@@ -9,6 +9,10 @@ import {
   DTYPES,
   JOIN_HOWS,
   NO_VALUE_OPERATORS,
+  OPERATOR_LABELS,
+  AGG_LABELS,
+  HOW_LABELS,
+  DTYPE_LABELS,
   type FieldSpec,
 } from '~/composables/useFlowModel'
 
@@ -20,6 +24,8 @@ const props = defineProps<{
   rightColumns?: ColumnInfo[]
   // dentro un container foreach: placeholder {{...}} utilizzabili ovunque
   placeholders?: string[]
+  // carica i valori distinti di una colonna (per il picker di in/not_in)
+  fetchDistinct?: (column: string) => Promise<any[]>
 }>()
 const emit = defineEmits<{ (e: 'update', params: Record<string, any>): void }>()
 
@@ -99,6 +105,8 @@ function rebuild() {
         // estremi del between temporale (se il valore salvato è una coppia)
         state.__lo = Array.isArray(p.value) ? String(p.value[0] ?? '') : ''
         state.__hi = Array.isArray(p.value) ? String(p.value[1] ?? '') : ''
+        // valori del picker in/not_in (lista salvata)
+        state.__inValues = Array.isArray(p.value) ? [...p.value] : []
         // modalità testo libero: riattivata se il valore salvato usa placeholder
         state.__phmode = JSON.stringify(p.value ?? '').includes('{{')
         break
@@ -124,6 +132,44 @@ function rebuild() {
 }
 watch(() => props.nodeId, rebuild, { immediate: true })
 
+// ── Picker dei valori distinti per in/not_in ──────────────────────────────
+const IN_OPERATORS = new Set(['in', 'not_in'])
+const isInOperator = computed(() => IN_OPERATORS.has(state.operator))
+const distinctValues = ref<any[] | null>(null)
+const distinctLoading = ref(false)
+const distinctCache = new Map<string, any[]>() // per colonna, entro questo nodo
+
+async function loadDistinct(column: string) {
+  if (!props.fetchDistinct || !column) return
+  if (distinctCache.has(column)) {
+    distinctValues.value = distinctCache.get(column)!
+    return
+  }
+  distinctLoading.value = true
+  try {
+    const vals = await props.fetchDistinct(column)
+    distinctCache.set(column, vals)
+    distinctValues.value = vals
+  } catch {
+    distinctValues.value = []
+  } finally {
+    distinctLoading.value = false
+  }
+}
+
+watch(
+  () => [state.operator, state.column],
+  () => {
+    if (isInOperator.value && state.column) loadDistinct(state.column)
+  },
+  { immediate: true },
+)
+
+function onInValues(values: any[]) {
+  state.__inValues = values
+  emitUpdate()
+}
+
 // ── Costruzione dei params dal form ───────────────────────────────────────
 function build(): Record<string, any> {
   const out: Record<string, any> = {}
@@ -136,7 +182,10 @@ function build(): Record<string, any> {
       }
       case 'value':
         if (NO_VALUE_OPERATORS.has(state.operator)) break
-        if (temporalInputType.value && !state.__phmode && state.operator === 'between') {
+        if (IN_OPERATORS.has(state.operator)) {
+          // lista dal picker (i tipi restano quelli originali dei dati)
+          if ((state.__inValues ?? []).length) out.value = [...state.__inValues]
+        } else if (temporalInputType.value && !state.__phmode && state.operator === 'between') {
           // coppia di date dai calendari: manda solo se entrambe presenti
           if (state.__lo && state.__hi) out.value = [state.__lo, state.__hi]
         } else if (temporalInputType.value && !state.__phmode && SINGLE_DATE_OPERATORS.has(state.operator)) {
@@ -204,6 +253,18 @@ function addRename() { renameRows.push({ from: '', to: '' }); }
 function addFill() { fillRows.push({ column: '', value: '' }); }
 function addAgg() { aggRows.push({ column: '', func: 'sum', alias: '' }); }
 function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
+
+// ── Opzioni per il Select custom ──────────────────────────────────────────
+// colonne (+ placeholder raggruppati); withEmpty aggiunge la voce "—"
+function columnSelectOptions(f?: FieldSpec, withEmpty = false) {
+  const cols = (f ? optionsFor(f) : leftNames.value).map((n) => ({ value: n, label: n }))
+  const ph = phOptions.value.map((p) => ({ value: p, label: p, group: 'placeholder' }))
+  return [...(withEmpty ? [{ value: undefined, label: '—' }] : []), ...cols, ...ph]
+}
+const OPERATOR_OPTIONS = FILTER_OPERATORS.map((op) => ({ value: op, label: OPERATOR_LABELS[op] ?? op }))
+const HOW_OPTIONS = JOIN_HOWS.map((h) => ({ value: h, label: HOW_LABELS[h] ?? h }))
+const DTYPE_OPTIONS = DTYPES.map((d) => ({ value: d, label: DTYPE_LABELS[d] ?? d }))
+const FUNC_OPTIONS = AGG_FUNCS.map((fn) => ({ value: fn, label: AGG_LABELS[fn] ?? fn }))
 </script>
 
 <template>
@@ -229,25 +290,40 @@ function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
       </div>
 
       <!-- select singola colonna (+ placeholder del foreach, se presenti) -->
-      <select v-else-if="f.control === 'column'" v-model="state[f.key]" @change="emitUpdate">
-        <option :value="undefined">—</option>
-        <option v-for="name in optionsFor(f)" :key="name" :value="name">{{ name }}</option>
-        <optgroup v-if="phOptions.length" label="placeholder">
-          <option v-for="ph in phOptions" :key="ph" :value="ph">{{ ph }}</option>
-        </optgroup>
-      </select>
+      <Select
+        v-else-if="f.control === 'column'"
+        :model-value="state[f.key]"
+        :options="columnSelectOptions(f, true)"
+        placeholder="—"
+        @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
+      />
 
-      <!-- select enumerati -->
-      <select v-else-if="f.control === 'operator'" v-model="state.operator" @change="emitUpdate">
-        <option v-for="op in FILTER_OPERATORS" :key="op" :value="op">{{ op }}</option>
-      </select>
-      <select v-else-if="f.control === 'how'" v-model="state[f.key]" @change="emitUpdate">
-        <option v-for="h in JOIN_HOWS" :key="h" :value="h">{{ h }}</option>
-      </select>
+      <!-- select enumerati (etichette leggibili, valore = id backend) -->
+      <Select
+        v-else-if="f.control === 'operator'"
+        :model-value="state.operator"
+        :options="OPERATOR_OPTIONS"
+        @update:model-value="(v: any) => { state.operator = v; emitUpdate() }"
+      />
+      <Select
+        v-else-if="f.control === 'how'"
+        :model-value="state[f.key]"
+        :options="HOW_OPTIONS"
+        @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
+      />
 
       <!-- valore filtro -->
       <template v-else-if="f.control === 'value'">
         <span v-if="NO_VALUE_OPERATORS.has(state.operator)" class="muted">nessun valore richiesto</span>
+
+        <!-- in / not_in → multiselect con ricerca sui valori distinti reali -->
+        <ValuePicker
+          v-else-if="isInOperator"
+          :model-value="state.__inValues ?? []"
+          :options="distinctValues"
+          :loading="distinctLoading"
+          @update:model-value="onInValues"
+        />
 
         <!-- colonna temporale + between → doppio calendario (da → a, inclusivi) -->
         <div v-else-if="temporalInputType && !state.__phmode && state.operator === 'between'" class="daterange">
@@ -299,16 +375,18 @@ function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
       <!-- cast: righe colonna → dtype -->
       <div v-else-if="f.control === 'castlist'" class="rows">
         <div v-for="(r, i) in castRows" :key="i" class="row">
-          <select v-model="r.column" @change="emitUpdate">
-            <option value="">colonna…</option>
-            <option v-for="n in leftNames" :key="n" :value="n">{{ n }}</option>
-            <optgroup v-if="phOptions.length" label="placeholder">
-              <option v-for="ph in phOptions" :key="ph" :value="ph">{{ ph }}</option>
-            </optgroup>
-          </select>
-          <select v-model="r.dtype" @change="emitUpdate">
-            <option v-for="d in DTYPES" :key="d" :value="d">{{ d }}</option>
-          </select>
+          <Select
+            :model-value="r.column"
+            :options="columnSelectOptions()"
+            placeholder="colonna…"
+            @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
+          />
+          <Select
+            :model-value="r.dtype"
+            :options="DTYPE_OPTIONS"
+            class="funcsel"
+            @update:model-value="(v: any) => { r.dtype = v; emitUpdate() }"
+          />
           <button class="x" @click="removeRow(castRows, i)"><X :size="13" /></button>
         </div>
         <button @click="addCast">+ aggiungi</button>
@@ -317,13 +395,12 @@ function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
       <!-- rename: righe da → a -->
       <div v-else-if="f.control === 'renamelist'" class="rows">
         <div v-for="(r, i) in renameRows" :key="i" class="row">
-          <select v-model="r.from" @change="emitUpdate">
-            <option value="">colonna…</option>
-            <option v-for="n in leftNames" :key="n" :value="n">{{ n }}</option>
-            <optgroup v-if="phOptions.length" label="placeholder">
-              <option v-for="ph in phOptions" :key="ph" :value="ph">{{ ph }}</option>
-            </optgroup>
-          </select>
+          <Select
+            :model-value="r.from"
+            :options="columnSelectOptions()"
+            placeholder="colonna…"
+            @update:model-value="(v: any) => { r.from = v; emitUpdate() }"
+          />
           <input type="text" v-model="r.to" placeholder="nuovo nome" @change="emitUpdate" />
           <button class="x" @click="removeRow(renameRows, i)"><X :size="13" /></button>
         </div>
@@ -333,13 +410,12 @@ function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
       <!-- fill_null: righe colonna → valore -->
       <div v-else-if="f.control === 'filllist'" class="rows">
         <div v-for="(r, i) in fillRows" :key="i" class="row">
-          <select v-model="r.column" @change="emitUpdate">
-            <option value="">colonna…</option>
-            <option v-for="n in leftNames" :key="n" :value="n">{{ n }}</option>
-            <optgroup v-if="phOptions.length" label="placeholder">
-              <option v-for="ph in phOptions" :key="ph" :value="ph">{{ ph }}</option>
-            </optgroup>
-          </select>
+          <Select
+            :model-value="r.column"
+            :options="columnSelectOptions()"
+            placeholder="colonna…"
+            @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
+          />
           <input type="text" v-model="r.value" placeholder="valore" @change="emitUpdate" />
           <button class="x" @click="removeRow(fillRows, i)"><X :size="13" /></button>
         </div>
@@ -349,16 +425,18 @@ function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
       <!-- group_by: righe colonna/funzione/alias -->
       <div v-else-if="f.control === 'agglist'" class="rows">
         <div v-for="(r, i) in aggRows" :key="i" class="row">
-          <select v-model="r.column" @change="emitUpdate">
-            <option value="">colonna…</option>
-            <option v-for="n in leftNames" :key="n" :value="n">{{ n }}</option>
-            <optgroup v-if="phOptions.length" label="placeholder">
-              <option v-for="ph in phOptions" :key="ph" :value="ph">{{ ph }}</option>
-            </optgroup>
-          </select>
-          <select v-model="r.func" @change="emitUpdate">
-            <option v-for="fn in AGG_FUNCS" :key="fn" :value="fn">{{ fn }}</option>
-          </select>
+          <Select
+            :model-value="r.column"
+            :options="columnSelectOptions()"
+            placeholder="colonna…"
+            @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
+          />
+          <Select
+            :model-value="r.func"
+            :options="FUNC_OPTIONS"
+            class="funcsel"
+            @update:model-value="(v: any) => { r.func = v; emitUpdate() }"
+          />
           <input type="text" v-model="r.alias" placeholder="alias" @change="emitUpdate" />
           <button class="x" @click="removeRow(aggRows, i)"><X :size="13" /></button>
         </div>

@@ -88,14 +88,16 @@ const open = ref(false)
         <button class="primary" @click="createGroup">Crea gruppo</button>
 
         <h4 style="margin-top: 16px">Aggiungi a gruppo</h4>
-        <select v-model.number="member.user_id">
-          <option :value="null" disabled>— utente —</option>
-          <option v-for="u in users" :key="u.id" :value="u.id">{{ u.email }}</option>
-        </select>
-        <select v-model.number="member.group_id">
-          <option :value="null" disabled>— gruppo —</option>
-          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-        </select>
+        <Select
+          v-model="member.user_id"
+          :options="users.map((u) => ({ value: u.id, label: u.email }))"
+          placeholder="utente…"
+        />
+        <Select
+          v-model="member.group_id"
+          :options="groups.map((g) => ({ value: g.id, label: g.name }))"
+          placeholder="gruppo…"
+        />
         <button @click="addMember">Aggiungi</button>
       </div>
     </div>

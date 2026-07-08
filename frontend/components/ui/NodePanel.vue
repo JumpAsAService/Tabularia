@@ -3,6 +3,7 @@ import type { Node } from '@vue-flow/core'
 import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import { defaultParams } from '~/composables/useFlowModel'
+import { opMeta } from '~/composables/useOpIcons'
 
 const props = defineProps<{
   node: Node | null
@@ -10,6 +11,7 @@ const props = defineProps<{
   inputColumns: ColumnInfo[]
   rightColumns: ColumnInfo[]
   placeholders?: string[]
+  fetchDistinct?: (column: string) => Promise<any[]>
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -19,8 +21,7 @@ const emit = defineEmits<{
 
 const isSource = () => props.node?.type === 'source'
 
-function changeType(ev: Event) {
-  const opType = (ev.target as HTMLSelectElement).value
+function changeType(opType: string) {
   // cambiando operazione, riparte da parametri di default puliti
   emit('update', { opType, params: defaultParams(opType) })
 }
@@ -102,9 +103,11 @@ function onParams(params: Record<string, any>) {
       </div>
 
       <label>Tipo</label>
-      <select :value="node.data.opType" @change="changeType">
-        <option v-for="op in operations.filter((o) => o !== 'foreach')" :key="op" :value="op">{{ op }}</option>
-      </select>
+      <Select
+        :model-value="node.data.opType"
+        :options="operations.filter((o) => o !== 'foreach').map((op) => ({ value: op, label: opMeta(op).label || op }))"
+        @update:model-value="changeType"
+      />
 
       <div v-if="node.data.opType === 'join'" class="joinhelp">
         <strong class="joinhead"><Link2 :size="13" /> Come collegare il join</strong>
@@ -122,6 +125,7 @@ function onParams(params: Record<string, any>) {
         :input-columns="inputColumns"
         :right-columns="rightColumns"
         :placeholders="placeholders"
+        :fetch-distinct="fetchDistinct"
         @update="onParams"
       />
 

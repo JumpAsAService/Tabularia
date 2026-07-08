@@ -58,6 +58,32 @@ let opCounter = 0
 let sourceCounter = 0
 
 const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
+
+// ── Pannello destro ridimensionabile (larghezza ricordata) ────────────────
+const PANEL_MIN = 280
+const PANEL_MAX = 640
+const panelWidth = ref(
+  Math.min(PANEL_MAX, Math.max(PANEL_MIN, Number(localStorage.getItem('tabularia.panelWidth')) || 340)),
+)
+const appStyle = computed(() => ({ gridTemplateColumns: `200px 1fr ${panelWidth.value}px` }))
+
+function startPanelResize(ev: MouseEvent) {
+  ev.preventDefault()
+  const onMove = (e: MouseEvent) => {
+    panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, window.innerWidth - e.clientX))
+  }
+  const onUp = () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    localStorage.setItem('tabularia.panelWidth', String(panelWidth.value))
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
 const status = ref('Carica un file per iniziare.')
 // tipo di stato → icona nella toolbar (spinner / check / errore)
 const statusKind = ref<'info' | 'ok' | 'error' | 'busy'>('info')
@@ -497,6 +523,33 @@ async function runPreview(nodeId: string) {
   }
 }
 
+// ── Valori distinti di una colonna all'INPUT del nodo selezionato ─────────
+// (per il picker del filtro in/not_in: unique sulla catena a monte, cache inclusa)
+async function fetchDistinctValues(column: string): Promise<any[]> {
+  const nodeId = selectedId.value
+  if (!nodeId) return []
+  const node = findNode(nodeId)
+  const inc = buildIncoming(getEdges.value)
+  const leftId =
+    inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
+  if (!leftId) return []
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId)
+  if (!sourceNode?.data?.parquetKey) return []
+  const res = await api.preview({
+    bucket: sourceNode.data.bucket ?? bucket,
+    input_key: sourceNode.data.parquetKey,
+    operations: [
+      ...ops,
+      { type: 'select', params: { columns: [column] } },
+      { type: 'unique', params: {} },
+      { type: 'sort', params: { by: column } },
+      { type: 'limit', params: { n: 200 } },
+    ],
+    limit: 200,
+  })
+  return res.rows.map((r) => r[column]).filter((v) => v !== null)
+}
+
 // ── Grafico: esegue la catena del nodo + aggregazioni extra sull'engine ──
 async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewResult | null> {
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
@@ -589,7 +642,7 @@ async function pollTask(id: string, outputKey: string) {
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" :style="appStyle">
     <Toolbar
       class="toolbar"
       :status="status"
@@ -634,12 +687,14 @@ async function pollTask(id: string, outputKey: string) {
     </div>
 
     <div class="panel">
+      <div class="panel-resizer" title="Trascina per ridimensionare" @mousedown="startPanelResize" />
       <NodePanel
         :node="selectedNode"
         :operations="operations"
         :input-columns="inputColumns"
         :right-columns="rightColumns"
         :placeholders="placeholders"
+        :fetch-distinct="fetchDistinctValues"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"

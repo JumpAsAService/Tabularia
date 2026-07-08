@@ -88,6 +88,26 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: 
 /* calendari nativi in tema scuro (icona e popup del datepicker) */
 input[type="date"], input[type="datetime-local"], input[type="time"] { color-scheme: dark; }
 
+/* dropdown nativi in tema scuro (fallback per eventuali select residue):
+   il popup segue color-scheme (Chromium) + colori espliciti (Firefox) */
+select { color-scheme: dark; }
+option, optgroup {
+  background-color: var(--panel);
+  color: var(--text);
+}
+optgroup { font-style: normal; color: var(--muted); }
+
+/* Select custom (components/ui/Select.vue): larghezze contestuali */
+.sel-trigger.fsel { width: 150px; }
+.sel-trigger.csel { width: auto; max-width: 200px; min-width: 120px; }
+.sel-trigger.projsel { width: 170px; }
+.sel-trigger.movesel { width: 150px; font-size: 12px; padding: 3px 8px; }
+/* righe dei form (cast/rename/fill/agg): proporzioni tra i campi */
+.row .sel-trigger { flex: 1.5; min-width: 0; }
+.row .sel-trigger.funcsel { flex: 1; min-width: 90px; }
+.row input[type="text"] { flex: 1; width: auto; min-width: 50px; }
+.grant .sel-trigger { flex: 1; min-width: 0; }
+
 .muted { color: var(--muted); }
 
 /* ── Layout editor ───────────────────────────────────────────────────── */
@@ -115,6 +135,22 @@ input[type="date"], input[type="datetime-local"], input[type="time"] { color-sch
   border-bottom: 1px solid var(--border-soft);
 }
 .sidebar, .panel, .grid { background: var(--panel); }
+.panel { position: relative; }
+
+/* maniglia di ridimensionamento del pannello destro */
+.panel-resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 20;
+  transition: background 0.15s;
+}
+.panel-resizer:hover, .panel-resizer:active {
+  background: rgba(79, 140, 255, 0.35);
+}
 .canvas {
   position: relative;
   background:

@@ -52,15 +52,14 @@ const statusIcon = computed(() => {
       placeholder="Nome flusso…"
       @input="emit('update:flowName', ($event.target as HTMLInputElement).value)"
     />
-    <select
+    <Select
       v-if="projects?.length && projectId === null"
       class="projsel"
-      title="Cartella di destinazione"
-      @change="emit('update:projectId', Number(($event.target as HTMLSelectElement).value) || null)"
-    >
-      <option value="">— cartella… —</option>
-      <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-    </select>
+      :model-value="projectId"
+      :options="projects.map((p) => ({ value: p.id, label: p.name }))"
+      placeholder="cartella…"
+      @update:model-value="emit('update:projectId', $event)"
+    />
     <button :disabled="busy" title="Salva flusso" @click="emit('save')"><Save :size="15" /> Salva</button>
 
     <span class="sep" />

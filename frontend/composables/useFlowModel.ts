@@ -224,6 +224,54 @@ export const AGG_FUNCS = [
 export const DTYPES = ['int', 'float', 'str', 'bool', 'date', 'datetime']
 export const JOIN_HOWS = ['inner', 'left', 'right', 'full', 'semi', 'anti', 'cross']
 
+// ── Human-readable dropdown labels (the VALUE stays the backend id) ─────────
+export const OPERATOR_LABELS: Record<string, string> = {
+  eq: 'equals',
+  ne: 'not equal to',
+  gt: 'greater than',
+  ge: 'greater or equal to',
+  lt: 'less than',
+  le: 'less or equal to',
+  in: 'is one of…',
+  not_in: 'is not one of…',
+  between: 'between',
+  contains: 'contains',
+  starts_with: 'starts with',
+  ends_with: 'ends with',
+  is_null: 'is null',
+  is_not_null: 'is not null',
+}
+export const AGG_LABELS: Record<string, string> = {
+  sum: 'sum',
+  mean: 'average',
+  min: 'minimum',
+  max: 'maximum',
+  count: 'count',
+  median: 'median',
+  std: 'std deviation',
+  var: 'variance',
+  first: 'first',
+  last: 'last',
+  n_unique: 'distinct count',
+}
+export const HOW_LABELS: Record<string, string> = {
+  inner: 'inner — matching rows only',
+  left: 'left — all rows from the left',
+  right: 'right — all rows from the right',
+  full: 'full — all rows from both sides',
+  semi: 'semi — left rows with a match (no right columns)',
+  anti: 'anti — left rows WITHOUT a match',
+  cross: 'cross — cartesian product',
+}
+export const DTYPE_LABELS: Record<string, string> = {
+  int: 'integer',
+  float: 'decimal',
+  str: 'text',
+  bool: 'boolean',
+  date: 'date',
+  datetime: 'datetime',
+}
+
 /** Operatori di filtro che non richiedono un valore. */
 export const NO_VALUE_OPERATORS = new Set(['is_null', 'is_not_null'])
 

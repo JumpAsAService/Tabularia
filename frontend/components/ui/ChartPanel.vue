@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import type { ColumnInfo, Operation, PreviewResult } from '~/composables/useApi'
 import { errMessage } from '~/composables/useApi'
+import { AGG_LABELS } from '~/composables/useFlowModel'
 
 use([CanvasRenderer, BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -46,6 +47,10 @@ type ChartType = (typeof CHART_TYPES)[number]['id']
 
 const AGGS = ['count', 'sum', 'mean', 'min', 'max', 'median', 'n_unique']
 const ADDITIVE = new Set(['count', 'sum']) // combinabili client-side (fetta "Altro")
+
+// opzioni funzione col label leggibile (senza count per gli assi dello scatter)
+const funcOptions = (noCount = false) =>
+  AGGS.filter((a) => !noCount || a !== 'count').map((a) => ({ value: a, label: AGG_LABELS[a] ?? a }))
 
 const chartType = ref<ChartType>('bar')
 const xCol = ref('') // dimensione (o "punto" per lo scatter)
@@ -365,49 +370,33 @@ const option = computed(() => {
       </div>
 
       <label>{{ isScatter ? 'punto' : 'X' }}</label>
-      <select v-model="xCol">
-        <option v-for="c in allCols" :key="c" :value="c">{{ c }}</option>
-      </select>
+      <Select v-model="xCol" :options="allCols" class="csel" />
 
       <template v-if="isScatter">
         <label>X</label>
-        <select v-model="xFunc" class="fsel">
-          <option v-for="f in AGGS.filter((a) => a !== 'count')" :key="f" :value="f">{{ f }}</option>
-        </select>
-        <select v-model="xNumCol">
-          <option value="" disabled>— colonna numerica —</option>
-          <option v-for="c in numericCols" :key="c" :value="c">{{ c }}</option>
-        </select>
+        <Select v-model="xFunc" :options="funcOptions(true)" class="fsel" />
+        <Select v-model="xNumCol" :options="numericCols" placeholder="colonna numerica" class="csel" />
         <label>Y</label>
-        <select v-model="yFunc" class="fsel">
-          <option v-for="f in AGGS.filter((a) => a !== 'count')" :key="f" :value="f">{{ f }}</option>
-        </select>
-        <select v-model="yNumCol">
-          <option value="" disabled>— colonna numerica —</option>
-          <option v-for="c in numericCols" :key="c" :value="c">{{ c }}</option>
-        </select>
+        <Select v-model="yFunc" :options="funcOptions(true)" class="fsel" />
+        <Select v-model="yNumCol" :options="numericCols" placeholder="colonna numerica" class="csel" />
       </template>
 
       <template v-else>
         <label>f</label>
-        <select v-model="func" class="fsel">
-          <option v-for="f in AGGS" :key="f" :value="f">{{ f }}</option>
-        </select>
+        <Select v-model="func" :options="funcOptions()" class="fsel" />
         <template v-if="needsY">
           <label>Y</label>
-          <select v-model="yCol">
-            <option value="" disabled>— colonna numerica —</option>
-            <option v-for="c in numericCols" :key="c" :value="c">{{ c }}</option>
-          </select>
+          <Select v-model="yCol" :options="numericCols" placeholder="colonna numerica" class="csel" />
         </template>
       </template>
 
       <template v-if="supportsBy">
         <label>by</label>
-        <select v-model="byCol">
-          <option value="">—</option>
-          <option v-for="c in allCols.filter((c) => c !== xCol)" :key="c" :value="c">{{ c }}</option>
-        </select>
+        <Select
+          v-model="byCol"
+          :options="[{ value: '', label: '—' }, ...allCols.filter((c) => c !== xCol)]"
+          class="csel"
+        />
       </template>
 
       <template v-if="chartType === 'bar' || chartType === 'treemap'">

@@ -125,8 +125,7 @@ function fmtDate(iso: string | null): string {
 
 const movingFlowId = ref<number | null>(null) // riga con il selettore "sposta" aperto
 
-async function moveFlow(flow: FlowSummary, ev: Event) {
-  const target = Number((ev.target as HTMLSelectElement).value)
+async function moveFlow(flow: FlowSummary, target: number | null) {
   if (!target || target === flow.project_id) {
     movingFlowId.value = null
     return
@@ -310,19 +309,15 @@ async function revoke(perm: Permission) {
                 </td>
                 <td class="fdate muted">{{ fmtDate(f.updated_at) }}</td>
                 <td class="factions">
-                  <select
+                  <Select
                     v-if="movingFlowId === f.id"
                     class="movesel"
-                    @change="moveFlow(f, $event)"
-                    @blur="movingFlowId = null"
-                  >
-                    <option value="">sposta in…</option>
-                    <option
-                      v-for="p in projects.filter((p) => p.id !== f.project_id)"
-                      :key="p.id"
-                      :value="p.id"
-                    >{{ p.name }}</option>
-                  </select>
+                    :model-value="null"
+                    :options="projects.filter((p) => p.id !== f.project_id).map((p) => ({ value: p.id, label: p.name }))"
+                    placeholder="sposta in…"
+                    @update:model-value="(v: any) => moveFlow(f, v)"
+                    @close="movingFlowId = null"
+                  />
                   <button
                     v-else
                     class="mini"
@@ -369,21 +364,23 @@ async function revoke(perm: Permission) {
             </table>
 
             <div class="grant">
-              <select v-model="grantSubjectType">
-                <option value="group">Gruppo</option>
-                <option v-if="isSuper" value="user">Utente</option>
-              </select>
-              <select v-if="grantSubjectType === 'group'" v-model.number="grantGroupId">
-                <option :value="null" disabled>— gruppo —</option>
-                <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-              </select>
-              <select v-else v-model.number="grantUserId">
-                <option :value="null" disabled>— utente —</option>
-                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.email }}</option>
-              </select>
-              <select v-model="grantCapability">
-                <option v-for="c in CAPABILITIES" :key="c" :value="c">{{ c }}</option>
-              </select>
+              <Select
+                v-model="grantSubjectType"
+                :options="isSuper ? [{ value: 'group', label: 'Gruppo' }, { value: 'user', label: 'Utente' }] : [{ value: 'group', label: 'Gruppo' }]"
+              />
+              <Select
+                v-if="grantSubjectType === 'group'"
+                v-model="grantGroupId"
+                :options="groups.map((g) => ({ value: g.id, label: g.name }))"
+                placeholder="gruppo…"
+              />
+              <Select
+                v-else
+                v-model="grantUserId"
+                :options="users.map((u) => ({ value: u.id, label: u.email }))"
+                placeholder="utente…"
+              />
+              <Select v-model="grantCapability" :options="CAPABILITIES" />
               <button class="primary" @click="grant">Concedi</button>
             </div>
           </div>
