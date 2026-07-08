@@ -1,0 +1,219 @@
+services:
+  # Valkey: fork open source BSD-3 di Redis, drop-in (stesso protocollo/porta).
+  # Il servizio resta chiamato "redis" così REDIS__HOST, il broker Celery e le
+  # URL redis:// non cambiano.
+  redis:
+    image: valkey/valkey:8-alpine
+    container_name: dataprep-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: valkey-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Postgres: DB dei metadati del control plane (utenti, gruppi, progetti, permessi).
+  # Lo possiede SOLO il gateway; l'engine resta stateless (Valkey + MinIO).
+  postgres:
+    image: postgres:16-alpine
+    container_name: dataprep-postgres
+    ports:
+      - "5433:5432"  # 5433 host: evita conflitti con un eventuale Postgres locale
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${DB__USER:-tabularia}
+      - POSTGRES_PASSWORD=${DB__PASSWORD:-tabularia}
+      - POSTGRES_DB=${DB__NAME:-tabularia}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB__USER:-tabularia}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MinIO: object storage S3-compatibile vero (streaming multipart su disco,
+  # gestisce file grandi senza bufferizzare in RAM come faceva rclone serve s3).
+  # Le credenziali root vengono dalle stesse variabili che usa l'app (una sola
+  # fonte di verità in .env).
+  minio:
+    image: minio/minio:latest
+    container_name: dataprep-minio
+    ports:
+      - "9002:9000"  # API S3 (9002 host: la 9000 è occupata da ClickHouse)
+      - "9001:9001"  # console web
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=${STORAGE__ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${STORAGE__SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Engine (data plane): NON esposto sull'host. Raggiungibile solo dagli altri
+  # servizi sulla rete Docker (il gateway ci fa da proxy). Niente `ports:`.
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dataprep-backend
+    expose:
+      - "8000"  # solo interno alla rete dataprep-network
+    env_file:
+      - .env
+    volumes:
+      - ../backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Gateway (control plane): UNICO ingresso pubblico (:8000). Auth + RBAC + Postgres,
+  # poi inoltra all'engine interno.
+  gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    container_name: dataprep-gateway
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ENGINE__BASE_URL=http://backend:8000
+      - DB__HOST=postgres
+      - DB__PORT=5432
+    volumes:
+      - ../gateway:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dataprep-worker
+    env_file:
+      - .env
+    volumes:
+      - ../backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    # -B: beat embedded (eviction cache). Ok per dev con un worker singolo;
+    # in prod/multi-worker separare 'celery beat' in un servizio dedicato.
+    command: celery -A app.tasks.celery_app worker -E --beat --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=2
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: dataprep-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # il browser chiama il GATEWAY (unico ingresso pubblico), non l'engine
+      - NUXT_PUBLIC_API_BASE=http://localhost:8000
+      - NUXT_PUBLIC_BUCKET=data-prep
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - gateway
+
+  # ── Monitoraggio ────────────────────────────────────────────────────────
+  # VictoriaMetrics: TSDB Prometheus-compatibile ma leggero; fa da scraper.
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.103.0
+    container_name: dataprep-victoriametrics
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm_data:/vmdata
+      - ./monitoring/scrape.yml:/etc/vm/scrape.yml:ro
+    command:
+      - "-storageDataPath=/vmdata"
+      - "-promscrape.config=/etc/vm/scrape.yml"
+      - "-retentionPeriod=3"  # mesi
+
+  # Grafana: dashboard. Credenziali admin da variabili d'ambiente (cambiabili in prod).
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: dataprep-grafana
+    ports:
+      - "3001:3000"  # 3000 è già del frontend
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - victoriametrics
+
+  # cAdvisor: metriche per-container (CPU/mem/disco/rete).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: dataprep-cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+
+  # node-exporter: metriche dell'host (CPU, memoria, disco/SSD, load).
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: dataprep-node-exporter
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    volumes:
+      - /:/host:ro
+    ports:
+      - "9100:9100"
+
+  # celery-exporter: task attivi, durate, esiti, profondità coda (via eventi Celery).
+  celery-exporter:
+    image: danihodovic/celery-exporter:latest
+    container_name: dataprep-celery-exporter
+    environment:
+      - CE_BROKER_URL=redis://redis:6379/0
+    ports:
+      - "9808:9808"
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+  minio_data:
+  postgres_data:
+  vm_data:
+  grafana_data:
+
+networks:
+  default:
+    name: dataprep-network

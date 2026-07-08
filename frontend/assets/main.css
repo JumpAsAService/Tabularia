@@ -1,0 +1,230 @@
+:root {
+  /* palette: dark blu-notte con accenti freddi */
+  --bg: #0b0e14;
+  --bg-soft: #0f131c;
+  --panel: #141926;
+  --panel-2: #1b2130;
+  --border: #262e40;
+  --border-soft: #1e2534;
+  --text: #e8ebf2;
+  --muted: #8b93a7;
+  --accent: #4f8cff;
+  --accent-hi: #7aa8ff;
+  --accent-2: #6ee7b7;
+  --violet: #a78bfa;
+  --danger: #ff6b6b;
+  --radius: 10px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --grad-accent: linear-gradient(135deg, #4f8cff 0%, #7c6cff 100%);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #__nuxt {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+}
+
+/* ── Scrollbar scure e sottili ───────────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Controlli base ──────────────────────────────────────────────────── */
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+button:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
+button:active { transform: translateY(1px); }
+button.primary {
+  background: var(--grad-accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 500;
+}
+button.primary:hover { filter: brightness(1.12); box-shadow: 0 2px 12px rgba(79, 140, 255, 0.35); }
+button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* rotazione per gli spinner (es. icona Loader) */
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+select, input[type="text"], input[type="email"], input[type="password"], input[type="number"],
+input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+select:focus, input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+}
+textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+
+/* calendari nativi in tema scuro (icona e popup del datepicker) */
+input[type="date"], input[type="datetime-local"], input[type="time"] { color-scheme: dark; }
+
+.muted { color: var(--muted); }
+
+/* ── Layout editor ───────────────────────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 200px 1fr 320px;
+  grid-template-areas:
+    "toolbar toolbar toolbar"
+    "sidebar canvas  panel"
+    "sidebar grid    panel";
+  height: 100vh;
+  gap: 1px;
+  background: var(--border-soft);
+}
+.app > .toolbar { grid-area: toolbar; }
+.app > .sidebar { grid-area: sidebar; }
+.app > .canvas  { grid-area: canvas; }
+.app > .panel   { grid-area: panel; }
+.app > .grid    { grid-area: grid; }
+
+.toolbar {
+  background: rgba(20, 25, 38, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-soft);
+}
+.sidebar, .panel, .grid { background: var(--panel); }
+.canvas {
+  position: relative;
+  background:
+    radial-gradient(1200px 600px at 30% 0%, rgba(79, 140, 255, 0.05), transparent 60%),
+    var(--bg);
+}
+
+/* ── Nodi del canvas ─────────────────────────────────────────────────── */
+.node {
+  --node-accent: var(--accent);
+  min-width: 160px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--node-accent);
+  border-radius: var(--radius);
+  /* niente overflow:hidden: taglierebbe gli handle che sporgono dal bordo */
+  font-size: 13px;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.node:hover { box-shadow: var(--shadow-2); }
+.vue-flow__node.selected .node {
+  border-color: var(--node-accent);
+  box-shadow: 0 0 0 1px var(--node-accent), 0 4px 20px rgba(79, 140, 255, 0.25);
+}
+.node-title {
+  padding: 7px 10px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+  /* arrotonda gli angoli alti (prima lo faceva l'overflow:hidden del .node) */
+  border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
+}
+.node-body { padding: 8px 10px; }
+.node-source { --node-accent: var(--accent-2); }
+
+/* handle più visibili e reattivi, CENTRATI sul bordo del nodo (il tema di
+   default usa offset fissi calibrati su handle da 6px: con i nostri più grandi
+   finivano dentro al rettangolo) */
+.vue-flow__handle {
+  width: 11px !important;
+  height: 11px !important;
+  background: var(--accent) !important;
+  border: 2px solid var(--bg) !important;
+  transition: transform 0.12s;
+}
+.vue-flow__handle-top    { top: 0 !important;    left: 50%; transform: translate(-50%, -50%); }
+.vue-flow__handle-bottom { bottom: 0 !important; left: 50%; transform: translate(-50%, 50%); }
+.vue-flow__handle-left   { left: 0 !important;   top: 50%;  transform: translate(-50%, -50%); }
+.vue-flow__handle-right  { right: 0 !important;  top: 50%;  transform: translate(50%, -50%); }
+.vue-flow__handle-top:hover    { transform: translate(-50%, -50%) scale(1.35); }
+.vue-flow__handle-bottom:hover { transform: translate(-50%, 50%) scale(1.35); }
+.vue-flow__handle-left:hover   { transform: translate(-50%, -50%) scale(1.35); }
+.vue-flow__handle-right:hover  { transform: translate(50%, -50%) scale(1.35); }
+
+/* edge curati */
+.vue-flow__edge-path { stroke: #3d4a66; stroke-width: 1.6; }
+.vue-flow__edge.selected .vue-flow__edge-path,
+.vue-flow__edge:hover .vue-flow__edge-path { stroke: var(--accent); }
+.vue-flow__edge.animated .vue-flow__edge-path { stroke-dasharray: 5; animation: dashdraw 0.6s linear infinite; }
+@keyframes dashdraw { from { stroke-dashoffset: 10; } }
+
+/* controlli Vue Flow in tema */
+.vue-flow__controls { box-shadow: var(--shadow-1); border-radius: 8px; overflow: hidden; }
+.vue-flow__controls-button {
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text);
+}
+.vue-flow__controls-button:hover { background: var(--border); }
+
+/* ── Vista dati (tab Tabella | Grafico) ──────────────────────────────── */
+.grid {
+  padding: 8px 10px 10px;
+  height: 34vh;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.viewtabs { display: flex; gap: 4px; flex-shrink: 0; }
+.viewtabs button {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 2px solid transparent;
+}
+.viewtabs button.active {
+  border-color: var(--accent);
+  background: rgba(79, 140, 255, 0.1);
+}
+.viewbody { flex: 1; min-height: 0; overflow: hidden; }
+.viewbody.scroll { overflow: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 12px; }
+table.data th, table.data td {
+  border: 1px solid var(--border-soft);
+  padding: 5px 9px;
+  text-align: left;
+  white-space: nowrap;
+}
+table.data th {
+  background: var(--panel-2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-weight: 600;
+  color: var(--accent-hi);
+}
+table.data tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+table.data tbody tr:hover { background: rgba(79, 140, 255, 0.06); }
+table.data td.null { color: var(--muted); font-style: italic; }

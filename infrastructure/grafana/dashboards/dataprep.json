@@ -1,0 +1,279 @@
+{
+  "uid": "dataprep-overview",
+  "title": "Data Prep — Overview",
+  "tags": [
+    "dataprep"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Voci in cache",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "dataprep_cache_entries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Cache: hit vs miss (rate/min)",
+      "gridPos": {
+        "h": 6,
+        "w": 18,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(dataprep_cache_hits[5m]) * 60",
+          "legendFormat": "hit/min",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "rate(dataprep_cache_misses[5m]) * 60",
+          "legendFormat": "miss/min",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Memoria per container",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "container_memory_usage_bytes{name=~\"dataprep-.*\"}",
+          "legendFormat": "{{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Task Celery attivi",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(celery_worker_tasks_active) by (hostname)",
+          "legendFormat": "{{hostname}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Target su (scrape)",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up",
+          "legendFormat": "{{job}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Durata run (transform) — p95 e media",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(celery_task_runtime_bucket{name=\"app.tasks.jobs.transform_data_task\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "rate(celery_task_runtime_sum{name=\"app.tasks.jobs.transform_data_task\"}[5m]) / rate(celery_task_runtime_count{name=\"app.tasks.jobs.transform_data_task\"}[5m])",
+          "legendFormat": "media",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Crescita storage per prefisso (cache/, datasets/, ...)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "dataprep_storage_bytes",
+          "legendFormat": "{{prefix}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Memoria worker Polars (working set)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "container_memory_working_set_bytes{name=\"dataprep-worker\"}",
+          "legendFormat": "worker",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          }
+        }
+      ]
+    }
+  ]
+}

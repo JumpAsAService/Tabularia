@@ -1,0 +1,38 @@
+# ── Secrets: NEVER commit ────────────────────────────────────────────────────
+infrastructure/.env
+backend/app/config/secrets.toml
+*.pem
+*.key
+
+# ── Local data files (never ship datasets with the repo) ─────────────────────
+*.csv
+*.xlsx
+*.parquet
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# ── Node / Nuxt ──────────────────────────────────────────────────────────────
+node_modules/
+frontend/.nuxt/
+frontend/.output/
+frontend/dist/
+npm-debug.log*
+yarn-error.log*
+
+# ── Runtime artifacts ────────────────────────────────────────────────────────
+celerybeat-schedule*
+*.log
+*.tmp
+
+# ── OS / IDE ─────────────────────────────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/

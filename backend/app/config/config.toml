@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Default Configuration (safe to commit)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[app]
+name = "Data Prep API"
+version = "0.1.0"
+debug = true
+env_name = "development"
+api_v1_prefix = "/api/v1"
+
+[redis]
+host = "localhost"
+port = 6379
+db = 0
+
+[storage]
+endpoint = "http://localhost:9002"
+bucket = "data-prep"
+region = "us-east-1"
+
+[celery]
+broker_url = ""
+result_backend = ""
+worker_concurrency = 2
+task_serializer = "json"
+result_serializer = "json"
+timezone = "UTC"
+enable_utc = true
