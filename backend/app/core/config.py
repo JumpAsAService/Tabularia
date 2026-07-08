@@ -37,7 +37,7 @@ class RedisSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Storage Configuration (Rclone S3)
+# Storage Configuration (qualsiasi endpoint S3-compatibile: MinIO, AWS, R2…)
 # ─────────────────────────────────────────────────────────────────────────────
 class StorageSettings(BaseModel):
     endpoint: str = Field(default="http://localhost:9002", description="Storage endpoint")
