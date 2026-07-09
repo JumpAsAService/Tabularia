@@ -14,13 +14,16 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Datasource, Project, Run, User
+from app.models import Connection, Datasource, Project, Run, User
 from app.models.permission import Capability
-from app.schemas.models import DatasourceOut, DatasourceUpdate
+from app.models.run import TERMINAL_STATES
+from app.routes.runs import _reconcile, launch_ingest_run
+from app.schemas.models import DatasourceOut, DatasourceUpdate, DbDatasourceCreate, RunOut
 from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
@@ -72,6 +75,117 @@ def list_project_datasources(
         select(Datasource).where(Datasource.project_id == project_id).order_by(Datasource.name)
     ).all()
     return [_to_out(d) for d in rows]
+
+
+@router.post(
+    "/projects/{project_id}/datasources/database",
+    response_model=DatasourceOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_db_datasource(
+    project_id: int,
+    body: DbDatasourceCreate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Datasource da database: EDIT sulla cartella di destinazione + CONNECT
+    sulla cartella della connessione (la barriera sulle credenziali). Il primo
+    ingest parte subito; il parquet è uno snapshot, il refresh lo sostituisce.
+    """
+    if session.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Progetto non trovato")
+    ensure_can(session, user, project_id, Capability.EDIT)
+
+    conn = session.get(Connection, body.connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connessione non trovata")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+
+    if body.source_type not in ("table", "sql"):
+        raise HTTPException(status_code=422, detail="source_type deve essere 'table' o 'sql'")
+    if not body.source_ref.strip():
+        raise HTTPException(status_code=422, detail="La sorgente (tabella o SQL) è vuota")
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Il nome della datasource è vuoto")
+    conflict = session.exec(
+        select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)
+    ).first()
+    if conflict:
+        raise HTTPException(status_code=409, detail=f"Esiste già una datasource '{name}' nella cartella")
+
+    ds = Datasource(
+        name=name,
+        description=body.description,
+        project_id=project_id,
+        owner_id=user.id,
+        bucket=get_settings().engine.bucket,
+        key="",  # nessuno snapshot finché il primo ingest non riesce
+        kind="database",
+        connection_id=conn.id,
+        source_type=body.source_type,
+        source_ref=body.source_ref,
+    )
+    session.add(ds)
+    session.commit()
+    session.refresh(ds)
+
+    try:
+        await launch_ingest_run(session, user, ds, conn)
+    except HTTPException:
+        # engine giù o richiesta rifiutata: niente datasource a metà, creazione atomica
+        session.delete(ds)
+        session.commit()
+        raise
+    return _to_out(ds)
+
+
+@router.post("/datasources/{ds_id}/refresh", response_model=RunOut, status_code=status.HTTP_202_ACCEPTED)
+async def refresh_datasource(
+    ds_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Ri-esegue la sorgente e sostituisce lo snapshot: RUN sulla cartella della
+    datasource + CONNECT su quella della connessione. Un refresh alla volta."""
+    ds = _get_ds(session, ds_id)
+    if ds.kind != "database":
+        raise HTTPException(status_code=422, detail="Solo le datasource database si possono aggiornare")
+    ensure_can(session, user, ds.project_id, Capability.RUN)
+    conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
+    if conn is None:
+        raise HTTPException(status_code=409, detail="La connessione di questa datasource non esiste più")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+
+    last = session.exec(
+        select(Run)
+        .where(Run.datasource_id == ds.id, Run.kind == "ingest")
+        .order_by(Run.started_at.desc())
+    ).first()
+    if last is not None:
+        last = await _reconcile(session, last)
+        if last.status not in TERMINAL_STATES:
+            raise HTTPException(status_code=409, detail="C'è già un refresh in corso per questa datasource")
+
+    return await launch_ingest_run(session, user, ds, conn)
+
+
+@router.get("/datasources/{ds_id}/runs", response_model=list[RunOut])
+async def list_datasource_runs(
+    ds_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Cronologia degli ingest (refresh) della datasource, riconciliata alla lettura."""
+    ds = _get_ds(session, ds_id)
+    ensure_can(session, user, ds.project_id, Capability.VIEW)
+    runs = session.exec(
+        select(Run)
+        .where(Run.datasource_id == ds.id, Run.kind == "ingest")
+        .order_by(Run.started_at.desc())
+        .limit(50)
+    ).all()
+    return [await _reconcile(session, r) for r in runs]
 
 
 @router.patch("/datasources/{ds_id}", response_model=DatasourceOut)
@@ -133,13 +247,15 @@ async def delete_datasource(
     ensure_can(session, user, ds.project_id, Capability.EDIT)
 
     bucket, key = ds.bucket, ds.key
-    # i run storici che l'hanno pubblicata restano, senza il riferimento
+    # i run storici che l'hanno pubblicata (o aggiornata) restano, senza il riferimento
     for run in session.exec(select(Run).where(Run.datasource_id == ds.id)).all():
         run.datasource_id = None
         session.add(run)
     session.delete(ds)
     session.commit()
 
+    if not key:  # datasource database mai ingerita: nessun blob da eliminare
+        return
     client = get_engine_client()
     try:
         resp = await client.delete("/files/object", params={"bucket": bucket, "key": key})

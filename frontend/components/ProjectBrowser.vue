@@ -18,11 +18,22 @@ import {
   CheckCircle2,
   XCircle,
   LoaderCircle,
+  Plug,
+  Pencil,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
-import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
+import {
+  useDatasources,
+  type DatasourceInfo,
+  type DbDatasourceDraft,
+} from '~/composables/useDatasources'
+import {
+  useConnections,
+  type ConnectionInfo,
+  type ConnectionDraft,
+} from '~/composables/useConnections'
 import {
   useProjects,
   CAPABILITIES,
@@ -36,6 +47,7 @@ const api = useProjects()
 const flowsApi = useFlows()
 const runsApi = useRuns()
 const dsApi = useDatasources()
+const connApi = useConnections()
 const { user } = useAuth()
 
 const projects = ref<Project[]>([])
@@ -109,6 +121,8 @@ async function selectProject(id: number) {
   flowsError.value = ''
   dsList.value = []
   expandedFlowId.value = null
+  ingestToken++ // ferma i poll di ingest della cartella precedente
+  ingestRuns.value = {}
   // flussi contenuti nella cartella (basta VIEW)
   try {
     flows.value = await flowsApi.listByProject(id)
@@ -118,8 +132,20 @@ async function selectProject(id: number) {
   // datasource della cartella
   try {
     dsList.value = await dsApi.listByProject(id)
+    // datasource DB senza snapshot: il primo import potrebbe essere in corso
+    for (const d of dsList.value) {
+      if (d.kind === 'database' && d.rows == null) pollIngest(d.id, ingestToken)
+    }
   } catch {
     dsList.value = []
+  }
+  // connessioni: visibili solo con la capability CONNECT sulla cartella
+  try {
+    connections.value = await connApi.listByProject(id)
+    canConnect.value = true
+  } catch {
+    connections.value = []
+    canConnect.value = false
   }
   // se riusciamo a leggere i permessi → abbiamo MANAGE sul progetto
   try {
@@ -204,6 +230,7 @@ function toggleRuns(flow: FlowSummary) {
 
 onUnmounted(() => {
   expandedFlowId.value = null // ferma l'auto-refresh
+  ingestToken++ // ferma i poll degli ingest
 })
 
 function fmtDuration(run: RunInfo): string {
@@ -222,6 +249,117 @@ async function deleteDatasource(ds: DatasourceInfo) {
   try {
     await dsApi.remove(ds.id)
     dsList.value = dsList.value.filter((d) => d.id !== ds.id)
+  } catch (e) {
+    error.value = errMessage(e)
+  }
+}
+
+// ── Ingest (import/refresh) delle datasource database ──────────────────────
+// stato dell'ultimo ingest per datasource; il token invalida i poll orfani
+const ingestRuns = ref<Record<number, RunInfo>>({})
+let ingestToken = 0
+
+async function pollIngest(dsId: number, token: number) {
+  try {
+    const runs = await dsApi.listRuns(dsId) // il GET riconcilia gli stati
+    if (token !== ingestToken) return
+    const last = runs[0]
+    if (!last) return
+    ingestRuns.value = { ...ingestRuns.value, [dsId]: last }
+    if (!isTerminal(last)) {
+      setTimeout(() => {
+        if (token === ingestToken) pollIngest(dsId, token)
+      }, 2500)
+    } else if (last.status === 'SUCCESS' && selectedId.value) {
+      dsList.value = await dsApi.listByProject(selectedId.value) // righe/refreshed_at
+    }
+  } catch {
+    // errore transitorio: il prossimo refresh manuale riproverà
+  }
+}
+
+async function refreshDatasource(ds: DatasourceInfo) {
+  try {
+    const run = await dsApi.refresh(ds.id)
+    ingestRuns.value = { ...ingestRuns.value, [ds.id]: run }
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    error.value = errMessage(e)
+  }
+}
+
+// ── Datasource da database (dialog) ─────────────────────────────────────────
+const showDbDsDialog = ref(false)
+const dbDsBusy = ref(false)
+const dbDsError = ref('')
+const usableConnections = ref<ConnectionInfo[]>([])
+
+async function openDbDsDialog() {
+  dbDsError.value = ''
+  try {
+    usableConnections.value = await connApi.list() // tutte quelle con CONNECT
+  } catch {
+    usableConnections.value = []
+  }
+  showDbDsDialog.value = true
+}
+
+async function createDbDatasource(draft: DbDatasourceDraft) {
+  if (!selectedId.value) return
+  dbDsBusy.value = true
+  dbDsError.value = ''
+  try {
+    const ds = await dsApi.createDb(selectedId.value, draft)
+    showDbDsDialog.value = false
+    dsList.value = await dsApi.listByProject(selectedId.value)
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    dbDsError.value = errMessage(e) // resta nel dialog, input preservato
+  } finally {
+    dbDsBusy.value = false
+  }
+}
+
+// ── Connessioni della cartella (capability CONNECT) ─────────────────────────
+const connections = ref<ConnectionInfo[]>([])
+const canConnect = ref(false)
+const showConnDialog = ref(false)
+const editingConn = ref<ConnectionInfo | null>(null)
+const connBusy = ref(false)
+const connDialogError = ref('')
+
+function openConnDialog(conn: ConnectionInfo | null) {
+  editingConn.value = conn
+  connDialogError.value = ''
+  showConnDialog.value = true
+}
+
+async function saveConnection(draft: ConnectionDraft) {
+  if (!selectedId.value) return
+  connBusy.value = true
+  connDialogError.value = ''
+  try {
+    if (editingConn.value) {
+      const body: any = { ...draft }
+      if (!body.password) delete body.password // vuota = invariata
+      await connApi.update(editingConn.value.id, body)
+    } else {
+      await connApi.create(selectedId.value, draft)
+    }
+    showConnDialog.value = false
+    connections.value = await connApi.listByProject(selectedId.value)
+  } catch (e) {
+    connDialogError.value = errMessage(e)
+  } finally {
+    connBusy.value = false
+  }
+}
+
+async function deleteConnection(c: ConnectionInfo) {
+  if (!confirm(`Delete connection "${c.name}"?`)) return
+  try {
+    await connApi.remove(c.id)
+    connections.value = connections.value.filter((x) => x.id !== c.id)
   } catch (e) {
     error.value = errMessage(e)
   }
@@ -447,19 +585,67 @@ async function revoke(perm: Permission) {
         <div class="section">
           <div class="section-head">
             <label>Datasources</label>
+            <button class="mini" @click="openDbDsDialog"><Plus :size="13" /> From database</button>
           </div>
           <p v-if="!dsList.length" class="muted">Nessuna datasource in questa cartella.</p>
           <table v-else class="flows">
             <tbody>
               <tr v-for="d in dsList" :key="d.id">
                 <td class="fname">
-                  <span class="flowlink dsname"><Database :size="14" /> {{ d.name }}</span>
+                  <span class="flowlink dsname" :title="d.source_ref ?? ''">
+                    <Database :size="14" /> {{ d.name }}
+                    <span v-if="d.kind === 'database'" class="dbtag">db</span>
+                  </span>
                 </td>
                 <td class="fdate muted">
-                  {{ d.rows != null ? `${d.rows} righe` : '' }} · {{ fmtDate(d.updated_at) }}
+                  <template v-if="ingestRuns[d.id] && !isTerminal(ingestRuns[d.id])">
+                    <LoaderCircle :size="12" class="spin rwip" /> importing…
+                  </template>
+                  <template v-else-if="ingestRuns[d.id]?.status === 'FAILURE'">
+                    <span class="rerr" :title="ingestRuns[d.id].error ?? ''">import failed</span>
+                  </template>
+                  <template v-else>
+                    {{ d.rows != null ? `${d.rows} righe` : '' }} · {{ fmtDate(d.refreshed_at ?? d.updated_at) }}
+                  </template>
                 </td>
                 <td class="factions">
+                  <button
+                    v-if="d.kind === 'database'"
+                    class="mini"
+                    title="Refresh snapshot (re-run the source)"
+                    :disabled="!!ingestRuns[d.id] && !isTerminal(ingestRuns[d.id])"
+                    @click="refreshDatasource(d)"
+                  ><RefreshCw :size="13" /></button>
                   <button class="mini danger" title="Elimina datasource (anche il parquet)" @click="deleteDatasource(d)">
+                    <Trash2 :size="13" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- connessioni della cartella (solo con capability CONNECT) -->
+        <div v-if="canConnect" class="section">
+          <div class="section-head">
+            <label>Connections</label>
+            <button class="mini" @click="openConnDialog(null)"><Plus :size="13" /> New connection</button>
+          </div>
+          <p v-if="!connections.length" class="muted">No connections in this folder.</p>
+          <table v-else class="flows">
+            <tbody>
+              <tr v-for="c in connections" :key="c.id">
+                <td class="fname">
+                  <span class="flowlink dsname"><Plug :size="14" /> {{ c.name }}</span>
+                </td>
+                <td class="fdate muted">
+                  {{ c.db_type }} · {{ c.host }}{{ c.database ? '/' + c.database : '' }}
+                </td>
+                <td class="factions">
+                  <button class="mini" title="Edit connection" @click="openConnDialog(c)">
+                    <Pencil :size="13" />
+                  </button>
+                  <button class="mini danger" title="Delete connection" @click="deleteConnection(c)">
                     <Trash2 :size="13" />
                   </button>
                 </td>
@@ -532,6 +718,24 @@ async function revoke(perm: Permission) {
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
+
+    <ConnectionDialog
+      :open="showConnDialog"
+      :project-id="selectedId ?? 0"
+      :existing="editingConn"
+      :error="connDialogError"
+      :busy="connBusy"
+      @confirm="saveConnection"
+      @cancel="showConnDialog = false"
+    />
+    <DbDatasourceDialog
+      :open="showDbDsDialog"
+      :connections="usableConnections"
+      :error="dbDsError"
+      :busy="dbDsBusy"
+      @confirm="createDbDatasource"
+      @cancel="showDbDsDialog = false"
+    />
   </div>
 </template>
 
@@ -612,6 +816,16 @@ td.factions { text-align: right; white-space: nowrap; display: flex; gap: 4px; j
 .rpub { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-hi); }
 .rerr { color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsname { cursor: default; }
+.dbtag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
 .btn-link.small { font-size: 12px; padding: 4px 10px; }
 .btn-link {
   display: inline-flex;

@@ -88,6 +88,16 @@ class MetricsSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Security (segreti condivisi col gateway)
+# ─────────────────────────────────────────────────────────────────────────────
+class SecuritySettings(BaseModel):
+    # env: SECURITY__FERNET_KEY — chiave condivisa gateway↔engine con cui le
+    # credenziali delle connessioni DB viaggiano/riposano cifrate. Vuota = chiave
+    # di sviluppo (vedi app/core/crypto.py); in produzione va impostata.
+    fernet_key: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # App Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
@@ -134,6 +144,7 @@ class Settings(BaseSettings):
     celery: CelerySettings = Field(default_factory=CelerySettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Customise sources to include TOML files

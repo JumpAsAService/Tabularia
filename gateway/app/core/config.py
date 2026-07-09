@@ -56,6 +56,19 @@ class AuthSettings(BaseModel):
 class EngineSettings(BaseModel):
     base_url: str = "http://localhost:8000"
     timeout_seconds: float = 120.0
+    # bucket dello storage dell'engine: il gateway lo usa solo come STRINGA nei
+    # payload (non tocca mai lo storage). Deve combaciare con STORAGE__BUCKET.
+    bucket: str = "data-prep"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security: chiave Fernet condivisa con l'engine per le credenziali delle
+# connessioni DB (cifrate a riposo e nei payload verso l'engine)
+# ─────────────────────────────────────────────────────────────────────────────
+class SecuritySettings(BaseModel):
+    # env: SECURITY__FERNET_KEY (stessa variabile letta dall'engine). Vuota =
+    # chiave di sviluppo (vedi app/core/crypto.py); in produzione va impostata.
+    fernet_key: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +95,7 @@ class Settings(BaseSettings):
     jwt: JwtSettings = Field(default_factory=JwtSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     engine: EngineSettings = Field(default_factory=EngineSettings)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")
@@ -102,6 +116,12 @@ class Settings(BaseSettings):
             problems.append("AUTH__ADMIN_PASSWORD è il default 'admin'")
         if self.db.password.get_secret_value() == "tabularia" and not self.db.url:
             problems.append("DB__PASSWORD è il default di sviluppo")
+        if not self.security.fernet_key:
+            problems.append(
+                "SECURITY__FERNET_KEY manca (le credenziali DB sarebbero cifrate con la "
+                "chiave di sviluppo): genera con "
+                "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            )
         if problems:
             raise RuntimeError(
                 "Configurazione NON sicura per la produzione:\n  - " + "\n  - ".join(problems)

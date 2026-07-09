@@ -75,7 +75,9 @@ function pickDatasource(id: number | null) {
         <label><Database :size="12" /> oppure usa una datasource del catalogo</label>
         <Select
           :model-value="node.data.datasourceId ?? null"
-          :options="(datasources ?? []).map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${d.rows} righe)` : d.name }))"
+          :options="(datasources ?? [])
+            .filter((d) => d.key)
+            .map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${d.rows} righe)` : d.name }))"
           placeholder="scegli una datasource…"
           @update:model-value="pickDatasource"
         />

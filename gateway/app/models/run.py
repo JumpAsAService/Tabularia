@@ -19,7 +19,10 @@ class Run(SQLModel, table=True):
     """
     __tablename__ = "runs"
     id: Optional[int] = Field(default=None, primary_key=True)
-    flow_id: int = Field(foreign_key="flows.id", index=True)
+    # kind="flow": esecuzione di un flusso (flow_id valorizzato).
+    # kind="ingest": refresh di una datasource database (datasource_id valorizzato).
+    kind: str = Field(default="flow", index=True)
+    flow_id: Optional[int] = Field(default=None, foreign_key="flows.id", index=True)
     task_id: str = Field(index=True)  # id del task Celery sull'engine
     status: str = "PENDING"  # PENDING | STARTED | SUCCESS | FAILURE
     launched_by: Optional[int] = Field(default=None, foreign_key="users.id")
@@ -30,7 +33,8 @@ class Run(SQLModel, table=True):
     rows_written: Optional[int] = None
     error: Optional[str] = Field(default=None, sa_column=Column(Text))
 
-    # richiesta di pubblicazione (facoltativa, decisa al lancio)
+    # richiesta di pubblicazione (facoltativa, decisa al lancio); per i run
+    # kind="ingest" `datasource_id` è la datasource che il refresh aggiorna
     publish_name: Optional[str] = None
     publish_project_id: Optional[int] = Field(default=None, foreign_key="projects.id")
     publish_description: str = ""

@@ -128,6 +128,46 @@ def transform_data_task(
     }
 
 
+@celery_app.task(name="app.tasks.jobs.ingest_database_task")
+def ingest_database_task(
+    connection: dict[str, Any],
+    source: dict[str, Any],
+    bucket: str,
+    output_key: str,
+) -> dict:
+    """
+    Ingest da database: esegue la sorgente (tabella o SQL) e scrive il risultato
+    in parquet su storage, in streaming (batch Arrow → ParquetWriter).
+
+    `connection.password_encrypted` è cifrata (Fernet, chiave condivisa col
+    gateway): la password in chiaro non transita mai nel broker.
+    """
+    from app.ingest.db_source import DbConnectionSpec, DbSourceSpec, ingest_db_to_parquet
+
+    conn = DbConnectionSpec(**connection)
+    logger.info(f"🚀 Starting ingest_database_task: {conn.db_type}@{conn.host} → {output_key}")
+
+    result = ingest_db_to_parquet(
+        conn=conn,
+        source=DbSourceSpec(**source),
+        bucket=bucket,
+        key=output_key,
+    )
+
+    logger.info(
+        f"✅ Completed ingest_database_task: {output_key} "
+        f"({result['rows_written']} righe, {len(result['columns'])} colonne)"
+    )
+    return {
+        "status": "success",
+        "bucket": bucket,
+        "output_key": output_key,
+        "rows_written": result["rows_written"],
+        "columns": result["columns"],
+        "processed_at": time.time(),
+    }
+
+
 @celery_app.task(name="app.tasks.jobs.convert_to_parquet_task")
 def convert_to_parquet_task(
     dataset_id: str,

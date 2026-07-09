@@ -111,6 +111,48 @@ class FlowUpdate(BaseModel):
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
 
 
+# ── Connections (connessioni a database esterni) ─────────────────────────────
+class ConnectionOut(BaseModel):
+    """La password NON esce mai dalle API: solo un flag che dice se è impostata."""
+    id: int
+    name: str
+    description: str
+    project_id: int
+    owner_id: Optional[int]
+    db_type: str
+    host: str
+    port: Optional[int]
+    username: str
+    database: str
+    db_schema: str
+    has_password: bool = False
+    updated_at: Optional[datetime] = None
+
+
+class ConnectionCreate(BaseModel):
+    name: str
+    description: str = ""
+    db_type: str
+    host: str
+    port: Optional[int] = None
+    username: str = ""
+    password: str = ""  # in chiaro solo nel body della richiesta; cifrata a riposo
+    database: str = ""
+    db_schema: str = ""
+
+
+class ConnectionUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    username: Optional[str] = None
+    password: Optional[str] = None  # valorizzata = sostituisce quella cifrata
+    database: Optional[str] = None
+    db_schema: Optional[str] = None
+    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+
+
 # ── Runs (esecuzioni dei flussi) ──────────────────────────────────────────────
 class PublishSpec(BaseModel):
     """Richiesta di pubblicare l'output del run come datasource nominata."""
@@ -128,7 +170,8 @@ class RunCreate(BaseModel):
 
 class RunOut(BaseModel):
     id: int
-    flow_id: int
+    kind: str = "flow"
+    flow_id: Optional[int] = None
     status: str
     launched_by: Optional[int]
     output_key: str
@@ -153,6 +196,11 @@ class DatasourceOut(BaseModel):
     columns: list[dict] = Field(default_factory=list)
     kind: str
     flow_id: Optional[int]
+    # per kind="database"
+    connection_id: Optional[int] = None
+    source_type: Optional[str] = None
+    source_ref: Optional[str] = None
+    refreshed_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
@@ -160,6 +208,15 @@ class DatasourceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+
+
+class DbDatasourceCreate(BaseModel):
+    """Datasource da database: definizione della sorgente + primo ingest."""
+    name: str
+    description: str = ""
+    connection_id: int
+    source_type: str  # table | sql
+    source_ref: str  # nome tabella oppure testo SQL
 
 
 # ── Permissions ───────────────────────────────────────────────────────────────

@@ -71,15 +71,9 @@ def has_capability(session: Session, user: User, project_id: int, capability: Ca
     return False
 
 
-def readable_project_ids(session: Session, user: User) -> set[int]:
-    """Progetti di cui l'utente può LEGGERE il contenuto: quelli con VIEW
-    concesso o ereditato (i discendenti dei grant). SENZA gli antenati.
-
-    Differenza fondamentale con `visible_project_ids`: quella aggiunge gli
-    antenati per rendere navigabile l'albero (ne mostra solo il NOME), ma il
-    contenuto degli antenati NON è leggibile. Per filtrare contenuti
-    (datasource, flussi, run) usare SEMPRE questa.
-    """
+def _granted_project_ids(session: Session, user: User, needed: Capability) -> set[int]:
+    """Progetti dove l'utente ha `needed` (concesso o ereditato: i discendenti
+    dei grant). SENZA gli antenati — solo dove la capability vale davvero."""
     projects = _all_projects(session)
     if user.is_superuser:
         return set(projects.keys())
@@ -88,10 +82,27 @@ def readable_project_ids(session: Session, user: User) -> set[int]:
         perm.project_id
         for perm in session.exec(select(Permission)).all()
         if (perm.user_id == user.id or perm.group_id in gids)
-        and grant_satisfies(perm.capability, Capability.VIEW.value)
+        and grant_satisfies(perm.capability, needed.value)
         and perm.project_id in projects
     }
     return descendant_ids(projects, granted_roots)  # eredità verso il basso
+
+
+def readable_project_ids(session: Session, user: User) -> set[int]:
+    """Progetti di cui l'utente può LEGGERE il contenuto (VIEW o superiore).
+
+    Differenza fondamentale con `visible_project_ids`: quella aggiunge gli
+    antenati per rendere navigabile l'albero (ne mostra solo il NOME), ma il
+    contenuto degli antenati NON è leggibile. Per filtrare contenuti
+    (datasource, flussi, run) usare SEMPRE questa.
+    """
+    return _granted_project_ids(session, user, Capability.VIEW)
+
+
+def connectable_project_ids(session: Session, user: User) -> set[int]:
+    """Progetti dove l'utente può usare/gestire le CONNESSIONI dati (CONNECT,
+    ortogonale a VIEW: chi ha solo VIEW non vede le connessioni)."""
+    return _granted_project_ids(session, user, Capability.CONNECT)
 
 
 def visible_project_ids(session: Session, user: User) -> set[int]:

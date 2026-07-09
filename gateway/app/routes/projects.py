@@ -109,6 +109,11 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
     has_ds = session.exec(select(Datasource).where(Datasource.project_id == project_id)).first()
     if has_ds:
         raise HTTPException(status_code=409, detail="Il progetto contiene datasource: spostale o eliminale prima")
+    from app.models import Connection
+
+    has_conn = session.exec(select(Connection).where(Connection.project_id == project_id)).first()
+    if has_conn:
+        raise HTTPException(status_code=409, detail="Il progetto contiene connessioni: spostale o eliminale prima")
 
     # run storici che avevano questo progetto come DESTINAZIONE di publish
     # (vivono sotto flussi di altri progetti): staccali, la cronologia resta

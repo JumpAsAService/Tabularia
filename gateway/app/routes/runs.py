@@ -19,13 +19,15 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Datasource, Flow, Project, Run, User
+from app.models import Connection, Datasource, Flow, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
+from app.routes.connections import engine_connection_payload
 from app.schemas.models import RunCreate, RunOut
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,14 @@ async def launch_run(
 ):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
+
+    # input_key e operazioni arrivano dal client: ogni chiave di storage
+    # referenziata deve essere leggibile dall'utente (RBAC data plane)
+    from app.services.objects import collect_storage_keys, ensure_can_read_keys
+
+    ensure_can_read_keys(
+        session, user, collect_storage_keys({"input_key": body.input_key, "operations": body.operations})
+    )
 
     if body.publish:
         # pubblicare scrive contenuto nella cartella di destinazione → EDIT
@@ -102,6 +112,47 @@ async def launch_run(
         publish_name=body.publish.name.strip() if body.publish else None,
         publish_project_id=body.publish.project_id if body.publish else None,
         publish_description=body.publish.description if body.publish else "",
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+async def launch_ingest_run(session: Session, user: User, ds: Datasource, conn: Connection) -> Run:
+    """Accoda sull'engine l'ingest di una datasource database e registra il run.
+
+    Ogni refresh scrive un parquet NUOVO: la datasource passa a puntarci solo a
+    SUCCESS (snapshot swap in `_finalize_ingest`), così chi legge lo snapshot
+    corrente non viene mai disturbato da un refresh in corso.
+    """
+    bucket = get_settings().engine.bucket
+    output_key = f"datasets/{uuid.uuid4().hex}.parquet"
+    client = get_engine_client()
+    resp = await client.post(
+        "/db/ingest",
+        json={
+            "connection": engine_connection_payload(conn),
+            "source": {"mode": ds.source_type, "ref": ds.source_ref},
+            "bucket": bucket,
+            "output_key": output_key,
+        },
+    )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+    task_id = resp.json().get("task_id")
+    if not task_id:
+        raise HTTPException(status_code=502, detail="L'engine non ha restituito un task_id")
+
+    run = Run(
+        kind="ingest",
+        flow_id=None,
+        datasource_id=ds.id,
+        task_id=task_id,
+        launched_by=user.id,
+        input_key=f"{conn.db_type}://{conn.host}/{conn.database}",  # descrittivo
+        output_bucket=bucket,
+        output_key=output_key,
     )
     session.add(run)
     session.commit()
@@ -174,7 +225,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
     if claimed.rowcount == 0:
         return run  # un'altra richiesta ha già chiuso questo run
 
-    if (
+    if new_status == "SUCCESS" and run.kind == "ingest":
+        await _finalize_ingest(session, run, result)
+    elif (
         new_status == "SUCCESS"
         and run.publish_name
         and run.publish_project_id
@@ -182,6 +235,44 @@ async def _reconcile(session: Session, run: Run) -> Run:
     ):
         _publish_datasource(session, run, result)
     return run
+
+
+async def _delete_blob(bucket: str, key: str) -> None:
+    """Cleanup best-effort di un blob via engine: un orfano è solo spazio perso."""
+    if not key:
+        return
+    client = get_engine_client()
+    try:
+        resp = await client.delete("/files/object", params={"bucket": bucket, "key": key})
+        if resp.status_code >= 400:
+            logger.warning("blob %s/%s non eliminato: %s", bucket, key, resp.text[:200])
+    except Exception as e:
+        logger.warning("blob %s/%s non eliminato (engine irraggiungibile): %s", bucket, key, e)
+
+
+async def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
+    """Il refresh è riuscito: swap dello snapshot (solo il vincitore del claim
+    arriva qui). La datasource passa a puntare al nuovo parquet; il precedente
+    viene eliminato best-effort."""
+    ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
+    if ds is None:
+        # datasource eliminata durante il refresh: il nuovo blob resterebbe orfano
+        await _delete_blob(run.output_bucket, run.output_key)
+        return
+
+    old_bucket, old_key = ds.bucket, ds.key
+    now = datetime.now(timezone.utc)
+    ds.bucket = result.get("bucket") or run.output_bucket
+    ds.key = run.output_key
+    ds.rows = result.get("rows_written")
+    ds.columns = json.dumps(result.get("columns") or [])
+    ds.refreshed_at = now
+    ds.updated_at = now
+    session.add(ds)
+    session.commit()
+
+    if old_key and old_key != ds.key:
+        await _delete_blob(old_bucket, old_key)
 
 
 def _publish_datasource(session: Session, run: Run, result: dict) -> None:
@@ -252,6 +343,14 @@ async def get_run(
     run = session.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run non trovato")
-    flow = _get_flow(session, run.flow_id)
-    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    if run.kind == "ingest":
+        ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
+        if ds is not None:
+            ensure_can(session, user, ds.project_id, Capability.VIEW)
+        elif not (user.is_superuser or run.launched_by == user.id):
+            # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
+            raise HTTPException(status_code=404, detail="Run non trovato")
+    else:
+        flow = _get_flow(session, run.flow_id)
+        ensure_can(session, user, flow.project_id, Capability.VIEW)
     return await _reconcile(session, run)

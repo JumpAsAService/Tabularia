@@ -16,6 +16,9 @@ class FakeStorage:
     def __init__(self):
         self.blobs: dict[tuple[str, str], bytes] = {}
 
+    def create_bucket(self, bucket: str) -> None:
+        pass  # idempotente come il servizio vero: qui non serve fare nulla
+
     def upload_file(self, local_path: str, bucket: str, key: str) -> None:
         self.blobs[(bucket, key)] = Path(local_path).read_bytes()
 

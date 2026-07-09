@@ -29,8 +29,15 @@ class Datasource(SQLModel, table=True):
     rows: Optional[int] = None
     columns: str = Field(default="[]", sa_column=Column(Text, nullable=False))  # JSON [{name, dtype}]
 
-    kind: str = "flow"  # flow | upload | database (futuri)
+    kind: str = "flow"  # flow | database (| upload, futuro)
     flow_id: Optional[int] = Field(default=None, foreign_key="flows.id")  # provenienza
+
+    # per kind="database": la definizione della sorgente e l'ultimo refresh.
+    # Il parquet è uno SNAPSHOT: refresh = nuovo ingest che sostituisce il blob.
+    connection_id: Optional[int] = Field(default=None, foreign_key="connections.id")
+    source_type: Optional[str] = None  # table | sql
+    source_ref: Optional[str] = Field(default=None, sa_column=Column(Text))
+    refreshed_at: Optional[datetime] = None
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
