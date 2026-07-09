@@ -100,5 +100,16 @@ def update_flow(
 def delete_flow(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.EDIT)
+
+    # FK da gestire: la cronologia dei run muore col flusso; le datasource
+    # pubblicate SOPRAVVIVONO (sono contenuti di catalogo) perdendo solo la
+    # provenienza (flow_id → NULL). Statement bulk: eseguiti SUBITO, così
+    # l'ordine (prima i referenzianti, poi il flusso) è garantito.
+    from sqlalchemy import delete as sa_delete, update as sa_update
+
+    from app.models import Datasource, Run
+
+    session.exec(sa_update(Datasource).where(Datasource.flow_id == flow_id).values(flow_id=None))
+    session.exec(sa_delete(Run).where(Run.flow_id == flow_id))
     session.delete(flow)
     session.commit()

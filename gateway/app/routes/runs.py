@@ -1,0 +1,257 @@
+"""Esecuzioni dei flussi (run history) e pubblicazione dell'output.
+
+Chi può cosa (ereditato lungo l'albero dei progetti):
+- lanciare un run: capability RUN sul progetto del flusso;
+- pubblicare l'output come datasource: in più EDIT sulla cartella di destinazione;
+- vedere la cronologia: VIEW.
+
+Il gateway NON fa polling in background: lo stato dei run non terminali viene
+riconciliato con l'engine ogni volta che qualcuno li legge (lazy). Così un run
+lanciato e dimenticato si aggiorna alla prima visita della cronologia.
+"""
+import json
+import logging
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
+
+from app.core.engine_client import get_engine_client
+from app.db.session import get_session
+from app.deps.auth import get_current_user
+from app.deps.permissions import ensure_can
+from app.models import Datasource, Flow, Project, Run, User
+from app.models.permission import Capability
+from app.models.run import TERMINAL_STATES
+from app.schemas.models import RunCreate, RunOut
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["runs"])
+
+
+def _get_flow(session: Session, flow_id: int) -> Flow:
+    flow = session.get(Flow, flow_id)
+    if flow is None:
+        raise HTTPException(status_code=404, detail="Flusso non trovato")
+    return flow
+
+
+def _datasource_name_taken(session: Session, project_id: int, name: str) -> bool:
+    return (
+        session.exec(
+            select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)
+        ).first()
+        is not None
+    )
+
+
+@router.post("/flows/{flow_id}/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)
+async def launch_run(
+    flow_id: int,
+    body: RunCreate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.RUN)
+
+    if body.publish:
+        # pubblicare scrive contenuto nella cartella di destinazione → EDIT
+        if session.get(Project, body.publish.project_id) is None:
+            raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
+        ensure_can(session, user, body.publish.project_id, Capability.EDIT)
+        if not body.publish.name.strip():
+            raise HTTPException(status_code=422, detail="Il nome della datasource è vuoto")
+        if _datasource_name_taken(session, body.publish.project_id, body.publish.name.strip()):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Esiste già una datasource '{body.publish.name}' in questa cartella",
+            )
+
+    # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
+    prefix = "datasets" if body.publish else "out"
+    output_key = f"{prefix}/{uuid.uuid4().hex}.parquet"
+
+    client = get_engine_client()
+    resp = await client.post(
+        "/tasks/transform-data",
+        json={
+            "bucket": body.bucket,
+            "input_key": body.input_key,
+            "output_key": output_key,
+            "operations": body.operations,
+        },
+    )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+    task_id = resp.json().get("task_id")
+    if not task_id:
+        raise HTTPException(status_code=502, detail="L'engine non ha restituito un task_id")
+
+    run = Run(
+        flow_id=flow_id,
+        task_id=task_id,
+        launched_by=user.id,
+        input_key=body.input_key,
+        output_bucket=body.bucket,
+        output_key=output_key,
+        publish_name=body.publish.name.strip() if body.publish else None,
+        publish_project_id=body.publish.project_id if body.publish else None,
+        publish_description=body.publish.description if body.publish else "",
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+# oltre questa età un run non terminale è perso: Celery risponde PENDING anche
+# per task id che NON conosce più (risultato scaduto, Redis svuotato, worker
+# morto) → senza cutoff il run resterebbe zombie per sempre.
+STALE_AFTER_SECONDS = 3600 + 300  # task_time_limit dell'engine + margine
+
+
+def _age_seconds(dt: datetime | None) -> float:
+    if dt is None:
+        return 0.0
+    if dt.tzinfo is None:  # Postgres restituisce naive → è UTC per costruzione
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - dt).total_seconds()
+
+
+async def _reconcile(session: Session, run: Run) -> Run:
+    """Allinea un run non terminale allo stato del task sull'engine.
+
+    La transizione a uno stato TERMINALE è un claim ATOMICO (UPDATE condizionato
+    sul non essere già terminale): tra letture concorrenti dello stesso run —
+    il polling dell'editor + la cronologia aperta, o due tab — ne vince una
+    sola, quindi la pubblicazione non può avvenire due volte.
+    Errori di rete verso l'engine non rompono la lettura: si riprova alla prossima.
+    """
+    if run.status in TERMINAL_STATES:
+        return run
+    client = get_engine_client()
+    try:
+        resp = await client.get(f"/tasks/{run.task_id}")
+        data = resp.json()
+    except Exception as e:  # engine irraggiungibile → riconcilieremo dopo
+        logger.warning("riconciliazione run %s rimandata: %s", run.id, e)
+        return run
+
+    new_status = data.get("status", run.status)
+    result = data.get("result") or {}
+    error = data.get("error")
+
+    if new_status not in TERMINAL_STATES and _age_seconds(run.started_at) > STALE_AFTER_SECONDS:
+        new_status = "FAILURE"
+        error = "stato del run perso (risultato scaduto o engine riavviato)"
+
+    if new_status == run.status:
+        return run
+
+    if new_status not in TERMINAL_STATES:  # es. PENDING → STARTED
+        run.status = new_status
+        session.add(run)
+        session.commit()
+        session.refresh(run)
+        return run
+
+    # claim atomico della transizione terminale
+    values: dict = {"status": new_status, "finished_at": datetime.now(timezone.utc)}
+    if new_status == "SUCCESS":
+        values["rows_written"] = result.get("rows_written")
+    else:
+        values["error"] = (error or "")[:2000]
+    claimed = session.exec(
+        update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**values)
+    )
+    session.commit()
+    session.refresh(run)
+    if claimed.rowcount == 0:
+        return run  # un'altra richiesta ha già chiuso questo run
+
+    if (
+        new_status == "SUCCESS"
+        and run.publish_name
+        and run.publish_project_id
+        and run.datasource_id is None
+    ):
+        _publish_datasource(session, run, result)
+    return run
+
+
+def _publish_datasource(session: Session, run: Run, result: dict) -> None:
+    """Crea la datasource promessa dal run (solo il vincitore del claim arriva qui).
+
+    Il vincolo UNIQUE (project, name) resta la rete di sicurezza: su conflitto
+    si riprova UNA volta con un suffisso; se fallisce ancora (o il progetto di
+    destinazione è stato eliminato nel frattempo) il run resta SUCCESS senza
+    datasource, con l'errore nei log.
+    """
+    def _make(name: str) -> Datasource:
+        return Datasource(
+            name=name,
+            description=run.publish_description,
+            project_id=run.publish_project_id,
+            owner_id=run.launched_by,
+            bucket=run.output_bucket,
+            key=run.output_key,
+            rows=run.rows_written,
+            columns=json.dumps(result.get("columns") or []),
+            kind="flow",
+            flow_id=run.flow_id,
+        )
+
+    first = run.publish_name
+    if _datasource_name_taken(session, run.publish_project_id, first):
+        first = f"{run.publish_name} ({run.task_id[:8]})"  # conflitto sopravvenuto
+    for candidate in dict.fromkeys([first, f"{run.publish_name} ({run.task_id[:8]})"]):
+        ds = _make(candidate)
+        session.add(ds)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            continue
+        run.datasource_id = ds.id
+        session.add(run)
+        session.commit()
+        session.refresh(run)
+        return
+    logger.error(
+        "run %s: datasource '%s' non pubblicata (conflitti ripetuti o progetto eliminato)",
+        run.id,
+        run.publish_name,
+    )
+
+
+@router.get("/flows/{flow_id}/runs", response_model=list[RunOut])
+async def list_runs(
+    flow_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    runs = session.exec(
+        select(Run).where(Run.flow_id == flow_id).order_by(Run.started_at.desc()).limit(50)
+    ).all()
+    return [await _reconcile(session, r) for r in runs]
+
+
+@router.get("/runs/{run_id}", response_model=RunOut)
+async def get_run(
+    run_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    run = session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run non trovato")
+    flow = _get_flow(session, run.flow_id)
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    return await _reconcile(session, run)

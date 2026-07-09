@@ -14,6 +14,8 @@ from app.routes.groups import router as groups_router
 from app.routes.projects import router as projects_router
 from app.routes.permissions import router as permissions_router
 from app.routes.flows import router as flows_router
+from app.routes.runs import router as runs_router
+from app.routes.datasources import router as datasources_router
 from app.routes.proxy import router as proxy_router
 
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +56,8 @@ app.include_router(groups_router)
 app.include_router(projects_router)
 app.include_router(permissions_router)
 app.include_router(flows_router)
+app.include_router(runs_router)
+app.include_router(datasources_router)
 # data plane (proxy verso l'engine interno)
 app.include_router(proxy_router)
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   ChevronRight,
   ChevronDown,
@@ -13,9 +13,16 @@ import {
   Plus,
   Workflow,
   FolderInput,
+  Database,
+  History,
+  CheckCircle2,
+  XCircle,
+  LoaderCircle,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
+import { useRuns, type RunInfo } from '~/composables/useRuns'
+import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import {
   useProjects,
   CAPABILITIES,
@@ -27,6 +34,8 @@ import {
 
 const api = useProjects()
 const flowsApi = useFlows()
+const runsApi = useRuns()
+const dsApi = useDatasources()
 const { user } = useAuth()
 
 const projects = ref<Project[]>([])
@@ -98,11 +107,19 @@ async function selectProject(id: number) {
   permissions.value = []
   flows.value = []
   flowsError.value = ''
+  dsList.value = []
+  expandedFlowId.value = null
   // flussi contenuti nella cartella (basta VIEW)
   try {
     flows.value = await flowsApi.listByProject(id)
   } catch (e) {
     flowsError.value = errMessage(e)
+  }
+  // datasource della cartella
+  try {
+    dsList.value = await dsApi.listByProject(id)
+  } catch {
+    dsList.value = []
   }
   // se riusciamo a leggere i permessi → abbiamo MANAGE sul progetto
   try {
@@ -144,6 +161,67 @@ async function deleteFlow(flow: FlowSummary) {
   try {
     await flowsApi.remove(flow.id)
     flows.value = flows.value.filter((f) => f.id !== flow.id)
+  } catch (e) {
+    error.value = errMessage(e)
+  }
+}
+
+// ── Cronologia run (espandibile per flusso) ────────────────────────────────
+const expandedFlowId = ref<number | null>(null)
+const flowRuns = ref<RunInfo[]>([])
+const runsLoading = ref(false)
+
+const isTerminal = (r: RunInfo) => r.status === 'SUCCESS' || r.status === 'FAILURE'
+
+async function loadRuns(flowId: number) {
+  try {
+    const rows = await runsApi.listByFlow(flowId) // il GET riconcilia gli stati
+    if (expandedFlowId.value !== flowId) return // risposta stantia: riga cambiata/chiusa
+    flowRuns.value = rows
+    // run in corso → auto-refresh finché la riga resta espansa
+    if (rows.some((r) => !isTerminal(r))) {
+      setTimeout(() => {
+        if (expandedFlowId.value === flowId) loadRuns(flowId)
+      }, 2500)
+    }
+  } catch (e) {
+    if (expandedFlowId.value === flowId) error.value = errMessage(e)
+  } finally {
+    runsLoading.value = false
+  }
+}
+
+function toggleRuns(flow: FlowSummary) {
+  if (expandedFlowId.value === flow.id) {
+    expandedFlowId.value = null
+    return
+  }
+  expandedFlowId.value = flow.id
+  flowRuns.value = []
+  runsLoading.value = true
+  loadRuns(flow.id)
+}
+
+onUnmounted(() => {
+  expandedFlowId.value = null // ferma l'auto-refresh
+})
+
+function fmtDuration(run: RunInfo): string {
+  if (!run.started_at || !run.finished_at) return '—'
+  const ms = new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()
+  if (ms < 1000) return '<1s'
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+// ── Datasources della cartella ─────────────────────────────────────────────
+const dsList = ref<DatasourceInfo[]>([])
+
+async function deleteDatasource(ds: DatasourceInfo) {
+  if (!confirm(`Eliminare la datasource "${ds.name}"? Il parquet verrà rimosso dallo storage.`)) return
+  try {
+    await dsApi.remove(ds.id)
+    dsList.value = dsList.value.filter((d) => d.id !== ds.id)
   } catch (e) {
     error.value = errMessage(e)
   }
@@ -301,7 +379,8 @@ async function revoke(perm: Permission) {
 
           <table v-else class="flows">
             <tbody>
-              <tr v-for="f in flows" :key="f.id">
+              <template v-for="f in flows" :key="f.id">
+              <tr>
                 <td class="fname">
                   <NuxtLink :to="`/editor?flow=${f.id}`" class="flowlink">
                     <Workflow :size="14" /> {{ f.name }}
@@ -309,6 +388,12 @@ async function revoke(perm: Permission) {
                 </td>
                 <td class="fdate muted">{{ fmtDate(f.updated_at) }}</td>
                 <td class="factions">
+                  <button
+                    class="mini"
+                    :class="{ activebtn: expandedFlowId === f.id }"
+                    title="Cronologia dei run"
+                    @click="toggleRuns(f)"
+                  ><History :size="13" /></button>
                   <Select
                     v-if="movingFlowId === f.id"
                     class="movesel"
@@ -325,6 +410,56 @@ async function revoke(perm: Permission) {
                     @click="movingFlowId = f.id"
                   ><FolderInput :size="13" /></button>
                   <button class="mini danger" title="Elimina flusso" @click="deleteFlow(f)">
+                    <Trash2 :size="13" />
+                  </button>
+                </td>
+              </tr>
+
+              <!-- cronologia dei run del flusso (espansa) -->
+              <tr v-if="expandedFlowId === f.id" class="runsrow">
+                <td colspan="3">
+                  <p v-if="runsLoading" class="muted runmeta">
+                    <LoaderCircle :size="13" class="spin" /> Carico la cronologia…
+                  </p>
+                  <p v-else-if="!flowRuns.length" class="muted runmeta">Nessun run per questo flusso.</p>
+                  <ul v-else class="runlist">
+                    <li v-for="r in flowRuns" :key="r.id" class="runitem">
+                      <CheckCircle2 v-if="r.status === 'SUCCESS'" :size="14" class="rok" />
+                      <XCircle v-else-if="r.status === 'FAILURE'" :size="14" class="rko" />
+                      <LoaderCircle v-else :size="14" class="spin rwip" />
+                      <span class="rwhen">{{ fmtDate(r.started_at) }}</span>
+                      <span class="muted">{{ fmtDuration(r) }}</span>
+                      <span v-if="r.rows_written != null" class="muted">{{ r.rows_written }} righe</span>
+                      <span v-if="r.publish_name" class="rpub">
+                        <Database :size="12" /> {{ r.publish_name }}
+                      </span>
+                      <span v-if="r.error" class="rerr" :title="r.error">{{ r.error.slice(0, 80) }}</span>
+                    </li>
+                  </ul>
+                </td>
+              </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- datasource della cartella -->
+        <div class="section">
+          <div class="section-head">
+            <label>Datasources</label>
+          </div>
+          <p v-if="!dsList.length" class="muted">Nessuna datasource in questa cartella.</p>
+          <table v-else class="flows">
+            <tbody>
+              <tr v-for="d in dsList" :key="d.id">
+                <td class="fname">
+                  <span class="flowlink dsname"><Database :size="14" /> {{ d.name }}</span>
+                </td>
+                <td class="fdate muted">
+                  {{ d.rows != null ? `${d.rows} righe` : '' }} · {{ fmtDate(d.updated_at) }}
+                </td>
+                <td class="factions">
+                  <button class="mini danger" title="Elimina datasource (anche il parquet)" @click="deleteDatasource(d)">
                     <Trash2 :size="13" />
                   </button>
                 </td>
@@ -465,6 +600,18 @@ td.factions { text-align: right; white-space: nowrap; display: flex; gap: 4px; j
 }
 .flowlink:hover { color: var(--accent); }
 .movesel { width: 130px; font-size: 12px; padding: 3px 6px; }
+.activebtn { border-color: var(--accent); }
+.runsrow td { background: var(--bg-soft); }
+.runmeta { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 2px; }
+.runlist { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.runitem { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 2px 4px; }
+.rok { color: var(--accent-2); }
+.rko { color: var(--danger); }
+.rwip { color: var(--accent); }
+.rwhen { min-width: 110px; }
+.rpub { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-hi); }
+.rerr { color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsname { cursor: default; }
 .btn-link.small { font-size: 12px; padding: 4px 10px; }
 .btn-link {
   display: inline-flex;

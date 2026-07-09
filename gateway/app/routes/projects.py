@@ -101,11 +101,22 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
     has_children = session.exec(select(Project).where(Project.parent_id == project_id)).first()
     if has_children:
         raise HTTPException(status_code=409, detail="Il progetto contiene sotto-cartelle: svuotalo prima")
-    from app.models import Permission, Flow
+    from app.models import Permission, Flow, Datasource
 
     has_flows = session.exec(select(Flow).where(Flow.project_id == project_id)).first()
     if has_flows:
         raise HTTPException(status_code=409, detail="Il progetto contiene flussi: spostali o eliminali prima")
+    has_ds = session.exec(select(Datasource).where(Datasource.project_id == project_id)).first()
+    if has_ds:
+        raise HTTPException(status_code=409, detail="Il progetto contiene datasource: spostale o eliminale prima")
+
+    # run storici che avevano questo progetto come DESTINAZIONE di publish
+    # (vivono sotto flussi di altri progetti): staccali, la cronologia resta
+    from sqlalchemy import update as sa_update
+
+    from app.models import Run
+
+    session.exec(sa_update(Run).where(Run.publish_project_id == project_id).values(publish_project_id=None))
 
     for perm in session.exec(select(Permission).where(Permission.project_id == project_id)).all():
         session.delete(perm)

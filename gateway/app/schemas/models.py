@@ -111,6 +111,57 @@ class FlowUpdate(BaseModel):
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
 
 
+# ── Runs (esecuzioni dei flussi) ──────────────────────────────────────────────
+class PublishSpec(BaseModel):
+    """Richiesta di pubblicare l'output del run come datasource nominata."""
+    name: str
+    project_id: int
+    description: str = ""
+
+
+class RunCreate(BaseModel):
+    bucket: str
+    input_key: str
+    operations: list[dict] = Field(default_factory=list)
+    publish: Optional[PublishSpec] = None
+
+
+class RunOut(BaseModel):
+    id: int
+    flow_id: int
+    status: str
+    launched_by: Optional[int]
+    output_key: str
+    rows_written: Optional[int]
+    error: Optional[str]
+    publish_name: Optional[str]
+    datasource_id: Optional[int]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+
+
+# ── Datasources (dataset nominati nel catalogo) ───────────────────────────────
+class DatasourceOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    project_id: int
+    owner_id: Optional[int]
+    bucket: str
+    key: str
+    rows: Optional[int]
+    columns: list[dict] = Field(default_factory=list)
+    kind: str
+    flow_id: Optional[int]
+    updated_at: Optional[datetime] = None
+
+
+class DatasourceUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+
+
 # ── Permissions ───────────────────────────────────────────────────────────────
 class PermissionOut(BaseModel):
     id: int

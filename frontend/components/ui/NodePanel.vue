@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Node } from '@vue-flow/core'
-import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat } from 'lucide-vue-next'
+import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
+import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
 
@@ -12,6 +13,7 @@ const props = defineProps<{
   rightColumns: ColumnInfo[]
   placeholders?: string[]
   fetchDistinct?: (column: string) => Promise<any[]>
+  datasources?: DatasourceInfo[]
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -28,6 +30,21 @@ function changeType(opType: string) {
 
 function onParams(params: Record<string, any>) {
   emit('update', { params })
+}
+
+// il nodo sorgente può caricare una datasource del catalogo al posto del file
+function pickDatasource(id: number | null) {
+  const ds = (props.datasources ?? []).find((d) => d.id === id)
+  if (!ds) return
+  emit('update', {
+    datasourceId: ds.id,
+    datasetId: null,
+    bucket: ds.bucket,
+    parquetKey: ds.key,
+    filename: ds.name,
+    rows: ds.rows,
+    columns: ds.columns,
+  })
 }
 </script>
 
@@ -53,6 +70,16 @@ function onParams(params: Record<string, any>) {
         </div>
       </template>
       <p v-else class="muted">Carica un file dalla toolbar per popolare la sorgente.</p>
+
+      <div class="dspick">
+        <label><Database :size="12" /> oppure usa una datasource del catalogo</label>
+        <Select
+          :model-value="node.data.datasourceId ?? null"
+          :options="(datasources ?? []).map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${d.rows} righe)` : d.name }))"
+          placeholder="scegli una datasource…"
+          @update:model-value="pickDatasource"
+        />
+      </div>
     </template>
 
     <!-- container foreach -->
@@ -149,6 +176,8 @@ label { font-size: 12px; color: var(--muted); }
 .del { padding: 2px 8px; }
 .mono { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
 .exportbar { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.dspick { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 5px; }
+.dspick > label { display: inline-flex; align-items: center; gap: 5px; }
 .phlist { margin: 8px 0 0; font-size: 12px; }
 .phlist code {
   background: var(--panel-2);

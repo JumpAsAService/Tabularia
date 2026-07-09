@@ -71,9 +71,15 @@ def has_capability(session: Session, user: User, project_id: int, capability: Ca
     return False
 
 
-def visible_project_ids(session: Session, user: User) -> set[int]:
-    """Progetti che l'utente può vedere: quelli su cui ha (o eredita) VIEW, più i
-    loro antenati (per rendere l'albero navigabile fino alla radice)."""
+def readable_project_ids(session: Session, user: User) -> set[int]:
+    """Progetti di cui l'utente può LEGGERE il contenuto: quelli con VIEW
+    concesso o ereditato (i discendenti dei grant). SENZA gli antenati.
+
+    Differenza fondamentale con `visible_project_ids`: quella aggiunge gli
+    antenati per rendere navigabile l'albero (ne mostra solo il NOME), ma il
+    contenuto degli antenati NON è leggibile. Per filtrare contenuti
+    (datasource, flussi, run) usare SEMPRE questa.
+    """
     projects = _all_projects(session)
     if user.is_superuser:
         return set(projects.keys())
@@ -85,7 +91,15 @@ def visible_project_ids(session: Session, user: User) -> set[int]:
         and grant_satisfies(perm.capability, Capability.VIEW.value)
         and perm.project_id in projects
     }
-    visible = descendant_ids(projects, granted_roots)  # eredità verso il basso
+    return descendant_ids(projects, granted_roots)  # eredità verso il basso
+
+
+def visible_project_ids(session: Session, user: User) -> set[int]:
+    """Progetti che l'utente può vedere NELL'ALBERO: i leggibili più i loro
+    antenati (solo per rendere navigabile il percorso fino alla radice — il
+    CONTENUTO degli antenati non è leggibile: vedi `readable_project_ids`)."""
+    projects = _all_projects(session)
+    visible = readable_project_ids(session, user)
     for pid in list(visible):
         visible.update(ancestor_ids(projects, pid))  # mostra il percorso
     return visible

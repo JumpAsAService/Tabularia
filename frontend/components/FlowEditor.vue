@@ -11,10 +11,14 @@ import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
+import { useRuns, type PublishSpec } from '~/composables/useRuns'
+import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 
 const api = useApi()
 const flowsApi = useFlows()
 const projectsApi = useProjects()
+const runsApi = useRuns()
+const dsApi = useDatasources()
 const route = useRoute()
 const router = useRouter()
 const bucket = useRuntimeConfig().public.bucket as string
@@ -191,16 +195,28 @@ onMounted(async () => {
     return
   }
   try {
-    if (flowId.value !== null) {
-      await loadFlow(flowId.value)
-    } else if (projectId.value === null) {
-      // flusso nuovo senza cartella: serve la lista per il selettore in toolbar
-      projectsList.value = await projectsApi.list()
-    }
+    // la lista progetti serve al selettore in toolbar E al dialog di run
+    projectsList.value = await projectsApi.list()
+  } catch {
+    projectsList.value = []
+  }
+  try {
+    if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
     setStatus(`Caricamento flusso fallito: ${errMessage(e)}`, 'error')
   }
+  refreshDatasources()
 })
+
+// ── Catalogo datasources (per il picker del nodo sorgente) ────────────────
+const datasources = ref<DatasourceInfo[]>([])
+async function refreshDatasources() {
+  try {
+    datasources.value = await dsApi.list()
+  } catch {
+    datasources.value = []
+  }
+}
 
 // ── Eventi canvas ─────────────────────────────────────────────────────────
 onConnect((conn: Connection) => {
@@ -244,6 +260,7 @@ async function onUpload(file: File) {
     const res = await api.uploadFile(file)
     updateNodeData(sid, {
       datasetId: res.dataset_id,
+      datasourceId: null, // l'upload scollega l'eventuale datasource scelta prima
       parquetKey: res.parquet_key,
       filename: file.name,
       rows: res.dataset?.rows ?? null,
@@ -602,32 +619,101 @@ async function exportSelected(format: 'csv' | 'xlsx') {
 }
 
 // ── Run (async via Celery) ──────────────────────────────────────────────
-async function run() {
+// Il click su Esegui apre il dialog (con pubblicazione opzionale); il lancio
+// vero passa dal GATEWAY quando il flusso è salvato → cronologia dei run.
+const runDialogOpen = ref(false)
+const runDialogError = ref('')
+
+function run() {
+  const leaf = leafNodeId(getNodes.value, getEdges.value)
+  const { sourceNode } = resolveChain(getNodes.value, getEdges.value, leaf)
+  if (!sourceNode?.data?.parquetKey) return
+  runDialogError.value = ''
+  runDialogOpen.value = true
+}
+
+async function executeRun(publish: PublishSpec | null) {
   const leaf = leafNodeId(getNodes.value, getEdges.value)
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leaf)
-  if (!sourceNode?.data?.parquetKey) return
-  busy.value = true
+  if (!sourceNode?.data?.parquetKey) {
+    runDialogOpen.value = false
+    return
+  }
+  runDialogError.value = ''
+  busy.value = true // solo per la durata del LANCIO: il canvas resta usabile durante il run
   try {
-    const outputKey = `out/${sourceNode.data.datasetId}_${Date.now()}.parquet`
-    const res = await api.transform({
-      bucket: sourceNode.data.bucket ?? bucket,
-      input_key: sourceNode.data.parquetKey,
-      output_key: outputKey,
-      operations: ops,
-    })
-    setStatus(`Task ${res.task_id} avviato…`, 'busy')
-    await pollTask(res.task_id, outputKey)
+    if (flowId.value !== null) {
+      // percorso con cronologia: il gateway registra il run e pubblica l'output
+      const launched = await runsApi.launch(flowId.value, {
+        bucket: sourceNode.data.bucket ?? bucket,
+        input_key: sourceNode.data.parquetKey,
+        operations: ops,
+        publish,
+      })
+      runDialogOpen.value = false // chiuso SOLO a lancio riuscito
+      setStatus(`Run #${launched.id} avviato…`, 'busy')
+      pollRun(launched.id) // in background: niente lock sull'editor
+    } else {
+      // flusso non salvato: run diretto, senza cronologia né pubblicazione
+      const outputKey = `out/${sourceNode.data.datasetId ?? 'run'}_${Date.now()}.parquet`
+      const res = await api.transform({
+        bucket: sourceNode.data.bucket ?? bucket,
+        input_key: sourceNode.data.parquetKey,
+        output_key: outputKey,
+        operations: ops,
+      })
+      runDialogOpen.value = false
+      setStatus(`Task ${res.task_id} avviato…`, 'busy')
+      pollTask(res.task_id, outputKey)
+    }
   } catch (e) {
-    setStatus(`Run fallito: ${errMessage(e)}`, 'error')
+    // 409 nome duplicato / 403 permessi: il dialog resta aperto con l'input intatto
+    runDialogError.value = errMessage(e)
   } finally {
     busy.value = false
   }
 }
 
+// token di cancellazione: un nuovo poll (o l'unmount) invalida i precedenti
+let pollToken = 0
+onUnmounted(() => {
+  pollToken++
+})
+
+async function pollRun(runId: number) {
+  const token = ++pollToken
+  // ~1.5s * 2400 ≈ 1h, allineato al task_time_limit dell'engine
+  for (let i = 0; i < 2400; i++) {
+    await new Promise((r) => setTimeout(r, 1500))
+    if (token !== pollToken) return // pagina chiusa o nuovo run: stop
+    let run
+    try {
+      run = await runsApi.get(runId) // il GET riconcilia lo stato lato gateway
+    } catch {
+      continue
+    }
+    if (token !== pollToken) return
+    if (run.status === 'SUCCESS') {
+      const published = run.publish_name ? ` → datasource “${run.publish_name}”` : ''
+      setStatus(`Completato: ${run.rows_written} righe${published}`, 'ok')
+      if (run.datasource_id) refreshDatasources() // subito usabile nel picker
+      return
+    }
+    if (run.status === 'FAILURE') {
+      setStatus(`Errore: ${run.error}`, 'error')
+      return
+    }
+  }
+  setStatus('Timeout in attesa del run.', 'error')
+}
+
 async function pollTask(id: string, outputKey: string) {
+  const token = ++pollToken
   for (let i = 0; i < 120; i++) {
     await new Promise((r) => setTimeout(r, 1000))
+    if (token !== pollToken) return
     const st = await api.taskStatus(id)
+    if (token !== pollToken) return
     if (st.status === 'SUCCESS') {
       setStatus(`Completato: ${st.result?.rows_written} righe → ${outputKey}`, 'ok')
       return
@@ -695,11 +781,23 @@ async function pollTask(id: string, outputKey: string) {
         :right-columns="rightColumns"
         :placeholders="placeholders"
         :fetch-distinct="fetchDistinctValues"
+        :datasources="datasources"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"
       />
     </div>
+
+    <RunDialog
+      :open="runDialogOpen"
+      :can-publish="flowId !== null"
+      :projects="projectsList"
+      :default-project-id="projectId"
+      :error="runDialogError"
+      :busy="busy"
+      @confirm="executeRun"
+      @cancel="runDialogOpen = false"
+    />
 
     <div class="grid">
       <div class="viewtabs">

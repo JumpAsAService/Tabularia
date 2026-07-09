@@ -78,3 +78,20 @@ def upload_file(
             os.remove(tmp_path)
         except OSError:
             pass
+
+
+@router.delete("/object", status_code=204)
+def delete_object(bucket: str, key: str):
+    """Elimina un oggetto dallo storage (idempotente, come S3).
+
+    Endpoint INTERNO usato dal gateway per il cleanup dei blob (es. eliminazione
+    di una datasource): le credenziali S3 vivono solo nell'engine, il control
+    plane non tocca mai lo storage direttamente. Limitato per sicurezza ai
+    prefissi dei dati gestiti.
+    """
+    allowed = ("datasets/", "out/", "raw/")
+    if not key.startswith(allowed):
+        raise HTTPException(422, f"chiave fuori dai prefissi gestiti {allowed}")
+    from app.utils import get_storage_service
+
+    get_storage_service().delete_object(bucket, key)
