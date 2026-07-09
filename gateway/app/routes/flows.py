@@ -16,8 +16,24 @@ from app.deps.permissions import ensure_can
 from app.models import Flow, Project, User
 from app.models.permission import Capability
 from app.schemas.models import FlowOut, FlowDetail, FlowCreate, FlowUpdate
+from app.services import permissions as perm_service
 
 router = APIRouter(tags=["flows"])
+
+
+@router.get("/flows", response_model=list[FlowOut])
+def list_all_flows(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """Tutti i flussi nei progetti LEGGIBILI (per la pagina globale Flows).
+
+    `readable_project_ids`, non `visible_project_ids`: gli antenati mostrati
+    per navigazione non danno accesso al loro contenuto.
+    """
+    readable = perm_service.readable_project_ids(session, user)
+    if not readable:
+        return []
+    return session.exec(
+        select(Flow).where(Flow.project_id.in_(readable)).order_by(Flow.name)
+    ).all()
 
 
 def _get_flow(session: Session, flow_id: int) -> Flow:

@@ -1,3 +1,13 @@
+/* Montserrat variable (100–900), self-hosted: l'alternativa libera a Gotham.
+   Un solo woff2 (subset latin, copre l'italiano); niente CDN a runtime. */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/montserrat-latin-var.woff2') format('woff2');
+}
+
 :root {
   /* palette: dark blu-notte con accenti freddi */
   --bg: #0b0e14;
@@ -26,8 +36,9 @@ html, body, #__nuxt {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
+  /* Montserrat è più largo dei font di sistema: 13.5px tiene le tabelle compatte */
+  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13.5px;
 }
 
 /* ── Scrollbar scure e sottili ───────────────────────────────────────── */

@@ -17,6 +17,9 @@ export function useFlows() {
   const { apiFetch } = useApiClient()
 
   return {
+    // tutti i flussi nei progetti leggibili (pagina globale Flows)
+    list: () => apiFetch<FlowSummary[]>('/flows'),
+
     listByProject: (projectId: number) =>
       apiFetch<FlowSummary[]>(`/projects/${projectId}/flows`),
 

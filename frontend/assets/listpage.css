@@ -1,0 +1,108 @@
+/* Stile condiviso delle pagine-elenco (Flows / Datasources / Connections).
+   Importato come <style scoped src="~/assets/listpage.css"> in ogni pagina. */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.page-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.count { font-size: 13px; font-weight: 500; }
+.head-actions { display: flex; align-items: center; gap: 10px; }
+.searchbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+}
+.searchbox input {
+  border: none;
+  background: transparent;
+  padding: 7px 0;
+  width: 220px;
+  outline: none;
+}
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  background: var(--grad-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+table.list {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+table.list thead th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+table.list td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+table.list tbody tr:last-child td { border-bottom: none; }
+table.list tbody tr:hover td { background: var(--panel-2); }
+.rowlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+}
+.rowlink:hover { color: var(--accent); }
+.desc { font-size: 12px; margin-top: 2px; }
+.nowrap { white-space: nowrap; }
+.right { text-align: right; white-space: nowrap; }
+.right .mini { margin-left: 4px; }
+button.mini { padding: 3px 8px; }
+button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
+button.danger:hover { background: var(--danger); color: #fff; }
+.err { color: var(--danger); }
+td .muted, td.muted { display: table-cell; }
+td.muted svg { vertical-align: -2px; margin-right: 4px; }
+.tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  margin-left: 6px;
+}
+.okline { color: var(--accent-2); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.koline { color: var(--danger); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }

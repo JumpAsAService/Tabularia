@@ -82,7 +82,8 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Memoria per container",
+      "title": "Memoria per container (working set)",
+      "description": "container_memory_working_set_bytes: la memoria che conta per l'OOM killer. NON usare container_memory_usage_bytes qui: include la page cache (reclamabile), che con Polars su file grandi gonfia il grafico fino alla dimensione del file senza alcun rischio reale.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -102,7 +103,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "container_memory_usage_bytes{name=~\"dataprep-.*\"}",
+          "expr": "container_memory_working_set_bytes{name=~\"dataprep-.*\"}",
           "legendFormat": "{{name}}",
           "datasource": {
             "type": "prometheus",
