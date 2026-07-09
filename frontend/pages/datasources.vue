@@ -10,6 +10,7 @@ import type { RunInfo } from '~/composables/useRuns'
 
 const dsApi = useDatasources()
 const projectsApi = useProjects()
+const toast = useToast()
 
 const list = ref<DatasourceInfo[]>([])
 const folderName = ref<Record<number, string>>({})
@@ -75,7 +76,7 @@ async function refresh(d: DatasourceInfo) {
     ingestRuns.value = { ...ingestRuns.value, [d.id]: run }
     pollIngest(d.id, pollToken)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 
@@ -84,8 +85,9 @@ async function remove(d: DatasourceInfo) {
   try {
     await dsApi.remove(d.id)
     list.value = list.value.filter((x) => x.id !== d.id)
+    toast.success(`Datasource "${d.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 </script>

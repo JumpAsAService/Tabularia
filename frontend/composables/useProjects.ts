@@ -54,6 +54,7 @@ export function useProjects() {
     users: () => apiFetch<UserOut[]>('/users'),
     createUser: (body: { email: string; password: string; full_name?: string; is_superuser?: boolean }) =>
       apiFetch<UserOut>('/users', { method: 'POST', body }),
+    deleteUser: (userId: number) => apiFetch<void>(`/users/${userId}`, { method: 'DELETE' }),
     groups: () => apiFetch<GroupOut[]>('/groups'),
     createGroup: (body: { name: string; description?: string }) =>
       apiFetch<GroupOut>('/groups', { method: 'POST', body }),

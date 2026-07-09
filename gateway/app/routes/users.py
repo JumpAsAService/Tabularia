@@ -57,11 +57,37 @@ def update_user(user_id: int, body: UserUpdate, session: Session = Depends(get_s
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: int, session: Session = Depends(get_session)):
+def delete_user(
+    user_id: int,
+    session: Session = Depends(get_session),
+    current: User = Depends(require_superuser),
+):
+    """Elimina l'utente. Il suo CONTENUTO resta (i dati sono dell'organizzazione,
+    non della persona): flussi/datasource/connessioni/run perdono solo il
+    riferimento al proprietario. Spariscono con lui i permessi personali, le
+    appartenenze ai gruppi e la proprietà degli upload non ancora in un flusso.
+    """
+    if user_id == current.id:
+        raise HTTPException(status_code=409, detail="Non puoi eliminare il tuo stesso account")
     user = _get_user(session, user_id)
-    # pulisci le appartenenze ai gruppi (niente FK cascade con SQLModel base)
-    for link in session.exec(select(UserGroupLink).where(UserGroupLink.user_id == user_id)).all():
-        session.delete(link)
+
+    # statement bulk espliciti: l'ordine (prima i referenzianti, poi l'utente)
+    # è garantito — stessa lezione dei delete di flussi/progetti
+    from sqlalchemy import delete as sa_delete, update as sa_update
+
+    from app.models import Connection, Datasource, Flow, Permission, Project, Run, Upload
+
+    session.exec(sa_delete(Permission).where(Permission.user_id == user_id))
+    session.exec(sa_delete(UserGroupLink).where(UserGroupLink.user_id == user_id))
+    session.exec(sa_delete(Upload).where(Upload.owner_id == user_id))
+    for model, col in (
+        (Project, Project.owner_id),
+        (Flow, Flow.owner_id),
+        (Datasource, Datasource.owner_id),
+        (Connection, Connection.owner_id),
+        (Run, Run.launched_by),
+    ):
+        session.exec(sa_update(model).where(col == user_id).values({col.key: None}))
     session.delete(user)
     session.commit()
 

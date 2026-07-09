@@ -8,6 +8,7 @@ import { useProjects } from '~/composables/useProjects'
 
 const flowsApi = useFlows()
 const projectsApi = useProjects()
+const toast = useToast()
 
 const flows = ref<FlowSummary[]>([])
 const folderName = ref<Record<number, string>>({})
@@ -49,8 +50,9 @@ async function deleteFlow(f: FlowSummary) {
   try {
     await flowsApi.remove(f.id)
     flows.value = flows.value.filter((x) => x.id !== f.id)
+    toast.success(`Flow "${f.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 </script>

@@ -91,9 +91,13 @@ function startPanelResize(ev: MouseEvent) {
 const status = ref('Carica un file per iniziare.')
 // tipo di stato → icona nella toolbar (spinner / check / errore)
 const statusKind = ref<'info' | 'ok' | 'error' | 'busy'>('info')
+const toast = useToast()
 function setStatus(msg: string, kind: 'info' | 'ok' | 'error' | 'busy' = 'info') {
   status.value = msg
   statusKind.value = kind
+  // successi ed errori anche come toast: si vedono anche a barra piena/ignorata
+  if (kind === 'ok') toast.success(msg)
+  else if (kind === 'error') toast.error(msg)
 }
 const busy = ref(false)
 const preview = ref<PreviewResult | null>(null)

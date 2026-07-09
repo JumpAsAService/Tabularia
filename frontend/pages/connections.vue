@@ -14,6 +14,7 @@ import { useProjects } from '~/composables/useProjects'
 
 const connApi = useConnections()
 const projectsApi = useProjects()
+const toast = useToast()
 
 const list = ref<ConnectionInfo[]>([])
 const folderName = ref<Record<number, string>>({})
@@ -76,6 +77,7 @@ async function saveEdit(draft: ConnectionDraft) {
     if (!body.password) delete body.password // vuota = invariata
     await connApi.update(editing.value.id, body)
     editing.value = null
+    toast.success(`Connection "${draft.name}" updated`)
     await load()
   } catch (e) {
     dialogError.value = errMessage(e)
@@ -89,8 +91,9 @@ async function remove(c: ConnectionInfo) {
   try {
     await connApi.remove(c.id)
     list.value = list.value.filter((x) => x.id !== c.id)
+    toast.success(`Connection "${c.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 </script>

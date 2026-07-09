@@ -49,6 +49,7 @@ const runsApi = useRuns()
 const dsApi = useDatasources()
 const connApi = useConnections()
 const { user } = useAuth()
+const toast = useToast()
 
 const projects = ref<Project[]>([])
 const expanded = ref<Set<number>>(new Set())
@@ -177,8 +178,9 @@ async function moveFlow(flow: FlowSummary, target: number | null) {
     await flowsApi.update(flow.id, { project_id: target })
     movingFlowId.value = null
     flows.value = flows.value.filter((f) => f.id !== flow.id)
+    toast.success(`Flow "${flow.name}" moved`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 
@@ -187,8 +189,9 @@ async function deleteFlow(flow: FlowSummary) {
   try {
     await flowsApi.remove(flow.id)
     flows.value = flows.value.filter((f) => f.id !== flow.id)
+    toast.success(`Flow "${flow.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 
@@ -249,8 +252,9 @@ async function deleteDatasource(ds: DatasourceInfo) {
   try {
     await dsApi.remove(ds.id)
     dsList.value = dsList.value.filter((d) => d.id !== ds.id)
+    toast.success(`Datasource "${ds.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 
@@ -284,7 +288,7 @@ async function refreshDatasource(ds: DatasourceInfo) {
     ingestRuns.value = { ...ingestRuns.value, [ds.id]: run }
     pollIngest(ds.id, ingestToken)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 
@@ -311,6 +315,7 @@ async function createDbDatasource(draft: DbDatasourceDraft) {
   try {
     const ds = await dsApi.createDb(selectedId.value, draft)
     showDbDsDialog.value = false
+    toast.success(`Datasource "${ds.name}" created — import started`)
     dsList.value = await dsApi.listByProject(selectedId.value)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
@@ -343,8 +348,10 @@ async function saveConnection(draft: ConnectionDraft) {
       const body: any = { ...draft }
       if (!body.password) delete body.password // vuota = invariata
       await connApi.update(editingConn.value.id, body)
+      toast.success(`Connection "${draft.name}" updated`)
     } else {
       await connApi.create(selectedId.value, draft)
+      toast.success(`Connection "${draft.name}" created`)
     }
     showConnDialog.value = false
     connections.value = await connApi.listByProject(selectedId.value)
@@ -360,8 +367,9 @@ async function deleteConnection(c: ConnectionInfo) {
   try {
     await connApi.remove(c.id)
     connections.value = connections.value.filter((x) => x.id !== c.id)
+    toast.success(`Connection "${c.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 
@@ -404,8 +412,9 @@ async function removeProject(p: Project) {
     await api.remove(p.id)
     if (selectedId.value === p.id) selectedId.value = null
     await loadProjects()
+    toast.success(`Folder "${p.name}" deleted`)
   } catch (e) {
-    error.value = errMessage(e)
+    toast.error(errMessage(e))
   }
 }
 

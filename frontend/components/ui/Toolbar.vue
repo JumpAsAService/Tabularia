@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Table2, Upload, Plus, Play, Save, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
+import {
+  Table2,
+  Upload,
+  Plus,
+  Play,
+  Save,
+  CheckCircle2,
+  XCircle,
+  LoaderCircle,
+  ArrowLeft,
+  LogOut,
+} from 'lucide-vue-next'
+
+const { logout } = useAuth()
 
 const props = defineProps<{
   status: string
@@ -82,6 +95,11 @@ const statusIcon = computed(() => {
       />
       {{ status }}
     </span>
+
+    <!-- navigazione: DENTRO la barra, così non copre mai lo stato del run -->
+    <span class="sep" />
+    <NuxtLink to="/" class="navbtn"><ArrowLeft :size="13" /> Progetti</NuxtLink>
+    <button class="navbtn" title="Esci" @click="logout"><LogOut :size="13" /></button>
   </div>
 </template>
 
@@ -96,9 +114,33 @@ const statusIcon = computed(() => {
 .flowname { width: 170px; }
 .projsel { width: 140px; }
 .sep { width: 1px; align-self: stretch; background: var(--border); }
-.status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .status.ok { color: var(--accent-2); }
 .status.error { color: var(--danger); }
+.navbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 5px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.navbtn:hover { border-color: var(--accent); }
 .filebtn {
   display: inline-flex;
   align-items: center;
