@@ -102,6 +102,13 @@ async def transform(
     output_key = payload.get("output_key") if isinstance(payload, dict) else None
     if not user.is_superuser and not str(output_key or "").startswith("out/"):
         raise HTTPException(status_code=403, detail="La scrittura è consentita solo nell'area out/")
+    # le destinazioni database passano SOLO da /flows/{id}/runs: è il gateway a
+    # costruire il payload di connessione (RBAC CONNECT, password mai dal client)
+    if isinstance(payload, dict) and payload.get("db_destination"):
+        raise HTTPException(
+            status_code=422,
+            detail="Destinazione database non consentita qui: salva il flusso e usa un nodo Output",
+        )
     return await _forward(request, "POST", "/tasks/transform-data", content=raw)
 
 

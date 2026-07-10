@@ -12,14 +12,16 @@ import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } fro
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
-import { useRuns, type PublishSpec } from '~/composables/useRuns'
+import { useRuns, type PublishSpec, type DestinationSpec } from '~/composables/useRuns'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
+import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
 
 const api = useApi()
 const flowsApi = useFlows()
 const projectsApi = useProjects()
 const runsApi = useRuns()
 const dsApi = useDatasources()
+const connApi = useConnections()
 const route = useRoute()
 const router = useRouter()
 const bucket = useRuntimeConfig().public.bucket as string
@@ -62,6 +64,7 @@ const nodeColumns = reactive<Record<string, ColumnInfo[]>>({}) // cache output p
 
 let opCounter = 0
 let sourceCounter = 0
+let outputCounter = 0
 
 const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
 
@@ -179,6 +182,7 @@ async function loadFlow(id: number) {
       .map((n: any) => Number(String(n.id).slice(prefix.length)) || 0))
   opCounter = maxN('op-')
   sourceCounter = maxN('src-')
+  outputCounter = maxN('out-')
   selectedId.value = null
   setStatus(`Flusso "${f.name}" caricato`, 'ok')
 }
@@ -225,6 +229,7 @@ onMounted(async () => {
   // il catalogo PRIMA del flusso: loadFlow riaggancia le sorgenti-datasource
   // allo snapshot corrente (le chiavi salvate diventano stantie a ogni refresh)
   await refreshDatasources()
+  refreshConnections() // per il nodo Output: può arrivare dopo, non blocca il load
   try {
     if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
@@ -239,6 +244,16 @@ async function refreshDatasources() {
     datasources.value = await dsApi.list()
   } catch {
     datasources.value = []
+  }
+}
+
+// ── Connessioni utilizzabili (per il nodo Output verso database) ──────────
+const connectionsList = ref<ConnectionInfo[]>([])
+async function refreshConnections() {
+  try {
+    connectionsList.value = await connApi.list()
+  } catch {
+    connectionsList.value = []
   }
 }
 
@@ -401,6 +416,20 @@ function onCanvasDrop(ev: DragEvent) {
       data: { bucket, datasetId: null, parquetKey: null, filename: null, rows: null, columns: [] },
     })
     selectedId.value = id
+    return
+  }
+
+  if (kind === 'output') {
+    // nodo terminale: dove finisce il risultato (datasource o tabella database)
+    const id = `out-${++outputCounter}`
+    addNodes({
+      id,
+      type: 'output',
+      position,
+      data: { destType: 'datasource', mode: 'append' },
+    })
+    selectedId.value = id
+    refreshForNode(id)
     return
   }
 
@@ -661,20 +690,84 @@ async function exportSelected(format: 'csv' | 'xlsx') {
 }
 
 // ── Run (async via Celery) ──────────────────────────────────────────────
-// Il click su Esegui apre il dialog (con pubblicazione opzionale); il lancio
-// vero passa dal GATEWAY quando il flusso è salvato → cronologia dei run.
+// Il click su Esegui apre il dialog; il lancio vero passa dal GATEWAY quando
+// il flusso è salvato → cronologia dei run. Se il canvas ha nodi Output, ogni
+// output diventa un run (la destinazione è configurata sul nodo, alla Tableau
+// Prep); senza nodi Output resta il percorso classico (pubblicazione opzionale
+// dal dialog).
 const runDialogOpen = ref(false)
 const runDialogError = ref('')
 
+interface OutputSummary {
+  id: string
+  label: string
+  detail: string
+  error: string | null
+}
+
+function outputNodes() {
+  return getNodes.value.filter((n) => n.type === 'output')
+}
+
+function describeOutput(n: Node): OutputSummary {
+  const d = n.data ?? {}
+  if ((d.destType ?? 'datasource') === 'database') {
+    const conn = connectionsList.value.find((c) => c.id === d.connectionId)
+    let error: string | null = null
+    if (d.connectionId == null) error = 'scegli la connessione'
+    else if (!conn) error = 'connessione non disponibile (permessi o eliminata)'
+    else if (!d.table?.trim()) error = 'indica la tabella di destinazione'
+    return {
+      id: n.id,
+      label: `Tabella ${d.table?.trim() || '…'}`,
+      detail: conn
+        ? `${conn.name} (${conn.db_type}) · ${d.mode === 'replace' ? 'sostituisci' : 'accoda'}`
+        : '',
+      error,
+    }
+  }
+  const proj = projectsList.value.find((p) => p.id === d.projectId)
+  let error: string | null = null
+  if (!d.name?.trim()) error = 'dai un nome alla datasource'
+  else if (d.projectId == null) error = 'scegli la cartella'
+  return {
+    id: n.id,
+    label: `Datasource “${d.name?.trim() || '…'}”`,
+    detail: proj ? `cartella ${proj.name}` : '',
+    error,
+  }
+}
+
+const runOutputs = computed(() => outputNodes().map(describeOutput))
+
 function run() {
-  const leaf = leafNodeId(getNodes.value, getEdges.value)
-  const { sourceNode } = resolveChain(getNodes.value, getEdges.value, leaf)
-  if (!sourceNode?.data?.parquetKey) return
+  const outs = outputNodes()
+  if (outs.length) {
+    // gli output richiedono il gateway (cronologia, RBAC, credenziali)
+    if (flowId.value === null) {
+      setStatus('Salva il flusso per eseguire i nodi Output', 'error')
+      return
+    }
+    const bad = runOutputs.value.find((o) => o.error)
+    if (bad) {
+      selectedId.value = bad.id
+      setStatus(`${bad.label}: ${bad.error}`, 'error')
+      return
+    }
+  } else {
+    const leaf = leafNodeId(getNodes.value, getEdges.value)
+    const { sourceNode } = resolveChain(getNodes.value, getEdges.value, leaf)
+    if (!sourceNode?.data?.parquetKey) return
+  }
   runDialogError.value = ''
   runDialogOpen.value = true
 }
 
 async function executeRun(publish: PublishSpec | null) {
+  if (outputNodes().length) {
+    await executeOutputRuns()
+    return
+  }
   const leaf = leafNodeId(getNodes.value, getEdges.value)
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leaf)
   if (!sourceNode?.data?.parquetKey) {
@@ -683,6 +776,7 @@ async function executeRun(publish: PublishSpec | null) {
   }
   runDialogError.value = ''
   busy.value = true // solo per la durata del LANCIO: il canvas resta usabile durante il run
+  pollToken++ // nuovo ciclo: i poll dei run precedenti si fermano
   try {
     if (flowId.value !== null) {
       // percorso con cronologia: il gateway registra il run e pubblica l'output
@@ -716,18 +810,68 @@ async function executeRun(publish: PublishSpec | null) {
   }
 }
 
-// token di cancellazione: un nuovo poll (o l'unmount) invalida i precedenti
+// un run per ogni nodo Output: la catena di ciascuno è il suo input sinistro
+async function executeOutputRuns() {
+  runDialogError.value = ''
+  busy.value = true
+  pollToken++ // nuovo ciclo: i poll dei run precedenti si fermano
+  try {
+    for (const node of outputNodes()) {
+      const label = describeOutput(node).label
+      const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id)
+      if (!sourceNode?.data?.parquetKey) {
+        runDialogError.value = `${label}: collega l'output a una catena con dati`
+        selectedId.value = node.id
+        return // dialog aperto: gli output già lanciati proseguono comunque
+      }
+      const d = node.data
+      const isDb = (d.destType ?? 'datasource') === 'database'
+      try {
+        const launched = await runsApi.launch(flowId.value!, {
+          bucket: sourceNode.data.bucket ?? bucket,
+          input_key: sourceNode.data.parquetKey,
+          operations: ops,
+          publish: isDb
+            ? null
+            : { name: d.name.trim(), project_id: d.projectId, description: d.description ?? '' },
+          destination: isDb
+            ? {
+                connection_id: d.connectionId,
+                table: d.table.trim(),
+                mode: d.mode ?? 'append',
+                post_sql: d.postSql ?? '',
+              }
+            : null,
+        })
+        setStatus(`${label}: run #${launched.id} avviato…`, 'busy')
+        pollRun(launched.id, label)
+      } catch (e) {
+        // 409 nome duplicato / 403 permessi: il dialog resta aperto sull'errore
+        runDialogError.value = `${label}: ${errMessage(e)}`
+        selectedId.value = node.id
+        return
+      }
+    }
+    runDialogOpen.value = false // tutti lanciati
+  } finally {
+    busy.value = false
+  }
+}
+
+// token di cancellazione: un nuovo CICLO di run (o l'unmount) invalida i poll
+// precedenti; i poll dello stesso ciclo (un run per nodo Output) convivono
 let pollToken = 0
 onUnmounted(() => {
   pollToken++
 })
 
-async function pollRun(runId: number) {
-  const token = ++pollToken
+async function pollRun(runId: number, label = '') {
+  const token = pollToken // cattura il ciclo corrente (bumpato da executeRun*)
+  const prefix = label ? `${label}: ` : ''
   // ~1.5s * 2400 ≈ 1h, allineato al task_time_limit dell'engine
   for (let i = 0; i < 2400; i++) {
     await new Promise((r) => setTimeout(r, 1500))
-    if (token !== pollToken) return // pagina chiusa o nuovo run: stop
+    if (token !== pollToken) return // pagina chiusa o nuovo ciclo di run: stop
     let run
     try {
       run = await runsApi.get(runId) // il GET riconcilia lo stato lato gateway
@@ -736,21 +880,27 @@ async function pollRun(runId: number) {
     }
     if (token !== pollToken) return
     if (run.status === 'SUCCESS') {
-      const published = run.publish_name ? ` → datasource “${run.publish_name}”` : ''
-      setStatus(`Completato: ${run.rows_written} righe${published}`, 'ok')
+      let target = run.publish_name ? ` → datasource “${run.publish_name}”` : ''
+      if (run.destination) {
+        try {
+          const d = JSON.parse(run.destination)
+          target = ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
+        } catch { /* riassunto illeggibile: resta il messaggio base */ }
+      }
+      setStatus(`${prefix}completato: ${run.rows_written} righe${target}`, 'ok')
       if (run.datasource_id) refreshDatasources() // subito usabile nel picker
       return
     }
     if (run.status === 'FAILURE') {
-      setStatus(`Errore: ${run.error}`, 'error')
+      setStatus(`${prefix}errore: ${run.error}`, 'error')
       return
     }
   }
-  setStatus('Timeout in attesa del run.', 'error')
+  setStatus(`${prefix}timeout in attesa del run.`, 'error')
 }
 
 async function pollTask(id: string, outputKey: string) {
-  const token = ++pollToken
+  const token = pollToken
   for (let i = 0; i < 120; i++) {
     await new Promise((r) => setTimeout(r, 1000))
     if (token !== pollToken) return
@@ -809,6 +959,9 @@ async function pollTask(id: string, outputKey: string) {
         <template #node-foreach="props">
           <ForeachNode :id="props.id" :data="props.data" />
         </template>
+        <template #node-output="props">
+          <OutputNode :id="props.id" :data="props.data" />
+        </template>
         <Background pattern-color="#2a2f3a" :gap="16" />
         <Controls>
           <ControlButton title="Ordina il flusso" @click="autoLayout">
@@ -828,6 +981,8 @@ async function pollTask(id: string, outputKey: string) {
         :placeholders="placeholders"
         :fetch-distinct="fetchDistinctValues"
         :datasources="datasources"
+        :projects="projectsList"
+        :connections="connectionsList"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"
@@ -841,6 +996,7 @@ async function pollTask(id: string, outputKey: string) {
       :default-project-id="projectId"
       :error="runDialogError"
       :busy="busy"
+      :outputs="runOutputs"
       @confirm="executeRun"
       @cancel="runDialogOpen = false"
     />

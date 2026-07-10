@@ -82,6 +82,37 @@ async def launch_run(
                 detail=f"Esiste già una datasource '{body.publish.name}' in questa cartella",
             )
 
+    # destinazione database (nodo Output): la connessione è referenziata per id,
+    # il payload con la password (cifrata) lo costruisce il gateway — mai il client
+    db_destination = None
+    destination_summary = None
+    if body.destination:
+        conn = session.get(Connection, body.destination.connection_id)
+        if conn is None:
+            raise HTTPException(status_code=404, detail="Connessione non trovata")
+        ensure_can(session, user, conn.project_id, Capability.CONNECT)
+        table = body.destination.table.strip()
+        if not table:
+            raise HTTPException(status_code=422, detail="Il nome della tabella di destinazione è vuoto")
+        db_destination = {
+            "connection": engine_connection_payload(conn),
+            "target": {
+                "table": table,
+                "mode": body.destination.mode,
+                "post_sql": body.destination.post_sql,
+            },
+        }
+        destination_summary = json.dumps(
+            {
+                "connection_id": conn.id,
+                "db_type": conn.db_type,
+                "host": conn.host,
+                "database": conn.database,
+                "table": table,
+                "mode": body.destination.mode,
+            }
+        )
+
     # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
     prefix = "datasets" if body.publish else "out"
     output_key = f"{prefix}/{uuid.uuid4().hex}.parquet"
@@ -94,6 +125,7 @@ async def launch_run(
             "input_key": body.input_key,
             "output_key": output_key,
             "operations": body.operations,
+            "db_destination": db_destination,
         },
     )
     if resp.status_code >= 400:
@@ -112,6 +144,7 @@ async def launch_run(
         publish_name=body.publish.name.strip() if body.publish else None,
         publish_project_id=body.publish.project_id if body.publish else None,
         publish_description=body.publish.description if body.publish else "",
+        destination=destination_summary,
     )
     session.add(run)
     session.commit()

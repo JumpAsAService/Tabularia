@@ -86,21 +86,26 @@ def transform_data_task(
     input_key: str,
     operations: list[dict[str, Any]],
     output_key: str,
+    db_destination: dict[str, Any] | None = None,
 ) -> dict:
     """
     Esegue un flow di trasformazione (run completo) su un parquet dello storage.
 
     Legge `input_key`, applica la catena di `operations` con l'engine Polars in
-    streaming e scrive il risultato in `output_key`.
+    streaming e scrive il risultato in `output_key`. Se `db_destination` è
+    presente ({"connection": …, "target": …}, password Fernet-cifrata come per
+    l'ingest), il parquet appena scritto viene POI riversato nella tabella di
+    destinazione: il parquet resta comunque su storage (cronologia/ispezione).
 
     Args:
         bucket: Nome del bucket S3
         input_key: Chiave del parquet di input
         operations: Lista di operazioni (IR: {"type": ..., "params": ...})
         output_key: Chiave del parquet di output
+        db_destination: Destinazione database opzionale (nodo Output)
 
     Returns:
-        Metadati del run (righe scritte, colonne di output).
+        Metadati del run (righe scritte, colonne di output, esito destinazione).
     """
     logger.info(f"🚀 Starting transform_data_task: {input_key} → {output_key}")
     logger.info(f"📋 Operations: {operations}")
@@ -112,11 +117,7 @@ def transform_data_task(
         destination=DataSource(bucket=bucket, key=output_key),
     )
 
-    logger.info(
-        f"✅ Completed transform_data_task: {output_key} "
-        f"({result.rows_written} righe, {len(result.columns)} colonne)"
-    )
-    return {
+    out: dict[str, Any] = {
         "status": "success",
         "bucket": bucket,
         "input_key": input_key,
@@ -126,6 +127,25 @@ def transform_data_task(
         "columns": [c.model_dump() for c in result.columns],
         "processed_at": time.time(),
     }
+
+    if db_destination:
+        from app.ingest.db_destination import (
+            DbDestinationSpec,
+            write_parquet_to_db,
+        )
+        from app.ingest.db_source import DbConnectionSpec
+
+        conn = DbConnectionSpec(**db_destination["connection"])
+        dest = DbDestinationSpec(**db_destination["target"])
+        logger.info(f"📤 Writing output to {conn.db_type}@{conn.host} table {dest.table}")
+        dest_result = write_parquet_to_db(conn=conn, dest=dest, bucket=bucket, key=output_key)
+        out["destination"] = dest_result
+
+    logger.info(
+        f"✅ Completed transform_data_task: {output_key} "
+        f"({result.rows_written} righe, {len(result.columns)} colonne)"
+    )
+    return out
 
 
 @celery_app.task(name="app.tasks.jobs.ingest_database_task")

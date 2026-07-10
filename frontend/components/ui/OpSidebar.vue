@@ -3,7 +3,7 @@
 // Il tipo viaggia nel dataTransfer (application/tabularia), letto dal drop
 // handler di FlowEditor.
 import { computed } from 'vue'
-import { GripVertical } from 'lucide-vue-next'
+import { GripVertical, HardDriveDownload } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const props = defineProps<{ operations: string[] }>()
@@ -60,6 +60,18 @@ function onDragStart(ev: DragEvent, kind: string) {
         <GripVertical :size="13" class="grip" />
       </div>
     </template>
+
+    <div class="group-title">Output</div>
+    <div
+      class="item"
+      draggable="true"
+      :style="{ '--item-color': '#fbbf24' }"
+      @dragstart="onDragStart($event, 'output')"
+    >
+      <HardDriveDownload :size="15" class="item-icon" />
+      <span>Output (datasource / database)</span>
+      <GripVertical :size="13" class="grip" />
+    </div>
 
     <p v-if="!operations.length" class="muted empty">Operazioni non caricate.</p>
   </aside>

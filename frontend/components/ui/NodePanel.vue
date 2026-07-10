@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { Node } from '@vue-flow/core'
-import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database } from 'lucide-vue-next'
+import {
+  FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database,
+  HardDriveDownload,
+} from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams } from '~/composables/useFlowModel'
@@ -14,6 +17,8 @@ const props = defineProps<{
   placeholders?: string[]
   fetchDistinct?: (column: string) => Promise<any[]>
   datasources?: DatasourceInfo[]
+  projects?: { id: number; name: string }[]
+  connections?: { id: number; name: string; db_type: string; database?: string }[]
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -82,6 +87,87 @@ function pickDatasource(id: number | null) {
           @update:model-value="pickDatasource"
         />
       </div>
+    </template>
+
+    <!-- nodo Output: dove finisce il risultato della catena -->
+    <template v-else-if="node.type === 'output'">
+      <div class="row">
+        <h3><HardDriveDownload :size="15" /> Output</h3>
+        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+      </div>
+
+      <label>Destinazione</label>
+      <Select
+        :model-value="node.data.destType ?? 'datasource'"
+        :options="[
+          { value: 'datasource', label: 'Datasource Tabularia' },
+          { value: 'database', label: 'Tabella di database' },
+        ]"
+        @update:model-value="(v: any) => emit('update', { destType: v })"
+      />
+
+      <template v-if="(node.data.destType ?? 'datasource') === 'datasource'">
+        <label>Nome della datasource</label>
+        <input
+          :value="node.data.name ?? ''"
+          type="text"
+          placeholder="es. vendite_pulite_2024"
+          @input="emit('update', { name: ($event.target as HTMLInputElement).value })"
+        />
+        <label>Cartella</label>
+        <Select
+          :model-value="node.data.projectId ?? null"
+          :options="(projects ?? []).map((p) => ({ value: p.id, label: p.name }))"
+          placeholder="cartella…"
+          @update:model-value="(v: any) => emit('update', { projectId: v })"
+        />
+        <label>Descrizione (opzionale)</label>
+        <input
+          :value="node.data.description ?? ''"
+          type="text"
+          placeholder="cosa contiene, per chi"
+          @input="emit('update', { description: ($event.target as HTMLInputElement).value })"
+        />
+      </template>
+
+      <template v-else>
+        <label>Connessione</label>
+        <Select
+          :model-value="node.data.connectionId ?? null"
+          :options="(connections ?? []).map((c) => ({
+            value: c.id,
+            label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
+          }))"
+          placeholder="connessione…"
+          @update:model-value="(v: any) => emit('update', { connectionId: v })"
+        />
+        <label>Tabella di destinazione (anche schema.tabella)</label>
+        <input
+          :value="node.data.table ?? ''"
+          type="text"
+          placeholder="es. analytics.vendite_pulite"
+          @input="emit('update', { table: ($event.target as HTMLInputElement).value })"
+        />
+        <label>Modalità di scrittura</label>
+        <Select
+          :model-value="node.data.mode ?? 'append'"
+          :options="[
+            { value: 'append', label: 'Accoda (INSERT)' },
+            { value: 'replace', label: 'Sostituisci (TRUNCATE + INSERT)' },
+          ]"
+          @update:model-value="(v: any) => emit('update', { mode: v })"
+        />
+        <label>SQL post-insert (opzionale, statement separati da ;)</label>
+        <textarea
+          :value="node.data.postSql ?? ''"
+          rows="3"
+          placeholder="es. ANALYZE analytics.vendite_pulite"
+          @input="emit('update', { postSql: ($event.target as HTMLTextAreaElement).value })"
+        />
+        <p class="muted outhint">
+          La tabella viene creata se non esiste, con i tipi dello schema dell'output.
+        </p>
+      </template>
     </template>
 
     <!-- container foreach -->
@@ -180,6 +266,7 @@ label { font-size: 12px; color: var(--muted); }
 .exportbar { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
 .dspick { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 5px; }
 .dspick > label { display: inline-flex; align-items: center; gap: 5px; }
+.outhint { font-size: 12px; margin: 2px 0 0; }
 .phlist { margin: 8px 0 0; font-size: 12px; }
 .phlist code {
   background: var(--panel-2);

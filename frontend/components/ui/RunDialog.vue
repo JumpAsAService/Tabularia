@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // Dialog di lancio del run: esegui e basta, oppure pubblica l'output come
-// datasource nominata (riusabile come sorgente in altri flussi).
+// datasource nominata (riusabile come sorgente in altri flussi). Se il canvas
+// ha nodi Output, il dialog mostra COSA verrà scritto (un run per output): la
+// configurazione sta sui nodi, qui si conferma soltanto.
 import { ref, watch } from 'vue'
-import { Play, X, Database } from 'lucide-vue-next'
+import { Play, X, Database, HardDriveDownload } from 'lucide-vue-next'
 import type { PublishSpec } from '~/composables/useRuns'
 
 const props = defineProps<{
@@ -12,6 +14,7 @@ const props = defineProps<{
   defaultProjectId: number | null
   error?: string // errore di lancio (409 nome duplicato, 403…): il dialog resta aperto
   busy?: boolean
+  outputs?: { id: string; label: string; detail: string }[] // nodi Output del canvas
 }>()
 const emit = defineEmits<{
   (e: 'confirm', publish: PublishSpec | null): void
@@ -59,26 +62,44 @@ function confirm() {
 
         <p class="muted rd-sub">Il flusso viene eseguito sull'intero dataset dal worker.</p>
 
-        <label class="chk rd-toggle" :class="{ off: !canPublish }">
-          <input v-model="publishEnabled" type="checkbox" :disabled="!canPublish" />
-          <Database :size="14" />
-          Pubblica l'output come datasource
-        </label>
-        <p v-if="!canPublish" class="muted rd-hint">
-          Salva il flusso per pubblicare l'output e avere la cronologia dei run.
-        </p>
+        <!-- con nodi Output nel canvas: un run per output, configurati sui nodi -->
+        <template v-if="outputs?.length">
+          <div class="rd-outputs">
+            <div v-for="o in outputs" :key="o.id" class="rd-output">
+              <HardDriveDownload :size="14" class="rd-oicon" />
+              <div>
+                <div>{{ o.label }}</div>
+                <div v-if="o.detail" class="muted rd-odetail">{{ o.detail }}</div>
+              </div>
+            </div>
+          </div>
+          <p class="muted rd-hint">
+            {{ outputs.length === 1 ? 'Verrà lanciato 1 run.' : `Verranno lanciati ${outputs.length} run, uno per output.` }}
+          </p>
+        </template>
 
-        <template v-if="publishEnabled && canPublish">
-          <label>Nome della datasource</label>
-          <input v-model="name" type="text" placeholder="es. vendite_pulite_2024" @keyup.enter="confirm" />
-          <label>Cartella</label>
-          <Select
-            v-model="projectId"
-            :options="projects.map((p) => ({ value: p.id, label: p.name }))"
-            placeholder="cartella…"
-          />
-          <label>Descrizione (opzionale)</label>
-          <input v-model="description" type="text" placeholder="cosa contiene, per chi" />
+        <template v-else>
+          <label class="chk rd-toggle" :class="{ off: !canPublish }">
+            <input v-model="publishEnabled" type="checkbox" :disabled="!canPublish" />
+            <Database :size="14" />
+            Pubblica l'output come datasource
+          </label>
+          <p v-if="!canPublish" class="muted rd-hint">
+            Salva il flusso per pubblicare l'output e avere la cronologia dei run.
+          </p>
+
+          <template v-if="publishEnabled && canPublish">
+            <label>Nome della datasource</label>
+            <input v-model="name" type="text" placeholder="es. vendite_pulite_2024" @keyup.enter="confirm" />
+            <label>Cartella</label>
+            <Select
+              v-model="projectId"
+              :options="projects.map((p) => ({ value: p.id, label: p.name }))"
+              placeholder="cartella…"
+            />
+            <label>Descrizione (opzionale)</label>
+            <input v-model="description" type="text" placeholder="cosa contiene, per chi" />
+          </template>
         </template>
 
         <p v-if="error" class="rd-err">{{ error }}</p>
@@ -124,6 +145,19 @@ function confirm() {
 .rd-toggle input { width: auto; }
 .rd-toggle.off { opacity: 0.55; }
 .rd-hint { font-size: 12px; margin: 0; }
+.rd-outputs { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.rd-output {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 13px;
+}
+.rd-oicon { color: #fbbf24; margin-top: 2px; flex-shrink: 0; }
+.rd-odetail { font-size: 11.5px; }
 label { font-size: 12px; color: var(--muted); }
 .rd-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .rd-err { color: var(--danger); font-size: 12px; margin: 4px 0 0; }

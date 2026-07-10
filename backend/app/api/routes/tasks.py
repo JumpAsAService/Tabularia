@@ -78,12 +78,13 @@ def submit_transform_data_task(request: TransformDataRequest):
     logger.info(f"📩 Submitting transform_data_task: {request.input_key}")
     
     operations = [op.model_dump() for op in request.operations]
-    
+
     task = transform_data_task.delay(
         bucket=request.bucket,
         input_key=request.input_key,
         operations=operations,
         output_key=request.output_key,
+        db_destination=request.db_destination,
     )
     
     return TaskResponse(

@@ -40,6 +40,10 @@ class Run(SQLModel, table=True):
     publish_description: str = ""
     datasource_id: Optional[int] = Field(default=None, foreign_key="datasources.id")
 
+    # destinazione database dell'output (nodo Output): riassunto JSON per la
+    # cronologia — {connection_id, db_type, host, database, table, mode}
+    destination: Optional[str] = Field(default=None, sa_column=Column("destination", Text))
+
     started_at: datetime = Field(default_factory=_now)
     finished_at: Optional[datetime] = None
 

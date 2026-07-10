@@ -1,7 +1,7 @@
 """Schemi di request/response del gateway. Separati dai modelli DB per non
 esporre mai `hashed_password` e per validare gli input."""
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 from app.models.permission import Capability
@@ -161,11 +161,21 @@ class PublishSpec(BaseModel):
     description: str = ""
 
 
+class RunDestinationSpec(BaseModel):
+    """Destinazione database dell'output (nodo Output del flusso): la
+    connessione è referenziata per id, le credenziali non passano MAI dal client."""
+    connection_id: int
+    table: str
+    mode: Literal["append", "replace"] = "append"
+    post_sql: str = ""
+
+
 class RunCreate(BaseModel):
     bucket: str
     input_key: str
     operations: list[dict] = Field(default_factory=list)
     publish: Optional[PublishSpec] = None
+    destination: Optional[RunDestinationSpec] = None
 
 
 class RunOut(BaseModel):
@@ -179,6 +189,7 @@ class RunOut(BaseModel):
     error: Optional[str]
     publish_name: Optional[str]
     datasource_id: Optional[int]
+    destination: Optional[str] = None  # JSON: {db_type, host, database, table, mode}
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
 

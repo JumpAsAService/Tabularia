@@ -19,6 +19,8 @@ _MIGRATIONS = [
     "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS source_type VARCHAR",
     "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS source_ref TEXT",
     "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS refreshed_at TIMESTAMP",
+    # Nodo Output: destinazione database dell'output del run (riassunto JSON)
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS destination TEXT",
 ]
 
 
