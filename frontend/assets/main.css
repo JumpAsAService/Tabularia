@@ -222,6 +222,26 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__handle-left:hover   { transform: translate(-50%, -50%) scale(1.35); }
 .vue-flow__handle-right:hover  { transform: translate(50%, -50%) scale(1.35); }
 
+/* il tipo 'output' collide con un nodo BUILT-IN di Vue Flow: il tema di
+   default veste il wrapper (sfondo bianco, 150px, padding, ombre su hover e
+   selezione). Reset completo: il nostro OutputNode si disegna da solo, come
+   gli altri nodi custom. */
+.vue-flow__node-output,
+.vue-flow__node-output.selectable:hover,
+.vue-flow__node-output.selected,
+.vue-flow__node-output:focus,
+.vue-flow__node-output:focus-visible {
+  padding: 0;
+  width: auto;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+  font-size: inherit;
+  color: inherit;
+}
+
 /* edge curati */
 .vue-flow__edge-path { stroke: #3d4a66; stroke-width: 1.6; }
 .vue-flow__edge.selected .vue-flow__edge-path,
