@@ -86,23 +86,25 @@ def transform_data_task(
     input_key: str,
     operations: list[dict[str, Any]],
     output_key: str,
-    db_destination: dict[str, Any] | None = None,
+    destination: dict[str, Any] | None = None,
 ) -> dict:
     """
     Esegue un flow di trasformazione (run completo) su un parquet dello storage.
 
     Legge `input_key`, applica la catena di `operations` con l'engine Polars in
-    streaming e scrive il risultato in `output_key`. Se `db_destination` è
-    presente ({"connection": …, "target": …}, password Fernet-cifrata come per
-    l'ingest), il parquet appena scritto viene POI riversato nella tabella di
-    destinazione: il parquet resta comunque su storage (cronologia/ispezione).
+    streaming e scrive il risultato in `output_key`. Se `destination` è
+    presente ({"type": "database"|"s3", "connection": …, "target": …}, secret
+    Fernet-cifrata come per l'ingest), il parquet appena scritto viene POI
+    riversato sulla destinazione: tabella di database oppure oggetto/dataset
+    hive-partizionato su S3. Il parquet resta comunque su storage
+    (cronologia/ispezione).
 
     Args:
         bucket: Nome del bucket S3
         input_key: Chiave del parquet di input
         operations: Lista di operazioni (IR: {"type": ..., "params": ...})
         output_key: Chiave del parquet di output
-        db_destination: Destinazione database opzionale (nodo Output)
+        destination: Destinazione opzionale (nodo Output)
 
     Returns:
         Metadati del run (righe scritte, colonne di output, esito destinazione).
@@ -128,18 +130,34 @@ def transform_data_task(
         "processed_at": time.time(),
     }
 
-    if db_destination:
-        from app.ingest.db_destination import (
-            DbDestinationSpec,
-            write_parquet_to_db,
-        )
-        from app.ingest.db_source import DbConnectionSpec
+    if destination:
+        dest_type = destination.get("type", "database")
+        if dest_type == "s3":
+            from app.ingest.s3_destination import (
+                S3ConnectionSpec,
+                S3DestinationSpec,
+                write_output_to_s3,
+            )
 
-        conn = DbConnectionSpec(**db_destination["connection"])
-        dest = DbDestinationSpec(**db_destination["target"])
-        logger.info(f"📤 Writing output to {conn.db_type}@{conn.host} table {dest.table}")
-        dest_result = write_parquet_to_db(conn=conn, dest=dest, bucket=bucket, key=output_key)
-        out["destination"] = dest_result
+            conn = S3ConnectionSpec(**destination["connection"])
+            dest = S3DestinationSpec(**destination["target"])
+            logger.info(f"📤 Writing output to s3 {conn.endpoint_url or 'aws'} key {dest.key}")
+            out["destination"] = write_output_to_s3(
+                conn=conn, dest=dest, bucket=bucket, key=output_key
+            )
+        else:
+            from app.ingest.db_destination import (
+                DbDestinationSpec,
+                write_parquet_to_db,
+            )
+            from app.ingest.db_source import DbConnectionSpec
+
+            db_conn = DbConnectionSpec(**destination["connection"])
+            db_dest = DbDestinationSpec(**destination["target"])
+            logger.info(f"📤 Writing output to {db_conn.db_type}@{db_conn.host} table {db_dest.table}")
+            out["destination"] = write_parquet_to_db(
+                conn=db_conn, dest=db_dest, bucket=bucket, key=output_key
+            )
 
     logger.info(
         f"✅ Completed transform_data_task: {output_key} "

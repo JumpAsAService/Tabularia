@@ -38,6 +38,15 @@ function onParams(params: Record<string, any>) {
   emit('update', { params })
 }
 
+// toggle di una colonna di partizione dell'output S3
+function togglePartition(name: string) {
+  const cur: string[] = [...(props.node?.data?.partitionBy ?? [])]
+  const i = cur.indexOf(name)
+  if (i >= 0) cur.splice(i, 1)
+  else cur.push(name)
+  emit('update', { partitionBy: cur })
+}
+
 // il nodo sorgente può caricare una datasource del catalogo al posto del file
 function pickDatasource(id: number | null) {
   const ds = (props.datasources ?? []).find((d) => d.id === id)
@@ -103,6 +112,7 @@ function pickDatasource(id: number | null) {
         :options="[
           { value: 'datasource', label: 'Datasource Tabularia' },
           { value: 'database', label: 'Tabella di database' },
+          { value: 's3', label: 'File su S3 / object storage' },
         ]"
         @update:model-value="(v: any) => emit('update', { destType: v })"
       />
@@ -131,11 +141,65 @@ function pickDatasource(id: number | null) {
         />
       </template>
 
+      <!-- destinazione S3: connessione object storage + chiave + formato + partizioni -->
+      <template v-else-if="(node.data.destType ?? 'datasource') === 's3'">
+        <label>Connessione S3</label>
+        <Select
+          :model-value="node.data.connectionId ?? null"
+          :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
+            value: c.id,
+            label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
+          }))"
+          placeholder="connessione…"
+          @update:model-value="(v: any) => emit('update', { connectionId: v })"
+        />
+        <label>Bucket <span class="muted">(vuoto = quello della connessione)</span></label>
+        <input
+          :value="node.data.s3Bucket ?? ''"
+          type="text"
+          placeholder="es. exports-cliente"
+          @input="emit('update', { s3Bucket: ($event.target as HTMLInputElement).value })"
+        />
+        <label>Chiave / percorso</label>
+        <input
+          :value="node.data.s3Key ?? ''"
+          type="text"
+          placeholder="es. exports/vendite.parquet — o un prefisso se partizioni"
+          @input="emit('update', { s3Key: ($event.target as HTMLInputElement).value })"
+        />
+        <label>Formato</label>
+        <Select
+          :model-value="node.data.s3Format ?? 'parquet'"
+          :options="[
+            { value: 'parquet', label: 'Parquet' },
+            { value: 'csv', label: 'CSV' },
+          ]"
+          @update:model-value="(v: any) => emit('update', { s3Format: v })"
+        />
+        <label>Partiziona per (hive: colonna=valore/…)</label>
+        <div v-if="inputColumns.length" class="partchecks">
+          <label v-for="c in inputColumns" :key="c.name" class="chk">
+            <input
+              type="checkbox"
+              :checked="(node.data.partitionBy ?? []).includes(c.name)"
+              @change="togglePartition(c.name)"
+            />
+            {{ c.name }}
+          </label>
+        </div>
+        <p v-else class="muted outhint">Collega l'output a una catena con dati per scegliere le colonne.</p>
+        <p class="muted outhint">
+          Senza partizioni scrive un singolo oggetto alla chiave indicata; con le
+          partizioni scrive un dataset <code>colonna=valore/…</code> sotto il prefisso
+          (le run successive sovrascrivono gli stessi percorsi).
+        </p>
+      </template>
+
       <template v-else>
         <label>Connessione</label>
         <Select
           :model-value="node.data.connectionId ?? null"
-          :options="(connections ?? []).map((c) => ({
+          :options="(connections ?? []).filter((c) => c.db_type !== 's3').map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
           }))"
@@ -279,6 +343,16 @@ label { font-size: 12px; color: var(--muted); }
 .dspick { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 5px; }
 .dspick > label { display: inline-flex; align-items: center; gap: 5px; }
 .outhint { font-size: 12px; margin: 2px 0 0; }
+.outhint code { font-size: 11px; }
+.partchecks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.partchecks .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.partchecks .chk input { width: auto; }
 .phlist { margin: 8px 0 0; font-size: 12px; }
 .phlist code {
   background: var(--panel-2);

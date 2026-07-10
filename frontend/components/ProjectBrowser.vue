@@ -301,7 +301,8 @@ const usableConnections = ref<ConnectionInfo[]>([])
 async function openDbDsDialog() {
   dbDsError.value = ''
   try {
-    usableConnections.value = await connApi.list() // tutte quelle con CONNECT
+    // tutte quelle con CONNECT; le S3 sono solo destinazioni, non sorgenti
+    usableConnections.value = (await connApi.list()).filter((c) => c.db_type !== 's3')
   } catch {
     usableConnections.value = []
   }

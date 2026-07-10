@@ -162,12 +162,20 @@ class PublishSpec(BaseModel):
 
 
 class RunDestinationSpec(BaseModel):
-    """Destinazione database dell'output (nodo Output del flusso): la
-    connessione è referenziata per id, le credenziali non passano MAI dal client."""
+    """Destinazione dell'output (nodo Output del flusso): tabella di database
+    o oggetto/dataset su S3. La connessione è referenziata per id, le
+    credenziali non passano MAI dal client."""
+    type: Literal["database", "s3"] = "database"
     connection_id: int
-    table: str
+    # type="database"
+    table: str = ""
     mode: Literal["append", "replace"] = "append"
     post_sql: str = ""
+    # type="s3"
+    bucket: str = ""  # vuoto = bucket di default della connessione
+    key: str = ""  # chiave del file, o prefisso se partizionato
+    format: Literal["parquet", "csv"] = "parquet"
+    partition_by: list[str] = Field(default_factory=list)  # hive: colonna=valore/…
 
 
 class RunCreate(BaseModel):

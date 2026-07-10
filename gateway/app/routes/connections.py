@@ -1,4 +1,10 @@
-"""Connessioni a database esterni (PostgreSQL/MySQL/MariaDB/ClickHouse/Trino).
+"""Connessioni esterne: database (PostgreSQL/MySQL/MariaDB/ClickHouse/Trino)
+e object storage S3-compatibile (db_type="s3": AWS, MinIO, R2, Wasabi…).
+
+Per le connessioni S3 le colonne sono riusate con questo mapping:
+host = endpoint URL (vuoto = AWS), username = access key id,
+password_encrypted = secret access key, database = bucket di default,
+db_schema = region.
 
 Tutte le operazioni richiedono la capability CONNECT sul progetto della
 connessione (ortogonale a VIEW/EDIT: chi gestisce i dati di una cartella non
@@ -6,7 +12,7 @@ usa credenziali DB per questo; MANAGE la include). La barriera di sicurezza è
 QUI: chi può usare una connessione legge tutto ciò che le sue credenziali
 leggono — consigliata un'utenza DB read-only.
 
-La password è cifrata a riposo (Fernet) e non esce mai dalle API: verso
+La password/secret è cifrata a riposo (Fernet) e non esce mai dalle API: verso
 l'engine viaggia ancora cifrata (`password_encrypted`, stessa chiave).
 """
 import logging
@@ -29,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3"}
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
@@ -54,7 +60,9 @@ def _name_taken(session: Session, project_id: int, name: str, exclude_id: int | 
 
 
 def engine_connection_payload(conn: Connection) -> dict:
-    """Il payload `connection` per l'engine: password ANCORA cifrata."""
+    """Il payload `connection` per l'engine: password/secret ANCORA cifrata."""
+    if conn.db_type == "s3":
+        return _s3_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.db_schema)
     return {
         "db_type": conn.db_type,
         "host": conn.host,
@@ -63,6 +71,18 @@ def engine_connection_payload(conn: Connection) -> dict:
         "password_encrypted": conn.password_encrypted,
         "database": conn.database,
         "db_schema": conn.db_schema,
+    }
+
+
+def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, db_schema: str) -> dict:
+    """Mapping colonne→campi S3 (vedi docstring del modulo)."""
+    return {
+        "db_type": "s3",
+        "endpoint_url": host or "",
+        "access_key": username or "",
+        "secret_key_encrypted": secret_encrypted or "",
+        "bucket": database or "",
+        "region": db_schema or "",
     }
 
 
@@ -218,15 +238,19 @@ async def test_draft_connection(
     ensure_can(session, user, project_id, Capability.CONNECT)
     if body.db_type not in SUPPORTED_DB_TYPES:
         raise HTTPException(status_code=422, detail=f"db_type non supportato: {sorted(SUPPORTED_DB_TYPES)}")
-    payload = {
-        "db_type": body.db_type,
-        "host": body.host,
-        "port": body.port,
-        "username": body.username,
-        "password_encrypted": encrypt_secret(body.password) if body.password else "",
-        "database": body.database,
-        "db_schema": body.db_schema,
-    }
+    secret = encrypt_secret(body.password) if body.password else ""
+    if body.db_type == "s3":
+        payload = _s3_payload(body.host, body.username, secret, body.database, body.db_schema)
+    else:
+        payload = {
+            "db_type": body.db_type,
+            "host": body.host,
+            "port": body.port,
+            "username": body.username,
+            "password_encrypted": secret,
+            "database": body.database,
+            "db_schema": body.db_schema,
+        }
     return await _engine_inspect(payload, "test")
 
 

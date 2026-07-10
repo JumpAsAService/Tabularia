@@ -84,7 +84,7 @@ def submit_transform_data_task(request: TransformDataRequest):
         input_key=request.input_key,
         operations=operations,
         output_key=request.output_key,
-        db_destination=request.db_destination,
+        destination=request.destination,
     )
     
     return TaskResponse(

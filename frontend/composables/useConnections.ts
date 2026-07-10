@@ -35,6 +35,8 @@ export const DB_TYPES = [
   { value: 'mariadb', label: 'MariaDB' },
   { value: 'clickhouse', label: 'ClickHouse' },
   { value: 'trino', label: 'Trino' },
+  // object storage: host=endpoint, username=access key, database=bucket, schema=region
+  { value: 's3', label: 'S3 / object storage' },
 ]
 
 export function useConnections() {

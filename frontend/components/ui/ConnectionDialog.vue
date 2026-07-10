@@ -36,6 +36,8 @@ const database = ref('')
 const dbSchema = ref('')
 
 const isEdit = computed(() => !!props.existing)
+// object storage: stesse colonne, etichette diverse (host=endpoint, ecc.)
+const isS3 = computed(() => dbType.value === 's3')
 
 watch(
   () => props.open,
@@ -69,7 +71,8 @@ function draft(): ConnectionDraft {
   }
 }
 
-const incomplete = computed(() => !name.value.trim() || !host.value.trim())
+// per S3 l'endpoint può essere vuoto (= AWS): basta il nome
+const incomplete = computed(() => !name.value.trim() || (!isS3.value && !host.value.trim()))
 
 // ── Test connection ──────────────────────────────────────────────────────────
 const testing = ref(false)
@@ -113,33 +116,47 @@ function confirm() {
             <label>Name</label>
             <input v-model="name" type="text" placeholder="e.g. sales-warehouse" />
           </div>
-          <div class="cd-field">
-            <label>Database type</label>
+          <div class="cd-field" :class="{ 'cd-wide': isS3 }">
+            <label>Connection type</label>
             <Select v-model="dbType" :options="DB_TYPES" />
           </div>
-          <div class="cd-field">
+          <div v-if="!isS3" class="cd-field">
             <label>Port <span class="cd-hint">(empty = default)</span></label>
             <input v-model="port" type="text" inputmode="numeric" placeholder="5432" />
           </div>
           <div class="cd-field cd-wide">
-            <label>Host</label>
-            <input v-model="host" type="text" placeholder="db.internal.example.com" />
+            <label>{{ isS3 ? 'Endpoint URL' : 'Host' }} <span v-if="isS3" class="cd-hint">(empty = AWS)</span></label>
+            <input
+              v-model="host"
+              type="text"
+              :placeholder="isS3 ? 'https://minio.example.com:9000' : 'db.internal.example.com'"
+            />
           </div>
           <div class="cd-field">
-            <label>Username</label>
+            <label>{{ isS3 ? 'Access key ID' : 'Username' }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
           <div class="cd-field">
-            <label>Password <span v-if="isEdit" class="cd-hint">(empty = unchanged)</span></label>
+            <label>
+              {{ isS3 ? 'Secret access key' : 'Password' }}
+              <span v-if="isEdit" class="cd-hint">(empty = unchanged)</span>
+            </label>
             <input v-model="password" type="password" autocomplete="new-password" />
           </div>
           <div class="cd-field">
-            <label>{{ dbType === 'trino' ? 'Catalog' : 'Database' }}</label>
-            <input v-model="database" type="text" />
+            <label>
+              {{ isS3 ? 'Default bucket' : dbType === 'trino' ? 'Catalog' : 'Database' }}
+              <span v-if="isS3" class="cd-hint">(optional)</span>
+            </label>
+            <input v-model="database" type="text" :placeholder="isS3 ? 'exports' : ''" />
           </div>
           <div class="cd-field">
-            <label>Schema <span class="cd-hint">(optional)</span></label>
-            <input v-model="dbSchema" type="text" :placeholder="dbType === 'postgresql' ? 'public' : ''" />
+            <label>{{ isS3 ? 'Region' : 'Schema' }} <span class="cd-hint">(optional)</span></label>
+            <input
+              v-model="dbSchema"
+              type="text"
+              :placeholder="isS3 ? 'eu-south-1' : dbType === 'postgresql' ? 'public' : ''"
+            />
           </div>
           <div class="cd-field cd-wide">
             <label>Description <span class="cd-hint">(optional)</span></label>
@@ -148,8 +165,14 @@ function confirm() {
         </div>
 
         <p class="muted cd-note">
-          Anyone with the CONNECT permission on this folder can query whatever these
-          credentials can read — prefer a read-only database user.
+          <template v-if="isS3">
+            Anyone with the CONNECT permission on this folder can write to whatever
+            these credentials can reach — prefer keys scoped to the target bucket.
+          </template>
+          <template v-else>
+            Anyone with the CONNECT permission on this folder can query whatever these
+            credentials can read — prefer a read-only database user.
+          </template>
         </p>
 
         <p v-if="testResult" class="cd-test" :class="testResult.ok ? 'ok' : 'ko'">

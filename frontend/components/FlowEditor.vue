@@ -733,6 +733,7 @@ function describeOutput(n: Node): OutputSummary {
     let error: string | null = null
     if (d.connectionId == null) error = 'scegli la connessione'
     else if (!conn) error = 'connessione non disponibile (permessi o eliminata)'
+    else if (conn.db_type === 's3') error = 'la connessione scelta è S3: usa la destinazione S3'
     else if (!d.table?.trim()) error = 'indica la tabella di destinazione'
     return {
       id: n.id,
@@ -740,6 +741,25 @@ function describeOutput(n: Node): OutputSummary {
       detail: conn
         ? `${conn.name} (${conn.db_type}) · ${d.mode === 'replace' ? 'sostituisci' : 'accoda'}`
         : '',
+      error,
+    }
+  }
+  if ((d.destType ?? 'datasource') === 's3') {
+    const conn = connectionsList.value.find((c) => c.id === d.connectionId)
+    const bucket = d.s3Bucket?.trim() || conn?.database?.trim() || ''
+    let error: string | null = null
+    if (d.connectionId == null) error = 'scegli la connessione S3'
+    else if (!conn) error = 'connessione non disponibile (permessi o eliminata)'
+    else if (conn.db_type !== 's3') error = 'la connessione scelta non è S3'
+    else if (!d.s3Key?.trim()) error = 'indica la chiave/percorso di destinazione'
+    else if (!bucket) error = 'nessun bucket: indicalo qui o come default della connessione'
+    const parts = (d.partitionBy ?? []).length
+      ? ` · partizioni: ${(d.partitionBy as string[]).join(', ')}`
+      : ''
+    return {
+      id: n.id,
+      label: `S3 ${bucket ? `${bucket}/` : ''}${d.s3Key?.trim() || '…'}`,
+      detail: conn ? `${conn.name} · ${d.s3Format ?? 'parquet'}${parts}` : '',
       error,
     }
   }
@@ -842,23 +862,36 @@ async function executeOutputRuns() {
         return // dialog aperto: gli output già lanciati proseguono comunque
       }
       const d = node.data
-      const isDb = (d.destType ?? 'datasource') === 'database'
+      const destType = d.destType ?? 'datasource'
+      let publish = null
+      let destination = null
+      if (destType === 'database') {
+        destination = {
+          type: 'database' as const,
+          connection_id: d.connectionId,
+          table: d.table.trim(),
+          mode: d.mode ?? 'append',
+          post_sql: d.postSql ?? '',
+        }
+      } else if (destType === 's3') {
+        destination = {
+          type: 's3' as const,
+          connection_id: d.connectionId,
+          bucket: d.s3Bucket?.trim() ?? '',
+          key: d.s3Key.trim(),
+          format: d.s3Format ?? 'parquet',
+          partition_by: d.partitionBy ?? [],
+        }
+      } else {
+        publish = { name: d.name.trim(), project_id: d.projectId, description: d.description ?? '' }
+      }
       try {
         const launched = await runsApi.launch(flowId.value!, {
           bucket: sourceNode.data.bucket ?? bucket,
           input_key: sourceNode.data.parquetKey,
           operations: ops,
-          publish: isDb
-            ? null
-            : { name: d.name.trim(), project_id: d.projectId, description: d.description ?? '' },
-          destination: isDb
-            ? {
-                connection_id: d.connectionId,
-                table: d.table.trim(),
-                mode: d.mode ?? 'append',
-                post_sql: d.postSql ?? '',
-              }
-            : null,
+          publish,
+          destination,
         })
         setStatus(`${label}: run #${launched.id} avviato…`, 'busy')
         pollRun(launched.id, label)
@@ -901,7 +934,9 @@ async function pollRun(runId: number, label = '') {
       if (run.destination) {
         try {
           const d = JSON.parse(run.destination)
-          target = ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
+          target = d.type === 's3'
+            ? ` → s3://${d.bucket}/${d.key}`
+            : ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
         } catch { /* riassunto illeggibile: resta il messaggio base */ }
       }
       setStatus(`${prefix}completato: ${run.rows_written} righe${target}`, 'ok')

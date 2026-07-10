@@ -27,10 +27,11 @@ class TransformDataRequest(BaseModel):
     input_key: str = Field(..., description="Chiave del file di input")
     output_key: str = Field(..., description="Chiave del file di output")
     operations: list[TransformOperation] = Field(..., description="Lista di operazioni da applicare")
-    # destinazione database opzionale (nodo Output): {"connection": …, "target": …};
-    # la password nella connection è Fernet-cifrata, come per l'ingest
-    db_destination: Optional[dict[str, Any]] = Field(
-        default=None, description="Destinazione database opzionale"
+    # destinazione opzionale (nodo Output): {"type": "database"|"s3",
+    # "connection": …, "target": …}; la secret nella connection è
+    # Fernet-cifrata, come per l'ingest
+    destination: Optional[dict[str, Any]] = Field(
+        default=None, description="Destinazione opzionale (database o S3)"
     )
 
 

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from app.api.models import TaskResponse
 from app.core.config import get_settings
+from app.ingest.converters import IngestError
 from app.ingest.db_source import (
     DbConnectionSpec,
     DbSourceError,
@@ -35,18 +36,30 @@ def _friendly(e: Exception) -> str:
 
 
 class DbInspectRequest(BaseModel):
-    connection: DbConnectionSpec
+    # dict e non DbConnectionSpec: le connessioni S3 hanno campi diversi
+    # (endpoint/access_key/…) e vengono smistate su `db_type`
+    connection: dict
     action: Literal["test", "tables"] = "test"
 
 
 @router.post("/inspect")
 def inspect(request: DbInspectRequest):
     try:
-        if request.action == "test":
-            test_connection(request.connection)
+        if request.connection.get("db_type") == "s3":
+            from app.ingest.s3_destination import S3ConnectionSpec
+            from app.ingest.s3_destination import test_connection as s3_test
+
+            if request.action == "tables":
+                raise DbSourceError("Le connessioni S3 non hanno tabelle da elencare")
+            s3_test(S3ConnectionSpec(**request.connection))
             return {"ok": True}
-        return {"tables": list_tables(request.connection)}
-    except DbSourceError as e:
+
+        conn = DbConnectionSpec(**request.connection)
+        if request.action == "test":
+            test_connection(conn)
+            return {"ok": True}
+        return {"tables": list_tables(conn)}
+    except IngestError as e:  # DbSourceError, S3DestinationError: già parlanti
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:  # errori driver: connessione rifiutata, auth, DNS…
         raise HTTPException(status_code=400, detail=_friendly(e))

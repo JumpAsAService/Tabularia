@@ -82,36 +82,80 @@ async def launch_run(
                 detail=f"Esiste già una datasource '{body.publish.name}' in questa cartella",
             )
 
-    # destinazione database (nodo Output): la connessione è referenziata per id,
-    # il payload con la password (cifrata) lo costruisce il gateway — mai il client
-    db_destination = None
+    # destinazione dell'output (nodo Output): la connessione è referenziata per
+    # id, il payload con la secret (cifrata) lo costruisce il gateway — mai il client
+    destination_payload = None
     destination_summary = None
     if body.destination:
         conn = session.get(Connection, body.destination.connection_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="Connessione non trovata")
         ensure_can(session, user, conn.project_id, Capability.CONNECT)
-        table = body.destination.table.strip()
-        if not table:
-            raise HTTPException(status_code=422, detail="Il nome della tabella di destinazione è vuoto")
-        db_destination = {
-            "connection": engine_connection_payload(conn),
-            "target": {
-                "table": table,
-                "mode": body.destination.mode,
-                "post_sql": body.destination.post_sql,
-            },
-        }
-        destination_summary = json.dumps(
-            {
-                "connection_id": conn.id,
-                "db_type": conn.db_type,
-                "host": conn.host,
-                "database": conn.database,
-                "table": table,
-                "mode": body.destination.mode,
+
+        if body.destination.type == "s3":
+            if conn.db_type != "s3":
+                raise HTTPException(
+                    status_code=422, detail="La connessione scelta non è S3/object storage"
+                )
+            key = body.destination.key.strip().strip("/")
+            if not key:
+                raise HTTPException(status_code=422, detail="La chiave/percorso S3 è vuota")
+            bucket_override = body.destination.bucket.strip()
+            if not bucket_override and not (conn.database or "").strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail="Nessun bucket: indicalo sull'output o come default della connessione",
+                )
+            destination_payload = {
+                "type": "s3",
+                "connection": engine_connection_payload(conn),
+                "target": {
+                    "bucket": bucket_override,
+                    "key": key,
+                    "format": body.destination.format,
+                    "partition_by": body.destination.partition_by,
+                },
             }
-        )
+            destination_summary = json.dumps(
+                {
+                    "type": "s3",
+                    "connection_id": conn.id,
+                    "db_type": "s3",
+                    "endpoint": conn.host or "aws",
+                    "bucket": bucket_override or conn.database,
+                    "key": key,
+                    "format": body.destination.format,
+                    "partition_by": body.destination.partition_by,
+                }
+            )
+        else:
+            if conn.db_type == "s3":
+                raise HTTPException(
+                    status_code=422, detail="La connessione scelta è S3: usa una destinazione S3"
+                )
+            table = body.destination.table.strip()
+            if not table:
+                raise HTTPException(status_code=422, detail="Il nome della tabella di destinazione è vuoto")
+            destination_payload = {
+                "type": "database",
+                "connection": engine_connection_payload(conn),
+                "target": {
+                    "table": table,
+                    "mode": body.destination.mode,
+                    "post_sql": body.destination.post_sql,
+                },
+            }
+            destination_summary = json.dumps(
+                {
+                    "type": "database",
+                    "connection_id": conn.id,
+                    "db_type": conn.db_type,
+                    "host": conn.host,
+                    "database": conn.database,
+                    "table": table,
+                    "mode": body.destination.mode,
+                }
+            )
 
     # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
     prefix = "datasets" if body.publish else "out"
@@ -125,7 +169,7 @@ async def launch_run(
             "input_key": body.input_key,
             "output_key": output_key,
             "operations": body.operations,
-            "db_destination": db_destination,
+            "destination": destination_payload,
         },
     )
     if resp.status_code >= 400:

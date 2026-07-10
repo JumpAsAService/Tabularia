@@ -23,10 +23,17 @@ export interface PublishSpec {
 }
 
 export interface DestinationSpec {
+  type: 'database' | 's3'
   connection_id: number
-  table: string
-  mode: 'append' | 'replace'
+  // type="database"
+  table?: string
+  mode?: 'append' | 'replace'
   post_sql?: string
+  // type="s3"
+  bucket?: string
+  key?: string
+  format?: 'parquet' | 'csv'
+  partition_by?: string[]
 }
 
 export function useRuns() {

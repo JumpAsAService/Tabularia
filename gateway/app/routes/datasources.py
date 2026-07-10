@@ -100,6 +100,11 @@ async def create_db_datasource(
     if conn is None:
         raise HTTPException(status_code=404, detail="Connessione non trovata")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type == "s3":
+        raise HTTPException(
+            status_code=422,
+            detail="Una connessione S3 non può essere una sorgente database (serve per i nodi Output)",
+        )
 
     if body.source_type not in ("table", "sql"):
         raise HTTPException(status_code=422, detail="source_type deve essere 'table' o 'sql'")

@@ -1,19 +1,32 @@
 <script setup lang="ts">
 // Nodo Output (terminale, stile Tableau Prep): dove finisce il risultato della
-// catena — datasource del catalogo Tabularia oppure tabella di un database.
+// catena — datasource del catalogo, tabella di database, o file/dataset su S3.
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
-import { Database, HardDriveDownload } from 'lucide-vue-next'
+import { Database, HardDriveDownload, CloudUpload } from 'lucide-vue-next'
 
 const props = defineProps<{ id: string; data: any }>()
 
-const isDb = computed(() => props.data?.destType === 'database')
+const destType = computed(() => props.data?.destType ?? 'datasource')
+const icon = computed(() =>
+  destType.value === 'database' ? Database : destType.value === 's3' ? CloudUpload : HardDriveDownload,
+)
+const title = computed(() =>
+  destType.value === 'database' ? 'Output database' : destType.value === 's3' ? 'Output S3' : 'Output datasource',
+)
 const summary = computed(() => {
-  if (isDb.value) {
-    const t = props.data?.table?.trim()
-    return t ? `tabella ${t} (${props.data?.mode === 'replace' ? 'sostituisci' : 'accoda'})` : 'scegli la tabella…'
+  const d = props.data ?? {}
+  if (destType.value === 'database') {
+    const t = d.table?.trim()
+    return t ? `tabella ${t} (${d.mode === 'replace' ? 'sostituisci' : 'accoda'})` : 'scegli la tabella…'
   }
-  const n = props.data?.name?.trim()
+  if (destType.value === 's3') {
+    const k = d.s3Key?.trim()
+    if (!k) return 'scegli chiave e bucket…'
+    const parts = (d.partitionBy ?? []).length ? ` · ${d.partitionBy.length} partizioni` : ''
+    return `${k} (${d.s3Format ?? 'parquet'})${parts}`
+  }
+  const n = d.name?.trim()
   return n ? `datasource “${n}”` : 'dai un nome alla datasource…'
 })
 </script>
@@ -22,8 +35,8 @@ const summary = computed(() => {
   <div class="node node-output">
     <Handle id="left" type="target" :position="Position.Left" />
     <div class="node-title">
-      <component :is="isDb ? Database : HardDriveDownload" :size="13" class="node-icon" />
-      Output {{ isDb ? 'database' : 'datasource' }}
+      <component :is="icon" :size="13" class="node-icon" />
+      {{ title }}
     </div>
     <div class="node-body muted">{{ summary }}</div>
     <!-- terminale: nessun handle di uscita -->
