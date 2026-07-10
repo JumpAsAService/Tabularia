@@ -66,12 +66,17 @@ class PolarsEngine(Engine):
         return f"{source.bucket}/{source.key}"
 
     def _sink(self, lf: pl.LazyFrame, path: str) -> None:
-        """Scrive un LazyFrame in parquet: streaming, con fallback in-memory."""
+        """Scrive un LazyFrame in parquet: streaming, con fallback in-memory.
+
+        Nel fallback il RISULTATO sta comunque tutto in RAM (è il prezzo di un
+        piano che il sink non regge), ma `engine="streaming"` esegue in
+        streaming tutti i nodi che possono esserlo: il picco resta più basso
+        del collect classico."""
         try:
             lf.sink_parquet(path)
         except Exception as e:  # nodo non supportato dall'engine streaming
             logger.warning("sink_parquet streaming fallito (%s), fallback in-memory", e)
-            lf.collect().write_parquet(path)
+            lf.collect(engine="streaming").write_parquet(path)
 
     def _lazy_from_cache(
         self,
@@ -214,7 +219,7 @@ class PolarsEngine(Engine):
                         raise
                     except Exception as e:  # nodo non supportato dallo streaming
                         logger.warning("sink_csv streaming fallito (%s), fallback in-memory", e)
-                        lf.collect().write_csv(out_path)
+                        lf.collect(engine="streaming").write_csv(out_path)
                 elif fmt == "xlsx":
                     n = lf.select(pl.len()).collect(engine="streaming").item()
                     if n > self.XLSX_MAX_ROWS:
