@@ -204,6 +204,18 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
     { key: 'by', label: 'Raggruppa per', control: 'columns' },
     { key: 'aggregations', label: 'Aggregazioni', control: 'agglist' },
   ],
+  pivot: [
+    { key: 'index', label: 'Chiavi di riga', control: 'columns' },
+    { key: 'on', label: 'Colonne dai valori di', control: 'column' },
+    { key: 'values', label: 'Valori da', control: 'column' },
+    { key: 'func', label: 'Aggrega con', control: 'func' },
+  ],
+  unpivot: [
+    { key: 'index', label: 'Colonne da tenere fisse', control: 'columns', optional: true },
+    { key: 'on', label: 'Colonne da sciogliere (vuoto = tutte le altre)', control: 'columns', optional: true },
+    { key: 'variable_name', label: 'Nome colonna etichette', control: 'text', optional: true },
+    { key: 'value_name', label: 'Nome colonna valori', control: 'text', optional: true },
+  ],
   join: [
     { key: 'how', label: 'Tipo di join', control: 'how' },
     { key: 'on', label: 'Colonne chiave (in entrambe)', control: 'columns' },

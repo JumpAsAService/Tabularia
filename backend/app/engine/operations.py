@@ -226,6 +226,63 @@ def op_group_by(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Reshape: pivot (righe → colonne) e unpivot (colonne → righe)
+# ─────────────────────────────────────────────────────────────────────────────
+# ogni valore distinto di `on` diventa una colonna nuova: oltre questa soglia è
+# quasi certamente la colonna sbagliata, non un reshape voluto
+MAX_PIVOT_COLUMNS = 500
+
+
+@register("pivot")
+def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    # params: {"index": ["paese"], "on": "anno", "values": "vendite", "func": "sum"}
+    index = _require(params, "index")
+    on = _require(params, "on")
+    values = _require(params, "values")
+    func = params.get("func") or "sum"
+    if isinstance(index, str):
+        index = [index]
+    if not index:
+        raise EngineError("pivot: serve almeno una colonna indice (le chiavi di riga)")
+    if func not in _AGG:
+        raise EngineError(f"funzione di aggregazione non supportata: '{func}'")
+
+    # 1) il grosso del lavoro resta lazy/STREAMING: l'aggregazione riduce il
+    #    dataset a (gruppi indice × valori distinti di `on`) righe — piccolo
+    #    per costruzione, qualunque sia la dimensione dell'input
+    aggregated = (
+        lf.group_by(index + [on]).agg(_AGG[func](values).alias(values)).collect(engine="streaming")
+    )
+
+    n_cols = aggregated.get_column(on).n_unique()
+    if n_cols > MAX_PIVOT_COLUMNS:
+        raise EngineError(
+            f"pivot: '{on}' ha {n_cols} valori distinti, cioè {n_cols} colonne nuove "
+            f"(massimo {MAX_PIVOT_COLUMNS}). È la colonna giusta?"
+        )
+
+    # 2) il reshape vero è eager (pivot non esiste in lazy) ma lavora sul
+    #    risultato già aggregato; "first" è un no-op: le coppie (indice, on)
+    #    sono uniche dopo la group_by
+    out = aggregated.pivot(on, index=index, values=values, aggregate_function="first", sort_columns=True)
+    return out.lazy()
+
+
+@register("unpivot")
+def op_unpivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    # params: {"index": ["id"], "on": ["gen", "feb"] (vuoto = tutte le altre),
+    #          "variable_name": "mese", "value_name": "valore"}
+    index = params.get("index") or None
+    on = params.get("on") or None
+    return lf.unpivot(
+        on=on,
+        index=index,
+        variable_name=params.get("variable_name") or "variable",
+        value_name=params.get("value_name") or "value",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Join (legge una seconda sorgente tramite il context)
 # ─────────────────────────────────────────────────────────────────────────────
 def _build_right(right_ref: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:

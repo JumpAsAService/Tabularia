@@ -17,6 +17,8 @@ import {
   Settings,
   FileText,
   Repeat,
+  UnfoldHorizontal,
+  FoldVertical,
 } from 'lucide-vue-next'
 
 export interface OpMeta {
@@ -37,6 +39,8 @@ const OP_META: Record<string, OpMeta> = {
   fill_null:  { icon: PaintBucket, label: 'Riempi null',       color: '#a78bfa' },
   drop_nulls: { icon: Eraser,      label: 'Scarta null',       color: '#a78bfa' },
   group_by:   { icon: Sigma,       label: 'Raggruppa',         color: '#6ee7b7' },
+  pivot:      { icon: UnfoldHorizontal, label: 'Pivot (righe→colonne)',   color: '#6ee7b7' },
+  unpivot:    { icon: FoldVertical,     label: 'Unpivot (colonne→righe)', color: '#6ee7b7' },
   join:       { icon: Link2,       label: 'Join',              color: '#6ee7b7' },
   foreach:    { icon: Repeat,      label: 'Ciclo foreach',     color: '#f472b6' },
 }

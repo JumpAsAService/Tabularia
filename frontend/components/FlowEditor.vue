@@ -146,7 +146,22 @@ async function loadFlow(id: number) {
   // normalizza: sorgenti salvate senza bucket (flussi vecchi/esterni) ricevono
   // quello di default, altrimenti preview/run partirebbero senza bucket (422)
   let nodes = (def.nodes ?? []).map((n: any) => {
-    if (n.type === 'source') return { ...n, data: { ...n.data, bucket: n.data?.bucket ?? bucket } }
+    if (n.type === 'source') {
+      const data = { ...n.data, bucket: n.data?.bucket ?? bucket }
+      // sorgente = datasource del catalogo: la chiave salvata può essere
+      // STANTIA (ogni refresh sostituisce lo snapshot e cancella il vecchio
+      // blob) → si riaggancia sempre allo snapshot corrente del catalogo
+      const ds =
+        data.datasourceId != null ? datasources.value.find((d) => d.id === data.datasourceId) : null
+      if (ds && ds.key) {
+        data.bucket = ds.bucket
+        data.parquetKey = ds.key
+        data.rows = ds.rows
+        data.columns = ds.columns
+        data.filename = ds.name
+      }
+      return { ...n, data }
+    }
     if (n.parentNode) return { ...n, extent: 'parent' } // figli restano nel container
     return n
   })
@@ -204,12 +219,14 @@ onMounted(async () => {
   } catch {
     projectsList.value = []
   }
+  // il catalogo PRIMA del flusso: loadFlow riaggancia le sorgenti-datasource
+  // allo snapshot corrente (le chiavi salvate diventano stantie a ogni refresh)
+  await refreshDatasources()
   try {
     if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
     setStatus(`Caricamento flusso fallito: ${errMessage(e)}`, 'error')
   }
-  refreshDatasources()
 })
 
 // ── Catalogo datasources (per il picker del nodo sorgente) ────────────────

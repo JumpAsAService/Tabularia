@@ -322,3 +322,100 @@ def test_foreach_errore_nel_corpo_indica_quale_iterazione():
                 "body": [{"type": "filter", "params": {"column": "paese", "operator": "eq", "value": "{{p}}"}}],
             },
         )
+
+
+# ── Reshape: pivot / unpivot ─────────────────────────────────────────────────
+def _df_vendite_per_anno() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "paese": ["IT", "IT", "FR", "FR", "IT"],
+            "anno": ["2023", "2024", "2023", "2024", "2023"],
+            "vendite": [10, 20, 5, 7, 3],
+        }
+    )
+
+
+def test_pivot_trasforma_le_righe_in_colonne_aggregando():
+    out = apply(
+        "pivot",
+        {"index": ["paese"], "on": "anno", "values": "vendite", "func": "sum"},
+        _df_vendite_per_anno(),
+    ).sort("paese")
+    assert out.columns == ["paese", "2023", "2024"]  # colonne ordinate
+    it = out.filter(pl.col("paese") == "IT")
+    assert it["2023"].item() == 13  # 10 + 3: le righe duplicate si sommano
+    assert it["2024"].item() == 20
+
+
+def test_pivot_func_default_e_sum():
+    out = apply("pivot", {"index": ["paese"], "on": "anno", "values": "vendite"}, _df_vendite_per_anno())
+    assert out.filter(pl.col("paese") == "IT")["2023"].item() == 13
+
+
+def test_pivot_combinazioni_mancanti_diventano_null():
+    df = pl.DataFrame({"k": ["a", "b"], "on": ["x", "y"], "v": [1, 2]})
+    out = apply("pivot", {"index": ["k"], "on": "on", "values": "v"}, df).sort("k")
+    assert out.filter(pl.col("k") == "a")["y"].item() is None
+
+
+def test_pivot_rifiuta_troppe_colonne(monkeypatch):
+    import app.engine.operations as ops
+
+    monkeypatch.setattr(ops, "MAX_PIVOT_COLUMNS", 2)
+    df = pl.DataFrame({"k": ["a", "a", "a"], "on": ["x", "y", "z"], "v": [1, 2, 3]})
+    with pytest.raises(EngineError, match="valori distinti"):
+        apply("pivot", {"index": ["k"], "on": "on", "values": "v"}, df)
+
+
+def test_pivot_senza_indice_da_errore_chiaro():
+    with pytest.raises(EngineError, match="indice"):
+        apply("pivot", {"index": [], "on": "anno", "values": "vendite"}, _df_vendite_per_anno())
+
+
+def test_pivot_funzione_sconosciuta_da_errore_chiaro():
+    with pytest.raises(EngineError, match="aggregazione"):
+        apply(
+            "pivot",
+            {"index": ["paese"], "on": "anno", "values": "vendite", "func": "boh"},
+            _df_vendite_per_anno(),
+        )
+
+
+def test_unpivot_trasforma_le_colonne_in_righe():
+    df = pl.DataFrame({"id": [1, 2], "gen": [10, 20], "feb": [30, 40]})
+    out = apply(
+        "unpivot",
+        {"index": ["id"], "on": ["gen", "feb"], "variable_name": "mese", "value_name": "valore"},
+        df,
+    )
+    assert out.columns == ["id", "mese", "valore"]
+    assert out.height == 4
+    assert out.filter((pl.col("id") == 1) & (pl.col("mese") == "feb"))["valore"].item() == 30
+
+
+def test_unpivot_senza_on_scioglie_tutte_le_altre_colonne():
+    df = pl.DataFrame({"id": [1], "a": [10], "b": [20]})
+    out = apply("unpivot", {"index": ["id"]}, df)
+    assert out.height == 2
+    assert set(out["variable"].to_list()) == {"a", "b"}
+
+
+def test_pivot_poi_unpivot_riporta_ai_dati_di_partenza():
+    # andata e ritorno: pivot e unpivot sono operazioni inverse
+    pivoted = apply(
+        "pivot",
+        {"index": ["paese"], "on": "anno", "values": "vendite", "func": "sum"},
+        _df_vendite_per_anno(),
+    )
+    back = apply(
+        "unpivot",
+        {"index": ["paese"], "variable_name": "anno", "value_name": "vendite"},
+        pivoted,
+    ).sort(["paese", "anno"])
+    atteso = (
+        _df_vendite_per_anno()
+        .group_by(["paese", "anno"])
+        .agg(pl.col("vendite").sum())
+        .sort(["paese", "anno"])
+    )
+    assert back.equals(atteso)

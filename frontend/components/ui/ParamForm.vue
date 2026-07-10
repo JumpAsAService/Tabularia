@@ -311,6 +311,12 @@ const FUNC_OPTIONS = AGG_FUNCS.map((fn) => ({ value: fn, label: AGG_LABELS[fn] ?
         :options="HOW_OPTIONS"
         @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
       />
+      <Select
+        v-else-if="f.control === 'func'"
+        :model-value="state[f.key] ?? 'sum'"
+        :options="FUNC_OPTIONS"
+        @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
+      />
 
       <!-- valore filtro -->
       <template v-else-if="f.control === 'value'">
