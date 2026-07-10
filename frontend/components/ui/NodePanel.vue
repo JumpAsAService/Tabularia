@@ -233,6 +233,15 @@ function pickDatasource(id: number | null) {
         </ol>
       </div>
 
+      <div v-if="node.data.opType === 'union'" class="joinhelp">
+        <strong class="joinhead"><Link2 :size="13" /> Come collegare la union</strong>
+        <ol>
+          <li>input a <span class="tag">sinistra</span> = lo step precedente della catena</li>
+          <li>input in <span class="tag right">alto</span> = il <strong>ramo/sorgente</strong> le cui righe vengono accodate sotto</li>
+          <li>per accodare più sorgenti, metti più nodi union in catena</li>
+        </ol>
+      </div>
+
       <ParamForm
         :node-id="node.id"
         :op-type="node.data.opType"

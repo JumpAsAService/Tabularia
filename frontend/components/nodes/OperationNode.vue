@@ -7,6 +7,9 @@ import { opMeta } from '~/composables/useOpIcons'
 const props = defineProps<{ id: string; data: any }>()
 
 const isJoin = computed(() => props.data?.opType === 'join')
+const isUnion = computed(() => props.data?.opType === 'union')
+// operazioni con un secondo input (ramo destro) collegato in alto
+const needsRight = computed(() => isJoin.value || isUnion.value)
 const meta = computed(() => opMeta(props.data?.opType ?? ''))
 const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
 </script>
@@ -14,13 +17,13 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
 <template>
   <div
     class="node node-op"
-    :class="{ 'node-join': isJoin }"
+    :class="{ 'node-join': needsRight }"
     :style="{ '--node-accent': meta.color }"
   >
     <!-- input principale (catena): sempre a sinistra -->
     <Handle id="left" type="target" :position="Position.Left" />
-    <!-- input "tabella da unire" del join: in ALTO, ben separato dal principale -->
-    <template v-if="isJoin">
+    <!-- secondo input (join: tabella da unire; union: ramo da accodare): in ALTO -->
+    <template v-if="needsRight">
       <Handle id="right" type="target" :position="Position.Top" class="handle-right" />
       <span class="hlabel-top"><ArrowUp :size="9" /> tabella</span>
     </template>
@@ -31,6 +34,9 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
     </div>
     <div class="node-body muted">
       <template v-if="isJoin">join {{ data.params?.how || 'inner' }}</template>
+      <template v-else-if="isUnion">
+        {{ data.params?.strategy === 'strict' ? 'schemi identici' : 'allinea per nome' }}
+      </template>
       <template v-else>
         {{ paramCount }} {{ paramCount === 1 ? 'parametro' : 'parametri' }}
       </template>

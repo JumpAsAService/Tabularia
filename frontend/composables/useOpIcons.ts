@@ -19,6 +19,8 @@ import {
   Repeat,
   UnfoldHorizontal,
   FoldVertical,
+  Calculator,
+  Merge,
 } from 'lucide-vue-next'
 
 export interface OpMeta {
@@ -32,6 +34,7 @@ const OP_META: Record<string, OpMeta> = {
   drop:       { icon: EyeOff,      label: 'Scarta colonne',    color: '#4f8cff' },
   rename:     { icon: PenLine,     label: 'Rinomina',          color: '#4f8cff' },
   cast:       { icon: Type,        label: 'Cambia tipo',       color: '#4f8cff' },
+  compute:    { icon: Calculator,  label: 'Colonna calcolata', color: '#4f8cff' },
   filter:     { icon: Filter,      label: 'Filtra',            color: '#f59e0b' },
   sort:       { icon: ArrowUpDown, label: 'Ordina',            color: '#f59e0b' },
   limit:      { icon: Scissors,    label: 'Limita righe',      color: '#f59e0b' },
@@ -42,6 +45,7 @@ const OP_META: Record<string, OpMeta> = {
   pivot:      { icon: UnfoldHorizontal, label: 'Pivot (righe→colonne)',   color: '#6ee7b7' },
   unpivot:    { icon: FoldVertical,     label: 'Unpivot (colonne→righe)', color: '#6ee7b7' },
   join:       { icon: Link2,       label: 'Join',              color: '#6ee7b7' },
+  union:      { icon: Merge,       label: 'Union (accoda righe)', color: '#6ee7b7' },
   foreach:    { icon: Repeat,      label: 'Ciclo foreach',     color: '#f472b6' },
 }
 

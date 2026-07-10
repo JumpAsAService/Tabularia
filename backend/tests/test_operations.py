@@ -419,3 +419,122 @@ def test_pivot_poi_unpivot_riporta_ai_dati_di_partenza():
         .sort(["paese", "anno"])
     )
     assert back.equals(atteso)
+
+
+# ── Compute (colonne calcolate, espressioni SQL) ─────────────────────────────
+def test_compute_espressione_aritmetica():
+    out = apply("compute", {"columns": [{"name": "doppio", "expr": "vendite * 2"}]})
+    assert out["doppio"].to_list() == [200, 100, 500, 600]
+
+
+def test_compute_case_when_e_funzioni_stringa():
+    out = apply(
+        "compute",
+        {"columns": [{"name": "fascia", "expr": "CASE WHEN vendite >= 250 THEN UPPER(paese) ELSE 'altro' END"}]},
+    )
+    assert out["fascia"].to_list() == ["altro", "altro", "DE", "IT"]
+
+
+def test_compute_window_function_over_partition():
+    out = apply(
+        "compute",
+        {"columns": [{"name": "tot_paese", "expr": "SUM(vendite) OVER (PARTITION BY paese)"}]},
+    )
+    per_riga = dict(zip(out["paese"].to_list(), out["tot_paese"].to_list()))
+    assert per_riga["IT"] == 400 and per_riga["FR"] == 50 and per_riga["DE"] == 250
+
+
+def test_compute_window_running_con_order_by():
+    out = apply(
+        "compute",
+        {"columns": [{"name": "progressivo", "expr": "SUM(vendite) OVER (PARTITION BY paese ORDER BY data)"}]},
+    )
+    it = out.filter(pl.col("paese") == "IT").sort("data")
+    assert it["progressivo"].to_list() == [100, 400]  # running sum, non totale
+
+
+def test_compute_sequenziale_usa_le_colonne_precedenti():
+    out = apply(
+        "compute",
+        {"columns": [
+            {"name": "netto", "expr": "vendite * 0.8"},
+            {"name": "netto_iva", "expr": "netto * 1.22"},  # usa la colonna appena creata
+        ]},
+    )
+    assert out["netto_iva"][0] == pytest.approx(100 * 0.8 * 1.22)
+
+
+def test_compute_sovrascrive_una_colonna_esistente():
+    out = apply("compute", {"columns": [{"name": "vendite", "expr": "vendite + 1"}]})
+    assert out["vendite"].to_list() == [101, 51, 251, 301]
+
+
+def test_compute_espressione_malformata_da_errore_parlante():
+    with pytest.raises(EngineError, match="non valida"):
+        apply("compute", {"columns": [{"name": "x", "expr": "SUM(("}]})
+
+
+def test_compute_nome_vuoto_rifiutato():
+    with pytest.raises(EngineError, match="nome"):
+        apply("compute", {"columns": [{"name": " ", "expr": "1 + 1"}]})
+
+
+def test_compute_lista_vuota_rifiutata():
+    with pytest.raises(EngineError, match="almeno una"):
+        apply("compute", {"columns": []})
+
+
+# ── Union (il ramo destro passa dallo storage, come il join) ────────────────
+def test_union_relaxed_allinea_colonne_per_nome(storage):
+    destra = upload_df(
+        storage,
+        pl.DataFrame({"paese": ["ES"], "vendite": [75], "canale": ["web"]}),
+        "datasets/vendite_es.parquet",
+    )
+    ctx = OperationContext(storage)
+    try:
+        out = apply("union", {"right": {"bucket": destra.bucket, "key": destra.key}}, ctx=ctx)
+        assert out.height == 5  # 4 righe base + 1 accodata
+        assert "canale" in out.columns and "data" in out.columns
+        es = out.filter(pl.col("paese") == "ES")
+        assert es["canale"].item() == "web" and es["data"].item() is None
+        assert out.filter(pl.col("paese") == "IT")["canale"].null_count() == 2
+    finally:
+        ctx.cleanup()
+
+
+def test_union_strict_rifiuta_schemi_diversi(storage):
+    destra = upload_df(
+        storage,
+        pl.DataFrame({"paese": ["ES"], "solo_qui": [1]}),
+        "datasets/schema_diverso.parquet",
+    )
+    ctx = OperationContext(storage)
+    try:
+        with pytest.raises(Exception):  # errore Polars a runtime: schemi non identici
+            apply("union", {"right": {"bucket": destra.bucket, "key": destra.key}, "strategy": "strict"}, ctx=ctx)
+    finally:
+        ctx.cleanup()
+
+
+def test_union_con_sotto_flow_sul_lato_destro(storage, anagrafica):
+    right = {
+        "source": {"bucket": anagrafica.bucket, "key": anagrafica.key},
+        "operations": [{"type": "filter", "params": {"column": "paese", "operator": "eq", "value": "IT"}}],
+    }
+    ctx = OperationContext(storage)
+    try:
+        out = apply("union", {"right": right}, ctx=ctx)
+        assert out.height == 5
+        assert out.filter(pl.col("nome") == "Italia").height == 1
+    finally:
+        ctx.cleanup()
+
+
+def test_union_strategia_sconosciuta_rifiutata(storage, anagrafica):
+    ctx = OperationContext(storage)
+    try:
+        with pytest.raises(EngineError, match="strategia"):
+            apply("union", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "strategy": "boh"}, ctx=ctx)
+    finally:
+        ctx.cleanup()

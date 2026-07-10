@@ -84,7 +84,7 @@ function operationFor(nodes: Node[], edges: Edge[], id: string, bodyUntil?: stri
   const node = nodes.find((n) => n.id === id)!
   const params: Record<string, any> = { ...(node.data.params ?? {}) }
 
-  if (node.data.opType === 'join') {
+  if (node.data.opType === 'join' || node.data.opType === 'union') {
     const rightId = buildIncoming(edges).get(id)?.right
     if (rightId) {
       const right = resolveChain(nodes, edges, rightId)
@@ -178,6 +178,8 @@ export interface FieldSpec {
     | 'renamelist' // {da: a}
     | 'filllist' // {colonna: valore}
     | 'agglist' // [{column, func, alias}]
+    | 'exprlist' // [{name, expr}] — colonne calcolate (espressioni SQL)
+    | 'strategy' // union: relaxed | strict
     | 'json' // textarea con JSON libero (es. items del foreach)
   optional?: boolean
 }
@@ -216,9 +218,15 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
     { key: 'variable_name', label: 'Nome colonna etichette', control: 'text', optional: true },
     { key: 'value_name', label: 'Nome colonna valori', control: 'text', optional: true },
   ],
+  compute: [
+    { key: 'columns', label: 'Colonne calcolate (espressioni SQL)', control: 'exprlist' },
+  ],
   join: [
     { key: 'how', label: 'Tipo di join', control: 'how' },
     { key: 'on', label: 'Colonne chiave (in entrambe)', control: 'columns' },
+  ],
+  union: [
+    { key: 'strategy', label: 'Se le colonne dei due rami differiscono', control: 'strategy' },
   ],
   foreach: [
     { key: 'items', label: 'Iterazioni statiche (solo senza driver)', control: 'json', optional: true },
@@ -275,6 +283,10 @@ export const HOW_LABELS: Record<string, string> = {
   anti: 'anti — left rows WITHOUT a match',
   cross: 'cross — cartesian product',
 }
+export const STRATEGY_LABELS: Record<string, string> = {
+  relaxed: 'align by name — missing columns become null',
+  strict: 'require identical schemas',
+}
 export const DTYPE_LABELS: Record<string, string> = {
   int: 'integer',
   float: 'decimal',
@@ -294,6 +306,8 @@ export function defaultParams(opType: string): Record<string, any> {
       return { operator: 'eq' }
     case 'join':
       return { how: 'inner' }
+    case 'union':
+      return { strategy: 'relaxed' }
     case 'sort':
       return { descending: false }
     case 'foreach':

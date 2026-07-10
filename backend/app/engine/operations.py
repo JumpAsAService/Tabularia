@@ -5,9 +5,11 @@ Ogni operazione è una funzione pura `(lf, params, ctx) -> lf` che mappa un nodo
 della IR (un dict `params`) in una trasformazione su `LazyFrame`. Aggiungere una
 nuova operazione = registrare una funzione con `@register("nome")`.
 
-Design volutamente dichiarativo: nessuna `eval` di espressioni arbitrarie
+Design volutamente dichiarativo: nessuna `eval` di codice arbitrario
 (sicurezza + serializzabilità JSON per Celery). Le trasformazioni sono un set
-chiuso e verificato.
+chiuso e verificato. Unica eccezione controllata: `compute` parsa espressioni
+SQL con `pl.sql_expr` — un parser di SOLE espressioni (niente statement, niente
+I/O, niente Python), quindi il perimetro resta chiuso.
 """
 from __future__ import annotations
 
@@ -322,6 +324,63 @@ def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
     left_on = _require(params, "left_on")
     right_on = _require(params, "right_on")
     return lf.join(right_lf, left_on=left_on, right_on=right_on, how=how)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Union: accoda le righe di un altro ramo (stile Tableau Prep)
+# ─────────────────────────────────────────────────────────────────────────────
+@register("union")
+def op_union(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    """
+    params: {"right": <sorgente o sub-flow, come il join>, "strategy": "relaxed"}
+
+    Accoda le righe del ramo destro sotto quelle della catena. "relaxed"
+    (default) allinea le colonne per nome: le mancanti da un lato diventano
+    null, i tipi si riconciliano al supertipo. "strict" richiede schemi
+    identici. Union di N sorgenti = nodi union in catena. Tutto lazy.
+    """
+    right_ref = _require(params, "right")
+    right_lf = _build_right(right_ref, ctx)
+    strategy = params.get("strategy") or "relaxed"
+    if strategy not in ("relaxed", "strict"):
+        raise EngineError(f"union: strategia non supportata: '{strategy}' (usa relaxed o strict)")
+    how = "diagonal_relaxed" if strategy == "relaxed" else "vertical"
+    return pl.concat([lf, right_lf], how=how)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Colonne calcolate: espressioni SQL (dialetto Polars) → espressioni lazy
+# ─────────────────────────────────────────────────────────────────────────────
+@register("compute")
+def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    """
+    params: {"columns": [{"name": "margine", "expr": "prezzo - costo"}, ...]}
+
+    Le espressioni sono SQL nel dialetto di Polars: aritmetica, CASE WHEN,
+    funzioni stringa/data e window functions con OVER (PARTITION BY /
+    ORDER BY → semantica running per righe). `pl.sql_expr` parsa SOLO
+    espressioni: niente statement né accesso a tabelle. Le colonne vengono
+    applicate IN SEQUENZA: un'espressione può usare quelle definite prima;
+    un nome già esistente sovrascrive la colonna. Tutto resta lazy.
+    """
+    columns = _require(params, "columns")
+    if not isinstance(columns, list) or not columns:
+        raise EngineError("compute: definisci almeno una colonna calcolata")
+    for c in columns:
+        name = str(c.get("name") or "").strip()
+        expr_s = str(c.get("expr") or "").strip()
+        if not name:
+            raise EngineError("compute: ogni colonna calcolata deve avere un nome")
+        if not expr_s:
+            raise EngineError(f"compute: l'espressione di '{name}' è vuota")
+        try:
+            expr = pl.sql_expr(expr_s)
+        except Exception as e:
+            raise EngineError(
+                f"compute: espressione di '{name}' non valida: {e}"
+            ) from e
+        lf = lf.with_columns(expr.alias(name))
+    return lf
 
 
 # ─────────────────────────────────────────────────────────────────────────────

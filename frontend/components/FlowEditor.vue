@@ -570,9 +570,9 @@ async function refreshForNode(nodeId: string) {
     placeholders.value = []
   }
 
-  // colonne del lato destro = ramo destro del join, o driver del foreach
+  // colonne del lato destro = ramo destro di join/union, o driver del foreach
   // (per il foreach sono i placeholder {{colonna}} disponibili nel corpo)
-  if (node?.data?.opType === 'join' || node?.type === 'foreach') {
+  if (node?.data?.opType === 'join' || node?.data?.opType === 'union' || node?.type === 'foreach') {
     const rightId = inc.get(nodeId)?.right
     try {
       rightColumns.value = rightId ? await ensureColumns(rightId) : []

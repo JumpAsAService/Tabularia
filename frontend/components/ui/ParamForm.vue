@@ -13,6 +13,7 @@ import {
   AGG_LABELS,
   HOW_LABELS,
   DTYPE_LABELS,
+  STRATEGY_LABELS,
   type FieldSpec,
 } from '~/composables/useFlowModel'
 
@@ -74,6 +75,7 @@ const castRows = reactive<{ column: string; dtype: string }[]>([])
 const renameRows = reactive<{ from: string; to: string }[]>([])
 const fillRows = reactive<{ column: string; value: string }[]>([])
 const aggRows = reactive<{ column: string; func: string; alias: string }[]>([])
+const exprRows = reactive<{ name: string; expr: string }[]>([])
 
 function parseValue(raw: string): any {
   const t = (raw ?? '').trim()
@@ -92,7 +94,7 @@ function showValue(v: any): string {
 // ricostruisce lo stato locale dai params quando cambia il nodo/operazione
 function rebuild() {
   for (const k of Object.keys(state)) delete state[k]
-  castRows.length = renameRows.length = fillRows.length = aggRows.length = 0
+  castRows.length = renameRows.length = fillRows.length = aggRows.length = exprRows.length = 0
   const p = props.params ?? {}
 
   for (const f of spec.value) {
@@ -124,6 +126,10 @@ function rebuild() {
         break
       case 'agglist':
         for (const a of p.aggregations ?? []) aggRows.push({ column: a.column, func: a.func, alias: a.alias ?? '' })
+        break
+      case 'exprlist':
+        for (const c of p.columns ?? []) exprRows.push({ name: c.name ?? '', expr: c.expr ?? '' })
+        if (!exprRows.length) exprRows.push({ name: '', expr: '' }) // parti con una riga pronta
         break
       default:
         state[f.key] = p[f.key]
@@ -225,6 +231,11 @@ function build(): Record<string, any> {
           .filter((r) => r.column && r.func)
           .map((r) => ({ column: r.column, func: r.func, ...(r.alias ? { alias: r.alias } : {}) }))
         break
+      case 'exprlist':
+        out.columns = exprRows
+          .filter((r) => r.name.trim() && r.expr.trim())
+          .map((r) => ({ name: r.name.trim(), expr: r.expr.trim() }))
+        break
       default:
         if (state[f.key] !== undefined && state[f.key] !== '') out[f.key] = state[f.key]
     }
@@ -252,6 +263,7 @@ function addCast() { castRows.push({ column: '', dtype: 'int' }); }
 function addRename() { renameRows.push({ from: '', to: '' }); }
 function addFill() { fillRows.push({ column: '', value: '' }); }
 function addAgg() { aggRows.push({ column: '', func: 'sum', alias: '' }); }
+function addExpr() { exprRows.push({ name: '', expr: '' }); }
 function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
 
 // ── Opzioni per il Select custom ──────────────────────────────────────────
@@ -265,6 +277,7 @@ const OPERATOR_OPTIONS = FILTER_OPERATORS.map((op) => ({ value: op, label: OPERA
 const HOW_OPTIONS = JOIN_HOWS.map((h) => ({ value: h, label: HOW_LABELS[h] ?? h }))
 const DTYPE_OPTIONS = DTYPES.map((d) => ({ value: d, label: DTYPE_LABELS[d] ?? d }))
 const FUNC_OPTIONS = AGG_FUNCS.map((fn) => ({ value: fn, label: AGG_LABELS[fn] ?? fn }))
+const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) => ({ value, label }))
 </script>
 
 <template>
@@ -315,6 +328,12 @@ const FUNC_OPTIONS = AGG_FUNCS.map((fn) => ({ value: fn, label: AGG_LABELS[fn] ?
         v-else-if="f.control === 'func'"
         :model-value="state[f.key] ?? 'sum'"
         :options="FUNC_OPTIONS"
+        @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
+      />
+      <Select
+        v-else-if="f.control === 'strategy'"
+        :model-value="state[f.key] ?? 'relaxed'"
+        :options="STRATEGY_OPTIONS"
         @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
       />
 
@@ -428,6 +447,29 @@ const FUNC_OPTIONS = AGG_FUNCS.map((fn) => ({ value: fn, label: AGG_LABELS[fn] ?
         <button @click="addFill">+ aggiungi</button>
       </div>
 
+      <!-- compute: righe nome → espressione SQL -->
+      <div v-else-if="f.control === 'exprlist'" class="rows">
+        <div v-for="(r, i) in exprRows" :key="i" class="exprrow">
+          <div class="exprhead">
+            <input type="text" v-model="r.name" placeholder="nome colonna" @change="emitUpdate" />
+            <button class="x" @click="removeRow(exprRows, i)"><X :size="13" /></button>
+          </div>
+          <textarea
+            v-model="r.expr"
+            rows="2"
+            spellcheck="false"
+            placeholder="es. prezzo - costo · SUM(importo) OVER (PARTITION BY cliente ORDER BY data)"
+            @change="emitUpdate"
+          />
+        </div>
+        <button @click="addExpr">+ aggiungi</button>
+        <p class="sqlhint">
+          SQL: aritmetica, CASE WHEN, funzioni stringa/data, aggregazioni con OVER
+          (PARTITION BY … ORDER BY …). Le righe successive vedono le colonne precedenti.
+          L'anteprima segnala subito le espressioni non valide.
+        </p>
+      </div>
+
       <!-- group_by: righe colonna/funzione/alias -->
       <div v-else-if="f.control === 'agglist'" class="rows">
         <div v-for="(r, i) in aggRows" :key="i" class="row">
@@ -466,4 +508,10 @@ label { font-size: 12px; color: var(--muted); }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; gap: 4px; align-items: center; }
 .row .x { padding: 2px 8px; }
+.exprrow { display: flex; flex-direction: column; gap: 4px; }
+.exprrow textarea { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+.exprhead { display: flex; gap: 4px; align-items: center; }
+.exprhead input { flex: 1; }
+.exprhead .x { padding: 2px 8px; }
+.sqlhint { font-size: 11.5px; color: var(--muted); margin: 2px 0 0; }
 </style>
