@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Node, Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
+import { Controls, ControlButton } from '@vue-flow/controls'
 
-import { Table2, BarChart3 } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2 } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
+import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
 import { useRuns, type PublishSpec } from '~/composables/useRuns'
@@ -38,6 +39,7 @@ const {
   onNodeClick,
   onPaneClick,
   screenToFlowCoordinate,
+  fitView,
 } = useVueFlow()
 
 const initialNodes: Node[] = [
@@ -359,6 +361,24 @@ function addOperation() {
   addEdges({ id: `e-${parentId}-left-${id}`, source: parentId, target: id, targetHandle: 'left' })
   selectedId.value = id
   refreshForNode(id)
+}
+
+// ── Auto-layout ("Ordina il flusso", bottone nei Controls del canvas) ────
+function autoLayout() {
+  const { positions, childPositions, containerSizes } = computeAutoLayout(getNodes.value, getEdges.value)
+  for (const [id, size] of containerSizes) {
+    const n = findNode(id)
+    if (n) n.style = { ...(n.style as object), width: `${size.width}px`, height: `${size.height}px` }
+  }
+  for (const [id, pos] of positions) {
+    const n = findNode(id)
+    if (n) n.position = pos
+  }
+  for (const [id, pos] of childPositions) {
+    const n = findNode(id)
+    if (n) n.position = pos
+  }
+  nextTick(() => fitView({ padding: 0.15, duration: 300 }))
 }
 
 // ── Drag & drop dalla sidebar dei componenti ─────────────────────────────
@@ -790,7 +810,11 @@ async function pollTask(id: string, outputKey: string) {
           <ForeachNode :id="props.id" :data="props.data" />
         </template>
         <Background pattern-color="#2a2f3a" :gap="16" />
-        <Controls />
+        <Controls>
+          <ControlButton title="Ordina il flusso" @click="autoLayout">
+            <Wand2 :size="13" />
+          </ControlButton>
+        </Controls>
       </VueFlow>
     </div>
 
