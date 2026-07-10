@@ -265,7 +265,7 @@ class PolarsEngine(Engine):
 
             # metadati dal parquet scritto (letti dai metadata, economici)
             written = pl.scan_parquet(out_path)
-            rows_written = written.select(pl.len()).collect().item()
+            rows_written = written.select(pl.len()).collect(engine="streaming").item()
             return RunResult(
                 destination=destination,
                 rows_written=int(rows_written),

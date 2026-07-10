@@ -28,7 +28,7 @@ def df_base() -> pl.DataFrame:
 def apply(op_type: str, params: dict, df: pl.DataFrame | None = None, ctx=None) -> pl.DataFrame:
     """Applica una singola operazione e materializza il risultato."""
     lf = (df if df is not None else df_base()).lazy()
-    return get_operation(op_type)(lf, params, ctx).collect()
+    return get_operation(op_type)(lf, params, ctx).collect(engine="streaming")
 
 
 # ── Colonne ──────────────────────────────────────────────────────────────────

@@ -143,7 +143,7 @@ class IngestService:
             self.storage.upload_file(out_path, self.bucket, parquet_key)
 
             scan = pl.scan_parquet(out_path)
-            rows = int(scan.select(pl.len()).collect().item())
+            rows = int(scan.select(pl.len()).collect(engine="streaming").item())
             columns = [ColumnInfo(name=n, dtype=str(t)) for n, t in scan.collect_schema().items()]
         finally:
             for p in temps:

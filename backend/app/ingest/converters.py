@@ -40,7 +40,7 @@ def _sink(lf: pl.LazyFrame, dst: str) -> None:
         lf.sink_parquet(dst)
     except Exception as e:  # noqa: BLE001
         logger.warning("sink_parquet streaming fallito (%s), fallback in-memory", e)
-        lf.collect().write_parquet(dst)
+        lf.collect(engine="streaming").write_parquet(dst)
 
 
 def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptions) -> None:
@@ -72,7 +72,7 @@ def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptio
     elif fmt is FileFormat.json:
         # JSON array: non streamabile
         df = pl.read_json(src)
-        df = _cast(df.lazy(), overrides).collect()
+        df = _cast(df.lazy(), overrides).collect(engine="streaming")
         df.write_parquet(dst)
 
     elif fmt is FileFormat.excel:
