@@ -108,7 +108,7 @@ async function remove(c: ConnectionInfo) {
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
-    <p v-else-if="loading" class="muted">Loading…</p>
+    <SkeletonRows v-else-if="loading" :rows="4" />
     <p v-else-if="!filtered.length" class="muted">
       {{ list.length ? 'No connection matches the search.' : 'No usable connections: create one from a folder where you have the CONNECT permission.' }}
     </p>

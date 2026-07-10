@@ -14,6 +14,7 @@ const props = defineProps<{
   operations: string[]
   inputColumns: ColumnInfo[]
   rightColumns: ColumnInfo[]
+  columnsLoading?: boolean
   placeholders?: string[]
   fetchDistinct?: (column: string) => Promise<any[]>
   datasources?: DatasourceInfo[]
@@ -199,6 +200,7 @@ function pickDatasource(id: number | null) {
         :params="node.data.params || {}"
         :input-columns="inputColumns"
         :right-columns="rightColumns"
+        :columns-loading="columnsLoading"
         @update="onParams"
       />
 
@@ -248,6 +250,7 @@ function pickDatasource(id: number | null) {
         :params="node.data.params || {}"
         :input-columns="inputColumns"
         :right-columns="rightColumns"
+        :columns-loading="columnsLoading"
         :placeholders="placeholders"
         :fetch-distinct="fetchDistinct"
         @update="onParams"

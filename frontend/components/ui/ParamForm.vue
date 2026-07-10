@@ -23,6 +23,8 @@ const props = defineProps<{
   params: Record<string, any>
   inputColumns: ColumnInfo[]
   rightColumns?: ColumnInfo[]
+  // le colonne del nodo sono in risoluzione (preview a monte in corso)
+  columnsLoading?: boolean
   // dentro un container foreach: placeholder {{...}} utilizzabili ovunque
   placeholders?: string[]
   // carica i valori distinti di una colonna (per il picker di in/not_in)
@@ -282,7 +284,13 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
 
 <template>
   <div class="paramform">
-    <div v-if="!inputColumns.length" class="hint">
+    <!-- colonne in risoluzione: skeleton al posto del falso "nessuna colonna" -->
+    <div v-if="columnsLoading && !inputColumns.length" class="skcols" aria-busy="true">
+      <span class="sk" style="width: 68%" />
+      <span class="sk" style="width: 52%" />
+      <span class="sk" style="width: 61%" />
+    </div>
+    <div v-else-if="!inputColumns.length" class="hint">
       <Info :size="13" /> Nessuna colonna a monte: collega/carica una sorgente e apri l'anteprima.
     </div>
 
@@ -299,7 +307,10 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <input type="checkbox" :checked="isChecked(f.key, ph)" @change="toggleColumn(f.key, ph)" />
           {{ ph }}
         </label>
-        <span v-if="!optionsFor(f).length && !phOptions.length" class="muted">{{ emptyMessage(f) }}</span>
+        <template v-if="!optionsFor(f).length && !phOptions.length">
+          <span v-if="columnsLoading" class="sk" style="width: 130px" aria-busy="true" />
+          <span v-else class="muted">{{ emptyMessage(f) }}</span>
+        </template>
       </div>
 
       <!-- select singola colonna (+ placeholder del foreach, se presenti) -->
@@ -496,6 +507,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
 
 <style scoped>
 .paramform { display: flex; flex-direction: column; gap: 10px; }
+.skcols { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 label { font-size: 12px; color: var(--muted); }
 .hint { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }

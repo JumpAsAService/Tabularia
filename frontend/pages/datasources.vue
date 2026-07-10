@@ -102,7 +102,7 @@ async function remove(d: DatasourceInfo) {
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
-    <p v-else-if="loading" class="muted">Loading…</p>
+    <SkeletonRows v-else-if="loading" :rows="4" />
     <p v-else-if="!filtered.length" class="muted">
       {{ list.length ? 'No datasource matches the search.' : 'No datasources yet: publish a flow output or import from a database.' }}
     </p>

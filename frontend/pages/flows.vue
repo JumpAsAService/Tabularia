@@ -68,7 +68,7 @@ async function deleteFlow(f: FlowSummary) {
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
-    <p v-else-if="loading" class="muted">Loading…</p>
+    <SkeletonRows v-else-if="loading" :rows="4" />
     <p v-else-if="!filtered.length" class="muted">
       {{ flows.length ? 'No flow matches the search.' : 'No flows yet: create one from a folder or with New flow.' }}
     </p>

@@ -58,6 +58,7 @@ const selectedId = ref<string | null>(SOURCE_ID)
 const operations = ref<string[]>([])
 const inputColumns = ref<ColumnInfo[]>([])
 const rightColumns = ref<ColumnInfo[]>([])
+const columnsLoading = ref(false) // risoluzione colonne del nodo selezionato in corso
 // placeholder {{colonna}} disponibili per un nodo DENTRO un container foreach
 const placeholders = ref<string[]>([])
 const nodeColumns = reactive<Record<string, ColumnInfo[]>>({}) // cache output per nodo
@@ -540,6 +541,7 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
 async function refreshForNode(nodeId: string) {
   const inc = buildIncoming(getEdges.value)
   const node = findNode(nodeId)
+  columnsLoading.value = true
 
   // colonne in ingresso (output del genitore sinistro); il PRIMO nodo di un
   // corpo foreach non ha archi interni → il suo input è quello del container
@@ -583,6 +585,7 @@ async function refreshForNode(nodeId: string) {
     rightColumns.value = []
   }
 
+  columnsLoading.value = false // colonne pronte: la preview può ancora girare
   await runPreview(nodeId)
 }
 
@@ -978,6 +981,7 @@ async function pollTask(id: string, outputKey: string) {
         :operations="operations"
         :input-columns="inputColumns"
         :right-columns="rightColumns"
+        :columns-loading="columnsLoading"
         :placeholders="placeholders"
         :fetch-distinct="fetchDistinctValues"
         :datasources="datasources"

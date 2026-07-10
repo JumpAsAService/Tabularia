@@ -121,6 +121,31 @@ optgroup { font-style: normal; color: var(--muted); }
 
 .muted { color: var(--muted); }
 
+/* ── Skeleton (shimmer) per gli stati di caricamento ──────────────────── */
+.sk {
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  background: var(--panel-2);
+  border-radius: 4px;
+  height: 12px;
+}
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  animation: sk-shimmer 1.1s infinite;
+}
+@keyframes sk-shimmer {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk::after { animation: none; }
+}
+
 /* ── Layout editor ───────────────────────────────────────────────────── */
 .app {
   display: grid;
