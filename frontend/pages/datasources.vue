@@ -4,6 +4,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { skeletonPad } from '~/composables/useSkeleton'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
 import type { RunInfo } from '~/composables/useRuns'
@@ -19,6 +20,7 @@ const loading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
+  const t0 = performance.now()
   try {
     const [ds, projects] = await Promise.all([dsApi.list(), projectsApi.list()])
     list.value = ds
@@ -26,6 +28,7 @@ onMounted(async () => {
   } catch (e) {
     error.value = errMessage(e)
   } finally {
+    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
     loading.value = false
   }
 })

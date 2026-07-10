@@ -5,6 +5,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Plug, Search, Trash2, Folder, Pencil, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { skeletonPad } from '~/composables/useSkeleton'
 import {
   useConnections,
   type ConnectionInfo,
@@ -29,11 +30,13 @@ async function load() {
 }
 
 onMounted(async () => {
+  const t0 = performance.now()
   try {
     await load()
   } catch (e) {
     error.value = errMessage(e)
   } finally {
+    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
     loading.value = false
   }
 })

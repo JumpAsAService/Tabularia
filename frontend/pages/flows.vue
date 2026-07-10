@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Workflow, Search, Trash2, Folder, Plus } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { skeletonPad } from '~/composables/useSkeleton'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
 
@@ -17,6 +18,7 @@ const loading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
+  const t0 = performance.now()
   try {
     const [fl, projects] = await Promise.all([flowsApi.list(), projectsApi.list()])
     flows.value = fl
@@ -24,6 +26,7 @@ onMounted(async () => {
   } catch (e) {
     error.value = errMessage(e)
   } finally {
+    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
     loading.value = false
   }
 })

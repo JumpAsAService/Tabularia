@@ -15,6 +15,7 @@ import { useProjects } from '~/composables/useProjects'
 import { useRuns, type PublishSpec, type DestinationSpec } from '~/composables/useRuns'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
+import { skeletonPad } from '~/composables/useSkeleton'
 
 const api = useApi()
 const flowsApi = useFlows()
@@ -538,10 +539,13 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
   return res.columns
 }
 
+let columnsSeq = 0 // come previewSeq: solo l'ultima risoluzione spegne lo skeleton
 async function refreshForNode(nodeId: string) {
   const inc = buildIncoming(getEdges.value)
   const node = findNode(nodeId)
   columnsLoading.value = true
+  const colSeq = ++columnsSeq
+  const t0 = performance.now()
 
   // colonne in ingresso (output del genitore sinistro); il PRIMO nodo di un
   // corpo foreach non ha archi interni → il suo input è quello del container
@@ -585,16 +589,23 @@ async function refreshForNode(nodeId: string) {
     rightColumns.value = []
   }
 
-  columnsLoading.value = false // colonne pronte: la preview può ancora girare
+  // spegne lo skeleton delle colonne dopo il minimo di visibilità, SENZA
+  // ritardare l'avvio della preview (che parte subito qui sotto)
+  skeletonPad(t0).then(() => {
+    if (colSeq === columnsSeq) columnsLoading.value = false
+  })
   await runPreview(nodeId)
 }
 
+let previewSeq = 0 // solo l'ULTIMA preview lanciata scrive risultato e spegne lo skeleton
 async function runPreview(nodeId: string) {
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
   if (!sourceNode?.data?.parquetKey) {
     preview.value = null
     return
   }
+  const seq = ++previewSeq
+  const t0 = performance.now()
   previewError.value = ''
   previewLoading.value = true
   try {
@@ -604,13 +615,16 @@ async function runPreview(nodeId: string) {
       operations: ops,
       limit: 100,
     })
-    preview.value = res
     nodeColumns[nodeId] = res.columns
+    if (seq === previewSeq) preview.value = res
   } catch (e) {
-    preview.value = null
-    previewError.value = errMessage(e)
+    if (seq === previewSeq) {
+      preview.value = null
+      previewError.value = errMessage(e)
+    }
   } finally {
-    previewLoading.value = false
+    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
+    if (seq === previewSeq) previewLoading.value = false
   }
 }
 
