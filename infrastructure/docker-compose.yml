@@ -131,6 +131,8 @@ services:
       # il browser chiama il GATEWAY (unico ingresso pubblico), non l'engine
       - NUXT_PUBLIC_API_BASE=http://localhost:8000
       - NUXT_PUBLIC_BUCKET=data-prep
+      # Grafana visto dal BROWSER (iframe della tab Monitoring)
+      - NUXT_PUBLIC_GRAFANA_URL=http://localhost:3001
     volumes:
       - ../frontend:/app
       - /app/node_modules
@@ -162,6 +164,15 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+      # embed nella tab Monitoring dell'app (iframe): senza allow_embedding
+      # Grafana manda X-Frame-Options: deny. L'anonimo Viewer serve perché
+      # l'iframe non condivide la sessione dell'app: chi raggiunge la :3001
+      # vede le dashboard SENZA login (sola lettura). Ok in locale; se esponi
+      # lo stack, chiudi la porta o metti un auth-proxy davanti.
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

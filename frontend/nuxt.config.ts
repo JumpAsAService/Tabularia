@@ -10,6 +10,8 @@ export default defineNuxtConfig({
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000',
       // bucket di default sullo storage
       bucket: process.env.NUXT_PUBLIC_BUCKET || 'data-prep',
+      // Grafana visto dal browser (iframe della tab Monitoring, solo admin)
+      grafanaUrl: process.env.NUXT_PUBLIC_GRAFANA_URL || 'http://localhost:3001',
     },
   },
 

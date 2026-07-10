@@ -10,6 +10,7 @@ import {
   Database,
   Plug,
   Shield,
+  Activity,
 } from 'lucide-vue-next'
 
 const { user, fetchMe, logout } = useAuth()
@@ -22,7 +23,12 @@ const links = computed(() => [
   { to: '/flows', label: 'Flows', icon: Workflow },
   { to: '/datasources', label: 'Datasources', icon: Database },
   { to: '/connections', label: 'Connections', icon: Plug },
-  ...(isSuper.value ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),
+  ...(isSuper.value
+    ? [
+        { to: '/monitoring', label: 'Monitoring', icon: Activity },
+        { to: '/admin', label: 'Admin', icon: Shield },
+      ]
+    : []),
 ])
 
 onMounted(async () => {
