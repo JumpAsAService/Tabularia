@@ -69,7 +69,8 @@ const PANEL_MAX = 640
 const panelWidth = ref(
   Math.min(PANEL_MAX, Math.max(PANEL_MIN, Number(localStorage.getItem('tabularia.panelWidth')) || 340)),
 )
-const appStyle = computed(() => ({ gridTemplateColumns: `200px 1fr ${panelWidth.value}px` }))
+// minmax(0,1fr) come in main.css: preview larghe (pivot) non devono spingere il pannello fuori schermo
+const appStyle = computed(() => ({ gridTemplateColumns: `200px minmax(0, 1fr) ${panelWidth.value}px` }))
 
 function startPanelResize(ev: MouseEvent) {
   ev.preventDefault()

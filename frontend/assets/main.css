@@ -125,7 +125,9 @@ optgroup { font-style: normal; color: var(--muted); }
 .app {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  grid-template-columns: 200px 1fr 320px;
+  /* minmax(0,1fr): senza il floor a 0 una preview con molte colonne (es. pivot)
+     allarga la traccia oltre il viewport e spinge il pannello destro fuori schermo */
+  grid-template-columns: 200px minmax(0, 1fr) 320px;
   grid-template-areas:
     "toolbar toolbar toolbar"
     "sidebar canvas  panel"
@@ -136,9 +138,9 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 .app > .toolbar { grid-area: toolbar; }
 .app > .sidebar { grid-area: sidebar; }
-.app > .canvas  { grid-area: canvas; }
+.app > .canvas  { grid-area: canvas; min-width: 0; }
 .app > .panel   { grid-area: panel; }
-.app > .grid    { grid-area: grid; }
+.app > .grid    { grid-area: grid; min-width: 0; }
 
 .toolbar {
   background: rgba(20, 25, 38, 0.92);
