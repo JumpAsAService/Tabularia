@@ -538,3 +538,69 @@ def test_union_strategia_sconosciuta_rifiutata(storage, anagrafica):
             apply("union", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "strategy": "boh"}, ctx=ctx)
     finally:
         ctx.cleanup()
+
+
+# ── Guardie foreach (anti-DoS): cap per-livello sugli items + budget cumulativo ──
+def test_foreach_items_statici_oltre_il_cap_rifiutati(monkeypatch):
+    from app.engine import operations as ops
+    monkeypatch.setattr(ops, "MAX_FOREACH_ITERATIONS", 5)
+    with pytest.raises(EngineError, match="oltre il limite"):
+        apply(
+            "foreach",
+            {
+                "items": [{"p": "IT"}] * 6,  # 6 > 5
+                "body": [{"type": "limit", "params": {"n": 1}}],
+            },
+        )
+
+
+def test_foreach_annidato_supera_il_budget_totale(monkeypatch, storage):
+    # due livelli 3×3 = 9 iterazioni totali; col budget a 5 deve tagliare
+    from app.engine import operations as ops
+    monkeypatch.setattr(ops, "MAX_FOREACH_TOTAL", 5)
+    ctx = OperationContext(storage)
+    try:
+        with pytest.raises(EngineError, match="iterazioni totali"):
+            apply(
+                "foreach",
+                {
+                    "items": [{"a": 1}, {"a": 2}, {"a": 3}],
+                    "body": [
+                        {
+                            "type": "foreach",
+                            "params": {
+                                "items": [{"b": 1}, {"b": 2}, {"b": 3}],
+                                "body": [{"type": "limit", "params": {"n": 1}}],
+                            },
+                        }
+                    ],
+                },
+                ctx=ctx,
+            )
+    finally:
+        ctx.cleanup()
+
+
+def test_foreach_budget_ok_sotto_il_limite(storage):
+    # sanity: sotto il budget il foreach annidato funziona
+    ctx = OperationContext(storage)
+    try:
+        out = apply(
+            "foreach",
+            {
+                "items": [{"a": 1}, {"a": 2}],
+                "body": [
+                    {
+                        "type": "foreach",
+                        "params": {
+                            "items": [{"b": 1}, {"b": 2}],
+                            "body": [{"type": "limit", "params": {"n": 1}}],
+                        },
+                    }
+                ],
+            },
+            ctx=ctx,
+        )
+        assert out.height == 4 * 1  # 2×2 iterazioni, ognuna 1 riga (limit 1) su df_base
+    finally:
+        ctx.cleanup()

@@ -194,7 +194,12 @@ def _write_mysql(
         with c.cursor() as cur:
             cur.execute(_create_table_sql(conn, qualified, schema))
             if dest.mode == "replace":
-                cur.execute(f"TRUNCATE TABLE {qualified}")
+                # DELETE (DML, transazionale) e NON TRUNCATE: in MySQL/MariaDB
+                # TRUNCATE è DDL e fa un COMMIT implicito, quindi svuoterebbe la
+                # tabella FUORI dalla transazione degli INSERT — un errore a metà
+                # stream lascerebbe la tabella permanentemente vuota. Con DELETE
+                # lo svuotamento e gli insert committano (o rollbackano) insieme.
+                cur.execute(f"DELETE FROM {qualified}")
             for batch in batches:
                 for chunk in _row_chunks(batch, schema, MYSQL_CHUNK_ROWS):
                     cur.executemany(insert, chunk)

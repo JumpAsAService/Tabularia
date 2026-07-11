@@ -5,6 +5,7 @@ Permessi (ereditati dall'albero come sempre):
 - creazione/salvataggio/eliminazione: EDIT;
 - spostamento: EDIT sia sul progetto di origine sia su quello di destinazione.
 """
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,8 +18,24 @@ from app.models import Flow, Project, User
 from app.models.permission import Capability
 from app.schemas.models import FlowOut, FlowDetail, FlowCreate, FlowUpdate
 from app.services import permissions as perm_service
+from app.services.objects import collect_storage_keys, ensure_can_read_keys
 
 router = APIRouter(tags=["flows"])
+
+
+def _authorize_definition_keys(session: Session, user: User, definition: str | None) -> None:
+    """Le chiavi di storage nominate nella definition di un flusso devono essere
+    LEGGIBILI da chi salva. Senza questo controllo la regola di lettura per-oggetto
+    (una chiave in un flusso leggibile è leggibile) sarebbe auto-autorizzante:
+    bastava scrivere la chiave altrui nel proprio flusso per guadagnarne l'accesso.
+    """
+    if not definition:
+        return
+    try:
+        parsed = json.loads(definition)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=422, detail="La definizione del flusso non è JSON valido")
+    ensure_can_read_keys(session, user, collect_storage_keys(parsed))
 
 
 @router.get("/flows", response_model=list[FlowOut])
@@ -61,6 +78,7 @@ def create_flow(
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
     ensure_can(session, user, project_id, Capability.EDIT)
+    _authorize_definition_keys(session, user, body.definition)
     flow = Flow(
         name=body.name,
         description=body.description,
@@ -90,6 +108,8 @@ def update_flow(
 ):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.EDIT)
+    if body.definition is not None:
+        _authorize_definition_keys(session, user, body.definition)
 
     if body.project_id is not None and body.project_id != flow.project_id:
         # spostamento: serve EDIT anche sulla cartella di destinazione

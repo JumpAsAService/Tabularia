@@ -20,6 +20,9 @@ class OperationContext:
     def __init__(self, storage):
         self.storage = storage
         self._temp_paths: list[str] = []
+        # budget cumulativo di iterazioni foreach su TUTTA la catena di un run:
+        # limita l'esplosione moltiplicativa dei foreach annidati (vedi op_foreach)
+        self.foreach_iterations = 0
 
     def tempfile(self, suffix: str = ".parquet") -> str:
         fd, path = tempfile.mkstemp(suffix=suffix, prefix="dataprep_")

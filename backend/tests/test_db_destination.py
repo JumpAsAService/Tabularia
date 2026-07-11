@@ -5,11 +5,13 @@ import pytest
 
 from app.ingest.db_destination import (
     DbDestinationError,
+    DbDestinationSpec,
     _create_table_sql,
     _post_statements,
     _qualified_table,
     _row_chunks,
     _sql_type,
+    _write_mysql,
 )
 from app.ingest.db_source import DbConnectionSpec
 
@@ -118,3 +120,59 @@ def test_row_chunks_order_and_size():
     assert [len(c) for c in chunks] == [2, 2, 1]
     assert chunks[0] == [(1, "a"), (2, "b")]
     assert chunks[2] == [(5, "e")]
+
+
+# ── replace su MySQL/MariaDB deve svuotare con DELETE (transazionale), non TRUNCATE ──
+class _RecordingCursor:
+    def __init__(self, log): self.log = log
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def execute(self, sql, *a): self.log.append(sql)
+    def executemany(self, sql, rows): self.log.append(("many", sql, len(rows)))
+
+
+class _RecordingConn:
+    def __init__(self, log): self.log = log
+    def cursor(self): return _RecordingCursor(self.log)
+    def commit(self): self.log.append("COMMIT")
+    def close(self): pass
+
+
+def _mysql_conn(**kw):
+    return DbConnectionSpec(db_type="mysql", host="h", username="u", password="p", database="d", **kw)
+
+
+def test_mysql_replace_usa_delete_non_truncate(monkeypatch):
+    import pymysql
+    log: list = []
+    monkeypatch.setattr(pymysql, "connect", lambda **kw: _RecordingConn(log))
+
+    conn = _mysql_conn()
+    dest = DbDestinationSpec(table="vendite", mode="replace")
+    schema = pa.schema([pa.field("a", pa.int64())])
+    batch = pa.record_batch([pa.array([1, 2, 3])], schema=schema)
+    qualified, parts = _qualified_table(conn, "vendite")
+
+    rows = _write_mysql(conn, dest, qualified, parts, schema, iter([batch]))
+
+    assert rows == 3
+    stmts = [s if isinstance(s, str) else s[1] for s in log]
+    joined = " ".join(stmts)
+    assert "DELETE FROM" in joined, f"atteso DELETE, ottenuto: {log}"
+    assert "TRUNCATE" not in joined, "TRUNCATE (DDL, auto-commit) non deve più essere usato"
+    # lo svuotamento precede gli INSERT e tutto committa una sola volta in fondo
+    assert log[-1] == "COMMIT"
+
+
+def test_mysql_append_non_svuota(monkeypatch):
+    import pymysql
+    log: list = []
+    monkeypatch.setattr(pymysql, "connect", lambda **kw: _RecordingConn(log))
+    conn = _mysql_conn()
+    dest = DbDestinationSpec(table="vendite", mode="append")
+    schema = pa.schema([pa.field("a", pa.int64())])
+    batch = pa.record_batch([pa.array([1])], schema=schema)
+    qualified, parts = _qualified_table(conn, "vendite")
+    _write_mysql(conn, dest, qualified, parts, schema, iter([batch]))
+    joined = " ".join(s if isinstance(s, str) else s[1] for s in log)
+    assert "DELETE FROM" not in joined and "TRUNCATE" not in joined

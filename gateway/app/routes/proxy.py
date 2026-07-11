@@ -64,8 +64,30 @@ async def _forward(request: Request, method: str, path: str, content: Any = None
     )
 
 
+# il body di queste rotte è l'IR di un flusso: piccolo per natura. Tetto per
+# evitare che un body gigante (multi-GB) faccia OOM il gateway con await body().
+MAX_JSON_BODY_BYTES = 8 * 1024 * 1024  # 8 MB
+
+
 async def _read_json(request: Request) -> tuple[bytes, Any]:
-    raw = await request.body()
+    # scarto subito se il Content-Length dichiarato supera il tetto…
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            if int(declared) > MAX_JSON_BODY_BYTES:
+                raise HTTPException(status_code=413, detail="Body troppo grande (limite 8 MB)")
+        except ValueError:
+            pass
+    # …e comunque leggo a chunk con un tetto reale (il Content-Length può mentire
+    # o mancare, es. Transfer-Encoding: chunked)
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > MAX_JSON_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Body troppo grande (limite 8 MB)")
+        chunks.append(chunk)
+    raw = b"".join(chunks)
     try:
         return raw, (json.loads(raw) if raw else {})
     except json.JSONDecodeError:

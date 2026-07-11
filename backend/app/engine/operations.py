@@ -386,8 +386,12 @@ def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
 # ─────────────────────────────────────────────────────────────────────────────
 # Foreach: ciclo con placeholder (stile container SSIS)
 # ─────────────────────────────────────────────────────────────────────────────
-# guardia: un driver enorme genererebbe migliaia di catene concatenate
+# guardia per-livello: un driver/items enorme genererebbe migliaia di catene
 MAX_FOREACH_ITERATIONS = 1000
+# guardia cumulativa su TUTTA la catena di un run: i foreach annidati moltiplicano
+# (1000^profondità), quindi il solo limite per-livello non basta. Conta le
+# iterazioni totali costruite (outer × inner) e taglia l'esplosione.
+MAX_FOREACH_TOTAL = 100_000
 
 # tollerante: spazi attorno alla chiave ("{{ ProductKey }}") e chiavi con
 # spazi/punteggiatura nel nome ("{{Customer ID}}" — capita nei nomi colonna)
@@ -465,8 +469,24 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
             "foreach senza iterazioni: collega un driver (input in alto) "
             "o definisci 'items' nei parametri"
         )
+    # cap per-livello anche sugli items STATICI (il ramo driver è già limitato sopra)
+    if len(items) > MAX_FOREACH_ITERATIONS:
+        raise EngineError(
+            f"foreach: {len(items)} iterazioni oltre il limite di {MAX_FOREACH_ITERATIONS}"
+        )
     if not body:
         raise EngineError("foreach con corpo vuoto: trascina delle operazioni dentro il container")
+
+    # budget cumulativo: i foreach annidati vengono ricostruiti a ogni iterazione
+    # esterna, quindi outer×inner passa da qui e viene tagliato prima dell'OOM.
+    # (in esecuzione reale ctx c'è sempre; è None solo nei test delle op pure)
+    if ctx is not None:
+        ctx.foreach_iterations += len(items)
+        if ctx.foreach_iterations > MAX_FOREACH_TOTAL:
+            raise EngineError(
+                f"foreach: troppe iterazioni totali ({ctx.foreach_iterations}) — "
+                f"annidamento eccessivo (limite {MAX_FOREACH_TOTAL})"
+            )
 
     add_keys = params.get("add_keys_as_columns", False)
     parts: list[pl.LazyFrame] = []
