@@ -540,6 +540,18 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
+// i picker (connessioni per l'Output, datasource per source/refresh, flussi per
+// runflow) sono caricati una volta al mount: se crei una connessione/datasource/
+// flusso in un'altra scheda e torni qui, li riaggiorniamo tornando visibili
+function onVisible() {
+  if (document.visibilityState !== 'visible') return
+  refreshConnections()
+  refreshDatasources()
+  refreshFlows()
+}
+onMounted(() => document.addEventListener('visibilitychange', onVisible))
+onUnmounted(() => document.removeEventListener('visibilitychange', onVisible))
+
 // ── Colonne / preview ───────────────────────────────────────────────────
 function invalidateColumns() {
   for (const k of Object.keys(nodeColumns)) if (findNode(k)?.type !== 'source') delete nodeColumns[k]
