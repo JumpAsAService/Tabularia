@@ -19,6 +19,8 @@ export interface DatasourceInfo {
   source_type: 'table' | 'sql' | null
   source_ref: string | null
   refreshed_at: string | null
+  refresh_schedule: string | null // espressione cron; null = non schedulato
+  next_refresh_at: string | null
   updated_at: string | null
 }
 
@@ -49,6 +51,10 @@ export function useDatasources() {
 
     // ri-esegue la sorgente e sostituisce lo snapshot (torna il run da pollare)
     refresh: (id: number) => apiFetch<RunInfo>(`/datasources/${id}/refresh`, { method: 'POST' }),
+
+    // imposta/disabilita il refresh schedulato (cron a 5 campi; '' = disabilita)
+    setSchedule: (id: number, cron: string) =>
+      apiFetch<DatasourceInfo>(`/datasources/${id}/schedule`, { method: 'PUT', body: { cron } }),
 
     // cronologia degli ingest (il GET riconcilia gli stati)
     listRuns: (id: number) => apiFetch<RunInfo[]>(`/datasources/${id}/runs`),

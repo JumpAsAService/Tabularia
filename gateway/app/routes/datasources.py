@@ -23,8 +23,15 @@ from app.models import Connection, Datasource, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
-from app.schemas.models import DatasourceOut, DatasourceUpdate, DbDatasourceCreate, RunOut
+from app.schemas.models import (
+    DatasourceOut,
+    DatasourceUpdate,
+    DbDatasourceCreate,
+    RunOut,
+    ScheduleUpdate,
+)
 from app.services import permissions as perm_service
+from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +180,47 @@ async def refresh_datasource(
             raise HTTPException(status_code=409, detail="C'è già un refresh in corso per questa datasource")
 
     return await launch_ingest_run(session, user, ds, conn)
+
+
+@router.put("/datasources/{ds_id}/schedule", response_model=DatasourceOut)
+def set_schedule(
+    ds_id: int,
+    body: ScheduleUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Imposta/disabilita il refresh schedulato (cron a 5 campi). `cron` vuoto =
+    disabilita. Serve RUN sulla datasource + CONNECT sulla connessione:
+    schedulare autorizza refresh RIPETUTI, quindi la stessa autorità del refresh
+    manuale. I refresh schedulati gireranno con l'autorità di CHI imposta lo
+    schedule (catturata qui in `refresh_scheduled_by`)."""
+    ds = _get_ds(session, ds_id)
+    if ds.kind != "database":
+        raise HTTPException(status_code=422, detail="Solo le datasource database si possono schedulare")
+    ensure_can(session, user, ds.project_id, Capability.RUN)
+    conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
+    if conn is None:
+        raise HTTPException(status_code=409, detail="La connessione di questa datasource non esiste più")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+
+    cron = (body.cron or "").strip()
+    if not cron:
+        ds.refresh_schedule = None
+        ds.refresh_scheduled_by = None
+        ds.next_refresh_at = None
+    else:
+        try:
+            cron = validate_schedule(cron)
+        except ScheduleError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        ds.refresh_schedule = cron
+        ds.refresh_scheduled_by = user.id  # autorità dei refresh schedulati
+        ds.next_refresh_at = next_fire(cron, datetime.now(timezone.utc))
+    ds.updated_at = datetime.now(timezone.utc)
+    session.add(ds)
+    session.commit()
+    session.refresh(ds)
+    return _to_out(ds)
 
 
 @router.get("/datasources/{ds_id}/runs", response_model=list[RunOut])

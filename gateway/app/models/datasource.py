@@ -39,5 +39,13 @@ class Datasource(SQLModel, table=True):
     source_ref: Optional[str] = Field(default=None, sa_column=Column(Text))
     refreshed_at: Optional[datetime] = None
 
+    # refresh SCHEDULATO (solo kind="database"): lo scheduler del gateway riesegue
+    # l'ingest quando `next_refresh_at` è scaduto, con l'autorità di
+    # `refresh_scheduled_by` (RUN+CONNECT catturati alla creazione dello schedule).
+    # schedule=None → disabilitato. Formato: "interval:<min>" oppure "daily:<HH>:<MM>".
+    refresh_schedule: Optional[str] = None
+    refresh_scheduled_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    next_refresh_at: Optional[datetime] = Field(default=None, index=True)
+
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

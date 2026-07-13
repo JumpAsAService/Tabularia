@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,7 @@ from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
 from app.db.session import init_db
 from app.db.seed import seed_admin
+from app.services.scheduler import scheduler_loop
 from app.routes.auth import router as auth_router
 from app.routes.users import router as users_router
 from app.routes.groups import router as groups_router
@@ -29,8 +31,19 @@ async def lifespan(app: FastAPI):
     # crea le tabelle e semina l'admin da env (idempotente)
     init_db()
     seed_admin()
-    yield
-    await close_engine_client()
+    # scheduler in-process del refresh delle datasource database
+    stop = asyncio.Event()
+    scheduler = asyncio.create_task(scheduler_loop(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        scheduler.cancel()
+        try:
+            await scheduler
+        except asyncio.CancelledError:
+            pass
+        await close_engine_client()
 
 
 settings = get_settings()

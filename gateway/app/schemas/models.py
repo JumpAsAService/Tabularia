@@ -220,6 +220,9 @@ class DatasourceOut(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     refreshed_at: Optional[datetime] = None
+    # refresh schedulato (cron); next_refresh_at = prossima esecuzione prevista
+    refresh_schedule: Optional[str] = None
+    next_refresh_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
@@ -227,6 +230,11 @@ class DatasourceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+
+
+class ScheduleUpdate(BaseModel):
+    """Imposta/aggiorna lo schedule del refresh. `cron` vuoto/None = disabilita."""
+    cron: Optional[str] = None
 
 
 class DbDatasourceCreate(BaseModel):

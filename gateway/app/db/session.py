@@ -21,6 +21,10 @@ _MIGRATIONS = [
     "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS refreshed_at TIMESTAMP",
     # Nodo Output: destinazione database dell'output del run (riassunto JSON)
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS destination TEXT",
+    # Refresh schedulato delle datasource database
+    "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS refresh_schedule VARCHAR",
+    "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS refresh_scheduled_by INTEGER REFERENCES users(id)",
+    "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS next_refresh_at TIMESTAMP",
 ]
 
 

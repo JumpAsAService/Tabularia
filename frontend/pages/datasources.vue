@@ -2,7 +2,7 @@
 // Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
 // con stato live, eliminazione.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle } from 'lucide-vue-next'
+import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, X } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -93,6 +93,41 @@ async function remove(d: DatasourceInfo) {
     toast.error(errMessage(e))
   }
 }
+
+// ── Refresh schedulato (cron) ───────────────────────────────────────────────
+const scheduleFor = ref<DatasourceInfo | null>(null)
+const cronInput = ref('')
+const savingSchedule = ref(false)
+const CRON_PRESETS = [
+  { label: 'Ogni 15 min', cron: '*/15 * * * *' },
+  { label: 'Ogni ora', cron: '0 * * * *' },
+  { label: 'Ogni notte (03:00)', cron: '0 3 * * *' },
+  { label: 'Ogni lunedì (06:00)', cron: '0 6 * * 1' },
+]
+
+function openSchedule(d: DatasourceInfo) {
+  scheduleFor.value = d
+  cronInput.value = d.refresh_schedule ?? ''
+}
+
+function replaceInList(updated: DatasourceInfo) {
+  list.value = list.value.map((x) => (x.id === updated.id ? updated : x))
+}
+
+async function saveSchedule(cron: string) {
+  if (!scheduleFor.value) return
+  savingSchedule.value = true
+  try {
+    const updated = await dsApi.setSchedule(scheduleFor.value.id, cron.trim())
+    replaceInList(updated)
+    toast.success(cron.trim() ? `Refresh schedulato: ${updated.refresh_schedule}` : 'Schedulazione disattivata')
+    scheduleFor.value = null
+  } catch (e) {
+    toast.error(errMessage(e)) // 422 cron invalido, 403 permessi
+  } finally {
+    savingSchedule.value = false
+  }
+}
 </script>
 
 <template>
@@ -123,6 +158,10 @@ async function remove(d: DatasourceInfo) {
               <span v-else-if="d.kind === 'flow'" class="tag">flow</span>
             </span>
             <div v-if="d.description" class="muted desc">{{ d.description }}</div>
+            <div v-if="d.refresh_schedule" class="muted sched">
+              <CalendarClock :size="11" /> <code>{{ d.refresh_schedule }}</code>
+              <span v-if="d.next_refresh_at"> · prossimo {{ fmtDate(d.next_refresh_at) }}</span>
+            </div>
           </td>
           <td class="muted"><Folder :size="13" /> {{ folderName[d.project_id] ?? `#${d.project_id}` }}</td>
           <td class="muted nowrap">
@@ -139,7 +178,14 @@ async function remove(d: DatasourceInfo) {
             <button
               v-if="d.kind === 'database'"
               class="mini"
-              title="Refresh snapshot (re-run the source)"
+              :class="{ active: !!d.refresh_schedule }"
+              title="Schedule automatic refresh (cron)"
+              @click="openSchedule(d)"
+            ><CalendarClock :size="13" /></button>
+            <button
+              v-if="d.kind === 'database'"
+              class="mini"
+              title="Refresh snapshot now (re-run the source)"
               :disabled="isImporting(d.id)"
               @click="refresh(d)"
             ><RefreshCw :size="13" /></button>
@@ -148,7 +194,73 @@ async function remove(d: DatasourceInfo) {
         </tr>
       </tbody>
     </table>
+
+    <Teleport to="body">
+      <div v-if="scheduleFor" class="sd-backdrop" @mousedown.self="scheduleFor = null">
+        <div class="sd-card" @keydown.esc="scheduleFor = null">
+          <div class="sd-head">
+            <h3><CalendarClock :size="15" /> Refresh schedulato</h3>
+            <button class="sd-x" @click="scheduleFor = null"><X :size="14" /></button>
+          </div>
+          <p class="muted sd-sub">
+            Aggiorna automaticamente lo snapshot di <strong>{{ scheduleFor.name }}</strong> rieseguendo la
+            sorgente. Orari in UTC.
+          </p>
+
+          <label>Espressione cron (minuto ora giorno mese giorno-settimana)</label>
+          <input
+            v-model="cronInput"
+            type="text"
+            spellcheck="false"
+            placeholder="es. 0 3 * * *"
+            @keyup.enter="saveSchedule(cronInput)"
+          />
+          <div class="sd-presets">
+            <button v-for="p in CRON_PRESETS" :key="p.cron" class="preset" @click="cronInput = p.cron">
+              {{ p.label }}
+            </button>
+          </div>
+
+          <div class="sd-actions">
+            <button
+              v-if="scheduleFor.refresh_schedule"
+              class="danger"
+              :disabled="savingSchedule"
+              @click="saveSchedule('')"
+            >Disattiva</button>
+            <span class="sd-spacer" />
+            <button :disabled="savingSchedule" @click="scheduleFor = null">Annulla</button>
+            <button class="primary" :disabled="savingSchedule || !cronInput.trim()" @click="saveSchedule(cronInput)">
+              Salva
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </AppShell>
 </template>
 
 <style scoped src="~/assets/listpage.css" />
+<style scoped>
+.sched { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.sched code { font-family: ui-monospace, monospace; }
+.mini.active { color: var(--accent-2); border-color: var(--accent-2); }
+.sd-backdrop {
+  position: fixed; inset: 0; background: rgba(5, 7, 12, 0.6); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
+}
+.sd-card {
+  width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-2); padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;
+}
+.sd-head { display: flex; align-items: center; justify-content: space-between; }
+.sd-head h3 { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 16px; }
+.sd-x { padding: 3px 7px; }
+.sd-sub { font-size: 12px; margin: 0 0 4px; }
+.sd-card label { font-size: 12px; color: var(--muted); }
+.sd-card input { font-family: ui-monospace, monospace; }
+.sd-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.preset { font-size: 12px; padding: 4px 9px; }
+.sd-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.sd-spacer { flex: 1; }
+</style>

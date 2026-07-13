@@ -17,4 +17,5 @@ dependencies = [
     "email-validator>=2.2.0",
     "python-multipart>=0.0.32",
     "cryptography>=44.0.0",
+    "croniter>=6.2.4",
 ]
