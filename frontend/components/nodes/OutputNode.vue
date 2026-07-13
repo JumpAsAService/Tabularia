@@ -33,13 +33,16 @@ const summary = computed(() => {
 
 <template>
   <div class="node node-output">
+    <!-- input DATI (orizzontale): la catena di trasformazione -->
     <Handle id="left" type="target" :position="Position.Left" />
+    <!-- handle di SEQUENZA (verticali): ordine di orchestrazione -->
+    <Handle id="seq-in" type="target" :position="Position.Top" class="handle-seq" />
     <div class="node-title">
       <component :is="icon" :size="13" class="node-icon" />
       {{ title }}
     </div>
     <div class="node-body muted">{{ summary }}</div>
-    <!-- terminale: nessun handle di uscita -->
+    <Handle id="seq-out" type="source" :position="Position.Bottom" class="handle-seq" />
   </div>
 </template>
 
@@ -47,4 +50,5 @@ const summary = computed(() => {
 .node-output { --node-accent: #fbbf24; }
 .node-icon { color: var(--node-accent); }
 .node-body { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.handle-seq { background: var(--node-accent) !important; }
 </style>

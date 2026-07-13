@@ -15,11 +15,14 @@ export interface Incoming {
   right?: string
 }
 
-/** Mappa target -> {left, right} in base al targetHandle degli archi. */
+/** Mappa target -> {left, right} in base al targetHandle degli archi DATI. Gli
+ * archi di SEQUENZA (verticali, handle seq-in/seq-out) definiscono l'ordine di
+ * orchestrazione e NON fanno parte della pipeline dati: qui vanno ignorati. */
 export function buildIncoming(edges: Edge[]): Map<string, Incoming> {
   const m = new Map<string, Incoming>()
   for (const e of edges) {
     const handle = (e.targetHandle as string) || 'left'
+    if (handle === 'seq-in' || (e.sourceHandle as string) === 'seq-out') continue
     const entry = m.get(e.target) ?? {}
     entry[handle === 'right' ? 'right' : 'left'] = e.source
     m.set(e.target, entry)

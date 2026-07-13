@@ -23,10 +23,22 @@ class FlowResolveError(ValueError):
     """La definizione non è eseguibile (output scollegato, sorgente mancante…)."""
 
 
+# handle degli archi di SEQUENZA (orchestrazione), da NON confondere con i dati
+SEQ_TARGET_HANDLE = "seq-in"
+SEQ_SOURCE_HANDLE = "seq-out"
+
+
+def _is_seq_edge(e: dict) -> bool:
+    return e.get("targetHandle") == SEQ_TARGET_HANDLE or e.get("sourceHandle") == SEQ_SOURCE_HANDLE
+
+
 def _incoming(edges: list[dict]) -> dict[str, dict[str, str]]:
-    """target -> {left, right} in base al targetHandle degli archi."""
+    """target -> {left, right} in base al targetHandle degli archi DATI (gli archi
+    di sequenza, verticali, non fanno parte della pipeline dati)."""
     m: dict[str, dict[str, str]] = {}
     for e in edges:
+        if _is_seq_edge(e):
+            continue
         handle = e.get("targetHandle") or "left"
         entry = m.setdefault(e.get("target"), {})
         entry["right" if handle == "right" else "left"] = e.get("source")
@@ -153,59 +165,114 @@ def _output_label(node: dict) -> str:
     return f"datasource “{d.get('name') or '…'}”"
 
 
+def _output_body(node: dict, source: tuple[str, str], operations: list[dict], default_bucket: str) -> dict:
+    """Corpo-run (shape di RunCreate) di UN nodo Output già risolto."""
+    bucket, key = source
+    body: dict[str, Any] = {
+        "bucket": bucket or default_bucket,
+        "input_key": key,
+        "operations": operations,
+    }
+    d = node.get("data") or {}
+    dest_type = d.get("destType") or "datasource"
+    if dest_type == "database":
+        body["destination"] = {
+            "type": "database",
+            "connection_id": d.get("connectionId"),
+            "table": (d.get("table") or "").strip(),
+            "mode": d.get("mode") or "append",
+            "post_sql": d.get("postSql") or "",
+        }
+    elif dest_type == "s3":
+        body["destination"] = {
+            "type": "s3",
+            "connection_id": d.get("connectionId"),
+            "bucket": (d.get("s3Bucket") or "").strip(),
+            "key": (d.get("s3Key") or "").strip(),
+            "format": d.get("s3Format") or "parquet",
+            "partition_by": d.get("partitionBy") or [],
+        }
+    else:
+        body["publish"] = {
+            "name": (d.get("name") or "").strip(),
+            "project_id": d.get("projectId"),
+            "description": d.get("description") or "",
+        }
+    return body
+
+
+def resolve_output_request(definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str) -> dict:
+    """Risolve UN nodo Output → corpo-run. Solleva FlowResolveError se la sua
+    catena dati non ha una sorgente risolvibile."""
+    resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds)
+    source, operations = resolver.chain(node["id"])
+    if source is None:
+        raise FlowResolveError(
+            f"output {_output_label(node)}: nessuna sorgente con dati a monte "
+            "(o la datasource sorgente non ha uno snapshot)"
+        )
+    return _output_body(node, source, operations, default_bucket)
+
+
 def build_output_run_requests(
     definition: dict, resolve_ds: DsResolver, default_bucket: str
 ) -> list[dict]:
-    """Un corpo-run (shape di RunCreate) per ogni nodo Output del flusso.
-
-    Solleva FlowResolveError se non ci sono Output o se un output non ha una
-    sorgente risolvibile a monte.
-    """
+    """Un corpo-run per ogni nodo Output del flusso (senza ordine di sequenza)."""
     nodes = definition.get("nodes") or []
-    edges = definition.get("edges") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
         raise FlowResolveError("il flusso non ha nodi Output: non c'è nulla da eseguire")
+    return [resolve_output_request(definition, n, resolve_ds, default_bucket) for n in outputs]
 
-    resolver = _Resolver(nodes, edges, resolve_ds)
-    requests: list[dict] = []
-    for node in outputs:
-        source, operations = resolver.chain(node["id"])
-        if source is None:
-            raise FlowResolveError(
-                f"output {_output_label(node)}: nessuna sorgente con dati a monte "
-                "(o la datasource sorgente non ha uno snapshot)"
-            )
-        bucket, key = source
-        body: dict[str, Any] = {
-            "bucket": bucket or default_bucket,
-            "input_key": key,
-            "operations": operations,
-        }
-        d = node.get("data") or {}
-        dest_type = d.get("destType") or "datasource"
-        if dest_type == "database":
-            body["destination"] = {
-                "type": "database",
-                "connection_id": d.get("connectionId"),
-                "table": (d.get("table") or "").strip(),
-                "mode": d.get("mode") or "append",
-                "post_sql": d.get("postSql") or "",
-            }
-        elif dest_type == "s3":
-            body["destination"] = {
-                "type": "s3",
-                "connection_id": d.get("connectionId"),
-                "bucket": (d.get("s3Bucket") or "").strip(),
-                "key": (d.get("s3Key") or "").strip(),
-                "format": d.get("s3Format") or "parquet",
-                "partition_by": d.get("partitionBy") or [],
-            }
-        else:
-            body["publish"] = {
-                "name": (d.get("name") or "").strip(),
-                "project_id": d.get("projectId"),
-                "description": d.get("description") or "",
-            }
-        requests.append(body)
-    return requests
+
+# ordine di esecuzione dei nodi non collegati in sequenza (default sensato)
+_ACTION_TYPES = ("refresh", "output", "runflow")
+_DEFAULT_PRIORITY = {"refresh": 0, "output": 1, "runflow": 2}
+
+
+def sequence_order(definition: dict) -> list[dict]:
+    """Ordina gli 'action node' (refresh/output/runflow) secondo gli archi di
+    SEQUENZA (topological sort, Kahn). I nodi non collegati escono nell'ordine
+    di default (refresh → output → runflow, poi ordine di dichiarazione), così i
+    flussi senza archi di sequenza mantengono il comportamento sensato di prima.
+    Cicli: i nodi coinvolti finiscono in coda nell'ordine di default (best effort).
+    """
+    nodes = definition.get("nodes") or []
+    edges = definition.get("edges") or []
+    action = [n for n in nodes if n.get("type") in _ACTION_TYPES]
+    by_id = {n["id"]: n for n in action}
+    idx = {n["id"]: i for i, n in enumerate(action)}
+
+    succ: dict[str, list[str]] = {n["id"]: [] for n in action}
+    indeg: dict[str, int] = {n["id"]: 0 for n in action}
+    for e in edges:
+        if e.get("targetHandle") != SEQ_TARGET_HANDLE:
+            continue
+        s, t = e.get("source"), e.get("target")
+        if s in by_id and t in by_id:
+            succ[s].append(t)
+            indeg[t] += 1
+
+    def rank(nid: str) -> tuple[int, int]:
+        return (_DEFAULT_PRIORITY.get(by_id[nid].get("type"), 9), idx[nid])
+
+    ready = sorted([nid for nid in by_id if indeg[nid] == 0], key=rank)
+    out: list[dict] = []
+    seen: set[str] = set()
+    while ready:
+        nid = ready.pop(0)
+        if nid in seen:
+            continue
+        seen.add(nid)
+        out.append(by_id[nid])
+        newly = []
+        for m in succ[nid]:
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                newly.append(m)
+        if newly:
+            ready = sorted(ready + newly, key=rank)
+    # eventuali nodi in ciclo: appesi in coda, ordine di default
+    for nid in sorted((nid for nid in by_id if nid not in seen), key=rank):
+        out.append(by_id[nid])
+    return out

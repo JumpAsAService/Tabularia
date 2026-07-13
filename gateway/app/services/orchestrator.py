@@ -29,7 +29,7 @@ from app.models.run import TERMINAL_STATES
 from app.routes.runs import _launch_flow_run, _reconcile, launch_ingest_run
 from app.schemas.models import RunCreate
 from app.services import permissions as perm_service
-from app.services.flow_resolver import FlowResolveError, build_output_run_requests
+from app.services.flow_resolver import FlowResolveError, resolve_output_request, sequence_order
 
 logger = logging.getLogger(__name__)
 
@@ -75,11 +75,16 @@ async def _refresh_and_wait(session: Session, user: User, ds_id: int) -> None:
         await asyncio.sleep(REFRESH_WAIT_INTERVAL_S)
     if run.status != "SUCCESS":
         raise OrchestrationError(f"refresh datasource {ds_id} non riuscito ({run.status})")
-    logger.info("orchestrate: datasource %s aggiornata prima del run", ds_id)
+    logger.info("orchestrate: datasource %s aggiornata (refresh completato)", ds_id)
 
 
 async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None) -> None:
-    """Esegue un flusso: refresh → output → runflow (ricorsivo)."""
+    """Esegue un flusso: gli 'action node' (refresh/output/runflow) nell'ordine
+    definito dagli archi di sequenza (topological sort), coi non collegati
+    nell'ordine di default refresh → output → runflow.
+
+    Un refresh fallito INTERROMPE il run (meglio niente che dati stantii); un
+    output o un sotto-flusso in errore vengono loggati e si prosegue."""
     seen = seen or set()
     if flow.id in seen or depth > MAX_FLOW_DEPTH:
         logger.warning("orchestrate: ciclo o profondità eccessiva su flusso %s (depth %d)", flow.id, depth)
@@ -87,35 +92,34 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
     seen = seen | {flow.id}
 
     definition = json.loads(flow.definition or "{}")
-    nodes = definition.get("nodes") or []
+    default_bucket = get_settings().engine.bucket
 
-    # 1. refresh delle sorgenti richieste (attende il completamento)
-    for n in nodes:
-        if n.get("type") == "refresh":
-            ds_id = (n.get("data") or {}).get("datasourceId")
+    def resolve_ds(i: int):
+        d = session.get(Datasource, i)
+        return (d.bucket, d.key) if d and d.key else None
+
+    for node in sequence_order(definition):
+        t = node.get("type")
+        d = node.get("data") or {}
+        if t == "refresh":
+            ds_id = d.get("datasourceId")
             if ds_id:
-                await _refresh_and_wait(session, user, ds_id)
-
-    # 2. output di questo flusso (se ne ha)
-    if any(n.get("type") == "output" for n in nodes):
-        def resolve_ds(i: int):
-            d = session.get(Datasource, i)
-            return (d.bucket, d.key) if d and d.key else None
-
-        requests = build_output_run_requests(definition, resolve_ds, get_settings().engine.bucket)
-        for req in requests:
-            await _launch_flow_run(session, user, flow, RunCreate(**req))
-
-    # 3. flussi da eseguire a valle
-    for n in nodes:
-        if n.get("type") == "runflow":
-            sub_id = (n.get("data") or {}).get("flowId")
-            if sub_id:
-                sub = session.get(Flow, sub_id)
-                if sub is None:
-                    logger.warning("orchestrate: flusso %s riferisce un runflow inesistente %s", flow.id, sub_id)
-                    continue
-                await orchestrate(session, user, sub, depth + 1, seen)
+                await _refresh_and_wait(session, user, ds_id)  # errore → propaga (aborta)
+        elif t == "output":
+            try:
+                req = resolve_output_request(definition, node, resolve_ds, default_bucket)
+                await _launch_flow_run(session, user, flow, RunCreate(**req))
+            except Exception as e:
+                logger.warning("orchestrate: flusso %s, output non eseguito: %s", flow.id, e)
+        elif t == "runflow":
+            sub_id = d.get("flowId")
+            if not sub_id:
+                continue
+            sub = session.get(Flow, sub_id)
+            if sub is None:
+                logger.warning("orchestrate: flusso %s riferisce un runflow inesistente %s", flow.id, sub_id)
+                continue
+            await orchestrate(session, user, sub, depth + 1, seen)
 
 
 async def orchestrate_bg(flow_id: int, user_id: int) -> None:
