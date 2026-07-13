@@ -16,7 +16,7 @@ from app.api.models import (
 )
 from app.engine import (
     DataSource, PreviewResult, get_engine, available_operations,
-    EngineError, OperationError, UnknownOperationError,
+    EngineError, OperationError, SourceNotFoundError, UnknownOperationError,
 )
 import logging
 
@@ -120,6 +120,8 @@ def preview_flow(request: PreviewRequest):
             operations=operations,
             limit=request.limit,
         )
+    except SourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except (UnknownOperationError, OperationError) as e:
         raise HTTPException(status_code=422, detail=str(e))
     except EngineError as e:
@@ -152,6 +154,9 @@ def export_flow(request: ExportRequest):
             out_path=path,
             limit=request.limit,
         )
+    except SourceNotFoundError as e:
+        os.unlink(path)
+        raise HTTPException(status_code=404, detail=str(e))
     except (UnknownOperationError, OperationError) as e:
         os.unlink(path)
         raise HTTPException(status_code=422, detail=str(e))

@@ -276,10 +276,21 @@ async function refreshFlows() {
 
 // ── Eventi canvas ─────────────────────────────────────────────────────────
 onConnect((conn: Connection) => {
+  const seqSource = (conn.sourceHandle as string) === 'seq-out'
+  const seqTarget = (conn.targetHandle as string) === 'seq-in'
+  // gli archi di SEQUENZA collegano solo seq-out (sotto) → seq-in (sopra): un
+  // source/ingresso-dati non ha presa di sequenza, quindi niente misto coi dati
+  if (seqSource !== seqTarget) {
+    setStatus('Sequenza: collega la presa in basso di un nodo a quella in alto di un altro nodo di controllo/output', 'error')
+    return
+  }
   const handle = (conn.targetHandle as string) || 'left'
-  // un solo arco per (target, handle)
-  const dup = getEdges.value.filter(
-    (e) => e.target === conn.target && ((e.targetHandle as string) || 'left') === handle,
+  // dati: un solo arco per (target, handle). Sequenza: più predecessori sono
+  // validi (fan-in), si rimuove solo l'eventuale arco identico duplicato.
+  const dup = getEdges.value.filter((e) =>
+    seqTarget
+      ? e.source === conn.source && e.target === conn.target && (e.targetHandle as string) === 'seq-in'
+      : e.target === conn.target && ((e.targetHandle as string) || 'left') === handle,
   )
   if (dup.length) removeEdges(dup.map((e) => e.id))
   addEdges({
@@ -289,8 +300,11 @@ onConnect((conn: Connection) => {
     sourceHandle: conn.sourceHandle ?? undefined,
     targetHandle: conn.targetHandle ?? undefined,
   })
-  invalidateColumns()
-  refreshForNode(conn.target!)
+  if (!seqTarget) {
+    // solo gli archi DATI cambiano le colonne a valle; la sequenza no
+    invalidateColumns()
+    refreshForNode(conn.target!)
+  }
 })
 
 onNodeClick(({ node }) => {

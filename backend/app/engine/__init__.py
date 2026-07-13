@@ -18,6 +18,7 @@ from app.engine.base import (
 from app.engine.exceptions import (
     EngineError,
     OperationError,
+    SourceNotFoundError,
     UnknownOperationError,
 )
 from app.engine.cache import StepCache, plan_hashes
@@ -36,6 +37,7 @@ __all__ = [
     "ColumnInfo",
     "EngineError",
     "OperationError",
+    "SourceNotFoundError",
     "UnknownOperationError",
     "available_operations",
     "resolve_dtype",

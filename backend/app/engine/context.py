@@ -12,8 +12,13 @@ import os
 import tempfile
 
 import polars as pl
+from botocore.exceptions import ClientError
 
 from app.engine.base import DataSource
+from app.engine.exceptions import SourceNotFoundError
+
+# codici S3/MinIO per "oggetto (o bucket) inesistente"
+_NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
 
 class OperationContext:
@@ -38,7 +43,13 @@ class OperationContext:
         `cleanup()`, così lo scan lazy (e lo streaming) può leggerlo.
         """
         local_path = self.tempfile(".parquet")
-        self.storage.download_file(source.bucket, source.key, local_path)
+        try:
+            self.storage.download_file(source.bucket, source.key, local_path)
+        except ClientError as e:
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            if code in _NOT_FOUND_CODES:
+                raise SourceNotFoundError(source.bucket, source.key) from e
+            raise
         return pl.scan_parquet(local_path)
 
     def cleanup(self) -> None:

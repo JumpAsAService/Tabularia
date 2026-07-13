@@ -12,6 +12,19 @@ class UnknownOperationError(EngineError):
         super().__init__(f"Operazione sconosciuta: '{op_type}'")
 
 
+class SourceNotFoundError(EngineError):
+    """Un parquet di input non esiste più nello storage (blob rimosso o chiave
+    stantia in un flow salvato). Da tradurre in 404, non in 500."""
+
+    def __init__(self, bucket: str, key: str):
+        self.bucket = bucket
+        self.key = key
+        super().__init__(
+            f"Sorgente non trovata: {bucket}/{key} non esiste (i dati potrebbero "
+            f"essere stati rimossi). Ricarica il file o aggiorna la sorgente."
+        )
+
+
 class OperationError(EngineError):
     """Errore durante l'applicazione di una specifica operazione del flow."""
 
