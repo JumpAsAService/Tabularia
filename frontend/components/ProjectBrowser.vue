@@ -378,6 +378,16 @@ onMounted(async () => {
   await loadProjects()
 })
 
+// se crei/modifichi una connessione (o datasource/flusso) in un'altra scheda,
+// tornando qui riaggiorniamo l'albero e la cartella aperta: niente vista stantia
+function onVisible() {
+  if (document.visibilityState !== 'visible') return
+  loadProjects()
+  if (selectedId.value != null) selectProject(selectedId.value)
+}
+onMounted(() => document.addEventListener('visibilitychange', onVisible))
+onUnmounted(() => document.removeEventListener('visibilitychange', onVisible))
+
 // ── Azioni progetti ─────────────────────────────────────────────────────────
 const newRootName = ref('')
 const newChildName = ref('')
