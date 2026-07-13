@@ -827,17 +827,18 @@ async function executeRun(publish: PublishSpec | null) {
       setStatus(`Run #${launched.id} avviato…`, 'busy')
       pollRun(launched.id) // in background: niente lock sull'editor
     } else {
-      // flusso non salvato: run diretto, senza cronologia né pubblicazione
-      const outputKey = `out/${sourceNode.data.datasetId ?? 'run'}_${Date.now()}.parquet`
+      // flusso non salvato: run diretto, senza cronologia né pubblicazione.
+      // La chiave di output la assegna il SERVER (out/<uuid> write-once): qui
+      // non la scegliamo più, si polla solo il task_id.
       const res = await api.transform({
         bucket: sourceNode.data.bucket ?? bucket,
         input_key: sourceNode.data.parquetKey,
-        output_key: outputKey,
+        output_key: '',
         operations: ops,
       })
       runDialogOpen.value = false
       setStatus(`Task ${res.task_id} avviato…`, 'busy')
-      pollTask(res.task_id, outputKey)
+      pollTask(res.task_id)
     }
   } catch (e) {
     // 409 nome duplicato / 403 permessi: il dialog resta aperto con l'input intatto
@@ -951,7 +952,7 @@ async function pollRun(runId: number, label = '') {
   setStatus(`${prefix}timeout in attesa del run.`, 'error')
 }
 
-async function pollTask(id: string, outputKey: string) {
+async function pollTask(id: string) {
   const token = pollToken
   for (let i = 0; i < 120; i++) {
     await new Promise((r) => setTimeout(r, 1000))
@@ -959,7 +960,7 @@ async function pollTask(id: string, outputKey: string) {
     const st = await api.taskStatus(id)
     if (token !== pollToken) return
     if (st.status === 'SUCCESS') {
-      setStatus(`Completato: ${st.result?.rows_written} righe → ${outputKey}`, 'ok')
+      setStatus(`Completato: ${st.result?.rows_written} righe`, 'ok')
       return
     }
     if (st.status === 'FAILURE') {

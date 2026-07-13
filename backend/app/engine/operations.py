@@ -398,6 +398,27 @@ MAX_FOREACH_TOTAL = 100_000
 _PLACEHOLDER = re.compile(r"\{\{\s*(.+?)\s*\}\}")
 
 
+def _reject_dynamic_source_keys(obj: Any) -> None:
+    """Vieta i placeholder `{{...}}` nei campi che INDIRIZZANO lo storage
+    (`key`/`bucket`). Una sorgente il cui percorso viene risolto dai DATI di
+    riga sfuggirebbe all'autorizzazione statica del gateway (che scandisce solo
+    il payload): potresti leggere il parquet di un altro progetto mettendone la
+    chiave in una cella del driver. I percorsi delle sorgenti devono venire dal
+    grafo del flusso (concreti e autorizzati), mai dai dati.
+    """
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in ("key", "bucket") and isinstance(v, str) and _PLACEHOLDER.search(v):
+                raise EngineError(
+                    "placeholder non ammessi nei percorsi sorgente (key/bucket): "
+                    "una sorgente non può essere scelta dai dati dell'iterazione"
+                )
+            _reject_dynamic_source_keys(v)
+    elif isinstance(obj, (list, tuple)):
+        for x in obj:
+            _reject_dynamic_source_keys(x)
+
+
 def _substitute(obj: Any, item: dict[str, Any]) -> Any:
     """Sostituisce ricorsivamente i placeholder {{chiave}} nei params del corpo.
 
@@ -476,6 +497,8 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
         )
     if not body:
         raise EngineError("foreach con corpo vuoto: trascina delle operazioni dentro il container")
+    # una sorgente nel corpo non può avere il percorso deciso dai dati (bypass RBAC)
+    _reject_dynamic_source_keys(body)
 
     # budget cumulativo: i foreach annidati vengono ricostruiti a ogni iterazione
     # esterna, quindi outer×inner passa da qui e viene tagliato prima dell'OOM.

@@ -604,3 +604,23 @@ def test_foreach_budget_ok_sotto_il_limite(storage):
         assert out.height == 4 * 1  # 2×2 iterazioni, ognuna 1 riga (limit 1) su df_base
     finally:
         ctx.cleanup()
+
+
+def test_foreach_vieta_placeholder_nel_percorso_sorgente(storage, anagrafica):
+    # una sorgente nel corpo non può avere key/bucket risolti dai dati: sfuggirebbe
+    # all'autorizzazione statica del gateway (bypass RBAC data-plane, #1 audit)
+    ctx = OperationContext(storage)
+    try:
+        with pytest.raises(EngineError, match="percorsi sorgente"):
+            apply(
+                "foreach",
+                {
+                    "items": [{"k": "datasets/anagrafica.parquet"}],
+                    "body": [
+                        {"type": "union", "params": {"right": {"source": {"bucket": anagrafica.bucket, "key": "{{k}}"}}}}
+                    ],
+                },
+                ctx=ctx,
+            )
+    finally:
+        ctx.cleanup()

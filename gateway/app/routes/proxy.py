@@ -13,6 +13,7 @@ debito documentato, accettabile.
 import json
 import logging
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import Upload, User
-from app.services.objects import collect_storage_keys, ensure_can_read_keys
+from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,7 @@ async def preview(
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
+    ensure_reads_pinned(user, payload, get_settings().engine.bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(payload))
     return await _forward(request, "POST", "/tasks/preview", content=raw)
 
@@ -118,21 +120,29 @@ async def transform(
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
-    ensure_can_read_keys(session, user, collect_storage_keys(payload))
-    # i client scrivono SOLO nell'area di lavoro out/ (l'area datasets/ è del
-    # catalogo: ci scrive il gateway stesso per publish e ingest)
-    output_key = payload.get("output_key") if isinstance(payload, dict) else None
-    if not user.is_superuser and not str(output_key or "").startswith("out/"):
-        raise HTTPException(status_code=403, detail="La scrittura è consentita solo nell'area out/")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="Il body dev'essere un oggetto JSON")
     # le destinazioni (database o S3) passano SOLO da /flows/{id}/runs: è il
     # gateway a costruire il payload di connessione (RBAC CONNECT, secret mai
     # dal client). "db_destination" è il nome storico: rifiutato anche quello.
-    if isinstance(payload, dict) and (payload.get("destination") or payload.get("db_destination")):
+    if payload.get("destination") or payload.get("db_destination"):
         raise HTTPException(
             status_code=422,
             detail="Destinazione non consentita qui: salva il flusso e usa un nodo Output",
         )
-    return await _forward(request, "POST", "/tasks/transform-data", content=raw)
+    engine_bucket = get_settings().engine.bucket
+    # la chiave di OUTPUT la sceglie il SERVER (out/<uuid> write-once), mai il
+    # client: niente overwrite del blob di un altro utente né riuso della chiave
+    # che avvelenerebbe la step-cache (indicizzata sul path). Il client polla il
+    # task_id, non ha bisogno di conoscere/scegliere la chiave.
+    payload["output_key"] = f"out/{uuid4().hex}.parquet"
+    payload["bucket"] = payload.get("bucket") or engine_bucket
+    # sorgenti vincolate al bucket dell'engine + prefissi gestiti (no letture arbitrarie)
+    ensure_reads_pinned(user, payload, engine_bucket)
+    # autorizza le sole chiavi di LETTURA (l'output è generato dal server, non va autorizzato in lettura)
+    read_payload = {k: v for k, v in payload.items() if k != "output_key"}
+    ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
+    return await _forward(request, "POST", "/tasks/transform-data", content=json.dumps(payload).encode())
 
 
 @router.post("/tasks/export")
@@ -142,6 +152,7 @@ async def export(
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
+    ensure_reads_pinned(user, payload, get_settings().engine.bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(payload))
     return await _forward(request, "POST", "/tasks/export", content=raw)
 

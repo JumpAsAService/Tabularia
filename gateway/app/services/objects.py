@@ -28,6 +28,50 @@ from app.services import permissions as perm_service
 # prefissi dello storage gestito (tutto il resto non è indirizzabile dai client)
 MANAGED_PREFIXES = ("datasets/", "out/", "raw/", "cache/")
 
+# campi che indirizzano una sorgente in LETTURA (top-level `input_key`, e `key`
+# nelle sotto-sorgenti di join/union/foreach); l'output non è una lettura
+_READ_KEY_FIELDS = ("key", "input_key")
+
+
+def collect_read_refs(payload: Any) -> tuple[set[str], set[str]]:
+    """Bucket e chiavi di LETTURA in posizione STRUTTURALE (campi key/input_key
+    e bucket), ovunque nel payload. Diverso da collect_storage_keys, che raccoglie
+    qualsiasi stringa con prefisso gestito: qui contano le POSIZIONI, così una
+    chiave fuori dai prefissi gestiti in un campo sorgente è visibile e rifiutabile."""
+    buckets: set[str] = set()
+    keys: set[str] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, str):
+                    if k in _READ_KEY_FIELDS:
+                        keys.add(v)
+                    elif k == "bucket":
+                        buckets.add(v)
+                walk(v)
+        elif isinstance(node, (list, tuple)):
+            for v in node:
+                walk(v)
+
+    walk(payload)
+    return buckets, keys
+
+
+def ensure_reads_pinned(user: User, payload: Any, engine_bucket: str) -> None:
+    """Ogni sorgente di un non-superuser deve stare NEL bucket dell'engine e sotto
+    un prefisso gestito. Senza questo, né gateway né engine vincolano bucket/chiave
+    e l'engine (credenziali che leggono tutto) servirebbe qualsiasi (bucket, key)."""
+    if user.is_superuser:
+        return
+    buckets, keys = collect_read_refs(payload)
+    for b in buckets:
+        if b and b != engine_bucket:
+            raise HTTPException(status_code=403, detail=f"bucket non consentito: '{b}'")
+    for k in keys:
+        if k and not k.startswith(MANAGED_PREFIXES):
+            raise HTTPException(status_code=403, detail=f"sorgente fuori dalle aree gestite: '{k}'")
+
 
 def collect_storage_keys(payload: Any) -> set[str]:
     """Tutte le stringhe che sembrano chiavi managed, ovunque nel payload
