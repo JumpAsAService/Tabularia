@@ -19,6 +19,16 @@ scrape_configs:
   - job_name: cadvisor          # per-container: CPU/mem/disco/rete
     static_configs:
       - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # cAdvisor riemette come container_label_* TUTTE le label OCI dell'immagine
+      # (~20: build_date, vcs_ref, vendor, version…). Sono rumore, e due sono ad
+      # alta cardinalità che CAMBIA a ogni rebuild — com_docker_compose_config_hash
+      # e com_docker_compose_image=sha256:… — quindi ogni `docker compose build`
+      # crea nuove timeseries e gonfia il TSDB. In più sballano il tetto di 30
+      # label/timeseries di VM, che scartava proprio le label utili (name, image).
+      # Le eliminiamo allo scrape: restano id/image/name/job/instance.
+      - regex: 'container_label_.*'
+        action: labeldrop
 
   - job_name: node              # host: CPU, memoria, disco/SSD, load
     static_configs:
