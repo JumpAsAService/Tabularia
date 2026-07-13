@@ -269,6 +269,8 @@ async def _reconcile(session: Session, run: Run) -> Run:
     """
     if run.status in TERMINAL_STATES:
         return run
+    if run.kind == "orchestration":
+        return run  # non è un task engine: lo stato lo gestisce l'orchestratore
     client = get_engine_client()
     try:
         resp = await client.get(f"/tasks/{run.task_id}")

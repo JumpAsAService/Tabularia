@@ -43,6 +43,8 @@ export function useFlows() {
 
     // esegue subito l'orchestrazione (refresh → output → runflow) in background
     runNow: (id: number) =>
-      apiFetch<{ status: string; flow_id: number }>(`/flows/${id}/run-now`, { method: 'POST' }),
+      apiFetch<{ status: string; flow_id: number; run_id: number }>(`/flows/${id}/run-now`, {
+        method: 'POST',
+      }),
   }
 }

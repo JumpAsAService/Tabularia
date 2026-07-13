@@ -171,19 +171,23 @@ async def run_flow_now(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Esegue subito l'ORCHESTRAZIONE del flusso (refresh → output → runflow) come
-    task di background, con l'autorità dell'utente. Serve RUN sul progetto; la
-    RBAC dei singoli passi (CONNECT dei refresh, EDIT/CONNECT degli output) è
-    ri-verificata durante l'orchestrazione. Torna subito: si polla la cronologia
-    dei run. È il percorso per i flussi con nodi di controllo (refresh/runflow)."""
+    """Esegue subito l'ORCHESTRAZIONE del flusso (nodi refresh/output/runflow
+    nell'ordine degli archi) come task di background, con l'autorità dell'utente.
+    Serve RUN sul progetto; la RBAC dei singoli passi (CONNECT dei refresh,
+    EDIT/CONNECT degli output) è ri-verificata durante l'orchestrazione.
+
+    Crea subito un 'run di orchestrazione' tracciante e ne torna l'id: il frontend
+    lo polla (`GET /runs/{id}`) fino a SUCCESS/FAILURE — così anche i flussi senza
+    nodo Output (che non producono run propri) hanno uno stato osservabile."""
     import asyncio
 
-    from app.services.orchestrator import orchestrate_bg
+    from app.services.orchestrator import create_orchestration_run, orchestrate_bg
 
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
-    asyncio.create_task(orchestrate_bg(flow.id, user.id))
-    return {"status": "started", "flow_id": flow.id}
+    run = create_orchestration_run(session, user, flow)
+    asyncio.create_task(orchestrate_bg(flow.id, user.id, orch_run_id=run.id))
+    return {"status": "started", "flow_id": flow.id, "run_id": run.id}
 
 
 @router.put("/flows/{flow_id}/schedule", response_model=FlowDetail)

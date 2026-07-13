@@ -903,9 +903,9 @@ async function executeOrchestration() {
   busy.value = true
   pollToken++
   try {
-    await flowsApi.runNow(flowId.value!)
-    setStatus('Orchestrazione avviata (refresh → output → flussi)…', 'busy')
-    pollFlowLatest(flowId.value!)
+    const { run_id } = await flowsApi.runNow(flowId.value!)
+    setStatus('Orchestrazione avviata…', 'busy')
+    pollOrchestration(run_id)
   } catch (e) {
     setStatus(`Errore: ${errMessage(e)}`, 'error')
   } finally {
@@ -913,26 +913,27 @@ async function executeOrchestration() {
   }
 }
 
-async function pollFlowLatest(fid: number) {
+// polla il RUN DI ORCHESTRAZIONE per id (lo crea run-now): traccia l'intera
+// esecuzione anche per flussi senza nodo Output, che non producono run propri.
+async function pollOrchestration(runId: number) {
   const token = pollToken
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 150; i++) {
     await new Promise((r) => setTimeout(r, 2000))
     if (token !== pollToken) return
-    let runs
+    let run
     try {
-      runs = await runsApi.listByFlow(fid)
+      run = await runsApi.get(runId)
     } catch {
       continue
     }
     if (token !== pollToken) return
-    const last = runs[0]
-    if (last && (last.status === 'SUCCESS' || last.status === 'FAILURE')) {
-      if (last.status === 'SUCCESS') {
-        setStatus(`Orchestrazione completata: ${last.rows_written ?? 0} righe (ultimo output)`, 'ok')
-        refreshDatasources()
-      } else {
-        setStatus(`Orchestrazione: errore — ${last.error}`, 'error')
-      }
+    if (run.status === 'SUCCESS') {
+      setStatus('Orchestrazione completata', 'ok')
+      refreshDatasources()
+      return
+    }
+    if (run.status === 'FAILURE') {
+      setStatus(`Orchestrazione: errore — ${run.error ?? 'sconosciuto'}`, 'error')
       return
     }
   }
