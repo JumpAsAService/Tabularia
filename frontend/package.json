@@ -13,6 +13,7 @@
     "@vue-flow/controls": "^1.1.2",
     "@vue-flow/core": "^1.42.0",
     "@vue-flow/node-resizer": "^1.5.1",
+    "cronstrue": "^3.24.0",
     "echarts": "^6.1.0",
     "lucide-vue-next": "^1.0.0",
     "nuxt": "^3.14.0",

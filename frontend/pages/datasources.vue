@@ -3,6 +3,7 @@
 // con stato live, eliminazione.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, X } from 'lucide-vue-next'
+import cronstrue from 'cronstrue/i18n'
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -110,6 +111,17 @@ function openSchedule(d: DatasourceInfo) {
   cronInput.value = d.refresh_schedule ?? ''
 }
 
+// descrizione testuale del cron in stile crontab.guru (live, in italiano)
+const cronDescription = computed<{ text: string; ok: boolean }>(() => {
+  const expr = cronInput.value.trim()
+  if (!expr) return { text: '', ok: true }
+  try {
+    return { text: cronstrue.toString(expr, { locale: 'it', verbose: false }), ok: true }
+  } catch {
+    return { text: 'Espressione cron non valida', ok: false }
+  }
+})
+
 function replaceInList(updated: DatasourceInfo) {
   list.value = list.value.map((x) => (x.id === updated.id ? updated : x))
 }
@@ -215,6 +227,9 @@ async function saveSchedule(cron: string) {
             placeholder="es. 0 3 * * *"
             @keyup.enter="saveSchedule(cronInput)"
           />
+          <p v-if="cronDescription.text" class="sd-desc" :class="{ bad: !cronDescription.ok }">
+            {{ cronDescription.ok ? '↳ ' : '' }}{{ cronDescription.text }}
+          </p>
           <div class="sd-presets">
             <button v-for="p in CRON_PRESETS" :key="p.cron" class="preset" @click="cronInput = p.cron">
               {{ p.label }}
@@ -259,6 +274,8 @@ async function saveSchedule(cron: string) {
 .sd-sub { font-size: 12px; margin: 0 0 4px; }
 .sd-card label { font-size: 12px; color: var(--muted); }
 .sd-card input { font-family: ui-monospace, monospace; }
+.sd-desc { font-size: 12.5px; margin: 2px 0 0; color: var(--accent-2); font-weight: 500; }
+.sd-desc.bad { color: var(--danger); }
 .sd-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .preset { font-size: 12px; padding: 4px 9px; }
 .sd-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
