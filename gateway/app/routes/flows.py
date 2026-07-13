@@ -24,12 +24,17 @@ from app.services.schedule import ScheduleError, next_fire, validate_schedule
 router = APIRouter(tags=["flows"])
 
 
-def _has_output_nodes(definition: str | None) -> bool:
+# nodi che danno "qualcosa da eseguire": Output, oppure i nodi di controllo
+# (refresh di una datasource, esecuzione di un altro flusso)
+_RUNNABLE_NODE_TYPES = {"output", "refresh", "runflow"}
+
+
+def _has_runnable_nodes(definition: str | None) -> bool:
     try:
         parsed = json.loads(definition or "{}")
     except json.JSONDecodeError:
         return False
-    return any((n or {}).get("type") == "output" for n in parsed.get("nodes") or [])
+    return any((n or {}).get("type") in _RUNNABLE_NODE_TYPES for n in parsed.get("nodes") or [])
 
 
 def _authorize_definition_keys(session: Session, user: User, definition: str | None) -> None:
@@ -160,6 +165,27 @@ def delete_flow(flow_id: int, user: User = Depends(get_current_user), session: S
     session.commit()
 
 
+@router.post("/flows/{flow_id}/run-now", status_code=status.HTTP_202_ACCEPTED)
+async def run_flow_now(
+    flow_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Esegue subito l'ORCHESTRAZIONE del flusso (refresh → output → runflow) come
+    task di background, con l'autorità dell'utente. Serve RUN sul progetto; la
+    RBAC dei singoli passi (CONNECT dei refresh, EDIT/CONNECT degli output) è
+    ri-verificata durante l'orchestrazione. Torna subito: si polla la cronologia
+    dei run. È il percorso per i flussi con nodi di controllo (refresh/runflow)."""
+    import asyncio
+
+    from app.services.orchestrator import orchestrate_bg
+
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.RUN)
+    asyncio.create_task(orchestrate_bg(flow.id, user.id))
+    return {"status": "started", "flow_id": flow.id}
+
+
 @router.put("/flows/{flow_id}/schedule", response_model=FlowDetail)
 def set_flow_schedule(
     flow_id: int,
@@ -181,10 +207,11 @@ def set_flow_schedule(
         flow.run_scheduled_by = None
         flow.next_run_at = None
     else:
-        if not _has_output_nodes(flow.definition):
+        if not _has_runnable_nodes(flow.definition):
             raise HTTPException(
                 status_code=422,
-                detail="Il flusso non ha nodi Output: aggiungine almeno uno prima di schedularlo",
+                detail="Il flusso non ha nulla da eseguire (Output, refresh o esegui-flusso): "
+                "aggiungi almeno un nodo prima di schedularlo",
             )
         try:
             cron = validate_schedule(cron)

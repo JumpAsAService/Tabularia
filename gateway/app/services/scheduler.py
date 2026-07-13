@@ -14,20 +14,16 @@ Postgres) per non lanciare due volte — documentato, non necessario ora.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from app.core.config import get_settings
 from app.db.session import engine
 from app.models import Connection, Datasource, Flow, Run, User
 from app.models.run import TERMINAL_STATES
-from app.routes.runs import _launch_flow_run, _reconcile, launch_ingest_run
-from app.schemas.models import RunCreate
-from app.services.flow_resolver import FlowResolveError, build_output_run_requests
+from app.routes.runs import _reconcile, launch_ingest_run
+from app.services.orchestrator import orchestrate_bg
 from app.services.schedule import next_fire
 
 logger = logging.getLogger(__name__)
@@ -105,31 +101,10 @@ async def _fire_flow(session: Session, flow: Flow, now: datetime) -> None:
     if user is None or not user.is_active:
         _disable_flow(session, flow, "autore dello schedule assente o disattivato")
         return
-
-    default_bucket = get_settings().engine.bucket
-
-    def resolve_ds(ds_id: int):
-        d = session.get(Datasource, ds_id)
-        return (d.bucket, d.key) if d and d.key else None
-
-    try:
-        definition = json.loads(flow.definition or "{}")
-        requests = build_output_run_requests(definition, resolve_ds, default_bucket)
-    except (FlowResolveError, json.JSONDecodeError) as e:
-        logger.warning("scheduler: flusso %s non eseguibile (%s), salto lo slot", flow.id, e)
-        _advance_flow(session, flow, now)
-        return
-
-    launched = 0
-    for req in requests:
-        try:
-            await _launch_flow_run(session, user, flow, RunCreate(**req))
-            launched += 1
-        except HTTPException as e:  # RBAC/validazione di un output: gli altri proseguono
-            logger.warning("scheduler: flusso %s, output non lanciato (%s): %s", flow.id, e.status_code, e.detail)
-        except Exception:
-            logger.exception("scheduler: flusso %s, output fallito", flow.id)
-    logger.info("scheduler: flusso %s (%s) schedulato: %d/%d output lanciati", flow.id, flow.name, launched, len(requests))
+    # orchestrazione (refresh → output → runflow) come task detached: non blocca
+    # il tick, e la guardia _running evita di sovrapporre lo stesso flusso
+    asyncio.create_task(orchestrate_bg(flow.id, user.id))
+    logger.info("scheduler: orchestrazione flusso %s (%s) avviata", flow.id, flow.name)
     _advance_flow(session, flow, now)
 
 
