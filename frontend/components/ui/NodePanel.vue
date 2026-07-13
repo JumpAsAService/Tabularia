@@ -2,7 +2,7 @@
 import type { Node } from '@vue-flow/core'
 import {
   FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database,
-  HardDriveDownload,
+  HardDriveDownload, RefreshCw, PlayCircle,
 } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
@@ -20,6 +20,8 @@ const props = defineProps<{
   datasources?: DatasourceInfo[]
   projects?: { id: number; name: string }[]
   connections?: { id: number; name: string; db_type: string; database?: string }[]
+  flows?: { id: number; name: string }[]
+  currentFlowId?: number | null
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -45,6 +47,17 @@ function togglePartition(name: string) {
   if (i >= 0) cur.splice(i, 1)
   else cur.push(name)
   emit('update', { partitionBy: cur })
+}
+
+// nodo Refresh: sceglie una datasource database da aggiornare prima del run
+function pickRefreshDatasource(id: number | null) {
+  const ds = (props.datasources ?? []).find((d) => d.id === id)
+  emit('update', { datasourceId: id, dsName: ds?.name ?? '' })
+}
+// nodo Esegui-flusso: sceglie un altro flusso da eseguire
+function pickRunFlow(id: number | null) {
+  const f = (props.flows ?? []).find((x) => x.id === id)
+  emit('update', { flowId: id, flowName: f?.name ?? '' })
 }
 
 // il nodo sorgente può caricare una datasource del catalogo al posto del file
@@ -233,6 +246,44 @@ function pickDatasource(id: number | null) {
           La tabella viene creata se non esiste, con i tipi dello schema dell'output.
         </p>
       </template>
+    </template>
+
+    <!-- nodo di controllo: Refresh di una datasource prima del run -->
+    <template v-else-if="node.type === 'refresh'">
+      <div class="row">
+        <h3><RefreshCw :size="15" /> Refresh datasource</h3>
+        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+      </div>
+      <p class="muted outhint">
+        Al run, questa datasource viene aggiornata (ri-eseguita dalla sorgente) e il flusso
+        attende prima di procedere: così gli Output girano su dati freschi.
+      </p>
+      <label>Datasource da aggiornare</label>
+      <Select
+        :model-value="node.data.datasourceId ?? null"
+        :options="(datasources ?? []).filter((d) => d.kind === 'database').map((d) => ({ value: d.id, label: d.name }))"
+        placeholder="scegli una datasource database…"
+        @update:model-value="pickRefreshDatasource"
+      />
+    </template>
+
+    <!-- nodo di controllo: Esegui un altro flusso -->
+    <template v-else-if="node.type === 'runflow'">
+      <div class="row">
+        <h3><PlayCircle :size="15" /> Esegui flusso</h3>
+        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+      </div>
+      <p class="muted outhint">
+        Al run, dopo gli Output di questo flusso, viene eseguito il flusso scelto (i suoi
+        nodi Output). Utile per concatenare pipeline. Cicli bloccati automaticamente.
+      </p>
+      <label>Flusso da eseguire</label>
+      <Select
+        :model-value="node.data.flowId ?? null"
+        :options="(flows ?? []).filter((f) => f.id !== currentFlowId).map((f) => ({ value: f.id, label: f.name }))"
+        placeholder="scegli un flusso…"
+        @update:model-value="pickRunFlow"
+      />
     </template>
 
     <!-- container foreach -->

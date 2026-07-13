@@ -40,5 +40,9 @@ export function useFlows() {
     // imposta/disabilita l'esecuzione schedulata (cron a 5 campi; '' = disabilita)
     setSchedule: (id: number, cron: string) =>
       apiFetch<FlowDetail>(`/flows/${id}/schedule`, { method: 'PUT', body: { cron } }),
+
+    // esegue subito l'orchestrazione (refresh → output → runflow) in background
+    runNow: (id: number) =>
+      apiFetch<{ status: string; flow_id: number }>(`/flows/${id}/run-now`, { method: 'POST' }),
   }
 }

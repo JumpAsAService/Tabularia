@@ -3,7 +3,7 @@
 // Il tipo viaggia nel dataTransfer (application/tabularia), letto dal drop
 // handler di FlowEditor.
 import { computed } from 'vue'
-import { GripVertical, HardDriveDownload } from 'lucide-vue-next'
+import { GripVertical, HardDriveDownload, RefreshCw, PlayCircle } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const props = defineProps<{ operations: string[] }>()
@@ -47,19 +47,38 @@ function onDragStart(ev: DragEvent, kind: string) {
       <GripVertical :size="13" class="grip" />
     </div>
 
-    <template v-if="hasForeach">
-      <div class="group-title">Controllo</div>
-      <div
-        class="item"
-        draggable="true"
-        :style="{ '--item-color': opMeta('foreach').color }"
-        @dragstart="onDragStart($event, 'op:foreach')"
-      >
-        <component :is="opMeta('foreach').icon" :size="15" class="item-icon" />
-        <span>{{ opMeta('foreach').label }}</span>
-        <GripVertical :size="13" class="grip" />
-      </div>
-    </template>
+    <div class="group-title">Controllo</div>
+    <div
+      v-if="hasForeach"
+      class="item"
+      draggable="true"
+      :style="{ '--item-color': opMeta('foreach').color }"
+      @dragstart="onDragStart($event, 'op:foreach')"
+    >
+      <component :is="opMeta('foreach').icon" :size="15" class="item-icon" />
+      <span>{{ opMeta('foreach').label }}</span>
+      <GripVertical :size="13" class="grip" />
+    </div>
+    <div
+      class="item"
+      draggable="true"
+      :style="{ '--item-color': '#38bdf8' }"
+      @dragstart="onDragStart($event, 'refresh')"
+    >
+      <RefreshCw :size="15" class="item-icon" />
+      <span>Refresh datasource</span>
+      <GripVertical :size="13" class="grip" />
+    </div>
+    <div
+      class="item"
+      draggable="true"
+      :style="{ '--item-color': '#c084fc' }"
+      @dragstart="onDragStart($event, 'runflow')"
+    >
+      <PlayCircle :size="15" class="item-icon" />
+      <span>Esegui flusso</span>
+      <GripVertical :size="13" class="grip" />
+    </div>
 
     <div class="group-title">Output</div>
     <div

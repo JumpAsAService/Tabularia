@@ -114,7 +114,11 @@ const previewError = ref('')
 
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) ?? null : null))
 const firstSource = computed(() => getNodes.value.find((n) => n.type === 'source'))
-const canRun = computed(() => !!firstSource.value?.data?.parquetKey)
+const canRun = computed(
+  () =>
+    !!firstSource.value?.data?.parquetKey ||
+    getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow'),
+)
 
 // ── Flusso salvato (persistenza nel gateway) ─────────────────────────────
 const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : null)
@@ -184,7 +188,7 @@ async function loadFlow(id: number) {
       .map((n: any) => Number(String(n.id).slice(prefix.length)) || 0))
   opCounter = maxN('op-')
   sourceCounter = maxN('src-')
-  outputCounter = maxN('out-')
+  outputCounter = Math.max(maxN('out-'), maxN('ctl-')) // out- e ctl- condividono il contatore
   selectedId.value = null
   setStatus(`Flusso "${f.name}" caricato`, 'ok')
 }
@@ -232,6 +236,7 @@ onMounted(async () => {
   // allo snapshot corrente (le chiavi salvate diventano stantie a ogni refresh)
   await refreshDatasources()
   refreshConnections() // per il nodo Output: può arrivare dopo, non blocca il load
+  refreshFlows() // per il nodo "Esegui flusso"
   try {
     if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
@@ -256,6 +261,16 @@ async function refreshConnections() {
     connectionsList.value = await connApi.list()
   } catch {
     connectionsList.value = []
+  }
+}
+
+// ── Flussi (per il picker del nodo "Esegui flusso") ───────────────────────
+const flowsList = ref<{ id: number; name: string }[]>([])
+async function refreshFlows() {
+  try {
+    flowsList.value = (await flowsApi.list()).map((f) => ({ id: f.id, name: f.name }))
+  } catch {
+    flowsList.value = []
   }
 }
 
@@ -432,6 +447,14 @@ function onCanvasDrop(ev: DragEvent) {
     })
     selectedId.value = id
     refreshForNode(id)
+    return
+  }
+
+  if (kind === 'refresh' || kind === 'runflow') {
+    // nodi di CONTROLLO (non nella catena dati): il gateway li interpreta al run
+    const id = `ctl-${++outputCounter}`
+    addNodes({ id, type: kind, position, data: {} })
+    selectedId.value = id
     return
   }
 
@@ -777,7 +800,21 @@ function describeOutput(n: Node): OutputSummary {
 
 const runOutputs = computed(() => outputNodes().map(describeOutput))
 
+// nodi di controllo (refresh/runflow): richiedono l'orchestrazione server-side
+const hasControlNodes = () =>
+  getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow')
+
 function run() {
+  // flussi con nodi di controllo → orchestrazione server (refresh→output→runflow),
+  // niente dialog: la configurazione sta sui nodi
+  if (hasControlNodes()) {
+    if (flowId.value === null) {
+      setStatus('Salva il flusso per eseguire i nodi di controllo', 'error')
+      return
+    }
+    executeOrchestration()
+    return
+  }
   const outs = outputNodes()
   if (outs.length) {
     // gli output richiedono il gateway (cronologia, RBAC, credenziali)
@@ -846,6 +883,48 @@ async function executeRun(publish: PublishSpec | null) {
   } finally {
     busy.value = false
   }
+}
+
+// orchestrazione server-side (flussi con nodi di controllo): il gateway fa
+// refresh → output → runflow. Torna subito, si polla la cronologia del flusso.
+async function executeOrchestration() {
+  busy.value = true
+  pollToken++
+  try {
+    await flowsApi.runNow(flowId.value!)
+    setStatus('Orchestrazione avviata (refresh → output → flussi)…', 'busy')
+    pollFlowLatest(flowId.value!)
+  } catch (e) {
+    setStatus(`Errore: ${errMessage(e)}`, 'error')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function pollFlowLatest(fid: number) {
+  const token = pollToken
+  for (let i = 0; i < 120; i++) {
+    await new Promise((r) => setTimeout(r, 2000))
+    if (token !== pollToken) return
+    let runs
+    try {
+      runs = await runsApi.listByFlow(fid)
+    } catch {
+      continue
+    }
+    if (token !== pollToken) return
+    const last = runs[0]
+    if (last && (last.status === 'SUCCESS' || last.status === 'FAILURE')) {
+      if (last.status === 'SUCCESS') {
+        setStatus(`Orchestrazione completata: ${last.rows_written ?? 0} righe (ultimo output)`, 'ok')
+        refreshDatasources()
+      } else {
+        setStatus(`Orchestrazione: errore — ${last.error}`, 'error')
+      }
+      return
+    }
+  }
+  setStatus('Orchestrazione ancora in corso: controlla la cronologia dei run.', 'info')
 }
 
 // un run per ogni nodo Output: la catena di ciascuno è il suo input sinistro
@@ -1015,6 +1094,12 @@ async function pollTask(id: string) {
         <template #node-output="props">
           <OutputNode :id="props.id" :data="props.data" />
         </template>
+        <template #node-refresh="props">
+          <RefreshNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-runflow="props">
+          <RunFlowNode :id="props.id" :data="props.data" />
+        </template>
         <Background pattern-color="#2a2f3a" :gap="16" />
         <Controls>
           <ControlButton title="Ordina il flusso" @click="autoLayout">
@@ -1037,6 +1122,8 @@ async function pollTask(id: string) {
         :datasources="datasources"
         :projects="projectsList"
         :connections="connectionsList"
+        :flows="flowsList"
+        :current-flow-id="flowId"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"
