@@ -192,10 +192,13 @@ const flatIndex = (o: SelectOption) => norm.value.indexOf(o)
 </style>
 
 <style>
-/* pannello teleportato sul body: NON scoped */
+/* pannello teleportato sul body: NON scoped. z-index tra i dialog (2000) e i
+   toast (3000): un Select dentro un dialog (es. ConnectionDialog) teletrasporta
+   il pannello sul body, quindi deve stare SOPRA il backdrop del dialog (non
+   dietro), ma sotto le notifiche. */
 .sel-panel {
   position: fixed;
-  z-index: 1000;
+  z-index: 2500;
   max-height: 240px;
   overflow-y: auto;
   background: var(--panel);
