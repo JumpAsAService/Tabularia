@@ -21,5 +21,13 @@ class Flow(SQLModel, table=True):
     project_id: int = Field(foreign_key="projects.id", index=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
     definition: str = Field(default="{}", sa_column=Column(Text, nullable=False))
+
+    # esecuzione SCHEDULATA (cron): lo scheduler del gateway ri-risolve la
+    # definizione CORRENTE e lancia i nodi Output con l'autorità di
+    # `run_scheduled_by`. schedule=None → disabilitato.
+    run_schedule: Optional[str] = None
+    run_scheduled_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    next_run_at: Optional[datetime] = Field(default=None, index=True)
+
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

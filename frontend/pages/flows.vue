@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Tutti i flussi nelle cartelle leggibili, con ricerca. Da qui si apre l'editor.
 import { computed, onMounted, ref } from 'vue'
-import { Workflow, Search, Trash2, Folder, Plus } from 'lucide-vue-next'
+import { Workflow, Search, Trash2, Folder, Plus, CalendarClock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -58,6 +58,26 @@ async function deleteFlow(f: FlowSummary) {
     toast.error(errMessage(e))
   }
 }
+
+// ── Esecuzione schedulata (cron) — dialog condiviso ScheduleDialog ──────────
+const scheduleFor = ref<FlowSummary | null>(null)
+const savingSchedule = ref(false)
+
+async function saveSchedule(cron: string) {
+  if (!scheduleFor.value) return
+  savingSchedule.value = true
+  try {
+    const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim())
+    flows.value = flows.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+    toast.success(cron.trim() ? `Esecuzione schedulata: ${updated.run_schedule}` : 'Schedulazione disattivata')
+    scheduleFor.value = null
+  } catch (e) {
+    // 422 "serve un nodo Output" / cron invalido, 403 permessi
+    toast.error(errMessage(e))
+  } finally {
+    savingSchedule.value = false
+  }
+}
 </script>
 
 <template>
@@ -87,16 +107,41 @@ async function deleteFlow(f: FlowSummary) {
               <Workflow :size="14" /> {{ f.name }}
             </NuxtLink>
             <div v-if="f.description" class="muted desc">{{ f.description }}</div>
+            <div v-if="f.run_schedule" class="muted sched">
+              <CalendarClock :size="11" /> <code>{{ f.run_schedule }}</code>
+              <span v-if="f.next_run_at"> · prossimo {{ fmtDate(f.next_run_at) }}</span>
+            </div>
           </td>
           <td class="muted"><Folder :size="13" /> {{ folderName[f.project_id] ?? `#${f.project_id}` }}</td>
           <td class="muted nowrap">{{ fmtDate(f.updated_at) }}</td>
           <td class="right">
+            <button
+              class="mini"
+              :class="{ active: !!f.run_schedule }"
+              title="Schedule flow execution (cron)"
+              @click="scheduleFor = f"
+            ><CalendarClock :size="13" /></button>
             <button class="mini danger" title="Delete flow" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <ScheduleDialog
+      :open="!!scheduleFor"
+      :title="scheduleFor?.name ?? ''"
+      subtitle="Esegui automaticamente i nodi Output di"
+      :current="scheduleFor?.run_schedule ?? null"
+      :busy="savingSchedule"
+      @save="saveSchedule"
+      @cancel="scheduleFor = null"
+    />
   </AppShell>
 </template>
 
 <style scoped src="~/assets/listpage.css" />
+<style scoped>
+.sched { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.sched code { font-family: ui-monospace, monospace; }
+.mini.active { color: var(--accent-2); border-color: var(--accent-2); }
+</style>

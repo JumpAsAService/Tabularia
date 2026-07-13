@@ -2,8 +2,7 @@
 // Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
 // con stato live, eliminazione.
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, X } from 'lucide-vue-next'
-import cronstrue from 'cronstrue/i18n'
+import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -95,35 +94,12 @@ async function remove(d: DatasourceInfo) {
   }
 }
 
-// ── Refresh schedulato (cron) ───────────────────────────────────────────────
+// ── Refresh schedulato (cron) — dialog condiviso ScheduleDialog ──────────────
 const scheduleFor = ref<DatasourceInfo | null>(null)
-const cronInput = ref('')
 const savingSchedule = ref(false)
-const CRON_PRESETS = [
-  { label: 'Ogni 15 min', cron: '*/15 * * * *' },
-  { label: 'Ogni ora', cron: '0 * * * *' },
-  { label: 'Ogni notte (03:00)', cron: '0 3 * * *' },
-  { label: 'Ogni lunedì (06:00)', cron: '0 6 * * 1' },
-]
 
 function openSchedule(d: DatasourceInfo) {
   scheduleFor.value = d
-  cronInput.value = d.refresh_schedule ?? ''
-}
-
-// descrizione testuale del cron in stile crontab.guru (live, in italiano)
-const cronDescription = computed<{ text: string; ok: boolean }>(() => {
-  const expr = cronInput.value.trim()
-  if (!expr) return { text: '', ok: true }
-  try {
-    return { text: cronstrue.toString(expr, { locale: 'it', verbose: false }), ok: true }
-  } catch {
-    return { text: 'Espressione cron non valida', ok: false }
-  }
-})
-
-function replaceInList(updated: DatasourceInfo) {
-  list.value = list.value.map((x) => (x.id === updated.id ? updated : x))
 }
 
 async function saveSchedule(cron: string) {
@@ -131,7 +107,7 @@ async function saveSchedule(cron: string) {
   savingSchedule.value = true
   try {
     const updated = await dsApi.setSchedule(scheduleFor.value.id, cron.trim())
-    replaceInList(updated)
+    list.value = list.value.map((x) => (x.id === updated.id ? updated : x))
     toast.success(cron.trim() ? `Refresh schedulato: ${updated.refresh_schedule}` : 'Schedulazione disattivata')
     scheduleFor.value = null
   } catch (e) {
@@ -207,51 +183,15 @@ async function saveSchedule(cron: string) {
       </tbody>
     </table>
 
-    <Teleport to="body">
-      <div v-if="scheduleFor" class="sd-backdrop" @mousedown.self="scheduleFor = null">
-        <div class="sd-card" @keydown.esc="scheduleFor = null">
-          <div class="sd-head">
-            <h3><CalendarClock :size="15" /> Refresh schedulato</h3>
-            <button class="sd-x" @click="scheduleFor = null"><X :size="14" /></button>
-          </div>
-          <p class="muted sd-sub">
-            Aggiorna automaticamente lo snapshot di <strong>{{ scheduleFor.name }}</strong> rieseguendo la
-            sorgente. Orari in UTC.
-          </p>
-
-          <label>Espressione cron (minuto ora giorno mese giorno-settimana)</label>
-          <input
-            v-model="cronInput"
-            type="text"
-            spellcheck="false"
-            placeholder="es. 0 3 * * *"
-            @keyup.enter="saveSchedule(cronInput)"
-          />
-          <p v-if="cronDescription.text" class="sd-desc" :class="{ bad: !cronDescription.ok }">
-            {{ cronDescription.ok ? '↳ ' : '' }}{{ cronDescription.text }}
-          </p>
-          <div class="sd-presets">
-            <button v-for="p in CRON_PRESETS" :key="p.cron" class="preset" @click="cronInput = p.cron">
-              {{ p.label }}
-            </button>
-          </div>
-
-          <div class="sd-actions">
-            <button
-              v-if="scheduleFor.refresh_schedule"
-              class="danger"
-              :disabled="savingSchedule"
-              @click="saveSchedule('')"
-            >Disattiva</button>
-            <span class="sd-spacer" />
-            <button :disabled="savingSchedule" @click="scheduleFor = null">Annulla</button>
-            <button class="primary" :disabled="savingSchedule || !cronInput.trim()" @click="saveSchedule(cronInput)">
-              Salva
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ScheduleDialog
+      :open="!!scheduleFor"
+      :title="scheduleFor?.name ?? ''"
+      subtitle="Aggiorna automaticamente lo snapshot di"
+      :current="scheduleFor?.refresh_schedule ?? null"
+      :busy="savingSchedule"
+      @save="saveSchedule"
+      @cancel="scheduleFor = null"
+    />
   </AppShell>
 </template>
 
@@ -260,24 +200,4 @@ async function saveSchedule(cron: string) {
 .sched { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
 .sched code { font-family: ui-monospace, monospace; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
-.sd-backdrop {
-  position: fixed; inset: 0; background: rgba(5, 7, 12, 0.6); backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center; z-index: 2000;
-}
-.sd-card {
-  width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-  box-shadow: var(--shadow-2); padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;
-}
-.sd-head { display: flex; align-items: center; justify-content: space-between; }
-.sd-head h3 { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 16px; }
-.sd-x { padding: 3px 7px; }
-.sd-sub { font-size: 12px; margin: 0 0 4px; }
-.sd-card label { font-size: 12px; color: var(--muted); }
-.sd-card input { font-family: ui-monospace, monospace; }
-.sd-desc { font-size: 12.5px; margin: 2px 0 0; color: var(--accent-2); font-weight: 500; }
-.sd-desc.bad { color: var(--danger); }
-.sd-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.preset { font-size: 12px; padding: 4px 9px; }
-.sd-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-.sd-spacer { flex: 1; }
 </style>

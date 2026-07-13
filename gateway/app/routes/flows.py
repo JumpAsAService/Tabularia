@@ -16,11 +16,20 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Flow, Project, User
 from app.models.permission import Capability
-from app.schemas.models import FlowOut, FlowDetail, FlowCreate, FlowUpdate
+from app.schemas.models import FlowOut, FlowDetail, FlowCreate, FlowScheduleUpdate, FlowUpdate
 from app.services import permissions as perm_service
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
+from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
 router = APIRouter(tags=["flows"])
+
+
+def _has_output_nodes(definition: str | None) -> bool:
+    try:
+        parsed = json.loads(definition or "{}")
+    except json.JSONDecodeError:
+        return False
+    return any((n or {}).get("type") == "output" for n in parsed.get("nodes") or [])
 
 
 def _authorize_definition_keys(session: Session, user: User, definition: str | None) -> None:
@@ -149,3 +158,43 @@ def delete_flow(flow_id: int, user: User = Depends(get_current_user), session: S
     session.exec(sa_delete(Run).where(Run.flow_id == flow_id))
     session.delete(flow)
     session.commit()
+
+
+@router.put("/flows/{flow_id}/schedule", response_model=FlowDetail)
+def set_flow_schedule(
+    flow_id: int,
+    body: FlowScheduleUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Imposta/disabilita l'esecuzione schedulata (cron a 5 campi; '' = off).
+    Serve RUN sul progetto del flusso, e il flusso deve avere almeno un nodo
+    Output (senza, un run schedulato non produrrebbe nulla). Al fire-time il
+    gateway ri-risolve la definizione CORRENTE e lancia gli Output con l'autorità
+    di chi schedula (EDIT/CONNECT dei singoli output ri-verificati allora)."""
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.RUN)
+
+    cron = (body.cron or "").strip()
+    if not cron:
+        flow.run_schedule = None
+        flow.run_scheduled_by = None
+        flow.next_run_at = None
+    else:
+        if not _has_output_nodes(flow.definition):
+            raise HTTPException(
+                status_code=422,
+                detail="Il flusso non ha nodi Output: aggiungine almeno uno prima di schedularlo",
+            )
+        try:
+            cron = validate_schedule(cron)
+        except ScheduleError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        flow.run_schedule = cron
+        flow.run_scheduled_by = user.id  # autorità dei run schedulati
+        flow.next_run_at = next_fire(cron, datetime.now(timezone.utc))
+    flow.updated_at = datetime.now(timezone.utc)
+    session.add(flow)
+    session.commit()
+    session.refresh(flow)
+    return flow

@@ -6,6 +6,8 @@ export interface FlowSummary {
   description: string
   project_id: number
   owner_id: number | null
+  run_schedule: string | null // cron; null = non schedulato
+  next_run_at: string | null
   updated_at: string | null
 }
 
@@ -34,5 +36,9 @@ export function useFlows() {
     ) => apiFetch<FlowDetail>(`/flows/${id}`, { method: 'PATCH', body }),
 
     remove: (id: number) => apiFetch<void>(`/flows/${id}`, { method: 'DELETE' }),
+
+    // imposta/disabilita l'esecuzione schedulata (cron a 5 campi; '' = disabilita)
+    setSchedule: (id: number, cron: string) =>
+      apiFetch<FlowDetail>(`/flows/${id}/schedule`, { method: 'PUT', body: { cron } }),
   }
 }

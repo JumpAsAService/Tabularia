@@ -59,10 +59,17 @@ async def launch_run(
     session: Session = Depends(get_session),
 ):
     flow = _get_flow(session, flow_id)
+    return await _launch_flow_run(session, user, flow, body)
+
+
+async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCreate) -> Run:
+    """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
+    (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
+    publish, CONNECT per le destinazioni — con l'autorità di `user`."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
 
-    # input_key e operazioni arrivano dal client: ogni chiave di storage
-    # referenziata deve essere leggibile dall'utente (RBAC data plane)
+    # input_key e operazioni: ogni chiave di storage referenziata deve essere
+    # leggibile dall'utente (RBAC data plane)
     from app.services.objects import collect_storage_keys, ensure_can_read_keys
 
     ensure_can_read_keys(
@@ -179,7 +186,7 @@ async def launch_run(
         raise HTTPException(status_code=502, detail="L'engine non ha restituito un task_id")
 
     run = Run(
-        flow_id=flow_id,
+        flow_id=flow.id,
         task_id=task_id,
         launched_by=user.id,
         input_key=body.input_key,

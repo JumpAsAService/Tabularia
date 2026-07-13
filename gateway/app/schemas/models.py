@@ -91,6 +91,8 @@ class FlowOut(BaseModel):
     description: str
     project_id: int
     owner_id: Optional[int]
+    run_schedule: Optional[str] = None  # cron; null = non schedulato
+    next_run_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
@@ -102,6 +104,11 @@ class FlowCreate(BaseModel):
     name: str
     description: str = ""
     definition: str = "{}"
+
+
+class FlowScheduleUpdate(BaseModel):
+    """Imposta/disabilita l'esecuzione schedulata del flusso. `cron` vuoto = off."""
+    cron: Optional[str] = None
 
 
 class FlowUpdate(BaseModel):
