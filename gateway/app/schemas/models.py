@@ -166,6 +166,9 @@ class PublishSpec(BaseModel):
     name: str
     project_id: int
     description: str = ""
+    # se una datasource con questo nome esiste già nella cartella: sovrascrivila
+    # (solo se è kind="flow") invece di fallire con 409
+    overwrite: bool = False
 
 
 class RunDestinationSpec(BaseModel):

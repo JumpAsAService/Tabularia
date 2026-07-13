@@ -42,13 +42,14 @@ def _get_flow(session: Session, flow_id: int) -> Flow:
     return flow
 
 
+def _find_datasource(session: Session, project_id: int, name: str) -> Datasource | None:
+    return session.exec(
+        select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)
+    ).first()
+
+
 def _datasource_name_taken(session: Session, project_id: int, name: str) -> bool:
-    return (
-        session.exec(
-            select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)
-        ).first()
-        is not None
-    )
+    return _find_datasource(session, project_id, name) is not None
 
 
 @router.post("/flows/{flow_id}/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)
@@ -81,13 +82,24 @@ async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCr
         if session.get(Project, body.publish.project_id) is None:
             raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
         ensure_can(session, user, body.publish.project_id, Capability.EDIT)
-        if not body.publish.name.strip():
+        pub_name = body.publish.name.strip()
+        if not pub_name:
             raise HTTPException(status_code=422, detail="Il nome della datasource è vuoto")
-        if _datasource_name_taken(session, body.publish.project_id, body.publish.name.strip()):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Esiste già una datasource '{body.publish.name}' in questa cartella",
-            )
+        existing = _find_datasource(session, body.publish.project_id, pub_name)
+        if existing is not None:
+            if not body.publish.overwrite:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Esiste già una datasource '{body.publish.name}' in questa cartella",
+                )
+            # sovrascrivere una snapshot di database (con schedule/connessione) la
+            # snaturerebbe: consentito solo su datasource prodotte da un flusso
+            if existing.kind != "flow":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"'{body.publish.name}' è una datasource di tipo «{existing.kind}»: "
+                    "non è sovrascrivibile da un flusso, scegli un altro nome",
+                )
 
     # destinazione dell'output (nodo Output): la connessione è referenziata per
     # id, il payload con la secret (cifrata) lo costruisce il gateway — mai il client
@@ -195,6 +207,7 @@ async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCr
         publish_name=body.publish.name.strip() if body.publish else None,
         publish_project_id=body.publish.project_id if body.publish else None,
         publish_description=body.publish.description if body.publish else "",
+        publish_overwrite=body.publish.overwrite if body.publish else False,
         destination=destination_summary,
     )
     session.add(run)
@@ -319,7 +332,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
         and run.publish_project_id
         and run.datasource_id is None
     ):
-        _publish_datasource(session, run, result)
+        replaced_blob = _publish_datasource(session, run, result)
+        if replaced_blob is not None:  # overwrite: il vecchio parquet ora è orfano
+            await _delete_blob(*replaced_blob)
     return run
 
 
@@ -361,14 +376,41 @@ async def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
         await _delete_blob(old_bucket, old_key)
 
 
-def _publish_datasource(session: Session, run: Run, result: dict) -> None:
-    """Crea la datasource promessa dal run (solo il vincitore del claim arriva qui).
+def _publish_datasource(session: Session, run: Run, result: dict) -> tuple[str, str] | None:
+    """Crea — o SOVRASCRIVE, se `run.publish_overwrite` — la datasource promessa dal
+    run (solo il vincitore del claim arriva qui). Torna il vecchio blob
+    (bucket, key) rimpiazzato da una sovrascrittura, da eliminare a valle; None
+    altrimenti.
 
-    Il vincolo UNIQUE (project, name) resta la rete di sicurezza: su conflitto
-    si riprova UNA volta con un suffisso; se fallisce ancora (o il progetto di
-    destinazione è stato eliminato nel frattempo) il run resta SUCCESS senza
-    datasource, con l'errore nei log.
+    Il vincolo UNIQUE (project, name) resta la rete di sicurezza: alla CREAZIONE,
+    su conflitto si riprova UNA volta con un suffisso; se fallisce ancora (o il
+    progetto è stato eliminato) il run resta SUCCESS senza datasource, con
+    l'errore nei log.
     """
+    columns = json.dumps(result.get("columns") or [])
+
+    # sovrascrittura: rimpiazza in-place la datasource omonima (kind="flow"),
+    # mantenendone id e nome — così i flussi che la usano come sorgente non si
+    # rompono. Se non esiste (o non è kind=flow) si ricade nella creazione.
+    if run.publish_overwrite:
+        existing = _find_datasource(session, run.publish_project_id, run.publish_name)
+        if existing is not None and existing.kind == "flow":
+            old_blob = (existing.bucket, existing.key)
+            existing.bucket = run.output_bucket
+            existing.key = run.output_key
+            existing.rows = run.rows_written
+            existing.columns = columns
+            existing.description = run.publish_description
+            existing.flow_id = run.flow_id
+            existing.owner_id = existing.owner_id or run.launched_by
+            session.add(existing)
+            session.commit()
+            run.datasource_id = existing.id
+            session.add(run)
+            session.commit()
+            session.refresh(run)
+            return old_blob if old_blob != (run.output_bucket, run.output_key) else None
+
     def _make(name: str) -> Datasource:
         return Datasource(
             name=name,
@@ -378,7 +420,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             bucket=run.output_bucket,
             key=run.output_key,
             rows=run.rows_written,
-            columns=json.dumps(result.get("columns") or []),
+            columns=columns,
             kind="flow",
             flow_id=run.flow_id,
         )
@@ -398,12 +440,13 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
         session.add(run)
         session.commit()
         session.refresh(run)
-        return
+        return None
     logger.error(
         "run %s: datasource '%s' non pubblicata (conflitti ripetuti o progetto eliminato)",
         run.id,
         run.publish_name,
     )
+    return None
 
 
 @router.get("/flows/{flow_id}/runs", response_model=list[RunOut])

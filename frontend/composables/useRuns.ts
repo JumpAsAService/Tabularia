@@ -20,6 +20,7 @@ export interface PublishSpec {
   name: string
   project_id: number
   description?: string
+  overwrite?: boolean
 }
 
 export interface DestinationSpec {

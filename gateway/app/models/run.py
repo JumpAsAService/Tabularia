@@ -38,6 +38,8 @@ class Run(SQLModel, table=True):
     publish_name: Optional[str] = None
     publish_project_id: Optional[int] = Field(default=None, foreign_key="projects.id")
     publish_description: str = ""
+    # sovrascrivi la datasource omonima (kind="flow") invece di crearne una nuova
+    publish_overwrite: bool = False
     datasource_id: Optional[int] = Field(default=None, foreign_key="datasources.id")
 
     # destinazione database dell'output (nodo Output): riassunto JSON per la

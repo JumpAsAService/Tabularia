@@ -197,6 +197,7 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
             "name": (d.get("name") or "").strip(),
             "project_id": d.get("projectId"),
             "description": d.get("description") or "",
+            "overwrite": bool(d.get("overwrite")),
         }
     return body
 

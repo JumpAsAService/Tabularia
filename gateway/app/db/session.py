@@ -29,6 +29,8 @@ _MIGRATIONS = [
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS run_schedule VARCHAR",
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS run_scheduled_by INTEGER REFERENCES users(id)",
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMP",
+    # Publish di una datasource in overwrite (ripubblica sopra l'omonima kind=flow)
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS publish_overwrite BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

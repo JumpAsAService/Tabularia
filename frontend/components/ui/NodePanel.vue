@@ -152,6 +152,18 @@ function pickDatasource(id: number | null) {
           placeholder="cosa contiene, per chi"
           @input="emit('update', { description: ($event.target as HTMLInputElement).value })"
         />
+        <label class="chk ovw">
+          <input
+            type="checkbox"
+            :checked="node.data.overwrite ?? false"
+            @change="emit('update', { overwrite: ($event.target as HTMLInputElement).checked })"
+          />
+          Sovrascrivi se esiste già
+        </label>
+        <p class="muted outhint">
+          Se una datasource con questo nome esiste già nella cartella, ne aggiorna i dati
+          (mantenendo id e nome, così i flussi che la usano non si rompono) invece di dare errore.
+        </p>
       </template>
 
       <!-- destinazione S3: connessione object storage + chiave + formato + partizioni -->
@@ -404,6 +416,8 @@ label { font-size: 12px; color: var(--muted); }
 }
 .partchecks .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .partchecks .chk input { width: auto; }
+.chk.ovw { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 8px; }
+.chk.ovw input { width: auto; }
 .phlist { margin: 8px 0 0; font-size: 12px; }
 .phlist code {
   background: var(--panel-2);

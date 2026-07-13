@@ -990,7 +990,12 @@ async function executeOutputRuns() {
           partition_by: d.partitionBy ?? [],
         }
       } else {
-        publish = { name: d.name.trim(), project_id: d.projectId, description: d.description ?? '' }
+        publish = {
+          name: d.name.trim(),
+          project_id: d.projectId,
+          description: d.description ?? '',
+          overwrite: !!d.overwrite,
+        }
       }
       try {
         const launched = await runsApi.launch(flowId.value!, {
