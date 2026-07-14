@@ -277,6 +277,7 @@ async def launch_ingest_run(session: Session, user: User, ds: Datasource, conn: 
 # per task id che NON conosce più (risultato scaduto, Redis svuotato, worker
 # morto) → senza cutoff il run resterebbe zombie per sempre.
 STALE_AFTER_SECONDS = 3600 + 300  # task_time_limit dell'engine + margine
+SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di rimandare
 
 
 def _age_seconds(dt: datetime | None) -> float:
@@ -336,31 +337,41 @@ async def _reconcile(session: Session, run: Run) -> Run:
         values["rows_written"] = result.get("rows_written")
     else:
         values["error"] = (error or "")[:2000]
-    claimed = session.exec(
-        update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**values)
+    # con qualche tentativo IMMEDIATO: un errore transitorio (lock, hiccup del DB)
+    # si risolve nello stesso giro invece di aspettare la prossima lettura; se
+    # persiste, dopo i tentativi il run resta non terminale e si ritenta più tardi.
+    for attempt in range(1, SIDE_EFFECT_ATTEMPTS + 1):
+        claimed = session.exec(
+            update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**values)
+        )
+        if claimed.rowcount == 0:
+            session.rollback()  # un'altra richiesta ha già chiuso questo run
+            session.refresh(run)
+            return run
+        try:
+            if new_status == "SUCCESS" and run.kind == "ingest":
+                _finalize_ingest(session, run, result)
+            elif (
+                new_status == "SUCCESS"
+                and run.publish_name
+                and run.publish_project_id
+                and run.datasource_id is None
+            ):
+                _publish_datasource(session, run, result)
+            session.commit()  # claim + effetto: atomici
+            session.refresh(run)
+            return run
+        except Exception:
+            session.rollback()  # il run torna non terminale
+            session.refresh(run)
+            logger.warning(
+                "run %s: effetto post-claim fallito (tentativo %d/%d)", run.id, attempt, SIDE_EFFECT_ATTEMPTS
+            )
+    logger.error(
+        "run %s: effetto post-claim non riuscito dopo %d tentativi, sarà ritentato alla prossima lettura",
+        run.id,
+        SIDE_EFFECT_ATTEMPTS,
     )
-    if claimed.rowcount == 0:
-        session.rollback()  # un'altra richiesta ha già chiuso questo run
-        session.refresh(run)
-        return run
-
-    try:
-        if new_status == "SUCCESS" and run.kind == "ingest":
-            _finalize_ingest(session, run, result)
-        elif (
-            new_status == "SUCCESS"
-            and run.publish_name
-            and run.publish_project_id
-            and run.datasource_id is None
-        ):
-            _publish_datasource(session, run, result)
-        session.commit()  # claim + effetto: atomici
-    except Exception:
-        session.rollback()  # il run resta non terminale → verrà ritentato al prossimo giro
-        logger.exception("run %s: effetto post-claim fallito, sarà ritentato", run.id)
-        session.refresh(run)
-        return run
-    session.refresh(run)
     return run
 
 

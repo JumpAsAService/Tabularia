@@ -206,67 +206,75 @@ async def test_reconcile_ingest_success_swaps_and_defers(session, fake_engine):
 
 
 # ── F13: effetto post-claim ATOMICO e RITENTABILE ───────────────────────────
-async def test_reconcile_retries_publish_when_side_effect_fails(session, fake_engine, monkeypatch):
+def _flaky(real, fail_times: int):
+    """Wrapper che fa fallire le prime `fail_times` chiamate, poi delega al reale."""
+    state = {"n": 0}
+
+    def wrapper(*a, **k):
+        state["n"] += 1
+        if state["n"] <= fail_times:
+            raise RuntimeError("boom")
+        return real(*a, **k)
+
+    return wrapper
+
+
+async def test_reconcile_publish_recovers_in_call_on_transient_failure(session, fake_engine, monkeypatch):
     import app.routes.runs as runs_mod
 
     run = make_run(
-        session, kind="flow", status="STARTED", task_id="t-flaky",
-        publish_name="rep", publish_project_id=1, output_key="datasets/r.parquet",
+        session, kind="flow", status="STARTED", task_id="t-r1",
+        publish_name="rep1", publish_project_id=1, output_key="datasets/r.parquet",
     )
-    fake_engine.set_task("t-flaky", "SUCCESS", result={"rows_written": 3, "columns": []})
+    fake_engine.set_task("t-r1", "SUCCESS", result={"rows_written": 3, "columns": []})
+    # fallisce UNA volta: il retry IMMEDIATO nello stesso _reconcile lo recupera
+    monkeypatch.setattr(runs_mod, "_publish_datasource", _flaky(runs_mod._publish_datasource, 1))
 
-    calls = {"n": 0}
-    real = runs_mod._publish_datasource
-
-    def flaky(sess, r, res):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("boom")  # l'effetto fallisce la prima volta
-        return real(sess, r, res)
-
-    monkeypatch.setattr(runs_mod, "_publish_datasource", flaky)
-
-    # 1º giro: l'effetto fallisce → ROLLBACK → il run NON è terminale, niente datasource
-    await _reconcile(session, run)
-    session.refresh(run)
-    assert run.status != "SUCCESS"
-    assert session.exec(select(Datasource).where(Datasource.name == "rep")).first() is None
-
-    # 2º giro: l'effetto riesce → SUCCESS + datasource pubblicata (ritentato)
     await _reconcile(session, run)
     session.refresh(run)
     assert run.status == "SUCCESS"
-    assert session.exec(select(Datasource).where(Datasource.name == "rep")).first() is not None
+    assert session.exec(select(Datasource).where(Datasource.name == "rep1")).first() is not None
 
 
-async def test_reconcile_ingest_retries_when_finalize_fails(session, fake_engine, monkeypatch):
+async def test_reconcile_publish_lazy_retry_when_attempts_exhausted(session, fake_engine, monkeypatch):
     import app.routes.runs as runs_mod
 
-    ds = make_datasource(session, name="live2", kind="database", key="datasets/s1.parquet")
-    run = make_run(session, kind="ingest", status="STARTED", task_id="t-ing2",
-                   datasource_id=ds.id, output_key="datasets/s2.parquet")
-    fake_engine.set_task("t-ing2", "SUCCESS", result={"rows_written": 1, "columns": []})
-
-    calls = {"n": 0}
-    real = runs_mod._finalize_ingest
-
-    def flaky(s, r, res):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("boom")
-        return real(s, r, res)
-
-    monkeypatch.setattr(runs_mod, "_finalize_ingest", flaky)
+    run = make_run(
+        session, kind="flow", status="STARTED", task_id="t-r2",
+        publish_name="rep2", publish_project_id=1, output_key="datasets/r.parquet",
+    )
+    fake_engine.set_task("t-r2", "SUCCESS", result={"rows_written": 3, "columns": []})
+    # fallisce TUTTI i tentativi immediati → il giro esaurisce e lascia non terminale
+    monkeypatch.setattr(
+        runs_mod, "_publish_datasource", _flaky(runs_mod._publish_datasource, runs_mod.SIDE_EFFECT_ATTEMPTS)
+    )
 
     await _reconcile(session, run)
+    session.refresh(run)
+    assert run.status != "SUCCESS"
+    assert session.exec(select(Datasource).where(Datasource.name == "rep2")).first() is None
+
+    # smette di fallire → la lettura successiva riconcilia (fallback lazy)
+    await _reconcile(session, run)
+    session.refresh(run)
+    assert run.status == "SUCCESS"
+    assert session.exec(select(Datasource).where(Datasource.name == "rep2")).first() is not None
+
+
+async def test_reconcile_ingest_recovers_in_call_on_transient_failure(session, fake_engine, monkeypatch):
+    import app.routes.runs as runs_mod
+
+    ds = make_datasource(session, name="live3", kind="database", key="datasets/s1.parquet")
+    run = make_run(session, kind="ingest", status="STARTED", task_id="t-r3",
+                   datasource_id=ds.id, output_key="datasets/s2.parquet")
+    fake_engine.set_task("t-r3", "SUCCESS", result={"rows_written": 1, "columns": []})
+    monkeypatch.setattr(runs_mod, "_finalize_ingest", _flaky(runs_mod._finalize_ingest, 1))
+
+    await _reconcile(session, run)  # un solo giro: il retry immediato recupera lo swap
     session.refresh(ds)
     session.refresh(run)
-    assert ds.key == "datasets/s1.parquet"  # swap NON avvenuto (rollback)
-    assert run.status != "SUCCESS"
-
-    await _reconcile(session, run)
-    session.refresh(ds)
-    assert ds.key == "datasets/s2.parquet"  # swappata al retry
+    assert ds.key == "datasets/s2.parquet"
+    assert run.status == "SUCCESS"
 
 
 async def test_reconcile_failure_records_error_and_no_side_effect(session, fake_engine):
