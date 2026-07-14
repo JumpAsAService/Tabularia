@@ -2,6 +2,7 @@
 // kind="flow": pubblicate da un run. kind="database": snapshot di una tabella o
 // query su una connessione esterna, aggiornabile con `refresh`.
 import type { RunInfo } from '~/composables/useRuns'
+import { pagedQuery, type Page } from '~/composables/useApi'
 
 export interface DatasourceInfo {
   id: number
@@ -38,6 +39,10 @@ export function useDatasources() {
   return {
     // tutte quelle nei progetti visibili (per il picker delle sorgenti)
     list: () => apiFetch<DatasourceInfo[]>('/datasources'),
+
+    // pagina globale: ricerca server-side (sull'intero dataset) + paginazione
+    listPaged: (p: { q?: string; limit: number; offset: number }) =>
+      apiFetch<Page<DatasourceInfo>>(`/datasources/search?${pagedQuery(p)}`),
 
     listByProject: (projectId: number) =>
       apiFetch<DatasourceInfo[]>(`/projects/${projectId}/datasources`),

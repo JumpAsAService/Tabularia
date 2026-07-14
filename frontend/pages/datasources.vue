@@ -1,46 +1,30 @@
 <script setup lang="ts">
 // Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
 // con stato live, eliminazione.
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
-import { skeletonPad } from '~/composables/useSkeleton'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
+import { usePagedList } from '~/composables/usePagedList'
 import type { RunInfo } from '~/composables/useRuns'
 
 const dsApi = useDatasources()
 const projectsApi = useProjects()
 const toast = useToast()
 
-const list = ref<DatasourceInfo[]>([])
+// ricerca server-side (nome/descrizione, su tutto il dataset) + paginazione
+const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
+  usePagedList<DatasourceInfo>((p) => dsApi.listPaged(p))
+
 const folderName = ref<Record<number, string>>({})
-const q = ref('')
-const loading = ref(true)
-const error = ref('')
-
 onMounted(async () => {
-  const t0 = performance.now()
   try {
-    const [ds, projects] = await Promise.all([dsApi.list(), projectsApi.list()])
-    list.value = ds
+    const projects = await projectsApi.list()
     folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
-  } catch (e) {
-    error.value = errMessage(e)
-  } finally {
-    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
-    loading.value = false
+  } catch {
+    /* i nomi cartella sono accessori */
   }
-})
-
-const filtered = computed(() => {
-  const needle = q.value.trim().toLowerCase()
-  if (!needle) return list.value
-  return list.value.filter(
-    (d) =>
-      d.name.toLowerCase().includes(needle) ||
-      (folderName.value[d.project_id] ?? '').toLowerCase().includes(needle),
-  )
 })
 
 function fmtDate(iso: string | null): string {
@@ -68,7 +52,7 @@ async function pollIngest(dsId: number, token: number) {
     if (!isTerminal(last)) {
       setTimeout(() => { if (token === pollToken) pollIngest(dsId, token) }, 2500)
     } else if (last.status === 'SUCCESS') {
-      list.value = await dsApi.list()
+      await load() // snapshot aggiornato: ricarica la pagina
     }
   } catch { /* riproverà al prossimo refresh manuale */ }
 }
@@ -87,8 +71,8 @@ async function remove(d: DatasourceInfo) {
   if (!confirm(`Delete datasource "${d.name}"? The parquet snapshot is removed too.`)) return
   try {
     await dsApi.remove(d.id)
-    list.value = list.value.filter((x) => x.id !== d.id)
     toast.success(`Datasource "${d.name}" deleted`)
+    await load() // ricarica la pagina (aggiorna totale/finestra)
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -107,7 +91,7 @@ async function saveSchedule(cron: string) {
   savingSchedule.value = true
   try {
     const updated = await dsApi.setSchedule(scheduleFor.value.id, cron.trim())
-    list.value = list.value.map((x) => (x.id === updated.id ? updated : x))
+    items.value = items.value.map((x) => (x.id === updated.id ? updated : x))
     toast.success(cron.trim() ? `Refresh schedulato: ${updated.refresh_schedule}` : 'Schedulazione disattivata')
     scheduleFor.value = null
   } catch (e) {
@@ -121,7 +105,7 @@ async function saveSchedule(cron: string) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Database :size="18" /> Datasources <span class="muted count">{{ list.length }}</span></h2>
+      <h2><Database :size="18" /> Datasources <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Search datasources…" /></span>
       </div>
@@ -129,8 +113,8 @@ async function saveSchedule(cron: string) {
 
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="4" />
-    <p v-else-if="!filtered.length" class="muted">
-      {{ list.length ? 'No datasource matches the search.' : 'No datasources yet: publish a flow output or import from a database.' }}
+    <p v-else-if="!items.length" class="muted">
+      {{ q ? 'No datasource matches the search.' : 'No datasources yet: publish a flow output or import from a database.' }}
     </p>
 
     <table v-else class="list">
@@ -138,7 +122,7 @@ async function saveSchedule(cron: string) {
         <tr><th>Name</th><th>Folder</th><th>Rows</th><th>Updated</th><th /></tr>
       </thead>
       <tbody>
-        <tr v-for="d in filtered" :key="d.id">
+        <tr v-for="d in items" :key="d.id">
           <td>
             <span class="rowlink" :title="d.source_ref ?? ''">
               <Database :size="14" /> {{ d.name }}
@@ -182,6 +166,8 @@ async function saveSchedule(cron: string) {
         </tr>
       </tbody>
     </table>
+
+    <Pager :offset="offset" :page-size="pageSize" :total="total" :loading="loading" @prev="prev" @next="next" />
 
     <ScheduleDialog
       :open="!!scheduleFor"

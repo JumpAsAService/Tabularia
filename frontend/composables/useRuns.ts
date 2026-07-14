@@ -1,5 +1,6 @@
 // Esecuzioni dei flussi (run history) via gateway. Il lancio richiede la
 // capability RUN sul progetto del flusso; la cronologia basta VIEW.
+import type { Page } from '~/composables/useApi'
 
 export interface RunInfo {
   id: number
@@ -61,14 +62,15 @@ export function useRuns() {
 
     get: (id: number) => apiFetch<RunInfo>(`/runs/${id}`),
 
-    // ricerca globale delle esecuzioni (nei progetti leggibili): filtro per stato
-    // e ricerca testuale sul motivo dell'errore
-    search: (params: { status?: string; q?: string; limit?: number }) => {
+    // ricerca globale PAGINATA delle esecuzioni (nei progetti leggibili): filtro
+    // per stato e ricerca testuale sul motivo, sull'intero dataset
+    search: (params: { status?: string; q?: string; limit?: number; offset?: number }) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
       if (params.q) qs.set('q', params.q)
       qs.set('limit', String(params.limit ?? 50))
-      return apiFetch<RunInfo[]>(`/runs?${qs.toString()}`)
+      qs.set('offset', String(params.offset ?? 0))
+      return apiFetch<Page<RunInfo>>(`/runs?${qs.toString()}`)
     },
   }
 }

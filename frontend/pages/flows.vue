@@ -1,44 +1,28 @@
 <script setup lang="ts">
 // Tutti i flussi nelle cartelle leggibili, con ricerca. Da qui si apre l'editor.
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { Workflow, Search, Trash2, Folder, Plus, CalendarClock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
-import { skeletonPad } from '~/composables/useSkeleton'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
+import { usePagedList } from '~/composables/usePagedList'
 
 const flowsApi = useFlows()
 const projectsApi = useProjects()
 const toast = useToast()
 
-const flows = ref<FlowSummary[]>([])
+// ricerca server-side (nome/descrizione, su tutto il dataset) + paginazione
+const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
+  usePagedList<FlowSummary>((p) => flowsApi.listPaged(p))
+
 const folderName = ref<Record<number, string>>({})
-const q = ref('')
-const loading = ref(true)
-const error = ref('')
-
 onMounted(async () => {
-  const t0 = performance.now()
   try {
-    const [fl, projects] = await Promise.all([flowsApi.list(), projectsApi.list()])
-    flows.value = fl
+    const projects = await projectsApi.list()
     folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
-  } catch (e) {
-    error.value = errMessage(e)
-  } finally {
-    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
-    loading.value = false
+  } catch {
+    /* i nomi cartella sono accessori */
   }
-})
-
-const filtered = computed(() => {
-  const needle = q.value.trim().toLowerCase()
-  if (!needle) return flows.value
-  return flows.value.filter(
-    (f) =>
-      f.name.toLowerCase().includes(needle) ||
-      (folderName.value[f.project_id] ?? '').toLowerCase().includes(needle),
-  )
 })
 
 function fmtDate(iso: string | null): string {
@@ -52,8 +36,8 @@ async function deleteFlow(f: FlowSummary) {
   if (!confirm(`Delete flow "${f.name}"?`)) return
   try {
     await flowsApi.remove(f.id)
-    flows.value = flows.value.filter((x) => x.id !== f.id)
     toast.success(`Flow "${f.name}" deleted`)
+    await load() // ricarica la pagina (aggiorna totale/finestra)
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -68,7 +52,7 @@ async function saveSchedule(cron: string) {
   savingSchedule.value = true
   try {
     const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim())
-    flows.value = flows.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+    items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
     toast.success(cron.trim() ? `Esecuzione schedulata: ${updated.run_schedule}` : 'Schedulazione disattivata')
     scheduleFor.value = null
   } catch (e) {
@@ -83,7 +67,7 @@ async function saveSchedule(cron: string) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Workflow :size="18" /> Flows <span class="muted count">{{ flows.length }}</span></h2>
+      <h2><Workflow :size="18" /> Flows <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Search flows…" /></span>
         <NuxtLink to="/editor" class="btn-link"><Plus :size="14" /> New flow</NuxtLink>
@@ -92,8 +76,8 @@ async function saveSchedule(cron: string) {
 
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="4" />
-    <p v-else-if="!filtered.length" class="muted">
-      {{ flows.length ? 'No flow matches the search.' : 'No flows yet: create one from a folder or with New flow.' }}
+    <p v-else-if="!items.length" class="muted">
+      {{ q ? 'No flow matches the search.' : 'No flows yet: create one from a folder or with New flow.' }}
     </p>
 
     <table v-else class="list">
@@ -101,7 +85,7 @@ async function saveSchedule(cron: string) {
         <tr><th>Name</th><th>Folder</th><th>Last modified</th><th /></tr>
       </thead>
       <tbody>
-        <tr v-for="f in filtered" :key="f.id">
+        <tr v-for="f in items" :key="f.id">
           <td>
             <NuxtLink :to="`/editor?flow=${f.id}`" class="rowlink">
               <Workflow :size="14" /> {{ f.name }}
@@ -126,6 +110,8 @@ async function saveSchedule(cron: string) {
         </tr>
       </tbody>
     </table>
+
+    <Pager :offset="offset" :page-size="pageSize" :total="total" :loading="loading" @prev="prev" @next="next" />
 
     <ScheduleDialog
       :open="!!scheduleFor"

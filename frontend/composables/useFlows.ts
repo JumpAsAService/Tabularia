@@ -1,4 +1,5 @@
 // Flussi salvati (DAG dell'editor) dentro i progetti. Via gateway autenticato.
+import { pagedQuery, type Page } from '~/composables/useApi'
 
 export interface FlowSummary {
   id: number
@@ -19,8 +20,12 @@ export function useFlows() {
   const { apiFetch } = useApiClient()
 
   return {
-    // tutti i flussi nei progetti leggibili (pagina globale Flows)
+    // tutti i flussi nei progetti leggibili (per i picker; non paginato)
     list: () => apiFetch<FlowSummary[]>('/flows'),
+
+    // pagina globale: ricerca server-side (sull'intero dataset) + paginazione
+    listPaged: (p: { q?: string; limit: number; offset: number }) =>
+      apiFetch<Page<FlowSummary>>(`/flows/search?${pagedQuery(p)}`),
 
     listByProject: (projectId: number) =>
       apiFetch<FlowSummary[]>(`/projects/${projectId}/flows`),

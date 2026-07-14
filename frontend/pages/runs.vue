@@ -1,46 +1,23 @@
 <script setup lang="ts">
 // Esecuzioni: ricerca globale dei run nei progetti leggibili, per capire perché
-// i flussi falliscono. Filtro per stato + ricerca testuale sul motivo; click su
-// una riga per il traceback completo.
-import { onMounted, ref, watch } from 'vue'
-import {
-  History, Search, RefreshCw, LoaderCircle, ChevronRight, Workflow, Database,
-} from 'lucide-vue-next'
-import { errMessage } from '~/composables/useApi'
-import { skeletonPad } from '~/composables/useSkeleton'
+// i flussi falliscono. Filtro per stato + ricerca testuale sul motivo (server-side,
+// su tutto il dataset) + paginazione; click su una riga per il traceback completo.
+import { ref, watch } from 'vue'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
+import { usePagedList } from '~/composables/usePagedList'
 
 const runsApi = useRuns()
-
-const q = ref('')
 const status = ref<'FAILURE' | 'SUCCESS' | ''>('FAILURE') // di default gli errori
-const list = ref<RunInfo[]>([])
-const loading = ref(true)
-const error = ref('')
 const expanded = ref<number | null>(null)
 
-async function load() {
-  loading.value = true
-  const t0 = performance.now()
-  try {
-    list.value = await runsApi.search({ status: status.value || undefined, q: q.value.trim() || undefined, limit: 100 })
-    error.value = ''
-  } catch (e) {
-    error.value = errMessage(e)
-  } finally {
-    await skeletonPad(t0)
-    loading.value = false
-  }
-}
-
-onMounted(load)
-
-// ricarica alla pressione di stato; per il testo aspetta una piccola pausa
-watch(status, load)
-let deb: ReturnType<typeof setTimeout> | null = null
-watch(q, () => {
-  if (deb) clearTimeout(deb)
-  deb = setTimeout(load, 350)
+const { q, items, total, offset, pageSize, loading, error, load, next, prev } = usePagedList<RunInfo>(
+  (p) => runsApi.search({ ...p, status: status.value || undefined }),
+)
+// lo stato è un filtro extra: al cambio torna alla prima pagina e ricarica
+watch(status, () => {
+  offset.value = 0
+  load()
 })
 
 function toggle(id: number) {
@@ -49,8 +26,7 @@ function toggle(id: number) {
 
 function fmtDate(s: string | null): string {
   if (!s) return '—'
-  const d = new Date(s)
-  return d.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+  return new Date(s).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
@@ -63,7 +39,7 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><History :size="18" /> Esecuzioni <span class="muted count">{{ list.length }}</span></h2>
+      <h2><History :size="18" /> Esecuzioni <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
         <div class="segmented">
           <button
@@ -83,12 +59,12 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
 
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="5" />
-    <p v-else-if="!list.length" class="muted">
+    <p v-else-if="!items.length" class="muted">
       Nessuna esecuzione{{ status === 'FAILURE' ? ' fallita' : '' }}{{ q ? ' per questa ricerca' : '' }}.
     </p>
 
     <div v-else class="runs">
-      <div v-for="r in list" :key="r.id" class="run" :class="{ open: expanded === r.id }">
+      <div v-for="r in items" :key="r.id" class="run" :class="{ open: expanded === r.id }">
         <button class="run-row" @click="toggle(r.id)">
           <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
           <span class="stpill" :class="r.status.toLowerCase()">{{ r.status }}</span>
@@ -106,6 +82,8 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
         </div>
       </div>
     </div>
+
+    <Pager :offset="offset" :page-size="pageSize" :total="total" :loading="loading" @prev="prev" @next="next" />
   </AppShell>
 </template>
 

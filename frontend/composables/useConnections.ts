@@ -1,5 +1,6 @@
 // Connessioni a database esterni. Tutte le operazioni richiedono la capability
 // CONNECT sulla cartella della connessione; la password non esce mai dalle API.
+import { pagedQuery, type Page } from '~/composables/useApi'
 
 export interface ConnectionInfo {
   id: number
@@ -45,6 +46,10 @@ export function useConnections() {
   return {
     // tutte quelle usabili dall'utente (per il picker delle sorgenti DB)
     list: () => apiFetch<ConnectionInfo[]>('/connections'),
+
+    // pagina globale: ricerca server-side (sull'intero dataset) + paginazione
+    listPaged: (p: { q?: string; limit: number; offset: number }) =>
+      apiFetch<Page<ConnectionInfo>>(`/connections/search?${pagedQuery(p)}`),
 
     listByProject: (projectId: number) =>
       apiFetch<ConnectionInfo[]>(`/projects/${projectId}/connections`),

@@ -96,6 +96,21 @@ export function useApi() {
   }
 }
 
+// Una pagina di risultati dalle liste paginate (ricerca server-side).
+export interface Page<T> {
+  items: T[]
+  total: number
+}
+
+// Query-string per gli endpoint paginati /…/search
+export function pagedQuery(p: { q?: string; limit: number; offset: number }): string {
+  const qs = new URLSearchParams()
+  if (p.q) qs.set('q', p.q)
+  qs.set('limit', String(p.limit))
+  qs.set('offset', String(p.offset))
+  return qs.toString()
+}
+
 // Estrae un messaggio d'errore leggibile da un errore di $fetch.
 export function errMessage(e: any): string {
   return e?.data?.detail ?? e?.data?.message ?? e?.message ?? 'Errore sconosciuto'

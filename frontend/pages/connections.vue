@@ -2,55 +2,33 @@
 // Tutte le connessioni usabili (capability CONNECT): test in-place, modifica,
 // eliminazione. La creazione resta nella cartella (Explore), dove la
 // connessione vive e prende i permessi.
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { Plug, Search, Trash2, Folder, Pencil, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
-import { skeletonPad } from '~/composables/useSkeleton'
 import {
   useConnections,
   type ConnectionInfo,
   type ConnectionDraft,
 } from '~/composables/useConnections'
 import { useProjects } from '~/composables/useProjects'
+import { usePagedList } from '~/composables/usePagedList'
 
 const connApi = useConnections()
 const projectsApi = useProjects()
 const toast = useToast()
 
-const list = ref<ConnectionInfo[]>([])
+// ricerca server-side (nome/host/database, su tutto il dataset) + paginazione
+const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
+  usePagedList<ConnectionInfo>((p) => connApi.listPaged(p))
+
 const folderName = ref<Record<number, string>>({})
-const q = ref('')
-const loading = ref(true)
-const error = ref('')
-
-async function load() {
-  const [conns, projects] = await Promise.all([connApi.list(), projectsApi.list()])
-  list.value = conns
-  folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
-}
-
 onMounted(async () => {
-  const t0 = performance.now()
   try {
-    await load()
-  } catch (e) {
-    error.value = errMessage(e)
-  } finally {
-    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
-    loading.value = false
+    const projects = await projectsApi.list()
+    folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
+  } catch {
+    /* i nomi cartella sono accessori */
   }
-})
-
-const filtered = computed(() => {
-  const needle = q.value.trim().toLowerCase()
-  if (!needle) return list.value
-  return list.value.filter(
-    (c) =>
-      c.name.toLowerCase().includes(needle) ||
-      c.host.toLowerCase().includes(needle) ||
-      c.db_type.toLowerCase().includes(needle) ||
-      (folderName.value[c.project_id] ?? '').toLowerCase().includes(needle),
-  )
 })
 
 // ── Test in-place ────────────────────────────────────────────────────────────
@@ -93,8 +71,8 @@ async function remove(c: ConnectionInfo) {
   if (!confirm(`Delete connection "${c.name}"?`)) return
   try {
     await connApi.remove(c.id)
-    list.value = list.value.filter((x) => x.id !== c.id)
     toast.success(`Connection "${c.name}" deleted`)
+    await load() // ricarica la pagina (aggiorna totale/finestra)
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -104,7 +82,7 @@ async function remove(c: ConnectionInfo) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Plug :size="18" /> Connections <span class="muted count">{{ list.length }}</span></h2>
+      <h2><Plug :size="18" /> Connections <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Search connections…" /></span>
       </div>
@@ -112,8 +90,8 @@ async function remove(c: ConnectionInfo) {
 
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="4" />
-    <p v-else-if="!filtered.length" class="muted">
-      {{ list.length ? 'No connection matches the search.' : 'No usable connections: create one from a folder where you have the CONNECT permission.' }}
+    <p v-else-if="!items.length" class="muted">
+      {{ q ? 'No connection matches the search.' : 'No usable connections: create one from a folder where you have the CONNECT permission.' }}
     </p>
 
     <table v-else class="list">
@@ -121,7 +99,7 @@ async function remove(c: ConnectionInfo) {
         <tr><th>Name</th><th>Type</th><th>Host / database</th><th>Folder</th><th /></tr>
       </thead>
       <tbody>
-        <tr v-for="c in filtered" :key="c.id">
+        <tr v-for="c in items" :key="c.id">
           <td>
             <span class="rowlink"><Plug :size="14" /> {{ c.name }}</span>
             <div v-if="c.description" class="muted desc">{{ c.description }}</div>
@@ -144,6 +122,8 @@ async function remove(c: ConnectionInfo) {
         </tr>
       </tbody>
     </table>
+
+    <Pager :offset="offset" :page-size="pageSize" :total="total" :loading="loading" @prev="prev" @next="next" />
 
     <ConnectionDialog
       :open="!!editing"
