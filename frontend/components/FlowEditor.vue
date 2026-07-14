@@ -246,9 +246,30 @@ onMounted(async () => {
 
 // ── Catalogo datasources (per il picker del nodo sorgente) ────────────────
 const datasources = ref<DatasourceInfo[]>([])
+
+// Riaggancia le sorgenti-datasource già sul canvas allo snapshot CORRENTE del
+// catalogo: la chiave nel nodo può essere STANTIA (un refresh/overwrite sostituisce
+// lo snapshot e cancella il vecchio blob) e la preview la userebbe → 404. Lo fa
+// per id, come lo scheduler lato server. Copre anche le sorgenti annidate
+// (join/foreach): sono tutte nodi 'source'. Al PRIMO caricamento il canvas è
+// vuoto (no-op) e ci pensa loadFlow; poi ogni refresh del catalogo ri-sincronizza.
+function syncSourceKeys() {
+  let changed = false
+  for (const n of getNodes.value) {
+    if (n.type !== 'source' || n.data?.datasourceId == null) continue
+    const ds = datasources.value.find((d) => d.id === n.data.datasourceId)
+    if (ds && ds.key && (n.data.parquetKey !== ds.key || n.data.bucket !== ds.bucket)) {
+      updateNodeData(n.id, { bucket: ds.bucket, parquetKey: ds.key, rows: ds.rows, columns: ds.columns })
+      changed = true
+    }
+  }
+  if (changed) invalidateColumns() // le catene a valle vanno ricalcolate sul nuovo snapshot
+}
+
 async function refreshDatasources() {
   try {
     datasources.value = await dsApi.list()
+    syncSourceKeys()
   } catch {
     datasources.value = []
   }
