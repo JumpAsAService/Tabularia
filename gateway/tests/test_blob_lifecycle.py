@@ -88,7 +88,8 @@ async def test_finalize_ingest_schedules_old_snapshot_not_immediate(session, fak
     run = make_run(session, kind="ingest", datasource_id=ds.id, output_key="datasets/new.parquet")
     result = {"bucket": "data-prep", "rows_written": 42, "columns": []}
 
-    await _finalize_ingest(session, run, result)
+    _finalize_ingest(session, run, result)
+    session.commit()
 
     session.refresh(ds)
     assert ds.key == "datasets/new.parquet"  # swappata al nuovo snapshot
@@ -98,22 +99,23 @@ async def test_finalize_ingest_schedules_old_snapshot_not_immediate(session, fak
     assert len(pend) == 1 and pend[0].key == "datasets/old.parquet"  # differito
 
 
-async def test_finalize_ingest_datasource_deleted_removes_new_orphan_now(session, fake_engine):
+async def test_finalize_ingest_datasource_deleted_defers_new_orphan(session, fake_engine):
     # datasource sparita durante il refresh: il nuovo blob è orfano SENZA lettori
-    # → cancellazione immediata, nessun differimento
+    # → comunque cancellazione differita (uniforme, resta pulito anche in retry)
     run = make_run(session, kind="ingest", datasource_id=999, output_key="datasets/new.parquet")
-    await _finalize_ingest(session, run, {"rows_written": 1})
-    assert ("data-prep", "datasets/new.parquet") in fake_engine.deleted
-    assert _pending(session) == []
+    _finalize_ingest(session, run, {"rows_written": 1})
+    session.commit()
+    assert fake_engine.deleted == []
+    assert [r.key for r in _pending(session)] == ["datasets/new.parquet"]
 
 
 # ── _publish_datasource ─────────────────────────────────────────────────────
 async def test_publish_creates_new_datasource(session, fake_engine):
     run = make_run(
-        session, kind="flow", status="SUCCESS", rows_written=5,
+        session, kind="flow", status="SUCCESS",
         publish_name="vendite", publish_project_id=1, output_key="datasets/pub.parquet",
     )
-    _publish_datasource(session, run, {"columns": [{"name": "a", "dtype": "i64"}]})
+    _publish_datasource(session, run, {"rows_written": 5, "columns": [{"name": "a", "dtype": "i64"}]})
     session.refresh(run)
     ds = session.exec(select(Datasource).where(Datasource.name == "vendite")).first()
     assert ds is not None and run.datasource_id == ds.id
@@ -126,10 +128,10 @@ async def test_publish_overwrite_replaces_in_place_and_defers_old_blob(session, 
         session, name="vendite", project_id=1, kind="flow", bucket="data-prep", key="datasets/v1.parquet"
     )
     run = make_run(
-        session, kind="flow", status="SUCCESS", rows_written=9, publish_overwrite=True,
+        session, kind="flow", status="SUCCESS", publish_overwrite=True,
         publish_name="vendite", publish_project_id=1, output_key="datasets/v2.parquet",
     )
-    _publish_datasource(session, run, {"columns": []})
+    _publish_datasource(session, run, {"rows_written": 9, "columns": []})
     session.refresh(existing)
     session.refresh(run)
     assert run.datasource_id == existing.id  # STESSO id (i flussi che la usano non si rompono)
@@ -201,3 +203,93 @@ async def test_reconcile_ingest_success_swaps_and_defers(session, fake_engine):
     assert ds.key == "datasets/s2.parquet"
     assert fake_engine.deleted == []  # vecchio snapshot differito, non cancellato subito
     assert [r.key for r in _pending(session)] == ["datasets/s1.parquet"]
+
+
+# ── F13: effetto post-claim ATOMICO e RITENTABILE ───────────────────────────
+async def test_reconcile_retries_publish_when_side_effect_fails(session, fake_engine, monkeypatch):
+    import app.routes.runs as runs_mod
+
+    run = make_run(
+        session, kind="flow", status="STARTED", task_id="t-flaky",
+        publish_name="rep", publish_project_id=1, output_key="datasets/r.parquet",
+    )
+    fake_engine.set_task("t-flaky", "SUCCESS", result={"rows_written": 3, "columns": []})
+
+    calls = {"n": 0}
+    real = runs_mod._publish_datasource
+
+    def flaky(sess, r, res):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("boom")  # l'effetto fallisce la prima volta
+        return real(sess, r, res)
+
+    monkeypatch.setattr(runs_mod, "_publish_datasource", flaky)
+
+    # 1º giro: l'effetto fallisce → ROLLBACK → il run NON è terminale, niente datasource
+    await _reconcile(session, run)
+    session.refresh(run)
+    assert run.status != "SUCCESS"
+    assert session.exec(select(Datasource).where(Datasource.name == "rep")).first() is None
+
+    # 2º giro: l'effetto riesce → SUCCESS + datasource pubblicata (ritentato)
+    await _reconcile(session, run)
+    session.refresh(run)
+    assert run.status == "SUCCESS"
+    assert session.exec(select(Datasource).where(Datasource.name == "rep")).first() is not None
+
+
+async def test_reconcile_ingest_retries_when_finalize_fails(session, fake_engine, monkeypatch):
+    import app.routes.runs as runs_mod
+
+    ds = make_datasource(session, name="live2", kind="database", key="datasets/s1.parquet")
+    run = make_run(session, kind="ingest", status="STARTED", task_id="t-ing2",
+                   datasource_id=ds.id, output_key="datasets/s2.parquet")
+    fake_engine.set_task("t-ing2", "SUCCESS", result={"rows_written": 1, "columns": []})
+
+    calls = {"n": 0}
+    real = runs_mod._finalize_ingest
+
+    def flaky(s, r, res):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("boom")
+        return real(s, r, res)
+
+    monkeypatch.setattr(runs_mod, "_finalize_ingest", flaky)
+
+    await _reconcile(session, run)
+    session.refresh(ds)
+    session.refresh(run)
+    assert ds.key == "datasets/s1.parquet"  # swap NON avvenuto (rollback)
+    assert run.status != "SUCCESS"
+
+    await _reconcile(session, run)
+    session.refresh(ds)
+    assert ds.key == "datasets/s2.parquet"  # swappata al retry
+
+
+async def test_reconcile_failure_records_error_and_no_side_effect(session, fake_engine):
+    run = make_run(
+        session, kind="flow", status="STARTED", task_id="t-fail",
+        publish_name="nope", publish_project_id=1, output_key="datasets/x.parquet",
+    )
+    fake_engine.set_task("t-fail", "FAILURE", error="task esploso")
+
+    await _reconcile(session, run)
+    session.refresh(run)
+    assert run.status == "FAILURE"
+    assert "esploso" in (run.error or "")
+    assert session.exec(select(Datasource).where(Datasource.name == "nope")).first() is None
+
+
+async def test_reconcile_ingest_failure_does_not_swap(session, fake_engine):
+    ds = make_datasource(session, name="keep", kind="database", key="datasets/orig.parquet")
+    run = make_run(session, kind="ingest", status="STARTED", task_id="t-if",
+                   datasource_id=ds.id, output_key="datasets/nope.parquet")
+    fake_engine.set_task("t-if", "FAILURE", error="ingest ko")
+
+    await _reconcile(session, run)
+    session.refresh(ds)
+    assert ds.key == "datasets/orig.parquet"  # snapshot invariato
+    assert _pending(session) == []

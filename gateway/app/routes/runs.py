@@ -326,7 +326,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
         session.refresh(run)
         return run
 
-    # claim atomico della transizione terminale
+    # claim atomico della transizione terminale + effetto collaterale (swap dello
+    # snapshot / publish della datasource) nella STESSA transazione: un solo commit
+    # in fondo. Se l'effetto fallisce si fa rollback e il run NON diventa terminale,
+    # così il prossimo _reconcile ritenta — invece di restare SUCCESS con lo swap/
+    # publish perso per sempre.
     values: dict = {"status": new_status, "finished_at": datetime.now(timezone.utc)}
     if new_status == "SUCCESS":
         values["rows_written"] = result.get("rows_written")
@@ -335,44 +339,43 @@ async def _reconcile(session: Session, run: Run) -> Run:
     claimed = session.exec(
         update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**values)
     )
-    session.commit()
-    session.refresh(run)
     if claimed.rowcount == 0:
-        return run  # un'altra richiesta ha già chiuso questo run
+        session.rollback()  # un'altra richiesta ha già chiuso questo run
+        session.refresh(run)
+        return run
 
-    if new_status == "SUCCESS" and run.kind == "ingest":
-        await _finalize_ingest(session, run, result)
-    elif (
-        new_status == "SUCCESS"
-        and run.publish_name
-        and run.publish_project_id
-        and run.datasource_id is None
-    ):
-        _publish_datasource(session, run, result)
+    try:
+        if new_status == "SUCCESS" and run.kind == "ingest":
+            _finalize_ingest(session, run, result)
+        elif (
+            new_status == "SUCCESS"
+            and run.publish_name
+            and run.publish_project_id
+            and run.datasource_id is None
+        ):
+            _publish_datasource(session, run, result)
+        session.commit()  # claim + effetto: atomici
+    except Exception:
+        session.rollback()  # il run resta non terminale → verrà ritentato al prossimo giro
+        logger.exception("run %s: effetto post-claim fallito, sarà ritentato", run.id)
+        session.refresh(run)
+        return run
+    session.refresh(run)
     return run
 
 
-async def _delete_blob(bucket: str, key: str) -> None:
-    """Cleanup best-effort di un blob via engine: un orfano è solo spazio perso."""
-    if not key:
-        return
-    client = get_engine_client()
-    try:
-        resp = await client.delete("/files/object", params={"bucket": bucket, "key": key})
-        if resp.status_code >= 400:
-            logger.warning("blob %s/%s non eliminato: %s", bucket, key, resp.text[:200])
-    except Exception as e:
-        logger.warning("blob %s/%s non eliminato (engine irraggiungibile): %s", bucket, key, e)
-
-
-async def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
+def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     """Il refresh è riuscito: swap dello snapshot (solo il vincitore del claim
-    arriva qui). La datasource passa a puntare al nuovo parquet; il precedente
-    viene eliminato best-effort."""
+    arriva qui). NON committa — lo fa `_reconcile`, così lo swap e il claim del
+    run sono nella stessa transazione (o entrambi, o nessuno). Lo snapshot
+    precedente è marcato per la cancellazione DIFFERITA."""
     ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
     if ds is None:
-        # datasource eliminata durante il refresh: il nuovo blob resterebbe orfano
-        await _delete_blob(run.output_bucket, run.output_key)
+        # datasource sparita durante il refresh: il nuovo blob è orfano (nessun
+        # lettore lo referenzia) → cancellazione differita, uniforme.
+        schedule_blob_deletion(
+            session, run.output_bucket, run.output_key, reason="datasource sparita durante il refresh"
+        )
         return
 
     old_bucket, old_key = ds.bucket, ds.key
@@ -385,13 +388,12 @@ async def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     ds.updated_at = now
     session.add(ds)
     # lo snapshot precedente può essere ancora in lettura da un run/preview che ne
-    # ha già risolto la chiave: cancellazione DIFFERITA (grace), nella stessa
-    # transazione dello swap così o si applicano insieme o niente.
+    # ha già risolto la chiave: cancellazione DIFFERITA (grace).
     if old_key and old_key != ds.key:
         schedule_blob_deletion(
             session, old_bucket, old_key, reason=f"snapshot datasource {ds.id} superato"
         )
-    session.commit()
+    session.flush()
 
 
 def _publish_datasource(session: Session, run: Run, result: dict) -> None:
@@ -415,7 +417,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             old_bucket, old_key = existing.bucket, existing.key
             existing.bucket = run.output_bucket
             existing.key = run.output_key
-            existing.rows = run.rows_written
+            existing.rows = result.get("rows_written")
             existing.columns = columns
             existing.description = run.publish_description
             existing.flow_id = run.flow_id
@@ -429,8 +431,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
                 schedule_blob_deletion(
                     session, old_bucket, old_key, reason=f"datasource {existing.id} sovrascritta"
                 )
-            session.commit()
-            session.refresh(run)
+            session.flush()  # NON committa: lo fa _reconcile (atomico col claim)
             return
 
     def _make(name: str) -> Datasource:
@@ -441,7 +442,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             owner_id=run.launched_by,
             bucket=run.output_bucket,
             key=run.output_key,
-            rows=run.rows_written,
+            rows=result.get("rows_written"),
             columns=columns,
             kind="flow",
             flow_id=run.flow_id,
@@ -452,16 +453,18 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
         first = f"{run.publish_name} ({run.task_id[:8]})"  # conflitto sopravvenuto
     for candidate in dict.fromkeys([first, f"{run.publish_name} ({run.task_id[:8]})"]):
         ds = _make(candidate)
-        session.add(ds)
         try:
-            session.commit()
+            # SAVEPOINT: isola il tentativo. Su conflitto UNIQUE si annulla SOLO il
+            # savepoint (non l'intera transazione, che porta anche il claim) e si
+            # prova il nome successivo.
+            with session.begin_nested():
+                session.add(ds)
+                session.flush()  # emette l'INSERT ora → IntegrityError qui se preso
         except IntegrityError:
-            session.rollback()
             continue
         run.datasource_id = ds.id
         session.add(run)
-        session.commit()
-        session.refresh(run)
+        session.flush()  # NON committa: lo fa _reconcile (atomico col claim)
         return
     # esauriti i tentativi: l'output non è pubblicato → il suo parquet è orfano.
     # Lo si marca per la cancellazione differita invece di lasciarlo perso.
@@ -473,7 +476,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
     schedule_blob_deletion(
         session, run.output_bucket, run.output_key, reason=f"publish run {run.id} fallito"
     )
-    session.commit()
+    session.flush()
 
 
 @router.get("/flows/{flow_id}/runs", response_model=list[RunOut])
