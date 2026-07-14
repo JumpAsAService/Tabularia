@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, update
+from sqlalchemy import func, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -29,7 +29,7 @@ from app.models import Connection, Datasource, Flow, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.connections import engine_connection_payload
-from app.schemas.models import RunCreate, RunOut, RunSearchOut
+from app.schemas.models import Page, RunCreate, RunOut, RunSearchOut
 from app.services.blobgc import schedule_blob_deletion
 
 logger = logging.getLogger(__name__)
@@ -530,26 +530,23 @@ async def get_run(
     return await _reconcile(session, run)
 
 
-@router.get("/runs", response_model=list[RunSearchOut])
+@router.get("/runs", response_model=Page[RunSearchOut])
 def search_runs(
     status: str | None = Query(None, description="filtra per stato, es. FAILURE"),
-    q: str | None = Query(None, description="testo cercato nel motivo dell'errore"),
+    q: str | None = Query(None, description="testo cercato nel motivo dell'errore, sull'INTERO dataset"),
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Ricerca globale delle esecuzioni nei progetti LEGGIBILI dell'utente (tutti
-    se superuser), con filtro per stato e ricerca testuale su error/error_detail —
-    per capire perché i flussi falliscono. Sola lettura: mostra lo stato storico
-    registrato, NON riconcilia (una ricerca non deve avere effetti collaterali)."""
-    stmt = (
-        select(Run, Flow, Datasource)
-        .join(Flow, Run.flow_id == Flow.id, isouter=True)
-        .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
-    )
+    """Ricerca globale PAGINATA delle esecuzioni nei progetti LEGGIBILI dell'utente
+    (tutti se superuser), con filtro per stato e ricerca testuale su error/
+    error_detail (sul dataset intero, non solo sulla pagina). Sola lettura: mostra
+    lo stato storico, NON riconcilia (una ricerca non deve avere effetti)."""
+    conds = []
     if not user.is_superuser:
         readable = perm_service.readable_project_ids(session, user)
-        stmt = stmt.where(
+        conds.append(
             or_(
                 Flow.project_id.in_(readable),
                 Datasource.project_id.in_(readable),
@@ -557,16 +554,30 @@ def search_runs(
             )
         )
     if status:
-        stmt = stmt.where(Run.status == status)
+        conds.append(Run.status == status)
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(or_(Run.error.ilike(like), Run.error_detail.ilike(like)))
-    stmt = stmt.order_by(Run.started_at.desc()).limit(limit)
+        conds.append(or_(Run.error.ilike(like), Run.error_detail.ilike(like)))
+
+    def _with_joins(stmt):
+        return stmt.join(Flow, Run.flow_id == Flow.id, isouter=True).join(
+            Datasource, Run.datasource_id == Datasource.id, isouter=True
+        )
+
+    items_stmt = _with_joins(select(Run, Flow, Datasource))
+    count_stmt = _with_joins(select(func.count()).select_from(Run))
+    for c in conds:
+        items_stmt = items_stmt.where(c)
+        count_stmt = count_stmt.where(c)
+    total = session.exec(count_stmt).one()
+    rows = session.exec(
+        items_stmt.order_by(Run.started_at.desc()).limit(limit).offset(offset)
+    ).all()
 
     out: list[RunSearchOut] = []
-    for run, flow, ds in session.exec(stmt).all():
+    for run, flow, ds in rows:
         item = RunSearchOut.model_validate(run, from_attributes=True)
         item.flow_name = flow.name if flow else None
         item.source_name = ds.name if ds else None
         out.append(item)
-    return out
+    return Page(items=out, total=total)

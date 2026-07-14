@@ -65,35 +65,47 @@ def _mk_scenario(session):
 
 async def test_search_scopes_to_readable_projects(session, fake_engine):
     user, p1, p2, f1, f2, r1, r2 = _mk_scenario(session)
-    res = search_runs(status=None, q=None, limit=50, user=user, session=session)
-    names = {x.flow_name for x in res}
-    assert names == {"flow-uno"}  # solo il progetto leggibile, non p2
+    res = search_runs(status=None, q=None, limit=50, offset=0, user=user, session=session)
+    assert {x.flow_name for x in res.items} == {"flow-uno"}  # solo il leggibile, non p2
+    assert res.total == 1
 
 
 async def test_search_superuser_sees_all(session, fake_engine):
     _mk_scenario(session)
     admin = make_user(session, email="admin@x.local", is_superuser=True)
-    res = search_runs(status=None, q=None, limit=50, user=admin, session=session)
-    assert {x.flow_name for x in res} == {"flow-uno", "flow-due"}
+    res = search_runs(status=None, q=None, limit=50, offset=0, user=admin, session=session)
+    assert {x.flow_name for x in res.items} == {"flow-uno", "flow-due"}
 
 
 async def test_search_filters_by_status(session, fake_engine):
     user, p1, *_ = _mk_scenario(session)
     make_run(session, kind="flow", status="SUCCESS", flow_id=make_flow(session, project_id=p1.id).id, task_id="c")
-    res = search_runs(status="FAILURE", q=None, limit=50, user=user, session=session)
-    assert res and all(x.status == "FAILURE" for x in res)
+    res = search_runs(status="FAILURE", q=None, limit=50, offset=0, user=user, session=session)
+    assert res.items and all(x.status == "FAILURE" for x in res.items)
 
 
 async def test_search_filters_by_query_text(session, fake_engine):
     user, *_ = _mk_scenario(session)
-    res = search_runs(status=None, q="ColumnNotFound", user=user, session=session, limit=50)
-    assert len(res) == 1 and "ColumnNotFound" in res[0].error
+    res = search_runs(status=None, q="ColumnNotFound", offset=0, user=user, session=session, limit=50)
+    assert res.total == 1 and "ColumnNotFound" in res.items[0].error
+
+
+async def test_search_paginates_with_total(session, fake_engine):
+    # 5 run falliti in un progetto leggibile: la pagina è limitata ma total è il totale
+    admin = make_user(session, email="pager@x.local", is_superuser=True)
+    f = make_flow(session, name="f", project_id=1)
+    for i in range(5):
+        make_run(session, kind="flow", status="FAILURE", flow_id=f.id, task_id=f"p{i}", error=f"err {i}")
+    page1 = search_runs(status="FAILURE", q=None, limit=2, offset=0, user=admin, session=session)
+    page3 = search_runs(status="FAILURE", q=None, limit=2, offset=4, user=admin, session=session)
+    assert page1.total == 5 and len(page1.items) == 2
+    assert len(page3.items) == 1  # ultima pagina
 
 
 async def test_search_includes_flow_and_source_names(session, fake_engine):
     admin = make_user(session, email="a2@x.local", is_superuser=True)
     ds = make_datasource(session, name="ordini", kind="database")
     make_run(session, kind="ingest", status="FAILURE", datasource_id=ds.id, task_id="d", error="boom")
-    res = search_runs(status="FAILURE", q=None, limit=50, user=admin, session=session)
-    ingest = next(x for x in res if x.kind == "ingest")
+    res = search_runs(status="FAILURE", q=None, limit=50, offset=0, user=admin, session=session)
+    ingest = next(x for x in res.items if x.kind == "ingest")
     assert ingest.source_name == "ordini"

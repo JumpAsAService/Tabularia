@@ -8,7 +8,8 @@ Permessi (ereditati dall'albero come sempre):
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.db.session import get_session
@@ -16,7 +17,8 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Flow, Project, User
 from app.models.permission import Capability
-from app.schemas.models import FlowOut, FlowDetail, FlowCreate, FlowScheduleUpdate, FlowUpdate
+from app.schemas.models import FlowOut, FlowDetail, FlowCreate, FlowScheduleUpdate, FlowUpdate, Page
+from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
@@ -65,6 +67,28 @@ def list_all_flows(user: User = Depends(get_current_user), session: Session = De
     return session.exec(
         select(Flow).where(Flow.project_id.in_(readable)).order_by(Flow.name)
     ).all()
+
+
+# NB: registrato PRIMA di /flows/{flow_id} così "search" non è preso per un id
+@router.get("/flows/search", response_model=Page[FlowOut])
+def search_flows(
+    q: str | None = Query(None, description="cerca su nome/descrizione, sull'INTERO dataset"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Flussi nei progetti leggibili, PAGINATI, con ricerca server-side sul
+    dataset intero. Per la pagina globale Flows."""
+    readable = perm_service.readable_project_ids(session, user)
+    if not readable:
+        return Page(items=[], total=0)
+    base = select(Flow).where(Flow.project_id.in_(readable))
+    if q:
+        like = f"%{q}%"
+        base = base.where(or_(Flow.name.ilike(like), Flow.description.ilike(like)))
+    items, total = paginate(session, base, Flow.name, limit, offset)
+    return Page(items=items, total=total)
 
 
 def _get_flow(session: Session, flow_id: int) -> Flow:

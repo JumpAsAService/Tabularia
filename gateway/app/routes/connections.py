@@ -18,7 +18,8 @@ l'engine viaggia ancora cifrata (`password_encrypted`, stessa chiave).
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.crypto import encrypt_secret
@@ -28,7 +29,8 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, User
 from app.models.permission import Capability
-from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate
+from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
+from app.services.pagination import paginate
 from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
@@ -109,6 +111,29 @@ def list_all_connections(user: User = Depends(get_current_user), session: Sessio
         select(Connection).where(Connection.project_id.in_(connectable)).order_by(Connection.name)
     ).all()
     return [_to_out(c) for c in rows]
+
+
+@router.get("/connections/search", response_model=Page[ConnectionOut])
+def search_connections(
+    q: str | None = Query(None, description="cerca su nome/host/database, sull'INTERO dataset"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Connessioni usabili dall'utente, PAGINATE, con ricerca server-side sul
+    dataset intero. Per la pagina globale Connections."""
+    connectable = perm_service.connectable_project_ids(session, user)
+    if not connectable:
+        return Page(items=[], total=0)
+    base = select(Connection).where(Connection.project_id.in_(connectable))
+    if q:
+        like = f"%{q}%"
+        base = base.where(
+            or_(Connection.name.ilike(like), Connection.host.ilike(like), Connection.database.ilike(like))
+        )
+    rows, total = paginate(session, base, Connection.name, limit, offset)
+    return Page(items=[_to_out(c) for c in rows], total=total)
 
 
 @router.get("/projects/{project_id}/connections", response_model=list[ConnectionOut])

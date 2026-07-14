@@ -1,10 +1,20 @@
 """Schemi di request/response del gateway. Separati dai modelli DB per non
 esporre mai `hashed_password` e per validare gli input."""
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Generic, Literal, Optional, TypeVar
 from pydantic import BaseModel, Field
 
 from app.models.permission import Capability
+
+T = TypeVar("T")
+
+
+class Page(BaseModel, Generic[T]):
+    """Una pagina di risultati: gli elementi + il totale che combacia col filtro
+    (per mostrare 'X–Y di Z' e navigare). Il filtro `q` gira SEMPRE sul dataset
+    intero lato server, non sulla pagina corrente."""
+    items: list[T]
+    total: int
 
 
 # Nota: l'email è un semplice `str`, non `EmailStr`. È uno strumento interno: gli

@@ -11,7 +11,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -26,11 +27,13 @@ from app.schemas.models import (
     DatasourceOut,
     DatasourceUpdate,
     DbDatasourceCreate,
+    Page,
     RunOut,
     ScheduleUpdate,
 )
 from app.services import permissions as perm_service
 from app.services.blobgc import schedule_blob_deletion
+from app.services.pagination import paginate
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,27 @@ def list_all_datasources(user: User = Depends(get_current_user), session: Sessio
         select(Datasource).where(Datasource.project_id.in_(readable)).order_by(Datasource.name)
     ).all()
     return [_to_out(d) for d in rows]
+
+
+@router.get("/datasources/search", response_model=Page[DatasourceOut])
+def search_datasources(
+    q: str | None = Query(None, description="cerca su nome/descrizione, sull'INTERO dataset"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Datasource nei progetti leggibili, PAGINATE, con ricerca server-side sul
+    dataset intero (non solo sulla pagina). Per la pagina globale Datasources."""
+    readable = perm_service.readable_project_ids(session, user)
+    if not readable:
+        return Page(items=[], total=0)
+    base = select(Datasource).where(Datasource.project_id.in_(readable))
+    if q:
+        like = f"%{q}%"
+        base = base.where(or_(Datasource.name.ilike(like), Datasource.description.ilike(like)))
+    rows, total = paginate(session, base, Datasource.name, limit, offset)
+    return Page(items=[_to_out(d) for d in rows], total=total)
 
 
 @router.get("/projects/{project_id}/datasources", response_model=list[DatasourceOut])
