@@ -3,17 +3,22 @@
 
 export interface RunInfo {
   id: number
+  kind?: string
   flow_id: number
   status: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | string
   launched_by: number | null
   output_key: string
   rows_written: number | null
   error: string | null
+  error_detail?: string | null // traceback completo (dettaglio del fallimento)
   publish_name: string | null
   datasource_id: number | null
   destination: string | null // JSON: {db_type, host, database, table, mode}
   started_at: string | null
   finished_at: string | null
+  // presenti solo nella ricerca globale /runs
+  flow_name?: string | null
+  source_name?: string | null
 }
 
 export interface PublishSpec {
@@ -55,5 +60,15 @@ export function useRuns() {
     listByFlow: (flowId: number) => apiFetch<RunInfo[]>(`/flows/${flowId}/runs`),
 
     get: (id: number) => apiFetch<RunInfo>(`/runs/${id}`),
+
+    // ricerca globale delle esecuzioni (nei progetti leggibili): filtro per stato
+    // e ricerca testuale sul motivo dell'errore
+    search: (params: { status?: string; q?: string; limit?: number }) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set('status', params.status)
+      if (params.q) qs.set('q', params.q)
+      qs.set('limit', String(params.limit ?? 50))
+      return apiFetch<RunInfo[]>(`/runs?${qs.toString()}`)
+    },
   }
 }

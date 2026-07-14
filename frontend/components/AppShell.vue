@@ -11,6 +11,7 @@ import {
   Plug,
   Shield,
   Activity,
+  History,
 } from 'lucide-vue-next'
 
 const { user, fetchMe, logout } = useAuth()
@@ -23,6 +24,7 @@ const links = computed(() => [
   { to: '/flows', label: 'Flows', icon: Workflow },
   { to: '/datasources', label: 'Datasources', icon: Database },
   { to: '/connections', label: 'Connections', icon: Plug },
+  { to: '/runs', label: 'Esecuzioni', icon: History },
   ...(isSuper.value
     ? [
         { to: '/monitoring', label: 'Monitoring', icon: Activity },
