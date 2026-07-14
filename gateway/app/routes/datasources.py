@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -31,6 +30,7 @@ from app.schemas.models import (
     ScheduleUpdate,
 )
 from app.services import permissions as perm_service
+from app.services.blobgc import schedule_blob_deletion
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
 logger = logging.getLogger(__name__)
@@ -288,11 +288,13 @@ async def delete_datasource(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Elimina la voce di catalogo E il blob parquet (via engine).
+    """Elimina la voce di catalogo E (in differita) il blob parquet.
 
     Ordine deliberato: PRIMA il catalogo (staccando i run che la referenziano),
-    POI il blob best-effort. Un blob orfano nello storage è innocuo (spazio);
-    una voce di catalogo che punta a un blob morto è un bug per l'utente.
+    e nella STESSA transazione si marca il blob per la cancellazione DIFFERITA:
+    un run/preview in corso potrebbe averne già risolto la chiave e stare per
+    leggerlo, quindi non lo si cancella subito (evita il 404 sotto lettura). Lo
+    sweep dello scheduler lo elimina dopo la grace.
     I flussi che la referenziano falliranno in preview con l'errore standard di
     sorgente mancante — comportamento coerente con la cancellazione dei dataset.
     """
@@ -305,14 +307,6 @@ async def delete_datasource(
         run.datasource_id = None
         session.add(run)
     session.delete(ds)
+    if key:  # datasource database mai ingerita: nessun blob da eliminare
+        schedule_blob_deletion(session, bucket, key, reason=f"datasource {ds_id} eliminata")
     session.commit()
-
-    if not key:  # datasource database mai ingerita: nessun blob da eliminare
-        return
-    client = get_engine_client()
-    try:
-        resp = await client.delete("/files/object", params={"bucket": bucket, "key": key})
-        if resp.status_code >= 400:
-            logger.warning("blob %s/%s non eliminato: %s", bucket, key, resp.text[:200])
-    except Exception as e:  # engine giù: blob orfano, lo segnaliamo soltanto
-        logger.warning("blob %s/%s non eliminato (engine irraggiungibile): %s", bucket, key, e)

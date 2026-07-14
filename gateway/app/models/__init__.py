@@ -7,8 +7,9 @@ from app.models.connection import Connection
 from app.models.datasource import Datasource
 from app.models.run import Run
 from app.models.upload import Upload
+from app.models.blob_deletion import PendingBlobDeletion
 
 __all__ = [
     "User", "Group", "UserGroupLink", "Project", "Permission", "Capability",
-    "Flow", "Connection", "Datasource", "Run", "Upload",
+    "Flow", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
 ]

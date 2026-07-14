@@ -23,6 +23,7 @@ from app.db.session import engine
 from app.models import Connection, Datasource, Flow, Run, User
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
+from app.services.blobgc import sweep_blob_deletions
 from app.services.orchestrator import orchestrate_bg
 from app.services.schedule import next_fire
 
@@ -140,6 +141,15 @@ async def _tick() -> None:
             except Exception:
                 logger.exception("scheduler: esecuzione flusso %s fallita", flow.id)
                 _advance_flow(session, flow, now)
+
+        # cancellazione differita dei blob la cui grace è scaduta (snapshot
+        # superati, parquet rimpiazzati, datasource eliminate)
+        try:
+            removed = await sweep_blob_deletions(session, now)
+            if removed:
+                logger.info("scheduler: %d blob obsoleti eliminati", removed)
+        except Exception:
+            logger.exception("scheduler: sweep dei blob differiti fallito")
 
 
 async def scheduler_loop(stop: asyncio.Event) -> None:

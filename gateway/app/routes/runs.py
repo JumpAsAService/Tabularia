@@ -29,6 +29,7 @@ from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.connections import engine_connection_payload
 from app.schemas.models import RunCreate, RunOut
+from app.services.blobgc import schedule_blob_deletion
 
 logger = logging.getLogger(__name__)
 
@@ -347,9 +348,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
         and run.publish_project_id
         and run.datasource_id is None
     ):
-        replaced_blob = _publish_datasource(session, run, result)
-        if replaced_blob is not None:  # overwrite: il vecchio parquet ora è orfano
-            await _delete_blob(*replaced_blob)
+        _publish_datasource(session, run, result)
     return run
 
 
@@ -385,22 +384,25 @@ async def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     ds.refreshed_at = now
     ds.updated_at = now
     session.add(ds)
+    # lo snapshot precedente può essere ancora in lettura da un run/preview che ne
+    # ha già risolto la chiave: cancellazione DIFFERITA (grace), nella stessa
+    # transazione dello swap così o si applicano insieme o niente.
+    if old_key and old_key != ds.key:
+        schedule_blob_deletion(
+            session, old_bucket, old_key, reason=f"snapshot datasource {ds.id} superato"
+        )
     session.commit()
 
-    if old_key and old_key != ds.key:
-        await _delete_blob(old_bucket, old_key)
 
-
-def _publish_datasource(session: Session, run: Run, result: dict) -> tuple[str, str] | None:
+def _publish_datasource(session: Session, run: Run, result: dict) -> None:
     """Crea — o SOVRASCRIVE, se `run.publish_overwrite` — la datasource promessa dal
-    run (solo il vincitore del claim arriva qui). Torna il vecchio blob
-    (bucket, key) rimpiazzato da una sovrascrittura, da eliminare a valle; None
-    altrimenti.
+    run (solo il vincitore del claim arriva qui). Il blob eventualmente rimpiazzato
+    da una sovrascrittura è marcato per la cancellazione differita.
 
     Il vincolo UNIQUE (project, name) resta la rete di sicurezza: alla CREAZIONE,
-    su conflitto si riprova UNA volta con un suffisso; se fallisce ancora (o il
-    progetto è stato eliminato) il run resta SUCCESS senza datasource, con
-    l'errore nei log.
+    su conflitto si riprova UNA volta con un suffisso; se fallisce anche così (o il
+    progetto è stato eliminato) l'output non viene pubblicato — il suo parquet,
+    ora orfano, viene marcato per la cancellazione (niente blob perso).
     """
     columns = json.dumps(result.get("columns") or [])
 
@@ -410,7 +412,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> tuple[str, 
     if run.publish_overwrite:
         existing = _find_datasource(session, run.publish_project_id, run.publish_name)
         if existing is not None and existing.kind == "flow":
-            old_blob = (existing.bucket, existing.key)
+            old_bucket, old_key = existing.bucket, existing.key
             existing.bucket = run.output_bucket
             existing.key = run.output_key
             existing.rows = run.rows_written
@@ -418,13 +420,18 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> tuple[str, 
             existing.description = run.publish_description
             existing.flow_id = run.flow_id
             existing.owner_id = existing.owner_id or run.launched_by
-            session.add(existing)
-            session.commit()
             run.datasource_id = existing.id
+            session.add(existing)
             session.add(run)
+            # il parquet rimpiazzato può essere ancora in lettura: cancellazione
+            # DIFFERITA (grace), nella stessa transazione dell'overwrite.
+            if old_key and old_key != run.output_key:
+                schedule_blob_deletion(
+                    session, old_bucket, old_key, reason=f"datasource {existing.id} sovrascritta"
+                )
             session.commit()
             session.refresh(run)
-            return old_blob if old_blob != (run.output_bucket, run.output_key) else None
+            return
 
     def _make(name: str) -> Datasource:
         return Datasource(
@@ -455,13 +462,18 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> tuple[str, 
         session.add(run)
         session.commit()
         session.refresh(run)
-        return None
+        return
+    # esauriti i tentativi: l'output non è pubblicato → il suo parquet è orfano.
+    # Lo si marca per la cancellazione differita invece di lasciarlo perso.
     logger.error(
         "run %s: datasource '%s' non pubblicata (conflitti ripetuti o progetto eliminato)",
         run.id,
         run.publish_name,
     )
-    return None
+    schedule_blob_deletion(
+        session, run.output_bucket, run.output_key, reason=f"publish run {run.id} fallito"
+    )
+    session.commit()
 
 
 @router.get("/flows/{flow_id}/runs", response_model=list[RunOut])
