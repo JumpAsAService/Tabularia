@@ -14,7 +14,7 @@ from sqlalchemy import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 import app.models  # noqa: F401 — registra i modelli su SQLModel.metadata
-from app.models import Datasource, Flow, Project, Run, User
+from app.models import Datasource, Flow, Permission, Project, Run, User
 
 
 @pytest.fixture
@@ -49,8 +49,11 @@ class FakeEngine:
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
 
-    def set_task(self, task_id: str, status: str, result: dict | None = None, error: str | None = None):
-        self.task_states[task_id] = {"status": status, "result": result or {}, "error": error}
+    def set_task(self, task_id: str, status: str, result: dict | None = None,
+                 error: str | None = None, error_detail: str | None = None):
+        self.task_states[task_id] = {
+            "status": status, "result": result or {}, "error": error, "error_detail": error_detail,
+        }
 
     def _handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -106,6 +109,24 @@ def make_datasource(session, **kw):
     session.commit()
     session.refresh(d)
     return d
+
+
+def make_flow(session, **kw):
+    kw.setdefault("name", "flow")
+    kw.setdefault("project_id", 1)
+    f = Flow(**kw)
+    session.add(f)
+    session.commit()
+    session.refresh(f)
+    return f
+
+
+def make_permission(session, *, user_id, project_id, capability="view"):
+    p = Permission(user_id=user_id, project_id=project_id, capability=capability)
+    session.add(p)
+    session.commit()
+    session.refresh(p)
+    return p
 
 
 def make_run(session, **kw):

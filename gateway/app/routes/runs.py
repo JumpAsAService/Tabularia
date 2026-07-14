@@ -14,8 +14,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import update
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -24,11 +24,12 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
+from app.services import permissions as perm_service
 from app.models import Connection, Datasource, Flow, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.connections import engine_connection_payload
-from app.schemas.models import RunCreate, RunOut
+from app.schemas.models import RunCreate, RunOut, RunSearchOut
 from app.services.blobgc import schedule_blob_deletion
 
 logger = logging.getLogger(__name__)
@@ -312,10 +313,12 @@ async def _reconcile(session: Session, run: Run) -> Run:
     new_status = data.get("status", run.status)
     result = data.get("result") or {}
     error = data.get("error")
+    error_detail = data.get("error_detail")  # traceback completo dell'engine
 
     if new_status not in TERMINAL_STATES and _age_seconds(run.started_at) > STALE_AFTER_SECONDS:
         new_status = "FAILURE"
         error = "stato del run perso (risultato scaduto o engine riavviato)"
+        error_detail = None
 
     if new_status == run.status:
         return run
@@ -337,6 +340,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
         values["rows_written"] = result.get("rows_written")
     else:
         values["error"] = (error or "")[:2000]
+        values["error_detail"] = error_detail[:20000] if error_detail else None
     # con qualche tentativo IMMEDIATO: un errore transitorio (lock, hiccup del DB)
     # si risolve nello stesso giro invece di aspettare la prossima lettura; se
     # persiste, dopo i tentativi il run resta non terminale e si ritenta più tardi.
@@ -524,3 +528,45 @@ async def get_run(
         flow = _get_flow(session, run.flow_id)
         ensure_can(session, user, flow.project_id, Capability.VIEW)
     return await _reconcile(session, run)
+
+
+@router.get("/runs", response_model=list[RunSearchOut])
+def search_runs(
+    status: str | None = Query(None, description="filtra per stato, es. FAILURE"),
+    q: str | None = Query(None, description="testo cercato nel motivo dell'errore"),
+    limit: int = Query(50, ge=1, le=200),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Ricerca globale delle esecuzioni nei progetti LEGGIBILI dell'utente (tutti
+    se superuser), con filtro per stato e ricerca testuale su error/error_detail —
+    per capire perché i flussi falliscono. Sola lettura: mostra lo stato storico
+    registrato, NON riconcilia (una ricerca non deve avere effetti collaterali)."""
+    stmt = (
+        select(Run, Flow, Datasource)
+        .join(Flow, Run.flow_id == Flow.id, isouter=True)
+        .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
+    )
+    if not user.is_superuser:
+        readable = perm_service.readable_project_ids(session, user)
+        stmt = stmt.where(
+            or_(
+                Flow.project_id.in_(readable),
+                Datasource.project_id.in_(readable),
+                Run.launched_by == user.id,
+            )
+        )
+    if status:
+        stmt = stmt.where(Run.status == status)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(Run.error.ilike(like), Run.error_detail.ilike(like)))
+    stmt = stmt.order_by(Run.started_at.desc()).limit(limit)
+
+    out: list[RunSearchOut] = []
+    for run, flow, ds in session.exec(stmt).all():
+        item = RunSearchOut.model_validate(run, from_attributes=True)
+        item.flow_name = flow.name if flow else None
+        item.source_name = ds.name if ds else None
+        out.append(item)
+    return out

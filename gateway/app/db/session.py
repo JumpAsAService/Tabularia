@@ -31,6 +31,8 @@ _MIGRATIONS = [
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMP",
     # Publish di una datasource in overwrite (ripubblica sopra l'omonima kind=flow)
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS publish_overwrite BOOLEAN NOT NULL DEFAULT FALSE",
+    # Dettaglio errore (traceback engine) per il debug dei run falliti
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS error_detail TEXT",
 ]
 
 

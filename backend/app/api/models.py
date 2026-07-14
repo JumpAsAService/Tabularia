@@ -46,6 +46,7 @@ class TaskStatusResponse(BaseModel):
     status: str
     result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
+    error_detail: Optional[str] = None  # traceback completo su FAILURE (per il debug)
     message: Optional[str] = None
 
 

@@ -191,6 +191,9 @@ def get_task_status(task_id: str):
         response.result = result.result
     elif result.status == "FAILURE":
         response.error = str(result.info)
+        # traceback completo: la causa vera (stack Polars, SQL, batch) che
+        # `str(info)` da solo perde — salvato dal gateway in Run.error_detail
+        response.error_detail = result.traceback
     elif result.status == "PENDING":
         response.message = "Task is pending"
     elif result.status == "STARTED":

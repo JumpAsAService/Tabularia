@@ -205,11 +205,19 @@ class RunOut(BaseModel):
     output_key: str
     rows_written: Optional[int]
     error: Optional[str]
+    error_detail: Optional[str] = None  # traceback completo (dettaglio del fallimento)
     publish_name: Optional[str]
     datasource_id: Optional[int]
     destination: Optional[str] = None  # JSON: {db_type, host, database, table, mode}
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
+
+
+class RunSearchOut(RunOut):
+    """Un run nella ricerca globale delle esecuzioni: come RunOut + i nomi del
+    flusso / della datasource, per mostrarli senza risolverli lato client."""
+    flow_name: Optional[str] = None
+    source_name: Optional[str] = None
 
 
 # ── Datasources (dataset nominati nel catalogo) ───────────────────────────────

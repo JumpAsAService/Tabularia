@@ -31,7 +31,9 @@ class Run(SQLModel, table=True):
     output_bucket: str
     output_key: str
     rows_written: Optional[int] = None
-    error: Optional[str] = Field(default=None, sa_column=Column(Text))
+    error: Optional[str] = Field(default=None, sa_column=Column(Text))  # sintesi (per la lista)
+    # traceback completo dell'engine (per capire la causa): mostrato nel dettaglio
+    error_detail: Optional[str] = Field(default=None, sa_column=Column("error_detail", Text))
 
     # richiesta di pubblicazione (facoltativa, decisa al lancio); per i run
     # kind="ingest" `datasource_id` è la datasource che il refresh aggiorna
