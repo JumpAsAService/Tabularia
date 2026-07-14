@@ -83,6 +83,11 @@ async def _refresh_and_wait(session: Session, user: User, ds_id: int) -> None:
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES:
             break
+        # rilascia la connessione del pool durante l'attesa: mentre lo stato non
+        # cambia _reconcile non committa e la transazione della SELECT terrebbe
+        # occupata una connessione per tutto lo sleep → con più orchestrazioni
+        # lente in parallelo il pool si esaurisce e il gateway va giù.
+        session.commit()
         await asyncio.sleep(REFRESH_WAIT_INTERVAL_S)
     if run.status != "SUCCESS":
         raise OrchestrationError(f"refresh datasource {ds_id} non riuscito ({run.status})")
@@ -98,6 +103,8 @@ async def _wait_run(session: Session, run: Run) -> Run:
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES:
             break
+        # vedi _refresh_and_wait: libera la connessione del pool durante lo sleep
+        session.commit()
         await asyncio.sleep(OUTPUT_WAIT_INTERVAL_S)
     return run
 
