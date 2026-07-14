@@ -69,13 +69,28 @@ async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCr
     publish, CONNECT per le destinazioni — con l'autorità di `user`."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
 
-    # input_key e operazioni: ogni chiave di storage referenziata deve essere
-    # leggibile dall'utente (RBAC data plane)
-    from app.services.objects import collect_storage_keys, ensure_can_read_keys
-
-    ensure_can_read_keys(
-        session, user, collect_storage_keys({"input_key": body.input_key, "operations": body.operations})
+    # input_key e operazioni: la sorgente (e ogni sorgente annidata: right di
+    # join/union, driver/body dei foreach) deve stare NEL bucket dell'engine e
+    # sotto un prefisso gestito (pinning), E ogni chiave gestita dev'essere
+    # leggibile dall'utente (RBAC data plane). Senza il pinning, `bucket`/
+    # `input_key` client-controlled farebbero leggere all'engine (credenziali che
+    # leggono tutto) qualsiasi oggetto — stesso vincolo del proxy preview/transform.
+    from app.services.objects import (
+        collect_storage_keys,
+        ensure_can_read_keys,
+        ensure_reads_pinned,
     )
+
+    engine_bucket = get_settings().engine.bucket
+    if not body.bucket:
+        body.bucket = engine_bucket
+    read_payload = {
+        "bucket": body.bucket,
+        "input_key": body.input_key,
+        "operations": body.operations,
+    }
+    ensure_reads_pinned(user, read_payload, engine_bucket)
+    ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
 
     if body.publish:
         # pubblicare scrive contenuto nella cartella di destinazione → EDIT
