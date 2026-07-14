@@ -5,21 +5,27 @@ cifra la password a riposo nel suo Postgres e la invia GIÀ CIFRATA all'engine
 (`password_encrypted`), che la decifra solo nel worker al momento di aprire la
 connessione. La password in chiaro non transita mai nel broker Celery.
 """
-import base64
 from functools import lru_cache
 
 from cryptography.fernet import Fernet
 
 from app.core.config import get_settings
 
-# Chiave di SVILUPPO, usata solo se SECURITY__FERNET_KEY non è impostata.
-# Deve restare IDENTICA a quella in backend/app/core/crypto.py.
-DEV_FERNET_KEY = base64.urlsafe_b64encode(b"tabularia-dev-fernet-key-0123456").decode()
-
 
 @lru_cache
 def _fernet() -> Fernet:
-    key = get_settings().security.fernet_key or DEV_FERNET_KEY
+    # Fail-closed: senza chiave si RIFIUTA di operare, invece di ripiegare in
+    # silenzio su una chiave nota nel repo (che renderebbe i segreti cifrati
+    # equivalenti a testo in chiaro). Vale in ogni ambiente, non solo in prod.
+    # Dev: impostala in infrastructure/.env (uguale in gateway ed engine).
+    key = get_settings().security.fernet_key
+    if not key:
+        raise RuntimeError(
+            "SECURITY__FERNET_KEY non impostata: impossibile cifrare/decifrare le "
+            "credenziali delle connessioni. Impostala (identica in gateway ed engine) — "
+            'genera con: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
+        )
     return Fernet(key)
 
 
