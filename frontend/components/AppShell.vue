@@ -56,6 +56,7 @@ onMounted(async () => {
       </nav>
 
       <span class="spacer" />
+      <MemoryGauge />
       <span v-if="user" class="who muted">
         {{ user.email }}<template v-if="isSuper"> · admin</template>
       </span>

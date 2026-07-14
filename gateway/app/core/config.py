@@ -72,6 +72,18 @@ class SecuritySettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Monitoraggio: node-exporter è la fonte della RAM dell'host mostrata in UI.
+# Lo si legge DIRETTAMENTE (valore istantaneo) e non da VictoriaMetrics, che
+# ha una granularità di scrape di 15s: qui serve un dato realtime.
+# ─────────────────────────────────────────────────────────────────────────────
+class MonitoringSettings(BaseModel):
+    node_exporter_url: str = "http://node-exporter:9100/metrics"
+    timeout_seconds: float = 3.0
+    # più browser che pollano condividono una sola fetch (il payload è ~85 KB)
+    cache_seconds: float = 3.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # App
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
@@ -96,6 +108,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     engine: EngineSettings = Field(default_factory=EngineSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

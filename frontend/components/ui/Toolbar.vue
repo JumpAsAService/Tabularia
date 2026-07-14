@@ -98,6 +98,8 @@ const statusIcon = computed(() => {
 
     <!-- navigazione: DENTRO la barra, così non copre mai lo stato del run -->
     <span class="sep" />
+    <MemoryGauge compact />
+    <span class="sep" />
     <NuxtLink to="/" class="navbtn"><ArrowLeft :size="13" /> Progetti</NuxtLink>
     <button class="navbtn" title="Esci" @click="logout"><LogOut :size="13" /></button>
   </div>
