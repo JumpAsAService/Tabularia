@@ -103,6 +103,9 @@ const calendarOption = computed(() => {
   const byKey = dailyByKey.value
   return {
     tooltip: {
+      // appesa al body: il wrapper ha overflow-y hidden (per lo scroll-x) e
+      // altrimenti taglierebbe la tooltip in alto
+      appendToBody: true,
       formatter: (p: any) => {
         const b = byKey.get(p.data[0])
         if (!b) return `${p.data[0]}<br/>nessuna esecuzione`
@@ -170,6 +173,7 @@ const hourlyOption = computed(() => {
     grid: { left: 34, right: 12, top: 20, bottom: 40 },
     tooltip: {
       trigger: 'axis',
+      appendToBody: true,
       formatter: (ps: any[]) => {
         const k = ps[0].axisValue
         const b = byHour.get(k)
