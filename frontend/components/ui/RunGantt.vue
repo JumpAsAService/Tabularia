@@ -64,13 +64,17 @@ const option = computed(() => {
   }
 
   return {
-    grid: { left: 54, right: 14, top: 8, bottom: 26 },
+    grid: { left: 54, right: 14, top: 8, bottom: 40 },
     tooltip: {
       formatter: (p: any) =>
         `<b>${p.data.name}</b> · ${p.data.status}<br/>${p.data.startLabel}<br/>durata: ${p.data.durationSec.toFixed(1)}s`,
     },
     xAxis: {
       type: 'time',
+      name: 'quando è avvenuta l\'esecuzione',
+      nameLocation: 'middle',
+      nameGap: 26,
+      nameTextStyle: { fontSize: 10, color: '#8b97ad' },
       axisLabel: { fontSize: 10, hideOverlap: true },
       splitLine: { show: true, lineStyle: { opacity: 0.15 } },
     },
@@ -88,9 +92,14 @@ const option = computed(() => {
 </script>
 
 <template>
-  <div class="gantt">
-    <VChart v-if="rows.length" :option="option" autoresize />
+  <div>
+    <div v-if="rows.length" class="gantt"><VChart :option="option" autoresize /></div>
     <p v-else class="muted small">Nessuna esecuzione da mostrare.</p>
+    <p v-if="rows.length" class="legend muted">
+      Ogni barra è un'esecuzione (asse Y: <code>#id</code> del run) — orizzontale: <b>quando</b> è
+      partita, larghezza: <b>durata</b>, colore l'esito
+      <span class="dot ok" /> riuscita <span class="dot ko" /> fallita.
+    </p>
   </div>
 </template>
 
@@ -98,4 +107,9 @@ const option = computed(() => {
 .gantt { height: 240px; width: 100%; }
 .gantt > :deep(div) { height: 100%; }
 .small { font-size: 12.5px; padding: 8px 0; }
+.legend { font-size: 11.5px; margin: 6px 0 0; line-height: 1.5; }
+.legend code { font-family: ui-monospace, monospace; font-size: 11px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: -1px; margin: 0 2px 0 6px; }
+.dot.ok { background: #34d399; }
+.dot.ko { background: #ef4444; }
 </style>
