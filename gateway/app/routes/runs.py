@@ -73,14 +73,17 @@ async def launch_run(
 
 
 async def _launch_flow_run(
-    session: Session, user: User, flow: Flow, body: RunCreate, trigger_type: str = "manual"
+    session: Session, user: User, flow: Flow, body: RunCreate,
+    trigger_type: str = "manual", parent_run_id: int | None = None,
 ) -> Run:
     """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
     (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
     publish, CONNECT per le destinazioni — con l'autorità di `user`.
 
     `trigger_type`: "manual" (un utente lo lancia) o "schedule" (avviato dallo
-    scheduler nell'ambito di un'orchestrazione schedulata)."""
+    scheduler nell'ambito di un'orchestrazione schedulata).
+    `parent_run_id`: valorizzato se è un output lanciato DENTRO un'orchestrazione
+    (figlio) — così il calendario non lo conta come esecuzione a sé."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
 
     # input_key e operazioni: la sorgente (e ogni sorgente annidata: right di
@@ -231,6 +234,7 @@ async def _launch_flow_run(
         task_id=task_id,
         launched_by=user.id,
         trigger_type=trigger_type,
+        parent_run_id=parent_run_id,
         input_key=body.input_key,
         output_bucket=body.bucket,
         output_key=output_key,
@@ -247,7 +251,8 @@ async def _launch_flow_run(
 
 
 async def launch_ingest_run(
-    session: Session, user: User, ds: Datasource, conn: Connection, trigger_type: str = "manual"
+    session: Session, user: User, ds: Datasource, conn: Connection,
+    trigger_type: str = "manual", parent_run_id: int | None = None,
 ) -> Run:
     """Accoda sull'engine l'ingest di una datasource database e registra il run.
 
@@ -280,6 +285,7 @@ async def launch_ingest_run(
         task_id=task_id,
         launched_by=user.id,
         trigger_type=trigger_type,
+        parent_run_id=parent_run_id,
         input_key=f"{conn.db_type}://{conn.host}/{conn.database}",  # descrittivo
         output_bucket=bucket,
         output_key=output_key,
@@ -554,7 +560,9 @@ def runs_activity(
 
     start_utc, end_utc = start_local + off, end_local + off  # confini UTC della finestra locale
 
-    conds = [Run.started_at >= start_utc, Run.started_at < end_utc]
+    # solo esecuzioni di ALTO LIVELLO: gli output/refresh figli di
+    # un'orchestrazione sono la stessa esecuzione contata più volte
+    conds = [Run.started_at >= start_utc, Run.started_at < end_utc, Run.parent_run_id.is_(None)]
     if not user.is_superuser:
         readable = perm_service.readable_project_ids(session, user)
         conds.append(

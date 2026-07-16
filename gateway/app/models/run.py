@@ -31,6 +31,11 @@ class Run(SQLModel, table=True):
     # mostriamo semplicemente "schedule". Colonna `trigger_type`: "trigger" è
     # parola riservata SQL.
     trigger_type: str = Field(default="manual")
+    # run di orchestrazione che ha generato questo run figlio (output/refresh
+    # lanciati DENTRO un'orchestrazione). None = esecuzione di ALTO LIVELLO
+    # (orchestrazione, run diretto dell'editor, refresh standalone): così il
+    # calendar plot conta le esecuzioni una sola volta, senza i doppioni figli.
+    parent_run_id: Optional[int] = Field(default=None, foreign_key="runs.id", index=True)
 
     input_key: str
     output_bucket: str

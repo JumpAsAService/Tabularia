@@ -56,7 +56,9 @@ class OrchestrationError(RuntimeError):
     pass
 
 
-async def _refresh_and_wait(session: Session, user: User, ds_id: int, trigger_type: str = "manual") -> None:
+async def _refresh_and_wait(
+    session: Session, user: User, ds_id: int, trigger_type: str = "manual", parent_run_id: int | None = None
+) -> None:
     """Aggiorna una datasource database e attende (bounded) il SUCCESS."""
     ds = session.get(Datasource, ds_id)
     if ds is None or ds.kind != "database":
@@ -77,7 +79,7 @@ async def _refresh_and_wait(session: Session, user: User, ds_id: int, trigger_ty
     ).first()
     if last is not None:
         last = await _reconcile(session, last)
-    run = last if (last is not None and last.status not in TERMINAL_STATES) else await launch_ingest_run(session, user, ds, conn, trigger_type=trigger_type)
+    run = last if (last is not None and last.status not in TERMINAL_STATES) else await launch_ingest_run(session, user, ds, conn, trigger_type=trigger_type, parent_run_id=parent_run_id)
 
     for _ in range(REFRESH_WAIT_TICKS):
         run = await _reconcile(session, run)
@@ -109,7 +111,7 @@ async def _wait_run(session: Session, run: Run) -> Run:
     return run
 
 
-async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual") -> list[str]:
+async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None) -> list[str]:
     """Esegue un flusso: gli 'action node' (refresh/output/runflow) nell'ordine
     definito dagli archi di sequenza (topological sort), coi non collegati
     nell'ordine di default refresh → output → runflow.
@@ -138,11 +140,11 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
         if t == "refresh":
             ds_id = d.get("datasourceId")
             if ds_id:
-                await _refresh_and_wait(session, user, ds_id, trigger_type)  # errore → propaga (aborta tutto)
+                await _refresh_and_wait(session, user, ds_id, trigger_type, parent_run_id)  # errore → propaga (aborta tutto)
         elif t == "output":
             try:
                 req = resolve_output_request(definition, node, resolve_ds, default_bucket)
-                run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type)
+                run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id)
                 run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
                 if run.status != "SUCCESS":
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
@@ -158,7 +160,9 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 logger.warning("orchestrate: flusso %s riferisce un runflow inesistente %s", flow.id, sub_id)
                 errors.append(f"runflow: flusso {sub_id} inesistente")
                 continue
-            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type))
+            # i figli dei sotto-flussi riferiscono lo stesso run di orchestrazione
+            # di testa (non c'è un tracciante separato per i sotto-flussi)
+            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type, parent_run_id))
     return errors
 
 
@@ -227,7 +231,9 @@ async def orchestrate_bg(
             if orch_run_id is None:  # percorso scheduler: nessun tracciante ancora
                 orch_run_id = create_orchestration_run(session, user, flow, trigger_type).id
             try:
-                errors = await orchestrate(session, user, flow, trigger_type=trigger_type)
+                # i run figli (output/refresh) riferiscono il run di orchestrazione:
+                # così il calendario conta solo quest'ultimo, non i doppioni figli
+                errors = await orchestrate(session, user, flow, trigger_type=trigger_type, parent_run_id=orch_run_id)
             except (FlowResolveError, OrchestrationError) as e:
                 logger.warning("orchestrate: flusso %s interrotto: %s", flow_id, e)
                 _finalize_orch_run(orch_run_id, "FAILURE", str(e))

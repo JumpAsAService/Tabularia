@@ -35,6 +35,8 @@ _MIGRATIONS = [
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS error_detail TEXT",
     # Origine dell'avvio: 'manual' (utente) | 'schedule' (scheduler)
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS trigger_type VARCHAR NOT NULL DEFAULT 'manual'",
+    # Run figlio di un'orchestrazione (per non contare i doppioni nel calendario)
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS parent_run_id INTEGER REFERENCES runs(id)",
 ]
 
 

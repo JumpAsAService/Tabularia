@@ -195,6 +195,26 @@ async def test_activity_scoped_to_readable_projects(session):
     assert sum(b.total for b in res.buckets) == 1
 
 
+async def test_activity_counts_only_high_level_runs(session):
+    """Un'orchestrazione + i suoi figli output: il calendario conta 1 (solo
+    l'orchestrazione), non i doppioni figli."""
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    f = make_flow(session, name="f", project_id=1)
+    now = _now_utc()
+    orch = make_run(session, kind="orchestration", status="SUCCESS", flow_id=f.id,
+                    task_id="orch", started_at=now)
+    # due output figli della stessa orchestrazione (doppioni, da NON contare)
+    make_run(session, kind="flow", status="SUCCESS", flow_id=f.id, task_id="c1",
+             started_at=now, parent_run_id=orch.id)
+    make_run(session, kind="flow", status="SUCCESS", flow_id=f.id, task_id="c2",
+             started_at=now, parent_run_id=orch.id)
+    # un run diretto dell'editor (alto livello, parent None → contato)
+    make_run(session, kind="flow", status="SUCCESS", flow_id=f.id, task_id="direct",
+             started_at=now, parent_run_id=None)
+    res = runs_activity(days=30, day=None, tz_offset=0, user=admin, session=session)
+    assert sum(b.total for b in res.buckets) == 2  # orchestrazione + run diretto
+
+
 async def test_activity_window_excludes_old_runs(session):
     admin = make_user(session, email="admin@x.local", is_superuser=True)
     f = make_flow(session, name="f", project_id=1)
