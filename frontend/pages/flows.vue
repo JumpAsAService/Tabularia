@@ -138,6 +138,9 @@ async function saveSchedule(cron: string) {
       </div>
     </div>
 
+    <!-- panoramica: calendar plot dell'attività (drill-down orario al click) -->
+    <RunCalendar />
+
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="5" />
     <p v-else-if="!items.length" class="muted">

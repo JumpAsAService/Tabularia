@@ -12,7 +12,7 @@ lanciato e dimenticato si aggiorna alla prima visita della cronologia.
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, update
@@ -29,7 +29,14 @@ from app.models import Connection, Datasource, Flow, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.connections import engine_connection_payload
-from app.schemas.models import Page, RunCreate, RunOut, RunSearchOut
+from app.schemas.models import (
+    ActivityBucket,
+    Page,
+    RunActivityOut,
+    RunCreate,
+    RunOut,
+    RunSearchOut,
+)
 from app.services.blobgc import schedule_blob_deletion
 
 logger = logging.getLogger(__name__)
@@ -515,6 +522,82 @@ async def list_runs(
         select(Run).where(Run.flow_id == flow_id).order_by(Run.started_at.desc()).limit(50)
     ).all()
     return [await _reconcile(session, r) for r in runs]
+
+
+# NB: registrato PRIMA di /runs/{run_id} così "activity" non è preso per un id
+@router.get("/runs/activity", response_model=RunActivityOut)
+def runs_activity(
+    days: int = Query(180, ge=1, le=730, description="ampiezza della finestra giornaliera"),
+    day: str | None = Query(None, description="YYYY-MM-DD (locale): ritorna il dettaglio ORARIO del giorno"),
+    tz_offset: int = Query(0, description="getTimezoneOffset() del client, in minuti (local = utc - offset)"),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Attività delle esecuzioni per il calendar plot della pagina Flows: conteggi
+    per GIORNO (heatmap) o, con `day`, per ORA (drill-down). Ogni run è un evento;
+    il breakdown distingue esito (successi/falliti) e origine (manuali/schedulati).
+    RBAC come la ricerca: solo i run nei progetti leggibili (o lanciati dall'utente).
+    I bucket sono in ora LOCALE del client, ricavata da `tz_offset`."""
+    off = timedelta(minutes=tz_offset)  # local = utc - off ; utc = local + off
+    now_local = datetime.now(timezone.utc).replace(tzinfo=None) - off
+
+    if day:
+        try:
+            d0 = datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Data non valida (atteso YYYY-MM-DD)")
+        start_local, end_local, granularity = d0, d0 + timedelta(days=1), "hour"
+    else:
+        today0 = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_local, granularity = today0 + timedelta(days=1), "day"
+        start_local = end_local - timedelta(days=days)
+
+    start_utc, end_utc = start_local + off, end_local + off  # confini UTC della finestra locale
+
+    conds = [Run.started_at >= start_utc, Run.started_at < end_utc]
+    if not user.is_superuser:
+        readable = perm_service.readable_project_ids(session, user)
+        conds.append(
+            or_(
+                Flow.project_id.in_(readable),
+                Datasource.project_id.in_(readable),
+                Run.launched_by == user.id,
+            )
+        )
+    stmt = (
+        select(Run.started_at, Run.status, Run.trigger_type)
+        .join(Flow, Run.flow_id == Flow.id, isouter=True)
+        .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
+    )
+    for c in conds:
+        stmt = stmt.where(c)
+
+    buckets: dict[str, dict] = {}
+    for started_at, run_status, trigger in session.exec(stmt).all():
+        if started_at is None:
+            continue
+        lt = started_at - off  # naive-UTC → ora locale del client
+        key = f"{lt.hour:02d}" if granularity == "hour" else lt.strftime("%Y-%m-%d")
+        b = buckets.setdefault(
+            key, {"total": 0, "success": 0, "failure": 0, "scheduled": 0, "manual": 0}
+        )
+        b["total"] += 1
+        if run_status == "SUCCESS":
+            b["success"] += 1
+        elif run_status == "FAILURE":
+            b["failure"] += 1
+        if trigger == "schedule":
+            b["scheduled"] += 1
+        else:
+            b["manual"] += 1
+
+    items = [ActivityBucket(key=k, **v) for k, v in sorted(buckets.items())]
+    if granularity == "hour":
+        from_key, to_key = "00", "23"
+    else:
+        from_key = start_local.strftime("%Y-%m-%d")
+        to_key = (end_local - timedelta(days=1)).strftime("%Y-%m-%d")
+    return RunActivityOut(granularity=granularity, from_key=from_key, to_key=to_key, buckets=items)
 
 
 @router.get("/runs/{run_id}", response_model=RunOut)

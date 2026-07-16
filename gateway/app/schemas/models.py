@@ -253,6 +253,28 @@ class RunSearchOut(RunOut):
     launched_by_name: Optional[str] = None  # None se schedulato o utente rimosso
 
 
+class ActivityBucket(BaseModel):
+    """Conteggi di un bucket del calendar plot: un giorno (key=YYYY-MM-DD) oppure
+    un'ora (key='00'..'23'). Ogni run è un evento; il breakdown distingue esito
+    (successi/falliti) e origine (manuali/schedulati)."""
+    key: str
+    total: int
+    success: int
+    failure: int
+    scheduled: int
+    manual: int
+
+
+class RunActivityOut(BaseModel):
+    """Attività delle esecuzioni per il calendar plot della pagina Flows: buckets
+    per GIORNO (heatmap) o per ORA (drill-down). I bucket sono in ora LOCALE del
+    client (passata via tz_offset); from_key/to_key delimitano la finestra."""
+    granularity: Literal["day", "hour"]
+    from_key: str
+    to_key: str
+    buckets: list[ActivityBucket]
+
+
 # ── Datasources (dataset nominati nel catalogo) ───────────────────────────────
 class DatasourceOut(BaseModel):
     id: int

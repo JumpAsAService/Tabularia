@@ -8,8 +8,10 @@
 import pytest
 from sqlmodel import select
 
+from datetime import datetime, timedelta, timezone
+
 from app.models import Run
-from app.routes.runs import _reconcile, search_runs
+from app.routes.runs import _reconcile, runs_activity, search_runs
 from tests.conftest import (
     make_datasource,
     make_flow,
@@ -148,3 +150,56 @@ async def test_run_trigger_type_defaults_to_manual(session):
     r = make_run(session, kind="flow", status="STARTED", task_id="def")
     session.refresh(r)
     assert r.trigger_type == "manual"
+
+
+# ── calendar plot (attività per giorno / drill-down orario) ─────────────────
+def _now_utc():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def test_activity_daily_buckets_count_by_status_and_origin(session):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    f = make_flow(session, name="f", project_id=1)
+    now = _now_utc()
+    make_run(session, kind="orchestration", status="SUCCESS", flow_id=f.id, task_id="a",
+             trigger_type="manual", started_at=now)
+    make_run(session, kind="orchestration", status="FAILURE", flow_id=f.id, task_id="b",
+             trigger_type="schedule", started_at=now)
+    res = runs_activity(days=30, day=None, tz_offset=0, user=admin, session=session)
+    assert res.granularity == "day"
+    today = now.strftime("%Y-%m-%d")
+    bucket = next(b for b in res.buckets if b.key == today)
+    assert bucket.total == 2
+    assert bucket.success == 1 and bucket.failure == 1
+    assert bucket.scheduled == 1 and bucket.manual == 1
+
+
+async def test_activity_hour_drilldown(session):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    f = make_flow(session, name="f", project_id=1)
+    now = _now_utc()
+    make_run(session, kind="orchestration", status="SUCCESS", flow_id=f.id, task_id="h",
+             trigger_type="schedule", started_at=now)
+    day = now.strftime("%Y-%m-%d")
+    res = runs_activity(days=30, day=day, tz_offset=0, user=admin, session=session)
+    assert res.granularity == "hour"
+    assert res.from_key == "00" and res.to_key == "23"
+    bucket = next(b for b in res.buckets if b.key == f"{now.hour:02d}")
+    assert bucket.total == 1 and bucket.scheduled == 1
+
+
+async def test_activity_scoped_to_readable_projects(session):
+    user, p1, p2, f1, f2, r1, r2 = _mk_scenario(session)  # user vede solo p1
+    res = runs_activity(days=30, day=None, tz_offset=0, user=user, session=session)
+    # r1 (p1, leggibile) contato; r2 (p2, non leggibile) escluso
+    assert sum(b.total for b in res.buckets) == 1
+
+
+async def test_activity_window_excludes_old_runs(session):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    f = make_flow(session, name="f", project_id=1)
+    old = _now_utc() - timedelta(days=100)
+    make_run(session, kind="orchestration", status="SUCCESS", flow_id=f.id, task_id="old",
+             started_at=old)
+    res = runs_activity(days=30, day=None, tz_offset=0, user=admin, session=session)
+    assert sum(b.total for b in res.buckets) == 0  # fuori dalla finestra di 30 giorni

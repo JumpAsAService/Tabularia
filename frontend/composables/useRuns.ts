@@ -24,6 +24,22 @@ export interface RunInfo {
   launched_by_name?: string | null // nome di chi l'ha avviato (null se schedulato)
 }
 
+// un bucket del calendar plot: un giorno (key=YYYY-MM-DD) o un'ora (key='00'..'23')
+export interface ActivityBucket {
+  key: string
+  total: number
+  success: number
+  failure: number
+  scheduled: number
+  manual: number
+}
+export interface RunActivity {
+  granularity: 'day' | 'hour'
+  from_key: string
+  to_key: string
+  buckets: ActivityBucket[]
+}
+
 export interface PublishSpec {
   name: string
   project_id: number
@@ -73,6 +89,16 @@ export function useRuns() {
       qs.set('limit', String(params.limit ?? 50))
       qs.set('offset', String(params.offset ?? 0))
       return apiFetch<Page<RunInfo>>(`/runs?${qs.toString()}`)
+    },
+
+    // attività per il calendar plot: conteggi per giorno (heatmap) o, con `day`,
+    // per ora (drill-down). tz_offset allinea i bucket all'ora locale del client.
+    activity: (params: { days?: number; day?: string } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.days) qs.set('days', String(params.days))
+      if (params.day) qs.set('day', params.day)
+      qs.set('tz_offset', String(new Date().getTimezoneOffset()))
+      return apiFetch<RunActivity>(`/runs/activity?${qs.toString()}`)
     },
   }
 }
