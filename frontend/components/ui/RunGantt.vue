@@ -44,15 +44,22 @@ const option = computed(() => {
     }
   })
 
-  // asse tempo a tacche ORARIE: min/max snappati all'ora, così ogni ora è presente
+  // Asse tempo adattivo. Se i run in vista stanno in UNA giornata: tacche orarie
+  // 00…23 ancorate alla mezzanotte locale (etichetta iniziale 00, non l'ora del
+  // primo run). Se coprono PIÙ giorni: lascio a ECharts tacche più larghe con
+  // etichetta giorno+ora, altrimenti 24 ore × N giorni diventa illeggibile.
   const HOUR = 3600 * 1000
   const times = rows.value.flatMap((r) => [
     new Date(r.started_at as string).getTime(),
     r.finished_at ? new Date(r.finished_at).getTime() : Date.now(),
   ])
-  const minT = Math.floor(Math.min(...times) / HOUR) * HOUR
-  let maxT = Math.ceil(Math.max(...times) / HOUR) * HOUR
+  const earliest = new Date(Math.min(...times))
+  // mezzanotte locale del giorno più vecchio (getTime() è UTC, il costruttore è locale)
+  const minT = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()).getTime()
+  // max snappato all'ora rispetto a minT → le tacche restano allineate alla mezzanotte
+  let maxT = minT + Math.ceil((Math.max(...times) - minT) / HOUR) * HOUR
   if (maxT <= minT) maxT = minT + HOUR
+  const singleDay = maxT - minT <= 24 * HOUR
 
   function renderItem(params: any, api: any) {
     const row = api.value(0)
@@ -83,13 +90,19 @@ const option = computed(() => {
       type: 'time',
       min: minT,
       max: maxT,
-      minInterval: HOUR, // tacca ogni ora…
-      maxInterval: HOUR, // …e non più larga di un'ora → tutte le ore presenti
-      name: 'ora del giorno',
+      // una sola giornata → forzo la tacca oraria (00…23); più giorni → lascio
+      // scegliere a ECharts per non affollare l'asse
+      ...(singleDay ? { minInterval: HOUR, maxInterval: HOUR } : {}),
+      name: singleDay ? 'ora del giorno' : 'giorno e ora',
       nameLocation: 'middle',
       nameGap: 28,
       nameTextStyle: { fontSize: 10, color: '#8b97ad' },
-      axisLabel: { fontSize: 10, hideOverlap: false, formatter: '{HH}' },
+      axisLabel: {
+        fontSize: 10,
+        hideOverlap: true,
+        // giornata singola: solo l'ora (00, 01…); multi-giorno: data + ora
+        formatter: singleDay ? '{HH}' : '{dd}/{MM} {HH}:{mm}',
+      },
       splitLine: { show: true, lineStyle: { opacity: 0.12 } },
     },
     yAxis: {
@@ -110,8 +123,9 @@ const option = computed(() => {
     <div v-if="rows.length" class="gantt"><VChart :option="option" autoresize /></div>
     <p v-else class="muted small">Nessuna esecuzione da mostrare.</p>
     <p v-if="rows.length" class="legend muted">
-      Ogni barra è un'esecuzione (asse Y: <code>#id</code> del run) — orizzontale: <b>ora del giorno</b>
-      (00–23, passa col mouse per la data completa), larghezza: <b>durata</b>, colore l'esito
+      Ogni barra è un'esecuzione (asse Y: <code>#id</code> del run) — orizzontale: il <b>tempo</b>
+      (una giornata: ore 00–23; più giorni: giorno e ora — passa col mouse per la data completa),
+      larghezza: <b>durata</b>, colore l'esito
       <span class="dot ok" /> riuscita <span class="dot ko" /> fallita.
     </p>
   </div>
