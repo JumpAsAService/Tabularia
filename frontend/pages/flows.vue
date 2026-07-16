@@ -205,6 +205,8 @@ async function saveSchedule(cron: string) {
   </AppShell>
 </template>
 
+<!-- stili condivisi delle pagine-lista: .btn-link, .mini, .err, .tag, … -->
+<style scoped src="~/assets/listpage.css" />
 <style scoped>
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h2 { display: inline-flex; align-items: center; gap: 8px; }
