@@ -12,6 +12,7 @@ import {
   Shield,
   Activity,
   History,
+  Cpu,
 } from 'lucide-vue-next'
 
 const { user, fetchMe, logout } = useAuth()
@@ -27,6 +28,7 @@ const links = computed(() => [
   { to: '/runs', label: 'Esecuzioni', icon: History },
   ...(isSuper.value
     ? [
+        { to: '/queue', label: 'Queue', icon: Cpu },
         { to: '/monitoring', label: 'Monitoring', icon: Activity },
         { to: '/admin', label: 'Admin', icon: Shield },
       ]

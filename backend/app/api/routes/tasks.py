@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
@@ -173,6 +174,78 @@ def export_flow(request: ExportRequest):
         filename=request.filename or f"export{suffix}",
         background=BackgroundTask(os.unlink, path),  # cleanup dopo l'invio
     )
+
+
+# NB: definita PRIMA di /{task_id} per non essere catturata dalla route dinamica
+@router.get("/queue")
+def queue_overview():
+    """Panoramica near-real-time della coda Celery per il pannello admin: worker
+    ONLINE (numero dinamico, quanti ce ne sono in quel momento), job IN
+    ESECUZIONE su ciascun worker, e job IN ATTESA (prefetchati dai worker +
+    backlog reale nel broker che l'inspect non vede).
+    """
+    inspect = celery_app.control.inspect(timeout=1.0)
+    active = inspect.active() or {}
+    reserved = inspect.reserved() or {}
+    stats = inspect.stats() or {}
+    active_queues = inspect.active_queues() or {}
+    now = time.time()
+
+    def _job(worker: str, t: dict, state: str) -> dict:
+        # time_start del task è epoch-secondi (task_track_started); se non è
+        # plausibile come epoch non calcoliamo il runtime (evita numeri assurdi)
+        ts = t.get("time_start")
+        runtime = round(now - ts, 1) if isinstance(ts, (int, float)) and ts > 1e9 else None
+        return {
+            "task_id": t.get("id"),
+            "task_name": t.get("name"),
+            "worker": worker,
+            "state": state,
+            "runtime_s": runtime,
+        }
+
+    running = [_job(w, t, "running") for w, ts in active.items() for t in ts]
+    reserved_jobs = [_job(w, t, "reserved") for w, ts in reserved.items() for t in ts]
+
+    # worker online: unione delle chiavi viste da stats/active/reserved/queues
+    names = set(stats) | set(active) | set(reserved) | set(active_queues)
+    workers = []
+    for name in sorted(names):
+        pool = (stats.get(name) or {}).get("pool") or {}
+        workers.append({
+            "name": name,
+            "concurrency": pool.get("max-concurrency"),
+            "running": len(active.get(name) or []),
+            "reserved": len(reserved.get(name) or []),
+        })
+
+    # backlog nel broker (task accodati ma non ancora consegnati a un worker):
+    # LLEN delle code Redis/Valkey — l'inspect NON li vede. Client redis diretto
+    # sul broker URL (più robusto del canale kombu dentro il processo uvicorn).
+    queue_names = {q.get("name") for qs in active_queues.values() for q in qs} or {"celery"}
+    broker: dict[str, int] = {}
+    try:
+        import redis
+        rc = redis.from_url(celery_app.conf.broker_url)
+        for q in queue_names:
+            try:
+                broker[q] = int(rc.llen(q))
+            except Exception:
+                pass
+    except Exception:
+        logger.warning("queue: backlog broker non leggibile", exc_info=True)
+    queued = sum(broker.values())
+
+    return {
+        "workers": workers,
+        "running": running,
+        "reserved": reserved_jobs,
+        "queues": [{"name": k, "messages": v} for k, v in sorted(broker.items())],
+        "queued": queued,                              # nel broker, non ancora presi
+        "reserved_count": len(reserved_jobs),
+        "running_count": len(running),
+        "waiting": queued + len(reserved_jobs),        # totale "in attesa"
+    }
 
 
 @router.get("/{task_id}", response_model=TaskStatusResponse)

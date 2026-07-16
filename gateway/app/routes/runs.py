@@ -337,6 +337,13 @@ async def _reconcile(session: Session, run: Run) -> Run:
     error = data.get("error")
     error_detail = data.get("error_detail")  # traceback completo dell'engine
 
+    # job fermato dall'admin (pannello Queue): Celery lo riporta REVOKED → per noi
+    # è un fallimento terminale, non uno stato da ri-pollare fino allo stale-timeout
+    if new_status == "REVOKED":
+        new_status = "FAILURE"
+        error = error or "job interrotto (revocato dall'amministratore)"
+        error_detail = None
+
     if new_status not in TERMINAL_STATES and _age_seconds(run.started_at) > STALE_AFTER_SECONDS:
         new_status = "FAILURE"
         error = "stato del run perso (risultato scaduto o engine riavviato)"
