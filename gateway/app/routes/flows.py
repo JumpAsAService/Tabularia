@@ -96,8 +96,26 @@ def search_flows(
     if q:
         like = f"%{q}%"
         base = base.where(or_(Flow.name.ilike(like), Flow.description.ilike(like)))
-    items, total = paginate(session, base, Flow.name, limit, offset)
-    return Page(items=items, total=total)
+    flows, total = paginate(session, base, Flow.name, limit, offset)
+    return Page(items=_with_owner_names(session, flows), total=total)
+
+
+def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
+    """Serializza i flussi risolvendo `owner_name` (nome di chi li ha creati) con
+    una sola query sugli owner coinvolti."""
+    owner_ids = {f.owner_id for f in flows if f.owner_id is not None}
+    names: dict[int, str] = {}
+    if owner_ids:
+        for uid, full_name, email in session.exec(
+            select(User.id, User.full_name, User.email).where(User.id.in_(owner_ids))
+        ).all():
+            names[uid] = full_name or email
+    out: list[FlowOut] = []
+    for f in flows:
+        item = FlowOut.model_validate(f, from_attributes=True)
+        item.owner_name = names.get(f.owner_id) if f.owner_id is not None else None
+        out.append(item)
+    return out
 
 
 def _get_flow(session: Session, flow_id: int) -> Flow:

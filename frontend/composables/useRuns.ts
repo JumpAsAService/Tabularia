@@ -8,6 +8,7 @@ export interface RunInfo {
   flow_id: number
   status: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | string
   launched_by: number | null
+  trigger_type?: string // "manual" | "schedule"
   output_key: string
   rows_written: number | null
   error: string | null
@@ -20,6 +21,7 @@ export interface RunInfo {
   // presenti solo nella ricerca globale /runs
   flow_name?: string | null
   source_name?: string | null
+  launched_by_name?: string | null // nome di chi l'ha avviato (null se schedulato)
 }
 
 export interface PublishSpec {

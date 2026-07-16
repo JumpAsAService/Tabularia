@@ -56,7 +56,7 @@ class OrchestrationError(RuntimeError):
     pass
 
 
-async def _refresh_and_wait(session: Session, user: User, ds_id: int) -> None:
+async def _refresh_and_wait(session: Session, user: User, ds_id: int, trigger_type: str = "manual") -> None:
     """Aggiorna una datasource database e attende (bounded) il SUCCESS."""
     ds = session.get(Datasource, ds_id)
     if ds is None or ds.kind != "database":
@@ -77,7 +77,7 @@ async def _refresh_and_wait(session: Session, user: User, ds_id: int) -> None:
     ).first()
     if last is not None:
         last = await _reconcile(session, last)
-    run = last if (last is not None and last.status not in TERMINAL_STATES) else await launch_ingest_run(session, user, ds, conn)
+    run = last if (last is not None and last.status not in TERMINAL_STATES) else await launch_ingest_run(session, user, ds, conn, trigger_type=trigger_type)
 
     for _ in range(REFRESH_WAIT_TICKS):
         run = await _reconcile(session, run)
@@ -109,7 +109,7 @@ async def _wait_run(session: Session, run: Run) -> Run:
     return run
 
 
-async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None) -> list[str]:
+async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual") -> list[str]:
     """Esegue un flusso: gli 'action node' (refresh/output/runflow) nell'ordine
     definito dagli archi di sequenza (topological sort), coi non collegati
     nell'ordine di default refresh → output → runflow.
@@ -138,11 +138,11 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
         if t == "refresh":
             ds_id = d.get("datasourceId")
             if ds_id:
-                await _refresh_and_wait(session, user, ds_id)  # errore → propaga (aborta tutto)
+                await _refresh_and_wait(session, user, ds_id, trigger_type)  # errore → propaga (aborta tutto)
         elif t == "output":
             try:
                 req = resolve_output_request(definition, node, resolve_ds, default_bucket)
-                run = await _launch_flow_run(session, user, flow, RunCreate(**req))
+                run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type)
                 run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
                 if run.status != "SUCCESS":
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
@@ -158,11 +158,13 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 logger.warning("orchestrate: flusso %s riferisce un runflow inesistente %s", flow.id, sub_id)
                 errors.append(f"runflow: flusso {sub_id} inesistente")
                 continue
-            errors.extend(await orchestrate(session, user, sub, depth + 1, seen))
+            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type))
     return errors
 
 
-def create_orchestration_run(session: Session, user: User, flow: Flow) -> Run:
+def create_orchestration_run(
+    session: Session, user: User, flow: Flow, trigger_type: str = "manual"
+) -> Run:
     """Crea la riga 'run di orchestrazione' (kind=orchestration) in stato STARTED:
     è il TRACCIANTE dell'intera esecuzione del flusso (anche di flussi senza nodo
     Output, che altrimenti non lascerebbero traccia). Non ha un task Celery: lo
@@ -174,6 +176,7 @@ def create_orchestration_run(session: Session, user: User, flow: Flow) -> Run:
         task_id="",
         status="STARTED",
         launched_by=user.id,
+        trigger_type=trigger_type,
         input_key="",
         output_bucket="",
         output_key="",
@@ -197,12 +200,15 @@ def _finalize_orch_run(run_id: int, status: str, error: str | None = None) -> No
         session.commit()
 
 
-async def orchestrate_bg(flow_id: int, user_id: int, orch_run_id: int | None = None) -> None:
+async def orchestrate_bg(
+    flow_id: int, user_id: int, orch_run_id: int | None = None, trigger_type: str = "manual"
+) -> None:
     """Entry point come task di background (scheduler o run-now): sessione propria,
     guardia anti-sovrapposizione, esito registrato sul run di orchestrazione.
 
     `orch_run_id` è passato da run-now (creato nella sessione della richiesta per
-    tornarlo subito al frontend); lo scheduler non lo passa e lo si crea qui."""
+    tornarlo subito al frontend); lo scheduler non lo passa e lo si crea qui.
+    `trigger_type`: "manual" da run-now, "schedule" dallo scheduler."""
     if flow_id in _running:
         logger.info("orchestrate: flusso %s già in esecuzione, salto", flow_id)
         if orch_run_id is not None:
@@ -219,9 +225,9 @@ async def orchestrate_bg(flow_id: int, user_id: int, orch_run_id: int | None = N
                     _finalize_orch_run(orch_run_id, "FAILURE", "flusso o utente non validi")
                 return
             if orch_run_id is None:  # percorso scheduler: nessun tracciante ancora
-                orch_run_id = create_orchestration_run(session, user, flow).id
+                orch_run_id = create_orchestration_run(session, user, flow, trigger_type).id
             try:
-                errors = await orchestrate(session, user, flow)
+                errors = await orchestrate(session, user, flow, trigger_type=trigger_type)
             except (FlowResolveError, OrchestrationError) as e:
                 logger.warning("orchestrate: flusso %s interrotto: %s", flow_id, e)
                 _finalize_orch_run(orch_run_id, "FAILURE", str(e))

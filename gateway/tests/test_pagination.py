@@ -78,3 +78,15 @@ async def test_flows_superuser_sees_all(session):
     make_flow(session, name="b", project_id=pb.id)
     res = search_flows(q=None, limit=50, offset=0, user=admin, session=session)
     assert res.total == 2
+
+
+async def test_flows_resolve_owner_name(session):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    owner = make_user(session, email="anna@x.local", full_name="Anna Bianchi")
+    p = make_project(session, name="p")
+    make_flow(session, name="con-owner", project_id=p.id, owner_id=owner.id)
+    make_flow(session, name="senza-owner", project_id=p.id, owner_id=None)
+    res = search_flows(q=None, limit=50, offset=0, user=admin, session=session)
+    by_name = {f.name: f.owner_name for f in res.items}
+    assert by_name["con-owner"] == "Anna Bianchi"
+    assert by_name["senza-owner"] is None

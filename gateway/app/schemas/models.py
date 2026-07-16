@@ -101,6 +101,7 @@ class FlowOut(BaseModel):
     description: str
     project_id: int
     owner_id: Optional[int]
+    owner_name: Optional[str] = None  # nome di chi ha creato il flusso (risolto)
     run_schedule: Optional[str] = None  # cron; null = non schedulato
     next_run_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -231,6 +232,7 @@ class RunOut(BaseModel):
     flow_id: Optional[int] = None
     status: str
     launched_by: Optional[int]
+    trigger_type: str = "manual"  # "manual" | "schedule"
     output_key: str
     rows_written: Optional[int]
     error: Optional[str]
@@ -244,9 +246,11 @@ class RunOut(BaseModel):
 
 class RunSearchOut(RunOut):
     """Un run nella ricerca globale delle esecuzioni: come RunOut + i nomi del
-    flusso / della datasource, per mostrarli senza risolverli lato client."""
+    flusso / della datasource / di chi l'ha avviato, per mostrarli senza
+    risolverli lato client."""
     flow_name: Optional[str] = None
     source_name: Optional[str] = None
+    launched_by_name: Optional[str] = None  # None se schedulato o utente rimosso
 
 
 # ── Datasources (dataset nominati nel catalogo) ───────────────────────────────

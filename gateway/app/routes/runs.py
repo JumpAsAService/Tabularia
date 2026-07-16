@@ -65,10 +65,15 @@ async def launch_run(
     return await _launch_flow_run(session, user, flow, body)
 
 
-async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCreate) -> Run:
+async def _launch_flow_run(
+    session: Session, user: User, flow: Flow, body: RunCreate, trigger_type: str = "manual"
+) -> Run:
     """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
     (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
-    publish, CONNECT per le destinazioni — con l'autorità di `user`."""
+    publish, CONNECT per le destinazioni — con l'autorità di `user`.
+
+    `trigger_type`: "manual" (un utente lo lancia) o "schedule" (avviato dallo
+    scheduler nell'ambito di un'orchestrazione schedulata)."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
 
     # input_key e operazioni: la sorgente (e ogni sorgente annidata: right di
@@ -218,6 +223,7 @@ async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCr
         flow_id=flow.id,
         task_id=task_id,
         launched_by=user.id,
+        trigger_type=trigger_type,
         input_key=body.input_key,
         output_bucket=body.bucket,
         output_key=output_key,
@@ -233,7 +239,9 @@ async def _launch_flow_run(session: Session, user: User, flow: Flow, body: RunCr
     return run
 
 
-async def launch_ingest_run(session: Session, user: User, ds: Datasource, conn: Connection) -> Run:
+async def launch_ingest_run(
+    session: Session, user: User, ds: Datasource, conn: Connection, trigger_type: str = "manual"
+) -> Run:
     """Accoda sull'engine l'ingest di una datasource database e registra il run.
 
     Ogni refresh scrive un parquet NUOVO: la datasource passa a puntarci solo a
@@ -264,6 +272,7 @@ async def launch_ingest_run(session: Session, user: User, ds: Datasource, conn: 
         datasource_id=ds.id,
         task_id=task_id,
         launched_by=user.id,
+        trigger_type=trigger_type,
         input_key=f"{conn.db_type}://{conn.host}/{conn.database}",  # descrittivo
         output_bucket=bucket,
         output_key=output_key,
@@ -560,11 +569,13 @@ def search_runs(
         conds.append(or_(Run.error.ilike(like), Run.error_detail.ilike(like)))
 
     def _with_joins(stmt):
-        return stmt.join(Flow, Run.flow_id == Flow.id, isouter=True).join(
-            Datasource, Run.datasource_id == Datasource.id, isouter=True
+        return (
+            stmt.join(Flow, Run.flow_id == Flow.id, isouter=True)
+            .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
+            .join(User, Run.launched_by == User.id, isouter=True)
         )
 
-    items_stmt = _with_joins(select(Run, Flow, Datasource))
+    items_stmt = _with_joins(select(Run, Flow, Datasource, User))
     count_stmt = _with_joins(select(func.count()).select_from(Run))
     for c in conds:
         items_stmt = items_stmt.where(c)
@@ -575,9 +586,11 @@ def search_runs(
     ).all()
 
     out: list[RunSearchOut] = []
-    for run, flow, ds in rows:
+    for run, flow, ds, launcher in rows:
         item = RunSearchOut.model_validate(run, from_attributes=True)
         item.flow_name = flow.name if flow else None
         item.source_name = ds.name if ds else None
+        # chi l'ha avviato: per gli schedulati mostreremo "schedule" lato client
+        item.launched_by_name = (launcher.full_name or launcher.email) if launcher else None
         out.append(item)
     return Page(items=out, total=total)

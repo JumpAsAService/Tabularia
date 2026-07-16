@@ -109,3 +109,42 @@ async def test_search_includes_flow_and_source_names(session, fake_engine):
     res = search_runs(status="FAILURE", q=None, limit=50, offset=0, user=admin, session=session)
     ingest = next(x for x in res.items if x.kind == "ingest")
     assert ingest.source_name == "ordini"
+
+
+# ── chi ha avviato il run (nome utente) e origine (manuale/schedule) ─────────
+async def test_search_resolves_launcher_name(session, fake_engine):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    launcher = make_user(session, email="mario@x.local", full_name="Mario Rossi")
+    f = make_flow(session, name="f", project_id=1)
+    make_run(session, kind="flow", status="FAILURE", flow_id=f.id, task_id="x",
+             error="boom", launched_by=launcher.id)
+    res = search_runs(status="FAILURE", q=None, limit=50, offset=0, user=admin, session=session)
+    assert res.items[0].launched_by_name == "Mario Rossi"
+
+
+async def test_search_launcher_name_falls_back_to_email(session, fake_engine):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    launcher = make_user(session, email="noname@x.local")  # full_name vuoto
+    f = make_flow(session, name="f", project_id=1)
+    make_run(session, kind="flow", status="FAILURE", flow_id=f.id, task_id="x",
+             error="boom", launched_by=launcher.id)
+    res = search_runs(status="FAILURE", q=None, limit=50, offset=0, user=admin, session=session)
+    assert res.items[0].launched_by_name == "noname@x.local"
+
+
+async def test_search_exposes_trigger_type(session, fake_engine):
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    f = make_flow(session, name="f", project_id=1)
+    make_run(session, kind="orchestration", status="SUCCESS", flow_id=f.id, task_id="m",
+             trigger_type="manual")
+    make_run(session, kind="orchestration", status="SUCCESS", flow_id=f.id, task_id="s",
+             trigger_type="schedule")
+    res = search_runs(status=None, q=None, limit=50, offset=0, user=admin, session=session)
+    by_task = {(x.flow_name, x.trigger_type) for x in res.items}
+    assert ("f", "manual") in by_task and ("f", "schedule") in by_task
+
+
+async def test_run_trigger_type_defaults_to_manual(session):
+    r = make_run(session, kind="flow", status="STARTED", task_id="def")
+    session.refresh(r)
+    assert r.trigger_type == "manual"

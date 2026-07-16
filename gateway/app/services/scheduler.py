@@ -72,7 +72,7 @@ async def _fire_ds(session: Session, ds: Datasource, now: datetime) -> None:
             logger.info("scheduler: datasource %s ha già un refresh in corso, salto lo slot", ds.id)
             _advance_ds(session, ds, now)
             return
-    await launch_ingest_run(session, user, ds, conn)
+    await launch_ingest_run(session, user, ds, conn, trigger_type="schedule")
     logger.info("scheduler: refresh schedulato lanciato per datasource %s (%s)", ds.id, ds.name)
     _advance_ds(session, ds, now)
 
@@ -104,7 +104,7 @@ async def _fire_flow(session: Session, flow: Flow, now: datetime) -> None:
         return
     # orchestrazione (refresh → output → runflow) come task detached: non blocca
     # il tick, e la guardia _running evita di sovrapporre lo stesso flusso
-    asyncio.create_task(orchestrate_bg(flow.id, user.id))
+    asyncio.create_task(orchestrate_bg(flow.id, user.id, trigger_type="schedule"))
     logger.info("scheduler: orchestrazione flusso %s (%s) avviata", flow.id, flow.name)
     _advance_flow(session, flow, now)
 

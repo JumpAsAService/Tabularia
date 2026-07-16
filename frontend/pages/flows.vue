@@ -167,6 +167,7 @@ async function saveSchedule(cron: string) {
           <template v-else-if="detail[f.id]">
             <div class="metrics">
               <div class="metric"><span class="mlabel">Cartella</span><span>{{ folderName[f.project_id] ?? `#${f.project_id}` }}</span></div>
+              <div class="metric"><span class="mlabel">Creato da</span><span>{{ f.owner_name ?? '—' }}</span></div>
               <div class="metric"><span class="mlabel">Creato</span><span>{{ fmtDate(f.created_at) }}</span></div>
               <div class="metric"><span class="mlabel">Esecuzioni</span><span>{{ detail[f.id].stats?.run_count ?? 0 }}</span></div>
               <div class="metric"><span class="mlabel">Successi / falliti</span><span>{{ detail[f.id].stats?.success_count ?? 0 }} / {{ detail[f.id].stats?.failure_count ?? 0 }}</span></div>

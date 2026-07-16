@@ -7,6 +7,7 @@ export interface FlowSummary {
   description: string
   project_id: number
   owner_id: number | null
+  owner_name: string | null // nome di chi ha creato il flusso
   run_schedule: string | null // cron; null = non schedulato
   next_run_at: string | null
   created_at: string | null

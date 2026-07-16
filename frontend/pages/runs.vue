@@ -3,7 +3,7 @@
 // i flussi falliscono. Filtro per stato + ricerca testuale sul motivo (server-side,
 // su tutto il dataset) + paginazione; click su una riga per il traceback completo.
 import { ref, watch } from 'vue'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
 
@@ -27,6 +27,14 @@ function toggle(id: number) {
 function fmtDate(s: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+// chi ha avviato il run: se schedulato mostriamo "schedule", altrimenti il nome
+function isScheduled(r: RunInfo): boolean {
+  return r.trigger_type === 'schedule'
+}
+function triggeredBy(r: RunInfo): string {
+  return isScheduled(r) ? 'schedule' : (r.launched_by_name || '—')
 }
 
 const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
@@ -73,6 +81,10 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
             {{ r.flow_name || r.source_name || (r.kind === 'ingest' ? 'refresh datasource' : `run #${r.id}`) }}
           </span>
           <span class="msg muted">{{ r.error || (r.status === 'SUCCESS' ? '—' : '') }}</span>
+          <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? 'Avviato dallo scheduler' : 'Avviato da ' + triggeredBy(r)">
+            <component :is="isScheduled(r) ? CalendarClock : User" :size="12" />
+            {{ triggeredBy(r) }}
+          </span>
           <span class="when muted">{{ fmtDate(r.started_at) }}</span>
         </button>
         <div v-if="expanded === r.id" class="detail">
@@ -102,7 +114,7 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
 .runs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .run { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
 .run.open { border-color: var(--border); }
-.run-row { width: 100%; display: grid; grid-template-columns: 18px 78px minmax(160px, 1fr) minmax(0, 2fr) 130px; align-items: center; gap: 10px; padding: 9px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
+.run-row { width: 100%; display: grid; grid-template-columns: 18px 78px minmax(150px, 1fr) minmax(0, 2fr) 120px 130px; align-items: center; gap: 10px; padding: 9px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
 .run-row:hover { background: var(--panel-2); }
 .chev { color: var(--muted); transition: transform 0.15s; flex: none; }
 .chev.rot { transform: rotate(90deg); }
@@ -112,6 +124,8 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
 .stpill.pending, .stpill.started { background: rgba(148, 163, 184, 0.15); color: var(--muted); }
 .who { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.by { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.by.sched { color: var(--accent-2); }
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
 
 .detail { border-top: 1px solid var(--border-soft); padding: 10px 12px 12px; background: var(--panel-2); }

@@ -33,6 +33,8 @@ _MIGRATIONS = [
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS publish_overwrite BOOLEAN NOT NULL DEFAULT FALSE",
     # Dettaglio errore (traceback engine) per il debug dei run falliti
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS error_detail TEXT",
+    # Origine dell'avvio: 'manual' (utente) | 'schedule' (scheduler)
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS trigger_type VARCHAR NOT NULL DEFAULT 'manual'",
 ]
 
 

@@ -26,6 +26,11 @@ class Run(SQLModel, table=True):
     task_id: str = Field(index=True)  # id del task Celery sull'engine
     status: str = "PENDING"  # PENDING | STARTED | SUCCESS | FAILURE
     launched_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    # come è stato avviato: "manual" (un utente) oppure "schedule" (lo scheduler);
+    # per gli schedulati `launched_by` è l'autore dello schedule, ma in cronologia
+    # mostriamo semplicemente "schedule". Colonna `trigger_type`: "trigger" è
+    # parola riservata SQL.
+    trigger_type: str = Field(default="manual")
 
     input_key: str
     output_bucket: str
