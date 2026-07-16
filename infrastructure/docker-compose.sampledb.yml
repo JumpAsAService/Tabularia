@@ -1,0 +1,101 @@
+# Database ESTERNI di esempio (azienda di SALUMI: gestionale ordini su Postgres,
+# CRM su ClickHouse) per testare i connettori di Tabularia — NON fanno parte
+# dello stack dell'app: sono opt-in.
+#
+#   # 1) avvia i due DB (sulla rete dataprep-network, così l'engine li vede):
+#   docker compose -f infrastructure/docker-compose.sampledb.yml up -d sampledb-postgres sampledb-clickhouse
+#   # 2) genera i dati realistici con Faker (scala small|medium|robusta):
+#   SAMPLEDB_SCALE=robusta docker compose -f infrastructure/docker-compose.sampledb.yml \
+#       --profile generate run --rm sampledb-generator
+#
+# Le connessioni in Tabularia puntano a questi host interni:
+#   Postgres    → host: sampledb-postgres    port: 5432   db: shop      user/pass: shop/shop
+#   ClickHouse  → host: sampledb-clickhouse   port: 8123   db: analytics user/pass: analytics/analytics
+services:
+  sampledb-postgres:
+    image: postgres:16-alpine
+    container_name: sampledb-postgres
+    environment:
+      - POSTGRES_USER=shop
+      - POSTGRES_PASSWORD=shop
+      - POSTGRES_DB=shop
+    ports:
+      - "5434:5432"  # accesso opzionale dall'host (5433 è di dataprep-postgres)
+    volumes:
+      - sampledb_pg:/var/lib/postgresql/data
+    # tuning per la generazione bulk (grandi INSERT ... generate_series)
+    command:
+      - postgres
+      - "-c"
+      - "max_wal_size=8GB"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "work_mem=256MB"
+      - "-c"
+      - "maintenance_work_mem=1GB"
+      - "-c"
+      - "synchronous_commit=off"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sampledb-clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: sampledb-clickhouse
+    environment:
+      - CLICKHOUSE_USER=analytics
+      - CLICKHOUSE_PASSWORD=analytics
+      - CLICKHOUSE_DB=analytics
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ports:
+      - "8124:8123"  # HTTP (usato da clickhouse-connect); host 8124 per non collidere
+    volumes:
+      - sampledb_ch:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # generatore dei dati (Faker + numpy): gira una volta, poi esce. Profilo
+  # "generate" così non parte con un semplice `up`.
+  sampledb-generator:
+    build: ./sampledb
+    container_name: sampledb-generator
+    profiles: ["generate"]
+    environment:
+      - PG_HOST=sampledb-postgres
+      - PG_PORT=5432
+      - PG_DB=shop
+      - PG_USER=shop
+      - PG_PASSWORD=shop
+      - CH_HOST=sampledb-clickhouse
+      - CH_PORT=8123
+      - CH_DB=analytics
+      - CH_USER=analytics
+      - CH_PASSWORD=analytics
+      - SAMPLEDB_SCALE=${SAMPLEDB_SCALE:-robusta}
+    depends_on:
+      sampledb-postgres:
+        condition: service_healthy
+      sampledb-clickhouse:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  sampledb_pg:
+  sampledb_ch:
+
+# riusa la rete dell'app (creata dal compose principale) così l'engine/worker
+# raggiungono questi DB per nome-container
+networks:
+  default:
+    name: dataprep-network
+    external: true
