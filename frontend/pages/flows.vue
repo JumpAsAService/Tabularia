@@ -7,6 +7,7 @@ import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { skeletonPad } from '~/composables/useSkeleton'
 import {
   useFlows, type FlowSummary, type FlowStats, type FlowVersionInfo,
 } from '~/composables/useFlows'
@@ -45,6 +46,7 @@ const detail = reactive<Record<number, Detail>>({})
 
 async function fetchDetail(id: number) {
   detail[id].loading = true
+  const t0 = performance.now()
   try {
     const [stats, versions, runs] = await Promise.all([
       flowsApi.stats(id),
@@ -58,6 +60,7 @@ async function fetchDetail(id: number) {
   } catch (e) {
     detail[id].error = errMessage(e)
   } finally {
+    await skeletonPad(t0)
     detail[id].loading = false
   }
 }

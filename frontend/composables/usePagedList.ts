@@ -4,6 +4,7 @@
 // fetcher del rispettivo endpoint /…/search.
 import { onMounted, ref, watch, type Ref } from 'vue'
 import { errMessage, type Page } from '~/composables/useApi'
+import { skeletonPad } from '~/composables/useSkeleton'
 
 export function usePagedList<T>(
   fetcher: (p: { q?: string; limit: number; offset: number }) => Promise<Page<T>>,
@@ -19,6 +20,7 @@ export function usePagedList<T>(
 
   async function load() {
     loading.value = true
+    const t0 = performance.now()
     try {
       const r = await fetcher({ q: q.value.trim() || undefined, limit: pageSize, offset: offset.value })
       items.value = r.items
@@ -29,6 +31,7 @@ export function usePagedList<T>(
       items.value = []
       total.value = 0
     } finally {
+      await skeletonPad(t0) // lo skeleton resta visibile un minimo: niente flash
       loading.value = false
     }
   }
