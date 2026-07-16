@@ -24,9 +24,10 @@ function fmt(s: string): string {
   return new Date(s).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-// più recenti in alto, max 40
+// solo gli ultimi 20 run (più recenti in alto): oltre, il grafico diventa
+// illeggibile
 const rows = computed(() =>
-  props.runs.filter((r) => r.started_at).slice(0, 40),
+  props.runs.filter((r) => r.started_at).slice(0, 20),
 )
 
 const option = computed(() => {

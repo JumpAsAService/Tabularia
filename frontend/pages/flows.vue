@@ -152,7 +152,7 @@ async function saveSchedule(cron: string) {
             <span class="when muted">{{ fmtDate(f.updated_at) }}</span>
           </button>
           <div class="flow-actions">
-            <NuxtLink :to="`/editor?flow=${f.id}`" class="mini" title="Apri nell'editor"><Pencil :size="13" /></NuxtLink>
+            <button class="mini" title="Apri nell'editor" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
             <button class="mini" :class="{ active: !!f.run_schedule }" title="Schedula esecuzione" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
             <button class="mini danger" title="Elimina flusso" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>
