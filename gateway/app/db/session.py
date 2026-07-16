@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from sqlmodel import create_engine, Session, SQLModel
+from sqlmodel import create_engine, select, Session, SQLModel
 
 from app.core.config import get_settings
 
@@ -43,6 +43,23 @@ def init_db() -> None:
     with engine.begin() as conn:
         for stmt in _MIGRATIONS:
             conn.execute(text(stmt))
+
+
+def backfill_flow_versions() -> None:
+    """Ogni flusso senza storico riceve una v1 con la definizione corrente (per i
+    flussi creati prima del versioning). Idempotente: a regime non carica righe."""
+    from app.models import Flow, FlowVersion
+
+    with Session(engine) as session:
+        missing = session.exec(
+            select(Flow).where(Flow.id.not_in(select(FlowVersion.flow_id)))
+        ).all()
+        for f in missing:
+            session.add(
+                FlowVersion(flow_id=f.id, version=1, definition=f.definition, note="baseline", created_by=f.owner_id)
+            )
+        if missing:
+            session.commit()
 
 
 def get_session():

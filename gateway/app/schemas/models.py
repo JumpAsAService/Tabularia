@@ -103,6 +103,7 @@ class FlowOut(BaseModel):
     owner_id: Optional[int]
     run_schedule: Optional[str] = None  # cron; null = non schedulato
     next_run_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
@@ -126,6 +127,24 @@ class FlowUpdate(BaseModel):
     description: Optional[str] = None
     definition: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+
+
+class FlowVersionOut(BaseModel):
+    """Una versione della definizione di un flusso (storico + promozione)."""
+    version: int
+    note: str
+    created_at: Optional[datetime]
+    created_by: Optional[int]
+    is_current: bool
+
+
+class FlowStatsOut(BaseModel):
+    """Statistiche d'esecuzione di un flusso (dalla cronologia dei run)."""
+    run_count: int
+    success_count: int
+    failure_count: int
+    last_run_at: Optional[datetime]
+    avg_duration_seconds: Optional[float]
 
 
 # ── Connections (connessioni a database esterni) ─────────────────────────────

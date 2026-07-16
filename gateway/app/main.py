@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
-from app.db.session import init_db
+from app.db.session import backfill_flow_versions, init_db
 from app.db.seed import seed_admin
 from app.services.scheduler import scheduler_loop
 from app.routes.auth import router as auth_router
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     # crea le tabelle e semina l'admin da env (idempotente)
     init_db()
     seed_admin()
+    backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
     # scheduler in-process del refresh delle datasource database
     stop = asyncio.Event()
     scheduler = asyncio.create_task(scheduler_loop(stop))
