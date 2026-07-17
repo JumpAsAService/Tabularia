@@ -25,6 +25,7 @@ import polars as pl
 from botocore.exceptions import ClientError
 
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
+from app.engine.cache import StepCache, plan_hashes
 from app.engine.duckdb_ops import get_duck_operation
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
@@ -71,8 +72,10 @@ class DuckContext:
             raise
         return self.con.read_parquet(path)
 
-    def apply(self, rel, ops):
-        """Applica una catena di operazioni (Operation o dict) a una relazione."""
+    def apply(self, rel, ops, index_offset: int = 0):
+        """Applica una catena di operazioni (Operation o dict) a una relazione.
+        `index_offset` allinea l'indice riportato negli errori a quello assoluto
+        nella catena (le op iniziali possono venire dalla cache)."""
         for i, op in enumerate(ops):
             op_type = op.type if isinstance(op, Operation) else op["type"]
             params = op.params if isinstance(op, Operation) else (op.get("params") or {})
@@ -82,7 +85,7 @@ class DuckContext:
             except EngineError:
                 raise
             except Exception as e:  # errore SQL/binder su questa operazione
-                raise OperationError(op_type, i, str(e)) from e
+                raise OperationError(op_type, i + index_offset, str(e)) from e
         return rel
 
     def build_right(self, ref: dict):
@@ -101,6 +104,7 @@ class DuckContext:
 
 
 class DuckDBEngine(Engine):
+    # tag che namespacea la step-cache: engine diversi non condividono i blob
     engine_name = "duckdb"
 
     def __init__(self, storage=None, cache=None):
@@ -109,17 +113,50 @@ class DuckDBEngine(Engine):
 
             storage = get_storage_service()
         self.storage = storage
-        # `cache` accettato per parità d'interfaccia con PolarsEngine; v1 non usa
-        # la step-cache incrementale (ricostruisce dalla sorgente).
-        self.cache = cache
+        self.cache = cache or StepCache(storage)
 
     def _connection(self) -> duckdb.DuckDBPyConnection:
         return duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
 
-    def _build(self, con, tmp: list[str], source: DataSource, ops: list[Operation], preview_limit=None):
-        """Relazione LAZY: scan della sorgente + applicazione delle operazioni."""
-        ctx = DuckContext(con, self.storage, tmp, preview_limit=preview_limit)
-        return ctx.apply(ctx.scan(source), ops)
+    def _source_id(self, source: DataSource) -> str:
+        return f"{self.engine_name}:{source.bucket}/{source.key}"
+
+    # ── Cache incrementale (mirror di PolarsEngine) ───────────────────────
+    def _rel_from_cache(self, ctx: "DuckContext", source, operations, hashes, record=False):
+        """Costruisce la relazione partendo dall'antenato in cache più vicino e
+        applicando solo le operazioni rimanenti."""
+        start = self.cache.nearest(hashes)  # quanti step iniziali sono già in cache
+        if record and operations:
+            (self.cache.record_hit if start > 0 else self.cache.record_miss)()
+        if start == 0:
+            rel = ctx.scan(source)
+        else:
+            self.cache.touch(hashes[start - 1])  # segna l'uso → posticipa il TTL
+            cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
+            rel = ctx.scan(cached)
+            logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
+        return ctx.apply(rel, operations[start:], index_offset=start)
+
+    def _materialize(self, ctx: "DuckContext", source, operations) -> None:
+        """Materializza in cache l'output di `operations` (se non già presente),
+        così le prossime esecuzioni possono ripartire da lì."""
+        if not operations:
+            return
+        hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in operations])
+        final = hashes[-1]
+        if self.cache.has(final):
+            return
+        rel = self._rel_from_cache(ctx, source, operations, hashes)
+        path = ctx.tempfile()
+        try:
+            rel.write_parquet(path)
+        except EngineError:
+            raise
+        except Exception as e:
+            raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+        self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
+        self.cache.mark(final)
+        logger.info("materializzato step %d in cache", len(operations))
 
     @staticmethod
     def _cleanup(tmp: list[str]) -> None:
@@ -140,7 +177,12 @@ class DuckDBEngine(Engine):
         con = self._connection()
         tmp: list[str] = []
         try:
-            rel = self._build(con, tmp, source, ops, preview_limit=limit + 1)
+            ctx = DuckContext(con, self.storage, tmp, preview_limit=limit + 1)
+            # materializza il PARENT: iterando sui parametri dell'ultimo nodo, le
+            # anteprime successive ripartono dalla sua cache (una sola op)
+            self._materialize(ctx, source, ops[:-1])
+            hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            rel = self._rel_from_cache(ctx, source, ops, hashes, record=True)
             try:
                 df = rel.limit(limit + 1).pl()  # solo LIMIT+1 righe materializzate
             except EngineError:
@@ -171,9 +213,10 @@ class DuckDBEngine(Engine):
         con = self._connection()
         tmp: list[str] = []
         try:
-            rel = self._build(con, tmp, source, ops)
-            out_path = tempfile.mkstemp(suffix=".parquet", prefix="duckdb_")[1]
-            tmp.append(out_path)
+            ctx = DuckContext(con, self.storage, tmp)
+            hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            rel = self._rel_from_cache(ctx, source, ops, hashes, record=True)
+            out_path = ctx.tempfile()
             try:
                 rel.write_parquet(out_path)  # streaming, spill su disco
             except EngineError:
@@ -182,6 +225,12 @@ class DuckDBEngine(Engine):
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
+            # l'output finale è anche il risultato dell'ultimo step: mettilo in
+            # cache così ri-run e anteprime del nodo foglia sono immediati
+            if ops and not self.cache.has(hashes[-1]):
+                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
+                self.cache.mark(hashes[-1])
+
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
             return RunResult(

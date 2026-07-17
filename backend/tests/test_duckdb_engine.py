@@ -7,13 +7,16 @@ import polars as pl
 import pytest
 
 from app.engine.base import DataSource
+from app.engine.cache import StepCache, plan_hashes
 from app.engine.duckdb_engine import DuckDBEngine
 from app.engine.exceptions import EngineError
 from tests.conftest import BUCKET, upload_df
+from tests.fakes import FakeRedis
 
 
-def _engine(storage):
-    return DuckDBEngine(storage=storage)
+def _engine(storage, cache=None):
+    # cache con Redis finto (i test girano senza Valkey), come i test Polars
+    return DuckDBEngine(storage=storage, cache=cache or StepCache(storage, redis_client=FakeRedis()))
 
 
 @pytest.fixture
@@ -163,6 +166,34 @@ def test_foreach_driver(storage, src):
     }}]
     res = _engine(storage).preview(src, ops, limit=50)
     assert res.row_count == 4  # soglia100 → 3, soglia300 → 1
+
+
+# ── step-cache incrementale ──────────────────────────────────────────────────
+def test_step_cache_materializes_parent(storage, src):
+    cache = StepCache(storage, redis_client=FakeRedis())
+    eng = _engine(storage, cache)
+    parent = [{"type": "filter", "params": {"column": "vendite", "operator": "gt", "value": 40}}]
+    ops = parent + [{"type": "sort", "params": {"by": "vendite"}}]
+    eng.preview(src, ops, limit=10)
+    parent_hash = plan_hashes(eng._source_id(src), parent)[-1]
+    assert cache.has(parent_hash)  # il parent (filter) è in cache → l'ultimo nodo riparte da lì
+
+
+def test_step_cache_result_identical(storage, src):
+    cache = StepCache(storage, redis_client=FakeRedis())
+    eng = _engine(storage, cache)
+    ops = [
+        {"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": 100}},
+        {"type": "sort", "params": {"by": "vendite", "descending": True}},
+    ]
+    first = eng.preview(src, ops, limit=10).rows
+    second = eng.preview(src, ops, limit=10).rows  # riparte dalla cache del parent
+    assert first == second
+
+
+def test_step_cache_namespaced_by_engine(storage, src):
+    # DuckDB e Polars non devono condividere i blob: il source_id porta il tag
+    assert _engine(storage)._source_id(src).startswith("duckdb:")
 
 
 # ── join / union / pivot / unpivot / compute ─────────────────────────────────
