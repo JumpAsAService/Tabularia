@@ -35,8 +35,8 @@ from app.services.schedule import ScheduleError, next_fire, validate_schedule
 router = APIRouter(tags=["flows"])
 
 # engine SELEZIONABILI alla creazione (sincronizzato col catalogo dell'engine:
-# solo quelli `available=True`). DuckDB entrerà qui quando il suo engine sarà pronto.
-_AVAILABLE_ENGINES = {"polars"}
+# solo quelli `available=True`).
+_AVAILABLE_ENGINES = {"polars", "duckdb"}
 
 
 def _validate_engine(engine: str | None) -> str:

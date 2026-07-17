@@ -53,13 +53,23 @@ __all__ = [
 
 DEFAULT_ENGINE = "polars"
 
-# implementazioni registrate: name → factory. DuckDB si aggiungerà qui.
+# implementazioni registrate: name → factory.
 _ENGINES: dict[str, type[Engine]] = {
     "polars": PolarsEngine,
 }
 
+# DuckDB richiede il pacchetto `duckdb`: import guardato così, se manca,
+# l'engine risulta non disponibile senza rompere Polars.
+try:
+    from app.engine.duckdb_engine import DuckDBEngine
+
+    _ENGINES["duckdb"] = DuckDBEngine
+    _DUCKDB_AVAILABLE = True
+except Exception:  # pragma: no cover
+    _DUCKDB_AVAILABLE = False
+
 # metadati per il picker del frontend (creazione flusso). `available=False` =
-# opzione mostrata ma non ancora selezionabile (in arrivo).
+# opzione mostrata ma non ancora selezionabile.
 ENGINE_CATALOG = [
     {
         "id": "polars",
@@ -70,8 +80,9 @@ ENGINE_CATALOG = [
     {
         "id": "duckdb",
         "label": "DuckDB",
-        "available": False,
-        "description": "Motore SQL out-of-core (spill su disco): adatto ad aggregazioni e join molto grandi. In arrivo.",
+        "available": _DUCKDB_AVAILABLE,
+        "description": "Motore SQL out-of-core (spill su disco): adatto ad aggregazioni e join molto grandi. "
+        "v1: operazioni di base (le trasformazioni avanzate usano Polars).",
     },
 ]
 
