@@ -184,6 +184,7 @@ export interface FieldSpec {
     | 'exprlist' // [{name, expr}] — colonne calcolate (espressioni SQL)
     | 'strategy' // union: relaxed | strict
     | 'json' // textarea con JSON libero (es. items del foreach)
+    | 'sqltext' // textarea con una query SQL intera (Execute SQL); preview MANUALE
   optional?: boolean
 }
 
@@ -224,6 +225,7 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
   compute: [
     { key: 'columns', label: 'Colonne calcolate (espressioni SQL)', control: 'exprlist' },
   ],
+  sql: [{ key: 'query', label: 'Query SQL', control: 'sqltext' }],
   join: [
     { key: 'how', label: 'Tipo di join', control: 'how' },
     { key: 'on', label: 'Colonne chiave (in entrambe)', control: 'columns' },
@@ -315,6 +317,8 @@ export function defaultParams(opType: string): Record<string, any> {
       return { descending: false }
     case 'foreach':
       return { add_keys_as_columns: true }
+    case 'sql':
+      return { query: '' }
     default:
       return {}
   }

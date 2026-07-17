@@ -407,6 +407,45 @@ def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Execute SQL: una query SQL (dialetto Polars) sul frame in ingresso
+# ─────────────────────────────────────────────────────────────────────────────
+# Table function che leggono FILE dal disco del worker: Polars SQL le supporta,
+# ma qui sono VIETATE — una query potrebbe leggere secret o i parquet di altri
+# (es. `SELECT * FROM read_csv('/app/.../secrets.toml')`). L'unica tabella
+# disponibile è l'input del nodo.
+_SQL_FILE_FUNCS = re.compile(r"\b(?:read|scan)_(?:csv|parquet|ipc|ndjson|json)\s*\(", re.IGNORECASE)
+
+
+@register("sql")
+def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    """
+    params: {"query": "SELECT ... FROM self ..."}
+
+    Esegue una query SQL nel dialetto di Polars sul frame in ingresso, esposto
+    come tabella `self` (alias `input`). Polars SQL è un motore CHIUSO sui frame
+    in memoria — niente Python, nessun I/O — e resta LAZY (`SQLContext.execute`
+    torna un LazyFrame → streamabile e cacheable), coerente con l'engine
+    dichiarativo. Le table function che leggono file sono bloccate a monte.
+    """
+    query = str(_require(params, "query") or "").strip()
+    if not query:
+        raise EngineError("sql: la query è vuota")
+    if _SQL_FILE_FUNCS.search(query):
+        raise EngineError(
+            "sql: le funzioni di lettura file (read_csv/read_parquet/…) non sono "
+            "permesse. L'unica tabella disponibile è l'input del nodo (`self`)."
+        )
+    try:
+        result = pl.SQLContext(frames={"self": lf, "input": lf}).execute(query)
+        result.collect_schema()  # valida sintassi/colonne SUBITO (metadati, senza dati)
+        return result
+    except EngineError:
+        raise
+    except Exception as e:
+        raise EngineError(f"sql: query non valida: {e}") from e
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Foreach: ciclo con placeholder (stile container SSIS)
 # ─────────────────────────────────────────────────────────────────────────────
 # guardia per-livello: un driver/items enorme genererebbe migliaia di catene

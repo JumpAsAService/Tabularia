@@ -27,6 +27,7 @@ const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
   (e: 'delete'): void
   (e: 'export', format: 'csv' | 'xlsx'): void
+  (e: 'preview'): void // anteprima a comando (nodo SQL)
 }>()
 
 const isSource = () => props.node?.type === 'source'
@@ -381,6 +382,7 @@ function pickDatasource(id: number | null) {
         :placeholders="placeholders"
         :fetch-distinct="fetchDistinct"
         @update="onParams"
+        @preview="emit('preview')"
       />
 
       <div class="exportbar">

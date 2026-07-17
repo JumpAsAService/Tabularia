@@ -157,6 +157,49 @@ def test_group_by_aggregazioni_multiple():
     assert {"tot", "massimo"} <= set(out.columns)
 
 
+# ── Execute SQL (dialetto Polars sul frame in ingresso) ──────────────────────
+def test_sql_select_where():
+    # df_base vendite: IT 100, FR 50, DE 250, IT 300 → >100 = DE, IT
+    out = apply("sql", {"query": "SELECT paese, vendite FROM self WHERE vendite > 100"})
+    assert out.columns == ["paese", "vendite"]
+    assert set(out["paese"]) == {"DE", "IT"}
+
+
+def test_sql_aggregation_group_by():
+    out = apply("sql", {"query": "SELECT paese, sum(vendite) AS tot FROM self GROUP BY paese"})
+    assert dict(zip(out["paese"], out["tot"]))["IT"] == 400  # 100 + 300
+
+
+def test_sql_from_input_alias():
+    out = apply("sql", {"query": "SELECT count(*) AS n FROM input"})
+    assert out["n"][0] == 4
+
+
+def test_sql_blocca_lettura_file():
+    # una query non deve poter leggere il filesystem del worker
+    with pytest.raises(EngineError, match="non sono permesse"):
+        apply("sql", {"query": "SELECT * FROM read_csv('/app/app/core/config.py')"})
+    with pytest.raises(EngineError, match="non sono permesse"):
+        apply("sql", {"query": "select * from READ_PARQUET ('/tmp/x.parquet')"})
+
+
+def test_sql_query_vuota_rifiutata():
+    with pytest.raises(EngineError):
+        apply("sql", {"query": "   "})
+
+
+def test_sql_query_invalida_rifiutata():
+    with pytest.raises(EngineError):
+        apply("sql", {"query": "SELECT colonna_inesistente FROM self"})
+
+
+def test_sql_resta_lazy():
+    # l'op deve restituire un LazyFrame (streamabile), non materializzare
+    lf = df_base().lazy()
+    out = get_operation("sql")(lf, {"query": "SELECT * FROM self"}, None)
+    assert isinstance(out, pl.LazyFrame)
+
+
 # ── Join (il lato destro passa dallo storage) ────────────────────────────────
 def test_join_inner_con_sorgente_semplice(storage, anagrafica):
     ctx = OperationContext(storage)

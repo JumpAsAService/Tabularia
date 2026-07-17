@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, computed, watch } from 'vue'
-import { Info, X, Calendar } from 'lucide-vue-next'
+import { Info, X, Calendar, Play } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import {
   OP_SPECS,
@@ -30,7 +30,10 @@ const props = defineProps<{
   // carica i valori distinti di una colonna (per il picker di in/not_in)
   fetchDistinct?: (column: string) => Promise<any[]>
 }>()
-const emit = defineEmits<{ (e: 'update', params: Record<string, any>): void }>()
+const emit = defineEmits<{
+  (e: 'update', params: Record<string, any>): void
+  (e: 'preview'): void // anteprima MANUALE (nodo SQL): non su ogni tasto
+}>()
 
 const spec = computed<FieldSpec[]>(() => OP_SPECS[props.opType] ?? [])
 const leftNames = computed(() => props.inputColumns.map((c) => c.name))
@@ -247,6 +250,12 @@ function build(): Record<string, any> {
 function emitUpdate() {
   emit('update', build())
 }
+// nodo SQL: l'anteprima si lancia SOLO a comando (bottone / Cmd-Ctrl+Enter),
+// mai a ogni tasto. Prima salva il testo corrente nei params, poi chiede il run.
+function emitPreviewNow() {
+  emitUpdate()
+  emit('preview')
+}
 
 // helper toggle per multi-select a checkbox
 function toggleColumn(key: string, name: string) {
@@ -401,6 +410,29 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         @change="emitUpdate"
       />
 
+      <!-- Execute SQL: query intera; anteprima MANUALE (mai a ogni tasto) -->
+      <div v-else-if="f.control === 'sqltext'" class="sqlblock">
+        <textarea
+          v-model="state[f.key]"
+          rows="9"
+          spellcheck="false"
+          class="sqlarea"
+          placeholder="SELECT paese, SUM(vendite) AS tot&#10;FROM self&#10;GROUP BY paese&#10;ORDER BY tot DESC"
+          @change="emitUpdate"
+          @keydown.meta.enter.prevent="emitPreviewNow"
+          @keydown.ctrl.enter.prevent="emitPreviewNow"
+        />
+        <div class="sqlactions">
+          <button class="previewbtn" type="button" @click="emitPreviewNow">
+            <Play :size="12" /> Anteprima
+          </button>
+          <span class="sqlhint">
+            Tabella d'ingresso: <code>self</code> (alias <code>input</code>). Dialetto SQL di Polars.
+            <br />L'anteprima parte solo a comando — <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
+          </span>
+        </div>
+      </div>
+
       <!-- scalari semplici -->
       <input v-else-if="f.control === 'number'" type="number" v-model="state[f.key]" @change="emitUpdate" />
       <label v-else-if="f.control === 'boolean'" class="chk">
@@ -526,4 +558,10 @@ label { font-size: 12px; color: var(--muted); }
 .exprhead input { flex: 1; }
 .exprhead .x { padding: 2px 8px; }
 .sqlhint { font-size: 11.5px; color: var(--muted); margin: 2px 0 0; }
+.sqlblock { display: flex; flex-direction: column; gap: 6px; }
+.sqlarea { font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.5; resize: vertical; tab-size: 2; }
+.sqlactions { display: flex; align-items: flex-start; gap: 10px; }
+.previewbtn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex-shrink: 0; }
+.sqlblock kbd { font-family: ui-monospace, monospace; font-size: 10.5px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
+.sqlblock code { font-family: ui-monospace, monospace; font-size: 11.5px; }
 </style>

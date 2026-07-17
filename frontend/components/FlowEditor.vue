@@ -541,7 +541,16 @@ function patchSelected(patch: Record<string, any>) {
   if (!selectedId.value) return
   updateNodeData(selectedId.value, patch)
   invalidateColumns()
+  // il nodo SQL NON esegue l'anteprima a ogni modifica: una query può essere
+  // pesante e riprovarla a ogni tasto/blur è sprecato. L'anteprima è a comando
+  // (bottone «Anteprima» o Cmd/Ctrl+Enter → previewSelected).
+  if (findNode(selectedId.value)?.data?.opType === 'sql') return
   refreshForNode(selectedId.value)
+}
+
+// anteprima a comando del nodo selezionato (usata dal nodo SQL)
+function previewSelected() {
+  if (selectedId.value) refreshForNode(selectedId.value)
 }
 
 function deleteSelected() {
@@ -1180,6 +1189,7 @@ async function pollTask(id: string) {
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"
+        @preview="previewSelected"
       />
     </div>
 

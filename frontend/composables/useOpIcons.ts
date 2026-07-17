@@ -21,6 +21,7 @@ import {
   FoldVertical,
   Calculator,
   Merge,
+  Terminal,
 } from 'lucide-vue-next'
 
 export interface OpMeta {
@@ -35,6 +36,7 @@ const OP_META: Record<string, OpMeta> = {
   rename:     { icon: PenLine,     label: 'Rinomina',          color: '#4f8cff' },
   cast:       { icon: Type,        label: 'Cambia tipo',       color: '#4f8cff' },
   compute:    { icon: Calculator,  label: 'Colonna calcolata', color: '#4f8cff' },
+  sql:        { icon: Terminal,     label: 'Execute SQL',       color: '#4f8cff' },
   filter:     { icon: Filter,      label: 'Filtra',            color: '#f59e0b' },
   sort:       { icon: ArrowUpDown, label: 'Ordina',            color: '#f59e0b' },
   limit:      { icon: Scissors,    label: 'Limita righe',      color: '#f59e0b' },
