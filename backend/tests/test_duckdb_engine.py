@@ -113,6 +113,70 @@ def test_run_writes_output(storage, src):
 
 def test_unsupported_ops_raise(storage, src):
     e = _engine(storage)
-    for bad in ("sql", "join", "compute", "pivot", "foreach"):
+    for bad in ("sql", "foreach"):
         with pytest.raises(EngineError, match="non ancora supportata"):
             e.preview(src, [{"type": bad, "params": {}}], limit=5)
+
+
+# ── join / union / pivot / unpivot / compute ─────────────────────────────────
+@pytest.fixture
+def anag(storage):
+    df = pl.DataFrame({"paese": ["IT", "FR"], "nome": ["Italia", "Francia"]})
+    return upload_df(storage, df, "datasets/anag_duck.parquet")
+
+
+def test_join_inner(storage, src, anag):
+    ops = [{"type": "join", "params": {"right": {"bucket": anag.bucket, "key": anag.key}, "on": ["paese"], "how": "inner"}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    assert "nome" in {c.name for c in res.columns}
+    assert {r["nome"] for r in res.rows} == {"Italia", "Francia"}  # DE senza match escluso
+
+
+def test_join_left_keeps_unmatched(storage, src, anag):
+    ops = [{"type": "join", "params": {"right": {"bucket": anag.bucket, "key": anag.key}, "on": ["paese"], "how": "left"}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    de = [r for r in res.rows if r["paese"] == "DE"]
+    assert de and de[0]["nome"] is None
+
+
+def test_join_overlap_suffix(storage, src):
+    r = upload_df(storage, pl.DataFrame({"paese": ["IT"], "vendite": [999]}), "datasets/ov_duck.parquet")
+    ops = [{"type": "join", "params": {"right": {"bucket": r.bucket, "key": r.key}, "on": ["paese"], "how": "inner"}}]
+    cols = {c.name for c in _engine(storage).preview(src, ops, limit=10).columns}
+    assert "vendite" in cols and "vendite_right" in cols  # omonima non-chiave → suffisso
+
+
+def test_union_relaxed(storage, src):
+    r = upload_df(storage, pl.DataFrame({"paese": ["ES"], "vendite": [7], "citta": ["Madrid"]}), "datasets/es_duck.parquet")
+    ops = [{"type": "union", "params": {"right": {"bucket": r.bucket, "key": r.key}, "strategy": "relaxed"}}]
+    res = _engine(storage).preview(src, ops, limit=20)
+    assert res.row_count == 5 and "ES" in {row["paese"] for row in res.rows}
+
+
+def test_compute(storage, src):
+    ops = [{"type": "compute", "params": {"columns": [{"name": "doppio", "expr": "vendite * 2"}]}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    row = [r for r in res.rows if r["vendite"] == 100][0]
+    assert row["doppio"] == 200
+
+
+def test_compute_blocks_subquery_and_file(storage, src):
+    e = _engine(storage)
+    for bad_expr in ("(SELECT 1)", "(SELECT * FROM read_csv('/etc/passwd'))"):
+        with pytest.raises(EngineError, match="non consentita"):
+            e.preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": bad_expr}]}}], limit=5)
+
+
+def test_pivot(storage):
+    s = upload_df(storage, pl.DataFrame({"paese": ["IT", "IT", "FR"], "anno": [2023, 2024, 2023], "v": [10, 20, 5]}), "datasets/piv_duck.parquet")
+    ops = [{"type": "pivot", "params": {"index": ["paese"], "on": "anno", "values": "v", "func": "sum"}}]
+    cols = {c.name for c in _engine(storage).preview(s, ops, limit=10).columns}
+    assert "paese" in cols and "2023" in cols and "2024" in cols
+
+
+def test_unpivot(storage):
+    s = upload_df(storage, pl.DataFrame({"paese": ["IT", "FR"], "a": [1, 2], "b": [3, 4]}), "datasets/unp_duck.parquet")
+    ops = [{"type": "unpivot", "params": {"index": ["paese"], "on": ["a", "b"], "variable_name": "metric", "value_name": "val"}}]
+    res = _engine(storage).preview(s, ops, limit=10)
+    assert {c.name for c in res.columns} == {"paese", "metric", "val"}
+    assert res.row_count == 4

@@ -8,9 +8,10 @@ materializzano. La sorgente è scaricata su file temporaneo e letta con
 `read_parquet` (out-of-core, niente dipendenza da httpfs); l'output è scritto in
 streaming e caricato sullo storage.
 
-v1: operazioni single-input strutturali (vedi `duckdb_ops`). compute/sql/join/
-union/pivot/unpivot/foreach non ancora supportate → errore chiaro (usa Polars).
-Nessuna step-cache incrementale (ricostruisce dalla sorgente): arriverà dopo.
+Operazioni in `duckdb_ops`: strutturali single-input + join/union (leggono il
+lato destro via il context) + pivot/unpivot + compute. `sql` (query intera) e
+`foreach` non sono ancora supportate → errore chiaro (usa Polars). Nessuna
+step-cache incrementale (ricostruisce dalla sorgente): arriverà dopo.
 """
 from __future__ import annotations
 
@@ -33,6 +34,63 @@ logger = logging.getLogger(__name__)
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
 
+class DuckContext:
+    """Stato di esecuzione di una catena DuckDB: connessione, storage, file
+    temporanei e generatore di nomi UNIVOCI (alias delle operazioni, viste
+    registrate). Le operazioni multi-input (join/union) lo usano per costruire
+    il lato destro dalla sorgente annidata."""
+
+    def __init__(self, con, storage, tmp: list[str]):
+        self.con = con
+        self.storage = storage
+        self.tmp = tmp
+        self._n = 0
+
+    def uid(self, prefix: str) -> str:
+        self._n += 1
+        return f"_{prefix}{self._n}"
+
+    def scan(self, source: DataSource):
+        path = tempfile.mkstemp(suffix=".parquet", prefix="duckdb_")[1]
+        self.tmp.append(path)
+        try:
+            self.storage.download_file(source.bucket, source.key, path)
+        except ClientError as e:
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            if code in _NOT_FOUND_CODES:
+                raise SourceNotFoundError(source.bucket, source.key) from e
+            raise
+        return self.con.read_parquet(path)
+
+    def apply(self, rel, ops):
+        """Applica una catena di operazioni (Operation o dict) a una relazione."""
+        for i, op in enumerate(ops):
+            op_type = op.type if isinstance(op, Operation) else op["type"]
+            params = op.params if isinstance(op, Operation) else (op.get("params") or {})
+            fn = get_duck_operation(op_type)
+            try:
+                rel = fn(rel, params, self.uid("q"), self)
+            except EngineError:
+                raise
+            except Exception as e:  # errore SQL/binder su questa operazione
+                raise OperationError(op_type, i, str(e)) from e
+        return rel
+
+    def build_right(self, ref: dict):
+        """Lato destro di un join/union: sotto-flow {source, operations} o
+        sorgente semplice {bucket, key}."""
+        if "source" in ref:
+            rel = self.scan(DataSource(**ref["source"]))
+            return self.apply(rel, ref.get("operations") or [])
+        return self.scan(DataSource(**ref))
+
+    def register(self, rel) -> str:
+        """Registra una relazione come vista con nome univoco (per il join/union)."""
+        name = self.uid("reg")
+        self.con.register(name, rel)
+        return name
+
+
 class DuckDBEngine(Engine):
     engine_name = "duckdb"
 
@@ -46,36 +104,13 @@ class DuckDBEngine(Engine):
         # la step-cache incrementale (ricostruisce dalla sorgente).
         self.cache = cache
 
-    # ── I/O ───────────────────────────────────────────────────────────────
     def _connection(self) -> duckdb.DuckDBPyConnection:
         return duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
 
-    def _download(self, path: str, source: DataSource) -> None:
-        try:
-            self.storage.download_file(source.bucket, source.key, path)
-        except ClientError as e:
-            code = str(e.response.get("Error", {}).get("Code", ""))
-            if code in _NOT_FOUND_CODES:
-                raise SourceNotFoundError(source.bucket, source.key) from e
-            raise
-
     def _build(self, con, tmp: list[str], source: DataSource, ops: list[Operation]):
         """Relazione LAZY: scan della sorgente + applicazione delle operazioni."""
-        path = tempfile.mkstemp(suffix=".parquet", prefix="duckdb_")[1]
-        tmp.append(path)
-        self._download(path, source)
-        rel = con.read_parquet(path)
-        for i, op in enumerate(ops):
-            fn = get_duck_operation(op.type)
-            try:
-                # alias UNICO per step: nomi ripetuti in .query() concatenate
-                # mandano DuckDB in ricorsione infinita
-                rel = fn(rel, op.params, f"_q{i}")
-            except EngineError:
-                raise
-            except Exception as e:  # errore SQL/binder su questa operazione
-                raise OperationError(op.type, i, str(e)) from e
-        return rel
+        ctx = DuckContext(con, self.storage, tmp)
+        return ctx.apply(ctx.scan(source), ops)
 
     @staticmethod
     def _cleanup(tmp: list[str]) -> None:
@@ -138,7 +173,6 @@ class DuckDBEngine(Engine):
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
-            # metadati dal parquet scritto (letti dai metadati, economici)
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
             return RunResult(
