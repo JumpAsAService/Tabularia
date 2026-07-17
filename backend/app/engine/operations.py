@@ -306,6 +306,34 @@ def _build_right(right_ref: dict[str, Any], ctx: OperationContext) -> pl.LazyFra
     return ctx.scan(DataSource(**right_ref))
 
 
+def _cross_join(lf: pl.LazyFrame, right_lf: pl.LazyFrame, ctx: OperationContext) -> pl.LazyFrame:
+    """Cross join (prodotto cartesiano L×R) con protezione anti-OOM.
+
+    In ANTEPRIMA campiona entrambi i lati (`ctx.sample_rows`): il risultato è un
+    campione del cartesiano, ma il picco di memoria resta minuscolo e la preview
+    non blocca il processo API. In RUN conta prima le righe dei due lati e, se il
+    prodotto supera il tetto, RIFIUTA con un messaggio chiaro invece di far
+    esplodere la RAM dell'host (il cross join è la causa n.1 di freeze)."""
+    if ctx.preview and ctx.sample_rows > 0:
+        n = ctx.sample_rows
+        return lf.head(n).join(right_lf.head(n), how="cross")
+
+    cap = ctx.max_cross_join_rows
+    if cap and cap > 0:
+        # count in streaming: sui parquet è quasi gratis (metadati); sul lato
+        # sinistro esegue la catena a monte una volta (prezzo dell'assicurazione)
+        left_n = lf.select(pl.len()).collect(engine="streaming").item()
+        right_n = right_lf.select(pl.len()).collect(engine="streaming").item()
+        if left_n * right_n > cap:
+            raise EngineError(
+                f"Il cross join produrrebbe {left_n * right_n:,} righe "
+                f"({left_n:,} × {right_n:,}), oltre il limite di {cap:,}. "
+                "Aggiungi una condizione di join (chiave) o riduci le sorgenti "
+                "(filter/limit) prima di incrociarle."
+            )
+    return lf.join(right_lf, how="cross")
+
+
 @register("join")
 def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     # params: {"right": <sorgente o sub-flow>,
@@ -315,9 +343,9 @@ def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
     right_lf = _build_right(right_ref, ctx)
     how = params.get("how", "inner")
 
-    # il cross join non usa colonne chiave
+    # il cross join non usa colonne chiave — e può esplodere: protetto a parte
     if how == "cross":
-        return lf.join(right_lf, how="cross")
+        return _cross_join(lf, right_lf, ctx)
 
     if "on" in params:
         return lf.join(right_lf, on=params["on"], how=how)

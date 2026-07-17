@@ -186,6 +186,41 @@ def test_join_con_sotto_flow_sul_lato_destro(storage, anagrafica):
         ctx.cleanup()
 
 
+def test_cross_join_run_ok_sotto_il_tetto(storage, anagrafica):
+    # 4 righe (df_base) × 2 (anagrafica) = 8 righe, sotto il tetto → prodotto pieno
+    ctx = OperationContext(storage)
+    ctx.max_cross_join_rows = 1000
+    try:
+        out = apply("join", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "how": "cross"}, ctx=ctx)
+        assert out.height == 8
+    finally:
+        ctx.cleanup()
+
+
+def test_cross_join_run_rifiuta_oltre_il_tetto(storage, anagrafica):
+    # tetto artificialmente basso → il cross join deve essere RIFIUTATO con un
+    # errore chiaro invece di materializzare il cartesiano (anti-OOM/freeze)
+    ctx = OperationContext(storage)
+    ctx.max_cross_join_rows = 5
+    try:
+        with pytest.raises(EngineError, match="cross join"):
+            apply("join", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "how": "cross"}, ctx=ctx)
+    finally:
+        ctx.cleanup()
+
+
+def test_cross_join_preview_campiona_gli_input(storage, anagrafica):
+    # in ANTEPRIMA il cross join campiona i due lati (head(sample_rows)) → mai il
+    # cartesiano pieno, così la preview resta leggera anche su sorgenti enormi
+    ctx = OperationContext(storage, preview=True, sample_rows=2)
+    ctx.max_cross_join_rows = 1  # anche col tetto a 1 la preview NON deve fallire
+    try:
+        out = apply("join", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "how": "cross"}, ctx=ctx)
+        assert out.height <= 4  # head(2) × head(2)
+    finally:
+        ctx.cleanup()
+
+
 def test_join_left_tiene_le_righe_senza_match(storage, anagrafica):
     ctx = OperationContext(storage)
     try:

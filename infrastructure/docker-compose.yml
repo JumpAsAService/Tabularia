@@ -76,6 +76,11 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+    # Tetto di RAM: un'operazione che esplode (es. cross join) viene uccisa
+    # dall'OOM del container invece di freezare l'host. memswap_limit == mem_limit
+    # DISABILITA lo swap del container (lo swap-thrashing è ciò che blocca il PC).
+    mem_limit: ${BACKEND_MEM_LIMIT:-4g}
+    memswap_limit: ${BACKEND_MEM_LIMIT:-4g}
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Gateway (control plane): UNICO ingresso pubblico (:8000). Auth + RBAC + Postgres,
@@ -116,6 +121,11 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+    # Tetto di RAM del worker (dove girano i run): un run che esplode (cross join,
+    # aggregazioni giganti) viene ucciso dall'OOM invece di freezare l'host.
+    # memswap_limit == mem_limit disabilita lo swap (evita lo swap-thrashing).
+    mem_limit: ${WORKER_MEM_LIMIT:-4g}
+    memswap_limit: ${WORKER_MEM_LIMIT:-4g}
     # -B: beat embedded (eviction cache). Ok per dev con un worker singolo;
     # in prod/multi-worker separare 'celery beat' in un servizio dedicato.
     command: celery -A app.tasks.celery_app worker -E --beat --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=2

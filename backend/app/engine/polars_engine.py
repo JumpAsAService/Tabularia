@@ -39,6 +39,12 @@ def _coerce_ops(operations: list[Operation] | list[dict[str, Any]]) -> list[Oper
     return [op if isinstance(op, Operation) else Operation(**op) for op in operations]
 
 
+def _has_cross_join(ops: list[Operation]) -> bool:
+    """Vero se la catena contiene un cross join: in preview è campionato, quindi
+    il suo output non va cache-ato (la cache è condivisa coi run)."""
+    return any(op.type == "join" and (op.params or {}).get("how") == "cross" for op in ops)
+
+
 def _columns_of(schema: dict[str, Any]) -> list[ColumnInfo]:
     return [ColumnInfo(name=n, dtype=str(t)) for n, t in schema.items()]
 
@@ -54,8 +60,8 @@ class PolarsEngine(Engine):
         self.cache = cache or StepCache(storage)
 
     @contextmanager
-    def _session(self) -> Iterator[OperationContext]:
-        ctx = OperationContext(self.storage)
+    def _session(self, preview: bool = False, sample_rows: int = 0) -> Iterator[OperationContext]:
+        ctx = OperationContext(self.storage, preview=preview, sample_rows=sample_rows)
         try:
             yield ctx
         finally:
@@ -154,11 +160,16 @@ class PolarsEngine(Engine):
         limit: int = 100,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
-        with self._session() as ctx:
+        # in anteprima il cross join campiona gli input (vedi op_join): serve il
+        # tetto righe del campione + 1 (per il flag "troncato")
+        with self._session(preview=True, sample_rows=limit + 1) as ctx:
             # Materializza il PARENT: iterando sui parametri di questo nodo, le
             # anteprime successive ripartiranno dalla sua cache (una sola op).
             # Per cambiare politica di caching, agisci qui.
-            self._materialize(ctx, source, ops[:-1])
+            # MA se il parent contiene un cross join, in preview è CAMPIONATO:
+            # non va messo in cache (la cache è condivisa coi run → dati troncati).
+            if not _has_cross_join(ops[:-1]):
+                self._materialize(ctx, source, ops[:-1])
 
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True)
