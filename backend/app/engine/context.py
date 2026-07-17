@@ -27,17 +27,13 @@ MAX_CROSS_JOIN_ROWS = int(os.getenv("ENGINE_MAX_CROSS_JOIN_ROWS", "50000000"))
 
 
 class OperationContext:
-    def __init__(self, storage, preview: bool = False, sample_rows: int = 0):
+    def __init__(self, storage):
         self.storage = storage
         self._temp_paths: list[str] = []
         # budget cumulativo di iterazioni foreach su TUTTA la catena di un run:
         # limita l'esplosione moltiplicativa dei foreach annidati (vedi op_foreach)
         self.foreach_iterations = 0
-        # modalità ANTEPRIMA: le operazioni che possono esplodere (cross join)
-        # lavorano su un campione limitato degli input (`sample_rows`), così la
-        # preview resta leggera e non satura la RAM del processo API.
-        self.preview = preview
-        self.sample_rows = sample_rows
+        # tetto righe del cross join (anti-OOM): oltre, l'operazione è rifiutata
         self.max_cross_join_rows = MAX_CROSS_JOIN_ROWS
 
     def tempfile(self, suffix: str = ".parquet") -> str:

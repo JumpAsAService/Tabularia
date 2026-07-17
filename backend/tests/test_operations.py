@@ -209,18 +209,6 @@ def test_cross_join_run_rifiuta_oltre_il_tetto(storage, anagrafica):
         ctx.cleanup()
 
 
-def test_cross_join_preview_campiona_gli_input(storage, anagrafica):
-    # in ANTEPRIMA il cross join campiona i due lati (head(sample_rows)) → mai il
-    # cartesiano pieno, così la preview resta leggera anche su sorgenti enormi
-    ctx = OperationContext(storage, preview=True, sample_rows=2)
-    ctx.max_cross_join_rows = 1  # anche col tetto a 1 la preview NON deve fallire
-    try:
-        out = apply("join", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "how": "cross"}, ctx=ctx)
-        assert out.height <= 4  # head(2) × head(2)
-    finally:
-        ctx.cleanup()
-
-
 def test_join_left_tiene_le_righe_senza_match(storage, anagrafica):
     ctx = OperationContext(storage)
     try:

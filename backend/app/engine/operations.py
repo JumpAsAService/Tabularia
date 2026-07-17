@@ -307,21 +307,16 @@ def _build_right(right_ref: dict[str, Any], ctx: OperationContext) -> pl.LazyFra
 
 
 def _cross_join(lf: pl.LazyFrame, right_lf: pl.LazyFrame, ctx: OperationContext) -> pl.LazyFrame:
-    """Cross join (prodotto cartesiano L×R) con protezione anti-OOM.
+    """Cross join (prodotto cartesiano L×R) con guardia anti-OOM.
 
-    In ANTEPRIMA campiona entrambi i lati (`ctx.sample_rows`): il risultato è un
-    campione del cartesiano, ma il picco di memoria resta minuscolo e la preview
-    non blocca il processo API. In RUN conta prima le righe dei due lati e, se il
-    prodotto supera il tetto, RIFIUTA con un messaggio chiaro invece di far
-    esplodere la RAM dell'host (il cross join è la causa n.1 di freeze)."""
-    if ctx.preview and ctx.sample_rows > 0:
-        n = ctx.sample_rows
-        return lf.head(n).join(right_lf.head(n), how="cross")
-
+    Conta prima le righe dei due lati e, se il prodotto supera il tetto, RIFIUTA
+    con un messaggio chiaro invece di far esplodere la RAM (il cross join è la
+    causa n.1 di freeze). Niente campionamento: l'anteprima mostra il risultato
+    VERO (o l'errore), mai un campione fuorviante. Il conteggio è in streaming:
+    sui parquet è quasi gratis (metadati); sul lato sinistro esegue la catena a
+    monte una volta (prezzo dell'assicurazione)."""
     cap = ctx.max_cross_join_rows
     if cap and cap > 0:
-        # count in streaming: sui parquet è quasi gratis (metadati); sul lato
-        # sinistro esegue la catena a monte una volta (prezzo dell'assicurazione)
         left_n = lf.select(pl.len()).collect(engine="streaming").item()
         right_n = right_lf.select(pl.len()).collect(engine="streaming").item()
         if left_n * right_n > cap:
