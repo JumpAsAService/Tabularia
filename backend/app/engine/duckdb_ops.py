@@ -313,21 +313,24 @@ def op_union(rel, params, a, ctx):
 @_register("pivot")
 def op_pivot(rel, params, a, ctx):
     index = _as_list(_require(params, "index"))
-    on = _require(params, "on")
+    on = _as_list(_require(params, "on"))  # più colonne = combinazioni
     values = _require(params, "values")
     func = params.get("func", "sum")
     if func not in _AGG:
         raise EngineError(f"pivot: funzione non supportata '{func}'")
     name = ctx.register(rel)
-    n_cols = ctx.con.sql(f"SELECT count(DISTINCT {_qi(on)}) FROM {name}").fetchone()[0]
+    on_sql = ", ".join(_qi(c) for c in on)
+    n_cols = ctx.con.sql(
+        f"SELECT count(*) FROM (SELECT DISTINCT {on_sql} FROM {name})"
+    ).fetchone()[0]
     if n_cols > MAX_PIVOT_COLUMNS:
         raise EngineError(
-            f"pivot: '{on}' ha {n_cols} valori distinti ({n_cols} colonne nuove, "
-            f"massimo {MAX_PIVOT_COLUMNS}). È la colonna giusta?"
+            f"pivot: le colonne scelte hanno {n_cols} combinazioni distinte ({n_cols} colonne "
+            f"nuove, massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
         )
     idx_sql = ", ".join(_qi(c) for c in index)
     return ctx.con.sql(
-        f"PIVOT {name} ON {_qi(on)} USING {_AGG[func]}({_qi(values)}) GROUP BY {idx_sql}"
+        f"PIVOT {name} ON {on_sql} USING {_AGG[func]}({_qi(values)}) GROUP BY {idx_sql}"
     )
 
 

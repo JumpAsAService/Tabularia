@@ -244,23 +244,26 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     func = params.get("func") or "sum"
     if isinstance(index, str):
         index = [index]
+    on = on if isinstance(on, list) else [on]  # più colonne = combinazioni dei valori
     if not index:
         raise EngineError("pivot: serve almeno una colonna indice (le chiavi di riga)")
+    if not on:
+        raise EngineError("pivot: serve almeno una colonna da spandere sulle colonne")
     if func not in _AGG:
         raise EngineError(f"funzione di aggregazione non supportata: '{func}'")
 
     # 1) il grosso del lavoro resta lazy/STREAMING: l'aggregazione riduce il
-    #    dataset a (gruppi indice × valori distinti di `on`) righe — piccolo
+    #    dataset a (gruppi indice × combinazioni di `on`) righe — piccolo
     #    per costruzione, qualunque sia la dimensione dell'input
     aggregated = (
-        lf.group_by(index + [on]).agg(_AGG[func](values).alias(values)).collect(engine="streaming")
+        lf.group_by(index + on).agg(_AGG[func](values).alias(values)).collect(engine="streaming")
     )
 
-    n_cols = aggregated.get_column(on).n_unique()
+    n_cols = aggregated.select(on).unique().height  # combinazioni distinte = colonne nuove
     if n_cols > MAX_PIVOT_COLUMNS:
         raise EngineError(
-            f"pivot: '{on}' ha {n_cols} valori distinti, cioè {n_cols} colonne nuove "
-            f"(massimo {MAX_PIVOT_COLUMNS}). È la colonna giusta?"
+            f"pivot: le colonne scelte hanno {n_cols} combinazioni distinte, cioè {n_cols} "
+            f"colonne nuove (massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
         )
 
     # 2) il reshape vero è eager (pivot non esiste in lazy) ma lavora sul

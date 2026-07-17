@@ -429,7 +429,7 @@ def test_pivot_rifiuta_troppe_colonne(monkeypatch):
 
     monkeypatch.setattr(ops, "MAX_PIVOT_COLUMNS", 2)
     df = pl.DataFrame({"k": ["a", "a", "a"], "on": ["x", "y", "z"], "v": [1, 2, 3]})
-    with pytest.raises(EngineError, match="valori distinti"):
+    with pytest.raises(EngineError, match="combinazioni distinte"):
         apply("pivot", {"index": ["k"], "on": "on", "values": "v"}, df)
 
 
