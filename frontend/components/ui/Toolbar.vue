@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   ArrowLeft,
   LogOut,
+  Cpu,
 } from 'lucide-vue-next'
 
 const { logout } = useAuth()
@@ -24,7 +25,14 @@ const props = defineProps<{
   flowName?: string
   projects?: { id: number; name: string }[]
   projectId?: number | null
+  // motore di esecuzione del flusso (polars | duckdb)
+  engine?: string
 }>()
+
+// etichetta leggibile del motore corrente
+const engineLabel = computed(() =>
+  props.engine === 'duckdb' ? 'DuckDB' : props.engine === 'polars' ? 'Polars' : (props.engine || 'Polars'),
+)
 const emit = defineEmits<{
   (e: 'upload', file: File): void
   (e: 'add-op'): void
@@ -56,6 +64,15 @@ const statusIcon = computed(() => {
 <template>
   <div class="toolbar-inner">
     <strong class="brand"><Table2 :size="16" /> Tabularia</strong>
+
+    <!-- motore di esecuzione del flusso -->
+    <span
+      class="enginebadge"
+      :class="engine === 'duckdb' ? 'duckdb' : 'polars'"
+      :title="`Motore di esecuzione del flusso: ${engineLabel}`"
+    >
+      <Cpu :size="12" /> {{ engineLabel }}
+    </span>
 
     <!-- nome del flusso + destinazione + salva -->
     <input
@@ -113,6 +130,22 @@ const statusIcon = computed(() => {
   padding: 8px 12px;
 }
 .brand { display: inline-flex; align-items: center; gap: 6px; }
+/* badge del motore di esecuzione */
+.enginebadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  cursor: default;
+}
+.enginebadge.polars { color: #6ee7b7; background: rgba(110, 231, 183, 0.12); border-color: rgba(110, 231, 183, 0.35); }
+.enginebadge.duckdb { color: #fbbf24; background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.35); }
 .flowname { width: 170px; }
 .projsel { width: 140px; }
 .sep { width: 1px; align-self: stretch; background: var(--border); }

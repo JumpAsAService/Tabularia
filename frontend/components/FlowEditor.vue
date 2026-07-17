@@ -350,8 +350,25 @@ onConnect((conn: Connection) => {
     // solo gli archi DATI cambiano le colonne a valle; la sequenza no
     invalidateColumns()
     refreshForNode(conn.target!)
+  } else {
+    autolinkRefreshToSource(conn.source!, conn.target!)
   }
 })
+
+// Collegando «Refresh datasource → Sorgente», imposta sul Refresh la datasource
+// della sorgente (solo se è una datasource DATABASE, le uniche refreshabili), così
+// l'arco significa davvero "aggiorna la datasource DI questa sorgente".
+function autolinkRefreshToSource(sourceId: string, targetId: string) {
+  const refresh = findNode(sourceId)
+  const src = findNode(targetId)
+  if (refresh?.type !== 'refresh' || src?.type !== 'source') return
+  const dsId = src.data?.datasourceId
+  if (dsId == null) return
+  const ds = datasources.value.find((d) => d.id === dsId)
+  if (!ds || ds.kind !== 'database') return
+  updateNodeData(refresh.id, { datasourceId: ds.id, dsName: ds.name })
+  setStatus(`Refresh collegato alla datasource «${ds.name}»`, 'ok')
+}
 
 onNodeClick(({ node }) => {
   selectedId.value = node.id
@@ -1163,6 +1180,7 @@ async function pollTask(id: string) {
       :flow-name="flowName"
       :projects="projectsList"
       :project-id="projectId"
+      :engine="flowEngine"
       @upload="onUpload"
       @add-op="addOperation"
       @add-source="addSource"

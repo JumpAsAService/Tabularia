@@ -21,7 +21,7 @@ import {
   Plug,
   Pencil,
 } from 'lucide-vue-next'
-import { errMessage } from '~/composables/useApi'
+import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import {
@@ -44,6 +44,7 @@ import {
 } from '~/composables/useProjects'
 
 const api = useProjects()
+const coreApi = useApi()
 const flowsApi = useFlows()
 const runsApi = useRuns()
 const dsApi = useDatasources()
@@ -59,6 +60,24 @@ const error = ref('')
 // flussi contenuti nel progetto selezionato
 const flows = ref<FlowSummary[]>([])
 const flowsError = ref('')
+
+// motori disponibili per il dropdown "Nuovo flusso" (il flusso è pinnato al
+// motore scelto). Stesso comportamento della tab Flows.
+interface EngineOpt { id: string; label: string; available: boolean; description: string }
+const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
+const newMenu = ref(false)
+function createFlowWith(engineId: string) {
+  newMenu.value = false
+  if (selectedId.value == null) return
+  navigateTo(`/editor?project=${selectedId.value}&engine=${engineId}`)
+}
+onMounted(async () => {
+  try {
+    engines.value = await coreApi.engines()
+  } catch {
+    /* fallback al solo Polars */
+  }
+})
 
 // permessi del progetto selezionato (null = pannello nascosto / non gestibile)
 const canManage = ref(false)
@@ -527,9 +546,25 @@ async function revoke(perm: Permission) {
         <div class="section">
           <div class="section-head">
             <label>Flussi</label>
-            <NuxtLink :to="`/editor?project=${selected.id}`" class="btn-link primary small">
-              <Plus :size="13" /> Nuovo flusso
-            </NuxtLink>
+            <div class="newflow">
+              <button class="btn-link primary small" @click="newMenu = !newMenu">
+                <Plus :size="13" /> Nuovo flusso
+              </button>
+              <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
+              <div v-if="newMenu" class="menu-pop">
+                <div class="menu-label">Motore di esecuzione</div>
+                <button
+                  v-for="e in engines"
+                  :key="e.id"
+                  class="menu-item"
+                  :disabled="!e.available"
+                  @click="createFlowWith(e.id)"
+                >
+                  <span class="mi-top">{{ e.label }}<span v-if="!e.available" class="soon">in arrivo</span></span>
+                  <span v-if="e.description" class="mi-desc">{{ e.description }}</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <p v-if="flowsError" class="muted">{{ flowsError }}</p>
@@ -880,4 +915,15 @@ button.mini { padding: 2px 8px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
 button.danger:hover { background: var(--danger); color: #fff; }
 .err { color: var(--danger); margin-top: 12px; }
+/* dropdown "Nuovo flusso" con scelta del motore (come nella tab Flows) */
+.newflow { position: relative; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 41; min-width: 260px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28); padding: 6px; }
+.menu-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 6px 8px 4px; }
+.menu-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 8px 9px; border: none; background: transparent; border-radius: 7px; cursor: pointer; }
+.menu-item:hover:not(:disabled) { background: var(--panel-2); }
+.menu-item:disabled { opacity: 0.55; cursor: not-allowed; }
+.mi-top { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; color: var(--text); }
+.mi-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.soon { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-2); border: 1px solid var(--accent-2); border-radius: 20px; padding: 1px 6px; }
 </style>
