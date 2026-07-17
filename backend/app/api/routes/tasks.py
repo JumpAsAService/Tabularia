@@ -132,6 +132,7 @@ def preview_flow(request: PreviewRequest):
             "operations": operations,
             "limit": request.limit,
             "engine": request.engine,
+            "no_cache": request.no_cache,
         },
         queue="preview",
     )

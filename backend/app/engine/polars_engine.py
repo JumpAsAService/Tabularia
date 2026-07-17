@@ -90,6 +90,7 @@ class PolarsEngine(Engine):
         operations: list[Operation],
         hashes: list[str],
         record: bool = False,
+        use_cache: bool = True,
     ) -> pl.LazyFrame:
         """
         Costruisce la catena lazy partendo dall'antenato in cache più vicino e
@@ -97,9 +98,11 @@ class PolarsEngine(Engine):
 
         `record=True` conta hit/miss per le metriche (solo dal percorso top-level
         di preview/run, non dalla materializzazione interna del parent).
+        `use_cache=False` ignora la cache (parte sempre dalla sorgente): usato dal
+        Viewer per non sporcare la cache con query esplorative usa-e-getta.
         """
-        start = self.cache.nearest(hashes)  # quanti step iniziali sono già in cache
-        if record and operations:
+        start = self.cache.nearest(hashes) if use_cache else 0  # step già in cache
+        if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
         if start == 0:
             lf = ctx.scan(source)
@@ -157,16 +160,18 @@ class PolarsEngine(Engine):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         limit: int = 100,
+        use_cache: bool = True,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         with self._session() as ctx:
             # Materializza il PARENT: iterando sui parametri di questo nodo, le
             # anteprime successive ripartiranno dalla sua cache (una sola op).
-            # Per cambiare politica di caching, agisci qui.
-            self._materialize(ctx, source, ops[:-1])
+            # Il Viewer passa use_cache=False → niente materializzazione.
+            if use_cache:
+                self._materialize(ctx, source, ops[:-1])
 
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True)
+            lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
 
             # +1 per capire se il risultato reale è più lungo del limite
             try:

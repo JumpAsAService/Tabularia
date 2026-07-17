@@ -74,6 +74,7 @@ class Engine(ABC):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         limit: int = 100,
+        use_cache: bool = True,
     ) -> PreviewResult: ...
 
     @abstractmethod

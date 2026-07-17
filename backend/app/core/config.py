@@ -131,8 +131,8 @@ def resolve_max_memory_per_child_kb(celery: CelerySettings) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 class CacheSettings(BaseModel):
     # env: CACHE__TTL_SECONDS — dopo quanto tempo dall'ultimo accesso una voce
-    # di cache viene rimossa (blob parquet + indice Valkey). Default 7 giorni.
-    ttl_seconds: int = 7 * 24 * 3600
+    # di cache viene rimossa (blob parquet + indice Valkey). Default 1 giorno.
+    ttl_seconds: int = 1 * 24 * 3600
     # env: CACHE__SWEEP_INTERVAL_SECONDS — ogni quanto gira l'eviction. Default 1h.
     sweep_interval_seconds: int = 3600
 

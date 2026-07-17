@@ -122,11 +122,12 @@ class DuckDBEngine(Engine):
         return f"{self.engine_name}:{source.bucket}/{source.key}"
 
     # ── Cache incrementale (mirror di PolarsEngine) ───────────────────────
-    def _rel_from_cache(self, ctx: "DuckContext", source, operations, hashes, record=False):
+    def _rel_from_cache(self, ctx: "DuckContext", source, operations, hashes, record=False, use_cache=True):
         """Costruisce la relazione partendo dall'antenato in cache più vicino e
-        applicando solo le operazioni rimanenti."""
-        start = self.cache.nearest(hashes)  # quanti step iniziali sono già in cache
-        if record and operations:
+        applicando solo le operazioni rimanenti. `use_cache=False` ignora la cache
+        (parte dalla sorgente): il Viewer non sporca la cache con query ad-hoc."""
+        start = self.cache.nearest(hashes) if use_cache else 0  # step già in cache
+        if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
         if start == 0:
             rel = ctx.scan(source)
@@ -172,6 +173,7 @@ class DuckDBEngine(Engine):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         limit: int = 100,
+        use_cache: bool = True,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         con = self._connection()
@@ -179,10 +181,11 @@ class DuckDBEngine(Engine):
         try:
             ctx = DuckContext(con, self.storage, tmp, preview_limit=limit + 1)
             # materializza il PARENT: iterando sui parametri dell'ultimo nodo, le
-            # anteprime successive ripartono dalla sua cache (una sola op)
-            self._materialize(ctx, source, ops[:-1])
+            # anteprime successive ripartono dalla sua cache (Viewer: use_cache=False)
+            if use_cache:
+                self._materialize(ctx, source, ops[:-1])
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            rel = self._rel_from_cache(ctx, source, ops, hashes, record=True)
+            rel = self._rel_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             try:
                 df = rel.limit(limit + 1).pl()  # solo LIMIT+1 righe materializzate
             except EngineError:

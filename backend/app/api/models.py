@@ -59,6 +59,7 @@ class PreviewRequest(BaseModel):
     )
     limit: int = Field(default=100, ge=1, le=1000, description="Righe massime nel campione")
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
+    no_cache: bool = Field(default=False, description="Non scrivere/leggere la step-cache (query esplorative del Viewer)")
 
 
 class ExportRequest(BaseModel):

@@ -13,7 +13,12 @@ import {
   Activity,
   History,
   Cpu,
+  PieChart,
 } from 'lucide-vue-next'
+
+// fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
+// Viewer che sfruttano tutta la larghezza. Le liste restano centrate (default).
+defineProps<{ fluid?: boolean }>()
 
 const { user, fetchMe, logout } = useAuth()
 const route = useRoute()
@@ -24,6 +29,7 @@ const links = computed(() => [
   { to: '/', label: 'Explore', icon: FolderTree },
   { to: '/flows', label: 'Flows', icon: Workflow },
   { to: '/datasources', label: 'Datasources', icon: Database },
+  { to: '/viewer', label: 'Viewer', icon: PieChart },
   { to: '/connections', label: 'Connections', icon: Plug },
   { to: '/runs', label: 'Esecuzioni', icon: History },
   ...(isSuper.value
@@ -67,7 +73,7 @@ onMounted(async () => {
       <button class="logout" title="Sign out" @click="logout"><LogOut :size="14" /></button>
     </header>
 
-    <main class="content">
+    <main class="content" :class="{ fluid }">
       <slot />
     </main>
   </div>
@@ -139,4 +145,5 @@ onMounted(async () => {
   width: 100%;
   margin: 0 auto;
 }
+.content.fluid { max-width: none; }
 </style>
