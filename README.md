@@ -7,6 +7,9 @@ No sampling.
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
+SAMPLEDB_SCALE=robusta docker compose -f infrastructure/docker-compose.sampledb.yml --profile generate run --rm sampledb-generator
+
+
 ## Why
 
 Visual data-prep tools either cost thousands per seat, or quietly work on **samples**

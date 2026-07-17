@@ -54,6 +54,15 @@ DATA_FINE = date(2026, 7, 15)
 DATA_INIZIO = date(2023, 7, 1)
 GIORNI = (DATA_FINE - DATA_INIZIO).days
 
+# ── trend temporali (perché i dati NON siano piatti/uniformi) ────────────────
+# crescita aziendale composta annua: più ordini col passare del tempo
+GROWTH_ANNUO = 0.18
+# crescita annua del valore medio ordine (carrello che si allarga nel tempo)
+BASKET_GROWTH_ANNUO = 0.05
+# stagionalità mensile dei salumi (indice 1..12; 0 = segnaposto):
+# Natale fortissimo, Pasqua (apr) su, agosto giù (ferie), autunno in ripresa
+MONTH_MULT = np.array([0.0, 0.90, 0.82, 1.05, 1.15, 1.00, 0.95, 0.90, 0.62, 1.05, 1.12, 1.30, 1.80])
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # preset di scala: (capi_area, ispettori, agenti, clienti, ordini, attività CRM)
@@ -281,6 +290,26 @@ def gen_catalogo(cur, prod: pd.DataFrame) -> None:
                                          "costo_materia_prima_kg", "costo_lavorazione_kg", "costo_confezionamento_pz"]))
 
 
+def build_day_weights() -> np.ndarray:
+    """Probabilità di ciascun giorno della finestra dati, così ordini e attività
+    NON sono distribuiti uniformemente ma seguono un TREND realistico:
+      · crescita aziendale composta (GROWTH_ANNUO);
+      · stagionalità annuale (Natale/Pasqua ↑, agosto ↓ — vedi MONTH_MULT);
+      · stagionalità settimanale B2B (feriali ↑, sabato ↓, domenica quasi zero).
+    Un po' di rumore giornaliero evita curve troppo lisce."""
+    ndays = GIORNI + 1
+    idx = np.arange(ndays)
+    dates = pd.to_datetime(np.datetime64(DATA_INIZIO) + idx.astype("timedelta64[D]"))
+    anni = idx / 365.25
+    crescita = (1.0 + GROWTH_ANNUO) ** anni
+    stagionale = MONTH_MULT[dates.month.to_numpy()]
+    dow = dates.dayofweek.to_numpy()  # 0=lun … 6=dom
+    settimanale = np.where(dow < 5, 1.0, np.where(dow == 5, 0.45, 0.12))
+    rumore = rng.uniform(0.85, 1.15, ndays)
+    w = crescita * stagionale * settimanale * rumore
+    return w / w.sum()
+
+
 def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd.DataFrame) -> None:
     """Ordini + righe + costi commerciali, a blocchi. Testata → cliente (e suo
     agente); righe → prodotti con prezzo≈listino±rumore e sconto per canale."""
@@ -290,6 +319,7 @@ def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd
     prezzi = prod._prezzo_listino.to_numpy()
     provv_base = np.concatenate([[0.0], agenti.provvigione_base_pct.to_numpy().astype(float)])
     base_d = np.datetime64(DATA_INIZIO)
+    p_day = build_day_weights()  # trend di crescita + stagionalità (no uniforme)
 
     riga_id = 0
     done = 0
@@ -301,7 +331,7 @@ def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd
         canale_i = canale_of[cliente]                      # 1..len(CANALI)
         canale = np.array(CANALI)[canale_i - 1]
         gdo_like = np.isin(canale_i, [1, 3])               # GDO/Grossista: qty↑ sconti↑
-        giorni = rng.integers(0, GIORNI + 1, n)
+        giorni = rng.choice(GIORNI + 1, size=n, p=p_day)   # data pesata dal trend
         data_ord = (base_d + giorni.astype("timedelta64[D]")).astype(str)
         stato = np.where(rng.random(n) < 0.90, "evaso",
                          np.where(rng.random(n) < 0.6, "in_lavorazione", "annullato"))
@@ -319,10 +349,13 @@ def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd
         r_oid = np.repeat(oid, n_righe)
         r_canale_gdo = np.repeat(gdo_like, n_righe)
         r_agente = np.repeat(agente, n_righe)
+        r_giorni = np.repeat(giorni, n_righe)
         prod_i = rng.integers(0, P_n, tot)
         prezzo_list = prezzi[prod_i]
-        # quantità: gamma (asimmetrica), più alta per GDO/Grossista
-        qta = rng.gamma(2.0, np.where(r_canale_gdo, 9.0, 4.0)) + 0.5
+        # quantità: gamma (asimmetrica), più alta per GDO/Grossista, e in lenta
+        # crescita nel tempo (il carrello medio si allarga anno su anno)
+        basket = (1.0 + BASKET_GROWTH_ANNUO) ** (r_giorni / 365.25)
+        qta = (rng.gamma(2.0, np.where(r_canale_gdo, 9.0, 4.0)) + 0.5) * basket
         qta = np.round(qta, 3)
         prezzo_un = np.round(prezzo_list * (1 + rng.normal(0, 0.04, tot)), 4)
         prezzo_un = np.maximum(prezzo_un, 0.5)
@@ -357,13 +390,17 @@ def gen_attivita(ch, agente_of) -> None:
     TIPI = np.array(["visita", "telefonata", "email", "sollecito", "reclamo"])
     ESITI = np.array(["positivo", "neutro", "negativo", "ordine"])
     base = np.datetime64(f"{DATA_INIZIO}T00:00:00")
-    secs = GIORNI * 86400
+    p_day = build_day_weights()  # stesso trend/stagionalità degli ordini
     done = 0
     while done < A:
         n = min(CHUNK_ATTIVITA, A - done)
         cliente = rng.integers(1, C + 1, n)
         agente = agente_of[cliente]
-        data = base + rng.integers(0, secs, n).astype("timedelta64[s]")
+        # giorno pesato dal trend + orario concentrato nella giornata lavorativa
+        giorno = rng.choice(GIORNI + 1, size=n, p=p_day)
+        sec_giorno = np.clip(rng.normal(13 * 3600, 2.5 * 3600, n), 7 * 3600, 20 * 3600)
+        offset = (giorno * 86400 + sec_giorno).astype(np.int64).astype("timedelta64[s]")
+        data = base + offset
         df = pd.DataFrame({
             "id": np.arange(done + 1, done + n + 1, dtype=np.int64),
             "cliente_id": cliente.astype(np.uint32),
