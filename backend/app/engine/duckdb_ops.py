@@ -19,10 +19,17 @@ import re
 from typing import Any, Callable
 
 import duckdb
+import pyarrow.parquet as _pq
 
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.exceptions import EngineError
-from app.engine.operations import MAX_PIVOT_COLUMNS
+from app.engine.operations import (
+    MAX_FOREACH_ITERATIONS,
+    MAX_FOREACH_TOTAL,
+    MAX_PIVOT_COLUMNS,
+    _reject_dynamic_source_keys,
+    _substitute,
+)
 
 DuckOpFn = Callable[..., "duckdb.DuckDBPyRelation"]
 
@@ -338,3 +345,99 @@ def op_unpivot(rel, params, a, ctx):
     return ctx.con.sql(
         f"UNPIVOT (SELECT * FROM {name}) ON {on_sql} INTO NAME {_qi(var)} VALUE {_qi(val)}"
     )
+
+
+# ── Execute SQL (query intera in SANDBOX) ─────────────────────────────────────
+@_register("sql")
+def op_sql(rel, params, a, ctx):
+    """Esegue una query SQL DuckDB sul frame in ingresso (tabella `self`, alias
+    `input`) in una connessione SANDBOX isolata.
+
+    Sicurezza: l'input viene caricato in una tabella, poi si disabilita ogni
+    accesso esterno (`enable_external_access=false` + `lock_configuration=true`):
+    read_csv/read_parquet/attach/copy/install/httpfs sono bloccati e non
+    riabilitabili. Il risultato NON viene scritto da DuckDB (bloccato dal
+    sandbox) ma da Python (pyarrow) in STREAMING → resta out-of-core."""
+    query = str(_require(params, "query")).strip()
+    if not query:
+        raise EngineError("sql: la query è vuota")
+
+    in_tmp = ctx.tempfile()
+    rel.write_parquet(in_tmp)  # materializza l'input (streaming su disco)
+
+    sbx = duckdb.connect(":memory:")
+    try:
+        sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
+        sbx.execute("CREATE VIEW input AS SELECT * FROM self")
+        sbx.execute("SET enable_external_access=false")  # niente file/rete/attach/install
+        sbx.execute("SET lock_configuration=true")  # e non riabilitabile dalla query
+        try:
+            result = sbx.sql(query)
+            if ctx.preview_limit:  # in anteprima non calcolare l'intero risultato
+                result = result.limit(ctx.preview_limit)
+            reader = result.to_arrow_reader(1_000_000)  # streaming Arrow
+            out_tmp = ctx.tempfile()
+            writer = _pq.ParquetWriter(out_tmp, reader.schema)  # scrive PYTHON, non DuckDB
+            try:
+                for batch in reader:
+                    writer.write_batch(batch)
+            finally:
+                writer.close()
+        except EngineError:
+            raise
+        except Exception as e:
+            raise EngineError(f"sql: query non valida o non consentita: {e}") from e
+    finally:
+        sbx.close()
+    return ctx.con.read_parquet(out_tmp)
+
+
+# ── foreach (ciclo con placeholder, stile container SSIS) ─────────────────────
+@_register("foreach")
+def op_foreach(rel, params, a, ctx):
+    """Esegue il corpo per ogni iterazione e APPENDE i risultati (UNION ALL BY
+    NAME). Le iterazioni vengono da `items` (lista statica di dict) o da un
+    `driver` (sub-flow: ogni riga = un'iterazione, le colonne = i placeholder
+    `{{chiave}}`). Riusa la sostituzione/sicurezza engine-agnostica di Polars."""
+    body = _require(params, "body")
+    items = params.get("items")
+    if not items and "driver" in params:
+        drv = ctx.build_right(params["driver"]).limit(MAX_FOREACH_ITERATIONS + 1).pl()
+        if drv.height > MAX_FOREACH_ITERATIONS:
+            raise EngineError(
+                f"il driver ha oltre {MAX_FOREACH_ITERATIONS} righe: riduci il driver (unique/filter)."
+            )
+        items = drv.to_dicts()
+    if not items:
+        raise EngineError(
+            "foreach senza iterazioni: collega un driver (input in alto) o definisci 'items'"
+        )
+    if len(items) > MAX_FOREACH_ITERATIONS:
+        raise EngineError(f"foreach: {len(items)} iterazioni oltre il limite di {MAX_FOREACH_ITERATIONS}")
+    if not body:
+        raise EngineError("foreach con corpo vuoto: trascina delle operazioni dentro il container")
+    _reject_dynamic_source_keys(body)  # una sorgente non può avere il percorso dai dati
+
+    ctx.foreach_iterations += len(items)
+    if ctx.foreach_iterations > MAX_FOREACH_TOTAL:
+        raise EngineError(
+            f"foreach: troppe iterazioni totali ({ctx.foreach_iterations}) — annidamento eccessivo"
+        )
+
+    add_keys = params.get("add_keys_as_columns", False)
+    parts = []
+    for idx, item in enumerate(items):
+        try:
+            sub = ctx.apply(rel, _substitute(body, item))
+        except EngineError as e:
+            raise EngineError(f"iterazione {idx + 1}/{len(items)}: {e}") from e
+        if add_keys:
+            lits = ", ".join(f"{_lit(v)} AS {_qi(str(k))}" for k, v in item.items())
+            alias = ctx.uid("fk")
+            sub = sub.query(alias, f"SELECT *, {lits} FROM {alias}")
+        parts.append(sub)
+
+    if len(parts) == 1:
+        return parts[0]
+    names = [ctx.register(p) for p in parts]  # UNION ALL BY NAME (come diagonal_relaxed)
+    return ctx.con.sql(" UNION ALL BY NAME ".join(f"SELECT * FROM {n}" for n in names))

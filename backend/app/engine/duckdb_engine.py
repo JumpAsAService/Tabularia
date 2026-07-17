@@ -40,19 +40,28 @@ class DuckContext:
     registrate). Le operazioni multi-input (join/union) lo usano per costruire
     il lato destro dalla sorgente annidata."""
 
-    def __init__(self, con, storage, tmp: list[str]):
+    def __init__(self, con, storage, tmp: list[str], preview_limit: int | None = None):
         self.con = con
         self.storage = storage
         self.tmp = tmp
         self._n = 0
+        # in preview il nodo `sql` limita il risultato del sandbox a queste righe
+        # (altrimenti calcolerebbe l'intero risultato solo per mostrarne N)
+        self.preview_limit = preview_limit
+        # budget cumulativo delle iterazioni foreach (anti-esplosione annidata)
+        self.foreach_iterations = 0
 
     def uid(self, prefix: str) -> str:
         self._n += 1
         return f"_{prefix}{self._n}"
 
-    def scan(self, source: DataSource):
+    def tempfile(self) -> str:
         path = tempfile.mkstemp(suffix=".parquet", prefix="duckdb_")[1]
         self.tmp.append(path)
+        return path
+
+    def scan(self, source: DataSource):
+        path = self.tempfile()
         try:
             self.storage.download_file(source.bucket, source.key, path)
         except ClientError as e:
@@ -107,9 +116,9 @@ class DuckDBEngine(Engine):
     def _connection(self) -> duckdb.DuckDBPyConnection:
         return duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
 
-    def _build(self, con, tmp: list[str], source: DataSource, ops: list[Operation]):
+    def _build(self, con, tmp: list[str], source: DataSource, ops: list[Operation], preview_limit=None):
         """Relazione LAZY: scan della sorgente + applicazione delle operazioni."""
-        ctx = DuckContext(con, self.storage, tmp)
+        ctx = DuckContext(con, self.storage, tmp, preview_limit=preview_limit)
         return ctx.apply(ctx.scan(source), ops)
 
     @staticmethod
@@ -131,7 +140,7 @@ class DuckDBEngine(Engine):
         con = self._connection()
         tmp: list[str] = []
         try:
-            rel = self._build(con, tmp, source, ops)
+            rel = self._build(con, tmp, source, ops, preview_limit=limit + 1)
             try:
                 df = rel.limit(limit + 1).pl()  # solo LIMIT+1 righe materializzate
             except EngineError:

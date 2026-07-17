@@ -111,11 +111,58 @@ def test_run_writes_output(storage, src):
     assert storage.exists(BUCKET, "out/duck.parquet")
 
 
-def test_unsupported_ops_raise(storage, src):
-    e = _engine(storage)
-    for bad in ("sql", "foreach"):
-        with pytest.raises(EngineError, match="non ancora supportata"):
-            e.preview(src, [{"type": bad, "params": {}}], limit=5)
+def test_unknown_op_raises(storage, src):
+    with pytest.raises(EngineError, match="non ancora supportata"):
+        _engine(storage).preview(src, [{"type": "does_not_exist", "params": {}}], limit=5)
+
+
+# ── Execute SQL (sandbox) ────────────────────────────────────────────────────
+def test_sql_aggregation(storage, src):
+    ops = [{"type": "sql", "params": {"query": "SELECT paese, sum(vendite) AS tot FROM self GROUP BY paese"}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    assert {r["paese"]: r["tot"] for r in res.rows}["IT"] == 400
+
+
+def test_sql_input_alias(storage, src):
+    res = _engine(storage).preview(src, [{"type": "sql", "params": {"query": "SELECT count(*) AS n FROM input"}}], limit=10)
+    assert res.rows[0]["n"] == 4
+
+
+def test_sql_sandbox_blocks_file_read(storage, src):
+    # la query utente NON può leggere il filesystem del worker
+    with pytest.raises(EngineError):
+        _engine(storage).preview(
+            src, [{"type": "sql", "params": {"query": "SELECT * FROM read_csv('/app/app/core/config.py')"}}], limit=5
+        )
+
+
+def test_sql_run_writes_output(storage, src):
+    dest = DataSource(bucket=BUCKET, key="out/duck_sql.parquet")
+    res = _engine(storage).run(src, [{"type": "sql", "params": {"query": "SELECT paese FROM self WHERE vendite > 100"}}], dest)
+    assert res.rows_written == 2 and storage.exists(BUCKET, "out/duck_sql.parquet")
+
+
+# ── foreach ──────────────────────────────────────────────────────────────────
+def test_foreach_items(storage, src):
+    ops = [{"type": "foreach", "params": {
+        "items": [{"soglia": 100}, {"soglia": 250}],
+        "add_keys_as_columns": True,
+        "body": [{"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": "{{soglia}}"}}],
+    }}]
+    res = _engine(storage).preview(src, ops, limit=50)
+    # soglia 100 → 3 righe (100,250,300); soglia 250 → 2 (250,300); totale 5
+    assert res.row_count == 5
+    assert "soglia" in {c.name for c in res.columns}
+
+
+def test_foreach_driver(storage, src):
+    driver = upload_df(storage, pl.DataFrame({"soglia": [100, 300]}), "datasets/drv_duck.parquet")
+    ops = [{"type": "foreach", "params": {
+        "driver": {"bucket": driver.bucket, "key": driver.key},
+        "body": [{"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": "{{soglia}}"}}],
+    }}]
+    res = _engine(storage).preview(src, ops, limit=50)
+    assert res.row_count == 4  # soglia100 → 3, soglia300 → 1
 
 
 # ── join / union / pivot / unpivot / compute ─────────────────────────────────
