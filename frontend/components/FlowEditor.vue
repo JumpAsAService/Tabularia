@@ -67,6 +67,7 @@ const nodeColumns = reactive<Record<string, ColumnInfo[]>>({}) // cache output p
 let opCounter = 0
 let sourceCounter = 0
 let outputCounter = 0
+let commentCounter = 0
 
 const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
 
@@ -150,6 +151,10 @@ function serializeCanvas(): string {
       ...(n.type === 'foreach'
         ? { style: { width: `${n.dimensions?.width || 460}px`, height: `${n.dimensions?.height || 280}px` } }
         : {}),
+      // nota: persisti la dimensione del riquadro (ridimensionabile)
+      ...(n.type === 'comment'
+        ? { style: { width: `${n.dimensions?.width || 220}px`, height: `${n.dimensions?.height || 120}px` } }
+        : {}),
     })),
     edges: getEdges.value.map((e) => ({
       id: e.id,
@@ -192,7 +197,12 @@ async function loadFlow(id: number) {
   // Vue Flow richiede i genitori PRIMA dei figli nell'array
   nodes = [...nodes.filter((n: any) => !n.parentNode), ...nodes.filter((n: any) => n.parentNode)]
   setNodes(nodes)
-  setEdges(def.edges ?? [])
+  // gli archi di SEQUENZA (targetHandle seq-in) ricevono una classe dedicata per
+  // distinguerli visivamente dal flusso DATI (ora sono tutti orizzontali)
+  setEdges((def.edges ?? []).map((e: any) => ({
+    ...e,
+    class: (e.targetHandle as string) === 'seq-in' ? 'edge-seq' : undefined,
+  })))
   // riallinea i contatori agli id caricati per evitare collisioni sui nuovi nodi
   const maxN = (prefix: string) =>
     Math.max(0, ...(def.nodes ?? [])
@@ -201,6 +211,7 @@ async function loadFlow(id: number) {
   opCounter = maxN('op-')
   sourceCounter = maxN('src-')
   outputCounter = Math.max(maxN('out-'), maxN('ctl-')) // out- e ctl- condividono il contatore
+  commentCounter = maxN('cmt-')
   selectedId.value = null
   setStatus(`Flusso "${f.name}" caricato`, 'ok')
 }
@@ -312,10 +323,10 @@ async function refreshFlows() {
 onConnect((conn: Connection) => {
   const seqSource = (conn.sourceHandle as string) === 'seq-out'
   const seqTarget = (conn.targetHandle as string) === 'seq-in'
-  // gli archi di SEQUENZA collegano solo seq-out (sotto) → seq-in (sopra): un
+  // gli archi di SEQUENZA collegano solo seq-out (destra) → seq-in (sinistra): un
   // source/ingresso-dati non ha presa di sequenza, quindi niente misto coi dati
   if (seqSource !== seqTarget) {
-    setStatus('Sequenza: collega la presa in basso di un nodo a quella in alto di un altro nodo di controllo/output', 'error')
+    setStatus('Sequenza: collega la presa di sequenza a destra di un nodo a quella a sinistra di un altro nodo di controllo/output', 'error')
     return
   }
   const handle = (conn.targetHandle as string) || 'left'
@@ -333,6 +344,7 @@ onConnect((conn: Connection) => {
     target: conn.target!,
     sourceHandle: conn.sourceHandle ?? undefined,
     targetHandle: conn.targetHandle ?? undefined,
+    class: seqTarget ? 'edge-seq' : undefined,
   })
   if (!seqTarget) {
     // solo gli archi DATI cambiano le colonne a valle; la sequenza no
@@ -502,6 +514,20 @@ function onCanvasDrop(ev: DragEvent) {
     // nodi di CONTROLLO (non nella catena dati): il gateway li interpreta al run
     const id = `ctl-${++outputCounter}`
     addNodes({ id, type: kind, position, data: {} })
+    selectedId.value = id
+    return
+  }
+
+  if (kind === 'comment') {
+    // nota libera: annotazione sul canvas, ignorata dall'esecuzione
+    const id = `cmt-${++commentCounter}`
+    addNodes({
+      id,
+      type: 'comment',
+      position,
+      style: { width: '220px', height: '120px' },
+      data: { text: '' },
+    })
     selectedId.value = id
     return
   }
@@ -1174,6 +1200,9 @@ async function pollTask(id: string) {
         </template>
         <template #node-runflow="props">
           <RunFlowNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-comment="props">
+          <CommentNode :id="props.id" :data="props.data" />
         </template>
         <Background pattern-color="#2a2f3a" :gap="16" />
         <Controls>

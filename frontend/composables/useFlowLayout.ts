@@ -47,7 +47,8 @@ function heightOf(n: Node, containers: Map<string, Size>): number {
 
 /** Figli di un container in ordine di catena (poi gli eventuali sciolti). */
 function orderedChildren(nodes: Node[], edges: Edge[], containerId: string): Node[] {
-  const kids = nodes.filter((n) => n.parentNode === containerId)
+  // i commenti sono annotazioni: non entrano nella catena del corpo
+  const kids = nodes.filter((n) => n.parentNode === containerId && n.type !== 'comment')
   if (!kids.length) return []
   const ids = new Set(kids.map((k) => k.id))
   const next = new Map<string, string>()
@@ -73,7 +74,8 @@ function orderedChildren(nodes: Node[], edges: Edge[], containerId: string): Nod
 
 export function computeAutoLayout(nodes: Node[], edges: Edge[]): LayoutResult {
   const inc = buildIncoming(edges)
-  const top = nodes.filter((n) => !n.parentNode)
+  // i commenti restano dove l'utente li ha messi: fuori dall'auto-layout
+  const top = nodes.filter((n) => !n.parentNode && n.type !== 'comment')
   const byId = new Map(top.map((n) => [n.id, n]))
 
   // 1) container foreach: figli in fila, dimensioni adattate al contenuto

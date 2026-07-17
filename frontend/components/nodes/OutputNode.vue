@@ -33,16 +33,17 @@ const summary = computed(() => {
 
 <template>
   <div class="node node-output">
-    <!-- input DATI (orizzontale): la catena di trasformazione -->
-    <Handle id="left" type="target" :position="Position.Left" />
-    <!-- handle di SEQUENZA (verticali): ordine di orchestrazione -->
-    <Handle id="seq-in" type="target" :position="Position.Top" class="handle-seq" />
+    <!-- input DATI: la catena di trasformazione (a sinistra, in alto) -->
+    <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
+    <!-- input di SEQUENZA: ordine di orchestrazione (a sinistra, sotto) -->
+    <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq h-left-bottom" />
     <div class="node-title">
       <component :is="icon" :size="13" class="node-icon" />
       {{ title }}
     </div>
     <div class="node-body muted">{{ summary }}</div>
-    <Handle id="seq-out" type="source" :position="Position.Bottom" class="handle-seq" />
+    <!-- uscita di SEQUENZA verso il prossimo nodo di controllo/output -->
+    <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />
   </div>
 </template>
 

@@ -53,7 +53,7 @@ const OP_META: Record<string, OpMeta> = {
 
 const DEFAULT_META: OpMeta = { icon: Settings, label: '', color: '#8b93a7' }
 
-export const SOURCE_META: OpMeta = { icon: FileText, label: 'Sorgente file', color: '#6ee7b7' }
+export const SOURCE_META: OpMeta = { icon: FileText, label: 'Source', color: '#6ee7b7' }
 
 export function opMeta(type: string): OpMeta {
   return OP_META[type] ?? { ...DEFAULT_META, label: type }

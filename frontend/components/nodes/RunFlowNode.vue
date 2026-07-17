@@ -11,13 +11,13 @@ const summary = computed(() => props.data?.flowName?.trim() || 'scegli un flusso
 
 <template>
   <div class="node node-ctl">
-    <Handle id="seq-in" type="target" :position="Position.Top" class="handle-seq" />
+    <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
     <div class="node-title">
       <PlayCircle :size="13" class="node-icon" />
       Esegui flusso
     </div>
     <div class="node-body muted">{{ summary }}</div>
-    <Handle id="seq-out" type="source" :position="Position.Bottom" class="handle-seq" />
+    <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />
   </div>
 </template>
 

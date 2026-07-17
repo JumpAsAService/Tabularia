@@ -246,6 +246,20 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__handle-bottom:hover { transform: translate(-50%, 50%) scale(1.35); }
 .vue-flow__handle-left:hover   { transform: translate(-50%, -50%) scale(1.35); }
 .vue-flow__handle-right:hover  { transform: translate(50%, -50%) scale(1.35); }
+/* Input IMPILATI sul bordo sinistro (join/union: tabella; foreach: driver;
+   output: sequenza). Selettore a doppia classe → batte per specificità le classi
+   di posizione che Vue Flow deriva dall'ID dell'handle (es. id="right" genera
+   .vue-flow__handle-right che altrimenti spingerebbe l'handle DENTRO il corpo). */
+.vue-flow__handle.h-left-top,
+.vue-flow__handle.h-left-bottom {
+  left: 0 !important;
+  right: auto !important;
+  transform: translate(-50%, -50%) !important;
+}
+.vue-flow__handle.h-left-top    { top: 33% !important; }
+.vue-flow__handle.h-left-bottom { top: 67% !important; }
+.vue-flow__handle.h-left-top:hover,
+.vue-flow__handle.h-left-bottom:hover { transform: translate(-50%, -50%) scale(1.35) !important; }
 
 /* il tipo 'output' collide con un nodo BUILT-IN di Vue Flow: il tema di
    default veste il wrapper (sfondo bianco, 150px, padding, ombre su hover e
@@ -273,6 +287,11 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__edge:hover .vue-flow__edge-path { stroke: var(--accent); }
 .vue-flow__edge.animated .vue-flow__edge-path { stroke-dasharray: 5; animation: dashdraw 0.6s linear infinite; }
 @keyframes dashdraw { from { stroke-dashoffset: 10; } }
+/* archi di SEQUENZA (orchestrazione): colore dedicato e STATICI, per distinguerli
+   dal flusso DATI animato ora che tutti gli archi sono orizzontali */
+.vue-flow__edge.edge-seq .vue-flow__edge-path { stroke: #c084fc; stroke-dasharray: 4 5; animation: none; }
+.vue-flow__edge.edge-seq.selected .vue-flow__edge-path,
+.vue-flow__edge.edge-seq:hover .vue-flow__edge-path { stroke: #d8b4fe; }
 
 /* controlli Vue Flow in tema */
 .vue-flow__controls { box-shadow: var(--shadow-1); border-radius: 8px; overflow: hidden; }

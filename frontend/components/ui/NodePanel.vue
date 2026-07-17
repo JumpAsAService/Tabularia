@@ -2,7 +2,7 @@
 import type { Node } from '@vue-flow/core'
 import {
   FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database,
-  HardDriveDownload, RefreshCw, PlayCircle,
+  HardDriveDownload, RefreshCw, PlayCircle, StickyNote,
 } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
@@ -81,6 +81,22 @@ function pickDatasource(id: number | null) {
   <div class="nodepanel">
     <div v-if="!node" class="muted">Nessun nodo selezionato.</div>
 
+    <template v-else-if="node.type === 'comment'">
+      <div class="row">
+        <h3><StickyNote :size="15" /> Nota</h3>
+        <button class="del" title="Elimina nota (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+      </div>
+      <label>Testo della nota</label>
+      <textarea
+        class="commenttext"
+        :value="node.data.text || ''"
+        rows="6"
+        placeholder="Scrivi una nota…"
+        @input="emit('update', { text: ($event.target as HTMLTextAreaElement).value })"
+      />
+      <p class="muted outhint">Solo un'annotazione: non fa parte del flusso e non viene eseguita.</p>
+    </template>
+
     <template v-else-if="isSource()">
       <div class="row">
         <h3><FileText :size="15" /> Sorgente</h3>
@@ -103,6 +119,7 @@ function pickDatasource(id: number | null) {
       <div class="dspick">
         <label><Database :size="12" /> oppure usa una datasource del catalogo</label>
         <Select
+          searchable
           :model-value="node.data.datasourceId ?? null"
           :options="(datasources ?? [])
             .filter((d) => d.key)
@@ -273,6 +290,7 @@ function pickDatasource(id: number | null) {
       </p>
       <label>Datasource da aggiornare</label>
       <Select
+        searchable
         :model-value="node.data.datasourceId ?? null"
         :options="(datasources ?? []).filter((d) => d.kind === 'database').map((d) => ({ value: d.id, label: d.name }))"
         placeholder="scegli una datasource database…"
@@ -307,19 +325,19 @@ function pickDatasource(id: number | null) {
       </div>
 
       <div class="joinhelp">
-        <strong class="joinhead"><Repeat :size="13" /> Come funziona</strong>
+        <strong class="joinhead"><Repeat :size="13" /> How it works</strong>
         <ol>
-          <li>input a <span class="tag">sinistra</span> = i dati da trasformare</li>
-          <li>input in <span class="tag right">alto</span> = il <strong>driver</strong>: una riga = un'iterazione</li>
-          <li><strong>trascina le operazioni dentro</strong> il riquadro: sono il corpo del ciclo</li>
-          <li>nei valori usa i placeholder <code v-pre>{{colonna}}</code> del driver</li>
-          <li>l'output è l'<strong>append</strong> dei risultati di tutte le iterazioni</li>
+          <li><span class="tag">top-left</span> input = the data to transform</li>
+          <li><span class="tag right">bottom-left</span> input = the <strong>driver</strong>: one row = one iteration</li>
+          <li><strong>drag the operations inside</strong> the box: they are the loop body</li>
+          <li>in the values use the driver's <code v-pre>{{column}}</code> placeholders</li>
+          <li>the output is the <strong>append</strong> of every iteration's result</li>
         </ol>
         <p v-if="rightColumns.length" class="phlist">
-          Placeholder disponibili:
+          Available placeholders:
           <code v-for="c in rightColumns" :key="c.name" v-text="`{{${c.name}}}`" />
         </p>
-        <p v-else class="muted phlist">Nessun driver collegato: definisci le iterazioni statiche qui sotto.</p>
+        <p v-else class="muted phlist">No driver connected: define the static iterations below.</p>
       </div>
 
       <ParamForm
@@ -355,20 +373,20 @@ function pickDatasource(id: number | null) {
       />
 
       <div v-if="node.data.opType === 'join'" class="joinhelp">
-        <strong class="joinhead"><Link2 :size="13" /> Come collegare il join</strong>
+        <strong class="joinhead"><Link2 :size="13" /> How to connect the join</strong>
         <ol>
-          <li>input a <span class="tag">sinistra</span> = lo step precedente della catena</li>
-          <li>input in <span class="tag right">alto</span> = trascina qui il <strong>ramo/sorgente</strong> (con dati) da unire</li>
-          <li>poi scegli il tipo di join e le colonne chiave qui sotto</li>
+          <li><span class="tag">top-left</span> input = the previous step in the chain — the <strong>left</strong> table</li>
+          <li><span class="tag right">bottom-left</span> input = drag here the <strong>branch/source</strong> to join — the <strong>right</strong> table</li>
+          <li>then pick the join type and the key columns below (<code>left</code>/<code>right</code> joins follow this order)</li>
         </ol>
       </div>
 
       <div v-if="node.data.opType === 'union'" class="joinhelp">
-        <strong class="joinhead"><Link2 :size="13" /> Come collegare la union</strong>
+        <strong class="joinhead"><Link2 :size="13" /> How to connect the union</strong>
         <ol>
-          <li>input a <span class="tag">sinistra</span> = lo step precedente della catena</li>
-          <li>input in <span class="tag right">alto</span> = il <strong>ramo/sorgente</strong> le cui righe vengono accodate sotto</li>
-          <li>per accodare più sorgenti, metti più nodi union in catena</li>
+          <li><span class="tag">top-left</span> input = the previous step in the chain</li>
+          <li><span class="tag right">bottom-left</span> input = the <strong>branch/source</strong> whose rows are appended below</li>
+          <li>to append more sources, chain several union nodes</li>
         </ol>
       </div>
 
@@ -409,6 +427,7 @@ label { font-size: 12px; color: var(--muted); }
 .dspick > label { display: inline-flex; align-items: center; gap: 5px; }
 .outhint { font-size: 12px; margin: 2px 0 0; }
 .outhint code { font-size: 11px; }
+.commenttext { font-family: inherit; }
 .partchecks {
   display: flex;
   flex-direction: column;

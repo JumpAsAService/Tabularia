@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
-import { ArrowUp } from 'lucide-vue-next'
 import { opMeta } from '~/composables/useOpIcons'
 
 const props = defineProps<{ id: string; data: any }>()
 
 const isJoin = computed(() => props.data?.opType === 'join')
 const isUnion = computed(() => props.data?.opType === 'union')
-// operazioni con un secondo input (ramo destro) collegato in alto
+// operazioni con un secondo input (ramo destro): sta a sinistra, sotto il principale
 const needsRight = computed(() => isJoin.value || isUnion.value)
 const meta = computed(() => opMeta(props.data?.opType ?? ''))
 const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
@@ -20,12 +19,12 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
     :class="{ 'node-join': needsRight }"
     :style="{ '--node-accent': meta.color }"
   >
-    <!-- input principale (catena): sempre a sinistra -->
-    <Handle id="left" type="target" :position="Position.Left" />
-    <!-- secondo input (join: tabella da unire; union: ramo da accodare): in ALTO -->
+    <!-- input principale (catena): a sinistra (in alto se c'è un secondo input) -->
+    <Handle id="left" type="target" :position="Position.Left" :class="needsRight ? 'h-left-top' : ''" />
+    <!-- secondo input (join: tabella da unire; union: ramo da accodare): a sinistra, sotto -->
     <template v-if="needsRight">
-      <Handle id="right" type="target" :position="Position.Top" class="handle-right" />
-      <span class="hlabel-top"><ArrowUp :size="9" /> tabella</span>
+      <Handle id="right" type="target" :position="Position.Left" class="handle-right h-left-bottom" />
+      <span class="hlabel-left">table</span>
     </template>
 
     <div class="node-title">
@@ -50,16 +49,16 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
 .node-join { min-width: 180px; position: relative; }
 .handle-right { background: var(--accent-2) !important; }
 .node-icon { color: var(--node-accent); }
-.hlabel-top {
+/* etichetta del secondo input, appena fuori dal bordo sinistro all'altezza dell'handle */
+.hlabel-left {
   position: absolute;
-  top: 3px;
-  right: 8px;
+  left: -6px;
+  top: 68%;
+  transform: translate(-100%, -50%);
   font-size: 9px;
   line-height: 1;
   color: var(--accent-2);
   pointer-events: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+  white-space: nowrap;
 }
 </style>

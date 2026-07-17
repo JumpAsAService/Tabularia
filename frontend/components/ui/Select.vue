@@ -4,7 +4,7 @@
 // teleportato sul body (position: fixed) così non viene mai tagliato dagli
 // overflow dei contenitori (pannello nodo, toolbar, celle di tabella).
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
-import { ChevronDown, Check } from 'lucide-vue-next'
+import { ChevronDown, Check, Search } from 'lucide-vue-next'
 
 export interface SelectOption {
   value: any
@@ -20,6 +20,8 @@ const props = defineProps<{
   options: Array<SelectOption | string | number>
   placeholder?: string
   disabled?: boolean
+  // casella di ricerca: default automatico quando le opzioni sono molte
+  searchable?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
@@ -32,10 +34,20 @@ const norm = computed<SelectOption[]>(() =>
 const labelOf = (o: SelectOption) => o.label ?? String(o.value)
 const selected = computed(() => norm.value.find((o) => o.value === props.modelValue))
 
-// opzioni raggruppate preservando l'ordine (group undefined = fuori gruppo)
+// ── ricerca: attiva su richiesta o quando l'elenco è lungo ────────────────
+const SEARCH_THRESHOLD = 8
+const query = ref('')
+const searchable = computed(() => props.searchable ?? norm.value.length > SEARCH_THRESHOLD)
+const filtered = computed<SelectOption[]>(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return norm.value
+  return norm.value.filter((o) => labelOf(o).toLowerCase().includes(q))
+})
+
+// opzioni (filtrate) raggruppate preservando l'ordine (group undefined = fuori gruppo)
 const groups = computed(() => {
   const out: { group: string | null; items: SelectOption[] }[] = []
-  for (const o of norm.value) {
+  for (const o of filtered.value) {
     const g = o.group ?? null
     const last = out[out.length - 1]
     if (last && last.group === g) last.items.push(o)
@@ -45,12 +57,13 @@ const groups = computed(() => {
 })
 
 const open = ref(false)
-const hi = ref(-1) // indice evidenziato (navigazione tastiera), sul flat
+const hi = ref(-1) // indice evidenziato (navigazione tastiera), sul flat filtrato
 const triggerEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
+const searchEl = ref<HTMLInputElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
 
-const PANEL_MAX_H = 240
+const PANEL_MAX_H = 280
 
 function positionPanel() {
   const r = triggerEl.value?.getBoundingClientRect()
@@ -74,18 +87,27 @@ function onDocMousedown(ev: MouseEvent) {
   if (triggerEl.value?.contains(t) || panelEl.value?.contains(t)) return
   close()
 }
+// lo scroll DENTRO il pannello non deve chiuderlo: solo lo scroll della pagina
+// sottostante (il pannello è position:fixed e non seguirebbe) lo chiude.
+function onScroll(ev: Event) {
+  const t = ev.target as Node
+  if (panelEl.value && t && panelEl.value.contains(t)) return
+  close()
+}
 const closeOnMove = () => close()
 
 async function openPanel() {
   if (props.disabled) return
   open.value = true
+  query.value = ''
   hi.value = norm.value.findIndex((o) => o.value === props.modelValue)
   await nextTick()
   positionPanel()
+  if (searchable.value) searchEl.value?.focus()
   // scroll fino all'opzione selezionata
   panelEl.value?.querySelector('.sel-opt.active')?.scrollIntoView({ block: 'nearest' })
   document.addEventListener('mousedown', onDocMousedown)
-  window.addEventListener('scroll', closeOnMove, true)
+  window.addEventListener('scroll', onScroll, true)
   window.addEventListener('resize', closeOnMove)
 }
 
@@ -93,7 +115,7 @@ function close() {
   if (!open.value) return
   open.value = false
   document.removeEventListener('mousedown', onDocMousedown)
-  window.removeEventListener('scroll', closeOnMove, true)
+  window.removeEventListener('scroll', onScroll, true)
   window.removeEventListener('resize', closeOnMove)
   emit('close')
 }
@@ -116,14 +138,30 @@ function onKeydown(ev: KeyboardEvent) {
     }
     return
   }
-  const flat = norm.value
+  const flat = filtered.value
   if (ev.key === 'Escape') { ev.preventDefault(); close() }
-  else if (ev.key === 'ArrowDown') { ev.preventDefault(); hi.value = Math.min(hi.value + 1, flat.length - 1) }
-  else if (ev.key === 'ArrowUp') { ev.preventDefault(); hi.value = Math.max(hi.value - 1, 0) }
-  else if (ev.key === 'Enter') { ev.preventDefault(); if (flat[hi.value]) pick(flat[hi.value]) }
+  else if (ev.key === 'ArrowDown') {
+    ev.preventDefault()
+    hi.value = Math.min(hi.value + 1, flat.length - 1)
+    scrollHiIntoView()
+  } else if (ev.key === 'ArrowUp') {
+    ev.preventDefault()
+    hi.value = Math.max(hi.value - 1, 0)
+    scrollHiIntoView()
+  } else if (ev.key === 'Enter') { ev.preventDefault(); if (flat[hi.value]) pick(flat[hi.value]) }
 }
 
-const flatIndex = (o: SelectOption) => norm.value.indexOf(o)
+// il testo di ricerca è cambiato: riporta l'evidenziazione in cima ai risultati
+function onQueryInput() {
+  hi.value = filtered.value.length ? 0 : -1
+}
+
+async function scrollHiIntoView() {
+  await nextTick()
+  panelEl.value?.querySelector('.sel-opt.hi')?.scrollIntoView({ block: 'nearest' })
+}
+
+const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
 </script>
 
 <template>
@@ -145,22 +183,37 @@ const flatIndex = (o: SelectOption) => norm.value.indexOf(o)
 
   <Teleport to="body">
     <div v-if="open" ref="panelEl" class="sel-panel" :style="panelStyle" @mousedown.stop>
-      <template v-for="(g, gi) in groups" :key="gi">
-        <div v-if="g.group" class="sel-group">{{ g.group }}</div>
-        <div
-          v-for="o in g.items"
-          :key="String(o.value)"
-          class="sel-opt"
-          :class="{ active: o.value === modelValue, hi: flatIndex(o) === hi }"
-          @click="pick(o)"
-          @mousemove="hi = flatIndex(o)"
-        >
-          <Check v-if="o.value === modelValue" :size="13" class="check" />
-          <span v-else class="check-spacer" />
-          <span class="sel-opt-label">{{ labelOf(o) }}</span>
-        </div>
-      </template>
-      <p v-if="!norm.length" class="sel-empty">No options</p>
+      <div v-if="searchable" class="sel-search">
+        <Search :size="13" class="sel-search-icon" />
+        <input
+          ref="searchEl"
+          v-model="query"
+          type="text"
+          class="sel-search-input"
+          placeholder="Cerca…"
+          @input="onQueryInput"
+          @keydown="onKeydown"
+        />
+      </div>
+      <div class="sel-list">
+        <template v-for="(g, gi) in groups" :key="gi">
+          <div v-if="g.group" class="sel-group">{{ g.group }}</div>
+          <div
+            v-for="o in g.items"
+            :key="String(o.value)"
+            class="sel-opt"
+            :class="{ active: o.value === modelValue, hi: flatIndex(o) === hi }"
+            @click="pick(o)"
+            @mousemove="hi = flatIndex(o)"
+          >
+            <Check v-if="o.value === modelValue" :size="13" class="check" />
+            <span v-else class="check-spacer" />
+            <span class="sel-opt-label">{{ labelOf(o) }}</span>
+          </div>
+        </template>
+        <p v-if="!norm.length" class="sel-empty">No options</p>
+        <p v-else-if="!filtered.length" class="sel-empty">Nessun risultato</p>
+      </div>
     </div>
   </Teleport>
 </template>
@@ -199,13 +252,40 @@ const flatIndex = (o: SelectOption) => norm.value.indexOf(o)
 .sel-panel {
   position: fixed;
   z-index: 2500;
-  max-height: 240px;
-  overflow-y: auto;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow-2);
   padding: 4px;
+}
+/* la casella di ricerca resta fissa; solo la lista scrolla */
+.sel-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+.sel-search-icon { color: var(--muted); flex-shrink: 0; }
+.sel-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+.sel-search-input::placeholder { color: var(--muted); }
+.sel-list {
+  overflow-y: auto;
+  min-height: 0;
 }
 .sel-group {
   font-size: 10px;

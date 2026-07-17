@@ -64,9 +64,9 @@ const SINGLE_DATE_OPERATORS = new Set(['eq', 'ne', 'gt', 'ge', 'lt', 'le'])
 
 // messaggio diagnostico quando il join non ha colonne chiave disponibili
 const joinOnDiag = computed(() => {
-  if (!leftNames.value.length) return "Collega l'input «sinistra» a uno step con dati."
-  if (!rightNames.value.length) return "Collega un ramo con dati all'input «↑ tabella» (in alto)."
-  return 'Le due tabelle non hanno colonne con lo stesso nome (servirebbe un join a chiavi diverse).'
+  if (!leftNames.value.length) return 'Connect the top-left input to a step with data.'
+  if (!rightNames.value.length) return 'Connect a branch with data to the bottom-left «table» input.'
+  return 'The two tables have no columns with the same name (a join on different keys would be needed).'
 })
 
 function emptyMessage(field: FieldSpec): string {

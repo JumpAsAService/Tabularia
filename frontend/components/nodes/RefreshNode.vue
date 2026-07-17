@@ -11,14 +11,14 @@ const summary = computed(() => props.data?.dsName?.trim() || 'scegli una datasou
 
 <template>
   <div class="node node-ctl">
-    <!-- handle di SEQUENZA (verticali): definiscono l'ordine di orchestrazione -->
-    <Handle id="seq-in" type="target" :position="Position.Top" class="handle-seq" />
+    <!-- handle di SEQUENZA (orizzontali): definiscono l'ordine di orchestrazione -->
+    <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
     <div class="node-title">
       <RefreshCw :size="13" class="node-icon" />
       Refresh datasource
     </div>
     <div class="node-body muted">{{ summary }}</div>
-    <Handle id="seq-out" type="source" :position="Position.Bottom" class="handle-seq" />
+    <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />
   </div>
 </template>
 

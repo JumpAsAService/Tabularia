@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // Container del ciclo: i nodi trascinati DENTRO diventano il corpo (figli Vue
-// Flow con parentNode). Input sinistro = dati; input in alto = driver (una
+// Flow con parentNode). Input a sinistra: sopra = dati, sotto = driver (una
 // riga = un'iterazione, le colonne sono i placeholder {{colonna}}).
 import { Handle, Position } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { Repeat, ArrowUp } from 'lucide-vue-next'
+import { Repeat } from 'lucide-vue-next'
 
 defineProps<{ id: string; data: any }>()
 </script>
@@ -18,14 +18,14 @@ defineProps<{ id: string; data: any }>()
       color="#f472b6"
       :line-style="{ borderWidth: '1px', borderColor: 'rgba(244, 114, 182, 0.35)' }"
     />
-    <Handle id="left" type="target" :position="Position.Left" />
-    <Handle id="right" type="target" :position="Position.Top" class="handle-driver" />
-    <span class="hlabel-top"><ArrowUp :size="9" /> driver</span>
+    <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
+    <Handle id="right" type="target" :position="Position.Left" class="handle-driver h-left-bottom" />
+    <span class="hlabel-left">driver</span>
 
     <div class="foreach-title">
       <Repeat :size="13" class="ico" />
       ciclo foreach
-      <span class="muted hint">trascina qui le operazioni del corpo</span>
+      <span class="muted hint">drag the body operations here</span>
     </div>
 
     <Handle id="out" type="source" :position="Position.Right" />
@@ -55,17 +55,16 @@ defineProps<{ id: string; data: any }>()
 .ico { color: #f472b6; }
 .hint { font-weight: 400; font-size: 10px; margin-left: auto; }
 .handle-driver { background: #f472b6 !important; }
-.hlabel-top {
+/* etichetta del driver, appena fuori dal bordo sinistro all'altezza dell'handle */
+.hlabel-left {
   position: absolute;
-  top: -14px;
-  left: 50%;
-  transform: translateX(14px);
+  left: -6px;
+  top: 68%;
+  transform: translate(-100%, -50%);
   font-size: 9px;
   line-height: 1;
   color: #f472b6;
   pointer-events: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+  white-space: nowrap;
 }
 </style>

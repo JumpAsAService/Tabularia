@@ -125,7 +125,8 @@ function operationFor(nodes: Node[], edges: Edge[], id: string, bodyUntil?: stri
  * quel nodo incluso (per la preview di un nodo interno).
  */
 function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?: string): Operation[] {
-  const children = nodes.filter((n) => n.parentNode === containerId)
+  // i commenti dentro un container sono solo annotazioni: fuori dal corpo
+  const children = nodes.filter((n) => n.parentNode === containerId && n.type !== 'comment')
   if (!children.length) return []
   const childIds = new Set(children.map((c) => c.id))
   const inc = buildIncoming(edges)
@@ -154,7 +155,8 @@ function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?
  * container non contano: appartengono al corpo del ciclo, non alla catena. */
 export function leafNodeId(nodes: Node[], edges: Edge[]): string {
   const hasOutgoing = new Set(edges.map((e) => e.source))
-  const leaves = nodes.filter((n) => !hasOutgoing.has(n.id) && !n.parentNode)
+  // i commenti sono annotazioni: non sono nodi del flusso, mai una foglia
+  const leaves = nodes.filter((n) => !hasOutgoing.has(n.id) && !n.parentNode && n.type !== 'comment')
   return (
     leaves.find((n) => n.type === 'operation' || n.type === 'foreach') ?? leaves[0]
   )?.id ?? SOURCE_ID
