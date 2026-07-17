@@ -65,6 +65,9 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: dataprep-backend
+    # riparte da solo se il container muore (es. OOM-kill del processo principale):
+    # niente engine giù, niente run appesi fino allo stale-timeout
+    restart: unless-stopped
     expose:
       - "8000"  # solo interno alla rete dataprep-network
     env_file:
@@ -90,6 +93,7 @@ services:
       context: ../gateway
       dockerfile: Dockerfile
     container_name: dataprep-gateway
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
@@ -112,6 +116,9 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: dataprep-worker
+    # riparte da solo dopo un OOM-kill del processo principale del worker:
+    # il caso limite in cui muore l'intero container invece del solo task-figlio
+    restart: unless-stopped
     env_file:
       - .env
     volumes:

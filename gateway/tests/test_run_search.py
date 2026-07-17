@@ -39,6 +39,22 @@ async def test_reconcile_failure_captures_short_and_detailed_error(session, fake
     assert "Traceback" in (run.error_detail or "")
 
 
+async def test_reconcile_oom_translated_to_friendly_message(session, fake_engine):
+    # worker ucciso dal limite di memoria (OOM): il messaggio grezzo SIGKILL/
+    # WorkerLostError va tradotto in qualcosa di chiaro, col traceback preservato
+    run = make_run(session, kind="flow", status="STARTED", task_id="t-oom", flow_id=1)
+    fake_engine.set_task(
+        "t-oom", "FAILURE",
+        error="WorkerLostError('Worker exited prematurely: signal 9 (SIGKILL) Job: 3.')",
+        error_detail="Traceback ...\nbilliard.exceptions.WorkerLostError: signal 9 (SIGKILL)",
+    )
+    await _reconcile(session, run)
+    session.refresh(run)
+    assert run.status == "FAILURE"
+    assert "memoria" in run.error.lower()  # messaggio chiaro, non il SIGKILL grezzo
+    assert "SIGKILL" in (run.error_detail or "")  # dettaglio tecnico preservato
+
+
 async def test_reconcile_success_leaves_error_detail_empty(session, fake_engine):
     run = make_run(session, kind="flow", status="STARTED", task_id="t-ok",
                    publish_name="x", publish_project_id=1)

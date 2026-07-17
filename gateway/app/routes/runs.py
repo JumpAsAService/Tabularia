@@ -302,6 +302,25 @@ async def launch_ingest_run(
 STALE_AFTER_SECONDS = 3600 + 300  # task_time_limit dell'engine + margine
 SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di rimandare
 
+# firme di un OOM-kill: il worker ha superato il limite di memoria del container
+# e il kernel ha ucciso il processo (segnale 9). Il messaggio grezzo di Celery
+# (WorkerLostError / SIGKILL) è criptico → lo traduciamo in qualcosa di chiaro.
+_OOM_SIGNS = ("signal 9", "sigkill", "workerlosterror", "memoryerror", "out of memory")
+_OOM_MESSAGE = (
+    "Il run ha esaurito la memoria disponibile ed è stato interrotto. "
+    "Riduci i dati (filter/limit) o semplifica il flusso; se serve più memoria, "
+    "aumenta il limite del worker (WORKER_MEM_LIMIT)."
+)
+
+
+def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
+    """Traduce i fallimenti da OOM (worker ucciso dal limite di memoria) in un
+    messaggio chiaro; il traceback grezzo resta in `error_detail`."""
+    blob = f"{error or ''}\n{error_detail or ''}".lower()
+    if any(sign in blob for sign in _OOM_SIGNS):
+        return _OOM_MESSAGE
+    return error
+
 
 def _age_seconds(dt: datetime | None) -> float:
     if dt is None:
@@ -368,7 +387,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
     if new_status == "SUCCESS":
         values["rows_written"] = result.get("rows_written")
     else:
-        values["error"] = (error or "")[:2000]
+        values["error"] = (_friendly_error(error, error_detail) or "")[:2000]
         values["error_detail"] = error_detail[:20000] if error_detail else None
     # con qualche tentativo IMMEDIATO: un errore transitorio (lock, hiccup del DB)
     # si risolve nello stesso giro invece di aspettare la prossima lettura; se
