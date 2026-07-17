@@ -87,6 +87,7 @@ def transform_data_task(
     operations: list[dict[str, Any]],
     output_key: str,
     destination: dict[str, Any] | None = None,
+    engine: str | None = None,
 ) -> dict:
     """
     Esegue un flow di trasformazione (run completo) su un parquet dello storage.
@@ -112,8 +113,8 @@ def transform_data_task(
     logger.info(f"🚀 Starting transform_data_task: {input_key} → {output_key}")
     logger.info(f"📋 Operations: {operations}")
 
-    engine = get_engine()
-    result = engine.run(
+    engine_impl = get_engine(engine)
+    result = engine_impl.run(
         source=DataSource(bucket=bucket, key=input_key),
         operations=operations,
         destination=DataSource(bucket=bucket, key=output_key),

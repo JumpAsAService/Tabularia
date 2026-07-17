@@ -221,6 +221,7 @@ async def _launch_flow_run(
             "output_key": output_key,
             "operations": body.operations,
             "destination": destination_payload,
+            "engine": flow.engine,  # motore scelto per questo flusso
         },
     )
     if resp.status_code >= 400:

@@ -86,6 +86,7 @@ def submit_transform_data_task(request: TransformDataRequest):
         operations=operations,
         output_key=request.output_key,
         destination=request.destination,
+        engine=request.engine,
     )
     
     return TaskResponse(
@@ -113,9 +114,9 @@ def preview_flow(request: PreviewRequest):
     È il feedback interattivo mentre l'utente costruisce il flow: niente Celery,
     risposta immediata con schema + prime N righe del risultato.
     """
-    engine = get_engine()
     operations = [op.model_dump() for op in request.operations]
     try:
+        engine = get_engine(request.engine)  # EngineError se il nome non è valido
         return engine.preview(
             source=DataSource(bucket=request.bucket, key=request.input_key),
             operations=operations,

@@ -65,6 +65,7 @@ export function useApi() {
       input_key: string
       operations: Operation[]
       limit?: number
+      engine?: string // motore del flusso (polars | duckdb); assente = default
     }): Promise<PreviewResult> {
       return await apiFetch<PreviewResult>('/tasks/preview', { method: 'POST', body })
     },
@@ -74,8 +75,14 @@ export function useApi() {
       input_key: string
       output_key: string
       operations: Operation[]
+      engine?: string
     }): Promise<TaskResponse> {
       return await apiFetch<TaskResponse>('/tasks/transform-data', { method: 'POST', body })
+    },
+
+    // catalogo degli engine disponibili (per il picker in creazione flusso)
+    async engines(): Promise<{ id: string; label: string; available: boolean; description: string }[]> {
+      return await apiFetch('/engines')
     },
 
     async taskStatus(id: string): Promise<TaskStatus> {

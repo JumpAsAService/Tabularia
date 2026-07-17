@@ -44,6 +44,11 @@ def _columns_of(schema: dict[str, Any]) -> list[ColumnInfo]:
 
 
 class PolarsEngine(Engine):
+    # tag che namespacea la cache a step: engine diversi (Polars/DuckDB) possono
+    # produrre parquet leggermente diversi per la stessa catena → non devono
+    # condividere i blob della step-cache (chiavati sull'hash del piano)
+    engine_name = "polars"
+
     def __init__(self, storage=None, cache: StepCache | None = None):
         # import ritardato per non forzare la dipendenza in import-time
         if storage is None:
@@ -63,7 +68,7 @@ class PolarsEngine(Engine):
 
     # ── Helpers ───────────────────────────────────────────────────────────
     def _source_id(self, source: DataSource) -> str:
-        return f"{source.bucket}/{source.key}"
+        return f"{self.engine_name}:{source.bucket}/{source.key}"
 
     def _sink(self, lf: pl.LazyFrame, path: str) -> None:
         """Scrive un LazyFrame in parquet: streaming, con fallback in-memory.

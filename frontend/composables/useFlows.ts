@@ -8,6 +8,7 @@ export interface FlowSummary {
   project_id: number
   owner_id: number | null
   owner_name: string | null // nome di chi ha creato il flusso
+  engine: string // motore di esecuzione (polars | duckdb)
   run_schedule: string | null // cron; null = non schedulato
   next_run_at: string | null
   created_at: string | null
@@ -50,7 +51,10 @@ export function useFlows() {
 
     get: (id: number) => apiFetch<FlowDetail>(`/flows/${id}`),
 
-    create: (projectId: number, body: { name: string; description?: string; definition: string }) =>
+    create: (
+      projectId: number,
+      body: { name: string; description?: string; definition: string; engine?: string },
+    ) =>
       apiFetch<FlowDetail>(`/projects/${projectId}/flows`, { method: 'POST', body }),
 
     update: (

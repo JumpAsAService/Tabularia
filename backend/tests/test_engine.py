@@ -47,7 +47,7 @@ def test_preview_con_operazione_rotta_indica_nodo_e_posizione(engine, vendite):
 def test_la_preview_materializza_il_parent_in_cache(engine, vendite, cache):
     ops = FILTRO_IT + [{"type": "limit", "params": {"n": 1}}]
     engine.preview(vendite, ops, limit=10)
-    parent_hash = plan_hashes(f"{vendite.bucket}/{vendite.key}", FILTRO_IT)[-1]
+    parent_hash = plan_hashes(engine._source_id(vendite), FILTRO_IT)[-1]
     assert cache.has(parent_hash)  # iterare sui params dell'ultimo nodo ora costa 1 op
 
 
@@ -77,7 +77,7 @@ def test_run_scrive_l_output_e_riporta_le_righe(engine, vendite, storage):
 def test_run_mette_in_cache_anche_lo_step_finale(engine, vendite, cache):
     dest = DataSource(bucket=BUCKET, key="out/risultato.parquet")
     engine.run(vendite, FILTRO_IT, dest)
-    final_hash = plan_hashes(f"{vendite.bucket}/{vendite.key}", FILTRO_IT)[-1]
+    final_hash = plan_hashes(engine._source_id(vendite), FILTRO_IT)[-1]
     assert cache.has(final_hash)  # ri-run e preview del nodo foglia sono immediati
 
 

@@ -6,7 +6,7 @@ import { onMounted, reactive, ref } from 'vue'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine,
 } from 'lucide-vue-next'
-import { errMessage } from '~/composables/useApi'
+import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 import {
   useFlows, type FlowSummary, type FlowStats, type FlowVersionInfo,
@@ -18,18 +18,35 @@ import { usePagedList } from '~/composables/usePagedList'
 const flowsApi = useFlows()
 const projectsApi = useProjects()
 const runsApi = useRuns()
+const api = useApi()
 const toast = useToast()
 
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
   usePagedList<FlowSummary>((p) => flowsApi.listPaged(p))
 
+// motori disponibili per il picker "Nuovo flusso" (il flusso è pinnato al motore
+// scelto). DuckDB compare come "in arrivo" finché il suo engine non è pronto.
+interface EngineOpt { id: string; label: string; available: boolean; description: string }
+const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
+const newMenu = ref(false)
+function createWith(engineId: string) {
+  newMenu.value = false
+  navigateTo(`/editor?engine=${engineId}`)
+}
+
 const folderName = ref<Record<number, string>>({})
+const engineLabel = (id: string) => engines.value.find((e) => e.id === id)?.label ?? id
 onMounted(async () => {
   try {
     const projects = await projectsApi.list()
     folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
   } catch {
     /* i nomi cartella sono accessori */
+  }
+  try {
+    engines.value = await api.engines()
+  } catch {
+    /* fallback: solo Polars (già in default) */
   }
 })
 
@@ -134,7 +151,23 @@ async function saveSchedule(cron: string) {
       <h2><Workflow :size="18" /> Flows <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Cerca flussi…" /></span>
-        <NuxtLink to="/editor" class="btn-link"><Plus :size="14" /> Nuovo flusso</NuxtLink>
+        <div class="newflow">
+          <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> Nuovo flusso</button>
+          <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
+          <div v-if="newMenu" class="menu-pop">
+            <div class="menu-label">Motore di esecuzione</div>
+            <button
+              v-for="e in engines"
+              :key="e.id"
+              class="menu-item"
+              :disabled="!e.available"
+              @click="createWith(e.id)"
+            >
+              <span class="mi-top">{{ e.label }}<span v-if="!e.available" class="soon">in arrivo</span></span>
+              <span v-if="e.description" class="mi-desc">{{ e.description }}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -170,6 +203,7 @@ async function saveSchedule(cron: string) {
           <template v-else-if="detail[f.id]">
             <div class="metrics">
               <div class="metric"><span class="mlabel">Cartella</span><span>{{ folderName[f.project_id] ?? `#${f.project_id}` }}</span></div>
+              <div class="metric"><span class="mlabel">Motore</span><span>{{ engineLabel(f.engine) }}</span></div>
               <div class="metric"><span class="mlabel">Creato da</span><span>{{ f.owner_name ?? '—' }}</span></div>
               <div class="metric"><span class="mlabel">Creato</span><span>{{ fmtDate(f.created_at) }}</span></div>
               <div class="metric"><span class="mlabel">Esecuzioni</span><span>{{ detail[f.id].stats?.run_count ?? 0 }}</span></div>
@@ -252,4 +286,16 @@ async function saveSchedule(cron: string) {
 .vdate { white-space: nowrap; font-size: 12px; }
 .promote { display: inline-flex; align-items: center; gap: 4px; }
 .small { font-size: 12.5px; }
+
+/* dropdown "Nuovo flusso" con scelta del motore */
+.newflow { position: relative; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 41; min-width: 260px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28); padding: 6px; }
+.menu-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 6px 8px 4px; }
+.menu-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 8px 9px; border: none; background: transparent; border-radius: 7px; cursor: pointer; }
+.menu-item:hover:not(:disabled) { background: var(--panel-2); }
+.menu-item:disabled { opacity: 0.55; cursor: not-allowed; }
+.mi-top { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; color: var(--text); }
+.mi-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.soon { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-2); border: 1px solid var(--accent-2); border-radius: 20px; padding: 1px 6px; }
 </style>

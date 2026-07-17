@@ -33,6 +33,7 @@ class TransformDataRequest(BaseModel):
     destination: Optional[dict[str, Any]] = Field(
         default=None, description="Destinazione opzionale (database o S3)"
     )
+    engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
 
 
 class TaskResponse(BaseModel):
@@ -57,6 +58,7 @@ class PreviewRequest(BaseModel):
         default_factory=list, description="Flow da applicare (IR dichiarativa)"
     )
     limit: int = Field(default=100, ge=1, le=1000, description="Righe massime nel campione")
+    engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
 
 
 class ExportRequest(BaseModel):

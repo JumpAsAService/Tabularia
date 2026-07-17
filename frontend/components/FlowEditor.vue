@@ -124,6 +124,17 @@ const canRun = computed(
 const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : null)
 const projectId = ref<number | null>(route.query.project ? Number(route.query.project) : null)
 const flowName = ref('Flusso senza nome')
+// motore del flusso: scelto in creazione (?engine=… dalla pagina Flows) per un
+// flusso nuovo, oppure caricato da flow.engine. Passato a preview/run e salvato.
+const flowEngine = ref<string>(route.query.engine ? String(route.query.engine) : 'polars')
+
+// preview/transform iniettano SEMPRE l'engine del flusso corrente. (`dataApi`
+// alias: evita che i wrapper si auto-referenzino nei rimpiazzi delle chiamate.)
+const dataApi = api
+const apiPreview = (body: Parameters<typeof api.preview>[0]) =>
+  dataApi.preview({ ...body, engine: flowEngine.value })
+const apiTransform = (body: Parameters<typeof api.transform>[0]) =>
+  dataApi.transform({ ...body, engine: flowEngine.value })
 const projectsList = ref<{ id: number; name: string }[]>([])
 
 // serializza SOLO ciò che serve a ricostruire il canvas (niente stato interno Vue Flow)
@@ -154,6 +165,7 @@ async function loadFlow(id: number) {
   const f = await flowsApi.get(id)
   flowName.value = f.name
   projectId.value = f.project_id
+  flowEngine.value = f.engine || 'polars'
   const def = JSON.parse(f.definition || '{}')
   // normalizza: sorgenti salvate senza bucket (flussi vecchi/esterni) ricevono
   // quello di default, altrimenti preview/run partirebbero senza bucket (422)
@@ -209,6 +221,7 @@ async function saveFlow() {
       const f = await flowsApi.create(projectId.value, {
         name: flowName.value.trim(),
         definition: serializeCanvas(),
+        engine: flowEngine.value,
       })
       flowId.value = f.id
       router.replace({ query: { flow: String(f.id) } }) // l'URL ora punta al flusso salvato
@@ -608,7 +621,7 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
   if (nodeColumns[nodeId]) return nodeColumns[nodeId]
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
   if (!sourceNode?.data?.parquetKey) return []
-  const res = await api.preview({
+  const res = await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
     input_key: sourceNode.data.parquetKey,
     operations: ops,
@@ -688,7 +701,7 @@ async function runPreview(nodeId: string) {
   previewError.value = ''
   previewLoading.value = true
   try {
-    const res = await api.preview({
+    const res = await apiPreview({
       bucket: sourceNode.data.bucket ?? bucket,
       input_key: sourceNode.data.parquetKey,
       operations: ops,
@@ -719,7 +732,7 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
   if (!leftId) return []
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId)
   if (!sourceNode?.data?.parquetKey) return []
-  const res = await api.preview({
+  const res = await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
     input_key: sourceNode.data.parquetKey,
     operations: [
@@ -739,7 +752,7 @@ async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewR
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
   if (!sourceNode?.data?.parquetKey) return null
-  return await api.preview({
+  return await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
     input_key: sourceNode.data.parquetKey,
     operations: [...ops, ...extraOps],
@@ -923,7 +936,7 @@ async function executeRun(publish: PublishSpec | null) {
       // flusso non salvato: run diretto, senza cronologia né pubblicazione.
       // La chiave di output la assegna il SERVER (out/<uuid> write-once): qui
       // non la scegliamo più, si polla solo il task_id.
-      const res = await api.transform({
+      const res = await apiTransform({
         bucket: sourceNode.data.bucket ?? bucket,
         input_key: sourceNode.data.parquetKey,
         output_key: '',

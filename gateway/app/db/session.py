@@ -37,6 +37,8 @@ _MIGRATIONS = [
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS trigger_type VARCHAR NOT NULL DEFAULT 'manual'",
     # Run figlio di un'orchestrazione (per non contare i doppioni nel calendario)
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS parent_run_id INTEGER REFERENCES runs(id)",
+    # Engine di esecuzione scelto per il flusso (polars | duckdb)
+    "ALTER TABLE flows ADD COLUMN IF NOT EXISTS engine VARCHAR NOT NULL DEFAULT 'polars'",
 ]
 
 

@@ -22,6 +22,10 @@ class Flow(SQLModel, table=True):
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
     definition: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
+    # motore di esecuzione scelto alla CREAZIONE (persistito): "polars" (default)
+    # o "duckdb" (in arrivo). Passato all'engine in preview/run.
+    engine: str = Field(default="polars")
+
     # esecuzione SCHEDULATA (cron): lo scheduler del gateway ri-risolve la
     # definizione CORRENTE e lancia i nodi Output con l'autorità di
     # `run_scheduled_by`. schedule=None → disabilitato.

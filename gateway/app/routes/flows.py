@@ -34,6 +34,20 @@ from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
 router = APIRouter(tags=["flows"])
 
+# engine SELEZIONABILI alla creazione (sincronizzato col catalogo dell'engine:
+# solo quelli `available=True`). DuckDB entrerà qui quando il suo engine sarà pronto.
+_AVAILABLE_ENGINES = {"polars"}
+
+
+def _validate_engine(engine: str | None) -> str:
+    e = (engine or "polars").strip().lower()
+    if e not in _AVAILABLE_ENGINES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"engine non disponibile: '{engine}'. Scegli tra: {', '.join(sorted(_AVAILABLE_ENGINES))}.",
+        )
+    return e
+
 
 # nodi che danno "qualcosa da eseguire": Output, oppure i nodi di controllo
 # (refresh di una datasource, esecuzione di un altro flusso)
@@ -150,6 +164,7 @@ def create_flow(
         definition=body.definition,
         project_id=project_id,
         owner_id=user.id,
+        engine=_validate_engine(body.engine),
     )
     session.add(flow)
     session.commit()
@@ -213,6 +228,8 @@ def update_flow(
         flow.description = body.description
     if body.definition is not None:
         flow.definition = body.definition
+    if body.engine is not None:
+        flow.engine = _validate_engine(body.engine)
 
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)

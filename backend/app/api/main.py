@@ -33,6 +33,14 @@ app.include_router(tasks_router)
 app.include_router(files_router)
 app.include_router(db_router)
 
+@app.get("/engines")
+def list_engines():
+    """Catalogo degli engine per il picker del frontend (id, label, disponibilità)."""
+    from app.engine import ENGINE_CATALOG
+
+    return ENGINE_CATALOG
+
+
 @app.get("/")
 def root():
     return {"message": "Data Prep API is running"}

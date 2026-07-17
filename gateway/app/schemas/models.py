@@ -102,6 +102,7 @@ class FlowOut(BaseModel):
     project_id: int
     owner_id: Optional[int]
     owner_name: Optional[str] = None  # nome di chi ha creato il flusso (risolto)
+    engine: str = "polars"  # motore di esecuzione (polars | duckdb)
     run_schedule: Optional[str] = None  # cron; null = non schedulato
     next_run_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -116,6 +117,7 @@ class FlowCreate(BaseModel):
     name: str
     description: str = ""
     definition: str = "{}"
+    engine: str = "polars"  # scelto alla creazione
 
 
 class FlowScheduleUpdate(BaseModel):
@@ -128,6 +130,7 @@ class FlowUpdate(BaseModel):
     description: Optional[str] = None
     definition: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+    engine: Optional[str] = None  # valorizzato = cambia il motore di esecuzione
 
 
 class FlowVersionOut(BaseModel):

@@ -101,6 +101,12 @@ async def operations(request: Request):
     return await _forward(request, "GET", "/tasks/operations")
 
 
+@router.get("/engines")
+async def engines(request: Request):
+    """Catalogo degli engine disponibili (per il picker del frontend)."""
+    return await _forward(request, "GET", "/engines")
+
+
 @router.post("/tasks/preview")
 async def preview(
     request: Request,
