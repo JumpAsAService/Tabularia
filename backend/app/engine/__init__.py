@@ -9,6 +9,7 @@ L'engine è scelto PER FLUSSO (persistito su `Flow.engine` nel gateway e passato
 in preview/run). `ENGINE_CATALOG` alimenta il picker del frontend.
 """
 from functools import lru_cache
+from typing import Callable
 
 from app.engine.base import (
     ColumnInfo,
@@ -53,8 +54,9 @@ __all__ = [
 
 DEFAULT_ENGINE = "polars"
 
-# implementazioni registrate: name → factory.
-_ENGINES: dict[str, type[Engine]] = {
+# implementazioni registrate: name → factory (classe engine o callable → istanza,
+# vedi chDB pigro più sotto).
+_ENGINES: dict[str, Callable[[], Engine]] = {
     "polars": PolarsEngine,
 }
 
@@ -67,6 +69,26 @@ try:
     _DUCKDB_AVAILABLE = True
 except Exception:  # pragma: no cover
     _DUCKDB_AVAILABLE = False
+
+# chDB (ClickHouse embedded) è FORK-UNSAFE: importarlo/inizializzarlo avvia i
+# thread nativi di ClickHouse, e se ciò avviene nel processo PADRE di Celery
+# (prefork) i figli forkati ereditano lock rotti → deadlock su QUALSIASI task.
+# Quindi NON lo importiamo qui: controlliamo solo la disponibilità con find_spec
+# (non esegue il modulo, niente thread) e lo carichiamo PIGRO dentro get_engine,
+# così l'init di chDB avviene nel FIGLIO dopo il fork (fork-safe, per-processo).
+import importlib.util
+
+_CHDB_AVAILABLE = importlib.util.find_spec("chdb") is not None
+
+
+def _make_chdb_engine() -> Engine:
+    from app.engine.chdb_engine import ChdbEngine
+
+    return ChdbEngine()
+
+
+if _CHDB_AVAILABLE:
+    _ENGINES["chdb"] = _make_chdb_engine  # factory pigra (callable → istanza)
 
 # metadati per il picker del frontend (creazione flusso). `available=False` =
 # opzione mostrata ma non ancora selezionabile.
@@ -83,6 +105,13 @@ ENGINE_CATALOG = [
         "available": _DUCKDB_AVAILABLE,
         "description": "Motore SQL out-of-core (spill su disco): adatto ad aggregazioni e join molto grandi. "
         "v1: operazioni di base (le trasformazioni avanzate usano Polars).",
+    },
+    {
+        "id": "chdb",
+        "label": "chDB (ClickHouse)",
+        "available": _CHDB_AVAILABLE,
+        "description": "Motore SQL out-of-core con dialetto ClickHouse (spill su disco). "
+        "v1: operazioni strutturali (sql/foreach usano Polars o DuckDB).",
     },
 ]
 

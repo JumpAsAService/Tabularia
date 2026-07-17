@@ -36,7 +36,7 @@ router = APIRouter(tags=["flows"])
 
 # engine SELEZIONABILI alla creazione (sincronizzato col catalogo dell'engine:
 # solo quelli `available=True`).
-_AVAILABLE_ENGINES = {"polars", "duckdb"}
+_AVAILABLE_ENGINES = {"polars", "duckdb", "chdb"}
 
 
 def _validate_engine(engine: str | None) -> str:
