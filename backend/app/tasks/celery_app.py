@@ -1,5 +1,5 @@
 from celery import Celery
-from app.core.config import get_settings
+from app.core.config import get_settings, resolve_max_memory_per_child_kb
 
 settings = get_settings()
 
@@ -19,9 +19,22 @@ celery_app.conf.update(
     task_time_limit=3600,
     task_soft_time_limit=3300,
     worker_concurrency=settings.celery.worker_concurrency,
+    # riciclo del processo figlio: rilascia all'OS la memoria che glibc malloc
+    # trattiene dopo le allocazioni native di Polars/Arrow (RSS a scalini che non
+    # rientra). Ricicla dopo N task E oltre un tetto di RSS.
+    worker_max_tasks_per_child=settings.celery.max_tasks_per_child,
+    # derivato dal limite cgroup/concurrency (o override esplicito via env)
+    worker_max_memory_per_child=resolve_max_memory_per_child_kb(settings.celery),
     # eventi task per celery-exporter (metriche: task attivi, durate, esiti)
     worker_send_task_events=True,
     task_send_sent_event=True,
+    # code separate: i run pesanti sulla coda di default, le ANTEPRIME su una
+    # coda dedicata servita da un worker suo (interattivo, bassa latenza) così
+    # non restano bloccate dietro un run lungo che occupa gli slot del pool.
+    task_default_queue="celery",
+    task_routes={
+        "app.tasks.jobs.preview_task": {"queue": "preview"},
+    },
 )
 
 # Eviction periodica della step cache (Celery beat). Intervallo configurabile

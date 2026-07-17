@@ -8,6 +8,7 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from typing import Any, Optional
 from celery.result import AsyncResult
+from celery.exceptions import TimeoutError as CeleryTimeoutError
 from app.tasks.jobs import test_task, process_file_task, transform_data_task
 from app.tasks.celery_app import celery_app
 from app.api.models import (
@@ -106,28 +107,48 @@ def list_operations():
     return available_operations()
 
 
+# timeout dell'attesa del risultato dell'anteprima (secondi); override via env
+PREVIEW_TIMEOUT_SECONDS = float(os.getenv("PREVIEW_TIMEOUT_SECONDS", "120"))
+# mappa il tag d'errore del task allo status HTTP
+_PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400}
+
+
 @router.post("/preview", response_model=PreviewResult)
 def preview_flow(request: PreviewRequest):
     """
-    Esegue il flow su un campione in modo SINCRONO e veloce.
+    Esegue il flow su un campione e ne ritorna schema + prime N righe.
 
-    È il feedback interattivo mentre l'utente costruisce il flow: niente Celery,
-    risposta immediata con schema + prime N righe del risultato.
+    L'esecuzione avviene su un WORKER dedicato (coda `preview`), non nel processo
+    API: l'engine non gira più in-process nel backend, che resta leggero. La
+    risposta resta SINCRONA (submit + attesa del risultato) → il frontend non
+    cambia. Su timeout la preview viene revocata per non intasare il worker.
     """
     operations = [op.model_dump() for op in request.operations]
+    async_result = celery_app.send_task(
+        "app.tasks.jobs.preview_task",
+        kwargs={
+            "bucket": request.bucket,
+            "input_key": request.input_key,
+            "operations": operations,
+            "limit": request.limit,
+            "engine": request.engine,
+        },
+        queue="preview",
+    )
     try:
-        engine = get_engine(request.engine)  # EngineError se il nome non è valido
-        return engine.preview(
-            source=DataSource(bucket=request.bucket, key=request.input_key),
-            operations=operations,
-            limit=request.limit,
+        payload = async_result.get(timeout=PREVIEW_TIMEOUT_SECONDS)
+    except CeleryTimeoutError:
+        async_result.revoke(terminate=True)  # ferma la preview in corso
+        raise HTTPException(
+            status_code=504, detail="Anteprima scaduta: il worker non ha risposto in tempo"
         )
-    except SourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except (UnknownOperationError, OperationError) as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except EngineError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        async_result.forget()  # non accumulare risultati nel backend
+
+    if not payload.get("ok"):
+        status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
+        raise HTTPException(status_code=status, detail=payload.get("detail", "Errore anteprima"))
+    return PreviewResult(**payload["result"])
 
 
 _EXPORT_MEDIA = {

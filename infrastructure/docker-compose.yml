@@ -121,6 +121,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # glibc apre un'arena malloc per thread: con i molti thread di Polars/Arrow
+      # questo gonfia l'RSS residuo (memoria non restituita all'OS). Limitare le
+      # arene riduce la frammentazione e appiattisce gli scalini di memoria.
+      - MALLOC_ARENA_MAX=2
     volumes:
       - ../backend:/app
     depends_on:
@@ -135,7 +140,39 @@ services:
     memswap_limit: ${WORKER_MEM_LIMIT:-4g}
     # -B: beat embedded (eviction cache). Ok per dev con un worker singolo;
     # in prod/multi-worker separare 'celery beat' in un servizio dedicato.
-    command: celery -A app.tasks.celery_app worker -E --beat --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=2
+    # NB: niente --concurrency qui → la concurrency viene dal conf
+    # (CELERY__WORKER_CONCURRENCY, default 2), unica fonte di verità usata anche
+    # per derivare il tetto di memoria per-figlio.
+    # -Q celery: consuma SOLO la coda di default (i run pesanti). Le anteprime
+    # vanno sulla coda `preview`, servita dal preview-worker qui sotto.
+    command: celery -A app.tasks.celery_app worker -E --beat --schedule /tmp/celerybeat-schedule -Q celery --loglevel=info
+
+  # Worker DEDICATO alle anteprime: coda `preview`, interattivo. Separato dal
+  # worker dei run così una preview non resta bloccata dietro un run lungo (e
+  # viceversa). Niente beat qui. Le anteprime sono più leggere → concurrency più
+  # alta possibile, ma con lo stesso tetto di memoria per-figlio derivato dal
+  # limite del container (scala automaticamente con mem_limit/concurrency).
+  preview-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dataprep-preview-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MALLOC_ARENA_MAX=2
+      - CELERY__WORKER_CONCURRENCY=${PREVIEW_WORKER_CONCURRENCY:-2}
+    volumes:
+      - ../backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    mem_limit: ${PREVIEW_WORKER_MEM_LIMIT:-2g}
+    memswap_limit: ${PREVIEW_WORKER_MEM_LIMIT:-2g}
+    command: celery -A app.tasks.celery_app worker -E -Q preview --loglevel=info
 
   frontend:
     build:

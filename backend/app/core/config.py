@@ -65,6 +65,65 @@ class CelerySettings(BaseModel):
     result_serializer: str = "json"
     timezone: str = "UTC"
     enable_utc: bool = True
+    # env: CELERY__MAX_TASKS_PER_CHILD — dopo quanti task il processo figlio
+    # prefork viene riciclato. I task Polars/Arrow allocano via glibc malloc, che
+    # NON restituisce all'OS la memoria liberata (frammentazione delle arene): il
+    # figlio riciclato rilascia tutto → l'RSS non cresce a scalini. Tenuto alto
+    # perché i task periodici leggeri (storage-stats ogni 60s, eviction) non
+    # riciclino il figlio di continuo: il vero cap è la memoria qui sotto. Def 50.
+    max_tasks_per_child: int = 50
+    # env: CELERY__MAX_MEMORY_PER_CHILD_KB — tetto RSS (KB) oltre il quale il
+    # figlio viene riciclato a FINE task (rilascio netto della memoria residua).
+    # None (default) = DERIVATO automaticamente dal limite di memoria del container
+    # (cgroup) e dalla concurrency, così resta coerente qualunque sia
+    # WORKER_MEM_LIMIT in produzione — vedi resolve_max_memory_per_child_kb().
+    # Impostalo solo per forzare un valore fisso.
+    max_memory_per_child_kb: Optional[int] = None
+    # frazione del limite container riservata ai figli worker (il resto è margine
+    # per processo principale, beat, page cache): per-figlio = limite*frac/concurrency
+    max_memory_headroom_frac: float = 0.75
+    # fallback quando il limite cgroup non è leggibile/illimitato (KB, ~1.5 GB)
+    max_memory_per_child_fallback_kb: int = 1_500_000
+    # pavimento: mai riciclare sotto questa soglia (evita riciclo troppo frequente)
+    max_memory_per_child_floor_kb: int = 512_000
+
+
+def cgroup_mem_limit_bytes() -> Optional[int]:
+    """Limite di memoria del container letto dal cgroup (il tetto che il kernel
+    impone davvero, qualunque sia il modo in cui è stato configurato). None se
+    illimitato o non leggibile (es. fuori da un container)."""
+    for path in ("/sys/fs/cgroup/memory.max",                    # cgroup v2
+                 "/sys/fs/cgroup/memory/memory.limit_in_bytes"):  # cgroup v1
+        try:
+            raw = Path(path).read_text().strip()
+        except OSError:
+            continue
+        if raw == "max":
+            return None
+        try:
+            val = int(raw)
+        except ValueError:
+            continue
+        # v1 "illimitato" è un intero enorme (~2^63): trattalo come nessun limite
+        if val <= 0 or val >= (1 << 62):
+            return None
+        return val
+    return None
+
+
+def resolve_max_memory_per_child_kb(celery: CelerySettings) -> int:
+    """Tetto RSS per figlio worker (KB). Se non forzato via env, lo deriva dal
+    limite cgroup e dalla concurrency: `limite * frac / concurrency`. Così due (o
+    N) figli residenti restano sotto il limite del container con un margine, e il
+    valore si adatta da solo se in produzione WORKER_MEM_LIMIT/concurrency cambiano."""
+    if celery.max_memory_per_child_kb:  # override esplicito
+        return celery.max_memory_per_child_kb
+    limit = cgroup_mem_limit_bytes()
+    if not limit:
+        return celery.max_memory_per_child_fallback_kb
+    concurrency = max(1, celery.worker_concurrency)
+    per_child_kb = int(limit * celery.max_memory_headroom_frac / concurrency / 1024)
+    return max(per_child_kb, celery.max_memory_per_child_floor_kb)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

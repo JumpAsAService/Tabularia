@@ -80,6 +80,46 @@ def process_file_task(bucket: str, input_key: str, output_key: str) -> dict:
     return result
 
 
+@celery_app.task(name="app.tasks.jobs.preview_task")
+def preview_task(
+    bucket: str,
+    input_key: str,
+    operations: list[dict[str, Any]],
+    limit: int = 100,
+    engine: str | None = None,
+) -> dict:
+    """Anteprima interattiva del flow (schema + prime N righe), eseguita su un
+    worker dedicato invece che nel processo API: così l'engine (Polars/DuckDB)
+    NON gira più in-process nel backend e la memoria delle preview è soggetta
+    allo stesso riciclo/tetto dei run.
+
+    Ritorna un dict TAGGATO (non solleva per gli errori attesi): col serializer
+    JSON le eccezioni non si propagano col loro tipo, quindi la route mappa lei
+    lo status HTTP leggendo `error`. Gli errori inattesi si propagano → 500."""
+    # import locale: le eccezioni engine servono solo qui
+    from app.engine.exceptions import (
+        EngineError,
+        OperationError,
+        SourceNotFoundError,
+        UnknownOperationError,
+    )
+
+    try:
+        engine_impl = get_engine(engine)
+        result = engine_impl.preview(
+            source=DataSource(bucket=bucket, key=input_key),
+            operations=operations,
+            limit=limit,
+        )
+        return {"ok": True, "result": result.model_dump()}
+    except SourceNotFoundError as e:
+        return {"ok": False, "error": "not_found", "detail": str(e)}
+    except (UnknownOperationError, OperationError) as e:
+        return {"ok": False, "error": "unprocessable", "detail": str(e)}
+    except EngineError as e:
+        return {"ok": False, "error": "bad_request", "detail": str(e)}
+
+
 @celery_app.task(name="app.tasks.jobs.transform_data_task")
 def transform_data_task(
     bucket: str,
