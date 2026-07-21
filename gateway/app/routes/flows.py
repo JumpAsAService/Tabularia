@@ -253,12 +253,19 @@ def list_flow_versions(
         .order_by(FlowVersion.version.desc())
     ).all()
     current = versions[0].version if versions else None
+    # nomi degli autori delle versioni (chi ha rilasciato/modificato)
+    uids = {v.created_by for v in versions if v.created_by is not None}
+    names: dict[int, str] = {}
+    if uids:
+        for u in session.exec(select(User).where(User.id.in_(uids))).all():
+            names[u.id] = u.full_name or u.email
     return [
         FlowVersionOut(
             version=v.version,
             note=v.note,
             created_at=v.created_at,
             created_by=v.created_by,
+            created_by_name=names.get(v.created_by),
             is_current=(v.version == current),
         )
         for v in versions

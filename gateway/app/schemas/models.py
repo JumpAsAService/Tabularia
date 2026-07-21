@@ -139,6 +139,7 @@ class FlowVersionOut(BaseModel):
     note: str
     created_at: Optional[datetime]
     created_by: Optional[int]
+    created_by_name: Optional[str] = None  # nome/email di chi ha rilasciato la versione
     is_current: bool
 
 

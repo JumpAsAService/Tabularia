@@ -4,7 +4,7 @@
 // timeline (Gantt) dei run e lo storico versioni con promozione.
 import { onMounted, reactive, ref } from 'vue'
 import {
-  Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine,
+  Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
@@ -221,6 +221,7 @@ async function saveSchedule(cron: string) {
                 <span class="vnum">v{{ v.version }}</span>
                 <span v-if="v.is_current" class="tag">corrente</span>
                 <span class="vnote muted">{{ v.note }}</span>
+                <span class="vby muted"><User :size="11" /> {{ v.created_by_name ?? '—' }}</span>
                 <span class="vdate muted">{{ fmtDate(v.created_at) }}</span>
                 <button v-if="!v.is_current" class="mini promote" title="Promuovi a corrente" @click="promote(f.id, v.version)">
                   <ArrowUpFromLine :size="12" /> Promuovi
@@ -283,6 +284,7 @@ async function saveSchedule(cron: string) {
 .ver:hover { background: var(--panel); }
 .vnum { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 34px; }
 .vnote { flex: 1; }
+.vby { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-size: 12px; }
 .vdate { white-space: nowrap; font-size: 12px; }
 .promote { display: inline-flex; align-items: center; gap: 4px; }
 .small { font-size: 12.5px; }

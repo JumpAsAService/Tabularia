@@ -32,6 +32,7 @@ export interface FlowVersionInfo {
   note: string
   created_at: string | null
   created_by: number | null
+  created_by_name: string | null
   is_current: boolean
 }
 
