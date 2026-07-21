@@ -164,20 +164,32 @@ def export_flow(request: ExportRequest):
     Esegue il flow (anche parziale, fino a un nodo intermedio) e restituisce il
     risultato come file scaricabile. Sincrono: csv in streaming, xlsx col tetto
     righe del formato (~1M). Il file temporaneo viene rimosso a risposta inviata.
+
+    Se `engine` è un motore diverso da Polars, le operazioni (che possono usare un
+    dialetto SQL specifico, es. `compute` in ClickHouse) vengono prima calcolate da
+    QUEL motore in uno SNAPSHOT parquet temporaneo; poi Polars riempie il file dai
+    dati già calcolati (nessuna ri-esecuzione, nessun problema di dialetto). Lo
+    snapshot viene cancellato subito dopo.
     """
-    engine = get_engine()
     operations = [op.model_dump() for op in request.operations]
+    src = DataSource(bucket=request.bucket, key=request.input_key)
     suffix = f".{request.format}"
     fd, path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
+
+    engine_name = (request.engine or "polars").lower()
+    snapshot: DataSource | None = None
     try:
-        engine.export(
-            source=DataSource(bucket=request.bucket, key=request.input_key),
-            operations=operations,
-            fmt=request.format,
-            out_path=path,
-            limit=request.limit,
-        )
+        if engine_name != "polars" and operations:
+            import uuid
+
+            snapshot = DataSource(bucket=request.bucket, key=f"tmp/export_{uuid.uuid4().hex}.parquet")
+            # calcola col motore scelto (dialetto corretto); niente step-cache
+            get_engine(engine_name).run(source=src, operations=operations, destination=snapshot, use_cache=False)
+            # Polars scrive il file dai dati già calcolati (operations vuote)
+            get_engine("polars").export(source=snapshot, operations=[], fmt=request.format, out_path=path, limit=request.limit)
+        else:
+            get_engine("polars").export(source=src, operations=operations, fmt=request.format, out_path=path, limit=request.limit)
     except SourceNotFoundError as e:
         os.unlink(path)
         raise HTTPException(status_code=404, detail=str(e))
@@ -190,6 +202,11 @@ def export_flow(request: ExportRequest):
     except Exception:
         os.unlink(path)
         raise
+    finally:
+        if snapshot is not None:  # lo snapshot ha già alimentato il file (o è fallito): via
+            from app.utils import get_storage_service
+
+            get_storage_service().delete_object(snapshot.bucket, snapshot.key)
 
     return FileResponse(
         path,

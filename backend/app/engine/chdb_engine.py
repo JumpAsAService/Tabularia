@@ -262,6 +262,7 @@ class ChdbEngine(Engine):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         destination: DataSource,
+        use_cache: bool = True,
     ) -> RunResult:
         ops = _coerce_ops(operations)
         sess, state_dir = self._new_session()
@@ -269,11 +270,11 @@ class ChdbEngine(Engine):
         try:
             ctx = ChdbContext(sess, self.storage, tmp)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            sql = self._sql_from_cache(ctx, source, ops, hashes, record=True)
+            sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             out_path = self._write_outfile(ctx, sql)
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
-            if ops and not self.cache.has(hashes[-1]):
+            if use_cache and ops and not self.cache.has(hashes[-1]):
                 self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
                 self.cache.mark(hashes[-1])
 

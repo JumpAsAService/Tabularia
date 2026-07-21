@@ -98,6 +98,7 @@ export function useApi() {
       format: 'csv' | 'xlsx'
       limit?: number
       filename?: string
+      engine?: string // motore che calcola lo snapshot; il file lo scrive Polars
     }): Promise<Blob> {
       return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
     },

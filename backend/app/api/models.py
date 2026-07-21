@@ -73,3 +73,4 @@ class ExportRequest(BaseModel):
     format: Literal["csv", "xlsx"] = Field(default="csv", description="Formato del file")
     limit: Optional[int] = Field(default=None, ge=1, description="Righe massime (opzionale)")
     filename: Optional[str] = Field(default=None, description="Nome file suggerito al browser")
+    engine: Optional[str] = Field(default=None, description="Motore che calcola lo snapshot (dialetto compute); il file è poi scritto da Polars")

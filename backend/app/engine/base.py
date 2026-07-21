@@ -83,6 +83,7 @@ class Engine(ABC):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         destination: DataSource,
+        use_cache: bool = True,
     ) -> RunResult: ...
 
     def export(

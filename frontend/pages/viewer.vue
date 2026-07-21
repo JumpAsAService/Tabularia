@@ -6,7 +6,7 @@
 // dati trasformati. Nulla viene salvato.
 import { ref, computed } from 'vue'
 import {
-  PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3,
+  PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type Operation, type ColumnInfo } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -78,6 +78,7 @@ function startResize(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 const pivotOn = ref(false)
+const outline = ref(false) // non ripetere i valori delle dimensioni di riga (vista compatta)
 const pivot = ref<{ index: string[]; on: string[]; values: string; func: string }>({
   index: [''], on: [''], values: '', func: 'sum',
 })
@@ -139,6 +140,18 @@ async function onPickDatasource(id: number | null) {
   if (ds) apply()
 }
 
+// operazioni della vista corrente: filtri + campi calcolati + eventuale pivot.
+// Condivise da tabella, grafico ed export.
+function buildTableOps(): Operation[] {
+  const ops = [...baseOps.value]
+  const pIndex = pivot.value.index.filter(Boolean)
+  const pOn = pivot.value.on.filter(Boolean)
+  if (pivotOn.value && pOn.length && pivot.value.values && pIndex.length) {
+    ops.push({ type: 'pivot', params: { index: pIndex, on: pOn, values: pivot.value.values, func: pivot.value.func } })
+  }
+  return ops
+}
+
 async function apply() {
   const ds = selectedDs.value
   if (!ds) return
@@ -148,13 +161,7 @@ async function apply() {
     const base = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true })
     baseCols.value = base.columns
     // 2) risultato tabella (con eventuale pivot)
-    const ops = [...baseOps.value]
-    const pIndex = pivot.value.index.filter(Boolean)
-    const pOn = pivot.value.on.filter(Boolean)
-    if (pivotOn.value && pOn.length && pivot.value.values && pIndex.length) {
-      ops.push({ type: 'pivot', params: { index: pIndex, on: pOn, values: pivot.value.values, func: pivot.value.func } })
-    }
-    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true })
+    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), engine: engine.value, limit: ROW_LIMIT, no_cache: true })
     rows.value = res.rows
     tableCols.value = res.columns
   } catch (e) {
@@ -165,6 +172,53 @@ async function apply() {
 }
 
 const cell = (v: any) => (v === null || v === undefined ? '' : typeof v === 'number' ? new Intl.NumberFormat('it-IT', { maximumFractionDigits: 4 }).format(v) : String(v))
+
+// export della vista corrente (csv/xlsx). Riusa /tasks/export → gira su Polars,
+// a prescindere dal motore scelto per la visualizzazione.
+const exporting = ref('')
+async function exportView(format: 'csv' | 'xlsx') {
+  const ds = selectedDs.value
+  if (!ds) return
+  exporting.value = format
+  error.value = ''
+  try {
+    const filename = `${ds.name}_viewer.${format}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
+    const blob = await api.exportData({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), format, filename, engine: engine.value })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    error.value = errMessage(e)
+  } finally {
+    exporting.value = ''
+  }
+}
+
+// righe da mostrare: in vista "outline" i valori delle dimensioni di riga NON si
+// ripetono — il prefisso condiviso con la riga precedente viene lasciato vuoto
+// (es. la regione appare una sola volta, poi solo le province). Nessun subtotale.
+const displayRows = computed<Record<string, any>[]>(() => {
+  if (!outline.value || !pivotOn.value) return rows.value
+  const idx = pivot.value.index.filter(Boolean)
+  if (idx.length < 2) return rows.value // con una sola dimensione non c'è nulla da comprimere
+  const out: Record<string, any>[] = []
+  let prev: Record<string, any> | null = null
+  for (const r of rows.value) {
+    const d = { ...r }
+    if (prev) {
+      // quanti livelli iniziali coincidono con la riga precedente
+      let depth = 0
+      while (depth < idx.length && String(prev[idx[depth]]) === String(r[idx[depth]])) depth++
+      for (let j = 0; j < depth; j++) d[idx[j]] = '' // svuota il prefisso condiviso
+    }
+    out.push(d)
+    prev = r
+  }
+  return out
+})
 
 onMounted(async () => {
   try { datasources.value = await dsApi.list() } catch (e) { error.value = errMessage(e) }
@@ -253,6 +307,9 @@ onMounted(async () => {
             <Select v-model="pivot.values" :options="colNames" placeholder="colonna valore" class="full" />
             <label class="lbl">Funzione</label>
             <Select v-model="pivot.func" :options="AGG_FUNCS" class="full" />
+            <label class="checkline" title="Non ripete i valori delle dimensioni di riga sulle righe successive dello stesso gruppo">
+              <input v-model="outline" type="checkbox" /> Non ripetere le dimensioni di riga
+            </label>
           </template>
         </div>
       </aside>
@@ -266,9 +323,17 @@ onMounted(async () => {
           <button :class="{ active: view === 'table' }" @click="view = 'table'"><Table2 :size="14" /> Tabella</button>
           <button :class="{ active: view === 'chart' }" @click="view = 'chart'"><PieChart :size="14" /> Grafico</button>
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> Applica</button>
-          <span class="rmeta muted">{{ rows.length }} righe · {{ tableCols.length }} colonne</span>
           <span v-if="loading" class="muted">calcolo…</span>
           <span v-else-if="error" class="err">{{ error }}</span>
+          <span class="rmeta muted">{{ rows.length }} righe · {{ tableCols.length }} colonne</span>
+          <div class="expbtns">
+            <button :disabled="!rows.length || !!exporting" title="Esporta CSV (Polars)" @click="exportView('csv')">
+              <Download :size="13" /> {{ exporting === 'csv' ? '…' : 'CSV' }}
+            </button>
+            <button :disabled="!rows.length || !!exporting" title="Esporta Excel (Polars)" @click="exportView('xlsx')">
+              <FileSpreadsheet :size="13" /> {{ exporting === 'xlsx' ? '…' : 'Excel' }}
+            </button>
+          </div>
         </div>
 
         <div v-show="view === 'table'" class="tablewrap">
@@ -285,8 +350,8 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(r, i) in rows" :key="i">
-                <td v-for="c in tableCols" :key="c.name" :class="{ num: /Int|Float|Decimal/i.test(c.dtype) }">{{ cell(r[c.name]) }}</td>
+              <tr v-for="(row, i) in displayRows" :key="i">
+                <td v-for="c in tableCols" :key="c.name" :class="{ num: /Int|Float|Decimal/i.test(c.dtype) }">{{ cell(row[c.name]) }}</td>
               </tr>
             </tbody>
           </table>
@@ -340,6 +405,7 @@ onMounted(async () => {
 .dimrow { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
 .dimrow .full { flex: 1; min-width: 0; }
 .add-dim { font-size: 11px; padding: 3px 8px; margin: 2px 0 4px; }
+.checkline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); margin-top: 8px; cursor: pointer; }
 
 .result { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .rtabs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -347,6 +413,8 @@ onMounted(async () => {
 .rtabs button.active { border-color: var(--accent); background: rgba(79, 140, 255, 0.12); }
 .rtabs .apply { margin-left: 8px; }
 .rmeta { margin-left: auto; font-size: 12px; }
+.expbtns { display: flex; gap: 4px; }
+.expbtns button { padding: 5px 9px; }
 .err { color: var(--danger); font-size: 12px; }
 .tablewrap { flex: 1; overflow: auto; min-height: 0; }
 .chartwrap { flex: 1; min-height: 0; padding: 12px; }

@@ -251,11 +251,12 @@ class PolarsEngine(Engine):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         destination: DataSource,
+        use_cache: bool = True,
     ) -> RunResult:
         ops = _coerce_ops(operations)
         with self._session() as ctx:
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True)
+            lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
 
             out_path = ctx.tempfile(".parquet")
             try:
@@ -269,7 +270,7 @@ class PolarsEngine(Engine):
 
             # L'output finale è anche il risultato dell'ultimo step: mettilo in
             # cache così ri-run e anteprime del nodo foglia sono immediati.
-            if ops and not self.cache.has(hashes[-1]):
+            if use_cache and ops and not self.cache.has(hashes[-1]):
                 self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
                 self.cache.mark(hashes[-1])
 
