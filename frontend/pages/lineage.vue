@@ -611,6 +611,9 @@ function nodeIcon(t: string) {
   padding: 0;
   width: 180px;
   box-shadow: var(--shadow-1);
+  /* il tema default di Vue Flow imposta un colore testo scuro sui nodi 'default':
+     lo forziamo al testo del tema, altrimenti è illeggibile su fondo scuro */
+  color: var(--text);
 }
 :deep(.ln-node.ln-center) { box-shadow: 0 0 0 2px var(--accent), var(--shadow-2); }
 :deep(.ln-node.ln-restricted) { border-style: dashed; opacity: 0.65; }
