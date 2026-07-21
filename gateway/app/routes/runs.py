@@ -660,7 +660,7 @@ async def get_run(
 @router.get("/runs", response_model=Page[RunSearchOut])
 def search_runs(
     status: str | None = Query(None, description="filtra per stato, es. FAILURE"),
-    q: str | None = Query(None, description="testo cercato nel motivo dell'errore, sull'INTERO dataset"),
+    q: str | None = Query(None, description="testo cercato su flusso/sorgente/autore/errore, sull'INTERO dataset"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -684,7 +684,19 @@ def search_runs(
         conds.append(Run.status == status)
     if q:
         like = f"%{q}%"
-        conds.append(or_(Run.error.ilike(like), Run.error_detail.ilike(like)))
+        # ricerca su più campi (non solo l'errore, altrimenti i run riusciti — che
+        # non hanno testo d'errore — non comparirebbero MAI): nome flusso, sorgente,
+        # autore ed eventuale motivo dell'errore.
+        conds.append(
+            or_(
+                Run.error.ilike(like),
+                Run.error_detail.ilike(like),
+                Flow.name.ilike(like),
+                Datasource.name.ilike(like),
+                User.full_name.ilike(like),
+                User.email.ilike(like),
+            )
+        )
 
     def _with_joins(stmt):
         return (

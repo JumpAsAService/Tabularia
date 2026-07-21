@@ -59,7 +59,7 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
         </div>
         <span class="searchbox">
           <Search :size="14" />
-          <input v-model="q" type="text" placeholder="Cerca nel motivo dell'errore…" />
+          <input v-model="q" type="text" placeholder="Cerca flusso, sorgente, autore o errore…" />
         </span>
         <button class="mini" title="Aggiorna" @click="load"><RefreshCw :size="14" /></button>
       </div>
