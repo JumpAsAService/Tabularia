@@ -299,8 +299,9 @@ async def launch_ingest_run(
 
 # oltre questa età un run non terminale è perso: Celery risponde PENDING anche
 # per task id che NON conosce più (risultato scaduto, Redis svuotato, worker
-# morto) → senza cutoff il run resterebbe zombie per sempre.
-STALE_AFTER_SECONDS = 3600 + 300  # task_time_limit dell'engine + margine
+# morto) → senza cutoff il run resterebbe zombie per sempre. Configurabile via
+# ENGINE__RUN_STALE_TIMEOUT_SECONDS.
+STALE_AFTER_SECONDS = get_settings().engine.run_stale_timeout_seconds
 SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di rimandare
 
 # firme di un OOM-kill: il worker ha superato il limite di memoria del container
@@ -366,7 +367,12 @@ async def _reconcile(session: Session, run: Run) -> Run:
 
     if new_status not in TERMINAL_STATES and _age_seconds(run.started_at) > STALE_AFTER_SECONDS:
         new_status = "FAILURE"
-        error = "stato del run perso (risultato scaduto o engine riavviato)"
+        _mins = STALE_AFTER_SECONDS // 60
+        error = (
+            f"Timeout: il run ha superato il tempo massimo ({_mins} min) senza completare. "
+            "Se il flusso è solo lento, aumenta il limite (ENGINE__RUN_STALE_TIMEOUT_SECONDS) o "
+            "riduci i dati; altrimenti il worker si è interrotto e il risultato è andato perso."
+        )
         error_detail = None
 
     if new_status == run.status:

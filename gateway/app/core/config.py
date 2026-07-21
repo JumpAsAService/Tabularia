@@ -59,6 +59,10 @@ class EngineSettings(BaseModel):
     # bucket dello storage dell'engine: il gateway lo usa solo come STRINGA nei
     # payload (non tocca mai lo storage). Deve combaciare con STORAGE__BUCKET.
     bucket: str = "data-prep"
+    # env: ENGINE__RUN_STALE_TIMEOUT_SECONDS — oltre questa età un run non terminale
+    # è considerato in TIMEOUT (risultato perso o task troppo lungo) e marcato
+    # FAILURE. Deve essere ≥ del task_time_limit dell'engine (3600s) + margine.
+    run_stale_timeout_seconds: int = 3600 + 300
 
 
 # ─────────────────────────────────────────────────────────────────────────────

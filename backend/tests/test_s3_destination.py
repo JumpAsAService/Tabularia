@@ -17,13 +17,33 @@ from tests.conftest import BUCKET, upload_df
 
 
 class RecordingClient:
-    """Client S3 finto: registra gli upload_file(local, bucket, key)."""
+    """Client S3 finto STATEFUL: registra gli upload e tiene lo stato degli oggetti
+    (per testare list/delete della pulizia idempotente delle partizioni)."""
 
     def __init__(self):
-        self.uploads: list[tuple[str, str]] = []  # (bucket, key)
+        self.uploads: list[tuple[str, str]] = []  # cronologia (bucket, key)
+        self.objects: dict[tuple[str, str], bool] = {}  # stato corrente
 
     def upload_file(self, local, bucket, key):
         self.uploads.append((bucket, key))
+        self.objects[(bucket, key)] = True
+
+    def get_paginator(self, op):
+        outer = self
+
+        class _Paginator:
+            def paginate(self, Bucket, Prefix):
+                yield {
+                    "Contents": [
+                        {"Key": k} for (b, k) in outer.objects if b == Bucket and k.startswith(Prefix)
+                    ]
+                }
+
+        return _Paginator()
+
+    def delete_objects(self, Bucket, Delete):
+        for o in Delete["Objects"]:
+            self.objects.pop((Bucket, o["Key"]), None)
 
 
 @pytest.fixture
@@ -88,6 +108,21 @@ def test_partizioni_multiple_colonne(storage, sorgente, recorder):
     )
     assert out["partitions"] == 4  # IT/2024, IT/2025, FR/2024, DE/2024
     assert any("paese=IT/anno=2025/" in k for _, k in recorder.uploads)
+
+
+def test_partizionato_idempotente_rimuove_file_stantii(storage, sorgente, recorder):
+    """Un file di un run PRECEDENTE sotto il prefisso (partizione sparita o conteggio
+    file diverso) dev'essere rimosso: niente righe duplicate al riscrivere."""
+    # simulo un residuo di un run precedente sotto lo stesso prefisso
+    recorder.objects[("c", "p/paese=ZZ/anno=1999/00000000.parquet")] = True
+    write_output_to_s3(
+        _conn(),
+        S3DestinationSpec(bucket="c", key="p", partition_by=["paese", "anno"]),
+        BUCKET, sorgente.key, storage=storage,
+    )
+    remaining = {k for (b, k) in recorder.objects if b == "c"}
+    assert "p/paese=ZZ/anno=1999/00000000.parquet" not in remaining  # stantio rimosso
+    assert any("paese=IT/anno=2025/" in k for k in remaining)  # nuovi presenti
 
 
 def test_bucket_default_dalla_connessione(storage, sorgente, recorder):

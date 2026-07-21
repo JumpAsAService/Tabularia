@@ -156,18 +156,35 @@ def _write_clickhouse(
         database=conn.database or "default",
         connect_timeout=10,
     )
+    # ClickHouse non ha transazioni sull'INSERT in streaming: scrivere direttamente
+    # nella tabella (TRUNCATE + insert a batch) la lascerebbe in stato PARZIALE se
+    # qualcosa fallisce a metà — con replace, addirittura vuota (dati persi). Quindi
+    # si scrive tutto in una tabella di STAGING; poi lo scambio è ATOMICO.
+    import uuid
+
+    q = _IDENT_QUOTE["clickhouse"]
+    stg_parts = parts[:-1] + [f"{parts[-1]}__tab_stg_{uuid.uuid4().hex[:8]}"]
+    stg_qualified = ".".join(f"{q}{p}{q}" for p in stg_parts)
+    stg_name = stg_parts[-1] if len(stg_parts) == 1 else ".".join(stg_parts)
     rows = 0
     try:
-        client.command(_create_table_sql(conn, qualified, schema))
-        if dest.mode == "replace":
-            client.command(f"TRUNCATE TABLE {qualified}")
-        table_name = parts[-1] if len(parts) == 1 else ".".join(parts)
+        client.command(_create_table_sql(conn, qualified, schema))  # target deve esistere per EXCHANGE
+        client.command(_create_table_sql(conn, stg_qualified, schema))
         for batch in batches:
-            client.insert_arrow(table_name, pa.Table.from_batches([batch], schema=schema))
+            client.insert_arrow(stg_name, pa.Table.from_batches([batch], schema=schema))
             rows += batch.num_rows
+        if dest.mode == "replace":
+            # swap ATOMICO: la destinazione passa dai vecchi ai nuovi dati in un colpo
+            client.command(f"EXCHANGE TABLES {qualified} AND {stg_qualified}")
+        else:
+            client.command(f"INSERT INTO {qualified} SELECT * FROM {stg_qualified}")  # append: un solo INSERT server-side
         for stmt in _post_statements(dest.post_sql):
             client.command(stmt)
     finally:
+        try:
+            client.command(f"DROP TABLE IF EXISTS {stg_qualified}")  # staging (dati vecchi o già copiati)
+        except Exception:
+            pass
         client.close()
     return rows
 
@@ -229,6 +246,11 @@ def _write_trino(
     if password:
         kwargs["http_scheme"] = "https"
         kwargs["auth"] = trino.auth.BasicAuthentication(conn.username, password)
+    # transazione esplicita: DELETE + INSERT devono essere atomici, altrimenti un
+    # errore a metà lascia la tabella svuotata/parziale. NB: la transazionalità in
+    # Trino dipende dal CONNETTORE (Iceberg/Delta la supportano, Hive puro no); dove
+    # non è supportata il commit/rollback degenera nel comportamento precedente.
+    kwargs["isolation_level"] = trino.transaction.IsolationLevel.READ_UNCOMMITTED
     c = trino.dbapi.connect(**kwargs)
 
     def _run(cur, sql: str, params=None) -> None:
@@ -241,6 +263,7 @@ def _write_trino(
     try:
         cur = c.cursor()
         _run(cur, _create_table_sql(conn, qualified, schema))
+        c.commit()  # la DDL fuori dalla transazione dei dati
         if dest.mode == "replace":
             _run(cur, f"DELETE FROM {qualified}")  # Trino non ha TRUNCATE ovunque
         for batch in batches:
@@ -250,6 +273,13 @@ def _write_trino(
                 rows += len(chunk)
         for stmt in _post_statements(dest.post_sql):
             _run(cur, stmt)
+        c.commit()  # DELETE + INSERT insieme: o tutto o niente
+    except Exception:
+        try:
+            c.rollback()
+        except Exception:
+            pass
+        raise
     finally:
         c.close()
     return rows

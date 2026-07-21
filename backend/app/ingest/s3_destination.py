@@ -97,6 +97,32 @@ def _local_files(root: str) -> list[tuple[str, str]]:
     return sorted(out, key=lambda t: t[1])
 
 
+def _delete_stale_objects(client, bucket: str, prefix: str, keep: set[str]) -> None:
+    """Rimuove gli oggetti sotto `prefix/` NON riscritti in questo run (`keep`).
+
+    Serve a rendere IDEMPOTENTE l'output partizionato: Polars nomina i file in modo
+    deterministico, ma il NUMERO di file per partizione può cambiare tra run (volume
+    dati/parallelismo) e alcune partizioni possono sparire → senza pulizia restano
+    file di run precedenti e si contano righe stantie/doppie. Prima si caricano i
+    nuovi (sovrascrivono), poi si tolgono i vecchi rimasti (mai finestra vuota)."""
+    p = prefix.rstrip("/") + "/"
+    stale: list[dict] = []
+    try:
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=p):
+            for obj in page.get("Contents", []):
+                if obj["Key"] not in keep:
+                    stale.append({"Key": obj["Key"]})
+        for i in range(0, len(stale), 1000):  # delete_objects: max 1000 per chiamata
+            client.delete_objects(Bucket=bucket, Delete={"Objects": stale[i : i + 1000]})
+    except Exception as e:
+        raise S3DestinationError(
+            f"pulizia dei file obsoleti sotto s3://{bucket}/{p} fallita ({type(e).__name__}): "
+            "l'output potrebbe contenere righe duplicate da run precedenti. Le credenziali S3 "
+            "devono avere anche i permessi di list/delete sul prefisso di destinazione."
+        ) from e
+
+
 def write_output_to_s3(
     conn: S3ConnectionSpec,
     dest: S3DestinationSpec,
@@ -171,6 +197,10 @@ def write_output_to_s3(
             raise S3DestinationError(
                 f"upload su s3://{target_bucket}/{target_key} fallito: {type(e).__name__}: {e}"
             ) from e
+        # dataset partizionato: rendi il prefisso IDEMPOTENTE togliendo i file dei
+        # run precedenti (l'output a file singolo sovrascrive già la stessa chiave)
+        if dest.partition_by:
+            _delete_stale_objects(client, target_bucket, target_key, {k for _, k in uploads})
     finally:
         try:
             os.remove(tmp)

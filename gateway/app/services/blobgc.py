@@ -13,15 +13,16 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models.blob_deletion import PendingBlobDeletion
 
 logger = logging.getLogger(__name__)
 
 # Un task in coda che ha risolto la vecchia chiave viene fallito da _reconcile
-# dopo STALE_AFTER_SECONDS (3900); oltre questa finestra nessun run legge più il
-# blob superato. Grace = quel tetto + margine.
-BLOB_DELETION_GRACE_SECONDS = 3900 + 600  # ~75 min
+# dopo il timeout stale del run; oltre questa finestra nessun run legge più il
+# blob superato. Grace = quel tetto + margine (deve restare ≥ stale timeout).
+BLOB_DELETION_GRACE_SECONDS = get_settings().engine.run_stale_timeout_seconds + 600
 
 
 def schedule_blob_deletion(
