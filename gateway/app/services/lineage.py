@@ -69,16 +69,20 @@ class _Graph:
         self.edges.append({"source": source, "target": target, "kind": kind})
 
 
-def _restricted_ds(g: _Graph, ds_id: int) -> str:
-    """Datasource riferita ma fuori dai progetti leggibili (o rimossa)."""
+def _restricted_ds(g: _Graph, ds_id: int, unknown: set[int]) -> str:
+    """Datasource riferita ma fuori dai progetti leggibili (o rimossa). Il motivo
+    (rimossa vs non accessibile) è risolto a fine costruzione con una query."""
+    unknown.add(ds_id)
     nid = _dsid(ds_id)
-    g.add_node(nid, type="datasource", label=f"Datasource #{ds_id}", restricted=True, kind=None)
+    g.add_node(nid, type="datasource", label=f"Datasource #{ds_id}", restricted=True, kind=None,
+               meta={"reason": "unknown"})
     return nid
 
 
-def _restricted_flow(g: _Graph, flow_id: int) -> str:
+def _restricted_flow(g: _Graph, flow_id: int, unknown: set[int]) -> str:
+    unknown.add(flow_id)
     nid = _fid(flow_id)
-    g.add_node(nid, type="flow", label=f"Flusso #{flow_id}", restricted=True)
+    g.add_node(nid, type="flow", label=f"Flusso #{flow_id}", restricted=True, meta={"reason": "unknown"})
     return nid
 
 
@@ -134,6 +138,8 @@ def build_full_graph(session: Session, user: User) -> _Graph:
             g.add_edge(_cid(d.connection_id), _dsid(d.id), EDGE_INGEST)  # connessione → snapshot
 
     # ── archi dedotti dalle definition dei flussi ────────────────────────────
+    unknown_ds: set[int] = set()    # datasource riferite ma non leggibili/rimosse
+    unknown_flow: set[int] = set()  # flussi riferiti ma non leggibili/rimossi
     for f in flows:
         try:
             definition = json.loads(f.definition or "{}")
@@ -148,21 +154,21 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 ds_id = d.get("datasourceId")
                 if ds_id is None:
                     continue
-                target = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id)
+                target = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id, unknown_ds)
                 g.add_edge(target, _fid(f.id), EDGE_READ)            # datasource → flusso
 
             elif t == "refresh":
                 ds_id = d.get("datasourceId")
                 if ds_id is None:
                     continue
-                target = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id)
+                target = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id, unknown_ds)
                 g.add_edge(_fid(f.id), target, EDGE_REFRESH)
 
             elif t == "runflow":
                 sub_id = d.get("flowId")
                 if sub_id is None:
                     continue
-                target = _fid(sub_id) if sub_id in flow_ids else _restricted_flow(g, sub_id)
+                target = _fid(sub_id) if sub_id in flow_ids else _restricted_flow(g, sub_id, unknown_flow)
                 g.add_edge(_fid(f.id), target, EDGE_ORCHESTRATE)
 
             elif t == "output":
@@ -190,20 +196,54 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 # dest == "datasource": la produzione è già coperta dall'arco
                 # PUBLISH persistito (datasources.flow_id) quando il flusso è girato
 
-    # ── staleness: un flusso è "vecchio" se legge una datasource DB rinfrescata
-    # DOPO il suo ultimo run riuscito (i suoi output sono su dati superati) ──────
+    # ── motivo dei riferimenti non risolti: rimosso vs non accessibile ─────────
+    # una sola query per tipo controlla l'ESISTENZA (non il contenuto: non si
+    # rivela nulla di un oggetto in un progetto non leggibile oltre "esiste").
+    if unknown_ds:
+        existing = {i for (i,) in session.exec(select(Datasource.id).where(Datasource.id.in_(unknown_ds)))}
+        for i in unknown_ds:
+            g.nodes[_dsid(i)]["meta"]["reason"] = "inaccessible" if i in existing else "removed"
+    if unknown_flow:
+        existing = {i for (i,) in session.exec(select(Flow.id).where(Flow.id.in_(unknown_flow)))}
+        for i in unknown_flow:
+            g.nodes[_fid(i)]["meta"]["reason"] = "inaccessible" if i in existing else "removed"
+
+    # ── staleness DIRETTA: un flusso legge una datasource DB rinfrescata DOPO il
+    # suo ultimo run riuscito (i suoi output sono su dati superati) ─────────────
     for e in g.edges:
         if e["kind"] != EDGE_READ or not e["source"].startswith("ds:"):
             continue
         ds = ds_by_id.get(int(e["source"].split(":")[1]))
         if not ds or not ds.refreshed_at:
             continue
-        fid_int = int(e["target"].split(":")[1])
-        succ = last_success_at.get(fid_int)
+        succ = last_success_at.get(int(e["target"].split(":")[1]))
         if succ is not None and ds.refreshed_at > succ:
             node = g.nodes.get(e["target"])
             if node:
                 node["meta"]["stale"] = True
+                node["meta"]["stale_reason"] = "source"  # causa diretta
+
+    # ── staleness a CASCATA: chi sta a valle di un nodo stale (lungo il flusso
+    # dei DATI: read/publish/write) eredita il sospetto ────────────────────────
+    down: dict[str, list[str]] = {}
+    for e in g.edges:
+        if e["kind"] in (EDGE_READ, EDGE_PUBLISH, EDGE_WRITE):
+            down.setdefault(e["source"], []).append(e["target"])
+    seeds = [nid for nid, n in g.nodes.items() if n.get("meta", {}).get("stale")]
+    queue = deque(seeds)
+    visited: set[str] = set(seeds)
+    while queue:
+        cur = queue.popleft()
+        for nxt in down.get(cur, []):
+            node = g.nodes.get(nxt)
+            if node is None:
+                continue
+            if not node["meta"].get("stale"):
+                node["meta"]["stale"] = True
+                node["meta"]["stale_reason"] = "upstream"  # ereditata
+            if nxt not in visited:
+                visited.add(nxt)
+                queue.append(nxt)
 
     return g
 

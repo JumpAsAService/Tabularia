@@ -225,6 +225,38 @@ function fmtDate(iso?: string | null) {
   try { return new Date(iso).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return iso }
 }
 
+// motivo di un riferimento non risolto
+function restrictedLabel(n: LineageNode) {
+  return n.meta?.reason === 'removed' ? 'Rimosso' : 'Non accessibile'
+}
+
+// blast radius: tutto ciò che sta a VALLE del nodo lungo il flusso dei dati
+// (read/publish/write), calcolato sul grafo COMPLETO (non sulla vista corrente)
+const DATA_KINDS = new Set(['read', 'publish', 'write'])
+function impactOf(n: LineageNode) {
+  const down = new Map<string, string[]>()
+  for (const e of fullGraph.value.edges) {
+    if (DATA_KINDS.has(e.kind)) down.set(e.source, [...(down.get(e.source) ?? []), e.target])
+  }
+  const seen = new Set<string>()
+  const queue = [...(down.get(n.id) ?? [])]
+  while (queue.length) {
+    const id = queue.shift()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    for (const nx of down.get(id) ?? []) if (!seen.has(nx)) queue.push(nx)
+  }
+  const byType = (t: string) =>
+    fullGraph.value.nodes.filter((x) => seen.has(x.id) && x.type === t).length
+  return {
+    flows: byType('flow'),
+    datasources: byType('datasource'),
+    sinks: byType('db_sink') + byType('s3_sink'),
+    total: seen.size,
+  }
+}
+const impact = computed(() => (selected.value ? impactOf(selected.value) : null))
+
 watch([centerType, centerId, direction, depth], load)
 
 onMounted(async () => {
@@ -306,7 +338,7 @@ function nodeIcon(t: string) {
           <!-- salute / problemi nel grafo mostrato -->
           <div v-if="problems.total || problems.neverRun" class="ln-block ln-problems">
             <label class="ln-label"><AlertTriangle :size="12" /> Salute</label>
-            <span v-if="problems.stale" class="ln-prob stale"><Clock :size="12" /> {{ problems.stale }} flusso/i con output vecchi (stale)</span>
+            <span v-if="problems.stale" class="ln-prob stale"><Clock :size="12" /> {{ problems.stale }} elemento/i stale (dati superati)</span>
             <span v-if="problems.neverRun" class="ln-prob never"><AlertTriangle :size="12" /> {{ problems.neverRun }} mai eseguito/i</span>
             <span v-if="problems.restricted" class="ln-prob restr"><AlertTriangle :size="12" /> {{ problems.restricted }} riferimento/i non risolto/i</span>
           </div>
@@ -363,7 +395,7 @@ function nodeIcon(t: string) {
                     <span class="ln-name">{{ data.node.label }}</span>
                     <span class="ln-meta">{{ NODE_META[data.node.type]?.label }}<template v-if="data.node.kind"> · {{ data.node.kind }}</template></span>
                   </div>
-                  <span v-if="data.node.meta?.stale" class="ln-badge stale" title="Output basato su dati più vecchi dell'ultimo refresh a monte"><Clock :size="11" /></span>
+                  <span v-if="data.node.meta?.stale" class="ln-badge stale" :title="data.node.meta?.stale_reason === 'upstream' ? 'Stale ereditata da monte' : 'Stale: dati più recenti dell\'ultimo run'"><Clock :size="11" /></span>
                   <span v-else-if="data.node.meta?.never_run" class="ln-badge never" title="Mai eseguito"><AlertTriangle :size="11" /></span>
                   <span v-else-if="data.node.restricted" class="ln-badge restr" title="Riferimento non risolto (rimosso o non accessibile)"><AlertTriangle :size="11" /></span>
                 </div>
@@ -385,9 +417,13 @@ function nodeIcon(t: string) {
               </div>
             </div>
 
-            <div v-if="selected.meta?.stale" class="ln-detail-warn stale"><Clock :size="13" /> Output basato su dati più vecchi dell'ultimo refresh a monte</div>
+            <div v-if="selected.meta?.stale" class="ln-detail-warn stale">
+              <Clock :size="13" />
+              <span v-if="selected.meta?.stale_reason === 'upstream'">Stale ereditata: dipende da un elemento a monte con dati superati — rieseguire la catena</span>
+              <span v-else>Stale: legge dati rinfrescati dopo l'ultimo run riuscito — rieseguire</span>
+            </div>
             <div v-else-if="selected.meta?.never_run" class="ln-detail-warn never"><AlertTriangle :size="13" /> Mai eseguito</div>
-            <div v-else-if="selected.restricted" class="ln-detail-warn restr"><AlertTriangle :size="13" /> Riferimento non risolto (rimosso o non accessibile)</div>
+            <div v-else-if="selected.restricted" class="ln-detail-warn restr"><AlertTriangle :size="13" /> Riferimento non risolto · {{ restrictedLabel(selected) }}</div>
 
             <dl class="ln-detail-meta">
               <template v-if="selected.type === 'flow'">
@@ -412,6 +448,16 @@ function nodeIcon(t: string) {
                 <dt>Formato</dt><dd>{{ selected.meta?.format ?? '—' }}</dd>
               </template>
             </dl>
+
+            <!-- blast radius: cosa si tocca a valle se cambio questo nodo -->
+            <div v-if="impact && impact.total" class="ln-impact">
+              <span class="ln-impact-h">Impatto a valle</span>
+              <div class="ln-impact-row">
+                <span v-if="impact.flows"><Workflow :size="11" /> {{ impact.flows }} flussi</span>
+                <span v-if="impact.datasources"><Database :size="11" /> {{ impact.datasources }} datasource</span>
+                <span v-if="impact.sinks"><HardDriveDownload :size="11" /> {{ impact.sinks }} destinazioni</span>
+              </div>
+            </div>
 
             <div class="ln-detail-actions">
               <button v-if="canRecenter(selected)" @click="recenterOn(selected)"><Crosshair :size="13" /> Centra qui</button>
@@ -537,6 +583,10 @@ function nodeIcon(t: string) {
 .ln-detail-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
 .ln-detail-meta dt { font-size: 11px; color: var(--muted); }
 .ln-detail-meta dd { font-size: 12px; margin: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln-impact { display: flex; flex-direction: column; gap: 5px; padding: 8px 9px; background: var(--panel-2); border-radius: 8px; }
+.ln-impact-h { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.ln-impact-row { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.ln-impact-row span { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
 .ln-detail-actions { display: flex; gap: 6px; }
 .ln-detail-actions button { flex: 1; font-size: 12px; padding: 6px 8px; }
 
