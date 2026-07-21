@@ -17,10 +17,13 @@ const dsApi = useDatasources()
 // ── sorgente + motore ─────────────────────────────────────────────────────
 const datasources = ref<DatasourceInfo[]>([])
 const dsId = ref<number | null>(null)
+const { preferredEngine, defaultEngine } = usePreferredEngine()
 const engines = ref<{ id: string; label: string; available: boolean }[]>([
   { id: 'polars', label: 'Polars', available: true },
 ])
-const engine = ref('polars')
+// default = motore preferito dell'utente (fallback Polars finché il catalogo
+// non è caricato; poi onMounted valida la disponibilità)
+const engine = ref(preferredEngine.value)
 
 const selectedDs = computed(() => datasources.value.find((d) => d.id === dsId.value) || null)
 const dsOptions = computed(() =>
@@ -222,7 +225,11 @@ const displayRows = computed<Record<string, any>[]>(() => {
 
 onMounted(async () => {
   try { datasources.value = await dsApi.list() } catch (e) { error.value = errMessage(e) }
-  try { engines.value = await api.engines() } catch { /* fallback polars */ }
+  try {
+    engines.value = await api.engines()
+    // la preferita potrebbe non essere disponibile: applica il fallback robusto
+    engine.value = defaultEngine(engines.value)
+  } catch { /* fallback polars */ }
 })
 </script>
 

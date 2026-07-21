@@ -126,8 +126,10 @@ const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : 
 const projectId = ref<number | null>(route.query.project ? Number(route.query.project) : null)
 const flowName = ref('Flusso senza nome')
 // motore del flusso: scelto in creazione (?engine=… dalla pagina Flows) per un
-// flusso nuovo, oppure caricato da flow.engine. Passato a preview/run e salvato.
-const flowEngine = ref<string>(route.query.engine ? String(route.query.engine) : 'polars')
+// flusso nuovo, oppure caricato da flow.engine. Se si apre l'editor senza scelta
+// esplicita si usa il motore PREFERITO dell'utente. Passato a preview/run e salvato.
+const { preferredEngine } = usePreferredEngine()
+const flowEngine = ref<string>(route.query.engine ? String(route.query.engine) : preferredEngine.value)
 
 // preview/transform iniettano SEMPRE l'engine del flusso corrente. (`dataApi`
 // alias: evita che i wrapper si auto-referenzino nei rimpiazzi delle chiamate.)

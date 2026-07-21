@@ -28,6 +28,7 @@ const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
 // scelto). DuckDB compare come "in arrivo" finché il suo engine non è pronto.
 interface EngineOpt { id: string; label: string; available: boolean; description: string }
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
+const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
 function createWith(engineId: string) {
   newMenu.value = false
@@ -163,7 +164,7 @@ async function saveSchedule(cron: string) {
               :disabled="!e.available"
               @click="createWith(e.id)"
             >
-              <span class="mi-top">{{ e.label }}<span v-if="!e.available" class="soon">in arrivo</span></span>
+              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">preferita</span><span v-if="!e.available" class="soon">in arrivo</span></span>
               <span v-if="e.description" class="mi-desc">{{ e.description }}</span>
             </button>
           </div>
@@ -300,4 +301,5 @@ async function saveSchedule(cron: string) {
 .mi-top { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; color: var(--text); }
 .mi-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
 .soon { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-2); border: 1px solid var(--accent-2); border-radius: 20px; padding: 1px 6px; }
+.pref { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); background: var(--tint-accent); border-radius: 20px; padding: 1px 6px; }
 </style>
