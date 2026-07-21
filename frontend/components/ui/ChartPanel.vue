@@ -29,11 +29,33 @@ const props = defineProps<{
   query: (ops: Operation[], limit?: number) => Promise<PreviewResult | null>
 }>()
 
-// palette categorica VALIDATA per superficie scura (lightness band, CVD, contrasto).
-// MAX 5 serie: mai ciclare le tinte oltre gli slot — le eccedenti si segnalano.
+// palette categorica VALIDATA (lightness band, CVD, contrasto): tinte mid-tone
+// che restano leggibili sia su fondo scuro sia chiaro. MAX 5 serie: mai ciclare
+// le tinte oltre gli slot — le eccedenti si segnalano.
 const PALETTE = ['#3987e5', '#199e70', '#c98500', '#9085e9', '#d55181']
 const OTHER_COLOR = '#8b93a7' // grigio neutro per la fetta "Altro"
 const MAX_SERIES = PALETTE.length
+
+// colori "cromo" (assi, testi, sfondi tooltip) letti dalle CSS variables del
+// tema corrente, così i grafici seguono il tema chiaro/scuro. Ricalcolati a ogni
+// cambio tema; l'`option` computed li referenzia e si aggiorna di conseguenza.
+const { theme } = useTheme()
+function readUi() {
+  const fallback = { text: '#e8ebf2', muted: '#8b93a7', border: '#262e40', borderSoft: '#1e2534', panel: '#141926', panel2: '#1b2130' }
+  if (!import.meta.client) return fallback
+  const s = getComputedStyle(document.documentElement)
+  const g = (n: string, f: string) => s.getPropertyValue(n).trim() || f
+  return {
+    text: g('--text', fallback.text),
+    muted: g('--muted', fallback.muted),
+    border: g('--border', fallback.border),
+    borderSoft: g('--border-soft', fallback.borderSoft),
+    panel: g('--panel', fallback.panel),
+    panel2: g('--panel-2', fallback.panel2),
+  }
+}
+const ui = ref(readUi())
+watch(theme, () => { ui.value = readUi() })
 
 const CHART_TYPES = [
   { id: 'bar', label: 'Barre', icon: BarChart3 },
@@ -186,21 +208,26 @@ function pivotBydata() {
 }
 
 // ── Opzione ECharts ──────────────────────────────────────────────────────────
-const AXIS_STYLE = {
-  axisLabel: { color: '#8b93a7', hideOverlap: true },
-  axisLine: { lineStyle: { color: '#262e40' } },
+// stili "cromo" derivati dal tema corrente (computed su `ui`)
+const AXIS_STYLE = computed(() => ({
+  axisLabel: { color: ui.value.muted, hideOverlap: true },
+  axisLine: { lineStyle: { color: ui.value.border } },
   axisTick: { show: false },
-}
-const TOOLTIP_BASE = {
-  backgroundColor: '#1b2130',
-  borderColor: '#262e40',
-  textStyle: { color: '#e8ebf2', fontSize: 12 },
+}))
+const TOOLTIP_BASE = computed(() => ({
+  backgroundColor: ui.value.panel2,
+  borderColor: ui.value.border,
+  textStyle: { color: ui.value.text, fontSize: 12 },
   valueFormatter: (v: any) => fmt.format(v),
-}
-const LEGEND_BASE = { textStyle: { color: '#8b93a7', fontSize: 11 }, top: 0, icon: 'circle' }
+}))
+const LEGEND_BASE = computed(() => ({ textStyle: { color: ui.value.muted, fontSize: 11 }, top: 0, icon: 'circle' }))
 
 const option = computed(() => {
   const t = chartType.value
+  const AXIS = AXIS_STYLE.value
+  const TOOLTIP = TOOLTIP_BASE.value
+  const LEGEND = LEGEND_BASE.value
+  const c = ui.value
 
   if (t === 'pie' || t === 'treemap') {
     // top-5 categorie + "Altro" (solo per funzioni additive: una media di medie
@@ -222,14 +249,14 @@ const option = computed(() => {
     if (t === 'pie') {
       return {
         backgroundColor: 'transparent',
-        tooltip: { ...TOOLTIP_BASE, trigger: 'item' },
+        tooltip: { ...TOOLTIP, trigger: 'item' },
         series: [{
           name: seriesName.value,
           type: 'pie',
           radius: ['42%', '72%'], // donut
-          itemStyle: { borderColor: '#141926', borderWidth: 2 }, // spacer tra fette
-          label: { color: '#e8ebf2', fontSize: 11, formatter: '{b}\n{d}%' },
-          labelLine: { lineStyle: { color: '#3d4a66' } },
+          itemStyle: { borderColor: c.panel, borderWidth: 2 }, // spacer tra fette
+          label: { color: c.text, fontSize: 11, formatter: '{b}\n{d}%' },
+          labelLine: { lineStyle: { color: c.border } },
           data,
         }],
       }
@@ -237,16 +264,16 @@ const option = computed(() => {
     // treemap = magnitudine → UNA tinta con shading per valore (non identità)
     return {
       backgroundColor: 'transparent',
-      tooltip: { ...TOOLTIP_BASE, trigger: 'item' },
+      tooltip: { ...TOOLTIP, trigger: 'item' },
       series: [{
         name: seriesName.value,
         type: 'treemap',
         roam: false,
         nodeClick: false,
         breadcrumb: { show: false },
-        itemStyle: { color: PALETTE[0], borderColor: '#141926', borderWidth: 2 },
+        itemStyle: { color: PALETTE[0], borderColor: c.panel, borderWidth: 2 },
         colorAlpha: [0.45, 1], // shading sequenziale per valore
-        label: { color: '#e8ebf2', fontSize: 11, formatter: '{b}' },
+        label: { color: c.text, fontSize: 11, formatter: '{b}' },
         data: rows.value.slice(0, Math.max(topN.value, 1)).map((r) => ({
           name: String(r[xCol.value]),
           value: r.__valore,
@@ -275,21 +302,21 @@ const option = computed(() => {
       backgroundColor: 'transparent',
       color: PALETTE,
       grid: { left: 8, right: 16, top: seriesDefs.length > 1 ? 30 : 24, bottom: 8, containLabel: true },
-      ...(seriesDefs.length > 1 ? { legend: LEGEND_BASE } : {}),
+      ...(seriesDefs.length > 1 ? { legend: LEGEND } : {}),
       tooltip: {
-        ...TOOLTIP_BASE,
+        ...TOOLTIP,
         trigger: 'item',
         formatter: (p: any) =>
           `${p.data.name}<br/>${xFunc.value}(${xNumCol.value}): <b>${fmt.format(p.data.value[0])}</b>` +
           `<br/>${yFunc.value}(${yNumCol.value}): <b>${fmt.format(p.data.value[1])}</b>`,
       },
-      xAxis: { type: 'value', ...AXIS_STYLE, splitLine: { lineStyle: { color: '#1e2534' } } },
-      yAxis: { type: 'value', ...AXIS_STYLE, splitLine: { lineStyle: { color: '#262e40' } } },
+      xAxis: { type: 'value', ...AXIS, splitLine: { lineStyle: { color: c.borderSoft } } },
+      yAxis: { type: 'value', ...AXIS, splitLine: { lineStyle: { color: c.border } } },
       series: seriesDefs.map((s) => ({
         name: s.name,
         type: 'scatter',
         symbolSize: 9,
-        itemStyle: { opacity: 0.75, borderColor: '#141926', borderWidth: 1 },
+        itemStyle: { opacity: 0.75, borderColor: c.panel, borderWidth: 1 },
         data: s.rows.map((r) => ({ name: String(r[xCol.value]), value: [r.__x, r.__y] })),
       })),
     }
@@ -338,17 +365,17 @@ const option = computed(() => {
     backgroundColor: 'transparent',
     color: PALETTE,
     grid: { left: 8, right: 16, top: seriesList.length > 1 ? 30 : 28, bottom: 8, containLabel: true },
-    ...(seriesList.length > 1 ? { legend: LEGEND_BASE } : {}), // ≥2 serie → legenda sempre
+    ...(seriesList.length > 1 ? { legend: LEGEND } : {}), // ≥2 serie → legenda sempre
     tooltip: {
-      ...TOOLTIP_BASE,
+      ...TOOLTIP,
       trigger: isBar ? 'item' : 'axis',
-      axisPointer: isBar ? undefined : { type: 'cross', label: { backgroundColor: '#1b2130' } },
+      axisPointer: isBar ? undefined : { type: 'cross', label: { backgroundColor: c.panel2 } },
     },
-    xAxis: { type: 'category', data: cats, ...AXIS_STYLE },
+    xAxis: { type: 'category', data: cats, ...AXIS },
     yAxis: {
       type: 'value',
-      axisLabel: { color: '#8b93a7', formatter: (v: number) => fmt.format(v) },
-      splitLine: { lineStyle: { color: '#262e40' } },
+      axisLabel: { color: c.muted, formatter: (v: number) => fmt.format(v) },
+      splitLine: { lineStyle: { color: c.border } },
     },
     series: seriesList,
   }

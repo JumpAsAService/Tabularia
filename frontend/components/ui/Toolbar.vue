@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
-  Table2,
   Upload,
   Plus,
   Play,
@@ -63,7 +62,7 @@ const statusIcon = computed(() => {
 
 <template>
   <div class="toolbar-inner">
-    <strong class="brand"><Table2 :size="16" /> Tabularia</strong>
+    <strong class="brand"><img src="/logo.png" alt="Tabularia" class="brand-logo" /> Tabularia</strong>
 
     <!-- motore di esecuzione del flusso -->
     <span
@@ -130,6 +129,7 @@ const statusIcon = computed(() => {
   padding: 8px 12px;
 }
 .brand { display: inline-flex; align-items: center; gap: 6px; }
+.brand-logo { width: 20px; height: 20px; border-radius: 5px; background: #fff; object-fit: contain; }
 /* badge del motore di esecuzione */
 .enginebadge {
   display: inline-flex;

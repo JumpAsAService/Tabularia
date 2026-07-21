@@ -86,7 +86,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
 
 <style scoped>
 .sd-backdrop {
-  position: fixed; inset: 0; background: rgba(5, 7, 12, 0.6); backdrop-filter: blur(2px);
+  position: fixed; inset: 0; background: var(--scrim); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center; z-index: 2000;
 }
 .sd-card {

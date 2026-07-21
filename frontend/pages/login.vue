@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Table2, LogIn } from 'lucide-vue-next'
+import { LogIn } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 
 const { login } = useAuth()
@@ -27,7 +27,7 @@ async function onSubmit() {
 <template>
   <div class="login-wrap">
     <form class="login-card" @submit.prevent="onSubmit">
-      <div class="brand-mark"><Table2 :size="26" /></div>
+      <div class="brand-mark"><img src="/logo.png" alt="Tabularia" /></div>
       <h1 class="brand">Tabularia</h1>
       <p class="muted sub">Accedi per continuare</p>
 
@@ -72,14 +72,15 @@ async function onSubmit() {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: var(--grad-accent);
-  color: #fff;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 6px;
-  box-shadow: 0 4px 16px rgba(79, 140, 255, 0.35);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(20, 30, 80, 0.35);
 }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; }
 .brand {
   margin: 0;
   font-size: 26px;

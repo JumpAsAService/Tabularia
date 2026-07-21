@@ -119,7 +119,7 @@ function confirm() {
 .rd-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(5, 7, 12, 0.6);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
