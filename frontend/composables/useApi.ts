@@ -86,6 +86,25 @@ export function useApi() {
       return await apiFetch('/engines')
     },
 
+    // grafo di lineage: senza center → grafo completo leggibile; con center →
+    // sottografo a monte/valle entro `depth` salti
+    async lineage(p?: {
+      type?: 'flow' | 'datasource'
+      id?: number
+      direction?: 'both' | 'upstream' | 'downstream'
+      depth?: number
+    }): Promise<LineageGraph> {
+      const q = new URLSearchParams()
+      if (p?.type && p?.id != null) {
+        q.set('type', p.type)
+        q.set('id', String(p.id))
+      }
+      if (p?.direction) q.set('direction', p.direction)
+      if (p?.depth) q.set('depth', String(p.depth))
+      const qs = q.toString()
+      return await apiFetch<LineageGraph>(`/lineage${qs ? `?${qs}` : ''}`)
+    },
+
     async taskStatus(id: string): Promise<TaskStatus> {
       return await apiFetch<TaskStatus>(`/tasks/${id}`)
     },
@@ -103,6 +122,29 @@ export function useApi() {
       return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
     },
   }
+}
+
+// ── Lineage cross-flow ───────────────────────────────────────────────────────
+export type LineageNodeType = 'flow' | 'datasource' | 'connection' | 'db_sink' | 's3_sink'
+export type LineageEdgeKind = 'read' | 'publish' | 'ingest' | 'write' | 'refresh' | 'orchestrate'
+export interface LineageNode {
+  id: string
+  type: LineageNodeType
+  label: string
+  project_id?: number | null
+  kind?: string | null // datasource: flow | database
+  restricted?: boolean
+  meta?: Record<string, any>
+}
+export interface LineageEdge {
+  source: string
+  target: string
+  kind: LineageEdgeKind
+}
+export interface LineageGraph {
+  nodes: LineageNode[]
+  edges: LineageEdge[]
+  center?: string | null
 }
 
 // Una pagina di risultati dalle liste paginate (ricerca server-side).
