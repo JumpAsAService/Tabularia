@@ -16,11 +16,12 @@ from __future__ import annotations
 import json
 import logging
 from collections import deque
+from datetime import datetime
 from typing import Optional
 
 from sqlmodel import Session, select
 
-from app.models import Connection, Datasource, Flow, User
+from app.models import Connection, Datasource, Flow, Run, User
 from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
@@ -104,9 +105,26 @@ def build_full_graph(session: Session, user: User) -> _Graph:
         g.add_node(_dsid(d.id), type="datasource", label=d.name, project_id=d.project_id,
                    kind=d.kind, meta={"rows": d.rows,
                                       "refreshed_at": d.refreshed_at.isoformat() if d.refreshed_at else None})
+    # ultimo run per flusso (per salute/impatto): più recente in assoluto +
+    # ultimo SUCCESS (base per la staleness). Una sola query sui run dei flussi.
+    last_run: dict[int, Run] = {}
+    last_success_at: dict[int, datetime] = {}
+    if flow_ids:
+        runs = session.exec(
+            select(Run).where(Run.flow_id.in_(flow_ids), Run.kind == "flow").order_by(Run.started_at)
+        ).all()
+        for r in runs:  # ordinati crescenti → l'ultimo visto vince
+            last_run[r.flow_id] = r
+            if r.status == "SUCCESS":
+                last_success_at[r.flow_id] = r.finished_at or r.started_at
+
     for f in flows:
+        lr = last_run.get(f.id)
         g.add_node(_fid(f.id), type="flow", label=f.name, project_id=f.project_id,
-                   meta={"engine": f.engine, "scheduled": bool(f.run_schedule)})
+                   meta={"engine": f.engine, "scheduled": bool(f.run_schedule),
+                         "last_run_at": (lr.started_at.isoformat() if lr else None),
+                         "last_run_status": (lr.status if lr else None),
+                         "never_run": lr is None})
 
     # ── archi persistiti dalla tabella datasources ───────────────────────────
     for d in datasources:
@@ -171,6 +189,21 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                     g.add_edge(_fid(f.id), sink, EDGE_WRITE)
                 # dest == "datasource": la produzione è già coperta dall'arco
                 # PUBLISH persistito (datasources.flow_id) quando il flusso è girato
+
+    # ── staleness: un flusso è "vecchio" se legge una datasource DB rinfrescata
+    # DOPO il suo ultimo run riuscito (i suoi output sono su dati superati) ──────
+    for e in g.edges:
+        if e["kind"] != EDGE_READ or not e["source"].startswith("ds:"):
+            continue
+        ds = ds_by_id.get(int(e["source"].split(":")[1]))
+        if not ds or not ds.refreshed_at:
+            continue
+        fid_int = int(e["target"].split(":")[1])
+        succ = last_success_at.get(fid_int)
+        if succ is not None and ds.refreshed_at > succ:
+            node = g.nodes.get(e["target"])
+            if node:
+                node["meta"]["stale"] = True
 
     return g
 

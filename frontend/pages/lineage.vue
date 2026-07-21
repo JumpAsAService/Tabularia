@@ -9,7 +9,8 @@ import type { Node, Edge } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import {
-  Share2, Workflow, Database, Plug, CloudUpload, HardDriveDownload, Search, ArrowRight,
+  Share2, Workflow, Database, Plug, CloudUpload, HardDriveDownload, Search,
+  AlertTriangle, Clock, ExternalLink, X, Crosshair,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
 
@@ -26,6 +27,16 @@ const centerId = ref<number | null>(null)
 const direction = ref<'both' | 'upstream' | 'downstream'>('both')
 const depth = ref(3)
 const q = ref('') // ricerca nel picker
+const selected = ref<LineageNode | null>(null) // nodo aperto nel pannello dettaglio
+
+// filtri per tipo di nodo (tutti attivi di default)
+const ALL_TYPES = ['flow', 'datasource', 'connection', 'db_sink', 's3_sink'] as const
+const enabledTypes = ref<Set<string>>(new Set(ALL_TYPES))
+function toggleType(t: string) {
+  const s = new Set(enabledTypes.value)
+  s.has(t) ? s.delete(t) : s.add(t)
+  enabledTypes.value = s
+}
 
 // ── etichette/colori per tipo di nodo e tipo di arco ─────────────────────────
 const NODE_META: Record<string, { label: string; icon: any; color: string }> = {
@@ -108,10 +119,25 @@ function layout(nodes: LineageNode[], edges: LineageEdge[]): Map<string, { x: nu
   return pos
 }
 
+// ── nodi/archi effettivamente mostrati (dopo i filtri per tipo) ──────────────
+const shownNodes = computed(() => graph.value.nodes.filter((n) => enabledTypes.value.has(n.type)))
+const shownEdges = computed(() => {
+  const ids = new Set(shownNodes.value.map((n) => n.id))
+  return graph.value.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
+})
+
+// problemi nel grafo mostrato: staleness + riferimenti non risolti
+const problems = computed(() => {
+  const stale = shownNodes.value.filter((n) => n.meta?.stale).length
+  const restricted = shownNodes.value.filter((n) => n.restricted).length
+  const neverRun = shownNodes.value.filter((n) => n.meta?.never_run).length
+  return { stale, restricted, neverRun, total: stale + restricted }
+})
+
 // ── traduzione grafo → nodi/archi Vue Flow ───────────────────────────────────
 const rfNodes = computed<Node[]>(() => {
-  const pos = layout(graph.value.nodes, graph.value.edges)
-  return graph.value.nodes.map((n) => ({
+  const pos = layout(shownNodes.value, shownEdges.value)
+  return shownNodes.value.map((n) => ({
     id: n.id,
     type: 'default',
     position: pos.get(n.id) ?? { x: 0, y: 0 },
@@ -127,7 +153,7 @@ const rfNodes = computed<Node[]>(() => {
   }))
 })
 const rfEdges = computed<Edge[]>(() =>
-  graph.value.edges.map((e, i) => {
+  shownEdges.value.map((e, i) => {
     const m = EDGE_META[e.kind]
     return {
       id: `e${i}`,
@@ -171,12 +197,32 @@ function pick(n: LineageNode) {
 function showAll() {
   centerType.value = null
   centerId.value = null
+  selected.value = null
 }
 
-// click su un nodo del grafo → ricentra su di esso (se flusso o datasource)
+// click su un nodo → apre il pannello di dettaglio (il ricentro è un'azione lì)
 function onNodeClick(ev: any) {
   const n: LineageNode | undefined = ev?.node?.data?.node
-  if (n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted) pick(n)
+  if (n) selected.value = n
+}
+
+// azioni del pannello: ricentra sul nodo, oppure aprilo nel suo strumento
+function recenterOn(n: LineageNode) {
+  if (n.type === 'flow' || n.type === 'datasource') pick(n)
+}
+function openNode(n: LineageNode) {
+  const id = Number(n.id.split(':')[1])
+  if (n.type === 'flow') navigateTo(`/editor?flow=${id}`)
+  else if (n.type === 'datasource') navigateTo('/datasources')
+}
+const canRecenter = (n: LineageNode | null) =>
+  !!n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted
+const canOpen = (n: LineageNode | null) =>
+  !!n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted
+
+function fmtDate(iso?: string | null) {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return iso }
 }
 
 watch([centerType, centerId, direction, depth], load)
@@ -257,11 +303,38 @@ function nodeIcon(t: string) {
             </div>
           </div>
 
-          <!-- legenda -->
+          <!-- salute / problemi nel grafo mostrato -->
+          <div v-if="problems.total || problems.neverRun" class="ln-block ln-problems">
+            <label class="ln-label"><AlertTriangle :size="12" /> Salute</label>
+            <span v-if="problems.stale" class="ln-prob stale"><Clock :size="12" /> {{ problems.stale }} flusso/i con output vecchi (stale)</span>
+            <span v-if="problems.neverRun" class="ln-prob never"><AlertTriangle :size="12" /> {{ problems.neverRun }} mai eseguito/i</span>
+            <span v-if="problems.restricted" class="ln-prob restr"><AlertTriangle :size="12" /> {{ problems.restricted }} riferimento/i non risolto/i</span>
+          </div>
+
+          <!-- filtri per tipo -->
           <div class="ln-block">
-            <label class="ln-label">Legenda</label>
+            <label class="ln-label">Mostra</label>
+            <div class="ln-filters">
+              <button
+                v-for="t in ALL_TYPES"
+                :key="t"
+                class="ln-filter"
+                :class="{ off: !enabledTypes.has(t) }"
+                :style="{ '--c': NODE_META[t].color }"
+                @click="toggleType(t)"
+              >
+                <i :style="{ background: NODE_META[t].color }" /> {{ NODE_META[t].label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- legenda archi -->
+          <div class="ln-block">
+            <label class="ln-label">Relazioni</label>
             <div class="ln-legend">
-              <span v-for="(m, k) in NODE_META" :key="k" class="ln-leg"><i :style="{ background: m.color }" /> {{ m.label }}</span>
+              <span v-for="(m, k) in EDGE_META" :key="k" class="ln-leg">
+                <i class="edge" :style="{ background: m.color, borderTop: m.dashed ? `2px dashed ${m.color}` : 'none' }" /> {{ m.label }}
+              </span>
             </div>
           </div>
         </aside>
@@ -290,6 +363,9 @@ function nodeIcon(t: string) {
                     <span class="ln-name">{{ data.node.label }}</span>
                     <span class="ln-meta">{{ NODE_META[data.node.type]?.label }}<template v-if="data.node.kind"> · {{ data.node.kind }}</template></span>
                   </div>
+                  <span v-if="data.node.meta?.stale" class="ln-badge stale" title="Output basato su dati più vecchi dell'ultimo refresh a monte"><Clock :size="11" /></span>
+                  <span v-else-if="data.node.meta?.never_run" class="ln-badge never" title="Mai eseguito"><AlertTriangle :size="11" /></span>
+                  <span v-else-if="data.node.restricted" class="ln-badge restr" title="Riferimento non risolto (rimosso o non accessibile)"><AlertTriangle :size="11" /></span>
                 </div>
                 <Handle type="source" :position="Position.Right" />
               </template>
@@ -297,6 +373,51 @@ function nodeIcon(t: string) {
               <Controls />
             </VueFlow>
           </ClientOnly>
+
+          <!-- pannello di dettaglio del nodo selezionato -->
+          <div v-if="selected" class="ln-detail">
+            <button class="ln-detail-x" title="Chiudi" @click="selected = null"><X :size="14" /></button>
+            <div class="ln-detail-head">
+              <component :is="nodeIcon(selected.type)" :size="16" :style="{ color: NODE_META[selected.type]?.color }" />
+              <div>
+                <div class="ln-detail-name">{{ selected.label }}</div>
+                <div class="ln-detail-type">{{ NODE_META[selected.type]?.label }}<template v-if="selected.kind"> · {{ selected.kind }}</template></div>
+              </div>
+            </div>
+
+            <div v-if="selected.meta?.stale" class="ln-detail-warn stale"><Clock :size="13" /> Output basato su dati più vecchi dell'ultimo refresh a monte</div>
+            <div v-else-if="selected.meta?.never_run" class="ln-detail-warn never"><AlertTriangle :size="13" /> Mai eseguito</div>
+            <div v-else-if="selected.restricted" class="ln-detail-warn restr"><AlertTriangle :size="13" /> Riferimento non risolto (rimosso o non accessibile)</div>
+
+            <dl class="ln-detail-meta">
+              <template v-if="selected.type === 'flow'">
+                <dt>Motore</dt><dd>{{ selected.meta?.engine ?? '—' }}</dd>
+                <dt>Ultimo run</dt><dd>{{ selected.meta?.last_run_status ?? 'mai' }} · {{ fmtDate(selected.meta?.last_run_at) }}</dd>
+                <dt>Schedulato</dt><dd>{{ selected.meta?.scheduled ? 'sì' : 'no' }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'datasource'">
+                <dt>Righe</dt><dd>{{ selected.meta?.rows ?? '—' }}</dd>
+                <dt>Rinfrescata</dt><dd>{{ fmtDate(selected.meta?.refreshed_at) }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'connection'">
+                <dt>Tipo</dt><dd>{{ selected.meta?.db_type ?? '—' }}</dd>
+                <dt>Database</dt><dd>{{ selected.meta?.database || '—' }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'db_sink'">
+                <dt>Connessione</dt><dd>{{ selected.meta?.connection_name ?? '—' }}</dd>
+                <dt>Modalità</dt><dd>{{ selected.meta?.mode ?? '—' }}</dd>
+              </template>
+              <template v-else-if="selected.type === 's3_sink'">
+                <dt>Bucket</dt><dd>{{ selected.meta?.bucket || '—' }}</dd>
+                <dt>Formato</dt><dd>{{ selected.meta?.format ?? '—' }}</dd>
+              </template>
+            </dl>
+
+            <div class="ln-detail-actions">
+              <button v-if="canRecenter(selected)" @click="recenterOn(selected)"><Crosshair :size="13" /> Centra qui</button>
+              <button v-if="canOpen(selected)" class="primary" @click="openNode(selected)"><ExternalLink :size="13" /> Apri</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -367,6 +488,57 @@ function nodeIcon(t: string) {
 .ln-legend { display: flex; flex-direction: column; gap: 5px; }
 .ln-leg { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
 .ln-leg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ln-leg i.edge { width: 16px; height: 2px; border-radius: 0; }
+
+/* filtri per tipo */
+.ln-filters { display: flex; flex-wrap: wrap; gap: 5px; }
+.ln-filter {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; padding: 4px 9px; border-radius: 999px;
+}
+.ln-filter i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.ln-filter.off { opacity: 0.4; text-decoration: line-through; }
+
+/* salute / problemi */
+.ln-problems { gap: 6px; }
+.ln-prob { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.ln-prob.stale { color: #d97706; }
+.ln-prob.never { color: var(--muted); }
+.ln-prob.restr { color: var(--danger); }
+
+/* badge di salute sui nodi del grafo */
+:deep(.ln-badge) {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 5px;
+}
+:deep(.ln-badge.stale) { color: #d97706; background: rgba(217, 119, 6, 0.14); }
+:deep(.ln-badge.never) { color: var(--muted); background: var(--panel-2); }
+:deep(.ln-badge.restr) { color: var(--danger); background: rgba(255, 107, 107, 0.14); }
+
+/* pannello di dettaglio */
+.ln-detail {
+  position: absolute; top: 12px; right: 12px; z-index: 8;
+  width: 260px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 11px; box-shadow: var(--shadow-2);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.ln-detail-x { position: absolute; top: 8px; right: 8px; padding: 4px 6px; }
+.ln-detail-head { display: flex; align-items: flex-start; gap: 9px; padding-right: 20px; }
+.ln-detail-name { font-size: 13.5px; font-weight: 700; line-height: 1.25; }
+.ln-detail-type { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
+.ln-detail-warn {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; padding: 7px 9px; border-radius: 8px; line-height: 1.3;
+}
+.ln-detail-warn.stale { color: #d97706; background: rgba(217, 119, 6, 0.12); }
+.ln-detail-warn.never { color: var(--muted); background: var(--panel-2); }
+.ln-detail-warn.restr { color: var(--danger); background: rgba(255, 107, 107, 0.12); }
+.ln-detail-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.ln-detail-meta dt { font-size: 11px; color: var(--muted); }
+.ln-detail-meta dd { font-size: 12px; margin: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln-detail-actions { display: flex; gap: 6px; }
+.ln-detail-actions button { flex: 1; font-size: 12px; padding: 6px 8px; }
 
 .ln-canvas {
   flex: 1;
