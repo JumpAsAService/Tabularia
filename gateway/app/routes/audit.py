@@ -17,7 +17,6 @@ from sqlmodel import Session, func, select
 from app.core.config import get_settings
 from app.db.session import get_session
 from app.deps.auth import require_superuser
-from app.deps.demo import demo_active, mask_ip
 from app.models import AuditLog, User
 from app.schemas.models import Page
 from app.services import audit as audit_svc
@@ -60,10 +59,7 @@ def _to_out(e: AuditLog) -> AuditEntryOut:
         detail = json.loads(e.detail) if e.detail else None
     except json.JSONDecodeError:
         detail = {"_raw": e.detail}
-    out = AuditEntryOut(**e.model_dump(exclude={"detail"}), detail=detail)
-    if demo_active():  # sandbox: non esporre l'IP di un visitatore a un altro
-        out.ip = mask_ip(out.ip)
-    return out
+    return AuditEntryOut(**e.model_dump(exclude={"detail"}), detail=detail)
 
 
 @router.get("/audit", response_model=Page[AuditEntryOut])
@@ -77,13 +73,10 @@ def list_audit(
     until: Optional[datetime] = Query(None, description="fino al timestamp (incluso)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user: User = Depends(require_superuser),
     session: Session = Depends(get_session),
 ):
     """Eventi di audit, dal più recente, paginati e filtrabili."""
     base = select(AuditLog)
-    if demo_active():  # sandbox: ogni visitatore vede SOLO i propri eventi
-        base = base.where(AuditLog.actor_id == user.id)
     if q:
         like = f"%{q}%"
         base = base.where(or_(
@@ -178,18 +171,14 @@ def access_activity(
 
 
 @router.get("/audit/sessions", response_model=list[ActiveSession])
-def active_sessions(
-    user: User = Depends(require_superuser),
-    session: Session = Depends(get_session),
-):
+def active_sessions(session: Session = Depends(get_session)):
     """Utenti con attività recente (il JWT è stateless: 'attivo ora' = last_seen
     entro la finestra). Ordinati dal più recente. Chi non è mai stato visto è escluso."""
     now = datetime.now(timezone.utc)
     threshold = now - ACTIVE_WINDOW
-    base = select(User).where(User.last_seen_at.is_not(None))
-    if demo_active():  # sandbox: mostra solo la propria sessione, non gli altri visitatori
-        base = base.where(User.id == user.id)
-    users = session.exec(base.order_by(User.last_seen_at.desc())).all()
+    users = session.exec(
+        select(User).where(User.last_seen_at.is_not(None)).order_by(User.last_seen_at.desc())
+    ).all()
     out: list[ActiveSession] = []
     for u in users:
         seen = u.last_seen_at
@@ -197,7 +186,7 @@ def active_sessions(
             seen = seen.replace(tzinfo=timezone.utc)
         out.append(ActiveSession(
             user_id=u.id, email=u.email, full_name=u.full_name, is_superuser=u.is_superuser,
-            last_seen_at=u.last_seen_at, last_seen_ip=mask_ip(u.last_seen_ip) if demo_active() else u.last_seen_ip,
+            last_seen_at=u.last_seen_at, last_seen_ip=u.last_seen_ip,
             online=(seen is not None and seen >= threshold),
         ))
     return out

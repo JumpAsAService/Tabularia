@@ -118,13 +118,6 @@ class AppSettings(BaseModel):
     def tzinfo(self) -> ZoneInfo:
         return ZoneInfo(self.timezone)
 
-    # DEMO_MODE: sandbox pubblico. Disabilita le superfici pericolose (upload file,
-    # creazione connessioni → SSRF/output esterni), scope-a-sé le viste admin e
-    # maschera gli IP nell'audit. Attiva il provisioning di sessioni effimere.
-    demo_mode: bool = False
-    # durata di una sessione demo prima del cleanup automatico (minuti)
-    demo_session_ttl_minutes: int = 120
-
 
 class SchedulingSettings(BaseModel):
     # capacità di esecuzione simultanea usata SOLO per evidenziare le fasce critiche
