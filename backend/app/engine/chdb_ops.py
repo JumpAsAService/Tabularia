@@ -250,6 +250,55 @@ def op_compute(sql, params, ctx):
     return sql
 
 
+# ── Execute SQL (query libera sull'input, dialetto ClickHouse) ────────────────
+# Table function di ACCESSO ESTERNO / ESECUZIONE: vietate. Non limitano lo SQL
+# analitico (SELECT/JOIN/GROUP BY/window/subquery/CTE restano liberi) — bloccano
+# solo lettura file / SSRF / RCE sul server, che romperebbero l'RBAC per tutti.
+_SQL_FORBIDDEN_FUNCS = re.compile(
+    r"\b(?:file|url|s3|s3Cluster|fileCluster|urlCluster|hdfs|hdfsCluster|"
+    r"remote|remoteSecure|cluster|clusterAllReplicas|"
+    r"mysql|postgresql|jdbc|odbc|mongodb|redis|sqlite|"
+    r"azureBlobStorage|gcs|deltaLake|iceberg|hudi|executable|dictionary)\s*\(",
+    re.IGNORECASE,
+)
+# statement/keyword pericolosi (DDL/DML, scrittura file, cambio settings, system)
+_SQL_FORBIDDEN_KW = re.compile(
+    r"\b(?:insert|attach|detach|create|alter|drop|truncate|optimize|rename|"
+    r"grant|revoke|system|use|kill|set|into\s+outfile|into\s+dumpfile)\b",
+    re.IGNORECASE,
+)
+
+
+@_register("sql")
+def op_sql(sql, params, ctx):
+    """Query SQL libera (dialetto ClickHouse) sull'input del nodo, esposto come
+    CTE `self` (alias `input`) — stessa convenzione di Polars/DuckDB. Composabile
+    come ogni altra op (resta una SELECT annidabile).
+
+    Sicurezza: lo SQL analitico è libero, ma sono vietate le table function di
+    accesso esterno/esecuzione (file/url/s3/remote/executable/…), i commenti e gli
+    statement multipli — così non si trasforma in lettura file/SSRF/RCE sul server.
+    """
+    query = str(_require(params, "query")).strip().rstrip(";").strip()
+    if not query:
+        raise EngineError("sql: la query è vuota")
+    # il nodo TRASFORMA il suo input: dev'essere referenziato come `self` o `input`
+    if not re.search(r"\bfrom\s+(?:self|input)\b", query, re.IGNORECASE):
+        raise EngineError("sql: la query deve leggere dall'input del nodo — usa `FROM self` (o `FROM input`).")
+    # niente commenti (offuscherebbero i controlli) né più istruzioni
+    if "--" in query or "/*" in query:
+        raise EngineError("sql: i commenti (-- e /* */) non sono ammessi nel nodo SQL.")
+    if ";" in query:
+        raise EngineError("sql: è ammessa una sola istruzione SELECT (niente ';').")
+    if _SQL_FORBIDDEN_FUNCS.search(query) or _SQL_FORBIDDEN_KW.search(query):
+        raise EngineError(
+            "sql: consentito solo interrogare l'input. Vietate le table function di "
+            "accesso esterno (file/url/s3/remote/…), l'esecuzione (executable) e DDL/DML."
+        )
+    # espone l'input come `self` (e alias `input`); resta una SELECT annidabile
+    return f"WITH input AS ({sql}), self AS (SELECT * FROM input) {query}"
+
+
 # ── join / union (leggono il lato destro dalla sorgente annidata) ─────────────
 def _join_condition(params: dict) -> tuple[str, str]:
     """Torna (clausola SQL, kind) dove kind='using' o 'on'."""
