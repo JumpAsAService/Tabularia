@@ -2,11 +2,13 @@
 // Nodo di controllo: al run il gateway esegue un ALTRO flusso salvato (i suoi
 // nodi Output), dopo gli output di questo. Guardia anti-ciclo lato gateway.
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
 import { PlayCircle } from 'lucide-vue-next'
 
 const props = defineProps<{ id: string; data: any }>()
-const summary = computed(() => props.data?.flowName?.trim() || 'scegli un flusso…')
+const { t } = useI18n()
+const summary = computed(() => props.data?.flowName?.trim() || t('runFlowNode.chooseFlow'))
 </script>
 
 <template>
@@ -14,7 +16,7 @@ const summary = computed(() => props.data?.flowName?.trim() || 'scegli un flusso
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
     <div class="node-title">
       <PlayCircle :size="13" class="node-icon" />
-      Esegui flusso
+      {{ t('runFlowNode.title') }}
     </div>
     <div class="node-body muted">{{ summary }}</div>
     <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />

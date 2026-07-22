@@ -31,4 +31,25 @@ export default {
     signIn: 'Anmelden',
     signingIn: 'Anmeldung…',
   },
+  outputNode: {
+    titleDatabase: 'Datenbank-Ausgabe',
+    titleS3: 'S3-Ausgabe',
+    titleDatasource: 'Datasource-Ausgabe',
+    modeReplace: 'ersetzen',
+    modeAppend: 'anhängen',
+    tableSummary: 'Tabelle {table} ({mode})',
+    chooseTable: 'Tabelle wählen…',
+    chooseKeyBucket: 'Schlüssel und Bucket wählen…',
+    partitionsSuffix: ' · {n} Partitionen',
+    datasourceSummary: 'Datasource „{name}“',
+    nameDatasource: 'Datasource benennen…',
+  },
+  refreshNode: {
+    title: 'Datasource aktualisieren',
+    chooseDatasource: 'Datasource wählen…',
+  },
+  runFlowNode: {
+    title: 'Flow ausführen',
+    chooseFlow: 'Flow wählen…',
+  },
 }

@@ -2,11 +2,13 @@
 // Nodo di controllo (non un'operazione dell'engine): al run il gateway aggiorna
 // la datasource indicata PRIMA degli output, così il flusso gira su dati freschi.
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
 import { RefreshCw } from 'lucide-vue-next'
 
 const props = defineProps<{ id: string; data: any }>()
-const summary = computed(() => props.data?.dsName?.trim() || 'scegli una datasource…')
+const { t } = useI18n()
+const summary = computed(() => props.data?.dsName?.trim() || t('refreshNode.chooseDatasource'))
 </script>
 
 <template>
@@ -15,7 +17,7 @@ const summary = computed(() => props.data?.dsName?.trim() || 'scegli una datasou
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
     <div class="node-title">
       <RefreshCw :size="13" class="node-icon" />
-      Refresh datasource
+      {{ t('refreshNode.title') }}
     </div>
     <div class="node-body muted">{{ summary }}</div>
     <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />

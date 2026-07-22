@@ -32,4 +32,25 @@ export default {
     signIn: 'Sign in',
     signingIn: 'Signing in…',
   },
+  outputNode: {
+    titleDatabase: 'Database output',
+    titleS3: 'S3 output',
+    titleDatasource: 'Datasource output',
+    modeReplace: 'replace',
+    modeAppend: 'append',
+    tableSummary: 'table {table} ({mode})',
+    chooseTable: 'choose the table…',
+    chooseKeyBucket: 'choose key and bucket…',
+    partitionsSuffix: ' · {n} partitions',
+    datasourceSummary: 'datasource “{name}”',
+    nameDatasource: 'name the datasource…',
+  },
+  refreshNode: {
+    title: 'Refresh datasource',
+    chooseDatasource: 'choose a datasource…',
+  },
+  runFlowNode: {
+    title: 'Run flow',
+    chooseFlow: 'choose a flow…',
+  },
 }

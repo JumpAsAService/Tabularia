@@ -31,4 +31,25 @@ export default {
     signIn: 'Entrar',
     signingIn: 'Entrando…',
   },
+  outputNode: {
+    titleDatabase: 'Salida a base de datos',
+    titleS3: 'Salida a S3',
+    titleDatasource: 'Salida a datasource',
+    modeReplace: 'reemplazar',
+    modeAppend: 'añadir',
+    tableSummary: 'tabla {table} ({mode})',
+    chooseTable: 'elige la tabla…',
+    chooseKeyBucket: 'elige clave y bucket…',
+    partitionsSuffix: ' · {n} particiones',
+    datasourceSummary: 'datasource «{name}»',
+    nameDatasource: 'nombra la datasource…',
+  },
+  refreshNode: {
+    title: 'Actualizar datasource',
+    chooseDatasource: 'elige una datasource…',
+  },
+  runFlowNode: {
+    title: 'Ejecutar flujo',
+    chooseFlow: 'elige un flujo…',
+  },
 }
