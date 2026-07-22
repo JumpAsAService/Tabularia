@@ -20,6 +20,8 @@ from app.routes.runs import router as runs_router
 from app.routes.datasources import router as datasources_router
 from app.routes.connections import router as connections_router
 from app.routes.lineage import router as lineage_router
+from app.routes.scheduling import router as scheduling_router
+from app.routes.audit import router as audit_router
 from app.routes.system import router as system_router
 from app.routes.queue import router as queue_router
 from app.routes.proxy import router as proxy_router
@@ -85,6 +87,8 @@ app.include_router(runs_router)
 app.include_router(datasources_router)
 app.include_router(connections_router)
 app.include_router(lineage_router)
+app.include_router(scheduling_router)
+app.include_router(audit_router)
 app.include_router(system_router)
 app.include_router(queue_router)
 # data plane (proxy verso l'engine interno)

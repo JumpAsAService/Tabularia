@@ -119,6 +119,14 @@ class AppSettings(BaseModel):
         return ZoneInfo(self.timezone)
 
 
+class SchedulingSettings(BaseModel):
+    # capacità di esecuzione simultanea usata SOLO per evidenziare le fasce critiche
+    # nell'heatmap del carico schedule: dovrebbe rispecchiare la concorrenza del
+    # worker 'celery' (CELERY__WORKER_CONCURRENCY sull'engine). Job schedulati nello
+    # stesso minuto oltre questa soglia finiscono in coda → fascia critica.
+    worker_capacity: int = 2
+
+
 class Settings(BaseSettings):
     """
     Configurazione del gateway. Priorità: init > env > default.
@@ -127,6 +135,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__", extra="ignore")
 
     app: AppSettings = Field(default_factory=AppSettings)
+    scheduling: SchedulingSettings = Field(default_factory=SchedulingSettings)
     db: DbSettings = Field(default_factory=DbSettings)
     jwt: JwtSettings = Field(default_factory=JwtSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)

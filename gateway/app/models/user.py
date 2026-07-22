@@ -23,6 +23,11 @@ class User(SQLModel, table=True):
     is_active: bool = True
     is_superuser: bool = False
     created_at: datetime = Field(default_factory=_now)
+    # ultima attività autenticata (per le "sessioni attive" dell'audit): il JWT è
+    # stateless, quindi tracciamo l'ultimo istante/IP visti (aggiornati con
+    # throttling nel dependency di auth, non a ogni richiesta).
+    last_seen_at: Optional[datetime] = Field(default=None, index=True)
+    last_seen_ip: Optional[str] = None
 
 
 class Group(SQLModel, table=True):

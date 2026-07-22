@@ -11,7 +11,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
@@ -20,6 +20,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, Run, User
+from app.services import audit
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
@@ -116,6 +117,7 @@ def list_project_datasources(
 async def create_db_datasource(
     project_id: int,
     body: DbDatasourceCreate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -173,12 +175,20 @@ async def create_db_datasource(
         session.delete(ds)
         session.commit()
         raise
+    audit.record_audit(
+        session, actor=user, action=audit.DS_CREATE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"project_id": project_id, "connection_id": conn.id,
+                "source_type": body.source_type, "source_ref": body.source_ref},
+        request=request,
+    )
     return _to_out(ds)
 
 
 @router.post("/datasources/{ds_id}/refresh", response_model=RunOut, status_code=status.HTTP_202_ACCEPTED)
 async def refresh_datasource(
     ds_id: int,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -203,13 +213,20 @@ async def refresh_datasource(
         if last.status not in TERMINAL_STATES:
             raise HTTPException(status_code=409, detail="C'è già un refresh in corso per questa datasource")
 
-    return await launch_ingest_run(session, user, ds, conn)
+    run = await launch_ingest_run(session, user, ds, conn)
+    audit.record_audit(
+        session, actor=user, action=audit.DS_REFRESH, target_type="datasource",
+        target_id=ds.id, target_label=ds.name, detail={"run_id": getattr(run, "id", None)},
+        request=request,
+    )
+    return run
 
 
 @router.put("/datasources/{ds_id}/schedule", response_model=DatasourceOut)
 def set_schedule(
     ds_id: int,
     body: ScheduleUpdate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -244,6 +261,11 @@ def set_schedule(
     session.add(ds)
     session.commit()
     session.refresh(ds)
+    audit.record_audit(
+        session, actor=user, action=audit.DS_SCHEDULE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"cron": ds.refresh_schedule or "(disattivato)"}, request=request,
+    )
     return _to_out(ds)
 
 
@@ -309,6 +331,7 @@ def update_datasource(
 @router.delete("/datasources/{ds_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_datasource(
     ds_id: int,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -325,6 +348,7 @@ async def delete_datasource(
     ds = _get_ds(session, ds_id)
     ensure_can(session, user, ds.project_id, Capability.EDIT)
 
+    ds_name, ds_kind = ds.name, ds.kind  # snapshot per l'audit
     bucket, key = ds.bucket, ds.key
     # i run storici che l'hanno pubblicata (o aggiornata) restano, senza il riferimento
     for run in session.exec(select(Run).where(Run.datasource_id == ds.id)).all():
@@ -334,3 +358,7 @@ async def delete_datasource(
     if key:  # datasource database mai ingerita: nessun blob da eliminare
         schedule_blob_deletion(session, bucket, key, reason=f"datasource {ds_id} eliminata")
     session.commit()
+    audit.record_audit(
+        session, actor=user, action=audit.DS_DELETE, target_type="datasource",
+        target_id=ds_id, target_label=ds_name, detail={"kind": ds_kind}, request=request,
+    )

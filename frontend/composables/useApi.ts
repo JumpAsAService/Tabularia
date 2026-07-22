@@ -91,6 +91,35 @@ export function useApi() {
       return await apiFetch('/system/info')
     },
 
+    // carico previsionale degli schedule (heatmap giorno×ora + fasce critiche)
+    async scheduleLoad(days = 7): Promise<ScheduleLoad> {
+      return await apiFetch<ScheduleLoad>(`/schedule/load?days=${days}`)
+    },
+
+    // ── Audit log (solo admin) ────────────────────────────────────────────────
+    async audit(p: {
+      q?: string; action?: string; outcome?: string; target_type?: string
+      limit: number; offset: number
+    }): Promise<Page<AuditEntry>> {
+      const s = new URLSearchParams()
+      if (p.q) s.set('q', p.q)
+      if (p.action) s.set('action', p.action)
+      if (p.outcome) s.set('outcome', p.outcome)
+      if (p.target_type) s.set('target_type', p.target_type)
+      s.set('limit', String(p.limit))
+      s.set('offset', String(p.offset))
+      return await apiFetch<Page<AuditEntry>>(`/audit?${s.toString()}`)
+    },
+    async auditActions(): Promise<string[]> {
+      return await apiFetch<string[]>('/audit/actions')
+    },
+    async auditSessions(): Promise<ActiveSession[]> {
+      return await apiFetch<ActiveSession[]>('/audit/sessions')
+    },
+    async auditAccessActivity(hours = 24): Promise<AccessActivity> {
+      return await apiFetch<AccessActivity>(`/audit/access-activity?hours=${hours}`)
+    },
+
     // grafo di lineage: senza center → grafo completo leggibile; con center →
     // sottografo a monte/valle entro `depth` salti
     async lineage(p?: {
@@ -150,6 +179,70 @@ export interface LineageGraph {
   nodes: LineageNode[]
   edges: LineageEdge[]
   center?: string | null
+}
+
+// ── Carico previsionale degli schedule ───────────────────────────────────────
+export interface ScheduleLoadCell {
+  weekday: number // 0 = lunedì … 6 = domenica
+  hour: number // 0–23
+  count: number
+  peak_concurrent: number
+  critical: boolean
+}
+export interface ScheduleCollision {
+  weekday: number
+  hour: number
+  minute: number
+  count: number
+  queued: number
+  schedules: string[]
+}
+export interface ScheduleLoad {
+  days: number
+  timezone: string
+  worker_capacity: number
+  total_schedules: number
+  total_firings: number
+  cells: ScheduleLoadCell[]
+  collisions: ScheduleCollision[]
+}
+
+// ── Audit log ─────────────────────────────────────────────────────────────
+export interface AuditEntry {
+  id: number
+  ts: string
+  actor_id: number | null
+  actor_label: string
+  action: string
+  outcome: string
+  target_type: string | null
+  target_id: number | null
+  target_label: string | null
+  detail: Record<string, any> | null
+  ip: string | null
+  user_agent: string | null
+}
+export interface ActiveSession {
+  user_id: number
+  email: string
+  full_name: string
+  is_superuser: boolean
+  last_seen_at: string | null
+  last_seen_ip: string | null
+  online: boolean
+}
+export interface AccessBucket {
+  ts: string
+  label: string
+  success: number
+  failure: number
+}
+export interface AccessActivity {
+  hours: number
+  timezone: string
+  buckets: AccessBucket[]
+  total_success: number
+  total_failure: number
 }
 
 // Una pagina di risultati dalle liste paginate (ricerca server-side).

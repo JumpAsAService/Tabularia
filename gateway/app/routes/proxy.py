@@ -25,6 +25,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import Upload, User
+from app.services import audit
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
 
 logger = logging.getLogger(__name__)
@@ -159,7 +160,20 @@ async def export(
 ):
     raw, payload = await _read_json(request)
     ensure_reads_pinned(user, payload, get_settings().engine.bucket)
-    ensure_can_read_keys(session, user, collect_storage_keys(payload))
+    keys = collect_storage_keys(payload)
+    ensure_can_read_keys(session, user, keys)
+    # audit del download: chi scarica cosa (formato, file, sorgente, motore)
+    audit.record_audit(
+        session, actor=user, action=audit.EXPORT_DOWNLOAD,
+        target_type="export", target_label=payload.get("filename") or payload.get("input_key"),
+        detail={
+            "format": payload.get("format"),
+            "filename": payload.get("filename"),
+            "engine": payload.get("engine"),
+            "source_keys": sorted(keys),
+        },
+        request=request,
+    )
     return await _forward(request, "POST", "/tasks/export", content=raw)
 
 

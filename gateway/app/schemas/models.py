@@ -107,6 +107,10 @@ class FlowOut(BaseModel):
     next_run_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # stato dell'ULTIMO run (per l'indicatore nella lista, senza aprire l'expander):
+    # SUCCESS | FAILURE | STARTED | PENDING | null (mai eseguito)
+    last_run_status: Optional[str] = None
+    last_run_at: Optional[datetime] = None
 
 
 class FlowDetail(FlowOut):

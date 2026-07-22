@@ -71,6 +71,9 @@ _MIGRATIONS = [
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS parent_run_id INTEGER REFERENCES runs(id)",
     # Engine di esecuzione scelto per il flusso (polars | duckdb)
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS engine VARCHAR NOT NULL DEFAULT 'polars'",
+    # Audit: ultima attività autenticata (per le "sessioni attive")
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_ip VARCHAR",
 ]
 
 

@@ -8,7 +8,7 @@ Permessi (ereditati dall'albero come sempre):
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
@@ -17,6 +17,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Flow, FlowVersion, Project, Run, User
 from app.models.permission import Capability
+from app.services import audit
 from app.schemas.models import (
     FlowCreate,
     FlowDetail,
@@ -115,8 +116,9 @@ def search_flows(
 
 
 def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
-    """Serializza i flussi risolvendo `owner_name` (nome di chi li ha creati) con
-    una sola query sugli owner coinvolti."""
+    """Serializza i flussi risolvendo `owner_name` (nome di chi li ha creati) e lo
+    stato dell'ULTIMO run, ciascuno con una sola query aggregata sui flussi della
+    pagina."""
     owner_ids = {f.owner_id for f in flows if f.owner_id is not None}
     names: dict[int, str] = {}
     if owner_ids:
@@ -124,10 +126,25 @@ def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
             select(User.id, User.full_name, User.email).where(User.id.in_(owner_ids))
         ).all():
             names[uid] = full_name or email
+
+    # ultimo run per flusso: colonne minime, ordinate crescenti → l'ultimo vince
+    flow_ids = [f.id for f in flows if f.id is not None]
+    last_run: dict[int, tuple[str, "datetime"]] = {}
+    if flow_ids:
+        for fid, status, started in session.exec(
+            select(Run.flow_id, Run.status, Run.started_at)
+            .where(Run.flow_id.in_(flow_ids), Run.kind == "flow")
+            .order_by(Run.started_at)
+        ).all():
+            last_run[fid] = (status, started)
+
     out: list[FlowOut] = []
     for f in flows:
         item = FlowOut.model_validate(f, from_attributes=True)
         item.owner_name = names.get(f.owner_id) if f.owner_id is not None else None
+        lr = last_run.get(f.id)
+        if lr:
+            item.last_run_status, item.last_run_at = lr
         out.append(item)
     return out
 
@@ -151,6 +168,7 @@ def list_flows(project_id: int, user: User = Depends(get_current_user), session:
 def create_flow(
     project_id: int,
     body: FlowCreate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -170,6 +188,11 @@ def create_flow(
     session.commit()
     session.refresh(flow)
     _snapshot_version(session, flow, user, note="creazione")
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_CREATE, target_type="flow",
+        target_id=flow.id, target_label=flow.name,
+        detail={"project_id": project_id, "engine": flow.engine}, request=request,
+    )
     return flow
 
 
@@ -207,6 +230,7 @@ def get_flow(flow_id: int, user: User = Depends(get_current_user), session: Sess
 def update_flow(
     flow_id: int,
     body: FlowUpdate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -214,6 +238,8 @@ def update_flow(
     ensure_can(session, user, flow.project_id, Capability.EDIT)
     if body.definition is not None:
         _authorize_definition_keys(session, user, body.definition)
+    changed = [k for k in ("name", "description", "definition", "project_id", "engine")
+               if getattr(body, k, None) is not None]
 
     if body.project_id is not None and body.project_id != flow.project_id:
         # spostamento: serve EDIT anche sulla cartella di destinazione
@@ -237,6 +263,10 @@ def update_flow(
     session.refresh(flow)
     if body.definition is not None:  # solo i cambi di DAG creano una versione
         _snapshot_version(session, flow, user, note="modifica")
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_UPDATE, target_type="flow",
+        target_id=flow.id, target_label=flow.name, detail={"changed": changed}, request=request,
+    )
     return flow
 
 
@@ -276,6 +306,7 @@ def list_flow_versions(
 def promote_flow_version(
     flow_id: int,
     version: int,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -296,6 +327,10 @@ def promote_flow_version(
     session.refresh(flow)
     _snapshot_version(session, flow, user, note=f"promossa dalla v{version}")
     session.refresh(flow)
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_PROMOTE, target_type="flow",
+        target_id=flow.id, target_label=flow.name, detail={"from_version": version}, request=request,
+    )
     return flow
 
 
@@ -336,9 +371,10 @@ def flow_stats(
 
 
 @router.delete("/flows/{flow_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_flow(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def delete_flow(flow_id: int, request: Request, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.EDIT)
+    flow_name = flow.name  # snapshot prima della cancellazione
 
     # FK da gestire: la cronologia dei run muore col flusso; le datasource
     # pubblicate SOPRAVVIVONO (sono contenuti di catalogo) perdendo solo la
@@ -353,11 +389,16 @@ def delete_flow(flow_id: int, user: User = Depends(get_current_user), session: S
     session.exec(sa_delete(FlowVersion).where(FlowVersion.flow_id == flow_id))
     session.delete(flow)
     session.commit()
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_DELETE, target_type="flow",
+        target_id=flow_id, target_label=flow_name, request=request,
+    )
 
 
 @router.post("/flows/{flow_id}/run-now", status_code=status.HTTP_202_ACCEPTED)
 async def run_flow_now(
     flow_id: int,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -377,6 +418,11 @@ async def run_flow_now(
     ensure_can(session, user, flow.project_id, Capability.RUN)
     run = create_orchestration_run(session, user, flow)
     asyncio.create_task(orchestrate_bg(flow.id, user.id, orch_run_id=run.id))
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_RUN, target_type="flow",
+        target_id=flow.id, target_label=flow.name, detail={"run_id": run.id, "trigger": "manual"},
+        request=request,
+    )
     return {"status": "started", "flow_id": flow.id, "run_id": run.id}
 
 
@@ -384,6 +430,7 @@ async def run_flow_now(
 def set_flow_schedule(
     flow_id: int,
     body: FlowScheduleUpdate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -418,4 +465,9 @@ def set_flow_schedule(
     session.add(flow)
     session.commit()
     session.refresh(flow)
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_SCHEDULE, target_type="flow",
+        target_id=flow.id, target_label=flow.name,
+        detail={"cron": flow.run_schedule or "(disattivato)"}, request=request,
+    )
     return flow

@@ -14,6 +14,7 @@ import {
   Cpu,
   PieChart,
   Share2,
+  ScrollText,
   Settings,
   Moon,
   Sun,
@@ -57,6 +58,7 @@ const links = computed(() => [
     ? [
         { to: '/queue', label: 'Queue', icon: Cpu },
         { to: '/monitoring', label: 'Monitoring', icon: Activity },
+        { to: '/audit', label: 'Audit', icon: ScrollText },
         { to: '/admin', label: 'Admin', icon: Shield },
       ]
     : []),

@@ -18,7 +18,7 @@ l'engine viaggia ancora cifrata (`password_encrypted`, stessa chiave).
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
@@ -28,6 +28,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, User
+from app.services import audit
 from app.models.permission import Capability
 from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
 from app.services.pagination import paginate
@@ -159,6 +160,7 @@ def list_project_connections(
 def create_connection(
     project_id: int,
     body: ConnectionCreate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -189,6 +191,11 @@ def create_connection(
     session.add(conn)
     session.commit()
     session.refresh(conn)
+    audit.record_audit(
+        session, actor=user, action=audit.CONN_CREATE, target_type="connection",
+        target_id=conn.id, target_label=conn.name,
+        detail={"project_id": project_id, "db_type": conn.db_type, "host": conn.host}, request=request,
+    )
     return _to_out(conn)
 
 
@@ -196,6 +203,7 @@ def create_connection(
 def update_connection(
     conn_id: int,
     body: ConnectionUpdate,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -228,12 +236,17 @@ def update_connection(
     session.add(conn)
     session.commit()
     session.refresh(conn)
+    audit.record_audit(
+        session, actor=user, action=audit.CONN_UPDATE, target_type="connection",
+        target_id=conn.id, target_label=conn.name, request=request,
+    )
     return _to_out(conn)
 
 
 @router.delete("/connections/{conn_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_connection(
     conn_id: int,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -245,8 +258,13 @@ def delete_connection(
             status_code=409,
             detail="La connessione è usata da una o più datasource: eliminale o spostale prima",
         )
+    conn_name, conn_type = conn.name, conn.db_type
     session.delete(conn)
     session.commit()
+    audit.record_audit(
+        session, actor=user, action=audit.CONN_DELETE, target_type="connection",
+        target_id=conn_id, target_label=conn_name, detail={"db_type": conn_type}, request=request,
+    )
 
 
 # ── Ispezione (via engine) ────────────────────────────────────────────────────

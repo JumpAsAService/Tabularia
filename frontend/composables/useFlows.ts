@@ -13,6 +13,9 @@ export interface FlowSummary {
   next_run_at: string | null
   created_at: string | null
   updated_at: string | null
+  // stato dell'ultimo run: SUCCESS | FAILURE | STARTED | PENDING | null (mai eseguito)
+  last_run_status: string | null
+  last_run_at: string | null
 }
 
 export interface FlowDetail extends FlowSummary {

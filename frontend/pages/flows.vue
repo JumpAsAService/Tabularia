@@ -5,6 +5,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
+  CheckCircle2, XCircle, LoaderCircle, Circle,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
@@ -80,6 +81,17 @@ async function fetchDetail(id: number) {
   } finally {
     await skeletonPad(t0)
     detail[id].loading = false
+  }
+}
+
+// indicatore dello stato dell'ultimo run (senza aprire l'expander)
+function runStatus(f: FlowSummary) {
+  switch (f.last_run_status) {
+    case 'SUCCESS': return { icon: CheckCircle2, cls: 'ok', label: 'Ultimo run: completato' }
+    case 'FAILURE': return { icon: XCircle, cls: 'fail', label: 'Ultimo run: fallito' }
+    case 'STARTED':
+    case 'PENDING': return { icon: LoaderCircle, cls: 'run', label: 'Esecuzione in corso' }
+    default: return { icon: Circle, cls: 'none', label: 'Mai eseguito' }
   }
 }
 
@@ -175,6 +187,9 @@ async function saveSchedule(cron: string) {
     <!-- panoramica: calendar plot dell'attività (drill-down orario al click) -->
     <RunCalendar />
 
+    <!-- carico previsionale degli schedule: fasce orarie critiche (collisioni) -->
+    <ScheduleLoad />
+
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="5" />
     <p v-else-if="!items.length" class="muted">
@@ -186,7 +201,16 @@ async function saveSchedule(cron: string) {
         <div class="flow-row">
           <button class="flow-head" @click="toggle(f)">
             <ChevronRight :size="14" class="chev" :class="{ rot: expanded === f.id }" />
-            <span class="fname"><Workflow :size="14" /> {{ f.name }}</span>
+            <span class="fname">
+              <component
+                :is="runStatus(f).icon"
+                :size="14"
+                class="rstat"
+                :class="[runStatus(f).cls, { spin: runStatus(f).cls === 'run' }]"
+                :title="runStatus(f).label"
+              />
+              {{ f.name }}
+            </span>
             <span class="folder muted"><Folder :size="12" /> {{ folderName[f.project_id] ?? `#${f.project_id}` }}</span>
             <span v-if="f.run_schedule" class="sched-badge" :title="f.run_schedule"><CalendarClock :size="11" /> schedulato</span>
             <span class="when muted">{{ fmtDate(f.updated_at) }}</span>
@@ -267,6 +291,11 @@ async function saveSchedule(cron: string) {
 .chev { color: var(--muted); transition: transform 0.15s; flex: none; }
 .chev.rot { transform: rotate(90deg); }
 .fname { display: inline-flex; align-items: center; gap: 7px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rstat { flex: none; }
+.rstat.ok { color: var(--accent-2); }
+.rstat.fail { color: var(--danger); }
+.rstat.run { color: var(--accent); }
+.rstat.none { color: var(--muted); opacity: 0.5; }
 .folder { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; }
 .sched-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--accent-2); }
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
