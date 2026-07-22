@@ -1,0 +1,52 @@
+{
+  "realm": "tabularia",
+  "enabled": true,
+  "displayName": "Tabularia (SSO example)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "groups": [
+    { "name": "analytics" },
+    { "name": "finance" },
+    { "name": "tabularia-admins" }
+  ],
+  "clients": [
+    {
+      "clientId": "tabularia-gateway",
+      "name": "Tabularia gateway",
+      "description": "Confidential OIDC client for the Tabularia control plane.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "tabularia-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8000/auth/sso/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "claim.name": "groups",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

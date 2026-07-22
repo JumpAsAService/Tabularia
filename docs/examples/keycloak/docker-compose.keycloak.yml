@@ -1,0 +1,19 @@
+# Dev Keycloak that auto-imports the `tabularia` realm (docs example only).
+# Not part of the Tabularia stack — run it standalone to try SSO group mapping:
+#   docker compose -f docker-compose.keycloak.yml up -d
+# Admin console: http://localhost:8080  (admin / admin)
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: tabularia-keycloak-example
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      # realm files in this dir are imported on first start
+      - ./:/opt/keycloak/data/import:ro

@@ -140,6 +140,10 @@ out/       run results, downloadable as CSV/Excel
 - **Audit log**: append-only, with text snapshots that survive rename/delete. Captures
   logins, CRUD, flow runs, data exports, and permission changes; admin tab with a
   24-hour access-activity chart. Secrets (DB passwords) are encrypted at rest (Fernet).
+- **SSO / external group mapping** *(design proposal)*: because RBAC reads only local
+  group tables, mapping an IdP's groups/roles onto Tabularia groups is a name-keyed
+  sync at login. See [`docs/design/sso-group-mapping.md`](docs/design/sso-group-mapping.md)
+  and the runnable Keycloak example in [`docs/examples/keycloak/`](docs/examples/keycloak/).
 
 ## Scheduling & timezone
 
