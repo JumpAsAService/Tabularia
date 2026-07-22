@@ -1,0 +1,34 @@
+// Español
+export default {
+  nav: {
+    explore: 'Explorar',
+    flows: 'Flujos',
+    datasources: 'Fuentes de datos',
+    lineage: 'Linaje',
+    viewer: 'Visor',
+    connections: 'Conexiones',
+    runs: 'Ejecuciones',
+    queue: 'Cola',
+    monitoring: 'Monitorización',
+    audit: 'Auditoría',
+    admin: 'Admin',
+  },
+  settings: {
+    title: 'Ajustes',
+    theme: 'Tema',
+    light: 'Claro',
+    dark: 'Oscuro',
+    engine: 'Motor preferido',
+    engineHint: 'Predeterminado para el Visor y los nuevos flujos. Al crear, se sigue eligiendo a mano.',
+    language: 'Idioma',
+    signOut: 'Cerrar sesión',
+    admin: 'admin',
+  },
+  login: {
+    subtitle: 'Inicia sesión para continuar',
+    email: 'Correo',
+    password: 'Contraseña',
+    signIn: 'Entrar',
+    signingIn: 'Entrando…',
+  },
+}

@@ -2,6 +2,7 @@
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   LogOut,
   FolderTree,
@@ -24,9 +25,11 @@ import {
 // Viewer che sfruttano tutta la larghezza. Le liste restano centrate (default).
 defineProps<{ fluid?: boolean }>()
 
+const { t } = useI18n()
 const { user, fetchMe, logout } = useAuth()
 const { theme, setTheme } = useTheme()
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
+const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
 
 const isSuper = computed(() => !!user.value?.is_superuser)
@@ -35,6 +38,8 @@ const isSuper = computed(() => !!user.value?.is_superuser)
 const engineOptions = computed(() =>
   engineCatalog.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label })),
 )
+// opzioni lingua per il selettore
+const localeOptions = computed(() => locales.map((l) => ({ value: l.code, label: l.label })))
 
 // menù impostazioni (ingranaggio in alto a destra): nome utente + tema + motore + logout
 const menuOpen = ref(false)
@@ -47,19 +52,19 @@ function closeMenu() {
 }
 
 const links = computed(() => [
-  { to: '/', label: 'Explore', icon: FolderTree },
-  { to: '/flows', label: 'Flows', icon: Workflow },
-  { to: '/datasources', label: 'Datasources', icon: Database },
-  { to: '/lineage', label: 'Lineage', icon: Share2 },
-  { to: '/viewer', label: 'Viewer', icon: PieChart },
-  { to: '/connections', label: 'Connections', icon: Plug },
-  { to: '/runs', label: 'Esecuzioni', icon: History },
+  { to: '/', label: t('nav.explore'), icon: FolderTree },
+  { to: '/flows', label: t('nav.flows'), icon: Workflow },
+  { to: '/datasources', label: t('nav.datasources'), icon: Database },
+  { to: '/lineage', label: t('nav.lineage'), icon: Share2 },
+  { to: '/viewer', label: t('nav.viewer'), icon: PieChart },
+  { to: '/connections', label: t('nav.connections'), icon: Plug },
+  { to: '/runs', label: t('nav.runs'), icon: History },
   ...(isSuper.value
     ? [
-        { to: '/queue', label: 'Queue', icon: Cpu },
-        { to: '/monitoring', label: 'Monitoring', icon: Activity },
-        { to: '/audit', label: 'Audit', icon: ScrollText },
-        { to: '/admin', label: 'Admin', icon: Shield },
+        { to: '/queue', label: t('nav.queue'), icon: Cpu },
+        { to: '/monitoring', label: t('nav.monitoring'), icon: Activity },
+        { to: '/audit', label: t('nav.audit'), icon: ScrollText },
+        { to: '/admin', label: t('nav.admin'), icon: Shield },
       ]
     : []),
 ])
@@ -96,7 +101,7 @@ onMounted(async () => {
         <button
           class="gear"
           :class="{ on: menuOpen }"
-          title="Impostazioni"
+          :title="t('settings.title')"
           @click="toggleMenu"
         >
           <Settings :size="16" />
@@ -107,42 +112,52 @@ onMounted(async () => {
           <div class="menu">
             <div v-if="user" class="menu-user">
               <span class="menu-email">{{ user.email }}</span>
-              <span v-if="isSuper" class="menu-role">admin</span>
+              <span v-if="isSuper" class="menu-role">{{ t('settings.admin') }}</span>
             </div>
 
             <div class="menu-sep" />
 
-            <div class="menu-label">Tema</div>
+            <div class="menu-label">{{ t('settings.theme') }}</div>
             <div class="theme-switch">
               <button
                 :class="{ active: theme === 'light' }"
                 @click="setTheme('light')"
               >
-                <Sun :size="14" /> Chiaro
+                <Sun :size="14" /> {{ t('settings.light') }}
               </button>
               <button
                 :class="{ active: theme === 'dark' }"
                 @click="setTheme('dark')"
               >
-                <Moon :size="14" /> Scuro
+                <Moon :size="14" /> {{ t('settings.dark') }}
               </button>
             </div>
 
             <div class="menu-sep" />
 
-            <div class="menu-label">Motore preferito</div>
+            <div class="menu-label">{{ t('settings.language') }}</div>
+            <Select
+              :model-value="locale"
+              :options="localeOptions"
+              class="engpref"
+              @update:model-value="setLocale($event as any)"
+            />
+
+            <div class="menu-sep" />
+
+            <div class="menu-label">{{ t('settings.engine') }}</div>
             <Select
               :model-value="preferredEngine"
               :options="engineOptions"
               class="engpref"
               @update:model-value="setPreferredEngine($event as string)"
             />
-            <span class="menu-hint">Default per Viewer e nuovi flussi. Alla creazione resta comunque scelto a mano.</span>
+            <span class="menu-hint">{{ t('settings.engineHint') }}</span>
 
             <div class="menu-sep" />
 
             <button class="menu-item" @click="closeMenu(); logout()">
-              <LogOut :size="14" /> Esci
+              <LogOut :size="14" /> {{ t('settings.signOut') }}
             </button>
           </div>
         </template>

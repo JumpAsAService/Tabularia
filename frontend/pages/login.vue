@@ -29,18 +29,18 @@ async function onSubmit() {
     <form class="login-card" @submit.prevent="onSubmit">
       <div class="brand-mark"><img src="/logo.png" alt="Tabularia" /></div>
       <h1 class="brand">Tabularia</h1>
-      <p class="muted sub">Accedi per continuare</p>
+      <p class="muted sub">{{ $t('login.subtitle') }}</p>
 
-      <label>Email</label>
+      <label>{{ $t('login.email') }}</label>
       <input v-model="email" type="email" autocomplete="username" required />
 
-      <label>Password</label>
+      <label>{{ $t('login.password') }}</label>
       <input v-model="password" type="password" autocomplete="current-password" required />
 
       <p v-if="error" class="err">{{ error }}</p>
 
       <button class="primary" type="submit" :disabled="busy">
-        <LogIn :size="15" /> {{ busy ? 'Accesso…' : 'Accedi' }}
+        <LogIn :size="15" /> {{ busy ? $t('login.signingIn') : $t('login.signIn') }}
       </button>
     </form>
   </div>
