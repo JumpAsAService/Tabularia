@@ -85,8 +85,10 @@ const upstream = computed(() => neighbors('up'))
 const downstream = computed(() => neighbors('down'))
 
 // ── layout a livelli (longest-path da radici) ────────────────────────────────
-const COL_W = 250
-const ROW_H = 92
+// distanza tra i livelli (orizzontale) e tra i nodi di uno stesso livello
+// (verticale). COL_W poco più della larghezza nodo (180px) → colonne ravvicinate.
+const COL_W = 210
+const ROW_H = 80
 function layout(nodes: LineageNode[], edges: LineageEdge[]): Map<string, { x: number; y: number }> {
   const layer = new Map<string, number>()
   nodes.forEach((n) => layer.set(n.id, 0))
