@@ -79,52 +79,52 @@ function pickDatasource(id: number | null) {
 
 <template>
   <div class="nodepanel">
-    <div v-if="!node" class="muted">Nessun nodo selezionato.</div>
+    <div v-if="!node" class="muted">{{ $t('nodePanel.noNodeSelected') }}</div>
 
     <template v-else-if="node.type === 'comment'">
       <div class="row">
-        <h3><StickyNote :size="15" /> Nota</h3>
-        <button class="del" title="Elimina nota (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><StickyNote :size="15" /> {{ $t('nodePanel.noteTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteNoteTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
-      <label>Testo della nota</label>
+      <label>{{ $t('nodePanel.noteTextLabel') }}</label>
       <textarea
         class="commenttext"
         :value="node.data.text || ''"
         rows="6"
-        placeholder="Scrivi una nota…"
+        :placeholder="$t('nodePanel.noteTextPlaceholder')"
         @input="emit('update', { text: ($event.target as HTMLTextAreaElement).value })"
       />
-      <p class="muted outhint">Solo un'annotazione: non fa parte del flusso e non viene eseguita.</p>
+      <p class="muted outhint">{{ $t('nodePanel.noteHint') }}</p>
     </template>
 
     <template v-else-if="isSource()">
       <div class="row">
-        <h3><FileText :size="15" /> Sorgente</h3>
-        <button class="del" title="Elimina sorgente (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><FileText :size="15" /> {{ $t('nodePanel.sourceTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteSourceTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
       <template v-if="node.data.parquetKey">
         <p><strong>{{ node.data.filename }}</strong></p>
-        <p class="muted">{{ node.data.rows }} righe · {{ (node.data.columns || []).length }} colonne</p>
+        <p class="muted">{{ $t('nodePanel.rowsColsSummary', { rows: node.data.rows, cols: (node.data.columns || []).length }) }}</p>
         <p class="muted mono">{{ node.data.parquetKey }}</p>
         <div class="exportbar">
-          <label>Scarica i dati di questo nodo</label>
+          <label>{{ $t('nodePanel.downloadNodeData') }}</label>
           <div class="exportbtns">
             <button @click="emit('export', 'csv')"><Download :size="14" /> CSV</button>
             <button @click="emit('export', 'xlsx')"><FileSpreadsheet :size="14" /> Excel</button>
           </div>
         </div>
       </template>
-      <p v-else class="muted">Carica un file dalla toolbar per popolare la sorgente.</p>
+      <p v-else class="muted">{{ $t('nodePanel.sourceEmptyHint') }}</p>
 
       <div class="dspick">
-        <label><Database :size="12" /> oppure usa una datasource del catalogo</label>
+        <label><Database :size="12" /> {{ $t('nodePanel.orUseCatalogDatasource') }}</label>
         <Select
           searchable
           :model-value="node.data.datasourceId ?? null"
           :options="(datasources ?? [])
             .filter((d) => d.key)
-            .map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${d.rows} righe)` : d.name }))"
-          placeholder="scegli una datasource…"
+            .map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${$t('nodePanel.rowsCountLabel', { rows: d.rows })})` : d.name }))"
+          :placeholder="$t('nodePanel.chooseDatasourcePlaceholder')"
           @update:model-value="pickDatasource"
         />
       </div>
@@ -133,41 +133,41 @@ function pickDatasource(id: number | null) {
     <!-- nodo Output: dove finisce il risultato della catena -->
     <template v-else-if="node.type === 'output'">
       <div class="row">
-        <h3><HardDriveDownload :size="15" /> Output</h3>
-        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><HardDriveDownload :size="15" /> {{ $t('nodePanel.outputTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteNodeTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
 
-      <label>Destinazione</label>
+      <label>{{ $t('nodePanel.destinationLabel') }}</label>
       <Select
         :model-value="node.data.destType ?? 'datasource'"
         :options="[
-          { value: 'datasource', label: 'Datasource Tabularia' },
-          { value: 'database', label: 'Tabella di database' },
-          { value: 's3', label: 'File su S3 / object storage' },
+          { value: 'datasource', label: $t('nodePanel.destTypeDatasource') },
+          { value: 'database', label: $t('nodePanel.destTypeDatabaseTable') },
+          { value: 's3', label: $t('nodePanel.destTypeS3') },
         ]"
         @update:model-value="(v: any) => emit('update', { destType: v })"
       />
 
       <template v-if="(node.data.destType ?? 'datasource') === 'datasource'">
-        <label>Nome della datasource</label>
+        <label>{{ $t('nodePanel.datasourceNameLabel') }}</label>
         <input
           :value="node.data.name ?? ''"
           type="text"
-          placeholder="es. vendite_pulite_2024"
+          :placeholder="$t('nodePanel.datasourceNamePlaceholder')"
           @input="emit('update', { name: ($event.target as HTMLInputElement).value })"
         />
-        <label>Cartella</label>
+        <label>{{ $t('nodePanel.folderLabel') }}</label>
         <Select
           :model-value="node.data.projectId ?? null"
           :options="(projects ?? []).map((p) => ({ value: p.id, label: p.name }))"
-          placeholder="cartella…"
+          :placeholder="$t('nodePanel.folderPlaceholder')"
           @update:model-value="(v: any) => emit('update', { projectId: v })"
         />
-        <label>Descrizione (opzionale)</label>
+        <label>{{ $t('nodePanel.descriptionOptionalLabel') }}</label>
         <input
           :value="node.data.description ?? ''"
           type="text"
-          placeholder="cosa contiene, per chi"
+          :placeholder="$t('nodePanel.descriptionPlaceholder')"
           @input="emit('update', { description: ($event.target as HTMLInputElement).value })"
         />
         <label class="chk ovw">
@@ -176,41 +176,40 @@ function pickDatasource(id: number | null) {
             :checked="node.data.overwrite ?? false"
             @change="emit('update', { overwrite: ($event.target as HTMLInputElement).checked })"
           />
-          Sovrascrivi se esiste già
+          {{ $t('nodePanel.overwriteIfExists') }}
         </label>
         <p class="muted outhint">
-          Se una datasource con questo nome esiste già nella cartella, ne aggiorna i dati
-          (mantenendo id e nome, così i flussi che la usano non si rompono) invece di dare errore.
+          {{ $t('nodePanel.overwriteHint') }}
         </p>
       </template>
 
       <!-- destinazione S3: connessione object storage + chiave + formato + partizioni -->
       <template v-else-if="(node.data.destType ?? 'datasource') === 's3'">
-        <label>Connessione S3</label>
+        <label>{{ $t('nodePanel.s3ConnectionLabel') }}</label>
         <Select
           :model-value="node.data.connectionId ?? null"
           :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
           }))"
-          placeholder="connessione…"
+          :placeholder="$t('nodePanel.connectionPlaceholder')"
           @update:model-value="(v: any) => emit('update', { connectionId: v })"
         />
-        <label>Bucket <span class="muted">(vuoto = quello della connessione)</span></label>
+        <label>Bucket <span class="muted">{{ $t('nodePanel.bucketHint') }}</span></label>
         <input
           :value="node.data.s3Bucket ?? ''"
           type="text"
-          placeholder="es. exports-cliente"
+          :placeholder="$t('nodePanel.bucketPlaceholder')"
           @input="emit('update', { s3Bucket: ($event.target as HTMLInputElement).value })"
         />
-        <label>Chiave / percorso</label>
+        <label>{{ $t('nodePanel.keyPathLabel') }}</label>
         <input
           :value="node.data.s3Key ?? ''"
           type="text"
-          placeholder="es. exports/vendite.parquet — o un prefisso se partizioni"
+          :placeholder="$t('nodePanel.s3KeyPlaceholder')"
           @input="emit('update', { s3Key: ($event.target as HTMLInputElement).value })"
         />
-        <label>Formato</label>
+        <label>{{ $t('nodePanel.formatLabel') }}</label>
         <Select
           :model-value="node.data.s3Format ?? 'parquet'"
           :options="[
@@ -219,7 +218,7 @@ function pickDatasource(id: number | null) {
           ]"
           @update:model-value="(v: any) => emit('update', { s3Format: v })"
         />
-        <label>Partiziona per (hive: colonna=valore/…)</label>
+        <label>{{ $t('nodePanel.partitionByLabel') }}</label>
         <div v-if="inputColumns.length" class="partchecks">
           <label v-for="c in inputColumns" :key="c.name" class="chk">
             <input
@@ -230,50 +229,50 @@ function pickDatasource(id: number | null) {
             {{ c.name }}
           </label>
         </div>
-        <p v-else class="muted outhint">Collega l'output a una catena con dati per scegliere le colonne.</p>
+        <p v-else class="muted outhint">{{ $t('nodePanel.partitionNoColumnsHint') }}</p>
         <p class="muted outhint">
-          Senza partizioni scrive un singolo oggetto alla chiave indicata; con le
-          partizioni scrive un dataset <code>colonna=valore/…</code> sotto il prefisso
-          (le run successive sovrascrivono gli stessi percorsi).
+          {{ $t('nodePanel.partitionHintPre') }}
+          <code>{{ $t('nodePanel.partitionHintFormat') }}</code>
+          {{ $t('nodePanel.partitionHintPost') }}
         </p>
       </template>
 
       <template v-else>
-        <label>Connessione</label>
+        <label>{{ $t('nodePanel.connectionLabel') }}</label>
         <Select
           :model-value="node.data.connectionId ?? null"
           :options="(connections ?? []).filter((c) => c.db_type !== 's3').map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
           }))"
-          placeholder="connessione…"
+          :placeholder="$t('nodePanel.connectionPlaceholder')"
           @update:model-value="(v: any) => emit('update', { connectionId: v })"
         />
-        <label>Tabella di destinazione (anche schema.tabella)</label>
+        <label>{{ $t('nodePanel.destTableLabel') }}</label>
         <input
           :value="node.data.table ?? ''"
           type="text"
-          placeholder="es. analytics.vendite_pulite"
+          :placeholder="$t('nodePanel.destTablePlaceholder')"
           @input="emit('update', { table: ($event.target as HTMLInputElement).value })"
         />
-        <label>Modalità di scrittura</label>
+        <label>{{ $t('nodePanel.writeModeLabel') }}</label>
         <Select
           :model-value="node.data.mode ?? 'append'"
           :options="[
-            { value: 'append', label: 'Accoda (INSERT)' },
-            { value: 'replace', label: 'Sostituisci (TRUNCATE + INSERT)' },
+            { value: 'append', label: $t('nodePanel.modeAppend') },
+            { value: 'replace', label: $t('nodePanel.modeReplace') },
           ]"
           @update:model-value="(v: any) => emit('update', { mode: v })"
         />
-        <label>SQL post-insert (opzionale, statement separati da ;)</label>
+        <label>{{ $t('nodePanel.postSqlLabel') }}</label>
         <textarea
           :value="node.data.postSql ?? ''"
           rows="3"
-          placeholder="es. ANALYZE analytics.vendite_pulite"
+          :placeholder="$t('nodePanel.postSqlPlaceholder')"
           @input="emit('update', { postSql: ($event.target as HTMLTextAreaElement).value })"
         />
         <p class="muted outhint">
-          La tabella viene creata se non esiste, con i tipi dello schema dell'output.
+          {{ $t('nodePanel.tableAutoCreateHint') }}
         </p>
       </template>
     </template>
@@ -281,19 +280,18 @@ function pickDatasource(id: number | null) {
     <!-- nodo di controllo: Refresh di una datasource prima del run -->
     <template v-else-if="node.type === 'refresh'">
       <div class="row">
-        <h3><RefreshCw :size="15" /> Refresh datasource</h3>
-        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><RefreshCw :size="15" /> {{ $t('nodePanel.refreshDatasourceTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteNodeTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
       <p class="muted outhint">
-        Al run, questa datasource viene aggiornata (ri-eseguita dalla sorgente) e il flusso
-        attende prima di procedere: così gli Output girano su dati freschi.
+        {{ $t('nodePanel.refreshHint') }}
       </p>
-      <label>Datasource da aggiornare</label>
+      <label>{{ $t('nodePanel.datasourceToRefreshLabel') }}</label>
       <Select
         searchable
         :model-value="node.data.datasourceId ?? null"
         :options="(datasources ?? []).filter((d) => d.kind === 'database').map((d) => ({ value: d.id, label: d.name }))"
-        placeholder="scegli una datasource database…"
+        :placeholder="$t('nodePanel.chooseDbDatasourcePlaceholder')"
         @update:model-value="pickRefreshDatasource"
       />
     </template>
@@ -301,18 +299,17 @@ function pickDatasource(id: number | null) {
     <!-- nodo di controllo: Esegui un altro flusso -->
     <template v-else-if="node.type === 'runflow'">
       <div class="row">
-        <h3><PlayCircle :size="15" /> Esegui flusso</h3>
-        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><PlayCircle :size="15" /> {{ $t('nodePanel.runFlowTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteNodeTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
       <p class="muted outhint">
-        Al run, dopo gli Output di questo flusso, viene eseguito il flusso scelto (i suoi
-        nodi Output). Utile per concatenare pipeline. Cicli bloccati automaticamente.
+        {{ $t('nodePanel.runFlowHint') }}
       </p>
-      <label>Flusso da eseguire</label>
+      <label>{{ $t('nodePanel.flowToRunLabel') }}</label>
       <Select
         :model-value="node.data.flowId ?? null"
         :options="(flows ?? []).filter((f) => f.id !== currentFlowId).map((f) => ({ value: f.id, label: f.name }))"
-        placeholder="scegli un flusso…"
+        :placeholder="$t('nodePanel.chooseFlowPlaceholder')"
         @update:model-value="pickRunFlow"
       />
     </template>
@@ -320,24 +317,24 @@ function pickDatasource(id: number | null) {
     <!-- container foreach -->
     <template v-else-if="node.type === 'foreach'">
       <div class="row">
-        <h3><Repeat :size="15" /> Ciclo foreach</h3>
-        <button class="del" title="Elimina container e corpo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><Repeat :size="15" /> {{ $t('nodePanel.foreachLoopTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteForeachTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
 
       <div class="joinhelp">
-        <strong class="joinhead"><Repeat :size="13" /> How it works</strong>
+        <strong class="joinhead"><Repeat :size="13" /> {{ $t('nodePanel.howItWorksTitle') }}</strong>
         <ol>
-          <li><span class="tag">top-left</span> input = the data to transform</li>
-          <li><span class="tag right">bottom-left</span> input = the <strong>driver</strong>: one row = one iteration</li>
-          <li><strong>drag the operations inside</strong> the box: they are the loop body</li>
-          <li>in the values use the driver's <code v-pre>{{column}}</code> placeholders</li>
-          <li>the output is the <strong>append</strong> of every iteration's result</li>
+          <li v-html="$t('nodePanel.foreachStepTopLeft')" />
+          <li v-html="$t('nodePanel.foreachStepBottomLeft')" />
+          <li v-html="$t('nodePanel.foreachStepDragOps')" />
+          <li v-html="$t('nodePanel.foreachStepPlaceholders')" />
+          <li v-html="$t('nodePanel.foreachStepOutput')" />
         </ol>
         <p v-if="rightColumns.length" class="phlist">
-          Available placeholders:
+          {{ $t('nodePanel.availablePlaceholders') }}
           <code v-for="c in rightColumns" :key="c.name" v-text="`{{${c.name}}}`" />
         </p>
-        <p v-else class="muted phlist">No driver connected: define the static iterations below.</p>
+        <p v-else class="muted phlist">{{ $t('nodePanel.noDriverConnectedHint') }}</p>
       </div>
 
       <ParamForm
@@ -351,7 +348,7 @@ function pickDatasource(id: number | null) {
       />
 
       <div class="exportbar">
-        <label>Scarica l'output del ciclo</label>
+        <label>{{ $t('nodePanel.downloadLoopOutput') }}</label>
         <div class="exportbtns">
           <button @click="emit('export', 'csv')"><Download :size="14" /> CSV</button>
           <button @click="emit('export', 'xlsx')"><FileSpreadsheet :size="14" /> Excel</button>
@@ -361,11 +358,11 @@ function pickDatasource(id: number | null) {
 
     <template v-else>
       <div class="row">
-        <h3><Settings :size="15" /> Operazione</h3>
-        <button class="del" title="Elimina nodo (Canc)" @click="emit('delete')"><Trash2 :size="14" /></button>
+        <h3><Settings :size="15" /> {{ $t('nodePanel.operationTitle') }}</h3>
+        <button class="del" :title="$t('nodePanel.deleteNodeTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
 
-      <label>Tipo</label>
+      <label>{{ $t('nodePanel.typeLabel') }}</label>
       <Select
         :model-value="node.data.opType"
         :options="operations.filter((o) => o !== 'foreach').map((op) => ({ value: op, label: opMeta(op).label || op }))"
@@ -373,20 +370,20 @@ function pickDatasource(id: number | null) {
       />
 
       <div v-if="node.data.opType === 'join'" class="joinhelp">
-        <strong class="joinhead"><Link2 :size="13" /> How to connect the join</strong>
+        <strong class="joinhead"><Link2 :size="13" /> {{ $t('nodePanel.howToConnectJoinTitle') }}</strong>
         <ol>
-          <li><span class="tag">top-left</span> input = the previous step in the chain — the <strong>left</strong> table</li>
-          <li><span class="tag right">bottom-left</span> input = drag here the <strong>branch/source</strong> to join — the <strong>right</strong> table</li>
-          <li>then pick the join type and the key columns below (<code>left</code>/<code>right</code> joins follow this order)</li>
+          <li v-html="$t('nodePanel.joinStepTopLeft')" />
+          <li v-html="$t('nodePanel.joinStepBottomLeft')" />
+          <li v-html="$t('nodePanel.joinStepPickType')" />
         </ol>
       </div>
 
       <div v-if="node.data.opType === 'union'" class="joinhelp">
-        <strong class="joinhead"><Link2 :size="13" /> How to connect the union</strong>
+        <strong class="joinhead"><Link2 :size="13" /> {{ $t('nodePanel.howToConnectUnionTitle') }}</strong>
         <ol>
-          <li><span class="tag">top-left</span> input = the previous step in the chain</li>
-          <li><span class="tag right">bottom-left</span> input = the <strong>branch/source</strong> whose rows are appended below</li>
-          <li>to append more sources, chain several union nodes</li>
+          <li v-html="$t('nodePanel.unionStepTopLeft')" />
+          <li v-html="$t('nodePanel.unionStepBottomLeft')" />
+          <li v-html="$t('nodePanel.unionStepChain')" />
         </ol>
       </div>
 
@@ -404,7 +401,7 @@ function pickDatasource(id: number | null) {
       />
 
       <div class="exportbar">
-        <label>Scarica i dati di questo nodo</label>
+        <label>{{ $t('nodePanel.downloadNodeData') }}</label>
         <div class="exportbtns">
           <button @click="emit('export', 'csv')"><Download :size="14" /> CSV</button>
           <button @click="emit('export', 'xlsx')"><FileSpreadsheet :size="14" /> Excel</button>

@@ -3,8 +3,11 @@
 // Il tipo viaggia nel dataTransfer (application/tabularia), letto dal drop
 // handler di FlowEditor.
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { GripVertical, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
+
+const { t } = useI18n()
 
 const props = defineProps<{ operations: string[] }>()
 
@@ -26,10 +29,10 @@ const hasForeach = computed(() => props.operations.includes('foreach'))
 // visibilità delle singole voci fisse e dei rispettivi gruppi
 const showSource = computed(() => match(SOURCE_META.label, 'source'))
 const showForeach = computed(() => hasForeach.value && match(opMeta('foreach').label || 'foreach', 'foreach'))
-const showRefresh = computed(() => match('Refresh datasource', 'refresh'))
-const showRunflow = computed(() => match('Esegui flusso', 'runflow'))
-const showOutput = computed(() => match('Output datasource database', 'output'))
-const showComment = computed(() => match('Nota', 'comment', 'commento'))
+const showRefresh = computed(() => match(t('opSidebar.refreshDatasourceLabel'), 'refresh'))
+const showRunflow = computed(() => match(t('opSidebar.runFlowLabel'), 'runflow'))
+const showOutput = computed(() => match(t('opSidebar.outputLabel'), 'output'))
+const showComment = computed(() => match(t('opSidebar.noteLabel'), 'comment', 'commento'))
 const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value)
 const noResults = computed(
   () =>
@@ -50,12 +53,12 @@ function onDragStart(ev: DragEvent, kind: string) {
   <aside class="opsidebar">
     <div class="searchbar">
       <Search :size="14" class="search-icon" />
-      <input v-model="query" type="text" class="search-input" placeholder="Cerca componente…" />
-      <button v-if="query" class="search-clear" title="Pulisci" @click="query = ''">✕</button>
+      <input v-model="query" type="text" class="search-input" :placeholder="$t('opSidebar.searchPlaceholder')" />
+      <button v-if="query" class="search-clear" :title="$t('opSidebar.clearSearch')" @click="query = ''">✕</button>
     </div>
 
     <template v-if="showSource">
-      <div class="group-title">Sorgenti</div>
+      <div class="group-title">{{ $t('opSidebar.sourcesGroup') }}</div>
       <div
         class="item"
         draggable="true"
@@ -69,7 +72,7 @@ function onDragStart(ev: DragEvent, kind: string) {
     </template>
 
     <template v-if="transformOps.length">
-      <div class="group-title">Trasformazioni</div>
+      <div class="group-title">{{ $t('opSidebar.transformsGroup') }}</div>
       <div
         v-for="op in transformOps"
         :key="op"
@@ -85,7 +88,7 @@ function onDragStart(ev: DragEvent, kind: string) {
     </template>
 
     <template v-if="showControl">
-      <div class="group-title">Controllo</div>
+      <div class="group-title">{{ $t('opSidebar.controlGroup') }}</div>
       <div
         v-if="showForeach"
         class="item"
@@ -105,7 +108,7 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, 'refresh')"
       >
         <RefreshCw :size="15" class="item-icon" />
-        <span>Refresh datasource</span>
+        <span>{{ $t('opSidebar.refreshDatasourceLabel') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
       <div
@@ -116,13 +119,13 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, 'runflow')"
       >
         <PlayCircle :size="15" class="item-icon" />
-        <span>Esegui flusso</span>
+        <span>{{ $t('opSidebar.runFlowLabel') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>
 
     <template v-if="showOutput">
-      <div class="group-title">Output</div>
+      <div class="group-title">{{ $t('opSidebar.outputGroup') }}</div>
       <div
         class="item"
         draggable="true"
@@ -130,13 +133,13 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, 'output')"
       >
         <HardDriveDownload :size="15" class="item-icon" />
-        <span>Output (datasource / database)</span>
+        <span>{{ $t('opSidebar.outputLabel') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>
 
     <template v-if="showComment">
-      <div class="group-title">Annotazioni</div>
+      <div class="group-title">{{ $t('opSidebar.annotationsGroup') }}</div>
       <div
         class="item"
         draggable="true"
@@ -144,13 +147,13 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, 'comment')"
       >
         <StickyNote :size="15" class="item-icon" />
-        <span>Nota</span>
+        <span>{{ $t('opSidebar.noteLabel') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>
 
-    <p v-if="!operations.length" class="muted empty">Operazioni non caricate.</p>
-    <p v-else-if="noResults" class="muted empty">Nessun componente per «{{ query }}».</p>
+    <p v-if="!operations.length" class="muted empty">{{ $t('opSidebar.noOperationsLoaded') }}</p>
+    <p v-else-if="noResults" class="muted empty">{{ $t('opSidebar.noResultsFor', { query }) }}</p>
   </aside>
 </template>
 

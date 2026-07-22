@@ -21,6 +21,7 @@ import {
   Plug,
   Pencil,
 } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
@@ -52,6 +53,7 @@ const dsApi = useDatasources()
 const connApi = useConnections()
 const { user } = useAuth()
 const toast = useToast()
+const { t } = useI18n()
 
 const projects = ref<Project[]>([])
 const expanded = ref<Set<number>>(new Set())
@@ -198,18 +200,18 @@ async function moveFlow(flow: FlowSummary, target: number | null) {
     await flowsApi.update(flow.id, { project_id: target })
     movingFlowId.value = null
     flows.value = flows.value.filter((f) => f.id !== flow.id)
-    toast.success(`Flow "${flow.name}" moved`)
+    toast.success(t('projectBrowser.flowMoved', { name: flow.name }))
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
 async function deleteFlow(flow: FlowSummary) {
-  if (!confirm(`Eliminare il flusso "${flow.name}"?`)) return
+  if (!confirm(t('projectBrowser.confirmDeleteFlow', { name: flow.name }))) return
   try {
     await flowsApi.remove(flow.id)
     flows.value = flows.value.filter((f) => f.id !== flow.id)
-    toast.success(`Flow "${flow.name}" deleted`)
+    toast.success(t('projectBrowser.flowDeleted', { name: flow.name }))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -268,11 +270,11 @@ function fmtDuration(run: RunInfo): string {
 const dsList = ref<DatasourceInfo[]>([])
 
 async function deleteDatasource(ds: DatasourceInfo) {
-  if (!confirm(`Eliminare la datasource "${ds.name}"? Il parquet verrà rimosso dallo storage.`)) return
+  if (!confirm(t('projectBrowser.confirmDeleteDatasource', { name: ds.name }))) return
   try {
     await dsApi.remove(ds.id)
     dsList.value = dsList.value.filter((d) => d.id !== ds.id)
-    toast.success(`Datasource "${ds.name}" deleted`)
+    toast.success(t('projectBrowser.datasourceDeleted', { name: ds.name }))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -336,7 +338,7 @@ async function createDbDatasource(draft: DbDatasourceDraft) {
   try {
     const ds = await dsApi.createDb(selectedId.value, draft)
     showDbDsDialog.value = false
-    toast.success(`Datasource "${ds.name}" created — import started`)
+    toast.success(t('projectBrowser.datasourceCreated', { name: ds.name }))
     dsList.value = await dsApi.listByProject(selectedId.value)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
@@ -369,10 +371,10 @@ async function saveConnection(draft: ConnectionDraft) {
       const body: any = { ...draft }
       if (!body.password) delete body.password // vuota = invariata
       await connApi.update(editingConn.value.id, body)
-      toast.success(`Connection "${draft.name}" updated`)
+      toast.success(t('projectBrowser.connectionUpdated', { name: draft.name }))
     } else {
       await connApi.create(selectedId.value, draft)
-      toast.success(`Connection "${draft.name}" created`)
+      toast.success(t('projectBrowser.connectionCreated', { name: draft.name }))
     }
     showConnDialog.value = false
     connections.value = await connApi.listByProject(selectedId.value)
@@ -384,11 +386,11 @@ async function saveConnection(draft: ConnectionDraft) {
 }
 
 async function deleteConnection(c: ConnectionInfo) {
-  if (!confirm(`Delete connection "${c.name}"?`)) return
+  if (!confirm(t('projectBrowser.confirmDeleteConnection', { name: c.name }))) return
   try {
     await connApi.remove(c.id)
     connections.value = connections.value.filter((x) => x.id !== c.id)
-    toast.success(`Connection "${c.name}" deleted`)
+    toast.success(t('projectBrowser.connectionDeleted', { name: c.name }))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -438,12 +440,12 @@ async function createChild() {
 }
 
 async function removeProject(p: Project) {
-  if (!confirm(`Eliminare la cartella "${p.name}"?`)) return
+  if (!confirm(t('projectBrowser.confirmDeleteFolder', { name: p.name }))) return
   try {
     await api.remove(p.id)
     if (selectedId.value === p.id) selectedId.value = null
     await loadProjects()
-    toast.success(`Folder "${p.name}" deleted`)
+    toast.success(t('projectBrowser.folderDeleted', { name: p.name }))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -456,10 +458,10 @@ const grantUserId = ref<number | null>(null)
 const grantCapability = ref<string>('view')
 
 function groupName(id: number | null) {
-  return groups.value.find((g) => g.id === id)?.name ?? (id != null ? `gruppo #${id}` : '')
+  return groups.value.find((g) => g.id === id)?.name ?? (id != null ? t('projectBrowser.groupFallback', { id }) : '')
 }
 function userLabel(id: number | null) {
-  return users.value.find((u) => u.id === id)?.email ?? (id != null ? `utente #${id}` : '')
+  return users.value.find((u) => u.id === id)?.email ?? (id != null ? t('projectBrowser.userFallback', { id }) : '')
 }
 
 async function grant() {
@@ -495,13 +497,13 @@ async function revoke(perm: Permission) {
     <!-- Albero cartelle -->
     <div class="tree-pane">
       <div class="pane-head">
-        <span>Progetti</span>
-        <button class="mini" title="Ricarica" @click="loadProjects"><RefreshCw :size="13" /></button>
+        <span>{{ $t('projectBrowser.projectsLabel') }}</span>
+        <button class="mini" :title="$t('projectBrowser.reloadTitle')" @click="loadProjects"><RefreshCw :size="13" /></button>
       </div>
 
       <div v-if="!rows.length" class="muted empty">
-        Nessun progetto visibile.
-        <template v-if="isSuper"> Crea il primo qui sotto.</template>
+        {{ $t('projectBrowser.noProjectsVisible') }}
+        <template v-if="isSuper"> {{ $t('projectBrowser.createFirstHere') }}</template>
       </div>
 
       <ul class="tree">
@@ -529,14 +531,14 @@ async function revoke(perm: Permission) {
       </ul>
 
       <div v-if="isSuper" class="new-root">
-        <input v-model="newRootName" type="text" placeholder="Nuovo progetto root…" @keyup.enter="createRoot" />
-        <button class="primary" @click="createRoot"><Plus :size="14" /> Root</button>
+        <input v-model="newRootName" type="text" :placeholder="$t('projectBrowser.newRootPlaceholder')" @keyup.enter="createRoot" />
+        <button class="primary" @click="createRoot"><Plus :size="14" /> {{ $t('projectBrowser.rootButton') }}</button>
       </div>
     </div>
 
     <!-- Dettaglio progetto selezionato -->
     <div class="detail-pane">
-      <div v-if="!selected" class="muted empty">Seleziona un progetto.</div>
+      <div v-if="!selected" class="muted empty">{{ $t('projectBrowser.selectAProject') }}</div>
 
       <template v-else>
         <div class="pane-head">
@@ -546,14 +548,14 @@ async function revoke(perm: Permission) {
         <!-- flussi contenuti nella cartella -->
         <div class="section">
           <div class="section-head">
-            <label>Flussi</label>
+            <label>{{ $t('projectBrowser.flowsLabel') }}</label>
             <div class="newflow">
               <button class="btn-link primary small" @click="newMenu = !newMenu">
-                <Plus :size="13" /> Nuovo flusso
+                <Plus :size="13" /> {{ $t('projectBrowser.newFlowButton') }}
               </button>
               <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
               <div v-if="newMenu" class="menu-pop">
-                <div class="menu-label">Motore di esecuzione</div>
+                <div class="menu-label">{{ $t('projectBrowser.engineMenuLabel') }}</div>
                 <button
                   v-for="e in engines"
                   :key="e.id"
@@ -561,7 +563,7 @@ async function revoke(perm: Permission) {
                   :disabled="!e.available"
                   @click="createFlowWith(e.id)"
                 >
-                  <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">preferita</span><span v-if="!e.available" class="soon">in arrivo</span></span>
+                  <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('projectBrowser.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t('projectBrowser.comingSoonTag') }}</span></span>
                   <span v-if="e.description" class="mi-desc">{{ e.description }}</span>
                 </button>
               </div>
@@ -569,7 +571,7 @@ async function revoke(perm: Permission) {
           </div>
 
           <p v-if="flowsError" class="muted">{{ flowsError }}</p>
-          <p v-else-if="!flows.length" class="muted">Nessun flusso in questa cartella.</p>
+          <p v-else-if="!flows.length" class="muted">{{ $t('projectBrowser.noFlowsInFolder') }}</p>
 
           <table v-else class="flows">
             <tbody>
@@ -585,7 +587,7 @@ async function revoke(perm: Permission) {
                   <button
                     class="mini"
                     :class="{ activebtn: expandedFlowId === f.id }"
-                    title="Cronologia dei run"
+                    :title="$t('projectBrowser.runHistoryTitle')"
                     @click="toggleRuns(f)"
                   ><History :size="13" /></button>
                   <Select
@@ -593,17 +595,17 @@ async function revoke(perm: Permission) {
                     class="movesel"
                     :model-value="null"
                     :options="projects.filter((p) => p.id !== f.project_id).map((p) => ({ value: p.id, label: p.name }))"
-                    placeholder="sposta in…"
+                    :placeholder="$t('projectBrowser.moveToPlaceholder')"
                     @update:model-value="(v: any) => moveFlow(f, v)"
                     @close="movingFlowId = null"
                   />
                   <button
                     v-else
                     class="mini"
-                    title="Sposta in un'altra cartella"
+                    :title="$t('projectBrowser.moveToFolderTitle')"
                     @click="movingFlowId = f.id"
                   ><FolderInput :size="13" /></button>
-                  <button class="mini danger" title="Elimina flusso" @click="deleteFlow(f)">
+                  <button class="mini danger" :title="$t('projectBrowser.deleteFlowTitle')" @click="deleteFlow(f)">
                     <Trash2 :size="13" />
                   </button>
                 </td>
@@ -613,9 +615,9 @@ async function revoke(perm: Permission) {
               <tr v-if="expandedFlowId === f.id" class="runsrow">
                 <td colspan="3">
                   <p v-if="runsLoading" class="muted runmeta">
-                    <LoaderCircle :size="13" class="spin" /> Carico la cronologia…
+                    <LoaderCircle :size="13" class="spin" /> {{ $t('projectBrowser.loadingHistory') }}
                   </p>
-                  <p v-else-if="!flowRuns.length" class="muted runmeta">Nessun run per questo flusso.</p>
+                  <p v-else-if="!flowRuns.length" class="muted runmeta">{{ $t('projectBrowser.noRunsForFlow') }}</p>
                   <ul v-else class="runlist">
                     <li v-for="r in flowRuns" :key="r.id" class="runitem">
                       <CheckCircle2 v-if="r.status === 'SUCCESS'" :size="14" class="rok" />
@@ -623,7 +625,7 @@ async function revoke(perm: Permission) {
                       <LoaderCircle v-else :size="14" class="spin rwip" />
                       <span class="rwhen">{{ fmtDate(r.started_at) }}</span>
                       <span class="muted">{{ fmtDuration(r) }}</span>
-                      <span v-if="r.rows_written != null" class="muted">{{ r.rows_written }} righe</span>
+                      <span v-if="r.rows_written != null" class="muted">{{ $t('projectBrowser.rowsCount', { n: r.rows_written }) }}</span>
                       <span v-if="r.publish_name" class="rpub">
                         <Database :size="12" /> {{ r.publish_name }}
                       </span>
@@ -640,10 +642,10 @@ async function revoke(perm: Permission) {
         <!-- datasource della cartella -->
         <div class="section">
           <div class="section-head">
-            <label>Datasources</label>
-            <button class="mini" @click="openDbDsDialog"><Plus :size="13" /> From database</button>
+            <label>{{ $t('projectBrowser.datasourcesLabel') }}</label>
+            <button class="mini" @click="openDbDsDialog"><Plus :size="13" /> {{ $t('projectBrowser.fromDatabaseButton') }}</button>
           </div>
-          <p v-if="!dsList.length" class="muted">Nessuna datasource in questa cartella.</p>
+          <p v-if="!dsList.length" class="muted">{{ $t('projectBrowser.noDatasourcesInFolder') }}</p>
           <table v-else class="flows">
             <tbody>
               <tr v-for="d in dsList" :key="d.id">
@@ -655,24 +657,24 @@ async function revoke(perm: Permission) {
                 </td>
                 <td class="fdate muted">
                   <template v-if="ingestRuns[d.id] && !isTerminal(ingestRuns[d.id])">
-                    <LoaderCircle :size="12" class="spin rwip" /> importing…
+                    <LoaderCircle :size="12" class="spin rwip" /> {{ $t('projectBrowser.importingLabel') }}
                   </template>
                   <template v-else-if="ingestRuns[d.id]?.status === 'FAILURE'">
-                    <span class="rerr" :title="ingestRuns[d.id].error ?? ''">import failed</span>
+                    <span class="rerr" :title="ingestRuns[d.id].error ?? ''">{{ $t('projectBrowser.importFailedLabel') }}</span>
                   </template>
                   <template v-else>
-                    {{ d.rows != null ? `${d.rows} righe` : '' }} · {{ fmtDate(d.refreshed_at ?? d.updated_at) }}
+                    {{ d.rows != null ? $t('projectBrowser.rowsCount', { n: d.rows }) : '' }} · {{ fmtDate(d.refreshed_at ?? d.updated_at) }}
                   </template>
                 </td>
                 <td class="factions">
                   <button
                     v-if="d.kind === 'database'"
                     class="mini"
-                    title="Refresh snapshot (re-run the source)"
+                    :title="$t('projectBrowser.refreshSnapshotTitle')"
                     :disabled="!!ingestRuns[d.id] && !isTerminal(ingestRuns[d.id])"
                     @click="refreshDatasource(d)"
                   ><RefreshCw :size="13" /></button>
-                  <button class="mini danger" title="Elimina datasource (anche il parquet)" @click="deleteDatasource(d)">
+                  <button class="mini danger" :title="$t('projectBrowser.deleteDatasourceTitle')" @click="deleteDatasource(d)">
                     <Trash2 :size="13" />
                   </button>
                 </td>
@@ -684,10 +686,10 @@ async function revoke(perm: Permission) {
         <!-- connessioni della cartella (solo con capability CONNECT) -->
         <div v-if="canConnect" class="section">
           <div class="section-head">
-            <label>Connections</label>
-            <button class="mini" @click="openConnDialog(null)"><Plus :size="13" /> New connection</button>
+            <label>{{ $t('projectBrowser.connectionsLabel') }}</label>
+            <button class="mini" @click="openConnDialog(null)"><Plus :size="13" /> {{ $t('projectBrowser.newConnectionButton') }}</button>
           </div>
-          <p v-if="!connections.length" class="muted">No connections in this folder.</p>
+          <p v-if="!connections.length" class="muted">{{ $t('projectBrowser.noConnectionsInFolder') }}</p>
           <table v-else class="flows">
             <tbody>
               <tr v-for="c in connections" :key="c.id">
@@ -698,10 +700,10 @@ async function revoke(perm: Permission) {
                   {{ c.db_type }} · {{ c.host }}{{ c.database ? '/' + c.database : '' }}
                 </td>
                 <td class="factions">
-                  <button class="mini" title="Edit connection" @click="openConnDialog(c)">
+                  <button class="mini" :title="$t('projectBrowser.editConnectionTitle')" @click="openConnDialog(c)">
                     <Pencil :size="13" />
                   </button>
-                  <button class="mini danger" title="Delete connection" @click="deleteConnection(c)">
+                  <button class="mini danger" :title="$t('projectBrowser.deleteConnectionTitle')" @click="deleteConnection(c)">
                     <Trash2 :size="13" />
                   </button>
                 </td>
@@ -713,16 +715,16 @@ async function revoke(perm: Permission) {
         <template v-if="canManage">
           <!-- crea sottocartella -->
           <div class="section">
-            <label>Nuova sottocartella</label>
+            <label>{{ $t('projectBrowser.newSubfolderLabel') }}</label>
             <div class="row">
-              <input v-model="newChildName" type="text" placeholder="Nome…" @keyup.enter="createChild" />
-              <button @click="createChild"><Plus :size="14" /> Cartella</button>
+              <input v-model="newChildName" type="text" :placeholder="$t('projectBrowser.namePlaceholder')" @keyup.enter="createChild" />
+              <button @click="createChild"><Plus :size="14" /> {{ $t('projectBrowser.folderButton') }}</button>
             </div>
           </div>
 
           <!-- permessi -->
           <div class="section">
-            <label>Permessi</label>
+            <label>{{ $t('projectBrowser.permissionsLabel') }}</label>
             <table class="perm">
               <tbody>
                 <tr v-for="p in permissions" :key="p.id">
@@ -735,7 +737,7 @@ async function revoke(perm: Permission) {
                   <td class="right"><button class="mini danger" @click="revoke(p)"><X :size="13" /></button></td>
                 </tr>
                 <tr v-if="!permissions.length">
-                  <td colspan="3" class="muted">Nessun permesso esplicito.</td>
+                  <td colspan="3" class="muted">{{ $t('projectBrowser.noExplicitPermissions') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -743,32 +745,32 @@ async function revoke(perm: Permission) {
             <div class="grant">
               <Select
                 v-model="grantSubjectType"
-                :options="isSuper ? [{ value: 'group', label: 'Gruppo' }, { value: 'user', label: 'Utente' }] : [{ value: 'group', label: 'Gruppo' }]"
+                :options="isSuper ? [{ value: 'group', label: $t('projectBrowser.groupOption') }, { value: 'user', label: $t('projectBrowser.userOption') }] : [{ value: 'group', label: $t('projectBrowser.groupOption') }]"
               />
               <Select
                 v-if="grantSubjectType === 'group'"
                 v-model="grantGroupId"
                 :options="groups.map((g) => ({ value: g.id, label: g.name }))"
-                placeholder="gruppo…"
+                :placeholder="$t('projectBrowser.groupPlaceholder')"
               />
               <Select
                 v-else
                 v-model="grantUserId"
                 :options="users.map((u) => ({ value: u.id, label: u.email }))"
-                placeholder="utente…"
+                :placeholder="$t('projectBrowser.userPlaceholder')"
               />
               <Select v-model="grantCapability" :options="CAPABILITIES" />
-              <button class="primary" @click="grant">Concedi</button>
+              <button class="primary" @click="grant">{{ $t('projectBrowser.grantButton') }}</button>
             </div>
           </div>
 
           <div class="section">
-            <button class="danger" @click="removeProject(selected)"><Trash2 :size="14" /> Elimina cartella</button>
+            <button class="danger" @click="removeProject(selected)"><Trash2 :size="14" /> {{ $t('projectBrowser.deleteFolderButton') }}</button>
           </div>
         </template>
 
         <div v-else class="muted section">
-          Hai accesso in sola lettura a questa cartella.
+          {{ $t('projectBrowser.readOnlyAccess') }}
         </div>
       </template>
     </div>

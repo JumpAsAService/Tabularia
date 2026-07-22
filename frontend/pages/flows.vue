@@ -3,6 +3,7 @@
 // flusso ha un expander (come le Esecuzioni) con metriche d'esecuzione, la
 // timeline (Gantt) dei run e lo storico versioni con promozione.
 import { onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
   CheckCircle2, XCircle, LoaderCircle, Circle,
@@ -21,6 +22,7 @@ const projectsApi = useProjects()
 const runsApi = useRuns()
 const api = useApi()
 const toast = useToast()
+const { t } = useI18n()
 
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
   usePagedList<FlowSummary>((p) => flowsApi.listPaged(p))
@@ -87,11 +89,11 @@ async function fetchDetail(id: number) {
 // indicatore dello stato dell'ultimo run (senza aprire l'expander)
 function runStatus(f: FlowSummary) {
   switch (f.last_run_status) {
-    case 'SUCCESS': return { icon: CheckCircle2, cls: 'ok', label: 'Ultimo run: completato' }
-    case 'FAILURE': return { icon: XCircle, cls: 'fail', label: 'Ultimo run: fallito' }
+    case 'SUCCESS': return { icon: CheckCircle2, cls: 'ok', label: t('flows.lastRunSuccess') }
+    case 'FAILURE': return { icon: XCircle, cls: 'fail', label: t('flows.lastRunFailure') }
     case 'STARTED':
-    case 'PENDING': return { icon: LoaderCircle, cls: 'run', label: 'Esecuzione in corso' }
-    default: return { icon: Circle, cls: 'none', label: 'Mai eseguito' }
+    case 'PENDING': return { icon: LoaderCircle, cls: 'run', label: t('flows.runInProgress') }
+    default: return { icon: Circle, cls: 'none', label: t('flows.neverRun') }
   }
 }
 
@@ -108,10 +110,10 @@ function toggle(f: FlowSummary) {
 }
 
 async function promote(id: number, version: number) {
-  if (!confirm(`Promuovere la versione v${version} a corrente? Diventa la definizione del flusso.`)) return
+  if (!confirm(t('flows.confirmPromote', { version }))) return
   try {
     await flowsApi.promote(id, version)
-    toast.success(`Versione v${version} promossa`)
+    toast.success(t('flows.promoteSuccess', { version }))
     await fetchDetail(id)
   } catch (e) {
     toast.error(errMessage(e))
@@ -119,10 +121,10 @@ async function promote(id: number, version: number) {
 }
 
 async function deleteFlow(f: FlowSummary) {
-  if (!confirm(`Eliminare il flusso "${f.name}"?`)) return
+  if (!confirm(t('flows.confirmDelete', { name: f.name }))) return
   try {
     await flowsApi.remove(f.id)
-    toast.success(`Flusso "${f.name}" eliminato`)
+    toast.success(t('flows.deleteSuccess', { name: f.name }))
     await load()
   } catch (e) {
     toast.error(errMessage(e))
@@ -148,7 +150,7 @@ async function saveSchedule(cron: string) {
   try {
     const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim())
     items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
-    toast.success(cron.trim() ? `Esecuzione schedulata: ${updated.run_schedule}` : 'Schedulazione disattivata')
+    toast.success(cron.trim() ? t('flows.scheduleSuccess', { cron: updated.run_schedule }) : t('flows.scheduleDisabled'))
     scheduleFor.value = null
   } catch (e) {
     toast.error(errMessage(e))
@@ -163,12 +165,12 @@ async function saveSchedule(cron: string) {
     <div class="page-head">
       <h2><Workflow :size="18" /> Flows <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Cerca flussi…" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('flows.searchPlaceholder')" /></span>
         <div class="newflow">
-          <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> Nuovo flusso</button>
+          <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('flows.newFlowButton') }}</button>
           <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
           <div v-if="newMenu" class="menu-pop">
-            <div class="menu-label">Motore di esecuzione</div>
+            <div class="menu-label">{{ $t('flows.engineMenuTitle') }}</div>
             <button
               v-for="e in engines"
               :key="e.id"
@@ -176,7 +178,7 @@ async function saveSchedule(cron: string) {
               :disabled="!e.available"
               @click="createWith(e.id)"
             >
-              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">preferita</span><span v-if="!e.available" class="soon">in arrivo</span></span>
+              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t('flows.comingSoonTag') }}</span></span>
               <span v-if="e.description" class="mi-desc">{{ e.description }}</span>
             </button>
           </div>
@@ -193,7 +195,7 @@ async function saveSchedule(cron: string) {
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="5" />
     <p v-else-if="!items.length" class="muted">
-      {{ q ? 'Nessun flusso per la ricerca.' : 'Nessun flusso: creane uno da una cartella o con Nuovo flusso.' }}
+      {{ q ? $t('flows.noResultsSearch') : $t('flows.noFlows') }}
     </p>
 
     <div v-else class="flows">
@@ -212,13 +214,13 @@ async function saveSchedule(cron: string) {
               {{ f.name }}
             </span>
             <span class="folder muted"><Folder :size="12" /> {{ folderName[f.project_id] ?? `#${f.project_id}` }}</span>
-            <span v-if="f.run_schedule" class="sched-badge" :title="f.run_schedule"><CalendarClock :size="11" /> schedulato</span>
+            <span v-if="f.run_schedule" class="sched-badge" :title="f.run_schedule"><CalendarClock :size="11" /> {{ $t('flows.scheduledBadge') }}</span>
             <span class="when muted">{{ fmtDate(f.updated_at) }}</span>
           </button>
           <div class="flow-actions">
-            <button class="mini" title="Apri nell'editor" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
-            <button class="mini" :class="{ active: !!f.run_schedule }" title="Schedula esecuzione" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
-            <button class="mini danger" title="Elimina flusso" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
+            <button class="mini" :title="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
+            <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
+            <button class="mini danger" :title="$t('flows.deleteFlowTitle')" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>
         </div>
 
@@ -227,29 +229,29 @@ async function saveSchedule(cron: string) {
           <p v-else-if="detail[f.id]?.error" class="err">{{ detail[f.id].error }}</p>
           <template v-else-if="detail[f.id]">
             <div class="metrics">
-              <div class="metric"><span class="mlabel">Cartella</span><span>{{ folderName[f.project_id] ?? `#${f.project_id}` }}</span></div>
-              <div class="metric"><span class="mlabel">Motore</span><span>{{ engineLabel(f.engine) }}</span></div>
-              <div class="metric"><span class="mlabel">Creato da</span><span>{{ f.owner_name ?? '—' }}</span></div>
-              <div class="metric"><span class="mlabel">Creato</span><span>{{ fmtDate(f.created_at) }}</span></div>
-              <div class="metric"><span class="mlabel">Esecuzioni</span><span>{{ detail[f.id].stats?.run_count ?? 0 }}</span></div>
-              <div class="metric"><span class="mlabel">Successi / falliti</span><span>{{ detail[f.id].stats?.success_count ?? 0 }} / {{ detail[f.id].stats?.failure_count ?? 0 }}</span></div>
-              <div class="metric"><span class="mlabel">Ultima esecuzione</span><span>{{ fmtDate(detail[f.id].stats?.last_run_at ?? null) }}</span></div>
-              <div class="metric"><span class="mlabel">Tempo medio</span><span>{{ fmtDur(detail[f.id].stats?.avg_duration_seconds) }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.folderLabel') }}</span><span>{{ folderName[f.project_id] ?? `#${f.project_id}` }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.engineLabel') }}</span><span>{{ engineLabel(f.engine) }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.createdByLabel') }}</span><span>{{ f.owner_name ?? '—' }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.createdLabel') }}</span><span>{{ fmtDate(f.created_at) }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.runsLabel') }}</span><span>{{ detail[f.id].stats?.run_count ?? 0 }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.successFailureLabel') }}</span><span>{{ detail[f.id].stats?.success_count ?? 0 }} / {{ detail[f.id].stats?.failure_count ?? 0 }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.lastRunLabel') }}</span><span>{{ fmtDate(detail[f.id].stats?.last_run_at ?? null) }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.avgDurationLabel') }}</span><span>{{ fmtDur(detail[f.id].stats?.avg_duration_seconds) }}</span></div>
             </div>
 
-            <div class="section-title">Timeline esecuzioni</div>
+            <div class="section-title">{{ $t('flows.runsTimelineTitle') }}</div>
             <RunGantt :runs="detail[f.id].runs" />
 
-            <div class="section-title">Versioni <span class="muted">({{ detail[f.id].versions.length }})</span></div>
+            <div class="section-title">{{ $t('flows.versionsTitle') }} <span class="muted">({{ detail[f.id].versions.length }})</span></div>
             <div class="versions">
               <div v-for="v in detail[f.id].versions" :key="v.version" class="ver">
                 <span class="vnum">v{{ v.version }}</span>
-                <span v-if="v.is_current" class="tag">corrente</span>
+                <span v-if="v.is_current" class="tag">{{ $t('flows.currentTag') }}</span>
                 <span class="vnote muted">{{ v.note }}</span>
                 <span class="vby muted"><User :size="11" /> {{ v.created_by_name ?? '—' }}</span>
                 <span class="vdate muted">{{ fmtDate(v.created_at) }}</span>
-                <button v-if="!v.is_current" class="mini promote" title="Promuovi a corrente" @click="promote(f.id, v.version)">
-                  <ArrowUpFromLine :size="12" /> Promuovi
+                <button v-if="!v.is_current" class="mini promote" :title="$t('flows.promoteTitle')" @click="promote(f.id, v.version)">
+                  <ArrowUpFromLine :size="12" /> {{ $t('flows.promoteButton') }}
                 </button>
               </div>
             </div>
@@ -263,7 +265,7 @@ async function saveSchedule(cron: string) {
     <ScheduleDialog
       :open="!!scheduleFor"
       :title="scheduleFor?.name ?? ''"
-      subtitle="Esegui automaticamente i nodi Output di"
+      :subtitle="$t('flows.scheduleSubtitle')"
       :current="scheduleFor?.run_schedule ?? null"
       :busy="savingSchedule"
       @save="saveSchedule"

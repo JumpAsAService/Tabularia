@@ -2,6 +2,7 @@
 // Amministrazione (solo superuser): utenti (lista + crea + elimina), gruppi e
 // appartenenze. Vive nella pagina /admin; il feedback passa dai toast.
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Shield, Trash2, User as UserIcon, Users as UsersIcon, Plus } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type UserOut, type GroupOut } from '~/composables/useProjects'
@@ -9,6 +10,7 @@ import { useProjects, type UserOut, type GroupOut } from '~/composables/useProje
 const api = useProjects()
 const toast = useToast()
 const { user: me } = useAuth()
+const { t } = useI18n()
 
 const users = ref<UserOut[]>([])
 const groups = ref<GroupOut[]>([])
@@ -29,12 +31,12 @@ onMounted(loadAll)
 
 async function createUser() {
   if (!nu.value.email || nu.value.password.length < 6) {
-    toast.error('Email and a password of at least 6 characters are required')
+    toast.error(t('adminPanel.emailPasswordRequired'))
     return
   }
   try {
     await api.createUser({ ...nu.value })
-    toast.success(`User ${nu.value.email} created`)
+    toast.success(t('adminPanel.userCreated', { email: nu.value.email }))
     nu.value = { email: '', password: '', full_name: '', is_superuser: false }
     await loadAll()
   } catch (e) {
@@ -43,11 +45,11 @@ async function createUser() {
 }
 
 async function deleteUser(u: UserOut) {
-  if (!confirm(`Delete user "${u.email}"? Their content stays, ownership references are cleared.`)) return
+  if (!confirm(t('adminPanel.confirmDeleteUser', { email: u.email }))) return
   try {
     await api.deleteUser(u.id)
     users.value = users.value.filter((x) => x.id !== u.id)
-    toast.success(`User ${u.email} deleted`)
+    toast.success(t('adminPanel.userDeleted', { email: u.email }))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -57,7 +59,7 @@ async function createGroup() {
   if (!ng.value.name) return
   try {
     await api.createGroup({ ...ng.value })
-    toast.success(`Group ${ng.value.name} created`)
+    toast.success(t('adminPanel.groupCreated', { name: ng.value.name }))
     ng.value = { name: '', description: '' }
     await loadAll()
   } catch (e) {
@@ -69,7 +71,7 @@ async function addMember() {
   if (!member.value.user_id || !member.value.group_id) return
   try {
     await api.addToGroup(member.value.user_id, member.value.group_id)
-    toast.success('User added to the group')
+    toast.success(t('adminPanel.userAddedToGroup'))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -79,27 +81,27 @@ async function addMember() {
 <template>
   <div class="admin">
     <div class="page-head">
-      <h2><Shield :size="18" /> Administration</h2>
+      <h2><Shield :size="18" /> {{ $t('adminPanel.title') }}</h2>
     </div>
 
     <div class="admin-grid">
       <!-- utenti -->
       <div class="card">
-        <h4><UserIcon :size="14" /> Users <span class="muted">{{ users.length }}</span></h4>
+        <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ users.length }}</span></h4>
         <table class="rows">
           <tbody>
             <tr v-for="u in users" :key="u.id">
               <td>
                 {{ u.email }}
-                <span v-if="u.is_superuser" class="tag">admin</span>
-                <span v-if="!u.is_active" class="tag off">disabled</span>
+                <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
+                <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
                 <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
               </td>
               <td class="right">
                 <button
                   class="mini danger"
                   :disabled="u.id === me?.id"
-                  :title="u.id === me?.id ? 'You cannot delete your own account' : 'Delete user'"
+                  :title="u.id === me?.id ? $t('adminPanel.cannotDeleteSelf') : $t('adminPanel.deleteUserTitle')"
                   @click="deleteUser(u)"
                 ><Trash2 :size="13" /></button>
               </td>
@@ -107,17 +109,17 @@ async function addMember() {
           </tbody>
         </table>
 
-        <h4 class="subhead"><Plus :size="13" /> New user</h4>
-        <input v-model="nu.email" type="email" placeholder="email" />
-        <input v-model="nu.password" type="password" placeholder="password (min 6)" autocomplete="new-password" />
-        <input v-model="nu.full_name" type="text" placeholder="full name (optional)" />
-        <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> superuser</label>
-        <button class="primary" @click="createUser">Create user</button>
+        <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.newUserTitle') }}</h4>
+        <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" />
+        <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
+        <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" />
+        <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> {{ $t('adminPanel.superuserLabel') }}</label>
+        <button class="primary" @click="createUser">{{ $t('adminPanel.createUserButton') }}</button>
       </div>
 
       <!-- gruppi -->
       <div class="card">
-        <h4><UsersIcon :size="14" /> Groups <span class="muted">{{ groups.length }}</span></h4>
+        <h4><UsersIcon :size="14" /> {{ $t('adminPanel.groupsTitle') }} <span class="muted">{{ groups.length }}</span></h4>
         <table class="rows">
           <tbody>
             <tr v-for="g in groups" :key="g.id">
@@ -126,27 +128,27 @@ async function addMember() {
                 <div v-if="g.description" class="muted small">{{ g.description }}</div>
               </td>
             </tr>
-            <tr v-if="!groups.length"><td class="muted">No groups yet.</td></tr>
+            <tr v-if="!groups.length"><td class="muted">{{ $t('adminPanel.noGroups') }}</td></tr>
           </tbody>
         </table>
 
-        <h4 class="subhead"><Plus :size="13" /> New group</h4>
-        <input v-model="ng.name" type="text" placeholder="group name" />
-        <input v-model="ng.description" type="text" placeholder="description (optional)" />
-        <button class="primary" @click="createGroup">Create group</button>
+        <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.newGroupTitle') }}</h4>
+        <input v-model="ng.name" type="text" :placeholder="$t('adminPanel.groupNamePlaceholder')" />
+        <input v-model="ng.description" type="text" :placeholder="$t('adminPanel.descriptionPlaceholder')" />
+        <button class="primary" @click="createGroup">{{ $t('adminPanel.createGroupButton') }}</button>
 
-        <h4 class="subhead"><UsersIcon :size="13" /> Add to group</h4>
+        <h4 class="subhead"><UsersIcon :size="13" /> {{ $t('adminPanel.addToGroupTitle') }}</h4>
         <Select
           v-model="member.user_id"
           :options="users.map((u) => ({ value: u.id, label: u.email }))"
-          placeholder="user…"
+          :placeholder="$t('adminPanel.userPlaceholder')"
         />
         <Select
           v-model="member.group_id"
           :options="groups.map((g) => ({ value: g.id, label: g.name }))"
-          placeholder="group…"
+          :placeholder="$t('adminPanel.groupPlaceholder')"
         />
-        <button @click="addMember">Add</button>
+        <button @click="addMember">{{ $t('adminPanel.addButton') }}</button>
       </div>
     </div>
   </div>

@@ -24,20 +24,20 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
     <!-- secondo input (join: tabella da unire; union: ramo da accodare): a sinistra, sotto -->
     <template v-if="needsRight">
       <Handle id="right" type="target" :position="Position.Left" class="handle-right h-left-bottom" />
-      <span class="hlabel-left">table</span>
+      <span class="hlabel-left">{{ $t('operationNode.tableInputLabel') }}</span>
     </template>
 
     <div class="node-title">
       <component :is="meta.icon" :size="13" class="node-icon" />
-      {{ data.opType || 'operazione' }}
+      {{ data.opType || $t('operationNode.operationFallback') }}
     </div>
     <div class="node-body muted">
-      <template v-if="isJoin">join {{ data.params?.how || 'inner' }}</template>
+      <template v-if="isJoin">{{ $t('operationNode.joinLabel', { how: data.params?.how || 'inner' }) }}</template>
       <template v-else-if="isUnion">
-        {{ data.params?.strategy === 'strict' ? 'schemi identici' : 'allinea per nome' }}
+        {{ data.params?.strategy === 'strict' ? $t('operationNode.unionStrict') : $t('operationNode.unionAlign') }}
       </template>
       <template v-else>
-        {{ paramCount }} {{ paramCount === 1 ? 'parametro' : 'parametri' }}
+        {{ $t('operationNode.paramCount', { n: paramCount }) }}
       </template>
     </div>
 

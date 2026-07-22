@@ -61,29 +61,29 @@ function addFree() {
     <div v-if="modelValue.length" class="chips">
       <span v-for="v in modelValue" :key="String(v)" class="chip">
         {{ v }}
-        <button class="chip-x" title="Remove" @click="toggle(v)"><X :size="11" /></button>
+        <button class="chip-x" :title="$t('valuePicker.remove')" @click="toggle(v)"><X :size="11" /></button>
       </span>
     </div>
 
     <input
       v-model="query"
       type="text"
-      placeholder="Search values…"
+      :placeholder="$t('valuePicker.searchPlaceholder')"
       @keydown.enter.prevent="canAddFree ? addFree() : filtered.length === 1 ? toggle(filtered[0]) : null"
     />
 
     <div class="optlist">
-      <p v-if="loading" class="muted state"><LoaderCircle :size="13" class="spin" /> Loading distinct values…</p>
+      <p v-if="loading" class="muted state"><LoaderCircle :size="13" class="spin" /> {{ $t('valuePicker.loadingValues') }}</p>
       <template v-else>
         <label v-for="o in filtered" :key="String(o)" class="opt">
           <input type="checkbox" :checked="selectedSet.has(String(o))" @change="toggle(o)" />
           <span class="optval">{{ o }}</span>
         </label>
         <button v-if="canAddFree" class="addfree" @click="addFree">
-          <Plus :size="12" /> Add “{{ query.trim() }}”
+          <Plus :size="12" /> {{ $t('valuePicker.addValue', { value: query.trim() }) }}
         </button>
-        <p v-if="hiddenCount" class="muted state">+{{ hiddenCount }} more — refine the search</p>
-        <p v-if="!filtered.length && !canAddFree" class="muted state">No matching values.</p>
+        <p v-if="hiddenCount" class="muted state">{{ $t('valuePicker.moreHidden', { n: hiddenCount }) }}</p>
+        <p v-if="!filtered.length && !canAddFree" class="muted state">{{ $t('valuePicker.noMatches') }}</p>
       </template>
     </div>
   </div>

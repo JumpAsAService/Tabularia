@@ -10,13 +10,13 @@ defineProps<{ id: string; data: any }>()
     <!-- ingresso di SEQUENZA: collega qui un «Refresh datasource» perché venga
          aggiornata PRIMA che la sorgente ne legga i dati -->
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
-    <div class="node-title"><FileText :size="13" /> Sorgente</div>
+    <div class="node-title"><FileText :size="13" /> {{ $t('sourceNode.title') }}</div>
     <div class="node-body">
       <template v-if="data.parquetKey">
         <div>{{ data.filename }}</div>
-        <div class="muted">{{ data.rows }} righe</div>
+        <div class="muted">{{ $t('sourceNode.rowsCount', { n: data.rows }) }}</div>
       </template>
-      <span v-else class="muted">nessun dato — carica un file</span>
+      <span v-else class="muted">{{ $t('sourceNode.noData') }}</span>
     </div>
     <Handle type="source" :position="Position.Right" />
   </div>

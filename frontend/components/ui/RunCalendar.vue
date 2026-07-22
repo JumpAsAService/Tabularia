@@ -3,6 +3,7 @@
 // giorno con intensità = numero di run, drill-down ORARIO al click su un giorno.
 // I conteggi distinguono esito (successi/falliti) e origine (manuali/schedulati).
 import { computed, onMounted, ref, shallowRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { HeatmapChart, BarChart } from 'echarts/charts'
@@ -15,6 +16,8 @@ import { useRuns, type ActivityBucket, type RunActivity } from '~/composables/us
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 
+const { t } = useI18n()
+
 use([
   CanvasRenderer, HeatmapChart, BarChart,
   CalendarComponent, VisualMapComponent, TooltipComponent, GridComponent,
@@ -23,9 +26,9 @@ use([
 const runsApi = useRuns()
 
 const RANGES = [
-  { days: 90, label: '3 mesi' },
-  { days: 180, label: '6 mesi' },
-  { days: 365, label: '1 anno' },
+  { days: 90, label: t('runCalendar.rangeLabel3Months') },
+  { days: 180, label: t('runCalendar.rangeLabel6Months') },
+  { days: 365, label: t('runCalendar.rangeLabel1Year') },
 ]
 const rangeDays = ref(180)
 
@@ -108,13 +111,13 @@ const calendarOption = computed(() => {
       appendToBody: true,
       formatter: (p: any) => {
         const b = byKey.get(p.data[0])
-        if (!b) return `${p.data[0]}<br/>nessuna esecuzione`
+        if (!b) return `${p.data[0]}<br/>${t('runCalendar.noRuns')}`
         return (
           `<b>${fmtDayIT(b.key)}</b><br/>` +
-          `esecuzioni: <b>${b.total}</b><br/>` +
-          `✓ ${b.success} riuscite · ✗ ${b.failure} fallite<br/>` +
-          `⏱ ${b.scheduled} schedulate · 👤 ${b.manual} manuali<br/>` +
-          `<span style="opacity:.6">click per il dettaglio orario</span>`
+          `${t('runCalendar.tooltipRuns', { n: b.total })}<br/>` +
+          `${t('runCalendar.successFailureLine', { success: b.success, failure: b.failure })}<br/>` +
+          `${t('runCalendar.scheduledManualLine', { scheduled: b.scheduled, manual: b.manual })}<br/>` +
+          `<span style="opacity:.6">${t('runCalendar.clickForHourlyDetail')}</span>`
         )
       },
     },
@@ -129,7 +132,7 @@ const calendarOption = computed(() => {
       itemHeight: 11,
       textStyle: { fontSize: 10, color: '#8b97ad' },
       inRange: { color: ['#bbf7d0', '#4ade80', '#15803d'] },
-      text: ['più', 'meno'],
+      text: [t('runCalendar.visualMapMore'), t('runCalendar.visualMapLess')],
     },
     calendar: {
       top: 18,
@@ -143,14 +146,14 @@ const calendarOption = computed(() => {
       monthLabel: {
         fontSize: 10,
         color: '#8b97ad',
-        nameMap: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'],
+        nameMap: t('runCalendar.monthAbbreviations').split(','),
       },
       // nameMap indicizzato da domenica(0); firstDay:1 avvia la settimana da lunedì
       dayLabel: {
         fontSize: 9,
         color: '#8b97ad',
         firstDay: 1,
-        nameMap: ['D', 'L', 'M', 'M', 'G', 'V', 'S'],
+        nameMap: t('runCalendar.dayAbbreviations').split(','),
       },
     },
     series: [{ type: 'heatmap', coordinateSystem: 'calendar', data }],
@@ -177,11 +180,11 @@ const hourlyOption = computed(() => {
       formatter: (ps: any[]) => {
         const k = ps[0].axisValue
         const b = byHour.get(k)
-        if (!b || !b.total) return `ore ${k}:00<br/>nessuna esecuzione`
+        if (!b || !b.total) return `${t('runCalendar.hourLabel', { h: k })}<br/>${t('runCalendar.noRuns')}`
         return (
-          `<b>ore ${k}:00</b> · ${b.total} esecuzioni<br/>` +
+          `<b>${t('runCalendar.hourLabel', { h: k })}</b> · ${t('runCalendar.runsCount', { n: b.total })}<br/>` +
           `✓ ${b.success} · ✗ ${b.failure}<br/>` +
-          `⏱ ${b.scheduled} schedulate · 👤 ${b.manual} manuali`
+          `${t('runCalendar.scheduledManualLine', { scheduled: b.scheduled, manual: b.manual })}`
         )
       },
     },
@@ -189,7 +192,7 @@ const hourlyOption = computed(() => {
     xAxis: {
       type: 'category',
       data: hours,
-      name: 'ora',
+      name: t('runCalendar.xAxisHour'),
       nameLocation: 'middle',
       nameGap: 26,
       nameTextStyle: { fontSize: 10, color: '#8b97ad' },
@@ -197,9 +200,9 @@ const hourlyOption = computed(() => {
     },
     yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 9 }, splitLine: { lineStyle: { opacity: 0.12 } } },
     series: [
-      { name: 'riuscite', type: 'bar', stack: 'x', data: success, itemStyle: { color: '#34d399' } },
-      { name: 'fallite', type: 'bar', stack: 'x', data: failure, itemStyle: { color: '#ef4444' } },
-      { name: 'in corso', type: 'bar', stack: 'x', data: pending, itemStyle: { color: '#94a3b8' } },
+      { name: t('runCalendar.legendSuccess'), type: 'bar', stack: 'x', data: success, itemStyle: { color: '#34d399' } },
+      { name: t('runCalendar.legendFailure'), type: 'bar', stack: 'x', data: failure, itemStyle: { color: '#ef4444' } },
+      { name: t('runCalendar.legendPending'), type: 'bar', stack: 'x', data: pending, itemStyle: { color: '#94a3b8' } },
     ],
   }
 })
@@ -214,10 +217,10 @@ const dailyTotal = computed(() =>
     <div class="cal-head">
       <div class="cal-title">
         <template v-if="view === 'calendar'">
-          Attività esecuzioni <span class="muted">· {{ dailyTotal }} run</span>
+          {{ $t('runCalendar.title') }} <span class="muted">{{ $t('runCalendar.totalRunsSuffix', { n: dailyTotal }) }}</span>
         </template>
         <template v-else>
-          <button class="back" @click="backToCalendar"><ChevronLeft :size="14" /> calendario</button>
+          <button class="back" @click="backToCalendar"><ChevronLeft :size="14" /> {{ $t('runCalendar.backToCalendar') }}</button>
           <span class="day-title">{{ selectedDay ? fmtDayIT(selectedDay) : '' }}</span>
         </template>
       </div>

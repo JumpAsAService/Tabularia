@@ -13,9 +13,11 @@ import {
   AlertTriangle, Clock, ExternalLink, X, Crosshair,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
+import { useI18n } from 'vue-i18n'
 
 const api = useApi()
 const { fitView } = useVueFlow()
+const { t } = useI18n()
 
 const graph = ref<LineageGraph>({ nodes: [], edges: [] })
 const loading = ref(false)
@@ -39,21 +41,21 @@ function toggleType(t: string) {
 }
 
 // ── etichette/colori per tipo di nodo e tipo di arco ─────────────────────────
-const NODE_META: Record<string, { label: string; icon: any; color: string }> = {
-  flow: { label: 'Flusso', icon: Workflow, color: '#4f8cff' },
-  datasource: { label: 'Datasource', icon: Database, color: '#6ee7b7' },
-  connection: { label: 'Connessione', icon: Plug, color: '#a78bfa' },
-  db_sink: { label: 'Tabella DB', icon: HardDriveDownload, color: '#fbbf24' },
-  s3_sink: { label: 'Oggetto S3', icon: CloudUpload, color: '#38bdf8' },
-}
-const EDGE_META: Record<string, { label: string; color: string; dashed?: boolean }> = {
-  read: { label: 'legge', color: '#4f8cff' },
-  publish: { label: 'produce', color: '#6ee7b7' },
-  ingest: { label: 'ingest', color: '#a78bfa' },
-  write: { label: 'scrive', color: '#fbbf24' },
-  refresh: { label: 'rinfresca', color: '#8b93a7', dashed: true },
-  orchestrate: { label: 'orchestra', color: '#c084fc', dashed: true },
-}
+const NODE_META = computed<Record<string, { label: string; icon: any; color: string }>>(() => ({
+  flow: { label: t('lineage.nodeFlow'), icon: Workflow, color: '#4f8cff' },
+  datasource: { label: t('lineage.nodeDatasource'), icon: Database, color: '#6ee7b7' },
+  connection: { label: t('lineage.nodeConnection'), icon: Plug, color: '#a78bfa' },
+  db_sink: { label: t('lineage.nodeDbSink'), icon: HardDriveDownload, color: '#fbbf24' },
+  s3_sink: { label: t('lineage.nodeS3Sink'), icon: CloudUpload, color: '#38bdf8' },
+}))
+const EDGE_META = computed<Record<string, { label: string; color: string; dashed?: boolean }>>(() => ({
+  read: { label: t('lineage.edgeRead'), color: '#4f8cff' },
+  publish: { label: t('lineage.edgePublish'), color: '#6ee7b7' },
+  ingest: { label: t('lineage.edgeIngest'), color: '#a78bfa' },
+  write: { label: t('lineage.edgeWrite'), color: '#fbbf24' },
+  refresh: { label: t('lineage.edgeRefresh'), color: '#8b93a7', dashed: true },
+  orchestrate: { label: t('lineage.edgeOrchestrate'), color: '#c084fc', dashed: true },
+}))
 
 // ── picker: flussi e datasource presenti nel grafo completo ──────────────────
 const fullGraph = ref<LineageGraph>({ nodes: [], edges: [] })
@@ -156,7 +158,7 @@ const rfNodes = computed<Node[]>(() => {
 })
 const rfEdges = computed<Edge[]>(() =>
   shownEdges.value.map((e, i) => {
-    const m = EDGE_META[e.kind]
+    const m = EDGE_META.value[e.kind]
     return {
       id: `e${i}`,
       source: e.source,
@@ -229,7 +231,7 @@ function fmtDate(iso?: string | null) {
 
 // motivo di un riferimento non risolto
 function restrictedLabel(n: LineageNode) {
-  return n.meta?.reason === 'removed' ? 'Rimosso' : 'Non accessibile'
+  return n.meta?.reason === 'removed' ? t('lineage.reasonRemoved') : t('lineage.reasonNotAccessible')
 }
 
 // blast radius: tutto ciò che sta a VALLE del nodo lungo il flusso dei dati
@@ -274,7 +276,7 @@ const centerLabel = computed(() =>
   graph.value.nodes.find((n) => n.id === centerNodeId.value)?.label ?? null,
 )
 function nodeIcon(t: string) {
-  return NODE_META[t]?.icon ?? Database
+  return NODE_META.value[t]?.icon ?? Database
 }
 </script>
 
@@ -282,17 +284,17 @@ function nodeIcon(t: string) {
   <AppShell fluid>
     <div class="lineage">
       <div class="page-head">
-        <h2><Share2 :size="18" /> Lineage</h2>
-        <span class="muted sub">Provenienza e impatto tra flussi, datasource, connessioni e destinazioni</span>
+        <h2><Share2 :size="18" /> {{ $t('lineage.title') }}</h2>
+        <span class="muted sub">{{ $t('lineage.subtitle') }}</span>
       </div>
 
       <div class="ln-body">
         <!-- sidebar: picker + parametri + liste a monte/valle -->
         <aside class="ln-side">
           <div class="ln-block">
-            <label class="ln-label">Centra su</label>
-            <div class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Cerca flusso o datasource…" /></div>
-            <button class="ln-all" :class="{ on: !centerNodeId }" @click="showAll">Tutto il grafo</button>
+            <label class="ln-label">{{ $t('lineage.centerOn') }}</label>
+            <div class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('lineage.searchPlaceholder')" /></div>
+            <button class="ln-all" :class="{ on: !centerNodeId }" @click="showAll">{{ $t('lineage.wholeGraph') }}</button>
             <div class="ln-picklist">
               <button
                 v-for="n in pickable"
@@ -303,51 +305,51 @@ function nodeIcon(t: string) {
               >
                 <component :is="nodeIcon(n.type)" :size="13" />
                 <span class="ln-pick-label">{{ n.label }}</span>
-                <span class="ln-pick-type">{{ n.type === 'flow' ? 'flusso' : 'datasource' }}</span>
+                <span class="ln-pick-type">{{ n.type === 'flow' ? $t('lineage.typeFlow') : $t('lineage.typeDatasource') }}</span>
               </button>
-              <p v-if="!pickable.length" class="muted empty">Nessun oggetto.</p>
+              <p v-if="!pickable.length" class="muted empty">{{ $t('lineage.noObjects') }}</p>
             </div>
           </div>
 
           <div v-if="centerNodeId" class="ln-block">
-            <label class="ln-label">Direzione</label>
+            <label class="ln-label">{{ $t('lineage.direction') }}</label>
             <div class="ln-seg">
-              <button :class="{ on: direction === 'upstream' }" @click="direction = 'upstream'">A monte</button>
-              <button :class="{ on: direction === 'both' }" @click="direction = 'both'">Entrambe</button>
-              <button :class="{ on: direction === 'downstream' }" @click="direction = 'downstream'">A valle</button>
+              <button :class="{ on: direction === 'upstream' }" @click="direction = 'upstream'">{{ $t('lineage.upstream') }}</button>
+              <button :class="{ on: direction === 'both' }" @click="direction = 'both'">{{ $t('lineage.both') }}</button>
+              <button :class="{ on: direction === 'downstream' }" @click="direction = 'downstream'">{{ $t('lineage.downstream') }}</button>
             </div>
-            <label class="ln-label" style="margin-top: 10px">Profondità: {{ depth }}</label>
+            <label class="ln-label" style="margin-top: 10px">{{ $t('lineage.depth', { n: depth }) }}</label>
             <input v-model.number="depth" type="range" min="1" max="8" class="ln-range" />
           </div>
 
           <div v-if="centerNodeId" class="ln-block">
-            <label class="ln-label">A monte <span class="muted">({{ upstream.length }})</span></label>
+            <label class="ln-label">{{ $t('lineage.upstream') }} <span class="muted">({{ upstream.length }})</span></label>
             <div class="ln-neigh">
               <span v-for="n in upstream" :key="n.id" class="ln-chip" :class="`c-${n.type}`">
                 <component :is="nodeIcon(n.type)" :size="11" /> {{ n.label }}
               </span>
-              <span v-if="!upstream.length" class="muted empty">— nessuno</span>
+              <span v-if="!upstream.length" class="muted empty">{{ $t('lineage.none') }}</span>
             </div>
-            <label class="ln-label" style="margin-top: 10px">A valle <span class="muted">({{ downstream.length }})</span></label>
+            <label class="ln-label" style="margin-top: 10px">{{ $t('lineage.downstream') }} <span class="muted">({{ downstream.length }})</span></label>
             <div class="ln-neigh">
               <span v-for="n in downstream" :key="n.id" class="ln-chip" :class="`c-${n.type}`">
                 <component :is="nodeIcon(n.type)" :size="11" /> {{ n.label }}
               </span>
-              <span v-if="!downstream.length" class="muted empty">— nessuno</span>
+              <span v-if="!downstream.length" class="muted empty">{{ $t('lineage.none') }}</span>
             </div>
           </div>
 
           <!-- salute / problemi nel grafo mostrato -->
           <div v-if="problems.total || problems.neverRun" class="ln-block ln-problems">
-            <label class="ln-label"><AlertTriangle :size="12" /> Salute</label>
-            <span v-if="problems.stale" class="ln-prob stale"><Clock :size="12" /> {{ problems.stale }} elemento/i stale (dati superati)</span>
-            <span v-if="problems.neverRun" class="ln-prob never"><AlertTriangle :size="12" /> {{ problems.neverRun }} mai eseguito/i</span>
-            <span v-if="problems.restricted" class="ln-prob restr"><AlertTriangle :size="12" /> {{ problems.restricted }} riferimento/i non risolto/i</span>
+            <label class="ln-label"><AlertTriangle :size="12" /> {{ $t('lineage.health') }}</label>
+            <span v-if="problems.stale" class="ln-prob stale"><Clock :size="12" /> {{ $t('lineage.staleItems', { n: problems.stale }) }}</span>
+            <span v-if="problems.neverRun" class="ln-prob never"><AlertTriangle :size="12" /> {{ $t('lineage.neverRunItems', { n: problems.neverRun }) }}</span>
+            <span v-if="problems.restricted" class="ln-prob restr"><AlertTriangle :size="12" /> {{ $t('lineage.unresolvedRefs', { n: problems.restricted }) }}</span>
           </div>
 
           <!-- filtri per tipo -->
           <div class="ln-block">
-            <label class="ln-label">Mostra</label>
+            <label class="ln-label">{{ $t('lineage.show') }}</label>
             <div class="ln-filters">
               <button
                 v-for="t in ALL_TYPES"
@@ -364,7 +366,7 @@ function nodeIcon(t: string) {
 
           <!-- legenda archi -->
           <div class="ln-block">
-            <label class="ln-label">Relazioni</label>
+            <label class="ln-label">{{ $t('lineage.relationships') }}</label>
             <div class="ln-legend">
               <span v-for="(m, k) in EDGE_META" :key="k" class="ln-leg">
                 <i class="edge" :style="{ background: m.color, borderTop: m.dashed ? `2px dashed ${m.color}` : 'none' }" /> {{ m.label }}
@@ -376,8 +378,8 @@ function nodeIcon(t: string) {
         <!-- canvas -->
         <div class="ln-canvas">
           <div v-if="error" class="ln-msg err">{{ error }}</div>
-          <div v-else-if="loading" class="ln-msg muted">Calcolo del grafo…</div>
-          <div v-else-if="!graph.nodes.length" class="ln-msg muted">Nessun elemento da mostrare.</div>
+          <div v-else-if="loading" class="ln-msg muted">{{ $t('lineage.computingGraph') }}</div>
+          <div v-else-if="!graph.nodes.length" class="ln-msg muted">{{ $t('lineage.noElements') }}</div>
           <ClientOnly>
             <VueFlow
               :nodes="rfNodes"
@@ -397,9 +399,9 @@ function nodeIcon(t: string) {
                     <span class="ln-name">{{ data.node.label }}</span>
                     <span class="ln-meta">{{ NODE_META[data.node.type]?.label }}<template v-if="data.node.kind"> · {{ data.node.kind }}</template></span>
                   </div>
-                  <span v-if="data.node.meta?.stale" class="ln-badge stale" :title="data.node.meta?.stale_reason === 'upstream' ? 'Stale ereditata da monte' : 'Stale: dati più recenti dell\'ultimo run'"><Clock :size="11" /></span>
-                  <span v-else-if="data.node.meta?.never_run" class="ln-badge never" title="Mai eseguito"><AlertTriangle :size="11" /></span>
-                  <span v-else-if="data.node.restricted" class="ln-badge restr" title="Riferimento non risolto (rimosso o non accessibile)"><AlertTriangle :size="11" /></span>
+                  <span v-if="data.node.meta?.stale" class="ln-badge stale" :title="data.node.meta?.stale_reason === 'upstream' ? $t('lineage.staleInherited') : $t('lineage.staleDataNewer')"><Clock :size="11" /></span>
+                  <span v-else-if="data.node.meta?.never_run" class="ln-badge never" :title="$t('lineage.neverRun')"><AlertTriangle :size="11" /></span>
+                  <span v-else-if="data.node.restricted" class="ln-badge restr" :title="$t('lineage.unresolvedRefTitle')"><AlertTriangle :size="11" /></span>
                 </div>
                 <Handle type="source" :position="Position.Right" />
               </template>
@@ -410,7 +412,7 @@ function nodeIcon(t: string) {
 
           <!-- pannello di dettaglio del nodo selezionato -->
           <div v-if="selected" class="ln-detail">
-            <button class="ln-detail-x" title="Chiudi" @click="selected = null"><X :size="14" /></button>
+            <button class="ln-detail-x" :title="$t('lineage.close')" @click="selected = null"><X :size="14" /></button>
             <div class="ln-detail-head">
               <component :is="nodeIcon(selected.type)" :size="16" :style="{ color: NODE_META[selected.type]?.color }" />
               <div>
@@ -421,49 +423,49 @@ function nodeIcon(t: string) {
 
             <div v-if="selected.meta?.stale" class="ln-detail-warn stale">
               <Clock :size="13" />
-              <span v-if="selected.meta?.stale_reason === 'upstream'">Stale ereditata: dipende da un elemento a monte con dati superati — rieseguire la catena</span>
-              <span v-else>Stale: legge dati rinfrescati dopo l'ultimo run riuscito — rieseguire</span>
+              <span v-if="selected.meta?.stale_reason === 'upstream'">{{ $t('lineage.staleInheritedDetail') }}</span>
+              <span v-else>{{ $t('lineage.staleDetail') }}</span>
             </div>
-            <div v-else-if="selected.meta?.never_run" class="ln-detail-warn never"><AlertTriangle :size="13" /> Mai eseguito</div>
-            <div v-else-if="selected.restricted" class="ln-detail-warn restr"><AlertTriangle :size="13" /> Riferimento non risolto · {{ restrictedLabel(selected) }}</div>
+            <div v-else-if="selected.meta?.never_run" class="ln-detail-warn never"><AlertTriangle :size="13" /> {{ $t('lineage.neverRun') }}</div>
+            <div v-else-if="selected.restricted" class="ln-detail-warn restr"><AlertTriangle :size="13" /> {{ $t('lineage.unresolvedRef') }} · {{ restrictedLabel(selected) }}</div>
 
             <dl class="ln-detail-meta">
               <template v-if="selected.type === 'flow'">
-                <dt>Motore</dt><dd>{{ selected.meta?.engine ?? '—' }}</dd>
-                <dt>Ultimo run</dt><dd>{{ selected.meta?.last_run_status ?? 'mai' }} · {{ fmtDate(selected.meta?.last_run_at) }}</dd>
-                <dt>Schedulato</dt><dd>{{ selected.meta?.scheduled ? 'sì' : 'no' }}</dd>
+                <dt>{{ $t('lineage.engine') }}</dt><dd>{{ selected.meta?.engine ?? '—' }}</dd>
+                <dt>{{ $t('lineage.lastRun') }}</dt><dd>{{ selected.meta?.last_run_status ?? $t('lineage.never') }} · {{ fmtDate(selected.meta?.last_run_at) }}</dd>
+                <dt>{{ $t('lineage.scheduled') }}</dt><dd>{{ selected.meta?.scheduled ? $t('lineage.yes') : $t('lineage.no') }}</dd>
               </template>
               <template v-else-if="selected.type === 'datasource'">
-                <dt>Righe</dt><dd>{{ selected.meta?.rows ?? '—' }}</dd>
-                <dt>Rinfrescata</dt><dd>{{ fmtDate(selected.meta?.refreshed_at) }}</dd>
+                <dt>{{ $t('lineage.rows') }}</dt><dd>{{ selected.meta?.rows ?? '—' }}</dd>
+                <dt>{{ $t('lineage.refreshed') }}</dt><dd>{{ fmtDate(selected.meta?.refreshed_at) }}</dd>
               </template>
               <template v-else-if="selected.type === 'connection'">
-                <dt>Tipo</dt><dd>{{ selected.meta?.db_type ?? '—' }}</dd>
-                <dt>Database</dt><dd>{{ selected.meta?.database || '—' }}</dd>
+                <dt>{{ $t('lineage.type') }}</dt><dd>{{ selected.meta?.db_type ?? '—' }}</dd>
+                <dt>{{ $t('lineage.database') }}</dt><dd>{{ selected.meta?.database || '—' }}</dd>
               </template>
               <template v-else-if="selected.type === 'db_sink'">
-                <dt>Connessione</dt><dd>{{ selected.meta?.connection_name ?? '—' }}</dd>
-                <dt>Modalità</dt><dd>{{ selected.meta?.mode ?? '—' }}</dd>
+                <dt>{{ $t('lineage.nodeConnection') }}</dt><dd>{{ selected.meta?.connection_name ?? '—' }}</dd>
+                <dt>{{ $t('lineage.mode') }}</dt><dd>{{ selected.meta?.mode ?? '—' }}</dd>
               </template>
               <template v-else-if="selected.type === 's3_sink'">
-                <dt>Bucket</dt><dd>{{ selected.meta?.bucket || '—' }}</dd>
-                <dt>Formato</dt><dd>{{ selected.meta?.format ?? '—' }}</dd>
+                <dt>{{ $t('lineage.bucket') }}</dt><dd>{{ selected.meta?.bucket || '—' }}</dd>
+                <dt>{{ $t('lineage.format') }}</dt><dd>{{ selected.meta?.format ?? '—' }}</dd>
               </template>
             </dl>
 
             <!-- blast radius: cosa si tocca a valle se cambio questo nodo -->
             <div v-if="impact && impact.total" class="ln-impact">
-              <span class="ln-impact-h">Impatto a valle</span>
+              <span class="ln-impact-h">{{ $t('lineage.downstreamImpact') }}</span>
               <div class="ln-impact-row">
-                <span v-if="impact.flows"><Workflow :size="11" /> {{ impact.flows }} flussi</span>
-                <span v-if="impact.datasources"><Database :size="11" /> {{ impact.datasources }} datasource</span>
-                <span v-if="impact.sinks"><HardDriveDownload :size="11" /> {{ impact.sinks }} destinazioni</span>
+                <span v-if="impact.flows"><Workflow :size="11" /> {{ $t('lineage.impactFlows', { n: impact.flows }) }}</span>
+                <span v-if="impact.datasources"><Database :size="11" /> {{ $t('lineage.impactDatasources', { n: impact.datasources }) }}</span>
+                <span v-if="impact.sinks"><HardDriveDownload :size="11" /> {{ $t('lineage.impactSinks', { n: impact.sinks }) }}</span>
               </div>
             </div>
 
             <div class="ln-detail-actions">
-              <button v-if="canRecenter(selected)" @click="recenterOn(selected)"><Crosshair :size="13" /> Centra qui</button>
-              <button v-if="canOpen(selected)" class="primary" @click="openNode(selected)"><ExternalLink :size="13" /> Apri</button>
+              <button v-if="canRecenter(selected)" @click="recenterOn(selected)"><Crosshair :size="13" /> {{ $t('lineage.centerHere') }}</button>
+              <button v-if="canOpen(selected)" class="primary" @click="openNode(selected)"><ExternalLink :size="13" /> {{ $t('lineage.open') }}</button>
             </div>
           </div>
         </div>

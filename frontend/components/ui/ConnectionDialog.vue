@@ -2,6 +2,7 @@
 // Dialog di creazione/modifica di una connessione database, con test in-place.
 // La password non viene mai mostrata: in modifica, campo vuoto = non cambiarla.
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plug, X, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import {
@@ -24,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const connApi = useConnections()
+const { t } = useI18n()
 
 const name = ref('')
 const description = ref('')
@@ -88,7 +90,7 @@ async function test() {
     } else {
       await connApi.testDraft(props.projectId, draft())
     }
-    testResult.value = { ok: true, message: 'Connection works' }
+    testResult.value = { ok: true, message: t('connectionDialog.testOk') }
   } catch (e) {
     testResult.value = { ok: false, message: errMessage(e) }
   } finally {
@@ -107,25 +109,25 @@ function confirm() {
     <div v-if="open" class="cd-backdrop" @mousedown.self="emit('cancel')">
       <div class="cd-card" @keydown.esc="emit('cancel')">
         <div class="cd-head">
-          <h3><Plug :size="15" /> {{ isEdit ? 'Edit connection' : 'New connection' }}</h3>
+          <h3><Plug :size="15" /> {{ isEdit ? $t('connectionDialog.titleEdit') : $t('connectionDialog.titleNew') }}</h3>
           <button class="cd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 
         <div class="cd-grid">
           <div class="cd-field cd-wide">
-            <label>Name</label>
-            <input v-model="name" type="text" placeholder="e.g. sales-warehouse" />
+            <label>{{ $t('connectionDialog.nameLabel') }}</label>
+            <input v-model="name" type="text" :placeholder="$t('connectionDialog.namePlaceholder')" />
           </div>
           <div class="cd-field" :class="{ 'cd-wide': isS3 }">
-            <label>Connection type</label>
+            <label>{{ $t('connectionDialog.typeLabel') }}</label>
             <Select v-model="dbType" :options="DB_TYPES" />
           </div>
           <div v-if="!isS3" class="cd-field">
-            <label>Port <span class="cd-hint">(empty = default)</span></label>
+            <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" placeholder="5432" />
           </div>
           <div class="cd-field cd-wide">
-            <label>{{ isS3 ? 'Endpoint URL' : 'Host' }} <span v-if="isS3" class="cd-hint">(empty = AWS)</span></label>
+            <label>{{ isS3 ? $t('connectionDialog.endpointLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
               type="text"
@@ -133,25 +135,25 @@ function confirm() {
             />
           </div>
           <div class="cd-field">
-            <label>{{ isS3 ? 'Access key ID' : 'Username' }}</label>
+            <label>{{ isS3 ? $t('connectionDialog.accessKeyLabel') : $t('connectionDialog.usernameLabel') }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
           <div class="cd-field">
             <label>
-              {{ isS3 ? 'Secret access key' : 'Password' }}
-              <span v-if="isEdit" class="cd-hint">(empty = unchanged)</span>
+              {{ isS3 ? $t('connectionDialog.secretKeyLabel') : $t('connectionDialog.passwordLabel') }}
+              <span v-if="isEdit" class="cd-hint">{{ $t('connectionDialog.passwordHintUnchanged') }}</span>
             </label>
             <input v-model="password" type="password" autocomplete="new-password" />
           </div>
           <div class="cd-field">
             <label>
-              {{ isS3 ? 'Default bucket' : dbType === 'trino' ? 'Catalog' : 'Database' }}
-              <span v-if="isS3" class="cd-hint">(optional)</span>
+              {{ isS3 ? $t('connectionDialog.bucketLabel') : dbType === 'trino' ? $t('connectionDialog.catalogLabel') : $t('connectionDialog.databaseLabel') }}
+              <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span>
             </label>
-            <input v-model="database" type="text" :placeholder="isS3 ? 'exports' : ''" />
+            <input v-model="database" type="text" :placeholder="isS3 ? $t('connectionDialog.bucketPlaceholder') : ''" />
           </div>
           <div class="cd-field">
-            <label>{{ isS3 ? 'Region' : 'Schema' }} <span class="cd-hint">(optional)</span></label>
+            <label>{{ isS3 ? $t('connectionDialog.regionLabel') : $t('connectionDialog.schemaLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
             <input
               v-model="dbSchema"
               type="text"
@@ -159,19 +161,17 @@ function confirm() {
             />
           </div>
           <div class="cd-field cd-wide">
-            <label>Description <span class="cd-hint">(optional)</span></label>
-            <input v-model="description" type="text" placeholder="what it connects to, who owns it" />
+            <label>{{ $t('connectionDialog.descriptionLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
+            <input v-model="description" type="text" :placeholder="$t('connectionDialog.descriptionPlaceholder')" />
           </div>
         </div>
 
         <p class="muted cd-note">
           <template v-if="isS3">
-            Anyone with the CONNECT permission on this folder can write to whatever
-            these credentials can reach — prefer keys scoped to the target bucket.
+            {{ $t('connectionDialog.noteS3') }}
           </template>
           <template v-else>
-            Anyone with the CONNECT permission on this folder can query whatever these
-            credentials can read — prefer a read-only database user.
+            {{ $t('connectionDialog.noteDb') }}
           </template>
         </p>
 
@@ -186,12 +186,12 @@ function confirm() {
           <button :disabled="testing || incomplete" @click="test">
             <LoaderCircle v-if="testing" :size="14" class="spin" />
             <Plug v-else :size="14" />
-            Test connection
+            {{ $t('connectionDialog.testButton') }}
           </button>
           <span class="cd-spacer" />
-          <button @click="emit('cancel')">Cancel</button>
+          <button @click="emit('cancel')">{{ $t('connectionDialog.cancelButton') }}</button>
           <button class="primary" :disabled="incomplete || busy" @click="confirm">
-            {{ isEdit ? 'Save' : 'Create' }}
+            {{ isEdit ? $t('connectionDialog.saveButton') : $t('connectionDialog.createButton') }}
           </button>
         </div>
       </div>

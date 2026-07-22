@@ -2,6 +2,7 @@
 // Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
 // con stato live, eliminazione.
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -12,6 +13,7 @@ import type { RunInfo } from '~/composables/useRuns'
 const dsApi = useDatasources()
 const projectsApi = useProjects()
 const toast = useToast()
+const { t } = useI18n()
 
 // ricerca server-side (nome/descrizione, su tutto il dataset) + paginazione
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
@@ -68,10 +70,10 @@ async function refresh(d: DatasourceInfo) {
 }
 
 async function remove(d: DatasourceInfo) {
-  if (!confirm(`Delete datasource "${d.name}"? The parquet snapshot is removed too.`)) return
+  if (!confirm(t('datasources.confirmDelete', { name: d.name }))) return
   try {
     await dsApi.remove(d.id)
-    toast.success(`Datasource "${d.name}" deleted`)
+    toast.success(t('datasources.deletedToast', { name: d.name }))
     await load() // ricarica la pagina (aggiorna totale/finestra)
   } catch (e) {
     toast.error(errMessage(e))
@@ -92,7 +94,7 @@ async function saveSchedule(cron: string) {
   try {
     const updated = await dsApi.setSchedule(scheduleFor.value.id, cron.trim())
     items.value = items.value.map((x) => (x.id === updated.id ? updated : x))
-    toast.success(cron.trim() ? `Refresh schedulato: ${updated.refresh_schedule}` : 'Schedulazione disattivata')
+    toast.success(cron.trim() ? t('datasources.scheduleSetToast', { cron: updated.refresh_schedule }) : t('datasources.scheduleDisabledToast'))
     scheduleFor.value = null
   } catch (e) {
     toast.error(errMessage(e)) // 422 cron invalido, 403 permessi
@@ -105,43 +107,43 @@ async function saveSchedule(cron: string) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Database :size="18" /> Datasources <span class="muted count">{{ total }}</span></h2>
+      <h2><Database :size="18" /> {{ $t('datasources.title') }} <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Search datasources…" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('datasources.searchPlaceholder')" /></span>
       </div>
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="4" />
     <p v-else-if="!items.length" class="muted">
-      {{ q ? 'No datasource matches the search.' : 'No datasources yet: publish a flow output or import from a database.' }}
+      {{ q ? $t('datasources.noSearchResults') : $t('datasources.emptyState') }}
     </p>
 
     <table v-else class="list">
       <thead>
-        <tr><th>Name</th><th>Folder</th><th>Rows</th><th>Updated</th><th /></tr>
+        <tr><th>{{ $t('datasources.colName') }}</th><th>{{ $t('datasources.colFolder') }}</th><th>{{ $t('datasources.colRows') }}</th><th>{{ $t('datasources.colUpdated') }}</th><th /></tr>
       </thead>
       <tbody>
         <tr v-for="d in items" :key="d.id">
           <td>
             <span class="rowlink" :title="d.source_ref ?? ''">
               <Database :size="14" /> {{ d.name }}
-              <span v-if="d.kind === 'database'" class="tag">db</span>
-              <span v-else-if="d.kind === 'flow'" class="tag">flow</span>
+              <span v-if="d.kind === 'database'" class="tag">{{ $t('datasources.tagDb') }}</span>
+              <span v-else-if="d.kind === 'flow'" class="tag">{{ $t('datasources.tagFlow') }}</span>
             </span>
             <div v-if="d.description" class="muted desc">{{ d.description }}</div>
             <div v-if="d.refresh_schedule" class="muted sched">
               <CalendarClock :size="11" /> <code>{{ d.refresh_schedule }}</code>
-              <span v-if="d.next_refresh_at"> · prossimo {{ fmtDate(d.next_refresh_at) }}</span>
+              <span v-if="d.next_refresh_at"> {{ $t('datasources.nextRefresh', { date: fmtDate(d.next_refresh_at) }) }}</span>
             </div>
           </td>
           <td class="muted"><Folder :size="13" /> {{ folderName[d.project_id] ?? `#${d.project_id}` }}</td>
           <td class="muted nowrap">
             <template v-if="isImporting(d.id)">
-              <span class="okline"><LoaderCircle :size="12" class="spin" /> importing…</span>
+              <span class="okline"><LoaderCircle :size="12" class="spin" /> {{ $t('datasources.importingStatus') }}</span>
             </template>
             <template v-else-if="ingestRuns[d.id]?.status === 'FAILURE'">
-              <span class="koline" :title="ingestRuns[d.id].error ?? ''">import failed</span>
+              <span class="koline" :title="ingestRuns[d.id].error ?? ''">{{ $t('datasources.importFailedStatus') }}</span>
             </template>
             <template v-else>{{ d.rows != null ? d.rows.toLocaleString('it-IT') : '—' }}</template>
           </td>
@@ -151,17 +153,17 @@ async function saveSchedule(cron: string) {
               v-if="d.kind === 'database'"
               class="mini"
               :class="{ active: !!d.refresh_schedule }"
-              title="Schedule automatic refresh (cron)"
+              :title="$t('datasources.scheduleRefreshTitle')"
               @click="openSchedule(d)"
             ><CalendarClock :size="13" /></button>
             <button
               v-if="d.kind === 'database'"
               class="mini"
-              title="Refresh snapshot now (re-run the source)"
+              :title="$t('datasources.refreshNowTitle')"
               :disabled="isImporting(d.id)"
               @click="refresh(d)"
             ><RefreshCw :size="13" /></button>
-            <button class="mini danger" title="Delete datasource" @click="remove(d)"><Trash2 :size="13" /></button>
+            <button class="mini danger" :title="$t('datasources.deleteTitle')" @click="remove(d)"><Trash2 :size="13" /></button>
           </td>
         </tr>
       </tbody>
@@ -172,7 +174,7 @@ async function saveSchedule(cron: string) {
     <ScheduleDialog
       :open="!!scheduleFor"
       :title="scheduleFor?.name ?? ''"
-      subtitle="Aggiorna automaticamente lo snapshot di"
+      :subtitle="$t('datasources.scheduleSubtitle')"
       :current="scheduleFor?.refresh_schedule ?? null"
       :busy="savingSchedule"
       @save="saveSchedule"

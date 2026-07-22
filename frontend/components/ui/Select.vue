@@ -5,6 +5,9 @@
 // overflow dei contenitori (pannello nodo, toolbar, celle di tabella).
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { ChevronDown, Check, Search } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 export interface SelectOption {
   value: any
@@ -190,7 +193,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
           v-model="query"
           type="text"
           class="sel-search-input"
-          placeholder="Cerca…"
+          :placeholder="t('select.search')"
           @input="onQueryInput"
           @keydown="onKeydown"
         />
@@ -211,8 +214,8 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
             <span class="sel-opt-label">{{ labelOf(o) }}</span>
           </div>
         </template>
-        <p v-if="!norm.length" class="sel-empty">No options</p>
-        <p v-else-if="!filtered.length" class="sel-empty">Nessun risultato</p>
+        <p v-if="!norm.length" class="sel-empty">{{ $t('select.noOptions') }}</p>
+        <p v-else-if="!filtered.length" class="sel-empty">{{ $t('select.noResults') }}</p>
       </div>
     </div>
   </Teleport>

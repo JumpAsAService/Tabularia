@@ -35,19 +35,19 @@ function commit() {
       color="#fbbf24"
       :line-style="{ borderWidth: '1px', borderColor: 'rgba(251, 191, 36, 0.4)' }"
     />
-    <div class="comment-head"><StickyNote :size="12" /> nota</div>
+    <div class="comment-head"><StickyNote :size="12" /> {{ $t('commentNode.label') }}</div>
     <!-- la classe nodrag evita che scrivere/selezionare sposti il nodo -->
     <textarea
       v-if="editing"
       ref="ta"
       v-model="draft"
       class="comment-input nodrag"
-      placeholder="Scrivi una nota…"
+      :placeholder="$t('commentNode.placeholder')"
       @blur="commit"
       @keydown.esc="commit"
     />
     <div v-else class="comment-text" :class="{ ph: !data?.text }" @dblclick="startEdit">
-      {{ data?.text || 'Doppio click per scrivere una nota' }}
+      {{ data?.text || $t('commentNode.emptyHint') }}
     </div>
   </div>
 </template>

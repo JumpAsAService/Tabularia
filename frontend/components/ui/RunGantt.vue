@@ -2,6 +2,7 @@
 // Gantt delle ESECUZIONI di un flusso: ogni run una barra start→fine sull'asse
 // tempo, colorata per esito. È la timeline delle attività del flusso.
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { CustomChart } from 'echarts/charts'
@@ -10,6 +11,8 @@ import VChart from 'vue-echarts'
 import type { RunInfo } from '~/composables/useRuns'
 
 use([CanvasRenderer, CustomChart, GridComponent, TooltipComponent, DataZoomComponent])
+
+const { t } = useI18n()
 
 const props = defineProps<{ runs: RunInfo[] }>()
 
@@ -84,7 +87,7 @@ const option = computed(() => {
     grid: { left: 54, right: 14, top: 8, bottom: 40 },
     tooltip: {
       formatter: (p: any) =>
-        `<b>${p.data.name}</b> · ${p.data.status}<br/>${p.data.startLabel}<br/>durata: ${p.data.durationSec.toFixed(1)}s`,
+        `<b>${p.data.name}</b> · ${p.data.status}<br/>${p.data.startLabel}<br/>${t('runGantt.tooltipDuration', { s: p.data.durationSec.toFixed(1) })}`,
     },
     xAxis: {
       type: 'time',
@@ -93,7 +96,7 @@ const option = computed(() => {
       // una sola giornata → forzo la tacca oraria (00…23); più giorni → lascio
       // scegliere a ECharts per non affollare l'asse
       ...(singleDay ? { minInterval: HOUR, maxInterval: HOUR } : {}),
-      name: singleDay ? 'ora del giorno' : 'giorno e ora',
+      name: singleDay ? t('runGantt.axisHourOfDay') : t('runGantt.axisDayAndHour'),
       nameLocation: 'middle',
       nameGap: 28,
       nameTextStyle: { fontSize: 10, color: '#8b97ad' },
@@ -121,12 +124,12 @@ const option = computed(() => {
 <template>
   <div>
     <div v-if="rows.length" class="gantt"><VChart :option="option" autoresize /></div>
-    <p v-else class="muted small">Nessuna esecuzione da mostrare.</p>
+    <p v-else class="muted small">{{ $t('runGantt.noRuns') }}</p>
     <p v-if="rows.length" class="legend muted">
-      Ogni barra è un'esecuzione (asse Y: <code>#id</code> del run) — orizzontale: il <b>tempo</b>
-      (una giornata: ore 00–23; più giorni: giorno e ora — passa col mouse per la data completa),
-      larghezza: <b>durata</b>, colore l'esito
-      <span class="dot ok" /> riuscita <span class="dot ko" /> fallita.
+      {{ $t('runGantt.legendEach') }}<code>#id</code>{{ $t('runGantt.legendOfRun') }}<b>{{ $t('runGantt.legendTimeLabel') }}</b>
+      {{ $t('runGantt.legendTimeDetail') }}
+      <b>{{ $t('runGantt.legendDurationLabel') }}</b>{{ $t('runGantt.legendColorOutcome') }}
+      <span class="dot ok" />{{ $t('runGantt.legendSuccessLabel') }}<span class="dot ko" />{{ $t('runGantt.legendFailureLabel') }}
     </p>
   </div>
 </template>

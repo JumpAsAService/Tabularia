@@ -4,6 +4,7 @@
 // streaming + cache) — mai sul campione della preview. Anche lo scatter è
 // aggregato: ogni punto è un gruppo (es. un prodotto), X e Y due aggregazioni.
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart, TreemapChart, ScatterChart } from 'echarts/charts'
@@ -23,6 +24,8 @@ import { errMessage } from '~/composables/useApi'
 import { AGG_LABELS } from '~/composables/useFlowModel'
 
 use([CanvasRenderer, BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent])
+
+const { t } = useI18n()
 
 const props = defineProps<{
   columns: ColumnInfo[] // colonne in uscita dal nodo selezionato
@@ -58,14 +61,23 @@ const ui = ref(readUi())
 watch(theme, () => { ui.value = readUi() })
 
 const CHART_TYPES = [
-  { id: 'bar', label: 'Barre', icon: BarChart3 },
-  { id: 'line', label: 'Linee', icon: ChartLine },
-  { id: 'area', label: 'Area', icon: ChartArea },
-  { id: 'pie', label: 'Torta', icon: ChartPie },
-  { id: 'treemap', label: 'Treemap', icon: LayoutGrid },
-  { id: 'scatter', label: 'Scatter', icon: ChartScatter },
+  { id: 'bar', icon: BarChart3 },
+  { id: 'line', icon: ChartLine },
+  { id: 'area', icon: ChartArea },
+  { id: 'pie', icon: ChartPie },
+  { id: 'treemap', icon: LayoutGrid },
+  { id: 'scatter', icon: ChartScatter },
 ] as const
 type ChartType = (typeof CHART_TYPES)[number]['id']
+
+const chartTypeLabels = computed<Record<ChartType, string>>(() => ({
+  bar: t('chartPanel.barChart'),
+  line: t('chartPanel.lineChart'),
+  area: t('chartPanel.areaChart'),
+  pie: t('chartPanel.pieChart'),
+  treemap: t('chartPanel.treemapChart'),
+  scatter: t('chartPanel.scatterChart'),
+}))
 
 const AGGS = ['count', 'sum', 'mean', 'min', 'max', 'median', 'n_unique']
 const ADDITIVE = new Set(['count', 'sum']) // combinabili client-side (fetta "Altro")
@@ -167,7 +179,7 @@ const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 })
 
 const seriesName = computed(() => {
   if (isScatter.value) return `${yFunc.value}(${yNumCol.value})`
-  if (func.value === 'count') return 'conteggio'
+  if (func.value === 'count') return t('chartPanel.countLabel')
   return `${func.value}(${yCol.value || xCol.value})`
 })
 
@@ -241,7 +253,7 @@ const option = computed(() => {
     }))
     if (rest.length && ADDITIVE.has(func.value)) {
       data.push({
-        name: `Altro (${rest.length})`,
+        name: t('chartPanel.otherGroup', { n: rest.length }),
         value: rest.reduce((s, r) => s + (Number(r.__valore) || 0), 0),
         itemStyle: t === 'pie' ? { color: OTHER_COLOR } : undefined,
       })
@@ -388,24 +400,24 @@ const option = computed(() => {
     <div class="controls">
       <div class="typebtns">
         <button
-          v-for="t in CHART_TYPES"
-          :key="t.id"
-          :class="{ active: chartType === t.id }"
-          :title="t.label"
-          @click="chartType = t.id"
-        ><component :is="t.icon" :size="14" /></button>
+          v-for="ct in CHART_TYPES"
+          :key="ct.id"
+          :class="{ active: chartType === ct.id }"
+          :title="chartTypeLabels[ct.id]"
+          @click="chartType = ct.id"
+        ><component :is="ct.icon" :size="14" /></button>
       </div>
 
-      <label>{{ isScatter ? 'punto' : 'X' }}</label>
+      <label>{{ isScatter ? $t('chartPanel.point') : 'X' }}</label>
       <Select v-model="xCol" :options="allCols" class="csel" />
 
       <template v-if="isScatter">
         <label>X</label>
         <Select v-model="xFunc" :options="funcOptions(true)" class="fsel" />
-        <Select v-model="xNumCol" :options="numericCols" placeholder="colonna numerica" class="csel" />
+        <Select v-model="xNumCol" :options="numericCols" :placeholder="$t('chartPanel.numericColumnPlaceholder')" class="csel" />
         <label>Y</label>
         <Select v-model="yFunc" :options="funcOptions(true)" class="fsel" />
-        <Select v-model="yNumCol" :options="numericCols" placeholder="colonna numerica" class="csel" />
+        <Select v-model="yNumCol" :options="numericCols" :placeholder="$t('chartPanel.numericColumnPlaceholder')" class="csel" />
       </template>
 
       <template v-else>
@@ -413,7 +425,7 @@ const option = computed(() => {
         <Select v-model="func" :options="funcOptions()" class="fsel" />
         <template v-if="needsY">
           <label>Y</label>
-          <Select v-model="yCol" :options="numericCols" placeholder="colonna numerica" class="csel" />
+          <Select v-model="yCol" :options="numericCols" :placeholder="$t('chartPanel.numericColumnPlaceholder')" class="csel" />
         </template>
       </template>
 
@@ -431,16 +443,16 @@ const option = computed(() => {
         <input v-model.number="topN" type="number" min="1" max="200" class="topn" />
       </template>
 
-      <button class="mini" title="Aggiorna" @click="refresh"><RefreshCw :size="13" /></button>
-      <span v-if="loading" class="muted">calcolo sull'intero dataset…</span>
+      <button class="mini" :title="$t('chartPanel.refresh')" @click="refresh"><RefreshCw :size="13" /></button>
+      <span v-if="loading" class="muted">{{ $t('chartPanel.computingFullDataset') }}</span>
       <span v-else-if="error" class="err">{{ error }}</span>
-      <span v-else-if="droppedSeries" class="muted">+{{ droppedSeries }} serie oltre le 5 mostrate</span>
+      <span v-else-if="droppedSeries" class="muted">{{ $t('chartPanel.droppedSeries', { n: droppedSeries }) }}</span>
     </div>
 
     <div class="plot">
       <VChart v-if="rows.length" :option="option" autoresize />
       <p v-else-if="!loading" class="muted empty">
-        Scegli le colonne — il grafico è calcolato dall'engine su tutte le righe, non sul campione.
+        {{ $t('chartPanel.chooseColumnsHint') }}
       </p>
     </div>
   </div>

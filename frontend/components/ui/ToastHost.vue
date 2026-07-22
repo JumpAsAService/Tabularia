@@ -16,7 +16,7 @@ const icons = { success: CheckCircle2, error: XCircle, info: Info }
         <div v-for="t in toasts" :key="t.id" class="toast" :class="t.kind" @click="dismiss(t.id)">
           <component :is="icons[t.kind]" :size="16" class="ticon" />
           <span class="tmsg">{{ t.message }}</span>
-          <button class="tx" title="Dismiss" @click.stop="dismiss(t.id)"><X :size="13" /></button>
+          <button class="tx" :title="$t('toastHost.dismiss')" @click.stop="dismiss(t.id)"><X :size="13" /></button>
         </div>
       </TransitionGroup>
     </div>

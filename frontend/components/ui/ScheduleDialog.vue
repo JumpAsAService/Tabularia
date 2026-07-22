@@ -3,8 +3,11 @@
 // flussi. Mostra la descrizione testuale live del cron (stile crontab.guru) via
 // cronstrue in italiano.
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { CalendarClock, X } from 'lucide-vue-next'
 import cronstrue from 'cronstrue/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
@@ -37,10 +40,10 @@ watch(
 )
 
 const CRON_PRESETS = [
-  { label: 'Ogni 15 min', cron: '*/15 * * * *' },
-  { label: 'Ogni ora', cron: '0 * * * *' },
-  { label: 'Ogni notte (03:00)', cron: '0 3 * * *' },
-  { label: 'Ogni lunedì (06:00)', cron: '0 6 * * 1' },
+  { label: t('scheduleDialog.presetEvery15Min'), cron: '*/15 * * * *' },
+  { label: t('scheduleDialog.presetHourly'), cron: '0 * * * *' },
+  { label: t('scheduleDialog.presetNightly'), cron: '0 3 * * *' },
+  { label: t('scheduleDialog.presetWeeklyMonday'), cron: '0 6 * * 1' },
 ]
 
 const cronDescription = computed<{ text: string; ok: boolean }>(() => {
@@ -49,7 +52,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
   try {
     return { text: cronstrue.toString(expr, { locale: 'it', verbose: false }), ok: true }
   } catch {
-    return { text: 'Espressione cron non valida', ok: false }
+    return { text: t('scheduleDialog.invalidCron'), ok: false }
   }
 })
 </script>
@@ -59,19 +62,19 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
     <div v-if="open" class="sd-backdrop" @mousedown.self="emit('cancel')">
       <div class="sd-card" @keydown.esc="emit('cancel')">
         <div class="sd-head">
-          <h3><CalendarClock :size="15" /> Schedulazione</h3>
+          <h3><CalendarClock :size="15" /> {{ $t('scheduleDialog.heading') }}</h3>
           <button class="sd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
         <p class="muted sd-sub">
-          {{ subtitle }} <strong>{{ title }}</strong>. Orari nel fuso <strong>{{ tz }}</strong>.
+          {{ subtitle }} <strong>{{ title }}</strong>. {{ $t('scheduleDialog.timezoneNote') }} <strong>{{ tz }}</strong>.
         </p>
 
-        <label>Espressione cron (minuto ora giorno mese giorno-settimana)</label>
+        <label>{{ $t('scheduleDialog.cronLabel') }}</label>
         <input
           v-model="cronInput"
           type="text"
           spellcheck="false"
-          placeholder="es. 0 3 * * *"
+          :placeholder="$t('scheduleDialog.cronPlaceholder')"
           @keyup.enter="emit('save', cronInput)"
         />
         <p v-if="cronDescription.text" class="sd-desc" :class="{ bad: !cronDescription.ok }">
@@ -84,11 +87,11 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
         </div>
 
         <div class="sd-actions">
-          <button v-if="current" class="danger" :disabled="busy" @click="emit('save', '')">Disattiva</button>
+          <button v-if="current" class="danger" :disabled="busy" @click="emit('save', '')">{{ $t('scheduleDialog.disable') }}</button>
           <span class="sd-spacer" />
-          <button :disabled="busy" @click="emit('cancel')">Annulla</button>
+          <button :disabled="busy" @click="emit('cancel')">{{ $t('scheduleDialog.cancel') }}</button>
           <button class="primary" :disabled="busy || !cronInput.trim() || !cronDescription.ok" @click="emit('save', cronInput)">
-            Salva
+            {{ $t('scheduleDialog.save') }}
           </button>
         </div>
       </div>

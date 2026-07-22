@@ -5,6 +5,7 @@
 // e i grafici (ChartPanel, aggregazione sull'intero dataset) girano sugli stessi
 // dati trasformati. Nulla viene salvato.
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet,
 } from 'lucide-vue-next'
@@ -13,6 +14,7 @@ import { useDatasources, type DatasourceInfo } from '~/composables/useDatasource
 
 const api = useApi()
 const dsApi = useDatasources()
+const { t } = useI18n()
 
 // ── sorgente + motore ─────────────────────────────────────────────────────
 const datasources = ref<DatasourceInfo[]>([])
@@ -38,10 +40,10 @@ const FILTER_OPS = [
   { value: 'eq', label: '=' }, { value: 'ne', label: '≠' },
   { value: 'gt', label: '>' }, { value: 'ge', label: '≥' },
   { value: 'lt', label: '<' }, { value: 'le', label: '≤' },
-  { value: 'between', label: 'tra' },
-  { value: 'contains', label: 'contiene' }, { value: 'starts_with', label: 'inizia con' },
-  { value: 'in', label: 'in (a,b,…)' }, { value: 'not_in', label: 'non in' },
-  { value: 'is_null', label: 'è nullo' }, { value: 'is_not_null', label: 'non nullo' },
+  { value: 'between', label: t('viewer.opBetween') },
+  { value: 'contains', label: t('viewer.opContains') }, { value: 'starts_with', label: t('viewer.opStartsWith') },
+  { value: 'in', label: t('viewer.opIn') }, { value: 'not_in', label: t('viewer.opNotIn') },
+  { value: 'is_null', label: t('viewer.opIsNull') }, { value: 'is_not_null', label: t('viewer.opIsNotNull') },
 ]
 const NO_VALUE = new Set(['is_null', 'is_not_null'])
 
@@ -54,9 +56,9 @@ function temporalType(col: string): 'date' | 'datetime-local' | 'time' | 'text' 
   return 'text'
 }
 const AGG_FUNCS = [
-  { value: 'sum', label: 'somma' }, { value: 'mean', label: 'media' },
-  { value: 'min', label: 'min' }, { value: 'max', label: 'max' },
-  { value: 'count', label: 'conteggio' },
+  { value: 'sum', label: t('viewer.aggSum') }, { value: 'mean', label: t('viewer.aggMean') },
+  { value: 'min', label: t('viewer.aggMin') }, { value: 'max', label: t('viewer.aggMax') },
+  { value: 'count', label: t('viewer.aggCount') },
 ]
 
 interface FilterRow { column: string; operator: string; value: string; value2: string }
@@ -237,107 +239,107 @@ onMounted(async () => {
   <AppShell fluid>
    <div class="viewer">
     <div class="page-head">
-      <h2><PieChart :size="18" /> Viewer</h2>
+      <h2><PieChart :size="18" /> {{ $t('viewer.pageTitle') }}</h2>
       <div class="head-actions">
-        <label class="hl"><Cpu :size="13" /> motore</label>
+        <label class="hl"><Cpu :size="13" /> {{ $t('viewer.engineLabel') }}</label>
         <Select v-model="engine" :options="engineOptions" class="engsel" />
         <Select
           :model-value="dsId"
           :options="dsOptions"
           searchable
-          placeholder="scegli una datasource…"
+          :placeholder="$t('viewer.datasourcePlaceholder')"
           class="dssel"
           @update:model-value="onPickDatasource"
         />
       </div>
     </div>
 
-    <p v-if="!selectedDs" class="muted empty">Scegli una datasource per esplorarla — filtri, campi calcolati, pivot e grafici, senza modificarla.</p>
+    <p v-if="!selectedDs" class="muted empty">{{ $t('viewer.emptyStateHint') }}</p>
 
     <div v-else class="body" :style="{ gridTemplateColumns: `${sidebarW}px 6px 1fr` }">
       <!-- pannello trasformazioni al volo -->
       <aside class="cfg">
         <div class="cfg-sec">
-          <div class="cfg-head"><Filter :size="13" /> Filtri <button class="add" @click="addFilter"><Plus :size="13" /></button></div>
-          <p v-if="!filters.length" class="muted small">Nessun filtro.</p>
+          <div class="cfg-head"><Filter :size="13" /> {{ $t('viewer.filtersTitle') }} <button class="add" @click="addFilter"><Plus :size="13" /></button></div>
+          <p v-if="!filters.length" class="muted small">{{ $t('viewer.noFilters') }}</p>
           <div v-for="(f, i) in filters" :key="i" class="frow">
-            <Select v-model="f.column" :options="colNames" placeholder="colonna" class="fc" />
+            <Select v-model="f.column" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="fc" />
             <Select v-model="f.operator" :options="FILTER_OPS" class="fo" />
             <template v-if="f.operator === 'between'">
-              <input v-model="f.value" :type="temporalType(f.column)" class="fv" placeholder="da" />
-              <input v-model="f.value2" :type="temporalType(f.column)" class="fv" placeholder="a" />
+              <input v-model="f.value" :type="temporalType(f.column)" class="fv" :placeholder="$t('viewer.fromPlaceholder')" />
+              <input v-model="f.value2" :type="temporalType(f.column)" class="fv" :placeholder="$t('viewer.toPlaceholder')" />
             </template>
             <input
               v-else-if="!NO_VALUE.has(f.operator)"
               v-model="f.value"
               :type="temporalType(f.column)"
               class="fv"
-              placeholder="valore"
+              :placeholder="$t('viewer.valuePlaceholder')"
             />
             <button class="rm" @click="filters.splice(i, 1)"><X :size="13" /></button>
           </div>
         </div>
 
         <div class="cfg-sec">
-          <div class="cfg-head"><Sigma :size="13" /> Campi calcolati <button class="add" @click="addComputed"><Plus :size="13" /></button></div>
-          <p class="muted small">Espressione SQL nel dialetto del motore ({{ engine }}).</p>
+          <div class="cfg-head"><Sigma :size="13" /> {{ $t('viewer.computedFieldsTitle') }} <button class="add" @click="addComputed"><Plus :size="13" /></button></div>
+          <p class="muted small">{{ $t('viewer.computedFieldsHint', { engine }) }}</p>
           <div v-for="(c, i) in computedFields" :key="i" class="crow">
             <div class="crow-top">
-              <input v-model="c.name" type="text" class="cn" placeholder="nome campo" />
+              <input v-model="c.name" type="text" class="cn" :placeholder="$t('viewer.fieldNamePlaceholder')" />
               <button class="rm" @click="computedFields.splice(i, 1)"><X :size="13" /></button>
             </div>
-            <textarea v-model="c.expr" class="ce" rows="2" placeholder="es. prezzo * quantita * (1 - sconto / 100)" />
+            <textarea v-model="c.expr" class="ce" rows="2" :placeholder="$t('viewer.exprPlaceholder')" />
           </div>
         </div>
 
         <div class="cfg-sec">
           <div class="cfg-head">
-            <Rows3 :size="13" /> Pivot
-            <label class="toggle"><input v-model="pivotOn" type="checkbox" /> attiva</label>
+            <Rows3 :size="13" /> {{ $t('viewer.pivotTitle') }}
+            <label class="toggle"><input v-model="pivotOn" type="checkbox" /> {{ $t('viewer.pivotEnable') }}</label>
           </div>
           <template v-if="pivotOn">
-            <label class="lbl">Righe (dimensioni)</label>
+            <label class="lbl">{{ $t('viewer.pivotRowsLabel') }}</label>
             <div v-for="(_, i) in pivot.index" :key="'ix' + i" class="dimrow">
-              <Select v-model="pivot.index[i]" :options="colNames" placeholder="colonna" class="full" />
+              <Select v-model="pivot.index[i]" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="full" />
               <button class="rm" :disabled="pivot.index.length === 1" @click="pivot.index.splice(i, 1)"><X :size="13" /></button>
             </div>
-            <button class="add-dim" @click="pivot.index.push('')"><Plus :size="12" /> aggiungi riga</button>
+            <button class="add-dim" @click="pivot.index.push('')"><Plus :size="12" /> {{ $t('viewer.addRow') }}</button>
 
-            <label class="lbl">Colonne (dimensioni)</label>
+            <label class="lbl">{{ $t('viewer.pivotColumnsLabel') }}</label>
             <div v-for="(_, i) in pivot.on" :key="'on' + i" class="dimrow">
-              <Select v-model="pivot.on[i]" :options="colNames" placeholder="colonna" class="full" />
+              <Select v-model="pivot.on[i]" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="full" />
               <button class="rm" :disabled="pivot.on.length === 1" @click="pivot.on.splice(i, 1)"><X :size="13" /></button>
             </div>
-            <button class="add-dim" @click="pivot.on.push('')"><Plus :size="12" /> aggiungi colonna</button>
+            <button class="add-dim" @click="pivot.on.push('')"><Plus :size="12" /> {{ $t('viewer.addColumn') }}</button>
 
-            <label class="lbl">Valori</label>
-            <Select v-model="pivot.values" :options="colNames" placeholder="colonna valore" class="full" />
-            <label class="lbl">Funzione</label>
+            <label class="lbl">{{ $t('viewer.valuesLabel') }}</label>
+            <Select v-model="pivot.values" :options="colNames" :placeholder="$t('viewer.valueColumnPlaceholder')" class="full" />
+            <label class="lbl">{{ $t('viewer.functionLabel') }}</label>
             <Select v-model="pivot.func" :options="AGG_FUNCS" class="full" />
-            <label class="checkline" title="Non ripete i valori delle dimensioni di riga sulle righe successive dello stesso gruppo">
-              <input v-model="outline" type="checkbox" /> Non ripetere le dimensioni di riga
+            <label class="checkline" :title="$t('viewer.outlineHint')">
+              <input v-model="outline" type="checkbox" /> {{ $t('viewer.outlineToggle') }}
             </label>
           </template>
         </div>
       </aside>
 
       <!-- maniglia di ridimensionamento della sidebar -->
-      <div class="resizer" title="Trascina per ridimensionare" @mousedown="startResize" />
+      <div class="resizer" :title="$t('viewer.resizeHint')" @mousedown="startResize" />
 
       <!-- area risultato: tabella o grafico -->
       <section class="result">
         <div class="rtabs">
-          <button :class="{ active: view === 'table' }" @click="view = 'table'"><Table2 :size="14" /> Tabella</button>
-          <button :class="{ active: view === 'chart' }" @click="view = 'chart'"><PieChart :size="14" /> Grafico</button>
-          <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> Applica</button>
-          <span v-if="loading" class="muted">calcolo…</span>
+          <button :class="{ active: view === 'table' }" @click="view = 'table'"><Table2 :size="14" /> {{ $t('viewer.tableTab') }}</button>
+          <button :class="{ active: view === 'chart' }" @click="view = 'chart'"><PieChart :size="14" /> {{ $t('viewer.chartTab') }}</button>
+          <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>
+          <span v-if="loading" class="muted">{{ $t('viewer.computing') }}</span>
           <span v-else-if="error" class="err">{{ error }}</span>
-          <span class="rmeta muted">{{ rows.length }} righe · {{ tableCols.length }} colonne</span>
+          <span class="rmeta muted">{{ $t('viewer.rowsColsMeta', { n: rows.length, m: tableCols.length }) }}</span>
           <div class="expbtns">
-            <button :disabled="!rows.length || !!exporting" title="Esporta CSV (Polars)" @click="exportView('csv')">
+            <button :disabled="!rows.length || !!exporting" :title="$t('viewer.exportCsvTitle')" @click="exportView('csv')">
               <Download :size="13" /> {{ exporting === 'csv' ? '…' : 'CSV' }}
             </button>
-            <button :disabled="!rows.length || !!exporting" title="Esporta Excel (Polars)" @click="exportView('xlsx')">
+            <button :disabled="!rows.length || !!exporting" :title="$t('viewer.exportExcelTitle')" @click="exportView('xlsx')">
               <FileSpreadsheet :size="13" /> {{ exporting === 'xlsx' ? '…' : 'Excel' }}
             </button>
           </div>
@@ -362,7 +364,7 @@ onMounted(async () => {
               </tr>
             </tbody>
           </table>
-          <p v-else-if="!loading" class="muted empty">Nessun dato — applica una configurazione.</p>
+          <p v-else-if="!loading" class="muted empty">{{ $t('viewer.noDataHint') }}</p>
         </div>
 
         <div v-show="view === 'chart'" class="chartwrap">

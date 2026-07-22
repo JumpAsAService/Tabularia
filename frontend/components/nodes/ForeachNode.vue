@@ -20,12 +20,12 @@ defineProps<{ id: string; data: any }>()
     />
     <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
     <Handle id="right" type="target" :position="Position.Left" class="handle-driver h-left-bottom" />
-    <span class="hlabel-left">driver</span>
+    <span class="hlabel-left">{{ $t('foreachNode.driverLabel') }}</span>
 
     <div class="foreach-title">
       <Repeat :size="13" class="ico" />
-      ciclo foreach
-      <span class="muted hint">drag the body operations here</span>
+      {{ $t('foreachNode.title') }}
+      <span class="muted hint">{{ $t('foreachNode.hint') }}</span>
     </div>
 
     <Handle id="out" type="source" :position="Position.Right" />

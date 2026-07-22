@@ -3,10 +3,12 @@
 // i flussi falliscono. Filtro per stato + ricerca testuale sul motivo (server-side,
 // su tutto il dataset) + paginazione; click su una riga per il traceback completo.
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
 
+const { t } = useI18n()
 const runsApi = useRuns()
 const status = ref<'FAILURE' | 'SUCCESS' | ''>('FAILURE') // di default gli errori
 const expanded = ref<number | null>(null)
@@ -34,20 +36,20 @@ function isScheduled(r: RunInfo): boolean {
   return r.trigger_type === 'schedule'
 }
 function triggeredBy(r: RunInfo): string {
-  return isScheduled(r) ? 'schedule' : (r.launched_by_name || '—')
+  return isScheduled(r) ? t('runs.triggerSchedule') : (r.launched_by_name || '—')
 }
 
 const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
-  { value: 'FAILURE', label: 'Falliti' },
-  { value: 'SUCCESS', label: 'Riusciti' },
-  { value: '', label: 'Tutti' },
+  { value: 'FAILURE', label: t('runs.statusFailed') },
+  { value: 'SUCCESS', label: t('runs.statusSuccess') },
+  { value: '', label: t('runs.statusAll') },
 ]
 </script>
 
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><History :size="18" /> Esecuzioni <span class="muted count">{{ total }}</span></h2>
+      <h2><History :size="18" /> {{ $t('runs.title') }} <span class="muted count">{{ total }}</span></h2>
       <div class="head-actions">
         <div class="segmented">
           <button
@@ -59,16 +61,18 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
         </div>
         <span class="searchbox">
           <Search :size="14" />
-          <input v-model="q" type="text" placeholder="Cerca flusso, sorgente, autore o errore…" />
+          <input v-model="q" type="text" :placeholder="$t('runs.searchPlaceholder')" />
         </span>
-        <button class="mini" title="Aggiorna" @click="load"><RefreshCw :size="14" /></button>
+        <button class="mini" :title="$t('runs.refresh')" @click="load"><RefreshCw :size="14" /></button>
       </div>
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
     <SkeletonRows v-else-if="loading" :rows="5" />
     <p v-else-if="!items.length" class="muted">
-      Nessuna esecuzione{{ status === 'FAILURE' ? ' fallita' : '' }}{{ q ? ' per questa ricerca' : '' }}.
+      {{ status === 'FAILURE'
+        ? (q ? $t('runs.noRunsFailedSearch') : $t('runs.noRunsFailed'))
+        : (q ? $t('runs.noRunsSearch') : $t('runs.noRunsAny')) }}
     </p>
 
     <div v-else class="runs">
@@ -78,10 +82,10 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
           <span class="stpill" :class="r.status.toLowerCase()">{{ r.status }}</span>
           <span class="who">
             <component :is="r.kind === 'ingest' ? Database : Workflow" :size="13" />
-            {{ r.flow_name || r.source_name || (r.kind === 'ingest' ? 'refresh datasource' : `run #${r.id}`) }}
+            {{ r.flow_name || r.source_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
           </span>
           <span class="msg muted">{{ r.error || (r.status === 'SUCCESS' ? '—' : '') }}</span>
-          <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? 'Avviato dallo scheduler' : 'Avviato da ' + triggeredBy(r)">
+          <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? $t('runs.triggeredByScheduler') : $t('runs.triggeredByName', { name: triggeredBy(r) })">
             <component :is="isScheduled(r) ? CalendarClock : User" :size="12" />
             {{ triggeredBy(r) }}
           </span>
@@ -90,7 +94,7 @@ const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
         <div v-if="expanded === r.id" class="detail">
           <div v-if="r.error" class="detail-summary">{{ r.error }}</div>
           <pre v-if="r.error_detail" class="trace">{{ r.error_detail }}</pre>
-          <p v-else class="muted small">Nessun dettaglio aggiuntivo registrato.</p>
+          <p v-else class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>
       </div>
     </div>

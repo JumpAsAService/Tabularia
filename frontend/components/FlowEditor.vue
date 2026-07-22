@@ -16,8 +16,10 @@ import { useRuns, type PublishSpec, type DestinationSpec } from '~/composables/u
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import { skeletonPad } from '~/composables/useSkeleton'
+import { useI18n } from 'vue-i18n'
 
 const api = useApi()
+const { t } = useI18n()
 const flowsApi = useFlows()
 const projectsApi = useProjects()
 const runsApi = useRuns()
@@ -97,7 +99,7 @@ function startPanelResize(ev: MouseEvent) {
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
 }
-const status = ref('Carica un file per iniziare.')
+const status = ref(t('flowEditor.statusInitial'))
 // tipo di stato → icona nella toolbar (spinner / check / errore)
 const statusKind = ref<'info' | 'ok' | 'error' | 'busy'>('info')
 const toast = useToast()
@@ -124,7 +126,7 @@ const canRun = computed(
 // ── Flusso salvato (persistenza nel gateway) ─────────────────────────────
 const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : null)
 const projectId = ref<number | null>(route.query.project ? Number(route.query.project) : null)
-const flowName = ref('Flusso senza nome')
+const flowName = ref(t('flowEditor.unnamedFlow'))
 // motore del flusso: scelto in creazione (?engine=… dalla pagina Flows) per un
 // flusso nuovo, oppure caricato da flow.engine. Se si apre l'editor senza scelta
 // esplicita si usa il motore PREFERITO dell'utente. Passato a preview/run e salvato.
@@ -215,16 +217,16 @@ async function loadFlow(id: number) {
   outputCounter = Math.max(maxN('out-'), maxN('ctl-')) // out- e ctl- condividono il contatore
   commentCounter = maxN('cmt-')
   selectedId.value = null
-  setStatus(`Flusso "${f.name}" caricato`, 'ok')
+  setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok')
 }
 
 async function saveFlow() {
   if (projectId.value === null) {
-    setStatus('Scegli la cartella di destinazione per salvare', 'error')
+    setStatus(t('flowEditor.chooseProjectToSave'), 'error')
     return
   }
   if (!flowName.value.trim()) {
-    setStatus('Dai un nome al flusso', 'error')
+    setStatus(t('flowEditor.nameFlowPrompt'), 'error')
     return
   }
   try {
@@ -239,9 +241,9 @@ async function saveFlow() {
       flowId.value = f.id
       router.replace({ query: { flow: String(f.id) } }) // l'URL ora punta al flusso salvato
     }
-    setStatus(`Flusso "${flowName.value.trim()}" salvato`, 'ok')
+    setStatus(t('flowEditor.flowSaved', { name: flowName.value.trim() }), 'ok')
   } catch (e) {
-    setStatus(`Salvataggio fallito: ${errMessage(e)}`, 'error')
+    setStatus(t('flowEditor.saveFailed', { error: errMessage(e) }), 'error')
   }
 }
 
@@ -249,7 +251,7 @@ onMounted(async () => {
   try {
     operations.value = await api.operations()
   } catch (e) {
-    setStatus(`Backend non raggiungibile: ${errMessage(e)}`, 'error')
+    setStatus(t('flowEditor.backendUnreachable', { error: errMessage(e) }), 'error')
     return
   }
   try {
@@ -266,7 +268,7 @@ onMounted(async () => {
   try {
     if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
-    setStatus(`Caricamento flusso fallito: ${errMessage(e)}`, 'error')
+    setStatus(t('flowEditor.flowLoadFailed', { error: errMessage(e) }), 'error')
   }
 })
 
@@ -328,7 +330,7 @@ onConnect((conn: Connection) => {
   // gli archi di SEQUENZA collegano solo seq-out (destra) → seq-in (sinistra): un
   // source/ingresso-dati non ha presa di sequenza, quindi niente misto coi dati
   if (seqSource !== seqTarget) {
-    setStatus('Sequenza: collega la presa di sequenza a destra di un nodo a quella a sinistra di un altro nodo di controllo/output', 'error')
+    setStatus(t('flowEditor.seqConnectError'), 'error')
     return
   }
   const handle = (conn.targetHandle as string) || 'left'
@@ -369,7 +371,7 @@ function autolinkRefreshToSource(sourceId: string, targetId: string) {
   const ds = datasources.value.find((d) => d.id === dsId)
   if (!ds || ds.kind !== 'database') return
   updateNodeData(refresh.id, { datasourceId: ds.id, dsName: ds.name })
-  setStatus(`Refresh collegato alla datasource «${ds.name}»`, 'ok')
+  setStatus(t('flowEditor.refreshLinked', { name: ds.name }), 'ok')
 }
 
 onNodeClick(({ node }) => {
@@ -390,7 +392,7 @@ function targetSourceId(): string {
 async function onUpload(file: File) {
   const sid = targetSourceId()
   busy.value = true
-  setStatus(`Caricamento ${file.name}…`, 'busy')
+  setStatus(t('flowEditor.uploading', { name: file.name }), 'busy')
   try {
     const res = await api.uploadFile(file)
     updateNodeData(sid, {
@@ -406,15 +408,15 @@ async function onUpload(file: File) {
     if (res.status === 'ready') {
       // file piccolo: conversione già fatta in modo sincrono
       nodeColumns[sid] = res.dataset?.columns ?? []
-      setStatus(`Pronto: ${res.dataset?.rows} righe`, 'ok')
+      setStatus(t('flowEditor.ready', { rows: res.dataset?.rows }), 'ok')
       await refreshForNode(sid)
     } else {
       // file grande: conversione async su Celery → aspetta il completamento
-      setStatus(`Conversione in corso (task ${res.task_id})…`, 'busy')
+      setStatus(t('flowEditor.convertingTask', { id: res.task_id }), 'busy')
       await pollConversion(sid, res.task_id!)
     }
   } catch (e) {
-    setStatus(`Upload fallito: ${errMessage(e)}`, 'error')
+    setStatus(t('flowEditor.uploadFailed', { error: errMessage(e) }), 'error')
   } finally {
     busy.value = false
   }
@@ -435,17 +437,17 @@ async function pollConversion(sid: string, taskId: string) {
       const info: any = st.result ?? {}
       updateNodeData(sid, { rows: info.rows ?? null, columns: info.columns ?? [] })
       nodeColumns[sid] = info.columns ?? []
-      setStatus(`Pronto: ${info.rows} righe`, 'ok')
+      setStatus(t('flowEditor.ready', { rows: info.rows }), 'ok')
       await refreshForNode(sid)
       return
     }
     if (st.status === 'FAILURE') {
-      setStatus(`Conversione fallita: ${st.error}`, 'error')
+      setStatus(t('flowEditor.conversionFailed', { error: st.error }), 'error')
       return
     }
-    setStatus(`Conversione in corso… (${st.status})`, 'busy')
+    setStatus(t('flowEditor.convertingStatus', { status: st.status }), 'busy')
   }
-  setStatus('Timeout conversione.', 'error')
+  setStatus(t('flowEditor.conversionTimeout'), 'error')
 }
 
 function addSource() {
@@ -810,7 +812,7 @@ async function exportSelected(format: 'csv' | 'xlsx') {
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
   if (!sourceNode?.data?.parquetKey) {
-    setStatus('Il nodo non ha dati a monte da esportare', 'error')
+    setStatus(t('flowEditor.exportNoData'), 'error')
     return
   }
   const node = findNode(nodeId)
@@ -819,7 +821,7 @@ async function exportSelected(format: 'csv' | 'xlsx') {
     .toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
 
   busy.value = true
-  setStatus(`Esportazione ${format.toUpperCase()}…`, 'busy')
+  setStatus(t('flowEditor.exporting', { format: format.toUpperCase() }), 'busy')
   try {
     const blob = await api.exportData({
       bucket: sourceNode.data.bucket ?? bucket,
@@ -835,9 +837,9 @@ async function exportSelected(format: 'csv' | 'xlsx') {
     a.download = filename
     a.click()
     URL.revokeObjectURL(url)
-    setStatus(`Scaricato ${filename}`, 'ok')
+    setStatus(t('flowEditor.downloaded', { filename }), 'ok')
   } catch (e) {
-    setStatus(`Export fallito: ${errMessage(e)}`, 'error')
+    setStatus(t('flowEditor.exportFailed', { error: errMessage(e) }), 'error')
   } finally {
     busy.value = false
   }
@@ -868,15 +870,15 @@ function describeOutput(n: Node): OutputSummary {
   if ((d.destType ?? 'datasource') === 'database') {
     const conn = connectionsList.value.find((c) => c.id === d.connectionId)
     let error: string | null = null
-    if (d.connectionId == null) error = 'scegli la connessione'
-    else if (!conn) error = 'connessione non disponibile (permessi o eliminata)'
-    else if (conn.db_type === 's3') error = 'la connessione scelta è S3: usa la destinazione S3'
-    else if (!d.table?.trim()) error = 'indica la tabella di destinazione'
+    if (d.connectionId == null) error = t('flowEditor.chooseConnection')
+    else if (!conn) error = t('flowEditor.connectionUnavailable')
+    else if (conn.db_type === 's3') error = t('flowEditor.connectionIsS3')
+    else if (!d.table?.trim()) error = t('flowEditor.enterTargetTable')
     return {
       id: n.id,
-      label: `Tabella ${d.table?.trim() || '…'}`,
+      label: t('flowEditor.tableLabel', { table: d.table?.trim() || '…' }),
       detail: conn
-        ? `${conn.name} (${conn.db_type}) · ${d.mode === 'replace' ? 'sostituisci' : 'accoda'}`
+        ? `${conn.name} (${conn.db_type}) · ${d.mode === 'replace' ? t('flowEditor.destModeReplace') : t('flowEditor.destModeAppend')}`
         : '',
       error,
     }
@@ -885,13 +887,13 @@ function describeOutput(n: Node): OutputSummary {
     const conn = connectionsList.value.find((c) => c.id === d.connectionId)
     const bucket = d.s3Bucket?.trim() || conn?.database?.trim() || ''
     let error: string | null = null
-    if (d.connectionId == null) error = 'scegli la connessione S3'
-    else if (!conn) error = 'connessione non disponibile (permessi o eliminata)'
-    else if (conn.db_type !== 's3') error = 'la connessione scelta non è S3'
-    else if (!d.s3Key?.trim()) error = 'indica la chiave/percorso di destinazione'
-    else if (!bucket) error = 'nessun bucket: indicalo qui o come default della connessione'
+    if (d.connectionId == null) error = t('flowEditor.chooseS3Connection')
+    else if (!conn) error = t('flowEditor.connectionUnavailable')
+    else if (conn.db_type !== 's3') error = t('flowEditor.connectionNotS3')
+    else if (!d.s3Key?.trim()) error = t('flowEditor.enterS3Key')
+    else if (!bucket) error = t('flowEditor.noBucketError')
     const parts = (d.partitionBy ?? []).length
-      ? ` · partizioni: ${(d.partitionBy as string[]).join(', ')}`
+      ? t('flowEditor.partitionsLabel', { list: (d.partitionBy as string[]).join(', ') })
       : ''
     return {
       id: n.id,
@@ -902,12 +904,12 @@ function describeOutput(n: Node): OutputSummary {
   }
   const proj = projectsList.value.find((p) => p.id === d.projectId)
   let error: string | null = null
-  if (!d.name?.trim()) error = 'dai un nome alla datasource'
-  else if (d.projectId == null) error = 'scegli la cartella'
+  if (!d.name?.trim()) error = t('flowEditor.enterDatasourceName')
+  else if (d.projectId == null) error = t('flowEditor.chooseFolder')
   return {
     id: n.id,
-    label: `Datasource “${d.name?.trim() || '…'}”`,
-    detail: proj ? `cartella ${proj.name}` : '',
+    label: t('flowEditor.datasourceLabel', { name: d.name?.trim() || '…' }),
+    detail: proj ? t('flowEditor.folderDetail', { name: proj.name }) : '',
     error,
   }
 }
@@ -923,7 +925,7 @@ function run() {
   // niente dialog: la configurazione sta sui nodi
   if (hasControlNodes()) {
     if (flowId.value === null) {
-      setStatus('Salva il flusso per eseguire i nodi di controllo', 'error')
+      setStatus(t('flowEditor.saveFlowForControlNodes'), 'error')
       return
     }
     executeOrchestration()
@@ -933,7 +935,7 @@ function run() {
   if (outs.length) {
     // gli output richiedono il gateway (cronologia, RBAC, credenziali)
     if (flowId.value === null) {
-      setStatus('Salva il flusso per eseguire i nodi Output', 'error')
+      setStatus(t('flowEditor.saveFlowForOutputNodes'), 'error')
       return
     }
     const bad = runOutputs.value.find((o) => o.error)
@@ -975,7 +977,7 @@ async function executeRun(publish: PublishSpec | null) {
         publish,
       })
       runDialogOpen.value = false // chiuso SOLO a lancio riuscito
-      setStatus(`Run #${launched.id} avviato…`, 'busy')
+      setStatus(t('flowEditor.runStarted', { id: launched.id }), 'busy')
       pollRun(launched.id) // in background: niente lock sull'editor
     } else {
       // flusso non salvato: run diretto, senza cronologia né pubblicazione.
@@ -988,7 +990,7 @@ async function executeRun(publish: PublishSpec | null) {
         operations: ops,
       })
       runDialogOpen.value = false
-      setStatus(`Task ${res.task_id} avviato…`, 'busy')
+      setStatus(t('flowEditor.taskStarted', { id: res.task_id }), 'busy')
       pollTask(res.task_id)
     }
   } catch (e) {
@@ -1006,10 +1008,10 @@ async function executeOrchestration() {
   pollToken++
   try {
     const { run_id } = await flowsApi.runNow(flowId.value!)
-    setStatus('Orchestrazione avviata…', 'busy')
+    setStatus(t('flowEditor.orchestrationStarted'), 'busy')
     pollOrchestration(run_id)
   } catch (e) {
-    setStatus(`Errore: ${errMessage(e)}`, 'error')
+    setStatus(t('flowEditor.errorGeneric', { error: errMessage(e) }), 'error')
   } finally {
     busy.value = false
   }
@@ -1030,16 +1032,16 @@ async function pollOrchestration(runId: number) {
     }
     if (token !== pollToken) return
     if (run.status === 'SUCCESS') {
-      setStatus('Orchestrazione completata', 'ok')
+      setStatus(t('flowEditor.orchestrationCompleted'), 'ok')
       refreshDatasources()
       return
     }
     if (run.status === 'FAILURE') {
-      setStatus(`Orchestrazione: errore — ${run.error ?? 'sconosciuto'}`, 'error')
+      setStatus(t('flowEditor.orchestrationError', { error: run.error ?? t('flowEditor.unknownError') }), 'error')
       return
     }
   }
-  setStatus('Orchestrazione ancora in corso: controlla la cronologia dei run.', 'info')
+  setStatus(t('flowEditor.orchestrationTimeout'), 'info')
 }
 
 // un run per ogni nodo Output: la catena di ciascuno è il suo input sinistro
@@ -1052,7 +1054,7 @@ async function executeOutputRuns() {
       const label = describeOutput(node).label
       const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id)
       if (!sourceNode?.data?.parquetKey) {
-        runDialogError.value = `${label}: collega l'output a una catena con dati`
+        runDialogError.value = `${label}: ${t('flowEditor.outputMissingChain')}`
         selectedId.value = node.id
         return // dialog aperto: gli output già lanciati proseguono comunque
       }
@@ -1093,7 +1095,7 @@ async function executeOutputRuns() {
           publish,
           destination,
         })
-        setStatus(`${label}: run #${launched.id} avviato…`, 'busy')
+        setStatus(`${label}: ${t('flowEditor.outputRunStarted', { id: launched.id })}`, 'busy')
         pollRun(launched.id, label)
       } catch (e) {
         // 409 nome duplicato / 403 permessi: il dialog resta aperto sull'errore
@@ -1139,16 +1141,16 @@ async function pollRun(runId: number, label = '') {
             : ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
         } catch { /* riassunto illeggibile: resta il messaggio base */ }
       }
-      setStatus(`${prefix}completato: ${run.rows_written} righe${target}`, 'ok')
+      setStatus(`${prefix}${t('flowEditor.completedRows', { rows: run.rows_written })}${target}`, 'ok')
       if (run.datasource_id) refreshDatasources() // subito usabile nel picker
       return
     }
     if (run.status === 'FAILURE') {
-      setStatus(`${prefix}errore: ${run.error}`, 'error')
+      setStatus(`${prefix}${t('flowEditor.errorInline', { error: run.error })}`, 'error')
       return
     }
   }
-  setStatus(`${prefix}timeout in attesa del run.`, 'error')
+  setStatus(`${prefix}${t('flowEditor.runTimeout')}`, 'error')
 }
 
 async function pollTask(id: string) {
@@ -1159,15 +1161,15 @@ async function pollTask(id: string) {
     const st = await api.taskStatus(id)
     if (token !== pollToken) return
     if (st.status === 'SUCCESS') {
-      setStatus(`Completato: ${st.result?.rows_written} righe`, 'ok')
+      setStatus(t('flowEditor.taskCompleted', { rows: st.result?.rows_written }), 'ok')
       return
     }
     if (st.status === 'FAILURE') {
-      setStatus(`Errore: ${st.error}`, 'error')
+      setStatus(t('flowEditor.errorGeneric', { error: st.error }), 'error')
       return
     }
   }
-  setStatus('Timeout in attesa del task.', 'error')
+  setStatus(t('flowEditor.taskTimeout'), 'error')
 }
 </script>
 
@@ -1226,7 +1228,7 @@ async function pollTask(id: string) {
         </template>
         <Background pattern-color="#2a2f3a" :gap="16" />
         <Controls>
-          <ControlButton title="Ordina il flusso" @click="autoLayout">
+          <ControlButton :title="$t('flowEditor.orderFlowTitle')" @click="autoLayout">
             <Wand2 :size="13" />
           </ControlButton>
         </Controls>
@@ -1234,7 +1236,7 @@ async function pollTask(id: string) {
     </div>
 
     <div class="panel">
-      <div class="panel-resizer" title="Trascina per ridimensionare" @mousedown="startPanelResize" />
+      <div class="panel-resizer" :title="$t('flowEditor.resizeHint')" @mousedown="startPanelResize" />
       <NodePanel
         :node="selectedNode"
         :operations="operations"
@@ -1270,10 +1272,10 @@ async function pollTask(id: string) {
     <div class="grid">
       <div class="viewtabs">
         <button :class="{ active: viewTab === 'table' }" @click="viewTab = 'table'">
-          <Table2 :size="13" /> Tabella
+          <Table2 :size="13" /> {{ $t('flowEditor.tableTab') }}
         </button>
         <button :class="{ active: viewTab === 'chart' }" @click="viewTab = 'chart'">
-          <BarChart3 :size="13" /> Grafico
+          <BarChart3 :size="13" /> {{ $t('flowEditor.chartTab') }}
         </button>
       </div>
       <div class="viewbody" :class="{ scroll: viewTab === 'table' }">

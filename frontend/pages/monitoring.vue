@@ -27,16 +27,16 @@ const grafanaHome = computed(() => config.public.grafanaUrl)
     <template v-if="user?.is_superuser">
       <div class="mon-head">
         <p class="muted">
-          Live metrics from the stack (VictoriaMetrics + Grafana), auto-refresh 10s.
+          {{ $t('monitoring.liveMetrics') }}
         </p>
         <a :href="grafanaHome" target="_blank" rel="noopener" class="ext">
-          <ExternalLink :size="13" /> Open Grafana
+          <ExternalLink :size="13" /> {{ $t('monitoring.openGrafana') }}
         </a>
       </div>
       <iframe
         :src="dashboardUrl"
         class="grafana"
-        title="Grafana — Data Prep Overview"
+        :title="$t('monitoring.dashboardTitle')"
         loading="lazy"
       />
     </template>

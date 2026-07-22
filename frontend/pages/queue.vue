@@ -4,6 +4,7 @@
 // Il numero di worker è dinamico (in produzione può essere diverso): mostriamo
 // quelli online in quel momento. Polling ogni 2s; nessun websocket.
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Cpu, Square, RefreshCw, CircleAlert, Loader } from 'lucide-vue-next'
 import { useQueue, type QueueOverview } from '~/composables/useQueue'
 import { errMessage } from '~/composables/useApi'
@@ -12,6 +13,7 @@ const { user } = useAuth()
 const router = useRouter()
 const toast = useToast()
 const queueApi = useQueue()
+const { t } = useI18n()
 
 // guardia UX (il gateway impone la RBAC vera: /queue è require_superuser)
 watchEffect(() => {
@@ -37,11 +39,11 @@ async function tick() {
 }
 
 async function stop(taskId: string) {
-  if (!confirm(`Fermare il job ${taskId.slice(0, 8)}…? L'esecuzione in corso verrà interrotta.`)) return
+  if (!confirm(t('queue.confirmStopJob', { id: taskId.slice(0, 8) }))) return
   stopping.value[taskId] = true
   try {
     await queueApi.stopJob(taskId)
-    toast.success('Job fermato')
+    toast.success(t('queue.jobStopped'))
     await tick()
   } catch (e) {
     toast.error(errMessage(e))
@@ -58,18 +60,19 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-// nomi task tecnici → etichette leggibili
+// nomi task tecnici → chiavi i18n per le etichette leggibili
 const LABELS: Record<string, string> = {
-  'app.tasks.jobs.transform_data_task': 'Trasformazione flusso',
-  'app.tasks.jobs.ingest_database_task': 'Ingest datasource',
-  'app.tasks.jobs.convert_to_parquet_task': 'Conversione parquet',
-  'app.tasks.jobs.process_file_task': 'Elaborazione file',
-  'app.tasks.jobs.evict_cache_task': 'Pulizia cache',
-  'app.tasks.jobs.storage_stats_task': 'Statistiche storage',
+  'app.tasks.jobs.transform_data_task': 'taskTransform',
+  'app.tasks.jobs.ingest_database_task': 'taskIngest',
+  'app.tasks.jobs.convert_to_parquet_task': 'taskConvertParquet',
+  'app.tasks.jobs.process_file_task': 'taskProcessFile',
+  'app.tasks.jobs.evict_cache_task': 'taskEvictCache',
+  'app.tasks.jobs.storage_stats_task': 'taskStorageStats',
 }
 function label(name: string | null): string {
   if (!name) return '—'
-  return LABELS[name] ?? name.split('.').pop() ?? name
+  const key = LABELS[name]
+  return key ? t(`queue.${key}`) : name.split('.').pop() ?? name
 }
 function fmtRuntime(s: number | null): string {
   if (s == null) return '—'
@@ -86,10 +89,10 @@ const reserved = computed(() => data.value?.reserved ?? [])
   <AppShell>
     <template v-if="user?.is_superuser">
       <div class="page-head">
-        <h2><Cpu :size="18" /> Queue</h2>
+        <h2><Cpu :size="18" /> {{ $t('queue.pageTitle') }}</h2>
         <div class="head-actions">
-          <span class="live"><span class="dot" /> live · 2s</span>
-          <button class="mini" title="Aggiorna ora" @click="tick"><RefreshCw :size="14" /></button>
+          <span class="live"><span class="dot" /> {{ $t('queue.liveIndicator', { s: POLL_MS / 1000 }) }}</span>
+          <button class="mini" :title="$t('queue.refreshNow')" @click="tick"><RefreshCw :size="14" /></button>
         </div>
       </div>
 
@@ -98,28 +101,28 @@ const reserved = computed(() => data.value?.reserved ?? [])
       <!-- riepilogo -->
       <div class="stats">
         <div class="stat">
-          <span class="n">{{ workers.length }}</span><span class="l">worker online</span>
+          <span class="n">{{ workers.length }}</span><span class="l">{{ $t('queue.workersOnline') }}</span>
         </div>
         <div class="stat">
-          <span class="n">{{ data?.running_count ?? 0 }}</span><span class="l">in esecuzione</span>
+          <span class="n">{{ data?.running_count ?? 0 }}</span><span class="l">{{ $t('queue.runningCount') }}</span>
         </div>
         <div class="stat">
-          <span class="n">{{ data?.waiting ?? 0 }}</span><span class="l">in attesa</span>
+          <span class="n">{{ data?.waiting ?? 0 }}</span><span class="l">{{ $t('queue.waitingCount') }}</span>
         </div>
         <div class="stat sub">
-          <span class="n">{{ data?.queued ?? 0 }}</span><span class="l">accodati nel broker</span>
+          <span class="n">{{ data?.queued ?? 0 }}</span><span class="l">{{ $t('queue.queuedInBroker') }}</span>
         </div>
       </div>
 
       <!-- worker -->
-      <div class="section-title">Worker</div>
-      <p v-if="!workers.length && !loading" class="muted">Nessun worker online.</p>
+      <div class="section-title">{{ $t('queue.workersTitle') }}</div>
+      <p v-if="!workers.length && !loading" class="muted">{{ $t('queue.noWorkersOnline') }}</p>
       <div v-else class="workers">
         <div v-for="w in workers" :key="w.name" class="worker">
           <div class="wname"><Cpu :size="13" /> {{ w.name }}</div>
           <div class="wmeta">
-            <span :title="'Job in esecuzione su ' + (w.concurrency ?? '?') + ' slot'">
-              {{ w.running }}<template v-if="w.concurrency"> / {{ w.concurrency }}</template> in esec.
+            <span :title="$t('queue.workerRunningTitle', { n: w.concurrency ?? '?' })">
+              {{ w.running }}<template v-if="w.concurrency"> / {{ w.concurrency }}</template> {{ $t('queue.runningInline') }}
             </span>
             <span v-if="w.reserved" class="muted">· {{ w.reserved }} prefetch</span>
           </div>
@@ -135,8 +138,8 @@ const reserved = computed(() => data.value?.reserved ?? [])
       </div>
 
       <!-- in esecuzione -->
-      <div class="section-title">In esecuzione <span class="muted">({{ running.length }})</span></div>
-      <p v-if="!running.length && !loading" class="muted">Nessun job in esecuzione.</p>
+      <div class="section-title">{{ $t('queue.runningSectionTitle') }} <span class="muted">({{ running.length }})</span></div>
+      <p v-if="!running.length && !loading" class="muted">{{ $t('queue.noJobsRunning') }}</p>
       <div v-else class="jobs">
         <div v-for="j in running" :key="j.task_id" class="job">
           <span class="jspin"><Loader :size="13" /></span>
@@ -145,16 +148,16 @@ const reserved = computed(() => data.value?.reserved ?? [])
           <span class="jworker muted">{{ j.worker }}</span>
           <span class="jrt muted">{{ fmtRuntime(j.runtime_s) }}</span>
           <button class="mini danger" :disabled="stopping[j.task_id]" @click="stop(j.task_id)">
-            <Square :size="12" /> {{ stopping[j.task_id] ? 'Fermo…' : 'Ferma' }}
+            <Square :size="12" /> {{ stopping[j.task_id] ? $t('queue.stoppingLabel') : $t('queue.stopLabel') }}
           </button>
         </div>
       </div>
 
       <!-- in attesa -->
       <div class="section-title">
-        In attesa <span class="muted">({{ data?.waiting ?? 0 }})</span>
+        {{ $t('queue.waitingSectionTitle') }} <span class="muted">({{ data?.waiting ?? 0 }})</span>
       </div>
-      <p v-if="!reserved.length && !(data?.queued)" class="muted">Nessun job in attesa.</p>
+      <p v-if="!reserved.length && !(data?.queued)" class="muted">{{ $t('queue.noJobsWaiting') }}</p>
       <template v-else>
         <div v-if="reserved.length" class="jobs">
           <div v-for="j in reserved" :key="j.task_id" class="job">
@@ -164,12 +167,12 @@ const reserved = computed(() => data.value?.reserved ?? [])
             <span class="jworker muted">prefetch · {{ j.worker }}</span>
             <span class="jrt muted">—</span>
             <button class="mini danger" :disabled="stopping[j.task_id]" @click="stop(j.task_id)">
-              <Square :size="12" /> {{ stopping[j.task_id] ? 'Rimuovo…' : 'Rimuovi' }}
+              <Square :size="12" /> {{ stopping[j.task_id] ? $t('queue.removingLabel') : $t('queue.removeLabel') }}
             </button>
           </div>
         </div>
         <p v-if="data?.queued" class="muted queued-note">
-          + {{ data.queued }} accodati nel broker, non ancora assegnati a un worker
+          {{ $t('queue.queuedNote', { n: data.queued }) }}
           <template v-if="data.queues?.length">
             ({{ data.queues.map((q) => `${q.name}: ${q.messages}`).join(', ') }})
           </template>

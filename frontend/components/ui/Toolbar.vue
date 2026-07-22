@@ -68,7 +68,7 @@ const statusIcon = computed(() => {
     <span
       class="enginebadge"
       :class="engine === 'duckdb' ? 'duckdb' : 'polars'"
-      :title="`Motore di esecuzione del flusso: ${engineLabel}`"
+      :title="$t('toolbar.engineTitle', { engine: engineLabel })"
     >
       <Cpu :size="12" /> {{ engineLabel }}
     </span>
@@ -78,7 +78,7 @@ const statusIcon = computed(() => {
       class="flowname"
       type="text"
       :value="flowName"
-      placeholder="Nome flusso…"
+      :placeholder="$t('toolbar.flowNamePlaceholder')"
       @input="emit('update:flowName', ($event.target as HTMLInputElement).value)"
     />
     <Select
@@ -86,21 +86,21 @@ const statusIcon = computed(() => {
       class="projsel"
       :model-value="projectId"
       :options="projects.map((p) => ({ value: p.id, label: p.name }))"
-      placeholder="cartella…"
+      :placeholder="$t('toolbar.folderPlaceholder')"
       @update:model-value="emit('update:projectId', $event)"
     />
-    <button :disabled="busy" title="Salva flusso" @click="emit('save')"><Save :size="15" /> Salva</button>
+    <button :disabled="busy" :title="$t('toolbar.saveFlowTitle')" @click="emit('save')"><Save :size="15" /> {{ $t('toolbar.save') }}</button>
 
     <span class="sep" />
 
     <label class="filebtn">
-      <Upload :size="15" /> Carica file
+      <Upload :size="15" /> {{ $t('toolbar.uploadFile') }}
       <input type="file" accept=".csv,.tsv,.txt,.json,.ndjson,.jsonl,.xlsx,.xls,.parquet" @change="onFile" />
     </label>
 
-    <button @click="emit('add-source')"><Plus :size="15" /> Sorgente</button>
-    <button @click="emit('add-op')"><Plus :size="15" /> Operazione</button>
-    <button class="primary" :disabled="!canRun || busy" @click="emit('run')"><Play :size="15" /> Esegui</button>
+    <button @click="emit('add-source')"><Plus :size="15" /> {{ $t('toolbar.source') }}</button>
+    <button @click="emit('add-op')"><Plus :size="15" /> {{ $t('toolbar.operation') }}</button>
+    <button class="primary" :disabled="!canRun || busy" @click="emit('run')"><Play :size="15" /> {{ $t('toolbar.run') }}</button>
 
     <span class="status muted" :class="statusKind">
       <component
@@ -116,8 +116,8 @@ const statusIcon = computed(() => {
     <span class="sep" />
     <MemoryGauge compact />
     <span class="sep" />
-    <NuxtLink to="/" class="navbtn"><ArrowLeft :size="13" /> Progetti</NuxtLink>
-    <button class="navbtn" title="Esci" @click="logout"><LogOut :size="13" /></button>
+    <NuxtLink to="/" class="navbtn"><ArrowLeft :size="13" /> {{ $t('toolbar.projects') }}</NuxtLink>
+    <button class="navbtn" :title="$t('toolbar.logoutTitle')" @click="logout"><LogOut :size="13" /></button>
   </div>
 </template>
 

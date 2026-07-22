@@ -13,8 +13,11 @@ import {
   LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle,
 } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
+import { useI18n } from 'vue-i18n'
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent])
+
+const { t } = useI18n()
 
 const { user } = useAuth()
 const router = useRouter()
@@ -45,7 +48,7 @@ async function load() {
     items.value = page.items
     total.value = page.total
   } catch (e: any) {
-    error.value = e?.message ?? 'Errore'
+    error.value = e?.message ?? t('audit.errorGeneric')
   } finally {
     loading.value = false
   }
@@ -86,7 +89,7 @@ const accessOption = computed(() => {
       trigger: 'axis', backgroundColor: c.panel, borderColor: c.border,
       textStyle: { color: c.text, fontSize: 12 },
     },
-    legend: { data: ['Accessi', 'Falliti'], textStyle: { color: c.muted, fontSize: 11 }, top: 0, icon: 'circle' },
+    legend: { data: [t('audit.chartLegendAccess'), t('audit.chartLegendFailed')], textStyle: { color: c.muted, fontSize: 11 }, top: 0, icon: 'circle' },
     grid: { left: 30, right: 10, top: 28, bottom: 22 },
     xAxis: {
       type: 'category', data: labels,
@@ -99,9 +102,9 @@ const accessOption = computed(() => {
       splitLine: { lineStyle: { color: c.border, opacity: 0.4 } },
     },
     series: [
-      { name: 'Accessi', type: 'bar', stack: 'x', data: a?.buckets.map((b) => b.success) ?? [],
+      { name: t('audit.chartLegendAccess'), type: 'bar', stack: 'x', data: a?.buckets.map((b) => b.success) ?? [],
         itemStyle: { color: '#6ee7b7', borderRadius: [0, 0, 0, 0] }, barMaxWidth: 18 },
-      { name: 'Falliti', type: 'bar', stack: 'x', data: a?.buckets.map((b) => b.failure) ?? [],
+      { name: t('audit.chartLegendFailed'), type: 'bar', stack: 'x', data: a?.buckets.map((b) => b.failure) ?? [],
         itemStyle: { color: '#ff6b6b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 18 },
     ],
   }
@@ -114,25 +117,25 @@ onMounted(async () => {
 
 // ── presentazione ─────────────────────────────────────────────────────────────
 const ACTION_META: Record<string, { icon: any; color: string; label: string }> = {
-  'auth.login': { icon: LogIn, color: '#6ee7b7', label: 'Login' },
-  'auth.login_failed': { icon: XCircle, color: '#ff6b6b', label: 'Login fallito' },
-  'auth.logout': { icon: LogOut, color: '#8b93a7', label: 'Logout' },
-  'flow.create': { icon: Workflow, color: '#4f8cff', label: 'Flusso creato' },
-  'flow.update': { icon: Workflow, color: '#4f8cff', label: 'Flusso modificato' },
-  'flow.delete': { icon: Workflow, color: '#ff6b6b', label: 'Flusso eliminato' },
-  'flow.run': { icon: Workflow, color: '#a78bfa', label: 'Flusso eseguito' },
-  'flow.schedule': { icon: Workflow, color: '#4f8cff', label: 'Flusso schedulato' },
-  'flow.promote': { icon: Workflow, color: '#4f8cff', label: 'Versione promossa' },
-  'datasource.create': { icon: Database, color: '#6ee7b7', label: 'Datasource creata' },
-  'datasource.refresh': { icon: Database, color: '#a78bfa', label: 'Datasource aggiornata' },
-  'datasource.delete': { icon: Database, color: '#ff6b6b', label: 'Datasource eliminata' },
-  'datasource.schedule': { icon: Database, color: '#4f8cff', label: 'Refresh schedulato' },
-  'connection.create': { icon: Plug, color: '#6ee7b7', label: 'Connessione creata' },
-  'connection.update': { icon: Plug, color: '#4f8cff', label: 'Connessione modificata' },
-  'connection.delete': { icon: Plug, color: '#ff6b6b', label: 'Connessione eliminata' },
-  'export.download': { icon: Download, color: '#fbbf24', label: 'Download' },
-  'permission.grant': { icon: Shield, color: '#6ee7b7', label: 'Permesso concesso' },
-  'permission.revoke': { icon: Shield, color: '#ff6b6b', label: 'Permesso revocato' },
+  'auth.login': { icon: LogIn, color: '#6ee7b7', label: t('audit.loginAction') },
+  'auth.login_failed': { icon: XCircle, color: '#ff6b6b', label: t('audit.loginFailedAction') },
+  'auth.logout': { icon: LogOut, color: '#8b93a7', label: t('audit.logoutAction') },
+  'flow.create': { icon: Workflow, color: '#4f8cff', label: t('audit.flowCreateAction') },
+  'flow.update': { icon: Workflow, color: '#4f8cff', label: t('audit.flowUpdateAction') },
+  'flow.delete': { icon: Workflow, color: '#ff6b6b', label: t('audit.flowDeleteAction') },
+  'flow.run': { icon: Workflow, color: '#a78bfa', label: t('audit.flowRunAction') },
+  'flow.schedule': { icon: Workflow, color: '#4f8cff', label: t('audit.flowScheduleAction') },
+  'flow.promote': { icon: Workflow, color: '#4f8cff', label: t('audit.flowPromoteAction') },
+  'datasource.create': { icon: Database, color: '#6ee7b7', label: t('audit.datasourceCreateAction') },
+  'datasource.refresh': { icon: Database, color: '#a78bfa', label: t('audit.datasourceRefreshAction') },
+  'datasource.delete': { icon: Database, color: '#ff6b6b', label: t('audit.datasourceDeleteAction') },
+  'datasource.schedule': { icon: Database, color: '#4f8cff', label: t('audit.datasourceScheduleAction') },
+  'connection.create': { icon: Plug, color: '#6ee7b7', label: t('audit.connectionCreateAction') },
+  'connection.update': { icon: Plug, color: '#4f8cff', label: t('audit.connectionUpdateAction') },
+  'connection.delete': { icon: Plug, color: '#ff6b6b', label: t('audit.connectionDeleteAction') },
+  'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
+  'permission.grant': { icon: Shield, color: '#6ee7b7', label: t('audit.permissionGrantAction') },
+  'permission.revoke': { icon: Shield, color: '#ff6b6b', label: t('audit.permissionRevokeAction') },
 }
 function meta(a: string) {
   return ACTION_META[a] ?? { icon: Circle, color: '#8b93a7', label: a }
@@ -143,10 +146,10 @@ function fmtDate(iso: string) {
 function fmtAgo(iso: string | null) {
   if (!iso) return '—'
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
-  if (s < 60) return 'adesso'
-  if (s < 3600) return `${Math.floor(s / 60)} min fa`
-  if (s < 86400) return `${Math.floor(s / 3600)} h fa`
-  return `${Math.floor(s / 86400)} g fa`
+  if (s < 60) return t('audit.timeJustNow')
+  if (s < 3600) return t('audit.timeMinAgo', { n: Math.floor(s / 60) })
+  if (s < 86400) return t('audit.timeHoursAgo', { n: Math.floor(s / 3600) })
+  return t('audit.timeDaysAgo', { n: Math.floor(s / 86400) })
 }
 // riassunto compatto del detail (JSON completo nel title)
 function detailSummary(e: AuditEntry): string {
@@ -156,11 +159,11 @@ function detailSummary(e: AuditEntry): string {
   if (d.reason) parts.push(String(d.reason))
   if (d.format) parts.push(`${d.format}`)
   if (d.filename && !d.format) parts.push(String(d.filename))
-  if (d.cron) parts.push(`cron: ${d.cron}`)
-  if (Array.isArray(d.changed) && d.changed.length) parts.push(`campi: ${d.changed.join(', ')}`)
+  if (d.cron) parts.push(t('audit.cronLabel', { cron: d.cron }))
+  if (Array.isArray(d.changed) && d.changed.length) parts.push(t('audit.fieldsLabel', { fields: d.changed.join(', ') }))
   if (d.capability) parts.push(String(d.capability))
   if (d.db_type) parts.push(String(d.db_type))
-  if (d.engine) parts.push(`engine: ${d.engine}`)
+  if (d.engine) parts.push(t('audit.engineLabel', { engine: d.engine }))
   return parts.join(' · ')
 }
 </script>
@@ -169,20 +172,20 @@ function detailSummary(e: AuditEntry): string {
   <AppShell fluid>
     <div class="audit">
       <div class="page-head">
-        <h2><ScrollText :size="18" /> Audit log</h2>
-        <span class="muted sub">Chi entra, chi fa cosa, chi scarica cosa</span>
+        <h2><ScrollText :size="18" /> {{ $t('audit.heading') }}</h2>
+        <span class="muted sub">{{ $t('audit.subtitle') }}</span>
         <span class="spacer" />
-        <button class="mini" title="Aggiorna" @click="load(); loadSessions(); loadAccess()"><RefreshCw :size="14" /></button>
+        <button class="mini" :title="$t('audit.refreshTitle')" @click="load(); loadSessions(); loadAccess()"><RefreshCw :size="14" /></button>
       </div>
 
       <!-- accessi ultime 24h -->
       <section class="acc">
         <div class="acc-head">
-          <span class="acc-title">Accessi · ultime 24 ore</span>
+          <span class="acc-title">{{ $t('audit.accessTitle') }}</span>
           <span class="acc-stats muted" v-if="access">
-            <span class="ok">{{ access.total_success }} accessi</span>
-            <span v-if="access.total_failure" class="ko">· {{ access.total_failure }} falliti</span>
-            <span>· fuso {{ access.timezone }}</span>
+            <span class="ok">{{ $t('audit.accessSuccessCount', { n: access.total_success }) }}</span>
+            <span v-if="access.total_failure" class="ko">{{ $t('audit.accessFailureCount', { n: access.total_failure }) }}</span>
+            <span>{{ $t('audit.accessTimezone', { tz: access.timezone }) }}</span>
           </span>
         </div>
         <VChart class="acc-chart" :option="accessOption" autoresize />
@@ -191,35 +194,35 @@ function detailSummary(e: AuditEntry): string {
       <!-- sessioni attive -->
       <section class="sess">
         <div class="sess-head">
-          <span class="sess-title">Sessioni attive</span>
-          <span class="sess-count"><Circle :size="8" class="dot on" /> {{ onlineCount }} online · {{ sessions.length }} viste di recente</span>
+          <span class="sess-title">{{ $t('audit.sessionsTitle') }}</span>
+          <span class="sess-count"><Circle :size="8" class="dot on" /> {{ $t('audit.sessionsCount', { online: onlineCount, total: sessions.length }) }}</span>
         </div>
         <div class="sess-grid">
           <div v-for="s in sessions" :key="s.user_id" class="sess-card" :class="{ off: !s.online }">
             <Circle :size="8" class="dot" :class="{ on: s.online }" />
             <div class="sess-who">
-              <span class="sess-name">{{ s.full_name || s.email }}<span v-if="s.is_superuser" class="adm">admin</span></span>
+              <span class="sess-name">{{ s.full_name || s.email }}<span v-if="s.is_superuser" class="adm">{{ $t('audit.adminBadge') }}</span></span>
               <span class="sess-meta muted">{{ s.last_seen_ip || '—' }} · {{ fmtAgo(s.last_seen_at) }}</span>
             </div>
           </div>
-          <p v-if="!sessions.length" class="muted empty">Nessuna sessione recente.</p>
+          <p v-if="!sessions.length" class="muted empty">{{ $t('audit.noSessions') }}</p>
         </div>
       </section>
 
       <!-- filtri -->
       <div class="filters">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" placeholder="Cerca attore, bersaglio, IP…" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('audit.searchPlaceholder')" /></span>
         <select v-model="action" class="fsel">
-          <option value="">Tutte le azioni</option>
+          <option value="">{{ $t('audit.allActions') }}</option>
           <option v-for="a in actions" :key="a" :value="a">{{ meta(a).label }}</option>
         </select>
         <select v-model="outcome" class="fsel">
-          <option value="">Ogni esito</option>
-          <option value="success">Successo</option>
-          <option value="failure">Fallito</option>
+          <option value="">{{ $t('audit.allOutcomes') }}</option>
+          <option value="success">{{ $t('audit.outcomeSuccess') }}</option>
+          <option value="failure">{{ $t('audit.outcomeFailure') }}</option>
         </select>
         <span class="spacer" />
-        <span class="muted count">{{ total }} eventi</span>
+        <span class="muted count">{{ $t('audit.eventCount', { n: total }) }}</span>
       </div>
 
       <!-- registro -->
@@ -228,7 +231,7 @@ function detailSummary(e: AuditEntry): string {
         <table v-else class="tbl">
           <thead>
             <tr>
-              <th>Quando</th><th>Chi</th><th>Azione</th><th>Bersaglio</th><th>Dettaglio</th><th>IP</th><th></th>
+              <th>{{ $t('audit.colWhen') }}</th><th>{{ $t('audit.colWho') }}</th><th>{{ $t('audit.colAction') }}</th><th>{{ $t('audit.colTarget') }}</th><th>{{ $t('audit.colDetail') }}</th><th>IP</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -253,16 +256,16 @@ function detailSummary(e: AuditEntry): string {
               </td>
             </tr>
             <tr v-if="!items.length && !loading">
-              <td colspan="7" class="msg muted">Nessun evento.</td>
+              <td colspan="7" class="msg muted">{{ $t('audit.noEvents') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <div class="pager">
-        <button class="mini" :disabled="offset === 0" @click="prev"><ChevronLeft :size="14" /> Precedenti</button>
-        <span class="muted">{{ total ? offset + 1 : 0 }}–{{ Math.min(offset + pageSize, total) }} di {{ total }}</span>
-        <button class="mini" :disabled="offset + pageSize >= total" @click="next">Successivi <ChevronRight :size="14" /></button>
+        <button class="mini" :disabled="offset === 0" @click="prev"><ChevronLeft :size="14" /> {{ $t('audit.prevPage') }}</button>
+        <span class="muted">{{ $t('audit.pagerRange', { from: total ? offset + 1 : 0, to: Math.min(offset + pageSize, total), total }) }}</span>
+        <button class="mini" :disabled="offset + pageSize >= total" @click="next">{{ $t('audit.nextPage') }} <ChevronRight :size="14" /></button>
       </div>
     </div>
   </AppShell>

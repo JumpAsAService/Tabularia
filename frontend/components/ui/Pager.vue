@@ -15,11 +15,11 @@ const hasNext = computed(() => props.offset + props.pageSize < props.total)
 
 <template>
   <div v-if="total > pageSize" class="pager">
-    <span class="muted">{{ from }}–{{ to }} di {{ total }}</span>
-    <button class="mini" :disabled="!hasPrev || loading" title="Precedente" @click="emit('prev')">
+    <span class="muted">{{ $t('pager.range', { from, to, total }) }}</span>
+    <button class="mini" :disabled="!hasPrev || loading" :title="$t('pager.prev')" @click="emit('prev')">
       <ChevronLeft :size="15" />
     </button>
-    <button class="mini" :disabled="!hasNext || loading" title="Successiva" @click="emit('next')">
+    <button class="mini" :disabled="!hasNext || loading" :title="$t('pager.next')" @click="emit('next')">
       <ChevronRight :size="15" />
     </button>
   </div>

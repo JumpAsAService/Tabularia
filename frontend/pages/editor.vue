@@ -9,7 +9,7 @@
     <ClientOnly>
       <FlowEditor />
       <template #fallback>
-        <div style="padding: 16px" class="muted">Caricamento editor…</div>
+        <div style="padding: 16px" class="muted">{{ $t('editor.loadingEditor') }}</div>
       </template>
     </ClientOnly>
   </div>

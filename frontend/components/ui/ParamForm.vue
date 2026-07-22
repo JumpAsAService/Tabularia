@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Info, X, Calendar, Play } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import {
@@ -34,6 +35,7 @@ const emit = defineEmits<{
   (e: 'update', params: Record<string, any>): void
   (e: 'preview'): void // anteprima MANUALE (nodo SQL): non su ogni tasto
 }>()
+const { t } = useI18n()
 
 const spec = computed<FieldSpec[]>(() => OP_SPECS[props.opType] ?? [])
 const leftNames = computed(() => props.inputColumns.map((c) => c.name))
@@ -64,14 +66,14 @@ const SINGLE_DATE_OPERATORS = new Set(['eq', 'ne', 'gt', 'ge', 'lt', 'le'])
 
 // messaggio diagnostico quando il join non ha colonne chiave disponibili
 const joinOnDiag = computed(() => {
-  if (!leftNames.value.length) return 'Connect the top-left input to a step with data.'
-  if (!rightNames.value.length) return 'Connect a branch with data to the bottom-left «table» input.'
-  return 'The two tables have no columns with the same name (a join on different keys would be needed).'
+  if (!leftNames.value.length) return t('paramForm.joinDiagNoLeft')
+  if (!rightNames.value.length) return t('paramForm.joinDiagNoRight')
+  return t('paramForm.joinDiagNoCommon')
 })
 
 function emptyMessage(field: FieldSpec): string {
   if (props.opType === 'join' && field.key === 'on') return joinOnDiag.value
-  return 'nessuna colonna disponibile'
+  return t('paramForm.noColumnsAvailable')
 }
 
 // ── Stato editabile locale ────────────────────────────────────────────────
@@ -300,7 +302,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
       <span class="sk" style="width: 61%" />
     </div>
     <div v-else-if="!inputColumns.length" class="hint">
-      <Info :size="13" /> Nessuna colonna a monte: collega/carica una sorgente e apri l'anteprima.
+      <Info :size="13" /> {{ $t('paramForm.noUpstreamColumns') }}
     </div>
 
     <div v-for="f in spec" :key="f.key" class="field">
@@ -359,7 +361,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
 
       <!-- valore filtro -->
       <template v-else-if="f.control === 'value'">
-        <span v-if="NO_VALUE_OPERATORS.has(state.operator)" class="muted">nessun valore richiesto</span>
+        <span v-if="NO_VALUE_OPERATORS.has(state.operator)" class="muted">{{ $t('paramForm.noValueRequired') }}</span>
 
         <!-- in / not_in → multiselect con ricerca sui valori distinti reali -->
         <ValuePicker
@@ -375,13 +377,13 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <input :type="temporalInputType" v-model="state.__lo" @change="emitUpdate" />
           <span class="muted">→</span>
           <input :type="temporalInputType" v-model="state.__hi" @change="emitUpdate" />
-          <button v-if="phOptions.length" class="phbtn" title="Usa un placeholder" @click="state.__phmode = true">{&#8288;{ }&#8288;}</button>
+          <button v-if="phOptions.length" class="phbtn" :title="$t('paramForm.usePlaceholder')" @click="state.__phmode = true">{&#8288;{ }&#8288;}</button>
         </div>
 
         <!-- colonna temporale + confronto singolo → calendario -->
         <div v-else-if="temporalInputType && !state.__phmode && SINGLE_DATE_OPERATORS.has(state.operator)" class="daterange">
           <input :type="temporalInputType" v-model="state.__value" @change="emitUpdate" />
-          <button v-if="phOptions.length" class="phbtn" title="Usa un placeholder" @click="state.__phmode = true">{&#8288;{ }&#8288;}</button>
+          <button v-if="phOptions.length" class="phbtn" :title="$t('paramForm.usePlaceholder')" @click="state.__phmode = true">{&#8288;{ }&#8288;}</button>
         </div>
 
         <!-- tutti gli altri casi → testo libero (numeri, stringhe, liste, placeholder) -->
@@ -389,13 +391,13 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <input
             type="text"
             v-model="state.__value"
-            :placeholder="phOptions.length ? `es. {{${placeholders![0]}}} — o valori: 10, IT, [1,2]` : 'es. 10, IT, [1,2] — date: [&quot;2024-01-01&quot;,&quot;2024-12-31&quot;]'"
+            :placeholder="phOptions.length ? $t('paramForm.valuePlaceholderPh', { ph: `{{${placeholders![0]}}}` }) : $t('paramForm.valuePlaceholderPlain')"
             @change="emitUpdate"
           />
           <button
             v-if="temporalInputType && state.__phmode"
             class="phbtn"
-            title="Torna al calendario"
+            :title="$t('paramForm.backToCalendar')"
             @click="state.__phmode = false"
           ><Calendar :size="13" /></button>
         </div>
@@ -406,7 +408,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         v-else-if="f.control === 'json'"
         v-model="state[`__json_${f.key}`]"
         rows="3"
-        placeholder='[{"paese": "IT", "soglia": 100}, {"paese": "FR", "soglia": 50}]'
+        :placeholder="$t('paramForm.jsonPlaceholderExample')"
         @change="emitUpdate"
       />
 
@@ -417,18 +419,18 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           rows="9"
           spellcheck="false"
           class="sqlarea"
-          placeholder="SELECT paese, SUM(vendite) AS tot&#10;FROM self&#10;GROUP BY paese&#10;ORDER BY tot DESC"
+          :placeholder="$t('paramForm.sqlQueryPlaceholder')"
           @change="emitUpdate"
           @keydown.meta.enter.prevent="emitPreviewNow"
           @keydown.ctrl.enter.prevent="emitPreviewNow"
         />
         <div class="sqlactions">
           <button class="previewbtn" type="button" @click="emitPreviewNow">
-            <Play :size="12" /> Anteprima
+            <Play :size="12" /> {{ $t('paramForm.previewButton') }}
           </button>
           <span class="sqlhint">
-            Tabella d'ingresso: <code>self</code> (alias <code>input</code>). Dialetto SQL di Polars.
-            <br />L'anteprima parte solo a comando — <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
+            {{ $t('paramForm.sqlInputTable') }} <code>self</code> {{ $t('paramForm.sqlInputAlias') }} <code>input</code>{{ $t('paramForm.sqlDialect') }}
+            <br />{{ $t('paramForm.sqlManualPreview') }} <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>.
           </span>
         </div>
       </div>
@@ -436,7 +438,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
       <!-- scalari semplici -->
       <input v-else-if="f.control === 'number'" type="number" v-model="state[f.key]" @change="emitUpdate" />
       <label v-else-if="f.control === 'boolean'" class="chk">
-        <input type="checkbox" v-model="state[f.key]" @change="emitUpdate" /> sì
+        <input type="checkbox" v-model="state[f.key]" @change="emitUpdate" /> {{ $t('paramForm.yesLabel') }}
       </label>
       <input v-else-if="f.control === 'text'" type="text" v-model="state[f.key]" @change="emitUpdate" />
 
@@ -446,7 +448,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.column"
             :options="columnSelectOptions()"
-            placeholder="colonna…"
+            :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
           />
           <Select
@@ -457,7 +459,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           />
           <button class="x" @click="removeRow(castRows, i)"><X :size="13" /></button>
         </div>
-        <button @click="addCast">+ aggiungi</button>
+        <button @click="addCast">{{ $t('paramForm.addRow') }}</button>
       </div>
 
       <!-- rename: righe da → a -->
@@ -466,13 +468,13 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.from"
             :options="columnSelectOptions()"
-            placeholder="colonna…"
+            :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.from = v; emitUpdate() }"
           />
-          <input type="text" v-model="r.to" placeholder="nuovo nome" @change="emitUpdate" />
+          <input type="text" v-model="r.to" :placeholder="$t('paramForm.newNamePlaceholder')" @change="emitUpdate" />
           <button class="x" @click="removeRow(renameRows, i)"><X :size="13" /></button>
         </div>
-        <button @click="addRename">+ aggiungi</button>
+        <button @click="addRename">{{ $t('paramForm.addRow') }}</button>
       </div>
 
       <!-- fill_null: righe colonna → valore -->
@@ -481,35 +483,33 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.column"
             :options="columnSelectOptions()"
-            placeholder="colonna…"
+            :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
           />
-          <input type="text" v-model="r.value" placeholder="valore" @change="emitUpdate" />
+          <input type="text" v-model="r.value" :placeholder="$t('paramForm.valuePlaceholder')" @change="emitUpdate" />
           <button class="x" @click="removeRow(fillRows, i)"><X :size="13" /></button>
         </div>
-        <button @click="addFill">+ aggiungi</button>
+        <button @click="addFill">{{ $t('paramForm.addRow') }}</button>
       </div>
 
       <!-- compute: righe nome → espressione SQL -->
       <div v-else-if="f.control === 'exprlist'" class="rows">
         <div v-for="(r, i) in exprRows" :key="i" class="exprrow">
           <div class="exprhead">
-            <input type="text" v-model="r.name" placeholder="nome colonna" @change="emitUpdate" />
+            <input type="text" v-model="r.name" :placeholder="$t('paramForm.columnNamePlaceholder')" @change="emitUpdate" />
             <button class="x" @click="removeRow(exprRows, i)"><X :size="13" /></button>
           </div>
           <textarea
             v-model="r.expr"
             rows="2"
             spellcheck="false"
-            placeholder="es. prezzo - costo · SUM(importo) OVER (PARTITION BY cliente ORDER BY data)"
+            :placeholder="$t('paramForm.exprPlaceholder')"
             @change="emitUpdate"
           />
         </div>
-        <button @click="addExpr">+ aggiungi</button>
+        <button @click="addExpr">{{ $t('paramForm.addRow') }}</button>
         <p class="sqlhint">
-          SQL: aritmetica, CASE WHEN, funzioni stringa/data, aggregazioni con OVER
-          (PARTITION BY … ORDER BY …). Le righe successive vedono le colonne precedenti.
-          L'anteprima segnala subito le espressioni non valide.
+          {{ $t('paramForm.exprHint') }}
         </p>
       </div>
 
@@ -519,7 +519,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.column"
             :options="columnSelectOptions()"
-            placeholder="colonna…"
+            :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
           />
           <Select
@@ -528,10 +528,10 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
             class="funcsel"
             @update:model-value="(v: any) => { r.func = v; emitUpdate() }"
           />
-          <input type="text" v-model="r.alias" placeholder="alias" @change="emitUpdate" />
+          <input type="text" v-model="r.alias" :placeholder="$t('paramForm.aliasPlaceholder')" @change="emitUpdate" />
           <button class="x" @click="removeRow(aggRows, i)"><X :size="13" /></button>
         </div>
-        <button @click="addAgg">+ aggiungi</button>
+        <button @click="addAgg">{{ $t('paramForm.addRow') }}</button>
       </div>
     </div>
   </div>

@@ -56,11 +56,11 @@ function confirm() {
     <div v-if="open" class="rd-backdrop" @mousedown.self="emit('cancel')">
       <div class="rd-card" @keydown.esc="emit('cancel')">
         <div class="rd-head">
-          <h3><Play :size="15" /> Esegui flusso</h3>
+          <h3><Play :size="15" /> {{ $t('runDialog.title') }}</h3>
           <button class="rd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 
-        <p class="muted rd-sub">Il flusso viene eseguito sull'intero dataset dal worker.</p>
+        <p class="muted rd-sub">{{ $t('runDialog.subtitle') }}</p>
 
         <!-- con nodi Output nel canvas: un run per output, configurati sui nodi -->
         <template v-if="outputs?.length">
@@ -74,7 +74,7 @@ function confirm() {
             </div>
           </div>
           <p class="muted rd-hint">
-            {{ outputs.length === 1 ? 'Verrà lanciato 1 run.' : `Verranno lanciati ${outputs.length} run, uno per output.` }}
+            {{ outputs.length === 1 ? $t('runDialog.runsHintSingle') : $t('runDialog.runsHintMulti', { n: outputs.length }) }}
           </p>
         </template>
 
@@ -82,32 +82,32 @@ function confirm() {
           <label class="chk rd-toggle" :class="{ off: !canPublish }">
             <input v-model="publishEnabled" type="checkbox" :disabled="!canPublish" />
             <Database :size="14" />
-            Pubblica l'output come datasource
+            {{ $t('runDialog.publishToggle') }}
           </label>
           <p v-if="!canPublish" class="muted rd-hint">
-            Salva il flusso per pubblicare l'output e avere la cronologia dei run.
+            {{ $t('runDialog.publishHint') }}
           </p>
 
           <template v-if="publishEnabled && canPublish">
-            <label>Nome della datasource</label>
-            <input v-model="name" type="text" placeholder="es. vendite_pulite_2024" @keyup.enter="confirm" />
-            <label>Cartella</label>
+            <label>{{ $t('runDialog.datasourceNameLabel') }}</label>
+            <input v-model="name" type="text" :placeholder="$t('runDialog.datasourceNamePlaceholder')" @keyup.enter="confirm" />
+            <label>{{ $t('runDialog.folderLabel') }}</label>
             <Select
               v-model="projectId"
               :options="projects.map((p) => ({ value: p.id, label: p.name }))"
-              placeholder="cartella…"
+              :placeholder="$t('runDialog.folderPlaceholder')"
             />
-            <label>Descrizione (opzionale)</label>
-            <input v-model="description" type="text" placeholder="cosa contiene, per chi" />
+            <label>{{ $t('runDialog.descriptionLabel') }}</label>
+            <input v-model="description" type="text" :placeholder="$t('runDialog.descriptionPlaceholder')" />
           </template>
         </template>
 
         <p v-if="error" class="rd-err">{{ error }}</p>
 
         <div class="rd-actions">
-          <button @click="emit('cancel')">Annulla</button>
+          <button @click="emit('cancel')">{{ $t('runDialog.cancel') }}</button>
           <button class="primary" :disabled="nameMissing() || busy" @click="confirm">
-            <Play :size="14" /> Esegui
+            <Play :size="14" /> {{ $t('runDialog.run') }}
           </button>
         </div>
       </div>

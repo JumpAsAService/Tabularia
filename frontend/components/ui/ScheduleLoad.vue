@@ -12,18 +12,24 @@ import { VisualMapComponent, TooltipComponent, GridComponent } from 'echarts/com
 import VChart from 'vue-echarts'
 import { CalendarClock, TriangleAlert, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import { useApi, errMessage, type ScheduleLoad } from '~/composables/useApi'
+import { useI18n } from 'vue-i18n'
 
 use([CanvasRenderer, HeatmapChart, VisualMapComponent, TooltipComponent, GridComponent])
 
 const api = useApi()
 const { theme } = useTheme()
+const { t } = useI18n()
 
-const WD = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
-const HORIZONS = [
-  { days: 7, label: '7 giorni' },
-  { days: 14, label: '14 giorni' },
-  { days: 30, label: '30 giorni' },
-]
+const WD = computed(() => [
+  t('scheduleLoad.weekdayMon'),
+  t('scheduleLoad.weekdayTue'),
+  t('scheduleLoad.weekdayWed'),
+  t('scheduleLoad.weekdayThu'),
+  t('scheduleLoad.weekdayFri'),
+  t('scheduleLoad.weekdaySat'),
+  t('scheduleLoad.weekdaySun'),
+])
+const HORIZONS = computed(() => [7, 14, 30].map((days) => ({ days, label: t('scheduleLoad.horizonDays', { n: days }) })))
 
 const days = ref(7)
 const data = ref<ScheduleLoad | null>(null)
@@ -79,8 +85,8 @@ const option = computed(() => {
       formatter: (p: any) => {
         const [h, wd, n] = p.data.value
         const peak = peakByCell.value.get(`${wd}-${h}`) ?? 1
-        const warn = peak > cap ? `<br/><span style="color:#ff6b6b">⚠ picco ${peak} simultanei &gt; capacità ${cap}</span>` : ''
-        return `<b>${WD[wd]} ${String(h).padStart(2, '0')}:00</b><br/>${n} esecuzion${n === 1 ? 'e' : 'i'} schedulat${n === 1 ? 'a' : 'e'}${warn}`
+        const warn = peak > cap ? `<br/><span style="color:#ff6b6b">${t('scheduleLoad.tooltipPeakWarning', { peak, cap })}</span>` : ''
+        return `<b>${WD.value[wd]} ${String(h).padStart(2, '0')}:00</b><br/>${t('scheduleLoad.tooltipScheduledCount', { n })}${warn}`
       },
     },
     grid: { left: 40, right: 12, top: 8, bottom: 46 },
@@ -90,7 +96,7 @@ const option = computed(() => {
       axisLine: { lineStyle: { color: c.border } }, axisTick: { show: false },
     },
     yAxis: {
-      type: 'category', data: WD, inverse: true,
+      type: 'category', data: WD.value, inverse: true,
       splitArea: { show: true }, axisLabel: { color: c.muted, fontSize: 11 },
       axisLine: { lineStyle: { color: c.border } }, axisTick: { show: false },
     },
@@ -108,7 +114,7 @@ const option = computed(() => {
 })
 
 function fmtBand(col: { weekday: number; hour: number; minute: number }) {
-  return `${WD[col.weekday]} ${String(col.hour).padStart(2, '0')}:${String(col.minute).padStart(2, '0')}`
+  return `${WD.value[col.weekday]} ${String(col.hour).padStart(2, '0')}:${String(col.minute).padStart(2, '0')}`
 }
 </script>
 
@@ -116,12 +122,12 @@ function fmtBand(col: { weekday: number; hour: number; minute: number }) {
   <section class="sl">
     <header class="sl-head" @click="open = !open">
       <component :is="open ? ChevronDown : ChevronRight" :size="15" class="sl-caret" />
-      <h3><CalendarClock :size="15" /> Carico degli schedule</h3>
+      <h3><CalendarClock :size="15" /> {{ $t('scheduleLoad.title') }}</h3>
       <span v-if="data" class="sl-sub muted">
-        {{ data.total_schedules }} schedule · {{ data.total_firings }} esecuzioni nei prossimi {{ data.days }}gg · fuso {{ data.timezone }}
+        {{ $t('scheduleLoad.summaryLine', { schedules: data.total_schedules, firings: data.total_firings, days: data.days, timezone: data.timezone }) }}
       </span>
       <span v-if="data?.collisions.length" class="sl-badge crit">
-        <TriangleAlert :size="12" /> {{ data.collisions.length }} fasce critiche
+        <TriangleAlert :size="12" /> {{ $t('scheduleLoad.criticalSlotsBadge', { n: data.collisions.length }) }}
       </span>
       <span class="sl-spacer" />
       <select v-model.number="days" class="sl-range" @click.stop>
@@ -131,9 +137,9 @@ function fmtBand(col: { weekday: number; hour: number; minute: number }) {
 
     <div v-if="open" class="sl-body">
       <p v-if="error" class="sl-msg err">{{ error }}</p>
-      <p v-else-if="loading" class="sl-msg muted">Calcolo del carico…</p>
+      <p v-else-if="loading" class="sl-msg muted">{{ $t('scheduleLoad.computingLoad') }}</p>
       <p v-else-if="!data || !data.total_schedules" class="sl-msg muted">
-        Nessuno schedule attivo. Quando pianifichi flussi o refresh, qui vedrai le fasce orarie più cariche.
+        {{ $t('scheduleLoad.noActiveSchedules') }}
       </p>
       <template v-else>
         <VChart class="sl-chart" :option="option" autoresize />
@@ -142,17 +148,17 @@ function fmtBand(col: { weekday: number; hour: number; minute: number }) {
         <div class="sl-crit">
           <template v-if="data.collisions.length">
             <div class="sl-crit-h">
-              <TriangleAlert :size="13" /> Fasce critiche
-              <span class="muted">— più di {{ data.worker_capacity }} job (capacità worker) nello stesso minuto → il resto va in coda</span>
+              <TriangleAlert :size="13" /> {{ $t('scheduleLoad.criticalSlotsTitle') }}
+              <span class="muted">{{ $t('scheduleLoad.criticalSlotsHint', { capacity: data.worker_capacity }) }}</span>
             </div>
             <div v-for="(col, i) in data.collisions" :key="i" class="sl-band">
               <span class="sl-band-when">{{ fmtBand(col) }}</span>
-              <span class="sl-band-n">{{ col.count }} simultanei · {{ col.queued }} in coda</span>
+              <span class="sl-band-n">{{ $t('scheduleLoad.collisionCounts', { count: col.count, queued: col.queued }) }}</span>
               <span class="sl-band-who muted">{{ col.schedules.join(', ') }}</span>
             </div>
           </template>
           <p v-else class="sl-ok muted">
-            ✓ Nessuna collisione: nessun minuto supera la capacità dei worker ({{ data.worker_capacity }}).
+            {{ $t('scheduleLoad.noCollisions', { capacity: data.worker_capacity }) }}
           </p>
         </div>
       </template>

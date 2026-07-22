@@ -89,56 +89,56 @@ function confirm() {
     <div v-if="open" class="dd-backdrop" @mousedown.self="emit('cancel')">
       <div class="dd-card" @keydown.esc="emit('cancel')">
         <div class="dd-head">
-          <h3><Database :size="15" /> New datasource from database</h3>
+          <h3><Database :size="15" /> {{ $t('dbDatasourceDialog.title') }}</h3>
           <button class="dd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 
-        <label>Name</label>
-        <input v-model="name" type="text" placeholder="e.g. orders_snapshot" />
+        <label>{{ $t('dbDatasourceDialog.nameLabel') }}</label>
+        <input v-model="name" type="text" :placeholder="$t('dbDatasourceDialog.namePlaceholder')" />
 
-        <label>Connection</label>
+        <label>{{ $t('dbDatasourceDialog.connectionLabel') }}</label>
         <Select
           v-model="connectionId"
           :options="connections.map((c) => ({ value: c.id, label: `${c.name} (${c.db_type})` }))"
-          placeholder="connection…"
+          :placeholder="$t('dbDatasourceDialog.connectionPlaceholder')"
         />
         <p v-if="!connections.length" class="muted dd-hint">
-          No usable connection: create one in a folder where you have the CONNECT permission.
+          {{ $t('dbDatasourceDialog.noConnectionHint') }}
         </p>
 
         <div class="dd-mode">
           <button :class="{ on: sourceType === 'table' }" @click="sourceType = 'table'">
-            <Table2 :size="13" /> Table
+            <Table2 :size="13" /> {{ $t('dbDatasourceDialog.modeTable') }}
           </button>
           <button :class="{ on: sourceType === 'sql' }" @click="sourceType = 'sql'">
-            <Code2 :size="13" /> SQL query
+            <Code2 :size="13" /> {{ $t('dbDatasourceDialog.modeSql') }}
           </button>
         </div>
 
         <template v-if="sourceType === 'table'">
-          <label>Table</label>
+          <label>{{ $t('dbDatasourceDialog.tableLabel') }}</label>
           <Select
             v-if="tables.length"
             v-model="tableName"
             :options="tables.map((t) => ({ value: t, label: t }))"
-            placeholder="table…"
+            :placeholder="$t('dbDatasourceDialog.tablePlaceholder')"
           />
           <input
             v-else
             v-model="tableName"
             type="text"
-            placeholder="schema.table"
+            :placeholder="$t('dbDatasourceDialog.schemaTablePlaceholder')"
           />
           <p v-if="tablesLoading" class="muted dd-hint">
-            <LoaderCircle :size="12" class="spin" /> Loading tables…
+            <LoaderCircle :size="12" class="spin" /> {{ $t('dbDatasourceDialog.loadingTables') }}
           </p>
           <p v-else-if="tablesError" class="muted dd-hint">
-            Could not list tables ({{ tablesError }}) — type the name manually.
+            {{ $t('dbDatasourceDialog.tablesListError', { error: tablesError }) }}
           </p>
         </template>
 
         <template v-else>
-          <label>SQL <span class="dd-soft">(runs with the connection's credentials, like a view)</span></label>
+          <label>{{ $t('dbDatasourceDialog.sqlLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.sqlHint') }}</span></label>
           <textarea
             v-model="sql"
             rows="6"
@@ -147,17 +147,17 @@ function confirm() {
           />
         </template>
 
-        <label>Description <span class="dd-soft">(optional)</span></label>
-        <input v-model="description" type="text" placeholder="what it contains, for whom" />
+        <label>{{ $t('dbDatasourceDialog.descriptionLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.optionalHint') }}</span></label>
+        <input v-model="description" type="text" :placeholder="$t('dbDatasourceDialog.descriptionPlaceholder')" />
 
         <p v-if="error" class="dd-err">{{ error }}</p>
 
         <div class="dd-actions">
-          <button @click="emit('cancel')">Cancel</button>
+          <button @click="emit('cancel')">{{ $t('dbDatasourceDialog.cancel') }}</button>
           <button class="primary" :disabled="incomplete() || busy" @click="confirm">
             <LoaderCircle v-if="busy" :size="14" class="spin" />
             <Database v-else :size="14" />
-            Create & import
+            {{ $t('dbDatasourceDialog.confirm') }}
           </button>
         </div>
       </div>
