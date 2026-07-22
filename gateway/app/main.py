@@ -67,6 +67,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/health", include_in_schema=False)
+def health():
+    """Liveness: l'app sta servendo. Usato dall'healthcheck del container per
+    rendere VISIBILE un gateway wedged (app giù ma container ancora 'running')."""
+    return {"status": "ok"}
+
+
 # control plane
 app.include_router(auth_router)
 app.include_router(users_router)

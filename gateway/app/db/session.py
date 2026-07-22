@@ -1,10 +1,42 @@
+import logging
+import time
+
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlmodel import create_engine, select, Session, SQLModel
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 # pool_pre_ping: evita connessioni morte dopo idle; utile in dev con restart di Postgres.
 engine = create_engine(get_settings().db.dsn, echo=False, pool_pre_ping=True)
+
+
+def wait_for_db(max_attempts: int = 30, delay: float = 2.0) -> None:
+    """Attende che il DB sia raggiungibile prima di inizializzare lo schema.
+
+    Dopo un reboot dell'host (o un restart di Postgres) il gateway può partire
+    prima che l'host `postgres` sia risolvibile dal DNS Docker: senza attesa
+    l'app uscirebbe all'avvio e — con `uvicorn --reload` — il container resterebbe
+    "running" ma non servirebbe nulla (il supervisore del reload non esce, quindi
+    `restart: unless-stopped` non scatta). Con il retry, invece, riparte da solo.
+    `depends_on: service_healthy` NON basta: vale solo su `compose up`, non quando
+    è il daemon Docker a riaccendere i container dopo un reboot."""
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            if attempt > 1:
+                logger.info("DB raggiungibile dopo %d tentativi", attempt)
+            return
+        except OperationalError as e:  # DNS non risolto o Postgres non ancora pronto
+            last_err = e
+            logger.warning("DB non pronto (tentativo %d/%d), riprovo tra %.0fs…",
+                           attempt, max_attempts, delay)
+            time.sleep(delay)
+    raise RuntimeError(f"DB non raggiungibile dopo {max_attempts} tentativi") from last_err
 
 
 # create_all crea le tabelle NUOVE ma non altera quelle esistenti: le colonne
@@ -44,6 +76,7 @@ _MIGRATIONS = [
 
 def init_db() -> None:
     """Crea le tabelle se non esistono e applica gli ALTER idempotenti."""
+    wait_for_db()  # tollera il DB non ancora pronto (reboot, restart di Postgres)
     import app.models  # noqa: F401 — registra i modelli su SQLModel.metadata
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
