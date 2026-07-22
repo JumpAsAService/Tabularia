@@ -42,6 +42,25 @@ margine  = ricavo - costo_p - costo_c
 Unendo poi `clienti`/`agenti` dal CRM si ottiene il margine per
 agente / ispettore / capo-area / regione / canale.
 
+## Stagionalità e anomalie (dati NON piatti)
+
+I fatti seguono trend e stagionalità realistici (tutto in `generate.py`), così
+i pivot raccontano una storia:
+
+| segnale | dove | effetto |
+|---|---|---|
+| crescita aziendale +18%/anno · carrello +5%/anno | `GROWTH_ANNUO`, `BASKET_GROWTH_ANNUO` | volumi che salgono nel tempo |
+| stagionalità mensile del **volume** | `MONTH_MULT` | Natale ×1.8, Pasqua su, agosto giù |
+| stagionalità settimanale B2B | `build_day_weights` | feriali pieni, weekend giù |
+| rincaro prezzi/costi +6% dal 2025 | `gen_catalogo` | due regimi di listino/costi |
+| **mix-prodotto × stagione** | `CATEGORY_SEASON`, `PRODUCT_SEASON` | cotechino/zampone esplodono a dicembre, mortadella/wurstel d'estate, bresaola nei mesi caldi, prosciutti pregiati a Natale/Pasqua |
+| **mix-canale × stagione** | `CHANNEL_SEASON` | HoReCa picco estivo (turismo), GDO/Dettaglio a Natale |
+| **anomalie di evasione per deposito** | `CANCEL_CHRONIC`, `CANCEL_INCIDENT` | **Napoli**: % annullata cronica in crescita (~4%→~24%); **Modena**: incidente puntuale (autunno 2025, ~30%) poi rientro |
+
+Buone analisi da provare: *quota categoria per mese* (mix-prodotto), *quota
+canale per mese* (mix-canale), *% evasa/annullata per deposito nel tempo*
+(anomalie), oltre al margine di riga per rete commerciale.
+
 ## Come popolarli
 
 ```bash

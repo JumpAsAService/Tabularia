@@ -60,7 +60,10 @@ GROWTH_ANNUO = 0.18
 # crescita annua del valore medio ordine (carrello che si allarga nel tempo)
 BASKET_GROWTH_ANNUO = 0.05
 # stagionalità mensile dei salumi (indice 1..12; 0 = segnaposto):
-# Natale fortissimo, Pasqua (apr) su, agosto giù (ferie), autunno in ripresa
+# Natale fortissimo, Pasqua (apr) su, agosto giù (ferie), autunno in ripresa.
+# Questo pesa il VOLUME totale; il MIX (prodotto/canale) e le anomalie di
+# evasione hanno tabelle dedicate più sotto (CATEGORY_SEASON, CHANNEL_SEASON,
+# CANCEL_*).
 MONTH_MULT = np.array([0.0, 0.90, 0.82, 1.05, 1.15, 1.00, 0.95, 0.90, 0.62, 1.05, 1.12, 1.30, 1.80])
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -127,6 +130,56 @@ FORMATI = [
 CANALI = ["GDO", "HoReCa", "Grossista", "Dettaglio", "Gastronomia"]
 DEPOSITI = ["Parma", "Modena", "San Daniele", "Milano", "Napoli"]
 AREE = ["Nord-Ovest", "Nord-Est", "Centro", "Sud", "Isole"]
+
+# ── mix-prodotto × stagione ──────────────────────────────────────────────────
+# Oltre al VOLUME totale (MONTH_MULT), cambia anche il MIX: ogni categoria ha un
+# profilo mensile (indice 1..12; 0 = segnaposto) che pesa la probabilità che un
+# suo SKU finisca in riga, mese per mese.
+#   · Insaccati da cuocere (cotechino/zampone): bomba di Capodanno, quasi nulli
+#     il resto dell'anno.  · Insaccati cotti (mortadella/cotto/wurstel): estate
+#     su (panini, grigliate).  · Prosciutti pregiati: regali di Natale + Pasqua.
+CATEGORY_SEASON = {
+    "Prosciutti":           [0.0, 0.90, 0.85, 1.00, 1.18, 1.00, 0.88, 0.82, 0.68, 1.00, 1.18, 1.40, 1.95],
+    "Insaccati cotti":      [0.0, 0.85, 0.85, 1.00, 1.05, 1.18, 1.30, 1.40, 1.10, 1.00, 0.95, 1.00, 1.10],
+    "Salami":               [0.0, 1.05, 1.00, 1.00, 1.00, 1.00, 0.95, 0.88, 0.80, 1.05, 1.10, 1.18, 1.30],
+    "Salumi stagionati":    [0.0, 1.00, 0.95, 1.00, 1.05, 1.08, 1.08, 1.02, 0.85, 1.05, 1.05, 1.12, 1.25],
+    "Insaccati da cuocere": [0.0, 0.55, 0.28, 0.18, 0.14, 0.10, 0.08, 0.08, 0.08, 0.16, 0.42, 1.70, 4.20],
+}
+# override per singolo prodotto (chiave = sottostringa del nome): la Bresaola è
+# l'eroe dell'estate (leggera, "da dieta") e domina i mesi caldi.
+PRODUCT_SEASON = {
+    "Bresaola": [0.0, 0.85, 0.85, 1.00, 1.15, 1.40, 1.65, 1.75, 1.35, 1.10, 0.90, 0.85, 0.90],
+}
+# popolarità di base per categoria (a parità di stagione, quanto "gira")
+CATEGORY_POP = {
+    "Prosciutti": 1.3, "Insaccati cotti": 1.6, "Salami": 1.4,
+    "Salumi stagionati": 1.0, "Insaccati da cuocere": 0.5,
+}
+
+# ── mix-canale × stagione ────────────────────────────────────────────────────
+# Sposta la QUOTA di ciascun canale mese per mese (il volume totale del mese
+# resta dettato da MONTH_MULT). HoReCa esplode d'estate (turismo/ristorazione),
+# GDO e Dettaglio a Natale; Grossista/Gastronomia più piatti.
+CHANNEL_SEASON = {
+    "GDO":         [0.0, 0.90, 0.85, 0.95, 1.05, 1.00, 0.95, 0.90, 0.95, 1.05, 1.20, 1.45, 1.60],
+    "HoReCa":      [0.0, 0.70, 0.72, 0.90, 1.10, 1.35, 1.70, 1.85, 1.55, 1.10, 0.85, 0.85, 1.05],
+    "Grossista":   [0.0, 0.95, 0.95, 1.00, 1.00, 1.05, 1.05, 1.00, 1.00, 1.05, 1.15, 1.25, 1.35],
+    "Dettaglio":   [0.0, 0.95, 0.90, 1.00, 1.15, 1.00, 0.92, 0.85, 0.90, 1.05, 1.15, 1.35, 1.70],
+    "Gastronomia": [0.0, 0.90, 0.88, 1.00, 1.10, 1.15, 1.20, 1.15, 1.00, 1.05, 1.10, 1.25, 1.50],
+}
+
+# ── anomalie di EVASIONE per deposito ────────────────────────────────────────
+# Baseline: ~4% di ordini annullati ovunque. Su due depositi iniettiamo una
+# patologia analizzabile sulla % evasa:
+#   · "Napoli"  → degrado CRONICO: la % annullata cresce nel tempo (problema
+#      logistico strutturale) da ~4% fino a ~26% a fine finestra.
+#   · "Modena"  → INCIDENTE puntuale: picco di annullati in un trimestre "nero"
+#      (autunno 2025) fino a ~30%, poi rientro.
+CANCEL_BASE = 0.04
+CANCEL_CHRONIC = {"Napoli": 0.22}  # incremento massimo raggiunto a fine finestra
+CANCEL_INCIDENT = {                # deposito → (dal, al, extra_di_picco)
+    "Modena": (date(2025, 9, 1), date(2025, 12, 15), 0.26),
+}
 
 # regione → (sigla provincia, città) per anagrafiche geograficamente coerenti
 GEO = [
@@ -310,6 +363,28 @@ def build_day_weights() -> np.ndarray:
     return w / w.sum()
 
 
+def build_seasonality(prod: pd.DataFrame):
+    """Per ogni SKU: vettore stagionale mensile [P_n × 13] (categoria, con
+    override per nome) + popolarità di base [P_n]. Da questi si ricavano i pesi
+    di scelta prodotto mese per mese (mix che cambia nel tempo)."""
+    P_n = len(prod)
+    season = np.ones((P_n, 13), dtype=float)
+    pop = np.ones(P_n, dtype=float)
+    nomi = prod.nome.to_numpy()
+    cats = prod.categoria.to_numpy()
+    for i in range(P_n):
+        prof = CATEGORY_SEASON.get(cats[i])
+        for key, override in PRODUCT_SEASON.items():
+            if key in nomi[i]:
+                prof = override
+                break
+        if prof is not None:
+            season[i] = prof
+        pop[i] = CATEGORY_POP.get(cats[i], 1.0)
+    season[:, 0] = 0.0  # mese-segnaposto: mai scelto
+    return season, pop
+
+
 def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd.DataFrame) -> None:
     """Ordini + righe + costi commerciali, a blocchi. Testata → cliente (e suo
     agente); righe → prodotti con prezzo≈listino±rumore e sconto per canale."""
@@ -321,22 +396,64 @@ def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd
     base_d = np.datetime64(DATA_INIZIO)
     p_day = build_day_weights()  # trend di crescita + stagionalità (no uniforme)
 
+    # ── tabelle di supporto per le stagionalità fini (precalcolate una volta) ──
+    # mese di ogni giorno della finestra: giorni → mese senza ripassare da pandas
+    days64 = base_d + np.arange(GIORNI + 1).astype("timedelta64[D]")
+    day_month = pd.to_datetime(days64).month.to_numpy()
+
+    # pesi di scelta CLIENTE per mese (mix-canale × stagione): a parità di mese,
+    # i clienti dei canali "in stagione" hanno più probabilità di ordinare
+    ch_mat = np.array([CHANNEL_SEASON[c] for c in CANALI])     # [len(CANALI) × 13]
+    client_ch0 = (canale_of[1:] - 1).astype(int)               # canale 0-based per cliente 1..C
+    client_ids = np.arange(1, C + 1, dtype=np.int64)
+    client_w = {m: (lambda col: col / col.sum())(ch_mat[client_ch0, m]) for m in range(1, 13)}
+
+    # pesi di scelta PRODOTTO per mese (mix-prodotto × stagione)
+    season, base_pop = build_seasonality(prod)
+    prod_w = {m: (lambda col: col / col.sum())(base_pop * season[:, m]) for m in range(1, 13)}
+
+    # anomalie di evasione per deposito: rampa cronica + finestra-incidente, per giorno
+    chronic_ramp = np.clip(np.arange(GIORNI + 1) / GIORNI, 0.0, 1.0)  # 0→1 sulla finestra
+    incident_flag = {}
+    for dep, (dal, al, _peak) in CANCEL_INCIDENT.items():
+        incident_flag[dep] = ((days64 >= np.datetime64(dal)) & (days64 <= np.datetime64(al))).astype(float)
+
     riga_id = 0
     done = 0
     while done < O:
         n = min(CHUNK_ORDINI, O - done)
         oid = np.arange(done + 1, done + n + 1, dtype=np.int64)
-        cliente = rng.integers(1, C + 1, n)
+        giorni = rng.choice(GIORNI + 1, size=n, p=p_day)   # data pesata dal trend
+        data_ord = (base_d + giorni.astype("timedelta64[D]")).astype(str)
+        mesi = day_month[giorni]                           # mese di ogni ordine
+
+        # cliente scelto per mese, pesato dalla stagionalità di canale
+        cliente = np.empty(n, dtype=np.int64)
+        for m in range(1, 13):
+            sel = np.where(mesi == m)[0]
+            if sel.size:
+                cliente[sel] = rng.choice(client_ids, size=sel.size, p=client_w[m])
         agente = agente_of[cliente]
         canale_i = canale_of[cliente]                      # 1..len(CANALI)
         canale = np.array(CANALI)[canale_i - 1]
         gdo_like = np.isin(canale_i, [1, 3])               # GDO/Grossista: qty↑ sconti↑
-        giorni = rng.choice(GIORNI + 1, size=n, p=p_day)   # data pesata dal trend
-        data_ord = (base_d + giorni.astype("timedelta64[D]")).astype(str)
-        stato = np.where(rng.random(n) < 0.90, "evaso",
-                         np.where(rng.random(n) < 0.6, "in_lavorazione", "annullato"))
         deposito = np.array(DEPOSITI)[rng.integers(0, len(DEPOSITI), n)]
         numero = np.char.add("ORD-", oid.astype(str))
+
+        # stato ordine: % annullata = baseline + anomalie di deposito (cronica /
+        # incidente); "in_lavorazione" concentrata sugli ordini recenti
+        p_cancel = np.full(n, CANCEL_BASE)
+        for dep, mx in CANCEL_CHRONIC.items():
+            mask = deposito == dep
+            p_cancel[mask] += mx * chronic_ramp[giorni[mask]]
+        for dep, (_dal, _al, peak) in CANCEL_INCIDENT.items():
+            mask = deposito == dep
+            p_cancel[mask] += peak * incident_flag[dep][giorni[mask]]
+        p_cancel = np.clip(p_cancel, 0.0, 0.95)
+        annull = rng.random(n) < p_cancel
+        p_inlav = 0.03 + 0.10 * (giorni / GIORNI)          # 3%→13% verso fine finestra
+        in_lav = (~annull) & (rng.random(n) < p_inlav)
+        stato = np.where(annull, "annullato", np.where(in_lav, "in_lavorazione", "evaso"))
 
         copy_df(cur, "vendite.ordini", pd.DataFrame({
             "id": oid, "numero": numero, "data_ordine": data_ord, "cliente_id": cliente,
@@ -350,7 +467,14 @@ def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd
         r_canale_gdo = np.repeat(gdo_like, n_righe)
         r_agente = np.repeat(agente, n_righe)
         r_giorni = np.repeat(giorni, n_righe)
-        prod_i = rng.integers(0, P_n, tot)
+        # prodotto scelto per mese: il MIX segue la stagione (cotechino a Natale,
+        # bresaola d'estate, …), non è più uniforme
+        r_mesi = day_month[r_giorni]
+        prod_i = np.empty(tot, dtype=np.int64)
+        for m in range(1, 13):
+            sel = np.where(r_mesi == m)[0]
+            if sel.size:
+                prod_i[sel] = rng.choice(P_n, size=sel.size, p=prod_w[m])
         prezzo_list = prezzi[prod_i]
         # quantità: gamma (asimmetrica), più alta per GDO/Grossista, e in lenta
         # crescita nel tempo (il carrello medio si allarga anno su anno)
