@@ -28,6 +28,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, User
+from app.deps.demo import block_in_demo
 from app.services import audit
 from app.models.permission import Capability
 from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
@@ -164,6 +165,7 @@ def create_connection(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    block_in_demo("La creazione di connessioni")  # sandbox: chiude SSRF e output esterni
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
     ensure_can(session, user, project_id, Capability.CONNECT)
@@ -276,6 +278,7 @@ async def test_draft_connection(
     session: Session = Depends(get_session),
 ):
     """Prova una connessione PRIMA di salvarla (il form della UI)."""
+    block_in_demo("Il test di connessioni")  # sandbox: il test si collega a host arbitrari (SSRF)
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
     ensure_can(session, user, project_id, Capability.CONNECT)

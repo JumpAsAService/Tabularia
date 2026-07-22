@@ -25,6 +25,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import Upload, User
+from app.deps.demo import block_in_demo
 from app.services import audit
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
 
@@ -194,6 +195,7 @@ async def upload(
     registrare chi possiede il dataset appena creato — è la base del controllo
     di lettura sugli upload non ancora dentro un flusso salvato.
     """
+    block_in_demo("Il caricamento di file")  # sandbox: niente upload arbitrari
     client = get_engine_client()
     engine_req = client.build_request(
         "POST",
