@@ -116,7 +116,7 @@ onMounted(async () => {
 })
 
 // ── presentazione ─────────────────────────────────────────────────────────────
-const ACTION_META: Record<string, { icon: any; color: string; label: string }> = {
+const ACTION_META = computed<Record<string, { icon: any; color: string; label: string }>>(() => ({
   'auth.login': { icon: LogIn, color: '#6ee7b7', label: t('audit.loginAction') },
   'auth.login_failed': { icon: XCircle, color: '#ff6b6b', label: t('audit.loginFailedAction') },
   'auth.logout': { icon: LogOut, color: '#8b93a7', label: t('audit.logoutAction') },
@@ -136,9 +136,9 @@ const ACTION_META: Record<string, { icon: any; color: string; label: string }> =
   'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
   'permission.grant': { icon: Shield, color: '#6ee7b7', label: t('audit.permissionGrantAction') },
   'permission.revoke': { icon: Shield, color: '#ff6b6b', label: t('audit.permissionRevokeAction') },
-}
+}))
 function meta(a: string) {
-  return ACTION_META[a] ?? { icon: Circle, color: '#8b93a7', label: a }
+  return ACTION_META.value[a] ?? { icon: Circle, color: '#8b93a7', label: a }
 }
 function fmtDate(iso: string) {
   try { return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'medium' }) } catch { return iso }

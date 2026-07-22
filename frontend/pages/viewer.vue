@@ -36,7 +36,7 @@ const engineOptions = computed(() =>
 )
 
 // ── trasformazioni al volo ────────────────────────────────────────────────
-const FILTER_OPS = [
+const FILTER_OPS = computed(() => [
   { value: 'eq', label: '=' }, { value: 'ne', label: '≠' },
   { value: 'gt', label: '>' }, { value: 'ge', label: '≥' },
   { value: 'lt', label: '<' }, { value: 'le', label: '≤' },
@@ -44,7 +44,7 @@ const FILTER_OPS = [
   { value: 'contains', label: t('viewer.opContains') }, { value: 'starts_with', label: t('viewer.opStartsWith') },
   { value: 'in', label: t('viewer.opIn') }, { value: 'not_in', label: t('viewer.opNotIn') },
   { value: 'is_null', label: t('viewer.opIsNull') }, { value: 'is_not_null', label: t('viewer.opIsNotNull') },
-]
+])
 const NO_VALUE = new Set(['is_null', 'is_not_null'])
 
 // colonna temporale → input calendario nativo (come nell'editor di flussi)
@@ -55,11 +55,11 @@ function temporalType(col: string): 'date' | 'datetime-local' | 'time' | 'text' 
   if (dt === 'Time') return 'time'
   return 'text'
 }
-const AGG_FUNCS = [
+const AGG_FUNCS = computed(() => [
   { value: 'sum', label: t('viewer.aggSum') }, { value: 'mean', label: t('viewer.aggMean') },
   { value: 'min', label: t('viewer.aggMin') }, { value: 'max', label: t('viewer.aggMax') },
   { value: 'count', label: t('viewer.aggCount') },
-]
+])
 
 interface FilterRow { column: string; operator: string; value: string; value2: string }
 interface CompRow { name: string; expr: string }

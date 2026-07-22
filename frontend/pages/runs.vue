@@ -2,7 +2,7 @@
 // Esecuzioni: ricerca globale dei run nei progetti leggibili, per capire perché
 // i flussi falliscono. Filtro per stato + ricerca testuale sul motivo (server-side,
 // su tutto il dataset) + paginazione; click su una riga per il traceback completo.
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
@@ -39,11 +39,11 @@ function triggeredBy(r: RunInfo): string {
   return isScheduled(r) ? t('runs.triggerSchedule') : (r.launched_by_name || '—')
 }
 
-const STATUSES: { value: 'FAILURE' | 'SUCCESS' | ''; label: string }[] = [
+const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]>(() => [
   { value: 'FAILURE', label: t('runs.statusFailed') },
   { value: 'SUCCESS', label: t('runs.statusSuccess') },
   { value: '', label: t('runs.statusAll') },
-]
+])
 </script>
 
 <template>

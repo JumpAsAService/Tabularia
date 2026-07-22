@@ -25,11 +25,12 @@ use([
 
 const runsApi = useRuns()
 
-const RANGES = [
+// computed (non const): così le etichette seguono il cambio lingua a runtime
+const RANGES = computed(() => [
   { days: 90, label: t('runCalendar.rangeLabel3Months') },
   { days: 180, label: t('runCalendar.rangeLabel6Months') },
   { days: 365, label: t('runCalendar.rangeLabel1Year') },
-]
+])
 const rangeDays = ref(180)
 
 const view = ref<'calendar' | 'day'>('calendar')

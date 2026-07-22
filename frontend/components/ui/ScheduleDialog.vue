@@ -39,12 +39,12 @@ watch(
   },
 )
 
-const CRON_PRESETS = [
+const CRON_PRESETS = computed(() => [
   { label: t('scheduleDialog.presetEvery15Min'), cron: '*/15 * * * *' },
   { label: t('scheduleDialog.presetHourly'), cron: '0 * * * *' },
   { label: t('scheduleDialog.presetNightly'), cron: '0 3 * * *' },
   { label: t('scheduleDialog.presetWeeklyMonday'), cron: '0 6 * * 1' },
-]
+])
 
 const cronDescription = computed<{ text: string; ok: boolean }>(() => {
   const expr = cronInput.value.trim()

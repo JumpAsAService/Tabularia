@@ -9,6 +9,23 @@ export interface EngineOpt { id: string; label: string; available: boolean; desc
 
 const STORAGE_KEY = 'tabularia-engine'
 
+// Descrizioni dei motori in INGLESE per tutte le lingue (l'API le fornisce in
+// italiano; qui si sovrascrivono senza toccare il backend). Fallback all'API se
+// arriva un id sconosciuto.
+const ENGINE_DESCRIPTIONS: Record<string, string> = {
+  polars: 'In-process, lazy, streaming engine. Default.',
+  duckdb:
+    'Out-of-core SQL engine (spills to disk): suited to very large aggregations and joins. ' +
+    'v1: basic operations (advanced transforms use Polars).',
+  chdb:
+    'Out-of-core SQL engine with ClickHouse dialect (spills to disk). ' +
+    'v1: structural operations (sql/foreach use Polars or DuckDB).',
+}
+
+export function engineDescription(id: string, fallback = ''): string {
+  return ENGINE_DESCRIPTIONS[id] ?? fallback
+}
+
 const preferredEngine = ref<string>('polars')
 // catalogo degli engine disponibili, caricato una volta e condiviso
 const catalog = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])

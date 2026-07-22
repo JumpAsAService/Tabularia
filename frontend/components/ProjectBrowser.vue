@@ -564,7 +564,7 @@ async function revoke(perm: Permission) {
                   @click="createFlowWith(e.id)"
                 >
                   <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('projectBrowser.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t('projectBrowser.comingSoonTag') }}</span></span>
-                  <span v-if="e.description" class="mi-desc">{{ e.description }}</span>
+                  <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
                 </button>
               </div>
             </div>
