@@ -4,7 +4,14 @@
 // localStorage e riletta a freddo dallo script anti-flash in nuxt.config.
 import { ref, watch } from 'vue'
 
-export type Theme = 'dark' | 'light'
+export type Theme = 'dark' | 'light' | 'dracula' | 'monokai'
+export const THEMES: { value: Theme; label: string }[] = [
+  { value: 'dark', label: 'Dark' },
+  { value: 'light', label: 'Light' },
+  { value: 'dracula', label: 'Dracula' },
+  { value: 'monokai', label: 'Monokai' },
+]
+const VALID = new Set<string>(THEMES.map((t) => t.value))
 const STORAGE_KEY = 'tabularia-theme'
 
 // stato condiviso a livello di modulo: un solo tema per tutta l'app
@@ -19,7 +26,7 @@ export function useTheme() {
   if (!initialized && import.meta.client) {
     initialized = true
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved === 'light' || saved === 'dark') theme.value = saved
+    if (saved && VALID.has(saved)) theme.value = saved as Theme
     apply(theme.value)
     watch(theme, (t) => {
       localStorage.setItem(STORAGE_KEY, t)
@@ -28,11 +35,12 @@ export function useTheme() {
   }
 
   function setTheme(t: Theme) {
-    theme.value = t
+    if (VALID.has(t)) theme.value = t
   }
   function toggle() {
-    theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    // toggle rapido scuro↔chiaro (i temi extra si scelgono dal picker)
+    theme.value = theme.value === 'light' ? 'dark' : 'light'
   }
 
-  return { theme, setTheme, toggle }
+  return { theme, setTheme, toggle, themes: THEMES }
 }

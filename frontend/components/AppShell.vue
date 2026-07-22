@@ -17,8 +17,6 @@ import {
   Share2,
   ScrollText,
   Settings,
-  Moon,
-  Sun,
 } from 'lucide-vue-next'
 
 // fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
@@ -40,6 +38,13 @@ const engineOptions = computed(() =>
 )
 // opzioni lingua per il selettore
 const localeOptions = computed(() => locales.map((l) => ({ value: l.code, label: l.label })))
+// opzioni tema: chiaro/scuro tradotti, Dracula/Monokai nomi propri
+const themeOptions = computed(() => [
+  { value: 'dark', label: t('settings.dark') },
+  { value: 'light', label: t('settings.light') },
+  { value: 'dracula', label: 'Dracula' },
+  { value: 'monokai', label: 'Monokai' },
+])
 
 // menù impostazioni (ingranaggio in alto a destra): nome utente + tema + motore + logout
 const menuOpen = ref(false)
@@ -118,20 +123,12 @@ onMounted(async () => {
             <div class="menu-sep" />
 
             <div class="menu-label">{{ t('settings.theme') }}</div>
-            <div class="theme-switch">
-              <button
-                :class="{ active: theme === 'light' }"
-                @click="setTheme('light')"
-              >
-                <Sun :size="14" /> {{ t('settings.light') }}
-              </button>
-              <button
-                :class="{ active: theme === 'dark' }"
-                @click="setTheme('dark')"
-              >
-                <Moon :size="14" /> {{ t('settings.dark') }}
-              </button>
-            </div>
+            <Select
+              :model-value="theme"
+              :options="themeOptions"
+              class="engpref"
+              @update:model-value="setTheme($event as any)"
+            />
 
             <div class="menu-sep" />
 

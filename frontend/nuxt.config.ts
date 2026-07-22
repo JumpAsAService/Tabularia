@@ -35,7 +35,7 @@ export default defineNuxtConfig({
       script: [
         {
           innerHTML:
-            "try{if(localStorage.getItem('tabularia-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}",
+            "try{var t=localStorage.getItem('tabularia-theme');if(t&&['light','dracula','monokai'].indexOf(t)>=0)document.documentElement.setAttribute('data-theme',t)}catch(e){}",
           tagPosition: 'head',
         },
       ],

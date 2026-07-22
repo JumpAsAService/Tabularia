@@ -28,6 +28,7 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
   --grad-accent: linear-gradient(135deg, #4f8cff 0%, #7c6cff 100%);
+  --on-accent: #fff;                      /* testo sui bottoni primari (su accento) */
 
   /* semantiche derivate: cambiano col tema (prima erano cablate nei componenti) */
   --scrim: rgba(5, 7, 12, 0.6);           /* velo dietro ai modali */
@@ -71,6 +72,68 @@
   color-scheme: light;
 }
 
+/* ── Dracula (palette ufficiale) ─────────────────────────────────────────── */
+:root[data-theme="dracula"] {
+  --bg: #1e1f29;
+  --bg-soft: #21222c;
+  --panel: #282a36;
+  --panel-2: #343746;
+  --border: #44475a;
+  --border-soft: #343746;
+  --text: #f8f8f2;
+  --muted: #7b82ab;
+  --accent: #bd93f9;
+  --accent-hi: #d3b6fb;
+  --accent-2: #50fa7b;
+  --violet: #ff79c6;
+  --danger: #ff5555;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --grad-accent: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
+  --on-accent: #21222c;                   /* accento chiaro → testo scuro sui bottoni */
+
+  --scrim: rgba(20, 21, 28, 0.6);
+  --topbar-bg: rgba(40, 42, 54, 0.92);
+  --row-even: rgba(255, 255, 255, 0.02);
+  --row-hover: rgba(189, 147, 249, 0.1);
+  --sheen: rgba(255, 255, 255, 0.03);
+  --edge: #6272a4;
+  --tint-accent: rgba(189, 147, 249, 0.16);
+  --shimmer: rgba(248, 248, 242, 0.07);
+  color-scheme: dark;
+}
+
+/* ── Monokai (palette classica) ──────────────────────────────────────────── */
+:root[data-theme="monokai"] {
+  --bg: #1e1f1c;
+  --bg-soft: #242520;
+  --panel: #272822;
+  --panel-2: #33342b;
+  --border: #49483e;
+  --border-soft: #33342b;
+  --text: #f8f8f2;
+  --muted: #a6a28c;
+  --accent: #66d9ef;
+  --accent-hi: #8ee6f5;
+  --accent-2: #a6e22e;
+  --violet: #ae81ff;
+  --danger: #f92672;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
+  --on-accent: #1e1f1c;                   /* accento chiaro → testo scuro sui bottoni */
+
+  --scrim: rgba(20, 21, 18, 0.6);
+  --topbar-bg: rgba(39, 40, 34, 0.92);
+  --row-even: rgba(255, 255, 255, 0.02);
+  --row-hover: rgba(102, 217, 239, 0.1);
+  --sheen: rgba(255, 255, 255, 0.03);
+  --edge: #75715e;
+  --tint-accent: rgba(102, 217, 239, 0.15);
+  --shimmer: rgba(248, 248, 242, 0.07);
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #__nuxt {
@@ -110,7 +173,7 @@ button:active { transform: translateY(1px); }
 button.primary {
   background: var(--grad-accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 500;
 }
 button.primary:hover { filter: brightness(1.12); box-shadow: 0 2px 12px rgba(79, 140, 255, 0.35); }
