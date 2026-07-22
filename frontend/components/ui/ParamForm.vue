@@ -306,7 +306,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
     </div>
 
     <div v-for="f in spec" :key="f.key" class="field">
-      <label>{{ f.label }}</label>
+      <label>{{ $t(f.label) }}</label>
 
       <!-- multi-select colonne (+ placeholder del foreach, se presenti) -->
       <div v-if="f.control === 'columns'" class="checks">

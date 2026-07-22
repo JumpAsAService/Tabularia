@@ -22,13 +22,13 @@ const match = (...texts: string[]) => {
 // foreach ha una voce dedicata nel gruppo "Controllo" (è un container, non
 // un'operazione normale della catena)
 const transformOps = computed(() =>
-  props.operations.filter((o) => o !== 'foreach' && match(opMeta(o).label || o, o)),
+  props.operations.filter((o) => o !== 'foreach' && match(t(opMeta(o).label), o)),
 )
 const hasForeach = computed(() => props.operations.includes('foreach'))
 
 // visibilità delle singole voci fisse e dei rispettivi gruppi
-const showSource = computed(() => match(SOURCE_META.label, 'source'))
-const showForeach = computed(() => hasForeach.value && match(opMeta('foreach').label || 'foreach', 'foreach'))
+const showSource = computed(() => match(t(SOURCE_META.label), 'source'))
+const showForeach = computed(() => hasForeach.value && match(t(opMeta('foreach').label), 'foreach'))
 const showRefresh = computed(() => match(t('opSidebar.refreshDatasourceLabel'), 'refresh'))
 const showRunflow = computed(() => match(t('opSidebar.runFlowLabel'), 'runflow'))
 const showOutput = computed(() => match(t('opSidebar.outputLabel'), 'output'))
@@ -66,7 +66,7 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, 'source')"
       >
         <component :is="SOURCE_META.icon" :size="15" class="item-icon" />
-        <span>{{ SOURCE_META.label }}</span>
+        <span>{{ $t(SOURCE_META.label) }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>
@@ -82,7 +82,7 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, `op:${op}`)"
       >
         <component :is="opMeta(op).icon" :size="15" class="item-icon" />
-        <span>{{ opMeta(op).label || op }}</span>
+        <span>{{ $t(opMeta(op).label) }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>
@@ -97,7 +97,7 @@ function onDragStart(ev: DragEvent, kind: string) {
         @dragstart="onDragStart($event, 'op:foreach')"
       >
         <component :is="opMeta('foreach').icon" :size="15" class="item-icon" />
-        <span>{{ opMeta('foreach').label }}</span>
+        <span>{{ $t(opMeta('foreach').label) }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
       <div
