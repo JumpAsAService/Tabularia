@@ -18,10 +18,22 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
+const api = useApi()
 const cronInput = ref('')
+// fuso del deployment in cui gli orari cron vengono interpretati (dal gateway);
+// caricato una volta alla prima apertura
+const tz = ref('UTC')
+let tzLoaded = false
 watch(
   () => props.open,
-  (o) => { if (o) cronInput.value = props.current ?? '' },
+  async (o) => {
+    if (!o) return
+    cronInput.value = props.current ?? ''
+    if (!tzLoaded) {
+      tzLoaded = true
+      try { tz.value = (await api.appInfo()).timezone } catch { /* fallback UTC */ }
+    }
+  },
 )
 
 const CRON_PRESETS = [
@@ -51,7 +63,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
           <button class="sd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
         <p class="muted sd-sub">
-          {{ subtitle }} <strong>{{ title }}</strong>. Orari in UTC.
+          {{ subtitle }} <strong>{{ title }}</strong>. Orari nel fuso <strong>{{ tz }}</strong>.
         </p>
 
         <label>Espressione cron (minuto ora giorno mese giorno-settimana)</label>

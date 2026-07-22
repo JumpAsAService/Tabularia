@@ -1,7 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import BaseModel, Field, SecretStr, computed_field
+from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
 from functools import lru_cache
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 # Come nell'engine: blocchi annidati BaseModel *puri*, il caricamento (env) avviene
@@ -97,6 +98,25 @@ class AppSettings(BaseModel):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
+    # fuso orario del DEPLOYMENT per lo SCHEDULING: le espressioni cron sono
+    # interpretate in questo fuso (orario a PARETE locale, DST incluso) e poi
+    # convertite in UTC per lo storage. NON tocca la visualizzazione dei timestamp
+    # (quella resta nel fuso del browser di chi guarda). Nome IANA, es. Europe/Rome.
+    timezone: str = "UTC"
+
+    @field_validator("timezone")
+    @classmethod
+    def _valid_timezone(cls, v: str) -> str:
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(
+                f"APP__TIMEZONE non valido: '{v}' — usa un nome IANA (es. 'Europe/Rome', 'UTC')"
+            )
+        return v
+
+    def tzinfo(self) -> ZoneInfo:
+        return ZoneInfo(self.timezone)
 
 
 class Settings(BaseSettings):

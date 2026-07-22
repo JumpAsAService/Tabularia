@@ -33,6 +33,21 @@ _cache: tuple[float, "MemoryOut"] | None = None  # (timestamp, valore)
 _lock = asyncio.Lock()
 
 
+class AppInfoOut(BaseModel):
+    """Info di deployment utili all'UI. `timezone` è il fuso in cui vengono
+    interpretate le espressioni cron degli schedule (vedi services/schedule.py)."""
+
+    name: str
+    version: str
+    timezone: str
+
+
+@router.get("/system/info", response_model=AppInfoOut)
+def app_info(user: User = Depends(get_current_user)):
+    s = get_settings().app
+    return AppInfoOut(name=s.name, version=s.version, timezone=s.timezone)
+
+
 class MemoryOut(BaseModel):
     """RAM dell'host. `available` è MemAvailable (non MemFree): tiene conto di
     cache/buffer riclamabili, quindi è la memoria realmente allocabile."""

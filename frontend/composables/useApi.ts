@@ -86,6 +86,11 @@ export function useApi() {
       return await apiFetch('/engines')
     },
 
+    // info di deployment (fuso orario degli schedule, nome, versione)
+    async appInfo(): Promise<{ name: string; version: string; timezone: string }> {
+      return await apiFetch('/system/info')
+    },
+
     // grafo di lineage: senza center → grafo completo leggibile; con center →
     // sottografo a monte/valle entro `depth` salti
     async lineage(p?: {
