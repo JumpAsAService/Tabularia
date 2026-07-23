@@ -27,6 +27,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from math import ceil
 
 from sqlmodel import Session, select
 
@@ -43,10 +44,16 @@ from app.services.flow_resolver import FlowResolveError, resolve_output_request,
 logger = logging.getLogger(__name__)
 
 MAX_FLOW_DEPTH = 5  # guardia sui runflow annidati (oltre al set anti-ciclo)
-REFRESH_WAIT_TICKS = 200  # * intervallo = tetto d'attesa di un refresh
-REFRESH_WAIT_INTERVAL_S = 3
-OUTPUT_WAIT_TICKS = 200  # idem per il completamento di un output (l'ordine è reale
-OUTPUT_WAIT_INTERVAL_S = 3  # solo se ogni passo ATTENDE la fine del precedente)
+
+# Tetti d'attesa (ORCHESTRATOR__* nell'env): l'orchestratore aspetta che refresh e
+# output COMPLETINO prima dei passi a valle, così l'ordine è reale. Espressi in
+# secondi e convertiti in tick di polling; oltre il tetto il flusso aborta invece
+# di leggere dati stantii.
+_orc = get_settings().orchestrator
+REFRESH_WAIT_INTERVAL_S = _orc.poll_interval_seconds
+OUTPUT_WAIT_INTERVAL_S = _orc.poll_interval_seconds
+REFRESH_WAIT_TICKS = max(1, ceil(_orc.refresh_wait_seconds / _orc.poll_interval_seconds))
+OUTPUT_WAIT_TICKS = max(1, ceil(_orc.output_wait_seconds / _orc.poll_interval_seconds))
 
 # flussi con un'orchestrazione in corso: evita sovrapposizioni (stesso flow_id)
 _running: set[int] = set()

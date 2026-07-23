@@ -127,6 +127,19 @@ class SchedulingSettings(BaseModel):
     worker_capacity: int = 2
 
 
+class OrchestratorSettings(BaseModel):
+    """Attese massime di un flusso sui nodi che devono COMPLETARSI prima dei passi
+    a valle (così l'ordine è reale, non cosmetico). Oltre il tetto il flusso aborta
+    invece di leggere dati stantii — alza i valori se hai refresh/output molto
+    lunghi (tabelle enormi o rete lenta)."""
+    # env: ORCHESTRATOR__REFRESH_WAIT_SECONDS — tetto d'attesa di un nodo Refresh
+    refresh_wait_seconds: int = 600
+    # env: ORCHESTRATOR__OUTPUT_WAIT_SECONDS — tetto d'attesa di un nodo Output
+    output_wait_seconds: int = 600
+    # env: ORCHESTRATOR__POLL_INTERVAL_SECONDS — cadenza di polling durante l'attesa
+    poll_interval_seconds: float = 3.0
+
+
 class Settings(BaseSettings):
     """
     Configurazione del gateway. Priorità: init > env > default.
@@ -136,6 +149,7 @@ class Settings(BaseSettings):
 
     app: AppSettings = Field(default_factory=AppSettings)
     scheduling: SchedulingSettings = Field(default_factory=SchedulingSettings)
+    orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
     db: DbSettings = Field(default_factory=DbSettings)
     jwt: JwtSettings = Field(default_factory=JwtSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
