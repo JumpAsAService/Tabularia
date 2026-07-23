@@ -22,6 +22,7 @@ from urllib.parse import quote as _urlquote
 
 import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from pydantic import BaseModel
 
@@ -130,6 +131,56 @@ def _batches_postgresql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
                 yield batch
 
 
+# ClickHouse esporta in Arrow i tipi temporali come INTERI grezzi (Date→uint16
+# giorni, Date32→int32, DateTime→uint32 secondi, DateTime64→int64 in `scale`
+# decimali): senza riconvertirli finirebbero numerici nel parquet (es. il datetime
+# 1714546800). A livello Arrow un uint32 è indistinguibile da un intero vero,
+# quindi usiamo i TIPI ClickHouse (nome della classe datatype, che ignora i
+# wrapper Nullable/LowCardinality) per sapere quali colonne convertire.
+def _clickhouse_temporal_targets(ch_types) -> dict:
+    """Indice colonna → (tipo Arrow di destinazione, scala DateTime64 | None)."""
+    targets: dict[int, tuple] = {}
+    for i, t in enumerate(ch_types):
+        cls = type(t).__name__
+        if cls in ("Date", "Date32"):
+            targets[i] = (pa.date32(), None)
+        elif cls == "DateTime":
+            targets[i] = (pa.timestamp("s"), None)  # NAIVE = istante UTC (come ADBC)
+        elif cls == "DateTime64":
+            scale = int(getattr(t, "scale", 3) or 0)
+            unit = {0: "s", 3: "ms", 6: "us", 9: "ns"}.get(scale, "us")
+            targets[i] = (pa.timestamp(unit), scale)
+    return targets
+
+
+def _cast_ch_temporal(arr, target):
+    """Reinterpreta l'intero grezzo di ClickHouse come date32/timestamp."""
+    arrow_t, scale = target
+    if pa.types.is_date(arrow_t):
+        return pc.cast(pc.cast(arr, pa.int32()), arrow_t)  # giorni dal 1970
+    raw = pc.cast(arr, pa.int64())
+    if scale is not None and scale not in (0, 3, 6, 9):
+        # DateTime64 con precisione non standard → riscala all'unità scelta (us)
+        raw = pc.multiply(raw, 10 ** (6 - scale)) if scale < 6 else pc.divide(raw, 10 ** (scale - 6))
+        raw = pc.cast(raw, pa.int64())
+    return pc.cast(raw, arrow_t)
+
+
+def _fix_clickhouse_temporals(batch, targets: dict):
+    """Riscrive il RecordBatch convertendo le colonne temporali intere."""
+    if not targets:
+        return batch
+    cols, fields = [], []
+    for i, field in enumerate(batch.schema):
+        arr, tgt = batch.column(i), targets.get(i)
+        if tgt is not None:
+            arr = _cast_ch_temporal(arr, tgt)
+            field = pa.field(field.name, tgt[0], nullable=field.nullable)
+        cols.append(arr)
+        fields.append(field)
+    return pa.RecordBatch.from_arrays(cols, schema=pa.schema(fields))
+
+
 def _batches_clickhouse(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
     import clickhouse_connect
 
@@ -142,19 +193,28 @@ def _batches_clickhouse(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         connect_timeout=10,
     )
     try:
+        # tipi ClickHouse da uno schema LIMIT 0: individuano le colonne temporali
+        # (che l'export Arrow rende interi grezzi) da riconvertire.
+        targets = _clickhouse_temporal_targets(
+            client.query(f"SELECT * FROM ({query}) AS _s LIMIT 0").column_types
+        )
         sent_schema = False
         with client.query_arrow_stream(query) as stream:
             for chunk in stream:  # a seconda della versione: Table o RecordBatch
                 batches = chunk.to_batches() if isinstance(chunk, pa.Table) else [chunk]
                 for batch in batches:
+                    batch = _fix_clickhouse_temporals(batch, targets)
                     if not sent_schema:
                         yield batch.schema
                         sent_schema = True
                     yield batch
         if not sent_schema:
-            # risultato vuoto: lo schema si ricava da un LIMIT 0
+            # risultato vuoto: schema da LIMIT 0, con i tipi temporali corretti
             empty = client.query_arrow(f"SELECT * FROM ({query}) AS _s LIMIT 0")
-            yield empty.schema
+            yield pa.schema([
+                pa.field(f.name, targets[i][0], nullable=f.nullable) if i in targets else f
+                for i, f in enumerate(empty.schema)
+            ])
     finally:
         client.close()
 
