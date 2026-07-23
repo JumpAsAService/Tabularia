@@ -124,7 +124,8 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: dataprep-worker
+    # NB: niente container_name → così `docker compose up -d --scale worker=N`
+    # può avviare più repliche (un nome fisso collide e blocca lo scaling).
     # riparte da solo dopo un OOM-kill del processo principale del worker:
     # il caso limite in cui muore l'intero container invece del solo task-figlio
     restart: unless-stopped
@@ -147,14 +148,32 @@ services:
     # memswap_limit == mem_limit disabilita lo swap (evita lo swap-thrashing).
     mem_limit: ${WORKER_MEM_LIMIT:-4g}
     memswap_limit: ${WORKER_MEM_LIMIT:-4g}
-    # -B: beat embedded (eviction cache). Ok per dev con un worker singolo;
-    # in prod/multi-worker separare 'celery beat' in un servizio dedicato.
-    # NB: niente --concurrency qui → la concurrency viene dal conf
-    # (CELERY__WORKER_CONCURRENCY, default 2), unica fonte di verità usata anche
-    # per derivare il tetto di memoria per-figlio.
-    # -Q celery: consuma SOLO la coda di default (i run pesanti). Le anteprime
-    # vanno sulla coda `preview`, servita dal preview-worker qui sotto.
-    command: celery -A app.tasks.celery_app worker -E --beat --schedule /tmp/celerybeat-schedule -Q celery --loglevel=info
+    # Worker PURO (niente -B): l'orologio è il servizio `beat` dedicato qui sotto,
+    # così questo servizio è scalabile a N repliche senza duplicare i task
+    # periodici. Niente --concurrency → viene dal conf (CELERY__WORKER_CONCURRENCY,
+    # default 2), unica fonte di verità usata anche per il tetto di memoria
+    # per-figlio. -Q celery: consuma SOLO la coda di default (i run pesanti); le
+    # anteprime vanno sulla coda `preview`, servita dal preview-worker qui sotto.
+    command: celery -A app.tasks.celery_app worker -E -Q celery --loglevel=info
+
+  # Beat = UNICO orologio dello stack: schedula i task periodici (eviction step
+  # cache, storage-stats) e li mette in coda; a ESEGUIRLI sono i worker. DEVE
+  # restare a 1 replica — N beat accodano i task periodici N volte. Non esegue
+  # task, quindi è leggero e non tocca lo storage (solo il broker).
+  beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dataprep-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ../backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A app.tasks.celery_app beat --schedule /tmp/celerybeat-schedule --loglevel=info
 
   # Worker DEDICATO alle anteprime: coda `preview`, interattivo. Separato dal
   # worker dei run così una preview non resta bloccata dietro un run lungo (e
@@ -165,7 +184,7 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: dataprep-preview-worker
+    # niente container_name → scalabile con --scale preview-worker=N
     restart: unless-stopped
     env_file:
       - .env

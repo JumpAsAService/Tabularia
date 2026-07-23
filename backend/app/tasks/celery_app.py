@@ -24,6 +24,17 @@ celery_app.conf.update(
     task_time_limit=3600,
     task_soft_time_limit=3300,
     worker_concurrency=settings.celery.worker_concurrency,
+    # Distribuzione EQUA su più worker: senza questo (default 4) ogni figlio
+    # "prenota" fino a 4 task in coda, così un worker occupato accaparra job che
+    # un worker appena aggiunto potrebbe prendere → l'altro resta a secco. Con 1
+    # ciascun figlio riserva un solo task oltre a quello in esecuzione. Cruciale
+    # per i run lunghi quando si scala la pool.
+    worker_prefetch_multiplier=1,
+    # NB: task_acks_late resta al default (False): l'ack avviene alla ricezione,
+    # non a fine task. Non lo abilitiamo perché un redelivery dopo un crash
+    # rieseguirebbe il task, e gli Output in append raddoppierebbero le righe
+    # (task NON idempotenti). Un run perso viene ripreso a mano / marcato FAILURE
+    # dal timeout di staleness. Abilitare acks_late solo dopo aver reso i task idempotenti.
     # riciclo del processo figlio: rilascia all'OS la memoria che glibc malloc
     # trattiene dopo le allocazioni native di Polars/Arrow (RSS a scalini che non
     # rientra). Ricicla dopo N task E oltre un tetto di RSS.
