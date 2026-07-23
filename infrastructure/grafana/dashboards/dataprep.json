@@ -103,7 +103,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "container_memory_working_set_bytes{name=~\"dataprep-.*\"}",
+          "expr": "container_memory_working_set_bytes{name=~\"dataprep-.*|infrastructure-.*\"}",
           "legendFormat": "{{name}}",
           "datasource": {
             "type": "prometheus",
@@ -267,8 +267,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "container_memory_working_set_bytes{name=\"dataprep-worker\"}",
-          "legendFormat": "worker",
+          "expr": "container_memory_working_set_bytes{image=\"infrastructure-worker\"}",
+          "legendFormat": "{{name}}",
           "datasource": {
             "type": "prometheus",
             "uid": "victoriametrics"
