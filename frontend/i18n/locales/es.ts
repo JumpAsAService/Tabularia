@@ -102,6 +102,7 @@ export default {
     sql_query: 'Consulta SQL',
     join_how: 'Tipo de join',
     join_on: 'Columnas clave (en ambas)',
+    join_keys: 'Claves de unión',
     union_strategy: 'Si las columnas de las dos ramas difieren',
     foreach_items: 'Iteraciones estáticas (solo sin driver)',
     foreach_add_keys_as_columns: 'Añadir los marcadores como columnas',

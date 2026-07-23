@@ -498,6 +498,8 @@ export default {
     "joinDiagNoCommon": "Les deux tables n'ont aucune colonne portant le même nom (une jointure sur des clés différentes serait nécessaire).",
     "joinDiagNoLeft": "Connectez l'entrée en haut à gauche à une étape contenant des données.",
     "joinDiagNoRight": "Connectez une branche contenant des données à l'entrée « table » en bas à gauche.",
+    "joinLeftKey": "Colonne gauche",
+    "joinRightKey": "Colonne droite",
     "jsonPlaceholderExample": "[{\"pays\": \"IT\", \"seuil\": 100}, {\"pays\": \"FR\", \"seuil\": 50}]",
     "newNamePlaceholder": "nouveau nom",
     "noColumnsAvailable": "Aucune colonne disponible",

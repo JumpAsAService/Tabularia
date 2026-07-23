@@ -83,6 +83,8 @@ const renameRows = reactive<{ from: string; to: string }[]>([])
 const fillRows = reactive<{ column: string; value: string }[]>([])
 const aggRows = reactive<{ column: string; func: string; alias: string }[]>([])
 const exprRows = reactive<{ name: string; expr: string }[]>([])
+// join: coppie chiave sinistra → chiave destra (nomi anche diversi)
+const joinRows = reactive<{ left: string; right: string }[]>([])
 
 function parseValue(raw: string): any {
   const t = (raw ?? '').trim()
@@ -101,7 +103,7 @@ function showValue(v: any): string {
 // ricostruisce lo stato locale dai params quando cambia il nodo/operazione
 function rebuild() {
   for (const k of Object.keys(state)) delete state[k]
-  castRows.length = renameRows.length = fillRows.length = aggRows.length = exprRows.length = 0
+  castRows.length = renameRows.length = fillRows.length = aggRows.length = exprRows.length = joinRows.length = 0
   const p = props.params ?? {}
 
   for (const f of spec.value) {
@@ -137,6 +139,16 @@ function rebuild() {
       case 'exprlist':
         for (const c of p.columns ?? []) exprRows.push({ name: c.name ?? '', expr: c.expr ?? '' })
         if (!exprRows.length) exprRows.push({ name: '', expr: '' }) // parti con una riga pronta
+        break
+      case 'joinkeys':
+        // accetta sia 'on' (nomi uguali, flussi esistenti) sia 'left_on'/'right_on'
+        if (Array.isArray(p.left_on) && Array.isArray(p.right_on)) {
+          const n = Math.min(p.left_on.length, p.right_on.length)
+          for (let i = 0; i < n; i++) joinRows.push({ left: String(p.left_on[i]), right: String(p.right_on[i]) })
+        } else if (Array.isArray(p.on)) {
+          for (const c of p.on) joinRows.push({ left: String(c), right: String(c) })
+        }
+        if (!joinRows.length) joinRows.push({ left: '', right: '' }) // una riga pronta
         break
       default:
         state[f.key] = p[f.key]
@@ -243,6 +255,18 @@ function build(): Record<string, any> {
           .filter((r) => r.name.trim() && r.expr.trim())
           .map((r) => ({ name: r.name.trim(), expr: r.expr.trim() }))
         break
+      case 'joinkeys': {
+        const rows = joinRows.filter((r) => r.left && r.right)
+        if (rows.length) {
+          if (rows.every((r) => r.left === r.right)) {
+            out.on = rows.map((r) => r.left) // nomi uguali → 'on' (compatibile, cross-engine)
+          } else {
+            out.left_on = rows.map((r) => r.left)
+            out.right_on = rows.map((r) => r.right)
+          }
+        }
+        break
+      }
       default:
         if (state[f.key] !== undefined && state[f.key] !== '') out[f.key] = state[f.key]
     }
@@ -277,7 +301,12 @@ function addRename() { renameRows.push({ from: '', to: '' }); }
 function addFill() { fillRows.push({ column: '', value: '' }); }
 function addAgg() { aggRows.push({ column: '', func: 'sum', alias: '' }); }
 function addExpr() { exprRows.push({ name: '', expr: '' }); }
+function addJoinKey() { joinRows.push({ left: '', right: '' }); }
 function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
+
+// opzioni colonne per i due lati del join (schemi distinti)
+const leftColOptions = computed(() => leftNames.value.map((n) => ({ value: n, label: n })))
+const rightColOptions = computed(() => rightNames.value.map((n) => ({ value: n, label: n })))
 
 // ── Opzioni per il Select custom ──────────────────────────────────────────
 // colonne (+ placeholder raggruppati); withEmpty aggiunge la voce "—"
@@ -513,6 +542,28 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         </p>
       </div>
 
+      <!-- join: coppie chiave sinistra → chiave destra (nomi anche diversi) -->
+      <div v-else-if="f.control === 'joinkeys'" class="rows">
+        <div v-for="(r, i) in joinRows" :key="i" class="row">
+          <Select
+            :model-value="r.left"
+            :options="leftColOptions"
+            :placeholder="$t('paramForm.joinLeftKey')"
+            @update:model-value="(v: any) => { r.left = v; emitUpdate() }"
+          />
+          <span class="jarrow">→</span>
+          <Select
+            :model-value="r.right"
+            :options="rightColOptions"
+            :placeholder="$t('paramForm.joinRightKey')"
+            @update:model-value="(v: any) => { r.right = v; emitUpdate() }"
+          />
+          <button class="x" @click="removeRow(joinRows, i)"><X :size="13" /></button>
+        </div>
+        <button @click="addJoinKey">{{ $t('paramForm.addRow') }}</button>
+        <span v-if="!leftNames.length || !rightNames.length" class="muted">{{ joinOnDiag }}</span>
+      </div>
+
       <!-- group_by: righe colonna/funzione/alias -->
       <div v-else-if="f.control === 'agglist'" class="rows">
         <div v-for="(r, i) in aggRows" :key="i" class="row">
@@ -552,6 +603,7 @@ label { font-size: 12px; color: var(--muted); }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; gap: 4px; align-items: center; }
 .row .x { padding: 2px 8px; }
+.jarrow { color: var(--muted); flex-shrink: 0; font-size: 13px; }
 .exprrow { display: flex; flex-direction: column; gap: 4px; }
 .exprrow textarea { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
 .exprhead { display: flex; gap: 4px; align-items: center; }

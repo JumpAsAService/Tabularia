@@ -102,6 +102,7 @@ export default {
     sql_query: 'Requête SQL',
     join_how: 'Type de jointure',
     join_on: 'Colonnes clés (dans les deux)',
+    join_keys: 'Clés de jointure',
     union_strategy: 'Si les colonnes des deux branches diffèrent',
     foreach_items: 'Itérations statiques (uniquement sans pilote)',
     foreach_add_keys_as_columns: 'Ajouter les espaces réservés comme colonnes',

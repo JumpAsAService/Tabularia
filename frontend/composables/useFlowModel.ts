@@ -185,6 +185,7 @@ export interface FieldSpec {
     | 'agglist' // [{column, func, alias}]
     | 'exprlist' // [{name, expr}] — colonne calcolate (espressioni SQL)
     | 'strategy' // union: relaxed | strict
+    | 'joinkeys' // join: righe colonna sinistra → colonna destra (nomi anche diversi)
     | 'json' // textarea con JSON libero (es. items del foreach)
     | 'sqltext' // textarea con una query SQL intera (Execute SQL); preview MANUALE
   optional?: boolean
@@ -230,7 +231,7 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
   sql: [{ key: 'query', label: 'params.sql_query', control: 'sqltext' }],
   join: [
     { key: 'how', label: 'params.join_how', control: 'how' },
-    { key: 'on', label: 'params.join_on', control: 'columns' },
+    { key: 'keys', label: 'params.join_keys', control: 'joinkeys' },
   ],
   union: [
     { key: 'strategy', label: 'params.union_strategy', control: 'strategy' },

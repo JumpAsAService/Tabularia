@@ -498,6 +498,8 @@ export default {
     "joinDiagNoCommon": "The two tables have no columns with the same name (a join on different keys would be needed).",
     "joinDiagNoLeft": "Connect the top-left input to a step with data.",
     "joinDiagNoRight": "Connect a branch with data to the bottom-left «table» input.",
+    "joinLeftKey": "Left column",
+    "joinRightKey": "Right column",
     "jsonPlaceholderExample": "[{\"country\": \"IT\", \"threshold\": 100}, {\"country\": \"FR\", \"threshold\": 50}]",
     "newNamePlaceholder": "new name",
     "noColumnsAvailable": "No columns available",

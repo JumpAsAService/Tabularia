@@ -102,6 +102,7 @@ export default {
     sql_query: 'SQL-Abfrage',
     join_how: 'Join-Typ',
     join_on: 'Schlüsselspalten (in beiden)',
+    join_keys: 'Join-Schlüssel',
     union_strategy: 'Wenn die Spalten der beiden Zweige abweichen',
     foreach_items: 'Statische Iterationen (nur ohne Treiber)',
     foreach_add_keys_as_columns: 'Platzhalter als Spalten hinzufügen',

@@ -498,6 +498,8 @@ export default {
     "joinDiagNoCommon": "Die beiden Tabellen haben keine Spalten mit demselben Namen (ein Join über unterschiedliche Schlüssel wäre nötig).",
     "joinDiagNoLeft": "Verbinde den oberen linken Eingang mit einem Schritt, der Daten enthält.",
     "joinDiagNoRight": "Verbinde einen Zweig mit Daten mit dem unteren linken Eingang „table“.",
+    "joinLeftKey": "Linke Spalte",
+    "joinRightKey": "Rechte Spalte",
     "jsonPlaceholderExample": "[{\"land\": \"IT\", \"schwelle\": 100}, {\"land\": \"FR\", \"schwelle\": 50}]",
     "newNamePlaceholder": "neuer Name",
     "noColumnsAvailable": "Keine Spalten verfügbar",
