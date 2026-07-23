@@ -1,12 +1,16 @@
 """Scheduler in-process del gateway: refresh delle datasource database E
 esecuzione dei flussi.
 
-Un timer (deroga controllata al "niente poller": quello valeva per lo STATO dei
-run, riconciliato pigramente; una schedulazione ha bisogno di un timer). A ogni
-tick lancia il lavoro scaduto con l'autorità di chi ha impostato lo schedule
-(capability catturate alla creazione). Per i FLUSSI la definizione viene
-RI-RISOLTA al fire-time (Opzione A): usa sempre gli snapshot correnti delle
-datasource e segue le modifiche al flusso.
+A ogni tick lancia il lavoro scaduto con l'autorità di chi ha impostato lo
+schedule (capability catturate alla creazione). Per i FLUSSI la definizione
+viene RI-RISOLTA al fire-time (Opzione A): usa sempre gli snapshot correnti
+delle datasource e segue le modifiche al flusso.
+
+Il tick riconcilia anche lo STATO dei run non terminali (oltre alla
+riconciliazione pigra on-poll del frontend): così un ingest/flusso completato
+lato engine viene applicato entro un tick anche se nessuno sta guardando —
+altrimenti un refresh finito resterebbe invisibile e la datasource punterebbe a
+dati vecchi.
 
 Single-instance: con più repliche del gateway servirebbe un lock (advisory lock
 Postgres) per non lanciare due volte — documentato, non necessario ora.
@@ -114,6 +118,28 @@ async def _tick() -> None:
     now = datetime.now(timezone.utc)
     now_naive = now.replace(tzinfo=None)  # le colonne TIMESTAMP sono naive-UTC
     with Session(engine) as session:
+        # Reconcile SERVER-SIDE dei run non terminali: un ingest/flusso completato
+        # lato engine va APPLICATO (swap parquet + schema della datasource) entro
+        # un tick anche se nessuno sta pollando dal frontend. Senza questo, un
+        # refresh finito mentre l'utente ha lasciato la vista resta invisibile e
+        # la datasource continua a puntare ai dati VECCHI (l'utente non sa cosa sta
+        # guardando). _reconcile salta i run già terminali e quelli senza task
+        # engine, e il claim a SUCCESS è atomico → sicuro anche col poll della UI.
+        try:
+            pending = session.exec(
+                select(Run).where(
+                    Run.status.not_in(TERMINAL_STATES),  # type: ignore[union-attr]
+                    Run.task_id != "",
+                )
+            ).all()
+            for r in pending:
+                try:
+                    await _reconcile(session, r)
+                except Exception:
+                    logger.exception("scheduler: reconcile del run %s fallito", r.id)
+        except Exception:
+            logger.exception("scheduler: passata di reconcile dei run fallita")
+
         due_ds = session.exec(
             select(Datasource).where(
                 Datasource.refresh_schedule.is_not(None),  # type: ignore[union-attr]
