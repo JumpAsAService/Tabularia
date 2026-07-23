@@ -1,5 +1,10 @@
+import logging
+
 from celery import Celery
+from celery.signals import worker_ready
 from app.core.config import get_settings, resolve_max_memory_per_child_kb
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -50,3 +55,21 @@ celery_app.conf.beat_schedule = {
         "schedule": float(settings.metrics.storage_stats_interval_seconds),
     },
 }
+
+
+@worker_ready.connect
+def _ensure_storage_bucket(sender=None, **_):
+    """All'avvio del worker garantisce che il bucket dello storage esista.
+
+    I task di manutenzione schedulati da beat (storage_stats, evict) girano anche
+    prima di qualsiasi upload: su un deploy fresco (o dopo un reset dello storage)
+    il bucket non esisterebbe ancora → NoSuchBucket in loop. `create_bucket` è
+    idempotente. Import lazy per evitare cicli con app.utils."""
+    from app.utils import get_storage_service
+
+    bucket = get_settings().storage.bucket
+    try:
+        get_storage_service().create_bucket(bucket)
+        logger.info("storage: bucket '%s' pronto", bucket)
+    except Exception:  # non deve mai impedire l'avvio del worker
+        logger.warning("storage: impossibile garantire il bucket '%s' all'avvio", bucket, exc_info=True)
