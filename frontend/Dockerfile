@@ -7,9 +7,12 @@ WORKDIR /app
 RUN chown node:node /app
 USER node
 
-# installa le dipendenze (layer cache-abile)
-COPY --chown=node:node package.json ./
-RUN npm install
+# installa le dipendenze (layer cache-abile). npm ci dal lockfile: build
+# deterministico e riproducibile — evita anche il crash dell'arborist di npm
+# (`Cannot read properties of null (reading 'edgesOut')`) sul fresh install
+# senza lockfile. Il lockfile va tenuto in sync con package.json.
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci
 
 COPY --chown=node:node . .
 
