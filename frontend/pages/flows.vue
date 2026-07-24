@@ -132,9 +132,16 @@ async function deleteFlow(f: FlowSummary) {
 }
 
 const exporting = ref<number | null>(null)
-const exportMenu = ref<number | null>(null)
+const exportMenuFlow = ref<FlowSummary | null>(null)
+const menuPos = reactive({ top: 0, left: 0 })
+function openExportMenu(e: MouseEvent, f: FlowSummary) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  menuPos.top = r.bottom + 4
+  menuPos.left = Math.max(8, r.right - 236) // allinea il bordo destro del menu al bottone
+  exportMenuFlow.value = exportMenuFlow.value?.id === f.id ? null : f
+}
 async function exportDbt(f: FlowSummary, target: 'duckdb' | 'native') {
-  exportMenu.value = null
+  exportMenuFlow.value = null
   exporting.value = f.id
   try {
     const blob = await api.exportFlowDbt(f.id, target)
@@ -239,24 +246,11 @@ async function saveSchedule(cron: string) {
           </button>
           <div class="flow-actions">
             <button class="mini" :title="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
-            <div class="export-wrap">
-              <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id"
-                @click="exportMenu = exportMenu === f.id ? null : f.id">
-                <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
-                <Download v-else :size="13" />
-              </button>
-              <template v-if="exportMenu === f.id">
-                <div class="export-backdrop" @click="exportMenu = null" />
-                <div class="export-menu">
-                  <button @click="exportDbt(f, 'duckdb')">
-                    <strong>dbt-duckdb</strong><span>{{ $t('flows.exportDbtFederated') }}</span>
-                  </button>
-                  <button @click="exportDbt(f, 'native')">
-                    <strong>{{ $t('flows.exportDbtNativeLabel') }}</strong><span>{{ $t('flows.exportDbtNative') }}</span>
-                  </button>
-                </div>
-              </template>
-            </div>
+            <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id"
+              @click="openExportMenu($event, f)">
+              <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
+              <Download v-else :size="13" />
+            </button>
             <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
             <button class="mini danger" :title="$t('flows.deleteFlowTitle')" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>
@@ -309,6 +303,21 @@ async function saveSchedule(cron: string) {
       @save="saveSchedule"
       @cancel="scheduleFor = null"
     />
+
+    <!-- menu export dbt: teleportato su body per uscire dall'overflow:hidden della riga -->
+    <Teleport to="body">
+      <template v-if="exportMenuFlow">
+        <div class="export-backdrop" @click="exportMenuFlow = null" />
+        <div class="export-menu" :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }">
+          <button @click="exportDbt(exportMenuFlow, 'duckdb')">
+            <strong>dbt-duckdb</strong><span>{{ $t('flows.exportDbtFederated') }}</span>
+          </button>
+          <button @click="exportDbt(exportMenuFlow, 'native')">
+            <strong>{{ $t('flows.exportDbtNativeLabel') }}</strong><span>{{ $t('flows.exportDbtNative') }}</span>
+          </button>
+        </div>
+      </template>
+    </Teleport>
   </AppShell>
 </template>
 
@@ -342,12 +351,12 @@ async function saveSchedule(cron: string) {
 .flow-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
 
-/* menu export dbt (duckdb federato / warehouse nativo) */
-.export-wrap { position: relative; display: inline-flex; }
-.export-backdrop { position: fixed; inset: 0; z-index: 40; }
+/* menu export dbt (duckdb federato / warehouse nativo): teleportato su body,
+   posizione fixed calcolata dal bottone → non viene clippato dall'overflow riga */
+.export-backdrop { position: fixed; inset: 0; z-index: 200; }
 .export-menu {
-  position: absolute; right: 0; top: calc(100% + 4px); z-index: 41;
-  min-width: 230px; background: var(--panel); border: 1px solid var(--border);
+  position: fixed; z-index: 201;
+  min-width: 236px; background: var(--panel); border: 1px solid var(--border);
   border-radius: 9px; box-shadow: var(--shadow-2); padding: 5px; display: flex; flex-direction: column; gap: 2px;
 }
 .export-menu button {
