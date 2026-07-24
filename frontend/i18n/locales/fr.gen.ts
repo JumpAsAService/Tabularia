@@ -289,6 +289,7 @@ export default {
     "noFlows": "Aucun flux : créez-en un depuis un dossier ou avec Nouveau flux.",
     "noResultsSearch": "Aucun flux ne correspond à votre recherche.",
     "openEditorTitle": "Ouvrir dans l'éditeur",
+    "exportDbtTitle": "Exporter en projet dbt",
     "preferredTag": "préféré",
     "promoteButton": "Promouvoir",
     "promoteSuccess": "Version v{version} promue",

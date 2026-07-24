@@ -289,6 +289,7 @@ export default {
     "noFlows": "Nessun flusso: creane uno da una cartella o con Nuovo flusso.",
     "noResultsSearch": "Nessun flusso per la ricerca.",
     "openEditorTitle": "Apri nell'editor",
+    "exportDbtTitle": "Esporta come progetto dbt",
     "preferredTag": "preferita",
     "promoteButton": "Promuovi",
     "promoteSuccess": "Versione v{version} promossa",

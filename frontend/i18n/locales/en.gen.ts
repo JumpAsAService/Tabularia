@@ -289,6 +289,7 @@ export default {
     "noFlows": "No flows: create one from a folder or with New flow.",
     "noResultsSearch": "No flows match your search.",
     "openEditorTitle": "Open in editor",
+    "exportDbtTitle": "Export as dbt project",
     "preferredTag": "preferred",
     "promoteButton": "Promote",
     "promoteSuccess": "Version v{version} promoted",

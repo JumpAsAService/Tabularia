@@ -155,6 +155,11 @@ export function useApi() {
     }): Promise<Blob> {
       return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
     },
+
+    // esporta un flusso come progetto dbt-duckdb (zip)
+    async exportFlowDbt(flowId: number): Promise<Blob> {
+      return await apiFetch<Blob>(`/flows/${flowId}/export/dbt`, { responseType: 'blob' })
+    },
   }
 }
 

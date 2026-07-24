@@ -8,10 +8,12 @@ Permessi (ereditati dall'albero come sempre):
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
+from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -217,6 +219,45 @@ def _snapshot_version(session: Session, flow: Flow, user: User, note: str) -> No
         )
     )
     session.commit()
+
+
+@router.get("/flows/{flow_id}/export/dbt")
+async def export_flow_dbt(
+    flow_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Esporta il flusso come progetto dbt-duckdb (zip). Il gateway risolve
+    flusso→operazioni e sorgenti→tabelle DB, l'engine compila e zippa."""
+    from app.services.dbt_export import DbtExportError, build_export_payload
+
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    try:
+        payload = build_export_payload(session, flow, get_settings().engine.bucket)
+    except DbtExportError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    resp = await get_engine_client().post("/dbt/export", json=payload)
+    if resp.status_code != 200:
+        detail = "export dbt non riuscito"
+        try:
+            detail = resp.json().get("detail", detail)
+        except Exception:
+            pass
+        raise HTTPException(status_code=resp.status_code if resp.status_code >= 400 else 502, detail=detail)
+
+    audit.record_audit(
+        session, actor=user, action=audit.EXPORT_DOWNLOAD,
+        target_type="flow", target_id=flow.id, target_label=flow.name,
+        detail={"format": "dbt"}, request=request,
+    )
+    fname = "".join(c if (c.isalnum() or c in "-_") else "_" for c in flow.name).strip("_") or "flow"
+    return Response(
+        content=resp.content, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}_dbt.zip"'},
+    )
 
 
 @router.get("/flows/{flow_id}", response_model=FlowDetail)

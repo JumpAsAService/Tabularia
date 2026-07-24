@@ -6,7 +6,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
-  CheckCircle2, XCircle, LoaderCircle, Circle,
+  CheckCircle2, XCircle, LoaderCircle, Circle, Download,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
@@ -131,6 +131,24 @@ async function deleteFlow(f: FlowSummary) {
   }
 }
 
+const exporting = ref<number | null>(null)
+async function exportDbt(f: FlowSummary) {
+  exporting.value = f.id
+  try {
+    const blob = await api.exportFlowDbt(f.id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${f.name.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '') || 'flow'}_dbt.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    exporting.value = null
+  }
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
@@ -219,6 +237,10 @@ async function saveSchedule(cron: string) {
           </button>
           <div class="flow-actions">
             <button class="mini" :title="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
+            <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id" @click="exportDbt(f)">
+              <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
+              <Download v-else :size="13" />
+            </button>
             <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
             <button class="mini danger" :title="$t('flows.deleteFlowTitle')" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>

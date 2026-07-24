@@ -7,6 +7,7 @@ from app.api.routes.healthcheck import router as healthcheck_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.files import router as files_router
 from app.api.routes.db import router as db_router
+from app.api.routes.dbt import router as dbt_router
 
 
 app = FastAPI(
@@ -32,6 +33,7 @@ app.include_router(healthcheck_router)
 app.include_router(tasks_router)
 app.include_router(files_router)
 app.include_router(db_router)
+app.include_router(dbt_router)
 
 @app.get("/engines")
 def list_engines():
