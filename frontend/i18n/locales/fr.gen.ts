@@ -293,6 +293,7 @@ export default {
     "exportDbtFederated": "Fédéré — lit les BD sources en direct",
     "exportDbtNativeLabel": "Warehouse natif",
     "exportDbtNative": "S'exécute dans la BD source (SQL traduit)",
+    "exportDbtCancel": "Annuler",
     "preferredTag": "préféré",
     "promoteButton": "Promouvoir",
     "promoteSuccess": "Version v{version} promue",

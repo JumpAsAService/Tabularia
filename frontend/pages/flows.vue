@@ -133,13 +133,6 @@ async function deleteFlow(f: FlowSummary) {
 
 const exporting = ref<number | null>(null)
 const exportMenuFlow = ref<FlowSummary | null>(null)
-const menuPos = reactive({ top: 0, left: 0 })
-function openExportMenu(e: MouseEvent, f: FlowSummary) {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  menuPos.top = r.bottom + 4
-  menuPos.left = Math.max(8, r.right - 236) // allinea il bordo destro del menu al bottone
-  exportMenuFlow.value = exportMenuFlow.value?.id === f.id ? null : f
-}
 async function exportDbt(f: FlowSummary, target: 'duckdb' | 'native') {
   exportMenuFlow.value = null
   exporting.value = f.id
@@ -247,7 +240,7 @@ async function saveSchedule(cron: string) {
           <div class="flow-actions">
             <button class="mini" :title="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
             <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id"
-              @click="openExportMenu($event, f)">
+              @click="exportMenuFlow = f">
               <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
               <Download v-else :size="13" />
             </button>
@@ -304,19 +297,23 @@ async function saveSchedule(cron: string) {
       @cancel="scheduleFor = null"
     />
 
-    <!-- menu export dbt: teleportato su body per uscire dall'overflow:hidden della riga -->
+    <!-- dialog centrato di scelta target export dbt -->
     <Teleport to="body">
-      <template v-if="exportMenuFlow">
-        <div class="export-backdrop" @click="exportMenuFlow = null" />
-        <div class="export-menu" :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }">
-          <button @click="exportDbt(exportMenuFlow, 'duckdb')">
+      <div v-if="exportMenuFlow" class="export-overlay" @click.self="exportMenuFlow = null">
+        <div class="export-card">
+          <div class="export-card-head">
+            <strong>{{ $t('flows.exportDbtTitle') }}</strong>
+            <span class="muted">{{ exportMenuFlow.name }}</span>
+          </div>
+          <button class="export-opt" @click="exportDbt(exportMenuFlow, 'duckdb')">
             <strong>dbt-duckdb</strong><span>{{ $t('flows.exportDbtFederated') }}</span>
           </button>
-          <button @click="exportDbt(exportMenuFlow, 'native')">
+          <button class="export-opt" @click="exportDbt(exportMenuFlow, 'native')">
             <strong>{{ $t('flows.exportDbtNativeLabel') }}</strong><span>{{ $t('flows.exportDbtNative') }}</span>
           </button>
+          <button class="export-cancel" @click="exportMenuFlow = null">{{ $t('flows.exportDbtCancel') }}</button>
         </div>
-      </template>
+      </div>
     </Teleport>
   </AppShell>
 </template>
@@ -351,21 +348,27 @@ async function saveSchedule(cron: string) {
 .flow-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
 
-/* menu export dbt (duckdb federato / warehouse nativo): teleportato su body,
-   posizione fixed calcolata dal bottone → non viene clippato dall'overflow riga */
-.export-backdrop { position: fixed; inset: 0; z-index: 200; }
-.export-menu {
-  position: fixed; z-index: 201;
-  min-width: 236px; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 9px; box-shadow: var(--shadow-2); padding: 5px; display: flex; flex-direction: column; gap: 2px;
+/* dialog centrato di scelta target export dbt (duckdb federato / nativo) */
+.export-overlay {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: var(--scrim, rgba(0, 0, 0, 0.5)); padding: 20px;
 }
-.export-menu button {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-  padding: 7px 9px; text-align: left; background: none; border: none; border-radius: 6px; width: 100%;
+.export-card {
+  width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow-2); padding: 14px; display: flex; flex-direction: column; gap: 8px;
 }
-.export-menu button:hover { background: var(--panel-2); }
-.export-menu strong { font-size: 12.5px; font-weight: 600; }
-.export-menu span { font-size: 11px; color: var(--muted); }
+.export-card-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
+.export-card-head strong { font-size: 14px; }
+.export-card-head .muted { font-size: 12px; }
+.export-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 11px 12px; text-align: left; width: 100%;
+  background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 9px;
+}
+.export-opt:hover { border-color: var(--accent); }
+.export-opt strong { font-size: 13px; font-weight: 600; }
+.export-opt span { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.export-cancel { align-self: flex-end; font-size: 12px; padding: 6px 10px; margin-top: 2px; }
 
 .flow-detail { border-top: 1px solid var(--border-soft); padding: 12px; background: var(--panel-2); }
 .metrics { display: flex; flex-wrap: wrap; gap: 10px 22px; }

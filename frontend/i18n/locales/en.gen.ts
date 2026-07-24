@@ -293,6 +293,7 @@ export default {
     "exportDbtFederated": "Federated — reads the source DBs live",
     "exportDbtNativeLabel": "Native warehouse",
     "exportDbtNative": "Runs in the source DB (translated SQL)",
+    "exportDbtCancel": "Cancel",
     "preferredTag": "preferred",
     "promoteButton": "Promote",
     "promoteSuccess": "Version v{version} promoted",

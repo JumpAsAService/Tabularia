@@ -293,6 +293,7 @@ export default {
     "exportDbtFederated": "Föderiert — liest die Quell-DBs live",
     "exportDbtNativeLabel": "Natives Warehouse",
     "exportDbtNative": "Läuft in der Quell-DB (übersetztes SQL)",
+    "exportDbtCancel": "Abbrechen",
     "preferredTag": "bevorzugt",
     "promoteButton": "Befördern",
     "promoteSuccess": "Version v{version} befördert",
