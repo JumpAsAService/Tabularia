@@ -94,6 +94,14 @@ def op_select(rel, params, a, ctx):
     return rel.query(a, f"SELECT {cols} FROM {a}")
 
 
+@_register("reorder")
+def op_reorder(rel, params, a, ctx):
+    # colonne elencate prima (nell'ordine), poi tutte le altre (EXCLUDE degli elencati)
+    order = _require(params, "columns")
+    q = ", ".join(_qi(c) for c in order)
+    return rel.query(a, f"SELECT {q}, * EXCLUDE ({q}) FROM {a}")
+
+
 @_register("drop")
 def op_drop(rel, params, a, ctx):
     cols = ", ".join(_qi(c) for c in _require(params, "columns"))

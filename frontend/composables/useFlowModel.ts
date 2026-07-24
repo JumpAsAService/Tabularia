@@ -186,6 +186,7 @@ export interface FieldSpec {
     | 'exprlist' // [{name, expr}] — colonne calcolate (espressioni SQL)
     | 'strategy' // union: relaxed | strict
     | 'joinkeys' // join: righe colonna sinistra → colonna destra (nomi anche diversi)
+    | 'reorder' // riordino colonne con drag-and-drop
     | 'json' // textarea con JSON libero (es. items del foreach)
     | 'sqltext' // textarea con una query SQL intera (Execute SQL); preview MANUALE
   optional?: boolean
@@ -193,6 +194,7 @@ export interface FieldSpec {
 
 export const OP_SPECS: Record<string, FieldSpec[]> = {
   select: [{ key: 'columns', label: 'params.select_columns', control: 'columns' }],
+  reorder: [{ key: 'columns', label: 'params.reorder_columns', control: 'reorder' }],
   drop: [{ key: 'columns', label: 'params.drop_columns', control: 'columns' }],
   rename: [{ key: 'mapping', label: 'params.rename_mapping', control: 'renamelist' }],
   cast: [{ key: 'columns', label: 'params.cast_columns', control: 'castlist' }],

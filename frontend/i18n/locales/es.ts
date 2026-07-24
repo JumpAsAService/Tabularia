@@ -55,6 +55,7 @@ export default {
 
   ops: {
     select: 'Seleccionar columnas',
+    reorder: 'Reordenar columnas',
     drop: 'Descartar columnas',
     rename: 'Renombrar',
     cast: 'Cambiar tipo',
@@ -76,6 +77,7 @@ export default {
   },
   params: {
     select_columns: 'Columnas a conservar',
+    reorder_columns: 'Arrastra para reordenar',
     drop_columns: 'Columnas a eliminar',
     rename_mapping: 'Renombrar',
     cast_columns: 'Conversiones de tipo',

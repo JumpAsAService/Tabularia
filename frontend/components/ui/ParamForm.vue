@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Info, X, Calendar, Play } from 'lucide-vue-next'
+import { Info, X, Calendar, Play, GripVertical } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import {
   OP_SPECS,
@@ -85,6 +85,9 @@ const aggRows = reactive<{ column: string; func: string; alias: string }[]>([])
 const exprRows = reactive<{ name: string; expr: string }[]>([])
 // join: coppie chiave sinistra → chiave destra (nomi anche diversi)
 const joinRows = reactive<{ left: string; right: string }[]>([])
+// reorder: ordine corrente delle colonne (drag-and-drop)
+const reorderCols = reactive<string[]>([])
+const dragIndex = ref<number | null>(null)
 
 function parseValue(raw: string): any {
   const t = (raw ?? '').trim()
@@ -104,6 +107,7 @@ function showValue(v: any): string {
 function rebuild() {
   for (const k of Object.keys(state)) delete state[k]
   castRows.length = renameRows.length = fillRows.length = aggRows.length = exprRows.length = joinRows.length = 0
+  reorderCols.length = 0
   const p = props.params ?? {}
 
   for (const f of spec.value) {
@@ -150,12 +154,36 @@ function rebuild() {
         }
         if (!joinRows.length) joinRows.push({ left: '', right: '' }) // una riga pronta
         break
+      case 'reorder':
+        syncReorder() // ordine salvato + eventuali colonne nuove a monte (in coda)
+        break
       default:
         state[f.key] = p[f.key]
     }
   }
 }
 watch(() => props.nodeId, rebuild, { immediate: true })
+
+// reorder: preserva l'ordine corrente per le colonne esistenti e appende le nuove.
+// Le colonne a monte arrivano async → risincronizza quando cambiano.
+function syncReorder() {
+  const all = leftNames.value
+  if (!all.length) return
+  const basis = reorderCols.length ? [...reorderCols] : (Array.isArray(props.params?.columns) ? props.params.columns : [])
+  const kept = basis.filter((c: string) => all.includes(c))
+  const added = all.filter((c) => !kept.includes(c))
+  reorderCols.splice(0, reorderCols.length, ...kept, ...added)
+}
+watch(leftNames, () => { if (props.opType === 'reorder') syncReorder() })
+
+function dropReorder(target: number) {
+  const from = dragIndex.value
+  dragIndex.value = null
+  if (from === null || from === target) return
+  const [moved] = reorderCols.splice(from, 1)
+  reorderCols.splice(target, 0, moved)
+  emitUpdate()
+}
 
 // ── Picker dei valori distinti per in/not_in ──────────────────────────────
 const IN_OPERATORS = new Set(['in', 'not_in'])
@@ -267,6 +295,9 @@ function build(): Record<string, any> {
         }
         break
       }
+      case 'reorder':
+        if (reorderCols.length) out.columns = [...reorderCols]
+        break
       default:
         if (state[f.key] !== undefined && state[f.key] !== '') out[f.key] = state[f.key]
     }
@@ -564,6 +595,29 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         <span v-if="!leftNames.length || !rightNames.length" class="muted">{{ joinOnDiag }}</span>
       </div>
 
+      <!-- reorder: lista di colonne trascinabile (drag per riordinare) -->
+      <div v-else-if="f.control === 'reorder'" class="reorder">
+        <div
+          v-for="(name, i) in reorderCols"
+          :key="name"
+          class="reorder-row"
+          :class="{ dragging: dragIndex === i }"
+          draggable="true"
+          @dragstart="dragIndex = i"
+          @dragend="dragIndex = null"
+          @dragenter.prevent
+          @dragover.prevent
+          @drop="dropReorder(i)"
+        >
+          <GripVertical :size="13" class="reorder-grip" />
+          <span>{{ name }}</span>
+        </div>
+        <template v-if="!reorderCols.length">
+          <span v-if="columnsLoading" class="sk" style="width: 130px" aria-busy="true" />
+          <span v-else class="muted">{{ $t('paramForm.noColumnsAvailable') }}</span>
+        </template>
+      </div>
+
       <!-- group_by: righe colonna/funzione/alias -->
       <div v-else-if="f.control === 'agglist'" class="rows">
         <div v-for="(r, i) in aggRows" :key="i" class="row">
@@ -604,6 +658,18 @@ label { font-size: 12px; color: var(--muted); }
 .row { display: flex; gap: 4px; align-items: center; }
 .row .x { padding: 2px 8px; }
 .jarrow { color: var(--muted); flex-shrink: 0; font-size: 13px; }
+/* reorder: lista trascinabile di colonne */
+.reorder { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow-y: auto; }
+.reorder-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: var(--bg-soft); border: 1px solid var(--border); border-radius: 7px;
+  font-size: 13px; color: var(--text); cursor: grab; user-select: none;
+  transition: border-color 0.12s, opacity 0.12s;
+}
+.reorder-row:hover { border-color: var(--accent); }
+.reorder-row:active { cursor: grabbing; }
+.reorder-row.dragging { opacity: 0.45; border-style: dashed; border-color: var(--accent); }
+.reorder-grip { color: var(--muted); flex-shrink: 0; }
 .exprrow { display: flex; flex-direction: column; gap: 4px; }
 .exprrow textarea { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
 .exprhead { display: flex; gap: 4px; align-items: center; }

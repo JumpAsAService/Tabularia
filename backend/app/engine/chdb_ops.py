@@ -96,6 +96,14 @@ def op_select(sql, params, ctx):
     return f"SELECT {cols} FROM {_sub(sql)}"
 
 
+@_register("reorder")
+def op_reorder(sql, params, ctx):
+    # colonne elencate prima (nell'ordine), poi le altre (EXCEPT degli elencati)
+    order = _require(params, "columns")
+    cols = ", ".join(_qi(c) for c in order)
+    return f"SELECT {cols}, * EXCEPT ({cols}) FROM {_sub(sql)}"
+
+
 @_register("drop")
 def op_drop(sql, params, ctx):
     cols = ", ".join(_qi(c) for c in _require(params, "columns"))

@@ -55,6 +55,7 @@ export default {
 
   ops: {
     select: 'Spalten auswählen',
+    reorder: 'Spalten neu ordnen',
     drop: 'Spalten entfernen',
     rename: 'Umbenennen',
     cast: 'Typ ändern',
@@ -76,6 +77,7 @@ export default {
   },
   params: {
     select_columns: 'Zu behaltende Spalten',
+    reorder_columns: 'Zum Umsortieren ziehen',
     drop_columns: 'Zu entfernende Spalten',
     rename_mapping: 'Umbenennen',
     cast_columns: 'Typkonvertierungen',

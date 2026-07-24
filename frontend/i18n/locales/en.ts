@@ -56,6 +56,7 @@ export default {
 
   ops: {
     select: 'Select columns',
+    reorder: 'Reorder columns',
     drop: 'Drop columns',
     rename: 'Rename',
     cast: 'Change type',
@@ -77,6 +78,7 @@ export default {
   },
   params: {
     select_columns: 'Columns to keep',
+    reorder_columns: 'Drag to reorder',
     drop_columns: 'Columns to remove',
     rename_mapping: 'Rename',
     cast_columns: 'Type conversions',

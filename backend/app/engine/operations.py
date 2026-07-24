@@ -62,6 +62,14 @@ def op_select(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
     return lf.select(_require(params, "columns"))
 
 
+@register("reorder")
+def op_reorder(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    # riordina: le colonne elencate prima (in quest'ordine), poi TUTTE le altre
+    # (così non si perdono colonne aggiunte a monte dopo la configurazione).
+    order = _require(params, "columns")
+    return lf.select([*order, pl.exclude(order)])
+
+
 @register("drop")
 def op_drop(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     return lf.drop(_require(params, "columns"))

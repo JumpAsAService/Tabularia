@@ -22,6 +22,7 @@ import {
   Calculator,
   Merge,
   Terminal,
+  ArrowLeftRight,
 } from 'lucide-vue-next'
 
 export interface OpMeta {
@@ -32,6 +33,7 @@ export interface OpMeta {
 
 const OP_META: Record<string, OpMeta> = {
   select:     { icon: Columns3,    label: 'ops.select', color: '#4f8cff' },
+  reorder:    { icon: ArrowLeftRight, label: 'ops.reorder', color: '#4f8cff' },
   drop:       { icon: EyeOff,      label: 'ops.drop',    color: '#4f8cff' },
   rename:     { icon: PenLine,     label: 'ops.rename',          color: '#4f8cff' },
   cast:       { icon: Type,        label: 'ops.cast',       color: '#4f8cff' },

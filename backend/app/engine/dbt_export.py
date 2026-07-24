@@ -88,6 +88,12 @@ def _compile_op(
         sql = f"SELECT {', '.join(q(x) for x in c)} FROM {ref}"
         return model.add(sql), list(c)
 
+    if op_type == "reorder":
+        order = _require(params, "columns")
+        qs = ", ".join(q(x) for x in order)
+        sql = f"SELECT {qs}, * EXCLUDE ({qs}) FROM {ref}"
+        return model.add(sql), list(order) + [c for c in cols if c not in set(order)]
+
     if op_type == "drop":
         drop = set(_require(params, "columns"))
         sql = f"SELECT * EXCLUDE ({', '.join(q(x) for x in drop)}) FROM {ref}"
