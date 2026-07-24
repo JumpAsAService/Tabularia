@@ -132,14 +132,16 @@ async function deleteFlow(f: FlowSummary) {
 }
 
 const exporting = ref<number | null>(null)
-async function exportDbt(f: FlowSummary) {
+const exportMenu = ref<number | null>(null)
+async function exportDbt(f: FlowSummary, target: 'duckdb' | 'native') {
+  exportMenu.value = null
   exporting.value = f.id
   try {
-    const blob = await api.exportFlowDbt(f.id)
+    const blob = await api.exportFlowDbt(f.id, target)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${f.name.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '') || 'flow'}_dbt.zip`
+    a.download = `${f.name.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '') || 'flow'}_dbt_${target}.zip`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
@@ -237,10 +239,24 @@ async function saveSchedule(cron: string) {
           </button>
           <div class="flow-actions">
             <button class="mini" :title="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
-            <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id" @click="exportDbt(f)">
-              <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
-              <Download v-else :size="13" />
-            </button>
+            <div class="export-wrap">
+              <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id"
+                @click="exportMenu = exportMenu === f.id ? null : f.id">
+                <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
+                <Download v-else :size="13" />
+              </button>
+              <template v-if="exportMenu === f.id">
+                <div class="export-backdrop" @click="exportMenu = null" />
+                <div class="export-menu">
+                  <button @click="exportDbt(f, 'duckdb')">
+                    <strong>dbt-duckdb</strong><span>{{ $t('flows.exportDbtFederated') }}</span>
+                  </button>
+                  <button @click="exportDbt(f, 'native')">
+                    <strong>{{ $t('flows.exportDbtNativeLabel') }}</strong><span>{{ $t('flows.exportDbtNative') }}</span>
+                  </button>
+                </div>
+              </template>
+            </div>
             <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
             <button class="mini danger" :title="$t('flows.deleteFlowTitle')" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>
@@ -325,6 +341,22 @@ async function saveSchedule(cron: string) {
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
 .flow-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
+
+/* menu export dbt (duckdb federato / warehouse nativo) */
+.export-wrap { position: relative; display: inline-flex; }
+.export-backdrop { position: fixed; inset: 0; z-index: 40; }
+.export-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 41;
+  min-width: 230px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 9px; box-shadow: var(--shadow-2); padding: 5px; display: flex; flex-direction: column; gap: 2px;
+}
+.export-menu button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 7px 9px; text-align: left; background: none; border: none; border-radius: 6px; width: 100%;
+}
+.export-menu button:hover { background: var(--panel-2); }
+.export-menu strong { font-size: 12.5px; font-weight: 600; }
+.export-menu span { font-size: 11px; color: var(--muted); }
 
 .flow-detail { border-top: 1px solid var(--border-soft); padding: 12px; background: var(--panel-2); }
 .metrics { display: flex; flex-wrap: wrap; gap: 10px 22px; }

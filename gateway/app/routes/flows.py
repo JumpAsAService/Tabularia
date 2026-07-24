@@ -225,17 +225,19 @@ def _snapshot_version(session: Session, flow: Flow, user: User, note: str) -> No
 async def export_flow_dbt(
     flow_id: int,
     request: Request,
+    target: str = Query("duckdb", pattern="^(duckdb|native)$"),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Esporta il flusso come progetto dbt-duckdb (zip). Il gateway risolve
-    flusso→operazioni e sorgenti→tabelle DB, l'engine compila e zippa."""
+    """Esporta il flusso come progetto dbt (zip). `target=duckdb` (federazione)
+    o `native` (warehouse di origine, SQL tradotto via sqlglot). Il gateway
+    risolve flusso→operazioni e sorgenti→tabelle DB, l'engine compila e zippa."""
     from app.services.dbt_export import DbtExportError, build_export_payload
 
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.VIEW)
     try:
-        payload = build_export_payload(session, flow, get_settings().engine.bucket)
+        payload = build_export_payload(session, flow, get_settings().engine.bucket, target)
     except DbtExportError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -251,12 +253,12 @@ async def export_flow_dbt(
     audit.record_audit(
         session, actor=user, action=audit.EXPORT_DOWNLOAD,
         target_type="flow", target_id=flow.id, target_label=flow.name,
-        detail={"format": "dbt"}, request=request,
+        detail={"format": "dbt", "target": target}, request=request,
     )
     fname = "".join(c if (c.isalnum() or c in "-_") else "_" for c in flow.name).strip("_") or "flow"
     return Response(
         content=resp.content, media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{fname}_dbt.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{fname}_dbt_{target}.zip"'},
     )
 
 

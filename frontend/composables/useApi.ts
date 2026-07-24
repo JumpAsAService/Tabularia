@@ -156,9 +156,10 @@ export function useApi() {
       return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
     },
 
-    // esporta un flusso come progetto dbt-duckdb (zip)
-    async exportFlowDbt(flowId: number): Promise<Blob> {
-      return await apiFetch<Blob>(`/flows/${flowId}/export/dbt`, { responseType: 'blob' })
+    // esporta un flusso come progetto dbt (zip). target: 'duckdb' (federato) |
+    // 'native' (warehouse di origine, SQL tradotto via sqlglot)
+    async exportFlowDbt(flowId: number, target: 'duckdb' | 'native' = 'duckdb'): Promise<Blob> {
+      return await apiFetch<Blob>(`/flows/${flowId}/export/dbt?target=${target}`, { responseType: 'blob' })
     },
   }
 }

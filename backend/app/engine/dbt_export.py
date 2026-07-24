@@ -17,6 +17,7 @@ Limiti v1: solo dialetto DuckDB (dbt-duckdb); `foreach` non è traducibile
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 from app.engine.duckdb_ops import (
@@ -264,6 +265,51 @@ def compile_model_sql(source: dict, operations: list, resolve: SourceResolver) -
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# v2 — traduzione dialetto (warehouse nativo) via sqlglot
+# ─────────────────────────────────────────────────────────────────────────────
+# In modalità nativa la sorgente è un IDENTIFICATORE segnaposto (non una macro
+# dbt, che sqlglot non saprebbe parsare). Si compila in SQL DuckDB, si espandono
+# gli star con lo schema (qualify) e si traduce nel dialetto target; poi il
+# segnaposto viene sostituito con `{{ source() }}` SOLO nel riferimento tabella
+# (tenendo l'alias, così i qualificatori di colonna restano validi).
+_SQLGLOT_DIALECT = {
+    "postgresql": "postgres", "mysql": "mysql", "mariadb": "mysql", "clickhouse": "clickhouse",
+}
+
+
+def transpile_model(sql: str, dialect: str, schema: dict[str, list[str]]) -> str:
+    """Traduce il SQL DuckDB del modello nel dialetto target, espandendo gli
+    star con lo schema delle sorgenti ({ident: [colonne]})."""
+    import sqlglot
+    from sqlglot.optimizer.qualify import qualify
+
+    sg_schema = {ident: {c: "VARCHAR" for c in cols} for ident, cols in schema.items()}
+    try:
+        # validate_qualify_columns=False: espande gli star best-effort senza
+        # fallire se un riferimento non è staticamente risolvibile (self-join,
+        # colonne derivate) — l'esecuzione reale nel warehouse le risolve comunque.
+        tree = qualify(
+            sqlglot.parse_one(sql, read="duckdb"), schema=sg_schema, dialect="duckdb",
+            validate_qualify_columns=False,
+        )
+        return tree.sql(dialect=dialect)
+    except Exception as e:
+        raise DbtExportError(
+            f"traduzione nel dialetto '{dialect}' non riuscita ({e}). "
+            "Il flusso è troppo complesso per l'export nativo — usa l'export «federato» (dbt-duckdb)."
+        )
+
+
+def substitute_source_idents(sql: str, ident_to_macro: dict[str, str]) -> str:
+    """Sostituisce `"ident" AS "ident"` → `{{ source(...) }} AS "ident"` (solo il
+    riferimento tabella; alias e qualificatori di colonna restano invariati)."""
+    for ident, macro in ident_to_macro.items():
+        pat = r'(["`])' + re.escape(ident) + r'\1\s+AS\s+(["`])' + re.escape(ident) + r"\2"
+        sql = re.sub(pat, macro + r" AS \2" + ident + r"\2", sql)
+    return sql
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Generatore di progetto dbt (target: dbt-duckdb che FEDERA i DB di origine)
 # ─────────────────────────────────────────────────────────────────────────────
 # DuckDB attacca il DB di origine (postgres/mysql) e legge le tabelle LIVE: il
@@ -284,36 +330,67 @@ def _attach_dsn(db_type: str, conn: dict, pw_env: str) -> str:
     raise DbtExportError(f"federazione DuckDB non disponibile per '{db_type}'")
 
 
+# v2 nativo: adapter dbt per db_type (dbt-postgres/dbt-mysql/dbt-clickhouse)
+_NATIVE_ADAPTER = {"postgresql": "postgres", "mysql": "mysql", "mariadb": "mysql", "clickhouse": "clickhouse"}
+
+
+def _native_profile(project: str, native: dict) -> str:
+    """profiles.yml per il warehouse NATIVO. Il dbt gira nel DB di origine; le
+    trasformazioni sono già tradotte nel suo dialetto (sqlglot). Password via env_var."""
+    db_type = native["db_type"]
+    adapter = _NATIVE_ADAPTER.get(db_type)
+    if adapter is None:
+        raise DbtExportError(f"nessun adapter dbt nativo per '{db_type}'")
+    c = native["conn"]
+    pw = "{{ env_var('%s') }}" % native["pw_env"]
+    schema = native.get("target_schema") or "dbt_tabularia"
+    lines = [f"{project}:", "  target: dev", "  outputs:", "    dev:", f"      type: {adapter}"]
+    if adapter == "postgres":
+        lines += [f"      host: {c['host']}", f"      port: {c['port']}", f"      user: {c['username']}",
+                  f"      password: \"{pw}\"", f"      dbname: {c['database']}", f"      schema: {schema}"]
+    elif adapter == "mysql":
+        lines += [f"      server: {c['host']}", f"      port: {c['port']}", f"      username: {c['username']}",
+                  f"      password: \"{pw}\"", f"      schema: {schema}"]
+    elif adapter == "clickhouse":
+        lines += [f"      host: {c['host']}", f"      port: {c['port']}", f"      user: {c['username']}",
+                  f"      password: \"{pw}\"", f"      schema: {schema}", "      secure: false"]
+    return "\n".join(lines) + "\n"
+
+
 def build_dbt_project(
-    flow_name: str, models: list[dict], attachments: list[dict], sources: list[dict]
+    flow_name: str, models: list[dict], attachments: list[dict] | None,
+    sources: list[dict], native: dict | None = None,
 ) -> dict[str, str]:
-    """Assembla i file di un progetto dbt-duckdb.
+    """Assembla i file di un progetto dbt.
 
     `models`: [{name, sql, materialized}].
-    `attachments`: [{alias, db_type, conn, pw_env}] — una per CONNESSIONE (ATTACH).
-    `sources`: [{name, database, schema, tables}] — una per (connessione, schema),
-    perché una stessa connessione può avere tabelle in schemi diversi. I modelli
-    referenziano le tabelle via `{{ source('<name>', '<table>') }}`."""
+    `sources`: [{name, database, schema, tables}] — una per (connessione, schema).
+    Modalità:
+    · **duckdb** (federazione): `attachments` = [{alias, db_type, conn, pw_env}].
+    · **native** (warehouse): `native` = {db_type, conn, pw_env, target_schema}."""
     project = _slug(flow_name)
     files: dict[str, str] = {}
 
-    extensions = sorted({_DUCK_ATTACH_TYPE[a["db_type"]] for a in attachments if a["db_type"] in _FEDERABLE})
-    attach = "\n".join(
-        f'        - path: \"{_attach_dsn(a["db_type"], a["conn"], a["pw_env"])}\"\n'
-        f'          type: {_DUCK_ATTACH_TYPE[a["db_type"]]}\n'
-        f'          alias: {a["alias"]}'
-        for a in attachments
-    )
-    files["profiles.yml"] = (
-        f"{project}:\n"
-        f"  target: dev\n"
-        f"  outputs:\n"
-        f"    dev:\n"
-        f"      type: duckdb\n"
-        f"      path: {project}.duckdb\n"
-        f"      extensions: [{', '.join(extensions)}]\n"
-        f"      attach:\n{attach}\n"
-    )
+    if native:
+        files["profiles.yml"] = _native_profile(project, native)
+    else:
+        extensions = sorted({_DUCK_ATTACH_TYPE[a["db_type"]] for a in (attachments or []) if a["db_type"] in _FEDERABLE})
+        attach = "\n".join(
+            f'        - path: \"{_attach_dsn(a["db_type"], a["conn"], a["pw_env"])}\"\n'
+            f'          type: {_DUCK_ATTACH_TYPE[a["db_type"]]}\n'
+            f'          alias: {a["alias"]}'
+            for a in (attachments or [])
+        )
+        files["profiles.yml"] = (
+            f"{project}:\n"
+            f"  target: dev\n"
+            f"  outputs:\n"
+            f"    dev:\n"
+            f"      type: duckdb\n"
+            f"      path: {project}.duckdb\n"
+            f"      extensions: [{', '.join(extensions)}]\n"
+            f"      attach:\n{attach}\n"
+        )
 
     files["dbt_project.yml"] = (
         f"name: '{project}'\n"
@@ -340,17 +417,27 @@ def build_dbt_project(
         header = f"{{{{ config(materialized='{mat}') }}}}\n\n"
         files[f"models/{_slug(m['name'])}.sql"] = header + m["sql"] + "\n"
 
+    if native:
+        adapter = _NATIVE_ADAPTER[native["db_type"]]
+        intro = (
+            f"Generated by Tabularia. Targets **dbt-{adapter}**: the transformations run\n"
+            f"natively in the source warehouse (SQL translated to its dialect via sqlglot).\n"
+        )
+        pip = f"pip install dbt-{adapter}"
+        pw_envs = [native["pw_env"]]
+    else:
+        intro = (
+            "Generated by Tabularia. Targets **dbt-duckdb**, which attaches the origin\n"
+            "database(s) and reads the tables live (no snapshots, no dialect translation).\n"
+        )
+        pip = "pip install dbt-duckdb"
+        pw_envs = [a["pw_env"] for a in (attachments or [])]
     files["README.md"] = (
-        f"# dbt project — {flow_name}\n\n"
-        "Generated by Tabularia. Targets **dbt-duckdb**, which attaches the origin\n"
-        "database(s) and reads the tables live (no snapshots, no dialect translation).\n\n"
-        "## Run\n\n"
-        "```bash\n"
-        "pip install dbt-duckdb\n"
-        "# set the source DB passwords (referenced via env_var in profiles.yml):\n"
-        + "".join(f"export {a['pw_env']}=...\n" for a in attachments)
-        + "DBT_PROFILES_DIR=. dbt run\n"
-        "```\n"
+        f"# dbt project — {flow_name}\n\n{intro}\n"
+        "## Run\n\n```bash\n" + pip + "\n"
+        "# set the source DB password(s) (referenced via env_var in profiles.yml):\n"
+        + "".join(f"export {e}=...\n" for e in pw_envs)
+        + "DBT_PROFILES_DIR=. dbt run\n```\n"
     )
     return files
 

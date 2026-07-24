@@ -19,6 +19,8 @@ from app.services.flow_resolver import FlowResolveError, build_output_run_reques
 
 # db_type federabili da DuckDB (scanner ufficiali) + porta di default
 _FEDERABLE_PORT = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306}
+# db_type con un adapter dbt NATIVO (v2, via traduzione sqlglot) + porta default
+_NATIVE_PORT = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306, "clickhouse": 8123}
 
 
 class DbtExportError(ValueError):
@@ -53,7 +55,9 @@ def _parse_ref(source_ref: str, default_schema: str) -> tuple[str, str]:
     return default_schema, parts[-1] if parts else source_ref
 
 
-def build_export_payload(session: Session, flow: Flow, default_bucket: str) -> dict:
+def build_export_payload(session: Session, flow: Flow, default_bucket: str, target: str = "duckdb") -> dict:
+    if target not in ("duckdb", "native"):
+        raise DbtExportError(f"target sconosciuto: '{target}'")
     definition = json.loads(flow.definition or "{}")
 
     def resolve_ds(ds_id: int) -> Optional[tuple[str, str]]:
@@ -78,12 +82,9 @@ def build_export_payload(session: Session, flow: Flow, default_bucket: str) -> d
             "operations": req.get("operations") or [],
         })
 
-    # mappa ogni chiave → tabella DB, accumulando attachments (per connessione)
-    # e sources (per connessione+schema)
-    source_map: dict[str, dict] = {}
-    attachments: dict[int, dict] = {}
-    sources: dict[tuple[str, str], dict] = {}
-    for key in keys:
+    # risolvi ogni chiave in (datasource, connessione, schema, tabella)
+    resolved: list[tuple[str, Datasource, Connection, str, str]] = []
+    for key in sorted(keys):
         ds = session.exec(select(Datasource).where(Datasource.key == key)).first()
         if ds is None or ds.kind != "database":
             raise DbtExportError(
@@ -91,46 +92,84 @@ def build_export_payload(session: Session, flow: Flow, default_bucket: str) -> d
                 "(una sorgente del flusso è un file o l'output di un altro flusso)"
             )
         if ds.source_type != "table":
-            raise DbtExportError(
-                f"la sorgente «{ds.name}» è una query SQL: l'export v1 supporta solo tabelle"
-            )
+            raise DbtExportError(f"la sorgente «{ds.name}» è una query SQL: supportate solo tabelle")
         conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
         if conn is None:
             raise DbtExportError(f"la sorgente «{ds.name}» non ha una connessione valida")
+        # DB senza schemi (clickhouse/mysql): la tabella sta nel database; Postgres → public
+        default_schema = conn.database if conn.db_type in ("clickhouse", "mysql", "mariadb") else "public"
+        schema, table = _parse_ref(ds.source_ref, default_schema)
+        resolved.append((key, ds, conn, schema, table))
+
+    def _cols(ds: Datasource) -> list[str]:
+        return [c.get("name") for c in json.loads(ds.columns or "[]") if c.get("name")]
+
+    if target == "native":
+        return _native_payload(flow, models, resolved, _cols)
+    return _duckdb_payload(flow, models, resolved, _cols)
+
+
+def _duckdb_payload(flow, models, resolved, cols) -> dict:
+    source_map: dict[str, dict] = {}
+    attachments: dict[int, dict] = {}
+    sources: dict[tuple[str, str], dict] = {}
+    for key, ds, conn, schema, table in resolved:
         if conn.db_type not in _FEDERABLE_PORT:
             raise DbtExportError(
                 f"la connessione «{conn.name}» è {conn.db_type}: non federabile da DuckDB "
-                "(v1 supporta postgresql/mysql/mariadb). ClickHouse/Trino non hanno uno scanner DuckDB."
+                "(federazione: postgresql/mysql/mariadb). Prova l'export «nativo» per ClickHouse."
             )
         alias = f"db_{conn.id}"
-        schema, table = _parse_ref(ds.source_ref, "public")
         src_name = _slug(f"{alias}_{schema}")
-
         attachments[conn.id] = {
-            "alias": alias,
-            "db_type": conn.db_type,
-            "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD",
-            "conn": {
-                "host": conn.host,
-                "port": conn.port or _FEDERABLE_PORT[conn.db_type],
-                "database": conn.database,
-                "username": conn.username,
-            },
+            "alias": alias, "db_type": conn.db_type, "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD",
+            "conn": {"host": conn.host, "port": conn.port or _FEDERABLE_PORT[conn.db_type],
+                     "database": conn.database, "username": conn.username},
         }
         s = sources.setdefault((alias, schema), {"name": src_name, "database": alias, "schema": schema, "tables": []})
         if table not in s["tables"]:
             s["tables"].append(table)
-        source_map[key] = {
-            "ref": "{{ source('%s', '%s') }}" % (src_name, table),
-            "columns": [c.get("name") for c in json.loads(ds.columns or "[]") if c.get("name")],
-        }
-
+        source_map[key] = {"ref": "{{ source('%s', '%s') }}" % (src_name, table), "columns": cols(ds)}
     return {
-        "flow_name": flow.name,
-        "models": models,
-        "source_map": source_map,
-        "attachments": list(attachments.values()),
-        "sources": list(sources.values()),
+        "flow_name": flow.name, "mode": "duckdb", "models": models, "source_map": source_map,
+        "attachments": list(attachments.values()), "sources": list(sources.values()),
+    }
+
+
+def _native_payload(flow, models, resolved, cols) -> dict:
+    # un solo warehouse: tutte le sorgenti sulla STESSA connessione
+    conn_ids = {conn.id for _, _, conn, _, _ in resolved}
+    if len(conn_ids) > 1:
+        raise DbtExportError(
+            "l'export nativo richiede che tutte le sorgenti siano sulla STESSA connessione "
+            "(un solo warehouse). Questo flusso ne usa più di una — usa l'export «federato»."
+        )
+    _, _, conn, _, _ = resolved[0]
+    if conn.db_type not in _NATIVE_PORT:
+        raise DbtExportError(f"nessun adapter dbt nativo per '{conn.db_type}'")
+
+    source_map: dict[str, dict] = {}
+    sources: dict[str, dict] = {}
+    for i, (key, ds, _c, schema, table) in enumerate(resolved):
+        src_name = _slug(f"src_{schema}")
+        source_map[key] = {
+            "ident": f"__s_{i}",
+            "macro": "{{ source('%s', '%s') }}" % (src_name, table),
+            "columns": cols(ds),
+        }
+        s = sources.setdefault(schema, {"name": src_name, "database": conn.database, "schema": schema, "tables": []})
+        if table not in s["tables"]:
+            s["tables"].append(table)
+    native = {
+        "db_type": conn.db_type,
+        "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD",
+        "target_schema": "dbt_tabularia",
+        "conn": {"host": conn.host, "port": conn.port or _NATIVE_PORT[conn.db_type],
+                 "database": conn.database, "username": conn.username},
+    }
+    return {
+        "flow_name": flow.name, "mode": "native", "models": models,
+        "source_map": source_map, "native": native, "sources": list(sources.values()),
     }
 
 
