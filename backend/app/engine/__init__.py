@@ -90,6 +90,24 @@ def _make_chdb_engine() -> Engine:
 if _CHDB_AVAILABLE:
     _ENGINES["chdb"] = _make_chdb_engine  # factory pigra (callable → istanza)
 
+# ClickHouse ESTERNO (server remoto/cloud): opzionale, attivo solo se configurato
+# (CLICKHOUSE_EXTERNAL__HOST). clickhouse-connect è HTTP puro → fork-safe, ma
+# l'import resta pigro per non pagare il costo dove l'engine non serve.
+from app.core.config import get_settings as _get_settings
+
+_CLICKHOUSE_CFG = _get_settings().clickhouse_external
+_CLICKHOUSE_AVAILABLE = _CLICKHOUSE_CFG.enabled and importlib.util.find_spec("clickhouse_connect") is not None
+
+
+def _make_clickhouse_engine() -> Engine:
+    from app.engine.clickhouse_engine import ClickHouseEngine
+
+    return ClickHouseEngine()
+
+
+if _CLICKHOUSE_AVAILABLE:
+    _ENGINES["clickhouse"] = _make_clickhouse_engine
+
 # metadati per il picker del frontend (creazione flusso). `available=False` =
 # opzione mostrata ma non ancora selezionabile.
 ENGINE_CATALOG = [
@@ -112,6 +130,19 @@ ENGINE_CATALOG = [
         "available": _CHDB_AVAILABLE,
         "description": "Motore SQL out-of-core con dialetto ClickHouse (spill su disco). "
         "v1: operazioni strutturali (sql/foreach usano Polars o DuckDB).",
+    },
+    {
+        "id": "clickhouse",
+        "label": "ClickHouse (external)",
+        "available": _CLICKHOUSE_AVAILABLE,
+        # opzionale: se non disponibile è perché NON È CONFIGURATO (non "in arrivo")
+        "optional": True,
+        "description": (
+            f"Server ClickHouse esterno ({_CLICKHOUSE_CFG.host}:{_CLICKHOUSE_CFG.port}, trasporto {_CLICKHOUSE_CFG.transport}): "
+            "le trasformazioni girano sul server, non nel worker."
+            if _CLICKHOUSE_AVAILABLE
+            else "Server ClickHouse esterno (cloud o self-hosted). Non configurato: imposta CLICKHOUSE_EXTERNAL__HOST."
+        ),
     },
 ]
 

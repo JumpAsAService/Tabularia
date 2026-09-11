@@ -85,20 +85,25 @@ Postgres and enforces auth + RBAC on every call before proxying to the internal
 
 Flows are stored as a **declarative IR** — a JSON list of typed operations — fully
 decoupled from execution. Adding or swapping an engine touches neither the routes, the
-workers, nor saved flows. Three engines are registered:
+workers, nor saved flows. Four engines are registered:
 
 | Engine | id | Notes |
 |---|---|---|
 | **Polars** | `polars` | In-process, lazy, streaming. **Default**; full operation coverage. |
 | **DuckDB** | `duckdb` | Out-of-core SQL (spills to disk) for very large joins/aggregations. Base ops; advanced transforms fall back to Polars. |
 | **chDB (ClickHouse)** | `chdb` | Out-of-core SQL with the ClickHouse dialect. Structural ops; `sql`/`foreach` via Polars/DuckDB. |
+| **ClickHouse (external)** | `clickhouse` | *Optional.* Same dialect and ops as chDB, executed on a **remote ClickHouse server** (cloud managed, e.g. Scaleway, or self-hosted). Enabled by `CLICKHOUSE_EXTERNAL__HOST`. Transport `s3` (the server reads/writes parquet directly on the object storage, nothing through the worker) or `push` (staging table + streamed result, works with any server). |
 
 Each engine is a registry of per-operation implementations. DuckDB and chDB are
 guarded imports — absent packages simply mark the engine unavailable without breaking
-Polars. chDB is **fork-unsafe**, so it is imported *lazily inside the Celery child*
+Polars; the external ClickHouse engine is listed but unavailable until configured. chDB is **fork-unsafe**, so it is imported *lazily inside the Celery child*
 (never in the prefork parent) to avoid inherited native-thread deadlocks. Users pick a
 **preferred engine** in settings (default for the Viewer and new flows); each flow
 persists the engine it was built with, so opening a non-preferred flow is regression-safe.
+Each flow also carries an optional **production engine**, decoupled from the development
+one: the editor (previews, manual runs) uses the development engine, while scheduled runs
+and "Run in production" use the production engine — e.g. design on Polars locally, run the
+scheduled DAG on an external ClickHouse. Every run records the engine it actually ran on.
 
 ## Operations
 
@@ -109,6 +114,42 @@ fill_null · drop_nulls · group_by · pivot · unpivot · join · union · fore
 
 - **`foreach`** is a loop container: it iterates its body over a driver table with
   `{{placeholder}}` substitution, appending results with bounded memory.
+- **Upstream filters** per source node: AND-ed `{column, operator, value}` conditions set in
+  the editor on the input datasource and saved with the flow. They become plain `filter`
+  operations injected right after the source is read, before anything else (development
+  sample included), in *every* mode — editor previews, scheduled runs, "Run in production"
+  and the dbt export — so a flow can read only the slice it needs from a large table.
+- **Cross-engine data standard.** The same flow must give the same data on every engine
+  (development on one, production on another), so the engines follow one explicit
+  semantics, SQL-like, locked by an oracle test suite (`backend/tests/test_data_correctness.py`,
+  hand-computed expectations run on Polars, DuckDB, chDB and external ClickHouse):
+  comparisons with NULL are false (`ne`/`not_in` drop NULLs); aggregates ignore NULLs,
+  `count`/`n_unique` never count NULL, `sum`/`mean`/`min`/`max` of an all-NULL group are NULL,
+  `std`/`var` are sample (n-1), `median` interpolates; sort puts NULLs **last** in both
+  directions (a top-N never returns NULLs); failed casts give NULL (never an error), text is
+  trimmed before parsing, text→int accepts integer literals only, number→int truncates;
+  joins never match NULL keys, missing sides are NULL, `on` keys are one coalesced column
+  (also in full/right joins), `left_on`/`right_on` keep both key columns, a non-key
+  homonym from the right gets `_right`; `compute` overwrites an existing column in place
+  and string functions are UTF-8 aware on ClickHouse (`upper`→`upperUTF8`, …); integer sums
+  stay exact int64; datetimes are **naive UTC instants** everywhere (ClickHouse output is
+  normalised, tz-aware parquet is normalised on read).
+- **Development sampling** per source node: "first N rows" or "random p%" set in the editor
+  and saved with the flow. It only affects previews and editor runs (development mode): the
+  gateway resolver injects it solely in development, never for scheduled runs or "Run in
+  production", and strips any such marked operation from production launches as defence in
+  depth — production always reads every record. Sample only the big table: joining two
+  sampled sources loses most matches.
+- **Field descriptions** on datasources: a hand-curated `{column: text}` map, edited from the
+  Datasources page, kept separately from the inferred schema so it survives refreshes and
+  exposed both as `column_descriptions` and inline as `columns[*].description` — semantic
+  context for people today and for the upcoming AI features.
+- **`pivot` / `unpivot`** follow one cross-engine standard (Polars, DuckDB, chDB, external
+  ClickHouse): pivot columns are named by the value as text (`null` for NULL, `2024_web` for
+  multi-column keys, existing combinations only, text-ordered), missing or all-NULL groups
+  are NULL (`count`/`n_unique` → 0, Int64), and unpivot keeps only the index columns with the
+  value cast to the common supertype — so a flow designed on one engine yields the same
+  columns when scheduled on another.
 - **`sql`** runs engine-native SQL against the node input (`FROM input`), with a
   guardrail floor that blocks filesystem / URL / executable access.
 - **Nodes**: `source` (file or DB datasource), `output` (write to a DB table or

@@ -31,6 +31,9 @@ class Run(SQLModel, table=True):
     # mostriamo semplicemente "schedule". Colonna `trigger_type`: "trigger" è
     # parola riservata SQL.
     trigger_type: str = Field(default="manual")
+    # engine con cui il run è stato ESEGUITO (dev o produzione del flusso al
+    # momento del lancio): in cronologia si vede con cosa ha girato davvero
+    engine: Optional[str] = None
     # run di orchestrazione che ha generato questo run figlio (output/refresh
     # lanciati DENTRO un'orchestrazione). None = esecuzione di ALTO LIVELLO
     # (orchestrazione, run diretto dell'editor, refresh standalone): così il

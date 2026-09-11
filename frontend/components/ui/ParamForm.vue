@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { reactive, computed, watch } from 'vue'
+import { reactive, computed, watch, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Info, X, Calendar, Play, GripVertical } from 'lucide-vue-next'
+import { Info, X, Calendar, Play, GripVertical, Search } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import {
   OP_SPECS,
@@ -113,7 +113,9 @@ function rebuild() {
   for (const f of spec.value) {
     switch (f.control) {
       case 'columns':
-        state[f.key] = Array.isArray(p[f.key]) ? [...p[f.key]] : []
+        // un valore singolo salvato quando il campo era una tendina (es. pivot
+        // `on` prima del multi-colonna) diventa una lista di un elemento
+        state[f.key] = Array.isArray(p[f.key]) ? [...p[f.key]] : (typeof p[f.key] === 'string' && p[f.key] ? [p[f.key]] : [])
         break
       case 'value':
         state.__value = showValue(p.value)
@@ -330,7 +332,35 @@ function isChecked(key: string, name: string): boolean {
 function addCast() { castRows.push({ column: '', dtype: 'int' }); }
 function addRename() { renameRows.push({ from: '', to: '' }); }
 function addFill() { fillRows.push({ column: '', value: '' }); }
-function addAgg() { aggRows.push({ column: '', func: 'sum', alias: '' }); }
+function addAgg() { aggRows.push({ column: '', func: 'sum', alias: '' }); aggQuery.value = '' }
+
+// ricerca fra le colonne da SPUNTARE (controllo `columns`: chiavi del group by,
+// select, drop, …): con tabelle larghe la lista di checkbox è lunga. Filtra
+// solo la vista; le spunte già date restano (anche se nascoste dal filtro).
+const COL_SEARCH_THRESHOLD = 8
+const colQuery = reactive<Record<string, string>>({})
+function filterCols(key: string, names: string[]): string[] {
+  const q = (colQuery[key] ?? '').trim().toLowerCase()
+  return q ? names.filter((n) => n.toLowerCase().includes(q)) : names
+}
+function checkedCount(key: string): number {
+  const v = state[key]
+  return Array.isArray(v) ? v.length : 0
+}
+
+// ricerca fra le righe di aggregazione (con molti campi la lista è lunga):
+// filtra per colonna / funzione / alias tenendo l'INDICE originale, così
+// rimozione e v-model lavorano sulla riga giusta. Compare oltre una soglia.
+const AGG_SEARCH_THRESHOLD = 2
+const aggQuery = ref('')
+const visibleAggRows = computed(() => {
+  const q = aggQuery.value.trim().toLowerCase()
+  const rows = aggRows.map((r, i) => ({ r, i }))
+  if (!q) return rows
+  return rows.filter(({ r }) =>
+    [r.column, r.func, r.alias].some((v) => String(v ?? '').toLowerCase().includes(q)),
+  )
+})
 function addExpr() { exprRows.push({ name: '', expr: '' }); }
 function addJoinKey() { joinRows.push({ left: '', right: '' }); }
 function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
@@ -369,19 +399,33 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
       <label>{{ $t(f.label) }}</label>
 
       <!-- multi-select colonne (+ placeholder del foreach, se presenti) -->
-      <div v-if="f.control === 'columns'" class="checks">
-        <label v-for="name in optionsFor(f)" :key="name" class="chk">
-          <input type="checkbox" :checked="isChecked(f.key, name)" @change="toggleColumn(f.key, name)" />
-          {{ name }}
-        </label>
-        <label v-for="ph in phOptions" :key="ph" class="chk ph">
-          <input type="checkbox" :checked="isChecked(f.key, ph)" @change="toggleColumn(f.key, ph)" />
-          {{ ph }}
-        </label>
-        <template v-if="!optionsFor(f).length && !phOptions.length">
-          <span v-if="columnsLoading" class="sk" style="width: 130px" aria-busy="true" />
-          <span v-else class="muted">{{ emptyMessage(f) }}</span>
-        </template>
+      <div v-if="f.control === 'columns'" class="checks-wrap">
+        <!-- ricerca fra le colonne da spuntare (es. chiavi del group by su
+             tabelle larghe): filtra la lista, le spunte restano tutte -->
+        <div v-if="optionsFor(f).length + phOptions.length > COL_SEARCH_THRESHOLD" class="rowsearch">
+          <Search :size="13" />
+          <input v-model="colQuery[f.key]" type="text" :placeholder="$t('paramForm.searchColumnsPlaceholder')" />
+          <span class="muted count">{{ checkedCount(f.key) }}/{{ optionsFor(f).length + phOptions.length }}</span>
+          <button v-if="colQuery[f.key]" class="x" :title="$t('paramForm.clearSearch')" @click="colQuery[f.key] = ''"><X :size="12" /></button>
+        </div>
+        <div class="checks">
+          <label v-for="name in filterCols(f.key, optionsFor(f))" :key="name" class="chk">
+            <input type="checkbox" :checked="isChecked(f.key, name)" @change="toggleColumn(f.key, name)" />
+            {{ name }}
+          </label>
+          <label v-for="ph in filterCols(f.key, phOptions)" :key="ph" class="chk ph">
+            <input type="checkbox" :checked="isChecked(f.key, ph)" @change="toggleColumn(f.key, ph)" />
+            {{ ph }}
+          </label>
+          <span
+            v-if="(optionsFor(f).length || phOptions.length) && !filterCols(f.key, optionsFor(f)).length && !filterCols(f.key, phOptions).length"
+            class="muted nomatch"
+          >{{ $t('paramForm.noColumnMatch') }}</span>
+          <template v-if="!optionsFor(f).length && !phOptions.length">
+            <span v-if="columnsLoading" class="sk" style="width: 130px" aria-busy="true" />
+            <span v-else class="muted">{{ emptyMessage(f) }}</span>
+          </template>
+        </div>
       </div>
 
       <!-- select singola colonna (+ placeholder del foreach, se presenti) -->
@@ -389,6 +433,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         v-else-if="f.control === 'column'"
         :model-value="state[f.key]"
         :options="columnSelectOptions(f, true)"
+        searchable
         placeholder="—"
         @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
       />
@@ -508,6 +553,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.column"
             :options="columnSelectOptions()"
+            searchable
             :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
           />
@@ -528,6 +574,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.from"
             :options="columnSelectOptions()"
+            searchable
             :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.from = v; emitUpdate() }"
           />
@@ -543,6 +590,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Select
             :model-value="r.column"
             :options="columnSelectOptions()"
+            searchable
             :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
           />
@@ -620,10 +668,18 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
 
       <!-- group_by: righe colonna/funzione/alias -->
       <div v-else-if="f.control === 'agglist'" class="rows">
-        <div v-for="(r, i) in aggRows" :key="i" class="row">
+        <div v-if="aggRows.length > AGG_SEARCH_THRESHOLD" class="rowsearch">
+          <Search :size="13" />
+          <input v-model="aggQuery" type="text" :placeholder="$t('paramForm.searchAggPlaceholder')" />
+          <span class="muted count">{{ visibleAggRows.length }}/{{ aggRows.length }}</span>
+          <button v-if="aggQuery" class="x" :title="$t('paramForm.clearSearch')" @click="aggQuery = ''"><X :size="12" /></button>
+        </div>
+        <p v-if="aggRows.length && !visibleAggRows.length" class="muted nomatch">{{ $t('paramForm.noAggMatch') }}</p>
+        <div v-for="{ r, i } in visibleAggRows" :key="i" class="row">
           <Select
             :model-value="r.column"
             :options="columnSelectOptions()"
+            searchable
             :placeholder="$t('paramForm.columnPlaceholder')"
             @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
           />
@@ -648,6 +704,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
 .field { display: flex; flex-direction: column; gap: 4px; }
 label { font-size: 12px; color: var(--muted); }
 .hint { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.checks-wrap { display: flex; flex-direction: column; gap: 6px; }
 .checks { display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow-y: auto; }
 .chk { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
 .chk input { width: auto; }
@@ -655,6 +712,11 @@ label { font-size: 12px; color: var(--muted); }
 .phbtn { padding: 4px 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
 .chk.ph { color: #f472b6; font-family: ui-monospace, monospace; font-size: 12px; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
+.rowsearch { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--muted); }
+.rowsearch input { flex: 1; border: none; background: transparent; outline: none; color: var(--text); font-size: 12.5px; min-width: 0; }
+.rowsearch .count { font-size: 11px; font-variant-numeric: tabular-nums; }
+.rowsearch .x { padding: 1px 6px; }
+.nomatch { font-size: 12px; margin: 0; }
 .row { display: flex; gap: 4px; align-items: center; }
 .row .x { padding: 2px 8px; }
 .jarrow { color: var(--muted); flex-shrink: 0; font-size: 13px; }

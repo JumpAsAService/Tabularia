@@ -8,7 +8,8 @@ export interface FlowSummary {
   project_id: number
   owner_id: number | null
   owner_name: string | null // nome di chi ha creato il flusso
-  engine: string // motore di esecuzione (polars | duckdb)
+  engine: string // motore di SVILUPPO (editor, run manuali)
+  production_engine: string | null // motore dei run SCHEDULATI; null = come engine
   run_schedule: string | null // cron; null = non schedulato
   next_run_at: string | null
   created_at: string | null
@@ -57,13 +58,14 @@ export function useFlows() {
 
     create: (
       projectId: number,
-      body: { name: string; description?: string; definition: string; engine?: string },
+      body: { name: string; description?: string; definition: string; engine?: string; production_engine?: string | null },
     ) =>
       apiFetch<FlowDetail>(`/projects/${projectId}/flows`, { method: 'POST', body }),
 
     update: (
       id: number,
-      body: Partial<{ name: string; description: string; definition: string; project_id: number }>,
+      // production_engine: '' = torna uguale allo sviluppo
+      body: Partial<{ name: string; description: string; definition: string; project_id: number; engine: string; production_engine: string }>,
     ) => apiFetch<FlowDetail>(`/flows/${id}`, { method: 'PATCH', body }),
 
     remove: (id: number) => apiFetch<void>(`/flows/${id}`, { method: 'DELETE' }),
@@ -77,12 +79,17 @@ export function useFlows() {
       apiFetch<FlowDetail>(`/flows/${id}/versions/${version}/promote`, { method: 'POST' }),
 
     // imposta/disabilita l'esecuzione schedulata (cron a 5 campi; '' = disabilita)
-    setSchedule: (id: number, cron: string) =>
-      apiFetch<FlowDetail>(`/flows/${id}/schedule`, { method: 'PUT', body: { cron } }),
+    // production_engine: omesso = invariato; '' = come sviluppo
+    setSchedule: (id: number, cron: string, production_engine?: string) =>
+      apiFetch<FlowDetail>(`/flows/${id}/schedule`, {
+        method: 'PUT',
+        body: { cron, ...(production_engine === undefined ? {} : { production_engine }) },
+      }),
 
-    // esegue subito l'orchestrazione (refresh → output → runflow) in background
-    runNow: (id: number) =>
-      apiFetch<{ status: string; flow_id: number; run_id: number }>(`/flows/${id}/run-now`, {
+    // esegue subito l'orchestrazione (refresh → output → runflow) in background.
+    // mode 'production' = col motore di produzione, come farebbe lo scheduler
+    runNow: (id: number, mode: 'development' | 'production' = 'development') =>
+      apiFetch<{ status: string; flow_id: number; run_id: number }>(`/flows/${id}/run-now?mode=${mode}`, {
         method: 'POST',
       }),
   }

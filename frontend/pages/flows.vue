@@ -6,7 +6,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
-  CheckCircle2, XCircle, LoaderCircle, Circle, Download,
+  CheckCircle2, XCircle, LoaderCircle, Circle, Download, Play,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
@@ -16,6 +16,7 @@ import {
 import { useProjects } from '~/composables/useProjects'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
+import type { EngineOpt } from '~/composables/useEngine'
 
 const flowsApi = useFlows()
 const projectsApi = useProjects()
@@ -29,7 +30,6 @@ const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
 
 // motori disponibili per il picker "Nuovo flusso" (il flusso è pinnato al motore
 // scelto). DuckDB compare come "in arrivo" finché il suo engine non è pronto.
-interface EngineOpt { id: string; label: string; available: boolean; description: string }
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
@@ -40,6 +40,33 @@ function createWith(engineId: string) {
 
 const folderName = ref<Record<number, string>>({})
 const engineLabel = (id: string) => engines.value.find((e) => e.id === id)?.label ?? id
+const availableEngines = computed(() => engines.value.filter((e) => e.available))
+
+// motore di PRODUZIONE (run schedulati / esegui-in-produzione): '' = come sviluppo
+async function setProductionEngine(f: FlowSummary, value: string) {
+  try {
+    const updated = await flowsApi.update(f.id, { production_engine: value })
+    items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+    toast.success(t('flows.prodEngineSaved', { engine: updated.production_engine ? engineLabel(updated.production_engine) : t('flows.sameAsDevEngine') }))
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+// esegue subito il DAG col motore di produzione (come farebbe lo scheduler)
+const runningProd = ref<number | null>(null)
+async function runProduction(f: FlowSummary) {
+  runningProd.value = f.id
+  try {
+    const r = await flowsApi.runNow(f.id, 'production')
+    toast.success(t('flows.runProdStarted', { id: r.run_id }))
+    items.value = items.value.map((x) => (x.id === f.id ? { ...x, last_run_status: 'PENDING' } : x))
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    runningProd.value = null
+  }
+}
 onMounted(async () => {
   try {
     const projects = await projectsApi.list()
@@ -164,11 +191,11 @@ function fmtDur(secs: number | null | undefined): string {
 // ── Scheduling (dialog condiviso) ────────────────────────────────────────────
 const scheduleFor = ref<FlowSummary | null>(null)
 const savingSchedule = ref(false)
-async function saveSchedule(cron: string) {
+async function saveSchedule(cron: string, productionEngine?: string) {
   if (!scheduleFor.value) return
   savingSchedule.value = true
   try {
-    const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim())
+    const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim(), productionEngine)
     items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
     toast.success(cron.trim() ? t('flows.scheduleSuccess', { cron: updated.run_schedule }) : t('flows.scheduleDisabled'))
     scheduleFor.value = null
@@ -198,7 +225,7 @@ async function saveSchedule(cron: string) {
               :disabled="!e.available"
               @click="createWith(e.id)"
             >
-              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t('flows.comingSoonTag') }}</span></span>
+              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t(e.optional ? 'flows.notConfiguredTag' : 'flows.comingSoonTag') }}</span></span>
               <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
             </button>
           </div>
@@ -244,6 +271,10 @@ async function saveSchedule(cron: string) {
               <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
               <Download v-else :size="13" />
             </button>
+            <button class="mini" :title="$t('flows.runProdTitle')" :disabled="runningProd === f.id" @click="runProduction(f)">
+              <LoaderCircle v-if="runningProd === f.id" :size="13" class="spin" />
+              <Play v-else :size="13" />
+            </button>
             <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
             <button class="mini danger" :title="$t('flows.deleteFlowTitle')" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>
@@ -255,7 +286,14 @@ async function saveSchedule(cron: string) {
           <template v-else-if="detail[f.id]">
             <div class="metrics">
               <div class="metric"><span class="mlabel">{{ $t('flows.folderLabel') }}</span><span>{{ folderName[f.project_id] ?? `#${f.project_id}` }}</span></div>
-              <div class="metric"><span class="mlabel">{{ $t('flows.engineLabel') }}</span><span>{{ engineLabel(f.engine) }}</span></div>
+              <div class="metric"><span class="mlabel">{{ $t('flows.devEngineLabel') }}</span><span>{{ engineLabel(f.engine) }}</span></div>
+              <div class="metric" :title="$t('flows.prodEngineHint')">
+                <span class="mlabel">{{ $t('flows.prodEngineLabel') }}</span>
+                <select class="prod-engine" :value="f.production_engine ?? ''" @change="setProductionEngine(f, ($event.target as HTMLSelectElement).value)">
+                  <option value="">{{ $t('flows.sameAsDevEngine') }} ({{ engineLabel(f.engine) }})</option>
+                  <option v-for="e in availableEngines" :key="e.id" :value="e.id">{{ e.label }}</option>
+                </select>
+              </div>
               <div class="metric"><span class="mlabel">{{ $t('flows.createdByLabel') }}</span><span>{{ f.owner_name ?? '—' }}</span></div>
               <div class="metric"><span class="mlabel">{{ $t('flows.createdLabel') }}</span><span>{{ fmtDate(f.created_at) }}</span></div>
               <div class="metric"><span class="mlabel">{{ $t('flows.runsLabel') }}</span><span>{{ detail[f.id].stats?.run_count ?? 0 }}</span></div>
@@ -293,6 +331,8 @@ async function saveSchedule(cron: string) {
       :subtitle="$t('flows.scheduleSubtitle')"
       :current="scheduleFor?.run_schedule ?? null"
       :busy="savingSchedule"
+      :engines="availableEngines"
+      :production-engine="scheduleFor?.production_engine ?? null"
       @save="saveSchedule"
       @cancel="scheduleFor = null"
     />
@@ -321,6 +361,7 @@ async function saveSchedule(cron: string) {
 <!-- stili condivisi delle pagine-lista: .btn-link, .mini, .err, .tag, … -->
 <style scoped src="~/assets/listpage.css" />
 <style scoped>
+.prod-engine { font-size: 12px; padding: 2px 6px; max-width: 220px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h2 { display: inline-flex; align-items: center; gap: 8px; }
 .count { font-weight: 400; font-size: 14px; }

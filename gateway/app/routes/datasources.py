@@ -42,12 +42,52 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["datasources"])
 
 
+MAX_COLUMN_DESCRIPTION = 2000
+
+
+def _load_column_descriptions(ds: Datasource) -> dict[str, str]:
+    try:
+        raw = json.loads(ds.column_descriptions or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+
+
+def clean_column_descriptions(value: dict[str, str]) -> dict[str, str]:
+    """Normalizza la mappa {colonna: descrizione}: spazi tolti, voci vuote
+    scartate, lunghezza limitata (422 oltre)."""
+    out: dict[str, str] = {}
+    for col, text in value.items():
+        col = str(col).strip()
+        text = str(text or "").strip()
+        if not col or not text:
+            continue
+        if len(text) > MAX_COLUMN_DESCRIPTION:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La descrizione del campo '{col}' supera {MAX_COLUMN_DESCRIPTION} caratteri",
+            )
+        out[col] = text
+    return out
+
+
 def _to_out(ds: Datasource) -> DatasourceOut:
     try:
         cols = json.loads(ds.columns or "[]")
     except json.JSONDecodeError:
         cols = []
-    return DatasourceOut(**ds.model_dump(exclude={"columns"}), columns=cols)
+    descs = _load_column_descriptions(ds)
+    # la descrizione viaggia anche dentro `columns` (comodo per editor/AI)
+    cols = [
+        {**c, "description": descs[c["name"]]} if isinstance(c, dict) and c.get("name") in descs else c
+        for c in cols
+    ]
+    # accesso per attributo (non model_dump): un'istanza "expired" dopo il commit
+    # dell'audit darebbe un dict vuoto → 500 (vedi connections._to_out)
+    fields = {
+        f: getattr(ds, f) for f in DatasourceOut.model_fields if f not in ("columns", "column_descriptions")
+    }
+    return DatasourceOut(**fields, columns=cols, column_descriptions=descs)
 
 
 def _get_ds(session: Session, ds_id: int) -> Datasource:
@@ -321,6 +361,8 @@ def update_datasource(
     ds.project_id = target_project
     if body.description is not None:
         ds.description = body.description
+    if body.column_descriptions is not None:
+        ds.column_descriptions = json.dumps(clean_column_descriptions(body.column_descriptions), ensure_ascii=False)
     ds.updated_at = datetime.now(timezone.utc)
     session.add(ds)
     session.commit()

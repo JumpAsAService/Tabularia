@@ -21,7 +21,7 @@ from typing import Any, Callable
 
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.exceptions import EngineError
-from app.engine.operations import MAX_PIVOT_COLUMNS
+from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, pivot_label, sample_threshold
 
 ChdbOpFn = Callable[..., str]
 
@@ -121,15 +121,51 @@ def op_rename(sql, params, ctx):
     return f"SELECT {', '.join(parts)} FROM {_sub(sql)}"
 
 
+def _cast_expr(c: str, base: str, dt: str) -> str:
+    """Stesso STANDARD del cast di Polars/DuckDB (vedi operations.op_cast):
+    fallito → NULL; testo con spazi tagliati; testo → intero solo se intero
+    letterale; numero → intero per troncamento; float → testo con ".0" sui
+    valori interi (ClickHouse stamperebbe 200.0 come "200")."""
+    is_text = base == "String" or base.startswith("FixedString")
+    is_num = base in _CH_FLOATS or base.startswith("Decimal")
+    if dt == "int":
+        if is_text:
+            return f"toInt64OrNull(trimBoth({c}))"
+        if is_num:
+            return f"toInt64OrNull(toString(trunc({c})))"
+        return f"accurateCastOrNull({c}, 'Int64')"
+    if dt == "float":
+        if is_text:
+            return f"toFloat64OrNull(trimBoth({c}))"
+        return f"accurateCastOrNull({c}, 'Float64')"
+    if dt == "str":
+        if base in _CH_FLOATS:
+            return (f"if({c} = trunc({c}) AND abs({c}) < 1e15, "
+                    f"concat(toString(toInt64({c})), '.0'), toString({c}))")
+        return f"CAST({c} AS Nullable(String))"
+    if dt == "date":
+        if is_text:
+            # ClickHouse è permissivo ("2024-02-30" → 1° marzo): valido solo se
+            # la data riletta coincide col testo, come Polars/DuckDB
+            return f"if(toString(toDateOrNull(trimBoth({c}))) = trimBoth({c}), toDateOrNull(trimBoth({c})), NULL)"
+        return f"toDateOrNull(toString({c}))"
+    if dt == "datetime":
+        return f"parseDateTimeBestEffortOrNull(trimBoth(toString({c})))"
+    if dt == "bool":
+        return f"toUInt8OrNull(trimBoth(toString({c})))"
+    raise EngineError(f"cast: tipo non supportato '{dt}'")
+
+
 @_register("cast")
 def op_cast(sql, params, ctx):
     cols = _require(params, "columns")
+    schema = dict(ctx.schema_of(sql))
     repls = []
     for col, dt in cols.items():
-        tmpl = _CH_CAST.get(str(dt))
-        if not tmpl:
+        if str(dt) not in _CH_CAST:
             raise EngineError(f"cast: tipo non supportato '{dt}'")
-        repls.append(f"{tmpl.format(c=_qi(col))} AS {_qi(col)}")
+        base = _ch_base_type(schema.get(col, ""))
+        repls.append(f"{_cast_expr(_qi(col), base, str(dt))} AS {_qi(col)}")
     return f"SELECT * REPLACE ({', '.join(repls)}) FROM {_sub(sql)}"
 
 
@@ -171,13 +207,21 @@ def op_filter(sql, params, ctx):
 def op_sort(sql, params, ctx):
     cols = _as_list(_require(params, "by"))
     direction = "DESC" if params.get("descending") else "ASC"
-    order = ", ".join(f"{_qi(c)} {direction}" for c in cols)
+    # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
+    order = ", ".join(f"{_qi(c)} {direction} NULLS LAST" for c in cols)
     return f"SELECT * FROM {_sub(sql)} ORDER BY {order}"
 
 
 @_register("limit")
 def op_limit(sql, params, ctx):
     return f"SELECT * FROM {_sub(sql)} LIMIT {int(_require(params, 'n'))}"
+
+
+@_register("sample")
+def op_sample(sql, params, ctx):
+    # campione casuale deterministico: hash del contenuto della riga (+ seme)
+    threshold, seed = sample_threshold(params)
+    return f"SELECT * FROM {_sub(sql)} WHERE cityHash64({seed}, *) % {SAMPLE_BUCKETS} < {threshold}"
 
 
 @_register("unique")
@@ -252,10 +296,30 @@ def op_compute(sql, params, ctx):
                 f"compute: espressione di '{name}' non consentita (niente subquery, "
                 "FROM o table function di lettura — solo espressioni scalari)."
             )
-        exclude = f" EXCEPT ({_qi(name)})" if name in existing else ""
-        sql = f"SELECT *{exclude}, ({expr}) AS {_qi(name)} FROM {_sub(sql)}"
+        expr = _utf8_functions(expr)
+        if name in existing:
+            # colonna esistente: sovrascritta NELLA SUA POSIZIONE (come Polars/DuckDB)
+            sql = f"SELECT * REPLACE (({expr}) AS {_qi(name)}) FROM {_sub(sql)}"
+        else:
+            sql = f"SELECT *, ({expr}) AS {_qi(name)} FROM {_sub(sql)}"
         existing.add(name)
     return sql
+
+
+# In ClickHouse upper/lower/length/substring/reverse lavorano sui BYTE: "Città"
+# → "CITTà", length = 6. Le varianti *UTF8 danno lo stesso risultato di
+# Polars/DuckDB (caratteri): la stessa espressione del compute vale ovunque.
+_CH_UTF8_FUNCS = {
+    "upper": "upperUTF8", "ucase": "upperUTF8", "lower": "lowerUTF8", "lcase": "lowerUTF8",
+    "length": "lengthUTF8", "char_length": "lengthUTF8", "character_length": "lengthUTF8",
+    "substring": "substringUTF8", "substr": "substringUTF8", "mid": "substringUTF8",
+    "reverse": "reverseUTF8",
+}
+_CH_UTF8_RE = re.compile(r"\b(" + "|".join(_CH_UTF8_FUNCS) + r")\s*\(", re.IGNORECASE)
+
+
+def _utf8_functions(expr: str) -> str:
+    return _CH_UTF8_RE.sub(lambda m: _CH_UTF8_FUNCS[m.group(1).lower()] + "(", expr)
 
 
 # ── Execute SQL (query libera sull'input, dialetto ClickHouse) ────────────────
@@ -321,11 +385,16 @@ def _join_condition(params: dict) -> tuple[str, str]:
     return f"ON {cond}", "on"
 
 
-def _join_select(lcols, rcols, skip_right: set) -> str:
+def _join_select(lcols, rcols, skip_right: set, coalesce_keys: set = frozenset()) -> str:
     """Colonne del risultato: tutte da sinistra + quelle di destra (chiavi USING
-    escluse), con suffisso _right sulle omonime — come Polars/DuckDB."""
+    escluse), con suffisso _right sulle omonime — come Polars/DuckDB. Nei
+    full/right join le chiavi USING sono coalesce(sinistra, destra): valorizzate
+    anche nelle righe che esistono solo a destra."""
     lset = set(lcols)
-    parts = ["l.*"]
+    parts = [
+        f"coalesce(l.{_qi(c)}, r.{_qi(c)}) AS {_qi(c)}" if c in coalesce_keys else f"l.{_qi(c)}"
+        for c in lcols
+    ]
     for c in rcols:
         if c in skip_right:
             continue
@@ -362,7 +431,7 @@ def op_join(sql, params, ctx):
     if how not in _JOIN_KW:
         raise EngineError(f"join: tipo non supportato '{how}'")
     skip_right = set(_as_list(params["on"])) if kind == "using" else set()
-    sel = _join_select(lcols, rcols, skip_right)
+    sel = _join_select(lcols, rcols, skip_right, skip_right if how in ("full", "right") else set())
     return f"SELECT {sel} FROM {L} AS l {_JOIN_KW[how]} {R} AS r {clause}"
 
 
@@ -383,18 +452,17 @@ def op_union(sql, params, ctx):
 
 
 # ── pivot / unpivot (righe↔colonne) ───────────────────────────────────────────
-_AGG_IF = {"sum": "sumIf", "mean": "avgIf", "min": "minIf", "max": "maxIf", "count": "countIf"}
-
-
+# Stesso standard cross-engine di operations.py (`pivot_label`): nomi colonna,
+# semantica NULL e tipi coincidono con Polars/DuckDB, così un flusso progettato
+# su un engine gira identico su ClickHouse in produzione.
 @_register("pivot")
 def op_pivot(sql, params, ctx):
     index = _as_list(_require(params, "index"))
     on = _as_list(_require(params, "on"))  # più colonne = combinazioni
     values = _require(params, "values")
     func = params.get("func", "sum")
-    agg_if = _AGG_IF.get(func)
-    if not agg_if:
-        raise EngineError(f"pivot: funzione non supportata su chDB '{func}' (usa sum/mean/min/max/count)")
+    if func not in _AGG:
+        raise EngineError(f"pivot: funzione non supportata '{func}'")
     base = _sub(sql)
     on_sql = ", ".join(_qi(c) for c in on)
     n_cols = ctx.scalar(f"SELECT count() FROM (SELECT DISTINCT {on_sql} FROM {base})")
@@ -404,13 +472,70 @@ def op_pivot(sql, params, ctx):
             f"nuove, massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
         )
     combos = ctx.distinct_rows(base, on)  # ClickHouse non ha PIVOT: colonne condizionali
+    # ordine delle colonne nuove = ordine TESTUALE delle etichette (come Polars e
+    # DuckDB, che ordinano la chiave stringa): "10" < "2", "null" tra "false" e "true"
+    combos = sorted(combos, key=lambda combo: tuple(pivot_label(v) for v in combo))
     idx_sql = ", ".join(_qi(c) for c in index)
     cols = [idx_sql] if idx_sql else []
     for combo in combos:
-        cond = " AND ".join(f"{_qi(c)} = {_lit(v)}" for c, v in zip(on, combo))
-        colname = " / ".join("" if v is None else str(v) for v in combo)
-        cols.append(f"{agg_if}({_qi(values)}, {cond}) AS {_qi(colname)}")
+        cond = " AND ".join(
+            f"{_qi(c)} IS NULL" if v is None else f"{_qi(c)} = {_lit(v)}" for c, v in zip(on, combo)
+        )
+        colname = PIVOT_LABEL_SEP.join(pivot_label(v) for v in combo)
+        # combinatore -If: aggrega solo le righe della combinazione; nessuna riga
+        # (o soli NULL) → NULL, tranne count/n_unique → 0 (Int64 come altrove)
+        expr = f"{_AGG[func]}If({_qi(values)}, {cond})"
+        if func in ("count", "n_unique"):
+            expr = f"toInt64({expr})"
+        cols.append(f"{expr} AS {_qi(colname)}")
     return f"SELECT {', '.join(cols)} FROM {base} GROUP BY {idx_sql}"
+
+
+# tipi ClickHouse → famiglia, per il supertipo del valore in unpivot
+_CH_INTS = {f"Int{b}" for b in (8, 16, 32, 64, 128, 256)} | {f"UInt{b}" for b in (8, 16, 32, 64, 128, 256)}
+_CH_FLOATS = {"Float32", "Float64"}
+
+
+def temporal_safe_sql(ctx, sql: str) -> str:
+    """ClickHouse esporta `Date` come UInt16 e `DateTime` (32 bit) come UInt32 —
+    INTERI — in Arrow/Parquet (19727 al posto di 2024-01-05, 1704450600 al
+    posto di 2024-01-05 10:30:00): ogni colonna di quei tipi, prodotta da
+    cast/compute/funzioni di data, viene promossa a Date32/DateTime64, che
+    escono come DATE/TIMESTAMP veri. Va applicato a ogni SQL FINALE (preview,
+    run, cache): le sorgenti lette da parquet sono già Date32/DateTime64."""
+    repls = []
+    for name, t in ctx.schema_of(sql):
+        base = _ch_base_type(t)
+        if base == "Date":
+            repls.append(f"toDate32({_qi(name)}) AS {_qi(name)}")
+        elif base == "DateTime" or base.startswith("DateTime("):
+            repls.append(f"toDateTime64({_qi(name)}, 0) AS {_qi(name)}")
+    if not repls:
+        return sql
+    return f"SELECT * REPLACE ({', '.join(repls)}) FROM {_sub(sql)}"
+
+
+def _ch_base_type(t: str) -> str:
+    """Toglie i wrapper Nullable(...) / LowCardinality(...)."""
+    t = t.strip()
+    for w in ("Nullable(", "LowCardinality("):
+        while t.startswith(w) and t.endswith(")"):
+            t = t[len(w):-1].strip()
+    return t
+
+
+def unpivot_value_type(types: list[str]) -> str:
+    """Supertipo del valore sciolto (stessa regola di Polars/DuckDB): tutti
+    interi → Int64; tutti numerici → Float64; tutti dello stesso tipo → quello;
+    altrimenti String."""
+    bases = [_ch_base_type(t) for t in types]
+    if all(b in _CH_INTS for b in bases):
+        return "Int64"
+    if all(b in _CH_INTS or b in _CH_FLOATS or b.startswith("Decimal") for b in bases):
+        return "Float64"
+    if len(set(bases)) == 1:
+        return bases[0]
+    return "String"
 
 
 @_register("unpivot")
@@ -419,15 +544,29 @@ def op_unpivot(sql, params, ctx):
     index = params.get("index") or []
     var = params.get("variable_name") or "variable"
     val = params.get("value_name") or "value"
-    allcols = ctx.columns_of(sql)
+    schema = dict(ctx.schema_of(sql))  # nome → tipo ClickHouse
+    allcols = list(schema)
     melt = on if on else [c for c in allcols if c not in set(index)]
     if not melt:
         raise EngineError("unpivot: nessuna colonna da sciogliere")
-    keep = [c for c in allcols if c in set(index)] if index else \
-        [c for c in allcols if c not in set(melt)]
+    missing = [c for c in melt if c not in schema]
+    if missing:
+        raise EngineError(f"unpivot: colonne inesistenti: {', '.join(missing)}")
+    # come Polars: restano SOLO le colonne indice (le altre non sciolte si perdono)
+    keep = [c for c in allcols if c in set(index)]
     keep_sql = "".join(f"{_qi(c)}, " for c in keep)
-    # arrayJoin su tuple (nome, valore-as-String): una riga per colonna sciolta
-    tuples = ", ".join(f"({_lit(c)}, toString({_qi(c)}))" for c in melt)
+    # arrayJoin su tuple (nome, valore al supertipo comune): una riga per colonna
+    vtype = unpivot_value_type([schema[c] for c in melt])
+
+    def _val(c: str) -> str:
+        if vtype == "String" and _ch_base_type(schema[c]) in _CH_FLOATS:
+            # ClickHouse stampa 7.0 come "7": allineato a Polars/DuckDB ("7.0")
+            q = _qi(c)
+            return (f"if({q} = trunc({q}) AND abs({q}) < 1e15, "
+                    f"concat(toString(toInt64({q})), '.0'), toString({q}))")
+        return f"CAST({_qi(c)} AS Nullable({vtype}))"
+
+    tuples = ", ".join(f"({_lit(c)}, {_val(c)})" for c in melt)
     base = _sub(sql)
     return (
         f"SELECT {keep_sql}tup.1 AS {_qi(var)}, tup.2 AS {_qi(val)} "

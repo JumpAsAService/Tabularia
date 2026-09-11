@@ -82,7 +82,7 @@ export function useApi() {
     },
 
     // catalogo degli engine disponibili (per il picker in creazione flusso)
-    async engines(): Promise<{ id: string; label: string; available: boolean; description: string }[]> {
+    async engines(): Promise<{ id: string; label: string; available: boolean; description: string; optional?: boolean }[]> {
       return await apiFetch('/engines')
     },
 

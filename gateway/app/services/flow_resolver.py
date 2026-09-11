@@ -23,6 +23,120 @@ class FlowResolveError(ValueError):
     """La definizione non è eseguibile (output scollegato, sorgente mancante…)."""
 
 
+# ── Filtri A MONTE sulle sorgenti ────────────────────────────────────────────
+# Un nodo sorgente può portare `data.filters` = [{column, operator, value}, …]:
+# condizioni in AND applicate SUBITO DOPO la lettura della sorgente, PRIMA di
+# ogni altra operazione (campione di sviluppo compreso). A differenza del
+# campione sono parte del flusso: valgono in sviluppo E in produzione, e
+# arrivano anche nell'export dbt. Diventano normali operazioni `filter` IR
+# (nessun marcatore: `strip_dev_sample_ops` non le tocca).
+SOURCE_FILTER_OPERATORS = frozenset({
+    "eq", "ne", "gt", "ge", "lt", "le", "in", "not_in",
+    "between", "contains", "starts_with", "ends_with", "is_null", "is_not_null",
+})
+_NO_VALUE_OPERATORS = frozenset({"is_null", "is_not_null"})
+
+
+def source_filter_operations(data: dict) -> list[dict]:
+    """Operazioni IR `filter` delle condizioni a monte di un nodo sorgente.
+    Le condizioni incomplete (senza colonna, operatore ignoto, valore mancante
+    dove serve) vengono IGNORATE, come fa l'editor: una riga appena aggiunta
+    non deve rompere il run."""
+    filters = (data or {}).get("filters")
+    if not isinstance(filters, list):
+        return []
+    ops: list[dict] = []
+    for cond in filters:
+        if not isinstance(cond, dict):
+            continue
+        column = cond.get("column")
+        operator = cond.get("operator")
+        if not isinstance(column, str) or not column or operator not in SOURCE_FILTER_OPERATORS:
+            continue
+        params: dict[str, Any] = {"column": column, "operator": operator}
+        if operator not in _NO_VALUE_OPERATORS:
+            value = cond.get("value")
+            if value is None:
+                continue
+            if operator in ("in", "not_in") and (not isinstance(value, list) or not value):
+                continue
+            if operator == "between" and (not isinstance(value, list) or len(value) != 2):
+                continue
+            params["value"] = value
+        ops.append({"type": "filter", "params": params})
+    return ops
+
+
+# ── Campione di SVILUPPO sulle sorgenti ──────────────────────────────────────
+# Un nodo sorgente può portare `data.sample` = {mode: "first"|"random", rows|percent}:
+# in modalità "development" (editor, run-now di prova) diventa un'operazione
+# iniettata SUBITO DOPO la sorgente; in "production" (scheduler, run-now
+# ?mode=production) NON viene mai iniettata: i flussi di produzione girano su
+# TUTTI i record. L'operazione porta il marcatore `_dev_sample` così
+# `strip_dev_sample_ops` può rimuoverla per difesa in profondità.
+DEV_SAMPLE_MARK = "_dev_sample"
+MAX_SAMPLE_ROWS = 100_000_000
+
+
+def dev_sample_operation(data: dict) -> Optional[dict]:
+    """Operazione IR del campione di un nodo sorgente, o None se non campionato."""
+    sample = (data or {}).get("sample")
+    if not isinstance(sample, dict):
+        return None
+    mode = sample.get("mode")
+    if mode == "first":
+        try:
+            n = int(sample.get("rows") or 0)
+        except (TypeError, ValueError):
+            return None
+        if n <= 0:
+            return None
+        return {"type": "limit", "params": {"n": min(n, MAX_SAMPLE_ROWS), DEV_SAMPLE_MARK: True}}
+    if mode == "random":
+        try:
+            pct = float(sample.get("percent") or 0)
+        except (TypeError, ValueError):
+            return None
+        if not 0 < pct < 100:
+            return None
+        return {"type": "sample", "params": {"fraction": pct / 100, "seed": 42, DEV_SAMPLE_MARK: True}}
+    return None
+
+
+def strip_dev_sample_ops(operations: list[dict]) -> tuple[list[dict], int]:
+    """Rimuove OVUNQUE (anche in right/driver/body annidati) le operazioni
+    marcate `_dev_sample`. Torna (operazioni pulite, numero rimosse)."""
+    removed = 0
+
+    def clean_ops(ops: Any) -> list[dict]:
+        nonlocal removed
+        out: list[dict] = []
+        for op in ops or []:
+            if not isinstance(op, dict):
+                out.append(op)
+                continue
+            params = op.get("params") or {}
+            if isinstance(params, dict) and params.get(DEV_SAMPLE_MARK):
+                removed += 1
+                continue
+            out.append({**op, "params": clean_params(params)})
+        return out
+
+    def clean_params(params: Any) -> Any:
+        if not isinstance(params, dict):
+            return params
+        new = dict(params)
+        for key in ("right", "driver"):
+            ref = new.get(key)
+            if isinstance(ref, dict) and "operations" in ref:
+                new[key] = {**ref, "operations": clean_ops(ref.get("operations"))}
+        if isinstance(new.get("body"), list):
+            new["body"] = clean_ops(new["body"])
+        return new
+
+    return clean_ops(operations), removed
+
+
 # handle degli archi di SEQUENZA (orchestrazione), da NON confondere con i dati
 SEQ_TARGET_HANDLE = "seq-in"
 SEQ_SOURCE_HANDLE = "seq-out"
@@ -62,11 +176,13 @@ def _resolve_source(node: dict, resolve_ds: DsResolver) -> Optional[tuple[str, s
 
 
 class _Resolver:
-    def __init__(self, nodes: list[dict], edges: list[dict], resolve_ds: DsResolver):
+    def __init__(self, nodes: list[dict], edges: list[dict], resolve_ds: DsResolver, engine_mode: str = "production"):
         self.by_id = {n["id"]: n for n in nodes}
         self.edges = edges
         self.inc = _incoming(edges)
         self.resolve_ds = resolve_ds
+        # SOLO "development" inietta i campioni; qualsiasi altro valore = produzione
+        self.dev_sampling = engine_mode == "development"
 
     def chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
         """Catena che termina in target_id: (sorgente risolta, operazioni IR)."""
@@ -80,6 +196,7 @@ class _Resolver:
         op_ids: list[str] = []
         seen: set[str] = set()
         source: Optional[tuple[str, str]] = None
+        head_ops: list[dict] = []  # operazioni del nodo sorgente: filtri a monte, poi campione
         cur: Optional[str] = target_id
         while cur and cur not in seen:
             seen.add(cur)
@@ -88,14 +205,21 @@ class _Resolver:
                 break
             if node.get("type") == "source":
                 source = _resolve_source(node, self.resolve_ds)
+                data = node.get("data") or {}
+                # filtri a monte: SEMPRE (sviluppo e produzione)
+                head_ops = source_filter_operations(data)
+                # campione: SOLO in sviluppo, e sui dati già filtrati
+                if self.dev_sampling:
+                    sample_op = dev_sample_operation(data)
+                    if sample_op is not None:
+                        head_ops.append(sample_op)
                 break
             if node.get("type") in ("operation", "foreach"):
                 op_ids.append(cur)
             cur = self.inc.get(cur, {}).get("left")
 
         op_ids.reverse()
-        operations = [self._operation_for(i) for i in op_ids]
-        return source, operations
+        return source, [*head_ops, *(self._operation_for(i) for i in op_ids)]
 
     def _operation_for(self, node_id: str, until: Optional[str] = None) -> dict:
         node = self.by_id[node_id]
@@ -202,10 +326,16 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
     return body
 
 
-def resolve_output_request(definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str) -> dict:
+def resolve_output_request(
+    definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production"
+) -> dict:
     """Risolve UN nodo Output → corpo-run. Solleva FlowResolveError se la sua
-    catena dati non ha una sorgente risolvibile."""
-    resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds)
+    catena dati non ha una sorgente risolvibile.
+
+    `engine_mode`: default "production" (nessun campione, tutti i record); solo
+    "development" inietta i campioni di sviluppo dei nodi sorgente. I filtri a
+    monte (`data.filters`) delle sorgenti sono iniettati in OGNI modalità."""
+    resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds, engine_mode)
     source, operations = resolver.chain(node["id"])
     if source is None:
         raise FlowResolveError(
@@ -216,14 +346,14 @@ def resolve_output_request(definition: dict, node: dict, resolve_ds: DsResolver,
 
 
 def build_output_run_requests(
-    definition: dict, resolve_ds: DsResolver, default_bucket: str
+    definition: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production"
 ) -> list[dict]:
     """Un corpo-run per ogni nodo Output del flusso (senza ordine di sequenza)."""
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
         raise FlowResolveError("il flusso non ha nodi Output: non c'è nulla da eseguire")
-    return [resolve_output_request(definition, n, resolve_ds, default_bucket) for n in outputs]
+    return [resolve_output_request(definition, n, resolve_ds, default_bucket, engine_mode) for n in outputs]
 
 
 # ordine di esecuzione dei nodi non collegati in sequenza (default sensato)

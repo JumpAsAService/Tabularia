@@ -108,7 +108,8 @@ async def _fire_flow(session: Session, flow: Flow, now: datetime) -> None:
         return
     # orchestrazione (refresh → output → runflow) come task detached: non blocca
     # il tick, e la guardia _running evita di sovrapporre lo stesso flusso
-    asyncio.create_task(orchestrate_bg(flow.id, user.id, trigger_type="schedule"))
+    # i run schedulati sono "produzione": usano flow.production_engine (se impostato)
+    asyncio.create_task(orchestrate_bg(flow.id, user.id, trigger_type="schedule", engine_mode="production"))
     logger.info("scheduler: orchestrazione flusso %s (%s) avviata", flow.id, flow.name)
     _advance_flow(session, flow, now)
 

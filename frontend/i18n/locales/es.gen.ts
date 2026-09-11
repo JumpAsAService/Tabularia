@@ -159,7 +159,21 @@ export default {
     "title": "Conexiones",
     "updatedToast": "Conexión \"{name}\" actualizada"
   },
+  "columnDescriptions": {
+    "heading": "Descripciones de campos",
+    "intro": "Describe qué significa cada campo de",
+    "introTail": "Estas notas documentan el conjunto de datos para las personas y dan contexto semántico a las futuras funciones de IA.",
+    "colName": "Campo",
+    "colType": "Tipo",
+    "colDescription": "Descripción",
+    "placeholder": "p. ej. importe neto del pedido en EUR, sin IVA",
+    "noColumns": "Esta fuente aún no tiene columnas conocidas (ejecútala o actualízala primero).",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "counter": "{n} de {total} descritos",
+  },
   "datasources": {
+    "descriptionsSavedToast": "Descripciones de campos guardadas ({n})",
     "colFolder": "Carpeta",
     "colName": "Nombre",
     "colRows": "Filas",
@@ -269,8 +283,16 @@ export default {
     "uploading": "Subiendo {name}…"
   },
   "flows": {
+    "devEngineLabel": "Motor (desarrollo)",
+    "prodEngineLabel": "Motor (producción)",
+    "sameAsDevEngine": "igual que desarrollo",
+    "prodEngineHint": "Motor usado por las ejecuciones programadas (y por «Ejecutar en producción»)",
+    "prodEngineSaved": "Motor de producción: {engine}",
+    "runProdTitle": "Ejecutar ahora con el motor de producción",
+    "runProdStarted": "Ejecución de producción iniciada (#{id})",
     "avgDurationLabel": "Tiempo medio",
     "comingSoonTag": "próximamente",
+    "notConfiguredTag": "no configurado",
     "confirmDelete": "¿Eliminar el flujo \"{name}\"?",
     "confirmPromote": "¿Promover la versión v{version} a actual? Se convierte en la definición del flujo.",
     "createdByLabel": "Creado por",
@@ -385,6 +407,19 @@ export default {
     "openGrafana": "Abrir Grafana"
   },
   "nodePanel": {
+    "sampleTitle": "Muestra de desarrollo",
+    "sampleOff": "off (todas las filas)",
+    "sampleFirst": "primeras N filas",
+    "sampleRandom": "% aleatorio",
+    "sampleRowsLabel": "filas",
+    "sampleHint": "Acelera las vistas previas y las ejecuciones desde el editor: solo se lee esta muestra. Las ejecuciones programadas y «Ejecutar en producción» leen siempre la tabla completa. Muestrea solo la tabla grande: un join entre dos fuentes muestreadas pierde casi todas las coincidencias.",
+    "sourceFiltersTitle": "Filtros previos",
+    "sourceFilterWhere": "donde",
+    "sourceFilterAnd": "y",
+    "sourceFilterAdd": "Añadir condición",
+    "sourceFilterRemove": "Quitar condición",
+    "sourceFilterIncomplete": "incompleta: ignorada",
+    "sourceFiltersHint": "Condiciones en AND aplicadas justo después de leer la fuente, antes de cualquier otra operación. Forman parte del flujo: se aplican en desarrollo Y en producción (a diferencia de la muestra).",
     "availablePlaceholders": "Placeholders disponibles:",
     "bucketHint": "(vacío = el de la conexión)",
     "bucketPlaceholder": "p. ej. exports-cliente",
@@ -493,6 +528,11 @@ export default {
     "range": "{from}–{to} de {total}"
   },
   "paramForm": {
+    "searchColumnsPlaceholder": "buscar columnas…",
+    "noColumnMatch": "Ninguna columna coincide con la búsqueda.",
+    "searchAggPlaceholder": "filtrar agregaciones…",
+    "clearSearch": "Borrar búsqueda",
+    "noAggMatch": "Ninguna agregación coincide con la búsqueda.",
     "addRow": "+ añadir",
     "aliasPlaceholder": "alias",
     "backToCalendar": "Volver al calendario",
@@ -524,6 +564,7 @@ export default {
   },
   "projectBrowser": {
     "comingSoonTag": "próximamente",
+    "notConfiguredTag": "no configurado",
     "confirmDeleteConnection": "¿Eliminar la conexión \"{name}\"?",
     "confirmDeleteDatasource": "¿Eliminar la fuente de datos \"{name}\"? El archivo parquet se eliminará del almacenamiento.",
     "confirmDeleteFlow": "¿Eliminar el flujo \"{name}\"?",
@@ -684,6 +725,8 @@ export default {
     "triggeredByScheduler": "Iniciado por el programador"
   },
   "scheduleDialog": {
+    "engineLabel": "Motor para las ejecuciones programadas",
+    "sameAsDevEngine": "igual que desarrollo",
     "cancel": "Cancelar",
     "cronLabel": "Expresión cron (minuto hora día mes día-semana)",
     "cronPlaceholder": "ej. 0 3 * * *",
@@ -724,6 +767,11 @@ export default {
     "search": "Buscar…"
   },
   "sourceNode": {
+    "sampleFirst": "muestra: primeras {n} filas",
+    "filtersBadge": "filtros previos: {n}",
+    "filtersTitle": "Filtros previos: aplicados al leer la fuente, en desarrollo y en producción",
+    "sampleRandom": "muestra: {p}% aleatorio",
+    "sampleTitle": "Muestra de desarrollo: las vistas previas usan este subconjunto; producción lee todo",
     "noData": "sin datos — sube un archivo",
     "rowsCount": "{n} filas",
     "title": "Fuente"
@@ -732,6 +780,7 @@ export default {
     "dismiss": "Cerrar"
   },
   "toolbar": {
+    "engineTitleProd": "Motor de desarrollo: {engine} · producción: {prod}",
     "engineTitle": "Motor de ejecución del flujo: {engine}",
     "flowNamePlaceholder": "Nombre del flujo…",
     "folderPlaceholder": "carpeta…",

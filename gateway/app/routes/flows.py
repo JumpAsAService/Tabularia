@@ -39,7 +39,9 @@ router = APIRouter(tags=["flows"])
 
 # engine SELEZIONABILI alla creazione (sincronizzato col catalogo dell'engine:
 # solo quelli `available=True`).
-_AVAILABLE_ENGINES = {"polars", "duckdb", "chdb"}
+# `clickhouse` (server esterno) è opzionale lato engine: se non configurato, il
+# run fallisce con un errore chiaro dell'engine.
+_AVAILABLE_ENGINES = {"polars", "duckdb", "chdb", "clickhouse"}
 
 
 def _validate_engine(engine: str | None) -> str:
@@ -50,6 +52,13 @@ def _validate_engine(engine: str | None) -> str:
             detail=f"engine non disponibile: '{engine}'. Scegli tra: {', '.join(sorted(_AVAILABLE_ENGINES))}.",
         )
     return e
+
+
+def _validate_production_engine(engine: str | None) -> str | None:
+    """Motore di produzione: vuoto = None (uguale allo sviluppo)."""
+    if engine is None or not engine.strip():
+        return None
+    return _validate_engine(engine)
 
 
 # nodi che danno "qualcosa da eseguire": Output, oppure i nodi di controllo
@@ -185,6 +194,7 @@ def create_flow(
         project_id=project_id,
         owner_id=user.id,
         engine=_validate_engine(body.engine),
+        production_engine=_validate_production_engine(body.production_engine),
     )
     session.add(flow)
     session.commit()
@@ -281,7 +291,7 @@ def update_flow(
     ensure_can(session, user, flow.project_id, Capability.EDIT)
     if body.definition is not None:
         _authorize_definition_keys(session, user, body.definition)
-    changed = [k for k in ("name", "description", "definition", "project_id", "engine")
+    changed = [k for k in ("name", "description", "definition", "project_id", "engine", "production_engine")
                if getattr(body, k, None) is not None]
 
     if body.project_id is not None and body.project_id != flow.project_id:
@@ -299,6 +309,8 @@ def update_flow(
         flow.definition = body.definition
     if body.engine is not None:
         flow.engine = _validate_engine(body.engine)
+    if body.production_engine is not None:
+        flow.production_engine = _validate_production_engine(body.production_engine)
 
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)
@@ -442,6 +454,7 @@ def delete_flow(flow_id: int, request: Request, user: User = Depends(get_current
 async def run_flow_now(
     flow_id: int,
     request: Request,
+    mode: str = Query("development", pattern="^(development|production)$"),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -452,7 +465,11 @@ async def run_flow_now(
 
     Crea subito un 'run di orchestrazione' tracciante e ne torna l'id: il frontend
     lo polla (`GET /runs/{id}`) fino a SUCCESS/FAILURE — così anche i flussi senza
-    nodo Output (che non producono run propri) hanno uno stato osservabile."""
+    nodo Output (che non producono run propri) hanno uno stato osservabile.
+
+    `mode`: "development" (default) usa il motore dell'editor; "production" usa
+    il motore di produzione del flusso — come farebbe lo scheduler — per
+    provarlo a mano prima di schedulare."""
     import asyncio
 
     from app.services.orchestrator import create_orchestration_run, orchestrate_bg
@@ -460,10 +477,10 @@ async def run_flow_now(
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
     run = create_orchestration_run(session, user, flow)
-    asyncio.create_task(orchestrate_bg(flow.id, user.id, orch_run_id=run.id))
+    asyncio.create_task(orchestrate_bg(flow.id, user.id, orch_run_id=run.id, engine_mode=mode))
     audit.record_audit(
         session, actor=user, action=audit.FLOW_RUN, target_type="flow",
-        target_id=flow.id, target_label=flow.name, detail={"run_id": run.id, "trigger": "manual"},
+        target_id=flow.id, target_label=flow.name, detail={"run_id": run.id, "trigger": "manual", "engine_mode": mode},
         request=request,
     )
     return {"status": "started", "flow_id": flow.id, "run_id": run.id}
@@ -504,6 +521,8 @@ def set_flow_schedule(
         flow.run_schedule = cron
         flow.run_scheduled_by = user.id  # autorità dei run schedulati
         flow.next_run_at = next_fire(cron, datetime.now(timezone.utc))
+    if body.production_engine is not None:  # omesso = invariato; "" = come sviluppo
+        flow.production_engine = _validate_production_engine(body.production_engine)
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)
     session.commit()
@@ -511,6 +530,6 @@ def set_flow_schedule(
     audit.record_audit(
         session, actor=user, action=audit.FLOW_SCHEDULE, target_type="flow",
         target_id=flow.id, target_label=flow.name,
-        detail={"cron": flow.run_schedule or "(disattivato)"}, request=request,
+        detail={"cron": flow.run_schedule or "(disattivato)", "production_engine": flow.production_engine}, request=request,
     )
     return flow

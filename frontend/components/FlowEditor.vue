@@ -132,6 +132,9 @@ const flowName = ref(t('flowEditor.unnamedFlow'))
 // esplicita si usa il motore PREFERITO dell'utente. Passato a preview/run e salvato.
 const { preferredEngine } = usePreferredEngine()
 const flowEngine = ref<string>(route.query.engine ? String(route.query.engine) : preferredEngine.value)
+// motore di PRODUZIONE (run schedulati): solo informativo nell'editor (badge);
+// si imposta dalla pagina Flows o dal dialog di schedule
+const flowProductionEngine = ref<string | null>(null)
 
 // preview/transform iniettano SEMPRE l'engine del flusso corrente. (`dataApi`
 // alias: evita che i wrapper si auto-referenzino nei rimpiazzi delle chiamate.)
@@ -175,6 +178,7 @@ async function loadFlow(id: number) {
   flowName.value = f.name
   projectId.value = f.project_id
   flowEngine.value = f.engine || 'polars'
+  flowProductionEngine.value = f.production_engine ?? null
   const def = JSON.parse(f.definition || '{}')
   // normalizza: sorgenti salvate senza bucket (flussi vecchi/esterni) ricevono
   // quello di default, altrimenti preview/run partirebbero senza bucket (422)
@@ -774,10 +778,18 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
   if (!nodeId) return []
   const node = findNode(nodeId)
   const inc = buildIncoming(getEdges.value)
-  const leftId =
-    inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
-  if (!leftId) return []
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId)
+  let sourceNode: Node | null = null
+  let ops: Operation[] = []
+  if (node?.type === 'source') {
+    // filtri a monte del nodo sorgente: i valori vengono dai dati GREZZI della
+    // sorgente (non dalla catena, che conterrebbe i filtri stessi)
+    sourceNode = node
+  } else {
+    const leftId =
+      inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
+    if (!leftId) return []
+    ;({ sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId))
+  }
   if (!sourceNode?.data?.parquetKey) return []
   const res = await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
@@ -1185,6 +1197,7 @@ async function pollTask(id: string) {
       :projects="projectsList"
       :project-id="projectId"
       :engine="flowEngine"
+      :production-engine="flowProductionEngine"
       @upload="onUpload"
       @add-op="addOperation"
       @add-source="addSource"

@@ -5,7 +5,8 @@
 import { ref, watch } from 'vue'
 import { useApi } from '~/composables/useApi'
 
-export interface EngineOpt { id: string; label: string; available: boolean; description: string }
+// `optional`: engine che esiste solo se configurato lato server (non disponibile = non configurato, non "in arrivo")
+export interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean }
 
 const STORAGE_KEY = 'tabularia-engine'
 
@@ -20,6 +21,9 @@ const ENGINE_DESCRIPTIONS: Record<string, string> = {
   chdb:
     'Out-of-core SQL engine with ClickHouse dialect (spills to disk). ' +
     'v1: structural operations (sql/foreach use Polars or DuckDB).',
+  clickhouse:
+    'External ClickHouse server (cloud or self-hosted): transforms run on the server, ' +
+    'not in the worker. Same operations as chDB. Requires CLICKHOUSE_EXTERNAL__HOST.',
 }
 
 export function engineDescription(id: string, fallback = ''): string {

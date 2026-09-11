@@ -72,9 +72,18 @@ async def launch_run(
     return await _launch_flow_run(session, user, flow, body)
 
 
+def resolve_run_engine(flow: Flow, engine_mode: str) -> str:
+    """Motore con cui eseguire un run del flusso: in "production" quello di
+    produzione se impostato, altrimenti (o in "development") quello di sviluppo."""
+    if engine_mode == "production" and flow.production_engine:
+        return flow.production_engine
+    return flow.engine
+
+
 async def _launch_flow_run(
     session: Session, user: User, flow: Flow, body: RunCreate,
     trigger_type: str = "manual", parent_run_id: int | None = None,
+    engine_mode: str = "development",
 ) -> Run:
     """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
     (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
@@ -83,8 +92,24 @@ async def _launch_flow_run(
     `trigger_type`: "manual" (un utente lo lancia) o "schedule" (avviato dallo
     scheduler nell'ambito di un'orchestrazione schedulata).
     `parent_run_id`: valorizzato se è un output lanciato DENTRO un'orchestrazione
-    (figlio) — così il calendario non lo conta come esecuzione a sé."""
+    (figlio) — così il calendario non lo conta come esecuzione a sé.
+    `engine_mode`: "development" = motore dell'editor (`flow.engine`);
+    "production" = `flow.production_engine` (se impostato) — è ciò che usa lo
+    scheduler, così il DAG in produzione può girare su un motore diverso da
+    quello con cui è stato progettato."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
+    engine_name = resolve_run_engine(flow, engine_mode)
+
+    # PRODUZIONE = tutti i record: qualunque campione di sviluppo (operazioni
+    # marcate `_dev_sample`, anche annidate) viene rimosso. Il resolver del
+    # gateway in produzione non le inietta mai: questa è difesa in profondità
+    # (es. un client che manda una catena costruita dall'editor).
+    if engine_mode != "development":
+        from app.services.flow_resolver import strip_dev_sample_ops
+
+        body.operations, removed = strip_dev_sample_ops(body.operations)
+        if removed:
+            logger.warning("run in produzione del flusso %s: rimossi %d campioni di sviluppo", flow.id, removed)
 
     # input_key e operazioni: la sorgente (e ogni sorgente annidata: right di
     # join/union, driver/body dei foreach) deve stare NEL bucket dell'engine e
@@ -221,7 +246,7 @@ async def _launch_flow_run(
             "output_key": output_key,
             "operations": body.operations,
             "destination": destination_payload,
-            "engine": flow.engine,  # motore scelto per questo flusso
+            "engine": engine_name,  # motore di sviluppo o di produzione (vedi engine_mode)
         },
     )
     if resp.status_code >= 400:
@@ -236,6 +261,7 @@ async def _launch_flow_run(
         launched_by=user.id,
         trigger_type=trigger_type,
         parent_run_id=parent_run_id,
+        engine=engine_name,
         input_key=body.input_key,
         output_bucket=body.bucket,
         output_key=output_key,

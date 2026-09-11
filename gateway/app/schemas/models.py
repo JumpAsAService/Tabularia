@@ -102,7 +102,8 @@ class FlowOut(BaseModel):
     project_id: int
     owner_id: Optional[int]
     owner_name: Optional[str] = None  # nome di chi ha creato il flusso (risolto)
-    engine: str = "polars"  # motore di esecuzione (polars | duckdb)
+    engine: str = "polars"  # motore di SVILUPPO (editor, run manuali)
+    production_engine: Optional[str] = None  # motore dei run SCHEDULATI; null = come engine
     run_schedule: Optional[str] = None  # cron; null = non schedulato
     next_run_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -122,11 +123,14 @@ class FlowCreate(BaseModel):
     description: str = ""
     definition: str = "{}"
     engine: str = "polars"  # scelto alla creazione
+    production_engine: Optional[str] = None  # facoltativo; null/"" = come engine
 
 
 class FlowScheduleUpdate(BaseModel):
-    """Imposta/disabilita l'esecuzione schedulata del flusso. `cron` vuoto = off."""
+    """Imposta/disabilita l'esecuzione schedulata del flusso. `cron` vuoto = off.
+    `production_engine`: omesso = invariato; "" = torna uguale allo sviluppo."""
     cron: Optional[str] = None
+    production_engine: Optional[str] = None
 
 
 class FlowUpdate(BaseModel):
@@ -134,7 +138,8 @@ class FlowUpdate(BaseModel):
     description: Optional[str] = None
     definition: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
-    engine: Optional[str] = None  # valorizzato = cambia il motore di esecuzione
+    engine: Optional[str] = None  # valorizzato = cambia il motore di sviluppo
+    production_engine: Optional[str] = None  # valorizzato = cambia il motore di produzione ("" = come sviluppo)
 
 
 class FlowVersionOut(BaseModel):
@@ -241,6 +246,7 @@ class RunOut(BaseModel):
     status: str
     launched_by: Optional[int]
     trigger_type: str = "manual"  # "manual" | "schedule"
+    engine: Optional[str] = None  # engine con cui è stato eseguito
     output_key: str
     rows_written: Optional[int]
     error: Optional[str]
@@ -293,7 +299,10 @@ class DatasourceOut(BaseModel):
     bucket: str
     key: str
     rows: Optional[int]
+    # [{name, dtype, description?}] — `description` presente solo se curata
     columns: list[dict] = Field(default_factory=list)
+    # {nome colonna: descrizione} (anche per colonne non più nello schema)
+    column_descriptions: dict[str, str] = Field(default_factory=dict)
     kind: str
     flow_id: Optional[int]
     # per kind="database"
@@ -311,6 +320,8 @@ class DatasourceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+    # valorizzato = SOSTITUISCE la mappa {colonna: descrizione}; voci vuote scartate
+    column_descriptions: Optional[dict[str, str]] = None
 
 
 class ScheduleUpdate(BaseModel):

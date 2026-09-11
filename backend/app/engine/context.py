@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError
 
 from app.engine.base import DataSource
 from app.engine.exceptions import SourceNotFoundError
+from app.engine.temporal import naive_utc_lazy
 
 # codici S3/MinIO per "oggetto (o bucket) inesistente"
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
@@ -57,7 +58,9 @@ class OperationContext:
             if code in _NOT_FOUND_CODES:
                 raise SourceNotFoundError(source.bucket, source.key) from e
             raise
-        return pl.scan_parquet(local_path)
+        # parquet scritti con fuso (es. run di ClickHouse esterno in modalità s3)
+        # → datetime naive UTC, lo standard di tutti gli engine
+        return naive_utc_lazy(pl.scan_parquet(local_path))
 
     def cleanup(self) -> None:
         for path in self._temp_paths:

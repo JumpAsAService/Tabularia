@@ -13,7 +13,8 @@ export interface DatasourceInfo {
   bucket: string
   key: string
   rows: number | null
-  columns: { name: string; dtype: string }[]
+  columns: { name: string; dtype: string; description?: string }[]
+  column_descriptions: Record<string, string> // {colonna: descrizione}, curate a mano
   kind: string
   flow_id: number | null
   connection_id: number | null
@@ -66,7 +67,7 @@ export function useDatasources() {
 
     update: (
       id: number,
-      body: Partial<{ name: string; description: string; project_id: number }>,
+      body: Partial<{ name: string; description: string; project_id: number; column_descriptions: Record<string, string> }>,
     ) => apiFetch<DatasourceInfo>(`/datasources/${id}`, { method: 'PATCH', body }),
 
     remove: (id: number) => apiFetch<void>(`/datasources/${id}`, { method: 'DELETE' }),
