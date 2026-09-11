@@ -271,6 +271,7 @@ export default {
   "flows": {
     "avgDurationLabel": "Average time",
     "comingSoonTag": "coming soon",
+    "notConfiguredTag": "not configured",
     "confirmDelete": "Delete flow \"{name}\"?",
     "confirmPromote": "Promote version v{version} to current? It becomes the flow's definition.",
     "createdByLabel": "Created by",
@@ -524,6 +525,7 @@ export default {
   },
   "projectBrowser": {
     "comingSoonTag": "coming soon",
+    "notConfiguredTag": "not configured",
     "confirmDeleteConnection": "Delete connection \"{name}\"?",
     "confirmDeleteDatasource": "Delete datasource \"{name}\"? The parquet file will be removed from storage.",
     "confirmDeleteFlow": "Delete flow \"{name}\"?",

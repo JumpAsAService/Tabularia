@@ -271,6 +271,7 @@ export default {
   "flows": {
     "avgDurationLabel": "Tempo medio",
     "comingSoonTag": "in arrivo",
+    "notConfiguredTag": "non configurato",
     "confirmDelete": "Eliminare il flusso \"{name}\"?",
     "confirmPromote": "Promuovere la versione v{version} a corrente? Diventa la definizione del flusso.",
     "createdByLabel": "Creato da",
@@ -524,6 +525,7 @@ export default {
   },
   "projectBrowser": {
     "comingSoonTag": "in arrivo",
+    "notConfiguredTag": "non configurato",
     "confirmDeleteConnection": "Eliminare la connessione \"{name}\"?",
     "confirmDeleteDatasource": "Eliminare la datasource \"{name}\"? Il parquet verrà rimosso dallo storage.",
     "confirmDeleteFlow": "Eliminare il flusso \"{name}\"?",

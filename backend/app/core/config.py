@@ -157,6 +157,68 @@ class SecuritySettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ClickHouse esterno (engine opzionale: un server ClickHouse remoto/cloud)
+# ─────────────────────────────────────────────────────────────────────────────
+class ClickHouseExternalSettings(BaseModel):
+    """Engine `clickhouse`: le trasformazioni girano su un server ClickHouse
+    esterno (es. Scaleway/ClickHouse Cloud/self-hosted) invece che nel worker.
+    Stesso dialetto e stesse operazioni di chDB; cambia solo DOVE gira e come i
+    dati arrivano al server (vedi `transport`). Disattivato finché `host` è vuoto.
+
+    env: CLICKHOUSE_EXTERNAL__HOST, __PORT, __USERNAME, __PASSWORD, __DATABASE,
+    __SECURE, __TRANSPORT, __S3_ENDPOINT, __S3_NAMED_COLLECTION, …"""
+
+    host: str = ""  # vuoto = engine non disponibile
+    # porta HTTP(S) di ClickHouse (clickhouse-connect): 8123 in chiaro, 8443 TLS
+    port: int = 8123
+    username: str = "default"
+    password: SecretStr = SecretStr("")
+    # database di lavoro: DEVE esistere; in modalità `push` ospita le tabelle di
+    # staging temporanee (l'utente ha bisogno di CREATE/INSERT/DROP su questo db)
+    database: str = "default"
+    secure: bool = False  # TLS (i cloud managed lo richiedono: porta 8443)
+    connect_timeout: int = 10
+    # Come il server raggiunge i dati:
+    # - "s3":   ClickHouse legge/scrive i parquet DIRETTAMENTE sull'object storage
+    #           con la table function s3() → nessun dato passa dal worker (scelta
+    #           di produzione: es. ClickHouse + Object Storage dello stesso cloud).
+    #           Richiede che lo storage sia raggiungibile dal server.
+    # - "push": il worker carica la sorgente in una tabella di staging e riscarica
+    #           il risultato in streaming → funziona con qualsiasi ClickHouse (anche
+    #           se non vede lo storage), ma i dati transitano dal worker.
+    transport: str = "s3"
+    # Endpoint dello storage COME LO VEDE ClickHouse (path-style: <endpoint>/<bucket>/<chiave>).
+    # Vuoto = STORAGE__ENDPOINT (giusto solo se il server è sulla stessa rete,
+    # es. http://minio:9000 in Docker); in cloud va l'URL pubblico, es.
+    # https://s3.fr-par.scw.cloud. Solo per transport=s3.
+    s3_endpoint: str = ""
+    # Named collection definita SUL SERVER con le credenziali dello storage: se
+    # impostata, le chiavi S3 non viaggiano nelle query (né finiscono nel query_log).
+    # Es. `CREATE NAMED COLLECTION tabularia_s3 AS access_key_id='…', secret_access_key='…'`.
+    s3_named_collection: str = ""
+    # tetto di esecuzione per singola query (secondi, 0 = nessuno); le preview
+    # interattive lo hanno comunque dal timeout lato API
+    max_execution_time: int = 0
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def _ensure_secret(cls, v: object) -> SecretStr:
+        return v if isinstance(v, SecretStr) else SecretStr("" if v is None else str(v))
+
+    @field_validator("transport")
+    @classmethod
+    def _check_transport(cls, v: str) -> str:
+        v = (v or "s3").strip().lower()
+        if v not in ("s3", "push"):
+            raise ValueError("clickhouse_external.transport deve essere 's3' o 'push'")
+        return v
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.host.strip())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # App Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
@@ -204,6 +266,7 @@ class Settings(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+    clickhouse_external: ClickHouseExternalSettings = Field(default_factory=ClickHouseExternalSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Customise sources to include TOML files

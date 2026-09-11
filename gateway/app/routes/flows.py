@@ -39,7 +39,9 @@ router = APIRouter(tags=["flows"])
 
 # engine SELEZIONABILI alla creazione (sincronizzato col catalogo dell'engine:
 # solo quelli `available=True`).
-_AVAILABLE_ENGINES = {"polars", "duckdb", "chdb"}
+# `clickhouse` (server esterno) è opzionale lato engine: se non configurato, il
+# run fallisce con un errore chiaro dell'engine.
+_AVAILABLE_ENGINES = {"polars", "duckdb", "chdb", "clickhouse"}
 
 
 def _validate_engine(engine: str | None) -> str:

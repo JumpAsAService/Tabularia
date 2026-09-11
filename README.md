@@ -85,17 +85,18 @@ Postgres and enforces auth + RBAC on every call before proxying to the internal
 
 Flows are stored as a **declarative IR** — a JSON list of typed operations — fully
 decoupled from execution. Adding or swapping an engine touches neither the routes, the
-workers, nor saved flows. Three engines are registered:
+workers, nor saved flows. Four engines are registered:
 
 | Engine | id | Notes |
 |---|---|---|
 | **Polars** | `polars` | In-process, lazy, streaming. **Default**; full operation coverage. |
 | **DuckDB** | `duckdb` | Out-of-core SQL (spills to disk) for very large joins/aggregations. Base ops; advanced transforms fall back to Polars. |
 | **chDB (ClickHouse)** | `chdb` | Out-of-core SQL with the ClickHouse dialect. Structural ops; `sql`/`foreach` via Polars/DuckDB. |
+| **ClickHouse (external)** | `clickhouse` | *Optional.* Same dialect and ops as chDB, executed on a **remote ClickHouse server** (cloud managed, e.g. Scaleway, or self-hosted). Enabled by `CLICKHOUSE_EXTERNAL__HOST`. Transport `s3` (the server reads/writes parquet directly on the object storage, nothing through the worker) or `push` (staging table + streamed result, works with any server). |
 
 Each engine is a registry of per-operation implementations. DuckDB and chDB are
 guarded imports — absent packages simply mark the engine unavailable without breaking
-Polars. chDB is **fork-unsafe**, so it is imported *lazily inside the Celery child*
+Polars; the external ClickHouse engine is listed but unavailable until configured. chDB is **fork-unsafe**, so it is imported *lazily inside the Celery child*
 (never in the prefork parent) to avoid inherited native-thread deadlocks. Users pick a
 **preferred engine** in settings (default for the Viewer and new flows); each flow
 persists the engine it was built with, so opening a non-preferred flow is regression-safe.

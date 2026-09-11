@@ -198,7 +198,7 @@ async function saveSchedule(cron: string) {
               :disabled="!e.available"
               @click="createWith(e.id)"
             >
-              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t('flows.comingSoonTag') }}</span></span>
+              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t(e.optional ? 'flows.notConfiguredTag' : 'flows.comingSoonTag') }}</span></span>
               <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
             </button>
           </div>
