@@ -28,6 +28,11 @@ class Datasource(SQLModel, table=True):
     key: str  # parquet nello storage (datasets/…)
     rows: Optional[int] = None
     columns: str = Field(default="[]", sa_column=Column(Text, nullable=False))  # JSON [{name, dtype}]
+    # descrizioni dei CAMPI (JSON {nome colonna: testo}), curate a mano: il
+    # significato di ogni colonna per chi la usa — e per la futura integrazione
+    # AI (contesto semantico sul dataset). Separate da `columns`, che viene
+    # rigenerato a ogni refresh/publish: così le descrizioni sopravvivono.
+    column_descriptions: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
     kind: str = "flow"  # flow | database (| upload, futuro)
     flow_id: Optional[int] = Field(default=None, foreign_key="flows.id")  # provenienza

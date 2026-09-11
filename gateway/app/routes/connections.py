@@ -42,10 +42,11 @@ SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
-    return ConnectionOut(
-        **conn.model_dump(exclude={"password_encrypted", "created_at"}),
-        has_password=bool(conn.password_encrypted),
-    )
+    # NON model_dump(): dopo un commit (es. record_audit) l'istanza è "expired" e
+    # model_dump torna {} → 500 con "11 validation errors". L'accesso per
+    # attributo ricarica i valori dal DB (sessione ancora aperta).
+    fields = {f: getattr(conn, f) for f in ConnectionOut.model_fields if f != "has_password"}
+    return ConnectionOut(**fields, has_password=bool(conn.password_encrypted))
 
 
 def _get_connection(session: Session, conn_id: int) -> Connection:

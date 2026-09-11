@@ -299,7 +299,10 @@ class DatasourceOut(BaseModel):
     bucket: str
     key: str
     rows: Optional[int]
+    # [{name, dtype, description?}] — `description` presente solo se curata
     columns: list[dict] = Field(default_factory=list)
+    # {nome colonna: descrizione} (anche per colonne non più nello schema)
+    column_descriptions: dict[str, str] = Field(default_factory=dict)
     kind: str
     flow_id: Optional[int]
     # per kind="database"
@@ -317,6 +320,8 @@ class DatasourceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+    # valorizzato = SOSTITUISCE la mappa {colonna: descrizione}; voci vuote scartate
+    column_descriptions: Optional[dict[str, str]] = None
 
 
 class ScheduleUpdate(BaseModel):
