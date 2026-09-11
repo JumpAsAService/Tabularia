@@ -30,9 +30,10 @@ from chdb import session as chdb_session
 
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
-from app.engine.chdb_ops import get_chdb_operation
+from app.engine.chdb_ops import get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
+from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,10 @@ class ChdbContext:
     def columns_of(self, sql: str) -> list[str]:
         """Nomi colonna del frammento SQL (via DESCRIBE)."""
         return [row[0] for row in self._rows_json(f"DESCRIBE ({sql})")]
+
+    def schema_of(self, sql: str) -> list[tuple[str, str]]:
+        """(nome, tipo ClickHouse) delle colonne del frammento SQL."""
+        return [(row[0], row[1]) for row in self._rows_json(f"DESCRIBE ({sql})")]
 
     def scalar(self, sql: str) -> int:
         rows = self._rows_json(sql)
@@ -198,11 +203,13 @@ class ChdbEngine(Engine):
         if os.path.exists(path):
             os.remove(path)  # INTO OUTFILE rifiuta un file esistente
         try:
-            ctx.session.query(f"SELECT * FROM ({sql}) INTO OUTFILE '{path}' FORMAT Parquet")
+            ctx.session.query(f"SELECT * FROM ({temporal_safe_sql(ctx, sql)}) INTO OUTFILE '{path}' FORMAT Parquet")
         except EngineError:
             raise
         except Exception as e:
             raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+        # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
+        rewrite_parquet_naive_utc(path)
         return path
 
     @staticmethod
@@ -233,7 +240,7 @@ class ChdbEngine(Engine):
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             try:
-                raw = sess.query(f"SELECT * FROM ({sql}) LIMIT {limit + 1}", "ArrowStream").bytes()
+                raw = sess.query(f"SELECT * FROM ({temporal_safe_sql(ctx, sql)}) LIMIT {limit + 1}", "ArrowStream").bytes()
             except Exception as e:
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
             if raw:
@@ -241,6 +248,7 @@ class ChdbEngine(Engine):
                 df = pl.from_arrow(tbl)
                 if isinstance(df, pl.Series):
                     df = df.to_frame()
+                df = naive_utc(df)  # standard cross-engine: datetime naive (istante UTC)
             else:
                 df = pl.DataFrame()
             truncated = df.height > limit

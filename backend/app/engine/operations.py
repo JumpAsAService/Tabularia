@@ -83,8 +83,34 @@ def op_rename(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 @register("cast")
 def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     # params: {"columns": {"col": "int", "altra": "float"}}
+    #
+    # STANDARD CROSS-ENGINE del cast (uguale in DuckDB/chDB/ClickHouse):
+    # - conversione impossibile → NULL, mai errore ("x" → NULL, "2024-02-30" → NULL);
+    # - testo → numero/data: spazi attorno tagliati (" 4 " → 4);
+    # - testo → intero: SOLO interi letterali ("2.7" → NULL, non 3 né 2);
+    # - numero (float/decimal) → intero: TRONCAMENTO verso zero (100.9 → 100,
+    #   -2.7 → -2), come INT() di Tableau; fuori range → NULL.
     columns: dict[str, str] = _require(params, "columns")
-    return lf.with_columns([pl.col(c).cast(_dtype(t)) for c, t in columns.items()])
+    schema = lf.collect_schema()
+    exprs: list[pl.Expr] = []
+    for c, t in columns.items():
+        target = _dtype(t)
+        src = schema.get(c)
+        e = pl.col(c)
+        if src == pl.String:
+            e = e.str.strip_chars()
+            if target.is_integer():
+                e = pl.when(e.str.contains(r"^[+-]?\d+$")).then(e).otherwise(None)
+            elif isinstance(target, pl.Datetime) or target == pl.Datetime:
+                # "2024-01-05 10:30:00" (spazio) vale quanto "2024-01-05T10:30:00"
+                e = e.str.replace(r"^(\d{4}-\d{2}-\d{2})\s+", "${1}T")
+            e = e.cast(target, strict=False)
+        elif target.is_integer() and src is not None and (src.is_float() or src.is_decimal()):
+            e = e.cast(pl.Float64).cast(target, strict=False)  # troncamento verso zero
+        else:
+            e = e.cast(target, strict=False)
+        exprs.append(e.alias(c))
+    return lf.with_columns(exprs)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -173,12 +199,41 @@ def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 def op_sort(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     by = _require(params, "by")
     descending = params.get("descending", False)
-    return lf.sort(by, descending=descending)
+    # STANDARD CROSS-ENGINE: i NULL vanno SEMPRE in coda (asc e desc), così un
+    # "top N" (sort desc + limit) non è mai fatto di NULL. DuckDB/ClickHouse
+    # usano NULLS LAST esplicito.
+    return lf.sort(by, descending=descending, nulls_last=True)
 
 
 @register("limit")
 def op_limit(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     return lf.limit(_require(params, "n"))
+
+
+SAMPLE_BUCKETS = 10_000
+
+
+def sample_threshold(params: dict[str, Any]) -> tuple[int, int]:
+    """(soglia su SAMPLE_BUCKETS, seme) da `fraction` (0..1] e `seed`."""
+    try:
+        fraction = float(_require(params, "fraction"))
+    except (TypeError, ValueError):
+        raise EngineError("sample: 'fraction' deve essere un numero tra 0 e 1")
+    if not 0 < fraction <= 1:
+        raise EngineError("sample: 'fraction' deve essere un numero tra 0 e 1")
+    seed = int(params.get("seed") or 42)
+    return max(1, int(round(fraction * SAMPLE_BUCKETS))), seed
+
+
+@register("sample")
+def op_sample(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
+    """Campione CASUALE ma DETERMINISTICO di una frazione delle righe: la scelta
+    dipende dall'hash del contenuto della riga (+ seme), non da un generatore →
+    stesse righe a ogni preview, streaming-friendly (niente row index né shuffle).
+    Usato dal campionamento di SVILUPPO dei nodi sorgente; in produzione non viene
+    mai iniettato (vedi gateway flow_resolver)."""
+    threshold, seed = sample_threshold(params)
+    return lf.filter(pl.struct(pl.all()).hash(seed) % SAMPLE_BUCKETS < threshold)
 
 
 @register("unique")
@@ -203,8 +258,12 @@ def op_drop_nulls(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContex
 # ─────────────────────────────────────────────────────────────────────────────
 # Aggregazione
 # ─────────────────────────────────────────────────────────────────────────────
+# STANDARD CROSS-ENGINE degli aggregati = semantica SQL (è ciò che gira in
+# produzione su DuckDB/ClickHouse): i NULL sono ignorati; sum di un gruppo con
+# SOLI NULL → NULL (Polars darebbe 0); n_unique NON conta il NULL (Polars sì);
+# std/var campionarie (n-1). Vale anche per il pivot, che usa questa tabella.
 _AGG: dict[str, Callable[[str], pl.Expr]] = {
-    "sum": lambda c: pl.col(c).sum(),
+    "sum": lambda c: pl.when(pl.col(c).count() > 0).then(pl.col(c).sum()).otherwise(None),
     "mean": lambda c: pl.col(c).mean(),
     "avg": lambda c: pl.col(c).mean(),
     "min": lambda c: pl.col(c).min(),
@@ -215,7 +274,7 @@ _AGG: dict[str, Callable[[str], pl.Expr]] = {
     "var": lambda c: pl.col(c).var(),
     "first": lambda c: pl.col(c).first(),
     "last": lambda c: pl.col(c).last(),
-    "n_unique": lambda c: pl.col(c).n_unique(),
+    "n_unique": lambda c: pl.col(c).drop_nulls().n_unique(),
 }
 
 
@@ -243,6 +302,34 @@ def op_group_by(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext)
 MAX_PIVOT_COLUMNS = 500
 
 
+# ── Standard CROSS-ENGINE del pivot (Polars, DuckDB, chDB, ClickHouse) ────────
+# Con engine di sviluppo ≠ engine di produzione lo stesso flusso deve produrre le
+# STESSE colonne ovunque (i nodi a valle le referenziano per nome). Regole:
+# - nome colonna = valore come testo (`pivot_label`: null→"null", bool→true/false,
+#   date ISO); più colonne `on` → etichette unite da "_" e SOLO le combinazioni
+#   presenti nei dati (niente prodotto cartesiano);
+# - semantica SQL: gruppo (indice × on) assente → NULL; presente ma con valori
+#   tutti NULL → NULL (anche per sum); `count`/`n_unique` → 0 e tipo Int64.
+PIVOT_LABEL_SEP = "_"
+
+
+def pivot_label(v: Any) -> str:
+    """Etichetta di colonna di un valore pivot, identica in tutti gli engine."""
+    import datetime as _dt
+
+    if v is None:
+        return "null"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float):
+        return repr(v)
+    if isinstance(v, _dt.datetime):
+        return v.isoformat(sep=" ")
+    if isinstance(v, _dt.date):
+        return v.isoformat()
+    return str(v)
+
+
 @register("pivot")
 def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     # params: {"index": ["paese"], "on": "anno", "values": "vendite", "func": "sum"}
@@ -263,8 +350,14 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     # 1) il grosso del lavoro resta lazy/STREAMING: l'aggregazione riduce il
     #    dataset a (gruppi indice × combinazioni di `on`) righe — piccolo
     #    per costruzione, qualunque sia la dimensione dell'input
+    agg_expr = _AGG[func](values)
+    if func == "sum":
+        # semantica SQL (come DuckDB/ClickHouse): sum di soli NULL → NULL, non 0
+        agg_expr = pl.when(pl.col(values).count() > 0).then(agg_expr).otherwise(None)
+    elif func in ("count", "n_unique"):
+        agg_expr = agg_expr.cast(pl.Int64)
     aggregated = (
-        lf.group_by(index + on).agg(_AGG[func](values).alias(values)).collect(engine="streaming")
+        lf.group_by(index + on).agg(agg_expr.alias(values)).collect(engine="streaming")
     )
 
     n_cols = aggregated.select(on).unique().height  # combinazioni distinte = colonne nuove
@@ -276,8 +369,16 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
 
     # 2) il reshape vero è eager (pivot non esiste in lazy) ma lavora sul
     #    risultato già aggregato; "first" è un no-op: le coppie (indice, on)
-    #    sono uniche dopo la group_by
-    out = aggregated.pivot(on, index=index, values=values, aggregate_function="first", sort_columns=True)
+    #    sono uniche dopo la group_by. Le colonne nuove prendono l'etichetta
+    #    standard cross-engine (vedi `pivot_label`) calcolata come colonna chiave.
+    key = "__pivot_on__"
+    label = pl.concat_str(
+        [pl.col(c).cast(pl.Utf8).fill_null("null") for c in on], separator=PIVOT_LABEL_SEP
+    ).alias(key)
+    aggregated = aggregated.with_columns(label).drop(on)
+    out = aggregated.pivot(key, index=index, values=values, aggregate_function="first", sort_columns=True)
+    if func in ("count", "n_unique"):  # gruppo assente = 0 righe, non "sconosciuto"
+        out = out.with_columns(pl.exclude(index).fill_null(0))
     return out.lazy()
 
 
@@ -353,11 +454,27 @@ def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
     if how == "cross":
         return _cross_join(lf, right_lf, ctx)
 
+    # STANDARD CROSS-ENGINE delle colonne del join (come SQL USING / ON):
+    # - `on` (stessi nomi): la chiave è UNA sola colonna, valorizzata anche
+    #   nelle righe solo-destra dei full/right join (coalescente);
+    # - `left_on`/`right_on` (nomi diversi): restano ENTRAMBE le colonne chiave;
+    # - colonna omonima non-chiave a destra → suffisso `_right`.
+    if how in ("semi", "anti"):
+        if "on" in params:
+            return lf.join(right_lf, on=params["on"], how=how)
+        return lf.join(right_lf, left_on=_require(params, "left_on"), right_on=_require(params, "right_on"), how=how)
+    left_cols = lf.collect_schema().names()
     if "on" in params:
-        return lf.join(right_lf, on=params["on"], how=how)
-    left_on = _require(params, "left_on")
-    right_on = _require(params, "right_on")
-    return lf.join(right_lf, left_on=left_on, right_on=right_on, how=how)
+        out = lf.join(right_lf, on=params["on"], how=how, coalesce=True)
+    else:
+        left_on = _require(params, "left_on")
+        right_on = _require(params, "right_on")
+        out = lf.join(right_lf, left_on=left_on, right_on=right_on, how=how, coalesce=False)
+    # ordine colonne = sinistra (nel suo ordine) + nuove di destra, su ogni tipo
+    # di join (il right join di Polars sposterebbe la chiave dopo le colonne di sinistra)
+    out_cols = out.collect_schema().names()
+    left_set = set(left_cols)
+    return out.select([c for c in left_cols if c in out_cols] + [c for c in out_cols if c not in left_set])
 
 
 # ─────────────────────────────────────────────────────────────────────────────

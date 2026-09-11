@@ -26,7 +26,7 @@ from botocore.exceptions import ClientError
 
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
-from app.engine.duckdb_ops import get_duck_operation
+from app.engine.duckdb_ops import _qi, get_duck_operation
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
 
@@ -70,7 +70,14 @@ class DuckContext:
             if code in _NOT_FOUND_CODES:
                 raise SourceNotFoundError(source.bucket, source.key) from e
             raise
-        return self.con.read_parquet(path)
+        rel = self.con.read_parquet(path)
+        # parquet scritti con fuso (es. run di ClickHouse esterno in modalità s3)
+        # → TIMESTAMP naive UTC, lo standard di tutti gli engine (sessione in UTC)
+        tz_cols = {c for c, t in zip(rel.columns, rel.types) if "WITH TIME ZONE" in str(t).upper()}
+        if tz_cols:
+            proj = ", ".join(f"CAST({_qi(c)} AS TIMESTAMP) AS {_qi(c)}" if c in tz_cols else _qi(c) for c in rel.columns)
+            rel = rel.project(proj)
+        return rel
 
     def apply(self, rel, ops, index_offset: int = 0):
         """Applica una catena di operazioni (Operation o dict) a una relazione.
@@ -116,7 +123,12 @@ class DuckDBEngine(Engine):
         self.cache = cache or StepCache(storage)
 
     def _connection(self) -> duckdb.DuckDBPyConnection:
-        return duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
+        con = duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
+        try:
+            con.execute("SET TimeZone = 'UTC'")  # i TIMESTAMPTZ letti diventano naive UTC
+        except Exception:  # senza estensione ICU DuckDB è comunque in UTC
+            pass
+        return con
 
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"

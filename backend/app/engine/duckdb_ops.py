@@ -29,6 +29,9 @@ from app.engine.operations import (
     MAX_PIVOT_COLUMNS,
     _reject_dynamic_source_keys,
     _substitute,
+    PIVOT_LABEL_SEP,
+    SAMPLE_BUCKETS,
+    sample_threshold,
 )
 
 DuckOpFn = Callable[..., "duckdb.DuckDBPyRelation"]
@@ -115,15 +118,32 @@ def op_rename(rel, params, a, ctx):
     return rel.query(a, f"SELECT * RENAME ({pairs}) FROM {a}")
 
 
+def _cast_expr(q: str, src: str, duck_t: str) -> str:
+    """Stesso STANDARD del cast di Polars (vedi operations.op_cast): fallito →
+    NULL; testo con spazi tagliati; testo → intero solo se intero letterale;
+    numero → intero per troncamento."""
+    src = src.upper()
+    is_text = src.startswith(("VARCHAR", "STRING", "TEXT", "CHAR"))
+    is_num = src in _DK_FLOATS or src.startswith("DECIMAL")
+    if duck_t == "BIGINT" and is_text:
+        return f"CASE WHEN regexp_matches(trim({q}), '^[+-]?[0-9]+$') THEN TRY_CAST(trim({q}) AS BIGINT) END"
+    if duck_t == "BIGINT" and is_num:
+        return f"TRY_CAST(trunc({q}) AS BIGINT)"
+    if is_text:
+        return f"TRY_CAST(trim({q}) AS {duck_t})"
+    return f"TRY_CAST({q} AS {duck_t})"
+
+
 @_register("cast")
 def op_cast(rel, params, a, ctx):
     cols = _require(params, "columns")
+    types = dict(zip(rel.columns, (str(t) for t in rel.types)))
     repls = []
     for col, dt in cols.items():
         duck_t = _DUCK_DTYPES.get(str(dt))
         if not duck_t:
             raise EngineError(f"cast: tipo non supportato '{dt}'")
-        repls.append(f"TRY_CAST({_qi(col)} AS {duck_t}) AS {_qi(col)}")
+        repls.append(f"{_cast_expr(_qi(col), types.get(col, ''), duck_t)} AS {_qi(col)}")
     return rel.query(a, f"SELECT * REPLACE ({', '.join(repls)}) FROM {a}")
 
 
@@ -164,13 +184,22 @@ def op_filter(rel, params, a, ctx):
 def op_sort(rel, params, a, ctx):
     cols = _as_list(_require(params, "by"))
     direction = "DESC" if params.get("descending") else "ASC"
-    order = ", ".join(f"{_qi(c)} {direction}" for c in cols)
+    # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
+    order = ", ".join(f"{_qi(c)} {direction} NULLS LAST" for c in cols)
     return rel.query(a, f"SELECT * FROM {a} ORDER BY {order}")
 
 
 @_register("limit")
 def op_limit(rel, params, a, ctx):
     return rel.query(a, f"SELECT * FROM {a} LIMIT {int(_require(params, 'n'))}")
+
+
+@_register("sample")
+def op_sample(rel, params, a, ctx):
+    # campione casuale riproducibile: bernoulli con seme (una passata, streaming)
+    threshold, seed = sample_threshold(params)
+    pct = threshold / SAMPLE_BUCKETS * 100
+    return rel.query(a, f"SELECT * FROM {a} USING SAMPLE {pct:.4f} PERCENT (bernoulli, {seed})")
 
 
 @_register("unique")
@@ -217,7 +246,21 @@ def op_group_by(rel, params, a, ctx):
         alias = agg.get("alias") or f"{col}_{func}"
         expr = f"count(DISTINCT {_qi(col)})" if func == "n_unique" else f"{_AGG[func]}({_qi(col)})"
         parts.append(f"{expr} AS {_qi(alias)}")
-    return rel.query(a, f"SELECT {', '.join(parts)} FROM {a} GROUP BY {by_sql}")
+    return _recast_hugeint(ctx, rel.query(a, f"SELECT {', '.join(parts)} FROM {a} GROUP BY {by_sql}"))
+
+
+def _recast_hugeint(ctx, rel):
+    """sum di interi → HUGEINT (int128, che Arrow/Polars leggono come DECIMAL e
+    la preview come float: 2^53+1 perderebbe precisione): riportato a BIGINT
+    come negli altri engine."""
+    if not any(str(t).upper() == "HUGEINT" for t in rel.types):
+        return rel
+    name = ctx.register(rel)
+    casts = ", ".join(
+        f"CAST({_qi(c)} AS BIGINT) AS {_qi(c)}" if str(t).upper() == "HUGEINT" else _qi(c)
+        for c, t in zip(rel.columns, rel.types)
+    )
+    return ctx.con.sql(f"SELECT {casts} FROM {name}")
 
 
 # ── compute (espressioni SQL scalari, SENZA sottoquery né lettura file) ────────
@@ -244,8 +287,11 @@ def op_compute(rel, params, a, ctx):
                 "FROM o funzioni di lettura file — solo espressioni scalari)."
             )
         step = f"{a}_{i}"
-        exclude = f" EXCLUDE ({_qi(name)})" if name in rel.columns else ""
-        rel = rel.query(step, f"SELECT *{exclude}, ({expr}) AS {_qi(name)} FROM {step}")
+        if name in rel.columns:
+            # colonna esistente: sovrascritta NELLA SUA POSIZIONE (come Polars)
+            rel = rel.query(step, f"SELECT * REPLACE (({expr}) AS {_qi(name)}) FROM {step}")
+        else:
+            rel = rel.query(step, f"SELECT *, ({expr}) AS {_qi(name)} FROM {step}")
     return rel
 
 
@@ -263,11 +309,16 @@ def _join_condition(ln: str, rn: str, params: dict) -> tuple[str, str]:
     return f"ON {cond}", "on"
 
 
-def _join_select(ln: str, lcols, rn: str, rcols, skip_right: set) -> str:
+def _join_select(ln: str, lcols, rn: str, rcols, skip_right: set, coalesce_keys: set = frozenset()) -> str:
     """Colonne del risultato: tutte da sinistra + quelle di destra (chiavi USING
-    escluse), con suffisso _right sulle omonime — come Polars."""
+    escluse), con suffisso _right sulle omonime — come Polars. Nei full/right
+    join le chiavi USING sono COALESCE(sinistra, destra): valorizzate anche
+    nelle righe che esistono solo a destra."""
     lset = set(lcols)
-    parts = [f"{ln}.*"]
+    parts = [
+        f"COALESCE({ln}.{_qi(c)}, {rn}.{_qi(c)}) AS {_qi(c)}" if c in coalesce_keys else f"{ln}.{_qi(c)}"
+        for c in lcols
+    ]
     for c in rcols:
         if c in skip_right:
             continue
@@ -304,7 +355,7 @@ def op_join(rel, params, a, ctx):
         raise EngineError(f"join: tipo non supportato '{how}'")
     # con USING le chiavi (stesse su entrambi) restano una sola volta
     skip_right = set(_as_list(params["on"])) if kind == "using" else set()
-    sel = _join_select(ln, lcols, rn, rcols, skip_right)
+    sel = _join_select(ln, lcols, rn, rcols, skip_right, skip_right if how in ("full", "right") else set())
     return ctx.con.sql(f"SELECT {sel} FROM {ln} {_JOIN_KW[how]} {rn} {clause}")
 
 
@@ -327,7 +378,9 @@ def op_pivot(rel, params, a, ctx):
     if func not in _AGG:
         raise EngineError(f"pivot: funzione non supportata '{func}'")
     name = ctx.register(rel)
-    on_sql = ", ".join(_qi(c) for c in on)
+    # etichetta standard cross-engine (vedi operations.pivot_label): valore come
+    # testo, NULL → 'null', più colonne unite da "_" (solo combinazioni presenti)
+    on_sql = f" || '{PIVOT_LABEL_SEP}' || ".join(f"coalesce(CAST({_qi(c)} AS VARCHAR), 'null')" for c in on)
     n_cols = ctx.con.sql(
         f"SELECT count(*) FROM (SELECT DISTINCT {on_sql} FROM {name})"
     ).fetchone()[0]
@@ -337,9 +390,27 @@ def op_pivot(rel, params, a, ctx):
             f"nuove, massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
         )
     idx_sql = ", ".join(_qi(c) for c in index)
-    return ctx.con.sql(
+    piv = ctx.con.sql(
         f"PIVOT {name} ON {on_sql} USING {_AGG[func]}({_qi(values)}) GROUP BY {idx_sql}"
     )
+    # sum di interi → HUGEINT (decimale per Polars): riportato a BIGINT come gli altri engine
+    return _recast_hugeint(ctx, piv)
+
+
+_DK_INTS = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT"}
+_DK_FLOATS = {"FLOAT", "DOUBLE", "REAL"}
+
+
+def unpivot_value_type(types: list[str]) -> str:
+    """Supertipo del valore sciolto (stessa regola di Polars/ClickHouse)."""
+    bases = [t.upper() for t in types]
+    if all(b in _DK_INTS for b in bases):
+        return "BIGINT"
+    if all(b in _DK_INTS or b in _DK_FLOATS or b.startswith("DECIMAL") for b in bases):
+        return "DOUBLE"
+    if len(set(bases)) == 1:
+        return bases[0]
+    return "VARCHAR"
 
 
 @_register("unpivot")
@@ -351,10 +422,22 @@ def op_unpivot(rel, params, a, ctx):
     melt = on if on else [c for c in rel.columns if c not in set(index)]
     if not melt:
         raise EngineError("unpivot: nessuna colonna da sciogliere")
+    types = dict(zip(rel.columns, (str(t) for t in rel.types)))
+    missing = [c for c in melt if c not in types]
+    if missing:
+        raise EngineError(f"unpivot: colonne inesistenti: {', '.join(missing)}")
+    # come Polars: restano SOLO le colonne indice; le sciolte vanno al supertipo
+    # comune (UNPIVOT vuole tipi unificabili)
+    vtype = unpivot_value_type([types[c] for c in melt])
+    keep = [c for c in rel.columns if c in set(index)]
+    sel = ", ".join([_qi(c) for c in keep] + [f"CAST({_qi(c)} AS {vtype}) AS {_qi(c)}" for c in melt])
     on_sql = ", ".join(_qi(c) for c in melt)
     name = ctx.register(rel)
+    # forma SQL-standard: l'unica che accetta INCLUDE NULLS (la sintassi
+    # `UNPIVOT … ON … INTO` scarta le righe con valore NULL, Polars/ClickHouse no)
     return ctx.con.sql(
-        f"UNPIVOT (SELECT * FROM {name}) ON {on_sql} INTO NAME {_qi(var)} VALUE {_qi(val)}"
+        f"SELECT * FROM (SELECT {sel} FROM {name}) "
+        f"UNPIVOT INCLUDE NULLS ({_qi(val)} FOR {_qi(var)} IN ({on_sql}))"
     )
 
 

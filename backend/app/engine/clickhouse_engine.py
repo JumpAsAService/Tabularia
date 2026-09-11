@@ -41,9 +41,10 @@ from botocore.exceptions import ClientError
 from app.core.config import ClickHouseExternalSettings, get_settings
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
-from app.engine.chdb_ops import _lit, _qi, get_chdb_operation
+from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
+from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
 
 logger = logging.getLogger(__name__)
 
@@ -158,18 +159,23 @@ class ClickHouseContext:
         except Exception as e:
             raise EngineError(_clean_error(e)) from e
 
+    def parquet_safe(self, sql: str) -> str:
+        """Date/DateTime → Date32/DateTime64 prima di ogni uscita in Parquet
+        (altrimenti escono come interi): vedi `chdb_ops.temporal_safe_sql`."""
+        return temporal_safe_sql(self, sql)
+
     def parquet_bytes(self, sql: str) -> bytes:
         """Esegue `sql` e ritorna il risultato come parquet (in RAM: solo per
         risultati piccoli, es. preview)."""
         try:
-            return self.client.raw_query(sql, fmt="Parquet", settings={**self.settings, **_PARQUET_OUT})
+            return self.client.raw_query(self.parquet_safe(sql), fmt="Parquet", settings={**self.settings, **_PARQUET_OUT})
         except Exception as e:
             raise EngineError(_clean_error(e)) from e
 
     def parquet_to_file(self, sql: str, path: str) -> None:
         """Esegue `sql` e scrive il parquet su file IN STREAMING (HTTP chunked)."""
         try:
-            with self.client.raw_stream(sql, fmt="Parquet", settings={**self.settings, **_PARQUET_OUT}) as stream, \
+            with self.client.raw_stream(self.parquet_safe(sql), fmt="Parquet", settings={**self.settings, **_PARQUET_OUT}) as stream, \
                     open(path, "wb") as fh:
                 for chunk in stream:
                     fh.write(chunk)
@@ -178,6 +184,9 @@ class ClickHouseContext:
 
     def columns_of(self, sql: str) -> list[str]:
         return [row[0] for row in self._rows(f"DESCRIBE ({sql})")]
+
+    def schema_of(self, sql: str) -> list[tuple[str, str]]:
+        return [(row[0], row[1]) for row in self._rows(f"DESCRIBE ({sql})")]
 
     def scalar(self, sql: str) -> int:
         rows = self._rows(sql)
@@ -336,12 +345,16 @@ class ClickHouseEngine(Engine):
         (ritorna None); in push scarica su file locale, lo carica e ritorna il path."""
         if ctx.cfg.transport == "s3":
             ctx.command(
-                f"INSERT INTO FUNCTION {ctx.s3_fn(dest)} SELECT * FROM ({sql})",
+                f"INSERT INTO FUNCTION {ctx.s3_fn(dest)} SELECT * FROM ({ctx.parquet_safe(sql)})",
                 settings={**_PARQUET_OUT, "s3_truncate_on_insert": 1, "s3_create_new_file_on_insert": 0},
             )
             return None
         path = ctx.tempfile()
         ctx.parquet_to_file(f"SELECT * FROM ({sql})", path)
+        # standard cross-engine: datetime NAIVE (istante UTC). In modalità s3 il
+        # file lo scrive il server (timestamp con fuso UTC): lo normalizzano i
+        # lettori di ogni engine allo scan (vedi app.engine.temporal).
+        rewrite_parquet_naive_utc(path)
         self.storage.upload_file(path, dest.bucket, dest.key)
         return path
 
@@ -382,7 +395,8 @@ class ClickHouseEngine(Engine):
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
-            df = pl.read_parquet(io.BytesIO(raw)) if raw else pl.DataFrame()
+            # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
+            df = naive_utc(pl.read_parquet(io.BytesIO(raw))) if raw else pl.DataFrame()
             truncated = df.height > limit
             if truncated:
                 df = df.head(limit)
