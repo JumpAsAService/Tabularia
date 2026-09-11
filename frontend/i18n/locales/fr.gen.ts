@@ -269,6 +269,13 @@ export default {
     "uploading": "Téléversement de {name}…"
   },
   "flows": {
+    "devEngineLabel": "Moteur (développement)",
+    "prodEngineLabel": "Moteur (production)",
+    "sameAsDevEngine": "identique au développement",
+    "prodEngineHint": "Moteur utilisé par les exécutions planifiées (et par « Exécuter en production »)",
+    "prodEngineSaved": "Moteur de production : {engine}",
+    "runProdTitle": "Exécuter maintenant avec le moteur de production",
+    "runProdStarted": "Exécution de production lancée (#{id})",
     "avgDurationLabel": "Temps moyen",
     "comingSoonTag": "bientôt disponible",
     "notConfiguredTag": "non configuré",
@@ -686,6 +693,8 @@ export default {
     "triggeredByScheduler": "Démarré par le planificateur"
   },
   "scheduleDialog": {
+    "engineLabel": "Moteur des exécutions planifiées",
+    "sameAsDevEngine": "identique au développement",
     "cancel": "Annuler",
     "cronLabel": "Expression cron (minute heure jour mois jour-semaine)",
     "cronPlaceholder": "ex. 0 3 * * *",
@@ -734,6 +743,7 @@ export default {
     "dismiss": "Fermer"
   },
   "toolbar": {
+    "engineTitleProd": "Moteur de développement : {engine} · production : {prod}",
     "engineTitle": "Moteur d'exécution du flux : {engine}",
     "flowNamePlaceholder": "Nom du flux…",
     "folderPlaceholder": "dossier…",

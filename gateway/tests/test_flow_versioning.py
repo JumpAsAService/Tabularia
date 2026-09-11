@@ -30,31 +30,31 @@ def _versions(session, flow_id):
 
 async def test_create_flow_snapshots_v1(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), user, session)
+    flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), None, user, session)
     vers = _versions(session, flow.id)
     assert len(vers) == 1 and vers[0].version == 1 and vers[0].note == "creazione"
 
 
 async def test_update_definition_creates_version_and_dedupes(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), user, session)
-    update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), user, session)  # cambia → v2
-    update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), user, session)  # uguale → niente
+    flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), None, user, session)
+    update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), None, user, session)  # cambia → v2
+    update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), None, user, session)  # uguale → niente
     assert [v.version for v in _versions(session, flow.id)] == [1, 2]
 
 
 async def test_update_name_only_makes_no_version(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), user, session)
-    update_flow(flow.id, FlowUpdate(name="rinominato"), user, session)
+    flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), None, user, session)
+    update_flow(flow.id, FlowUpdate(name="rinominato"), None, user, session)
     assert len(_versions(session, flow.id)) == 1
 
 
 async def test_promote_old_version_becomes_current(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition='{"v":1}'), user, session)
-    update_flow(flow.id, FlowUpdate(definition='{"v":2}'), user, session)  # v2 = corrente
-    promoted = promote_flow_version(flow.id, 1, user, session)  # torna alla v1
+    flow = create_flow(p.id, FlowCreate(name="f", definition='{"v":1}'), None, user, session)
+    update_flow(flow.id, FlowUpdate(definition='{"v":2}'), None, user, session)  # v2 = corrente
+    promoted = promote_flow_version(flow.id, 1, None, user, session)  # torna alla v1
     assert promoted.definition == '{"v":1}'
     vers = _versions(session, flow.id)
     assert [v.version for v in vers] == [1, 2, 3]
@@ -63,8 +63,8 @@ async def test_promote_old_version_becomes_current(session):
 
 async def test_list_versions_marks_current(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition='{"v":1}'), user, session)
-    update_flow(flow.id, FlowUpdate(definition='{"v":2}'), user, session)
+    flow = create_flow(p.id, FlowCreate(name="f", definition='{"v":1}'), None, user, session)
+    update_flow(flow.id, FlowUpdate(definition='{"v":2}'), None, user, session)
     out = list_flow_versions(flow.id, user, session)
     assert out[0].version == 2 and out[0].is_current is True
     assert out[1].version == 1 and out[1].is_current is False
@@ -72,7 +72,7 @@ async def test_list_versions_marks_current(session):
 
 async def test_flow_stats_counts_and_average(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition="{}"), user, session)
+    flow = create_flow(p.id, FlowCreate(name="f", definition="{}"), None, user, session)
     now = datetime(2026, 7, 15, 10, 0, 0, tzinfo=timezone.utc)
     for tid, st, secs in [("a", "SUCCESS", 10), ("b", "SUCCESS", 20), ("c", "FAILURE", 6)]:
         make_run(session, kind="flow", flow_id=flow.id, status=st, task_id=tid,
@@ -85,6 +85,6 @@ async def test_flow_stats_counts_and_average(session):
 
 async def test_flow_stats_empty(session):
     user, p = _admin_and_project(session)
-    flow = create_flow(p.id, FlowCreate(name="f", definition="{}"), user, session)
+    flow = create_flow(p.id, FlowCreate(name="f", definition="{}"), None, user, session)
     s = flow_stats(flow.id, user, session)
     assert s.run_count == 0 and s.avg_duration_seconds is None and s.last_run_at is None

@@ -269,6 +269,13 @@ export default {
     "uploading": "Uploading {name}…"
   },
   "flows": {
+    "devEngineLabel": "Engine (development)",
+    "prodEngineLabel": "Engine (production)",
+    "sameAsDevEngine": "same as development",
+    "prodEngineHint": "Engine used by scheduled runs (and by \"Run in production\")",
+    "prodEngineSaved": "Production engine: {engine}",
+    "runProdTitle": "Run now with the production engine",
+    "runProdStarted": "Production run started (#{id})",
     "avgDurationLabel": "Average time",
     "comingSoonTag": "coming soon",
     "notConfiguredTag": "not configured",
@@ -686,6 +693,8 @@ export default {
     "triggeredByScheduler": "Started by the scheduler"
   },
   "scheduleDialog": {
+    "engineLabel": "Engine for scheduled runs",
+    "sameAsDevEngine": "same as development",
     "cancel": "Cancel",
     "cronLabel": "Cron expression (minute hour day month weekday)",
     "cronPlaceholder": "e.g. 0 3 * * *",
@@ -734,6 +743,7 @@ export default {
     "dismiss": "Dismiss"
   },
   "toolbar": {
+    "engineTitleProd": "Development engine: {engine} · production: {prod}",
     "engineTitle": "Flow execution engine: {engine}",
     "flowNamePlaceholder": "Flow name…",
     "folderPlaceholder": "folder…",

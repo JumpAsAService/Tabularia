@@ -132,6 +132,9 @@ const flowName = ref(t('flowEditor.unnamedFlow'))
 // esplicita si usa il motore PREFERITO dell'utente. Passato a preview/run e salvato.
 const { preferredEngine } = usePreferredEngine()
 const flowEngine = ref<string>(route.query.engine ? String(route.query.engine) : preferredEngine.value)
+// motore di PRODUZIONE (run schedulati): solo informativo nell'editor (badge);
+// si imposta dalla pagina Flows o dal dialog di schedule
+const flowProductionEngine = ref<string | null>(null)
 
 // preview/transform iniettano SEMPRE l'engine del flusso corrente. (`dataApi`
 // alias: evita che i wrapper si auto-referenzino nei rimpiazzi delle chiamate.)
@@ -175,6 +178,7 @@ async function loadFlow(id: number) {
   flowName.value = f.name
   projectId.value = f.project_id
   flowEngine.value = f.engine || 'polars'
+  flowProductionEngine.value = f.production_engine ?? null
   const def = JSON.parse(f.definition || '{}')
   // normalizza: sorgenti salvate senza bucket (flussi vecchi/esterni) ricevono
   // quello di default, altrimenti preview/run partirebbero senza bucket (422)
@@ -1185,6 +1189,7 @@ async function pollTask(id: string) {
       :projects="projectsList"
       :project-id="projectId"
       :engine="flowEngine"
+      :production-engine="flowProductionEngine"
       @upload="onUpload"
       @add-op="addOperation"
       @add-source="addSource"

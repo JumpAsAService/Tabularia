@@ -118,7 +118,7 @@ async def _wait_run(session: Session, run: Run) -> Run:
     return run
 
 
-async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None) -> list[str]:
+async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None, engine_mode: str = "development") -> list[str]:
     """Esegue un flusso: gli 'action node' (refresh/output/runflow) nell'ordine
     definito dagli archi di sequenza (topological sort), coi non collegati
     nell'ordine di default refresh → output → runflow.
@@ -126,7 +126,11 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
     Un refresh fallito SOLLEVA (interrompe tutto: meglio niente che dati stantii);
     un output o un sotto-flusso in errore vengono raccolti e si prosegue. Torna la
     lista degli errori non fatali (vuota = tutto ok) per marcare il run di
-    orchestrazione."""
+    orchestrazione.
+
+    `engine_mode` ("development" | "production") decide il motore di ogni output
+    (vedi `_launch_flow_run`); i sotto-flussi (runflow) lo ereditano e ciascuno
+    risolve il PROPRIO motore di produzione."""
     seen = seen or set()
     if flow.id in seen or depth > MAX_FLOW_DEPTH:
         logger.warning("orchestrate: ciclo o profondità eccessiva su flusso %s (depth %d)", flow.id, depth)
@@ -151,7 +155,7 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
         elif t == "output":
             try:
                 req = resolve_output_request(definition, node, resolve_ds, default_bucket)
-                run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id)
+                run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id, engine_mode=engine_mode)
                 run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
                 if run.status != "SUCCESS":
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
@@ -169,7 +173,7 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 continue
             # i figli dei sotto-flussi riferiscono lo stesso run di orchestrazione
             # di testa (non c'è un tracciante separato per i sotto-flussi)
-            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type, parent_run_id))
+            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type, parent_run_id, engine_mode))
     return errors
 
 
@@ -212,14 +216,16 @@ def _finalize_orch_run(run_id: int, status: str, error: str | None = None) -> No
 
 
 async def orchestrate_bg(
-    flow_id: int, user_id: int, orch_run_id: int | None = None, trigger_type: str = "manual"
+    flow_id: int, user_id: int, orch_run_id: int | None = None, trigger_type: str = "manual",
+    engine_mode: str = "development",
 ) -> None:
     """Entry point come task di background (scheduler o run-now): sessione propria,
     guardia anti-sovrapposizione, esito registrato sul run di orchestrazione.
 
     `orch_run_id` è passato da run-now (creato nella sessione della richiesta per
     tornarlo subito al frontend); lo scheduler non lo passa e lo si crea qui.
-    `trigger_type`: "manual" da run-now, "schedule" dallo scheduler."""
+    `trigger_type`: "manual" da run-now, "schedule" dallo scheduler.
+    `engine_mode`: "production" dallo scheduler (e da run-now ?mode=production)."""
     if flow_id in _running:
         logger.info("orchestrate: flusso %s già in esecuzione, salto", flow_id)
         if orch_run_id is not None:
@@ -240,7 +246,7 @@ async def orchestrate_bg(
             try:
                 # i run figli (output/refresh) riferiscono il run di orchestrazione:
                 # così il calendario conta solo quest'ultimo, non i doppioni figli
-                errors = await orchestrate(session, user, flow, trigger_type=trigger_type, parent_run_id=orch_run_id)
+                errors = await orchestrate(session, user, flow, trigger_type=trigger_type, parent_run_id=orch_run_id, engine_mode=engine_mode)
             except (FlowResolveError, OrchestrationError) as e:
                 logger.warning("orchestrate: flusso %s interrotto: %s", flow_id, e)
                 _finalize_orch_run(orch_run_id, "FAILURE", str(e))

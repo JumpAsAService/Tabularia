@@ -269,6 +269,13 @@ export default {
     "uploading": "Subiendo {name}…"
   },
   "flows": {
+    "devEngineLabel": "Motor (desarrollo)",
+    "prodEngineLabel": "Motor (producción)",
+    "sameAsDevEngine": "igual que desarrollo",
+    "prodEngineHint": "Motor usado por las ejecuciones programadas (y por «Ejecutar en producción»)",
+    "prodEngineSaved": "Motor de producción: {engine}",
+    "runProdTitle": "Ejecutar ahora con el motor de producción",
+    "runProdStarted": "Ejecución de producción iniciada (#{id})",
     "avgDurationLabel": "Tiempo medio",
     "comingSoonTag": "próximamente",
     "notConfiguredTag": "no configurado",
@@ -686,6 +693,8 @@ export default {
     "triggeredByScheduler": "Iniciado por el programador"
   },
   "scheduleDialog": {
+    "engineLabel": "Motor para las ejecuciones programadas",
+    "sameAsDevEngine": "igual que desarrollo",
     "cancel": "Cancelar",
     "cronLabel": "Expresión cron (minuto hora día mes día-semana)",
     "cronPlaceholder": "ej. 0 3 * * *",
@@ -734,6 +743,7 @@ export default {
     "dismiss": "Cerrar"
   },
   "toolbar": {
+    "engineTitleProd": "Motor de desarrollo: {engine} · producción: {prod}",
     "engineTitle": "Motor de ejecución del flujo: {engine}",
     "flowNamePlaceholder": "Nombre del flujo…",
     "folderPlaceholder": "carpeta…",

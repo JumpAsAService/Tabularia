@@ -100,6 +100,10 @@ Polars; the external ClickHouse engine is listed but unavailable until configure
 (never in the prefork parent) to avoid inherited native-thread deadlocks. Users pick a
 **preferred engine** in settings (default for the Viewer and new flows); each flow
 persists the engine it was built with, so opening a non-preferred flow is regression-safe.
+Each flow also carries an optional **production engine**, decoupled from the development
+one: the editor (previews, manual runs) uses the development engine, while scheduled runs
+and "Run in production" use the production engine — e.g. design on Polars locally, run the
+scheduled DAG on an external ClickHouse. Every run records the engine it actually ran on.
 
 ## Operations
 

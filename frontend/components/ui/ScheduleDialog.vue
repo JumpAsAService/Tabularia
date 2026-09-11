@@ -15,11 +15,18 @@ const props = defineProps<{
   subtitle?: string // cosa fa lo schedule
   current: string | null // cron attuale (per prefill e per mostrare "Disattiva")
   busy?: boolean
+  // (solo flussi) motori selezionabili per i run schedulati + scelta attuale;
+  // se assenti il selettore non compare (datasources)
+  engines?: { id: string; label: string }[]
+  productionEngine?: string | null
 }>()
 const emit = defineEmits<{
-  (e: 'save', cron: string): void
+  // productionEngine: '' = come sviluppo; undefined = invariato (nessun selettore o disattivazione)
+  (e: 'save', cron: string, productionEngine?: string): void
   (e: 'cancel'): void
 }>()
+const prodEngine = ref('')
+const prodChoice = () => (props.engines?.length ? prodEngine.value : undefined)
 
 const api = useApi()
 const cronInput = ref('')
@@ -32,6 +39,7 @@ watch(
   async (o) => {
     if (!o) return
     cronInput.value = props.current ?? ''
+    prodEngine.value = props.productionEngine ?? ''
     if (!tzLoaded) {
       tzLoaded = true
       try { tz.value = (await api.appInfo()).timezone } catch { /* fallback UTC */ }
@@ -75,7 +83,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
           type="text"
           spellcheck="false"
           :placeholder="$t('scheduleDialog.cronPlaceholder')"
-          @keyup.enter="emit('save', cronInput)"
+          @keyup.enter="emit('save', cronInput, prodChoice())"
         />
         <p v-if="cronDescription.text" class="sd-desc" :class="{ bad: !cronDescription.ok }">
           {{ cronDescription.ok ? '↳ ' : '' }}{{ cronDescription.text }}
@@ -86,11 +94,19 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
           </button>
         </div>
 
+        <template v-if="engines?.length">
+          <label class="sd-engine-label">{{ $t('scheduleDialog.engineLabel') }}</label>
+          <select v-model="prodEngine">
+            <option value="">{{ $t('scheduleDialog.sameAsDevEngine') }}</option>
+            <option v-for="e in engines" :key="e.id" :value="e.id">{{ e.label }}</option>
+          </select>
+        </template>
+
         <div class="sd-actions">
           <button v-if="current" class="danger" :disabled="busy" @click="emit('save', '')">{{ $t('scheduleDialog.disable') }}</button>
           <span class="sd-spacer" />
           <button :disabled="busy" @click="emit('cancel')">{{ $t('scheduleDialog.cancel') }}</button>
-          <button class="primary" :disabled="busy || !cronInput.trim() || !cronDescription.ok" @click="emit('save', cronInput)">
+          <button class="primary" :disabled="busy || !cronInput.trim() || !cronDescription.ok" @click="emit('save', cronInput, prodChoice())">
             {{ $t('scheduleDialog.save') }}
           </button>
         </div>
@@ -117,6 +133,7 @@ input { font-family: ui-monospace, monospace; }
 .sd-desc { font-size: 12.5px; margin: 2px 0 0; color: var(--accent-2); font-weight: 500; }
 .sd-desc.bad { color: var(--danger); }
 .sd-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.sd-engine-label { margin-top: 8px; }
 .preset { font-size: 12px; padding: 4px 9px; }
 .sd-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .sd-spacer { flex: 1; }

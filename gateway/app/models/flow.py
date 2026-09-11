@@ -22,9 +22,14 @@ class Flow(SQLModel, table=True):
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
     definition: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
-    # motore di esecuzione scelto alla CREAZIONE (persistito): "polars" (default)
-    # o "duckdb" (in arrivo). Passato all'engine in preview/run.
+    # motore di SVILUPPO (persistito): quello dell'editor — preview, run manuali,
+    # run-now. Scelto alla creazione, cambiabile dopo.
     engine: str = Field(default="polars")
+    # motore di PRODUZIONE: usato dai run SCHEDULATI (e da run-now in modalità
+    # produzione). None = lo stesso dello sviluppo. Disaccoppia "cosa uso mentre
+    # progetto" (es. Polars, veloce in locale) da "cosa usa il DAG in produzione"
+    # (es. un ClickHouse esterno).
+    production_engine: Optional[str] = None
 
     # esecuzione SCHEDULATA (cron): lo scheduler del gateway ri-risolve la
     # definizione CORRENTE e lancia i nodi Output con l'autorità di

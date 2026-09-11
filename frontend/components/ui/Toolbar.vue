@@ -24,14 +24,24 @@ const props = defineProps<{
   flowName?: string
   projects?: { id: number; name: string }[]
   projectId?: number | null
-  // motore di esecuzione del flusso (polars | duckdb)
+  // motore di SVILUPPO del flusso (quello con cui l'editor lavora)
   engine?: string
+  // motore di PRODUZIONE (run schedulati); null/uguale = nessuna differenza da mostrare
+  productionEngine?: string | null
 }>()
 
+const ENGINE_LABELS: Record<string, string> = { polars: 'Polars', duckdb: 'DuckDB', chdb: 'chDB', clickhouse: 'ClickHouse' }
+const labelOf = (id?: string | null) => (id ? ENGINE_LABELS[id] ?? id : 'Polars')
 // etichetta leggibile del motore corrente
-const engineLabel = computed(() =>
-  props.engine === 'duckdb' ? 'DuckDB' : props.engine === 'polars' ? 'Polars' : (props.engine || 'Polars'),
+const engineLabel = computed(() => labelOf(props.engine))
+const badgeClass = computed(() => (props.engine && props.engine in ENGINE_LABELS ? props.engine : 'polars'))
+const hasProdDiff = computed(() => !!props.productionEngine && props.productionEngine !== (props.engine || 'polars'))
+const engineTitle = computed(() =>
+  hasProdDiff.value
+    ? t('toolbar.engineTitleProd', { engine: engineLabel.value, prod: labelOf(props.productionEngine) })
+    : t('toolbar.engineTitle', { engine: engineLabel.value }),
 )
+const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'upload', file: File): void
   (e: 'add-op'): void
@@ -67,10 +77,10 @@ const statusIcon = computed(() => {
     <!-- motore di esecuzione del flusso -->
     <span
       class="enginebadge"
-      :class="engine === 'duckdb' ? 'duckdb' : 'polars'"
-      :title="$t('toolbar.engineTitle', { engine: engineLabel })"
+      :class="badgeClass"
+      :title="engineTitle"
     >
-      <Cpu :size="12" /> {{ engineLabel }}
+      <Cpu :size="12" /> {{ engineLabel }}<span v-if="hasProdDiff" class="prod">→ {{ labelOf(productionEngine) }}</span>
     </span>
 
     <!-- nome del flusso + destinazione + salva -->
@@ -146,6 +156,9 @@ const statusIcon = computed(() => {
 }
 .enginebadge.polars { color: #6ee7b7; background: rgba(110, 231, 183, 0.12); border-color: rgba(110, 231, 183, 0.35); }
 .enginebadge.duckdb { color: #fbbf24; background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.35); }
+.enginebadge.chdb { color: #fb923c; background: rgba(251, 146, 60, 0.12); border-color: rgba(251, 146, 60, 0.35); }
+.enginebadge.clickhouse { color: #60a5fa; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); }
+.enginebadge .prod { margin-left: 5px; opacity: 0.8; font-weight: 500; }
 .flowname { width: 170px; }
 .projsel { width: 140px; }
 .sep { width: 1px; align-self: stretch; background: var(--border); }
