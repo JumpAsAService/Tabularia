@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   Upload,
   Plus,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-vue-next'
 
 const { logout } = useAuth()
+const { t } = useI18n()
 
 const props = defineProps<{
   status: string
@@ -41,7 +43,6 @@ const engineTitle = computed(() =>
     ? t('toolbar.engineTitleProd', { engine: engineLabel.value, prod: labelOf(props.productionEngine) })
     : t('toolbar.engineTitle', { engine: engineLabel.value }),
 )
-const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'upload', file: File): void
   (e: 'add-op'): void

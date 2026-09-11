@@ -159,7 +159,21 @@ export default {
     "title": "Connexions",
     "updatedToast": "Connexion « {name} » mise à jour"
   },
+  "columnDescriptions": {
+    "heading": "Descriptions des champs",
+    "intro": "Décrivez la signification de chaque champ de",
+    "introTail": "Ces notes documentent le jeu de données pour les personnes et donnent un contexte sémantique aux futures fonctions IA.",
+    "colName": "Champ",
+    "colType": "Type",
+    "colDescription": "Description",
+    "placeholder": "ex. montant net de la commande en EUR, hors TVA",
+    "noColumns": "Cette source n'a pas encore de colonnes connues (exécutez-la ou actualisez-la d'abord).",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "counter": "{n} sur {total} décrits",
+  },
   "datasources": {
+    "descriptionsSavedToast": "Descriptions des champs enregistrées ({n})",
     "colFolder": "Dossier",
     "colName": "Nom",
     "colRows": "Lignes",
@@ -393,6 +407,19 @@ export default {
     "openGrafana": "Ouvrir Grafana"
   },
   "nodePanel": {
+    "sampleTitle": "Échantillon de développement",
+    "sampleOff": "off (toutes les lignes)",
+    "sampleFirst": "N premières lignes",
+    "sampleRandom": "% aléatoire",
+    "sampleRowsLabel": "lignes",
+    "sampleHint": "Accélère les aperçus et les exécutions depuis l'éditeur : seul cet échantillon est lu. Les exécutions planifiées et « Exécuter en production » lisent toujours la table entière. N'échantillonnez que la grande table : une jointure entre deux sources échantillonnées perd presque toutes les correspondances.",
+    "sourceFiltersTitle": "Filtres en amont",
+    "sourceFilterWhere": "où",
+    "sourceFilterAnd": "et",
+    "sourceFilterAdd": "Ajouter une condition",
+    "sourceFilterRemove": "Supprimer la condition",
+    "sourceFilterIncomplete": "incomplète : ignorée",
+    "sourceFiltersHint": "Conditions en ET appliquées juste après la lecture de la source, avant toute autre opération. Elles font partie du flux : elles s'appliquent en développement ET en production (contrairement à l'échantillon).",
     "availablePlaceholders": "Placeholders disponibles :",
     "bucketHint": "(vide = celui de la connexion)",
     "bucketPlaceholder": "ex. exports-client",
@@ -501,6 +528,11 @@ export default {
     "range": "{from}–{to} sur {total}"
   },
   "paramForm": {
+    "searchColumnsPlaceholder": "rechercher des colonnes…",
+    "noColumnMatch": "Aucune colonne ne correspond à la recherche.",
+    "searchAggPlaceholder": "filtrer les agrégations…",
+    "clearSearch": "Effacer la recherche",
+    "noAggMatch": "Aucune agrégation ne correspond à la recherche.",
     "addRow": "+ ajouter",
     "aliasPlaceholder": "alias",
     "backToCalendar": "Revenir au calendrier",
@@ -735,6 +767,11 @@ export default {
     "search": "Rechercher…"
   },
   "sourceNode": {
+    "sampleFirst": "échantillon : {n} premières lignes",
+    "filtersBadge": "filtres en amont : {n}",
+    "filtersTitle": "Filtres en amont : appliqués à la lecture de la source, en développement et en production",
+    "sampleRandom": "échantillon : {p} % aléatoire",
+    "sampleTitle": "Échantillon de développement : les aperçus utilisent ce sous-ensemble ; la production lit tout",
     "noData": "aucune donnée — importez un fichier",
     "rowsCount": "{n} lignes",
     "title": "Source"

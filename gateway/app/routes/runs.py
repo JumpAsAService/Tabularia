@@ -100,6 +100,17 @@ async def _launch_flow_run(
     ensure_can(session, user, flow.project_id, Capability.RUN)
     engine_name = resolve_run_engine(flow, engine_mode)
 
+    # PRODUZIONE = tutti i record: qualunque campione di sviluppo (operazioni
+    # marcate `_dev_sample`, anche annidate) viene rimosso. Il resolver del
+    # gateway in produzione non le inietta mai: questa è difesa in profondità
+    # (es. un client che manda una catena costruita dall'editor).
+    if engine_mode != "development":
+        from app.services.flow_resolver import strip_dev_sample_ops
+
+        body.operations, removed = strip_dev_sample_ops(body.operations)
+        if removed:
+            logger.warning("run in produzione del flusso %s: rimossi %d campioni di sviluppo", flow.id, removed)
+
     # input_key e operazioni: la sorgente (e ogni sorgente annidata: right di
     # join/union, driver/body dei foreach) deve stare NEL bucket dell'engine e
     # sotto un prefisso gestito (pinning), E ogni chiave gestita dev'essere

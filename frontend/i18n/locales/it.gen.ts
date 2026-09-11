@@ -159,7 +159,21 @@ export default {
     "title": "Connessioni",
     "updatedToast": "Connessione \"{name}\" aggiornata"
   },
+  "columnDescriptions": {
+    "heading": "Descrizioni dei campi",
+    "intro": "Descrivi cosa significa ogni campo di",
+    "introTail": "Queste note documentano il dataset per le persone e danno contesto semantico alle future funzioni AI.",
+    "colName": "Campo",
+    "colType": "Tipo",
+    "colDescription": "Descrizione",
+    "placeholder": "es. importo netto dell'ordine in EUR, IVA esclusa",
+    "noColumns": "Questa datasource non ha ancora colonne note (eseguila o aggiornala prima).",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "counter": "{n} di {total} descritti",
+  },
   "datasources": {
+    "descriptionsSavedToast": "Descrizioni dei campi salvate ({n})",
     "colFolder": "Cartella",
     "colName": "Nome",
     "colRows": "Righe",
@@ -393,6 +407,19 @@ export default {
     "openGrafana": "Apri Grafana"
   },
   "nodePanel": {
+    "sampleTitle": "Campione di sviluppo",
+    "sampleOff": "off (tutte le righe)",
+    "sampleFirst": "prime N righe",
+    "sampleRandom": "% casuale",
+    "sampleRowsLabel": "righe",
+    "sampleHint": "Velocizza preview e run dall'editor: viene letto solo questo campione. I run schedulati ed \"Esegui in produzione\" leggono sempre l'intera tabella. Campiona solo la tabella grande: un join tra due sorgenti campionate perde quasi tutti gli incroci.",
+    "sourceFiltersTitle": "Filtri a monte",
+    "sourceFilterWhere": "dove",
+    "sourceFilterAnd": "e",
+    "sourceFilterAdd": "Aggiungi condizione",
+    "sourceFilterRemove": "Rimuovi condizione",
+    "sourceFilterIncomplete": "incompleta: ignorata",
+    "sourceFiltersHint": "Condizioni in AND applicate subito dopo la lettura della sorgente, prima di ogni altra operazione. Fanno parte del flusso: valgono in sviluppo E in produzione (a differenza del campione).",
     "availablePlaceholders": "Placeholder disponibili:",
     "bucketHint": "(vuoto = quello della connessione)",
     "bucketPlaceholder": "es. exports-cliente",
@@ -501,6 +528,11 @@ export default {
     "range": "{from}–{to} di {total}"
   },
   "paramForm": {
+    "searchColumnsPlaceholder": "cerca colonne…",
+    "noColumnMatch": "Nessuna colonna corrisponde alla ricerca.",
+    "searchAggPlaceholder": "filtra aggregazioni…",
+    "clearSearch": "Pulisci ricerca",
+    "noAggMatch": "Nessuna aggregazione corrisponde alla ricerca.",
     "addRow": "+ aggiungi",
     "aliasPlaceholder": "alias",
     "backToCalendar": "Torna al calendario",
@@ -735,6 +767,11 @@ export default {
     "search": "Cerca…"
   },
   "sourceNode": {
+    "sampleFirst": "campione: prime {n} righe",
+    "filtersBadge": "filtri a monte: {n}",
+    "filtersTitle": "Filtri a monte: applicati alla lettura della sorgente, in sviluppo e in produzione",
+    "sampleRandom": "campione: {p}% casuale",
+    "sampleTitle": "Campione di sviluppo: le preview usano questo sottoinsieme; la produzione legge tutto",
     "noData": "nessun dato — carica un file",
     "rowsCount": "{n} righe",
     "title": "Sorgente"

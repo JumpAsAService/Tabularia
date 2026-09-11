@@ -778,10 +778,18 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
   if (!nodeId) return []
   const node = findNode(nodeId)
   const inc = buildIncoming(getEdges.value)
-  const leftId =
-    inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
-  if (!leftId) return []
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId)
+  let sourceNode: Node | null = null
+  let ops: Operation[] = []
+  if (node?.type === 'source') {
+    // filtri a monte del nodo sorgente: i valori vengono dai dati GREZZI della
+    // sorgente (non dalla catena, che conterrebbe i filtri stessi)
+    sourceNode = node
+  } else {
+    const leftId =
+      inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
+    if (!leftId) return []
+    ;({ sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId))
+  }
   if (!sourceNode?.data?.parquetKey) return []
   const res = await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,

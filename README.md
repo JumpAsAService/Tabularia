@@ -114,6 +114,42 @@ fill_null · drop_nulls · group_by · pivot · unpivot · join · union · fore
 
 - **`foreach`** is a loop container: it iterates its body over a driver table with
   `{{placeholder}}` substitution, appending results with bounded memory.
+- **Upstream filters** per source node: AND-ed `{column, operator, value}` conditions set in
+  the editor on the input datasource and saved with the flow. They become plain `filter`
+  operations injected right after the source is read, before anything else (development
+  sample included), in *every* mode — editor previews, scheduled runs, "Run in production"
+  and the dbt export — so a flow can read only the slice it needs from a large table.
+- **Cross-engine data standard.** The same flow must give the same data on every engine
+  (development on one, production on another), so the engines follow one explicit
+  semantics, SQL-like, locked by an oracle test suite (`backend/tests/test_data_correctness.py`,
+  hand-computed expectations run on Polars, DuckDB, chDB and external ClickHouse):
+  comparisons with NULL are false (`ne`/`not_in` drop NULLs); aggregates ignore NULLs,
+  `count`/`n_unique` never count NULL, `sum`/`mean`/`min`/`max` of an all-NULL group are NULL,
+  `std`/`var` are sample (n-1), `median` interpolates; sort puts NULLs **last** in both
+  directions (a top-N never returns NULLs); failed casts give NULL (never an error), text is
+  trimmed before parsing, text→int accepts integer literals only, number→int truncates;
+  joins never match NULL keys, missing sides are NULL, `on` keys are one coalesced column
+  (also in full/right joins), `left_on`/`right_on` keep both key columns, a non-key
+  homonym from the right gets `_right`; `compute` overwrites an existing column in place
+  and string functions are UTF-8 aware on ClickHouse (`upper`→`upperUTF8`, …); integer sums
+  stay exact int64; datetimes are **naive UTC instants** everywhere (ClickHouse output is
+  normalised, tz-aware parquet is normalised on read).
+- **Development sampling** per source node: "first N rows" or "random p%" set in the editor
+  and saved with the flow. It only affects previews and editor runs (development mode): the
+  gateway resolver injects it solely in development, never for scheduled runs or "Run in
+  production", and strips any such marked operation from production launches as defence in
+  depth — production always reads every record. Sample only the big table: joining two
+  sampled sources loses most matches.
+- **Field descriptions** on datasources: a hand-curated `{column: text}` map, edited from the
+  Datasources page, kept separately from the inferred schema so it survives refreshes and
+  exposed both as `column_descriptions` and inline as `columns[*].description` — semantic
+  context for people today and for the upcoming AI features.
+- **`pivot` / `unpivot`** follow one cross-engine standard (Polars, DuckDB, chDB, external
+  ClickHouse): pivot columns are named by the value as text (`null` for NULL, `2024_web` for
+  multi-column keys, existing combinations only, text-ordered), missing or all-NULL groups
+  are NULL (`count`/`n_unique` → 0, Int64), and unpivot keeps only the index columns with the
+  value cast to the common supertype — so a flow designed on one engine yields the same
+  columns when scheduled on another.
 - **`sql`** runs engine-native SQL against the node input (`FROM input`), with a
   guardrail floor that blocks filesystem / URL / executable access.
 - **Nodes**: `source` (file or DB datasource), `output` (write to a DB table or

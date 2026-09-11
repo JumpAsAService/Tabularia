@@ -30,10 +30,81 @@ export function buildIncoming(edges: Edge[]): Map<string, Incoming> {
   return m
 }
 
+// ── Filtri A MONTE di un nodo sorgente ────────────────────────────────────
+// `data.filters` = [{ id, column, operator, value }, …]: condizioni in AND
+// applicate subito dopo la lettura della sorgente, PRIMA di ogni altra
+// operazione (campione compreso). A differenza del campione fanno parte del
+// flusso: valgono in sviluppo E in produzione (e nell'export dbt). Diventano
+// normali operazioni `filter` senza marcatore. Speculare a
+// `source_filter_operations` in gateway/services/flow_resolver.py.
+export type SourceFilter = { id: string; column?: string; operator?: string; value?: any }
+
+/** Una condizione è completa se ha colonna, operatore e (dove serve) valore. */
+export function isCompleteSourceFilter(f: SourceFilter | null | undefined): boolean {
+  if (!f || typeof f !== 'object') return false
+  if (!f.column || !f.operator || !FILTER_OPERATORS.includes(f.operator)) return false
+  if (NO_VALUE_OPERATORS.has(f.operator)) return true
+  if (f.value === null || f.value === undefined) return false
+  if ((f.operator === 'in' || f.operator === 'not_in') && (!Array.isArray(f.value) || !f.value.length)) return false
+  if (f.operator === 'between' && (!Array.isArray(f.value) || f.value.length !== 2)) return false
+  return true
+}
+
+export function sourceFilterOperations(data: any): Operation[] {
+  const filters: SourceFilter[] = Array.isArray(data?.filters) ? data.filters : []
+  return filters.filter(isCompleteSourceFilter).map((f) => {
+    const params: Record<string, any> = { column: f.column, operator: f.operator }
+    if (!NO_VALUE_OPERATORS.has(f.operator!)) params.value = f.value
+    return { type: 'filter', params }
+  })
+}
+
+/** Numero di condizioni a monte COMPLETE (badge sul nodo). */
+export function sourceFilterCount(data: any): number {
+  return sourceFilterOperations(data).length
+}
+
+// ── Campione di SVILUPPO di un nodo sorgente ──────────────────────────────
+// `data.sample` = { mode: 'first' | 'random', rows?, percent? } | null. L'editor
+// lavora SEMPRE in sviluppo: il campione diventa la prima operazione dopo la
+// sorgente (limit / sample) con il marcatore `_dev_sample`. In produzione
+// (scheduler, "esegui in produzione") il gateway NON lo inietta e rimuove
+// comunque ogni operazione marcata: i flussi di produzione girano su tutti i
+// record. Speculare a `dev_sample_operation` in gateway/services/flow_resolver.py.
+export type SourceSample = { mode: 'first' | 'random'; rows?: number | null; percent?: number | null }
+export const DEV_SAMPLE_MARK = '_dev_sample'
+
+export function devSampleOperation(data: any): Operation | null {
+  const s: SourceSample | null | undefined = data?.sample
+  if (!s || typeof s !== 'object') return null
+  if (s.mode === 'first') {
+    const n = Math.floor(Number(s.rows ?? 0))
+    if (!(n > 0)) return null
+    return { type: 'limit', params: { n, [DEV_SAMPLE_MARK]: true } }
+  }
+  if (s.mode === 'random') {
+    const pct = Number(s.percent ?? 0)
+    if (!(pct > 0 && pct < 100)) return null
+    return { type: 'sample', params: { fraction: pct / 100, seed: 42, [DEV_SAMPLE_MARK]: true } }
+  }
+  return null
+}
+
+/** Etichetta breve del campione attivo (badge sul nodo), o null. */
+export function sampleLabel(data: any, t: (k: string, p?: any) => string): string | null {
+  const s: SourceSample | null | undefined = data?.sample
+  if (!s) return null
+  if (s.mode === 'first' && Number(s.rows) > 0) return t('sourceNode.sampleFirst', { n: Number(s.rows).toLocaleString() })
+  if (s.mode === 'random' && Number(s.percent) > 0 && Number(s.percent) < 100) return t('sourceNode.sampleRandom', { p: s.percent })
+  return null
+}
+
 /**
  * Risolve la catena che termina in `targetId`: risale gli input sinistri fino
  * alla sorgente, raccogliendo i nodi-operazione. Ritorna la sorgente terminale
- * e la lista IR delle operazioni (con il `right` dei join già iniettato).
+ * e la lista IR delle operazioni (con il `right` dei join già iniettato; in
+ * testa i filtri a monte della sorgente e poi il campione di sviluppo, se
+ * impostati).
  */
 export function resolveChain(
   nodes: Node[],
@@ -74,6 +145,10 @@ export function resolveChain(
 
   opIds.reverse()
   const operations = opIds.map((id) => operationFor(nodes, edges, id))
+  // testa della catena: filtri a monte (sempre), poi il campione (solo editor)
+  const sample = sourceNode ? devSampleOperation(sourceNode.data) : null
+  if (sample) operations.unshift(sample)
+  if (sourceNode) operations.unshift(...sourceFilterOperations(sourceNode.data))
   return { sourceNode, operations }
 }
 
@@ -217,7 +292,8 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
   ],
   pivot: [
     { key: 'index', label: 'params.pivot_index', control: 'columns' },
-    { key: 'on', label: 'params.pivot_on', control: 'column' },
+    // più colonne = combinazioni (etichette unite da '_', vedi standard cross-engine)
+    { key: 'on', label: 'params.pivot_on', control: 'columns' },
     { key: 'values', label: 'params.pivot_values', control: 'column' },
     { key: 'func', label: 'params.pivot_func', control: 'func' },
   ],

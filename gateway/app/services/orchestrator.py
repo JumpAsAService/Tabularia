@@ -154,7 +154,9 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 await _refresh_and_wait(session, user, ds_id, trigger_type, parent_run_id)  # errore → propaga (aborta tutto)
         elif t == "output":
             try:
-                req = resolve_output_request(definition, node, resolve_ds, default_bucket)
+                # engine_mode decide anche il CAMPIONE di sviluppo: solo "development"
+                # lo inietta; in produzione la catena legge tutti i record
+                req = resolve_output_request(definition, node, resolve_ds, default_bucket, engine_mode)
                 run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id, engine_mode=engine_mode)
                 run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
                 if run.status != "SUCCESS":

@@ -159,7 +159,21 @@ export default {
     "title": "Connections",
     "updatedToast": "Connection \"{name}\" updated"
   },
+  "columnDescriptions": {
+    "heading": "Field descriptions",
+    "intro": "Describe what each field of",
+    "introTail": "means. These notes document the dataset for people and give the upcoming AI features semantic context.",
+    "colName": "Field",
+    "colType": "Type",
+    "colDescription": "Description",
+    "placeholder": "e.g. order net amount in EUR, VAT excluded",
+    "noColumns": "This datasource has no known columns yet (run or refresh it first).",
+    "save": "Save",
+    "cancel": "Cancel",
+    "counter": "{n} of {total} described",
+  },
   "datasources": {
+    "descriptionsSavedToast": "Field descriptions saved ({n})",
     "colFolder": "Folder",
     "colName": "Name",
     "colRows": "Rows",
@@ -393,6 +407,19 @@ export default {
     "openGrafana": "Open Grafana"
   },
   "nodePanel": {
+    "sampleTitle": "Development sample",
+    "sampleOff": "off (all rows)",
+    "sampleFirst": "first N rows",
+    "sampleRandom": "random %",
+    "sampleRowsLabel": "rows",
+    "sampleHint": "Speeds up previews and editor runs: only this sample is read. Scheduled runs and \"Run in production\" always read the whole table. Sample the big table only: joining two sampled sources loses most matches.",
+    "sourceFiltersTitle": "Upstream filters",
+    "sourceFilterWhere": "where",
+    "sourceFilterAnd": "and",
+    "sourceFilterAdd": "Add condition",
+    "sourceFilterRemove": "Remove condition",
+    "sourceFilterIncomplete": "incomplete: ignored",
+    "sourceFiltersHint": "AND-ed conditions applied right after the source is read, before any other operation. They are part of the flow: they apply in development AND in production (unlike the sample).",
     "availablePlaceholders": "Available placeholders:",
     "bucketHint": "(empty = the connection's default)",
     "bucketPlaceholder": "e.g. client-exports",
@@ -501,6 +528,11 @@ export default {
     "range": "{from}–{to} of {total}"
   },
   "paramForm": {
+    "searchColumnsPlaceholder": "search columns…",
+    "noColumnMatch": "No column matches the search.",
+    "searchAggPlaceholder": "filter aggregations…",
+    "clearSearch": "Clear search",
+    "noAggMatch": "No aggregation matches the search.",
     "addRow": "+ add",
     "aliasPlaceholder": "alias",
     "backToCalendar": "Back to calendar",
@@ -735,6 +767,11 @@ export default {
     "search": "Search…"
   },
   "sourceNode": {
+    "sampleFirst": "sample: first {n} rows",
+    "filtersBadge": "upstream filters: {n}",
+    "filtersTitle": "Upstream filters: applied when the source is read, in development and in production",
+    "sampleRandom": "sample: {p}% random",
+    "sampleTitle": "Development sample: previews use this subset; production reads everything",
     "noData": "no data — upload a file",
     "rowsCount": "{n} rows",
     "title": "Source"

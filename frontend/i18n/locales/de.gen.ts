@@ -159,7 +159,21 @@ export default {
     "title": "Verbindungen",
     "updatedToast": "Verbindung „{name}“ aktualisiert"
   },
+  "columnDescriptions": {
+    "heading": "Feldbeschreibungen",
+    "intro": "Beschreiben Sie, was jedes Feld von",
+    "introTail": "bedeutet. Diese Notizen dokumentieren den Datensatz für Menschen und geben den kommenden KI-Funktionen semantischen Kontext.",
+    "colName": "Feld",
+    "colType": "Typ",
+    "colDescription": "Beschreibung",
+    "placeholder": "z. B. Nettobetrag der Bestellung in EUR, ohne MwSt.",
+    "noColumns": "Diese Datenquelle hat noch keine bekannten Spalten (zuerst ausführen oder aktualisieren).",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "counter": "{n} von {total} beschrieben",
+  },
   "datasources": {
+    "descriptionsSavedToast": "Feldbeschreibungen gespeichert ({n})",
     "colFolder": "Ordner",
     "colName": "Name",
     "colRows": "Zeilen",
@@ -393,6 +407,19 @@ export default {
     "openGrafana": "Grafana öffnen"
   },
   "nodePanel": {
+    "sampleTitle": "Entwicklungs-Stichprobe",
+    "sampleOff": "aus (alle Zeilen)",
+    "sampleFirst": "erste N Zeilen",
+    "sampleRandom": "zufällig %",
+    "sampleRowsLabel": "Zeilen",
+    "sampleHint": "Beschleunigt Vorschauen und Läufe aus dem Editor: nur diese Stichprobe wird gelesen. Geplante Läufe und „In Produktion ausführen“ lesen immer die ganze Tabelle. Nur die große Tabelle beproben: ein Join zweier beprobter Quellen verliert fast alle Treffer.",
+    "sourceFiltersTitle": "Vorgelagerte Filter",
+    "sourceFilterWhere": "wobei",
+    "sourceFilterAnd": "und",
+    "sourceFilterAdd": "Bedingung hinzufügen",
+    "sourceFilterRemove": "Bedingung entfernen",
+    "sourceFilterIncomplete": "unvollständig: ignoriert",
+    "sourceFiltersHint": "UND-verknüpfte Bedingungen, die direkt nach dem Lesen der Quelle und vor jeder anderen Operation angewendet werden. Sie gehören zum Flow: sie gelten in Entwicklung UND Produktion (anders als die Stichprobe).",
     "availablePlaceholders": "Verfügbare Platzhalter:",
     "bucketHint": "(leer = der der Verbindung)",
     "bucketPlaceholder": "z. B. exports-kunde",
@@ -501,6 +528,11 @@ export default {
     "range": "{from}–{to} von {total}"
   },
   "paramForm": {
+    "searchColumnsPlaceholder": "Spalten suchen…",
+    "noColumnMatch": "Keine Spalte passt zur Suche.",
+    "searchAggPlaceholder": "Aggregationen filtern…",
+    "clearSearch": "Suche löschen",
+    "noAggMatch": "Keine Aggregation passt zur Suche.",
     "addRow": "+ hinzufügen",
     "aliasPlaceholder": "Alias",
     "backToCalendar": "Zurück zum Kalender",
@@ -735,6 +767,11 @@ export default {
     "search": "Suchen…"
   },
   "sourceNode": {
+    "sampleFirst": "Stichprobe: erste {n} Zeilen",
+    "filtersBadge": "vorgelagerte Filter: {n}",
+    "filtersTitle": "Vorgelagerte Filter: beim Lesen der Quelle angewendet, in Entwicklung und Produktion",
+    "sampleRandom": "Stichprobe: {p} % zufällig",
+    "sampleTitle": "Entwicklungs-Stichprobe: Vorschauen nutzen diese Teilmenge; die Produktion liest alles",
     "noData": "keine Daten — Datei hochladen",
     "rowsCount": "{n} Zeilen",
     "title": "Quelle"

@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import type { Node } from '@vue-flow/core'
-import {
-  FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database,
-  HardDriveDownload, RefreshCw, PlayCircle, StickyNote,
-} from 'lucide-vue-next'
+import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, FlaskConical, Filter, Plus, X } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
-import { defaultParams } from '~/composables/useFlowModel'
+import { defaultParams, isCompleteSourceFilter, type SourceFilter } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
 
 const props = defineProps<{
@@ -59,6 +56,48 @@ function pickRefreshDatasource(id: number | null) {
 function pickRunFlow(id: number | null) {
   const f = (props.flows ?? []).find((x) => x.id === id)
   emit('update', { flowId: id, flowName: f?.name ?? '' })
+}
+
+// filtri A MONTE del nodo sorgente (vedi sourceFilterOperations in useFlowModel):
+// condizioni in AND applicate prima di tutto, in sviluppo E in produzione.
+// Ogni riga ha un id stabile (chiave del form: rimuovere una riga non deve
+// far "scivolare" i valori delle altre).
+const sourceFilters = (): SourceFilter[] => (props.node?.data?.filters ?? []) as SourceFilter[]
+function addSourceFilter() {
+  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+  emit('update', { filters: [...sourceFilters(), { id, operator: 'eq' }] })
+}
+function updateSourceFilter(id: string, params: Record<string, any>) {
+  emit('update', {
+    filters: sourceFilters().map((f) =>
+      f.id === id ? { id, column: params.column, operator: params.operator, value: params.value } : f,
+    ),
+  })
+}
+function removeSourceFilter(id: string) {
+  const rest = sourceFilters().filter((f) => f.id !== id)
+  emit('update', { filters: rest.length ? rest : null })
+}
+
+// campione di sviluppo del nodo sorgente (vedi devSampleOperation in useFlowModel)
+function setSampleMode(mode: string) {
+  if (mode === 'off') {
+    emit('update', { sample: null })
+    return
+  }
+  const cur = props.node?.data?.sample ?? {}
+  emit('update', {
+    sample: mode === 'first'
+      ? { mode: 'first', rows: cur.rows ?? 100000 }
+      : { mode: 'random', percent: cur.percent ?? 10 },
+  })
+}
+function setSampleValue(key: 'rows' | 'percent', raw: string) {
+  const cur = props.node?.data?.sample
+  if (!cur) return
+  const v = Number(raw)
+  if (!(v > 0)) return
+  emit('update', { sample: { ...cur, [key]: key === 'rows' ? Math.floor(v) : Math.min(v, 99) } })
 }
 
 // il nodo sorgente può caricare una datasource del catalogo al posto del file
@@ -115,6 +154,69 @@ function pickDatasource(id: number | null) {
         </div>
       </template>
       <p v-else class="muted">{{ $t('nodePanel.sourceEmptyHint') }}</p>
+
+      <!-- filtri A MONTE: condizioni applicate subito dopo la lettura della
+           sorgente, SEMPRE (sviluppo e produzione), prima del campione -->
+      <div v-if="node.data.parquetKey" class="filtersbox">
+        <label><Filter :size="12" /> {{ $t('nodePanel.sourceFiltersTitle') }}</label>
+        <div v-for="(f, i) in sourceFilters()" :key="f.id" class="filterrow" :class="{ incomplete: !isCompleteSourceFilter(f) }">
+          <div class="filterhead">
+            <span class="muted">{{ i === 0 ? $t('nodePanel.sourceFilterWhere') : $t('nodePanel.sourceFilterAnd') }}</span>
+            <span v-if="!isCompleteSourceFilter(f)" class="muted warn">{{ $t('nodePanel.sourceFilterIncomplete') }}</span>
+            <button class="x" :title="$t('nodePanel.sourceFilterRemove')" @click="removeSourceFilter(f.id)"><X :size="12" /></button>
+          </div>
+          <ParamForm
+            :node-id="`${node.id}:filter:${f.id}`"
+            op-type="filter"
+            :params="f"
+            :input-columns="(node.data.columns as ColumnInfo[]) ?? []"
+            :fetch-distinct="fetchDistinct"
+            @update="(p: Record<string, any>) => updateSourceFilter(f.id, p)"
+          />
+        </div>
+        <button class="addfilter" @click="addSourceFilter"><Plus :size="13" /> {{ $t('nodePanel.sourceFilterAdd') }}</button>
+        <p class="muted outhint">{{ $t('nodePanel.sourceFiltersHint') }}</p>
+      </div>
+
+      <!-- campione di SVILUPPO: solo preview e run dall'editor; in produzione
+           (scheduler, esegui in produzione) la sorgente è letta per intero -->
+      <div v-if="node.data.parquetKey" class="samplebox">
+        <label><FlaskConical :size="12" /> {{ $t('nodePanel.sampleTitle') }}</label>
+        <div class="samplerow">
+          <Select
+            :model-value="node.data.sample?.mode ?? 'off'"
+            :options="[
+              { value: 'off', label: $t('nodePanel.sampleOff') },
+              { value: 'first', label: $t('nodePanel.sampleFirst') },
+              { value: 'random', label: $t('nodePanel.sampleRandom') },
+            ]"
+            @update:model-value="setSampleMode"
+          />
+          <input
+            v-if="node.data.sample?.mode === 'first'"
+            type="number"
+            min="1"
+            step="1000"
+            class="samplenum"
+            :value="node.data.sample?.rows ?? 100000"
+            :placeholder="$t('nodePanel.sampleRowsLabel')"
+            @change="setSampleValue('rows', ($event.target as HTMLInputElement).value)"
+          />
+          <span v-if="node.data.sample?.mode === 'first'" class="muted">{{ $t('nodePanel.sampleRowsLabel') }}</span>
+          <input
+            v-if="node.data.sample?.mode === 'random'"
+            type="number"
+            min="0.01"
+            max="99"
+            step="1"
+            class="samplenum"
+            :value="node.data.sample?.percent ?? 10"
+            @change="setSampleValue('percent', ($event.target as HTMLInputElement).value)"
+          />
+          <span v-if="node.data.sample?.mode === 'random'" class="muted">%</span>
+        </div>
+        <p class="muted outhint">{{ $t('nodePanel.sampleHint') }}</p>
+      </div>
 
       <div class="dspick">
         <label><Database :size="12" /> {{ $t('nodePanel.orUseCatalogDatasource') }}</label>
@@ -412,6 +514,20 @@ function pickDatasource(id: number | null) {
 </template>
 
 <style scoped>
+.filtersbox { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.filtersbox > label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.filterrow { padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: 6px; }
+.filterrow.incomplete { border-style: dashed; }
+.filterhead { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.filterhead .warn { margin-left: auto; text-transform: none; letter-spacing: 0; color: #fbbf24; }
+.filterhead .x { margin-left: auto; padding: 1px 4px; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.filterhead .warn + .x { margin-left: 0; }
+.filterhead .x:hover { color: var(--danger, #f87171); }
+.addfilter { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; }
+.samplebox { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; }
+.samplebox > label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.samplerow { display: flex; align-items: center; gap: 6px; }
+.samplerow .samplenum { width: 110px; }
 .nodepanel { padding: 12px; overflow-y: auto; height: 100%; display: flex; flex-direction: column; gap: 8px; }
 h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
 .joinhead { display: inline-flex; align-items: center; gap: 5px; }

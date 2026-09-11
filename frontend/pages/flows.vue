@@ -16,6 +16,7 @@ import {
 import { useProjects } from '~/composables/useProjects'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
+import type { EngineOpt } from '~/composables/useEngine'
 
 const flowsApi = useFlows()
 const projectsApi = useProjects()
@@ -29,7 +30,6 @@ const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
 
 // motori disponibili per il picker "Nuovo flusso" (il flusso è pinnato al motore
 // scelto). DuckDB compare come "in arrivo" finché il suo engine non è pronto.
-interface EngineOpt { id: string; label: string; available: boolean; description: string }
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
