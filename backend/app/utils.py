@@ -239,6 +239,21 @@ class StorageService:
             ExpiresIn=expiration,
         )
 
+    def object_exists(self, bucket: str, object_key: str) -> bool:
+        """True se l'oggetto esiste (HEAD, nessun download). 404/NoSuchKey → False;
+        ogni altro errore (credenziali, rete) viene propagato."""
+        from botocore.exceptions import ClientError
+
+        try:
+            self.client.head_object(Bucket=bucket, Key=object_key)
+            return True
+        except ClientError as e:
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in ("404", "NoSuchKey", "NotFound") or status == 404:
+                return False
+            raise
+
     def head_object(self, bucket: str, object_key: str) -> dict:
         """
         Ottieni metadati di un oggetto senza scaricarlo.

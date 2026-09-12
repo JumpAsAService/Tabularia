@@ -20,6 +20,13 @@ il flow viene ricalcolato normalmente (nessun errore all'utente).
 Content-addressed ⇒ nessuna invalidazione: se cambi un parametro cambia l'hash.
 Le voci non più accedute vengono rimosse dall'eviction TTL (`evict_expired`),
 che cancella insieme blob + SET + ZSET, così indice e storage restano allineati.
+
+L'indice è una PROMESSA, non una prova: un blob può sparire sotto i suoi piedi
+(cancellazione manuale sul bucket, regola di lifecycle, cambio di storage).
+Un hit su un blob mancante non deve mai rompere una preview: `nearest` verifica
+l'esistenza (HEAD) prima di riusare uno step, dimentica la voce orfana e risale
+all'antenato precedente, fino alla sorgente; lo sweep periodico scarta le voci
+senza blob.
 """
 from __future__ import annotations
 
@@ -72,6 +79,27 @@ class StepCache:
         """Chiave storage del parquet materializzato per l'hash `h`."""
         return f"{CACHE_PREFIX}/{h}.parquet"
 
+    def blob_exists(self, h: str) -> bool:
+        """Il parquet dello step esiste davvero nello storage? (HEAD, mai download).
+        Se lo storage non sa rispondere (errore transitorio) si assume True: il
+        download successivo fallirà comunque in modo esplicito."""
+        check = getattr(self.storage, "object_exists", None) or getattr(self.storage, "exists", None)
+        if check is None:
+            return True
+        try:
+            return bool(check(self.bucket, self.object_key(h)))
+        except Exception:
+            return True
+
+    def forget(self, h: str) -> None:
+        """Toglie una voce dall'indice (SET + ZSET) senza toccare lo storage:
+        per le voci ORFANE, il cui blob non esiste più."""
+        try:
+            self.redis.srem(INDEX_SET, h)
+            self.redis.zrem(ATIME_ZSET, h)
+        except redis.RedisError:
+            pass
+
     def has(self, h: str) -> bool:
         """Solo presenza nell'indice (nessun effetto collaterale)."""
         try:
@@ -115,10 +143,19 @@ class StepCache:
         Ritorna l'indice `k` (0..len) tale che `hashes[k-1]` è l'antenato
         materializzato più vicino. 0 = nessun antenato in cache (si parte dalla
         sorgente).
+
+        Auto-riparante: un hash presente nell'indice ma senza blob nello storage
+        viene dimenticato e si prosegue con l'antenato precedente. Una HEAD per
+        hit: trascurabile rispetto al download del parquet che segue.
         """
         for k in range(len(hashes), 0, -1):
-            if self.has(hashes[k - 1]):
+            h = hashes[k - 1]
+            if not self.has(h):
+                continue
+            if self.blob_exists(h):
                 return k
+            logger.warning("cache: voce orfana %s (blob mancante nello storage), rimossa dall'indice", h[:12])
+            self.forget(h)
         return 0
 
     def _reconcile(self) -> None:
@@ -143,12 +180,15 @@ class StepCache:
         Rimuove le voci non accedute da più di `ttl_seconds`.
 
         Per ogni voce scaduta cancella IN BLOCCO: blob parquet + SET + ZSET, così
-        indice e storage restano sincronizzati. Ritorna il numero di voci rimosse.
+        indice e storage restano sincronizzati. Le voci NON scadute il cui blob
+        è sparito dallo storage (cancellazione manuale, lifecycle) vengono
+        dimenticate. Ritorna il numero di voci rimosse (scadute + orfane).
         """
         try:
             self._reconcile()
             cutoff = time.time() - ttl_seconds
             expired = self.redis.zrangebyscore(ATIME_ZSET, "-inf", cutoff)
+            alive = [h for h in self.redis.zrangebyscore(ATIME_ZSET, cutoff, "+inf")]
         except redis.RedisError:
             return 0
 
@@ -158,9 +198,16 @@ class StepCache:
             self.redis.srem(INDEX_SET, h)
             self.redis.zrem(ATIME_ZSET, h)
 
-        if expired:
-            logger.info("Cache eviction: rimosse %d voci (ttl=%ds)", len(expired), ttl_seconds)
-        return len(expired)
+        orphans = [h for h in alive if not self.blob_exists(h)]
+        for h in orphans:
+            self.forget(h)
+
+        if expired or orphans:
+            logger.info(
+                "Cache eviction: rimosse %d voci scadute (ttl=%ds) e %d orfane (blob mancante)",
+                len(expired), ttl_seconds, len(orphans),
+            )
+        return len(expired) + len(orphans)
 
     def clear(self) -> int:
         """Svuota tutta la cache (blob + indici). Ritorna quante voci rimosse."""

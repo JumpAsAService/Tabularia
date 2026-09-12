@@ -44,16 +44,23 @@ def test_l_ordine_delle_chiavi_nei_params_non_conta():
 
 
 # ── StepCache: indice e accessi ──────────────────────────────────────────────
+def _materialize(cache, storage, h: str) -> None:
+    """Come farebbe l'engine: blob nello storage + voce nell'indice (l'indice da
+    solo non basta più: un hit senza blob viene trattato come orfano)."""
+    storage.blobs[(cache.bucket, cache.object_key(h))] = b"parquet"
+    cache.mark(h)
+
+
 def test_mark_rende_l_hash_visibile_a_has(cache):
     assert not cache.has("abc")
     cache.mark("abc")
     assert cache.has("abc")
 
 
-def test_nearest_trova_l_antenato_piu_profondo(cache):
+def test_nearest_trova_l_antenato_piu_profondo(cache, storage):
     hashes = plan_hashes("src", OPS)
-    cache.mark(hashes[0])
-    cache.mark(hashes[1])
+    _materialize(cache, storage, hashes[0])
+    _materialize(cache, storage, hashes[1])
     assert cache.nearest(hashes) == 2  # riparte dopo i primi 2 step
 
 
@@ -61,8 +68,8 @@ def test_nearest_senza_antenati_ritorna_zero(cache):
     assert cache.nearest(plan_hashes("src", OPS)) == 0
 
 
-def test_touch_posticipa_l_eviction(cache, fredis):
-    cache.mark("h1")
+def test_touch_posticipa_l_eviction(cache, storage, fredis):
+    _materialize(cache, storage, "h1")
     fredis.zadd(ATIME_ZSET, {"h1": time.time() - 9999})  # finge un accesso vecchio
     cache.touch("h1")  # l'uso lo ringiovanisce
     assert cache.evict_expired(ttl_seconds=3600) == 0
@@ -83,8 +90,8 @@ def test_evict_expired_rimuove_blob_e_indici_in_sincrono(cache, storage, fredis)
     assert "vecchio" not in fredis.zrange(ATIME_ZSET, 0, -1)
 
 
-def test_evict_non_tocca_le_voci_recenti(cache):
-    cache.mark("fresco")
+def test_evict_non_tocca_le_voci_recenti(cache, storage):
+    _materialize(cache, storage, "fresco")
     assert cache.evict_expired(ttl_seconds=3600) == 0
     assert cache.has("fresco")
 
@@ -114,3 +121,33 @@ def test_con_redis_rotto_la_cache_si_comporta_come_vuota(storage):
     broken.record_hit()  # non solleva
     assert broken.nearest(["a", "b"]) == 0
     assert broken.evict_expired(3600) == 0
+
+
+# ── Voci orfane: indice che promette un blob che non c'è più ─────────────────
+def test_nearest_salta_e_dimentica_la_voce_senza_blob(cache, storage):
+    """Blob cancellato a mano sul bucket: l'hit non deve rompere la preview ma
+    risalire all'antenato precedente (o alla sorgente) e pulire l'indice."""
+    hashes = plan_hashes("src", OPS)
+    for h in hashes[:2]:
+        cache.mark(h)
+        storage.blobs[(cache.bucket, cache.object_key(h))] = b"parquet"
+    # il blob dello step 2 sparisce (es. cancellazione manuale)
+    del storage.blobs[(cache.bucket, cache.object_key(hashes[1]))]
+    assert cache.nearest(hashes) == 1  # riparte dallo step 1, che esiste
+    assert not cache.has(hashes[1]) and cache.has(hashes[0])
+    # sparisce anche lo step 1 → sorgente, indice vuoto
+    del storage.blobs[(cache.bucket, cache.object_key(hashes[0]))]
+    assert cache.nearest(hashes) == 0
+    assert not cache.has(hashes[0])
+
+
+def test_evict_scarta_le_voci_orfane_non_scadute(cache, storage):
+    hashes = plan_hashes("src", OPS)
+    ok, orphan = hashes[0], hashes[1]
+    for h in (ok, orphan):
+        cache.mark(h)
+    storage.blobs[(cache.bucket, cache.object_key(ok))] = b"parquet"  # solo `ok` ha il blob
+    removed = cache.evict_expired(ttl_seconds=3600)  # nessuna voce scaduta
+    assert removed == 1
+    assert cache.has(ok) and not cache.has(orphan)
+    assert (cache.bucket, cache.object_key(ok)) in storage.blobs  # il blob buono resta
