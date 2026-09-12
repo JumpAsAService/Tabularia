@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Tabularia · Runtime Architecture",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com-tabularia:JumpAsAService/Tabularia.git",
+      "link_mode": "local-only",
+      "revision": "c20d0a6505bb6ff395166be53381cd72bfad6c54"
+    },
+    "views": [
+      {
+        "id": "control-plane",
+        "label": "Control plane",
+        "focus": [
+          "webui",
+          "gateway",
+          "postgres",
+          "backend"
+        ],
+        "note": "The browser only talks to the gateway: JWT, RBAC and metadata, then a proxy to the engine."
+      },
+      {
+        "id": "data-plane",
+        "label": "Data plane",
+        "focus": [
+          "backend",
+          "valkey",
+          "preview",
+          "worker",
+          "beat",
+          "minio"
+        ],
+        "note": "Every preview and run is a Celery task: two queues, parquet on object storage."
+      },
+      {
+        "id": "edges",
+        "label": "External systems",
+        "focus": [
+          "worker",
+          "minio",
+          "clickhouse",
+          "sources",
+          "metrics"
+        ],
+        "note": "Sources ingested as parquet, cloud ClickHouse as an optional engine, metrics scraped."
+      }
+    ],
+    "locale": "en"
+  },
+  "components": [
+    {
+      "id": "webui",
+      "type": "frontend",
+      "label": "Web UI",
+      "sublabel": "Nuxt 3 · :3000",
+      "pos": [
+        30,
+        330
+      ],
+      "size": [
+        130,
+        60
+      ],
+      "sources": [
+        {
+          "path": "frontend/nuxt.config.ts",
+          "label": "apiBase → gateway"
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "security",
+      "label": "Gateway",
+      "sublabel": "FastAPI · JWT + RBAC",
+      "pos": [
+        240,
+        330
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "tag": "public",
+      "sources": [
+        {
+          "path": "gateway/app/main.py"
+        },
+        {
+          "path": "gateway/app/services/scheduler.py",
+          "label": "in-process scheduler"
+        }
+      ]
+    },
+    {
+      "id": "metrics",
+      "type": "cloud",
+      "label": "Observability",
+      "sublabel": "VictoriaMetrics · Grafana",
+      "pos": [
+        240,
+        170
+      ],
+      "size": [
+        170,
+        60
+      ],
+      "sources": [
+        {
+          "path": "infrastructure/monitoring/scrape.yml",
+          "label": "scrape targets"
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "metadata and audit",
+      "brand": "postgresql",
+      "pos": [
+        240,
+        520
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/db/session.py"
+        }
+      ]
+    },
+    {
+      "id": "backend",
+      "type": "backend",
+      "label": "Engine API",
+      "sublabel": "FastAPI · private network",
+      "brand": "fastapi",
+      "pos": [
+        460,
+        330
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/main.py"
+        }
+      ]
+    },
+    {
+      "id": "valkey",
+      "type": "messagebus",
+      "label": "Valkey",
+      "sublabel": "broker + cache index",
+      "pos": [
+        680,
+        330
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/engine/cache.py",
+          "label": "cache index"
+        }
+      ]
+    },
+    {
+      "id": "preview",
+      "type": "backend",
+      "label": "Preview worker",
+      "sublabel": "Celery · preview queue",
+      "pos": [
+        900,
+        170
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/tasks/jobs.py",
+          "label": "preview_task"
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Run worker",
+      "sublabel": "run · ingest · export",
+      "pos": [
+        900,
+        330
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "tag": "Polars · DuckDB · chDB",
+      "sources": [
+        {
+          "path": "backend/app/tasks/celery_app.py",
+          "label": "queues"
+        },
+        {
+          "path": "backend/app/engine/__init__.py",
+          "label": "engine registry"
+        }
+      ]
+    },
+    {
+      "id": "beat",
+      "type": "backend",
+      "label": "Celery beat",
+      "sublabel": "cache eviction · stats",
+      "pos": [
+        680,
+        520
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/tasks/celery_app.py",
+          "label": "beat_schedule"
+        }
+      ]
+    },
+    {
+      "id": "minio",
+      "type": "cloud",
+      "label": "Object storage",
+      "sublabel": "MinIO · Scaleway S3",
+      "pos": [
+        1130,
+        330
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/core/config.py",
+          "label": "StorageSettings"
+        }
+      ]
+    },
+    {
+      "id": "clickhouse",
+      "type": "external",
+      "label": "ClickHouse cloud",
+      "sublabel": "optional engine",
+      "brand": "clickhouse",
+      "pos": [
+        1130,
+        660
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/engine/clickhouse_engine.py"
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "External databases",
+      "sublabel": "Postgres · ClickHouse · MySQL…",
+      "pos": [
+        880,
+        660
+      ],
+      "size": [
+        190,
+        60
+      ],
+      "sources": [
+        {
+          "path": "backend/app/ingest/db_source.py",
+          "label": "ADBC ingest"
+        },
+        {
+          "path": "backend/app/ingest/db_destination.py",
+          "label": "table writes"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Docker Compose · dataprep-network",
+      "wraps": [
+        "metrics",
+        "gateway",
+        "postgres",
+        "backend",
+        "valkey",
+        "preview",
+        "worker",
+        "beat",
+        "minio"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "security-group",
+      "label": "data plane · no published ports",
+      "wraps": [
+        "backend",
+        "valkey",
+        "preview",
+        "worker",
+        "beat"
+      ],
+      "pad": 14
+    }
+  ],
+  "connections": [
+    {
+      "from": "webui",
+      "to": "gateway",
+      "label": "HTTPS + JWT",
+      "variant": "emphasis"
+    },
+    {
+      "from": "gateway",
+      "to": "postgres",
+      "label": "SQL · metadata",
+      "labelDy": 24
+    },
+    {
+      "from": "gateway",
+      "to": "backend",
+      "label": "proxy · RBAC",
+      "variant": "emphasis"
+    },
+    {
+      "from": "metrics",
+      "to": "backend",
+      "label": "scrapes /metrics",
+      "variant": "dashed",
+      "toSide": "top"
+    },
+    {
+      "from": "backend",
+      "to": "valkey",
+      "label": "enqueues tasks",
+      "variant": "emphasis"
+    },
+    {
+      "from": "valkey",
+      "to": "preview",
+      "label": "preview queue",
+      "fromSide": "top"
+    },
+    {
+      "from": "valkey",
+      "to": "worker",
+      "label": "celery queue",
+      "variant": "emphasis"
+    },
+    {
+      "from": "beat",
+      "to": "valkey",
+      "label": "periodic tasks",
+      "variant": "dashed"
+    },
+    {
+      "from": "worker",
+      "to": "minio",
+      "label": "parquet in/out",
+      "variant": "emphasis",
+      "labelDy": -32
+    },
+    {
+      "from": "preview",
+      "to": "minio",
+      "label": "reads parquet",
+      "toSide": "top"
+    },
+    {
+      "from": "worker",
+      "to": "clickhouse",
+      "label": "SQL over HTTPS",
+      "variant": "dashed"
+    },
+    {
+      "from": "clickhouse",
+      "to": "minio",
+      "label": "s3(): reads and writes parquet",
+      "variant": "dashed"
+    },
+    {
+      "from": "worker",
+      "to": "sources",
+      "label": "ADBC ingest · writes tables",
+      "labelDy": 24,
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Control plane",
+      "items": [
+        "The gateway is the only exposed service: JWT login, per-project RBAC, append-only audit log",
+        "Metadata (users, versioned flows, runs, datasources, encrypted connections) lives in PostgreSQL",
+        "The scheduler runs inside the gateway: on cron it launches flows in production mode on the production engine"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Data plane",
+      "items": [
+        "Every preview and every run is a Celery task: the preview queue stays responsive during long runs",
+        "Engines run in-process in the worker (Polars, DuckDB, chDB); cloud ClickHouse is an optional remote engine",
+        "Content-addressed step cache: parquet under cache/ plus an index on Valkey, 24 h TTL swept hourly"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Storage and boundaries",
+      "items": [
+        "One bucket: datasets/ (snapshots), cache/ (steps), out/ (results); MinIO locally, Scaleway S3 in the cloud",
+        "Source databases are ingested as streaming Arrow → parquet; Output nodes write datasources, tables or S3",
+        "VictoriaMetrics scrapes the Engine API /metrics, celery-exporter, cAdvisor and node-exporter; Grafana shows them"
+      ]
+    }
+  ]
+}
