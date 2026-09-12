@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1.9
+#
+# Immagine di PRODUZIONE del frontend (Nuxt 3, rendering lato server con Nitro).
+# `Dockerfile` resta per lo sviluppo: server di sviluppo con ricaricamento a
+# caldo e sorgenti montati, un modello troppo diverso da un'app compilata per
+# condividere l'immagine.
+#
+# Una sola immagine per ogni ambiente: le voci pubbliche della configurazione
+# si impostano ALL'AVVIO con le variabili d'ambiente, senza ricompilare:
+#   NUXT_PUBLIC_API_BASE     URL pubblico del gateway, chiamato dal browser
+#   NUXT_PUBLIC_BUCKET       bucket di default (deve combaciare con STORAGE__BUCKET)
+#   NUXT_PUBLIC_GRAFANA_URL  Grafana visto dal browser (tab Monitoring, facoltativo)
+# Il server Nuxt non chiama mai le API durante il rendering: tutte le chiamate
+# partono dal browser, quindi il pod non deve raggiungere il gateway.
+#
+# Utente non root 10001 (come backend e gateway), filesystem in sola lettura:
+# il server non scrive file, /tmp resta l'unica directory scrivibile.
+
+########################
+#   Stage 1: build     #
+########################
+FROM node:22-alpine AS build
+
+WORKDIR /build
+
+ENV NUXT_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--max-old-space-size=4096
+
+# dipendenze dal lockfile (layer cache-abile)
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
+
+COPY . .
+RUN npm run build
+
+########################
+#   Stage 2: runtime   #
+########################
+FROM node:22-alpine AS runtime
+
+RUN addgroup -S -g 10001 app \
+ && adduser -S -D -H -u 10001 -G app -s /sbin/nologin app
+
+# HOST/PORT: dove ascolta il server Nitro. HOME=/tmp: l'utente non ha home.
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000 \
+    TMPDIR=/tmp \
+    HOME=/tmp \
+    NUXT_TELEMETRY_DISABLED=1
+
+WORKDIR /app
+
+# Solo l'app compilata: Nitro include in .output le dipendenze che usa davvero
+# (niente node_modules completo, niente sorgenti, niente strumenti di build).
+COPY --from=build --chown=10001:10001 /build/.output ./.output
+
+USER 10001:10001
+
+EXPOSE 3000
+
+CMD ["node", ".output/server/index.mjs"]

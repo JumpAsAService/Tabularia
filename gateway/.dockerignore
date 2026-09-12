@@ -3,3 +3,9 @@ __pycache__/
 .venv/
 .git/
 .pytest_cache/
+# segreti e configurazione locale: non devono MAI entrare in un'immagine
+.env
+.env.*
+*.pem
+*.key
+**/secrets.toml

@@ -228,6 +228,8 @@ celery-exporter. Grafana is embedded in an admin-only Monitoring tab.
 
 ## Quickstart
 
+> Production on Kubernetes: see [`docs/deploy/kubernetes.md`](docs/deploy/kubernetes.md) for the components, the hardened backend image, ingress and storage sizing, and configuration.
+
 Requires Docker and Docker Compose.
 
 ```bash

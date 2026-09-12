@@ -19,3 +19,8 @@ dependencies = [
     "cryptography>=44.0.0",
     "croniter>=6.2.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

@@ -124,6 +124,12 @@ class DuckDBEngine(Engine):
 
     def _connection(self) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
+        # Riversamenti su disco nella directory temporanea di SISTEMA (TMPDIR, di
+        # default /tmp). Il default di DuckDB per i DB in memoria è `.tmp` nella
+        # directory di lavoro: con l'immagine di produzione a filesystem in sola
+        # lettura fallirebbe, e in sviluppo scriverebbe dentro i sorgenti montati.
+        spill_dir = os.path.join(tempfile.gettempdir(), "duckdb")
+        con.execute(f"SET temp_directory = '{spill_dir}'")
         try:
             con.execute("SET TimeZone = 'UTC'")  # i TIMESTAMPTZ letti diventano naive UTC
         except Exception:  # senza estensione ICU DuckDB è comunque in UTC

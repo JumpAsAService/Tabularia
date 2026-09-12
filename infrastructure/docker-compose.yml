@@ -61,9 +61,15 @@ services:
   # Engine (data plane): NON esposto sull'host. Raggiungibile solo dagli altri
   # servizi sulla rete Docker (il gateway ci fa da proxy). Niente `ports:`.
   backend:
+    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
+    # e pytest, in produzione senza; stesse regole, utente non root
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        WITH_CHDB: "true"
+        WITH_DEV: "true"
+    image: tabularia-backend:dev
     container_name: dataprep-backend
     # riparte da solo se il container muore (es. OOM-kill del processo principale):
     # niente engine giù, niente run appesi fino allo stale-timeout
@@ -74,6 +80,9 @@ services:
       - .env
     environment:
       - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
+      # i sorgenti montati appartengono all'utente dell'host, non all'utente 10001
+      # del container: pytest non prova a scriverci la sua cache
+      - PYTEST_ADDOPTS=-p no:cacheprovider
     volumes:
       - ../backend:/app
     depends_on:
@@ -91,9 +100,14 @@ services:
   # Gateway (control plane): UNICO ingresso pubblico (:8000). Auth + RBAC + Postgres,
   # poi inoltra all'engine interno.
   gateway:
+    # immagine UNICA del gateway (vedi gateway/Dockerfile): in sviluppo con
+    # pytest, in produzione senza; stesse regole, utente non root
     build:
       context: ../gateway
       dockerfile: Dockerfile
+      args:
+        WITH_DEV: "true"
+    image: tabularia-gateway:dev
     container_name: dataprep-gateway
     restart: unless-stopped
     ports:
@@ -105,6 +119,9 @@ services:
       - ENGINE__BASE_URL=http://backend:8000
       - DB__HOST=postgres
       - DB__PORT=5432
+      # i sorgenti montati appartengono all'utente dell'host, non all'utente 10001
+      # del container: pytest non prova a scriverci la sua cache
+      - PYTEST_ADDOPTS=-p no:cacheprovider
     volumes:
       - ../gateway:/app
     depends_on:
@@ -124,9 +141,15 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
+    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
+    # e pytest, in produzione senza; stesse regole, utente non root
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        WITH_CHDB: "true"
+        WITH_DEV: "true"
+    image: tabularia-backend:dev
     # NB: niente container_name → così `docker compose up -d --scale worker=N`
     # può avviare più repliche (un nome fisso collide e blocca lo scaling).
     # riparte da solo dopo un OOM-kill del processo principale del worker:
@@ -165,9 +188,15 @@ services:
   # restare a 1 replica — N beat accodano i task periodici N volte. Non esegue
   # task, quindi è leggero e non tocca lo storage (solo il broker).
   beat:
+    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
+    # e pytest, in produzione senza; stesse regole, utente non root
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        WITH_CHDB: "true"
+        WITH_DEV: "true"
+    image: tabularia-backend:dev
     container_name: dataprep-beat
     restart: unless-stopped
     env_file:
@@ -187,9 +216,15 @@ services:
   # alta possibile, ma con lo stesso tetto di memoria per-figlio derivato dal
   # limite del container (scala automaticamente con mem_limit/concurrency).
   preview-worker:
+    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
+    # e pytest, in produzione senza; stesse regole, utente non root
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        WITH_CHDB: "true"
+        WITH_DEV: "true"
+    image: tabularia-backend:dev
     # niente container_name → scalabile con --scale preview-worker=N
     restart: unless-stopped
     env_file:

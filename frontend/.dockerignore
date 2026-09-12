@@ -1,0 +1,17 @@
+# prodotti locali: le immagini installano e compilano da sé
+node_modules/
+.nuxt/
+.output/
+.data/
+.cache/
+dist/
+*.log
+
+# niente segreti né configurazione locale nelle immagini
+.env
+.env.*
+
+# file del repository che l'immagine non usa
+.git/
+image.png
+Dockerfile*

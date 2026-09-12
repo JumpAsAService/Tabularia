@@ -128,8 +128,16 @@ ENGINE_CATALOG = [
         "id": "chdb",
         "label": "chDB (ClickHouse)",
         "available": _CHDB_AVAILABLE,
-        "description": "Motore SQL out-of-core con dialetto ClickHouse (spill su disco). "
-        "v1: operazioni strutturali (sql/foreach usano Polars o DuckDB).",
+        # opzionale: l'immagine di produzione leggera non lo include (WITH_CHDB);
+        # se manca, il selettore lo mostra «non configurato», non «in arrivo»
+        "optional": True,
+        "description": (
+            "Motore SQL out-of-core con dialetto ClickHouse (spill su disco). "
+            "v1: operazioni strutturali (sql/foreach usano Polars o DuckDB)."
+            if _CHDB_AVAILABLE
+            else "Embedded ClickHouse engine, not included in this image: "
+            "rebuild the backend with WITH_CHDB=true to enable it."
+        ),
     },
     {
         "id": "clickhouse",
@@ -156,6 +164,15 @@ def get_engine(name: str | None = None) -> Engine:
     key = (name or DEFAULT_ENGINE).lower()
     factory = _ENGINES.get(key)
     if factory is None:
+        # engine NOTO ma assente in questo deployment (es. chDB escluso
+        # dall'immagine leggera, ClickHouse esterno non configurato): messaggio
+        # per l'utente, in inglese, che non lo chiama «sconosciuto»
+        known = next((e for e in ENGINE_CATALOG if e["id"] == key), None)
+        if known is not None:
+            raise EngineError(
+                f"The {known['label']} engine is not available in this deployment. "
+                "Choose another engine for this flow, or ask the administrator to enable it."
+            )
         raise EngineError(
             f"engine sconosciuto: '{name}'. Disponibili: {', '.join(sorted(_ENGINES))}."
         )
