@@ -10,6 +10,9 @@ from app.api.routes.db import router as db_router
 from app.api.routes.dbt import router as dbt_router
 
 
+# la chiave Fernet è obbligatoria in ogni ambiente: senza, meglio non partire
+get_settings().check_required_secrets()
+
 app = FastAPI(
     title="Data Prep API",
     description="API per Data Preparation Tool",

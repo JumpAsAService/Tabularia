@@ -31,7 +31,9 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # in produzione i default di sviluppo (jwt/admin/db) bloccano l'avvio
+    # la chiave Fernet è obbligatoria SEMPRE; in produzione anche i default di
+    # sviluppo (jwt/admin/db) bloccano l'avvio
+    get_settings().check_required_secrets()
     get_settings().check_production_safety()
     # crea le tabelle e semina l'admin da env (idempotente)
     init_db()

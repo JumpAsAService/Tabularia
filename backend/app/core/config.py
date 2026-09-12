@@ -151,8 +151,8 @@ class MetricsSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class SecuritySettings(BaseModel):
     # env: SECURITY__FERNET_KEY — chiave condivisa gateway↔engine con cui le
-    # credenziali delle connessioni DB viaggiano/riposano cifrate. Vuota = chiave
-    # di sviluppo (vedi app/core/crypto.py); in produzione va impostata.
+    # credenziali delle connessioni DB viaggiano/riposano cifrate. OBBLIGATORIA in
+    # ogni ambiente: senza, API e worker non partono (check_required_secrets).
     fernet_key: str = ""
 
 
@@ -322,6 +322,26 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development environment"""
         return self.app.env_name.lower() in ("development", "dev", "local")
+
+    def check_required_secrets(self) -> None:
+        """La chiave Fernet è OBBLIGATORIA in ogni ambiente, anche in sviluppo:
+        senza, le credenziali delle connessioni non si possono cifrare né
+        decifrare e le API fallirebbero al primo uso. Meglio non partire, con
+        un messaggio chiaro. Chiamata allo startup (API, worker, beat)."""
+        from cryptography.fernet import Fernet
+
+        hint = (
+            'genera con: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())" e impostala in infrastructure/.env '
+            "(identica in gateway ed engine)"
+        )
+        key = self.security.fernet_key
+        if not key:
+            raise RuntimeError(f"SECURITY__FERNET_KEY non impostata: {hint}")
+        try:
+            Fernet(key)
+        except Exception as e:  # base64 malformato, lunghezza sbagliata…
+            raise RuntimeError(f"SECURITY__FERNET_KEY non valida ({e}): {hint}") from e
 
 
 # ─────────────────────────────────────────────────────────────────────────────

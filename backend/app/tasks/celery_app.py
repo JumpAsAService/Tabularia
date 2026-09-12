@@ -7,6 +7,9 @@ from app.core.config import get_settings, resolve_max_memory_per_child_kb
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+# la chiave Fernet è obbligatoria in ogni ambiente: il worker che dovrà
+# decifrare le credenziali non deve nemmeno partire senza
+settings.check_required_secrets()
 
 celery_app = Celery(
     "data_prep",

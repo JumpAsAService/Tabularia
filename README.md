@@ -62,20 +62,28 @@ builder on top of their existing databases and object storage.
 
 ## Architecture
 
-```
- Browser (Nuxt 3 + Vue Flow editor · i18n · themes)
-    │
-    ▼
- Gateway  ── FastAPI · JWT auth · RBAC · audit log · scheduling
-    │           metadata in Postgres (users, groups, projects,
-    │           permissions, flows, connections, runs, schedules)
-    ▼
- Engine   ── FastAPI · declarative IR → pluggable executor
-    │           preview (sync) · runs & DB ingest (Celery workers)
-    ├── Valkey  — broker, cache index, counters
-    └── S3 storage — MinIO by default; any S3 endpoint via env vars
-                     (raw/ → datasets/ → cache/ → out/, all parquet)
-```
+[![Tabularia runtime architecture](docs/architecture/tabularia-runtime.png)](https://jumpasaservice.github.io/Tabularia/architecture/runtime-architecture.html)
+
+**[Open the interactive diagram](https://jumpasaservice.github.io/Tabularia/architecture/runtime-architecture.html)**
+(pan/zoom, light/dark theme, search, guided views, PNG/SVG export). It is generated
+with [Archify](https://github.com/tt-a1i/archify) from
+[`docs/architecture/runtime.architecture.json`](docs/architecture/runtime.architecture.json);
+every node cites the source files that implement it, verified against the commit
+pinned in the spec.
+
+| Runtime component | Role |
+|---|---|
+| Web UI | Nuxt 3 app, calls the gateway only (JWT) |
+| Gateway | FastAPI control plane: auth, RBAC, audit, in-process scheduler; proxies to the engine after the permission check |
+| PostgreSQL | control-plane metadata (users, groups, projects, versioned flows, connections, runs, schedules, audit) |
+| Engine API | FastAPI on the private network: turns every preview and run into a Celery task |
+| Valkey | Celery broker and step-cache index |
+| Run worker / preview worker | Celery workers on two queues (`celery`: runs, DB ingest, export · `preview`: interactive previews); engines in-process (Polars, DuckDB, chDB) |
+| Celery beat | cache eviction and storage statistics |
+| Object storage | one bucket, all parquet: `datasets/` snapshots, `cache/` steps, `out/` results (MinIO locally, any S3 such as Scaleway in the cloud) |
+| ClickHouse cloud | optional remote engine, reads and writes the parquet directly through `s3()` |
+| External databases | sources ingested via ADBC into parquet snapshots; Output nodes can write tables back |
+| VictoriaMetrics + Grafana | scrape the engine `/metrics`, celery-exporter, cAdvisor and node-exporter |
 
 The **gateway** (control plane) is the only public ingress: it owns the metadata
 Postgres and enforces auth + RBAC on every call before proxying to the internal
@@ -161,7 +169,7 @@ Every node's output is **content-addressed and cached**: editing the last step o
 
 ## Storage layout
 
-All parquet, in S3 (MinIO by default):
+All parquet, in S3 (MinIO by default, but each S3 compatible cloud object storages are supported):
 
 ```
 raw/       ingested files, as uploaded
@@ -221,6 +229,9 @@ Requires Docker and Docker Compose.
 git clone git@github.com:JumpAsAService/Tabularia.git
 cd Tabularia/infrastructure
 cp .env.example .env        # then edit: secrets, admin credentials, timezone
+# required in every environment: the key that encrypts DB-connection passwords
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#   → paste it as SECURITY__FERNET_KEY in .env (compose refuses to start without it)
 docker compose up -d
 ```
 
@@ -235,9 +246,10 @@ Upload a CSV/XLSX/JSON/parquet file **or** connect a database, drag transformati
 from the sidebar, connect nodes, preview at any point, then run — or download any
 node's data as CSV/Excel.
 
-**Production note:** the gateway refuses to start with `APP__ENV_NAME=production`
-unless the dev-default secrets (`JWT__SECRET`, admin and DB passwords) have been
-overridden. Storage, broker, database, and timezone are all env-driven — pointing at
+**Secrets:** `SECURITY__FERNET_KEY` is mandatory everywhere — gateway, engine and
+workers refuse to start without a valid key, in development too. With
+`APP__ENV_NAME=production` the gateway additionally refuses the dev-default secrets
+(`JWT__SECRET`, admin and DB passwords) until they are overridden. Storage, broker, database, and timezone are all env-driven — pointing at
 managed S3/Postgres/Redis-compatible services is a config change, not a code change.
 
 ## Sample database (optional)

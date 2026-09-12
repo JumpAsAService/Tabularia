@@ -72,6 +72,8 @@ services:
       - "8000"  # solo interno alla rete dataprep-network
     env_file:
       - .env
+    environment:
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
     volumes:
       - ../backend:/app
     depends_on:
@@ -99,6 +101,7 @@ services:
     env_file:
       - .env
     environment:
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
       - ENGINE__BASE_URL=http://backend:8000
       - DB__HOST=postgres
       - DB__PORT=5432
@@ -136,6 +139,7 @@ services:
       # questo gonfia l'RSS residuo (memoria non restituita all'OS). Limitare le
       # arene riduce la frammentazione e appiattisce gli scalini di memoria.
       - MALLOC_ARENA_MAX=2
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
     volumes:
       - ../backend:/app
     depends_on:
@@ -168,6 +172,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
     volumes:
       - ../backend:/app
     depends_on:
@@ -191,6 +197,7 @@ services:
     environment:
       - MALLOC_ARENA_MAX=2
       - CELERY__WORKER_CONCURRENCY=${PREVIEW_WORKER_CONCURRENCY:-2}
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
     volumes:
       - ../backend:/app
     depends_on:

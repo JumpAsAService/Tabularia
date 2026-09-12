@@ -17,8 +17,9 @@ from app.core.config import get_settings
 def _fernet() -> Fernet:
     # Fail-closed: senza chiave si RIFIUTA di operare, invece di ripiegare in
     # silenzio su una chiave nota nel repo (che renderebbe i segreti cifrati
-    # equivalenti a testo in chiaro). Vale in ogni ambiente, non solo in prod.
-    # Dev: impostala in infrastructure/.env (uguale in gateway ed engine).
+    # equivalenti a testo in chiaro). Vale in ogni ambiente, non solo in prod:
+    # lo startup (Settings.check_required_secrets) la pretende già, questo è
+    # il secondo lucchetto. Impostala in infrastructure/.env (uguale ovunque).
     key = get_settings().security.fernet_key
     if not key:
         raise RuntimeError(
