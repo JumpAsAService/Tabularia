@@ -11,6 +11,7 @@ from app.db.session import backfill_flow_versions, init_db
 from app.db.seed import seed_admin
 from app.services.scheduler import scheduler_loop
 from app.routes.auth import router as auth_router
+from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
 from app.routes.groups import router as groups_router
 from app.routes.projects import router as projects_router
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
     # la chiave Fernet è obbligatoria SEMPRE; in produzione anche i default di
     # sviluppo (jwt/admin/db) bloccano l'avvio
     get_settings().check_required_secrets()
+    get_settings().check_sso_config()  # SSO acceso ⇒ configurazione completa
     get_settings().check_production_safety()
     # crea le tabelle e semina l'admin da env (idempotente)
     init_db()
@@ -80,6 +82,7 @@ def health():
 
 # control plane
 app.include_router(auth_router)
+app.include_router(sso_router)
 app.include_router(users_router)
 app.include_router(groups_router)
 app.include_router(projects_router)

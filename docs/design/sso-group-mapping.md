@@ -1,9 +1,18 @@
 # Design note — SSO & external group mapping (OIDC)
 
-**Status:** proposal (not yet implemented). This note describes how an external
-identity provider (Keycloak, Microsoft Entra ID / MSAL, Auth0, Okta, …) would plug
-into Tabularia and how its groups/roles map onto Tabularia groups, so consumers can
-evaluate the effort and so a future implementation stays aligned.
+**Status: implemented and optional.** An external identity provider (Keycloak,
+Microsoft Entra ID / MSAL, Auth0, Okta, …) plugs into the gateway and its groups or
+app roles drive Tabularia's RBAC. The feature is inert until `OIDC__ISSUER` is set.
+
+Where it lives:
+
+| piece | file |
+|---|---|
+| OIDC front door (discovery, PKCE, JWKS validation, group sync) | [`gateway/app/services/sso.py`](../../gateway/app/services/sso.py) |
+| routes `/auth/sso/config`, `/auth/sso/login`, `/auth/sso/callback` | [`gateway/app/routes/sso.py`](../../gateway/app/routes/sso.py) |
+| `OIDC__*` settings + startup coherence check | [`gateway/app/core/config.py`](../../gateway/app/core/config.py) |
+| login button and callback landing page | [`frontend/pages/login.vue`](../../frontend/pages/login.vue), [`frontend/pages/auth/callback.vue`](../../frontend/pages/auth/callback.vue) |
+| tests | [`gateway/tests/test_sso.py`](../../gateway/tests/test_sso.py) |
 
 A runnable Keycloak example lives in [`../examples/keycloak/`](../examples/keycloak/).
 
@@ -17,8 +26,8 @@ authorization layer, the audit trail, or saved flows.
 
 ## Current auth model (recap)
 
-- **Local only today.** `POST /auth/login` verifies an email + bcrypt password and
-  issues an internal **JWT** (`HS256`, `sub = user.id`), see
+- **Local login is still the baseline.** `POST /auth/login` verifies an email + bcrypt
+  password and issues an internal **JWT** (`HS256`, `sub = user.id`), see
   [`gateway/app/routes/auth.py`](../../gateway/app/routes/auth.py) and
   [`gateway/app/core/security.py`](../../gateway/app/core/security.py).
 - **Groups are name-keyed.** `groups.name` is `unique`; membership is the
@@ -69,17 +78,30 @@ Browser                Gateway                         IdP (Keycloak/Entra)
 
 ## The two seams
 
-### 1. Token acceptance — new SSO routes
-Add `GET /auth/sso/login` (redirect to the IdP `authorize` endpoint with `state` +
-`nonce`) and `GET /auth/sso/callback` (exchange code, validate token against the IdP
-**JWKS**, checking `iss`/`aud`/`exp`/`nonce`). Discovery via the IdP's
-`.well-known/openid-configuration`. Local `POST /auth/login` is untouched.
+### 1. Token acceptance — SSO routes
+`GET /auth/sso/login` redirects to the IdP `authorize` endpoint with `state`, `nonce`
+and a PKCE challenge, all carried in a signed, HttpOnly, 10-minute cookie scoped to
+`/auth/sso` (no server-side session, so replicas and restarts are fine).
+`GET /auth/sso/callback` exchanges the code and validates the id_token against the IdP
+**JWKS**, checking `iss`, `aud`, `exp` and `nonce`. Discovery comes from the IdP's
+`.well-known/openid-configuration`, cached for an hour. Local `POST /auth/login` is
+untouched. `GET /auth/sso/config` is public and tells the login page whether to show
+the button; it exposes only `enabled` and the label, never issuer or client id.
+
+Only asymmetric signatures are accepted (`RS*`, `PS*`, `ES*`): never `none`, never
+`HS*` with the client secret as key.
+
+The internal token reaches the browser through the URL **fragment**
+(`OIDC__POST_LOGIN_URL#token=…`), which browsers never send to a server: it stays out
+of access logs and `Referer`. The landing page moves it into the session cookie and
+clears the address bar immediately.
 
 ### 2. Group sync — one reconcile function
-On successful validation, reconcile membership from the token's group/role claim:
+On successful validation, `provision_and_sync()` reconciles membership from the token's
+group/role claim. The shipped version follows this shape:
 
 ```python
-# gateway/app/services/sso.py  (sketch)
+# gateway/app/services/sso.py  (shape; read the file for the real thing)
 def provision_and_sync(session, claims, cfg) -> User:
     email = claims["email"]
     user = session.exec(select(User).where(User.email == email)).first()
@@ -122,10 +144,10 @@ maintains.
 
 ## Data-model changes
 
-- `users.hashed_password` is currently `NOT NULL`. Make it **nullable** (or accept an
-  empty sentinel) so SSO-only users need no local password. Small forward migration in
-  [`gateway/app/db/session.py`](../../gateway/app/db/session.py) (the project does
-  lightweight in-code migrations there).
+- `users.hashed_password` is **nullable**: an SSO-only user has no local password, and
+  local login refuses those accounts outright (no empty-password back door). Forward
+  migration in [`gateway/app/db/session.py`](../../gateway/app/db/session.py) (the
+  project does lightweight in-code migrations there).
 - *(Optional)* add `users.idp` and `users.external_id` to disambiguate identities
   across providers and pin an account to an IdP subject (`sub`). Not required if email
   is the stable key.
@@ -149,6 +171,8 @@ OIDC__GROUP_ALLOWLIST=                      # empty = allow all
 OIDC__AUTO_CREATE_GROUPS=false
 OIDC__AUTHORITATIVE=true
 OIDC__SUPERUSER_GROUP=tabularia-admins
+OIDC__POST_LOGIN_URL=http://localhost:3000/auth/callback   # frontend landing page
+OIDC__BUTTON_LABEL=Single sign-on                          # label on the login page
 ```
 
 The gateway self-configures from `${OIDC__ISSUER}/.well-known/openid-configuration`
@@ -169,26 +193,29 @@ The gateway self-configures from `${OIDC__ISSUER}/.well-known/openid-configurati
 - **Audit.** Emit `LOGIN` (and a new `SSO_LOGIN` / `GROUP_SYNC`) audit events through
   the existing `record_audit`, including the resolved group delta.
 
-## Effort estimate
+## What shipped
 
-Well-scoped, comparable to one of the existing feature "phases" — **not** a
-rearchitecture:
-
-- one new service (`sso.py`: discovery, token validation, provision+sync),
-- two routes (`/auth/sso/login`, `/auth/sso/callback`),
-- an `OidcSettings` block,
+- one service (`sso.py`: discovery, PKCE, token validation, provision + sync),
+- three routes (`/auth/sso/config`, `/auth/sso/login`, `/auth/sso/callback`),
+- an `OidcSettings` block plus a startup check that refuses a half-configured IdP,
 - a nullable-`hashed_password` migration,
-- a frontend "Sign in with SSO" button + redirect handling,
-- one dependency (`authlib`, which bundles JWKS validation and the code flow).
+- a "Sign in with SSO" button and a `/auth/callback` landing page in the frontend,
+- two audit actions (`auth.sso_login`, `auth.sso_login_failed`) carrying the group delta,
+- **no new dependency**: discovery and token exchange use `httpx`, validation uses
+  `PyJWT` (`PyJWKClient`), PKCE uses the standard library. All were already present.
 
-The **group mapping itself is trivial** (reconciling name-keyed rows); the work is the
-OIDC front door.
+As predicted, the group mapping is the trivial half (reconciling name-keyed rows); the
+OIDC front door was the work.
 
-## Open questions
+## Deliberately left out
 
-- Multiple IdPs simultaneously, or one per deployment? (One is simpler; `users.idp`
-  leaves the door open.)
-- Should group **auto-create** ever be allowed, or always map to admin-curated groups?
-  (Allowlist is safer for RBAC hygiene.)
-- Do consumers need SCIM-style background sync, or is login-time JIT enough for v1?
-  (JIT is enough for the stated use case.)
+- **One IdP per deployment.** Multiple simultaneous providers would need `users.idp` to
+  disambiguate identities; email is the stable key today.
+- **No SCIM / background sync.** Membership is reconciled at login. A user removed from
+  an IdP group keeps their Tabularia access until the internal JWT expires
+  (`JWT__ACCESS_TTL_MINUTES`, 12h by default) and they sign in again. Shorten the TTL
+  where faster deprovisioning matters.
+- **No single logout.** Signing out of Tabularia drops the local session; the IdP
+  session is untouched.
+- **Group auto-creation is off by default.** Mapping onto admin-curated groups keeps
+  RBAC hygiene; turn it on only when the IdP is the source of truth for group names.

@@ -27,6 +27,27 @@ export function useAuth() {
     await fetchMe()
   }
 
+  // SSO OIDC (opzionale): il gateway dice se è configurato. Mai un errore se
+  // spento — la pagina di login deve funzionare comunque.
+  async function ssoConfig(): Promise<{ enabled: boolean; button_label: string }> {
+    try {
+      return await $fetch<{ enabled: boolean; button_label: string }>(`${base}/auth/sso/config`)
+    } catch {
+      return { enabled: false, button_label: '' }
+    }
+  }
+
+  // avvia il flusso SSO: navigazione vera (non fetch), il gateway redirige all'IdP
+  function ssoLogin() {
+    window.location.href = `${base}/auth/sso/login`
+  }
+
+  // token consegnato dal callback SSO: stessa sessione del login locale
+  async function adoptToken(accessToken: string): Promise<Me | null> {
+    token.value = accessToken
+    return await fetchMe()
+  }
+
   async function fetchMe(): Promise<Me | null> {
     if (!token.value) {
       user.value = null
@@ -49,5 +70,5 @@ export function useAuth() {
     navigateTo('/login')
   }
 
-  return { token, user, login, logout, fetchMe }
+  return { token, user, login, logout, fetchMe, ssoConfig, ssoLogin, adoptToken }
 }

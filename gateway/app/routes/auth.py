@@ -15,7 +15,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login", response_model=Token)
 def login(body: LoginRequest, request: Request, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.email == body.email)).first()
-    if user is None or not verify_password(body.password, user.hashed_password):
+    # utente solo-SSO (nessuna password locale): entra solo dall'IdP
+    if user is None or not user.hashed_password or not verify_password(body.password, user.hashed_password):
         # login fallito: si registra chi ci ha provato e da dove (email tentata)
         audit.record_audit(
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,

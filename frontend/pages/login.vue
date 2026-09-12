@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { LogIn } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { LogIn, KeyRound } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 
-const { login } = useAuth()
+const { login, ssoConfig, ssoLogin } = useAuth()
+const { t } = useI18n()
 
 const email = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
+
+// SSO OIDC: il pulsante compare solo se il gateway è configurato con un IdP
+const sso = ref<{ enabled: boolean; button_label: string }>({ enabled: false, button_label: '' })
+onMounted(async () => {
+  sso.value = await ssoConfig()
+  // il callback SSO rimanda qui con ?sso_error=<codice> se qualcosa è andato storto
+  const code = new URLSearchParams(window.location.search).get('sso_error')
+  if (code) error.value = t('login.ssoError', { code })
+})
 
 async function onSubmit() {
   busy.value = true
@@ -42,11 +53,22 @@ async function onSubmit() {
       <button class="primary" type="submit" :disabled="busy">
         <LogIn :size="15" /> {{ busy ? $t('login.signingIn') : $t('login.signIn') }}
       </button>
+
+      <!-- SSO opzionale: senza IdP configurato questo blocco non esiste -->
+      <template v-if="sso.enabled">
+        <div class="sep"><span>{{ $t('login.or') }}</span></div>
+        <button class="sso" type="button" @click="ssoLogin()">
+          <KeyRound :size="15" /> {{ sso.button_label || $t('login.signInWithSso') }}
+        </button>
+      </template>
     </form>
   </div>
 </template>
 
 <style scoped>
+.sep { display: flex; align-items: center; gap: 10px; margin: 14px 0 10px; color: var(--muted); font-size: 12px; }
+.sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.sso { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 9px 12px; }
 .login-wrap {
   display: flex;
   align-items: center;

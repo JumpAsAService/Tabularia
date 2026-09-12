@@ -68,6 +68,8 @@ export default {
     "heading": "Audit log",
     "loginAction": "Login",
     "loginFailedAction": "Login fallito",
+    "ssoLoginAction": "Login SSO",
+    "ssoLoginFailedAction": "Login SSO fallito",
     "logoutAction": "Logout",
     "nextPage": "Successivi",
     "noEvents": "Nessun evento.",

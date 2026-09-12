@@ -10,8 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle,
-} from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 
@@ -120,6 +119,8 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
   'auth.login': { icon: LogIn, color: '#6ee7b7', label: t('audit.loginAction') },
   'auth.login_failed': { icon: XCircle, color: '#ff6b6b', label: t('audit.loginFailedAction') },
   'auth.logout': { icon: LogOut, color: '#8b93a7', label: t('audit.logoutAction') },
+  'auth.sso_login': { icon: KeyRound, color: '#6ee7b7', label: t('audit.ssoLoginAction') },
+  'auth.sso_login_failed': { icon: KeyRound, color: '#ff6b6b', label: t('audit.ssoLoginFailedAction') },
   'flow.create': { icon: Workflow, color: '#4f8cff', label: t('audit.flowCreateAction') },
   'flow.update': { icon: Workflow, color: '#4f8cff', label: t('audit.flowUpdateAction') },
   'flow.delete': { icon: Workflow, color: '#ff6b6b', label: t('audit.flowDeleteAction') },

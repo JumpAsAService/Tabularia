@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from app.api.models import TaskResponse
 from app.core.config import get_settings
 from app.ingest.converters import IngestError
+from app.ingest.db_errors import describe_db_error
 from app.ingest.db_source import (
     DbConnectionSpec,
     DbSourceError,
@@ -30,9 +31,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/db", tags=["db"])
 
 
-def _friendly(e: Exception) -> str:
-    """Messaggio d'errore compatto del driver (OperationalError ecc.), troncato."""
-    return f"{type(e).__name__}: {e}"[:500]
+def _friendly(e: Exception, connection: Optional[dict] = None) -> str:
+    """Messaggio del server del database (vedi app.ingest.db_errors), non
+    l'eccezione Python di trasporto."""
+    c = connection or {}
+    return describe_db_error(e, c.get("db_type"), c.get("host"), c.get("port"))
 
 
 class DbInspectRequest(BaseModel):
@@ -62,7 +65,7 @@ def inspect(request: DbInspectRequest):
     except IngestError as e:  # DbSourceError, S3DestinationError: già parlanti
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:  # errori driver: connessione rifiutata, auth, DNS…
-        raise HTTPException(status_code=400, detail=_friendly(e))
+        raise HTTPException(status_code=400, detail=_friendly(e, request.connection))
 
 
 class DbIngestRequest(BaseModel):

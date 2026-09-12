@@ -67,6 +67,70 @@ class EngineSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SSO OIDC (OPZIONALE): Keycloak, Microsoft Entra ID (MSAL), Auth0, Okta…
+#
+# Disattivato finché `issuer` e `client_id` non sono valorizzati: senza, il
+# login locale resta l'unico e il frontend non mostra nemmeno il pulsante.
+# Il gateway si auto-configura da {issuer}/.well-known/openid-configuration.
+# L'IdP NON sostituisce il JWT interno: dopo la validazione del token OIDC si
+# emette il solito token Tabularia, così RBAC e audit restano identici.
+# ─────────────────────────────────────────────────────────────────────────────
+class OidcSettings(BaseModel):
+    # env: OIDC__ISSUER — es. https://keycloak.example.com/realms/tabularia
+    #   Entra ID: https://login.microsoftonline.com/<tenant-id>/v2.0
+    issuer: str = ""
+    # env: OIDC__CLIENT_ID / OIDC__CLIENT_SECRET (client confidenziale)
+    client_id: str = ""
+    client_secret: SecretStr = SecretStr("")
+    # env: OIDC__REDIRECT_URI — deve combaciare ESATTAMENTE con quella registrata
+    # sull'IdP; punta al gateway: https://gateway.example.com/auth/sso/callback
+    redirect_uri: str = ""
+    # env: OIDC__SCOPES — separati da spazio
+    scopes: str = "openid profile email"
+    # env: OIDC__GROUPS_CLAIM — 'groups' (Keycloak) o 'roles' (app role di Entra)
+    groups_claim: str = "groups"
+    # env: OIDC__GROUP_ALLOWLIST — nomi separati da virgola; vuoto = tutti
+    group_allowlist: str = ""
+    # env: OIDC__AUTO_CREATE_GROUPS — crea i gruppi Tabularia mancanti al login.
+    # False (default) = mappa solo su gruppi già curati dall'admin (più igienico)
+    auto_create_groups: bool = False
+    # env: OIDC__AUTHORITATIVE — True: l'IdP possiede l'appartenenza (toglie i
+    # gruppi non presenti nella claim). False: l'SSO aggiunge soltanto.
+    authoritative: bool = True
+    # env: OIDC__SUPERUSER_GROUP — appartenervi concede is_superuser (vuoto = mai)
+    superuser_group: str = ""
+    # env: OIDC__POST_LOGIN_URL — pagina del FRONTEND che riceve il token
+    post_login_url: str = "http://localhost:3000/auth/callback"
+    # env: OIDC__BUTTON_LABEL — etichetta del pulsante nella pagina di login
+    button_label: str = "Single sign-on"
+    # env: OIDC__DISCOVERY_TTL_SECONDS — cache del documento di discovery
+    discovery_ttl_seconds: int = 3600
+    # env: OIDC__TIMEOUT_SECONDS — timeout delle chiamate all'IdP
+    timeout_seconds: float = 10.0
+    # env: OIDC__LOGIN_TX_TTL_SECONDS — validità della transazione di login
+    # (cookie con state/nonce/PKCE): quanto può durare la schermata dell'IdP
+    login_tx_ttl_seconds: int = 600
+
+    @computed_field
+    @property
+    def enabled(self) -> bool:
+        """SSO attivo solo se configurato: nessun default nascosto."""
+        return bool(self.issuer and self.client_id)
+
+    @property
+    def allowlist(self) -> set[str]:
+        return {g.strip() for g in self.group_allowlist.split(",") if g.strip()}
+
+    @property
+    def scope_list(self) -> list[str]:
+        return [s for s in self.scopes.split() if s]
+
+    @property
+    def discovery_url(self) -> str:
+        return self.issuer.rstrip("/") + "/.well-known/openid-configuration"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Security: chiave Fernet condivisa con l'engine per le credenziali delle
 # connessioni DB (cifrate a riposo e nei payload verso l'engine)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -155,6 +219,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     engine: EngineSettings = Field(default_factory=EngineSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+    oidc: OidcSettings = Field(default_factory=OidcSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
     def is_production(self) -> bool:
@@ -179,6 +244,28 @@ class Settings(BaseSettings):
             Fernet(key)
         except Exception as e:  # base64 malformato, lunghezza sbagliata…
             raise RuntimeError(f"SECURITY__FERNET_KEY non valida ({e}): {hint}") from e
+
+    def check_sso_config(self) -> None:
+        """Se l'SSO è acceso deve essere COMPLETO: una configurazione a metà
+        (senza segreto o senza redirect URI) fallirebbe solo al primo login, con
+        l'utente davanti. Chiamata allo startup. SSO spento = nessun vincolo."""
+        cfg = self.oidc
+        if not cfg.enabled:
+            return
+        missing = [
+            name for name, value in (
+                ("OIDC__CLIENT_SECRET", cfg.client_secret.get_secret_value()),
+                ("OIDC__REDIRECT_URI", cfg.redirect_uri),
+                ("OIDC__POST_LOGIN_URL", cfg.post_login_url),
+            ) if not value
+        ]
+        if missing:
+            raise RuntimeError(
+                "SSO OIDC attivo ma incompleto, manca: " + ", ".join(missing)
+                + ". Completa la configurazione o togli OIDC__ISSUER per disattivarlo."
+            )
+        if "openid" not in cfg.scope_list:
+            raise RuntimeError("OIDC__SCOPES deve includere 'openid' (è un requisito OIDC)")
 
     def check_production_safety(self) -> None:
         """Rifiuta di partire in produzione con i default di sviluppo.

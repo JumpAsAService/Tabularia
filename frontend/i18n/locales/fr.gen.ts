@@ -68,6 +68,8 @@ export default {
     "heading": "Journal d'audit",
     "loginAction": "Connexion",
     "loginFailedAction": "Connexion échouée",
+    "ssoLoginAction": "Connexion SSO",
+    "ssoLoginFailedAction": "Échec de connexion SSO",
     "logoutAction": "Déconnexion",
     "nextPage": "Suivants",
     "noEvents": "Aucun événement.",

@@ -30,6 +30,10 @@ export default {
     password: 'Contraseña',
     signIn: 'Entrar',
     signingIn: 'Entrando…',
+    or: 'o',
+    signInWithSso: 'Entrar con SSO',
+    ssoCompleting: 'Completando el acceso…',
+    ssoError: 'Error de acceso SSO ({code}). Inténtalo de nuevo o entra con tu correo.',
   },
   outputNode: {
     titleDatabase: 'Salida a base de datos',

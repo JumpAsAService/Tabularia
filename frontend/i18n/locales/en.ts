@@ -31,6 +31,10 @@ export default {
     password: 'Password',
     signIn: 'Sign in',
     signingIn: 'Signing in…',
+    or: 'or',
+    signInWithSso: 'Sign in with SSO',
+    ssoCompleting: 'Completing sign-in…',
+    ssoError: 'Single sign-on failed ({code}). Try again or sign in with your email.',
   },
   outputNode: {
     titleDatabase: 'Database output',

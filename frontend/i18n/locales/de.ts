@@ -30,6 +30,10 @@ export default {
     password: 'Passwort',
     signIn: 'Anmelden',
     signingIn: 'Anmeldung…',
+    or: 'oder',
+    signInWithSso: 'Mit SSO anmelden',
+    ssoCompleting: 'Anmeldung läuft…',
+    ssoError: 'SSO-Anmeldung fehlgeschlagen ({code}). Erneut versuchen oder mit E-Mail anmelden.',
   },
   outputNode: {
     titleDatabase: 'Datenbank-Ausgabe',

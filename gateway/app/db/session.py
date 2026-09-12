@@ -78,6 +78,8 @@ _MIGRATIONS = [
     # Engine con cui ciascun run è stato eseguito
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS engine VARCHAR",
     # Audit: ultima attività autenticata (per le "sessioni attive")
+    # utenti solo-SSO: nessuna password locale (vedi services/sso.py)
+    "ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_ip VARCHAR",
 ]

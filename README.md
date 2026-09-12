@@ -189,9 +189,14 @@ out/       run results, downloadable as CSV/Excel
 - **Audit log**: append-only, with text snapshots that survive rename/delete. Captures
   logins, CRUD, flow runs, data exports, and permission changes; admin tab with a
   24-hour access-activity chart. Secrets (DB passwords) are encrypted at rest (Fernet).
-- **SSO / external group mapping** *(design proposal)*: because RBAC reads only local
-  group tables, mapping an IdP's groups/roles onto Tabularia groups is a name-keyed
-  sync at login. See [`docs/design/sso-group-mapping.md`](docs/design/sso-group-mapping.md)
+- **SSO / OIDC** *(optional)*: sign in against Keycloak, Microsoft Entra ID (MSAL),
+  Auth0 or Okta with the authorization-code flow (PKCE, `state`, `nonce`, id_token
+  validated against the IdP JWKS). Users are provisioned on first login and the IdP's
+  `groups` claim (or Entra app `roles`) is reconciled onto Tabularia groups **by name**,
+  which is all RBAC reads — so permissions, audit and saved flows are untouched. Policy
+  toggles cover authoritative vs additive membership, a group allowlist, auto-creation
+  and a superuser group. Off until `OIDC__ISSUER` is set; local login always stays
+  available as break-glass. See [`docs/design/sso-group-mapping.md`](docs/design/sso-group-mapping.md)
   and the runnable Keycloak example in [`docs/examples/keycloak/`](docs/examples/keycloak/).
 
 ## Scheduling & timezone

@@ -27,6 +27,7 @@ import pyarrow.parquet as pq
 from pydantic import BaseModel
 
 from app.ingest.converters import IngestError
+from app.ingest.db_errors import describe_db_error
 from app.ingest.db_source import _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec
 
 logger = logging.getLogger(__name__)
@@ -340,7 +341,14 @@ def write_parquet_to_db(
             "db-dest %s@%s ← %s → %s (%s, %d colonne)",
             conn.db_type, conn.host, key, qualified, dest.mode, len(schema),
         )
-        rows = writer(conn, dest, qualified, parts, schema, pf.iter_batches(batch_size=BATCH_ROWS))
+        try:
+            rows = writer(conn, dest, qualified, parts, schema, pf.iter_batches(batch_size=BATCH_ROWS))
+        except IngestError:
+            raise
+        except Exception as e:  # errore del driver → messaggio del server del database
+            raise DbDestinationError(
+                describe_db_error(e, conn.db_type, conn.host, conn.port_or_default)
+            ) from e
     finally:
         try:
             os.remove(tmp)

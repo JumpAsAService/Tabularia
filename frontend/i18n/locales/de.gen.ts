@@ -68,6 +68,8 @@ export default {
     "heading": "Audit-Protokoll",
     "loginAction": "Anmeldung",
     "loginFailedAction": "Fehlgeschlagene Anmeldung",
+    "ssoLoginAction": "SSO-Anmeldung",
+    "ssoLoginFailedAction": "Fehlgeschlagene SSO-Anmeldung",
     "logoutAction": "Abmeldung",
     "nextPage": "Nächste",
     "noEvents": "Keine Ereignisse.",

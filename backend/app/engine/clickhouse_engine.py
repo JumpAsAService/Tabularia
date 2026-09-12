@@ -56,14 +56,14 @@ _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 _PARQUET_OUT = {"output_format_parquet_string_as_string": 1}
 
 
-def _clean_error(e: Exception) -> str:
-    """Messaggio d'errore leggibile da un'eccezione clickhouse-connect: tiene la
-    parte `DB::Exception: …` (il resto è rumore HTTP con l'URL del server)."""
-    msg = str(e)
-    idx = msg.find("DB::Exception")
-    if idx >= 0:
-        msg = msg[idx:]
-    return msg.strip()
+def _clean_error(e: Exception, host: str | None = None, port: int | None = None) -> str:
+    """Messaggio del server ClickHouse (vedi app.ingest.db_errors): il testo di
+    `DB::Exception` senza rumore HTTP, anche quando lo stream si interrompe a metà.
+    Già etichettato «ClickHouse: …»: non va incastrato in un'altra frase che
+    ripeta il nome del database."""
+    from app.ingest.db_errors import describe_db_error
+
+    return describe_db_error(e, "clickhouse", host, port)
 
 
 def _source_exists(storage, source: DataSource) -> bool:
@@ -233,7 +233,10 @@ class ClickHouseContext:
             for i in range(pf.num_row_groups):
                 self.client.insert_arrow(table, pf.read_row_group(i), database=self.cfg.database)
         except Exception as e:
-            raise EngineError(f"caricamento della sorgente su ClickHouse fallito: {_clean_error(e)}") from e
+            raise EngineError(
+                "Loading the source onto the server failed. "
+                + _clean_error(e, self.cfg.host, self.cfg.port)
+            ) from e
         return f"SELECT * FROM {qualified}"
 
     # ── sorgenti e catena ────────────────────────────────────────────────
@@ -308,7 +311,7 @@ class ClickHouseEngine(Engine):
                 connect_timeout=self.cfg.connect_timeout,
             )
         except Exception as e:
-            raise EngineError(f"connessione a ClickHouse ({self.cfg.host}:{self.cfg.port}) fallita: {_clean_error(e)}") from e
+            raise EngineError(_clean_error(e, self.cfg.host, self.cfg.port)) from e
 
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"

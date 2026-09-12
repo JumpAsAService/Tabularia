@@ -27,6 +27,7 @@ import pyarrow.parquet as pq
 from pydantic import BaseModel
 
 from app.ingest.converters import IngestError
+from app.ingest.db_errors import describe_db_error
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +333,23 @@ def _null_types_to_string(schema: pa.Schema) -> pa.Schema:
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point: ingest completo verso parquet su storage
 # ─────────────────────────────────────────────────────────────────────────────
+def _guarded(gen: Iterator[Any], conn: DbConnectionSpec) -> Iterator[Any]:
+    """Itera il generatore del driver traducendo i suoi errori nel messaggio del
+    SERVER (vedi db_errors). Riguarda solo le chiamate al driver: un errore di
+    scrittura del parquet o dello storage resta quello originale. La causa
+    originale resta agganciata (`from e`) e finisce nel traceback del run."""
+    while True:
+        try:
+            item = next(gen)
+        except StopIteration:
+            return
+        except IngestError:
+            raise
+        except Exception as e:
+            raise DbSourceError(describe_db_error(e, conn.db_type, conn.host, conn.port_or_default)) from e
+        yield item
+
+
 def ingest_db_to_parquet(
     conn: DbConnectionSpec,
     source: DbSourceSpec,
@@ -348,7 +366,8 @@ def ingest_db_to_parquet(
     query = build_query(conn, source)
     logger.info("db-ingest %s@%s → %s (%s)", conn.db_type, conn.host, key, query[:200])
 
-    gen = _open_batches(conn, query)
+    # errori del driver → messaggio del server del database, non l'eccezione Python
+    gen = _guarded(_open_batches(conn, query), conn)
     try:
         schema = next(gen)
     except StopIteration:  # nessun driver arriva qui, ma il contratto va difeso

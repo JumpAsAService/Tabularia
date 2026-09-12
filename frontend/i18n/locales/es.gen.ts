@@ -68,6 +68,8 @@ export default {
     "heading": "Registro de auditoría",
     "loginAction": "Inicio de sesión",
     "loginFailedAction": "Inicio de sesión fallido",
+    "ssoLoginAction": "Acceso SSO",
+    "ssoLoginFailedAction": "Acceso SSO fallido",
     "logoutAction": "Cierre de sesión",
     "nextPage": "Siguientes",
     "noEvents": "Ningún evento.",

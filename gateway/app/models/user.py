@@ -19,7 +19,9 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
     full_name: str = ""
-    hashed_password: str
+    # None = utente SOLO SSO (nessuna password locale): il login locale lo
+    # rifiuta, entra esclusivamente dall'IdP. Vedi services/sso.py.
+    hashed_password: Optional[str] = None
     is_active: bool = True
     is_superuser: bool = False
     created_at: datetime = Field(default_factory=_now)

@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 # ── azioni note (stringhe stabili: usate anche come filtro nell'UI) ───────────
 LOGIN = "auth.login"
 LOGIN_FAILED = "auth.login_failed"
+SSO_LOGIN = "auth.sso_login"            # login via IdP esterno (OIDC)
+SSO_LOGIN_FAILED = "auth.sso_login_failed"
 FLOW_CREATE = "flow.create"
 FLOW_UPDATE = "flow.update"
 FLOW_DELETE = "flow.delete"
