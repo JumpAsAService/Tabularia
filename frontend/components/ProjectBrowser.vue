@@ -498,7 +498,7 @@ async function revoke(perm: Permission) {
     <div class="tree-pane">
       <div class="pane-head">
         <span>{{ $t('projectBrowser.projectsLabel') }}</span>
-        <button class="mini" :title="$t('projectBrowser.reloadTitle')" @click="loadProjects"><RefreshCw :size="13" /></button>
+        <button class="mini" :title="$t('projectBrowser.reloadTitle')" :aria-label="$t('projectBrowser.reloadTitle')" @click="loadProjects"><RefreshCw :size="13" /></button>
       </div>
 
       <div v-if="!rows.length" class="muted empty">
@@ -550,7 +550,7 @@ async function revoke(perm: Permission) {
           <div class="section-head">
             <label>{{ $t('projectBrowser.flowsLabel') }}</label>
             <div class="newflow">
-              <button class="btn-link primary small" @click="newMenu = !newMenu">
+              <button class="btn-link primary small" aria-haspopup="menu" :aria-expanded="newMenu" @click="newMenu = !newMenu">
                 <Plus :size="13" /> {{ $t('projectBrowser.newFlowButton') }}
               </button>
               <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />

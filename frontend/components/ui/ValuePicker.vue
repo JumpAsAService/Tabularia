@@ -61,7 +61,7 @@ function addFree() {
     <div v-if="modelValue.length" class="chips">
       <span v-for="v in modelValue" :key="String(v)" class="chip">
         {{ v }}
-        <button class="chip-x" :title="$t('valuePicker.remove')" @click="toggle(v)"><X :size="11" /></button>
+        <button class="chip-x" :title="$t('valuePicker.remove')" :aria-label="$t('valuePicker.remove')" @click="toggle(v)"><X :size="11" /></button>
       </span>
     </div>
 

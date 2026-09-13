@@ -118,7 +118,7 @@ async function remove(c: ConnectionInfo) {
               <LoaderCircle v-if="testState[c.id] === 'busy'" :size="13" class="spin" />
               <Plug v-else :size="13" />
             </button>
-            <button class="mini" :title="$t('connections.editConnection')" @click="editing = c"><Pencil :size="13" /></button>
+            <button class="mini" :title="$t('connections.editConnection')" :aria-label="$t('connections.editConnection')" @click="editing = c"><Pencil :size="13" /></button>
             <button class="mini danger" :title="$t('connections.deleteConnection')" @click="remove(c)"><Trash2 :size="13" /></button>
           </td>
         </tr>

@@ -443,7 +443,7 @@ const option = computed(() => {
         <input v-model.number="topN" type="number" min="1" max="200" class="topn" />
       </template>
 
-      <button class="mini" :title="$t('chartPanel.refresh')" @click="refresh"><RefreshCw :size="13" /></button>
+      <button class="mini" :title="$t('chartPanel.refresh')" :aria-label="$t('chartPanel.refresh')" @click="refresh"><RefreshCw :size="13" /></button>
       <span v-if="loading" class="muted">{{ $t('chartPanel.computingFullDataset') }}</span>
       <span v-else-if="error" class="err">{{ error }}</span>
       <span v-else-if="droppedSeries" class="muted">{{ $t('chartPanel.droppedSeries', { n: droppedSeries }) }}</span>

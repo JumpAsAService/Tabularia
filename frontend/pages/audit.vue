@@ -176,7 +176,7 @@ function detailSummary(e: AuditEntry): string {
         <h1><ScrollText :size="18" /> {{ $t('audit.heading') }}</h1>
         <span class="muted sub">{{ $t('audit.subtitle') }}</span>
         <span class="spacer" />
-        <button class="mini" :title="$t('audit.refreshTitle')" @click="load(); loadSessions(); loadAccess()"><RefreshCw :size="14" /></button>
+        <button class="mini" :title="$t('audit.refreshTitle')" :aria-label="$t('audit.refreshTitle')" @click="load(); loadSessions(); loadAccess()"><RefreshCw :size="14" /></button>
       </div>
 
       <!-- accessi ultime 24h -->

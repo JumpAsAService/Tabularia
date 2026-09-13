@@ -107,6 +107,9 @@ onMounted(async () => {
           class="gear"
           :class="{ on: menuOpen }"
           :title="t('settings.title')"
+          :aria-label="t('settings.title')"
+          aria-haspopup="menu"
+          :aria-expanded="menuOpen"
           @click="toggleMenu"
         >
           <Settings :size="16" />

@@ -214,7 +214,7 @@ async function saveSchedule(cron: string, productionEngine?: string) {
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('flows.searchPlaceholder')" /></span>
         <div class="newflow">
-          <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('flows.newFlowButton') }}</button>
+          <button class="btn-link" aria-haspopup="menu" :aria-expanded="newMenu" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('flows.newFlowButton') }}</button>
           <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
           <div v-if="newMenu" class="menu-pop">
             <div class="menu-label">{{ $t('flows.engineMenuTitle') }}</div>
@@ -265,7 +265,7 @@ async function saveSchedule(cron: string, productionEngine?: string) {
             <span class="when muted">{{ fmtDate(f.updated_at) }}</span>
           </button>
           <div class="flow-actions">
-            <button class="mini" :title="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
+            <button class="mini" :title="$t('flows.openEditorTitle')" :aria-label="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
             <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id"
               @click="exportMenuFlow = f">
               <LoaderCircle v-if="exporting === f.id" :size="13" class="spin" />
@@ -275,7 +275,7 @@ async function saveSchedule(cron: string, productionEngine?: string) {
               <LoaderCircle v-if="runningProd === f.id" :size="13" class="spin" />
               <Play v-else :size="13" />
             </button>
-            <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
+            <button class="mini" :class="{ active: !!f.run_schedule }" :title="$t('flows.scheduleRunTitle')" :aria-label="$t('flows.scheduleRunTitle')" @click="scheduleFor = f"><CalendarClock :size="13" /></button>
             <button class="mini danger" :title="$t('flows.deleteFlowTitle')" @click="deleteFlow(f)"><Trash2 :size="13" /></button>
           </div>
         </div>

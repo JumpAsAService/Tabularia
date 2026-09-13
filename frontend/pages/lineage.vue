@@ -412,7 +412,7 @@ function nodeIcon(t: string) {
 
           <!-- pannello di dettaglio del nodo selezionato -->
           <div v-if="selected" class="ln-detail">
-            <button class="ln-detail-x" :title="$t('lineage.close')" @click="selected = null"><X :size="14" /></button>
+            <button class="ln-detail-x" :title="$t('lineage.close')" :aria-label="$t('lineage.close')" @click="selected = null"><X :size="14" /></button>
             <div class="ln-detail-head">
               <component :is="nodeIcon(selected.type)" :size="16" :style="{ color: NODE_META[selected.type]?.color }" />
               <div>

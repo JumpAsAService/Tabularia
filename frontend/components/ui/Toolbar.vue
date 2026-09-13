@@ -128,7 +128,7 @@ const statusIcon = computed(() => {
     <MemoryGauge compact />
     <span class="sep" />
     <NuxtLink to="/" class="navbtn"><ArrowLeft :size="13" /> {{ $t('toolbar.projects') }}</NuxtLink>
-    <button class="navbtn" :title="$t('toolbar.logoutTitle')" @click="logout"><LogOut :size="13" /></button>
+    <button class="navbtn" :title="$t('toolbar.logoutTitle')" :aria-label="$t('toolbar.logoutTitle')" @click="logout"><LogOut :size="13" /></button>
   </div>
 </template>
 

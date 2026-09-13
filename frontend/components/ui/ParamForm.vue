@@ -406,7 +406,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Search :size="13" />
           <input v-model="colQuery[f.key]" type="text" :placeholder="$t('paramForm.searchColumnsPlaceholder')" />
           <span class="muted count">{{ checkedCount(f.key) }}/{{ optionsFor(f).length + phOptions.length }}</span>
-          <button v-if="colQuery[f.key]" class="x" :title="$t('paramForm.clearSearch')" @click="colQuery[f.key] = ''"><X :size="12" /></button>
+          <button v-if="colQuery[f.key]" class="x" :title="$t('paramForm.clearSearch')" :aria-label="$t('paramForm.clearSearch')" @click="colQuery[f.key] = ''"><X :size="12" /></button>
         </div>
         <div class="checks">
           <label v-for="name in filterCols(f.key, optionsFor(f))" :key="name" class="chk">
@@ -672,7 +672,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <Search :size="13" />
           <input v-model="aggQuery" type="text" :placeholder="$t('paramForm.searchAggPlaceholder')" />
           <span class="muted count">{{ visibleAggRows.length }}/{{ aggRows.length }}</span>
-          <button v-if="aggQuery" class="x" :title="$t('paramForm.clearSearch')" @click="aggQuery = ''"><X :size="12" /></button>
+          <button v-if="aggQuery" class="x" :title="$t('paramForm.clearSearch')" :aria-label="$t('paramForm.clearSearch')" @click="aggQuery = ''"><X :size="12" /></button>
         </div>
         <p v-if="aggRows.length && !visibleAggRows.length" class="muted nomatch">{{ $t('paramForm.noAggMatch') }}</p>
         <div v-for="{ r, i } in visibleAggRows" :key="i" class="row">

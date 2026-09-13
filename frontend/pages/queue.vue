@@ -91,7 +91,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
         <h1><Cpu :size="18" /> {{ $t('queue.pageTitle') }}</h1>
         <div class="head-actions">
           <span class="live"><span class="dot" /> {{ $t('queue.liveIndicator', { s: POLL_MS / 1000 }) }}</span>
-          <button class="mini" :title="$t('queue.refreshNow')" @click="tick"><RefreshCw :size="14" /></button>
+          <button class="mini" :title="$t('queue.refreshNow')" :aria-label="$t('queue.refreshNow')" @click="tick"><RefreshCw :size="14" /></button>
         </div>
       </div>
 

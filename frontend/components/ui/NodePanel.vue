@@ -163,7 +163,7 @@ function pickDatasource(id: number | null) {
           <div class="filterhead">
             <span class="muted">{{ i === 0 ? $t('nodePanel.sourceFilterWhere') : $t('nodePanel.sourceFilterAnd') }}</span>
             <span v-if="!isCompleteSourceFilter(f)" class="muted warn">{{ $t('nodePanel.sourceFilterIncomplete') }}</span>
-            <button class="x" :title="$t('nodePanel.sourceFilterRemove')" @click="removeSourceFilter(f.id)"><X :size="12" /></button>
+            <button class="x" :title="$t('nodePanel.sourceFilterRemove')" :aria-label="$t('nodePanel.sourceFilterRemove')" @click="removeSourceFilter(f.id)"><X :size="12" /></button>
           </div>
           <ParamForm
             :node-id="`${node.id}:filter:${f.id}`"

@@ -63,7 +63,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <Search :size="14" />
           <input v-model="q" type="text" :placeholder="$t('runs.searchPlaceholder')" />
         </span>
-        <button class="mini" :title="$t('runs.refresh')" @click="load"><RefreshCw :size="14" /></button>
+        <button class="mini" :title="$t('runs.refresh')" :aria-label="$t('runs.refresh')" @click="load"><RefreshCw :size="14" /></button>
       </div>
     </div>
 
