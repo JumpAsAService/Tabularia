@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
 from app.db.session import backfill_flow_versions, init_db
 from app.db.seed import seed_admin
+from app.services.orchestrator import close_interrupted_orchestrations
 from app.services.scheduler import scheduler_loop
 from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
@@ -41,6 +42,10 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_admin()
     backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
+    # orchestrazioni rimaste appese da un riavvio precedente: nessuno le
+    # riconcilia (non hanno un task sull'engine), quindi resterebbero STARTED per
+    # sempre. Si chiudono qui, dicendo che sono state interrotte.
+    close_interrupted_orchestrations()
     # scheduler in-process del refresh delle datasource database
     stop = asyncio.Event()
     scheduler = asyncio.create_task(scheduler_loop(stop))

@@ -82,6 +82,13 @@ _MIGRATIONS = [
     "ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_ip VARCHAR",
+    # Inizio REALE dell'esecuzione sul worker: il timeout di staleness non deve
+    # contare l'attesa in coda (vedi models/run.py)
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS engine_started_at TIMESTAMP",
+    # Run che ha prodotto lo snapshot corrente: rifiuta gli swap da run più
+    # vecchi (vedi models/datasource.py). Intero semplice, nessuna FK: eviterebbe
+    # un ciclo runs ↔ datasources
+    "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS snapshot_run_id INTEGER",
 ]
 
 

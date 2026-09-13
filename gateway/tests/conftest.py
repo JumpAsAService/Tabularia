@@ -45,6 +45,7 @@ class FakeEngine:
 
     def __init__(self):
         self.deleted: list[tuple[str, str]] = []  # (bucket, key) cancellati
+        self.revoked: list[str] = []  # task_id revocati (DELETE /tasks/{id})
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
@@ -59,6 +60,9 @@ class FakeEngine:
         path = request.url.path
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]
+            if request.method == "DELETE":  # revoca + terminate del task
+                self.revoked.append(tid)
+                return httpx.Response(200, json={"task_id": tid, "status": "revoked"})
             return httpx.Response(200, json=self.task_states.get(tid, self.default_state))
         if path == "/files/object" and request.method == "DELETE":
             if self.delete_status < 400:  # cancellazione effettiva riuscita

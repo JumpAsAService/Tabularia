@@ -61,6 +61,27 @@ def _datasource_name_taken(session: Session, project_id: int, name: str) -> bool
     return _find_datasource(session, project_id, name) is not None
 
 
+def snapshot_key(datasource_id: int | None) -> str:
+    """Chiave del parquet di una datasource: una CARTELLA per datasource, col
+    timestamp nel nome del file.
+
+    Serve all'OPERATIVITÀ, non alla correttezza: si vede a colpo d'occhio a quale
+    datasource appartiene ogni parquet, la pulizia degli orfani può elencare per
+    prefisso invece di scandire tutto, e diventano possibili le regole di ciclo di
+    vita per singola datasource. L'ordine degli aggiornamenti NON si legge da qui
+    (lo dice `Datasource.snapshot_run_id`): il timestamp è quello di SCRITTURA e in
+    una corsa premierebbe il run partito prima e finito dopo, cioè il dato stantio.
+
+    `datasource_id` è ignoto alla PRIMA pubblicazione di un output (la datasource
+    nasce dopo il run): in quel caso il file va in `datasets/new/` e dalla
+    sovrascrittura successiva finisce nella cartella della sua datasource. Le
+    chiavi vecchie (`datasets/<uuid>.parquet`) restano valide: sono solo stringhe,
+    nessuno le interpreta.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"datasets/{datasource_id or 'new'}/{stamp}-{uuid.uuid4().hex[:8]}.parquet"
+
+
 @router.post("/flows/{flow_id}/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)
 async def launch_run(
     flow_id: int,
@@ -134,6 +155,9 @@ async def _launch_flow_run(
     ensure_reads_pinned(user, read_payload, engine_bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
 
+    # cartella di destinazione del parquet: quella della datasource sovrascritta,
+    # quando la si conosce già al lancio (vedi `snapshot_key`)
+    publish_target_id: int | None = None
     if body.publish:
         # pubblicare scrive contenuto nella cartella di destinazione → EDIT
         if session.get(Project, body.publish.project_id) is None:
@@ -157,6 +181,7 @@ async def _launch_flow_run(
                     detail=f"'{body.publish.name}' è una datasource di tipo «{existing.kind}»: "
                     "non è sovrascrivibile da un flusso, scegli un altro nome",
                 )
+            publish_target_id = existing.id  # la sovrascrittura riusa la sua cartella
 
     # destinazione dell'output (nodo Output): la connessione è referenziata per
     # id, il payload con la secret (cifrata) lo costruisce il gateway — mai il client
@@ -234,8 +259,9 @@ async def _launch_flow_run(
             )
 
     # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
-    prefix = "datasets" if body.publish else "out"
-    output_key = f"{prefix}/{uuid.uuid4().hex}.parquet"
+    output_key = (
+        snapshot_key(publish_target_id) if body.publish else f"out/{uuid.uuid4().hex}.parquet"
+    )
 
     client = get_engine_client()
     resp = await client.post(
@@ -288,7 +314,7 @@ async def launch_ingest_run(
     corrente non viene mai disturbato da un refresh in corso.
     """
     bucket = get_settings().engine.bucket
-    output_key = f"datasets/{uuid.uuid4().hex}.parquet"
+    output_key = snapshot_key(ds.id)
     client = get_engine_client()
     resp = await client.post(
         "/db/ingest",
@@ -366,6 +392,34 @@ def _age_seconds(dt: datetime | None) -> float:
     return (datetime.now(timezone.utc) - dt).total_seconds()
 
 
+async def _revoke_task(run: Run) -> None:
+    """Ferma DAVVERO il task sull'engine (revoke + terminate: lo stesso comando del
+    pannello Queue).
+
+    Best-effort: se l'engine non risponde il run viene comunque marcato fallito.
+    Ma senza questo tentativo lo stato direbbe il falso — il task continuerebbe a
+    girare, e a scrivere, mentre la cronologia lo dà per fallito.
+    """
+    if not run.task_id:
+        return
+    try:
+        await get_engine_client().delete(f"/tasks/{run.task_id}")
+        logger.info("run %s scaduto: task %s revocato sull'engine", run.id, run.task_id)
+    except Exception as e:
+        logger.warning("run %s: revoca del task %s non riuscita: %s", run.id, run.task_id, e)
+
+
+def _is_stale_swap(ds: Datasource, run: Run) -> bool:
+    """True se `run` è più VECCHIO del run che ha prodotto lo snapshot corrente.
+
+    Gli id dei run sono monotoni e assegnati al lancio, quindi ordinano per istante
+    di LETTURA della sorgente: un id più basso ha letto prima, e i suoi dati sono
+    più stantii anche se ha finito dopo. Senza baseline (`snapshot_run_id` nullo,
+    snapshot anteriore a questo campo) si accetta.
+    """
+    return ds.snapshot_run_id is not None and run.id is not None and run.id < ds.snapshot_run_id
+
+
 async def _reconcile(session: Session, run: Run) -> Run:
     """Allinea un run non terminale allo stato del task sull'engine.
 
@@ -399,13 +453,21 @@ async def _reconcile(session: Session, run: Run) -> Run:
         error = error or "job interrotto (revocato dall'amministratore)"
         error_detail = None
 
-    if new_status not in TERMINAL_STATES and _age_seconds(run.started_at) > STALE_AFTER_SECONDS:
+    # il cronometro parte dall'esecuzione REALE, non dalla nascita della riga:
+    # `started_at` include l'attesa in coda, e con i worker occupati un run appena
+    # partito verrebbe dichiarato scaduto mentre sta scrivendo.
+    _age = _age_seconds(run.engine_started_at or run.started_at)
+    if new_status not in TERMINAL_STATES and _age > STALE_AFTER_SECONDS:
+        # il task NON si ferma da solo: senza revoca continuerebbe a girare — e a
+        # SCRIVERE — mentre il run risulta fallito. Su un Output in append questo
+        # porta l'utente a rilanciare e ad accodare le stesse righe due volte.
+        await _revoke_task(run)
         new_status = "FAILURE"
         _mins = STALE_AFTER_SECONDS // 60
         error = (
-            f"Timeout: il run ha superato il tempo massimo ({_mins} min) senza completare. "
-            "Se il flusso è solo lento, aumenta il limite (ENGINE__RUN_STALE_TIMEOUT_SECONDS) o "
-            "riduci i dati; altrimenti il worker si è interrotto e il risultato è andato perso."
+            f"Timeout: il run ha superato il tempo massimo ({_mins} min) senza completare ed è "
+            "stato interrotto. Se il flusso è solo lento, aumenta il limite "
+            "(ENGINE__RUN_STALE_TIMEOUT_SECONDS) o riduci i dati."
         )
         error_detail = None
 
@@ -414,6 +476,8 @@ async def _reconcile(session: Session, run: Run) -> Run:
 
     if new_status not in TERMINAL_STATES:  # es. PENDING → STARTED
         run.status = new_status
+        if new_status == "STARTED" and run.engine_started_at is None:
+            run.engine_started_at = datetime.now(timezone.utc)  # inizio reale
         session.add(run)
         session.commit()
         session.refresh(run)
@@ -482,6 +546,21 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
         )
         return
 
+    # un run più VECCHIO di quello che ha prodotto lo snapshot corrente ha letto la
+    # sorgente prima: i suoi dati sono più stantii e non devono rimpiazzare i più
+    # freschi solo perché ha finito dopo. Il suo parquet resta orfano → differita.
+    if _is_stale_swap(ds, run):
+        logger.warning(
+            "run %s: swap rifiutato, la datasource %s ha già lo snapshot del run %s (più recente)",
+            run.id, ds.id, ds.snapshot_run_id,
+        )
+        schedule_blob_deletion(
+            session, run.output_bucket, run.output_key,
+            reason=f"refresh {run.id} superato dal run {ds.snapshot_run_id}",
+        )
+        session.flush()
+        return
+
     old_bucket, old_key = ds.bucket, ds.key
     now = datetime.now(timezone.utc)
     ds.bucket = result.get("bucket") or run.output_bucket
@@ -490,6 +569,7 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     ds.columns = json.dumps(result.get("columns") or [])
     ds.refreshed_at = now
     ds.updated_at = now
+    ds.snapshot_run_id = run.id
     session.add(ds)
     # lo snapshot precedente può essere ancora in lettura da un run/preview che ne
     # ha già risolto la chiave: cancellazione DIFFERITA (grace).
@@ -518,6 +598,18 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
     if run.publish_overwrite:
         existing = _find_datasource(session, run.publish_project_id, run.publish_name)
         if existing is not None and existing.kind == "flow":
+            # come per il refresh: chi ha letto PRIMA non sovrascrive chi ha letto DOPO
+            if _is_stale_swap(existing, run):
+                logger.warning(
+                    "run %s: publish rifiutato, la datasource %s ha già lo snapshot del run %s",
+                    run.id, existing.id, existing.snapshot_run_id,
+                )
+                schedule_blob_deletion(
+                    session, run.output_bucket, run.output_key,
+                    reason=f"publish {run.id} superato dal run {existing.snapshot_run_id}",
+                )
+                session.flush()
+                return
             old_bucket, old_key = existing.bucket, existing.key
             existing.bucket = run.output_bucket
             existing.key = run.output_key
@@ -526,6 +618,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             existing.description = run.publish_description
             existing.flow_id = run.flow_id
             existing.owner_id = existing.owner_id or run.launched_by
+            existing.snapshot_run_id = run.id
             run.datasource_id = existing.id
             session.add(existing)
             session.add(run)
@@ -550,6 +643,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             columns=columns,
             kind="flow",
             flow_id=run.flow_id,
+            snapshot_run_id=run.id,  # baseline per i publish successivi
         )
 
     first = run.publish_name

@@ -62,6 +62,12 @@ class Run(SQLModel, table=True):
     destination: Optional[str] = Field(default=None, sa_column=Column("destination", Text))
 
     started_at: datetime = Field(default_factory=_now)
+    # istante in cui il task ha cominciato a girare DAVVERO sul worker (Celery
+    # riporta STARTED, `task_track_started=True`). `started_at` nasce col lancio e
+    # include l'attesa in coda, quindi non misura l'esecuzione: con i worker
+    # occupati un run appena partito risulterebbe già scaduto. Il timeout di
+    # staleness parte da qui. None = non ancora osservato in esecuzione.
+    engine_started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
 
 

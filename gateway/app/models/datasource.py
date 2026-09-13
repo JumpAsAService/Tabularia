@@ -52,5 +52,15 @@ class Datasource(SQLModel, table=True):
     refresh_scheduled_by: Optional[int] = Field(default=None, foreign_key="users.id")
     next_refresh_at: Optional[datetime] = Field(default=None, index=True)
 
+    # run che ha prodotto lo SNAPSHOT corrente: ordina gli aggiornamenti
+    # concorrenti. Gli id dei run sono monotoni e assegnati al LANCIO, quindi
+    # ordinano per istante di LETTURA della sorgente — non per istante di
+    # scrittura, che premierebbe il run partito prima e finito dopo, cioè il dato
+    # più stantio. Uno swap da un run più vecchio di questo viene rifiutato.
+    # Intero semplice, senza foreign key: `runs.datasource_id` punta già qui e un
+    # riferimento inverso creerebbe un ciclo nella creazione dello schema.
+    # None = nessuna baseline (snapshot anteriore a questo campo) → si accetta.
+    snapshot_run_id: Optional[int] = None
+
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

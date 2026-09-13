@@ -217,6 +217,46 @@ def _finalize_orch_run(run_id: int, status: str, error: str | None = None) -> No
         session.commit()
 
 
+ORCHESTRATION_INTERRUPTED = (
+    "Orchestrazione interrotta dal riavvio del gateway: i passi rimanenti non sono stati "
+    "eseguiti. Controlla cosa è già stato prodotto e rilancia il flusso."
+)
+
+
+def close_interrupted_orchestrations() -> int:
+    """All'avvio: chiude le orchestrazioni rimaste appese da un riavvio precedente.
+
+    Un'orchestrazione gira come task asyncio DENTRO il processo del gateway
+    (`orchestrate_bg`), non come task Celery: se il processo muore — riavvio,
+    deploy, crash — il task sparisce e la riga resta STARTED per sempre, perché
+    `_reconcile` salta i run di orchestrazione (non hanno un task sull'engine) e
+    la passata dello scheduler filtra quelli senza `task_id`.
+
+    Le si marca FAILURE dicendo cosa è successo. NON si riprende l'esecuzione: i
+    passi già eseguiti hanno scritto, e rifarli duplicherebbe gli Output in append.
+    """
+    with Session(engine) as session:
+        stuck = session.exec(
+            select(Run).where(
+                Run.kind == "orchestration",
+                Run.status.not_in(TERMINAL_STATES),  # type: ignore[union-attr]
+            )
+        ).all()
+        if not stuck:
+            return 0
+        now = datetime.now(timezone.utc)
+        for run in stuck:
+            run.status = "FAILURE"
+            run.error = ORCHESTRATION_INTERRUPTED
+            run.finished_at = now
+            session.add(run)
+        session.commit()
+        logger.warning(
+            "avvio: %d orchestrazioni rimaste appese da un riavvio precedente, chiuse", len(stuck)
+        )
+        return len(stuck)
+
+
 async def orchestrate_bg(
     flow_id: int, user_id: int, orch_run_id: int | None = None, trigger_type: str = "manual",
     engine_mode: str = "development",
