@@ -216,10 +216,12 @@ worker's logs.
 
 > **Use a different bucket from the one Tabularia itself runs on.** Point the
 > connection at storage that belongs to the consumer, not at the bucket holding
-> `datasets/`, `cache/`, `out/` and `raw/`. Those prefixes are managed: Tabularia
-> deletes superseded snapshots there on its own schedule, so a copy written under one
-> of them can vanish later without anyone having touched it. A separate bucket also
-> keeps the credentials scoped to exactly what that consumer should be able to reach.
+> `datasets/`, `cache/`, `out/` and `raw/`. A copy written into that bucket is not
+> checked against the objects already there: aim it at a key another datasource is
+> using and you overwrite that datasource's snapshot, outside the permission model,
+> for everyone who reads it. A separate bucket removes the possibility rather than
+> relying on care, and keeps the credentials scoped to exactly what that consumer
+> should be able to reach.
 
 ## Auth, RBAC & audit
 

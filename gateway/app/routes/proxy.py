@@ -132,7 +132,12 @@ async def transform(
     # le destinazioni (database o S3) passano SOLO da /flows/{id}/runs: è il
     # gateway a costruire il payload di connessione (RBAC CONNECT, secret mai
     # dal client). "db_destination" è il nome storico: rifiutato anche quello.
-    if payload.get("destination") or payload.get("db_destination"):
+    # "mirror" (copia su S3 esterno) appartiene alla STESSA classe: porta una
+    # connessione e una destinazione. Senza questo filtro un utente qualsiasi
+    # poteva inviarla qui con endpoint e secret IN CHIARO propri e farsi
+    # consegnare il parquet dal worker, saltando catalogo, CONNECT, cifratura
+    # e riga Run — cioè ogni controllo che il percorso /flows/{id}/runs applica.
+    if payload.get("destination") or payload.get("db_destination") or payload.get("mirror"):
         raise HTTPException(
             status_code=422,
             detail="Destinazione non consentita qui: salva il flusso e usa un nodo Output",
