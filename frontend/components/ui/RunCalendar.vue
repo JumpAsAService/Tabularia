@@ -15,6 +15,7 @@ import { ChevronLeft } from 'lucide-vue-next'
 import { useRuns, type ActivityBucket, type RunActivity } from '~/composables/useRuns'
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 const { t } = useI18n()
 
@@ -24,6 +25,7 @@ use([
 ])
 
 const runsApi = useRuns()
+const { ui } = useChartTheme()
 
 // computed (non const): così le etichette seguono il cambio lingua a runtime
 const RANGES = computed(() => [
@@ -131,7 +133,9 @@ const calendarOption = computed(() => {
       bottom: 0,
       itemWidth: 11,
       itemHeight: 11,
-      textStyle: { fontSize: 10, color: '#8b97ad' },
+      textStyle: { fontSize: 10, color: ui.value.muted },
+      // rampa sequenziale: è codifica del DATO (intensità), non cromo, quindi
+      // resta fissa come la scala di un grafico
       inRange: { color: ['#bbf7d0', '#4ade80', '#15803d'] },
       text: [t('runCalendar.visualMapMore'), t('runCalendar.visualMapLess')],
     },
@@ -142,17 +146,17 @@ const calendarOption = computed(() => {
       cellSize: [14, 14],
       range: [d.from_key, d.to_key],
       splitLine: { show: false },
-      itemStyle: { color: 'transparent', borderColor: 'rgba(148,163,184,0.18)', borderWidth: 1 },
+      itemStyle: { color: 'transparent', borderColor: ui.value.border, borderWidth: 1 },
       yearLabel: { show: false },
       monthLabel: {
         fontSize: 10,
-        color: '#8b97ad',
+        color: ui.value.muted,
         nameMap: t('runCalendar.monthAbbreviations').split(','),
       },
       // nameMap indicizzato da domenica(0); firstDay:1 avvia la settimana da lunedì
       dayLabel: {
         fontSize: 9,
-        color: '#8b97ad',
+        color: ui.value.muted,
         firstDay: 1,
         nameMap: t('runCalendar.dayAbbreviations').split(','),
       },
@@ -189,21 +193,22 @@ const hourlyOption = computed(() => {
         )
       },
     },
-    legend: { bottom: 0, textStyle: { fontSize: 10, color: '#8b97ad' }, itemHeight: 8, itemWidth: 12 },
+    legend: { bottom: 0, textStyle: { fontSize: 10, color: ui.value.muted }, itemHeight: 8, itemWidth: 12 },
     xAxis: {
       type: 'category',
       data: hours,
       name: t('runCalendar.xAxisHour'),
       nameLocation: 'middle',
       nameGap: 26,
-      nameTextStyle: { fontSize: 10, color: '#8b97ad' },
-      axisLabel: { fontSize: 9, interval: 1 },
+      nameTextStyle: { fontSize: 10, color: ui.value.muted },
+      // senza color le etichette ereditavano il grigio scuro di ECharts, illeggibile sui temi scuri
+      axisLabel: { fontSize: 9, interval: 1, color: ui.value.muted },
     },
-    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 9 }, splitLine: { lineStyle: { opacity: 0.12 } } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 9, color: ui.value.muted }, splitLine: { lineStyle: { opacity: 0.12 } } },
     series: [
-      { name: t('runCalendar.legendSuccess'), type: 'bar', stack: 'x', data: success, itemStyle: { color: '#34d399' } },
-      { name: t('runCalendar.legendFailure'), type: 'bar', stack: 'x', data: failure, itemStyle: { color: '#ef4444' } },
-      { name: t('runCalendar.legendPending'), type: 'bar', stack: 'x', data: pending, itemStyle: { color: '#94a3b8' } },
+      { name: t('runCalendar.legendSuccess'), type: 'bar', stack: 'x', data: success, itemStyle: { color: ui.value.success } },
+      { name: t('runCalendar.legendFailure'), type: 'bar', stack: 'x', data: failure, itemStyle: { color: ui.value.danger } },
+      { name: t('runCalendar.legendPending'), type: 'bar', stack: 'x', data: pending, itemStyle: { color: ui.value.muted } },
     ],
   }
 })
@@ -267,7 +272,8 @@ const dailyTotal = computed(() =>
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 4px 10px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 12px; cursor: pointer; }
 .segmented button:last-child { border-right: none; }
-.segmented button.on { background: var(--accent); color: #fff; }
+/* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro e vuole testo scuro */
+.segmented button.on { background: var(--accent); color: var(--on-accent); }
 
 .cal-scroll { overflow-x: auto; overflow-y: hidden; }
 .hour-wrap { margin-top: 4px; }

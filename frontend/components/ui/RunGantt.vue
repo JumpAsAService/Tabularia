@@ -9,6 +9,7 @@ import { CustomChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, DataZoomComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import type { RunInfo } from '~/composables/useRuns'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, CustomChart, GridComponent, TooltipComponent, DataZoomComponent])
 
@@ -16,12 +17,18 @@ const { t } = useI18n()
 
 const props = defineProps<{ runs: RunInfo[] }>()
 
-const COLORS: Record<string, string> = {
-  SUCCESS: '#34d399',
-  FAILURE: '#ef4444',
+const { ui } = useChartTheme()
+
+// esito positivo e negativo usano i token semantici dell'app, gli stessi di
+// .okline/.koline: così la legenda qui sotto e il resto dell'interfaccia dicono
+// lo stesso colore in tutti e quattro i temi. "in corso" resta giallo fisso
+// perché non esiste un token per quello stato.
+const COLORS = computed<Record<string, string>>(() => ({
+  SUCCESS: ui.value.success,
+  FAILURE: ui.value.danger,
   STARTED: '#facc15',
-  PENDING: '#94a3b8',
-}
+  PENDING: ui.value.muted,
+}))
 
 function fmt(s: string): string {
   return new Date(s).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
@@ -43,7 +50,7 @@ const option = computed(() => {
       status: r.status,
       startLabel: fmt(r.started_at as string),
       durationSec: Math.max(0, (end - start) / 1000),
-      itemStyle: { color: COLORS[r.status] ?? '#94a3b8' },
+      itemStyle: { color: COLORS.value[r.status] ?? ui.value.muted },
     }
   })
 
@@ -99,13 +106,17 @@ const option = computed(() => {
       name: singleDay ? t('runGantt.axisHourOfDay') : t('runGantt.axisDayAndHour'),
       nameLocation: 'middle',
       nameGap: 28,
-      nameTextStyle: { fontSize: 10, color: '#8b97ad' },
+      nameTextStyle: { fontSize: 10, color: ui.value.muted },
       axisLabel: {
         fontSize: 10,
         hideOverlap: true,
+        // senza color esplicito ECharts usa il suo grigio scuro di default, che
+        // sui quattro temi scuri è quasi illeggibile
+        color: ui.value.muted,
         // giornata singola: solo l'ora (00, 01…); multi-giorno: data + ora
         formatter: singleDay ? '{HH}' : '{dd}/{MM} {HH}:{mm}',
       },
+      axisLine: { lineStyle: { color: ui.value.border } },
       splitLine: { show: true, lineStyle: { opacity: 0.12 } },
     },
     yAxis: {
@@ -113,7 +124,8 @@ const option = computed(() => {
       inverse: true,
       data: rows.value.map((r) => `#${r.id}`),
       axisTick: { show: false },
-      axisLabel: { fontSize: 10 },
+      axisLabel: { fontSize: 10, color: ui.value.muted },
+      axisLine: { lineStyle: { color: ui.value.border } },
     },
     dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
     series: [{ type: 'custom', renderItem, encode: { x: [1, 2], y: 0 }, data }],
@@ -141,6 +153,6 @@ const option = computed(() => {
 .legend { font-size: 11.5px; margin: 6px 0 0; line-height: 1.5; }
 .legend code { font-family: ui-monospace, monospace; font-size: 11px; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: -1px; margin: 0 2px 0 6px; }
-.dot.ok { background: #34d399; }
-.dot.ko { background: #ef4444; }
+.dot.ok { background: var(--accent-2); }
+.dot.ko { background: var(--danger); }
 </style>

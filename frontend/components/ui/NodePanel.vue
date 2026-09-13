@@ -573,7 +573,8 @@ label { font-size: 12px; color: var(--muted); }
 .joinhelp ol { margin: 6px 0 0; padding-left: 18px; }
 .joinhelp li { margin: 3px 0; color: var(--muted); }
 .tag {
-  background: var(--accent); color: #fff; border-radius: 4px; padding: 0 5px; font-size: 11px;
+  /* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro */
+  background: var(--accent); color: var(--on-accent); border-radius: 4px; padding: 0 5px; font-size: 11px;
 }
 .tag.right { background: var(--accent-2); color: #0f1117; }
 </style>

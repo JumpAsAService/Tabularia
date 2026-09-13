@@ -13,11 +13,11 @@ import VChart from 'vue-echarts'
 import { CalendarClock, TriangleAlert, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import { useApi, errMessage, type ScheduleLoad } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, HeatmapChart, VisualMapComponent, TooltipComponent, GridComponent])
 
 const api = useApi()
-const { theme } = useTheme()
 const { t } = useI18n()
 
 const WD = computed(() => [
@@ -52,25 +52,14 @@ async function load() {
 watch(days, load)
 onMounted(load)
 
-// colori dal tema corrente (heatmap leggibile su chiaro e scuro)
 // split = bande alternate dello sfondo griglia: SENZA un areaStyle esplicito
 // ECharts usa un default grigio-chiaro che sui temi scuri diventa bande bianche.
+// Restano qui e non nel composable: sono una scelta di QUESTO grafico, non cromo
+// condiviso — il composable espone `isLight`, la decisione la prende il chiamante.
 const DARK_SPLIT = ['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.06)']
 const LIGHT_SPLIT = ['rgba(0,0,0,0.025)', 'rgba(0,0,0,0.05)']
-function readUi() {
-  const fb = { text: '#e8ebf2', muted: '#8b93a7', border: '#262e40', panel: '#141926', split: DARK_SPLIT }
-  if (!import.meta.client) return fb
-  const s = getComputedStyle(document.documentElement)
-  const g = (n: string, f: string) => s.getPropertyValue(n).trim() || f
-  // solo il tema "light" ha sfondo chiaro; dark/dracula/monokai sono scuri
-  const light = document.documentElement.getAttribute('data-theme') === 'light'
-  return {
-    text: g('--text', fb.text), muted: g('--muted', fb.muted), border: g('--border', fb.border),
-    panel: g('--panel', fb.panel), split: light ? LIGHT_SPLIT : DARK_SPLIT,
-  }
-}
-const ui = ref(readUi())
-watch(theme, () => { ui.value = readUi() })
+const { ui } = useChartTheme()
+const split = computed(() => (ui.value.isLight ? LIGHT_SPLIT : DARK_SPLIT))
 
 const maxCount = computed(() => Math.max(1, ...(data.value?.cells.map((c) => c.count) ?? [1])))
 // lookup per il tooltip (peak per cella)
@@ -86,7 +75,7 @@ const option = computed(() => {
   const cap = d?.worker_capacity ?? 2
   const points = (d?.cells ?? []).map((cell) => ({
     value: [cell.hour, cell.weekday, cell.count],
-    itemStyle: cell.critical ? { borderColor: '#ff6b6b', borderWidth: 2 } : undefined,
+    itemStyle: cell.critical ? { borderColor: c.danger, borderWidth: 2 } : undefined,
   }))
   return {
     tooltip: {
@@ -94,19 +83,19 @@ const option = computed(() => {
       formatter: (p: any) => {
         const [h, wd, n] = p.data.value
         const peak = peakByCell.value.get(`${wd}-${h}`) ?? 1
-        const warn = peak > cap ? `<br/><span style="color:#ff6b6b">${t('scheduleLoad.tooltipPeakWarning', { peak, cap })}</span>` : ''
+        const warn = peak > cap ? `<br/><span style="color:${c.danger}">${t('scheduleLoad.tooltipPeakWarning', { peak, cap })}</span>` : ''
         return `<b>${WD.value[wd]} ${String(h).padStart(2, '0')}:00</b><br/>${t('scheduleLoad.tooltipScheduledCount', { n })}${warn}`
       },
     },
     grid: { left: 40, right: 12, top: 8, bottom: 46 },
     xAxis: {
       type: 'category', data: Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')),
-      splitArea: { show: true, areaStyle: { color: c.split } }, axisLabel: { color: c.muted, fontSize: 10, interval: 1 },
+      splitArea: { show: true, areaStyle: { color: split.value } }, axisLabel: { color: c.muted, fontSize: 10, interval: 1 },
       axisLine: { lineStyle: { color: c.border } }, axisTick: { show: false },
     },
     yAxis: {
       type: 'category', data: WD.value, inverse: true,
-      splitArea: { show: true, areaStyle: { color: c.split } }, axisLabel: { color: c.muted, fontSize: 11 },
+      splitArea: { show: true, areaStyle: { color: split.value } }, axisLabel: { color: c.muted, fontSize: 11 },
       axisLine: { lineStyle: { color: c.border } }, axisTick: { show: false },
     },
     visualMap: {

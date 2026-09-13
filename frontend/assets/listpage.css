@@ -43,7 +43,8 @@
   border-radius: 8px;
   text-decoration: none;
   background: var(--grad-accent);
-  color: #fff;
+  /* --on-accent, non #fff: su Dracula e Monokai il gradiente è chiaro */
+  color: var(--on-accent);
   font-size: 13px;
   font-weight: 500;
 }

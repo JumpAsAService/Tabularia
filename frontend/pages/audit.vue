@@ -13,6 +13,7 @@ import {
   LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -64,20 +65,12 @@ async function loadSessions() {
 const onlineCount = computed(() => sessions.value.filter((s) => s.online).length)
 
 // ── grafico accessi ultime 24h ───────────────────────────────────────────────
-const { theme } = useTheme()
 const access = ref<AccessActivity | null>(null)
 async function loadAccess() {
   try { access.value = await api.auditAccessActivity(24) } catch { /* ignore */ }
 }
-function readUi() {
-  const fb = { text: '#e8ebf2', muted: '#8b93a7', border: '#262e40', panel: '#141926' }
-  if (!import.meta.client) return fb
-  const s = getComputedStyle(document.documentElement)
-  const g = (n: string, f: string) => s.getPropertyValue(n).trim() || f
-  return { text: g('--text', fb.text), muted: g('--muted', fb.muted), border: g('--border', fb.border), panel: g('--panel', fb.panel) }
-}
-const ui = ref(readUi())
-watch(theme, () => { ui.value = readUi() })
+// cromo dal tema corrente: la lettura dei token vive nel composable condiviso
+const { ui } = useChartTheme()
 
 const accessOption = computed(() => {
   const a = access.value
@@ -102,9 +95,9 @@ const accessOption = computed(() => {
     },
     series: [
       { name: t('audit.chartLegendAccess'), type: 'bar', stack: 'x', data: a?.buckets.map((b) => b.success) ?? [],
-        itemStyle: { color: '#6ee7b7', borderRadius: [0, 0, 0, 0] }, barMaxWidth: 18 },
+        itemStyle: { color: c.success, borderRadius: [0, 0, 0, 0] }, barMaxWidth: 18 },
       { name: t('audit.chartLegendFailed'), type: 'bar', stack: 'x', data: a?.buckets.map((b) => b.failure) ?? [],
-        itemStyle: { color: '#ff6b6b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 18 },
+        itemStyle: { color: c.danger, borderRadius: [3, 3, 0, 0] }, barMaxWidth: 18 },
     ],
   }
 })
@@ -115,31 +108,41 @@ onMounted(async () => {
 })
 
 // ── presentazione ─────────────────────────────────────────────────────────────
-const ACTION_META = computed<Record<string, { icon: any; color: string; label: string }>>(() => ({
-  'auth.login': { icon: LogIn, color: '#6ee7b7', label: t('audit.loginAction') },
-  'auth.login_failed': { icon: XCircle, color: '#ff6b6b', label: t('audit.loginFailedAction') },
-  'auth.logout': { icon: LogOut, color: '#8b93a7', label: t('audit.logoutAction') },
-  'auth.sso_login': { icon: KeyRound, color: '#6ee7b7', label: t('audit.ssoLoginAction') },
-  'auth.sso_login_failed': { icon: KeyRound, color: '#ff6b6b', label: t('audit.ssoLoginFailedAction') },
-  'flow.create': { icon: Workflow, color: '#4f8cff', label: t('audit.flowCreateAction') },
-  'flow.update': { icon: Workflow, color: '#4f8cff', label: t('audit.flowUpdateAction') },
-  'flow.delete': { icon: Workflow, color: '#ff6b6b', label: t('audit.flowDeleteAction') },
-  'flow.run': { icon: Workflow, color: '#a78bfa', label: t('audit.flowRunAction') },
-  'flow.schedule': { icon: Workflow, color: '#4f8cff', label: t('audit.flowScheduleAction') },
-  'flow.promote': { icon: Workflow, color: '#4f8cff', label: t('audit.flowPromoteAction') },
-  'datasource.create': { icon: Database, color: '#6ee7b7', label: t('audit.datasourceCreateAction') },
-  'datasource.refresh': { icon: Database, color: '#a78bfa', label: t('audit.datasourceRefreshAction') },
-  'datasource.delete': { icon: Database, color: '#ff6b6b', label: t('audit.datasourceDeleteAction') },
-  'datasource.schedule': { icon: Database, color: '#4f8cff', label: t('audit.datasourceScheduleAction') },
-  'connection.create': { icon: Plug, color: '#6ee7b7', label: t('audit.connectionCreateAction') },
-  'connection.update': { icon: Plug, color: '#4f8cff', label: t('audit.connectionUpdateAction') },
-  'connection.delete': { icon: Plug, color: '#ff6b6b', label: t('audit.connectionDeleteAction') },
-  'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
-  'permission.grant': { icon: Shield, color: '#6ee7b7', label: t('audit.permissionGrantAction') },
-  'permission.revoke': { icon: Shield, color: '#ff6b6b', label: t('audit.permissionRevokeAction') },
-}))
+// I colori qui erano 21 esadecimali scritti a mano che riproducevano ESATTAMENTE
+// i token del tema scuro (#6ee7b7 = --accent-2, #ff6b6b = --danger, #4f8cff =
+// --accent, #a78bfa = --violet, #8b93a7 = --muted). Non erano codifica del dato:
+// erano la tavolozza dell'app ricopiata, e sugli altri tre temi risultavano
+// sbagliati — sul chiaro il verde menta su fondo bianco è quasi invisibile.
+// Essendo un computed, legge i token vivi e segue il cambio tema.
+const ACTION_META = computed<Record<string, { icon: any; color: string; label: string }>>(() => {
+  const u = ui.value
+  return {
+    'auth.login': { icon: LogIn, color: u.success, label: t('audit.loginAction') },
+    'auth.login_failed': { icon: XCircle, color: u.danger, label: t('audit.loginFailedAction') },
+    'auth.logout': { icon: LogOut, color: u.muted, label: t('audit.logoutAction') },
+    'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
+    'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
+    'flow.create': { icon: Workflow, color: u.accent, label: t('audit.flowCreateAction') },
+    'flow.update': { icon: Workflow, color: u.accent, label: t('audit.flowUpdateAction') },
+    'flow.delete': { icon: Workflow, color: u.danger, label: t('audit.flowDeleteAction') },
+    'flow.run': { icon: Workflow, color: u.violet, label: t('audit.flowRunAction') },
+    'flow.schedule': { icon: Workflow, color: u.accent, label: t('audit.flowScheduleAction') },
+    'flow.promote': { icon: Workflow, color: u.accent, label: t('audit.flowPromoteAction') },
+    'datasource.create': { icon: Database, color: u.success, label: t('audit.datasourceCreateAction') },
+    'datasource.refresh': { icon: Database, color: u.violet, label: t('audit.datasourceRefreshAction') },
+    'datasource.delete': { icon: Database, color: u.danger, label: t('audit.datasourceDeleteAction') },
+    'datasource.schedule': { icon: Database, color: u.accent, label: t('audit.datasourceScheduleAction') },
+    'connection.create': { icon: Plug, color: u.success, label: t('audit.connectionCreateAction') },
+    'connection.update': { icon: Plug, color: u.accent, label: t('audit.connectionUpdateAction') },
+    'connection.delete': { icon: Plug, color: u.danger, label: t('audit.connectionDeleteAction') },
+    // ambra: è l'unico che non corrisponde ad alcun token, resta fisso
+    'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
+    'permission.grant': { icon: Shield, color: u.success, label: t('audit.permissionGrantAction') },
+    'permission.revoke': { icon: Shield, color: u.danger, label: t('audit.permissionRevokeAction') },
+  }
+})
 function meta(a: string) {
-  return ACTION_META.value[a] ?? { icon: Circle, color: '#8b93a7', label: a }
+  return ACTION_META.value[a] ?? { icon: Circle, color: ui.value.muted, label: a }
 }
 function fmtDate(iso: string) {
   try { return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'medium' }) } catch { return iso }

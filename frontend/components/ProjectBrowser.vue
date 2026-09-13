@@ -894,7 +894,8 @@ td.factions { text-align: right; white-space: nowrap; display: flex; gap: 4px; j
   text-decoration: none;
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #fff;
+  /* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro */
+  color: var(--on-accent);
 }
 .section { margin-top: 16px; }
 .section > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }

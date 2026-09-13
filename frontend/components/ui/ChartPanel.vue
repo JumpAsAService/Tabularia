@@ -22,6 +22,7 @@ import {
 import type { ColumnInfo, Operation, PreviewResult } from '~/composables/useApi'
 import { errMessage } from '~/composables/useApi'
 import { AGG_LABELS } from '~/composables/useFlowModel'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -39,26 +40,10 @@ const PALETTE = ['#3987e5', '#199e70', '#c98500', '#9085e9', '#d55181']
 const OTHER_COLOR = '#8b93a7' // grigio neutro per la fetta "Altro"
 const MAX_SERIES = PALETTE.length
 
-// colori "cromo" (assi, testi, sfondi tooltip) letti dalle CSS variables del
-// tema corrente, così i grafici seguono il tema chiaro/scuro. Ricalcolati a ogni
-// cambio tema; l'`option` computed li referenzia e si aggiorna di conseguenza.
-const { theme } = useTheme()
-function readUi() {
-  const fallback = { text: '#e8ebf2', muted: '#8b93a7', border: '#262e40', borderSoft: '#1e2534', panel: '#141926', panel2: '#1b2130' }
-  if (!import.meta.client) return fallback
-  const s = getComputedStyle(document.documentElement)
-  const g = (n: string, f: string) => s.getPropertyValue(n).trim() || f
-  return {
-    text: g('--text', fallback.text),
-    muted: g('--muted', fallback.muted),
-    border: g('--border', fallback.border),
-    borderSoft: g('--border-soft', fallback.borderSoft),
-    panel: g('--panel', fallback.panel),
-    panel2: g('--panel-2', fallback.panel2),
-  }
-}
-const ui = ref(readUi())
-watch(theme, () => { ui.value = readUi() })
+// colori "cromo" (assi, testi, sfondi tooltip) dal tema corrente: la lettura dei
+// token vive in un composable condiviso — era copiata identica qui, in
+// ScheduleLoad e in audit.vue, e mancava del tutto in RunCalendar e RunGantt.
+const { ui } = useChartTheme()
 
 const CHART_TYPES = [
   { id: 'bar', icon: BarChart3 },

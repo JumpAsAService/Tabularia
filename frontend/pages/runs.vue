@@ -116,7 +116,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 5px 11px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 13px; }
 .segmented button:last-child { border-right: none; }
-.segmented button.on { background: var(--accent); color: #fff; }
+/* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro e vuole testo scuro */
+.segmented button.on { background: var(--accent); color: var(--on-accent); }
 
 .runs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .run { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
