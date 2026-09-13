@@ -299,7 +299,24 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
     }
     d = node.get("data") or {}
     dest_type = d.get("destType") or "datasource"
-    if dest_type == "database":
+    if dest_type == "email":
+        # I destinatari sono testo libero nella definizione del flusso: il
+        # gateway li valida contro i domini ammessi della connessione prima di
+        # costruire il payload (vedi routes/runs.py). Qui si trasportano soltanto.
+        body["email"] = {
+            "connection_id": d.get("connectionId"),
+            "to": d.get("emailTo") or [],
+            "cc": d.get("emailCc") or [],
+            "subject": d.get("emailSubject") or "",
+            "body": d.get("emailBody") or "",
+            "body_is_html": bool(d.get("emailHtml")),
+            "attachment_name": (d.get("attachmentName") or "").strip(),
+            "attachment_format": d.get("attachmentFormat") or "xlsx",
+            # scelta dell'utente: un invio fallito interrompe la sequenza invece
+            # di essere solo raccolto fra gli errori (vedi services/orchestrator)
+            "stop_on_failure": d.get("stopOnFailure") is not False,
+        }
+    elif dest_type == "database":
         body["destination"] = {
             "type": "database",
             "connection_id": d.get("connectionId"),

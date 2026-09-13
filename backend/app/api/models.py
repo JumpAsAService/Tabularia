@@ -28,6 +28,13 @@ class TransformDataRequest(BaseModel):
     mirror: Optional[dict[str, Any]] = Field(
         default=None, description="Copia best-effort su S3 esterno (in aggiunta all'output)"
     )
+    # invio dell'output come allegato email: stessa forma di `destination`
+    # ({"connection": …, "target": …}) più `stop_on_failure`. La secret nella
+    # connection è Fernet-cifrata, e i destinatari sono già stati validati dal
+    # gateway contro i domini ammessi della connessione.
+    email: Optional[dict[str, Any]] = Field(
+        default=None, description="Invio dell'output come email con allegato"
+    )
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
 
 

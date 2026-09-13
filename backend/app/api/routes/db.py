@@ -48,6 +48,16 @@ class DbInspectRequest(BaseModel):
 @router.post("/inspect")
 def inspect(request: DbInspectRequest):
     try:
+        if request.connection.get("db_type") == "smtp":
+            from app.ingest.email_destination import SmtpConnectionSpec
+            from app.ingest.email_destination import test_connection as smtp_test
+
+            if request.action == "tables":
+                raise DbSourceError("Le connessioni SMTP non hanno tabelle da elencare")
+            # apre, cifra e autentica senza spedire nulla
+            smtp_test(SmtpConnectionSpec(**request.connection))
+            return {"ok": True}
+
         if request.connection.get("db_type") == "s3":
             from app.ingest.s3_destination import S3ConnectionSpec
             from app.ingest.s3_destination import test_connection as s3_test

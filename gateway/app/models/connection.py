@@ -24,13 +24,21 @@ class Connection(SQLModel, table=True):
     project_id: int = Field(foreign_key="projects.id", index=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
 
-    db_type: str  # postgresql | mysql | mariadb | clickhouse | trino
+    db_type: str  # postgresql | mysql | mariadb | clickhouse | trino | s3 | smtp
     host: str
     port: Optional[int] = None  # None = porta di default del db_type
     username: str = ""
     password_encrypted: str = Field(default="", sa_column=Column(Text, nullable=False))
     database: str = ""
     db_schema: str = ""  # schema Postgres / schema Trino; vuoto = default
+
+    # Opzioni specifiche del TIPO di connessione, in JSON. Le colonne qui sopra
+    # coprono ciò che i database e S3 hanno in comune; SMTP invece porta tre
+    # impostazioni senza una colonna naturale — mittente, modalità TLS e domini
+    # ammessi per i destinatari — e riusare `database`/`db_schema` come fa S3 ne
+    # avrebbe lasciata fuori una comunque. Meglio un posto dichiarato che un
+    # terzo trucco. Vuoto ("{}") per tutti gli altri tipi.
+    extra: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

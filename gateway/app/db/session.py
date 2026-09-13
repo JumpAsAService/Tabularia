@@ -87,6 +87,13 @@ _MIGRATIONS = [
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS engine_started_at TIMESTAMP",
     # copia best-effort dell'output su S3 esterno: esito JSON, NULL = non richiesta
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS mirror TEXT",
+    # Opzioni specifiche del tipo di connessione (JSON). Serve all'SMTP, che ha
+    # tre impostazioni senza una colonna naturale dove stare — mittente, modalità
+    # TLS e domini ammessi — e spremere `database`/`db_schema` come si fa per S3
+    # ne avrebbe comunque lasciata fuori una. Gli altri tipi non la usano.
+    "ALTER TABLE connections ADD COLUMN IF NOT EXISTS extra TEXT NOT NULL DEFAULT '{}'",
+    # Invio email dell'output (nodo Output destType=email): esito JSON, NULL = non richiesto
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS email TEXT",
     # Run che ha prodotto lo snapshot corrente: rifiuta gli swap da run più
     # vecchi (vedi models/datasource.py). Intero semplice, nessuna FK: eviterebbe
     # un ciclo runs ↔ datasources

@@ -43,6 +43,7 @@ def submit_transform_data_task(request: TransformDataRequest):
         output_key=request.output_key,
         destination=request.destination,
         mirror=request.mirror,
+        email=request.email,
         engine=request.engine,
     )
     

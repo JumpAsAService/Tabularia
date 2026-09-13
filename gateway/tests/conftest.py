@@ -46,6 +46,7 @@ class FakeEngine:
     def __init__(self):
         self.deleted: list[tuple[str, str]] = []  # (bucket, key) cancellati
         self.revoked: list[str] = []  # task_id revocati (DELETE /tasks/{id})
+        self.transforms: list[dict] = []  # corpi ricevuti su POST /tasks/transform-data
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
@@ -69,6 +70,16 @@ class FakeEngine:
         path = request.url.path
         if path == "/engines":
             return httpx.Response(200, json=self.engines)
+        # DEVE stare prima del ramo "/tasks/", che altrimenti lo intercetta come
+        # se "transform-data" fosse un task_id e risponde con uno stato invece
+        # che con un id. Il payload viene registrato: è l'unico modo di
+        # verificare COSA il gateway manda all'engine — che le secret partano
+        # cifrate, e che i destinatari siano quelli già validati.
+        if path == "/tasks/transform-data" and request.method == "POST":
+            import json as _json
+
+            self.transforms.append(_json.loads(request.content or b"{}"))
+            return httpx.Response(200, json={"task_id": f"t-transform-{len(self.transforms)}"})
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]
             if request.method == "DELETE":  # revoca + terminate del task

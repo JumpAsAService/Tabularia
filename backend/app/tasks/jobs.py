@@ -60,6 +60,7 @@ def transform_data_task(
     output_key: str,
     destination: dict[str, Any] | None = None,
     mirror: dict[str, Any] | None = None,
+    email: dict[str, Any] | None = None,
     engine: str | None = None,
 ) -> dict:
     """
@@ -163,6 +164,40 @@ def transform_data_task(
                 "key": m_target.get("key", ""),
                 "error": f"{type(e).__name__}: {e}"[:500],
             }
+
+    # Invio email dell'output come allegato (csv/xlsx). Arriva per ULTIMO: manda
+    # ciò che è stato prodotto, quindi tutto il resto dev'essere già finito.
+    #
+    # A differenza della copia su S3 NON è best-effort per scelta dell'utente: un
+    # report che non parte è il risultato che non c'è, e un run verde mentre
+    # nessuno riceve nulla è peggio di un run rosso. `stop_on_failure` (default
+    # acceso) decide se l'errore faccia fallire il run; l'esito torna comunque in
+    # `out`, e il gateway lo registra sulla riga del run.
+    if email:
+        from app.ingest.email_destination import (
+            EmailSpec,
+            SmtpConnectionSpec,
+            send_output_email,
+        )
+
+        spec_raw = dict(email.get("target") or {})
+        ferma = bool(email.get("stop_on_failure", True))
+        try:
+            e_conn = SmtpConnectionSpec(**email["connection"])
+            e_spec = EmailSpec(**spec_raw)
+            logger.info("📧 Invio email via %s a %d destinatari", e_conn.host, len(e_spec.to))
+            out["email"] = send_output_email(conn=e_conn, spec=e_spec, bucket=bucket, key=output_key)
+        except Exception as e:
+            out["email"] = {
+                "ok": False,
+                "recipients": len(spec_raw.get("to") or []),
+                "attachment": spec_raw.get("attachment_name", ""),
+                "error": f"{type(e).__name__}: {e}"[:500],
+            }
+            if ferma:
+                logger.error("❌ invio email fallito, il run fallisce: %s", e)
+                raise
+            logger.warning("⚠️ invio email fallito (il run resta valido): %s", e)
 
     logger.info(
         f"✅ Completed transform_data_task: {output_key} "

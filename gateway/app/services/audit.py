@@ -47,6 +47,10 @@ ENGINE_ALLOW = "engine.allow"
 ENGINE_DISALLOW = "engine.disallow"
 # viste salvate (configurazioni del Viewer dentro una cartella). Prefisso
 # "saved_view" e non "view": `VIEW` è già il nome di una capability.
+# invio email dell'output di un run: è l'UNICA destinazione che manda dati fuori
+# verso un indirizzo scritto a mano nel flusso, quindi va tracciata a parte —
+# i domini ammessi dicono DOVE può uscire un dato, l'audit dice COSA è uscito
+EMAIL_SEND = "email.send"
 SAVED_VIEW_CREATE = "saved_view.create"
 SAVED_VIEW_UPDATE = "saved_view.update"
 SAVED_VIEW_DELETE = "saved_view.delete"

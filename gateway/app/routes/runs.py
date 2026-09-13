@@ -28,7 +28,8 @@ from app.services import permissions as perm_service
 from app.models import Connection, Datasource, Flow, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
-from app.routes.connections import engine_connection_payload
+from app.routes.connections import allowed_email_domains, engine_connection_payload
+from app.services import audit
 from app.schemas.models import (
     ActivityBucket,
     Page,
@@ -93,6 +94,34 @@ async def launch_run(
     return await _launch_flow_run(session, user, flow, body)
 
 
+@router.post("/flows/{flow_id}/email-test", response_model=RunOut, status_code=status.HTTP_201_CREATED)
+async def launch_email_test(
+    flow_id: int,
+    body: RunCreate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Prova a vuoto del nodo email: genera l'allegato VERO e lo manda a CHI LO
+    CHIEDE, per vedere com'è fatto prima di spedirlo a qualcun altro.
+
+    Il destinatario lo impone il server (`user.email`): il client non può
+    sceglierlo, altrimenti questa rotta sarebbe il modo più comodo per aggirare i
+    domini ammessi. Tutto il resto del percorso è identico a un run normale —
+    stessa RBAC (RUN sul flusso, CONNECT sulla connessione), stesso audit — così
+    la prova verifica davvero ciò che accadrà, non una sua imitazione.
+
+    Pubblicazione, destinazione e copia vengono scartate: una prova non deve
+    scrivere niente da nessuna parte.
+    """
+    flow = _get_flow(session, flow_id)
+    if not body.email:
+        raise HTTPException(status_code=422, detail="Questa prova richiede un nodo Output di tipo email")
+    if not (user.email or "").strip():
+        raise HTTPException(status_code=422, detail="Il tuo account non ha un indirizzo email")
+    solo_email = body.model_copy(update={"publish": None, "destination": None, "mirror": None})
+    return await _launch_flow_run(session, user, flow, solo_email, dry_run_to=user.email.strip())
+
+
 def resolve_run_engine(flow: Flow, engine_mode: str) -> str:
     """Motore con cui eseguire un run del flusso: in "production" quello di
     produzione se impostato, altrimenti (o in "development") quello di sviluppo."""
@@ -105,6 +134,7 @@ async def _launch_flow_run(
     session: Session, user: User, flow: Flow, body: RunCreate,
     trigger_type: str = "manual", parent_run_id: int | None = None,
     engine_mode: str = "development",
+    dry_run_to: str | None = None,
 ) -> Run:
     """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
     (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
@@ -305,6 +335,90 @@ async def _launch_flow_run(
             }
         )
 
+    # invio dell'output come allegato email. Stessa risoluzione di destinazione e
+    # copia (connessione per id, secret cifrata dal gateway, CONNECT), più il
+    # controllo che qui è il vero confine di sicurezza: i destinatari sono testo
+    # libero nella definizione del flusso, e l'unica barriera all'invio verso un
+    # indirizzo arbitrario sono i domini ammessi della connessione. Va applicata
+    # QUI: il worker riceve destinatari già risolti e non può più distinguerli.
+    email_payload = None
+    email_summary = None
+    if body.email:
+        econn = session.get(Connection, body.email.connection_id)
+        if econn is None:
+            raise HTTPException(status_code=404, detail="Connessione SMTP non trovata")
+        ensure_can(session, user, econn.project_id, Capability.CONNECT)
+        if econn.db_type != "smtp":
+            raise HTTPException(status_code=422, detail="La connessione scelta non è SMTP")
+
+        if dry_run_to:
+            # PROVA A VUOTO: il destinatario è l'identità autenticata, imposta dal
+            # server e non scelta dal client. Qui i domini ammessi NON si
+            # applicano di proposito: mandare a sé stessi non è esfiltrazione, e
+            # con i domini ristretti (tipicamente a quelli dei clienti) il
+            # pulsante di prova non funzionerebbe mai.
+            to_finale, cc_finale = [dry_run_to], []
+            destinatari = [dry_run_to]
+        else:
+            to_finale = [a.strip() for a in body.email.to if a.strip()]
+            cc_finale = [a.strip() for a in body.email.cc if a.strip()]
+            destinatari = [*to_finale, *cc_finale]
+            if not destinatari:
+                raise HTTPException(status_code=422, detail="Nessun destinatario per l'email")
+
+            ammessi = allowed_email_domains(econn)
+            if ammessi:
+                fuori = [a for a in destinatari if a.rsplit("@", 1)[-1].lower() not in ammessi]
+                if fuori:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"Destinatari fuori dai domini ammessi da questa connessione "
+                            f"({', '.join(ammessi)}): {', '.join(fuori)}"
+                        ),
+                    )
+
+        email_payload = {
+            "connection": engine_connection_payload(econn),
+            # una prova non deve mai far fallire nulla: è un controllo, non un passo
+            "stop_on_failure": False if dry_run_to else body.email.stop_on_failure,
+            "target": {
+                "to": to_finale,
+                "cc": cc_finale,
+                "subject": body.email.subject,
+                "body": body.email.body,
+                "body_is_html": body.email.body_is_html,
+                "attachment_name": body.email.attachment_name or "report",
+                "attachment_format": body.email.attachment_format,
+            },
+        }
+        email_summary = json.dumps(
+            {
+                "connection_id": econn.id,
+                "host": econn.host,
+                "to": destinatari,
+                "subject": body.email.subject,
+                "attachment": body.email.attachment_name or "report",
+                "format": body.email.attachment_format,
+                "ok": None,  # "pending" finché il worker non riporta l'esito
+            }
+        )
+        # Audit al LANCIO, non alla riconciliazione: chi ha chiesto di spedire,
+        # cosa e a chi è il fatto che serve a un'indagine, ed esiste anche se
+        # l'invio poi fallisce. L'esito tecnico vive sulla riga del run.
+        audit.record_audit(
+            session, actor=user, action=audit.EMAIL_SEND, target_type="flow",
+            target_id=flow.id, target_label=flow.name,
+            detail={
+                "connection_id": econn.id,
+                "host": econn.host,
+                "to": destinatari,
+                "subject": body.email.subject,
+                "format": body.email.attachment_format,
+                "trigger": "dry_run" if dry_run_to else trigger_type,
+            },
+        )
+
     # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
     output_key = (
         snapshot_key(publish_target_id) if body.publish else f"out/{uuid.uuid4().hex}.parquet"
@@ -320,6 +434,7 @@ async def _launch_flow_run(
             "operations": body.operations,
             "destination": destination_payload,
             "mirror": mirror_payload,
+            "email": email_payload,
             "engine": engine_name,  # motore di sviluppo o di produzione (vedi engine_mode)
         },
     )
@@ -345,6 +460,7 @@ async def _launch_flow_run(
         publish_overwrite=body.publish.overwrite if body.publish else False,
         destination=destination_summary,
         mirror=mirror_summary,
+        email=email_summary,
     )
     session.add(run)
     session.commit()
@@ -545,6 +661,8 @@ async def _reconcile(session: Session, run: Run) -> Run:
         # o resterebbe solo nei log del worker, invisibile in cronologia
         if result.get("mirror") is not None:
             values["mirror"] = json.dumps(result.get("mirror"))[:2000]
+        if result.get("email") is not None:
+            values["email"] = json.dumps(result.get("email"))[:2000]
     else:
         values["error"] = (_friendly_error(error, error_detail) or "")[:2000]
         values["error_detail"] = error_detail[:20000] if error_detail else None

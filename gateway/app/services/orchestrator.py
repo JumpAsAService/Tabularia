@@ -160,6 +160,17 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id, engine_mode=engine_mode)
                 run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
                 if run.status != "SUCCESS":
+                    # Un output email con `stopOnFailure` INTERROMPE la sequenza,
+                    # come fa il refresh. Gli altri output restano raccolti e si
+                    # prosegue: la differenza è voluta e vale solo per l'email,
+                    # perché i passi a valle di una notifica spesso la danno per
+                    # avvenuta (marcare "notificato" senza aver notificato è
+                    # peggio che fermarsi). L'opzione è sul nodo, non implicita.
+                    if d.get("destType") == "email" and d.get("stopOnFailure") is not False:
+                        raise OrchestrationError(
+                            f"invio email non riuscito (run {run.id}): {run.error or run.status}. "
+                            "I passi successivi del flusso non sono stati eseguiti."
+                        )
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
             except Exception as e:
                 logger.warning("orchestrate: flusso %s, output non eseguito: %s", flow.id, e)

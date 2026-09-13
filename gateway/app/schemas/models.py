@@ -345,6 +345,30 @@ class RunMirrorSpec(BaseModel):
     key: str  # percorso completo dell'oggetto (sottocartella + nome file)
 
 
+class RunEmailSpec(BaseModel):
+    """Invio dell'output come allegato email (nodo Output con destType="email").
+
+    I destinatari sono testo libero nella definizione del flusso, quindi questo è
+    l'unico tipo di destinazione che può mandare dati verso un indirizzo
+    arbitrario. Due conseguenze, entrambe applicate dal gateway e non dal client:
+    i destinatari vengono validati contro i domini ammessi della connessione, e
+    ogni invio finisce nell'audit.
+
+    `stop_on_failure` (default acceso) fa interrompere la SEQUENZA del flusso, non
+    solo fallire il run: i passi a valle di una notifica spesso la danno per
+    avvenuta.
+    """
+    connection_id: int
+    to: list[str] = Field(default_factory=list)
+    cc: list[str] = Field(default_factory=list)
+    subject: str = ""
+    body: str = ""
+    body_is_html: bool = False
+    attachment_name: str = ""
+    attachment_format: Literal["csv", "xlsx"] = "xlsx"
+    stop_on_failure: bool = True
+
+
 class RunCreate(BaseModel):
     bucket: str
     input_key: str
@@ -353,6 +377,7 @@ class RunCreate(BaseModel):
     destination: Optional[RunDestinationSpec] = None
     # convive con `publish`: la datasource è il risultato, questa è la copia
     mirror: Optional[RunMirrorSpec] = None
+    email: Optional[RunEmailSpec] = None
 
 
 class RunOut(BaseModel):
@@ -372,6 +397,8 @@ class RunOut(BaseModel):
     destination: Optional[str] = None  # JSON: {db_type, host, database, table, mode}
     # JSON: {bucket, key, format, ok, error?} — copia best-effort su S3 esterno
     mirror: Optional[str] = None
+    # JSON: {connection_id, host, to, subject, attachment, ok, error?} — invio email
+    email: Optional[str] = None
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
 

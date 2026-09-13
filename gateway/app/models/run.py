@@ -69,6 +69,13 @@ class Run(SQLModel, table=True):
     # log del worker, invisibile a chi guarda la cronologia.
     mirror: Optional[str] = Field(default=None, sa_column=Column("mirror", Text))
 
+    # invio dell'output come allegato email (nodo Output destType="email"):
+    # riassunto JSON — {connection_id, host, to, subject, attachment, ok, error?}.
+    # A differenza della copia NON è best-effort: un report che non parte è il
+    # risultato che non c'è. Il dettaglio sta qui perché l'audit registra COSA è
+    # uscito e verso chi, mentre questa colonna dice se è arrivato.
+    email: Optional[str] = Field(default=None, sa_column=Column("email", Text))
+
     started_at: datetime = Field(default_factory=_now)
     # istante in cui il task ha cominciato a girare DAVVERO sul worker (Celery
     # riporta STARTED, `task_track_started=True`). `started_at` nasce col lancio e

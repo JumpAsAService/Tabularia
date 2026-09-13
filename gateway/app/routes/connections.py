@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3", "smtp"}
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
@@ -63,8 +63,47 @@ def _name_taken(session: Session, project_id: int, name: str, exclude_id: int | 
     return session.exec(stmt).first() is not None
 
 
+def smtp_options(conn: Connection) -> dict:
+    """Opzioni SMTP dalla colonna `extra` (JSON). Tollerante: una connessione
+    creata prima di questa colonna, o con JSON rotto, non deve far esplodere un
+    run — si ricade sui default."""
+    import json as _json
+
+    try:
+        data = _json.loads(conn.extra or "{}")
+        return data if isinstance(data, dict) else {}
+    except _json.JSONDecodeError:
+        return {}
+
+
+def allowed_email_domains(conn: Connection) -> list[str]:
+    """Domini a cui questa connessione può spedire. Elenco VUOTO = nessun limite
+    (chi non ne ha bisogno non se ne accorge); valorizzato = barriera vera contro
+    l'uso del nodo email come canale di uscita verso indirizzi arbitrari."""
+    grezzi = smtp_options(conn).get("allowed_domains") or []
+    if isinstance(grezzi, str):
+        grezzi = grezzi.split(",")
+    return [d.strip().lower().lstrip("@") for d in grezzi if isinstance(d, str) and d.strip()]
+
+
+def _smtp_payload(conn: Connection) -> dict:
+    opts = smtp_options(conn)
+    return {
+        "db_type": "smtp",
+        "host": conn.host,
+        "port": conn.port or 587,
+        "username": conn.username,
+        "password_encrypted": conn.password_encrypted,
+        "from_address": opts.get("from_address") or "",
+        "from_name": opts.get("from_name") or "",
+        "tls": opts.get("tls") or "starttls",
+    }
+
+
 def engine_connection_payload(conn: Connection) -> dict:
     """Il payload `connection` per l'engine: password/secret ANCORA cifrata."""
+    if conn.db_type == "smtp":
+        return _smtp_payload(conn)
     if conn.db_type == "s3":
         return _s3_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.db_schema)
     return {

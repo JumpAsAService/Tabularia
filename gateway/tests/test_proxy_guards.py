@@ -10,8 +10,13 @@ traccia.
 
 Regressione vera: `mirror` era stato aggiunto come campo fratello di
 `destination` senza estendere questa guardia, che fino ad allora non era
-coperta da alcun test. Il parametrizzato copre tutti e tre i nomi proprio
-perché il prossimo campo di questa famiglia non ripeta la storia.
+coperta da alcun test. Il parametrizzato copre tutti i nomi della famiglia
+proprio perché il prossimo campo non ripeta la storia — `email` è stato
+aggiunto qui nello stesso commit che lo ha introdotto.
+
+Per `email` la posta in gioco è più alta: oltre a catalogo, CONNECT e cifratura,
+saltare questa guardia salterebbe la validazione dei domini ammessi, cioè
+l'unica barriera fra un flusso e l'invio di dati a un indirizzo arbitrario.
 """
 import json
 from types import SimpleNamespace
@@ -54,7 +59,7 @@ def _richiesta(body: dict) -> Request:
     return Request(scope, receive)
 
 
-@pytest.mark.parametrize("campo", ["destination", "db_destination", "mirror"])
+@pytest.mark.parametrize("campo", ["destination", "db_destination", "mirror", "email"])
 async def test_destinazioni_rifiutate_dal_proxy(campo):
     body = {
         "bucket": "data-prep",
