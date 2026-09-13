@@ -210,7 +210,7 @@ async function saveSchedule(cron: string, productionEngine?: string) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Workflow :size="18" /> Flows <span class="muted count">{{ total }}</span></h2>
+      <h1><Workflow :size="18" /> Flows <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('flows.searchPlaceholder')" /></span>
         <div class="newflow">
@@ -363,7 +363,7 @@ async function saveSchedule(cron: string, productionEngine?: string) {
 <style scoped>
 .prod-engine { font-size: 12px; padding: 2px 6px; max-width: 220px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.page-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+.page-head h1 { display: inline-flex; align-items: center; gap: 8px; }
 .count { font-weight: 400; font-size: 14px; }
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .searchbox { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--panel-2); }

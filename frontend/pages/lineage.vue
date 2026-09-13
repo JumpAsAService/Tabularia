@@ -284,7 +284,7 @@ function nodeIcon(t: string) {
   <AppShell fluid>
     <div class="lineage">
       <div class="page-head">
-        <h2><Share2 :size="18" /> {{ $t('lineage.title') }}</h2>
+        <h1><Share2 :size="18" /> {{ $t('lineage.title') }}</h1>
         <span class="muted sub">{{ $t('lineage.subtitle') }}</span>
       </div>
 
@@ -477,7 +477,7 @@ function nodeIcon(t: string) {
 <style scoped>
 .lineage { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
 .page-head { display: flex; align-items: baseline; gap: 12px; }
-.page-head h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.page-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 1.5em; }
 .sub { font-size: 12.5px; }
 
 .ln-body { display: flex; gap: 12px; flex: 1; min-height: 0; }

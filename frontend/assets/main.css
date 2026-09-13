@@ -178,6 +178,19 @@ button.primary {
 }
 button.primary:hover { filter: brightness(1.12); box-shadow: 0 2px 12px rgba(79, 140, 255, 0.35); }
 button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
+/* Navigazione da tastiera: i campi avevano il loro anello (più sotto), i bottoni
+   no — restava quello di default del browser, poco visibile su questi fondi.
+   `outline` invece di box-shadow: segue il token dell'accento in tutti i temi e
+   non compete con l'ombra di :hover. Solo :focus-visible, così il click col
+   mouse non lo accende. */
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* la card di un dialogo riceve il fuoco all'apertura (tabindex="-1") perché lo
+   screen reader ne annunci il titolo: è un fuoco programmatico, non deve
+   disegnare un anello attorno all'intero riquadro */
+[role="dialog"]:focus { outline: none; }
 
 /* rotazione per gli spinner (es. icona Loader) */
 .spin { animation: spin 1s linear infinite; }

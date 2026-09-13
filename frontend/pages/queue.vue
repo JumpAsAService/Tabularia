@@ -88,7 +88,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
   <AppShell>
     <template v-if="user?.is_superuser">
       <div class="page-head">
-        <h2><Cpu :size="18" /> {{ $t('queue.pageTitle') }}</h2>
+        <h1><Cpu :size="18" /> {{ $t('queue.pageTitle') }}</h1>
         <div class="head-actions">
           <span class="live"><span class="dot" /> {{ $t('queue.liveIndicator', { s: POLL_MS / 1000 }) }}</span>
           <button class="mini" :title="$t('queue.refreshNow')" @click="tick"><RefreshCw :size="14" /></button>
@@ -183,7 +183,8 @@ const reserved = computed(() => data.value?.reserved ?? [])
 
 <style scoped>
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.page-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+/* dimensioni fissate: vedi nota in runs.vue — <h1> deve rendere come il <h2> */
+.page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .live .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 1.6s ease-in-out infinite; }

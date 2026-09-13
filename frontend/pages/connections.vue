@@ -84,7 +84,7 @@ async function remove(c: ConnectionInfo) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Plug :size="18" /> {{ $t('connections.title') }} <span class="muted count">{{ total }}</span></h2>
+      <h1><Plug :size="18" /> {{ $t('connections.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('connections.searchPlaceholder')" /></span>
       </div>

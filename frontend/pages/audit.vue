@@ -173,7 +173,7 @@ function detailSummary(e: AuditEntry): string {
   <AppShell fluid>
     <div class="audit">
       <div class="page-head">
-        <h2><ScrollText :size="18" /> {{ $t('audit.heading') }}</h2>
+        <h1><ScrollText :size="18" /> {{ $t('audit.heading') }}</h1>
         <span class="muted sub">{{ $t('audit.subtitle') }}</span>
         <span class="spacer" />
         <button class="mini" :title="$t('audit.refreshTitle')" @click="load(); loadSessions(); loadAccess()"><RefreshCw :size="14" /></button>
@@ -275,7 +275,7 @@ function detailSummary(e: AuditEntry): string {
 <style scoped>
 .audit { display: flex; flex-direction: column; gap: 14px; }
 .page-head { display: flex; align-items: center; gap: 12px; }
-.page-head h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.page-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 1.5em; }
 .sub { font-size: 12.5px; }
 .spacer { flex: 1; }
 .mini { padding: 5px 9px; font-size: 12px; }

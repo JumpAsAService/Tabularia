@@ -7,6 +7,7 @@ import { Database, X, Table2, Code2, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import type { DbDatasourceDraft } from '~/composables/useDatasources'
+import { useDialogA11y } from '~/composables/useDialogA11y'
 
 const props = defineProps<{
   open: boolean
@@ -20,6 +21,10 @@ const emit = defineEmits<{
 }>()
 
 const connApi = useConnections()
+
+// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+const card = ref<HTMLElement | null>(null)
+useDialogA11y(card, () => props.open, () => emit('cancel'))
 
 const name = ref('')
 const description = ref('')
@@ -87,9 +92,16 @@ function confirm() {
 <template>
   <Teleport to="body">
     <div v-if="open" class="dd-backdrop" @mousedown.self="emit('cancel')">
-      <div class="dd-card" @keydown.esc="emit('cancel')">
+      <div
+        ref="card"
+        class="dd-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dd-title"
+        tabindex="-1"
+      >
         <div class="dd-head">
-          <h3><Database :size="15" /> {{ $t('dbDatasourceDialog.title') }}</h3>
+          <h3 id="dd-title"><Database :size="15" /> {{ $t('dbDatasourceDialog.title') }}</h3>
           <button class="dd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 

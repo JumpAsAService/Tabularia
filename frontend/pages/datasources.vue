@@ -150,7 +150,7 @@ async function saveSchedule(cron: string) {
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><Database :size="18" /> {{ $t('datasources.title') }} <span class="muted count">{{ total }}</span></h2>
+      <h1><Database :size="18" /> {{ $t('datasources.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('datasources.searchPlaceholder')" /></span>
       </div>

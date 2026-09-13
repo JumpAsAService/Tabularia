@@ -6,6 +6,7 @@
 import { ref, watch } from 'vue'
 import { Play, X, Database, HardDriveDownload } from 'lucide-vue-next'
 import type { PublishSpec } from '~/composables/useRuns'
+import { useDialogA11y } from '~/composables/useDialogA11y'
 
 const props = defineProps<{
   open: boolean
@@ -20,6 +21,10 @@ const emit = defineEmits<{
   (e: 'confirm', publish: PublishSpec | null): void
   (e: 'cancel'): void
 }>()
+
+// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+const card = ref<HTMLElement | null>(null)
+useDialogA11y(card, () => props.open, () => emit('cancel'))
 
 const publishEnabled = ref(false)
 const name = ref('')
@@ -54,9 +59,16 @@ function confirm() {
 <template>
   <Teleport to="body">
     <div v-if="open" class="rd-backdrop" @mousedown.self="emit('cancel')">
-      <div class="rd-card" @keydown.esc="emit('cancel')">
+      <div
+        ref="card"
+        class="rd-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rd-title"
+        tabindex="-1"
+      >
         <div class="rd-head">
-          <h3><Play :size="15" /> {{ $t('runDialog.title') }}</h3>
+          <h3 id="rd-title"><Play :size="15" /> {{ $t('runDialog.title') }}</h3>
           <button class="rd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 

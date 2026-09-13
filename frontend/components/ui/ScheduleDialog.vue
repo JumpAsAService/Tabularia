@@ -6,6 +6,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CalendarClock, X } from 'lucide-vue-next'
 import cronstrue from 'cronstrue/i18n'
+import { useDialogA11y } from '~/composables/useDialogA11y'
 
 const { t } = useI18n()
 
@@ -25,6 +26,10 @@ const emit = defineEmits<{
   (e: 'save', cron: string, productionEngine?: string): void
   (e: 'cancel'): void
 }>()
+// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+const card = ref<HTMLElement | null>(null)
+useDialogA11y(card, () => props.open, () => emit('cancel'))
+
 const prodEngine = ref('')
 const prodChoice = () => (props.engines?.length ? prodEngine.value : undefined)
 
@@ -68,9 +73,16 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
 <template>
   <Teleport to="body">
     <div v-if="open" class="sd-backdrop" @mousedown.self="emit('cancel')">
-      <div class="sd-card" @keydown.esc="emit('cancel')">
+      <div
+        ref="card"
+        class="sd-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sd-title"
+        tabindex="-1"
+      >
         <div class="sd-head">
-          <h3><CalendarClock :size="15" /> {{ $t('scheduleDialog.heading') }}</h3>
+          <h3 id="sd-title"><CalendarClock :size="15" /> {{ $t('scheduleDialog.heading') }}</h3>
           <button class="sd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
         <p class="muted sd-sub">

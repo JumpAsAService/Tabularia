@@ -49,7 +49,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 <template>
   <AppShell>
     <div class="page-head">
-      <h2><History :size="18" /> {{ $t('runs.title') }} <span class="muted count">{{ total }}</span></h2>
+      <h1><History :size="18" /> {{ $t('runs.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
         <div class="segmented">
           <button
@@ -105,7 +105,10 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 
 <style scoped>
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.page-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+/* font-size/margin espliciti: il titolo era un <h2> e prendeva i default del
+   browser (1.5em, margine 0.83em). Promosso ad <h1> per la navigazione per
+   intestazioni, li fissa qui per rendere esattamente come prima. */
+.page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .count { font-weight: 400; font-size: 14px; }
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .searchbox { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--panel-2); }

@@ -208,7 +208,7 @@ function etichettaLivello(l: string): string {
 <template>
   <div class="admin">
     <div class="page-head">
-      <h2><Shield :size="18" /> {{ $t('adminPanel.title') }}</h2>
+      <h1><Shield :size="18" /> {{ $t('adminPanel.title') }}</h1>
     </div>
 
     <div class="layout">
@@ -452,7 +452,7 @@ function etichettaLivello(l: string): string {
 
 <style scoped>
 .page-head { margin-bottom: 16px; }
-.page-head h2 {
+.page-head h1 {
   margin: 0;
   font-size: 19px;
   font-weight: 700;

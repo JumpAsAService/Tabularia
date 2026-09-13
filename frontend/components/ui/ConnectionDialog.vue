@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plug, X, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { useDialogA11y } from '~/composables/useDialogA11y'
 import {
   useConnections,
   DB_TYPES,
@@ -26,6 +27,10 @@ const emit = defineEmits<{
 
 const connApi = useConnections()
 const { t } = useI18n()
+
+// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+const card = ref<HTMLElement | null>(null)
+useDialogA11y(card, () => props.open, () => emit('cancel'))
 
 const name = ref('')
 const description = ref('')
@@ -107,9 +112,16 @@ function confirm() {
 <template>
   <Teleport to="body">
     <div v-if="open" class="cd-backdrop" @mousedown.self="emit('cancel')">
-      <div class="cd-card" @keydown.esc="emit('cancel')">
+      <div
+        ref="card"
+        class="cd-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cd-title"
+        tabindex="-1"
+      >
         <div class="cd-head">
-          <h3><Plug :size="15" /> {{ isEdit ? $t('connectionDialog.titleEdit') : $t('connectionDialog.titleNew') }}</h3>
+          <h3 id="cd-title"><Plug :size="15" /> {{ isEdit ? $t('connectionDialog.titleEdit') : $t('connectionDialog.titleNew') }}</h3>
           <button class="cd-x" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 

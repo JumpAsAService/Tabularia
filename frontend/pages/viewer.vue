@@ -239,7 +239,7 @@ onMounted(async () => {
   <AppShell fluid>
    <div class="viewer">
     <div class="page-head">
-      <h2><PieChart :size="18" /> {{ $t('viewer.pageTitle') }}</h2>
+      <h1><PieChart :size="18" /> {{ $t('viewer.pageTitle') }}</h1>
       <div class="head-actions">
         <label class="hl"><Cpu :size="13" /> {{ $t('viewer.engineLabel') }}</label>
         <Select v-model="engine" :options="engineOptions" class="engsel" />
