@@ -528,17 +528,15 @@ onMounted(async () => {
 <style scoped src="~/assets/listpage.css"></style>
 <style scoped>
 .viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-/* `flex-wrap` non è un dettaglio: questa barra ha sei controlli e senza wrap i
-   figli si comprimono invece di andare a capo. Comprimendosi, l'etichetta DENTRO
-   il bottone va a capo e il bottone diventa alto il doppio dei Select accanto.
-   Va a capo la barra, come fa già `.page-head`, non il testo dei controlli. */
-.head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.head-actions > * { flex-shrink: 0; }
-.savewrap .btn-link { white-space: nowrap; }
+.head-actions { display: flex; align-items: center; gap: 8px; }
 .vwsel { width: 200px; }
 /* riquadro di salvataggio: stessa meccanica del menù "nuovo flusso" — uno
-   sfondo che cattura il click fuori, e il pannello sopra */
-.savewrap { position: relative; }
+   sfondo che cattura il click fuori, e il pannello sopra.
+   `flex-shrink: 0` + `nowrap` sono la correzione del bottone alto il doppio: la
+   barra resta su UNA riga, e a cedere qualche pixel sono i Select accanto (il
+   loro testo ha già l'ellissi), non l'etichetta del bottone andando a capo. */
+.savewrap { position: relative; flex-shrink: 0; }
+.savewrap .btn-link { white-space: nowrap; }
 .menu-backdrop { position: fixed; inset: 0; z-index: 20; }
 .savepop {
   position: absolute;
