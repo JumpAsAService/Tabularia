@@ -89,6 +89,15 @@ _MIGRATIONS = [
     # vecchi (vedi models/datasource.py). Intero semplice, nessuna FK: eviterebbe
     # un ciclo runs ↔ datasources
     "ALTER TABLE datasources ADD COLUMN IF NOT EXISTS snapshot_run_id INTEGER",
+    # Identità SSO stabile (issuer + subject del token). L'SSO riconosce l'utente
+    # da qui, non dall'email — vedi models/user.py e services/sso.py.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_issuer VARCHAR",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_subject VARCHAR",
+    # Una stessa identità dell'IdP non può appartenere a due account. Indice
+    # PARZIALE: gli account senza SSO hanno entrambe le colonne nulle e non
+    # devono collidere fra loro.
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_oidc_identity ON users (oidc_issuer, oidc_subject)"
+    " WHERE oidc_subject IS NOT NULL",
 ]
 
 

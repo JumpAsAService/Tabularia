@@ -225,6 +225,67 @@ def email_from_claims(claims: dict) -> str:
     raise SsoError("l'id_token non contiene un'email (né UPN): impossibile identificare l'utente", "no_email")
 
 
+def identity_from_claims(claims: dict) -> tuple[str, str]:
+    """Identità STABILE dell'utente presso l'IdP: la coppia (issuer, subject).
+
+    È questa — non l'email — a dire CHI sta entrando. Il subject lo assegna
+    l'IdP, è immutabile e l'utente non se lo può scegliere; email, UPN e
+    `preferred_username` invece sono modificabili in molte directory, e chi può
+    sceglierseli potrebbe altrimenti farsi riconoscere come qualcun altro.
+
+    `validate_id_token` esige già `iss` e `sub`, quindi nel flusso reale ci sono
+    sempre: qui si rifiuta comunque un token che ne sia privo.
+    """
+    issuer = str(claims.get("iss") or "").strip()
+    subject = str(claims.get("sub") or "").strip()
+    if not issuer or not subject:
+        raise SsoError(
+            "l'id_token non contiene iss/sub: non identifica stabilmente nessuno", "no_identity"
+        )
+    return issuer, subject
+
+
+def claim_is_true(value: Any) -> bool:
+    """Una claim booleana è vera SOLO se lo afferma esplicitamente.
+
+    Gli IdP mandano indifferentemente booleani o stringhe, e la vecchia guardia
+    controllava `is False`: bastava che la claim mancasse, o valesse `"false"`
+    o `0`, per superarla. Qui l'assenza vale NON confermato, che è l'unico
+    default sicuro per una verifica.
+    """
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"true", "1", "yes"}
+
+
+def ensure_admitted(cfg: OidcSettings, email: str, idp_groups: set[str]) -> None:
+    """Chi può ENTRARE, che è cosa diversa da quali gruppi riceve.
+
+    Senza questi due cancelli un account attivo nasce per chiunque l'IdP
+    autentichi: puntato alla directory aziendale, significa tutta l'azienda.
+    Entrambi sono spenti di default, quindi non cambiano nulla a chi già usa
+    l'SSO; chi li accende decide esplicitamente il perimetro.
+    """
+    if cfg.allowed_domains:
+        dominio = email.rsplit("@", 1)[-1].lower()
+        if dominio not in cfg.allowed_domains:
+            raise SsoError(f"dominio {dominio} non ammesso all'accesso", "not_allowed")
+
+    if cfg.require_allowlisted_group:
+        ammessi = set(cfg.allowlist)
+        if cfg.superuser_group:
+            ammessi.add(cfg.superuser_group)
+        if not ammessi:
+            # configurazione contraddittoria: si richiede un gruppo ammesso ma
+            # non ne è elencato nessuno → nessuno entrerebbe mai, in silenzio
+            raise SsoError(
+                "OIDC__REQUIRE_ALLOWLISTED_GROUP è attivo ma OIDC__GROUP_ALLOWLIST è vuoto",
+                "config_error",
+            )
+        if not (idp_groups & ammessi):
+            raise SsoError(f"{email} non appartiene a nessun gruppo ammesso", "not_allowed")
+
+
 def normalize_groups(claims: dict, cfg: OidcSettings) -> set[str]:
     """Nomi dei gruppi dalla claim configurata, normalizzati.
 
@@ -266,22 +327,70 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     cambiato (utente creato, gruppi aggiunti/rimossi, superuser).
     """
     cfg = cfg or get_settings().oidc
+    issuer, subject = identity_from_claims(claims)
     email = email_from_claims(claims)
-    user = session.exec(select(User).where(User.email == email)).first()
-    created = user is None
+    # 0) ha il permesso di entrare? Prima di creare o collegare qualsiasi cosa.
+    ensure_admitted(cfg, email, normalize_groups(claims, cfg))
+
+    # 1) CHI sta entrando: sempre dalla coppia stabile dell'IdP, mai dall'email.
+    user = session.exec(
+        select(User).where(User.oidc_issuer == issuer, User.oidc_subject == subject)
+    ).first()
+    created = False
+    linked = False
+
     if user is None:
-        # utente solo-SSO: nessuna password locale (colonna nullable)
-        user = User(
-            email=email,
-            full_name=str(claims.get("name") or claims.get("given_name") or "").strip(),
-            hashed_password=None,
-            is_active=True,
-        )
-        session.add(user)
-        session.flush()
-    elif not user.is_active:
-        raise SsoError(f"utente {email} disattivato in Tabularia", "user_disabled")
-    elif claims.get("name") and not user.full_name:
+        # 2) Identità mai vista. Esiste già un account con quell'email?
+        omonimo = session.exec(select(User).where(User.email == email)).first()
+        if omonimo is None:
+            # utente solo-SSO: nessuna password locale (colonna nullable)
+            user = User(
+                email=email,
+                full_name=str(claims.get("name") or claims.get("given_name") or "").strip(),
+                hashed_password=None,
+                is_active=True,
+                oidc_issuer=issuer,
+                oidc_subject=subject,
+            )
+            session.add(user)
+            session.flush()
+            created = True
+        elif not omonimo.is_active:
+            raise SsoError(f"utente {email} disattivato in Tabularia", "user_disabled")
+        elif omonimo.oidc_subject:
+            # quell'account appartiene già a un'ALTRA identità dell'IdP: due
+            # persone non possono rivendicare lo stesso utente
+            raise SsoError(
+                f"l'account {email} è già collegato a un'altra identità dell'IdP", "identity_conflict"
+            )
+        elif not claim_is_true(claims.get("email_verified")):
+            # QUI stava il takeover: un account esistente veniva rivendicato solo
+            # perché il token portava la sua email. Il collegamento avviene una
+            # volta sola e richiede che l'IdP dichiari l'email VERIFICATA.
+            raise SsoError(
+                f"l'IdP non dichiara verificata l'email {email}: collegamento all'account "
+                "esistente rifiutato",
+                "email_unverified",
+            )
+        else:
+            omonimo.oidc_issuer = issuer
+            omonimo.oidc_subject = subject
+            session.add(omonimo)
+            user = omonimo
+            linked = True
+
+    if not user.is_active:
+        raise SsoError(f"utente {user.email} disattivato in Tabularia", "user_disabled")
+
+    # L'email presso l'IdP può cambiare: si aggiorna, l'identità resta la stessa.
+    # Non si tocca se l'indirizzo è già di qualcun altro (vincolo UNIQUE).
+    if user.email != email:
+        occupata = session.exec(select(User).where(User.email == email, User.id != user.id)).first()
+        if occupata is None:
+            user.email = email
+            session.add(user)
+
+    if claims.get("name") and not user.full_name:
         user.full_name = str(claims["name"]).strip()
         session.add(user)
 
@@ -322,6 +431,9 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
 
     detail = {
         "created": created,
+        # collegamento di un account PREESISTENTE a un'identità dell'IdP: avviene
+        # una volta sola e va lasciato in chiaro nell'audit
+        "linked": linked,
         "groups_added": _names(wanted - current),
         "groups_removed": _names(removed_ids),
         "groups": sorted(idp_groups),

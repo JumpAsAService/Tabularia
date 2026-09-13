@@ -27,7 +27,7 @@ README.md → Known limits before going to production.
 {{- end }}
 {{- if .Values.oidc.enabled }}
 
-NOTE: single sign-on is enabled. Read README.md → Known limits: Tabularia
-identifies users by the email or UPN in the token, so the identity provider must
-not let people choose those values freely.
+NOTE: single sign-on is enabled. Admission is open by default — everyone the
+provider authenticates gets an account. Set oidc.allowedEmailDomains or
+oidc.requireAllowlistedGroup if your issuer is the whole company directory.
 {{- end }}

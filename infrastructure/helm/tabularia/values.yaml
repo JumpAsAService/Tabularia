@@ -142,6 +142,11 @@ oidc:
   scopes: "openid profile email"
   groupsClaim: groups     # use "roles" for Entra ID app roles
   groupAllowlist: ""
+  # Who may sign in at all — a different question from which groups they receive.
+  # Both are off by default. Without them anyone the provider authenticates gets
+  # an active account: pointed at a company directory, that is everyone.
+  allowedEmailDomains: ""         # comma-separated; empty = any domain
+  requireAllowlistedGroup: false  # signing in requires a group from groupAllowlist
   autoCreateGroups: false
   authoritative: false
   superuserGroup: ""

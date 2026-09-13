@@ -55,6 +55,9 @@ data:
   OIDC__SCOPES: {{ .Values.oidc.scopes | quote }}
   OIDC__GROUPS_CLAIM: {{ .Values.oidc.groupsClaim | quote }}
   OIDC__GROUP_ALLOWLIST: {{ .Values.oidc.groupAllowlist | quote }}
+  # Chi può entrare (vuoto/false = nessun filtro, comportamento storico)
+  OIDC__ALLOWED_EMAIL_DOMAINS: {{ .Values.oidc.allowedEmailDomains | quote }}
+  OIDC__REQUIRE_ALLOWLISTED_GROUP: {{ .Values.oidc.requireAllowlistedGroup | quote }}
   OIDC__AUTO_CREATE_GROUPS: {{ .Values.oidc.autoCreateGroups | quote }}
   OIDC__AUTHORITATIVE: {{ .Values.oidc.authoritative | quote }}
   OIDC__SUPERUSER_GROUP: {{ .Values.oidc.superuserGroup | quote }}

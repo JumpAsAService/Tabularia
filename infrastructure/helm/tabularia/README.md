@@ -192,12 +192,13 @@ the longest run you expect, or an upgrade will interrupt work mid-write.
 Read these before going to production. They are application limits, not chart
 limits, and they are documented in [`docs/audit`](../../../docs/audit).
 
-- **Single sign-on identifies users by email or UPN**, not by a stable subject
-  identifier, and the provisioning step matches an existing account by email.
-  Against a directory where people can choose their own email or username, this
-  allows landing on someone else's account. Enable SSO only with a directory you
-  control, and restrict who may sign in on the provider side: Tabularia has no
-  allowlist of its own, so anyone the provider authenticates gets an account.
+- **Anyone the provider authenticates gets an account**, unless you say
+  otherwise. Identity itself is safe — Tabularia keys users on the stable
+  `iss`+`sub` pair from the token, and an existing account can be claimed only
+  once and only when the provider asserts the email as verified — but admission
+  is open by default. If your issuer is the whole company directory, set
+  `oidc.allowedEmailDomains` or `oidc.requireAllowlistedGroup`, or restrict
+  assignment on the provider side.
 - **Sessions cannot be revoked individually.** Disabling or deleting a user takes
   effect immediately, but a leaked token of an account that stays active remains
   valid for `auth.jwtAccessTtlMinutes` (12 hours by default) unless you rotate

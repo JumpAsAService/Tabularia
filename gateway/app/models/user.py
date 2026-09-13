@@ -31,6 +31,15 @@ class User(SQLModel, table=True):
     last_seen_at: Optional[datetime] = Field(default=None, index=True)
     last_seen_ip: Optional[str] = None
 
+    # Identità presso l'IdP, quando l'account è collegato a un single sign-on.
+    # È la coppia (issuer, subject) del token: il subject è assegnato dall'IdP,
+    # è stabile e — a differenza di email e UPN — l'utente non se lo può
+    # scegliere. È QUESTA la chiave con cui l'SSO riconosce chi sta entrando;
+    # l'email serve solo al primo collegamento. Entrambe nulle = account che
+    # non è mai entrato dall'IdP.
+    oidc_issuer: Optional[str] = Field(default=None, index=True)
+    oidc_subject: Optional[str] = Field(default=None, index=True)
+
 
 class Group(SQLModel, table=True):
     __tablename__ = "groups"

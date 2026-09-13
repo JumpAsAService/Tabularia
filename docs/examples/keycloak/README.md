@@ -163,5 +163,7 @@ is in the gateway log (never in the browser, to avoid leaking IdP or config deta
 | `code_rejected` | the IdP refused the code exchange: usually a wrong client secret or a redirect URI that does not match exactly |
 | `token_invalid`, `nonce_mismatch`, `jwks_error` | id_token failed validation (signature, `iss`, `aud`, `exp`, `nonce`) |
 | `no_email` | the token carries no email, UPN or `preferred_username` in email form |
-| `email_unverified` | the IdP explicitly flags the address as unverified |
+| `no_identity` | the token carries no `iss`/`sub`, so it identifies nobody. Tabularia recognises a user by that stable pair, never by the email alone |
+| `email_unverified` | an account with this email already exists and the IdP does not assert the address as **verified**, so it will not be claimed. Linking an existing account happens once and requires proof; a brand-new account does not |
+| `identity_conflict` | that account is already linked to a different identity of the IdP. Two people cannot claim the same user |
 | `user_disabled` | the user exists in Tabularia but is deactivated |

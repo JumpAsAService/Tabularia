@@ -99,6 +99,15 @@ class OidcSettings(BaseModel):
     authoritative: bool = True
     # env: OIDC__SUPERUSER_GROUP — appartenervi concede is_superuser (vuoto = mai)
     superuser_group: str = ""
+    # ── Chi può ENTRARE (diverso da: quali gruppi riceve) ────────────────────
+    # Senza questi due, chiunque l'IdP autentichi ottiene un account attivo: se
+    # l'issuer è la directory aziendale, è tutta l'azienda. Entrambi spenti di
+    # default, per non cambiare il comportamento di chi già usa l'SSO.
+    # env: OIDC__ALLOWED_EMAIL_DOMAINS — domini ammessi, separati da virgola
+    allowed_email_domains: str = ""
+    # env: OIDC__REQUIRE_ALLOWLISTED_GROUP — entra solo chi appartiene ad almeno
+    # un gruppo di `group_allowlist` (o al gruppo che concede l'admin)
+    require_allowlisted_group: bool = False
     # env: OIDC__POST_LOGIN_URL — pagina del FRONTEND che riceve il token
     post_login_url: str = "http://localhost:3000/auth/callback"
     # env: OIDC__BUTTON_LABEL — etichetta del pulsante nella pagina di login
@@ -120,6 +129,14 @@ class OidcSettings(BaseModel):
     @property
     def allowlist(self) -> set[str]:
         return {g.strip() for g in self.group_allowlist.split(",") if g.strip()}
+
+    @property
+    def allowed_domains(self) -> set[str]:
+        return {
+            d.strip().lower().lstrip("@")
+            for d in self.allowed_email_domains.split(",")
+            if d.strip()
+        }
 
     @property
     def scope_list(self) -> list[str]:
