@@ -94,6 +94,12 @@ def delete_user(
     non della persona): flussi/datasource/connessioni/run perdono solo il
     riferimento al proprietario. Spariscono con lui i permessi personali, le
     appartenenze ai gruppi e la proprietà degli upload non ancora in un flusso.
+
+    L'AUDIT invece non si tocca: è append-only e deve restare leggibile dopo che
+    la persona se n'è andata, altrimenti cancellare un account cancellerebbe le
+    prove di ciò che ha fatto. Si azzera solo il riferimento `actor_id`, mentre
+    `actor_label` conserva l'email di allora — è esattamente il motivo per cui
+    quel campo esiste (vedi models/audit.py).
     """
     if user_id == current.id:
         raise HTTPException(status_code=409, detail="Non puoi eliminare il tuo stesso account")
@@ -103,11 +109,16 @@ def delete_user(
     # è garantito — stessa lezione dei delete di flussi/progetti
     from sqlalchemy import delete as sa_delete, update as sa_update
 
-    from app.models import Connection, Datasource, Flow, Permission, Project, Run, Upload
+    from app.models import AuditLog, Connection, Datasource, Flow, Permission, Project, Run, Upload
 
     session.exec(sa_delete(Permission).where(Permission.user_id == user_id))
     session.exec(sa_delete(UserGroupLink).where(UserGroupLink.user_id == user_id))
     session.exec(sa_delete(Upload).where(Upload.owner_id == user_id))
+    # `audit_logs.actor_id` è una FK verso users: senza azzerarla il DELETE
+    # viola il vincolo e l'API risponde 500. Non è un caso limite — `auth.login`
+    # è auditato, quindi bastava aver fatto accesso una volta per non essere più
+    # eliminabili. Non emergeva nei test perché SQLite ha le foreign key spente.
+    session.exec(sa_update(AuditLog).where(AuditLog.actor_id == user_id).values(actor_id=None))
     for model, col in (
         (Project, Project.owner_id),
         (Flow, Flow.owner_id),
