@@ -388,6 +388,20 @@ export default {
     "hint": "trascina qui le operazioni del corpo",
     "title": "ciclo foreach"
   },
+  "globalSearch": {
+    "placeholder": "Cerca ovunque…",
+    "ariaLabel": "Cerca in tutte le cartelle",
+    "clear": "Svuota la ricerca",
+    "keepTyping": "Scrivi almeno {n} caratteri.",
+    "searching": "Cerco…",
+    "noResults": "Nulla di ciò che puoi vedere corrisponde a \"{q}\".",
+    "andMore": "Altri {n} risultati.",
+    "kind_folder": "Cartelle",
+    "kind_flow": "Flussi",
+    "kind_datasource": "Datasource",
+    "kind_view": "Viste",
+    "kind_connection": "Connessioni"
+  },
   "lineage": {
     "both": "Entrambe",
     "bucket": "Bucket",

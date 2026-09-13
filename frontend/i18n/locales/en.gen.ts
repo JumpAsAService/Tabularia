@@ -388,6 +388,20 @@ export default {
     "hint": "drag the body operations here",
     "title": "foreach loop"
   },
+  "globalSearch": {
+    "placeholder": "Search everything…",
+    "ariaLabel": "Search across all folders",
+    "clear": "Clear the search",
+    "keepTyping": "Type at least {n} characters.",
+    "searching": "Searching…",
+    "noResults": "Nothing you can see matches \"{q}\".",
+    "andMore": "{n} more results.",
+    "kind_folder": "Folders",
+    "kind_flow": "Flows",
+    "kind_datasource": "Datasources",
+    "kind_view": "Views",
+    "kind_connection": "Connections"
+  },
   "lineage": {
     "both": "Both",
     "bucket": "Bucket",

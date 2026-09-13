@@ -99,6 +99,7 @@ onMounted(async () => {
       </nav>
 
       <span class="spacer" />
+      <GlobalSearch />
       <MemoryGauge />
 
       <!-- impostazioni: ingranaggio → nome utente completo, tema, logout -->
