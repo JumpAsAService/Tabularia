@@ -6,7 +6,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  CheckCircle2, Plus, Shield, Trash2, TriangleAlert,
+  CheckCircle2, Plus, Search, Shield, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
@@ -31,6 +31,23 @@ const ng = ref({ name: '', description: '' })
 const nb = ref<{ message: string; level: BannerLevel }>({ message: '', level: 'warning' })
 const gruppoSelezionato = ref<number | null>(null)
 const daAggiungere = ref<number | null>(null)
+
+// ricerca: sottostringa, senza distinzione fra maiuscole e minuscole
+const qUsers = ref('')
+const qGroups = ref('')
+
+function combacia(q: string, ...campi: (string | null | undefined)[]): boolean {
+  const ago = q.trim().toLowerCase()
+  if (!ago) return true
+  return campi.filter(Boolean).join(' ').toLowerCase().includes(ago)
+}
+
+const utentiFiltrati = computed(() =>
+  users.value.filter((u) => combacia(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
+)
+const gruppiFiltrati = computed(() =>
+  groups.value.filter((g) => combacia(qGroups.value, g.name, g.description)),
+)
 
 const sezioni = computed(() => [
   { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: users.value.length },
@@ -215,53 +232,70 @@ function etichettaLivello(l: string): string {
         <template v-if="sezione === 'users'">
           <div class="card">
             <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ users.length }}</span></h4>
-            <table class="rows">
-              <thead>
-                <tr>
-                  <th>{{ $t('adminPanel.colUser') }}</th>
-                  <th>{{ $t('adminPanel.colGroups') }}</th>
-                  <th>{{ $t('adminPanel.colCreated') }}</th>
-                  <th>{{ $t('adminPanel.colLastSeen') }}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="u in users" :key="u.id">
-                  <td>
-                    {{ u.email }}
-                    <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
-                    <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
-                    <span v-if="u.sso_only" class="tag sso">{{ $t('adminPanel.ssoTag') }}</span>
-                    <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
-                  </td>
-                  <td>
-                    <span v-for="g in u.groups" :key="g" class="chip">{{ g }}</span>
-                    <span v-if="!u.groups.length" class="muted small">—</span>
-                  </td>
-                  <td class="muted small nowrap">{{ quando(u.created_at) }}</td>
-                  <td class="muted small nowrap">
-                    {{ u.last_seen_at ? quando(u.last_seen_at) : $t('adminPanel.neverSeen') }}
-                  </td>
-                  <td class="right nowrap">
-                    <button
-                      class="mini"
-                      :disabled="u.id === me?.id"
-                      :title="u.is_active ? $t('adminPanel.disableUserTitle') : $t('adminPanel.enableUserTitle')"
-                      @click="toggleActive(u)"
-                    >
-                      <component :is="u.is_active ? XCircle : CheckCircle2" :size="13" />
-                    </button>
-                    <button
-                      class="mini danger"
-                      :disabled="u.id === me?.id"
-                      :title="u.id === me?.id ? $t('adminPanel.cannotDeleteSelf') : $t('adminPanel.deleteUserTitle')"
-                      @click="deleteUser(u)"
-                    ><Trash2 :size="13" /></button>
-                  </td>
-                </tr>
-                <tr v-if="!users.length"><td colspan="5" class="muted">{{ $t('adminPanel.noUsers') }}</td></tr>
-              </tbody>
-            </table>
+
+            <div class="rowsearch">
+              <Search :size="13" />
+              <input v-model="qUsers" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" />
+              <span class="muted count">{{ utentiFiltrati.length }}/{{ users.length }}</span>
+              <button v-if="qUsers" class="x" :title="$t('adminPanel.clearSearch')" @click="qUsers = ''">
+                <X :size="12" />
+              </button>
+            </div>
+
+            <!-- la tabella cresce: resta scorrevole, con l'intestazione ferma in cima -->
+            <div class="tablewrap">
+              <table class="rows">
+                <thead>
+                  <tr>
+                    <th>{{ $t('adminPanel.colUser') }}</th>
+                    <th>{{ $t('adminPanel.colGroups') }}</th>
+                    <th>{{ $t('adminPanel.colCreated') }}</th>
+                    <th>{{ $t('adminPanel.colLastSeen') }}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="u in utentiFiltrati" :key="u.id">
+                    <td>
+                      {{ u.email }}
+                      <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
+                      <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
+                      <span v-if="u.sso_only" class="tag sso">{{ $t('adminPanel.ssoTag') }}</span>
+                      <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
+                    </td>
+                    <td>
+                      <span v-for="g in u.groups" :key="g" class="chip">{{ g }}</span>
+                      <span v-if="!u.groups.length" class="muted small">—</span>
+                    </td>
+                    <td class="muted small nowrap">{{ quando(u.created_at) }}</td>
+                    <td class="muted small nowrap">
+                      {{ u.last_seen_at ? quando(u.last_seen_at) : $t('adminPanel.neverSeen') }}
+                    </td>
+                    <td class="right nowrap">
+                      <button
+                        class="mini"
+                        :disabled="u.id === me?.id"
+                        :title="u.is_active ? $t('adminPanel.disableUserTitle') : $t('adminPanel.enableUserTitle')"
+                        @click="toggleActive(u)"
+                      >
+                        <component :is="u.is_active ? XCircle : CheckCircle2" :size="13" />
+                      </button>
+                      <button
+                        class="mini danger"
+                        :disabled="u.id === me?.id"
+                        :title="u.id === me?.id ? $t('adminPanel.cannotDeleteSelf') : $t('adminPanel.deleteUserTitle')"
+                        @click="deleteUser(u)"
+                      ><Trash2 :size="13" /></button>
+                    </td>
+                  </tr>
+                  <tr v-if="!utentiFiltrati.length">
+                    <td colspan="5" class="muted">
+                      {{ qUsers ? $t('adminPanel.noSearchResults') : $t('adminPanel.noUsers') }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="card form">
@@ -278,57 +312,75 @@ function etichettaLivello(l: string): string {
         <template v-else-if="sezione === 'groups'">
           <div class="card">
             <h4><UsersIcon :size="14" /> {{ $t('adminPanel.groupsTitle') }} <span class="muted">{{ groups.length }}</span></h4>
-            <table class="rows">
-              <thead>
-                <tr>
-                  <th>{{ $t('adminPanel.colName') }}</th>
-                  <th>{{ $t('adminPanel.colMembers') }}</th>
-                  <th>{{ $t('adminPanel.colCreated') }}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="g in groups"
-                  :key="g.id"
-                  class="clickable"
-                  :class="{ sel: g.id === gruppoSelezionato }"
-                  @click="gruppoSelezionato = g.id"
-                >
-                  <td>
-                    {{ g.name }}
-                    <div v-if="g.description" class="muted small">{{ g.description }}</div>
-                  </td>
-                  <td class="muted small">{{ g.member_count }}</td>
-                  <td class="muted small nowrap">{{ quando(g.created_at) }}</td>
-                  <td class="right">
-                    <button class="mini danger" :title="$t('adminPanel.deleteGroupTitle')" @click.stop="deleteGroup(g)">
-                      <Trash2 :size="13" />
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="!groups.length"><td colspan="4" class="muted">{{ $t('adminPanel.noGroups') }}</td></tr>
-              </tbody>
-            </table>
+
+            <div class="rowsearch">
+              <Search :size="13" />
+              <input v-model="qGroups" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" />
+              <span class="muted count">{{ gruppiFiltrati.length }}/{{ groups.length }}</span>
+              <button v-if="qGroups" class="x" :title="$t('adminPanel.clearSearch')" @click="qGroups = ''">
+                <X :size="12" />
+              </button>
+            </div>
+
+            <div class="tablewrap">
+              <table class="rows">
+                <thead>
+                  <tr>
+                    <th>{{ $t('adminPanel.colName') }}</th>
+                    <th>{{ $t('adminPanel.colMembers') }}</th>
+                    <th>{{ $t('adminPanel.colCreated') }}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="g in gruppiFiltrati"
+                    :key="g.id"
+                    class="clickable"
+                    :class="{ sel: g.id === gruppoSelezionato }"
+                    @click="gruppoSelezionato = g.id"
+                  >
+                    <td>
+                      {{ g.name }}
+                      <div v-if="g.description" class="muted small">{{ g.description }}</div>
+                    </td>
+                    <td class="muted small">{{ g.member_count }}</td>
+                    <td class="muted small nowrap">{{ quando(g.created_at) }}</td>
+                    <td class="right">
+                      <button class="mini danger" :title="$t('adminPanel.deleteGroupTitle')" @click.stop="deleteGroup(g)">
+                        <Trash2 :size="13" />
+                      </button>
+                    </td>
+                  </tr>
+                  <tr v-if="!gruppiFiltrati.length">
+                    <td colspan="4" class="muted">
+                      {{ qGroups ? $t('adminPanel.noSearchResults') : $t('adminPanel.noGroups') }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <!-- membri del gruppo scelto: aggiunta e rimozione stanno qui, dove
                si vede subito chi c'è dentro -->
           <div v-if="gruppoCorrente" class="card">
             <h4><UsersIcon :size="14" /> {{ $t('adminPanel.membersTitle', { name: gruppoCorrente.name }) }}</h4>
-            <table class="rows">
-              <tbody>
-                <tr v-for="u in membri" :key="u.id">
-                  <td>{{ u.email }}</td>
-                  <td class="right">
-                    <button class="mini" :title="$t('adminPanel.removeFromGroupTitle')" @click="removeMember(u)">
-                      <X :size="13" />
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="!membri.length"><td class="muted">{{ $t('adminPanel.noMembers') }}</td></tr>
-              </tbody>
-            </table>
+            <div class="tablewrap">
+              <table class="rows">
+                <tbody>
+                  <tr v-for="u in membri" :key="u.id">
+                    <td>{{ u.email }}</td>
+                    <td class="right">
+                      <button class="mini" :title="$t('adminPanel.removeFromGroupTitle')" @click="removeMember(u)">
+                        <X :size="13" />
+                      </button>
+                    </td>
+                  </tr>
+                  <tr v-if="!membri.length"><td class="muted">{{ $t('adminPanel.noMembers') }}</td></tr>
+                </tbody>
+              </table>
+            </div>
 
             <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.addToGroupTitle') }}</h4>
             <Select
@@ -352,29 +404,31 @@ function etichettaLivello(l: string): string {
           <div class="card">
             <h4><TriangleAlert :size="14" /> {{ $t('adminPanel.bannersTitle') }} <span class="muted">{{ banners.length }}</span></h4>
             <p class="muted small hint">{{ $t('adminPanel.bannersHint') }}</p>
-            <table class="rows">
-              <thead>
-                <tr>
-                  <th>{{ $t('adminPanel.colLevel') }}</th>
-                  <th>{{ $t('adminPanel.colMessage') }}</th>
-                  <th>{{ $t('adminPanel.colCreated') }}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="b in banners" :key="b.id">
-                  <td><span class="tag" :class="b.level">{{ etichettaLivello(b.level) }}</span></td>
-                  <td>{{ b.message }}</td>
-                  <td class="muted small nowrap">{{ quando(b.created_at) }}</td>
-                  <td class="right">
-                    <button class="mini danger" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
-                      <Trash2 :size="13" />
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="!banners.length"><td colspan="4" class="muted">{{ $t('adminPanel.noBanners') }}</td></tr>
-              </tbody>
-            </table>
+            <div class="tablewrap">
+              <table class="rows">
+                <thead>
+                  <tr>
+                    <th>{{ $t('adminPanel.colLevel') }}</th>
+                    <th>{{ $t('adminPanel.colMessage') }}</th>
+                    <th>{{ $t('adminPanel.colCreated') }}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="b in banners" :key="b.id">
+                    <td><span class="tag" :class="b.level">{{ etichettaLivello(b.level) }}</span></td>
+                    <td>{{ b.message }}</td>
+                    <td class="muted small nowrap">{{ quando(b.created_at) }}</td>
+                    <td class="right">
+                      <button class="mini danger" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
+                        <Trash2 :size="13" />
+                      </button>
+                    </td>
+                  </tr>
+                  <tr v-if="!banners.length"><td colspan="4" class="muted">{{ $t('adminPanel.noBanners') }}</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="card form">
@@ -450,6 +504,30 @@ function etichettaLivello(l: string): string {
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .subhead { margin-top: 14px !important; color: var(--muted); font-size: 12.5px; }
 .hint { margin: 0; }
+/* stessa barra di ricerca del group by */
+.rowsearch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.rowsearch input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--text);
+  font-size: 12.5px;
+  min-width: 0;
+}
+.rowsearch .count { font-size: 11px; font-variant-numeric: tabular-nums; }
+.rowsearch .x { padding: 1px 6px; }
+/* la tabella scorre invece di allungare la pagina all'infinito */
+.tablewrap { max-height: 420px; overflow-y: auto; }
 table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.rows th {
   text-align: left;
@@ -460,6 +538,10 @@ table.rows th {
   letter-spacing: 0.04em;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
 }
 table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
 table.rows tr:last-child td { border-bottom: none; }

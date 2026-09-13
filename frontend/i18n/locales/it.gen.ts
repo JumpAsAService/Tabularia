@@ -2,6 +2,9 @@
 // The base locale (it.ts) holds nav/settings/login; these are the rest.
 export default {
   "adminPanel": {
+    "searchPlaceholder": "cerca…",
+    "clearSearch": "Svuota la ricerca",
+    "noSearchResults": "Nessun risultato per questa ricerca",
     "colUser": "Utente",
     "colGroups": "Gruppi",
     "colCreated": "Creato",
