@@ -836,7 +836,24 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 .searchbox input { border: none; background: transparent; outline: none; color: var(--text); width: 190px; font-size: 13px; }
 .searchbox .x { padding: 1px 5px; min-height: 0; }
 .newwrap { position: relative; flex-shrink: 0; }
-.newwrap .btn-link { white-space: nowrap; }
+/* `.btn-link` vive in assets/listpage.css, che qui NON è importato: con gli stili
+   scoped quella regola non arriva, e senza questa il bottone cadrebbe sulla
+   regola base `button` perdendo il riempimento d'accento, cioè il peso visivo
+   dell'unica azione primaria della pagina. Valori copiati da listpage.css perché
+   il `Nuovo` di Explore sia identico a quello di Flussi e Datasource. */
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  background: var(--grad-accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
 .menu-backdrop { position: fixed; inset: 0; z-index: 40; }
 .menu-pop {
   position: absolute;
@@ -921,6 +938,9 @@ tr.folderrow .kicon { color: var(--accent-2); }
   color: var(--muted);
 }
 .empty { padding: 28px 4px; }
+/* come `.btn-link`: vive in listpage.css, qui non importato. Senza, il messaggio
+   d'errore uscirebbe del colore del testo normale, cioè non sembrerebbe un errore. */
+.err { color: var(--danger); }
 .movesel { width: 130px; font-size: 12px; }
 .activebtn { border-color: var(--accent); }
 
