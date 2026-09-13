@@ -52,6 +52,12 @@ data:
   # Read by the engine API: how long it waits for a preview worker before
   # revoking the job and answering 504.
   PREVIEW_TIMEOUT_SECONDS: {{ .Values.engine.previewTimeoutSeconds | quote }}
+  # How long a run may take. The worker kills the task at the hard limit, and the
+  # gateway declares a run lost only after that — which is why the stale timeout
+  # must stay above it. Every workload reads this same ConfigMap, so the two
+  # halves of that agreement cannot drift apart between engine and gateway.
+  CELERY__TASK_TIME_LIMIT: {{ .Values.engine.taskTimeLimitSeconds | quote }}
+  CELERY__TASK_SOFT_TIME_LIMIT: {{ .Values.engine.taskSoftTimeLimitSeconds | quote }}
   ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ .Values.engine.runStaleTimeoutSeconds | quote }}
 
   CACHE__TTL_SECONDS: {{ .Values.cache.ttlSeconds | quote }}

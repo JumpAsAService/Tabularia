@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
 from functools import lru_cache
@@ -51,6 +53,20 @@ class AuthSettings(BaseModel):
     admin_name: str = "Administrator"
 
 
+def _celery_hard_limit_seconds() -> int:
+    """Il limite duro di Celery COME LO VEDE L'ENGINE: stessa variabile, stesso
+    `.env`, entrambi i container la ricevono. Il gateway non importa la
+    configurazione dell'engine (processi e immagini diverse), quindi l'accordo fra
+    i due passa da qui."""
+    raw = os.getenv("CELERY__TASK_TIME_LIMIT", "3600")
+    try:
+        return int(raw)
+    except ValueError:
+        raise RuntimeError(
+            f"CELERY__TASK_TIME_LIMIT non è un numero intero di secondi: '{raw}'"
+        ) from None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Engine interno (data plane): il gateway ci fa da proxy, non è esposto pubblicamente
 # ─────────────────────────────────────────────────────────────────────────────
@@ -61,8 +77,22 @@ class EngineSettings(BaseModel):
     bucket: str = "data-prep"
     # env: ENGINE__RUN_STALE_TIMEOUT_SECONDS — oltre questa età un run non terminale
     # è considerato in TIMEOUT (risultato perso o task troppo lungo) e marcato
-    # FAILURE. Deve essere ≥ del task_time_limit dell'engine (3600s) + margine.
-    run_stale_timeout_seconds: int = 3600 + 300
+    # FAILURE.
+    #
+    # Il default NON è più un numero fisso: è DERIVATO dal limite duro di Celery
+    # più cinque minuti di margine. Prima i due valori erano scritti a mano nei
+    # due servizi (`3600 + 300` qui, `3600` là), e alzare solo quello dell'engine
+    # lasciava il gateway a dichiarare perso un run ancora vivo — oppure, alzando
+    # solo questo, si aspettava di più per scoprire che Celery l'aveva già ucciso.
+    #
+    # L'invariante da preservare: questa soglia deve restare MAGGIORE del limite
+    # duro, perché il gateway rinuncia solo DOPO che Celery ha ucciso il task. È
+    # anche ciò che rende sicuro non abilitare `task_acks_late` sull'engine.
+    # Valorizzare ENGINE__RUN_STALE_TIMEOUT_SECONDS ha comunque la precedenza
+    # (l'env batte il default), per chi vuole un margine diverso.
+    run_stale_timeout_seconds: int = Field(
+        default_factory=lambda: _celery_hard_limit_seconds() + 300
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

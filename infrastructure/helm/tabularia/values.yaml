@@ -180,16 +180,27 @@ oidc:
   buttonLabel: "Sign in with SSO"
 
 engine:
+  # ── How long a run may take ────────────────────────────────────────────────
+  # The next three are COUPLED. Changing one on its own does not do what it looks
+  # like it does, so they are kept together.
+  #
+  # The worker KILLS the task at this age: it is the real ceiling on a run.
+  taskTimeLimitSeconds: 3600
+  # Shortly before that, the task gets an exception instead, so it can close
+  # files and report a failure rather than simply vanish.
+  taskSoftTimeLimitSeconds: 3300
+  # A run older than this is declared stale: the gateway revokes the task on the
+  # engine and marks the run failed. Must stay ABOVE taskTimeLimitSeconds, so the
+  # gateway gives up only after Celery has actually killed the task. Raising this
+  # alone does not allow longer runs — it only makes you wait longer to be told
+  # the run died at the hard limit. To allow longer runs, raise both.
+  runStaleTimeoutSeconds: 3900
   # Ceiling on a preview. The engine API does not compute it: it submits the job
   # to the `preview` queue and waits this long for a worker to answer, then
   # revokes the task and returns 504. Keep the ingress read timeout above it.
   # The gateway has no timeout of its own towards the engine — deliberately, so
   # that multi-gigabyte uploads are never cut off mid-transfer.
   previewTimeoutSeconds: 120
-  # A run older than this is declared stale: the gateway revokes the task on the
-  # engine and marks the run failed. Must stay ABOVE the Celery hard time limit
-  # (3600 s) or you will kill runs that are merely slow.
-  runStaleTimeoutSeconds: 3900
 
 cache:
   # Step-cache blobs older than this are evicted from the object storage.

@@ -24,8 +24,13 @@ celery_app.conf.update(
     timezone=settings.celery.timezone,
     enable_utc=settings.celery.enable_utc,
     task_track_started=True,
-    task_time_limit=3600,
-    task_soft_time_limit=3300,
+    # Durata massima di un task: al limite SOFT arriva un'eccezione (chiusura
+    # ordinata), al limite DURO il worker uccide il processo. Erano due letterali
+    # in un blocco per il resto interamente configurabile. Il gateway ci accorda
+    # la sua soglia di staleness (ENGINE__RUN_STALE_TIMEOUT_SECONDS), che deve
+    # restare MAGGIORE del limite duro: vedi la nota su task_acks_late più sotto.
+    task_time_limit=settings.celery.task_time_limit,
+    task_soft_time_limit=settings.celery.task_soft_time_limit,
     worker_concurrency=settings.celery.worker_concurrency,
     # Distribuzione EQUA su più worker: senza questo (default 4) ogni figlio
     # "prenota" fino a 4 task in coda, così un worker occupato accaparra job che

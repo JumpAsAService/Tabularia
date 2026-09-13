@@ -56,6 +56,19 @@ class CelerySettings(BaseModel):
     broker_url: Optional[str] = None
     result_backend: Optional[str] = None
     worker_concurrency: int = 2
+    # env: CELERY__TASK_TIME_LIMIT / CELERY__TASK_SOFT_TIME_LIMIT — durata massima
+    # di un task. Al limite SOFT il task riceve un'eccezione e può chiudere in
+    # ordine (file temporanei, connessioni); al limite DURO il worker gli uccide
+    # il processo.
+    #
+    # ACCOPPIATI AL GATEWAY: `ENGINE__RUN_STALE_TIMEOUT_SECONDS` deve restare
+    # MAGGIORE di `task_time_limit`, perché il gateway dichiara perso un run solo
+    # dopo che Celery lo ha già ucciso — è l'invariante su cui poggia la scelta di
+    # non abilitare `task_acks_late` (vedi celery_app.py). Alzare uno solo dei due
+    # non allunga la durata consentita ai run: cambia solo quanto si aspetta prima
+    # di vederli fallire.
+    task_time_limit: int = 3600
+    task_soft_time_limit: int = 3300
     task_serializer: str = "json"
     result_serializer: str = "json"
     timezone: str = "UTC"
