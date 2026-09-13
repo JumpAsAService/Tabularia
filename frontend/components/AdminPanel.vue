@@ -1,29 +1,61 @@
 <script setup lang="ts">
-// Amministrazione (solo superuser): utenti (lista + crea + elimina), gruppi e
-// appartenenze. Vive nella pagina /admin; il feedback passa dai toast.
-import { ref, onMounted } from 'vue'
+// Amministrazione (solo superuser), divisa in SEZIONI con navigazione a sinistra:
+// utenti, gruppi, banner. Prima era tutto impilato in un'unica schermata e le
+// azioni distruttive stavano accanto ai form di creazione. Il feedback passa dai
+// toast; le conferme dai confirm() del browser, come nel resto dell'app.
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Shield, Trash2, User as UserIcon, Users as UsersIcon, Plus, TriangleAlert } from 'lucide-vue-next'
+import {
+  CheckCircle2, Plus, Shield, Trash2, TriangleAlert,
+  User as UserIcon, Users as UsersIcon, X, XCircle,
+} from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
-import { useProjects, type UserOut, type GroupOut } from '~/composables/useProjects'
+import { useProjects, type GroupOut, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
 
 const api = useProjects()
+const bannersApi = useBanners()
 const toast = useToast()
 const { user: me } = useAuth()
 const { t } = useI18n()
 
+type Sezione = 'users' | 'groups' | 'banners'
+const sezione = ref<Sezione>('users')
+
 const users = ref<UserOut[]>([])
 const groups = ref<GroupOut[]>([])
+const banners = ref<Banner[]>([])
 
 const nu = ref({ email: '', password: '', full_name: '', is_superuser: false })
 const ng = ref({ name: '', description: '' })
-const member = ref<{ user_id: number | null; group_id: number | null }>({ user_id: null, group_id: null })
-
-// banner dell'Explore: l'elenco qui è ESATTAMENTE ciò che vedono gli utenti
-const bannersApi = useBanners()
-const banners = ref<Banner[]>([])
 const nb = ref<{ message: string; level: BannerLevel }>({ message: '', level: 'warning' })
+const gruppoSelezionato = ref<number | null>(null)
+const daAggiungere = ref<number | null>(null)
+
+const sezioni = computed(() => [
+  { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: users.value.length },
+  { id: 'groups' as Sezione, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
+  { id: 'banners' as Sezione, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
+])
+
+// stessa convenzione delle altre pagine: formattatore locale, tollerante
+function quando(iso: string | null): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+  } catch {
+    return iso
+  }
+}
+
+const gruppoCorrente = computed(() => groups.value.find((g) => g.id === gruppoSelezionato.value) ?? null)
+// i membri si ricavano dagli utenti già caricati: nessuna chiamata in più
+const membri = computed(() =>
+  gruppoCorrente.value ? users.value.filter((u) => u.groups.includes(gruppoCorrente.value!.name)) : [],
+)
+const nonMembri = computed(() =>
+  gruppoCorrente.value ? users.value.filter((u) => !u.groups.includes(gruppoCorrente.value!.name)) : [],
+)
 
 async function loadAll() {
   try {
@@ -36,6 +68,7 @@ async function loadAll() {
 }
 onMounted(loadAll)
 
+// ── utenti ──────────────────────────────────────────────────────────────────
 async function createUser() {
   if (!nu.value.email || nu.value.password.length < 6) {
     toast.error(t('adminPanel.emailPasswordRequired'))
@@ -51,19 +84,33 @@ async function createUser() {
   }
 }
 
-async function deleteUser(u: UserOut) {
-  if (!confirm(t('adminPanel.confirmDeleteUser', { email: u.email }))) return
+async function toggleActive(u: UserOut) {
   try {
-    await api.deleteUser(u.id)
-    users.value = users.value.filter((x) => x.id !== u.id)
-    toast.success(t('adminPanel.userDeleted', { email: u.email }))
+    await api.updateUser(u.id, { is_active: !u.is_active })
+    toast.success(t(u.is_active ? 'adminPanel.userDisabled' : 'adminPanel.userEnabled', { email: u.email }))
+    await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
+async function deleteUser(u: UserOut) {
+  if (!confirm(t('adminPanel.confirmDeleteUser', { email: u.email }))) return
+  try {
+    await api.deleteUser(u.id)
+    toast.success(t('adminPanel.userDeleted', { email: u.email }))
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+// ── gruppi ──────────────────────────────────────────────────────────────────
 async function createGroup() {
-  if (!ng.value.name) return
+  if (!ng.value.name.trim()) {
+    toast.error(t('adminPanel.groupNameRequired'))
+    return
+  }
   try {
     await api.createGroup({ ...ng.value })
     toast.success(t('adminPanel.groupCreated', { name: ng.value.name }))
@@ -74,16 +121,42 @@ async function createGroup() {
   }
 }
 
-async function addMember() {
-  if (!member.value.user_id || !member.value.group_id) return
+async function deleteGroup(g: GroupOut) {
+  if (!confirm(t('adminPanel.confirmDeleteGroup', { name: g.name }))) return
   try {
-    await api.addToGroup(member.value.user_id, member.value.group_id)
-    toast.success(t('adminPanel.userAddedToGroup'))
+    await api.deleteGroup(g.id)
+    if (gruppoSelezionato.value === g.id) gruppoSelezionato.value = null
+    toast.success(t('adminPanel.groupDeleted', { name: g.name }))
+    await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
+async function addMember() {
+  if (!daAggiungere.value || !gruppoCorrente.value) return
+  try {
+    await api.addToGroup(daAggiungere.value, gruppoCorrente.value.id)
+    toast.success(t('adminPanel.userAddedToGroup'))
+    daAggiungere.value = null
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+async function removeMember(u: UserOut) {
+  if (!gruppoCorrente.value) return
+  try {
+    await api.removeFromGroup(u.id, gruppoCorrente.value.id)
+    toast.success(t('adminPanel.userRemovedFromGroup'))
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+// ── banner ──────────────────────────────────────────────────────────────────
 async function createBanner() {
   if (!nb.value.message.trim()) {
     toast.error(t('adminPanel.bannerMessageRequired'))
@@ -109,6 +182,10 @@ async function deleteBanner(b: Banner) {
     toast.error(errMessage(e))
   }
 }
+
+function etichettaLivello(l: string): string {
+  return t(`banners.level${l.charAt(0).toUpperCase()}${l.slice(1)}`)
+}
 </script>
 
 <template>
@@ -117,106 +194,204 @@ async function deleteBanner(b: Banner) {
       <h2><Shield :size="18" /> {{ $t('adminPanel.title') }}</h2>
     </div>
 
-    <div class="admin-grid">
-      <!-- utenti -->
-      <div class="card">
-        <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ users.length }}</span></h4>
-        <table class="rows">
-          <tbody>
-            <tr v-for="u in users" :key="u.id">
-              <td>
-                {{ u.email }}
-                <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
-                <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
-                <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
-              </td>
-              <td class="right">
-                <button
-                  class="mini danger"
-                  :disabled="u.id === me?.id"
-                  :title="u.id === me?.id ? $t('adminPanel.cannotDeleteSelf') : $t('adminPanel.deleteUserTitle')"
-                  @click="deleteUser(u)"
-                ><Trash2 :size="13" /></button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="layout">
+      <!-- navigazione di sezione: solo per l'amministrazione -->
+      <nav class="sidenav">
+        <button
+          v-for="s in sezioni"
+          :key="s.id"
+          class="navitem"
+          :class="{ on: sezione === s.id }"
+          @click="sezione = s.id"
+        >
+          <component :is="s.icon" :size="15" />
+          <span class="lbl">{{ s.label }}</span>
+          <span class="count">{{ s.badge }}</span>
+        </button>
+      </nav>
 
-        <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.newUserTitle') }}</h4>
-        <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" />
-        <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
-        <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" />
-        <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> {{ $t('adminPanel.superuserLabel') }}</label>
-        <button class="primary" @click="createUser">{{ $t('adminPanel.createUserButton') }}</button>
-      </div>
+      <section class="content">
+        <!-- ── UTENTI ─────────────────────────────────────────────────────── -->
+        <template v-if="sezione === 'users'">
+          <div class="card">
+            <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ users.length }}</span></h4>
+            <table class="rows">
+              <thead>
+                <tr>
+                  <th>{{ $t('adminPanel.colUser') }}</th>
+                  <th>{{ $t('adminPanel.colGroups') }}</th>
+                  <th>{{ $t('adminPanel.colCreated') }}</th>
+                  <th>{{ $t('adminPanel.colLastSeen') }}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in users" :key="u.id">
+                  <td>
+                    {{ u.email }}
+                    <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
+                    <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
+                    <span v-if="u.sso_only" class="tag sso">{{ $t('adminPanel.ssoTag') }}</span>
+                    <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
+                  </td>
+                  <td>
+                    <span v-for="g in u.groups" :key="g" class="chip">{{ g }}</span>
+                    <span v-if="!u.groups.length" class="muted small">—</span>
+                  </td>
+                  <td class="muted small nowrap">{{ quando(u.created_at) }}</td>
+                  <td class="muted small nowrap">
+                    {{ u.last_seen_at ? quando(u.last_seen_at) : $t('adminPanel.neverSeen') }}
+                  </td>
+                  <td class="right nowrap">
+                    <button
+                      class="mini"
+                      :disabled="u.id === me?.id"
+                      :title="u.is_active ? $t('adminPanel.disableUserTitle') : $t('adminPanel.enableUserTitle')"
+                      @click="toggleActive(u)"
+                    >
+                      <component :is="u.is_active ? XCircle : CheckCircle2" :size="13" />
+                    </button>
+                    <button
+                      class="mini danger"
+                      :disabled="u.id === me?.id"
+                      :title="u.id === me?.id ? $t('adminPanel.cannotDeleteSelf') : $t('adminPanel.deleteUserTitle')"
+                      @click="deleteUser(u)"
+                    ><Trash2 :size="13" /></button>
+                  </td>
+                </tr>
+                <tr v-if="!users.length"><td colspan="5" class="muted">{{ $t('adminPanel.noUsers') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
 
-      <!-- gruppi -->
-      <div class="card">
-        <h4><UsersIcon :size="14" /> {{ $t('adminPanel.groupsTitle') }} <span class="muted">{{ groups.length }}</span></h4>
-        <table class="rows">
-          <tbody>
-            <tr v-for="g in groups" :key="g.id">
-              <td>
-                {{ g.name }}
-                <div v-if="g.description" class="muted small">{{ g.description }}</div>
-              </td>
-            </tr>
-            <tr v-if="!groups.length"><td class="muted">{{ $t('adminPanel.noGroups') }}</td></tr>
-          </tbody>
-        </table>
+          <div class="card form">
+            <h4><Plus :size="13" /> {{ $t('adminPanel.newUserTitle') }}</h4>
+            <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" />
+            <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
+            <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" />
+            <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> {{ $t('adminPanel.superuserLabel') }}</label>
+            <button class="primary" @click="createUser">{{ $t('adminPanel.createUserButton') }}</button>
+          </div>
+        </template>
 
-        <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.newGroupTitle') }}</h4>
-        <input v-model="ng.name" type="text" :placeholder="$t('adminPanel.groupNamePlaceholder')" />
-        <input v-model="ng.description" type="text" :placeholder="$t('adminPanel.descriptionPlaceholder')" />
-        <button class="primary" @click="createGroup">{{ $t('adminPanel.createGroupButton') }}</button>
+        <!-- ── GRUPPI ─────────────────────────────────────────────────────── -->
+        <template v-else-if="sezione === 'groups'">
+          <div class="card">
+            <h4><UsersIcon :size="14" /> {{ $t('adminPanel.groupsTitle') }} <span class="muted">{{ groups.length }}</span></h4>
+            <table class="rows">
+              <thead>
+                <tr>
+                  <th>{{ $t('adminPanel.colName') }}</th>
+                  <th>{{ $t('adminPanel.colMembers') }}</th>
+                  <th>{{ $t('adminPanel.colCreated') }}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="g in groups"
+                  :key="g.id"
+                  class="clickable"
+                  :class="{ sel: g.id === gruppoSelezionato }"
+                  @click="gruppoSelezionato = g.id"
+                >
+                  <td>
+                    {{ g.name }}
+                    <div v-if="g.description" class="muted small">{{ g.description }}</div>
+                  </td>
+                  <td class="muted small">{{ g.member_count }}</td>
+                  <td class="muted small nowrap">{{ quando(g.created_at) }}</td>
+                  <td class="right">
+                    <button class="mini danger" :title="$t('adminPanel.deleteGroupTitle')" @click.stop="deleteGroup(g)">
+                      <Trash2 :size="13" />
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="!groups.length"><td colspan="4" class="muted">{{ $t('adminPanel.noGroups') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
 
-        <h4 class="subhead"><UsersIcon :size="13" /> {{ $t('adminPanel.addToGroupTitle') }}</h4>
-        <Select
-          v-model="member.user_id"
-          :options="users.map((u) => ({ value: u.id, label: u.email }))"
-          :placeholder="$t('adminPanel.userPlaceholder')"
-        />
-        <Select
-          v-model="member.group_id"
-          :options="groups.map((g) => ({ value: g.id, label: g.name }))"
-          :placeholder="$t('adminPanel.groupPlaceholder')"
-        />
-        <button @click="addMember">{{ $t('adminPanel.addButton') }}</button>
-      </div>
+          <!-- membri del gruppo scelto: aggiunta e rimozione stanno qui, dove
+               si vede subito chi c'è dentro -->
+          <div v-if="gruppoCorrente" class="card">
+            <h4><UsersIcon :size="14" /> {{ $t('adminPanel.membersTitle', { name: gruppoCorrente.name }) }}</h4>
+            <table class="rows">
+              <tbody>
+                <tr v-for="u in membri" :key="u.id">
+                  <td>{{ u.email }}</td>
+                  <td class="right">
+                    <button class="mini" :title="$t('adminPanel.removeFromGroupTitle')" @click="removeMember(u)">
+                      <X :size="13" />
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="!membri.length"><td class="muted">{{ $t('adminPanel.noMembers') }}</td></tr>
+              </tbody>
+            </table>
 
-      <!-- banner dell'Explore -->
-      <div class="card wide">
-        <h4><TriangleAlert :size="14" /> {{ $t('adminPanel.bannersTitle') }} <span class="muted">{{ banners.length }}</span></h4>
-        <p class="muted small hint">{{ $t('adminPanel.bannersHint') }}</p>
-        <table class="rows">
-          <tbody>
-            <tr v-for="b in banners" :key="b.id">
-              <td>
-                <span class="tag" :class="b.level">{{ $t(`banners.level${b.level.charAt(0).toUpperCase()}${b.level.slice(1)}`) }}</span>
-                {{ b.message }}
-              </td>
-              <td class="right">
-                <button class="mini danger" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
-                  <Trash2 :size="13" />
-                </button>
-              </td>
-            </tr>
-            <tr v-if="!banners.length"><td class="muted">{{ $t('adminPanel.noBanners') }}</td></tr>
-          </tbody>
-        </table>
+            <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.addToGroupTitle') }}</h4>
+            <Select
+              v-model="daAggiungere"
+              :options="nonMembri.map((u) => ({ value: u.id, label: u.email }))"
+              :placeholder="$t('adminPanel.userPlaceholder')"
+            />
+            <button :disabled="!daAggiungere" @click="addMember">{{ $t('adminPanel.addButton') }}</button>
+          </div>
 
-        <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.newBannerTitle') }}</h4>
-        <input v-model="nb.message" type="text" :placeholder="$t('adminPanel.bannerMessagePlaceholder')" @keyup.enter="createBanner" />
-        <Select
-          v-model="nb.level"
-          :options="[
-            { value: 'info', label: $t('banners.levelInfo') },
-            { value: 'warning', label: $t('banners.levelWarning') },
-            { value: 'danger', label: $t('banners.levelDanger') },
-          ]"
-        />
-        <button class="primary" @click="createBanner">{{ $t('adminPanel.createBannerButton') }}</button>
-      </div>
+          <div class="card form">
+            <h4><Plus :size="13" /> {{ $t('adminPanel.newGroupTitle') }}</h4>
+            <input v-model="ng.name" type="text" :placeholder="$t('adminPanel.groupNamePlaceholder')" />
+            <input v-model="ng.description" type="text" :placeholder="$t('adminPanel.descriptionPlaceholder')" />
+            <button class="primary" @click="createGroup">{{ $t('adminPanel.createGroupButton') }}</button>
+          </div>
+        </template>
+
+        <!-- ── BANNER ─────────────────────────────────────────────────────── -->
+        <template v-else>
+          <div class="card">
+            <h4><TriangleAlert :size="14" /> {{ $t('adminPanel.bannersTitle') }} <span class="muted">{{ banners.length }}</span></h4>
+            <p class="muted small hint">{{ $t('adminPanel.bannersHint') }}</p>
+            <table class="rows">
+              <thead>
+                <tr>
+                  <th>{{ $t('adminPanel.colLevel') }}</th>
+                  <th>{{ $t('adminPanel.colMessage') }}</th>
+                  <th>{{ $t('adminPanel.colCreated') }}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="b in banners" :key="b.id">
+                  <td><span class="tag" :class="b.level">{{ etichettaLivello(b.level) }}</span></td>
+                  <td>{{ b.message }}</td>
+                  <td class="muted small nowrap">{{ quando(b.created_at) }}</td>
+                  <td class="right">
+                    <button class="mini danger" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
+                      <Trash2 :size="13" />
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="!banners.length"><td colspan="4" class="muted">{{ $t('adminPanel.noBanners') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card form">
+            <h4><Plus :size="13" /> {{ $t('adminPanel.newBannerTitle') }}</h4>
+            <input v-model="nb.message" type="text" :placeholder="$t('adminPanel.bannerMessagePlaceholder')" @keyup.enter="createBanner" />
+            <Select
+              v-model="nb.level"
+              :options="[
+                { value: 'info', label: $t('banners.levelInfo') },
+                { value: 'warning', label: $t('banners.levelWarning') },
+                { value: 'danger', label: $t('banners.levelDanger') },
+              ]"
+            />
+            <button class="primary" @click="createBanner">{{ $t('adminPanel.createBannerButton') }}</button>
+          </div>
+        </template>
+      </section>
     </div>
   </div>
 </template>
@@ -231,12 +406,37 @@ async function deleteBanner(b: Banner) {
   align-items: center;
   gap: 9px;
 }
-.admin-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: start;
+.layout { display: grid; grid-template-columns: 210px 1fr; gap: 16px; align-items: start; }
+.sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  position: sticky;
+  top: 12px;
 }
+.navitem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.navitem:hover { background: var(--panel-2); }
+.navitem.on { background: var(--panel-2); color: var(--accent-hi); font-weight: 600; }
+.navitem .lbl { flex: 1; }
+.navitem .count { font-size: 11px; color: var(--muted); }
+.content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .card {
   display: flex;
   flex-direction: column;
@@ -246,18 +446,38 @@ async function deleteBanner(b: Banner) {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+.card.form { max-width: 420px; }
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
-.card.wide { grid-column: 1 / -1; }  /* i messaggi sono lunghi: tutta la larghezza */
-.hint { margin: 0; }
-.tag.info { color: var(--accent-hi, #4c8dff); }
-.tag.warning { color: var(--warning, #d08700); }
-.tag.danger { color: var(--danger, #e5484d); }
 .subhead { margin-top: 14px !important; color: var(--muted); font-size: 12.5px; }
+.hint { margin: 0; }
 table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); }
+table.rows th {
+  text-align: left;
+  padding: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
 table.rows tr:last-child td { border-bottom: none; }
-td.right { text-align: right; width: 40px; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--panel-2); }
+tr.sel td { background: var(--panel-2); }
+td.right { text-align: right; width: 80px; }
+.nowrap { white-space: nowrap; }
 .small { font-size: 11.5px; }
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  margin: 0 4px 2px 0;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
 .tag {
   font-size: 10px;
   text-transform: uppercase;
@@ -270,10 +490,19 @@ td.right { text-align: right; width: 40px; }
   margin-left: 6px;
 }
 .tag.off { color: var(--muted); }
+.tag.sso { color: var(--muted); }
+.tag.info { color: var(--accent-hi, #4c8dff); }
+.tag.warning { color: var(--warning, #d08700); }
+.tag.danger { color: var(--danger, #e5484d); }
 .chk { display: flex; align-items: center; gap: 6px; }
 .chk input { width: auto; }
 button.mini { padding: 3px 8px; }
+button.mini + button.mini { margin-left: 4px; }
 .mini.danger { border-color: var(--danger); color: var(--danger); }
 .mini.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
-.mini.danger:disabled { opacity: 0.4; cursor: not-allowed; }
+.mini:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidenav { position: static; flex-direction: row; overflow-x: auto; }
+}
 </style>
