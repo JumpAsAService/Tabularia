@@ -39,6 +39,9 @@ CONN_DELETE = "connection.delete"
 EXPORT_DOWNLOAD = "export.download"
 PERM_GRANT = "permission.grant"
 PERM_REVOKE = "permission.revoke"
+# banner dell'Explore: cambiano ciò che vede TUTTA l'installazione
+BANNER_CREATE = "banner.create"
+BANNER_DELETE = "banner.delete"
 
 
 def client_ip(request: Optional[Request]) -> Optional[str]:

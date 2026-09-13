@@ -72,6 +72,21 @@ class GroupCreate(BaseModel):
     description: str = ""
 
 
+# ── Banners ───────────────────────────────────────────────────────────────────
+class BannerOut(BaseModel):
+    id: int
+    message: str
+    level: str
+    created_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+
+
+class BannerCreate(BaseModel):
+    """Il livello decide solo icona e colore: un banner è sempre visibile a tutti."""
+    message: str = Field(min_length=1, max_length=500)
+    level: Literal["info", "warning", "danger"] = "warning"
+
+
 # ── Projects ──────────────────────────────────────────────────────────────────
 class ProjectOut(BaseModel):
     id: int

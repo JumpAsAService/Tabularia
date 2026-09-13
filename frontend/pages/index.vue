@@ -5,6 +5,7 @@
 
 <template>
   <AppShell>
+    <BannerBar />
     <ProjectBrowser class="grow" />
   </AppShell>
 </template>

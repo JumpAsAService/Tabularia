@@ -2,6 +2,17 @@
 // The base locale (en.ts) holds nav/settings/login; these are the rest.
 export default {
   "adminPanel": {
+    "bannersTitle": "Explore banners",
+    "bannersHint": "Shown at the top of Explore, to everyone.",
+    "noBanners": "No banners",
+    "newBannerTitle": "New banner",
+    "bannerMessagePlaceholder": "message everyone will see",
+    "createBannerButton": "Add banner",
+    "deleteBannerTitle": "Remove banner",
+    "confirmDeleteBanner": "Remove this banner? It disappears for everyone.",
+    "bannerCreated": "Banner added",
+    "bannerDeleted": "Banner removed",
+    "bannerMessageRequired": "Write the banner message",
     "addButton": "Add",
     "addToGroupTitle": "Add to group",
     "adminTag": "admin",
@@ -89,6 +100,11 @@ export default {
     "timeHoursAgo": "{n} h ago",
     "timeJustNow": "just now",
     "timeMinAgo": "{n} min ago"
+  },
+  "banners": {
+    "levelInfo": "Information",
+    "levelWarning": "Warning",
+    "levelDanger": "Critical"
   },
   "chartPanel": {
     "areaChart": "Area",

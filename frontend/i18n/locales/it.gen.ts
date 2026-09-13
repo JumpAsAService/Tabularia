@@ -2,6 +2,17 @@
 // The base locale (it.ts) holds nav/settings/login; these are the rest.
 export default {
   "adminPanel": {
+    "bannersTitle": "Banner dell'Explore",
+    "bannersHint": "Mostrati in cima all'Explore, a tutti.",
+    "noBanners": "Nessun banner",
+    "newBannerTitle": "Nuovo banner",
+    "bannerMessagePlaceholder": "messaggio che vedranno tutti",
+    "createBannerButton": "Aggiungi banner",
+    "deleteBannerTitle": "Togli il banner",
+    "confirmDeleteBanner": "Togliere questo banner? Sparisce per tutti.",
+    "bannerCreated": "Banner aggiunto",
+    "bannerDeleted": "Banner tolto",
+    "bannerMessageRequired": "Scrivi il messaggio del banner",
     "addButton": "Aggiungi",
     "addToGroupTitle": "Aggiungi al gruppo",
     "adminTag": "admin",
@@ -89,6 +100,11 @@ export default {
     "timeHoursAgo": "{n} h fa",
     "timeJustNow": "adesso",
     "timeMinAgo": "{n} min fa"
+  },
+  "banners": {
+    "levelInfo": "Informazione",
+    "levelWarning": "Avvertimento",
+    "levelDanger": "Critico"
   },
   "chartPanel": {
     "areaChart": "Area",

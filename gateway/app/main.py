@@ -15,6 +15,7 @@ from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
 from app.routes.groups import router as groups_router
+from app.routes.banners import router as banners_router
 from app.routes.projects import router as projects_router
 from app.routes.permissions import router as permissions_router
 from app.routes.flows import router as flows_router
@@ -90,6 +91,7 @@ app.include_router(auth_router)
 app.include_router(sso_router)
 app.include_router(users_router)
 app.include_router(groups_router)
+app.include_router(banners_router)
 app.include_router(projects_router)
 app.include_router(permissions_router)
 app.include_router(flows_router)

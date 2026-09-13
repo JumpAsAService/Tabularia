@@ -3,9 +3,10 @@
 // appartenenze. Vive nella pagina /admin; il feedback passa dai toast.
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Shield, Trash2, User as UserIcon, Users as UsersIcon, Plus } from 'lucide-vue-next'
+import { Shield, Trash2, User as UserIcon, Users as UsersIcon, Plus, TriangleAlert } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type UserOut, type GroupOut } from '~/composables/useProjects'
+import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
 
 const api = useProjects()
 const toast = useToast()
@@ -19,10 +20,16 @@ const nu = ref({ email: '', password: '', full_name: '', is_superuser: false })
 const ng = ref({ name: '', description: '' })
 const member = ref<{ user_id: number | null; group_id: number | null }>({ user_id: null, group_id: null })
 
+// banner dell'Explore: l'elenco qui è ESATTAMENTE ciò che vedono gli utenti
+const bannersApi = useBanners()
+const banners = ref<Banner[]>([])
+const nb = ref<{ message: string; level: BannerLevel }>({ message: '', level: 'warning' })
+
 async function loadAll() {
   try {
     users.value = await api.users()
     groups.value = await api.groups()
+    banners.value = await bannersApi.list()
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -72,6 +79,32 @@ async function addMember() {
   try {
     await api.addToGroup(member.value.user_id, member.value.group_id)
     toast.success(t('adminPanel.userAddedToGroup'))
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+async function createBanner() {
+  if (!nb.value.message.trim()) {
+    toast.error(t('adminPanel.bannerMessageRequired'))
+    return
+  }
+  try {
+    await bannersApi.create({ message: nb.value.message.trim(), level: nb.value.level })
+    toast.success(t('adminPanel.bannerCreated'))
+    nb.value = { message: '', level: 'warning' }
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+async function deleteBanner(b: Banner) {
+  if (!confirm(t('adminPanel.confirmDeleteBanner'))) return
+  try {
+    await bannersApi.remove(b.id)
+    banners.value = banners.value.filter((x) => x.id !== b.id)
+    toast.success(t('adminPanel.bannerDeleted'))
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -150,6 +183,40 @@ async function addMember() {
         />
         <button @click="addMember">{{ $t('adminPanel.addButton') }}</button>
       </div>
+
+      <!-- banner dell'Explore -->
+      <div class="card wide">
+        <h4><TriangleAlert :size="14" /> {{ $t('adminPanel.bannersTitle') }} <span class="muted">{{ banners.length }}</span></h4>
+        <p class="muted small hint">{{ $t('adminPanel.bannersHint') }}</p>
+        <table class="rows">
+          <tbody>
+            <tr v-for="b in banners" :key="b.id">
+              <td>
+                <span class="tag" :class="b.level">{{ $t(`banners.level${b.level.charAt(0).toUpperCase()}${b.level.slice(1)}`) }}</span>
+                {{ b.message }}
+              </td>
+              <td class="right">
+                <button class="mini danger" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
+                  <Trash2 :size="13" />
+                </button>
+              </td>
+            </tr>
+            <tr v-if="!banners.length"><td class="muted">{{ $t('adminPanel.noBanners') }}</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.newBannerTitle') }}</h4>
+        <input v-model="nb.message" type="text" :placeholder="$t('adminPanel.bannerMessagePlaceholder')" @keyup.enter="createBanner" />
+        <Select
+          v-model="nb.level"
+          :options="[
+            { value: 'info', label: $t('banners.levelInfo') },
+            { value: 'warning', label: $t('banners.levelWarning') },
+            { value: 'danger', label: $t('banners.levelDanger') },
+          ]"
+        />
+        <button class="primary" @click="createBanner">{{ $t('adminPanel.createBannerButton') }}</button>
+      </div>
     </div>
   </div>
 </template>
@@ -180,6 +247,11 @@ async function addMember() {
   border-radius: var(--radius);
 }
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
+.card.wide { grid-column: 1 / -1; }  /* i messaggi sono lunghi: tutta la larghezza */
+.hint { margin: 0; }
+.tag.info { color: var(--accent-hi, #4c8dff); }
+.tag.warning { color: var(--warning, #d08700); }
+.tag.danger { color: var(--danger, #e5484d); }
 .subhead { margin-top: 14px !important; color: var(--muted); font-size: 12.5px; }
 table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); }
