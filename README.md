@@ -176,8 +176,9 @@ fill_null · drop_nulls · group_by · pivot · unpivot · join · union · fore
 - **`sql`** runs engine-native SQL against the node input (`FROM input`), with a
   guardrail floor that blocks filesystem / URL / executable access.
 - **Nodes**: `source` (file or DB datasource), `output` (write to a DB table or
-  publish a datasource; append/replace + post-SQL), `refresh` (re-ingest a DB source),
-  `runflow` (invoke another flow).
+  publish a datasource; append/replace + post-SQL, and optionally a copy on an
+  external S3 bucket — see [Publishing to an external bucket](#publishing-to-an-external-bucket)),
+  `refresh` (re-ingest a DB source), `runflow` (invoke another flow).
 
 Every node's output is **content-addressed and cached**: editing the last step of a
 10-step flow recomputes one step, not ten. Cache entries evict by TTL.
@@ -192,6 +193,33 @@ datasets/  normalized parquet datasources
 cache/     content-addressed step outputs
 out/       run results, downloadable as CSV/Excel
 ```
+
+## Publishing to an external bucket
+
+An Output node that publishes a datasource can also drop a copy of the same parquet
+on a bucket Tabularia doesn't own — the one another team already reads from. It is
+the integration path for the common case where nobody wants a data-prep tool writing
+into their database, and it needs no orchestrator: the consumer polls a path.
+
+The copy always lands at **the same key, always parquet, overwritten on every run**,
+so whoever reads it agrees on one path once and never has to discover a new filename.
+The overwrite is a single object and becomes visible only when the upload completes:
+a reader gets either the previous file or the new one in full, never a mixture.
+Scheduled runs behave exactly like manual ones — the node's configuration is the
+whole story.
+
+It is **best effort by design**. The datasource is the result; the copy is a delivery
+downstream of it. A copy that fails — expired credentials, an unreachable endpoint, a
+bucket that is full — leaves the run successful and the datasource published, and
+records the error on the run so it stays visible in the history instead of only in the
+worker's logs.
+
+> **Use a different bucket from the one Tabularia itself runs on.** Point the
+> connection at storage that belongs to the consumer, not at the bucket holding
+> `datasets/`, `cache/`, `out/` and `raw/`. Those prefixes are managed: Tabularia
+> deletes superseded snapshots there on its own schedule, so a copy written under one
+> of them can vanish later without anyone having touched it. A separate bucket also
+> keeps the credentials scoped to exactly what that consumer should be able to reach.
 
 ## Auth, RBAC & audit
 
