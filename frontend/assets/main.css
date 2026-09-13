@@ -192,6 +192,20 @@ button:focus-visible {
    disegnare un anello attorno all'intero riquadro */
 [role="dialog"]:focus { outline: none; }
 
+/* Bersagli tattili. La densità di questa interfaccia è voluta e su desktop con
+   mouse resta intatta: si allarga SOLO dove il puntatore è grossolano (dito,
+   stilo), che è la condizione reale del problema — non la larghezza dello
+   schermo, che non dice nulla sul metodo di input. */
+@media (pointer: coarse) {
+  button.mini,
+  button.x,
+  .cd-x, .rd-x, .dd-x, .sd-x,
+  .chip-x, .tx {
+    min-height: 32px;
+    min-width: 32px;
+  }
+}
+
 /* rotazione per gli spinner (es. icona Loader) */
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

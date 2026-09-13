@@ -73,14 +73,23 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  /* era `height: 100vh`: un'altezza FISSA con contenuto centrato taglia la cima
+     della card quando questa supera il viewport (succede col blocco SSO attivo su
+     schermo basso) e la parte tagliata non è raggiungibile. min-height la lascia
+     crescere e scorrere. dvh segue la barra degli indirizzi mobile che si ritrae;
+     la riga 100vh resta come fallback per chi non conosce dvh. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 16px;
   background:
     radial-gradient(900px 500px at 20% 10%, rgba(79, 140, 255, 0.08), transparent 60%),
     radial-gradient(700px 500px at 85% 90%, rgba(110, 231, 183, 0.05), transparent 60%),
     var(--bg);
 }
 .login-card {
-  width: 340px;
+  /* stesso idioma dei dialoghi: sotto i 340px di viewport la card usciva dallo
+     schermo e trascinava la pagina a scorrere in orizzontale */
+  width: min(340px, calc(100vw - 32px));
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;

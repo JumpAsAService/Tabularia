@@ -578,7 +578,7 @@ td.right { text-align: right; width: 80px; }
 .tag.danger { color: var(--danger, #e5484d); }
 .chk { display: flex; align-items: center; gap: 6px; }
 .chk input { width: auto; }
-button.mini { padding: 3px 8px; }
+button.mini { padding: 3px 8px; min-height: 24px; }
 button.mini + button.mini { margin-left: 4px; }
 .mini.danger { border-color: var(--danger); color: var(--danger); }
 .mini.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }

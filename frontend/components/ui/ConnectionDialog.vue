@@ -223,7 +223,11 @@ function confirm() {
   z-index: 2000;
 }
 .cd-card {
-  width: 520px;
+  /* larghezza fissa = traboccava sotto i 520px di viewport; il max-height serve
+     perché questo dialogo ha dieci campi e su schermo basso usciva in verticale */
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;

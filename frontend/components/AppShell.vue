@@ -294,4 +294,20 @@ onMounted(async () => {
   margin: 0 auto;
 }
 .content.fluid { max-width: none; }
+
+/* Schermi stretti: la barra ha fino a undici voci più i controlli, e a larghezza
+   ridotta spingeva la pagina a scorrere in orizzontale. La navigazione scorre
+   dentro la propria barra invece di allargare il documento; il menù a panino
+   sarebbe una riprogettazione, non un adattamento. */
+@media (max-width: 760px) {
+  .topbar { gap: 12px; padding: 0 12px; }
+  .mainnav {
+    overflow-x: auto;
+    scrollbar-width: none; /* la barra scorre al tocco: la scrollbar sarebbe rumore */
+    flex: 1;
+  }
+  .mainnav::-webkit-scrollbar { display: none; }
+  .navlink { padding: 0 9px; white-space: nowrap; }
+  .content { padding: 16px 14px; }
+}
 </style>

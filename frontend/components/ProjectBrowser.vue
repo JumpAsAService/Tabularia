@@ -914,7 +914,7 @@ table.perm td.right { text-align: right; width: 32px; }
 .grant { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .grant select { width: auto; flex: 1; min-width: 90px; }
 
-button.mini { padding: 2px 8px; }
+button.mini { padding: 2px 8px; min-height: 24px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
 button.danger:hover { background: var(--danger); color: #fff; }
 .err { color: var(--danger); margin-top: 12px; }

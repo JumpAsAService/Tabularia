@@ -87,7 +87,8 @@ table.list tbody tr:hover td { background: var(--panel-2); }
 .nowrap { white-space: nowrap; }
 .right { text-align: right; white-space: nowrap; }
 .right .mini { margin-left: 4px; }
-button.mini { padding: 3px 8px; }
+/* min-height: il minimo AA per un bersaglio è 24px e il solo padding ne dava 22 */
+button.mini { padding: 3px 8px; min-height: 24px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
 button.danger:hover { background: var(--danger); color: #fff; }
 .err { color: var(--danger); }

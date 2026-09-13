@@ -133,7 +133,8 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
   display: flex; align-items: center; justify-content: center; z-index: 2000;
 }
 .sd-card {
-  width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
   box-shadow: var(--shadow-2); padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;
 }
 .sd-head { display: flex; align-items: center; justify-content: space-between; }

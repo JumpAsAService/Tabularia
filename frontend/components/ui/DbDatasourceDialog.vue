@@ -189,7 +189,9 @@ function confirm() {
   z-index: 2000;
 }
 .dd-card {
-  width: 460px;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;

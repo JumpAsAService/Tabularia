@@ -139,7 +139,9 @@ function confirm() {
   z-index: 2000;
 }
 .rd-card {
-  width: 380px;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
