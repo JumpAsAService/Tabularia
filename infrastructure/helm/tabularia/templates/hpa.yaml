@@ -1,0 +1,51 @@
+{{/*
+Optional autoscalers, off by default.
+
+A warning before you enable them: CPU is a poor signal for these workers. A pod
+waiting on a slow database, or streaming a large parquet, uses little CPU while
+being entirely busy — and a pod that finished its task uses none while still
+holding a long shutdown grace period. Scaling on CPU therefore reacts late and
+scales in at the wrong moment.
+
+The signal that actually matches the work is QUEUE LENGTH: the Redis lists
+`celery` (runs) and `preview` (previews). With KEDA:
+
+  triggers:
+    - type: redis
+      metadata:
+        address: <redis host>:6379
+        listName: celery
+        listLength: "5"
+
+Note also that scaling IN can interrupt a run: workers get a long termination
+grace period precisely so a task finishes, so set a generous
+`stabilizationWindowSeconds` or let the queue drain instead.
+
+There is no autoscaler for the gateway or beat: both are singletons by design.
+*/}}
+{{- range $name, $cfg := dict "engine" $.Values.engineApi "worker" $.Values.worker "preview-worker" $.Values.previewWorker "frontend" $.Values.frontend }}
+{{- if $cfg.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "tabularia.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "tabularia.fullname" $ }}-{{ $name }}
+  minReplicas: {{ $cfg.autoscaling.minReplicas }}
+  maxReplicas: {{ $cfg.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $cfg.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

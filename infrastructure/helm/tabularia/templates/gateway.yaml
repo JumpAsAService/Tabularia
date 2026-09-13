@@ -1,0 +1,106 @@
+{{/*
+Control plane — the only public entry point for the API.
+
+SINGLETON BY DESIGN. The gateway runs an in-process scheduler that takes no
+distributed lock, so a second replica fires every schedule a second time:
+duplicate refreshes, duplicate runs, duplicate rows in append outputs. The
+replica count is therefore not exposed as a value, and the strategy is Recreate
+so that a rolling update never briefly runs two.
+
+This is a real capacity limit: the gateway also proxies uploads and builds CSV
+and Excel exports. Give it headroom rather than replicas.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tabularia.fullname" . }}-gateway
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.gateway.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "tabularia.labels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+    spec:
+      {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: gateway
+          image: {{ include "tabularia.image" (dict "root" $ "component" "gateway") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            {{- include "tabularia.envFrom" . | nindent 12 }}
+          # The schema is created and migrated at startup, and interrupted
+          # orchestrations are closed then too. Give it room before probing.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.gateway.tmpSizeLimit }}
+      {{- with .Values.gateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tabularia.fullname" . }}-gateway
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.gatewayPort }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "tabularia.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: gateway

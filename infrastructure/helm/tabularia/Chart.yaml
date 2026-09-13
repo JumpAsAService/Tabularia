@@ -1,0 +1,29 @@
+apiVersion: v2
+name: tabularia
+description: |
+  Tabularia — visual data preparation. This chart deploys the application only:
+  frontend, gateway (control plane), engine API and the Celery workers.
+
+  PostgreSQL, Redis/Valkey and the S3 object storage are intentionally NOT part
+  of the chart: in production they should be managed services with their own
+  backups and failover. You point the chart at them through values.
+type: application
+
+# Chart version — bump on every chart change.
+version: 0.1.0
+
+# Version of Tabularia this chart was written against. Overridden per component
+# by image.tag values when you pin your own builds.
+appVersion: "0.1.0"
+
+keywords:
+  - data-preparation
+  - etl
+  - polars
+  - duckdb
+  - clickhouse
+
+annotations:
+  # Constraints the operator must know before scaling anything. They are
+  # enforced by the templates and explained in README.md.
+  tabularia.io/singleton-components: "gateway, beat"

@@ -1,0 +1,86 @@
+{{- if .Values.networkPolicy.enabled }}
+{{/*
+Two policies, for two different reasons.
+
+1. The engine API accepts traffic only from the gateway and the workers. It does
+   no authorisation of its own and holds credentials that read the whole bucket,
+   so "internal only" should be enforced by the network, not by the absence of an
+   Ingress.
+
+2. Egress from the backend roles is restricted to the destinations you list.
+   This is the mitigation for the open SSRF gap: a user who can create database
+   connections can otherwise make the engine connect anywhere the cluster can
+   reach, including cloud metadata endpoints. Tabularia does not filter those
+   destinations itself — see README → Known limits.
+
+Add every database, object storage and identity provider your users legitimately
+need to networkPolicy.egressCIDRs, or these policies will break real work.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" . }}-engine-ingress
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: engine
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: preview-worker
+      ports:
+        - protocol: TCP
+          port: 8000
+{{- if .Values.networkPolicy.egressCIDRs }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" . }}-backend-egress
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: [engine, worker, preview-worker, beat]
+  policyTypes:
+    - Egress
+  egress:
+    # DNS, or nothing resolves.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # In-cluster traffic (broker, metadata database when self-hosted).
+    - to:
+        - podSelector: {}
+    # Everything the workers are allowed to reach outside the cluster.
+    {{- range .Values.networkPolicy.egressCIDRs }}
+    - to:
+        - ipBlock:
+            cidr: {{ . | quote }}
+    {{- end }}
+{{- end }}
+{{- end }}

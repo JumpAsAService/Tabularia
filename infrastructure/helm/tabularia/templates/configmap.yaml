@@ -1,0 +1,75 @@
+{{/*
+Non-secret configuration, mirroring the .env surface the application already
+uses in docker-compose. Keeping the same variable names means anything you learn
+from the compose setup transfers directly.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tabularia.configMapName" . }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+data:
+  APP__ENV_NAME: {{ .Values.app.envName | quote }}
+  APP__DEBUG: {{ .Values.app.debug | quote }}
+  APP__TIMEZONE: {{ .Values.app.timezone | quote }}
+
+  # Broker and step-cache index
+  REDIS__HOST: {{ required "externalServices.redis.host is required" .Values.externalServices.redis.host | quote }}
+  REDIS__PORT: {{ .Values.externalServices.redis.port | quote }}
+  REDIS__DB: {{ .Values.externalServices.redis.db | quote }}
+
+  # Object storage — the durable side of the system
+  STORAGE__ENDPOINT: {{ required "externalServices.storage.endpoint is required" .Values.externalServices.storage.endpoint | quote }}
+  STORAGE__BUCKET: {{ .Values.externalServices.storage.bucket | quote }}
+  STORAGE__REGION: {{ .Values.externalServices.storage.region | quote }}
+
+  # Metadata database (gateway only, but harmless elsewhere)
+  DB__HOST: {{ required "externalServices.postgres.host is required" .Values.externalServices.postgres.host | quote }}
+  DB__PORT: {{ .Values.externalServices.postgres.port | quote }}
+  DB__NAME: {{ .Values.externalServices.postgres.database | quote }}
+  DB__USER: {{ .Values.externalServices.postgres.user | quote }}
+
+  JWT__ACCESS_TTL_MINUTES: {{ .Values.auth.jwtAccessTtlMinutes | quote }}
+  AUTH__ADMIN_EMAIL: {{ .Values.auth.adminEmail | quote }}
+  AUTH__ADMIN_NAME: {{ .Values.auth.adminName | quote }}
+
+  # Engine API, reached only from inside the cluster
+  ENGINE__BASE_URL: "http://{{ include "tabularia.fullname" . }}-engine:{{ .Values.service.gatewayPort }}"
+  ENGINE__TIMEOUT_SECONDS: {{ .Values.engine.timeoutSeconds | quote }}
+  ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ .Values.engine.runStaleTimeoutSeconds | quote }}
+
+  CACHE__TTL_SECONDS: {{ .Values.cache.ttlSeconds | quote }}
+  CACHE__SWEEP_INTERVAL_SECONDS: {{ .Values.cache.sweepIntervalSeconds | quote }}
+
+  ORCHESTRATOR__REFRESH_WAIT_SECONDS: {{ .Values.orchestrator.refreshWaitSeconds | quote }}
+  ORCHESTRATOR__OUTPUT_WAIT_SECONDS: {{ .Values.orchestrator.outputWaitSeconds | quote }}
+  ORCHESTRATOR__POLL_INTERVAL_SECONDS: {{ .Values.orchestrator.pollIntervalSeconds | quote }}
+
+{{- if .Values.oidc.enabled }}
+  # Single sign-on. Setting OIDC__ISSUER is what switches SSO on; local login
+  # stays available as a break-glass path.
+  OIDC__ISSUER: {{ required "oidc.issuer is required when oidc.enabled" .Values.oidc.issuer | quote }}
+  OIDC__CLIENT_ID: {{ required "oidc.clientId is required when oidc.enabled" .Values.oidc.clientId | quote }}
+  OIDC__REDIRECT_URI: {{ required "oidc.redirectUri is required when oidc.enabled" .Values.oidc.redirectUri | quote }}
+  OIDC__SCOPES: {{ .Values.oidc.scopes | quote }}
+  OIDC__GROUPS_CLAIM: {{ .Values.oidc.groupsClaim | quote }}
+  OIDC__GROUP_ALLOWLIST: {{ .Values.oidc.groupAllowlist | quote }}
+  OIDC__AUTO_CREATE_GROUPS: {{ .Values.oidc.autoCreateGroups | quote }}
+  OIDC__AUTHORITATIVE: {{ .Values.oidc.authoritative | quote }}
+  OIDC__SUPERUSER_GROUP: {{ .Values.oidc.superuserGroup | quote }}
+  OIDC__POST_LOGIN_URL: {{ .Values.oidc.postLoginUrl | quote }}
+  OIDC__BUTTON_LABEL: {{ .Values.oidc.buttonLabel | quote }}
+{{- end }}
+
+{{- if .Values.externalServices.clickhouse.enabled }}
+  # Optional engine: transformations execute on the remote server instead of in
+  # the worker process.
+  CLICKHOUSE_EXTERNAL__HOST: {{ required "externalServices.clickhouse.host is required when enabled" .Values.externalServices.clickhouse.host | quote }}
+  CLICKHOUSE_EXTERNAL__PORT: {{ .Values.externalServices.clickhouse.port | quote }}
+  CLICKHOUSE_EXTERNAL__SECURE: {{ .Values.externalServices.clickhouse.secure | quote }}
+  CLICKHOUSE_EXTERNAL__DATABASE: {{ .Values.externalServices.clickhouse.database | quote }}
+  CLICKHOUSE_EXTERNAL__USERNAME: {{ .Values.externalServices.clickhouse.username | quote }}
+  CLICKHOUSE_EXTERNAL__TRANSPORT: {{ .Values.externalServices.clickhouse.transport | quote }}
+  CLICKHOUSE_EXTERNAL__S3_ENDPOINT: {{ .Values.externalServices.clickhouse.s3Endpoint | quote }}
+{{- end }}

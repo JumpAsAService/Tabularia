@@ -1,0 +1,104 @@
+{{/*
+Data plane HTTP API.
+
+NEVER expose this outside the cluster. It performs no authorisation of its own —
+it trusts the gateway — and it holds storage credentials that can read the whole
+bucket. There is deliberately no Ingress for it; enable networkPolicy to make
+that structural rather than a convention.
+
+Scales freely. It does real work: uploads are received here and converted to
+parquet, and CSV/Excel exports are built here, which is why its /tmp is sized
+for the largest file a user uploads.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tabularia.fullname" . }}-engine
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: engine
+spec:
+  {{- if not .Values.engineApi.autoscaling.enabled }}
+  replicas: {{ .Values.engineApi.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: engine
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.engineApi.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "tabularia.labels" . | nindent 8 }}
+        app.kubernetes.io/component: engine
+    spec:
+      {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: engine
+          image: {{ include "tabularia.image" (dict "root" $ "component" "backend") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            {{- include "tabularia.envFrom" . | nindent 12 }}
+          env:
+            - name: MALLOC_ARENA_MAX
+              value: "2"
+          readinessProbe:
+            httpGet: { path: /healthcheck/, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthcheck/, port: http }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.engineApi.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Read-only root filesystem: uploads and exports are built here.
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.engineApi.tmpSizeLimit }}
+      {{- with .Values.engineApi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.engineApi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.engineApi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tabularia.fullname" . }}-engine
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: engine
+spec:
+  type: ClusterIP     # never NodePort or LoadBalancer for this one
+  ports:
+    - port: {{ .Values.service.gatewayPort }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "tabularia.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: engine

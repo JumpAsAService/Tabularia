@@ -1,0 +1,122 @@
+# Example production values. Copy, fill in, and keep it out of git if it carries
+# secrets — better still, use `existingSecret` and leave the `secrets` block out.
+#
+#   helm install tabularia infrastructure/helm/tabularia \
+#     --namespace tabularia --create-namespace \
+#     --values values-production.yaml
+
+image:
+  registry: registry.example.com
+  backend:  { repository: tabularia-backend,  tag: "0.1.0" }
+  gateway:  { repository: tabularia-gateway,  tag: "0.1.0" }
+  frontend: { repository: tabularia-frontend, tag: "0.1.0" }
+  pullSecrets:
+    - name: regcred
+
+externalServices:
+  postgres:
+    host: tabularia-db.internal
+    port: 5432
+    database: tabularia
+    user: tabularia
+  redis:
+    host: tabularia-valkey.internal
+    port: 6379
+  storage:
+    endpoint: https://s3.fr-par.scw.cloud
+    bucket: tabularia-prod
+    region: fr-par
+  # Production engine on a managed ClickHouse. With the s3 transport the server
+  # reads and writes parquet directly on the object storage, which keeps the
+  # heavy work off the workers.
+  clickhouse:
+    enabled: false
+    host: ""
+    port: 8443
+    secure: true
+    database: tabularia
+    username: tabularia
+    transport: s3
+    s3Endpoint: https://s3.fr-par.scw.cloud
+
+# Preferred: a Secret you manage, with the keys listed in values.yaml.
+existingSecret: tabularia-secrets
+
+app:
+  envName: production
+  timezone: Europe/Rome
+
+auth:
+  adminEmail: admin@example.com
+  adminName: Administrator
+  jwtAccessTtlMinutes: 720
+
+# Enable only against a directory you control — see README → Known limits.
+oidc:
+  enabled: false
+  issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
+  clientId: <application-id>
+  redirectUri: https://tabularia.example.com/auth/sso/callback
+  postLoginUrl: https://tabularia.example.com/auth/callback
+  # Entra ID: app roles are readable names, the groups claim carries object IDs.
+  groupsClaim: roles
+  superuserGroup: tabularia-admins
+
+# Sizing below assumes datasets of a few GB. Raise tmpSizeLimit and memory
+# together: peak memory is roughly concurrency × dataset size.
+engineApi:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 4Gi }
+  tmpSizeLimit: 20Gi
+
+worker:
+  replicaCount: 3
+  concurrency: 2
+  resources:
+    requests: { cpu: "1", memory: 2Gi }
+    limits: { memory: 12Gi }
+  tmpSizeLimit: 100Gi
+  terminationGracePeriodSeconds: 3600
+
+previewWorker:
+  replicaCount: 2
+  concurrency: 4
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 4Gi }
+  tmpSizeLimit: 20Gi
+
+frontend:
+  replicaCount: 2
+  publicApiBase: https://tabularia.example.com
+  publicGrafanaUrl: https://grafana.example.com
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: tabularia.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: tabularia-tls
+      hosts: [tabularia.example.com]
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # The application has no login throttling of its own.
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+
+# Strongly recommended in production: without it the engine API is reachable from
+# any pod, and the workers can connect anywhere the cluster can reach.
+networkPolicy:
+  enabled: true
+  egressCIDRs:
+    - 10.0.0.0/8        # internal databases
+    - 0.0.0.0/0         # REPLACE: narrow this to your storage and IdP ranges

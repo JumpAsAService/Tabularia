@@ -1,0 +1,367 @@
+# Tabularia — configuration.
+#
+# Read README.md first: it explains WHY the chart is shaped this way, especially
+# why the gateway and beat are pinned to a single replica.
+#
+# The only values you MUST set before the first install are under `secrets`
+# (or `existingSecret`), `externalServices` and `ingress.hosts`.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Images
+# ─────────────────────────────────────────────────────────────────────────────
+# Build and push these yourself from the repository; there is no public
+# registry. See README.md → "Building the images".
+image:
+  registry: ""            # e.g. registry.example.com/tabularia — empty = Docker Hub style names
+  pullPolicy: IfNotPresent
+  pullSecrets: []         # [{ name: regcred }]
+
+  # One image serves the engine API, both workers and beat.
+  # Built WITHOUT chDB by default (727 MB). Build with --build-arg WITH_CHDB=true
+  # (1.36 GB) only if your flows use the embedded chDB engine.
+  backend:
+    repository: tabularia-backend
+    tag: "0.1.0"
+
+  gateway:
+    repository: tabularia-gateway
+    tag: "0.1.0"
+
+  # IMPORTANT: build from frontend/Dockerfile.prod, not frontend/Dockerfile
+  # (that one is the hot-reload development server).
+  frontend:
+    repository: tabularia-frontend
+    tag: "0.1.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# External services — not deployed by this chart
+# ─────────────────────────────────────────────────────────────────────────────
+externalServices:
+  # Metadata database. Owned by the gateway only; the engine never touches it.
+  postgres:
+    host: ""              # REQUIRED, e.g. tabularia-db.postgres.database.azure.com
+    port: 5432
+    database: tabularia
+    user: tabularia
+    # password → secrets.dbPassword
+
+  # Celery broker and step-cache index. Any Redis-compatible server.
+  # Holds queues and cache keys, not durable data: losing it costs in-flight
+  # jobs and a cold cache, nothing else.
+  redis:
+    host: ""              # REQUIRED
+    port: 6379
+    db: 0
+
+  # S3-compatible object storage: every dataset, cache blob and run output.
+  # This one IS durable data — back it up.
+  storage:
+    endpoint: ""          # REQUIRED, e.g. https://s3.fr-par.scw.cloud
+    bucket: tabularia
+    region: fr-par
+    # accessKey/secretKey → secrets.storageAccessKey / secrets.storageSecretKey
+
+  # Optional engine: transformations run on a remote ClickHouse instead of in
+  # the worker. Leave host empty to disable.
+  clickhouse:
+    enabled: false
+    host: ""
+    port: 8443
+    secure: true
+    database: tabularia
+    username: ""
+    transport: s3         # s3 = server reads/writes parquet directly; push = streamed through the worker
+    s3Endpoint: ""
+    # password → secrets.clickhousePassword
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Secrets
+# ─────────────────────────────────────────────────────────────────────────────
+# In production point `existingSecret` at a Secret you manage (sealed-secrets,
+# External Secrets, Vault…) and leave the values below empty. The chart refuses
+# to render if neither is provided.
+#
+# Required keys when using an existing Secret:
+#   FERNET_KEY, JWT_SECRET, DB_PASSWORD, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY,
+#   ADMIN_PASSWORD, and OIDC_CLIENT_SECRET / CLICKHOUSE_PASSWORD when enabled.
+existingSecret: ""
+
+secrets:
+  # Encrypts database credentials stored in the metadata DB. MUST be the same
+  # value for gateway, engine API and every worker, and MUST NOT change after
+  # the first connection is saved — rotating it makes stored credentials
+  # undecryptable. Generate with:
+  #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  fernetKey: ""
+
+  # Signs session tokens. Changing it logs everyone out immediately, which is
+  # also the only way to invalidate a leaked token (see README → Known limits).
+  jwtSecret: ""
+
+  dbPassword: ""
+  storageAccessKey: ""
+  storageSecretKey: ""
+
+  # Break-glass administrator, seeded on first start only. An existing admin is
+  # never modified, so this is not a password reset.
+  adminPassword: ""
+
+  oidcClientSecret: ""
+  clickhousePassword: ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Application settings (non-secret)
+# ─────────────────────────────────────────────────────────────────────────────
+app:
+  # Turns on the production guard: the gateway refuses to start if any secret is
+  # still a development default. Leave it as "production".
+  envName: production
+  debug: false
+  # Timezone used to interpret cron schedules. Schedules fire on this clock.
+  timezone: UTC
+
+auth:
+  adminEmail: admin@example.com
+  adminName: Administrator
+  # Session lifetime. There is no per-session revocation: a leaked token stays
+  # valid for this long unless you disable the account or rotate JWT_SECRET.
+  jwtAccessTtlMinutes: 720
+
+# Optional single sign-on. With issuer empty, Tabularia keeps local email +
+# password login and the login page shows no SSO button.
+# SECURITY NOTE — read README → Known limits before enabling this against a
+# directory where users can choose their own email or username.
+oidc:
+  enabled: false
+  issuer: ""
+  clientId: ""
+  redirectUri: ""         # https://<public host>/auth/sso/callback
+  scopes: "openid profile email"
+  groupsClaim: groups     # use "roles" for Entra ID app roles
+  groupAllowlist: ""
+  autoCreateGroups: false
+  authoritative: false
+  superuserGroup: ""
+  postLoginUrl: ""        # https://<public host>/auth/callback
+  buttonLabel: "Sign in with SSO"
+
+engine:
+  # How long the gateway waits for a synchronous preview before giving up.
+  timeoutSeconds: 120
+  # A run older than this is declared stale: the gateway revokes the task on the
+  # engine and marks the run failed. Must stay ABOVE the Celery hard time limit
+  # (3600 s) or you will kill runs that are merely slow.
+  runStaleTimeoutSeconds: 3900
+
+cache:
+  # Step-cache blobs older than this are evicted from the object storage.
+  ttlSeconds: 86400
+  sweepIntervalSeconds: 3600
+
+orchestrator:
+  refreshWaitSeconds: 1800
+  outputWaitSeconds: 600
+  pollIntervalSeconds: 5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Components
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Control plane: the only public entry point for the API. Auth, RBAC, metadata,
+# and the in-process scheduler.
+#
+# replicas is NOT configurable on purpose. The scheduler takes no distributed
+# lock, so two gateways fire every schedule twice. The template also forces the
+# Recreate strategy: a rolling update would briefly run two of them.
+gateway:
+  # strategy is pinned to Recreate; see README → Why the gateway is a singleton.
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  tmpSizeLimit: 1Gi       # session scratch only
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Data plane HTTP API. Internal only — never expose it: it trusts the gateway
+# for authorisation and holds credentials that read the whole bucket.
+engineApi:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 4Gi }
+  # Uploads land here before being converted to parquet, and CSV/Excel exports
+  # are built here. Size it for the largest file your users upload.
+  tmpSizeLimit: 20Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Runs, database refreshes and output writes. The heavy one.
+worker:
+  replicaCount: 2
+  # Celery child processes per pod. Peak memory is roughly
+  # concurrency × dataset size, so raise the memory limit with it.
+  concurrency: 2
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 8Gi }
+  # In-process engines spill here and every source parquet is downloaded here.
+  # Size it for the largest dataset a single run touches.
+  tmpSizeLimit: 50Gi
+  # Runs can be long. Give Celery time to finish the current task before SIGKILL,
+  # otherwise a rolling update aborts work mid-write.
+  terminationGracePeriodSeconds: 3600
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    # CPU is a poor signal for queue workers — see README → Autoscaling.
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Interactive previews on their own queue, so a preview never queues behind a
+# long run.
+previewWorker:
+  replicaCount: 2
+  concurrency: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 4Gi }
+  tmpSizeLimit: 20Gi
+  terminationGracePeriodSeconds: 120
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The clock. Enqueues periodic jobs (cache eviction, storage stats); the workers
+# execute them. MUST stay at one replica: N beats enqueue everything N times.
+# Like the gateway, replicas are not configurable and the strategy is Recreate.
+beat:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  tmpSizeLimit: 128Mi     # only its schedule file
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Server-rendered UI. Stateless, scale freely.
+frontend:
+  replicaCount: 2
+  # Read by the BROWSER, so these must be the public URLs, not cluster DNS.
+  publicApiBase: ""       # REQUIRED, e.g. https://tabularia.example.com
+  publicGrafanaUrl: ""    # optional, powers the Monitoring tab iframe
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  tmpSizeLimit: 256Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Networking
+# ─────────────────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  gatewayPort: 8000
+  frontendPort: 3000
+
+# Routes "/" to the frontend and the API paths to the gateway on one hostname.
+# The annotations below are nginx-ingress; translate them for your controller.
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: tabularia.example.com    # REQUIRED
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls: []                 # [{ secretName: tabularia-tls, hosts: [tabularia.example.com] }]
+  annotations:
+    # Uploads stream through the gateway. Zero = no limit; set a real ceiling if
+    # you prefer. The default of 1 MB will break every upload.
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # Do not spool uploads on the proxy's disk.
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    # Previews are synchronous and can take as long as engine.timeoutSeconds.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+  # Paths served by the gateway rather than the frontend.
+  apiPaths:
+    - /auth
+    - /users
+    - /groups
+    - /banners
+    - /projects
+    - /permissions
+    - /flows
+    - /runs
+    - /datasources
+    - /connections
+    - /lineage
+    - /scheduling
+    - /audit
+    - /system
+    - /queue
+    - /tasks
+    - /files
+    - /engines
+    - /health
+
+# Restricts who may reach the engine API. Strongly recommended: the engine holds
+# storage credentials and, through database connections, can reach anything the
+# cluster can reach (see README → Known limits, SSRF).
+networkPolicy:
+  enabled: false
+  # Extra CIDRs the workers must reach: your databases, object storage, IdP.
+  egressCIDRs: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}         # e.g. IRSA / Workload Identity for S3 access
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+# The images ship no writable paths: everything scratch goes to the /tmp
+# emptyDir mounted per component.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

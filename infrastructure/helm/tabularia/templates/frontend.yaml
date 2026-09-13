@@ -1,0 +1,105 @@
+{{/*
+Server-rendered UI. Stateless — scale it freely.
+
+The NUXT_PUBLIC_* values are read by the BROWSER, not by the pod, so they must be
+the PUBLIC URLs of the gateway and of Grafana. Cluster DNS names will not work
+here. They are read at startup, which is why one image serves every environment.
+
+The frontend never calls the API during server rendering, so these pods need no
+route to the gateway at all.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tabularia.fullname" . }}-frontend
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  {{- if not .Values.frontend.autoscaling.enabled }}
+  replicas: {{ .Values.frontend.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      {{- with .Values.frontend.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "tabularia.labels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: frontend
+          image: {{ include "tabularia.image" (dict "root" $ "component" "frontend") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: NUXT_PUBLIC_API_BASE
+              value: {{ required "frontend.publicApiBase is required: it is the PUBLIC gateway URL the browser calls" .Values.frontend.publicApiBase | quote }}
+            - name: NUXT_PUBLIC_BUCKET
+              value: {{ .Values.externalServices.storage.bucket | quote }}
+            {{- with .Values.frontend.publicGrafanaUrl }}
+            - name: NUXT_PUBLIC_GRAFANA_URL
+              value: {{ . | quote }}
+            {{- end }}
+          readinessProbe:
+            # "/" redirects to the login page, so probe the page itself.
+            httpGet: { path: /login, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /login, port: http }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.frontend.tmpSizeLimit }}
+      {{- with .Values.frontend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tabularia.fullname" . }}-frontend
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.frontendPort }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "tabularia.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: frontend

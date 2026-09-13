@@ -1,0 +1,60 @@
+{{- if .Values.ingress.enabled }}
+{{/*
+One hostname serves both the UI and the API: the browser calls the gateway at
+the same origin, which keeps cookies and CORS simple. API prefixes are routed to
+the gateway, everything else to the frontend.
+
+Three settings matter more than the rest, and the defaults of most controllers
+get them wrong for this application:
+
+  proxy-body-size        uploads stream through the gateway; the usual 1 MB
+                         default rejects every real file
+  proxy-request-buffering  must be off, or the proxy spools uploads to its disk
+  proxy-read-timeout     previews are synchronous and wait for the engine
+
+If you use a controller other than nginx, translate the annotations in values.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "tabularia.fullname" . }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- /* API prefixes first: longest-prefix routing sends these to the gateway */}}
+          {{- range $.Values.ingress.apiPaths }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "tabularia.fullname" $ }}-gateway
+                port:
+                  number: {{ $.Values.service.gatewayPort }}
+          {{- end }}
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "tabularia.fullname" $ }}-{{ .service }}
+                port:
+                  number: {{ if eq .service "gateway" }}{{ $.Values.service.gatewayPort }}{{ else }}{{ $.Values.service.frontendPort }}{{ end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

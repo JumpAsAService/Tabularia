@@ -8,6 +8,18 @@ it runs dev servers with hot reload and bind-mounts the sources.
 Everything below marked *verified* was exercised on 2026-09-12 against the real
 stack (Scaleway object storage, managed ClickHouse).
 
+## Helm chart
+
+A chart that applies everything on this page lives in
+[`infrastructure/helm/tabularia`](../../infrastructure/helm/tabularia). It encodes
+the constraints as templates — the gateway and beat cannot be scaled, the root
+filesystem is read-only, `/tmp` is sized per role — and refuses to render when a
+required secret is missing. Its
+[README](../../infrastructure/helm/tabularia/README.md) explains each decision,
+and `values-production.example.yaml` is a filled-in starting point.
+
+This page remains the reference for *why*; the chart is *how*.
+
 ## Components
 
 | Component | Image | Command | Exposure | Replicas |

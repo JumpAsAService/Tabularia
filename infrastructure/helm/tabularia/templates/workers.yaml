@@ -1,0 +1,33 @@
+{{/*
+The three Celery roles. They share one template because they must share one
+configuration; only the command, the queue and the sizing differ.
+
+  worker         — runs, database refreshes, output writes. The heavy one.
+  preview-worker — interactive previews on their own queue, so a preview never
+                   queues behind a long run.
+  beat           — the clock. Enqueues periodic jobs; the workers execute them.
+
+Both workers scale horizontally. Beat MUST NOT: it is a singleton, because N
+beats enqueue every periodic job N times.
+*/}}
+{{- include "tabularia.celeryDeployment" (dict
+      "root" $
+      "role" "worker"
+      "cfg" .Values.worker
+      "command" (list "celery" "-A" "app.tasks.celery_app" "worker" "-E" "-Q" "celery" "--loglevel=info")
+   ) }}
+---
+{{ include "tabularia.celeryDeployment" (dict
+      "root" $
+      "role" "preview-worker"
+      "cfg" .Values.previewWorker
+      "command" (list "celery" "-A" "app.tasks.celery_app" "worker" "-E" "-Q" "preview" "--loglevel=info")
+   ) }}
+---
+{{ include "tabularia.celeryDeployment" (dict
+      "root" $
+      "role" "beat"
+      "cfg" .Values.beat
+      "singleton" true
+      "command" (list "celery" "-A" "app.tasks.celery_app" "beat" "--schedule" "/tmp/celerybeat-schedule" "--loglevel=info")
+   ) }}
