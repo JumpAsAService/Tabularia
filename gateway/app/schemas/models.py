@@ -262,11 +262,15 @@ class RunMirrorSpec(BaseModel):
     Sempre in SOVRASCRITTURA: stessa chiave a ogni esecuzione, nessuna
     cronologia sul bucket esterno — chi legge trova sempre l'ultimo dato al
     percorso concordato. Niente partizioni, per lo stesso motivo.
-    La connessione è referenziata per id: le credenziali non passano dal client."""
+    La connessione è referenziata per id: le credenziali non passano dal client.
+
+    SOLO parquet, e non è una svista: il formato non è scelto perché nome del
+    file e formato sarebbero indipendenti, e un CSV chiamato `.parquet` verrebbe
+    aperto come parquet da chi lo legge a valle. Togliere la scelta rende
+    l'errore impossibile invece di avvisare che è possibile."""
     connection_id: int
     bucket: str = ""  # vuoto = bucket di default della connessione
     key: str  # percorso completo dell'oggetto (sottocartella + nome file)
-    format: Literal["parquet", "csv"] = "parquet"
 
 
 class RunCreate(BaseModel):

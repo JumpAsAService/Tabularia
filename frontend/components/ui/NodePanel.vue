@@ -319,15 +319,9 @@ function pickDatasource(id: number | null) {
             :placeholder="$t('nodePanel.mirrorKeyPlaceholder')"
             @input="emit('update', { mirrorKey: ($event.target as HTMLInputElement).value })"
           />
-          <label>{{ $t('nodePanel.formatLabel') }}</label>
-          <Select
-            :model-value="node.data.mirrorFormat ?? 'parquet'"
-            :options="[
-              { value: 'parquet', label: 'Parquet' },
-              { value: 'csv', label: 'CSV' },
-            ]"
-            @update:model-value="(v: any) => emit('update', { mirrorFormat: v })"
-          />
+          <!-- nessuna scelta del formato: sempre parquet. Nome e formato
+               sarebbero indipendenti, e un CSV chiamato .parquet romperebbe
+               chi lo legge a valle -->
           <p class="muted outhint">{{ $t('nodePanel.mirrorHint') }}</p>
         </template>
       </template>

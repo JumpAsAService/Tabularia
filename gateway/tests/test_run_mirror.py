@@ -38,11 +38,11 @@ def test_mirror_convive_con_publish():
         ("data-prep", "datasets/in.parquet"), [], "data-prep",
     )
     assert body["publish"]["name"] == "vendite"  # il risultato primario resta
+    # nessun `format`: la copia è sempre parquet, la scelta non esiste
     assert body["mirror"] == {
         "connection_id": 7,
         "bucket": "lake",
         "key": "published/vendite/latest.parquet",
-        "format": "parquet",
     }
     # `destination` NON è usato: là un errore sarebbe fatale, qui non deve esserlo
     assert "destination" not in body

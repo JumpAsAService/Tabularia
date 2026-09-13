@@ -286,8 +286,10 @@ async def _launch_flow_run(
             "target": {
                 "bucket": mbucket,
                 "key": mkey,
-                "format": body.mirror.format,
-                # mai partizionato: la copia è un singolo oggetto sovrascritto
+                # sempre parquet (copia byte a byte dello snapshot interno) e mai
+                # partizionato: la copia è UN oggetto sovrascritto, al percorso
+                # concordato con chi la legge
+                "format": "parquet",
                 "partition_by": [],
             },
         }
@@ -298,7 +300,7 @@ async def _launch_flow_run(
                 "endpoint": mconn.host or "aws",
                 "bucket": mbucket or mconn.database,
                 "key": mkey,
-                "format": body.mirror.format,
+                "format": "parquet",
                 "ok": None,
             }
         )

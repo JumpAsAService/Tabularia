@@ -330,7 +330,6 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
                 "connection_id": d.get("mirrorConnectionId"),
                 "bucket": (d.get("mirrorBucket") or "").strip(),
                 "key": (d.get("mirrorKey") or "").strip(),
-                "format": d.get("mirrorFormat") or "parquet",
             }
     return body
 
