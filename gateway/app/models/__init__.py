@@ -11,9 +11,10 @@ from app.models.upload import Upload
 from app.models.blob_deletion import PendingBlobDeletion
 from app.models.audit import AuditLog
 from app.models.banner import Banner
+from app.models.engine_policy import DisabledEngine
 
 __all__ = [
     "User", "Group", "UserGroupLink", "Project", "Permission", "Capability",
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
-    "AuditLog", "Banner",
+    "AuditLog", "Banner", "DisabledEngine",
 ]

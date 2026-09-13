@@ -128,6 +128,16 @@ one: the editor (previews, manual runs) uses the development engine, while sched
 and "Run in production" use the production engine — e.g. design on Polars locally, run the
 scheduled DAG on an external ClickHouse. Every run records the engine it actually ran on.
 
+An administrator can narrow that choice for the whole installation. **Admin → Engines**
+decides which engines a flow may be built on, so a company standardising on one engine
+says it once instead of repeating it per flow. Disabling an engine stops it from being
+*chosen* — at creation, when changing a flow's engine, and as a production engine — but
+deliberately does **not** stop the flows already using it: a switch in an admin panel
+should never halt a scheduled DAG the moment it is pressed. So that standardising is not
+merely cosmetic, the panel reports how many flows still run on each engine — that list is
+the migration backlog. At least one engine always stays allowed, and the picker keeps the
+reasons apart: *not allowed here* is not the same as *not configured*.
+
 ## Operations
 
 ~18 transforms plus source / output / control nodes, all engine-agnostic in the IR:

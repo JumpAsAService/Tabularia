@@ -6,25 +6,28 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  CheckCircle2, Plus, Search, Shield, Trash2, TriangleAlert,
+  CheckCircle2, Cpu, Plus, Search, Shield, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type GroupOut, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
+import { useEnginePolicy, type EnginePolicy } from '~/composables/useEnginePolicy'
 
 const api = useProjects()
 const bannersApi = useBanners()
+const engineApi = useEnginePolicy()
 const toast = useToast()
 const { user: me } = useAuth()
 const { t } = useI18n()
 
-type Sezione = 'users' | 'groups' | 'banners'
+type Sezione = 'users' | 'groups' | 'banners' | 'engines'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
 const groups = ref<GroupOut[]>([])
 const banners = ref<Banner[]>([])
+const motori = ref<EnginePolicy[]>([])
 
 const nu = ref({ email: '', password: '', full_name: '', is_superuser: false })
 const ng = ref({ name: '', description: '' })
@@ -53,6 +56,9 @@ const sezioni = computed(() => [
   { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: users.value.length },
   { id: 'groups' as Sezione, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
   { id: 'banners' as Sezione, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
+  // il conteggio è quanti motori sono CONSENTITI: è il numero che descrive lo
+  // stato dell'installazione, non quanti ne esistono
+  { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
 ])
 
 // stessa convenzione delle altre pagine: formattatore locale, tollerante
@@ -79,11 +85,19 @@ async function loadAll() {
     users.value = await api.users()
     groups.value = await api.groups()
     banners.value = await bannersApi.list()
+    motori.value = await engineApi.list()
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 onMounted(loadAll)
+
+// flussi rimasti su un motore non più consentito: è la lista di lavoro della
+// migrazione. Disabilitare non ferma nulla, quindi senza questo numero il
+// cambiamento non avrebbe alcuna conseguenza visibile.
+const daMigrare = computed(() =>
+  motori.value.filter((m) => !m.allowed).reduce((n, m) => n + m.flows_using, 0),
+)
 
 // ── utenti ──────────────────────────────────────────────────────────────────
 async function createUser() {
@@ -202,6 +216,19 @@ async function deleteBanner(b: Banner) {
 
 function etichettaLivello(l: string): string {
   return t(`banners.level${l.charAt(0).toUpperCase()}${l.slice(1)}`)
+}
+
+// ── motori ──────────────────────────────────────────────────────────────────
+async function toggleMotore(m: EnginePolicy) {
+  try {
+    const aggiornato = await engineApi.set(m.engine_id, !m.allowed)
+    motori.value = motori.value.map((x) => (x.engine_id === aggiornato.engine_id ? aggiornato : x))
+    toast.success(
+      t(aggiornato.allowed ? 'adminPanel.engineAllowed' : 'adminPanel.engineDisallowed', { engine: m.engine_id }),
+    )
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
 }
 </script>
 
@@ -399,6 +426,49 @@ function etichettaLivello(l: string): string {
           </div>
         </template>
 
+        <!-- ── MOTORI ─────────────────────────────────────────────────────── -->
+        <template v-else-if="sezione === 'engines'">
+          <div class="card">
+            <h4><Cpu :size="14" /> {{ $t('adminPanel.enginesTitle') }}</h4>
+            <p class="muted small hint">{{ $t('adminPanel.enginesHint') }}</p>
+            <p class="muted small hint">
+              {{ daMigrare ? $t('adminPanel.enginesToMigrate', { count: daMigrare }) : $t('adminPanel.enginesAllCompliant') }}
+            </p>
+            <div class="tablewrap">
+              <table class="rows">
+                <thead>
+                  <tr>
+                    <th>{{ $t('adminPanel.colEngine') }}</th>
+                    <th>{{ $t('adminPanel.colFlowsUsing') }}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="m in motori" :key="m.engine_id">
+                    <td>
+                      {{ m.engine_id }}
+                      <span v-if="!m.allowed" class="tag off">{{ $t('adminPanel.notAllowedTag') }}</span>
+                    </td>
+                    <!-- evidenziato solo quando il motore NON è consentito: lì
+                         il numero è lavoro da fare, altrove è solo un fatto -->
+                    <td class="small" :class="!m.allowed && m.flows_using ? 'warn' : 'muted'">{{ m.flows_using }}</td>
+                    <td class="right">
+                      <button
+                        class="mini"
+                        :title="m.allowed ? $t('adminPanel.disallowEngineTitle') : $t('adminPanel.allowEngineTitle')"
+                        :aria-label="m.allowed ? $t('adminPanel.disallowEngineTitle') : $t('adminPanel.allowEngineTitle')"
+                        @click="toggleMotore(m)"
+                      >
+                        <component :is="m.allowed ? CheckCircle2 : XCircle" :size="13" />
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+
         <!-- ── BANNER ─────────────────────────────────────────────────────── -->
         <template v-else>
           <div class="card">
@@ -572,6 +642,7 @@ td.right { text-align: right; width: 80px; }
   margin-left: 6px;
 }
 .tag.off { color: var(--muted); }
+td.warn { color: var(--warning, #d08700); font-weight: 600; }
 .tag.sso { color: var(--muted); }
 .tag.info { color: var(--accent-hi, #4c8dff); }
 .tag.warning { color: var(--warning, #d08700); }

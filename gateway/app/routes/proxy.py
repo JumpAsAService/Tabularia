@@ -26,6 +26,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import Upload, User
 from app.services import audit
+from app.services.engine_policy import disabled_engines
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
 
 logger = logging.getLogger(__name__)
@@ -103,9 +104,32 @@ async def operations(request: Request):
 
 
 @router.get("/engines")
-async def engines(request: Request):
-    """Catalogo degli engine disponibili (per il picker del frontend)."""
-    return await _forward(request, "GET", "/engines")
+async def engines(request: Request, session: Session = Depends(get_session)):
+    """Catalogo degli engine, con la politica dell'installazione già applicata.
+
+    NON è un inoltro cieco, ed è l'unico punto in cui il catalogo dell'engine
+    viene riscritto: l'engine sa cosa è tecnicamente disponibile, il gateway sa
+    cosa l'amministratore consente. Un motore disabilitato torna `available:
+    false` con `disabled_by_admin: true`, perché il selettore deve poter dire
+    PERCHÉ — «non consentito qui» non è «non configurato», e mostrarli uguali
+    manderebbe l'utente a cercare una variabile d'ambiente che non c'entra.
+    """
+    client = get_engine_client()
+    resp = await client.get("/engines")
+    if resp.status_code >= 400:  # errore dell'engine: si passa così com'è
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type"),
+        )
+    catalogo = resp.json()
+    vietati = disabled_engines(session)
+    if vietati and isinstance(catalogo, list):
+        for e in catalogo:
+            if isinstance(e, dict) and e.get("id") in vietati:
+                e["available"] = False
+                e["disabled_by_admin"] = True
+    return catalogo
 
 
 @router.post("/tasks/preview")

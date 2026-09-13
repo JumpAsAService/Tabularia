@@ -42,6 +42,9 @@ PERM_REVOKE = "permission.revoke"
 # banner dell'Explore: cambiano ciò che vede TUTTA l'installazione
 BANNER_CREATE = "banner.create"
 BANNER_DELETE = "banner.delete"
+# motori consentiti: cambiano ciò che TUTTA l'installazione può scegliere
+ENGINE_ALLOW = "engine.allow"
+ENGINE_DISALLOW = "engine.disallow"
 
 
 def client_ip(request: Optional[Request]) -> Optional[str]:

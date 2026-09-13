@@ -66,7 +66,10 @@ const flowsError = ref('')
 
 // motori disponibili per il dropdown "Nuovo flusso" (il flusso è pinnato al
 // motore scelto). Stesso comportamento della tab Flows.
-interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean }
+// `disabled_by_admin`: disponibile lato server ma VIETATO in questa
+// installazione (pannello Admin → Motori) — diverso da `optional`, che vuol
+// dire «non configurato».
+interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean; disabled_by_admin?: boolean }
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 const newMenu = ref(false)
 function createFlowWith(engineId: string) {
@@ -563,7 +566,7 @@ async function revoke(perm: Permission) {
                   :disabled="!e.available"
                   @click="createFlowWith(e.id)"
                 >
-                  <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('projectBrowser.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t(e.optional ? 'projectBrowser.notConfiguredTag' : 'projectBrowser.comingSoonTag') }}</span></span>
+                  <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('projectBrowser.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t(e.disabled_by_admin ? 'projectBrowser.notAllowedTag' : (e.optional ? 'projectBrowser.notConfiguredTag' : 'projectBrowser.comingSoonTag')) }}</span></span>
                   <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
                 </button>
               </div>

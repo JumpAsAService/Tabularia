@@ -42,6 +42,15 @@ const folderName = ref<Record<number, string>>({})
 const engineLabel = (id: string) => engines.value.find((e) => e.id === id)?.label ?? id
 const availableEngines = computed(() => engines.value.filter((e) => e.available))
 
+// Perché un motore non è scegliibile. Sono tre ragioni diverse — non consentito
+// in questa installazione (pannello Admin → Motori), non configurato lato
+// server, non ancora pronto — e mostrarle con la stessa etichetta manderebbe a
+// cercare la causa sbagliata (una variabile d'ambiente invece dell'amministratore).
+function engineTag(e: EngineOpt): string {
+  if (e.disabled_by_admin) return t('flows.notAllowedTag')
+  return t(e.optional ? 'flows.notConfiguredTag' : 'flows.comingSoonTag')
+}
+
 // motore di PRODUZIONE (run schedulati / esegui-in-produzione): '' = come sviluppo
 async function setProductionEngine(f: FlowSummary, value: string) {
   try {
@@ -225,7 +234,7 @@ async function saveSchedule(cron: string, productionEngine?: string) {
               :disabled="!e.available"
               @click="createWith(e.id)"
             >
-              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ $t(e.optional ? 'flows.notConfiguredTag' : 'flows.comingSoonTag') }}</span></span>
+              <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ engineTag(e) }}</span></span>
               <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
             </button>
           </div>

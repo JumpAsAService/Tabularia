@@ -49,6 +49,15 @@ class FakeEngine:
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
+        # catalogo servito da GET /engines. L'engine dice cosa è tecnicamente
+        # disponibile; è il GATEWAY a sovrapporci la politica dell'installazione
+        # (motori disabilitati dall'admin), quindi qui arrivano tutti "available".
+        self.engines: list[dict] = [
+            {"id": "polars", "label": "Polars", "available": True, "description": ""},
+            {"id": "duckdb", "label": "DuckDB", "available": True, "description": ""},
+            {"id": "chdb", "label": "chDB", "available": True, "description": "", "optional": True},
+            {"id": "clickhouse", "label": "ClickHouse", "available": True, "description": "", "optional": True},
+        ]
 
     def set_task(self, task_id: str, status: str, result: dict | None = None,
                  error: str | None = None, error_detail: str | None = None):
@@ -58,6 +67,8 @@ class FakeEngine:
 
     def _handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        if path == "/engines":
+            return httpx.Response(200, json=self.engines)
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]
             if request.method == "DELETE":  # revoca + terminate del task

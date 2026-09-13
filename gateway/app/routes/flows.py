@@ -30,6 +30,7 @@ from app.schemas.models import (
     FlowVersionOut,
     Page,
 )
+from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
@@ -41,24 +42,39 @@ router = APIRouter(tags=["flows"])
 # solo quelli `available=True`).
 # `clickhouse` (server esterno) è opzionale lato engine: se non configurato, il
 # run fallisce con un errore chiaro dell'engine.
-_AVAILABLE_ENGINES = {"polars", "duckdb", "chdb", "clickhouse"}
+_AVAILABLE_ENGINES = set(KNOWN_ENGINES)
 
 
-def _validate_engine(engine: str | None) -> str:
+def _validate_engine(engine: str | None, session: Session | None = None) -> str:
+    """Il motore esiste nel catalogo e — se si passa la sessione — è fra quelli
+    che l'amministratore consente ancora di scegliere.
+
+    `session` è facoltativa di proposito: il controllo sul CATALOGO è puro e
+    resta utilizzabile senza database (lo usano i test di validazione). Il
+    criterio amministrativo si applica dove una sessione c'è, cioè in tutte le
+    rotte — creazione, cambio motore e motore di produzione, che sono i tre
+    punti in cui un motore si sceglie."""
     e = (engine or "polars").strip().lower()
     if e not in _AVAILABLE_ENGINES:
         raise HTTPException(
             status_code=422,
             detail=f"engine non disponibile: '{engine}'. Scegli tra: {', '.join(sorted(_AVAILABLE_ENGINES))}.",
         )
+    vietati = disabled_engines(session) if session is not None else set()
+    if e in vietati:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Il motore '{e}' è stato disabilitato dall'amministratore. "
+            f"Scegli tra: {', '.join(sorted(_AVAILABLE_ENGINES - vietati))}.",
+        )
     return e
 
 
-def _validate_production_engine(engine: str | None) -> str | None:
+def _validate_production_engine(engine: str | None, session: Session | None = None) -> str | None:
     """Motore di produzione: vuoto = None (uguale allo sviluppo)."""
     if engine is None or not engine.strip():
         return None
-    return _validate_engine(engine)
+    return _validate_engine(engine, session)
 
 
 # nodi che danno "qualcosa da eseguire": Output, oppure i nodi di controllo
@@ -193,8 +209,8 @@ def create_flow(
         definition=body.definition,
         project_id=project_id,
         owner_id=user.id,
-        engine=_validate_engine(body.engine),
-        production_engine=_validate_production_engine(body.production_engine),
+        engine=_validate_engine(body.engine, session),
+        production_engine=_validate_production_engine(body.production_engine, session),
     )
     session.add(flow)
     session.commit()
@@ -308,9 +324,9 @@ def update_flow(
     if body.definition is not None:
         flow.definition = body.definition
     if body.engine is not None:
-        flow.engine = _validate_engine(body.engine)
+        flow.engine = _validate_engine(body.engine, session)
     if body.production_engine is not None:
-        flow.production_engine = _validate_production_engine(body.production_engine)
+        flow.production_engine = _validate_production_engine(body.production_engine, session)
 
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)
@@ -522,7 +538,7 @@ def set_flow_schedule(
         flow.run_scheduled_by = user.id  # autorità dei run schedulati
         flow.next_run_at = next_fire(cron, datetime.now(timezone.utc))
     if body.production_engine is not None:  # omesso = invariato; "" = come sviluppo
-        flow.production_engine = _validate_production_engine(body.production_engine)
+        flow.production_engine = _validate_production_engine(body.production_engine, session)
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)
     session.commit()

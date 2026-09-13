@@ -6,7 +6,18 @@ import { ref, watch } from 'vue'
 import { useApi } from '~/composables/useApi'
 
 // `optional`: engine che esiste solo se configurato lato server (non disponibile = non configurato, non "in arrivo")
-export interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean }
+// `disabled_by_admin`: disponibile lato server ma VIETATO in questa installazione
+// (pannello Admin → Motori). Va distinto da `optional`: «non consentito qui» non
+// è «non configurato», e confonderli manda l'utente a cercare una variabile
+// d'ambiente che non c'entra.
+export interface EngineOpt {
+  id: string
+  label: string
+  available: boolean
+  description: string
+  optional?: boolean
+  disabled_by_admin?: boolean
+}
 
 const STORAGE_KEY = 'tabularia-engine'
 

@@ -95,6 +95,22 @@ class BannerCreate(BaseModel):
     level: Literal["info", "warning", "danger"] = "warning"
 
 
+# ── Engine policy (motori che l'installazione consente) ───────────────────────
+class EnginePolicyOut(BaseModel):
+    """Stato di un motore per l'installazione.
+
+    `flows_using` è la lista di lavoro della migrazione: disabilitare un motore
+    non ferma i flussi che lo usano già, quindi il numero dice quanti restano
+    fuori standard — altrimenti la standardizzazione resterebbe cosmetica."""
+    engine_id: str
+    allowed: bool
+    flows_using: int = 0
+
+
+class EnginePolicyUpdate(BaseModel):
+    allowed: bool
+
+
 # ── Projects ──────────────────────────────────────────────────────────────────
 class ProjectOut(BaseModel):
     id: int
