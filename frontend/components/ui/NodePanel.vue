@@ -25,6 +25,7 @@ const emit = defineEmits<{
   (e: 'delete'): void
   (e: 'export', format: 'csv' | 'xlsx'): void
   (e: 'preview'): void // anteprima a comando (nodo SQL)
+  (e: 'email-test'): void // prova a vuoto: manda l'allegato a sé stessi
 }>()
 
 const isSource = () => props.node?.type === 'source'
@@ -45,6 +46,25 @@ function togglePartition(name: string) {
   if (i >= 0) cur.splice(i, 1)
   else cur.push(name)
   emit('update', { partitionBy: cur })
+}
+
+// Destinatari email: il flusso li SALVA come elenco, perché è così che li
+// rilegge il resolver lato server per i run schedulati. Nel form restano una
+// riga separata da virgole, quindi si converte solo all'uscita dal campo
+// (@change e non @input: spezzare a ogni tasto cancellerebbe la virgola appena
+// digitata, che qui è il separatore).
+function splitAddresses(raw: string): string[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+// la prova a vuoto ignora i destinatari (li impone il server), ma senza
+// connessione e senza oggetto non c'è niente da spedire
+function emailTestReady(): boolean {
+  const d = props.node?.data ?? {}
+  return d.connectionId != null && !!(d.emailSubject ?? '').trim()
 }
 
 // nodo Refresh: sceglie una datasource database da aggiornare prima del run
@@ -246,6 +266,7 @@ function pickDatasource(id: number | null) {
           { value: 'datasource', label: $t('nodePanel.destTypeDatasource') },
           { value: 'database', label: $t('nodePanel.destTypeDatabaseTable') },
           { value: 's3', label: $t('nodePanel.destTypeS3') },
+          { value: 'email', label: $t('nodePanel.destTypeEmail') },
         ]"
         @update:model-value="(v: any) => emit('update', { destType: v })"
       />
@@ -380,11 +401,95 @@ function pickDatasource(id: number | null) {
         </p>
       </template>
 
+      <!-- destinazione email: l'output parte come allegato. I destinatari qui
+           sono una proposta: il gateway li confronta con i domini ammessi della
+           connessione, che sono il vincolo vero -->
+      <template v-else-if="(node.data.destType ?? 'datasource') === 'email'">
+        <label>{{ $t('nodePanel.smtpConnectionLabel') }}</label>
+        <Select
+          :model-value="node.data.connectionId ?? null"
+          :options="(connections ?? []).filter((c) => c.db_type === 'smtp').map((c) => ({
+            value: c.id,
+            label: c.name,
+          }))"
+          :placeholder="$t('nodePanel.connectionPlaceholder')"
+          @update:model-value="(v: any) => emit('update', { connectionId: v })"
+        />
+        <label>{{ $t('nodePanel.emailToLabel') }} <span class="muted">{{ $t('nodePanel.emailListHint') }}</span></label>
+        <input
+          :value="(node.data.emailTo ?? []).join(', ')"
+          type="text"
+          placeholder="report@azienda.it, capo@azienda.it"
+          @change="emit('update', { emailTo: splitAddresses(($event.target as HTMLInputElement).value) })"
+        />
+        <label>{{ $t('nodePanel.emailCcLabel') }} <span class="muted">{{ $t('nodePanel.emailListHint') }}</span></label>
+        <input
+          :value="(node.data.emailCc ?? []).join(', ')"
+          type="text"
+          @change="emit('update', { emailCc: splitAddresses(($event.target as HTMLInputElement).value) })"
+        />
+        <label>{{ $t('nodePanel.emailSubjectLabel') }}</label>
+        <input
+          :value="node.data.emailSubject ?? ''"
+          type="text"
+          :placeholder="$t('nodePanel.emailSubjectPlaceholder')"
+          @input="emit('update', { emailSubject: ($event.target as HTMLInputElement).value })"
+        />
+        <label>{{ $t('nodePanel.emailBodyLabel') }}</label>
+        <textarea
+          :value="node.data.emailBody ?? ''"
+          rows="4"
+          :placeholder="$t('nodePanel.emailBodyPlaceholder')"
+          @input="emit('update', { emailBody: ($event.target as HTMLTextAreaElement).value })"
+        />
+        <label class="chk ovw">
+          <input
+            type="checkbox"
+            :checked="node.data.emailHtml ?? false"
+            @change="emit('update', { emailHtml: ($event.target as HTMLInputElement).checked })"
+          />
+          {{ $t('nodePanel.emailHtmlLabel') }}
+        </label>
+        <label>{{ $t('nodePanel.attachmentNameLabel') }}</label>
+        <input
+          :value="node.data.attachmentName ?? ''"
+          type="text"
+          :placeholder="$t('nodePanel.attachmentNamePlaceholder')"
+          @input="emit('update', { attachmentName: ($event.target as HTMLInputElement).value })"
+        />
+        <label>{{ $t('nodePanel.formatLabel') }}</label>
+        <Select
+          :model-value="node.data.attachmentFormat ?? 'xlsx'"
+          :options="[
+            { value: 'xlsx', label: 'Excel (.xlsx)' },
+            { value: 'csv', label: 'CSV' },
+          ]"
+          @update:model-value="(v: any) => emit('update', { attachmentFormat: v })"
+        />
+        <!-- scelta dell'utente: default acceso. Spento, un invio fallito resta
+             fra gli errori del run e i passi successivi proseguono -->
+        <label class="chk ovw">
+          <input
+            type="checkbox"
+            :checked="node.data.stopOnFailure !== false"
+            @change="emit('update', { stopOnFailure: ($event.target as HTMLInputElement).checked })"
+          />
+          {{ $t('nodePanel.emailStopOnFailure') }}
+        </label>
+        <p class="muted outhint">{{ $t('nodePanel.emailHint') }}</p>
+
+        <button class="dryrun" :disabled="!emailTestReady()" @click="emit('email-test')">
+          <FlaskConical :size="13" />
+          {{ $t('nodePanel.emailDryRun') }}
+        </button>
+        <p class="muted outhint">{{ $t('nodePanel.emailDryRunHint') }}</p>
+      </template>
+
       <template v-else>
         <label>{{ $t('nodePanel.connectionLabel') }}</label>
         <Select
           :model-value="node.data.connectionId ?? null"
-          :options="(connections ?? []).filter((c) => c.db_type !== 's3').map((c) => ({
+          :options="(connections ?? []).filter((c) => c.db_type !== 's3' && c.db_type !== 'smtp').map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
           }))"
@@ -601,6 +706,15 @@ label { font-size: 12px; color: var(--muted); }
   padding: 0 5px;
   margin-right: 4px;
   font-size: 11px;
+}
+.dryrun {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
 }
 .exportbtns { display: flex; gap: 6px; margin-top: 6px; }
 .exportbtns button { flex: 1; }

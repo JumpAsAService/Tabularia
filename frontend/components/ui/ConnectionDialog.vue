@@ -42,9 +42,17 @@ const password = ref('')
 const database = ref('')
 const dbSchema = ref('')
 
+// SMTP: mittente, cifratura e domini ammessi non hanno una colonna propria e
+// viaggiano nel campo `extra` (JSON). Qui restano quattro campi normali.
+const fromAddress = ref('')
+const fromName = ref('')
+const tls = ref('starttls')
+const allowedDomains = ref('')
+
 const isEdit = computed(() => !!props.existing)
 // object storage: stesse colonne, etichette diverse (host=endpoint, ecc.)
 const isS3 = computed(() => dbType.value === 's3')
+const isSmtp = computed(() => dbType.value === 'smtp')
 
 watch(
   () => props.open,
@@ -61,6 +69,19 @@ watch(
     password.value = '' // mai precompilata
     database.value = c?.database ?? ''
     dbSchema.value = c?.db_schema ?? ''
+    // `extra` è JSON opaco: se una connessione salvata a mano lo avesse rotto,
+    // il form deve comunque aprirsi — si riparte dai default
+    let opts: Record<string, any> = {}
+    try {
+      const parsed = JSON.parse(c?.extra || '{}')
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) opts = parsed
+    } catch { /* JSON illeggibile: campi vuoti */ }
+    fromAddress.value = opts.from_address ?? ''
+    fromName.value = opts.from_name ?? ''
+    tls.value = opts.tls ?? 'starttls'
+    allowedDomains.value = Array.isArray(opts.allowed_domains)
+      ? opts.allowed_domains.join(', ')
+      : (opts.allowed_domains ?? '')
   },
 )
 
@@ -75,11 +96,32 @@ function draft(): ConnectionDraft {
     password: password.value,
     database: database.value.trim(),
     db_schema: dbSchema.value.trim(),
+    // inviato sempre: per gli altri tipi resta un oggetto vuoto, e ometterlo in
+    // modifica vorrebbe dire «non toccarlo», che qui non è mai l'intenzione
+    extra: JSON.stringify(
+      isSmtp.value
+        ? {
+            from_address: fromAddress.value.trim(),
+            from_name: fromName.value.trim(),
+            tls: tls.value,
+            allowed_domains: allowedDomains.value
+              .split(/[,;\s]+/)
+              .map((d) => d.trim())
+              .filter(Boolean),
+          }
+        : {},
+    ),
   }
 }
 
-// per S3 l'endpoint può essere vuoto (= AWS): basta il nome
-const incomplete = computed(() => !name.value.trim() || (!isS3.value && !host.value.trim()))
+// per S3 l'endpoint può essere vuoto (= AWS): basta il nome. Per SMTP serve
+// anche il mittente: senza, la connessione si salva e poi ogni invio fallisce.
+const incomplete = computed(
+  () =>
+    !name.value.trim() ||
+    (!isS3.value && !host.value.trim()) ||
+    (isSmtp.value && !fromAddress.value.trim()),
+)
 
 // ── Test connection ──────────────────────────────────────────────────────────
 const testing = ref(false)
@@ -136,14 +178,14 @@ function confirm() {
           </div>
           <div v-if="!isS3" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
-            <input v-model="port" type="text" inputmode="numeric" placeholder="5432" />
+            <input v-model="port" type="text" inputmode="numeric" :placeholder="isSmtp ? '587' : '5432'" />
           </div>
           <div class="cd-field cd-wide">
-            <label>{{ isS3 ? $t('connectionDialog.endpointLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
+            <label>{{ isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
               type="text"
-              :placeholder="isS3 ? 'https://minio.example.com:9000' : 'db.internal.example.com'"
+              :placeholder="isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : 'db.internal.example.com'"
             />
           </div>
           <div class="cd-field">
@@ -157,21 +199,50 @@ function confirm() {
             </label>
             <input v-model="password" type="password" autocomplete="new-password" />
           </div>
-          <div class="cd-field">
-            <label>
-              {{ isS3 ? $t('connectionDialog.bucketLabel') : dbType === 'trino' ? $t('connectionDialog.catalogLabel') : $t('connectionDialog.databaseLabel') }}
-              <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span>
-            </label>
-            <input v-model="database" type="text" :placeholder="isS3 ? $t('connectionDialog.bucketPlaceholder') : ''" />
-          </div>
-          <div class="cd-field">
-            <label>{{ isS3 ? $t('connectionDialog.regionLabel') : $t('connectionDialog.schemaLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
-            <input
-              v-model="dbSchema"
-              type="text"
-              :placeholder="isS3 ? 'eu-south-1' : dbType === 'postgresql' ? 'public' : ''"
-            />
-          </div>
+          <!-- SMTP non ha database né schema: al loro posto le opzioni che per
+               gli altri tipi non esistono -->
+          <template v-if="isSmtp">
+            <div class="cd-field">
+              <label>{{ $t('connectionDialog.fromAddressLabel') }}</label>
+              <input v-model="fromAddress" type="text" placeholder="report@azienda.it" />
+            </div>
+            <div class="cd-field">
+              <label>{{ $t('connectionDialog.fromNameLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
+              <input v-model="fromName" type="text" :placeholder="$t('connectionDialog.fromNamePlaceholder')" />
+            </div>
+            <div class="cd-field">
+              <label>{{ $t('connectionDialog.tlsLabel') }}</label>
+              <Select
+                v-model="tls"
+                :options="[
+                  { value: 'starttls', label: 'STARTTLS (587)' },
+                  { value: 'ssl', label: 'SSL/TLS (465)' },
+                  { value: 'none', label: $t('connectionDialog.tlsNone') },
+                ]"
+              />
+            </div>
+            <div class="cd-field">
+              <label>{{ $t('connectionDialog.allowedDomainsLabel') }} <span class="cd-hint">{{ $t('connectionDialog.allowedDomainsHint') }}</span></label>
+              <input v-model="allowedDomains" type="text" placeholder="azienda.it, clienti.it" />
+            </div>
+          </template>
+          <template v-else>
+            <div class="cd-field">
+              <label>
+                {{ isS3 ? $t('connectionDialog.bucketLabel') : dbType === 'trino' ? $t('connectionDialog.catalogLabel') : $t('connectionDialog.databaseLabel') }}
+                <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span>
+              </label>
+              <input v-model="database" type="text" :placeholder="isS3 ? $t('connectionDialog.bucketPlaceholder') : ''" />
+            </div>
+            <div class="cd-field">
+              <label>{{ isS3 ? $t('connectionDialog.regionLabel') : $t('connectionDialog.schemaLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
+              <input
+                v-model="dbSchema"
+                type="text"
+                :placeholder="isS3 ? 'eu-south-1' : dbType === 'postgresql' ? 'public' : ''"
+              />
+            </div>
+          </template>
           <div class="cd-field cd-wide">
             <label>{{ $t('connectionDialog.descriptionLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
             <input v-model="description" type="text" :placeholder="$t('connectionDialog.descriptionPlaceholder')" />
@@ -181,6 +252,9 @@ function confirm() {
         <p class="muted cd-note">
           <template v-if="isS3">
             {{ $t('connectionDialog.noteS3') }}
+          </template>
+          <template v-else-if="isSmtp">
+            {{ $t('connectionDialog.noteSmtp') }}
           </template>
           <template v-else>
             {{ $t('connectionDialog.noteDb') }}

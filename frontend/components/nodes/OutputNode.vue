@@ -4,21 +4,29 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
-import { Database, HardDriveDownload, CloudUpload } from 'lucide-vue-next'
+import { Database, HardDriveDownload, CloudUpload, Mail } from 'lucide-vue-next'
 
 const props = defineProps<{ id: string; data: any }>()
 const { t } = useI18n()
 
 const destType = computed(() => props.data?.destType ?? 'datasource')
 const icon = computed(() =>
-  destType.value === 'database' ? Database : destType.value === 's3' ? CloudUpload : HardDriveDownload,
+  destType.value === 'database'
+    ? Database
+    : destType.value === 's3'
+      ? CloudUpload
+      : destType.value === 'email'
+        ? Mail
+        : HardDriveDownload,
 )
 const title = computed(() =>
   destType.value === 'database'
     ? t('outputNode.titleDatabase')
     : destType.value === 's3'
       ? t('outputNode.titleS3')
-      : t('outputNode.titleDatasource'),
+      : destType.value === 'email'
+        ? t('outputNode.titleEmail')
+        : t('outputNode.titleDatasource'),
 )
 const summary = computed(() => {
   const d = props.data ?? {}
@@ -33,6 +41,10 @@ const summary = computed(() => {
     if (!k) return t('outputNode.chooseKeyBucket')
     const parts = (d.partitionBy ?? []).length ? t('outputNode.partitionsSuffix', { n: d.partitionBy.length }) : ''
     return `${k} (${d.s3Format ?? 'parquet'})${parts}`
+  }
+  if (destType.value === 'email') {
+    const to: string[] = d.emailTo ?? []
+    return to.length ? t('outputNode.emailSummary', { to: to.join(', ') }) : t('outputNode.chooseRecipients')
   }
   const n = d.name?.trim()
   return n ? t('outputNode.datasourceSummary', { name: n }) : t('outputNode.nameDatasource')

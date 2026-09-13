@@ -61,20 +61,42 @@ export interface DestinationSpec {
   partition_by?: string[]
 }
 
+// Invio dell'output come allegato. I destinatari sono limitati dai domini
+// ammessi sulla CONNESSIONE e il controllo è del gateway: quello che si scrive
+// qui è una proposta, non un permesso.
+export interface EmailSpec {
+  connection_id: number
+  to: string[]
+  cc?: string[]
+  subject: string
+  body?: string
+  body_is_html?: boolean
+  attachment_name?: string
+  attachment_format?: 'csv' | 'xlsx'
+  stop_on_failure?: boolean
+}
+
+interface RunBody {
+  bucket: string
+  input_key: string
+  operations: any[]
+  publish?: PublishSpec | null
+  destination?: DestinationSpec | null
+  email?: EmailSpec | null
+}
+
 export function useRuns() {
   const { apiFetch } = useApiClient()
 
   return {
-    launch: (
-      flowId: number,
-      body: {
-        bucket: string
-        input_key: string
-        operations: any[]
-        publish?: PublishSpec | null
-        destination?: DestinationSpec | null
-      },
-    ) => apiFetch<RunInfo>(`/flows/${flowId}/runs`, { method: 'POST', body }),
+    launch: (flowId: number, body: RunBody) =>
+      apiFetch<RunInfo>(`/flows/${flowId}/runs`, { method: 'POST', body }),
+
+    // prova a vuoto: stesso corpo, ma il DESTINATARIO lo impone il server
+    // (l'utente collegato) e publish/destination vengono scartati. Mandarsi
+    // l'allegato è l'unico modo di vedere davvero cosa riceverà chi di dovere.
+    emailTest: (flowId: number, body: RunBody) =>
+      apiFetch<RunInfo>(`/flows/${flowId}/email-test`, { method: 'POST', body }),
 
     listByFlow: (flowId: number) => apiFetch<RunInfo[]>(`/flows/${flowId}/runs`),
 

@@ -508,7 +508,10 @@ async function openDbDsDialog() {
   dbDsError.value = ''
   try {
     // le S3 sono solo destinazioni, non sorgenti
-    usableConnections.value = (await connApi.list()).filter((c) => c.db_type !== 's3')
+    // sorgenti dati: solo database interrogabili — né object storage né posta
+    usableConnections.value = (await connApi.list()).filter(
+      (c) => c.db_type !== 's3' && c.db_type !== 'smtp',
+    )
   } catch { usableConnections.value = [] }
   showDbDsDialog.value = true
 }

@@ -914,6 +914,22 @@ function describeOutput(n: Node): OutputSummary {
       error,
     }
   }
+  if ((d.destType ?? 'datasource') === 'email') {
+    const conn = connectionsList.value.find((c) => c.id === d.connectionId)
+    const to: string[] = d.emailTo ?? []
+    let error: string | null = null
+    if (d.connectionId == null) error = t('flowEditor.chooseSmtpConnection')
+    else if (!conn) error = t('flowEditor.connectionUnavailable')
+    else if (conn.db_type !== 'smtp') error = t('flowEditor.connectionNotSmtp')
+    else if (!to.length) error = t('flowEditor.enterRecipients')
+    else if (!d.emailSubject?.trim()) error = t('flowEditor.enterSubject')
+    return {
+      id: n.id,
+      label: t('flowEditor.emailLabel', { to: to.join(', ') || '…' }),
+      detail: conn ? `${conn.name} · ${d.attachmentFormat ?? 'xlsx'}` : '',
+      error,
+    }
+  }
   const proj = projectsList.value.find((p) => p.id === d.projectId)
   let error: string | null = null
   if (!d.name?.trim()) error = t('flowEditor.enterDatasourceName')
@@ -1056,6 +1072,55 @@ async function pollOrchestration(runId: number) {
   setStatus(t('flowEditor.orchestrationTimeout'), 'info')
 }
 
+// I nomi dei campi sono quelli che rilegge il resolver lato server per i run
+// schedulati (services/flow_resolver): tenerli allineati è ciò che impedisce a
+// un nodo di funzionare col pulsante Esegui e di spedire a nessuno a orario.
+function emailSpecOf(d: any) {
+  return {
+    connection_id: d.connectionId,
+    to: d.emailTo ?? [],
+    cc: d.emailCc ?? [],
+    subject: d.emailSubject ?? '',
+    body: d.emailBody ?? '',
+    body_is_html: !!d.emailHtml,
+    attachment_name: (d.attachmentName ?? '').trim(),
+    attachment_format: d.attachmentFormat ?? 'xlsx',
+    stop_on_failure: d.stopOnFailure !== false,
+  }
+}
+
+// Prova a vuoto del nodo email: stesso corpo di un run vero, ma il destinatario
+// lo impone il gateway (l'utente collegato) e non si pubblica nulla. Serve a
+// vedere l'allegato davvero generato prima di mandarlo a qualcun altro.
+async function emailTestSelected() {
+  const node = selectedNode.value
+  if (!node) return
+  if (flowId.value === null) {
+    setStatus(t('flowEditor.emailTestNeedsSavedFlow'), 'error')
+    return
+  }
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id)
+  if (!sourceNode?.data?.parquetKey) {
+    setStatus(t('flowEditor.outputMissingChain'), 'error')
+    return
+  }
+  busy.value = true
+  try {
+    const launched = await runsApi.emailTest(flowId.value, {
+      bucket: sourceNode.data.bucket ?? bucket,
+      input_key: sourceNode.data.parquetKey,
+      operations: ops,
+      email: emailSpecOf(node.data),
+    })
+    setStatus(t('flowEditor.emailTestStarted'), 'busy')
+    pollRun(launched.id, t('flowEditor.emailTestLabel'))
+  } catch (e) {
+    setStatus(errMessage(e), 'error')
+  } finally {
+    busy.value = false
+  }
+}
+
 // un run per ogni nodo Output: la catena di ciascuno è il suo input sinistro
 async function executeOutputRuns() {
   runDialogError.value = ''
@@ -1074,7 +1139,10 @@ async function executeOutputRuns() {
       const destType = d.destType ?? 'datasource'
       let publish = null
       let destination = null
-      if (destType === 'database') {
+      let email = null
+      if (destType === 'email') {
+        email = emailSpecOf(d)
+      } else if (destType === 'database') {
         destination = {
           type: 'database' as const,
           connection_id: d.connectionId,
@@ -1106,6 +1174,7 @@ async function executeOutputRuns() {
           operations: ops,
           publish,
           destination,
+          email,
         })
         setStatus(`${label}: ${t('flowEditor.outputRunStarted', { id: launched.id })}`, 'busy')
         pollRun(launched.id, label)
@@ -1267,6 +1336,7 @@ async function pollTask(id: string) {
         @delete="deleteSelected"
         @export="exportSelected"
         @preview="previewSelected"
+        @email-test="emailTestSelected"
       />
     </div>
 

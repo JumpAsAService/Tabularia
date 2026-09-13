@@ -15,6 +15,9 @@ export interface ConnectionInfo {
   database: string
   db_schema: string
   has_password: boolean
+  // opzioni del tipo, JSON (solo SMTP: from_address, from_name, tls,
+  // allowed_domains). Non contiene segreti, per questo torna al client.
+  extra: string
   updated_at: string | null
 }
 
@@ -28,6 +31,7 @@ export interface ConnectionDraft {
   password?: string
   database?: string
   db_schema?: string
+  extra?: string
 }
 
 export const DB_TYPES = [
@@ -38,6 +42,9 @@ export const DB_TYPES = [
   { value: 'trino', label: 'Trino' },
   // object storage: host=endpoint, username=access key, database=bucket, schema=region
   { value: 's3', label: 'S3 / object storage' },
+  // posta: le tre impostazioni senza colonna naturale (mittente, TLS, domini
+  // ammessi) vivono in `extra`
+  { value: 'smtp', label: 'SMTP / email' },
 ]
 
 export function useConnections() {
