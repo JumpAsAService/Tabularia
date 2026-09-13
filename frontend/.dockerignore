@@ -13,5 +13,4 @@ dist/
 
 # file del repository che l'immagine non usa
 .git/
-image.png
 Dockerfile*

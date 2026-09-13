@@ -2,19 +2,16 @@ import os
 import tempfile
 import time
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
-from pydantic import BaseModel, Field
-from typing import Any, Optional
 from celery.result import AsyncResult
 from celery.exceptions import TimeoutError as CeleryTimeoutError
-from app.tasks.jobs import test_task, process_file_task, transform_data_task
+from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
 from app.api.models import (
-    TestTaskRequest, ProcessFileRequest, TransformOperation,
-    TaskResponse, TransformDataRequest, TaskStatusResponse, PreviewRequest,
-    ExportRequest,
+    TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
+    PreviewRequest, ExportRequest,
 )
 from app.engine import (
     DataSource, PreviewResult, get_engine, available_operations,
@@ -28,50 +25,8 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Request/Response Models
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────────────────────────
-@router.post("/test", response_model=TaskResponse)
-def submit_test_task(request: TestTaskRequest):
-    """
-    Submit un task di test per verificare che Celery funzioni.
-    """
-    logger.info(f"📩 Submitting test_task: {request.message}")
-    
-    task = test_task.delay(message=request.message, delay=request.delay)
-    
-    return TaskResponse(
-        task_id=task.id,
-        status="submitted",
-        message=f"Task {request.message} submitted",
-    )
-
-
-@router.post("/process-file", response_model=TaskResponse)
-def submit_process_file_task(request: ProcessFileRequest):
-    """
-    Submit un task per processare un file dallo storage.
-    """
-    logger.info(f"📩 Submitting process_file_task: {request.input_key} → {request.output_key}")
-    
-    task = process_file_task.delay(
-        bucket=request.bucket,
-        input_key=request.input_key,
-        output_key=request.output_key,
-    )
-    
-    return TaskResponse(
-        task_id=task.id,
-        status="submitted",
-        message=f"Processing {request.input_key} → {request.output_key}",
-    )
-
-
 @router.post("/transform-data", response_model=TaskResponse)
 def submit_transform_data_task(request: TransformDataRequest):
     """

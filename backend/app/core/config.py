@@ -1,9 +1,4 @@
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-    PydanticBaseSettingsSource,
-    TomlConfigSettingsSource,
-)
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import BaseModel, Field, computed_field, field_validator, SecretStr
 from functools import lru_cache
 from pathlib import Path
@@ -222,10 +217,9 @@ class ClickHouseExternalSettings(BaseModel):
 # App Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
-    name: str = "Data Prep API"
-    version: str = "0.1.0"
-    debug: bool = False
-    api_v1_prefix: str = "/api/v1"
+    # NB: nessun codice del backend legge `env_name` — il guard di produzione
+    # vive solo nel gateway. Resta qui perché la configurazione condivisa la
+    # imposta su tutti i pod, e senza il campo pydantic la ignorerebbe soltanto.
     env_name: str = "development"
     # origini permesse per il CORS (il frontend Nuxt gira su :3000)
     cors_origins: list[str] = Field(
@@ -269,34 +263,6 @@ class Settings(BaseSettings):
     clickhouse_external: ClickHouseExternalSettings = Field(default_factory=ClickHouseExternalSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Customise sources to include TOML files
-    # ─────────────────────────────────────────────────────────────────────────
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """
-        Aggiunge i file TOML come sorgenti di configurazione.
-
-        `secrets.toml` e `config.toml` sono due sorgenti *separate* (non una lista
-        passata a un unico source): un'unica lista farebbe un merge shallow di
-        primo livello e la `[storage]` dei secret cancellerebbe quella dei
-        default. Sorgenti separate → deep-merge per campo, con secrets prima dei
-        default.
-
-        Priorità (dalla più alta): init > env > secrets.toml > config.toml.
-        """
-        config_dir = Path(__file__).parent.parent.parent / "config"
-        secrets_toml = TomlConfigSettingsSource(settings_cls, toml_file=config_dir / "secrets.toml")
-        config_toml = TomlConfigSettingsSource(settings_cls, toml_file=config_dir / "config.toml")
-        return (init_settings, env_settings, secrets_toml, config_toml, file_secret_settings)
-
-    # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access
     # ─────────────────────────────────────────────────────────────────────────
     @computed_field
@@ -310,18 +276,6 @@ class Settings(BaseSettings):
     def celery_result_backend(self) -> str:
         """Returns Celery result backend (from celery config or fallback to redis)"""
         return self.celery.result_backend or self.redis.url
-
-    @property
-    def project_root(self) -> Path:
-        return Path(__file__).parent.parent.parent
-
-    def is_production(self) -> bool:
-        """Check if running in production environment"""
-        return self.app.env_name.lower() in ("production", "prod")
-
-    def is_development(self) -> bool:
-        """Check if running in development environment"""
-        return self.app.env_name.lower() in ("development", "dev", "local")
 
     def check_required_secrets(self) -> None:
         """La chiave Fernet è OBBLIGATORIA in ogni ambiente, anche in sviluppo:

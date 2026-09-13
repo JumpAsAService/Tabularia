@@ -108,7 +108,6 @@ export default {
     compute_columns: 'Computed columns (SQL expressions)',
     sql_query: 'SQL query',
     join_how: 'Join type',
-    join_on: 'Key columns (in both)',
     join_keys: 'Join keys',
     union_strategy: 'If the two branches\' columns differ',
     foreach_items: 'Static iterations (only without a driver)',

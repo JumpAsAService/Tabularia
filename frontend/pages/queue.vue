@@ -65,7 +65,6 @@ const LABELS: Record<string, string> = {
   'app.tasks.jobs.transform_data_task': 'taskTransform',
   'app.tasks.jobs.ingest_database_task': 'taskIngest',
   'app.tasks.jobs.convert_to_parquet_task': 'taskConvertParquet',
-  'app.tasks.jobs.process_file_task': 'taskProcessFile',
   'app.tasks.jobs.evict_cache_task': 'taskEvictCache',
   'app.tasks.jobs.storage_stats_task': 'taskStorageStats',
 }

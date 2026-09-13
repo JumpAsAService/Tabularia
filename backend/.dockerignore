@@ -79,7 +79,6 @@ docs/
 !.env.example
 *.pem
 *.key
-config/secrets.toml
 # il file dei segreti locali sta sotto app/config: non deve MAI entrare in un'immagine
 app/config/secrets.toml
 **/secrets.toml

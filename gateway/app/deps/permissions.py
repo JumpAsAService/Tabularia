@@ -1,9 +1,7 @@
 """Helper per applicare i permessi sui progetti dentro le route."""
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from sqlmodel import Session
 
-from app.db.session import get_session
-from app.deps.auth import get_current_user
 from app.models import User
 from app.models.permission import Capability
 from app.services import permissions as perm_service

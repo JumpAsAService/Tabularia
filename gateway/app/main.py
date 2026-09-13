@@ -107,11 +107,6 @@ app.include_router(queue_router)
 app.include_router(proxy_router)
 
 
-@app.get("/health", tags=["health"])
-def health():
-    return {"status": "ok", "service": "gateway"}
-
-
 @app.get("/", tags=["health"])
 def root():
     return {"message": f"{settings.app.name} gateway is running"}

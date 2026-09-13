@@ -107,7 +107,6 @@ export default {
     compute_columns: 'Colonnes calculées (expressions SQL)',
     sql_query: 'Requête SQL',
     join_how: 'Type de jointure',
-    join_on: 'Colonnes clés (dans les deux)',
     join_keys: 'Clés de jointure',
     union_strategy: 'Si les colonnes des deux branches diffèrent',
     foreach_items: 'Itérations statiques (uniquement sans pilote)',

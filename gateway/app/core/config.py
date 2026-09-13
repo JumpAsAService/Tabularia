@@ -56,7 +56,6 @@ class AuthSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class EngineSettings(BaseModel):
     base_url: str = "http://localhost:8000"
-    timeout_seconds: float = 120.0
     # bucket dello storage dell'engine: il gateway lo usa solo come STRINGA nei
     # payload (non tocca mai lo storage). Deve combaciare con STORAGE__BUCKET.
     bucket: str = "data-prep"

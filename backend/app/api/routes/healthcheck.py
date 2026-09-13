@@ -1,4 +1,4 @@
-from fastapi import APIRouter, FastAPI, Depends, HTTPException, status
+from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 import redis
 from app.core.config import get_settings
