@@ -89,6 +89,15 @@ The **gateway** (control plane) is the only public ingress: it owns the metadata
 Postgres and enforces auth + RBAC on every call before proxying to the internal
 **engine** (data plane), which stays stateless (Valkey + S3 only).
 
+That metadata Postgres has a diagram of its own:
+**[Open the metadata database schema](https://jumpasaservice.github.io/Tabularia/architecture/metadata-schema.html)**
+— 14 tables and all 26 foreign keys, read back from a live database rather than
+transcribed from the models, and generated with Archify from
+[`docs/architecture/metadata-schema.architecture.json`](docs/architecture/metadata-schema.architecture.json).
+The ten ownership and actor columns that all point at `users.id` are listed rather
+than drawn, so the structural relationships stay legible instead of collapsing into
+a star.
+
 ## Declarative IR & pluggable engines
 
 Flows are stored as a **declarative IR** — a JSON list of typed operations — fully
