@@ -36,7 +36,9 @@ data:
 
   # Engine API, reached only from inside the cluster
   ENGINE__BASE_URL: "http://{{ include "tabularia.fullname" . }}-engine:{{ .Values.service.gatewayPort }}"
-  ENGINE__TIMEOUT_SECONDS: {{ .Values.engine.timeoutSeconds | quote }}
+  # Read by the engine API: how long it waits for a preview worker before
+  # revoking the job and answering 504.
+  PREVIEW_TIMEOUT_SECONDS: {{ .Values.engine.previewTimeoutSeconds | quote }}
   ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ .Values.engine.runStaleTimeoutSeconds | quote }}
 
   CACHE__TTL_SECONDS: {{ .Values.cache.ttlSeconds | quote }}
@@ -55,7 +57,7 @@ data:
   OIDC__SCOPES: {{ .Values.oidc.scopes | quote }}
   OIDC__GROUPS_CLAIM: {{ .Values.oidc.groupsClaim | quote }}
   OIDC__GROUP_ALLOWLIST: {{ .Values.oidc.groupAllowlist | quote }}
-  # Chi può entrare (vuoto/false = nessun filtro, comportamento storico)
+  # Who may sign in (empty / false = no filter, the historical behaviour)
   OIDC__ALLOWED_EMAIL_DOMAINS: {{ .Values.oidc.allowedEmailDomains | quote }}
   OIDC__REQUIRE_ALLOWLISTED_GROUP: {{ .Values.oidc.requireAllowlistedGroup | quote }}
   OIDC__AUTO_CREATE_GROUPS: {{ .Values.oidc.autoCreateGroups | quote }}

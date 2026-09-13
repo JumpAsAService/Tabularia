@@ -62,7 +62,7 @@ Ingress settings the application depends on:
 |---|---|---|
 | Max request body size | file uploads stream through the gateway to the engine and can be tens of GB | at least the largest file users upload |
 | Request buffering | the proxy must not spool uploads to its own disk | off |
-| Read timeout | previews wait for the engine synchronously (`ENGINE__TIMEOUT_SECONDS`, default 120) | ≥ 120 s |
+| Read timeout | previews wait for a worker synchronously (`PREVIEW_TIMEOUT_SECONDS` on the engine API, default 120) | above that ceiling |
 | Rate limit on `/auth/login` | the application has no login throttling of its own | per client IP |
 
 **Egress.** The engine connects to databases that users configure as connections: that

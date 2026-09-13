@@ -154,8 +154,12 @@ oidc:
   buttonLabel: "Sign in with SSO"
 
 engine:
-  # How long the gateway waits for a synchronous preview before giving up.
-  timeoutSeconds: 120
+  # Ceiling on a preview. The engine API does not compute it: it submits the job
+  # to the `preview` queue and waits this long for a worker to answer, then
+  # revokes the task and returns 504. Keep the ingress read timeout above it.
+  # The gateway has no timeout of its own towards the engine — deliberately, so
+  # that multi-gigabyte uploads are never cut off mid-transfer.
+  previewTimeoutSeconds: 120
   # A run older than this is declared stale: the gateway revokes the task on the
   # engine and marks the run failed. Must stay ABOVE the Celery hard time limit
   # (3600 s) or you will kill runs that are merely slow.
@@ -317,7 +321,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
     # Do not spool uploads on the proxy's disk.
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-    # Previews are synchronous and can take as long as engine.timeoutSeconds.
+    # Previews are synchronous and can take as long as engine.previewTimeoutSeconds.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
   # Paths served by the gateway rather than the frontend.
