@@ -98,9 +98,15 @@ workers, nor saved flows. Four engines are registered:
 | Engine | id | Notes |
 |---|---|---|
 | **Polars** | `polars` | In-process, lazy, streaming. **Default**; full operation coverage. |
-| **DuckDB** | `duckdb` | Out-of-core SQL (spills to disk) for very large joins/aggregations. Base ops; advanced transforms fall back to Polars. |
-| **chDB (ClickHouse)** | `chdb` | Out-of-core SQL with the ClickHouse dialect. Structural ops; `sql`/`foreach` via Polars/DuckDB. |
+| **DuckDB** | `duckdb` | Out-of-core SQL (spills to disk) for very large joins/aggregations. Full operation coverage. |
+| **chDB (ClickHouse)** | `chdb` | Out-of-core SQL with the ClickHouse dialect. Full coverage except `foreach`. |
 | **ClickHouse (external)** | `clickhouse` | *Optional.* Same dialect and ops as chDB, executed on a **remote ClickHouse server** (cloud managed, e.g. Scaleway, or self-hosted). Enabled by `CLICKHOUSE_EXTERNAL__HOST`. Transport `s3` (the server reads/writes parquet directly on the object storage, nothing through the worker) or `push` (staging table + streamed result, works with any server). |
+
+Engines agree on SQL semantics for most behaviour — nulls, aggregates, sort order, casts
+and joins are guaranteed identical and enforced by an oracle suite — but not on
+everything. **[docs/engines/engine-differences.md](docs/engines/engine-differences.md)**
+is the contract: what is guaranteed, what differs, and the rules of thumb. Read it before
+setting a production engine different from the development one.
 
 Each engine is a registry of per-operation implementations. DuckDB and chDB are
 guarded imports — absent packages simply mark the engine unavailable without breaking
