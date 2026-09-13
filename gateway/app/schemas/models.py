@@ -143,6 +143,30 @@ class SavedViewUpdate(BaseModel):
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
 
 
+# ── Ricerca unificata (per nome, su tutti i tipi di risorsa) ──────────────────
+SearchKind = Literal["folder", "flow", "datasource", "view", "connection"]
+
+
+class SearchHit(BaseModel):
+    """Una risorsa trovata. `project_*` dice DOVE si trova: per una cartella è la
+    cartella che la contiene, per tutto il resto è la cartella che la ospita —
+    senza, un risultato con un nome comune non è distinguibile da un altro."""
+    kind: SearchKind
+    id: int
+    name: str
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
+    detail: str = ""  # riga di contesto, dipende dal tipo (es. db_type/host)
+
+
+class SearchOut(BaseModel):
+    """`counts` alimenta il selettore per tipo con i numeri: si calcola comunque
+    per ordinare, quindi non costa una query in più."""
+    items: list[SearchHit]
+    total: int
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
 # ── Projects ──────────────────────────────────────────────────────────────────
 class ProjectOut(BaseModel):
     id: int
