@@ -210,9 +210,13 @@ whole story.
 
 It is **best effort by design**. The datasource is the result; the copy is a delivery
 downstream of it. A copy that fails — expired credentials, an unreachable endpoint, a
-bucket that is full — leaves the run successful and the datasource published, and
-records the error on the run so it stays visible in the history instead of only in the
-worker's logs.
+bucket that is full — leaves the run successful and the datasource published, and the
+error is recorded on the run and returned by the API.
+
+> **No screen shows that error yet.** The outcome is stored and served, but nothing in
+> the interface reads it, so today a failed copy is only discoverable through the API
+> or the worker's logs. Until that is wired up, treat a successful run as saying
+> nothing either way about the copy.
 
 > **Use a different bucket from the one Tabularia itself runs on.** Point the
 > connection at storage that belongs to the consumer, not at the bucket holding
