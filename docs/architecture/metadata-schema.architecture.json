@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Tabularia Metadata Database",
+    "locale": "en",
+    "output": "metadata-schema.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com-tabularia:JumpAsAService/Tabularia.git",
+      "link_mode": "local-only",
+      "revision": "6a033486c1d6986e1676432ee202367b65b14375"
+    },
+    "views": [
+      {
+        "id": "access-control",
+        "label": "Access control",
+        "focus": ["users", "groups", "user_groups", "permissions"],
+        "note": "Who exists, who belongs to which group, and which capability is granted on which project."
+      },
+      {
+        "id": "catalog",
+        "label": "Project catalog",
+        "focus": ["projects", "flows", "flow_versions", "connections", "datasources"],
+        "note": "Every catalog object hangs off a project, which is the unit RBAC is checked against."
+      },
+      {
+        "id": "execution",
+        "label": "Execution",
+        "focus": ["flows", "datasources", "runs"],
+        "note": "A run records one execution of a flow and, when it publishes, the datasource it wrote."
+      },
+      {
+        "id": "operational",
+        "label": "Operational records",
+        "focus": ["audit_logs", "banners", "uploads", "pending_blob_deletions"],
+        "note": "Tables written by the platform itself rather than by the catalog."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "audit_logs",
+      "type": "security",
+      "label": "audit_logs",
+      "sublabel": "append-only trail",
+      "tag": "actor_label survives",
+      "pos": [60, 60],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/audit.py", "label": "AuditLog" }]
+    },
+    {
+      "id": "banners",
+      "type": "database",
+      "label": "banners",
+      "sublabel": "admin notices",
+      "pos": [310, 60],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/banner.py", "label": "Banner" }]
+    },
+    {
+      "id": "uploads",
+      "type": "database",
+      "label": "uploads",
+      "sublabel": "raw file + parquet",
+      "pos": [560, 60],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/upload.py", "label": "Upload" }]
+    },
+    {
+      "id": "pending_blob_deletions",
+      "type": "messagebus",
+      "label": "pending_blob_deletions",
+      "sublabel": "deferred deletions",
+      "tag": "no foreign key",
+      "pos": [60, 280],
+      "size": [200, 66],
+      "sources": [{ "path": "gateway/app/models/blob_deletion.py", "label": "PendingBlobDeletion" }]
+    },
+    {
+      "id": "users",
+      "type": "security",
+      "label": "users",
+      "sublabel": "local or SSO identity",
+      "tag": "unique (issuer, subject)",
+      "pos": [310, 280],
+      "size": [165, 70],
+      "sources": [{ "path": "gateway/app/models/user.py", "label": "User" }]
+    },
+    {
+      "id": "user_groups",
+      "type": "security",
+      "label": "user_groups",
+      "sublabel": "membership join",
+      "tag": "composite key",
+      "pos": [310, 500],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/user.py", "label": "UserGroup" }]
+    },
+    {
+      "id": "groups",
+      "type": "security",
+      "label": "groups",
+      "sublabel": "IdP groups, by name",
+      "tag": "unique name",
+      "pos": [310, 720],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/user.py", "label": "Group" }]
+    },
+    {
+      "id": "permissions",
+      "type": "security",
+      "label": "permissions",
+      "sublabel": "capability per project",
+      "tag": "user_id XOR group_id",
+      "pos": [560, 500],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/permission.py", "label": "Permission" }]
+    },
+    {
+      "id": "projects",
+      "type": "database",
+      "label": "projects",
+      "sublabel": "RBAC scope, self-nesting",
+      "pos": [810, 500],
+      "size": [165, 70],
+      "sources": [{ "path": "gateway/app/models/project.py", "label": "Project" }]
+    },
+    {
+      "id": "connections",
+      "type": "database",
+      "label": "connections",
+      "sublabel": "credentials, Fernet",
+      "tag": "unique (project_id, name)",
+      "pos": [810, 720],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/connection.py", "label": "Connection" }]
+    },
+    {
+      "id": "flow_versions",
+      "type": "database",
+      "label": "flow_versions",
+      "sublabel": "immutable history",
+      "tag": "unique (flow_id, version)",
+      "pos": [1060, 60],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/flow_version.py", "label": "FlowVersion" }]
+    },
+    {
+      "id": "flows",
+      "type": "database",
+      "label": "flows",
+      "sublabel": "definition + schedule",
+      "tag": "engine, production_engine",
+      "pos": [1060, 280],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/flow.py", "label": "Flow" }]
+    },
+    {
+      "id": "runs",
+      "type": "backend",
+      "label": "runs",
+      "sublabel": "one execution, one task",
+      "tag": "parent_run_id self-ref",
+      "pos": [1060, 500],
+      "size": [165, 70],
+      "sources": [{ "path": "gateway/app/models/run.py", "label": "Run" }]
+    },
+    {
+      "id": "datasources",
+      "type": "database",
+      "label": "datasources",
+      "sublabel": "published parquet",
+      "tag": "snapshot_run_id guard",
+      "pos": [1060, 720],
+      "size": [165, 66],
+      "sources": [{ "path": "gateway/app/models/datasource.py", "label": "Datasource" }]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Access control",
+      "wraps": ["users", "user_groups", "groups", "permissions"]
+    },
+    {
+      "kind": "region",
+      "label": "Catalog and execution",
+      "wraps": ["projects", "connections", "flow_versions", "flows", "runs", "datasources"]
+    }
+  ],
+  "connections": [
+    { "id": "audit-user", "from": "audit_logs", "to": "users", "label": "actor_id", "variant": "dashed" },
+    { "id": "banner-user", "from": "banners", "to": "users", "label": "created_by", "variant": "dashed", "labelDy": 90 },
+    { "id": "upload-user", "from": "uploads", "to": "users", "label": "owner_id", "variant": "dashed" },
+    { "id": "ug-user", "from": "user_groups", "to": "users", "label": "user_id" },
+    { "id": "ug-group", "from": "user_groups", "to": "groups", "label": "group_id", "labelDy": 90 },
+    { "id": "perm-user", "from": "permissions", "to": "users", "label": "user_id" },
+    { "id": "perm-group", "from": "permissions", "to": "groups", "label": "group_id" },
+    { "id": "perm-project", "from": "permissions", "to": "projects", "label": "project_id", "variant": "emphasis" },
+    { "id": "conn-project", "from": "connections", "to": "projects", "label": "project_id" },
+    { "id": "flow-project", "from": "flows", "to": "projects", "label": "project_id" },
+    { "id": "fv-flow", "from": "flow_versions", "to": "flows", "label": "flow_id", "labelDy": 90 },
+    { "id": "run-flow", "from": "runs", "to": "flows", "label": "flow_id" },
+    { "id": "run-ds", "from": "runs", "to": "datasources", "label": "datasource_id", "labelDy": 90 },
+    { "id": "ds-project", "from": "datasources", "to": "projects", "label": "project_id" },
+    { "id": "ds-conn", "from": "datasources", "to": "connections", "label": "connection_id", "labelDy": 24 },
+    { "id": "ds-flow", "from": "datasources", "to": "flows", "label": "flow_id", "fromSide": "right", "toSide": "right", "via": [[1290, 753], [1290, 313]] }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Access control",
+      "items": [
+        "user_groups is a pure join table: its primary key is (user_id, group_id), so a membership cannot be duplicated.",
+        "permissions grants one capability on one project to either a user or a group; both columns are nullable and exactly one is filled.",
+        "groups.name is unique because SSO reconciles IdP groups by name, not by id.",
+        "users carries a partial unique index on (oidc_issuer, oidc_subject): the SSO identity anchor, null for local accounts."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Project catalog",
+      "items": [
+        "projects nests through parent_id, a self-reference not drawn as an arrow; RBAC is checked against the project.",
+        "flow_versions keeps immutable definition history, unique on (flow_id, version).",
+        "connections and datasources are each unique on (project_id, name), so names only have to be unique inside a project.",
+        "A datasource can come from a flow, from a database connection, or from neither: all three columns are nullable."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Execution",
+      "items": [
+        "runs.parent_run_id is a self-reference, not drawn: a parent run fans out into child runs.",
+        "runs.datasource_id and datasources.snapshot_run_id point at each other, so snapshot_run_id is a plain integer with no foreign key to avoid a circular constraint.",
+        "started_at includes queue time; engine_started_at records when the engine actually began, and drives the staleness clock.",
+        "pending_blob_deletions deliberately has no foreign key: it must survive the rows whose objects it deletes."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Foreign keys listed, not drawn",
+      "items": [
+        "Ownership and actor columns all point at users.id: projects.owner_id, flows.owner_id, connections.owner_id, datasources.owner_id, runs.launched_by, flow_versions.created_by.",
+        "Scheduling actors: flows.run_scheduled_by, datasources.refresh_scheduled_by.",
+        "Publish target: runs.publish_project_id points at projects.id.",
+        "Self-references: projects.parent_id and runs.parent_run_id.",
+        "All 26 foreign keys are nullable except the project_id columns, so deleting a user never cascades away history."
+      ]
+    }
+  ]
+}
