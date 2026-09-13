@@ -270,6 +270,10 @@ class ConnectionOut(BaseModel):
     username: str
     database: str
     db_schema: str
+    # opzioni specifiche del tipo (JSON). Oggi solo SMTP: mittente, modalità TLS
+    # e domini ammessi. Non contiene segreti, quindi può tornare al client —
+    # serve a ripopolare il form quando si modifica la connessione.
+    extra: str = "{}"
     has_password: bool = False
     updated_at: Optional[datetime] = None
 
@@ -284,6 +288,7 @@ class ConnectionCreate(BaseModel):
     password: str = ""  # in chiaro solo nel body della richiesta; cifrata a riposo
     database: str = ""
     db_schema: str = ""
+    extra: str = "{}"  # opzioni del tipo (SMTP: from_address, tls, allowed_domains)
 
 
 class ConnectionUpdate(BaseModel):
@@ -295,6 +300,7 @@ class ConnectionUpdate(BaseModel):
     password: Optional[str] = None  # valorizzata = sostituisce quella cifrata
     database: Optional[str] = None
     db_schema: Optional[str] = None
+    extra: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
 
 

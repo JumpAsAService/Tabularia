@@ -63,6 +63,22 @@ def _name_taken(session: Session, project_id: int, name: str, exclude_id: int | 
     return session.exec(stmt).first() is not None
 
 
+def _valid_extra(extra: str | None) -> str:
+    """Le opzioni del tipo sono testo opaco per il gateway, ma devono essere un
+    OGGETTO JSON: accettarne uno rotto sposterebbe l'errore da chi salva la
+    connessione a chi, giorni dopo, si chiede perché l'email non parte."""
+    import json as _json
+
+    grezzo = (extra or "{}").strip() or "{}"
+    try:
+        data = _json.loads(grezzo)
+    except _json.JSONDecodeError:
+        raise HTTPException(status_code=422, detail="Le opzioni della connessione non sono JSON valido")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="Le opzioni della connessione devono essere un oggetto JSON")
+    return grezzo
+
+
 def smtp_options(conn: Connection) -> dict:
     """Opzioni SMTP dalla colonna `extra` (JSON). Tollerante: una connessione
     creata prima di questa colonna, o con JSON rotto, non deve far esplodere un
@@ -227,6 +243,7 @@ def create_connection(
         password_encrypted=encrypt_secret(body.password) if body.password else "",
         database=body.database,
         db_schema=body.db_schema,
+        extra=_valid_extra(body.extra),
     )
     session.add(conn)
     session.commit()
@@ -269,6 +286,8 @@ def update_connection(
         value = getattr(body, field)
         if value is not None:
             setattr(conn, field, value)
+    if body.extra is not None:
+        conn.extra = _valid_extra(body.extra)
     if body.password is not None:
         # stringa vuota = rimuovi la password; valorizzata = sostituisci
         conn.password_encrypted = encrypt_secret(body.password) if body.password else ""
