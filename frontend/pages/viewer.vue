@@ -528,7 +528,13 @@ onMounted(async () => {
 <style scoped src="~/assets/listpage.css"></style>
 <style scoped>
 .viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.head-actions { display: flex; align-items: center; gap: 8px; }
+/* `flex-wrap` non è un dettaglio: questa barra ha sei controlli e senza wrap i
+   figli si comprimono invece di andare a capo. Comprimendosi, l'etichetta DENTRO
+   il bottone va a capo e il bottone diventa alto il doppio dei Select accanto.
+   Va a capo la barra, come fa già `.page-head`, non il testo dei controlli. */
+.head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.head-actions > * { flex-shrink: 0; }
+.savewrap .btn-link { white-space: nowrap; }
 .vwsel { width: 200px; }
 /* riquadro di salvataggio: stessa meccanica del menù "nuovo flusso" — uno
    sfondo che cattura il click fuori, e il pannello sopra */
