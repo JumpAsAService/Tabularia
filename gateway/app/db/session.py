@@ -85,6 +85,8 @@ _MIGRATIONS = [
     # Inizio REALE dell'esecuzione sul worker: il timeout di staleness non deve
     # contare l'attesa in coda (vedi models/run.py)
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS engine_started_at TIMESTAMP",
+    # copia best-effort dell'output su S3 esterno: esito JSON, NULL = non richiesta
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS mirror TEXT",
     # Run che ha prodotto lo snapshot corrente: rifiuta gli swap da run più
     # vecchi (vedi models/datasource.py). Intero semplice, nessuna FK: eviterebbe
     # un ciclo runs ↔ datasources

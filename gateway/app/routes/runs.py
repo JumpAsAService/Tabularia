@@ -258,6 +258,51 @@ async def _launch_flow_run(
                 }
             )
 
+    # copia su S3 esterno IN AGGIUNTA alla datasource: stessa risoluzione della
+    # destinazione (connessione per id, secret cifrata dal gateway, capability
+    # CONNECT) — cambia solo che l'esito non è vincolante per il run.
+    mirror_payload = None
+    mirror_summary = None
+    if body.mirror:
+        mconn = session.get(Connection, body.mirror.connection_id)
+        if mconn is None:
+            raise HTTPException(status_code=404, detail="Connessione della copia S3 non trovata")
+        ensure_can(session, user, mconn.project_id, Capability.CONNECT)
+        if mconn.db_type != "s3":
+            raise HTTPException(
+                status_code=422, detail="La connessione della copia non è S3/object storage"
+            )
+        mkey = body.mirror.key.strip().strip("/")
+        if not mkey:
+            raise HTTPException(status_code=422, detail="Il percorso S3 della copia è vuoto")
+        mbucket = body.mirror.bucket.strip()
+        if not mbucket and not (mconn.database or "").strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Nessun bucket per la copia: indicalo sull'output o come default della connessione",
+            )
+        mirror_payload = {
+            "connection": engine_connection_payload(mconn),
+            "target": {
+                "bucket": mbucket,
+                "key": mkey,
+                "format": body.mirror.format,
+                # mai partizionato: la copia è un singolo oggetto sovrascritto
+                "partition_by": [],
+            },
+        }
+        # "pending" finché il worker non riporta l'esito (vedi _reconcile)
+        mirror_summary = json.dumps(
+            {
+                "connection_id": mconn.id,
+                "endpoint": mconn.host or "aws",
+                "bucket": mbucket or mconn.database,
+                "key": mkey,
+                "format": body.mirror.format,
+                "ok": None,
+            }
+        )
+
     # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
     output_key = (
         snapshot_key(publish_target_id) if body.publish else f"out/{uuid.uuid4().hex}.parquet"
@@ -272,6 +317,7 @@ async def _launch_flow_run(
             "output_key": output_key,
             "operations": body.operations,
             "destination": destination_payload,
+            "mirror": mirror_payload,
             "engine": engine_name,  # motore di sviluppo o di produzione (vedi engine_mode)
         },
     )
@@ -296,6 +342,7 @@ async def _launch_flow_run(
         publish_description=body.publish.description if body.publish else "",
         publish_overwrite=body.publish.overwrite if body.publish else False,
         destination=destination_summary,
+        mirror=mirror_summary,
     )
     session.add(run)
     session.commit()
@@ -491,6 +538,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
     values: dict = {"status": new_status, "finished_at": datetime.now(timezone.utc)}
     if new_status == "SUCCESS":
         values["rows_written"] = result.get("rows_written")
+        # esito della copia best-effort: il run resta SUCCESS anche se è fallita,
+        # ma l'errore va registrato qui dentro — nello STESSO claim atomico —
+        # o resterebbe solo nei log del worker, invisibile in cronologia
+        if result.get("mirror") is not None:
+            values["mirror"] = json.dumps(result.get("mirror"))[:2000]
     else:
         values["error"] = (_friendly_error(error, error_detail) or "")[:2000]
         values["error_detail"] = error_detail[:20000] if error_detail else None

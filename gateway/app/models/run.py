@@ -61,6 +61,14 @@ class Run(SQLModel, table=True):
     # cronologia — {connection_id, db_type, host, database, table, mode}
     destination: Optional[str] = Field(default=None, sa_column=Column("destination", Text))
 
+    # copia dell'output su uno storage S3 esterno, IN AGGIUNTA alla datasource
+    # pubblicata: riassunto JSON dell'esito — {bucket, key, format, ok, error?}.
+    # È BEST-EFFORT per scelta: la datasource è il risultato primario, questa è
+    # una consegna a valle, e un suo fallimento non deve annullare la
+    # pubblicazione. L'errore finisce qui perché altrimenti resterebbe solo nei
+    # log del worker, invisibile a chi guarda la cronologia.
+    mirror: Optional[str] = Field(default=None, sa_column=Column("mirror", Text))
+
     started_at: datetime = Field(default_factory=_now)
     # istante in cui il task ha cominciato a girare DAVVERO sul worker (Celery
     # riporta STARTED, `task_track_started=True`). `started_at` nasce col lancio e

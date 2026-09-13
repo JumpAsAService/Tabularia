@@ -323,6 +323,15 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
             "description": d.get("description") or "",
             "overwrite": bool(d.get("overwrite")),
         }
+        # copia su S3 esterno IN AGGIUNTA alla datasource: `destination` resta
+        # libero, così il suo fallimento non è vincolante (vedi RunMirrorSpec)
+        if d.get("mirrorEnabled") and d.get("mirrorConnectionId"):
+            body["mirror"] = {
+                "connection_id": d.get("mirrorConnectionId"),
+                "bucket": (d.get("mirrorBucket") or "").strip(),
+                "key": (d.get("mirrorKey") or "").strip(),
+                "format": d.get("mirrorFormat") or "parquet",
+            }
     return body
 
 

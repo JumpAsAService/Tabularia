@@ -59,6 +59,7 @@ def transform_data_task(
     operations: list[dict[str, Any]],
     output_key: str,
     destination: dict[str, Any] | None = None,
+    mirror: dict[str, Any] | None = None,
     engine: str | None = None,
 ) -> dict:
     """
@@ -131,6 +132,37 @@ def transform_data_task(
             out["destination"] = write_parquet_to_db(
                 conn=db_conn, dest=db_dest, bucket=bucket, key=output_key
             )
+
+    # Copia su S3 esterno, IN AGGIUNTA all'output: best-effort per scelta.
+    # Arriva DOPO la destinazione perché il risultato primario viene prima; un
+    # suo fallimento (credenziali scadute, bucket pieno, rete) non deve annullare
+    # un run riuscito né impedire la pubblicazione della datasource, che il
+    # gateway fa leggendo questo stesso risultato. L'esito torna in `out` e il
+    # gateway lo registra sul run, così l'errore resta visibile in cronologia.
+    if mirror:
+        from app.ingest.s3_destination import (
+            S3ConnectionSpec,
+            S3DestinationSpec,
+            write_output_to_s3,
+        )
+
+        m_target = dict(mirror.get("target") or {})
+        try:
+            m_conn = S3ConnectionSpec(**mirror["connection"])
+            m_dest = S3DestinationSpec(**m_target)
+            logger.info(f"📎 Copia su s3 {m_conn.endpoint_url or 'aws'} key {m_dest.key}")
+            out["mirror"] = {
+                "ok": True,
+                **write_output_to_s3(conn=m_conn, dest=m_dest, bucket=bucket, key=output_key),
+            }
+        except Exception as e:
+            logger.warning(f"⚠️ copia su S3 fallita (il run resta valido): {type(e).__name__}: {e}")
+            out["mirror"] = {
+                "ok": False,
+                "bucket": m_target.get("bucket", ""),
+                "key": m_target.get("key", ""),
+                "error": f"{type(e).__name__}: {e}"[:500],
+            }
 
     logger.info(
         f"✅ Completed transform_data_task: {output_key} "

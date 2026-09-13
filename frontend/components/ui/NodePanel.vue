@@ -283,6 +283,53 @@ function pickDatasource(id: number | null) {
         <p class="muted outhint">
           {{ $t('nodePanel.overwriteHint') }}
         </p>
+
+        <!-- copia su S3 esterno IN AGGIUNTA alla datasource: sempre in
+             sovrascrittura, e best-effort (se fallisce il run resta valido) -->
+        <label class="chk ovw">
+          <input
+            type="checkbox"
+            :checked="node.data.mirrorEnabled ?? false"
+            @change="emit('update', { mirrorEnabled: ($event.target as HTMLInputElement).checked })"
+          />
+          {{ $t('nodePanel.mirrorEnable') }}
+        </label>
+        <template v-if="node.data.mirrorEnabled">
+          <label>{{ $t('nodePanel.s3ConnectionLabel') }}</label>
+          <Select
+            :model-value="node.data.mirrorConnectionId ?? null"
+            :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
+              value: c.id,
+              label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
+            }))"
+            :placeholder="$t('nodePanel.connectionPlaceholder')"
+            @update:model-value="(v: any) => emit('update', { mirrorConnectionId: v })"
+          />
+          <label>{{ $t('nodePanel.mirrorBucketLabel') }}</label>
+          <input
+            :value="node.data.mirrorBucket ?? ''"
+            type="text"
+            :placeholder="$t('nodePanel.mirrorBucketPlaceholder')"
+            @input="emit('update', { mirrorBucket: ($event.target as HTMLInputElement).value })"
+          />
+          <label>{{ $t('nodePanel.mirrorKeyLabel') }}</label>
+          <input
+            :value="node.data.mirrorKey ?? ''"
+            type="text"
+            :placeholder="$t('nodePanel.mirrorKeyPlaceholder')"
+            @input="emit('update', { mirrorKey: ($event.target as HTMLInputElement).value })"
+          />
+          <label>{{ $t('nodePanel.formatLabel') }}</label>
+          <Select
+            :model-value="node.data.mirrorFormat ?? 'parquet'"
+            :options="[
+              { value: 'parquet', label: 'Parquet' },
+              { value: 'csv', label: 'CSV' },
+            ]"
+            @update:model-value="(v: any) => emit('update', { mirrorFormat: v })"
+          />
+          <p class="muted outhint">{{ $t('nodePanel.mirrorHint') }}</p>
+        </template>
       </template>
 
       <!-- destinazione S3: connessione object storage + chiave + formato + partizioni -->

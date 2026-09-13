@@ -22,6 +22,12 @@ class TransformDataRequest(BaseModel):
     destination: Optional[dict[str, Any]] = Field(
         default=None, description="Destinazione opzionale (database o S3)"
     )
+    # copia BEST-EFFORT su S3 esterno, in aggiunta all'output: stessa forma di
+    # `destination` ({"connection": …, "target": …}) ma un suo errore NON fa
+    # fallire il task — output e datasource restano il risultato primario
+    mirror: Optional[dict[str, Any]] = Field(
+        default=None, description="Copia best-effort su S3 esterno (in aggiunta all'output)"
+    )
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
 
 

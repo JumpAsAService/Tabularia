@@ -254,12 +254,29 @@ class RunDestinationSpec(BaseModel):
     partition_by: list[str] = Field(default_factory=list)  # hive: colonna=valore/…
 
 
+class RunMirrorSpec(BaseModel):
+    """Copia dell'output su uno storage S3 esterno, IN AGGIUNTA alla
+    pubblicazione come datasource (non al posto suo: per quella c'è
+    `RunDestinationSpec` con type="s3", dove la scrittura È il risultato).
+
+    Sempre in SOVRASCRITTURA: stessa chiave a ogni esecuzione, nessuna
+    cronologia sul bucket esterno — chi legge trova sempre l'ultimo dato al
+    percorso concordato. Niente partizioni, per lo stesso motivo.
+    La connessione è referenziata per id: le credenziali non passano dal client."""
+    connection_id: int
+    bucket: str = ""  # vuoto = bucket di default della connessione
+    key: str  # percorso completo dell'oggetto (sottocartella + nome file)
+    format: Literal["parquet", "csv"] = "parquet"
+
+
 class RunCreate(BaseModel):
     bucket: str
     input_key: str
     operations: list[dict] = Field(default_factory=list)
     publish: Optional[PublishSpec] = None
     destination: Optional[RunDestinationSpec] = None
+    # convive con `publish`: la datasource è il risultato, questa è la copia
+    mirror: Optional[RunMirrorSpec] = None
 
 
 class RunOut(BaseModel):
@@ -277,6 +294,8 @@ class RunOut(BaseModel):
     publish_name: Optional[str]
     datasource_id: Optional[int]
     destination: Optional[str] = None  # JSON: {db_type, host, database, table, mode}
+    # JSON: {bucket, key, format, ok, error?} — copia best-effort su S3 esterno
+    mirror: Optional[str] = None
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
 
