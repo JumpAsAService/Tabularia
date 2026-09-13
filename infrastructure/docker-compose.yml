@@ -117,6 +117,10 @@ services:
     environment:
       - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
       - ENGINE__BASE_URL=http://backend:8000
+      # Il gateway tiene una copia SUA del nome del bucket e la confronta con
+      # quello di ogni richiesta, rifiutando con 403 se non combaciano. Derivarla
+      # dalla stessa variabile del backend è ciò che impedisce ai due di divergere.
+      - ENGINE__BUCKET=${STORAGE__BUCKET:-data-prep}
       - DB__HOST=postgres
       - DB__PORT=5432
       # i sorgenti montati appartengono all'utente dell'host, non all'utente 10001

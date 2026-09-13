@@ -11,7 +11,6 @@ metadata:
     {{- include "tabularia.labels" . | nindent 4 }}
 data:
   APP__ENV_NAME: {{ .Values.app.envName | quote }}
-  APP__DEBUG: {{ .Values.app.debug | quote }}
   APP__TIMEZONE: {{ .Values.app.timezone | quote }}
 
   # Broker and step-cache index
@@ -23,12 +22,26 @@ data:
   STORAGE__ENDPOINT: {{ required "externalServices.storage.endpoint is required" .Values.externalServices.storage.endpoint | quote }}
   STORAGE__BUCKET: {{ .Values.externalServices.storage.bucket | quote }}
   STORAGE__REGION: {{ .Values.externalServices.storage.region | quote }}
+  # The gateway keeps its OWN copy of the bucket name and compares it against the
+  # bucket in every request, rejecting a mismatch with 403. Rendering it from the
+  # same value is what stops the two from drifting apart.
+  ENGINE__BUCKET: {{ .Values.externalServices.storage.bucket | quote }}
 
   # Metadata database (gateway only, but harmless elsewhere)
   DB__HOST: {{ required "externalServices.postgres.host is required" .Values.externalServices.postgres.host | quote }}
   DB__PORT: {{ .Values.externalServices.postgres.port | quote }}
   DB__NAME: {{ .Values.externalServices.postgres.database | quote }}
   DB__USER: {{ .Values.externalServices.postgres.user | quote }}
+
+{{- with .Values.app.corsOrigins }}
+  # A JSON list: the setting is a list[str] and pydantic parses it as JSON.
+  # Only needed when the frontend is served from a different host than the API.
+  APP__CORS_ORIGINS: {{ toJson . | quote }}
+{{- end }}
+{{- with .Values.monitoring.nodeExporterUrl }}
+  # Powers the RAM badge. Unset, the badge simply disappears.
+  MONITORING__NODE_EXPORTER_URL: {{ . | quote }}
+{{- end }}
 
   JWT__ACCESS_TTL_MINUTES: {{ .Values.auth.jwtAccessTtlMinutes | quote }}
   AUTH__ADMIN_EMAIL: {{ .Values.auth.adminEmail | quote }}
@@ -77,4 +90,11 @@ data:
   CLICKHOUSE_EXTERNAL__USERNAME: {{ .Values.externalServices.clickhouse.username | quote }}
   CLICKHOUSE_EXTERNAL__TRANSPORT: {{ .Values.externalServices.clickhouse.transport | quote }}
   CLICKHOUSE_EXTERNAL__S3_ENDPOINT: {{ .Values.externalServices.clickhouse.s3Endpoint | quote }}
+  CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT: {{ .Values.externalServices.clickhouse.connectTimeout | quote }}
+  CLICKHOUSE_EXTERNAL__MAX_EXECUTION_TIME: {{ .Values.externalServices.clickhouse.maxExecutionTime | quote }}
+{{- with .Values.externalServices.clickhouse.s3NamedCollection }}
+  # Credentials held on the ClickHouse server: the S3 keys never travel inside a
+  # query, so they never reach the server's query_log.
+  CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION: {{ . | quote }}
+{{- end }}
 {{- end }}

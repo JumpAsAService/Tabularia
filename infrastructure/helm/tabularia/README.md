@@ -22,6 +22,16 @@ Bundling them as subcharts would produce a deployment that looks complete and
 quietly loses data on the first node failure. Point the chart at managed services
 through `externalServices`.
 
+**Neither is the monitoring stack.** The compose file ships VictoriaMetrics,
+Grafana, cAdvisor, node-exporter and a Celery exporter for local work; in a
+cluster you almost certainly already run your own. Two things in the product
+depend on them, and both degrade quietly rather than breaking:
+
+| Feature | Without monitoring | To restore it |
+|---|---|---|
+| RAM badge in the UI | disappears (`/system/memory` answers 503) | point `monitoring.nodeExporterUrl` at your node-exporter |
+| Monitoring tab (superusers) | iframe stays blank | set `frontend.publicGrafanaUrl`, and provision the dashboards yourself |
+
 ## Building the images
 
 There is no public registry; build and push the three images yourself.

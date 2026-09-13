@@ -179,15 +179,15 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 
 | Variable | Gateway | Backend roles | Notes |
 |---|---|---|---|
-| `APP__ENV_NAME=production` | ✓ | ✓ | enables the production guard: the gateway refuses to start with development secrets |
+| `APP__ENV_NAME=production` | ✓ | | enables the production guard: the gateway refuses to start with development secrets. It has **no effect** on the engine or the workers — nothing reads it there |
 | `SECURITY__FERNET_KEY` *secret* | ✓ | ✓ | **same value everywhere**; encrypts database credentials; every process refuses to start without a valid key |
-| `APP__TIMEZONE` | ✓ | ✓ | timezone used to interpret schedules |
+| `APP__TIMEZONE` | ✓ | | timezone in which the **gateway** interprets cron schedules. Celery beat keeps its own clock (`CELERY__TIMEZONE`, UTC by default), but the gateway converts schedules to UTC before enqueuing, so leaving beat on UTC is correct |
 | `DB__HOST`, `DB__PORT`, `DB__USER`, `DB__PASSWORD` *secret*, `DB__NAME` | ✓ | | metadata Postgres |
 | `JWT__SECRET` *secret*, `JWT__ACCESS_TTL_MINUTES` | ✓ | | session tokens, default lifetime 720 minutes |
 | `AUTH__ADMIN_EMAIL`, `AUTH__ADMIN_PASSWORD` *secret*, `AUTH__ADMIN_NAME` | ✓ | | break-glass admin, seeded at first start |
-| `APP__CORS_ORIGINS` | ✓ | | JSON list with the public frontend URL, e.g. `["https://tabularia.example.com"]` |
+| `APP__CORS_ORIGINS` | ✓ | | JSON list with the public frontend URL, e.g. `["https://app.example.com"]`. Needed **only** when the frontend is served from a different host than the gateway; the reference ingress puts both on one host, where it can stay unset (`app.corsOrigins` in the chart) |
 | `ENGINE__BASE_URL` | ✓ | | internal URL of the engine API |
-| `ENGINE__BUCKET` | ✓ | | must equal `STORAGE__BUCKET` |
+| `ENGINE__BUCKET` | ✓ | | the gateway's own copy of the bucket name; it compares it against the bucket in every request and rejects a mismatch with 403. It **must equal** `STORAGE__BUCKET`, so the chart and the compose file both derive it from the same single value — set it by hand only if you know why |
 | `REDIS__HOST`, `REDIS__PORT`, `REDIS__DB` | | ✓ | broker and cache index |
 | `STORAGE__ENDPOINT`, `STORAGE__ACCESS_KEY`, `STORAGE__SECRET_KEY` *secret*, `STORAGE__BUCKET`, `STORAGE__REGION` | | ✓ | object storage |
 | `CELERY__WORKER_CONCURRENCY` | | ✓ | per worker pod |
