@@ -7,13 +7,18 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet,
+  PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type Operation, type ColumnInfo } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
+import { useSavedViews, type SavedView, type SavedViewSpec } from '~/composables/useSavedViews'
+import { useProjects, type Project } from '~/composables/useProjects'
 
 const api = useApi()
 const dsApi = useDatasources()
+const viewsApi = useSavedViews()
+const projectsApi = useProjects()
+const toast = useToast()
 const { t } = useI18n()
 
 // ── sorgente + motore ─────────────────────────────────────────────────────
@@ -225,6 +230,114 @@ const displayRows = computed<Record<string, any>[]>(() => {
   return out
 })
 
+// ── viste salvate ───────────────────────────────────────────────────────────
+// Una vista è QUESTA configurazione con un nome, dentro una cartella. Contiene
+// un riferimento alla datasource e nessuna riga: riaprirla domani rilegge lo
+// snapshot corrente — segue il dato, non lo congela.
+const savedViews = ref<SavedView[]>([])
+const projects = ref<Project[]>([])
+const currentViewId = ref<number | null>(null)
+const saveOpen = ref(false)
+const saveName = ref('')
+const saveProjectId = ref<number | null>(null)
+const saving = ref(false)
+
+const savedViewOptions = computed(() =>
+  savedViews.value.map((v) => ({ value: v.id, label: v.name })),
+)
+
+function buildSpec(): SavedViewSpec {
+  return {
+    engine: engine.value,
+    filters: filters.value.map((f) => ({ ...f })),
+    computedFields: computedFields.value.map((c) => ({ ...c })),
+    pivotOn: pivotOn.value,
+    pivot: {
+      index: [...pivot.value.index],
+      on: [...pivot.value.on],
+      values: pivot.value.values,
+      func: pivot.value.func,
+    },
+    outline: outline.value,
+  }
+}
+
+// Difensiva per costruzione: una vista salvata da una versione precedente (o con
+// un campo in meno) non deve rompere la pagina — ogni pezzo mancante ricade sul
+// valore di partenza.
+function applySpec(raw: string) {
+  let s: Partial<SavedViewSpec> = {}
+  try { s = JSON.parse(raw || '{}') } catch { s = {} }
+  if (s.engine) engine.value = s.engine
+  filters.value = Array.isArray(s.filters) ? s.filters.map((f) => ({ ...f })) : []
+  computedFields.value = Array.isArray(s.computedFields) ? s.computedFields.map((c) => ({ ...c })) : []
+  pivotOn.value = !!s.pivotOn
+  pivot.value = {
+    index: s.pivot?.index?.length ? [...s.pivot.index] : [''],
+    on: s.pivot?.on?.length ? [...s.pivot.on] : [''],
+    values: s.pivot?.values ?? '',
+    func: s.pivot?.func ?? 'sum',
+  }
+  outline.value = !!s.outline
+}
+
+async function openSavedView(id: number | null) {
+  if (id == null) return
+  currentViewId.value = id
+  error.value = ''
+  try {
+    const v = await viewsApi.get(id)
+    const ds = datasources.value.find((d) => d.id === v.datasource_id)
+    if (!ds) {
+      // la datasource è stata rimossa (o non è più leggibile): la vista resta,
+      // ma lo diciamo invece di mostrare una tabella vuota senza spiegazione
+      error.value = t('viewer.viewDatasourceMissing', { name: v.datasource_name ?? '—' })
+      return
+    }
+    dsId.value = ds.id
+    baseCols.value = ds.columns ? ds.columns.map((c) => ({ name: c.name, dtype: c.dtype })) : []
+    tableCols.value = baseCols.value
+    applySpec(v.spec)
+    await apply()
+  } catch (e) {
+    error.value = errMessage(e)
+  }
+}
+
+function openSaveDialog() {
+  if (!selectedDs.value) return
+  const corrente = savedViews.value.find((v) => v.id === currentViewId.value)
+  saveName.value = corrente?.name ?? ''
+  saveProjectId.value = corrente?.project_id ?? selectedDs.value.project_id ?? projects.value[0]?.id ?? null
+  saveOpen.value = true
+}
+
+async function saveView() {
+  const ds = selectedDs.value
+  const nome = saveName.value.trim()
+  if (!ds || !nome || saveProjectId.value == null) return
+  saving.value = true
+  try {
+    const spec = JSON.stringify(buildSpec())
+    // stesso nome nella stessa cartella = aggiorno quella, invece di far
+    // sbattere l'utente contro un 409 che non saprebbe risolvere
+    const esistente = savedViews.value.find(
+      (v) => v.name === nome && v.project_id === saveProjectId.value,
+    )
+    const salvata = esistente
+      ? await viewsApi.update(esistente.id, { spec, name: nome })
+      : await viewsApi.create(saveProjectId.value, { name: nome, datasource_id: ds.id, spec })
+    currentViewId.value = salvata.id
+    savedViews.value = await viewsApi.list()
+    saveOpen.value = false
+    toast.success(t('viewer.viewSaved', { name: nome }))
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(async () => {
   try { datasources.value = await dsApi.list() } catch (e) { error.value = errMessage(e) }
   try {
@@ -232,6 +345,13 @@ onMounted(async () => {
     // la preferita potrebbe non essere disponibile: applica il fallback robusto
     engine.value = defaultEngine(engines.value)
   } catch { /* fallback polars */ }
+  // le viste sono accessorie: se non si caricano, il Viewer resta usabile
+  try { savedViews.value = await viewsApi.list() } catch { savedViews.value = [] }
+  try { projects.value = await projectsApi.list() } catch { projects.value = [] }
+  // apertura diretta da un link (?view=<id>): è così che la cartella porta qui.
+  // Va DOPO il caricamento delle datasource, perché la vista ne deve trovare una.
+  const linked = Number(useRoute().query.view)
+  if (Number.isInteger(linked) && linked > 0) await openSavedView(linked)
 })
 </script>
 
@@ -241,6 +361,35 @@ onMounted(async () => {
     <div class="page-head">
       <h1><PieChart :size="18" /> {{ $t('viewer.pageTitle') }}</h1>
       <div class="head-actions">
+        <label class="hl"><Bookmark :size="13" /> {{ $t('viewer.savedViewsLabel') }}</label>
+        <Select
+          :model-value="currentViewId"
+          :options="savedViewOptions"
+          searchable
+          :placeholder="$t('viewer.savedViewsPlaceholder')"
+          class="vwsel"
+          @update:model-value="openSavedView"
+        />
+        <div class="savewrap">
+          <button class="btn-link" :disabled="!selectedDs" :title="$t('viewer.saveViewTitle')" @click="openSaveDialog">
+            <Save :size="14" /> {{ $t('viewer.saveViewButton') }}
+          </button>
+          <div v-if="saveOpen" class="menu-backdrop" @click="saveOpen = false" />
+          <div v-if="saveOpen" class="savepop">
+            <label class="lbl">{{ $t('viewer.viewNameLabel') }}</label>
+            <input v-model="saveName" type="text" :placeholder="$t('viewer.viewNamePlaceholder')" @keyup.enter="saveView" />
+            <label class="lbl">{{ $t('viewer.viewFolderLabel') }}</label>
+            <Select
+              v-model="saveProjectId"
+              :options="projects.map((p) => ({ value: p.id, label: p.name }))"
+              :placeholder="$t('viewer.viewFolderPlaceholder')"
+            />
+            <p class="muted small">{{ $t('viewer.saveViewHint') }}</p>
+            <button class="primary" :disabled="!saveName.trim() || saveProjectId == null || saving" @click="saveView">
+              {{ saving ? '…' : $t('viewer.saveViewConfirm') }}
+            </button>
+          </div>
+        </div>
         <label class="hl"><Cpu :size="13" /> {{ $t('viewer.engineLabel') }}</label>
         <Select v-model="engine" :options="engineOptions" class="engsel" />
         <Select
@@ -380,6 +529,28 @@ onMounted(async () => {
 <style scoped>
 .viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .head-actions { display: flex; align-items: center; gap: 8px; }
+.vwsel { width: 200px; }
+/* riquadro di salvataggio: stessa meccanica del menù "nuovo flusso" — uno
+   sfondo che cattura il click fuori, e il pannello sopra */
+.savewrap { position: relative; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 20; }
+.savepop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 21;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+.savepop .lbl { font-size: 11px; color: var(--muted); }
+.savepop input { width: 100%; }
 .hl { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .engsel { width: 140px; }
 .dssel { width: 260px; }

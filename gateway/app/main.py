@@ -17,6 +17,7 @@ from app.routes.users import router as users_router
 from app.routes.groups import router as groups_router
 from app.routes.banners import router as banners_router
 from app.routes.engine_policy import router as engine_policy_router
+from app.routes.saved_views import router as saved_views_router
 from app.routes.projects import router as projects_router
 from app.routes.permissions import router as permissions_router
 from app.routes.flows import router as flows_router
@@ -94,6 +95,7 @@ app.include_router(users_router)
 app.include_router(groups_router)
 app.include_router(banners_router)
 app.include_router(engine_policy_router)
+app.include_router(saved_views_router)
 app.include_router(projects_router)
 app.include_router(permissions_router)
 app.include_router(flows_router)

@@ -45,6 +45,11 @@ BANNER_DELETE = "banner.delete"
 # motori consentiti: cambiano ciò che TUTTA l'installazione può scegliere
 ENGINE_ALLOW = "engine.allow"
 ENGINE_DISALLOW = "engine.disallow"
+# viste salvate (configurazioni del Viewer dentro una cartella). Prefisso
+# "saved_view" e non "view": `VIEW` è già il nome di una capability.
+SAVED_VIEW_CREATE = "saved_view.create"
+SAVED_VIEW_UPDATE = "saved_view.update"
+SAVED_VIEW_DELETE = "saved_view.delete"
 
 
 def client_ip(request: Optional[Request]) -> Optional[str]:

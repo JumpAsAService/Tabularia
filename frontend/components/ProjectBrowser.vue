@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   Plug,
   Pencil,
+  Bookmark,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { errMessage, useApi } from '~/composables/useApi'
@@ -35,6 +36,7 @@ import {
   type ConnectionInfo,
   type ConnectionDraft,
 } from '~/composables/useConnections'
+import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
 import {
   useProjects,
   CAPABILITIES,
@@ -51,6 +53,7 @@ const flowsApi = useFlows()
 const runsApi = useRuns()
 const dsApi = useDatasources()
 const connApi = useConnections()
+const viewsApi = useSavedViews()
 const { user } = useAuth()
 const toast = useToast()
 const { t } = useI18n()
@@ -146,6 +149,7 @@ async function selectProject(id: number) {
   flows.value = []
   flowsError.value = ''
   dsList.value = []
+  savedViews.value = []
   expandedFlowId.value = null
   ingestToken++ // ferma i poll di ingest della cartella precedente
   ingestRuns.value = {}
@@ -164,6 +168,12 @@ async function selectProject(id: number) {
     }
   } catch {
     dsList.value = []
+  }
+  // viste salvate: come i flussi, bastano i permessi di lettura
+  try {
+    savedViews.value = await viewsApi.listByProject(id)
+  } catch {
+    savedViews.value = []
   }
   // connessioni: visibili solo con la capability CONNECT sulla cartella
   try {
@@ -348,6 +358,23 @@ async function createDbDatasource(draft: DbDatasourceDraft) {
     dbDsError.value = errMessage(e) // resta nel dialog, input preservato
   } finally {
     dbDsBusy.value = false
+  }
+}
+
+// ── Viste salvate della cartella ────────────────────────────────────────────
+// Bastano i permessi di lettura, come per i flussi: una vista è condivisa, la
+// vede chiunque veda la cartella. Eliminarla richiede EDIT (lo impone il
+// gateway; qui l'errore arriva come toast).
+const savedViews = ref<SavedView[]>([])
+
+async function deleteSavedView(v: SavedView) {
+  if (!confirm(t('projectBrowser.confirmDeleteSavedView', { name: v.name }))) return
+  try {
+    await viewsApi.remove(v.id)
+    savedViews.value = savedViews.value.filter((x) => x.id !== v.id)
+    toast.success(t('projectBrowser.savedViewDeleted', { name: v.name }))
+  } catch (e) {
+    toast.error(errMessage(e))
   }
 }
 
@@ -678,6 +705,35 @@ async function revoke(perm: Permission) {
                     @click="refreshDatasource(d)"
                   ><RefreshCw :size="13" /></button>
                   <button class="mini danger" :title="$t('projectBrowser.deleteDatasourceTitle')" @click="deleteDatasource(d)">
+                    <Trash2 :size="13" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- viste salvate della cartella -->
+        <div class="section">
+          <div class="section-head">
+            <label>{{ $t('projectBrowser.savedViewsLabel') }}</label>
+          </div>
+          <p v-if="!savedViews.length" class="muted">{{ $t('projectBrowser.noSavedViewsInFolder') }}</p>
+          <table v-else class="flows">
+            <tbody>
+              <tr v-for="v in savedViews" :key="v.id">
+                <td class="fname">
+                  <NuxtLink :to="`/viewer?view=${v.id}`" class="flowlink">
+                    <Bookmark :size="14" /> {{ v.name }}
+                  </NuxtLink>
+                </td>
+                <!-- su COSA è la vista: il nome della datasource, risolto dal
+                     gateway, perché è la prima cosa che si vuole sapere -->
+                <td class="fdate muted">
+                  <Database :size="12" /> {{ v.datasource_name ?? '—' }} · {{ fmtDate(v.updated_at) }}
+                </td>
+                <td class="factions">
+                  <button class="mini danger" :title="$t('projectBrowser.deleteSavedViewTitle')" @click="deleteSavedView(v)">
                     <Trash2 :size="13" />
                   </button>
                 </td>

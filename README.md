@@ -29,6 +29,12 @@ databases, and keeps a full record of who did what.
   Prep, Alteryx, or Knime.
 - **No sampling, ever.** Previews, profiles, and charts run on the *whole* dataset
   through a streaming engine — what you see in the editor is what you ship.
+- **Explore without building a flow.** The **Viewer** is a read-only BI surface over any
+  datasource: filters, calculated fields, pivots and charts, computed on the whole
+  dataset by the engine you choose. Any configuration can be **saved as a view** into a
+  folder, next to flows and datasources. A view stores the configuration and never the
+  rows, so reopening it reads today's data — it is a lens, not a copy — and anyone who
+  can see the folder can open it.
 - **Connect to your databases.** Read directly from Postgres, MySQL, SQL Server,
   ClickHouse and more; write results back to a database table or publish them as a
   reusable datasource. Files (CSV/Excel/JSON/parquet) work too.

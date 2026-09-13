@@ -111,6 +111,38 @@ class EnginePolicyUpdate(BaseModel):
     allowed: bool
 
 
+# ── Saved views (configurazioni del Viewer salvate in cartella) ───────────────
+class SavedViewOut(BaseModel):
+    """`datasource_name` è risolto lato server: l'elenco di una cartella deve
+    poter dire SU COSA è la vista senza che il client risolva N id."""
+    id: int
+    name: str
+    description: str = ""
+    project_id: int
+    owner_id: Optional[int] = None
+    datasource_id: int
+    datasource_name: Optional[str] = None
+    # JSON opaco: la forma appartiene al Viewer, il gateway ne verifica solo la
+    # validità sintattica (vedi models/saved_view.py)
+    spec: str = "{}"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class SavedViewCreate(BaseModel):
+    name: str
+    description: str = ""
+    datasource_id: int
+    spec: str = "{}"
+
+
+class SavedViewUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    spec: Optional[str] = None
+    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+
+
 # ── Projects ──────────────────────────────────────────────────────────────────
 class ProjectOut(BaseModel):
     id: int

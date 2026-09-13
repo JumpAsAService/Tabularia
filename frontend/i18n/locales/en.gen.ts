@@ -620,6 +620,11 @@ export default {
     "yesLabel": "yes"
   },
   "projectBrowser": {
+    "savedViewsLabel": "Views",
+    "noSavedViewsInFolder": "No saved views in this folder",
+    "deleteSavedViewTitle": "Delete view",
+    "confirmDeleteSavedView": "Delete view \"{name}\"? The data stays: a view is only a configuration.",
+    "savedViewDeleted": "View \"{name}\" deleted",
     "comingSoonTag": "coming soon",
     "notConfiguredTag": "not configured",
     "notAllowedTag": "not allowed here",
@@ -859,6 +864,18 @@ export default {
     "searchPlaceholder": "Search values…"
   },
   "viewer": {
+    "savedViewsLabel": "View",
+    "savedViewsPlaceholder": "open a saved view…",
+    "saveViewButton": "Save view",
+    "saveViewTitle": "Save this configuration as a named view",
+    "saveViewConfirm": "Save",
+    "viewNameLabel": "Name",
+    "viewNamePlaceholder": "e.g. Margin by area",
+    "viewFolderLabel": "Folder",
+    "viewFolderPlaceholder": "choose a folder",
+    "saveViewHint": "A view stores the configuration, never the rows: reopening it reads the current data. Everyone who can see the folder can open it.",
+    "viewSaved": "View \"{name}\" saved",
+    "viewDatasourceMissing": "This view points at the datasource \"{name}\", which is no longer available to you.",
     "addColumn": "add column",
     "addRow": "add row",
     "aggCount": "count",

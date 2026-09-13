@@ -620,6 +620,11 @@ export default {
     "yesLabel": "sì"
   },
   "projectBrowser": {
+    "savedViewsLabel": "Viste",
+    "noSavedViewsInFolder": "Nessuna vista salvata in questa cartella",
+    "deleteSavedViewTitle": "Elimina la vista",
+    "confirmDeleteSavedView": "Eliminare la vista \"{name}\"? I dati restano: una vista è solo una configurazione.",
+    "savedViewDeleted": "Vista \"{name}\" eliminata",
     "comingSoonTag": "in arrivo",
     "notConfiguredTag": "non configurato",
     "notAllowedTag": "non consentito qui",
@@ -859,6 +864,18 @@ export default {
     "searchPlaceholder": "Cerca valori…"
   },
   "viewer": {
+    "savedViewsLabel": "Vista",
+    "savedViewsPlaceholder": "apri una vista salvata…",
+    "saveViewButton": "Salva vista",
+    "saveViewTitle": "Salva questa configurazione come vista con un nome",
+    "saveViewConfirm": "Salva",
+    "viewNameLabel": "Nome",
+    "viewNamePlaceholder": "es. Margine per area",
+    "viewFolderLabel": "Cartella",
+    "viewFolderPlaceholder": "scegli una cartella",
+    "saveViewHint": "Una vista salva la configurazione, mai le righe: riaprendola legge i dati correnti. La può aprire chiunque veda la cartella.",
+    "viewSaved": "Vista \"{name}\" salvata",
+    "viewDatasourceMissing": "Questa vista punta alla datasource \"{name}\", che non è più disponibile per te.",
     "addColumn": "aggiungi colonna",
     "addRow": "aggiungi riga",
     "aggCount": "conteggio",
