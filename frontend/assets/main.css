@@ -1,11 +1,13 @@
-/* Montserrat variable (100–900), self-hosted: l'alternativa libera a Gotham.
+/* IBM Plex Sans variable, self-hosted: disegnato per interfacce tecniche, più
+   stretto di Montserrat (che era un geometrico da display) e con un monospace
+   fratello, IBM Plex Mono, se un domani si vorrà dare una voce sola al codice.
    Un solo woff2 (subset latin, copre l'italiano); niente CDN a runtime. */
 @font-face {
-  font-family: 'Montserrat';
+  font-family: 'IBM Plex Sans';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 100 700;
   font-display: swap;
-  src: url('fonts/montserrat-latin-var.woff2') format('woff2');
+  src: url('fonts/ibm-plex-sans-latin-var.woff2') format('woff2');
 }
 
 :root {
@@ -157,8 +159,10 @@ html, body, #__nuxt {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  /* Montserrat è più largo dei font di sistema: 13.5px tiene le tabelle compatte */
-  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* 13.5px veniva dalla larghezza di Montserrat, che costringeva a rimpicciolire
+     per tenere compatte le tabelle. Plex è più stretto: il corpo si può alzare
+     verso i 14-15px senza perdere densità — da provare separatamente. */
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 13.5px;
 }
 
