@@ -229,7 +229,8 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   gap: 6px;
   width: 100%;
   background: var(--bg-soft);
-  border: 1px solid var(--border);
+  /* stesso bordo dei campi nativi: è un controllo, non un riquadro decorativo */
+  border: 1px solid var(--control-border);
   border-radius: 8px;
   padding: 6px 10px;
   font: inherit;

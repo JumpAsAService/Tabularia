@@ -576,5 +576,5 @@ label { font-size: 12px; color: var(--muted); }
   /* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro */
   background: var(--accent); color: var(--on-accent); border-radius: 4px; padding: 0 5px; font-size: 11px;
 }
-.tag.right { background: var(--accent-2); color: #0f1117; }
+.tag.right { background: var(--accent-2); color: var(--on-accent-2); }
 </style>

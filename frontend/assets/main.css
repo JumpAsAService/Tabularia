@@ -17,6 +17,10 @@
   --panel-2: #1b2130;
   --border: #262e40;
   --border-soft: #1e2534;
+  /* bordo dei CAMPI compilabili, separato da --border (che veste separatori e
+     tabelle): lo sfondo di un input differisce dal pannello per appena 1,06:1,
+     quindi è il bordo a dire dove si scrive e deve reggere i 3:1 di WCAG 1.4.11 */
+  --control-border: #5c6884;
   --text: #e8ebf2;
   --muted: #8b93a7;
   --accent: #4f8cff;
@@ -29,6 +33,9 @@
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
   --grad-accent: linear-gradient(135deg, #4f8cff 0%, #7c6cff 100%);
   --on-accent: #fff;                      /* testo sui bottoni primari (su accento) */
+  /* testo sul RIEMPIMENTO --accent-2 (solo .tag.right lo usa così): scuro dove il
+     verde è chiaro. Il tema chiaro lo ribalta, avendo un verde scuro. */
+  --on-accent-2: #0f1117;
 
   /* semantiche derivate: cambiano col tema (prima erano cablate nei componenti) */
   --scrim: rgba(5, 7, 12, 0.6);           /* velo dietro ai modali */
@@ -50,11 +57,16 @@
   --panel-2: #eef1f7;
   --border: #d7dde9;
   --border-soft: #e6eaf2;
+  --control-border: #7c8699;
+  /* qui --accent-2 è un verde SCURO: il testo sopra va chiaro (5,15:1), mentre il
+     nero di :root darebbe 3,67:1 */
+  --on-accent-2: #ffffff;
   --text: #1b2233;
   --muted: #5f6b81;
   --accent: #3b6fe0;
   --accent-hi: #2b57c4;
-  --accent-2: #0e9f6e;
+  /* era #0e9f6e: 3,39:1 su bianco — e questo colore veste i messaggi di esito */
+  --accent-2: #0a7d56;
   --violet: #7c3aed;
   --danger: #e02424;
   --shadow-1: 0 1px 2px rgba(20, 30, 60, 0.08);
@@ -80,8 +92,10 @@
   --panel-2: #343746;
   --border: #44475a;
   --border-soft: #343746;
+  --control-border: #737898;
   --text: #f8f8f2;
-  --muted: #7b82ab;
+  /* era #7b82ab: 3,16:1 sulle intestazioni di tabella, sotto il minimo AA */
+  --muted: #9ca5d0;
   --accent: #bd93f9;
   --accent-hi: #d3b6fb;
   --accent-2: #50fa7b;
@@ -111,13 +125,15 @@
   --panel-2: #33342b;
   --border: #49483e;
   --border-soft: #33342b;
+  --control-border: #7b7867;
   --text: #f8f8f2;
   --muted: #a6a28c;
   --accent: #66d9ef;
   --accent-hi: #8ee6f5;
   --accent-2: #a6e22e;
   --violet: #ae81ff;
-  --danger: #f92672;
+  /* era #f92672: 3,93:1 sul pannello — è il colore dei messaggi di errore */
+  --danger: #fb4a8b;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
@@ -215,7 +231,7 @@ input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg-soft);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 8px;
   padding: 6px 10px;
   width: 100%;
