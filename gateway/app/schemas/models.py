@@ -40,6 +40,12 @@ class UserOut(BaseModel):
     full_name: str
     is_active: bool
     is_superuser: bool
+    # Campi informativi per la pagina Admin. TUTTI con un default: `MeOut` eredita
+    # da qui ed è costruito a mano in routes/auth.py, che passa solo i primi cinque.
+    created_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None  # ultima attività autenticata
+    sso_only: bool = False  # nessuna password locale: entra solo dall'IdP
+    groups: list[str] = []
 
 
 class MeOut(UserOut):
@@ -65,6 +71,8 @@ class GroupOut(BaseModel):
     id: int
     name: str
     description: str
+    created_at: Optional[datetime] = None
+    member_count: int = 0
 
 
 class GroupCreate(BaseModel):

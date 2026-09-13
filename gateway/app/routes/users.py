@@ -11,9 +11,37 @@ from app.schemas.models import UserOut, UserCreate, UserUpdate
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(require_superuser)])
 
 
+def _group_names(session: Session) -> dict[int, list[str]]:
+    """Nomi dei gruppi per utente, in UNA query: l'elenco admin li mostra tutti e
+    una query per utente sarebbe un N+1 gratuito."""
+    righe = session.exec(
+        select(UserGroupLink.user_id, Group.name).where(UserGroupLink.group_id == Group.id)
+    ).all()
+    per_utente: dict[int, list[str]] = {}
+    for user_id, nome in righe:
+        per_utente.setdefault(user_id, []).append(nome)
+    return {k: sorted(v) for k, v in per_utente.items()}
+
+
+def _to_out(user: User, groups: list[str] | None = None) -> UserOut:
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        created_at=user.created_at,
+        last_seen_at=user.last_seen_at,
+        # nessuna password locale ⇒ l'account entra SOLO dall'IdP (vedi services/sso.py)
+        sso_only=user.hashed_password is None,
+        groups=groups or [],
+    )
+
+
 @router.get("", response_model=list[UserOut])
 def list_users(session: Session = Depends(get_session)):
-    return session.exec(select(User)).all()
+    per_utente = _group_names(session)
+    return [_to_out(u, per_utente.get(u.id, [])) for u in session.exec(select(User)).all()]
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -29,7 +57,7 @@ def create_user(body: UserCreate, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
-    return user
+    return _to_out(user)  # appena creato: nessun gruppo ancora
 
 
 def _get_user(session: Session, user_id: int) -> User:
@@ -53,7 +81,7 @@ def update_user(user_id: int, body: UserUpdate, session: Session = Depends(get_s
     session.add(user)
     session.commit()
     session.refresh(user)
-    return user
+    return _to_out(user, _group_names(session).get(user.id, []))
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

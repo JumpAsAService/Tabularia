@@ -1,5 +1,6 @@
 """Gruppi. Lettura per ogni utente autenticato; scrittura solo superuser."""
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.db.session import get_session
@@ -12,7 +13,19 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 
 @router.get("", response_model=list[GroupOut], dependencies=[Depends(get_current_user)])
 def list_groups(session: Session = Depends(get_session)):
-    return session.exec(select(Group)).all()
+    # quanti membri per gruppo, in UNA query (l'elenco admin lo mostra per ognuno)
+    conteggi = dict(
+        session.exec(
+            select(UserGroupLink.group_id, func.count()).group_by(UserGroupLink.group_id)  # type: ignore[arg-type]
+        ).all()
+    )
+    return [
+        GroupOut(
+            id=g.id, name=g.name, description=g.description,
+            created_at=g.created_at, member_count=conteggi.get(g.id, 0),
+        )
+        for g in session.exec(select(Group)).all()
+    ]
 
 
 @router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED,
@@ -24,7 +37,12 @@ def create_group(body: GroupCreate, session: Session = Depends(get_session)):
     session.add(group)
     session.commit()
     session.refresh(group)
-    return group
+    # esplicito come in list_groups: così la rotta dice la verità anche a chi la
+    # chiama direttamente, senza passare dalla serializzazione di FastAPI
+    return GroupOut(
+        id=group.id, name=group.name, description=group.description,
+        created_at=group.created_at, member_count=0,  # appena creato: nessun membro
+    )
 
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT,
