@@ -199,6 +199,16 @@ def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 def op_sort(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     by = _require(params, "by")
     descending = params.get("descending", False)
+    # `ignore_missing`: lo mette SOLO l'iniezione del publish (gateway), mai
+    # l'utente. Una chiave di ordinamento dichiarata sull'Output e poi sparita
+    # dalla catena (colonna rinominata o tolta) non deve far fallire OGNI run
+    # del flusso — e non è nemmeno togliibile dalla checklist, che mostra solo
+    # le colonne esistenti. Un `sort` chiesto esplicitamente resta severo.
+    if params.get("ignore_missing"):
+        have = set(lf.collect_schema().names())
+        by = [c for c in (by if isinstance(by, list) else [by]) if c in have]
+        if not by:
+            return lf
     # STANDARD CROSS-ENGINE: i NULL vanno SEMPRE in coda (asc e desc), così un
     # "top N" (sort desc + limit) non è mai fatto di NULL. DuckDB/ClickHouse
     # usano NULLS LAST esplicito.

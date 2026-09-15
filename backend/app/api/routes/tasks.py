@@ -81,18 +81,23 @@ def preview_flow(request: PreviewRequest):
     cambia. Su timeout la preview viene revocata per non intasare il worker.
     """
     operations = [op.model_dump() for op in request.operations]
+    kwargs = {
+        "bucket": request.bucket,
+        "input_key": request.input_key,
+        "operations": operations,
+        "limit": request.limit,
+        "engine": request.engine,
+        "no_cache": request.no_cache,
+    }
+    # AGGIUNTO SOLO SE VALORIZZATO. Durante un aggiornamento progressivo l'API
+    # nuova può parlare con un worker VECCHIO: un kwarg che quel worker non
+    # conosce fa fallire OGNI preview (TypeError → 500). Omettendolo quando è
+    # vuoto — il caso normale, e tutte le preview dell'editor — le preview
+    # continuano a funzionare per tutta la finestra di rollout.
+    if request.sort_keys:
+        kwargs["sort_keys"] = request.sort_keys
     async_result = celery_app.send_task(
-        "app.tasks.jobs.preview_task",
-        kwargs={
-            "bucket": request.bucket,
-            "input_key": request.input_key,
-            "operations": operations,
-            "limit": request.limit,
-            "engine": request.engine,
-            "no_cache": request.no_cache,
-            "sort_keys": request.sort_keys,
-        },
-        queue="preview",
+        "app.tasks.jobs.preview_task", kwargs=kwargs, queue="preview",
     )
     try:
         payload = async_result.get(timeout=PREVIEW_TIMEOUT_SECONDS)

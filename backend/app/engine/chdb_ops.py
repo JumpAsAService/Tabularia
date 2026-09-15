@@ -206,6 +206,16 @@ def op_filter(sql, params, ctx):
 @_register("sort")
 def op_sort(sql, params, ctx):
     cols = _as_list(_require(params, "by"))
+    # `ignore_missing`: lo mette SOLO l'iniezione del publish (gateway), mai
+    # l'utente. Una chiave di ordinamento dichiarata sull'Output e poi sparita
+    # dalla catena (colonna rinominata o tolta) non deve far fallire OGNI run
+    # del flusso — e non è nemmeno togliibile dalla checklist, che mostra solo
+    # le colonne esistenti. Un `sort` chiesto esplicitamente resta severo.
+    if params.get("ignore_missing"):
+        have = set(ctx.columns_of(sql))
+        cols = [c for c in cols if c in have]
+        if not cols:
+            return sql
     direction = "DESC" if params.get("descending") else "ASC"
     # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
     order = ", ".join(f"{_qi(c)} {direction} NULLS LAST" for c in cols)

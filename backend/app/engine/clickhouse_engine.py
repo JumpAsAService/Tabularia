@@ -29,6 +29,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 import tempfile
 import uuid
 from typing import Any
@@ -60,6 +61,13 @@ _PARQUET_OUT = {"output_format_parquet_string_as_string": 1}
 # righe): lì l'oversubscription dei thread paga. Le altre (filtro/proiezione con
 # LIMIT) si fermano presto e con troppi thread rallenterebbero: restano al default.
 _SCAN_HEAVY = frozenset({"group_by", "pivot", "unpivot", "sort", "join", "union", "unique", "sql"})
+
+# La copia gira DENTRO la richiesta di preview, che l'API abbandona a 120s
+# (PREVIEW_TIMEOUT_SECONDS) revocando il task: il worker viene terminato con un
+# segnale, il `except` che droppa la tabella temporanea NON gira e resta un
+# orfano. Con un tetto più basso la copia fallisce da sola, in modo pulito:
+# cleanup eseguito, backoff registrato, preview servita da s3().
+_MATERIALIZE_MAX_SECONDS = 60
 
 
 def _needs_scan_tuning(ops) -> bool:
@@ -331,9 +339,10 @@ class ClickHouseContext:
         opts = " SETTINGS allow_nullable_key = 1" if keys else ""
         final = f"{_qi(db)}.{_qi(table)}"
         tmp = f"{_qi(db)}.{_qi(table + '_tmp_' + uuid.uuid4().hex[:8])}"
-        self.command(f"CREATE TABLE {tmp} ({ddl}) ENGINE = MergeTree ORDER BY {order}{opts}")
+        cap = {"max_execution_time": _MATERIALIZE_MAX_SECONDS}
+        self.command(f"CREATE TABLE {tmp} ({ddl}) ENGINE = MergeTree ORDER BY {order}{opts}", settings=cap)
         try:
-            self.command(f"INSERT INTO {tmp} SELECT * FROM {s3}")
+            self.command(f"INSERT INTO {tmp} SELECT * FROM {s3}", settings=cap)
             try:
                 self.command(f"RENAME TABLE {tmp} TO {final}")
             except Exception:
@@ -410,13 +419,17 @@ class ClickHouseEngine(Engine):
     def _scan_max_threads(self, ctx) -> int:
         """max_threads da imporre a una scansione, o 0 per non toccare. Legge i
         core del server una volta per processo; su errore lascia perdere."""
-        if self.cfg.parquet_scan_max_threads <= 0:
+        # solo con transport s3: in push il server non tocca l'object storage,
+        # non c'è latenza di rete da nascondere e l'oversubscription danneggia
+        if self.cfg.transport != "s3" or self.cfg.parquet_scan_max_threads <= 0:
             return 0
         if self._server_threads is None:
             try:
-                self._server_threads = int(
-                    ctx.scalar("SELECT value FROM system.settings WHERE name = 'max_threads'")
-                )
+                # il valore può essere "8" oppure "auto(8)": int() da solo
+                # fallirebbe, azzerando il guard «non abbassare un server grande»
+                raw = str(ctx._rows("SELECT value FROM system.settings WHERE name = 'max_threads'")[0][0])
+                digits = re.search(r"\d+", raw)
+                self._server_threads = int(digits.group()) if digits else 0
             except Exception:
                 self._server_threads = 0
         return _effective_scan_threads(self.cfg.parquet_scan_max_threads, self._server_threads)
@@ -497,8 +510,15 @@ class ClickHouseEngine(Engine):
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         client = self._client()
+        # `allow_matview` SOLO per le query esplorative del viewer (use_cache=False).
+        # L'editor usa la step-cache: lì la copia (a) è sincrona dentro la richiesta
+        # e fa "appendere" la preview, (b) nascerebbe con un'identità diversa (senza
+        # sort_keys) duplicando l'intero dataset, e (c) i blob di step-cache scritti
+        # LEGGENDO dalla copia finirebbero nello stesso namespace di hash usato dai
+        # run, che la copia non ce l'hanno.
         ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
-                                matviews=self.matviews, allow_matview=True, sort_keys=sort_keys)
+                                matviews=self.matviews, allow_matview=not use_cache,
+                                sort_keys=sort_keys)
         if _needs_scan_tuning(ops):
             threads = self._scan_max_threads(ctx)
             if threads:

@@ -694,10 +694,14 @@ async function refreshForNode(nodeId: string) {
   // corpo foreach non ha archi interni → il suo input è quello del container
   const leftId =
     inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
+  // come previewSeq in runPreview: una risoluzione PIU' VECCHIA non deve
+  // sovrascrivere le colonne del nodo selezionato dopo (il pannello mostrerebbe
+  // le colonne di un altro nodo). Il guard vale per OGNI scrittura di stato.
   try {
-    inputColumns.value = leftId ? await ensureColumns(leftId) : []
+    const cols = leftId ? await ensureColumns(leftId) : []
+    if (colSeq === columnsSeq) inputColumns.value = cols
   } catch {
-    inputColumns.value = []
+    if (colSeq === columnsSeq) inputColumns.value = []
   }
 
   // placeholder disponibili per i nodi dentro un container: colonne del driver
@@ -707,15 +711,16 @@ async function refreshForNode(nodeId: string) {
     const drvId = inc.get(node.parentNode)?.right
     try {
       if (drvId) {
-        placeholders.value = (await ensureColumns(drvId)).map((c) => c.name)
+        const ph = (await ensureColumns(drvId)).map((c) => c.name)
+        if (colSeq === columnsSeq) placeholders.value = ph
       } else {
         const items = container?.data?.params?.items ?? []
-        placeholders.value = Object.keys(items[0] ?? {})
+        if (colSeq === columnsSeq) placeholders.value = Object.keys(items[0] ?? {})
       }
     } catch {
-      placeholders.value = []
+      if (colSeq === columnsSeq) placeholders.value = []
     }
-  } else {
+  } else if (colSeq === columnsSeq) {
     placeholders.value = []
   }
 
@@ -724,11 +729,12 @@ async function refreshForNode(nodeId: string) {
   if (node?.data?.opType === 'join' || node?.data?.opType === 'union' || node?.type === 'foreach') {
     const rightId = inc.get(nodeId)?.right
     try {
-      rightColumns.value = rightId ? await ensureColumns(rightId) : []
+      const right = rightId ? await ensureColumns(rightId) : []
+      if (colSeq === columnsSeq) rightColumns.value = right
     } catch {
-      rightColumns.value = []
+      if (colSeq === columnsSeq) rightColumns.value = []
     }
-  } else {
+  } else if (colSeq === columnsSeq) {
     rightColumns.value = []
   }
 

@@ -47,9 +47,26 @@ async def test_publish_with_keys_appends_a_sort_op(session, fake_engine):
     run = await _launch_flow_run(session, admin, flow, _body(p.id, sort_keys=["id", "data"]))
 
     ops = fake_engine.transforms[0]["operations"]
-    assert ops[-1] == {"type": "sort", "params": {"by": ["id", "data"]}}, ops
+    assert ops[-1] == {
+        "type": "sort",
+        "params": {"by": ["id", "data"], "ignore_missing": True},
+    }, ops
     assert ops[0]["type"] == "select", "le operazioni originali restano davanti"
     assert json.loads(session.get(Run, run.id).publish_sort_keys) == ["id", "data"]
+
+
+async def test_the_injected_sort_tolerates_a_vanished_key(session, fake_engine):
+    """`ignore_missing` è la differenza fra «la chiave non c'è più, ordino per le
+    altre» e «ogni run di questo flusso fallisce». La checklist mostra solo le
+    colonne esistenti, quindi una chiave stantia non sarebbe nemmeno togliibile."""
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    p = make_project(session, name="p")
+    flow = make_flow(session, name="f", project_id=p.id)
+
+    await _launch_flow_run(session, admin, flow, _body(p.id, sort_keys=["colonna_sparita"]))
+
+    sort_op = fake_engine.transforms[0]["operations"][-1]
+    assert sort_op["params"]["ignore_missing"] is True
 
 
 async def test_publish_without_keys_adds_no_sort_op(session, fake_engine):

@@ -190,7 +190,11 @@ async def _launch_flow_run(
     # standard su ogni engine; le stesse chiavi finiscono anche sulla datasource.
     publish_keys = [k.strip() for k in body.publish.sort_keys if k and k.strip()] if body.publish else []
     if publish_keys:
-        body.operations = list(body.operations) + [{"type": "sort", "params": {"by": publish_keys}}]
+        # `ignore_missing`: una chiave sparita dalla catena non deve far fallire
+        # il run (la copia materializzata la ignora già allo stesso modo)
+        body.operations = list(body.operations) + [
+            {"type": "sort", "params": {"by": publish_keys, "ignore_missing": True}}
+        ]
 
     # cartella di destinazione del parquet: quella della datasource sovrascritta,
     # quando la si conosce già al lancio (vedi `snapshot_key`)

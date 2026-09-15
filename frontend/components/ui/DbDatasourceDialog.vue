@@ -90,7 +90,7 @@ function confirm() {
     connection_id: connectionId.value!,
     source_type: sourceType.value,
     source_ref: sourceType.value === 'table' ? tableName.value.trim() : sql.value,
-    sort_keys: sortKeysText.value.split(/[,;]+/).map((k) => k.trim()).filter(Boolean),
+    sort_keys: sortKeysText.value.split(/[,;\s]+/).map((k) => k.trim()).filter(Boolean),
   })
 }
 </script>

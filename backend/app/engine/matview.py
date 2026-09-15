@@ -46,6 +46,15 @@ TABLE_PREFIX = "_mv_"
 INDEX_SET = "dataprep:matview"  # SET Valkey: source id materializzati
 ATIME_ZSET = "dataprep:matview:atime"  # ZSET: source id -> ultimo accesso (unix ts)
 SMALL_SET = "dataprep:matview:small"  # SET: source id sotto soglia (cache negativa)
+FAILED_ZSET = "dataprep:matview:failed"  # ZSET: source id -> istante dell'ultimo fallimento
+# Dopo un fallimento si aspetta prima di riprovare: senza, OGNI preview rilancia
+# la copia dell'intero dataset (grant mancante, disco pieno, worker ucciso dal
+# timeout) e il viewer resta per sempre PIU' LENTO di prima che la feature esistesse.
+FAILURE_BACKOFF_SECONDS = 600
+# Tetto al numero di copie vive: `sort_keys` fa parte dell'identità, quindi chi
+# varia le chiavi genera copie distinte dello stesso dato. Il TTL da solo non
+# basta a proteggere il disco del server condiviso.
+MAX_TABLES = 32
 
 
 class MatViewStore:
@@ -97,7 +106,7 @@ class MatViewStore:
         db = cfg.matview_database
         table = self.table_name(sid)
         try:
-            if self._is_small(sid):
+            if self._is_small(sid) or self._failed_recently(sid):
                 return None
             if self._is_known(sid):
                 if ctx.matview_exists(db, table):
@@ -108,11 +117,24 @@ class MatViewStore:
             if rows < cfg.materialize_min_rows:
                 self._mark_small(sid)
                 return None
+            # tetto alle copie vive: oltre, si resta su s3() (nessun errore)
+            try:
+                live = len(ctx.matview_list(db, TABLE_PREFIX))
+            except Exception:
+                live = 0
+            if live >= MAX_TABLES:
+                logger.warning(
+                    "matview: %d copie già presenti (tetto %d), resto su s3() per %s",
+                    live, MAX_TABLES, sid,
+                )
+                return None
             ctx.matview_build(db, table, source, sort_keys)
             self._mark(sid)
             logger.info("materializzata la sorgente %s in %s (%d righe)", sid, table, rows)
             return self._qualified(table)
         except Exception as e:  # best-effort: sempre giù su s3(), mai un errore
+            # segna il fallimento: senza, si ritenta la copia intera a OGNI preview
+            self._mark_failed(sid)
             logger.warning("materializzazione non riuscita per %s, resto su s3(): %s", sid, e)
             return None
 
@@ -124,6 +146,7 @@ class MatViewStore:
         db = self.cfg.matview_database
         cutoff = time.time() - ttl_seconds
         removed = 0
+        self._reconcile()
 
         for sid in self._expired(cutoff):
             try:
@@ -134,7 +157,16 @@ class MatViewStore:
             self._forget(sid)
             removed += 1
 
-        known = {self.table_name(s) for s in self._all_known()}
+        # Il registro DEVE essere leggibile per sweepare le orfane: se Valkey non
+        # risponde, `_all_known` tornerebbe vuoto e considereremmo ORFANA ogni
+        # tabella viva, droppandole tutte (anche sotto query in corso, perché
+        # metadata_modification_time è l'istante della DDL e non avanza con l'uso).
+        # Come la step-cache, qui si fallisce CHIUSI: niente sweep.
+        known_raw = self._all_known(strict=True)
+        if known_raw is None:
+            logger.warning("matview: registro non leggibile, salto lo sweep delle orfane")
+            return removed
+        known = {self.table_name(s) for s in known_raw}
         try:
             server = ctx.matview_list(db, TABLE_PREFIX)
         except Exception:
@@ -159,17 +191,20 @@ class MatViewStore:
         except redis.RedisError:
             return False
 
-    def _all_known(self) -> set:
+    def _all_known(self, strict: bool = False) -> set | None:
+        """Gli id registrati. `strict=True` ritorna None se Valkey non risponde,
+        per distinguere «nessuna voce» da «non lo so» (vedi evict)."""
         try:
             return set(self.redis.smembers(INDEX_SET))
         except redis.RedisError:
-            return set()
+            return None if strict else set()
 
     def _mark(self, sid: str) -> None:
         try:
             self.redis.sadd(INDEX_SET, sid)
             self.redis.zadd(ATIME_ZSET, {sid: time.time()})
             self.redis.srem(SMALL_SET, sid)
+            self.redis.zrem(FAILED_ZSET, sid)
         except redis.RedisError:
             pass
 
@@ -183,6 +218,35 @@ class MatViewStore:
         try:
             self.redis.srem(INDEX_SET, sid)
             self.redis.zrem(ATIME_ZSET, sid)
+        except redis.RedisError:
+            pass
+
+    def _reconcile(self) -> None:
+        """Ripristina l'invariante SET == ZSET (come StepCache._reconcile). Una
+        voce nel SET senza `atime` — due comandi non atomici interrotti a metà —
+        sarebbe INVISIBILE al TTL e insieme protetta dallo sweep delle orfane:
+        una copia da più GB resterebbe sul server per sempre."""
+        try:
+            in_set = set(self.redis.smembers(INDEX_SET))
+            in_zset = set(self.redis.zrange(ATIME_ZSET, 0, -1))
+            now = time.time()
+            for sid in in_set - in_zset:
+                self.redis.zadd(ATIME_ZSET, {sid: now})  # adottata nel ciclo TTL
+            for sid in in_zset - in_set:
+                self.redis.zrem(ATIME_ZSET, sid)
+        except redis.RedisError:
+            pass
+
+    def _failed_recently(self, sid: str) -> bool:
+        try:
+            recent = self.redis.zrangebyscore(FAILED_ZSET, time.time() - FAILURE_BACKOFF_SECONDS, "+inf")
+            return sid in set(recent)
+        except redis.RedisError:
+            return False
+
+    def _mark_failed(self, sid: str) -> None:
+        try:
+            self.redis.zadd(FAILED_ZSET, {sid: time.time()})
         except redis.RedisError:
             pass
 

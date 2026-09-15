@@ -76,10 +76,19 @@ def build_export_payload(session: Session, flow: Flow, default_bucket: str, targ
         root_key = req["input_key"]
         keys.add(root_key)
         _collect_source_keys(req.get("operations") or [], keys)
+        # L'ORDER BY del publish viene iniettato dal gateway al LANCIO
+        # (routes/runs.py), quindi non è in `req["operations"]`: senza questo, il
+        # modello dbt produrrebbe una tabella NON ordinata mentre lo stesso flusso
+        # eseguito dall'app la ordina — due risultati fisicamente diversi, e il
+        # pruning a valle assente proprio nella pipeline esportata.
+        ops = list(req.get("operations") or [])
+        pub_keys = [k.strip() for k in ((req.get("publish") or {}).get("sort_keys") or []) if k and k.strip()]
+        if pub_keys:
+            ops.append({"type": "sort", "params": {"by": pub_keys, "ignore_missing": True}})
         models.append({
             "name": _model_name(req, i),
             "source": {"bucket": req.get("bucket") or default_bucket, "key": root_key},
-            "operations": req.get("operations") or [],
+            "operations": ops,
         })
 
     # risolvi ogni chiave in (datasource, connessione, schema, tabella)

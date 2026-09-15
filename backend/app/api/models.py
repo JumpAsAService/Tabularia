@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Literal, Optional
 
 
@@ -62,7 +62,25 @@ class PreviewRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=1000, description="Righe massime nel campione")
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
     no_cache: bool = Field(default=False, description="Non scrivere/leggere la step-cache (query esplorative del Viewer)")
-    sort_keys: list[str] = Field(default_factory=list, description="Colonne di ORDER BY che la copia materializzata (ClickHouse) deve ereditare")
+    # Le chiavi entrano nell'IDENTITA' della copia materializzata: variarle genera
+    # copie distinte dello stesso dato. Senza un tetto, una richiesta ripetuta con
+    # chiavi sempre diverse riempirebbe il disco del server condiviso.
+    sort_keys: list[str] = Field(
+        default_factory=list, max_length=8,
+        description="Colonne di ORDER BY che la copia materializzata (ClickHouse) deve ereditare",
+    )
+
+    @field_validator("sort_keys")
+    @classmethod
+    def _clean_sort_keys(cls, v: list[str]) -> list[str]:
+        out, seen = [], set()
+        for k in v:
+            k = (k or "").strip()
+            if not k or k in seen or len(k) > 128:
+                continue
+            seen.add(k)
+            out.append(k)
+        return out
 
 
 class ExportRequest(BaseModel):
