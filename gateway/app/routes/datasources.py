@@ -84,10 +84,18 @@ def _to_out(ds: Datasource) -> DatasourceOut:
     ]
     # accesso per attributo (non model_dump): un'istanza "expired" dopo il commit
     # dell'audit darebbe un dict vuoto → 500 (vedi connections._to_out)
+    try:
+        skeys = json.loads(ds.sort_keys or "[]")
+    except json.JSONDecodeError:
+        skeys = []
+    if not isinstance(skeys, list):
+        skeys = []
     fields = {
-        f: getattr(ds, f) for f in DatasourceOut.model_fields if f not in ("columns", "column_descriptions")
+        f: getattr(ds, f)
+        for f in DatasourceOut.model_fields
+        if f not in ("columns", "column_descriptions", "sort_keys")
     }
-    return DatasourceOut(**fields, columns=cols, column_descriptions=descs)
+    return DatasourceOut(**fields, columns=cols, column_descriptions=descs, sort_keys=skeys)
 
 
 def _get_ds(session: Session, ds_id: int) -> Datasource:
@@ -203,6 +211,7 @@ async def create_db_datasource(
         connection_id=conn.id,
         source_type=body.source_type,
         source_ref=body.source_ref,
+        sort_keys=json.dumps([k.strip() for k in body.sort_keys if k and k.strip()]),
     )
     session.add(ds)
     session.commit()

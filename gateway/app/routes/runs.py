@@ -485,7 +485,7 @@ async def launch_ingest_run(
         "/db/ingest",
         json={
             "connection": engine_connection_payload(conn),
-            "source": {"mode": ds.source_type, "ref": ds.source_ref},
+            "source": {"mode": ds.source_type, "ref": ds.source_ref, "sort_keys": json.loads(ds.sort_keys or "[]")},
             "bucket": bucket,
             "output_key": output_key,
         },

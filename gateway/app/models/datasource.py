@@ -28,6 +28,10 @@ class Datasource(SQLModel, table=True):
     key: str  # parquet nello storage (datasets/…)
     rows: Optional[int] = None
     columns: str = Field(default="[]", sa_column=Column(Text, nullable=False))  # JSON [{name, dtype}]
+    # chiavi di ORDER BY (JSON [nome colonna]) con cui il parquet è stato scritto
+    # ordinato: abilita il pruning a valle (viewer/ClickHouse). Vuoto = nessun
+    # ordine imposto, tutto come prima. Persiste tra i refresh.
+    sort_keys: str = Field(default="[]", sa_column=Column(Text, nullable=False))
     # descrizioni dei CAMPI (JSON {nome colonna: testo}), curate a mano: il
     # significato di ogni colonna per chi la usa — e per la futura integrazione
     # AI (contesto semantico sul dataset). Separate da `columns`, che viene

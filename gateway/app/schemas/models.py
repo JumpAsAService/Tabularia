@@ -454,6 +454,8 @@ class DatasourceOut(BaseModel):
     columns: list[dict] = Field(default_factory=list)
     # {nome colonna: descrizione} (anche per colonne non più nello schema)
     column_descriptions: dict[str, str] = Field(default_factory=dict)
+    # colonne di ORDER BY con cui il parquet è ordinato (vuoto = nessun ordine)
+    sort_keys: list[str] = Field(default_factory=list)
     kind: str
     flow_id: Optional[int]
     # per kind="database"
@@ -487,6 +489,8 @@ class DbDatasourceCreate(BaseModel):
     connection_id: int
     source_type: str  # table | sql
     source_ref: str  # nome tabella oppure testo SQL
+    # colonne per l'ORDER BY dell'ingest (vuoto = nessun ordine, come prima)
+    sort_keys: list[str] = Field(default_factory=list)
 
 
 # ── Permissions ───────────────────────────────────────────────────────────────

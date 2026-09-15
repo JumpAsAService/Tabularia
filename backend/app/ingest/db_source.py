@@ -76,6 +76,9 @@ class DbConnectionSpec(BaseModel):
 class DbSourceSpec(BaseModel):
     mode: Literal["table", "sql"]
     ref: str  # nome tabella (anche schema.tabella) oppure il testo SQL
+    # colonne per l'ORDER BY finale: il parquet esce ordinato → pruning a valle.
+    # Vuoto = nessun ordine (come prima). Sono nomi di colonna del RISULTATO.
+    sort_keys: list[str] = []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,7 +101,7 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
         sql = source.ref.strip().rstrip(";").strip()
         if not sql:
             raise DbSourceError("La query SQL è vuota")
-        return f"SELECT * FROM ({sql}) AS _q"
+        return _with_order_by(f"SELECT * FROM ({sql}) AS _q", conn, source)
 
     q = _IDENT_QUOTE[conn.db_type]
     parts = [p.strip() for p in source.ref.split(".") if p.strip()]
@@ -109,7 +112,22 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
     if len(parts) == 1 and conn.db_schema:
         parts = [conn.db_schema, parts[0]]
     qualified = ".".join(f"{q}{p}{q}" for p in parts)
-    return f"SELECT * FROM {qualified}"
+    return _with_order_by(f"SELECT * FROM {qualified}", conn, source)
+
+
+def _with_order_by(base: str, conn: DbConnectionSpec, source: DbSourceSpec) -> str:
+    """Appende `ORDER BY <chiavi>` (quotate per dialetto) se ci sono sort_keys.
+    Le chiavi sono nomi di colonna del risultato; il DB dà un errore parlante se
+    non esistono. Vuoto = query invariata."""
+    keys = [k.strip() for k in (source.sort_keys or []) if k and k.strip()]
+    if not keys:
+        return base
+    q = _IDENT_QUOTE[conn.db_type]
+    for k in keys:
+        if q in k:
+            raise DbSourceError(f"Chiave di ordinamento non valida: contiene {q!r}")
+    cols = ", ".join(f"{q}{k}{q}" for k in keys)
+    return f"{base} ORDER BY {cols}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
