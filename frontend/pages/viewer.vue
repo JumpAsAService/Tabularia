@@ -138,7 +138,7 @@ const baseOps = computed<Operation[]>(() => {
 async function chartQuery(ops: Operation[], limit?: number) {
   const ds = selectedDs.value
   if (!ds) return null
-  return await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: [...baseOps.value, ...ops], engine: engine.value, limit, no_cache: true })
+  return await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: [...baseOps.value, ...ops], engine: engine.value, limit, no_cache: true, sort_keys: ds.sort_keys })
 }
 
 async function onPickDatasource(id: number | null) {
@@ -168,10 +168,10 @@ async function apply() {
   loading.value = true; error.value = ''
   try {
     // 1) schema dopo filtri+campi (per i picker di grafico/pivot)
-    const base = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true })
+    const base = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true, sort_keys: ds.sort_keys })
     baseCols.value = base.columns
     // 2) risultato tabella (con eventuale pivot)
-    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), engine: engine.value, limit: ROW_LIMIT, no_cache: true })
+    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys })
     rows.value = res.rows
     tableCols.value = res.columns
   } catch (e) {

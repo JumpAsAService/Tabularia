@@ -32,6 +32,10 @@ const connectionId = ref<number | null>(null)
 const sourceType = ref<'table' | 'sql'>('table')
 const tableName = ref('')
 const sql = ref('')
+// chiavi di ORDER BY, testo separato da virgole: pre-ingest non conosciamo le
+// colonne (solo i nomi delle tabelle), quindi l'utente le digita — è la SUA
+// tabella. Vuoto = nessun ordine. Un nome sbagliato dà l'errore parlante del DB.
+const sortKeysText = ref('')
 
 // tabelle della connessione scelta (best-effort: se fallisce si digita a mano)
 const tables = ref<string[]>([])
@@ -48,6 +52,7 @@ watch(
     sourceType.value = 'table'
     tableName.value = ''
     sql.value = ''
+    sortKeysText.value = ''
     tables.value = []
     tablesError.value = ''
     if (connectionId.value != null) loadTables(connectionId.value)
@@ -85,6 +90,7 @@ function confirm() {
     connection_id: connectionId.value!,
     source_type: sourceType.value,
     source_ref: sourceType.value === 'table' ? tableName.value.trim() : sql.value,
+    sort_keys: sortKeysText.value.split(/[,;]+/).map((k) => k.trim()).filter(Boolean),
   })
 }
 </script>
@@ -158,6 +164,9 @@ function confirm() {
             placeholder="SELECT customer_id, SUM(amount) AS total&#10;FROM orders&#10;GROUP BY customer_id"
           />
         </template>
+
+        <label>{{ $t('dbDatasourceDialog.sortKeysLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.sortKeysHint') }}</span></label>
+        <input v-model="sortKeysText" type="text" placeholder="id, data_ordine" />
 
         <label>{{ $t('dbDatasourceDialog.descriptionLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.optionalHint') }}</span></label>
         <input v-model="description" type="text" :placeholder="$t('dbDatasourceDialog.descriptionPlaceholder')" />

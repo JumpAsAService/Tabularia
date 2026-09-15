@@ -45,6 +45,7 @@ export interface PublishSpec {
   project_id: number
   description?: string
   overwrite?: boolean
+  sort_keys?: string[] // ORDER BY della datasource pubblicata (vuoto = nessuno)
 }
 
 export interface DestinationSpec {

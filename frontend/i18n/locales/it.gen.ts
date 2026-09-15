@@ -257,6 +257,8 @@ export default {
     "title": "Datasources"
   },
   "dbDatasourceDialog": {
+    "sortKeysLabel": "Ordina per",
+    "sortKeysHint": "(colonne separate da virgola, opzionale — velocizza il viewer)",
     "cancel": "Annulla",
     "confirm": "Crea e importa",
     "connectionLabel": "Connessione",
@@ -578,6 +580,9 @@ export default {
     "orUseCatalogDatasource": "oppure usa una datasource del catalogo",
     "outputTitle": "Output",
     "overwriteHint": "Se una datasource con questo nome esiste già nella cartella, ne aggiorna i dati (mantenendo id e nome, così i flussi che la usano non si rompono) invece di dare errore.",
+    "sortKeysLabel": "Ordina per",
+    "sortKeysHint": "(opzionale: rende più veloci filtri e grafici nel viewer)",
+    "sortKeysNoColumns": "Collega una catena con dati per scegliere le colonne di ordinamento.",
     "overwriteIfExists": "Sovrascrivi se esiste già",
     "partitionByLabel": "Partiziona per (hive: colonna=valore/...)",
     "partitionHintFormat": "colonna=valore/...",

@@ -67,6 +67,7 @@ export function useApi() {
       limit?: number
       engine?: string // motore del flusso (polars | duckdb); assente = default
       no_cache?: boolean // Viewer: query esplorative che non sporcano la step-cache
+      sort_keys?: string[] // ORDER BY che la copia materializzata (ClickHouse) eredita
     }): Promise<PreviewResult> {
       return await apiFetch<PreviewResult>('/tasks/preview', { method: 'POST', body })
     },

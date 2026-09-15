@@ -1165,6 +1165,7 @@ async function executeOutputRuns() {
           project_id: d.projectId,
           description: d.description ?? '',
           overwrite: !!d.overwrite,
+          sort_keys: d.sortKeys ?? [],
         }
       }
       try {

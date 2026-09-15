@@ -48,6 +48,17 @@ function togglePartition(name: string) {
   emit('update', { partitionBy: cur })
 }
 
+// chiavi di ORDER BY dell'output datasource: il parquet esce ordinato e la copia
+// materializzata del viewer le eredita → pruning a valle. L'ordine di selezione
+// è l'ordine delle chiavi (prima cliccata = prima nell'ORDER BY).
+function toggleSortKey(name: string) {
+  const cur: string[] = [...(props.node?.data?.sortKeys ?? [])]
+  const i = cur.indexOf(name)
+  if (i >= 0) cur.splice(i, 1)
+  else cur.push(name)
+  emit('update', { sortKeys: cur })
+}
+
 // Destinatari email: il flusso li SALVA come elenco, perché è così che li
 // rilegge il resolver lato server per i run schedulati. Nel form restano una
 // riga separata da virgole, quindi si converte solo all'uscita dal campo
@@ -304,6 +315,19 @@ function pickDatasource(id: number | null) {
         <p class="muted outhint">
           {{ $t('nodePanel.overwriteHint') }}
         </p>
+
+        <label>{{ $t('nodePanel.sortKeysLabel') }} <span class="muted">{{ $t('nodePanel.sortKeysHint') }}</span></label>
+        <div v-if="inputColumns.length" class="partchecks">
+          <label v-for="c in inputColumns" :key="c.name" class="chk">
+            <input
+              type="checkbox"
+              :checked="(node.data.sortKeys ?? []).includes(c.name)"
+              @change="toggleSortKey(c.name)"
+            />
+            {{ c.name }}
+          </label>
+        </div>
+        <p v-else class="muted outhint">{{ $t('nodePanel.sortKeysNoColumns') }}</p>
 
         <!-- copia su S3 esterno IN AGGIUNTA alla datasource: sempre in
              sovrascrittura, e best-effort (se fallisce il run resta valido) -->

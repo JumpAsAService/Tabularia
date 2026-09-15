@@ -15,6 +15,7 @@ export interface DatasourceInfo {
   rows: number | null
   columns: { name: string; dtype: string; description?: string }[]
   column_descriptions: Record<string, string> // {colonna: descrizione}, curate a mano
+  sort_keys: string[] // colonne di ORDER BY (ordinano parquet + copia materializzata)
   kind: string
   flow_id: number | null
   connection_id: number | null
@@ -32,6 +33,7 @@ export interface DbDatasourceDraft {
   connection_id: number
   source_type: 'table' | 'sql'
   source_ref: string
+  sort_keys?: string[] // ORDER BY dell'import (vuoto = nessun ordine)
 }
 
 export function useDatasources() {
