@@ -94,6 +94,10 @@ externalServices:
     materializeMinRows: 5000000
     materializeDatabase: ""
     materializeTtlSeconds: 1800
+    # Scan-heavy queries (aggregations, pivots, sorts) get at least this many
+    # threads to hide S3 read latency; never below the server's cores, never on
+    # LIMIT queries. 0 = leave max_threads alone.
+    parquetScanMaxThreads: 8
     # password → secrets.clickhousePassword
 
 # ─────────────────────────────────────────────────────────────────────────────

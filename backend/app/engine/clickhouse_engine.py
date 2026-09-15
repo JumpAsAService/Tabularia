@@ -56,6 +56,25 @@ _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 # tipo logico → Polars le leggerebbe come Binary.
 _PARQUET_OUT = {"output_format_parquet_string_as_string": 1}
 
+# operazioni che impongono una SCANSIONE piena (ClickHouse legge molte/tutte le
+# righe): lì l'oversubscription dei thread paga. Le altre (filtro/proiezione con
+# LIMIT) si fermano presto e con troppi thread rallenterebbero: restano al default.
+_SCAN_HEAVY = frozenset({"group_by", "pivot", "unpivot", "sort", "join", "union", "unique", "sql"})
+
+
+def _needs_scan_tuning(ops) -> bool:
+    return any((o.type if hasattr(o, "type") else o.get("type")) in _SCAN_HEAVY for o in ops)
+
+
+def _effective_scan_threads(target: int, server_threads: int) -> int:
+    """Thread da imporre a una scansione: `target`, ma solo se ALZA rispetto al
+    default del server (= n. core). 0 = non toccare (spento, o server già capiente)."""
+    if target <= 0:
+        return 0
+    if server_threads and target <= server_threads:
+        return 0
+    return target
+
 
 def _clean_error(e: Exception, host: str | None = None, port: int | None = None) -> str:
     """Messaggio del server ClickHouse (vedi app.ingest.db_errors): il testo di
@@ -355,6 +374,7 @@ class ClickHouseEngine(Engine):
                 "engine ClickHouse esterno non configurato: imposta CLICKHOUSE_EXTERNAL__HOST (e credenziali)."
             )
         self.matviews = MatViewStore(self.cache.redis, self.cfg)
+        self._server_threads: int | None = None  # core del server (letto una volta)
 
     def _client(self):
         import clickhouse_connect
@@ -374,6 +394,20 @@ class ClickHouseEngine(Engine):
 
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"
+
+    def _scan_max_threads(self, ctx) -> int:
+        """max_threads da imporre a una scansione, o 0 per non toccare. Legge i
+        core del server una volta per processo; su errore lascia perdere."""
+        if self.cfg.parquet_scan_max_threads <= 0:
+            return 0
+        if self._server_threads is None:
+            try:
+                self._server_threads = int(
+                    ctx.scalar("SELECT value FROM system.settings WHERE name = 'max_threads'")
+                )
+            except Exception:
+                self._server_threads = 0
+        return _effective_scan_threads(self.cfg.parquet_scan_max_threads, self._server_threads)
 
     # ── Cache incrementale (mirror di chDB) ───────────────────────────────
     def _sql_from_cache(self, ctx, source, operations, hashes, record=False, use_cache=True) -> str:
@@ -452,6 +486,10 @@ class ClickHouseEngine(Engine):
         client = self._client()
         ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
                                 matviews=self.matviews, allow_matview=True)
+        if _needs_scan_tuning(ops):
+            threads = self._scan_max_threads(ctx)
+            if threads:
+                ctx.settings["max_threads"] = threads
         try:
             if use_cache:
                 self._materialize(ctx, source, ops[:-1])
@@ -484,6 +522,9 @@ class ClickHouseEngine(Engine):
         ops = _coerce_ops(operations)
         client = self._client()
         ctx = ClickHouseContext(client, self.storage, self.cfg, [])
+        threads = self._scan_max_threads(ctx)
+        if threads:
+            ctx.settings["max_threads"] = threads
         try:
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)

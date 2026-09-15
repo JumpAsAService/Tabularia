@@ -220,6 +220,13 @@ class ClickHouseExternalSettings(BaseModel):
     # env: __MATERIALIZE_TTL_SECONDS — dopo quanti secondi di INUTILIZZO la copia
     # viene droppata (il conteggio riparte a ogni accesso).
     materialize_ttl_seconds: int = 1800
+    # env: __PARQUET_SCAN_MAX_THREADS — sulle query di SCANSIONE (aggregazioni,
+    # pivot, sort, join) impone almeno questi thread. Il default di ClickHouse è
+    # il numero di core, troppo basso quando leggere da S3 è I/O-bound (i thread
+    # aspettano la rete): l'oversubscription nasconde la latenza. NON tocca le
+    # query con LIMIT (la vista tabella), che con troppi thread rallentano; non
+    # scende mai sotto i core del server. 0 = non toccare max_threads.
+    parquet_scan_max_threads: int = 8
 
     @field_validator("password", mode="before")
     @classmethod

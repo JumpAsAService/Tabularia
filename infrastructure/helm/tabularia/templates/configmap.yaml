@@ -101,6 +101,7 @@ data:
   CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS: {{ .Values.externalServices.clickhouse.materializeMinRows | quote }}
   CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE: {{ .Values.externalServices.clickhouse.materializeDatabase | quote }}
   CLICKHOUSE_EXTERNAL__MATERIALIZE_TTL_SECONDS: {{ .Values.externalServices.clickhouse.materializeTtlSeconds | quote }}
+  CLICKHOUSE_EXTERNAL__PARQUET_SCAN_MAX_THREADS: {{ .Values.externalServices.clickhouse.parquetScanMaxThreads | quote }}
 {{- with .Values.externalServices.clickhouse.s3NamedCollection }}
   # Credentials held on the ClickHouse server: the S3 keys never travel inside a
   # query, so they never reach the server's query_log.
