@@ -313,6 +313,9 @@ class PublishSpec(BaseModel):
     # se una datasource con questo nome esiste già nella cartella: sovrascrivila
     # (solo se è kind="flow") invece di fallire con 409
     overwrite: bool = False
+    # colonne per l'ORDER BY: il risultato viene ordinato prima di scriverlo
+    # (parquet ordinato → pruning a valle) e le chiavi restano sulla datasource
+    sort_keys: list[str] = Field(default_factory=list)
 
 
 class RunDestinationSpec(BaseModel):

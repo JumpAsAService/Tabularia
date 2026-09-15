@@ -339,6 +339,7 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
             "project_id": d.get("projectId"),
             "description": d.get("description") or "",
             "overwrite": bool(d.get("overwrite")),
+            "sort_keys": d.get("sortKeys") or [],
         }
         # copia su S3 esterno IN AGGIUNTA alla datasource: `destination` resta
         # libero, così il suo fallimento non è vincolante (vedi RunMirrorSpec)

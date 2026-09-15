@@ -185,6 +185,13 @@ async def _launch_flow_run(
     ensure_reads_pinned(user, read_payload, engine_bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
 
+    # publish con chiavi di ordinamento: ordina il RISULTATO prima di scriverlo,
+    # così il parquet è fisicamente ordinato (pruning a valle). L'op `sort` è
+    # standard su ogni engine; le stesse chiavi finiscono anche sulla datasource.
+    publish_keys = [k.strip() for k in body.publish.sort_keys if k and k.strip()] if body.publish else []
+    if publish_keys:
+        body.operations = list(body.operations) + [{"type": "sort", "params": {"by": publish_keys}}]
+
     # cartella di destinazione del parquet: quella della datasource sovrascritta,
     # quando la si conosce già al lancio (vedi `snapshot_key`)
     publish_target_id: int | None = None
@@ -458,6 +465,7 @@ async def _launch_flow_run(
         publish_project_id=body.publish.project_id if body.publish else None,
         publish_description=body.publish.description if body.publish else "",
         publish_overwrite=body.publish.overwrite if body.publish else False,
+        publish_sort_keys=json.dumps(publish_keys),
         destination=destination_summary,
         mirror=mirror_summary,
         email=email_summary,
@@ -787,6 +795,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             existing.key = run.output_key
             existing.rows = result.get("rows_written")
             existing.columns = columns
+            existing.sort_keys = run.publish_sort_keys
             existing.description = run.publish_description
             existing.flow_id = run.flow_id
             existing.owner_id = existing.owner_id or run.launched_by
@@ -813,6 +822,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             key=run.output_key,
             rows=result.get("rows_written"),
             columns=columns,
+            sort_keys=run.publish_sort_keys,
             kind="flow",
             flow_id=run.flow_id,
             snapshot_run_id=run.id,  # baseline per i publish successivi

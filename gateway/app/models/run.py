@@ -55,6 +55,9 @@ class Run(SQLModel, table=True):
     publish_description: str = ""
     # sovrascrivi la datasource omonima (kind="flow") invece di crearne una nuova
     publish_overwrite: bool = False
+    # colonne di ORDER BY promesse alla datasource pubblicata (JSON): il risultato
+    # esce ordinato e la datasource le eredita (vedi _publish_datasource)
+    publish_sort_keys: str = "[]"
     datasource_id: Optional[int] = Field(default=None, foreign_key="datasources.id")
 
     # destinazione database dell'output (nodo Output): riassunto JSON per la
