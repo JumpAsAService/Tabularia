@@ -229,6 +229,7 @@ class ChdbEngine(Engine):
         operations: list[Operation] | list[dict[str, Any]],
         limit: int = 100,
         use_cache: bool = True,
+        sort_keys: list[str] | None = None,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         sess, state_dir = self._new_session()

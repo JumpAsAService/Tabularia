@@ -18,6 +18,7 @@ def preview_task(
     limit: int = 100,
     engine: str | None = None,
     no_cache: bool = False,
+    sort_keys: list[str] | None = None,
 ) -> dict:
     """Anteprima interattiva del flow (schema + prime N righe), eseguita su un
     worker dedicato invece che nel processo API: così l'engine (Polars/DuckDB)
@@ -42,6 +43,7 @@ def preview_task(
             operations=operations,
             limit=limit,
             use_cache=not no_cache,
+            sort_keys=sort_keys,
         )
         return {"ok": True, "result": result.model_dump()}
     except SourceNotFoundError as e:

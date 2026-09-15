@@ -143,7 +143,8 @@ class ClickHouseContext:
     funziona invariato."""
 
     def __init__(self, client, storage, cfg: ClickHouseExternalSettings, tmp: list[str],
-                 preview_limit: int | None = None, matviews=None, allow_matview: bool = False):
+                 preview_limit: int | None = None, matviews=None, allow_matview: bool = False,
+                 sort_keys=None):
         self.client = client
         self.storage = storage
         self.cfg = cfg
@@ -154,6 +155,8 @@ class ClickHouseContext:
         # materializzazione della sorgente radice: attiva solo nel viewer (preview)
         self.matviews = matviews
         self.allow_matview = allow_matview
+        # colonne di ORDER BY che la copia materializzata deve ereditare
+        self.sort_keys = [k.strip() for k in (sort_keys or []) if k and k.strip()]
         self.settings: dict[str, Any] = {}
         if cfg.max_execution_time > 0:
             self.settings["max_execution_time"] = cfg.max_execution_time
@@ -271,7 +274,7 @@ class ClickHouseContext:
         # solo la SORGENTE radice del viewer (non i blob di cache, non i lati
         # join): se è grande, si legge dalla copia MergeTree invece che da s3()
         if root and self.allow_matview and self.matviews is not None:
-            table = self.matviews.resolve(self, source)
+            table = self.matviews.resolve(self, source, self.sort_keys)
             if table:
                 return f"SELECT * FROM {table}"
         return f"SELECT * FROM {self.s3_fn(source)}"
@@ -306,7 +309,7 @@ class ClickHouseContext:
             f"SELECT count() FROM system.tables WHERE database = {_lit(db)} AND name = {_lit(table)}"
         ) > 0
 
-    def matview_build(self, db: str, table: str, source: DataSource) -> None:
+    def matview_build(self, db: str, table: str, source: DataSource, sort_keys=None) -> None:
         """CREATE + INSERT + RENAME. Il database gestito di Scaleway è `Replicated`
         e rifiuta `CREATE AS SELECT`, quindi DDL esplicita (da DESCRIBE) e INSERT
         separato. Il RENAME rende la tabella visibile solo a INSERT COMPLETO: chi
@@ -317,9 +320,18 @@ class ClickHouseContext:
         if not cols:
             raise EngineError("materializzazione: schema della sorgente vuoto")
         ddl = ", ".join(f"{_qi(name)} {typ}" for name, typ in cols)
+        # ORDER BY solo sulle chiavi che esistono davvero nello schema (una chiave
+        # sbagliata non deve far fallire la copia); nessuna → tuple() come prima
+        present = {name for name, _ in cols}
+        keys = [k for k in (sort_keys or []) if k in present]
+        order = f"({', '.join(_qi(k) for k in keys)})" if keys else "tuple()"
+        # le colonne del parquet sono Nullable: una sorting key nullable è
+        # rifiutata (code 44) senza questo setting → senza, l'ORDER BY non
+        # partirebbe MAI. Irrilevante con tuple().
+        opts = " SETTINGS allow_nullable_key = 1" if keys else ""
         final = f"{_qi(db)}.{_qi(table)}"
         tmp = f"{_qi(db)}.{_qi(table + '_tmp_' + uuid.uuid4().hex[:8])}"
-        self.command(f"CREATE TABLE {tmp} ({ddl}) ENGINE = MergeTree ORDER BY tuple()")
+        self.command(f"CREATE TABLE {tmp} ({ddl}) ENGINE = MergeTree ORDER BY {order}{opts}")
         try:
             self.command(f"INSERT INTO {tmp} SELECT * FROM {s3}")
             try:
@@ -481,11 +493,12 @@ class ClickHouseEngine(Engine):
         operations: list[Operation] | list[dict[str, Any]],
         limit: int = 100,
         use_cache: bool = True,
+        sort_keys: list[str] | None = None,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         client = self._client()
         ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
-                                matviews=self.matviews, allow_matview=True)
+                                matviews=self.matviews, allow_matview=True, sort_keys=sort_keys)
         if _needs_scan_tuning(ops):
             threads = self._scan_max_threads(ctx)
             if threads:

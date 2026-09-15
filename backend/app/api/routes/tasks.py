@@ -90,6 +90,7 @@ def preview_flow(request: PreviewRequest):
             "limit": request.limit,
             "engine": request.engine,
             "no_cache": request.no_cache,
+            "sort_keys": request.sort_keys,
         },
         queue="preview",
     )

@@ -65,8 +65,12 @@ class MatViewStore:
 
     # ── identità ────────────────────────────────────────────────────────────
     @staticmethod
-    def _sid(source) -> str:
-        return f"{source.bucket}/{source.key}"
+    def _sid(source, sort_keys=None) -> str:
+        # le chiavi fanno parte dell'IDENTITÀ: cambiarle deve dare una tabella
+        # nuova (con ORDER BY diverso), non riusare quella vecchia
+        base = f"{source.bucket}/{source.key}"
+        keys = [k for k in (sort_keys or []) if k]
+        return f"{base}|sk={','.join(keys)}" if keys else base
 
     def _secret(self) -> bytes:
         # la chiave Fernet è obbligatoria (check_required_secrets): il fallback
@@ -81,14 +85,15 @@ class MatViewStore:
         return f"{_qi(self.cfg.matview_database)}.{_qi(table)}"
 
     # ── decisione (chiamata da ClickHouseContext.scan sulla sorgente radice) ──
-    def resolve(self, ctx, source) -> str | None:
+    def resolve(self, ctx, source, sort_keys=None) -> str | None:
         """Nome qualificato della tabella da leggere al posto di `s3()`, o None
         per restare su `s3()`. Materializza pigramente alla prima richiesta di un
-        dataset sopra soglia; per gli altri è un no-op dopo la prima volta."""
+        dataset sopra soglia; per gli altri è un no-op dopo la prima volta. La
+        copia eredita `sort_keys` come ORDER BY (vedi ctx.matview_build)."""
         cfg = self.cfg
         if not cfg.materialize_enabled:
             return None
-        sid = self._sid(source)
+        sid = self._sid(source, sort_keys)
         db = cfg.matview_database
         table = self.table_name(sid)
         try:
@@ -103,7 +108,7 @@ class MatViewStore:
             if rows < cfg.materialize_min_rows:
                 self._mark_small(sid)
                 return None
-            ctx.matview_build(db, table, source)
+            ctx.matview_build(db, table, source, sort_keys)
             self._mark(sid)
             logger.info("materializzata la sorgente %s in %s (%d righe)", sid, table, rows)
             return self._qualified(table)

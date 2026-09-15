@@ -40,8 +40,9 @@ class FakeCtx:
     def matview_exists(self, db: str, table: str) -> bool:
         return table in self.tables
 
-    def matview_build(self, db: str, table: str, source) -> None:
+    def matview_build(self, db: str, table: str, source, sort_keys=None) -> None:
         self.built.append(table)
+        self.built_keys = list(sort_keys or [])
         self.tables[table] = time.time()
 
     def matview_drop(self, db: str, table: str) -> None:
@@ -123,7 +124,7 @@ def test_a_build_failure_falls_back_to_s3():
     store = _store()
 
     class Boom(FakeCtx):
-        def matview_build(self, db, table, source):
+        def matview_build(self, db, table, source, sort_keys=None):
             raise RuntimeError("permesso negato sul database")
 
     assert store.resolve(Boom(rows=5_000_000), SRC) is None
@@ -198,3 +199,26 @@ def test_evict_drops_old_orphans_but_spares_fresh_ones():
     assert f"{TABLE_PREFIX}vecchia" in ctx.dropped
     assert f"{TABLE_PREFIX}fresca" not in ctx.dropped
     assert removed == 1
+
+
+# ── ereditarietà delle chiavi di ordinamento nella copia ─────────────────────────
+def test_sort_keys_reach_the_build():
+    store = _store()
+    ctx = FakeCtx(rows=5_000_000)
+    store.resolve(ctx, SRC, ["id", "data"])
+    assert ctx.built_keys == ["id", "data"]
+
+
+def test_different_sort_keys_are_different_tables():
+    # cambiare le chiavi deve dare una tabella nuova (ORDER BY diverso), non
+    # riusare quella vecchia
+    store = _store()
+    t_none = store.table_name(store._sid(SRC))
+    t_id = store.table_name(store._sid(SRC, ["id"]))
+    t_data = store.table_name(store._sid(SRC, ["data"]))
+    assert len({t_none, t_id, t_data}) == 3
+
+
+def test_same_sort_keys_are_the_same_table():
+    store = _store()
+    assert store._sid(SRC, ["id", "data"]) == store._sid(SRC, ["id", "data"])
