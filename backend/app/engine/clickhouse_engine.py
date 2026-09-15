@@ -41,6 +41,7 @@ from botocore.exceptions import ClientError
 from app.core.config import ClickHouseExternalSettings, get_settings
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
+from app.engine.matview import MatViewStore
 from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
@@ -123,7 +124,7 @@ class ClickHouseContext:
     funziona invariato."""
 
     def __init__(self, client, storage, cfg: ClickHouseExternalSettings, tmp: list[str],
-                 preview_limit: int | None = None):
+                 preview_limit: int | None = None, matviews=None, allow_matview: bool = False):
         self.client = client
         self.storage = storage
         self.cfg = cfg
@@ -131,6 +132,9 @@ class ClickHouseContext:
         self.staging: list[str] = []  # tabelle di staging (push) da droppare
         self._n = 0
         self.preview_limit = preview_limit
+        # materializzazione della sorgente radice: attiva solo nel viewer (preview)
+        self.matviews = matviews
+        self.allow_matview = allow_matview
         self.settings: dict[str, Any] = {}
         if cfg.max_execution_time > 0:
             self.settings["max_execution_time"] = cfg.max_execution_time
@@ -240,11 +244,17 @@ class ClickHouseContext:
         return f"SELECT * FROM {qualified}"
 
     # ── sorgenti e catena ────────────────────────────────────────────────
-    def scan(self, source: DataSource) -> str:
+    def scan(self, source: DataSource, root: bool = False) -> str:
         if self.cfg.transport == "push":
             return self._push(source)
         if not _source_exists(self.storage, source):
             raise SourceNotFoundError(source.bucket, source.key)
+        # solo la SORGENTE radice del viewer (non i blob di cache, non i lati
+        # join): se è grande, si legge dalla copia MergeTree invece che da s3()
+        if root and self.allow_matview and self.matviews is not None:
+            table = self.matviews.resolve(self, source)
+            if table:
+                return f"SELECT * FROM {table}"
         return f"SELECT * FROM {self.s3_fn(source)}"
 
     def apply(self, sql: str, ops, index_offset: int = 0) -> str:
@@ -265,6 +275,54 @@ class ClickHouseContext:
             sql = self.scan(DataSource(**ref["source"]))
             return self.apply(sql, ref.get("operations") or [])
         return self.scan(DataSource(**ref))
+
+    # ── operazioni per la materializzazione (la politica sta in matview.py) ────
+    def matview_count(self, source: DataSource) -> int:
+        """Righe della sorgente senza leggerne i dati: ClickHouse conta dai
+        metadati del parquet (footer), non scansiona."""
+        return self.scalar(f"SELECT count() FROM {self.s3_fn(source)}")
+
+    def matview_exists(self, db: str, table: str) -> bool:
+        return self.scalar(
+            f"SELECT count() FROM system.tables WHERE database = {_lit(db)} AND name = {_lit(table)}"
+        ) > 0
+
+    def matview_build(self, db: str, table: str, source: DataSource) -> None:
+        """CREATE + INSERT + RENAME. Il database gestito di Scaleway è `Replicated`
+        e rifiuta `CREATE AS SELECT`, quindi DDL esplicita (da DESCRIBE) e INSERT
+        separato. Il RENAME rende la tabella visibile solo a INSERT COMPLETO: chi
+        guarda `matview_exists` non vede mai una copia a metà. Se un altro worker
+        l'ha già creata nel frattempo, la sua è valida quanto la mia."""
+        s3 = self.s3_fn(source)
+        cols = self.schema_of(f"SELECT * FROM {s3}")
+        if not cols:
+            raise EngineError("materializzazione: schema della sorgente vuoto")
+        ddl = ", ".join(f"{_qi(name)} {typ}" for name, typ in cols)
+        final = f"{_qi(db)}.{_qi(table)}"
+        tmp = f"{_qi(db)}.{_qi(table + '_tmp_' + uuid.uuid4().hex[:8])}"
+        self.command(f"CREATE TABLE {tmp} ({ddl}) ENGINE = MergeTree ORDER BY tuple()")
+        try:
+            self.command(f"INSERT INTO {tmp} SELECT * FROM {s3}")
+            try:
+                self.command(f"RENAME TABLE {tmp} TO {final}")
+            except Exception:
+                if self.matview_exists(db, table):
+                    self.command(f"DROP TABLE IF EXISTS {tmp} SYNC")
+                else:
+                    raise
+        except Exception:
+            self.command(f"DROP TABLE IF EXISTS {tmp} SYNC")
+            raise
+
+    def matview_drop(self, db: str, table: str) -> None:
+        self.command(f"DROP TABLE IF EXISTS {_qi(db)}.{_qi(table)} SYNC")
+
+    def matview_list(self, db: str, prefix: str) -> list[tuple[str, float]]:
+        rows = self._rows(
+            "SELECT name, toUnixTimestamp(metadata_modification_time) FROM system.tables "
+            f"WHERE database = {_lit(db)} AND startsWith(name, {_lit(prefix)})"
+        )
+        return [(r[0], float(r[1])) for r in rows]
 
     def cleanup(self) -> None:
         for table in self.staging:
@@ -296,6 +354,7 @@ class ClickHouseEngine(Engine):
             raise EngineError(
                 "engine ClickHouse esterno non configurato: imposta CLICKHOUSE_EXTERNAL__HOST (e credenziali)."
             )
+        self.matviews = MatViewStore(self.cache.redis, self.cfg)
 
     def _client(self):
         import clickhouse_connect
@@ -322,7 +381,7 @@ class ClickHouseEngine(Engine):
         if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
         if start == 0:
-            sql = ctx.scan(source)
+            sql = ctx.scan(source, root=True)
         else:
             self.cache.touch(hashes[start - 1])
             cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
@@ -391,7 +450,8 @@ class ClickHouseEngine(Engine):
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         client = self._client()
-        ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1)
+        ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
+                                matviews=self.matviews, allow_matview=True)
         try:
             if use_cache:
                 self._materialize(ctx, source, ops[:-1])
@@ -448,4 +508,17 @@ class ClickHouseEngine(Engine):
             return RunResult(destination=destination, rows_written=rows_written, columns=columns)
         finally:
             ctx.cleanup()
+            client.close()
+
+    # ── Manutenzione delle copie del viewer (chiamata dal task beat) ───────────
+    def evict_matviews(self) -> int:
+        """Droppa le tabelle materializzate scadute e le orfane. No-op se la
+        materializzazione non è attiva."""
+        if not self.cfg.materialize_enabled:
+            return 0
+        client = self._client()
+        ctx = ClickHouseContext(client, self.storage, self.cfg, [])
+        try:
+            return self.matviews.evict(ctx, self.cfg.materialize_ttl_seconds)
+        finally:
             client.close()

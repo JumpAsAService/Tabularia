@@ -73,6 +73,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.jobs.storage_stats_task",
         "schedule": float(settings.metrics.storage_stats_interval_seconds),
     },
+    # drop delle copie materializzate per il viewer (ClickHouse esterno) non più
+    # usate; il task si auto-salta se la feature è spenta
+    "evict-matviews": {
+        "task": "app.tasks.jobs.evict_matview_task",
+        "schedule": float(max(300, settings.clickhouse_external.materialize_ttl_seconds // 2)),
+    },
 }
 
 

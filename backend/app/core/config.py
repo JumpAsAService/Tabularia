@@ -207,6 +207,19 @@ class ClickHouseExternalSettings(BaseModel):
     # tetto di esecuzione per singola query (secondi, 0 = nessuno); le preview
     # interattive lo hanno comunque dal timeout lato API
     max_execution_time: int = 0
+    # ── Materializzazione per il viewer (solo transport s3) ───────────────────
+    # env: __MATERIALIZE_MIN_ROWS — sopra questa soglia di righe un dataset letto
+    # dal viewer viene COPIATO una volta in una MergeTree sul server, e le query
+    # successive leggono da lì invece di rileggere il parquet con s3(): sulle
+    # scansioni piene (grafici, pivot, ordinamenti) è 2–6× più veloce. 0 =
+    # disattivato. Best-effort: se la copia non riesce si resta su s3().
+    materialize_min_rows: int = 5_000_000
+    # env: __MATERIALIZE_DATABASE — database dove creare quelle tabelle; vuoto =
+    # lo stesso `database`. Un db dedicato tiene le copie effimere separate.
+    materialize_database: str = ""
+    # env: __MATERIALIZE_TTL_SECONDS — dopo quanti secondi di INUTILIZZO la copia
+    # viene droppata (il conteggio riparte a ogni accesso).
+    materialize_ttl_seconds: int = 1800
 
     @field_validator("password", mode="before")
     @classmethod
@@ -224,6 +237,15 @@ class ClickHouseExternalSettings(BaseModel):
     @property
     def enabled(self) -> bool:
         return bool(self.host.strip())
+
+    @property
+    def materialize_enabled(self) -> bool:
+        # solo con transport s3: in push la sorgente è GIÀ una MergeTree di staging
+        return self.enabled and self.transport == "s3" and self.materialize_min_rows > 0
+
+    @property
+    def matview_database(self) -> str:
+        return (self.materialize_database or self.database).strip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
