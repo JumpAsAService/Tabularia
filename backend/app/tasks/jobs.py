@@ -36,6 +36,9 @@ def preview_task(
         UnknownOperationError,
     )
 
+    import time as _time
+
+    _t0 = _time.perf_counter()
     try:
         engine_impl = get_engine(engine)
         result = engine_impl.preview(
@@ -45,7 +48,24 @@ def preview_task(
             use_cache=not no_cache,
             sort_keys=sort_keys,
         )
-        return {"ok": True, "result": result.model_dump()}
+        _engine_ms = (_time.perf_counter() - _t0) * 1000
+        payload = {"ok": True, "result": result.model_dump()}
+        # Il tempo DENTRO il worker, per ogni engine. Confrontalo con quello che
+        # misura il chiamante: la differenza e' attesa in coda + trasporto del
+        # risultato, non lavoro. Se `serializz` e' alto, pesa il payload (righe x
+        # colonne), non la query.
+        _ser = _time.perf_counter()
+        _n_rows, _n_cols = result.row_count, len(result.columns)
+        logger.info(
+            "preview_task %.0f ms | engine=%s(%.0fms) serializz=%.0fms | righe=%d colonne=%d limit=%d ops=%d cache=%s chiavi=%d",
+            (_time.perf_counter() - _t0) * 1000,
+            engine or "default", _engine_ms,
+            (_time.perf_counter() - _ser) * 1000,
+            _n_rows, _n_cols, limit, len(operations),
+            "off" if no_cache else "on",
+            len(sort_keys or []),
+        )
+        return payload
     except SourceNotFoundError as e:
         return {"ok": False, "error": "not_found", "detail": str(e)}
     except (UnknownOperationError, OperationError) as e:

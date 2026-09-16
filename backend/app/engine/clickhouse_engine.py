@@ -27,6 +27,8 @@ essere registrato eager nel padre Celery — a differenza di chDB.
 from __future__ import annotations
 
 import io
+import threading
+import time
 import logging
 import os
 import re
@@ -68,6 +70,9 @@ _SCAN_HEAVY = frozenset({"group_by", "pivot", "unpivot", "sort", "join", "union"
 # orfano. Con un tetto più basso la copia fallisce da sola, in modo pulito:
 # cleanup eseguito, backoff registrato, preview servita da s3().
 _MATERIALIZE_MAX_SECONDS = 60
+
+# un client ClickHouse per thread (vedi _client): l'handshake costa piu' della query
+_CLIENTI_PER_THREAD = threading.local()
 
 
 def _needs_scan_tuning(ops) -> bool:
@@ -165,6 +170,12 @@ class ClickHouseContext:
         self.allow_matview = allow_matview
         # colonne di ORDER BY che la copia materializzata deve ereditare
         self.sort_keys = [k.strip() for k in (sort_keys or []) if k and k.strip()]
+        # da dove e' stata letta la sorgente RADICE: la copia MergeTree copre
+        # un caso stretto (radice del viewer, sopra soglia, use_cache=False,
+        # transport s3), quindi il caso NORMALE resta s3(). Senza questo, un
+        # `query=5000ms` nei log non si sa se e' una scansione del parquet o
+        # una lettura dalla copia: diagnosi opposte.
+        self.fonte_radice = "?"
         self.settings: dict[str, Any] = {}
         if cfg.max_execution_time > 0:
             self.settings["max_execution_time"] = cfg.max_execution_time
@@ -284,7 +295,11 @@ class ClickHouseContext:
         if root and self.allow_matview and self.matviews is not None:
             table = self.matviews.resolve(self, source, self.sort_keys)
             if table:
+                if root:
+                    self.fonte_radice = "matview"
                 return f"SELECT * FROM {table}"
+        if root:
+            self.fonte_radice = "s3" if self.cfg.transport != "push" else "push"
         return f"SELECT * FROM {self.s3_fn(source)}"
 
     def apply(self, sql: str, ops, index_offset: int = 0) -> str:
@@ -398,10 +413,42 @@ class ClickHouseEngine(Engine):
         self._server_threads: int | None = None  # core del server (letto una volta)
 
     def _client(self):
+        """Client RIUSATO per thread. Crearlo costa tre round-trip (version+
+        timezone, l'intera system.settings ~424 KiB, un ping): nei log valeva
+        113-130 ms, PIU' della query stessa. Su rete remota e' il costo fisso
+        piu' grande di una preview, pagato a ogni richiesta.
+
+        Per thread e non globale: i worker Celery sono processi separati (nessuna
+        condivisione), ma l'API FastAPI e' multi-thread e due thread sullo stesso
+        client si pesterebbero i piedi.
+
+        Prima del riuso si valida con un `SELECT 1` (~10 ms): senza, una
+        connessione morta — server riavviato, rete caduta, idle chiuso dal
+        bilanciatore — resterebbe in cache e farebbe fallire OGNI preview
+        successiva. Dieci millisecondi per non barattare velocita' con fragilita'.
+        """
         import clickhouse_connect
 
+        chiave = (self.cfg.host, self.cfg.port, self.cfg.database or "default",
+                  self.cfg.username or "default", bool(self.cfg.secure))
+        cache = getattr(_CLIENTI_PER_THREAD, "per_chiave", None)
+        if cache is None:
+            cache = _CLIENTI_PER_THREAD.per_chiave = {}
+
+        esistente = cache.get(chiave)
+        if esistente is not None:
+            try:
+                esistente.command("SELECT 1")
+                return esistente
+            except Exception:
+                cache.pop(chiave, None)
+                try:
+                    esistente.close()
+                except Exception:
+                    pass  # gia' morto: buttarlo e basta
+
         try:
-            return clickhouse_connect.get_client(
+            c = clickhouse_connect.get_client(
                 host=self.cfg.host,
                 port=self.cfg.port,
                 username=self.cfg.username or "default",
@@ -412,6 +459,8 @@ class ClickHouseEngine(Engine):
             )
         except Exception as e:
             raise EngineError(_clean_error(e, self.cfg.host, self.cfg.port)) from e
+        cache[chiave] = c
+        return c
 
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"
@@ -508,8 +557,21 @@ class ClickHouseEngine(Engine):
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
     ) -> PreviewResult:
+        # Cronometro per FASI: quando una preview "ci mette troppo" serve sapere
+        # QUALE pezzo, non il totale. Le fasi sono disgiunte; cio' che manca
+        # rispetto al tempo visto dal chiamante e' coda o trasporto.
+        _t0 = time.perf_counter()
+        _fasi: dict[str, float] = {}
+
+        def _fase(nome, da):
+            ora = time.perf_counter()
+            _fasi[nome] = (ora - da) * 1000
+            return ora
+
         ops = _coerce_ops(operations)
+        _t = _t0
         client = self._client()
+        _t = _fase("client", _t)
         # `allow_matview` SOLO per le query esplorative del viewer (use_cache=False).
         # L'editor usa la step-cache: lì la copia (a) è sincrona dentro la richiesta
         # e fa "appendere" la preview, (b) nascerebbe con un'identità diversa (senza
@@ -526,23 +588,41 @@ class ClickHouseEngine(Engine):
         try:
             if use_cache:
                 self._materialize(ctx, source, ops[:-1])
+                _t = _fase("stepcache", _t)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            # include la risoluzione della copia materializzata: se qui il tempo
+            # e' alto, la copia si sta CREANDO adesso (prima volta o dopo un drop)
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
+            _t = _fase("sql", _t)
             raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
+            _t = _fase("query", _t)
             # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
             df = naive_utc(pl.read_parquet(io.BytesIO(raw))) if raw else pl.DataFrame()
             truncated = df.height > limit
             if truncated:
                 df = df.head(limit)
-            return PreviewResult(
+            res = PreviewResult(
                 columns=_columns_of(df.schema),
                 rows=df.to_dicts(),
                 row_count=df.height,
                 truncated=truncated,
             )
+            _fase("decode", _t)
+            logger.info(
+                "preview clickhouse %.0f ms | %s | righe=%d colonne=%d limit=%d ops=%d cache=%s scaricati=%.0fKB fonte=%s",
+                (time.perf_counter() - _t0) * 1000,
+                " ".join("%s=%.0fms" % kv for kv in _fasi.items()),
+                res.row_count, len(res.columns), limit, len(ops),
+                "on" if use_cache else "off",
+                (len(raw) / 1024) if raw else 0,
+                ctx.fonte_radice,
+            )
+            return res
         finally:
             ctx.cleanup()
-            client.close()
+            # NIENTE client.close(): e' condiviso col prossimo task di questo
+            # thread. Muore col processo (i figli Celery si riciclano), e se la
+            # connessione cade la validazione in _client() la sostituisce.
 
     # ── Run ───────────────────────────────────────────────────────────────
     def run(
@@ -582,7 +662,9 @@ class ClickHouseEngine(Engine):
             return RunResult(destination=destination, rows_written=rows_written, columns=columns)
         finally:
             ctx.cleanup()
-            client.close()
+            # NIENTE client.close(): e' condiviso col prossimo task di questo
+            # thread. Muore col processo (i figli Celery si riciclano), e se la
+            # connessione cade la validazione in _client() la sostituisce.
 
     # ── Manutenzione delle copie del viewer (chiamata dal task beat) ───────────
     def evict_matviews(self) -> int:
@@ -595,4 +677,4 @@ class ClickHouseEngine(Engine):
         try:
             return self.matviews.evict(ctx, self.cfg.materialize_ttl_seconds)
         finally:
-            client.close()
+            ctx.cleanup()  # il client resta al thread (vedi _client)

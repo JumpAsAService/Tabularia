@@ -63,6 +63,14 @@ class OrchestrationError(RuntimeError):
     pass
 
 
+class StopSequence(OrchestrationError):
+    """Interrompe la SEQUENZA, non solo il nodo: la solleva l'output email con
+    `stopOnFailure`. Serve un tipo suo perché il blocco che esegue gli output ha
+    un `except Exception` che raccoglie gli errori e prosegue — comportamento
+    voluto per gli altri output. Senza un tipo distinto, l'interruzione veniva
+    raccolta da quel medesimo except e la sequenza continuava lo stesso."""
+
+
 async def _refresh_and_wait(
     session: Session, user: User, ds_id: int, trigger_type: str = "manual", parent_run_id: int | None = None
 ) -> None:
@@ -167,11 +175,16 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                     # avvenuta (marcare "notificato" senza aver notificato è
                     # peggio che fermarsi). L'opzione è sul nodo, non implicita.
                     if d.get("destType") == "email" and d.get("stopOnFailure") is not False:
-                        raise OrchestrationError(
+                        raise StopSequence(
                             f"invio email non riuscito (run {run.id}): {run.error or run.status}. "
                             "I passi successivi del flusso non sono stati eseguiti."
                         )
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
+            except StopSequence:
+                # deve uscire: l'except qui sotto la raccoglierebbe come un
+                # errore qualunque e i passi a valle girerebbero comunque,
+                # dando per avvenuta una notifica che non è partita
+                raise
             except Exception as e:
                 logger.warning("orchestrate: flusso %s, output non eseguito: %s", flow.id, e)
                 errors.append(f"output: {e}")

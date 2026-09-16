@@ -36,15 +36,29 @@ def submit_transform_data_task(request: TransformDataRequest):
     
     operations = [op.model_dump() for op in request.operations]
 
+    # I kwarg OPZIONALI si inviano solo se valorizzati. Celery serializza per
+    # nome: un'API aggiornata che manda un parametro che il worker ancora vecchio
+    # non ha in firma lo fa morire di TypeError PRIMA di iniziare — ogni run
+    # fallito per tutta la finestra di un aggiornamento progressivo. È già
+    # successo con `mirror`, poi con `sort_keys` su preview_task; qui valeva per
+    # `mirror`, `email` e `engine` insieme. Omettere un kwarg con default è
+    # sempre sicuro, quindi il worker vecchio regge finché la feature non si usa.
+    extra = {
+        k: v
+        for k, v in (
+            ("destination", request.destination),
+            ("mirror", request.mirror),
+            ("email", request.email),
+            ("engine", request.engine),
+        )
+        if v is not None
+    }
     task = transform_data_task.delay(
         bucket=request.bucket,
         input_key=request.input_key,
         operations=operations,
         output_key=request.output_key,
-        destination=request.destination,
-        mirror=request.mirror,
-        email=request.email,
-        engine=request.engine,
+        **extra,
     )
     
     return TaskResponse(

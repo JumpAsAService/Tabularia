@@ -167,13 +167,22 @@ async function apply() {
   if (!ds) return
   loading.value = true; error.value = ''
   try {
-    // 1) schema dopo filtri+campi (per i picker di grafico/pivot)
-    const base = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true, sort_keys: ds.sort_keys })
-    baseCols.value = base.columns
-    // 2) risultato tabella (con eventuale pivot)
-    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys })
+    const ops = buildTableOps()
+    // `baseCols` sono le colonne SENZA pivot: servono ai picker di grafico e
+    // pivot. Senza pivot coincidono con quelle della tabella, quindi si leggono
+    // dal risultato che arriva comunque — e la query dello schema sparisce.
+    // Costava quanto l'altra (un LIMIT 1 dopo un filtro deve scansionare lo
+    // stesso: su parquet non c'è indice), cioè RADDOPPIAVA ogni Apply.
+    const conPivot = ops.length > baseOps.value.length
+    if (conPivot) {
+      // solo qui la tabella ha colonne diverse da quelle su cui si configura
+      const base = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true, sort_keys: ds.sort_keys })
+      baseCols.value = base.columns
+    }
+    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys })
     rows.value = res.rows
     tableCols.value = res.columns
+    if (!conPivot) baseCols.value = res.columns
   } catch (e) {
     error.value = errMessage(e); rows.value = []
   } finally {
