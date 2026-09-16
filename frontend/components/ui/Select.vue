@@ -38,9 +38,13 @@ const labelOf = (o: SelectOption) => o.label ?? String(o.value)
 const selected = computed(() => norm.value.find((o) => o.value === props.modelValue))
 
 // ── ricerca: attiva su richiesta o quando l'elenco è lungo ────────────────
+// `||` e non `??`: un prop booleano NON passato Vue lo converte in `false`, non
+// in `undefined`, quindi con `??` la regola automatica non scattava mai — il
+// pivot del viewer con 50 colonne non aveva la casella di ricerca. Il prop
+// esplicito forza l'attivazione; l'elenco lungo la attiva da solo.
 const SEARCH_THRESHOLD = 8
 const query = ref('')
-const searchable = computed(() => props.searchable ?? norm.value.length > SEARCH_THRESHOLD)
+const searchable = computed(() => props.searchable || norm.value.length > SEARCH_THRESHOLD)
 const filtered = computed<SelectOption[]>(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return norm.value
