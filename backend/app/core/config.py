@@ -257,6 +257,15 @@ class ClickHouseExternalSettings(BaseModel):
         return self.enabled and self.transport == "s3" and self.materialize_min_rows > 0
 
     @property
+    def matview_sweep_enabled(self) -> bool:
+        """Lo SWEEP delle copie (scadute + orfane) non dipende dal fatto che se ne
+        creino di nuove: spegnere la materializzazione (min_rows=0) spegneva anche
+        lo spazzino, e una tabella temporanea da 5,77 GiB lasciata da una build
+        uccisa a metà restava sul server per sempre. Basta che ClickHouse sia
+        configurato e che il trasporto sia s3 (in push non esistono copie)."""
+        return self.enabled and self.transport == "s3"
+
+    @property
     def matview_database(self) -> str:
         return (self.materialize_database or self.database).strip()
 

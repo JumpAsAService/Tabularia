@@ -112,3 +112,32 @@ def test_materialization_is_off_by_default():
     cfg = ClickHouseExternalSettings(host="ch.example", transport="s3")
     assert cfg.materialize_min_rows == 0
     assert cfg.materialize_enabled is False
+
+
+# ── lo sweep NON dipende dall'interruttore della materializzazione ─────────────
+def test_the_sweep_switch_depends_only_on_clickhouse_being_configured():
+    assert _cfg(materialize_min_rows=0).materialize_enabled is False
+    assert _cfg(materialize_min_rows=0).matview_sweep_enabled is True
+    assert ClickHouseExternalSettings(host="", transport="s3").matview_sweep_enabled is False
+    assert ClickHouseExternalSettings(host="h", transport="push").matview_sweep_enabled is False
+
+
+def test_orphans_are_swept_even_with_materialization_off(monkeypatch):
+    """Spegnere la materializzazione (min_rows=0) spegneva anche lo spazzino: la
+    tabella temporanea da 5,77 GiB di una build uccisa a metà restava sul server
+    per sempre. Lo sweep deve girare finché ClickHouse è configurato."""
+    import time
+    from app.engine import clickhouse_engine as ce
+
+    eng = _engine("8", materialize_min_rows=0, materialize_ttl_seconds=100)
+    eng.storage = None
+    eng.matviews = MatViewStore(FakeRedis(), eng.cfg)
+    ctx = FakeCtx(rows=0)
+    ctx.tables["_mv_deadbeef_tmp_1234abcd"] = time.time() - 10_000  # orfana, ben oltre il TTL
+    ctx.cleanup = lambda: None
+    monkeypatch.setattr(eng, "_client", lambda: object())
+    monkeypatch.setattr(ce, "ClickHouseContext", lambda *a, **k: ctx)
+
+    assert eng.cfg.materialize_enabled is False
+    assert eng.evict_matviews() == 1
+    assert any("_tmp_" in d for d in ctx.dropped), ctx.dropped

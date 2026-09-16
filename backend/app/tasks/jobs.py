@@ -339,11 +339,13 @@ def evict_cache_task() -> dict:
 def evict_matview_task() -> dict:
     """Drop periodico delle tabelle materializzate per il viewer sul ClickHouse
     esterno (scadute per inutilizzo + orfane). Schedulato da Celery beat; si
-    auto-salta se l'engine non c'è o la materializzazione è disattivata."""
+    auto-salta solo se l'engine non c'è o ClickHouse non è configurato — NON se
+    la materializzazione è spenta: i residui di quando era accesa (o di una
+    build uccisa a metà) vanno comunque rimossi."""
     from app.engine import _CLICKHOUSE_AVAILABLE
 
     settings = get_settings()
-    if not _CLICKHOUSE_AVAILABLE or not settings.clickhouse_external.materialize_enabled:
+    if not _CLICKHOUSE_AVAILABLE or not settings.clickhouse_external.matview_sweep_enabled:
         return {"removed": 0, "skipped": True}
     removed = get_engine("clickhouse").evict_matviews()
     return {"removed": removed, "ttl_seconds": settings.clickhouse_external.materialize_ttl_seconds}

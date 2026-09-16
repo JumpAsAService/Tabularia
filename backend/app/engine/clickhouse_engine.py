@@ -707,9 +707,11 @@ class ClickHouseEngine(Engine):
 
     # ── Manutenzione delle copie del viewer (chiamata dal task beat) ───────────
     def evict_matviews(self) -> int:
-        """Droppa le tabelle materializzate scadute e le orfane. No-op se la
-        materializzazione non è attiva."""
-        if not self.cfg.materialize_enabled:
+        """Droppa le tabelle materializzate scadute e le orfane. No-op solo se
+        ClickHouse non è configurato (o il trasporto è push): con la
+        materializzazione SPENTA lo sweep deve girare lo stesso, per rimuovere
+        ciò che è rimasto da quando era accesa."""
+        if not self.cfg.matview_sweep_enabled:
             return 0
         client = self._client()
         ctx = ClickHouseContext(client, self.storage, self.cfg, [])
