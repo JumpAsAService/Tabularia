@@ -213,7 +213,13 @@ class ClickHouseExternalSettings(BaseModel):
     # successive leggono da lì invece di rileggere il parquet con s3(): sulle
     # scansioni piene (grafici, pivot, ordinamenti) è 2–6× più veloce. 0 =
     # disattivato. Best-effort: se la copia non riesce si resta su s3().
-    materialize_min_rows: int = 5_000_000
+    # SPENTA di default (0). La copia e' SINCRONA dentro la richiesta: su una
+    # tabella da 25M righe x 50 colonne non stava nel tetto di 60 s, andava in
+    # timeout, e ogni Apply del viewer pagava un minuto per poi leggere comunque
+    # da s3(). Con parquet scritti a row group grandi (INGEST__PARQUET_ROW_GROUP_ROWS)
+    # la lettura diretta e' gia' rapida: un'aggregazione da 18,7 s e' scesa a
+    # 0,64 s senza alcuna copia. Chi la vuole la accende con un valore > 0.
+    materialize_min_rows: int = 0
     # env: __MATERIALIZE_DATABASE — database dove creare quelle tabelle; vuoto =
     # lo stesso `database`. Un db dedicato tiene le copie effimere separate.
     materialize_database: str = ""
@@ -258,6 +264,25 @@ class ClickHouseExternalSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # App Configuration
 # ─────────────────────────────────────────────────────────────────────────────
+class IngestSettings(BaseModel):
+    """Scrittura dei parquet prodotti dall'ingest."""
+
+    # Righe per ROW GROUP del parquet. Il writer ne scriveva uno per ogni batch
+    # del driver (~8k righe): su 25M righe x 50 colonne faceva 3.063 row group e
+    # 153.000 pezzi di colonna, con un footer di 16,6 MB. Con blocchi cosi'
+    # piccoli leggere due colonne su cinquanta richiederebbe migliaia di richieste
+    # da poche decine di KB, quindi il motore scarica tutto il file: il pruning
+    # per colonna che il formato promette non conviene mai. Un milione di righe
+    # riporta i blocchi a poche decine.
+    # ATTENZIONE alla memoria: il blocco si accumula in RAM prima di essere
+    # scritto (~570 MB per 1M righe x 50 colonne larghe), quindi alzarlo troppo
+    # fa morire di OOM l'ingest invece di renderlo piu' veloce.
+    # il minimo e' basso di proposito: un valore piccolo e' inefficiente, non
+    # scorretto, e serve a poter esercitare la soglia nei test senza generare
+    # milioni di righe
+    parquet_row_group_rows: int = Field(default=1_000_000, ge=1, le=20_000_000)
+
+
 class AppSettings(BaseModel):
     # NB: nessun codice del backend legge `env_name` — il guard di produzione
     # vive solo nel gateway. Resta qui perché la configurazione condivisa la
@@ -303,6 +328,7 @@ class Settings(BaseSettings):
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     clickhouse_external: ClickHouseExternalSettings = Field(default_factory=ClickHouseExternalSettings)
+    ingest: IngestSettings = Field(default_factory=IngestSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

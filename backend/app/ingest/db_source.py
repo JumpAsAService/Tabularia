@@ -26,6 +26,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from pydantic import BaseModel
 
+from app.core.config import get_settings
 from app.ingest.converters import IngestError
 from app.ingest.db_errors import describe_db_error
 
@@ -395,10 +396,30 @@ def ingest_db_to_parquet(
     os.close(fd)
     try:
         rows = 0
+        # I batch del driver sono piccoli (~8k righe) e `write_batch` scrive UN
+        # ROW GROUP PER BATCH: cosi' un parquet da 25M righe finiva con 3.063 row
+        # group e un footer di 16,6 MB. Con blocchi tanto piccoli il motore non
+        # puo' leggere solo le colonne che servono — sarebbero migliaia di
+        # richieste da poche decine di KB — e finisce per scaricare tutto il file.
+        # Qui i batch si ACCUMULANO fino alla soglia e si scrivono insieme.
+        soglia = get_settings().ingest.parquet_row_group_rows
         with pq.ParquetWriter(tmp, schema, compression="zstd") as writer:
+            blocco: list = []
+            in_blocco = 0
+
+            def _scarica() -> None:
+                nonlocal blocco, in_blocco
+                if blocco:
+                    writer.write_table(pa.Table.from_batches(blocco, schema))
+                    blocco, in_blocco = [], 0
+
             for batch in gen:
-                writer.write_batch(batch)
+                blocco.append(batch)
+                in_blocco += batch.num_rows
                 rows += batch.num_rows
+                if in_blocco >= soglia:
+                    _scarica()
+            _scarica()  # l'ultimo blocco, quasi sempre piu' corto della soglia
 
         storage.create_bucket(bucket)
         storage.upload_file(tmp, bucket, key)

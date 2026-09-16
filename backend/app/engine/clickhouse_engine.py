@@ -73,6 +73,8 @@ _MATERIALIZE_MAX_SECONDS = 60
 
 # un client ClickHouse per thread (vedi _client): l'handshake costa piu' della query
 _CLIENTI_PER_THREAD = threading.local()
+# quanto puo' restare inattivo un client prima di rivalidarlo (secondi)
+_VALIDA_CLIENT_DOPO = 30.0
 
 
 def _needs_scan_tuning(ops) -> bool:
@@ -99,16 +101,44 @@ def _clean_error(e: Exception, host: str | None = None, port: int | None = None)
     return describe_db_error(e, "clickhouse", host, port)
 
 
+# Esiti POSITIVI del controllo di esistenza, per processo: (bucket, key) -> scadenza.
+# Un HEAD verso l'object storage costa ~11 ms — un sesto di una preview veloce —
+# e si paga per OGNI sorgente di OGNI preview (i lati join compresi), sempre sulla
+# stessa chiave. Le chiavi sono immutabili (ogni refresh ne crea una nuova), quindi
+# un file che esiste non cambia sotto di noi. Si cachea SOLO il positivo: un file
+# assente puo' comparire da un momento all'altro, e ricordarselo assente farebbe
+# fallire una sorgente appena caricata.
+_ESISTENZA_TTL = 60.0
+_ESISTENZA: dict[tuple[str, str], float] = {}
+
+
 def _source_exists(storage, source: DataSource) -> bool:
     """Esistenza dell'oggetto senza scaricarlo (HEAD); i doppioni di test espongono
-    `exists`."""
+    `exists`. L'esito positivo resta valido per qualche decina di secondi."""
+    chiave = (source.bucket, source.key)
+    scadenza = _ESISTENZA.get(chiave)
+    adesso = time.monotonic()
+    if scadenza is not None and scadenza > adesso:
+        return True
+    if scadenza is not None:
+        _ESISTENZA.pop(chiave, None)
+        if len(_ESISTENZA) > 4096:  # potatura: non deve crescere all'infinito
+            for k, v in list(_ESISTENZA.items()):
+                if v <= adesso:
+                    _ESISTENZA.pop(k, None)
+
+    def _ricorda(esito: bool) -> bool:
+        if esito:
+            _ESISTENZA[chiave] = time.monotonic() + _ESISTENZA_TTL
+        return esito
+
     head = getattr(storage, "head_object", None)
     if head is None:
         exists = getattr(storage, "exists", None)
-        return True if exists is None else bool(exists(source.bucket, source.key))
+        return True if exists is None else _ricorda(bool(exists(source.bucket, source.key)))
     try:
         head(source.bucket, source.key)
-        return True
+        return _ricorda(True)
     except ClientError as e:
         code = str(e.response.get("Error", {}).get("Code", ""))
         if code in _NOT_FOUND_CODES:
@@ -435,10 +465,19 @@ class ClickHouseEngine(Engine):
         if cache is None:
             cache = _CLIENTI_PER_THREAD.per_chiave = {}
 
-        esistente = cache.get(chiave)
+        esistente, ultimo_uso = cache.get(chiave, (None, 0.0))
         if esistente is not None:
+            # La validazione costa un round-trip (~11 ms): su preview consecutive
+            # sarebbe la voce piu' grande dopo la query, spesa per chiedere "sei
+            # vivo?" a una connessione usata due secondi fa. Si valida solo dopo
+            # una pausa, quando un bilanciatore o il server possono davvero aver
+            # chiuso la connessione da sotto.
+            if time.monotonic() - ultimo_uso < _VALIDA_CLIENT_DOPO:
+                cache[chiave] = (esistente, time.monotonic())
+                return esistente
             try:
                 esistente.command("SELECT 1")
+                cache[chiave] = (esistente, time.monotonic())
                 return esistente
             except Exception:
                 cache.pop(chiave, None)
@@ -459,7 +498,7 @@ class ClickHouseEngine(Engine):
             )
         except Exception as e:
             raise EngineError(_clean_error(e, self.cfg.host, self.cfg.port)) from e
-        cache[chiave] = c
+        cache[chiave] = (c, time.monotonic())
         return c
 
     def _source_id(self, source: DataSource) -> str:

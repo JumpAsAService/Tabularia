@@ -177,8 +177,8 @@ services:
     # Tetto di RAM del worker (dove girano i run): un run che esplode (cross join,
     # aggregazioni giganti) viene ucciso dall'OOM invece di freezare l'host.
     # memswap_limit == mem_limit disabilita lo swap (evita lo swap-thrashing).
-    mem_limit: ${WORKER_MEM_LIMIT:-4g}
-    memswap_limit: ${WORKER_MEM_LIMIT:-4g}
+    mem_limit: ${WORKER_MEM_LIMIT:-6g}
+    memswap_limit: ${WORKER_MEM_LIMIT:-6g}
     # Worker PURO (niente -B): l'orologio è il servizio `beat` dedicato qui sotto,
     # così questo servizio è scalabile a N repliche senza duplicare i task
     # periodici. Niente --concurrency → viene dal conf (CELERY__WORKER_CONCURRENCY,
@@ -244,8 +244,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    mem_limit: ${PREVIEW_WORKER_MEM_LIMIT:-2g}
-    memswap_limit: ${PREVIEW_WORKER_MEM_LIMIT:-2g}
+    mem_limit: ${PREVIEW_WORKER_MEM_LIMIT:-4g}
+    memswap_limit: ${PREVIEW_WORKER_MEM_LIMIT:-4g}
     command: celery -A app.tasks.celery_app worker -E -Q preview --loglevel=info
 
   frontend:

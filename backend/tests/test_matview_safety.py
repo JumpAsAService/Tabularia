@@ -102,3 +102,13 @@ def test_push_transport_is_never_tuned():
     eng = _engine("2", parquet_scan_max_threads=8)
     eng.cfg = ClickHouseExternalSettings(host="h", transport="push", parquet_scan_max_threads=8)
     assert eng._scan_max_threads(_Ctx("2")) == 0
+
+
+def test_materialization_is_off_by_default():
+    """La copia sincrona su una tabella grande non finiva mai nel tetto di
+    tempo e costava un minuto a ogni Apply: di default resta spenta, e chi la
+    vuole la accende con una soglia esplicita."""
+    from app.core.config import ClickHouseExternalSettings
+    cfg = ClickHouseExternalSettings(host="ch.example", transport="s3")
+    assert cfg.materialize_min_rows == 0
+    assert cfg.materialize_enabled is False
