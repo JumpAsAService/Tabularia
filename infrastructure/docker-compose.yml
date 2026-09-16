@@ -235,7 +235,7 @@ services:
       - .env
     environment:
       - MALLOC_ARENA_MAX=2
-      - CELERY__WORKER_CONCURRENCY=${PREVIEW_WORKER_CONCURRENCY:-2}
+      - CELERY__WORKER_CONCURRENCY=${PREVIEW_WORKER_CONCURRENCY:-4}
       - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
     volumes:
       - ../backend:/app
