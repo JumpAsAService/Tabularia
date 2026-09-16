@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.db.session import get_session
 from app.deps.auth import require_superuser
 from app.models import AuditLog, User
-from app.schemas.models import Page
+from app.schemas.models import UtcDateTime, Page
 from app.services import audit as audit_svc
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ ACTIVE_WINDOW = timedelta(minutes=15)
 
 class AuditEntryOut(BaseModel):
     id: int
-    ts: datetime
+    ts: UtcDateTime  # naive UTC dal DB: in JSON con +00:00
     actor_id: Optional[int]
     actor_label: str
     action: str
@@ -49,7 +49,7 @@ class ActiveSession(BaseModel):
     email: str
     full_name: str
     is_superuser: bool
-    last_seen_at: Optional[datetime]
+    last_seen_at: Optional[UtcDateTime]
     last_seen_ip: Optional[str]
     online: bool  # last_seen entro ACTIVE_WINDOW
 

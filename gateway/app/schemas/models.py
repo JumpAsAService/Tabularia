@@ -1,8 +1,22 @@
 """Schemi di request/response del gateway. Separati dai modelli DB per non
 esporre mai `hashed_password` e per validare gli input."""
-from datetime import datetime
-from typing import Generic, Literal, Optional, TypeVar
-from pydantic import BaseModel, Field
+from datetime import datetime, timezone
+from typing import Annotated, Generic, Literal, Optional, TypeVar
+from pydantic import BaseModel, PlainSerializer, Field
+
+# ── Datetime in uscita: sempre con l'offset ───────────────────────────────────
+# Le colonne TIMESTAMP del DB sono naive e per convenzione in UTC (vedi
+# scheduler.py). Serializzate cosi' com'erano, arrivavano al browser SENZA
+# offset ("2026-09-16T20:57:02") e `new Date()` le leggeva come ora LOCALE:
+# ogni orario dei run appariva spostato dell'offset del client (a Roma, due ore
+# prima) — nel Gantt un run appena partito sembrava durare due ore. Qui si
+# esplicita cio' che il DB sottintende: +00:00. Solo in JSON: in Python restano
+# datetime, per non cambiare confronti e test.
+def _utc_iso(d: datetime) -> str:
+    return (d if d.tzinfo is not None else d.replace(tzinfo=timezone.utc)).isoformat()
+
+
+UtcDateTime = Annotated[datetime, PlainSerializer(_utc_iso, return_type=str, when_used="json")]
 
 from app.models.permission import Capability
 
@@ -42,8 +56,8 @@ class UserOut(BaseModel):
     is_superuser: bool
     # Campi informativi per la pagina Admin. TUTTI con un default: `MeOut` eredita
     # da qui ed è costruito a mano in routes/auth.py, che passa solo i primi cinque.
-    created_at: Optional[datetime] = None
-    last_seen_at: Optional[datetime] = None  # ultima attività autenticata
+    created_at: Optional[UtcDateTime] = None
+    last_seen_at: Optional[UtcDateTime] = None  # ultima attività autenticata
     sso_only: bool = False  # nessuna password locale: entra solo dall'IdP
     groups: list[str] = []
 
@@ -71,7 +85,7 @@ class GroupOut(BaseModel):
     id: int
     name: str
     description: str
-    created_at: Optional[datetime] = None
+    created_at: Optional[UtcDateTime] = None
     member_count: int = 0
 
 
@@ -85,7 +99,7 @@ class BannerOut(BaseModel):
     id: int
     message: str
     level: str
-    created_at: Optional[datetime] = None
+    created_at: Optional[UtcDateTime] = None
     created_by: Optional[int] = None
 
 
@@ -125,8 +139,8 @@ class SavedViewOut(BaseModel):
     # JSON opaco: la forma appartiene al Viewer, il gateway ne verifica solo la
     # validità sintattica (vedi models/saved_view.py)
     spec: str = "{}"
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: Optional[UtcDateTime] = None
+    updated_at: Optional[UtcDateTime] = None
 
 
 class SavedViewCreate(BaseModel):
@@ -200,13 +214,13 @@ class FlowOut(BaseModel):
     engine: str = "polars"  # motore di SVILUPPO (editor, run manuali)
     production_engine: Optional[str] = None  # motore dei run SCHEDULATI; null = come engine
     run_schedule: Optional[str] = None  # cron; null = non schedulato
-    next_run_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    next_run_at: Optional[UtcDateTime] = None
+    created_at: Optional[UtcDateTime] = None
+    updated_at: Optional[UtcDateTime] = None
     # stato dell'ULTIMO run (per l'indicatore nella lista, senza aprire l'expander):
     # SUCCESS | FAILURE | STARTED | PENDING | null (mai eseguito)
     last_run_status: Optional[str] = None
-    last_run_at: Optional[datetime] = None
+    last_run_at: Optional[UtcDateTime] = None
 
 
 class FlowDetail(FlowOut):
@@ -241,7 +255,7 @@ class FlowVersionOut(BaseModel):
     """Una versione della definizione di un flusso (storico + promozione)."""
     version: int
     note: str
-    created_at: Optional[datetime]
+    created_at: Optional[UtcDateTime]
     created_by: Optional[int]
     created_by_name: Optional[str] = None  # nome/email di chi ha rilasciato la versione
     is_current: bool
@@ -252,7 +266,7 @@ class FlowStatsOut(BaseModel):
     run_count: int
     success_count: int
     failure_count: int
-    last_run_at: Optional[datetime]
+    last_run_at: Optional[UtcDateTime]
     avg_duration_seconds: Optional[float]
 
 
@@ -275,7 +289,7 @@ class ConnectionOut(BaseModel):
     # serve a ripopolare il form quando si modifica la connessione.
     extra: str = "{}"
     has_password: bool = False
-    updated_at: Optional[datetime] = None
+    updated_at: Optional[UtcDateTime] = None
 
 
 class ConnectionCreate(BaseModel):
@@ -408,8 +422,8 @@ class RunOut(BaseModel):
     mirror: Optional[str] = None
     # JSON: {connection_id, host, to, subject, attachment, ok, error?} — invio email
     email: Optional[str] = None
-    started_at: Optional[datetime]
-    finished_at: Optional[datetime]
+    started_at: Optional[UtcDateTime]
+    finished_at: Optional[UtcDateTime]
 
 
 class RunSearchOut(RunOut):
@@ -465,11 +479,11 @@ class DatasourceOut(BaseModel):
     connection_id: Optional[int] = None
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
-    refreshed_at: Optional[datetime] = None
+    refreshed_at: Optional[UtcDateTime] = None
     # refresh schedulato (cron); next_refresh_at = prossima esecuzione prevista
     refresh_schedule: Optional[str] = None
-    next_refresh_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    next_refresh_at: Optional[UtcDateTime] = None
+    updated_at: Optional[UtcDateTime] = None
 
 
 class DatasourceUpdate(BaseModel):
