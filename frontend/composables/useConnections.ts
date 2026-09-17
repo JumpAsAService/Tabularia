@@ -45,6 +45,10 @@ export const DB_TYPES = [
   // posta: le tre impostazioni senza colonna naturale (mittente, TLS, domini
   // ammessi) vivono in `extra`
   { value: 'smtp', label: 'SMTP / email' },
+  // file Excel su SharePoint via Microsoft Graph: host=URL del sito,
+  // username=client id dell'app Entra ID, password=secret, database=tenant id,
+  // extra.library=raccolta documenti
+  { value: 'sharepoint', label: 'SharePoint (Excel)' },
 ]
 
 export function useConnections() {
@@ -76,6 +80,10 @@ export function useConnections() {
     testDraft: (projectId: number, body: ConnectionDraft) =>
       apiFetch<{ ok: boolean }>(`/projects/${projectId}/connections/test`, { method: 'POST', body }),
 
+    // i file Excel che un percorso/glob prende su una connessione SharePoint
+    sharepointFiles: (id: number, path: string) =>
+      apiFetch<{ files: { path: string; size: number; modified_at: string }[]; total: number }>(
+        `/connections/${id}/sharepoint/files`, { method: 'POST', body: { path } }),
     tables: (id: number) => apiFetch<{ tables: string[] }>(`/connections/${id}/tables`),
   }
 }

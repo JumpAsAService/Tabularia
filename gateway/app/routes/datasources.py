@@ -28,6 +28,7 @@ from app.schemas.models import (
     DatasourceOut,
     DatasourceUpdate,
     DbDatasourceCreate,
+    SharePointDatasourceCreate,
     Page,
     RunOut,
     ScheduleUpdate,
@@ -207,6 +208,8 @@ async def create_db_datasource(
             status_code=422,
             detail="Una connessione S3 non può essere una sorgente database (serve per i nodi Output)",
         )
+    if conn.db_type in ("smtp", "sharepoint"):
+        raise HTTPException(status_code=422, detail=f"Una connessione {conn.db_type} non è un database")
 
     if body.source_type not in ("table", "sql"):
         raise HTTPException(status_code=422, detail="source_type deve essere 'table' o 'sql'")
@@ -250,6 +253,63 @@ async def create_db_datasource(
         target_id=ds.id, target_label=ds.name,
         detail={"project_id": project_id, "connection_id": conn.id,
                 "source_type": body.source_type, "source_ref": body.source_ref},
+        request=request,
+    )
+    return _to_out(ds)
+
+
+@router.post(
+    "/projects/{project_id}/datasources/sharepoint",
+    response_model=DatasourceOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_sharepoint_datasource(
+    project_id: int,
+    body: SharePointDatasourceCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Datasource da file Excel su SharePoint (percorso anche con glob + foglio).
+
+    È una datasource `kind="database"` a tutti gli effetti — refresh manuale e
+    schedulato, storico degli import, spinner, snapshot swap — con
+    `source_type="sharepoint"` e `source_ref` = JSON {path, sheet}: cambia solo
+    CHI porta i dati (vedi launch_ingest_run)."""
+    if session.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Progetto non trovato")
+    ensure_can(session, user, project_id, Capability.EDIT)
+    conn = session.get(Connection, body.connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connessione non trovata")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "sharepoint":
+        raise HTTPException(status_code=422, detail="Serve una connessione di tipo SharePoint")
+    name, path, sheet = body.name.strip(), body.path.strip(), body.sheet.strip()
+    if not name or not path or not sheet:
+        raise HTTPException(status_code=422, detail="Nome, percorso e foglio sono obbligatori")
+    if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
+        raise HTTPException(status_code=409, detail=f"Esiste già una datasource '{name}' nella cartella")
+
+    ds = Datasource(
+        name=name, description=body.description, project_id=project_id, owner_id=user.id,
+        bucket=get_settings().engine.bucket, key="",  # nessuno snapshot finché il primo import non riesce
+        kind="database", connection_id=conn.id,
+        source_type="sharepoint", source_ref=json.dumps({"path": path, "sheet": sheet}),
+    )
+    session.add(ds)
+    session.commit()
+    session.refresh(ds)
+    try:
+        await launch_ingest_run(session, user, ds, conn)
+    except HTTPException:
+        session.delete(ds)  # engine giù o richiesta rifiutata: niente datasource a metà
+        session.commit()
+        raise
+    audit.record_audit(
+        session, actor=user, action=audit.DS_CREATE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"project_id": project_id, "connection_id": conn.id, "source_type": "sharepoint", "path": path, "sheet": sheet},
         request=request,
     )
     return _to_out(ds)

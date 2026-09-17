@@ -43,7 +43,7 @@ import {
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
-import { useDatasources, type DatasourceInfo, type DbDatasourceDraft } from '~/composables/useDatasources'
+import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
 import {
@@ -535,6 +535,23 @@ async function createDbDatasource(draft: DbDatasourceDraft) {
   }
 }
 
+async function createSharePointDatasource(draft: SharePointDatasourceDraft) {
+  if (!currentId.value) return
+  dbDsBusy.value = true
+  dbDsError.value = ''
+  try {
+    const ds = await dsApi.createSharePoint(currentId.value, draft)
+    toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
+    showDbDsDialog.value = false
+    dsList.value = await dsApi.listByProject(currentId.value)
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    dbDsError.value = errMessage(e)
+  } finally {
+    dbDsBusy.value = false
+  }
+}
+
 // cambiando cartella si azzerano ricerca e filtro: sono domande sul contenuto
 // corrente, non preferenze durature
 watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.value = false })
@@ -801,6 +818,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       :error="dbDsError"
       :busy="dbDsBusy"
       @confirm="createDbDatasource"
+      @confirm-sharepoint="createSharePointDatasource"
       @cancel="showDbDsDialog = false"
     />
   </div>

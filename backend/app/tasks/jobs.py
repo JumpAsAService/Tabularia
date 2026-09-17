@@ -247,6 +247,34 @@ def transform_data_task(
     return out
 
 
+@celery_app.task(name="app.tasks.jobs.ingest_sharepoint_task")
+def ingest_sharepoint_task(
+    connection: dict[str, Any],
+    source: dict[str, Any],
+    bucket: str,
+    output_key: str,
+) -> dict:
+    """Scarica da SharePoint i file Excel che corrispondono al percorso (anche con
+    glob), li impila e scrive il parquet. Stessa forma di `ingest_database_task`:
+    il gateway tratta i due ingest allo stesso modo (run, snapshot swap, refresh).
+    Il secret dell'app arriva cifrato e si decifra solo per chiedere il token."""
+    from app.ingest.sharepoint_source import (
+        SharePointConnectionSpec,
+        SharePointSourceSpec,
+        ingest_sharepoint_to_parquet,
+    )
+
+    conn = SharePointConnectionSpec(**connection)
+    src = SharePointSourceSpec(**source)
+    logger.info(f"🚀 Starting ingest_sharepoint_task: {conn.site_url} :: {src.path} [{src.sheet}] → {output_key}")
+    result = ingest_sharepoint_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service())
+    logger.info(
+        f"✅ Completed ingest_sharepoint_task: {output_key} "
+        f"({result['rows_written']} righe da {len(result['files'])} file)"
+    )
+    return result
+
+
 @celery_app.task(name="app.tasks.jobs.ingest_database_task")
 def ingest_database_task(
     connection: dict[str, Any],

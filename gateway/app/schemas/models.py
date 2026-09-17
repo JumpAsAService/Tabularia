@@ -513,6 +513,16 @@ class DbDatasourceCreate(BaseModel):
     sort_keys: list[str] = Field(default_factory=list)
 
 
+class SharePointDatasourceCreate(BaseModel):
+    """Datasource da file Excel su SharePoint: un percorso (anche con glob) e un
+    foglio. Più file corrispondenti vengono impilati in una tabella sola."""
+    name: str
+    description: str = ""
+    connection_id: int
+    path: str = Field(min_length=1, max_length=1000)
+    sheet: str = Field(min_length=1, max_length=255)
+
+
 # ── Permissions ───────────────────────────────────────────────────────────────
 class PermissionOut(BaseModel):
     id: int

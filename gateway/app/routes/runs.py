@@ -275,6 +275,12 @@ async def _launch_flow_run(
                 raise HTTPException(
                     status_code=422, detail="La connessione scelta è S3: usa una destinazione S3"
                 )
+            if conn.db_type in ("smtp", "sharepoint"):
+                # non sono database: senza questo controllo l'errore arriverebbe
+                # dal driver, a run già partito, e parlerebbe d'altro
+                raise HTTPException(
+                    status_code=422, detail=f"Una connessione {conn.db_type} non può ricevere una tabella: serve un database"
+                )
             table = body.destination.table.strip()
             if not table:
                 raise HTTPException(status_code=422, detail="Il nome della tabella di destinazione è vuoto")
@@ -493,15 +499,29 @@ async def launch_ingest_run(
     bucket = get_settings().engine.bucket
     output_key = snapshot_key(ds.id)
     client = get_engine_client()
-    resp = await client.post(
-        "/db/ingest",
-        json={
-            "connection": engine_connection_payload(conn),
-            "source": {"mode": ds.source_type, "ref": ds.source_ref, "sort_keys": json.loads(ds.sort_keys or "[]")},
-            "bucket": bucket,
-            "output_key": output_key,
-        },
-    )
+    if conn.db_type == "sharepoint":
+        # stesso giro dei database (run, snapshot swap, refresh, scheduler): cambia
+        # solo CHI porta i dati. `source_ref` è il JSON {path, sheet}.
+        ref = json.loads(ds.source_ref or "{}")
+        resp = await client.post(
+            "/sharepoint/ingest",
+            json={
+                "connection": engine_connection_payload(conn),
+                "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", "")},
+                "bucket": bucket,
+                "output_key": output_key,
+            },
+        )
+    else:
+        resp = await client.post(
+            "/db/ingest",
+            json={
+                "connection": engine_connection_payload(conn),
+                "source": {"mode": ds.source_type, "ref": ds.source_ref, "sort_keys": json.loads(ds.sort_keys or "[]")},
+                "bucket": bucket,
+                "output_key": output_key,
+            },
+        )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
     task_id = resp.json().get("task_id")

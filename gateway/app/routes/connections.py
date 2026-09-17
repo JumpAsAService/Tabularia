@@ -18,6 +18,7 @@ l'engine viaggia ancora cifrata (`password_encrypted`, stessa chiave).
 import logging
 from datetime import datetime, timezone
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy import or_
 from sqlmodel import Session, select
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3", "smtp"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3", "smtp", "sharepoint"}
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
@@ -118,6 +119,8 @@ def _smtp_payload(conn: Connection) -> dict:
 
 def engine_connection_payload(conn: Connection) -> dict:
     """Il payload `connection` per l'engine: password/secret ANCORA cifrata."""
+    if conn.db_type == "sharepoint":
+        return _sharepoint_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.extra)
     if conn.db_type == "smtp":
         return _smtp_payload(conn)
     if conn.db_type == "s3":
@@ -133,6 +136,35 @@ def engine_connection_payload(conn: Connection) -> dict:
     }
 
 
+def _sharepoint_payload(host: str, username: str, secret_encrypted: str, database: str, extra: str | None) -> dict:
+    """SharePoint riusa le colonne esistenti, senza migrazioni: `host` = URL del
+    sito, `username` = client id dell'app registrata su Entra ID, il campo cifrato
+    = il suo secret, `database` = tenant id, `extra.library` = la raccolta documenti
+    (vuota = quella predefinita). Gli endpoint Microsoft NON sono configurabili da
+    qui: lasciarli scegliere a chi crea la connessione sarebbe un modo per far
+    chiamare al backend un indirizzo qualunque con un token in mano."""
+    import json as _json
+
+    try:
+        opts = _json.loads(extra or "{}")
+    except _json.JSONDecodeError:
+        opts = {}
+    return {
+        "tenant_id": (database or "").strip(),
+        "client_id": (username or "").strip(),
+        "client_secret_encrypted": secret_encrypted,
+        "site_url": (host or "").strip(),
+        "library": str(opts.get("library") or "").strip() if isinstance(opts, dict) else "",
+    }
+
+
+def _check_sharepoint(host: str, username: str, database: str) -> None:
+    if not (host or "").strip().lower().startswith("https://"):
+        raise HTTPException(status_code=422, detail="URL del sito SharePoint non valido: atteso https://<azienda>.sharepoint.com/sites/<nome>")
+    if not (username or "").strip() or not (database or "").strip():
+        raise HTTPException(status_code=422, detail="Servono tenant id e client id dell'app registrata su Entra ID")
+
+
 def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, db_schema: str) -> dict:
     """Mapping colonne→campi S3 (vedi docstring del modulo)."""
     return {
@@ -145,9 +177,12 @@ def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, 
     }
 
 
-async def _engine_inspect(payload: dict, action: str) -> dict:
+async def _engine_inspect(payload: dict, action: str, path: str = "") -> dict:
     client = get_engine_client()
-    resp = await client.post("/db/inspect", json={"connection": payload, "action": action})
+    if "tenant_id" in payload:  # SharePoint ha le sue rotte sull'engine
+        resp = await client.post("/sharepoint/inspect", json={"connection": payload, "action": action, "path": path})
+    else:
+        resp = await client.post("/db/inspect", json={"connection": payload, "action": action})
     if resp.status_code >= 400:
         try:
             detail = resp.json().get("detail", resp.text)
@@ -225,6 +260,8 @@ def create_connection(
     ensure_can(session, user, project_id, Capability.CONNECT)
     if body.db_type not in SUPPORTED_DB_TYPES:
         raise HTTPException(status_code=422, detail=f"db_type non supportato: {sorted(SUPPORTED_DB_TYPES)}")
+    if body.db_type == "sharepoint":
+        _check_sharepoint(body.host, body.username, body.database)
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="Il nome della connessione è vuoto")
@@ -341,7 +378,10 @@ async def test_draft_connection(
     if body.db_type not in SUPPORTED_DB_TYPES:
         raise HTTPException(status_code=422, detail=f"db_type non supportato: {sorted(SUPPORTED_DB_TYPES)}")
     secret = encrypt_secret(body.password) if body.password else ""
-    if body.db_type == "s3":
+    if body.db_type == "sharepoint":
+        _check_sharepoint(body.host, body.username, body.database)
+        payload = _sharepoint_payload(body.host, body.username, secret, body.database, body.extra)
+    elif body.db_type == "s3":
         payload = _s3_payload(body.host, body.username, secret, body.database, body.db_schema)
     else:
         payload = {
@@ -365,6 +405,26 @@ async def test_connection(
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     return await _engine_inspect(engine_connection_payload(conn), "test")
+
+
+class SharePointFilesQuery(BaseModel):
+    path: str
+
+
+@router.post("/connections/{conn_id}/sharepoint/files")
+async def list_sharepoint_files(
+    conn_id: int,
+    body: SharePointFilesQuery,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """I file Excel che un percorso (anche con glob) prende su questo sito: il
+    riscontro mentre si configura la datasource, PRIMA di importare."""
+    conn = _get_connection(session, conn_id)
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "sharepoint":
+        raise HTTPException(status_code=422, detail="Non è una connessione SharePoint")
+    return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path)
 
 
 @router.get("/connections/{conn_id}/tables")

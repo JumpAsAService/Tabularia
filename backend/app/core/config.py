@@ -273,6 +273,17 @@ class ClickHouseExternalSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # App Configuration
 # ─────────────────────────────────────────────────────────────────────────────
+class SharePointSettings(BaseModel):
+    """Endpoint Microsoft per la sorgente SharePoint. Scelta di DEPLOYMENT, non di
+    chi crea la connessione (a lui non è concesso: sarebbe un modo per far
+    chiamare al backend un indirizzo qualunque con un token in mano). Servono a
+    chi sta su un cloud sovrano — `https://graph.microsoft.us/v1.0` +
+    `https://login.microsoftonline.us`, o 21Vianet — e ai test di integrazione."""
+
+    graph_base: str = "https://graph.microsoft.com/v1.0"
+    login_base: str = "https://login.microsoftonline.com"
+
+
 class IngestSettings(BaseModel):
     """Scrittura dei parquet prodotti dall'ingest."""
 
@@ -338,6 +349,7 @@ class Settings(BaseSettings):
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     clickhouse_external: ClickHouseExternalSettings = Field(default_factory=ClickHouseExternalSettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
+    sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

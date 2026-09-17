@@ -37,6 +37,14 @@ export interface DbDatasourceDraft {
   sort_keys?: string[] // ORDER BY dell'import (vuoto = nessun ordine)
 }
 
+export interface SharePointDatasourceDraft {
+  name: string
+  description?: string
+  connection_id: number
+  path: string // percorso nella raccolta, anche con glob: Budget/2026/*.xlsx
+  sheet: string
+}
+
 export function useDatasources() {
   const { apiFetch } = useApiClient()
 
@@ -52,6 +60,9 @@ export function useDatasources() {
       apiFetch<DatasourceInfo[]>(`/projects/${projectId}/datasources`),
 
     // datasource da database: crea la voce e lancia il primo ingest
+    // datasource da Excel su SharePoint: più file del glob = una tabella sola
+    createSharePoint: (projectId: number, body: SharePointDatasourceDraft) =>
+      apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sharepoint`, { method: 'POST', body }),
     createDb: (projectId: number, body: DbDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/database`, {
         method: 'POST',

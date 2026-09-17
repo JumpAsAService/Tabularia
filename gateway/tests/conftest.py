@@ -47,6 +47,8 @@ class FakeEngine:
         self.deleted: list[tuple[str, str]] = []  # (bucket, key) cancellati
         self.revoked: list[str] = []  # task_id revocati (DELETE /tasks/{id})
         self.transforms: list[dict] = []  # corpi ricevuti su POST /tasks/transform-data
+        self.ingests: list[tuple[str, dict]] = []  # (rotta, corpo) degli ingest accodati
+        self.inspects: list[dict] = []  # corpi ricevuti su POST /sharepoint/inspect
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
@@ -75,6 +77,16 @@ class FakeEngine:
         # che con un id. Il payload viene registrato: è l'unico modo di
         # verificare COSA il gateway manda all'engine — che le secret partano
         # cifrate, e che i destinatari siano quelli già validati.
+        if path in ("/db/ingest", "/sharepoint/ingest") and request.method == "POST":
+            import json as _json
+
+            self.ingests.append((path, _json.loads(request.content or b"{}")))
+            return httpx.Response(200, json={"task_id": f"t-ingest-{len(self.ingests)}"})
+        if path == "/sharepoint/inspect" and request.method == "POST":
+            import json as _json
+
+            self.inspects.append(_json.loads(request.content or b"{}"))
+            return httpx.Response(200, json={"ok": True, "files": [], "total": 0})
         if path == "/tasks/transform-data" and request.method == "POST":
             import json as _json
 

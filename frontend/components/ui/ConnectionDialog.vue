@@ -53,6 +53,10 @@ const isEdit = computed(() => !!props.existing)
 // object storage: stesse colonne, etichette diverse (host=endpoint, ecc.)
 const isS3 = computed(() => dbType.value === 's3')
 const isSmtp = computed(() => dbType.value === 'smtp')
+// SharePoint: stesse colonne, altre etichette (host=sito, username=client id,
+// password=secret, database=tenant); la raccolta documenti vive in `extra`
+const isSp = computed(() => dbType.value === 'sharepoint')
+const library = ref('')
 
 watch(
   () => props.open,
@@ -76,6 +80,7 @@ watch(
       const parsed = JSON.parse(c?.extra || '{}')
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) opts = parsed
     } catch { /* JSON illeggibile: campi vuoti */ }
+    library.value = opts.library ?? ''
     fromAddress.value = opts.from_address ?? ''
     fromName.value = opts.from_name ?? ''
     tls.value = opts.tls ?? 'starttls'
@@ -109,7 +114,9 @@ function draft(): ConnectionDraft {
               .map((d) => d.trim())
               .filter(Boolean),
           }
-        : {},
+        : isSp.value
+          ? { library: library.value.trim() }
+          : {},
     ),
   }
 }
@@ -120,7 +127,8 @@ const incomplete = computed(
   () =>
     !name.value.trim() ||
     (!isS3.value && !host.value.trim()) ||
-    (isSmtp.value && !fromAddress.value.trim()),
+    (isSmtp.value && !fromAddress.value.trim()) ||
+    (isSp.value && (!username.value.trim() || !database.value.trim())),
 )
 
 // ── Test connection ──────────────────────────────────────────────────────────
@@ -172,29 +180,29 @@ function confirm() {
             <label>{{ $t('connectionDialog.nameLabel') }}</label>
             <input v-model="name" type="text" :placeholder="$t('connectionDialog.namePlaceholder')" />
           </div>
-          <div class="cd-field" :class="{ 'cd-wide': isS3 }">
+          <div class="cd-field" :class="{ 'cd-wide': isS3 || isSp }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
             <Select v-model="dbType" :options="DB_TYPES" />
           </div>
-          <div v-if="!isS3" class="cd-field">
+          <div v-if="!isS3 && !isSp" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="isSmtp ? '587' : '5432'" />
           </div>
           <div class="cd-field cd-wide">
-            <label>{{ isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
+            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
               type="text"
-              :placeholder="isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : 'db.internal.example.com'"
+              :placeholder="isSp ? 'https://azienda.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : 'db.internal.example.com'"
             />
           </div>
           <div class="cd-field">
-            <label>{{ isS3 ? $t('connectionDialog.accessKeyLabel') : $t('connectionDialog.usernameLabel') }}</label>
+            <label>{{ isSp ? $t('sharepoint.clientIdLabel') : isS3 ? $t('connectionDialog.accessKeyLabel') : $t('connectionDialog.usernameLabel') }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
           <div class="cd-field">
             <label>
-              {{ isS3 ? $t('connectionDialog.secretKeyLabel') : $t('connectionDialog.passwordLabel') }}
+              {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : $t('connectionDialog.passwordLabel') }}
               <span v-if="isEdit" class="cd-hint">{{ $t('connectionDialog.passwordHintUnchanged') }}</span>
             </label>
             <input v-model="password" type="password" autocomplete="new-password" />
@@ -226,6 +234,16 @@ function confirm() {
               <input v-model="allowedDomains" type="text" placeholder="azienda.it, clienti.it" />
             </div>
           </template>
+          <template v-else-if="isSp">
+            <div class="cd-field">
+              <label>{{ $t('sharepoint.tenantLabel') }}</label>
+              <input v-model="database" type="text" autocomplete="off" placeholder="00000000-0000-0000-0000-000000000000" />
+            </div>
+            <div class="cd-field">
+              <label>{{ $t('sharepoint.libraryLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
+              <input v-model="library" type="text" :placeholder="$t('sharepoint.libraryPlaceholder')" />
+            </div>
+          </template>
           <template v-else>
             <div class="cd-field">
               <label>
@@ -255,6 +273,9 @@ function confirm() {
           </template>
           <template v-else-if="isSmtp">
             {{ $t('connectionDialog.noteSmtp') }}
+          </template>
+          <template v-else-if="isSp">
+            {{ $t('sharepoint.note') }}
           </template>
           <template v-else>
             {{ $t('connectionDialog.noteDb') }}
