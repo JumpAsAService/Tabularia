@@ -213,3 +213,59 @@ def test_the_slot_registry_fails_open(monkeypatch):
     monkeypatch.setattr(ps, "_client", Boom())
     assert ps.claim("s", "t", 60) is None and ps.owner("s") is None
     ps.release("s", "t")
+
+
+# ── l'interruzione si riconosce in QUALUNQUE involucro ─────────────────────────
+class HTTPClientError(Exception):
+    """Come quella di botocore: porta la causa SOLO nel messaggio."""
+
+
+def test_an_interruption_wrapped_by_botocore_is_recognised():
+    """Visto dal vivo nel test multiutente: il segnale arriva durante la HEAD su
+    S3, botocore la avvolge, e il task finiva "raised unexpected" con traceback —
+    19 in un'ora, per preview che nessuno aspettava piu'."""
+    from app.engine.query_tag import was_interrupted
+
+    assert was_interrupted(HTTPClientError("An HTTP Client raised an unhandled exception: SoftTimeLimitExceeded()"))
+    assert not was_interrupted(HTTPClientError("connessione rifiutata"))
+    assert not was_interrupted(None)
+
+
+def test_the_task_reports_superseded_instead_of_crashing(monkeypatch):
+    from app.tasks import jobs
+
+    class Boom:
+        def preview(self, **kw):
+            raise HTTPClientError("An HTTP Client raised an unhandled exception: SoftTimeLimitExceeded()")
+    monkeypatch.setattr(jobs, "get_engine", lambda name: Boom())
+    out = jobs.preview_task.run(bucket="b", input_key="k", operations=[])
+    assert out["ok"] is False and out["error"] == "superseded"
+
+
+def test_a_real_unexpected_error_still_propagates(monkeypatch):
+    """Il silenzio vale solo per l'interruzione: un errore vero deve continuare a
+    farsi sentire."""
+    from app.tasks import jobs
+
+    class Boom:
+        def preview(self, **kw):
+            raise RuntimeError("disco pieno")
+    monkeypatch.setattr(jobs, "get_engine", lambda name: Boom())
+    with pytest.raises(RuntimeError):
+        jobs.preview_task.run(bucket="b", input_key="k", operations=[])
+
+
+def test_expected_engine_errors_keep_their_tags(monkeypatch):
+    from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
+    from app.tasks import jobs
+
+    for exc, tag in ((SourceNotFoundError("b", "k"), "not_found"), (OperationError("filter", 0, "x"), "unprocessable"), (EngineError("x"), "bad_request")):
+        class Boom:
+            def preview(self, _e=exc, **kw):
+                raise _e
+        monkeypatch.setattr(jobs, "get_engine", lambda name, B=Boom: B())
+        assert jobs.preview_task.run(bucket="b", input_key="k", operations=[])["error"] == tag
+
+
+def test_the_route_maps_superseded_to_409():
+    assert routes._PREVIEW_ERROR_STATUS["superseded"] == 409

@@ -49,7 +49,7 @@ from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
 from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
-from app.engine.query_tag import current_query_tag, is_safe_tag
+from app.engine.query_tag import current_query_tag, is_safe_tag, was_interrupted
 
 logger = logging.getLogger(__name__)
 
@@ -430,16 +430,7 @@ class ClickHouseContext:
         self.tmp.clear()
 
 
-def _was_interrupted(exc: BaseException) -> bool:
-    """True se nella catena delle cause c'e' l'interruzione del task. Per NOME e
-    non per tipo: l'engine non deve importare Celery."""
-    seen = 0
-    while exc is not None and seen < 10:
-        if type(exc).__name__ in ("SoftTimeLimitExceeded", "KeyboardInterrupt"):
-            return True
-        exc = exc.__cause__ or exc.__context__
-        seen += 1
-    return False
+_was_interrupted = was_interrupted  # definita in query_tag: la usa anche il task
 
 
 class ClickHouseEngine(Engine):

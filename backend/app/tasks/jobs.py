@@ -73,12 +73,24 @@ def preview_task(
             len(sort_keys or []),
         )
         return payload
-    except SourceNotFoundError as e:
-        return {"ok": False, "error": "not_found", "detail": str(e)}
-    except (UnknownOperationError, OperationError) as e:
-        return {"ok": False, "error": "unprocessable", "detail": str(e)}
-    except EngineError as e:
-        return {"ok": False, "error": "bad_request", "detail": str(e)}
+    except Exception as e:
+        # Superata da una preview piu' recente: NON e' un errore. Va riconosciuta
+        # prima di ogni altro ramo, perche' arriva travestita — EngineError se il
+        # task parlava con ClickHouse, HTTPClientError di botocore se parlava con
+        # S3 — e come "unexpected" riempiva i log di traceback per lavoro che
+        # nessuno aspettava piu'.
+        from app.engine.query_tag import was_interrupted
+
+        if was_interrupted(e):
+            logger.info("preview_task superata da una piu' recente (%.0f ms)", (_time.perf_counter() - _t0) * 1000)
+            return {"ok": False, "error": "superseded", "detail": "Anteprima superata da una richiesta piu' recente"}
+        if isinstance(e, SourceNotFoundError):
+            return {"ok": False, "error": "not_found", "detail": str(e)}
+        if isinstance(e, (UnknownOperationError, OperationError)):
+            return {"ok": False, "error": "unprocessable", "detail": str(e)}
+        if isinstance(e, EngineError):
+            return {"ok": False, "error": "bad_request", "detail": str(e)}
+        raise
 
 
 @celery_app.task(name="app.tasks.jobs.transform_data_task")

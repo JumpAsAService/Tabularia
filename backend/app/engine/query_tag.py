@@ -34,3 +34,22 @@ def query_tag(tag: str | None):
         yield
     finally:
         _TAG.reset(token)
+
+
+def was_interrupted(exc: BaseException | None) -> bool:
+    """True se nella catena delle cause c'e' l'interruzione del task (la preview
+    e' stata superata: il worker riceve SIGUSR1 → SoftTimeLimitExceeded). Per
+    NOME e non per tipo — l'engine non importa Celery — e risalendo la catena:
+    l'eccezione arriva quasi sempre AVVOLTA, in un EngineError se il task stava
+    parlando con ClickHouse, in un HTTPClientError di botocore se stava parlando
+    con S3. Visto dal vivo: 19 traceback "raised unexpected" in un'ora per
+    preview che nessuno aspettava piu'."""
+    seen = 0
+    while exc is not None and seen < 12:
+        if type(exc).__name__ in ("SoftTimeLimitExceeded", "KeyboardInterrupt"):
+            return True
+        if "SoftTimeLimitExceeded" in str(exc):  # botocore la riporta solo nel messaggio
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return False

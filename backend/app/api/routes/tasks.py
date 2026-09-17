@@ -83,7 +83,7 @@ def list_operations():
 # timeout dell'attesa del risultato dell'anteprima (secondi); override via env
 PREVIEW_TIMEOUT_SECONDS = float(os.getenv("PREVIEW_TIMEOUT_SECONDS", "120"))
 # mappa il tag d'errore del task allo status HTTP
-_PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400}
+_PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "superseded": 409}
 # ogni quanto l'attesa controlla di non essere stata superata
 _PREVIEW_POLL_SECONDS = 0.25
 _SUPERSEDED = "Anteprima superata da una richiesta piu' recente"
