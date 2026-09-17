@@ -1,0 +1,820 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-17T19:35:01+00:00",
+  "title": "Design System: Tabularia",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Signal Blue",
+        "canonical": "#4f8cff",
+        "tonalRamp": [
+          "#000038",
+          "#001d64",
+          "#023799",
+          "#215ac9",
+          "#4480f2",
+          "#79a7fa",
+          "#aecbff",
+          "#e6effe"
+        ]
+      },
+      "accent-hi": {
+        "role": "primary",
+        "displayName": "Signal Blue, raised",
+        "canonical": "#7aa8ff",
+        "tonalRamp": [
+          "#00003a",
+          "#001b67",
+          "#163c89",
+          "#365fb0",
+          "#5884d8",
+          "#78a6fd",
+          "#b0cbfd",
+          "#e6efff"
+        ]
+      },
+      "grad-accent-end": {
+        "role": "primary",
+        "displayName": "Accent Gradient end",
+        "canonical": "#7c6cff",
+        "tonalRamp": [
+          "#0b0032",
+          "#250071",
+          "#3f12ab",
+          "#5b43d4",
+          "#7b6bfe",
+          "#9d9bfb",
+          "#c3c5fc",
+          "#ecedff"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On Accent",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#a8a8a8",
+          "#cacaca",
+          "#eeeeee"
+        ]
+      },
+      "accent-2": {
+        "role": "secondary",
+        "displayName": "Outcome Green",
+        "canonical": "#6ee7b7",
+        "tonalRamp": [
+          "#001007",
+          "#002f1f",
+          "#024f38",
+          "#0e7555",
+          "#029e72",
+          "#44c193",
+          "#6ce5b5",
+          "#c1ffe2"
+        ]
+      },
+      "on-accent-2": {
+        "role": "secondary",
+        "displayName": "On Outcome Green",
+        "canonical": "#0f1117",
+        "tonalRamp": [
+          "#090b11",
+          "#24262d",
+          "#404249",
+          "#60636b",
+          "#83868e",
+          "#a4a7b0",
+          "#c7cad3",
+          "#ebeef7"
+        ]
+      },
+      "violet": {
+        "role": "tertiary",
+        "displayName": "Violet",
+        "canonical": "#a78bfa",
+        "tonalRamp": [
+          "#10002e",
+          "#2e0265",
+          "#4a268d",
+          "#6a4bb4",
+          "#8c6fdc",
+          "#ad94fa",
+          "#ccc1fc",
+          "#efecff"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger Red",
+        "canonical": "#ff6b6b",
+        "tonalRamp": [
+          "#220000",
+          "#4f0009",
+          "#810017",
+          "#b4202e",
+          "#de4d50",
+          "#f97c7a",
+          "#feb5b1",
+          "#ffe9e7"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Page",
+        "canonical": "#0b0e14",
+        "tonalRamp": [
+          "#080b11",
+          "#23262d",
+          "#3f424a",
+          "#5f636b",
+          "#82868f",
+          "#a3a8b1",
+          "#c6cbd4",
+          "#eaeff8"
+        ]
+      },
+      "bg-soft": {
+        "role": "neutral",
+        "displayName": "Well",
+        "canonical": "#0f131c",
+        "tonalRamp": [
+          "#070b13",
+          "#222630",
+          "#3d424d",
+          "#5e636f",
+          "#818692",
+          "#a2a8b4",
+          "#c4cbd8",
+          "#e8effc"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#141926",
+        "tonalRamp": [
+          "#070b17",
+          "#212634",
+          "#3c4251",
+          "#5d6373",
+          "#7f8697",
+          "#a0a8b9",
+          "#c3cadd",
+          "#e8eefe"
+        ]
+      },
+      "panel-2": {
+        "role": "neutral",
+        "displayName": "Panel, second step",
+        "canonical": "#1b2130",
+        "tonalRamp": [
+          "#060a18",
+          "#202635",
+          "#3b4253",
+          "#5c6375",
+          "#7e8699",
+          "#9fa8bb",
+          "#c2cadf",
+          "#e7eeff"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "#262e40",
+        "tonalRamp": [
+          "#050a1a",
+          "#1e2638",
+          "#3a4255",
+          "#5a6378",
+          "#7c869c",
+          "#9da8be",
+          "#c0cbe2",
+          "#e7effe"
+        ]
+      },
+      "border-soft": {
+        "role": "neutral",
+        "displayName": "Soft Border",
+        "canonical": "#1e2534",
+        "tonalRamp": [
+          "#060b18",
+          "#1f2635",
+          "#3b4253",
+          "#5b6375",
+          "#7d8699",
+          "#9fa8bb",
+          "#c1cbdf",
+          "#e7efff"
+        ]
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "Control Border",
+        "canonical": "#5c6884",
+        "tonalRamp": [
+          "#04091f",
+          "#1c253d",
+          "#37425c",
+          "#57637f",
+          "#7986a3",
+          "#9aa8c6",
+          "#bdcaea",
+          "#e8eefe"
+        ]
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Edge",
+        "canonical": "#3d4a66",
+        "tonalRamp": [
+          "#030920",
+          "#1a263f",
+          "#35425d",
+          "#556380",
+          "#7786a5",
+          "#98a8c8",
+          "#bbcbec",
+          "#e7efff"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "#e8ebf2",
+        "tonalRamp": [
+          "#090b0f",
+          "#24262b",
+          "#404248",
+          "#616369",
+          "#83868c",
+          "#a5a8ae",
+          "#c7cad1",
+          "#ebeef5"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#8b93a7",
+        "tonalRamp": [
+          "#060a18",
+          "#202636",
+          "#3b4253",
+          "#5c6376",
+          "#7e869a",
+          "#9fa7bc",
+          "#c2cae0",
+          "#e8eefe"
+        ]
+      },
+      "op-columns": {
+        "role": "tertiary",
+        "displayName": "Category: column operations",
+        "canonical": "#4f8cff",
+        "tonalRamp": [
+          "#000038",
+          "#001d64",
+          "#023799",
+          "#215ac9",
+          "#4480f2",
+          "#79a7fa",
+          "#aecbff",
+          "#e6effe"
+        ]
+      },
+      "op-rows": {
+        "role": "tertiary",
+        "displayName": "Category: row operations",
+        "canonical": "#f59e0b",
+        "tonalRamp": [
+          "#170700",
+          "#392000",
+          "#5c3a07",
+          "#8a5600",
+          "#b67615",
+          "#e3941c",
+          "#fcbd71",
+          "#ffebd5"
+        ]
+      },
+      "op-nulls": {
+        "role": "tertiary",
+        "displayName": "Category: null handling",
+        "canonical": "#a78bfa",
+        "tonalRamp": [
+          "#10002e",
+          "#2e0265",
+          "#4a268d",
+          "#6a4bb4",
+          "#8c6fdc",
+          "#ad94fa",
+          "#ccc1fc",
+          "#efecff"
+        ]
+      },
+      "op-shape": {
+        "role": "tertiary",
+        "displayName": "Category: reshape, combine, sources",
+        "canonical": "#6ee7b7",
+        "tonalRamp": [
+          "#001007",
+          "#002f1f",
+          "#024f38",
+          "#0e7555",
+          "#029e72",
+          "#44c193",
+          "#6ce5b5",
+          "#c1ffe2"
+        ]
+      },
+      "op-foreach": {
+        "role": "tertiary",
+        "displayName": "Category: foreach",
+        "canonical": "#f472b6",
+        "tonalRamp": [
+          "#1f0010",
+          "#4b002e",
+          "#7a004e",
+          "#a62871",
+          "#cf5195",
+          "#f674b7",
+          "#fcb1d4",
+          "#fee7f1"
+        ]
+      },
+      "op-output": {
+        "role": "tertiary",
+        "displayName": "Category: outputs and sinks",
+        "canonical": "#fbbf24",
+        "tonalRamp": [
+          "#130900",
+          "#332400",
+          "#553e01",
+          "#7e5e08",
+          "#a77f1e",
+          "#d09f26",
+          "#fcc026",
+          "#ffecc8"
+        ]
+      },
+      "op-control": {
+        "role": "tertiary",
+        "displayName": "Category: control and S3",
+        "canonical": "#38bdf8",
+        "tonalRamp": [
+          "#000d19",
+          "#002b3d",
+          "#014965",
+          "#0c6c92",
+          "#0092c6",
+          "#2db5f0",
+          "#8cd5fd",
+          "#ddf2ff"
+        ]
+      },
+      "edge-sequence": {
+        "role": "tertiary",
+        "displayName": "Sequence edge",
+        "canonical": "#c084fc",
+        "tonalRamp": [
+          "#150028",
+          "#37015a",
+          "#5a158a",
+          "#7c3fb1",
+          "#a064d9",
+          "#c387ff",
+          "#dabafe",
+          "#f3eafe"
+        ]
+      }
+    },
+    "themes": {
+      "dark": {
+        "selector": ":root",
+        "colorScheme": "dark",
+        "bg": "#0b0e14",
+        "bg-soft": "#0f131c",
+        "panel": "#141926",
+        "panel-2": "#1b2130",
+        "border": "#262e40",
+        "border-soft": "#1e2534",
+        "control-border": "#5c6884",
+        "text": "#e8ebf2",
+        "muted": "#8b93a7",
+        "accent": "#4f8cff",
+        "accent-hi": "#7aa8ff",
+        "accent-2": "#6ee7b7",
+        "violet": "#a78bfa",
+        "danger": "#ff6b6b",
+        "on-accent": "#fff",
+        "on-accent-2": "#0f1117",
+        "edge": "#3d4a66",
+        "grad-accent": "linear-gradient(135deg, #4f8cff 0%, #7c6cff 100%)",
+        "scrim": "rgba(5, 7, 12, 0.6)",
+        "topbar-bg": "rgba(20, 25, 38, 0.92)",
+        "row-even": "rgba(255, 255, 255, 0.015)",
+        "row-hover": "rgba(79, 140, 255, 0.06)",
+        "sheen": "rgba(255, 255, 255, 0.03)",
+        "tint-accent": "rgba(79, 140, 255, 0.1)",
+        "shimmer": "rgba(255, 255, 255, 0.07)"
+      },
+      "light": {
+        "selector": ":root[data-theme=\"light\"]",
+        "colorScheme": "light",
+        "bg": "#f4f6fb",
+        "bg-soft": "#ffffff",
+        "panel": "#ffffff",
+        "panel-2": "#eef1f7",
+        "border": "#d7dde9",
+        "border-soft": "#e6eaf2",
+        "control-border": "#7c8699",
+        "text": "#1b2233",
+        "muted": "#5f6b81",
+        "accent": "#3b6fe0",
+        "accent-hi": "#2b57c4",
+        "accent-2": "#0a7d56",
+        "violet": "#7c3aed",
+        "danger": "#e02424",
+        "on-accent": "#fff",
+        "on-accent-2": "#ffffff",
+        "edge": "#b3bdd0",
+        "grad-accent": "linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%)",
+        "scrim": "rgba(20, 28, 48, 0.35)",
+        "topbar-bg": "rgba(255, 255, 255, 0.88)",
+        "row-even": "rgba(20, 40, 90, 0.025)",
+        "row-hover": "rgba(59, 111, 224, 0.08)",
+        "sheen": "rgba(20, 40, 90, 0.02)",
+        "tint-accent": "rgba(59, 111, 224, 0.1)",
+        "shimmer": "rgba(20, 40, 90, 0.06)"
+      },
+      "dracula": {
+        "selector": ":root[data-theme=\"dracula\"]",
+        "colorScheme": "dark",
+        "bg": "#1e1f29",
+        "bg-soft": "#21222c",
+        "panel": "#282a36",
+        "panel-2": "#343746",
+        "border": "#44475a",
+        "border-soft": "#343746",
+        "control-border": "#737898",
+        "text": "#f8f8f2",
+        "muted": "#9ca5d0",
+        "accent": "#bd93f9",
+        "accent-hi": "#d3b6fb",
+        "accent-2": "#50fa7b",
+        "violet": "#ff79c6",
+        "danger": "#ff5555",
+        "on-accent": "#21222c",
+        "on-accent-2": "#0f1117",
+        "edge": "#6272a4",
+        "grad-accent": "linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%)",
+        "scrim": "rgba(20, 21, 28, 0.6)",
+        "topbar-bg": "rgba(40, 42, 54, 0.92)",
+        "row-even": "rgba(255, 255, 255, 0.02)",
+        "row-hover": "rgba(189, 147, 249, 0.1)",
+        "sheen": "rgba(255, 255, 255, 0.03)",
+        "tint-accent": "rgba(189, 147, 249, 0.16)",
+        "shimmer": "rgba(248, 248, 242, 0.07)"
+      },
+      "monokai": {
+        "selector": ":root[data-theme=\"monokai\"]",
+        "colorScheme": "dark",
+        "bg": "#1e1f1c",
+        "bg-soft": "#242520",
+        "panel": "#272822",
+        "panel-2": "#33342b",
+        "border": "#49483e",
+        "border-soft": "#33342b",
+        "control-border": "#7b7867",
+        "text": "#f8f8f2",
+        "muted": "#a6a28c",
+        "accent": "#66d9ef",
+        "accent-hi": "#8ee6f5",
+        "accent-2": "#a6e22e",
+        "violet": "#ae81ff",
+        "danger": "#fb4a8b",
+        "on-accent": "#1e1f1c",
+        "on-accent-2": "#0f1117",
+        "edge": "#75715e",
+        "grad-accent": "linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%)",
+        "scrim": "rgba(20, 21, 18, 0.6)",
+        "topbar-bg": "rgba(39, 40, 34, 0.92)",
+        "row-even": "rgba(255, 255, 255, 0.02)",
+        "row-hover": "rgba(102, 217, 239, 0.1)",
+        "sheen": "rgba(255, 255, 255, 0.03)",
+        "tint-accent": "rgba(102, 217, 239, 0.15)",
+        "shimmer": "rgba(248, 248, 242, 0.07)"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The single h1 of a page, with an 18px icon before it and an optional muted count after it."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Dialog headings; the top-bar wordmark sits beside this step at 16.5px."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base size on html; 13px for nav, nodes, options, toasts."
+      },
+      "body-dense": {
+        "displayName": "Body dense",
+        "purpose": "Data-grid cells, row descriptions, hints, toolbar and tab buttons (12 to 12.5px)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels above inputs, in muted."
+      },
+      "label-caps": {
+        "displayName": "Label caps",
+        "purpose": "List-table column headers; the same device at 10 to 10.5px for tags, role badges, Select group headings."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "SQL and expression textareas, cron strings, identifiers, paths, logs (11 to 12.5px). System stack, no webfont."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-1",
+        "value": "0 1px 2px rgba(0, 0, 0, 0.4)",
+        "purpose": "Buttons on hover, nodes at rest, canvas controls. Light theme: 0 1px 2px rgba(20, 30, 60, 0.08)."
+      },
+      {
+        "name": "shadow-2",
+        "value": "0 4px 16px rgba(0, 0, 0, 0.45)",
+        "purpose": "Anything floating: dialogs, menus, Select panels, toasts, nodes on hover. Light: 0 6px 20px rgba(20, 30, 60, 0.12); dracula and monokai: 0.5 alpha."
+      },
+      {
+        "name": "focus-glow",
+        "value": "0 0 0 3px rgba(79, 140, 255, 0.18)",
+        "purpose": "Focused inputs and open Select triggers, with the border turning accent."
+      },
+      {
+        "name": "node-selected",
+        "value": "0 0 0 1px var(--node-accent), 0 4px 20px rgba(79, 140, 255, 0.25)",
+        "purpose": "The selected node on the canvas."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "0.15s (transform 0.1s)",
+        "purpose": "Border, background and shadow changes on buttons, inputs, nodes, nav."
+      },
+      {
+        "name": "button-press",
+        "value": "translateY(1px) on :active",
+        "purpose": "Tactile press on every button; disabled buttons do not move."
+      },
+      {
+        "name": "skeleton-shimmer",
+        "value": "1.1s infinite sweep; minimum visible time 300ms (skeletonPad)",
+        "purpose": "Loading placeholders. Disabled under prefers-reduced-motion: reduce."
+      },
+      {
+        "name": "toast",
+        "value": "0.22s ease; enter from translateY(8px), leave to translateX(12px)",
+        "purpose": "Toast enter and leave."
+      },
+      {
+        "name": "edge-flow",
+        "value": "stroke-dasharray 5, 0.6s linear infinite",
+        "purpose": "Animated data edges on the canvas; sequence edges stay static."
+      },
+      {
+        "name": "spin",
+        "value": "1s linear infinite",
+        "purpose": "Loader icon inside a busy button."
+      },
+      {
+        "name": "card-entrance",
+        "value": "620ms cubic-bezier(0.16, 1, 0.3, 1), opacity 0 and translateY(10px) to rest",
+        "purpose": "Sign-in card, once, only under prefers-reduced-motion: no-preference."
+      },
+      {
+        "name": "ordering-field",
+        "value": "canvas at 30fps, drift 13px/s, DPR capped at 2, fade-in 1100ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The one authored motion moment (sign-in background). Stops when the tab is hidden; a still frame under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "admin-and-search",
+        "value": "900px"
+      },
+      {
+        "name": "topbar",
+        "value": "760px"
+      },
+      {
+        "name": "sign-in",
+        "value": "720px"
+      },
+      {
+        "name": "touch",
+        "value": "(pointer: coarse)"
+      }
+    ],
+    "zIndex": [
+      {
+        "name": "topbar",
+        "value": 100
+      },
+      {
+        "name": "settings-menu",
+        "value": 201
+      },
+      {
+        "name": "dialog",
+        "value": 2000
+      },
+      {
+        "name": "select-panel",
+        "value": 2500
+      },
+      {
+        "name": "toasts",
+        "value": 3000
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Default neutral action; hover borders in accent, press moves 1px.",
+      "html": "<button class=\"ds-btn\">Cancel</button>",
+      "css": ".ds-btn { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s; } .ds-btn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action of a view or dialog footer; the only use of the accent gradient.",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"6 3 20 12 6 21 6 3\"/></svg> Run now</button>",
+      "css": ".ds-btn { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s; } .ds-btn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; } .ds-btn-primary { background: var(--grad-accent); border-color: transparent; color: var(--on-accent); font-weight: 500; } .ds-btn-primary:hover { filter: brightness(1.12); box-shadow: 0 2px 12px rgba(79, 140, 255, 0.35); }"
+    },
+    {
+      "name": "Danger Mini Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive row action: outlined at rest, filled on hover; mini size keeps a 24px target.",
+      "html": "<button class=\"ds-btn ds-btn-mini ds-btn-danger\" aria-label=\"Delete\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18\"/><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"/><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"/></svg></button>",
+      "css": ".ds-btn { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s; } .ds-btn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; } .ds-btn-mini { padding: 3px 8px; min-height: 24px; } .ds-btn-danger { border-color: var(--danger); color: var(--danger); } .ds-btn-danger:hover { background: var(--danger); color: #fff; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Label above, well-coloured field outlined with the control border, accent border plus glow on focus.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"ds-name\">Flow name</label><input class=\"ds-input\" id=\"ds-name\" type=\"text\" value=\"monthly_margin\" /></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; width: 240px; font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-label { font-size: 12px; color: var(--muted); } .ds-input { font: inherit; font-size: 13.5px; color: var(--text); background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: 8px; padding: 6px 10px; width: 100%; transition: border-color 0.15s, box-shadow 0.15s; } .ds-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18); }"
+    },
+    {
+      "name": "Select Trigger",
+      "kind": "input",
+      "refersTo": "select-trigger",
+      "description": "Custom dropdown trigger styled as a field; the panel adds a search box above 8 options.",
+      "html": "<button class=\"ds-sel\" type=\"button\"><span>Polars</span><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m6 9 6 6 6-6\"/></svg></button>",
+      "css": ".ds-sel { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; width: 170px; background: var(--bg-soft); border: 1px solid var(--control-border); border-radius: 8px; padding: 6px 10px; color: var(--text); cursor: pointer; text-align: left; transition: border-color 0.15s, box-shadow 0.15s; } .ds-sel svg { color: var(--muted); } .ds-sel:hover { border-color: var(--accent); } .ds-sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Top-bar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Muted links across a 52px translucent bar; the current section is text-coloured with a 2px accent underline.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-navlink ds-on\" href=\"#\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"8\" height=\"8\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M7 11v4a2 2 0 0 0 2 2h4\"/><rect width=\"8\" height=\"8\" x=\"13\" y=\"13\" rx=\"2\"/></svg> Flows</a><a class=\"ds-navlink\" href=\"#\">Datasources</a><a class=\"ds-navlink\" href=\"#\">Viewer</a></nav>",
+      "css": ".ds-nav { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 20px; background: var(--topbar-bg); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(8px); } .ds-navlink { display: inline-flex; align-items: center; gap: 7px; height: 100%; padding: 0 13px; font-size: 13px; font-weight: 500; color: var(--muted); text-decoration: none; border-top: 2px solid transparent; border-bottom: 2px solid transparent; transition: color 0.15s; } .ds-navlink:hover { color: var(--text); } .ds-navlink.ds-on { color: var(--text); border-bottom-color: var(--accent); } .ds-navlink:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Small uppercase marker beside a row title.",
+      "html": "<span class=\"ds-tag\">scheduled</span>",
+      "css": ".ds-tag { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }"
+    },
+    {
+      "name": "List Table",
+      "kind": "card",
+      "refersTo": "list-table",
+      "description": "The catalog table of list pages: bordered panel, caps header, row link first, row hover tint.",
+      "html": "<table class=\"ds-list\"><thead><tr><th>Name</th><th>Rows</th><th>Updated</th></tr></thead><tbody><tr><td><a class=\"ds-rowlink\" href=\"#\">orders_clean</a><div class=\"ds-desc\">Orders with margin per line</div></td><td>1,204,500</td><td>2 h ago</td></tr><tr><td><a class=\"ds-rowlink\" href=\"#\">crm_contacts</a></td><td>88,310</td><td>yesterday</td></tr></tbody></table>",
+      "css": ".ds-list { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; color: var(--text); width: 460px; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; } .ds-list th { text-align: left; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--panel-2); } .ds-list td { padding: 10px 14px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; } .ds-list tbody tr:last-child td { border-bottom: none; } .ds-list tbody tr:hover td { background: var(--panel-2); } .ds-rowlink { color: var(--text); text-decoration: none; font-weight: 500; } .ds-rowlink:hover { color: var(--accent); } .ds-rowlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-desc { font-size: 12px; margin-top: 2px; color: var(--muted); }"
+    },
+    {
+      "name": "Flow Node",
+      "kind": "custom",
+      "refersTo": "flow-node",
+      "description": "Canvas node: panel card with a 3px left edge in its operation-category colour; shadow deepens on hover.",
+      "html": "<div class=\"ds-node\" style=\"--node-accent: #f59e0b\" tabindex=\"0\"><div class=\"ds-node-title\"><span class=\"ds-node-ico\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3\"/></svg></span> Filter</div><div class=\"ds-node-body\">amount &gt; 0</div></div>",
+      "css": ".ds-node { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-width: 160px; width: 180px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--node-accent, var(--accent)); border-radius: var(--radius); font-size: 13px; box-shadow: var(--shadow-1); transition: box-shadow 0.15s, border-color 0.15s; } .ds-node:hover { box-shadow: var(--shadow-2); } .ds-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-node-title { padding: 7px 10px; font-weight: 600; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; gap: 6px; background: linear-gradient(180deg, var(--sheen), transparent); border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0; } .ds-node-ico { color: var(--node-accent, var(--accent)); display: inline-flex; } .ds-node-body { padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); }"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Bottom-right notification: floating panel, outcome-coloured border and icon.",
+      "html": "<div class=\"ds-toast\" role=\"status\"><span class=\"ds-ticon\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m9 12 2 2 4-4\"/></svg></span><span>Flow published as datasource.</span></div>",
+      "css": ".ds-toast { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: inline-flex; align-items: flex-start; gap: 9px; padding: 10px 12px; max-width: 380px; color: var(--text); background: var(--panel); border: 1px solid rgba(110, 231, 183, 0.45); border-radius: 10px; box-shadow: var(--shadow-2); font-size: 13px; line-height: 1.35; cursor: pointer; } .ds-ticon { color: var(--accent-2); display: inline-flex; margin-top: 1px; }"
+    },
+    {
+      "name": "Skeleton Row",
+      "kind": "custom",
+      "refersTo": "skeleton",
+      "description": "Loading placeholder; shown for at least 300ms, sweep disabled under reduced motion.",
+      "html": "<div class=\"ds-skrow\"><span class=\"ds-sk\" style=\"width:15%\"></span><span class=\"ds-sk\" style=\"width:52%\"></span><span class=\"ds-sk ds-skend\" style=\"width:9%\"></span></div>",
+      "css": ".ds-skrow { display: flex; gap: 16px; align-items: center; width: 420px; } .ds-skend { margin-left: auto; } .ds-sk { position: relative; overflow: hidden; display: inline-block; background: var(--panel-2); border-radius: 4px; height: 12px; } .ds-sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--shimmer), transparent); animation: ds-sk-shimmer 1.1s infinite; } @keyframes ds-sk-shimmer { 100% { transform: translateX(100%); } } @media (prefers-reduced-motion: reduce) { .ds-sk::after { animation: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Instrument",
+    "overview": "Tabularia is a working tool that people keep open all day: a flow canvas, preview grids, run histories, catalogs. The interface is built like an instrument housing around the data. Surfaces are a stack of close, cool neutrals; chrome is small, sentence-case and low-contrast against itself; the only saturated things on a screen are the primary action, the operation-category colour of a node, and the state of a run. The product principle \"the data is the subject; the interface recedes\" is visible in the build as density (13.5px body, 12px data cells, 52px top bar, 6px control padding) rather than as emptiness.\n\nThe whole palette lives in CSS custom properties on `:root` and is swapped by a single `data-theme` attribute on `<html>`: dark (default, midnight blue), light (cool greys, not pure white pages), dracula and monokai (the editor palettes this audience already lives in). Components never know which theme is active; they name roles. Charts and the sign-in canvas, which cannot read CSS variables, resolve the same tokens at runtime and re-resolve when the theme changes.\n\nMotion is functional and brief (0.1 to 0.22s state transitions, a skeleton shimmer, a dashed flow on data edges). There is exactly one authored motion moment in the product: the ordering field behind the sign-in card, where scattered, dirty numeric values settle into a right-aligned table. It is the product's purpose drawn in its own material (monospace numbers, table rules, theme tokens) and it is not a pattern to repeat elsewhere.",
+    "keyCharacteristics": [
+      "Four themes from one role vocabulary; dark is the default, selection persisted per browser.",
+      "Dense by intent: 13.5px base, 12px data, controls at 6px vertical padding; density relaxes only under `pointer: coarse`.",
+      "Tonal layering first (bg, bg-soft, panel, panel-2), 1px borders second, two shadow steps third.",
+      "One gradient, reserved for the primary action.",
+      "Colour as encoding: operation categories, run outcomes, engines. Never as decoration.",
+      "IBM Plex Sans for the interface, the system monospace for anything that is data, code or an identifier.",
+      "lucide icons at 11 to 18px, always beside a label or carrying an `aria-label`.",
+      "Every visible string goes through i18n (five locales, English base)."
+    ],
+    "rules": [
+      {
+        "name": "The Role, Not Hex Rule",
+        "body": "Component CSS names a role (`var(--panel-2)`), never a value. A colour that must sit on the accent uses `--on-accent`, never `#fff`: on two of four themes the accent is light.",
+        "section": "colors"
+      },
+      {
+        "name": "The Control Border Rule",
+        "body": "Anything the user types or picks in is outlined with `--control-border`; separators, tables and cards use `--border`. The two are never interchanged.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Gradient Rule",
+        "body": "`--grad-accent` fills the primary action of a view and nothing else. No gradient text, no gradient panels.",
+        "section": "colors"
+      },
+      {
+        "name": "The Colour Is Encoding Rule",
+        "body": "Saturated colour outside the accent means something: an operation category, a run outcome, an engine. If it encodes nothing, it is a neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Data Is Mono Rule",
+        "body": "If the user could paste it into a terminal or a query (SQL, expressions, identifiers, cron, logs), it is set in the mono stack. Interface copy never is.",
+        "section": "typography"
+      },
+      {
+        "name": "The Caps Are For Headers Rule",
+        "body": "Uppercase with tracking belongs to table column headers, tags and group headings, at 11.5px or below. Sentences, buttons, nav and page titles are sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat At Rest Rule",
+        "body": "A surface in the page flow has a border and no shadow. `--shadow-1` answers hover; `--shadow-2` means \"this floats above the page\".",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** name roles: `var(--panel)`, `var(--control-border)`, `var(--on-accent)`. Check any new surface in all four themes; two of them have a light accent.",
+      "**Do** outline every typeable or pickable control with `--control-border` and keep it at 3:1 against its surroundings.",
+      "**Do** keep one `<h1>` per page, 19px / 700, with an 18px lucide icon before it and a muted count after it where the page is a list.",
+      "**Do** use the shared list-page stylesheet (`~/assets/listpage.css`) for any new catalog-style page, with `SkeletonRows` while loading and `skeletonPad` so the skeleton shows for at least 300ms.",
+      "**Do** use `components/ui/Select.vue` for option lists; let it add its own search above 8 options.",
+      "**Do** build modal dialogs on the shared skeleton and `useDialogA11y` (focus on the card, Tab trapped, Esc closes, focus returned).",
+      "**Do** give buttons a `:focus-visible` outline of `2px solid var(--accent)` at 2px offset, and give every icon-only button an `aria-label`.",
+      "**Do** set SQL, expressions, identifiers, cron strings and logs in the mono stack.",
+      "**Do** put every visible string through `$t`. English is the base locale and the fallback for `it`, `fr`, `de`, `es`. Each locale has a hand-written base catalog (`<locale>.ts`: nav, settings, sign-in) and a `<locale>.gen.ts` catalog produced by the i18n sweep, namespaced per component or page. In a new component, import `useI18n` explicitly.",
+      "**Do** gate any new animation behind `prefers-reduced-motion` and leave a meaningful still state, as the skeleton and the ordering field do.",
+      "**Do** resolve tokens at runtime (and re-resolve on `data-theme` change) for anything drawn outside CSS: canvas, ECharts.",
+      "**Do** widen small targets under `@media (pointer: coarse)`, not under a width breakpoint."
+    ],
+    "donts": [
+      "**Don't** write a hex or an `rgba()` of the dark accent in component CSS; it will be wrong in three themes.",
+      "**Don't** put `#fff` on the accent; use `--on-accent`.",
+      "**Don't** use `--grad-accent` for anything but the primary action.",
+      "**Don't** use `--border` on a field or `--control-border` on a card.",
+      "**Don't** add a shadow to a surface that sits in the page flow.",
+      "**Don't** wrap a page's action bar onto a second line to fit a new control; protect the button label instead.",
+      "**Don't** replace the scrolling top-bar nav with a hamburger as an \"adaptation\"; that is a redesign.",
+      "**Don't** set `overflow: hidden` on a flow node; the handles overhang by design.",
+      "**Don't** signal an outcome with colour alone; pair `accent-2` or `danger` with an icon and words.",
+      "**Don't** load fonts or icons from a CDN at runtime; the font is one self-hosted woff2 and icons are lucide components.",
+      "**Don't** reuse the ordering field, or add a second ambient animation, inside the working app. The product has one authored motion moment and it is before sign-in.",
+      "**Don't** flash a skeleton: never show one for less than 300ms, and never use a full-page spinner where a skeleton fits."
+    ]
+  }
+}
