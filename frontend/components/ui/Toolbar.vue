@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BrandMark from '~/components/ui/BrandMark.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -73,7 +74,7 @@ const statusIcon = computed(() => {
 
 <template>
   <div class="toolbar-inner">
-    <strong class="brand"><img src="/logo.png" alt="Tabularia" class="brand-logo" /> Tabularia</strong>
+    <strong class="brand"><BrandMark :size="20" /> Tabularia</strong>
 
     <!-- motore di esecuzione del flusso -->
     <span
@@ -140,7 +141,6 @@ const statusIcon = computed(() => {
   padding: 8px 12px;
 }
 .brand { display: inline-flex; align-items: center; gap: 6px; }
-.brand-logo { width: 20px; height: 20px; border-radius: 5px; background: #fff; object-fit: contain; }
 /* badge del motore di esecuzione */
 .enginebadge {
   display: inline-flex;

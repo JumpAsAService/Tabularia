@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BrandMark from '~/components/ui/BrandMark.vue'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
 import { computed, onMounted, ref } from 'vue'
@@ -83,7 +84,7 @@ onMounted(async () => {
   <div class="shell">
     <header class="topbar">
       <NuxtLink to="/" class="brand">
-        <span class="brand-mark"><img src="/logo.png" alt="Tabularia" /></span> Tabularia
+        <BrandMark :size="26" /> Tabularia
       </NuxtLink>
 
       <nav class="mainnav">
@@ -197,17 +198,6 @@ onMounted(async () => {
   text-decoration: none;
   white-space: nowrap;
 }
-.brand-mark {
-  width: 27px;
-  height: 27px;
-  border-radius: 8px;
-  background: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.brand-mark img { width: 100%; height: 100%; object-fit: contain; }
 .mainnav { display: flex; align-items: center; gap: 2px; height: 100%; }
 .navlink {
   display: inline-flex;

@@ -7,6 +7,7 @@ import { useLocale } from '~/composables/useLocale'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
 import OrderingField from '~/components/ui/OrderingField.vue'
 import Select from '~/components/ui/Select.vue'
+import BrandMark from '~/components/ui/BrandMark.vue'
 
 const { login, ssoConfig, ssoLogin } = useAuth()
 const { t } = useI18n()
@@ -92,7 +93,7 @@ async function onSubmit() {
 
     <form ref="card" class="card" :aria-busy="busy" @submit.prevent="onSubmit">
       <header class="id">
-        <span class="mark"><img src="/logo.png" alt="" /></span>
+        <BrandMark :size="40" />
         <h1>Tabularia</h1>
       </header>
       <p class="tagline">{{ $t('login.tagline') }}</p>
@@ -207,16 +208,6 @@ async function onSubmit() {
 }
 
 .id { display: flex; align-items: center; gap: 12px; }
-.mark {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: #fff;
-  overflow: hidden;
-  border: 1px solid var(--border); /* su pannello bianco la tessera perdeva il bordo */
-}
-.mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
 h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
 .tagline { margin: -6px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.45; text-wrap: balance; }
 

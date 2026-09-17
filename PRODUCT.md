@@ -30,7 +30,7 @@ Runs behind a gateway (JWT auth, RBAC on users, groups and projects, optional OI
 
 ## Brand Commitments
 
-Name "Tabularia" and the existing logo (`frontend/public/logo.png`). Sober, technical voice; Italian-first team, English as the base locale.
+Name "Tabularia" and its mark — a table grid crossed by a flow. The mark is vector (`frontend/components/ui/BrandMark.vue` in the app, `frontend/public/logo.svg` outside it): grid in the text colour, flow in the accent, a reduced 2×2 variant below 24px. Redrawn on 2026-09-17 from the original raster, same idea and silhouette. Sober, technical voice; Italian-first team, English as the base locale.
 
 ## Evidence on Hand
 

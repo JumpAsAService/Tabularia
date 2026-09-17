@@ -43,6 +43,9 @@ export default defineNuxtConfig({
         // favicon ritagliata stretta sul simbolo — il logo.png a piena
         // risoluzione ha margini enormi e in tab sparirebbe. PNG puri come
         // primari (i più affidabili su Chrome), .ico BMP come fallback.
+        // vettoriale e con la griglia che segue il tema del BROWSER: chi lo supporta
+        // lo preferisce ai PNG qui sotto, che restano come ripiego
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png' },
         { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16.png' },
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
