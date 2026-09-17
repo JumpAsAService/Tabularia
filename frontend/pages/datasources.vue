@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
 // con stato live, eliminazione.
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
@@ -101,6 +101,18 @@ async function pollIngest(dsId: number, token: number) {
     }
   } catch { /* riproverà al prossimo refresh manuale */ }
 }
+
+// Lo stato "sta importando" non può vivere solo qui: un refresh da cinque minuti
+// sopravvive a un cambio di pagina, e quelli schedulati non partono da un click.
+// Il server segna `refreshing`; a ogni caricamento si riaggancia il polling.
+watch(items, (list) => {
+  for (const d of list) {
+    if (d.refreshing && !isImporting(d.id)) {
+      ingestRuns.value = { ...ingestRuns.value, [d.id]: { status: 'STARTED' } as RunInfo }
+      pollIngest(d.id, pollToken)
+    }
+  }
+}, { immediate: true })
 
 async function refresh(d: DatasourceInfo) {
   try {

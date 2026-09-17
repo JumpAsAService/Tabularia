@@ -24,6 +24,10 @@ export default {
     signOut: 'Déconnexion',
     admin: 'admin',
   },
+  presence: {
+    alsoOpenBy: "Également ouvert par {who}",
+    lastSaveWins: "le dernier à enregistrer écrase l'autre",
+  },
   login: {
     tagline: 'Des données brutes à une table fiable.',
     rawSide: 'données brutes',

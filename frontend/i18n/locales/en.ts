@@ -25,6 +25,10 @@ export default {
     signOut: 'Sign out',
     admin: 'admin',
   },
+  presence: {
+    alsoOpenBy: "Also open by {who}",
+    lastSaveWins: "the last one to save overwrites the other",
+  },
   login: {
     tagline: 'From raw data to a table you can trust.',
     rawSide: 'raw data',

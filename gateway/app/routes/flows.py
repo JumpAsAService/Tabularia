@@ -19,7 +19,9 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Flow, FlowVersion, Project, Run, User
 from app.models.permission import Capability
-from app.services import audit
+from app.services import audit, flow_presence
+from pydantic import BaseModel, Field
+from app.schemas.models import UtcDateTime
 from app.schemas.models import (
     FlowCreate,
     FlowDetail,
@@ -286,6 +288,56 @@ async def export_flow_dbt(
         content=resp.content, media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{fname}_dbt_{target}.zip"'},
     )
+
+
+# ── Presenza nell'editor ───────────────────────────────────────────────────────
+class PresenceBeat(BaseModel):
+    # id dell'ISTANZA dell'editor (una per scheda), generato dal browser
+    instance: str = Field(min_length=4, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class PresenceOther(BaseModel):
+    user_id: int
+    email: str
+    full_name: str = ""
+    since: UtcDateTime
+
+
+class PresenceOut(BaseModel):
+    others: list[PresenceOther]
+    heartbeat_seconds: int
+
+
+@router.post("/flows/{flow_id}/presence", response_model=PresenceOut)
+def flow_presence_beat(
+    flow_id: int,
+    body: PresenceBeat,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """"Ho questo flusso aperto": il battito dell'editor. Risponde con chi ALTRO
+    ce l'ha aperto. Non blocca e non impedisce nulla — avvisa, perche' l'ultimo
+    che salva sovrascrive l'altro. Chi vede il flusso vede anche chi lo sta
+    guardando; nessun altro."""
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    others = flow_presence.beat(flow_id, body.instance, user.id, user.email, user.full_name or "")
+    return PresenceOut(
+        others=[PresenceOther(**{**o, "since": datetime.fromtimestamp(o["since"], timezone.utc)}) for o in others],
+        heartbeat_seconds=flow_presence.HEARTBEAT_SECONDS,
+    )
+
+
+@router.delete("/flows/{flow_id}/presence/{instance}", status_code=status.HTTP_204_NO_CONTENT)
+def flow_presence_leave(
+    flow_id: int,
+    instance: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    flow_presence.leave(flow_id, instance)
 
 
 @router.get("/flows/{flow_id}", response_model=FlowDetail)

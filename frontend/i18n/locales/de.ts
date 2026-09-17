@@ -24,6 +24,10 @@ export default {
     signOut: 'Abmelden',
     admin: 'Admin',
   },
+  presence: {
+    alsoOpenBy: "Auch geöffnet von {who}",
+    lastSaveWins: "wer zuletzt speichert, überschreibt den anderen",
+  },
   login: {
     tagline: 'Von Rohdaten zu einer Tabelle, der man vertraut.',
     rawSide: 'Rohdaten',

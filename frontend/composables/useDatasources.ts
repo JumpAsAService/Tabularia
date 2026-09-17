@@ -22,6 +22,7 @@ export interface DatasourceInfo {
   source_type: 'table' | 'sql' | null
   source_ref: string | null
   refreshed_at: string | null
+  refreshing?: boolean // un ingest è in corso ORA (lo dice il server)
   refresh_schedule: string | null // espressione cron; null = non schedulato
   next_refresh_at: string | null
   updated_at: string | null

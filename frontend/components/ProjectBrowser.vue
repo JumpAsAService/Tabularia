@@ -236,7 +236,9 @@ async function loadFolder(id: number | null) {
     try {
       dsList.value = await dsApi.listByProject(id)
       for (const d of dsList.value) {
-        if (d.kind === 'database' && d.rows == null) pollIngest(d.id, ingestToken)
+        // `refreshing` lo dice il server: vale anche per un refresh partito da
+        // un'altra pagina, da un altro utente o dallo scheduler
+        if (d.kind === 'database' && (d.rows == null || d.refreshing)) pollIngest(d.id, ingestToken)
       }
     } catch { dsList.value = [] }
     try { savedViews.value = await viewsApi.listByProject(id) } catch { savedViews.value = [] }

@@ -24,6 +24,10 @@ export default {
     signOut: 'Cerrar sesión',
     admin: 'admin',
   },
+  presence: {
+    alsoOpenBy: "También abierto por {who}",
+    lastSaveWins: "el último que guarda sobrescribe al otro",
+  },
   login: {
     tagline: 'De los datos en bruto a una tabla fiable.',
     rawSide: 'datos en bruto',

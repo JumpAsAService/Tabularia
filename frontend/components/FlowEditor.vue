@@ -5,9 +5,10 @@ import type { Node, Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls, ControlButton } from '@vue-flow/controls'
 
-import { Table2, BarChart3, Wand2 } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
+import { useFlowPresence } from '~/composables/useFlowPresence'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -126,6 +127,12 @@ const canRun = computed(
 
 // ── Flusso salvato (persistenza nel gateway) ─────────────────────────────
 const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : null)
+// chi ALTRO ha questo flusso aperto: l'ultimo che salva sovrascrive, quindi si avvisa
+const { others: alsoOpenBy } = useFlowPresence(flowId)
+const alsoOpenLabel = computed(() => {
+  const mails = [...new Set(alsoOpenBy.value.map((o) => o.email))]
+  return mails.length <= 2 ? mails.join(', ') : `${mails.slice(0, 2).join(', ')} +${mails.length - 2}`
+})
 const projectId = ref<number | null>(route.query.project ? Number(route.query.project) : null)
 const flowName = ref(t('flowEditor.unnamedFlow'))
 // motore del flusso: scelto in creazione (?engine=… dalla pagina Flows) per un
@@ -1297,6 +1304,11 @@ async function pollTask(id: string) {
       @update:flow-name="flowName = $event"
       @update:project-id="projectId = $event"
     />
+    <p v-if="alsoOpenBy.length" class="also-open" role="status">
+      <Users :size="14" aria-hidden="true" />
+      <span>{{ $t('presence.alsoOpenBy', { who: alsoOpenLabel }) }}</span>
+      <span class="also-open-why">{{ $t('presence.lastSaveWins') }}</span>
+    </p>
 
     <div class="sidebar">
       <OpSidebar :operations="operations" />

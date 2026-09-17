@@ -480,6 +480,9 @@ class DatasourceOut(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     refreshed_at: Optional[UtcDateTime] = None
+    # un ingest è in corso ORA (lo dice il server: vale anche per i refresh
+    # schedulati e dopo una ricarica della pagina). Solo negli elenchi.
+    refreshing: bool = False
     # refresh schedulato (cron); next_refresh_at = prossima esecuzione prevista
     refresh_schedule: Optional[str] = None
     next_refresh_at: Optional[UtcDateTime] = None

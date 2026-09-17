@@ -71,7 +71,24 @@ def clean_column_descriptions(value: dict[str, str]) -> dict[str, str]:
     return out
 
 
-def _to_out(ds: Datasource) -> DatasourceOut:
+def _refreshing_ids(session: Session, rows: list[Datasource]) -> set[int]:
+    """Le datasource che hanno un ingest IN CORSO, con una sola query per tutto
+    l'elenco. Lo stato "sta importando" viveva solo nella memoria della pagina:
+    con un refresh da cinque minuti bastava cambiare scheda e tornare — o che il
+    refresh fosse partito dallo scheduler — per non vedere più niente. Lo dice il
+    server, così lo spinner sopravvive a ricariche e a refresh altrui."""
+    ids = [d.id for d in rows if d.id is not None]
+    if not ids:
+        return set()
+    found = session.exec(
+        select(Run.datasource_id).where(
+            Run.kind == "ingest", Run.datasource_id.in_(ids), Run.status.notin_(list(TERMINAL_STATES))
+        )
+    ).all()
+    return {i for i in found if i is not None}
+
+
+def _to_out(ds: Datasource, refreshing: bool = False) -> DatasourceOut:
     try:
         cols = json.loads(ds.columns or "[]")
     except json.JSONDecodeError:
@@ -93,9 +110,10 @@ def _to_out(ds: Datasource) -> DatasourceOut:
     fields = {
         f: getattr(ds, f)
         for f in DatasourceOut.model_fields
-        if f not in ("columns", "column_descriptions", "sort_keys")
+        # `refreshing` non è una colonna: è calcolato (vedi _refreshing_ids)
+        if f not in ("columns", "column_descriptions", "sort_keys", "refreshing")
     }
-    return DatasourceOut(**fields, columns=cols, column_descriptions=descs, sort_keys=skeys)
+    return DatasourceOut(**fields, columns=cols, column_descriptions=descs, sort_keys=skeys, refreshing=refreshing)
 
 
 def _get_ds(session: Session, ds_id: int) -> Datasource:
@@ -118,7 +136,8 @@ def list_all_datasources(user: User = Depends(get_current_user), session: Sessio
     rows = session.exec(
         select(Datasource).where(Datasource.project_id.in_(readable)).order_by(Datasource.name)
     ).all()
-    return [_to_out(d) for d in rows]
+    busy = _refreshing_ids(session, rows)
+    return [_to_out(d, d.id in busy) for d in rows]
 
 
 @router.get("/datasources/search", response_model=Page[DatasourceOut])
@@ -139,7 +158,8 @@ def search_datasources(
         like = f"%{q}%"
         base = base.where(or_(Datasource.name.ilike(like), Datasource.description.ilike(like)))
     rows, total = paginate(session, base, Datasource.name, limit, offset)
-    return Page(items=[_to_out(d) for d in rows], total=total)
+    busy = _refreshing_ids(session, rows)
+    return Page(items=[_to_out(d, d.id in busy) for d in rows], total=total)
 
 
 @router.get("/projects/{project_id}/datasources", response_model=list[DatasourceOut])
@@ -154,7 +174,8 @@ def list_project_datasources(
     rows = session.exec(
         select(Datasource).where(Datasource.project_id == project_id).order_by(Datasource.name)
     ).all()
-    return [_to_out(d) for d in rows]
+    busy = _refreshing_ids(session, rows)
+    return [_to_out(d, d.id in busy) for d in rows]
 
 
 @router.post(

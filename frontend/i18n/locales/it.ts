@@ -24,6 +24,10 @@ export default {
     signOut: 'Esci',
     admin: 'admin',
   },
+  presence: {
+    alsoOpenBy: "Aperto anche da {who}",
+    lastSaveWins: "l'ultimo che salva sovrascrive l'altro",
+  },
   login: {
     tagline: 'Dai dati grezzi a una tabella di cui fidarsi.',
     rawSide: 'dati grezzi',
