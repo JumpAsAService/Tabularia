@@ -45,6 +45,18 @@ def preview_task(
     from app.engine.query_tag import query_tag
 
     _tid = getattr(getattr(current_task, "request", None), "id", None)
+
+    def _stats(outcome: str) -> None:
+        # istogrammi + classifica delle più lente su Valkey (vedi preview_stats):
+        # nessuna tabella, nessuna lista in memoria
+        from app.observability import preview_stats
+
+        fasi, fonte = preview_stats.take_phases()
+        preview_stats.record(
+            engine=engine or "default", outcome=outcome, total_ms=(_time.perf_counter() - _t0) * 1000,
+            phases=fasi, dataset=input_key, ops=len(operations), source=fonte, cache=not no_cache,
+        )
+
     try:
         engine_impl = get_engine(engine)
         with query_tag(f"tab-prev:{_tid}" if _tid else None):
@@ -57,6 +69,7 @@ def preview_task(
             )
         _engine_ms = (_time.perf_counter() - _t0) * 1000
         payload = {"ok": True, "result": result.model_dump()}
+        _stats("ok")
         # Il tempo DENTRO il worker, per ogni engine. Confrontalo con quello che
         # misura il chiamante: la differenza e' attesa in coda + trasporto del
         # risultato, non lavoro. Se `serializz` e' alto, pesa il payload (righe x
@@ -81,6 +94,7 @@ def preview_task(
         # nessuno aspettava piu'.
         from app.engine.query_tag import was_interrupted
 
+        _stats("superseded" if was_interrupted(e) else "error")
         if was_interrupted(e):
             logger.info("preview_task superata da una piu' recente (%.0f ms)", (_time.perf_counter() - _t0) * 1000)
             return {"ok": False, "error": "superseded", "detail": "Anteprima superata da una richiesta piu' recente"}

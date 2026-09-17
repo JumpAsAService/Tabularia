@@ -67,6 +67,8 @@ async def lifespan(app: FastAPI):
 
 settings = get_settings()
 
+from app.routes import performance as performance_routes
+
 app = FastAPI(
     title=f"{settings.app.name} — Gateway",
     description="Control plane: auth, utenti/gruppi, progetti/permessi, proxy verso l'engine",
@@ -111,6 +113,7 @@ app.include_router(system_router)
 app.include_router(queue_router)
 # data plane (proxy verso l'engine interno)
 app.include_router(proxy_router)
+app.include_router(performance_routes.router)
 
 
 @app.get("/", tags=["health"])

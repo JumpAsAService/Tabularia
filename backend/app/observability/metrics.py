@@ -57,6 +57,41 @@ class DataPrepCollector:
             g_obj.add_metric([prefix], float(val))
         yield g_obj
 
+        yield from _preview_metrics()
+
+
+def _preview_metrics():
+    """Istogramma delle preview (durata per motore ed esito) e tempo per fase.
+    I contatori vivono su Valkey (vedi preview_stats): qui si traducono nel
+    formato Prometheus — secchi CUMULATIVI — da cui Grafana ricava p50/p95."""
+    from prometheus_client.core import CounterMetricFamily, HistogramMetricFamily
+
+    from app.observability import preview_stats as ps
+
+    snap = ps.snapshot()
+    series: dict[tuple[str, str], dict[str, int]] = {}
+    for key, n in snap["hist"].items():
+        engine, outcome, le = key.split("|", 2)
+        series.setdefault((engine, outcome), {})[le] = n
+    h = HistogramMetricFamily(
+        "dataprep_preview_duration_ms", "Durata delle preview (ms)", labels=["engine", "outcome"]
+    )
+    for (engine, outcome), per_le in series.items():
+        running, buckets = 0, []
+        for le in [str(b) for b in ps.BUCKETS_MS] + ["+Inf"]:
+            running += per_le.get(le, 0)
+            buckets.append((le, running))
+        h.add_metric([engine, outcome], buckets, sum_value=snap["sum_ms"].get(f"{engine}|{outcome}", 0.0))
+    yield h
+
+    c = CounterMetricFamily(
+        "dataprep_preview_phase_ms", "Tempo speso dalle preview in ogni fase (ms)", labels=["engine", "phase"]
+    )
+    for key, ms in snap["phase_ms"].items():
+        engine, phase = key.split("|", 1)
+        c.add_metric([engine, phase], ms)
+    yield c
+
 
 def register_app_metrics() -> None:
     """Registra il collector custom nel registry di default (quello di /metrics)."""

@@ -50,6 +50,7 @@ from app.engine.exceptions import EngineError, OperationError, SourceNotFoundErr
 from app.engine.polars_engine import _coerce_ops, _columns_of
 from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
 from app.engine.query_tag import current_query_tag, is_safe_tag, was_interrupted
+from app.observability import preview_stats
 
 logger = logging.getLogger(__name__)
 
@@ -696,6 +697,7 @@ class ClickHouseEngine(Engine):
                 truncated=truncated,
             )
             _fase("decode", _t)
+            preview_stats.set_phases(_fasi, ctx.fonte_radice)  # le raccoglie preview_task
             logger.info(
                 "preview clickhouse %.0f ms | %s | righe=%d colonne=%d limit=%d ops=%d cache=%s scaricati=%.0fKB fonte=%s",
                 (time.perf_counter() - _t0) * 1000,
