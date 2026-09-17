@@ -49,6 +49,7 @@ from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
 from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
+from app.engine.query_tag import current_query_tag, is_safe_tag
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,11 @@ class ClickHouseContext:
         # una lettura dalla copia: diagnosi opposte.
         self.fonte_radice = "?"
         self.settings: dict[str, Any] = {}
+        # etichetta del lavoro in corso (vedi query_tag.py): permette di uccidere
+        # sul server le query di una preview interrotta
+        _tag = current_query_tag()
+        if _tag:
+            self.settings["log_comment"] = _tag
         if cfg.max_execution_time > 0:
             self.settings["max_execution_time"] = cfg.max_execution_time
 
@@ -424,6 +430,18 @@ class ClickHouseContext:
         self.tmp.clear()
 
 
+def _was_interrupted(exc: BaseException) -> bool:
+    """True se nella catena delle cause c'e' l'interruzione del task. Per NOME e
+    non per tipo: l'engine non deve importare Celery."""
+    seen = 0
+    while exc is not None and seen < 10:
+        if type(exc).__name__ in ("SoftTimeLimitExceeded", "KeyboardInterrupt"):
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return False
+
+
 class ClickHouseEngine(Engine):
     engine_name = "clickhouse"
 
@@ -495,11 +513,51 @@ class ClickHouseEngine(Engine):
                 database=self.cfg.database or "default",
                 secure=self.cfg.secure,
                 connect_timeout=self.cfg.connect_timeout,
+                # NIENTE sessione: l'engine non usa tabelle temporanee ne' SET, e
+                # una sessione e' un lucchetto — finche' una query interrotta gira
+                # ancora sul server, ogni altra query dello stesso client fallisce
+                # con "Session … is locked by a concurrent client". Con il client
+                # riusato per thread, una preview annullata avvelenava il processo.
+                autogenerate_session_id=False,
             )
         except Exception as e:
             raise EngineError(_clean_error(e, self.cfg.host, self.cfg.port)) from e
         cache[chiave] = (c, time.monotonic())
         return c
+
+    def _forget_client(self) -> None:
+        """Butta il client in cache di questo thread. Dopo un'interruzione a
+        meta' risposta la connessione e' in uno stato ignoto: meglio pagare un
+        handshake che servire la prossima preview con un socket a meta' lettura."""
+        cache = getattr(_CLIENTI_PER_THREAD, "per_chiave", None) or {}
+        for chiave, (c, _) in list(cache.items()):
+            cache.pop(chiave, None)
+            try:
+                c.close()
+            except Exception:
+                pass
+
+    def kill_tagged(self, tag: str) -> None:
+        """Uccide sul server le query con questa etichetta. Best-effort e con un
+        client NUOVO (quello del lavoro interrotto non e' affidabile). ASYNC: non
+        si aspetta la fine, basta che il server smetta di lavorarci."""
+        if not is_safe_tag(tag):
+            return
+        try:
+            import clickhouse_connect  # import locale, come in _client(): dipendenza opzionale
+
+            c = clickhouse_connect.get_client(
+                host=self.cfg.host, port=self.cfg.port, username=self.cfg.username or "default",
+                password=self.cfg.password.get_secret_value(), database=self.cfg.database or "default",
+                secure=self.cfg.secure, connect_timeout=self.cfg.connect_timeout,
+                autogenerate_session_id=False,
+            )
+            try:
+                c.command(f"KILL QUERY WHERE Settings['log_comment'] = '{tag}' ASYNC")
+            finally:
+                c.close()
+        except Exception as e:  # non deve mai far fallire chi sta pulendo
+            logger.warning("KILL QUERY per %s non riuscita: %s", tag, _clean_error(e))
 
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"
@@ -657,6 +715,19 @@ class ClickHouseEngine(Engine):
                 ctx.fonte_radice,
             )
             return res
+        except BaseException as e:
+            # Preview INTERROTTA (superata da una piu' recente: il worker riceve
+            # SIGUSR1 e qui arriva SoftTimeLimitExceeded, di solito avvolta in un
+            # EngineError da _rows). Due pulizie che nessun altro puo' fare:
+            # il server sta ANCORA eseguendo la query, e la connessione e' rimasta
+            # a meta' risposta. Misurato: senza, il server lavorava a vuoto e le
+            # preview successive di questo processo fallivano.
+            if _was_interrupted(e):
+                self._forget_client()
+                tag = ctx.settings.get("log_comment")
+                if tag:
+                    self.kill_tagged(tag)
+            raise
         finally:
             ctx.cleanup()
             # NIENTE client.close(): e' condiviso col prossimo task di questo

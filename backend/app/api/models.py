@@ -62,6 +62,10 @@ class PreviewRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=1000, description="Righe massime nel campione")
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
     no_cache: bool = Field(default=False, description="Non scrivere/leggere la step-cache (query esplorative del Viewer)")
+    # Slot della preview: in ogni slot conta solo l'ULTIMA richiesta — una nuova
+    # butta giu' la precedente (vedi api/preview_slots.py). Assente = come prima.
+    slot: Optional[str] = Field(default=None, max_length=96, pattern=r"^[A-Za-z0-9:_-]+$",
+                                description="Slot: una nuova preview sullo stesso slot annulla la precedente")
     # Le chiavi entrano nell'IDENTITA' della copia materializzata: variarle genera
     # copie distinte dello stesso dato. Senza un tetto, una richiesta ripetuta con
     # chiavi sempre diverse riempirebbe il disco del server condiviso.

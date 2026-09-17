@@ -11,6 +11,7 @@ GET /tasks/{task_id} (stato di un task: gli id sono UUID non enumerabili) —
 debito documentato, accettabile.
 """
 import json
+import re
 import logging
 from typing import Any
 from uuid import uuid4
@@ -132,6 +133,28 @@ async def engines(request: Request, session: Session = Depends(get_session)):
     return catalogo
 
 
+_SLOT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def scope_preview_slot(raw: bytes, payload: Any, user_id: int) -> bytes:
+    """Lo slot di una preview ("in questo pannello conta solo l'ultima") lo
+    dichiara il browser, ma una nuova preview sullo stesso slot BUTTA GIU' la
+    precedente: senza un recinto, chi indovinasse lo slot di un altro gli
+    annullerebbe le anteprime. Il gateway lo prefissa con l'utente autenticato,
+    quindi uno slot puo' colpire solo le preview di chi lo manda. Uno slot
+    malformato viene tolto (la preview gira, semplicemente senza slot); senza
+    slot il body passa INTATTO, byte per byte, come prima."""
+    if not isinstance(payload, dict) or "slot" not in payload:
+        return raw
+    slot = payload.get("slot")
+    scoped = dict(payload)
+    if isinstance(slot, str) and _SLOT_RE.match(slot):
+        scoped["slot"] = f"u{user_id}:{slot}"
+    else:
+        scoped.pop("slot", None)
+    return json.dumps(scoped).encode()
+
+
 @router.post("/tasks/preview")
 async def preview(
     request: Request,
@@ -141,6 +164,7 @@ async def preview(
     raw, payload = await _read_json(request)
     ensure_reads_pinned(user, payload, get_settings().engine.bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(payload))
+    raw = scope_preview_slot(raw, payload, user.id)
     return await _forward(request, "POST", "/tasks/preview", content=raw)
 
 

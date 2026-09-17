@@ -7,6 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 
 import { Table2, BarChart3, Wand2 } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
+import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -139,8 +140,12 @@ const flowProductionEngine = ref<string | null>(null)
 // preview/transform iniettano SEMPRE l'engine del flusso corrente. (`dataApi`
 // alias: evita che i wrapper si auto-referenzino nei rimpiazzi delle chiamate.)
 const dataApi = api
-const apiPreview = (body: Parameters<typeof api.preview>[0]) =>
-  dataApi.preview({ ...body, engine: flowEngine.value })
+// Quattro slot per editor — anteprima, colonne, valori distinti, grafico: in
+// ognuno una richiesta nuova butta giu' la precedente (vedi usePreviewSlots).
+const previewSlots = usePreviewSlots('ed')
+onUnmounted(() => previewSlots.cancelAll())
+const apiPreview = (body: Parameters<typeof api.preview>[0], slot?: 'preview' | 'cols' | 'values' | 'chart') =>
+  previewSlots.preview({ ...body, engine: flowEngine.value }, slot)
 const apiTransform = (body: Parameters<typeof api.transform>[0]) =>
   dataApi.transform({ ...body, engine: flowEngine.value })
 const projectsList = ref<{ id: number; name: string }[]>([])
@@ -677,11 +682,12 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
     input_key: sourceNode.data.parquetKey,
     operations: ops,
     limit: 1,
-  })
+  }, 'cols')
   nodeColumns[nodeId] = res.columns
   return res.columns
 }
 
+const CLICK_SETTLE_MS = 180
 let columnsSeq = 0 // come previewSeq: solo l'ultima risoluzione spegne lo skeleton
 async function refreshForNode(nodeId: string) {
   const inc = buildIncoming(getEdges.value)
@@ -689,6 +695,11 @@ async function refreshForNode(nodeId: string) {
   columnsLoading.value = true
   const colSeq = ++columnsSeq
   const t0 = performance.now()
+  // Chi scorre i nodi uno dopo l'altro non vuole la preview di ognuno: si
+  // aspetta un attimo, e se nel frattempo e' arrivato un altro click questo
+  // non parte nemmeno. Lo skeleton e' gia' acceso: il ritardo non si vede.
+  await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
+  if (colSeq !== columnsSeq) return
 
   // colonne in ingresso (output del genitore sinistro); il PRIMO nodo di un
   // corpo foreach non ha archi interni → il suo input è quello del container
@@ -743,6 +754,9 @@ async function refreshForNode(nodeId: string) {
   skeletonPad(t0).then(() => {
     if (colSeq === columnsSeq) columnsLoading.value = false
   })
+  // Superato mentre risolvevo le colonne: NON lanciare la preview del nodo
+  // vecchio — occuperebbe lo slot e butterebbe giu' quella del nodo nuovo.
+  if (colSeq !== columnsSeq) return
   await runPreview(nodeId)
 }
 
@@ -763,11 +777,12 @@ async function runPreview(nodeId: string) {
       input_key: sourceNode.data.parquetKey,
       operations: ops,
       limit: 100,
-    })
+    }, 'preview')
     nodeColumns[nodeId] = res.columns
     if (seq === previewSeq) preview.value = res
   } catch (e) {
-    if (seq === previewSeq) {
+    // "superata da una piu' recente" non e' un errore: non va mai mostrato
+    if (seq === previewSeq && !isSuperseded(e)) {
       preview.value = null
       previewError.value = errMessage(e)
     }
@@ -808,7 +823,7 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
       { type: 'limit', params: { n: 200 } },
     ],
     limit: 200,
-  })
+  }, 'values')
   return res.rows.map((r) => r[column]).filter((v) => v !== null)
 }
 
@@ -822,7 +837,7 @@ async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewR
     input_key: sourceNode.data.parquetKey,
     operations: [...ops, ...extraOps],
     limit,
-  })
+  }, 'chart')
 }
 
 // ── Export (download csv/xlsx del nodo selezionato) ─────────────────────

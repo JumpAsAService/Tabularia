@@ -10,11 +10,17 @@ import {
   PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type Operation, type ColumnInfo } from '~/composables/useApi'
+import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useSavedViews, type SavedView, type SavedViewSpec } from '~/composables/useSavedViews'
 import { useProjects, type Project } from '~/composables/useProjects'
 
 const api = useApi()
+// Tabella e grafico su due slot: un Apply (o un ritocco al grafico) butta giu'
+// quello precedente invece di accodarglisi dietro — vedi usePreviewSlots.
+const previewSlots = usePreviewSlots('vw')
+onUnmounted(() => previewSlots.cancelAll())
+let applySeq = 0 // solo l'ultimo Apply spegne lo spinner
 const dsApi = useDatasources()
 const viewsApi = useSavedViews()
 const projectsApi = useProjects()
@@ -138,7 +144,7 @@ const baseOps = computed<Operation[]>(() => {
 async function chartQuery(ops: Operation[], limit?: number) {
   const ds = selectedDs.value
   if (!ds) return null
-  return await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: [...baseOps.value, ...ops], engine: engine.value, limit, no_cache: true, sort_keys: ds.sort_keys })
+  return await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: [...baseOps.value, ...ops], engine: engine.value, limit, no_cache: true, sort_keys: ds.sort_keys }, 'chart')
 }
 
 async function onPickDatasource(id: number | null) {
@@ -165,6 +171,7 @@ function buildTableOps(): Operation[] {
 async function apply() {
   const ds = selectedDs.value
   if (!ds) return
+  const seq = ++applySeq
   loading.value = true; error.value = ''
   try {
     const ops = buildTableOps()
@@ -176,17 +183,20 @@ async function apply() {
     const conPivot = ops.length > baseOps.value.length
     if (conPivot) {
       // solo qui la tabella ha colonne diverse da quelle su cui si configura
-      const base = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true, sort_keys: ds.sort_keys })
+      const base = await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true, sort_keys: ds.sort_keys }, 'table')
       baseCols.value = base.columns
     }
-    const res = await api.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys })
+    const res = await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys }, 'table')
     rows.value = res.rows
     tableCols.value = res.columns
     if (!conPivot) baseCols.value = res.columns
   } catch (e) {
+    // un Apply superato da un Apply piu' recente non e' un errore da mostrare:
+    // stato e spinner li governa quello nuovo
+    if (isSuperseded(e)) return
     error.value = errMessage(e); rows.value = []
   } finally {
-    loading.value = false
+    if (applySeq === seq) loading.value = false
   }
 }
 

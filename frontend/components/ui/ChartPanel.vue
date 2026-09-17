@@ -98,7 +98,13 @@ const loading = ref(false)
 const error = ref('')
 const droppedSeries = ref(0) // serie oltre i 5 slot della palette
 
+// Solo l'ULTIMO refresh scrive lo stato. Le query del grafico ora si annullano
+// a vicenda (chi ospita il pannello le manda su uno slot): senza questa guardia
+// una richiesta annullata, tornando DOPO la piu' recente, scriverebbe "errore"
+// e svuoterebbe le righe sopra il grafico appena disegnato.
+let refreshSeq = 0
 async function refresh() {
+  const seq = ++refreshSeq
   error.value = ''
   droppedSeries.value = 0
   if (!xCol.value) return
@@ -138,12 +144,14 @@ async function refresh() {
       ]
     }
     const res = await props.query(ops, 1000)
-    rows.value = res?.rows ?? []
+    if (seq === refreshSeq) rows.value = res?.rows ?? []
   } catch (e) {
-    rows.value = []
-    error.value = errMessage(e)
+    if (seq === refreshSeq) {
+      rows.value = []
+      error.value = errMessage(e)
+    }
   } finally {
-    loading.value = false
+    if (seq === refreshSeq) loading.value = false
   }
 }
 

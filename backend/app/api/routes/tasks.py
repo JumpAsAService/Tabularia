@@ -1,14 +1,16 @@
 import os
 import tempfile
 import time
+import uuid
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 from celery.result import AsyncResult
-from celery.exceptions import TimeoutError as CeleryTimeoutError
+from celery.exceptions import TaskRevokedError, TimeoutError as CeleryTimeoutError
 from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
+from app.api import preview_slots
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
     PreviewRequest, ExportRequest,
@@ -82,6 +84,9 @@ def list_operations():
 PREVIEW_TIMEOUT_SECONDS = float(os.getenv("PREVIEW_TIMEOUT_SECONDS", "120"))
 # mappa il tag d'errore del task allo status HTTP
 _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400}
+# ogni quanto l'attesa controlla di non essere stata superata
+_PREVIEW_POLL_SECONDS = 0.25
+_SUPERSEDED = "Anteprima superata da una richiesta piu' recente"
 
 
 @router.post("/preview", response_model=PreviewResult)
@@ -110,18 +115,44 @@ def preview_flow(request: PreviewRequest):
     # continuano a funzionare per tutta la finestra di rollout.
     if request.sort_keys:
         kwargs["sort_keys"] = request.sort_keys
+    # id deciso QUI: serve prima dell'invio per prenotare lo slot
+    task_id = str(uuid.uuid4())
+    previous = None
+    if request.slot:
+        previous = preview_slots.claim(request.slot, task_id, int(PREVIEW_TIMEOUT_SECONDS) + 60)
     async_result = celery_app.send_task(
-        "app.tasks.jobs.preview_task", kwargs=kwargs, queue="preview",
+        "app.tasks.jobs.preview_task", kwargs=kwargs, queue="preview", task_id=task_id,
     )
+    if previous and previous != task_id:
+        # Butta giu' la preview che occupava lo slot. In coda: il worker la scarta
+        # all'arrivo. In esecuzione: SIGUSR1 = SoftTimeLimitExceeded DENTRO il
+        # task — il processo sopravvive (niente ricarica da 1,5 s) e l'engine
+        # ripulisce (client, query sul server). Il SIGTERM lo ucciderebbe.
+        celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
+
+    deadline = time.monotonic() + PREVIEW_TIMEOUT_SECONDS
     try:
-        payload = async_result.get(timeout=PREVIEW_TIMEOUT_SECONDS)
-    except CeleryTimeoutError:
-        async_result.revoke(terminate=True)  # ferma la preview in corso
-        raise HTTPException(
-            status_code=504, detail="Anteprima scaduta: il worker non ha risposto in tempo"
-        )
+        while True:
+            try:
+                payload = async_result.get(timeout=_PREVIEW_POLL_SECONDS)
+                break
+            except CeleryTimeoutError:
+                # Superata mentre aspettavo? Una preview ancora IN CODA non viene
+                # marcata revocata finche' il worker non la raggiunge: senza questo
+                # controllo il thread dell'API resterebbe qui fino ad allora.
+                if request.slot and preview_slots.owner(request.slot) not in (None, task_id):
+                    raise HTTPException(status_code=409, detail=_SUPERSEDED)
+                if time.monotonic() >= deadline:
+                    async_result.revoke(terminate=True)  # ferma la preview in corso
+                    raise HTTPException(
+                        status_code=504, detail="Anteprima scaduta: il worker non ha risposto in tempo"
+                    )
+            except TaskRevokedError:
+                raise HTTPException(status_code=409, detail=_SUPERSEDED)
     finally:
         async_result.forget()  # non accumulare risultati nel backend
+        if request.slot:
+            preview_slots.release(request.slot, task_id)
 
     if not payload.get("ok"):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)

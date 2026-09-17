@@ -39,15 +39,22 @@ def preview_task(
     import time as _time
 
     _t0 = _time.perf_counter()
+    # Le query di QUESTA preview portano l'id del task come etichetta: se la
+    # preview viene superata da una piu' recente, l'engine le uccide sul server.
+    from celery import current_task
+    from app.engine.query_tag import query_tag
+
+    _tid = getattr(getattr(current_task, "request", None), "id", None)
     try:
         engine_impl = get_engine(engine)
-        result = engine_impl.preview(
-            source=DataSource(bucket=bucket, key=input_key),
-            operations=operations,
-            limit=limit,
-            use_cache=not no_cache,
-            sort_keys=sort_keys,
-        )
+        with query_tag(f"tab-prev:{_tid}" if _tid else None):
+            result = engine_impl.preview(
+                source=DataSource(bucket=bucket, key=input_key),
+                operations=operations,
+                limit=limit,
+                use_cache=not no_cache,
+                sort_keys=sort_keys,
+            )
         _engine_ms = (_time.perf_counter() - _t0) * 1000
         payload = {"ok": True, "result": result.model_dump()}
         # Il tempo DENTRO il worker, per ogni engine. Confrontalo con quello che
