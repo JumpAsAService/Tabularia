@@ -1,12 +1,16 @@
 # Tabularia
 
-**Self-hosted, open-source visual data-preparation platform** — a Tableau Prep–style
-flow editor on pluggable streaming engines, with full-data previews, loops, charts,
-database sources & destinations, scheduling, cross-flow lineage, and an audit trail.
-No sampling.
+**Self-hosted, open-source visual data-preparation platform.** A Tableau Prep–style
+flow editor on pluggable engines: build a pipeline once, preview it on the whole
+dataset, and run it where the compute makes sense — in-process on your own servers, on
+a **managed ClickHouse**, or on **Google BigQuery** — without changing the flow.
+Database sources and destinations, loops, charts, scheduling, cross-flow lineage and an
+audit trail come in the box.
 
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
+
+Current release: **1.0.0 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -15,52 +19,122 @@ No sampling.
 ## The problem
 
 Visual data-prep tools either cost thousands per seat, or quietly work on **samples**
-of your data and hope for the best. Teams end up choosing between price, honesty about
-scale, and the freedom to run the tool on their own infrastructure.
+of your data and hope for the best. And once a pipeline exists, moving it to bigger
+iron usually means rebuilding it: the tool that was comfortable on a laptop does not
+speak to the warehouse the company already pays for.
 
 Tabularia is an open-source alternative you host yourself: a visual, drag-and-drop
-data pipeline builder that runs on the **entire** dataset, connects straight to your
-databases, and keeps a full record of who did what.
+pipeline builder that runs on the **entire** dataset, connects straight to your
+databases, keeps a full record of who did what — and lets the same flow run on five
+engines, from an in-process library to a serverless warehouse.
 
 ## What you get
 
 - **Build pipelines visually — no code.** Drag transformations onto a canvas, connect
   them, and preview the result at any step. Familiar to anyone who has used Tableau
   Prep, Alteryx, or Knime.
-- **No sampling, ever.** Previews, profiles, and charts run on the *whole* dataset
-  through a streaming engine — what you see in the editor is what you ship.
+- **No sampling, ever — unless you ask for it.** Previews, profiles and charts run on
+  the *whole* dataset through a streaming engine: what you see in the editor is what
+  you ship. Where every read is billed, an optional development sample keeps the
+  editor cheap, per node and switchable, and never touches production runs.
+- **Compute where it makes sense.** The same flow runs on Polars, DuckDB, chDB, an
+  external ClickHouse or BigQuery. Design in-process, then hand production to the
+  warehouse: the parquet stays in your bucket, the warehouse reads it **in place**,
+  nothing is copied and nothing streams through the workers. See
+  [Run it on your engine — or on your warehouse](#run-it-on-your-engine--or-on-your-warehouse).
 - **Explore without building a flow.** The **Viewer** is a read-only BI surface over any
   datasource: filters, calculated fields, pivots and charts, computed on the whole
   dataset by the engine you choose. Any configuration can be **saved as a view** into a
   folder, next to flows and datasources. A view stores the configuration and never the
-  rows, so reopening it reads today's data — it is a lens, not a copy — and anyone who
-  can see the folder can open it.
-- **Connect to your databases.** Read directly from Postgres, MySQL, SQL Server,
-  ClickHouse and more; write results back to a database table or publish them as a
-  reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
+  rows, so reopening it reads today's data — it is a lens, not a copy.
+- **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
+  ClickHouse, Trino and SharePoint Excel; write results back to a database table or
+  publish them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
 - **Schedule and forget.** Put flows on a schedule (timezone-aware, DST-safe) and let
   them refresh on their own; a load heatmap shows busy time-bands and collisions
   before they bite.
 - **Full history & governance.** Every run is recorded with downloadable results; an
-  **audit log** captures logins, flow runs, data exports, and permission changes —
+  **audit log** captures logins, flow runs, data exports and permission changes —
   "who entered, who ran what, which data was downloaded" — with a 24-hour access chart.
 - **See how everything connects.** A dedicated **Lineage** view maps datasources and
-  flows across the whole workspace: provenance, impact/blast-radius, staleness, and
+  flows across the whole workspace: provenance, impact/blast-radius, staleness and
   broken references at a glance.
-- **Multi-user from day one.** JWT login, users & groups, nested projects with
-  inherited view / edit / manage / connect permissions. Everyone works in the same
-  place, safely.
+- **Multi-user from day one.** JWT login or SSO (Keycloak, Entra ID, Auth0, Okta),
+  users & groups, nested projects with inherited view / edit / manage / connect
+  permissions. Everyone works in the same place, safely.
 - **Yours to run.** Self-hosted, AGPL-3.0 open source, no per-seat fees, no data
   leaving your infrastructure. Point it at managed S3 / Postgres / Redis if you prefer.
-- **Speaks your language, looks the part.** UI available in **English, Italian,
-  French, German, Spanish**, with **Dark, Light, Dracula, and Monokai** themes,
-  selectable per user.
+- **Speaks your language, looks the part.** UI in **English, Italian, French, German,
+  Spanish**, with **Dark, Light, Dracula and Monokai** themes, selectable per user.
+
+## Run it on your engine — or on your warehouse
+
+Every flow is stored as a declarative list of operations, decoupled from execution.
+That is what makes the engine a deployment choice instead of a design constraint:
+
+| Engine | Where the compute runs | What you need | How it is billed | Choose it when |
+|---|---|---|---|---|
+| **Polars** *(default)* | In the worker process | Nothing | Your servers | Day-to-day work, anything that fits the worker's memory |
+| **DuckDB** | In the worker process, spilling to disk | Nothing | Your servers | Very large joins and aggregations on one machine |
+| **chDB** | In the worker process (embedded ClickHouse) | The chDB build of the image | Your servers | Prototyping the ClickHouse dialect locally |
+| **ClickHouse (external)** | On a managed or self-hosted ClickHouse server | A ClickHouse reachable from the workers | The server you rent | Big tables, sub-second aggregations, a warehouse you already run |
+| **Google BigQuery** | On BigQuery, serverless | A GCP project and a bucket on Google Cloud Storage | Per byte read, no idle cost | Data already on GCP, elastic scale, zero servers to operate |
+
+A flow carries **two engines**: the development one, used by the editor and manual
+runs, and an optional production one, used by the scheduler and "Run in production".
+Design on Polars with a development sample, schedule on ClickHouse or BigQuery: the
+flow does not change, and every run records the engine it actually ran on. An
+administrator can restrict which engines the installation allows.
+
+The engines agree on one data standard — nulls, casts, joins, aggregates, sort order,
+pivots — locked by an oracle test suite that runs the same hand-computed expectations
+on all five. The remaining differences are documented, not discovered in production:
+[docs/engines/engine-differences.md](docs/engines/engine-differences.md).
+
+### Managed ClickHouse
+
+Set `CLICKHOUSE_EXTERNAL__HOST` and the engine appears in the picker. With the `s3`
+transport the server reads and writes the parquet **directly on the object storage**
+through its `s3()` table function: nothing passes through the workers, and an
+aggregation over 25 million rows answers in 0.6 s instead of 18 s, because the parquet
+is written with large row groups the server can skip. With the `push` transport
+the worker stages the source in a table and streams the result back, which works with
+any server that cannot see the bucket. Validated on Scaleway's managed ClickHouse;
+ClickHouse Cloud speaks the same protocol and reads S3-compatible buckets the same way
+(multi-replica services are not handled yet: query cancellation and the performance
+page read one replica).
+
+Optionally, datasets above a size threshold are copied once into a MergeTree on the
+server so the Viewer's full scans read local columns instead of the bucket.
+
+### Google BigQuery
+
+Point the object storage at Google Cloud Storage, give the engine a project and a
+service account, and every flow can run on BigQuery. Each source parquet becomes a
+**temporary external table** of the query (`gs://bucket/key`), so no dataset is
+loaded and no copy is made; the chain of operations is one GoogleSQL query; results
+come back through the Storage Read API and are written as parquet like everywhere
+else. Columns are checked with free dry runs; every job is capped by
+`BIGQUERY__MAXIMUM_BYTES_BILLED` so a runaway query is refused before it runs.
+
+The editor gets a **native step-cache**: intermediate steps are materialised as
+expiring tables in a `tabularia_cache` dataset by a background task, so the first click
+on a node never waits and the next ones read a small native table. Measured on a
+25 M × 50 table with a 100 k development sample: 0.6–1.1 s per click with the cache,
+1.1–2.9 s without.
+
+Know the cost model before pointing the Viewer at a wide table: BigQuery bills the
+**logical** bytes of the columns a query touches, whatever the file compression. On
+that same 25 M × 50 table, aggregations read 100 MB–1 GB per query (a fraction of a
+cent); sorting whole rows reads all 50 columns, about 19 GB, eleven cents per click.
+The per-query cap and the development sample are the two guards; the free tier
+covers 1 TB a month.
 
 ## Who it's for
 
 Data & analytics teams that want a self-hosted, governed, no-sampling data-prep tool
 without enterprise licensing — and anyone who needs an auditable, multi-user pipeline
-builder on top of their existing databases and object storage.
+builder that can start on one machine and grow onto the warehouse they already have.
 
 ---
 
@@ -83,66 +157,85 @@ pinned in the spec.
 | Gateway | FastAPI control plane: auth, RBAC, audit, in-process scheduler; proxies to the engine after the permission check |
 | PostgreSQL | control-plane metadata (users, groups, projects, versioned flows, connections, runs, schedules, audit) |
 | Engine API | FastAPI on the private network: turns every preview and run into a Celery task |
-| Valkey | Celery broker and step-cache index |
-| Run worker / preview worker | Celery workers on two queues (`celery`: runs, DB ingest, export · `preview`: interactive previews); engines in-process (Polars, DuckDB, chDB) |
+| Valkey | Celery broker, step-cache index, preview slots |
+| Run worker / preview worker | Celery workers on two queues (`celery`: runs, DB ingest, export · `preview`: interactive previews); in-process engines (Polars, DuckDB, chDB) and the clients of the external ones |
 | Celery beat | cache eviction and storage statistics |
-| Object storage | one bucket, all parquet: `datasets/` snapshots, `cache/` steps, `out/` results (MinIO locally, any S3 such as Scaleway in the cloud) |
-| ClickHouse cloud | optional remote engine, reads and writes the parquet directly through `s3()` |
+| Object storage | one bucket, all parquet: `datasets/` snapshots, `cache/` steps, `out/` results. MinIO locally; any S3 (Scaleway, AWS…) or Google Cloud Storage through its S3 API in the cloud |
+| External engines *(optional)* | a managed ClickHouse reading and writing the parquet through `s3()`; Google BigQuery reading it as temporary external tables over GCS |
 | External databases | sources ingested via ADBC into parquet snapshots; Output nodes can write tables back |
 | VictoriaMetrics + Grafana | scrape the engine `/metrics`, celery-exporter, cAdvisor and node-exporter |
 
 The **gateway** (control plane) is the only public ingress: it owns the metadata
 Postgres and enforces auth + RBAC on every call before proxying to the internal
-**engine** (data plane), which stays stateless (Valkey + S3 only).
+**engine** (data plane), which stays stateless (Valkey + object storage only).
 
 That metadata Postgres has a diagram of its own:
 **[Open the metadata database schema](https://jumpasaservice.github.io/Tabularia/architecture/metadata-schema.html)**
 — 14 tables and all 26 foreign keys, read back from a live database rather than
 transcribed from the models, and generated with Archify from
 [`docs/architecture/metadata-schema.architecture.json`](docs/architecture/metadata-schema.architecture.json).
-The ten ownership and actor columns that all point at `users.id` are listed rather
-than drawn, so the structural relationships stay legible instead of collapsing into
-a star.
 
 ## Declarative IR & pluggable engines
 
 Flows are stored as a **declarative IR** — a JSON list of typed operations — fully
 decoupled from execution. Adding or swapping an engine touches neither the routes, the
-workers, nor saved flows. Four engines are registered:
+workers, nor saved flows. Five engines are registered:
 
 | Engine | id | Notes |
 |---|---|---|
 | **Polars** | `polars` | In-process, lazy, streaming. **Default**; full operation coverage. |
 | **DuckDB** | `duckdb` | Out-of-core SQL (spills to disk) for very large joins/aggregations. Full operation coverage. |
-| **chDB (ClickHouse)** | `chdb` | Out-of-core SQL with the ClickHouse dialect. Full coverage except `foreach`. |
-| **ClickHouse (external)** | `clickhouse` | *Optional.* Same dialect and ops as chDB, executed on a **remote ClickHouse server** (cloud managed, e.g. Scaleway, or self-hosted). Enabled by `CLICKHOUSE_EXTERNAL__HOST`. Transport `s3` (the server reads/writes parquet directly on the object storage, nothing through the worker) or `push` (staging table + streamed result, works with any server). |
-
-Engines agree on SQL semantics for most behaviour — nulls, aggregates, sort order, casts
-and joins are guaranteed identical and enforced by an oracle suite — but not on
-everything. **[docs/engines/engine-differences.md](docs/engines/engine-differences.md)**
-is the contract: what is guaranteed, what differs, and the rules of thumb. Read it before
-setting a production engine different from the development one.
+| **chDB (ClickHouse)** | `chdb` | Out-of-core SQL with the ClickHouse dialect, embedded. Full coverage except `foreach`. |
+| **ClickHouse (external)** | `clickhouse` | *Optional.* Same dialect and ops as chDB, executed on a **remote ClickHouse server**. Enabled by `CLICKHOUSE_EXTERNAL__HOST`. Transport `s3` (the server reads/writes parquet directly on the object storage) or `push` (staging table + streamed result). |
+| **BigQuery** | `bigquery` | *Optional.* GoogleSQL over **temporary external tables** on GCS; results through the Storage Read API. Enabled by `BIGQUERY__PROJECT` plus a service-account key. Full coverage except `foreach` and `median` inside `pivot`. |
 
 Each engine is a registry of per-operation implementations. DuckDB and chDB are
 guarded imports — absent packages simply mark the engine unavailable without breaking
-Polars; the external ClickHouse engine is listed but unavailable until configured. chDB is **fork-unsafe**, so it is imported *lazily inside the Celery child*
-(never in the prefork parent) to avoid inherited native-thread deadlocks. Users pick a
-**preferred engine** in settings (default for the Viewer and new flows); each flow
-persists the engine it was built with, so opening a non-preferred flow is regression-safe.
-Each flow also carries an optional **production engine**, decoupled from the development
-one: the editor (previews, manual runs) uses the development engine, while scheduled runs
-and "Run in production" use the production engine — e.g. design on Polars locally, run the
-scheduled DAG on an external ClickHouse. Every run records the engine it actually ran on.
+Polars; the external engines are listed but unavailable until configured. chDB is
+**fork-unsafe**, so it is imported *lazily inside the Celery child* (never in the
+prefork parent) to avoid inherited native-thread deadlocks. Users pick a **preferred
+engine** in settings (default for the Viewer and new flows); each flow persists the
+engine it was built with, so opening a non-preferred flow is regression-safe. Each
+flow also carries an optional **production engine**: the editor (previews, manual
+runs) uses the development engine, while scheduled runs and "Run in production" use
+the production engine. Every run records the engine it actually ran on.
 
 An administrator can narrow that choice for the whole installation. **Admin → Engines**
-decides which engines a flow may be built on, so a company standardising on one engine
-says it once instead of repeating it per flow. Disabling an engine stops it from being
+decides which engines a flow may be built on. Disabling an engine stops it from being
 *chosen* — at creation, when changing a flow's engine, and as a production engine — but
 deliberately does **not** stop the flows already using it: a switch in an admin panel
-should never halt a scheduled DAG the moment it is pressed. So that standardising is not
-merely cosmetic, the panel reports how many flows still run on each engine — that list is
-the migration backlog. At least one engine always stays allowed, and the picker keeps the
-reasons apart: *not allowed here* is not the same as *not configured*.
+should never halt a scheduled DAG the moment it is pressed. The panel reports how many
+flows still run on each engine — that list is the migration backlog. At least one
+engine always stays allowed, and the picker keeps *not allowed here* apart from *not
+configured*.
+
+### External engines in detail
+
+**ClickHouse (external)** — `CLICKHOUSE_EXTERNAL__HOST`, `__PORT` (8443 with TLS on
+managed services), `__USERNAME`, `__PASSWORD`, `__DATABASE`, `__SECURE`, `__TRANSPORT`
+(`s3` | `push`), `__S3_ENDPOINT` (the storage endpoint *as the server sees it*) and,
+recommended, `__S3_NAMED_COLLECTION`: a named collection holding the bucket credentials
+on the server, so keys never travel inside a query nor land in `query_log`. The engine
+raises `max_threads` on scan-heavy queries to hide object-storage latency, never on
+`LIMIT` queries; `__MATERIALIZE_MIN_ROWS` turns on the MergeTree copy for the Viewer.
+Interactive previews carry a `log_comment` tag: when a newer preview supersedes one
+still running, the server is told to `KILL` it. Preview timings and the server's own
+`query_log` are shown on the admin **Performance** page.
+
+**BigQuery** — `BIGQUERY__PROJECT`, `BIGQUERY__CREDENTIALS_FILE` (path of the
+service-account JSON key inside the container) or `BIGQUERY__CREDENTIALS_B64` (the
+same key, base64 on one line), `BIGQUERY__LOCATION` (empty = the bucket's region),
+`BIGQUERY__MAXIMUM_BYTES_BILLED` (default 20 GiB) and `BIGQUERY__CACHE_DATASET`
+(default `tabularia_cache`, empty disables the step-cache). The service account needs
+*BigQuery Job User* on the project, *BigQuery Data Editor* for the cache dataset, and
+read access on the bucket; the object storage must be Google Cloud Storage
+(`STORAGE__ENDPOINT=https://storage.googleapis.com` with HMAC keys). Column names
+BigQuery cannot represent (`Ragione Sociale`, `Importo (€)`) are mapped to safe names
+inside the query and restored in the results; `compute` expressions are transpiled from
+the common dialect with sqlglot (`%` → `MOD`, `strftime` → `FORMAT_DATE`). Jobs are
+labelled with the preview tag so a superseded preview is cancelled on the service.
+Verified against a real project: the cross-engine oracle suite passes on BigQuery
+(`BIGQUERY_LIVE=1 pytest -k bigquery`).
 
 ## Operations
 
@@ -158,37 +251,32 @@ fill_null · drop_nulls · group_by · pivot · unpivot · join · union · fore
   operations injected right after the source is read, before anything else (development
   sample included), in *every* mode — editor previews, scheduled runs, "Run in production"
   and the dbt export — so a flow can read only the slice it needs from a large table.
-- **Cross-engine data standard.** The same flow must give the same data on every engine
-  (development on one, production on another), so the engines follow one explicit
-  semantics, SQL-like, locked by an oracle test suite (`backend/tests/test_data_correctness.py`,
-  hand-computed expectations run on Polars, DuckDB, chDB and external ClickHouse):
-  comparisons with NULL are false (`ne`/`not_in` drop NULLs); aggregates ignore NULLs,
-  `count`/`n_unique` never count NULL, `sum`/`mean`/`min`/`max` of an all-NULL group are NULL,
-  `std`/`var` are sample (n-1), `median` interpolates; sort puts NULLs **last** in both
-  directions (a top-N never returns NULLs); failed casts give NULL (never an error), text is
-  trimmed before parsing, text→int accepts integer literals only, number→int truncates;
-  joins never match NULL keys, missing sides are NULL, `on` keys are one coalesced column
-  (also in full/right joins), `left_on`/`right_on` keep both key columns, a non-key
-  homonym from the right gets `_right`; `compute` overwrites an existing column in place
-  and string functions are UTF-8 aware on ClickHouse (`upper`→`upperUTF8`, …); integer sums
-  stay exact int64; datetimes are **naive UTC instants** everywhere (ClickHouse output is
-  normalised, tz-aware parquet is normalised on read).
-- **Development sampling** per source node: "first N rows" or "random p%" set in the editor
-  and saved with the flow. It only affects previews and editor runs (development mode): the
-  gateway resolver injects it solely in development, never for scheduled runs or "Run in
-  production", and strips any such marked operation from production launches as defence in
-  depth — production always reads every record. Sample only the big table: joining two
-  sampled sources loses most matches.
-- **Field descriptions** on datasources: a hand-curated `{column: text}` map, edited from the
-  Datasources page, kept separately from the inferred schema so it survives refreshes and
-  exposed both as `column_descriptions` and inline as `columns[*].description` — semantic
-  context for people today and for the upcoming AI features.
-- **`pivot` / `unpivot`** follow one cross-engine standard (Polars, DuckDB, chDB, external
-  ClickHouse): pivot columns are named by the value as text (`null` for NULL, `2024_web` for
-  multi-column keys, existing combinations only, text-ordered), missing or all-NULL groups
-  are NULL (`count`/`n_unique` → 0, Int64), and unpivot keeps only the index columns with the
-  value cast to the common supertype — so a flow designed on one engine yields the same
-  columns when scheduled on another.
+- **Cross-engine data standard.** The same flow must give the same data on every engine,
+  so the engines follow one explicit semantics, SQL-like, locked by an oracle test suite
+  (`backend/tests/test_data_correctness.py`, hand-computed expectations run on Polars,
+  DuckDB, chDB, external ClickHouse and BigQuery): comparisons with NULL are false
+  (`ne`/`not_in` drop NULLs); aggregates ignore NULLs, `count`/`n_unique` never count NULL,
+  `sum`/`mean`/`min`/`max` of an all-NULL group are NULL, `std`/`var` are sample (n-1),
+  `median` interpolates; sort puts NULLs **last** in both directions; failed casts give
+  NULL (never an error), text is trimmed before parsing, text→int accepts integer literals
+  only, number→int truncates; joins never match NULL keys, `on` keys are one coalesced
+  column, `left_on`/`right_on` keep both key columns, a non-key homonym from the right
+  gets `_right`; `compute` overwrites an existing column in place; integer sums stay
+  exact int64; datetimes are **naive UTC instants** everywhere.
+- **Development sampling** per source node: "first N rows" or "random p%" set in the
+  editor and saved with the flow. It only affects previews and editor runs: the gateway
+  resolver injects it solely in development, never for scheduled runs or "Run in
+  production", and strips any such marked operation from production launches as defence
+  in depth. With `PREVIEW__DEFAULT_SAMPLE_ROWS` set, every source node without a sample
+  of its own gets an **automatic** "first N rows" sample, shown as a badge on the node
+  and switchable per node ("off (all rows)") — the right default where every read is
+  billed. Sample only the big table: joining two sampled sources loses most matches.
+- **Field descriptions** on datasources: a hand-curated `{column: text}` map, kept
+  separately from the inferred schema so it survives refreshes.
+- **`pivot` / `unpivot`** follow one cross-engine standard: pivot columns are named by the
+  value as text (`null` for NULL, `2024_web` for multi-column keys, existing combinations
+  only, text-ordered), missing or all-NULL groups are NULL (`count`/`n_unique` → 0), and
+  unpivot keeps only the index columns with the value cast to the common supertype.
 - **`sql`** runs engine-native SQL against the node input (`FROM input`), with a
   guardrail floor that blocks filesystem / URL / executable access.
 - **Nodes**: `source` (file or DB datasource), `output` (write to a DB table or
@@ -197,11 +285,15 @@ fill_null · drop_nulls · group_by · pivot · unpivot · join · union · fore
   `refresh` (re-ingest a DB source), `runflow` (invoke another flow).
 
 Every node's output is **content-addressed and cached**: editing the last step of a
-10-step flow recomputes one step, not ten. Cache entries evict by TTL.
+10-step flow recomputes one step, not ten. In-process engines and ClickHouse keep the
+steps as parquet under `cache/`; BigQuery keeps them as expiring native tables. Cache
+entries evict by TTL.
 
 ## Storage layout
 
-All parquet, in S3 (MinIO by default, but each S3 compatible cloud object storages are supported):
+All parquet, on any S3-compatible object storage (MinIO by default) or on Google Cloud
+Storage through its S3 API — the two things GCS does differently (no batch delete,
+no chunked request checksums) are handled by the storage layer:
 
 ```
 raw/       ingested files, as uploaded
@@ -209,6 +301,10 @@ datasets/  normalized parquet datasources
 cache/     content-addressed step outputs
 out/       run results, downloadable as CSV/Excel
 ```
+
+Parquet files are written with large row groups (`INGEST__PARQUET_ROW_GROUP_ROWS`,
+default 1 M) and, when a datasource declares sort keys, ordered on them: that is what
+lets an external engine skip most of a file on a filtered query instead of reading it.
 
 ## Publishing to an external bucket
 
@@ -221,27 +317,18 @@ The copy always lands at **the same key, always parquet, overwritten on every ru
 so whoever reads it agrees on one path once and never has to discover a new filename.
 The overwrite is a single object and becomes visible only when the upload completes:
 a reader gets either the previous file or the new one in full, never a mixture.
-Scheduled runs behave exactly like manual ones — the node's configuration is the
-whole story.
 
 It is **best effort by design**. The datasource is the result; the copy is a delivery
-downstream of it. A copy that fails — expired credentials, an unreachable endpoint, a
-bucket that is full — leaves the run successful and the datasource published, and the
-error is recorded on the run and returned by the API.
+downstream of it. A copy that fails leaves the run successful and the datasource
+published, and the error is recorded on the run and returned by the API.
 
-> **No screen shows that error yet.** The outcome is stored and served, but nothing in
-> the interface reads it, so today a failed copy is only discoverable through the API
-> or the worker's logs. Until that is wired up, treat a successful run as saying
-> nothing either way about the copy.
+> **No screen shows that error yet.** Until that is wired up, treat a successful run
+> as saying nothing either way about the copy.
 
-> **Use a different bucket from the one Tabularia itself runs on.** Point the
-> connection at storage that belongs to the consumer, not at the bucket holding
-> `datasets/`, `cache/`, `out/` and `raw/`. A copy written into that bucket is not
-> checked against the objects already there: aim it at a key another datasource is
-> using and you overwrite that datasource's snapshot, outside the permission model,
-> for everyone who reads it. A separate bucket removes the possibility rather than
-> relying on care, and keeps the credentials scoped to exactly what that consumer
-> should be able to reach.
+> **Use a different bucket from the one Tabularia itself runs on.** A copy written
+> into that bucket is not checked against the objects already there: aim it at a key
+> another datasource is using and you overwrite that datasource's snapshot, outside the
+> permission model.
 
 ## Auth, RBAC & audit
 
@@ -257,25 +344,25 @@ error is recorded on the run and returned by the API.
 - **SSO / OIDC** *(optional)*: sign in against Keycloak, Microsoft Entra ID (MSAL),
   Auth0 or Okta with the authorization-code flow (PKCE, `state`, `nonce`, id_token
   validated against the IdP JWKS). Users are provisioned on first login and the IdP's
-  `groups` claim (or Entra app `roles`) is reconciled onto Tabularia groups **by name**,
-  which is all RBAC reads — so permissions, audit and saved flows are untouched. Policy
-  toggles cover authoritative vs additive membership, a group allowlist, auto-creation
-  and a superuser group. Off until `OIDC__ISSUER` is set; local login always stays
-  available as break-glass. See [`docs/design/sso-group-mapping.md`](docs/design/sso-group-mapping.md)
-  and the runnable Keycloak example in [`docs/examples/keycloak/`](docs/examples/keycloak/).
+  `groups` claim is reconciled onto Tabularia groups **by name**. Off until
+  `OIDC__ISSUER` is set; local login always stays available as break-glass. See
+  [`docs/design/sso-group-mapping.md`](docs/design/sso-group-mapping.md) and the
+  runnable Keycloak example in [`docs/examples/keycloak/`](docs/examples/keycloak/).
 
 ## Scheduling & timezone
 
-Cron-style schedules are evaluated in a **deployment-wide timezone** (`APP__TIMEZONE`
-env var, DST-aware) and stored/returned in UTC; the frontend displays browser-local
-time. A schedule-load heatmap surfaces busy bands and collisions against a configurable
+Cron-style schedules are evaluated in a **deployment-wide timezone** (`APP__TIMEZONE`,
+DST-aware) and stored/returned in UTC; the frontend displays browser-local time. A
+schedule-load heatmap surfaces busy bands and collisions against a configurable
 worker capacity.
 
 ## Monitoring
 
 Ships in the box: **VictoriaMetrics + Grafana** dashboards (task durations, cache hit
-rate, storage growth, per-container memory), plus cAdvisor, node-exporter, and a
-celery-exporter. Grafana is embedded in an admin-only Monitoring tab.
+rate, storage growth, per-container memory, preview latency by engine), plus cAdvisor,
+node-exporter and a celery-exporter. Grafana is embedded in an admin-only Monitoring
+tab, and a **Performance** page shows run durations, preview histograms per engine and
+the external ClickHouse's slowest queries without any extra table.
 
 ## Services (docker-compose)
 
@@ -293,7 +380,10 @@ celery-exporter. Grafana is embedded in an admin-only Monitoring tab.
 
 ## Quickstart
 
-> Production on Kubernetes: see [`docs/deploy/kubernetes.md`](docs/deploy/kubernetes.md) for the components, the hardened backend image, ingress and storage sizing, and configuration.
+> Production on Kubernetes: see [`docs/deploy/kubernetes.md`](docs/deploy/kubernetes.md)
+> for the components, the hardened backend image, ingress and storage sizing, and the
+> Helm chart in [`infrastructure/helm/tabularia`](infrastructure/helm/tabularia).
+> Upgrading: [`docs/deploy/release-checklist.md`](docs/deploy/release-checklist.md).
 
 Requires Docker and Docker Compose.
 
@@ -318,11 +408,36 @@ Upload a CSV/XLSX/JSON/parquet file **or** connect a database, drag transformati
 from the sidebar, connect nodes, preview at any point, then run — or download any
 node's data as CSV/Excel.
 
+**Adding an external engine** is configuration only. For a managed ClickHouse:
+
+```bash
+CLICKHOUSE_EXTERNAL__HOST=xxxx.datawarehouse.it-mil.scw.eu
+CLICKHOUSE_EXTERNAL__PORT=8443
+CLICKHOUSE_EXTERNAL__SECURE=true
+CLICKHOUSE_EXTERNAL__USERNAME=...
+CLICKHOUSE_EXTERNAL__PASSWORD=...
+CLICKHOUSE_EXTERNAL__S3_ENDPOINT=https://s3.it-mil.scw.cloud   # the bucket as the server sees it
+```
+
+For BigQuery, with the bucket on Google Cloud Storage:
+
+```bash
+STORAGE__ENDPOINT=https://storage.googleapis.com               # HMAC keys in STORAGE__ACCESS_KEY / SECRET_KEY
+STORAGE__REGION=auto
+BIGQUERY__PROJECT=my-gcp-project
+BIGQUERY__CREDENTIALS_B64=...                                  # base64 -w0 service-account.json, one line
+PREVIEW__DEFAULT_SAMPLE_ROWS=100000                             # keep the editor cheap
+```
+
+Recreate the workers (`docker compose up -d`) and the engine shows up in the picker;
+`.env.example` documents every variable.
+
 **Secrets:** `SECURITY__FERNET_KEY` is mandatory everywhere — gateway, engine and
 workers refuse to start without a valid key, in development too. With
 `APP__ENV_NAME=production` the gateway additionally refuses the dev-default secrets
-(`JWT__SECRET`, admin and DB passwords) until they are overridden. Storage, broker, database, and timezone are all env-driven — pointing at
-managed S3/Postgres/Redis-compatible services is a config change, not a code change.
+(`JWT__SECRET`, admin and DB passwords) until they are overridden. Storage, broker,
+database, timezone and engines are all env-driven — pointing at managed services is a
+config change, not a code change.
 
 ## Sample database (optional)
 
@@ -355,7 +470,8 @@ For commercial licensing options, contact the author.
 
 Tabularia is **not affiliated with, endorsed by, or sponsored by Salesforce, Inc.**
 "Tableau" and "Tableau Prep" are trademarks of Salesforce, Inc., referenced solely
-for comparison purposes.
+for comparison purposes. "BigQuery" and "Google Cloud" are trademarks of Google LLC;
+"ClickHouse" is a trademark of ClickHouse, Inc.
 
 ### Third-party services
 
