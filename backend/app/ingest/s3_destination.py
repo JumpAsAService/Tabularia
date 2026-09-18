@@ -60,7 +60,11 @@ class S3ConnectionSpec(BaseModel):
         if self.endpoint_url.strip():
             kwargs["endpoint_url"] = self.endpoint_url.strip()
             # path-style: obbligatorio per MinIO/Rclone e innocuo per gli altri
-            kwargs["config"] = Config(signature_version="s3v4", s3={"addressing_style": "path"})
+            kwargs["config"] = Config(
+                signature_version="s3v4", s3={"addressing_style": "path"},
+                # come in app.utils: i checksum a blocchi di boto3 rompono le PUT su GCS
+                request_checksum_calculation="when_required", response_checksum_validation="when_required",
+            )
         if self.region.strip():
             kwargs["region_name"] = self.region.strip()
         return boto3.client(
@@ -113,8 +117,12 @@ def _delete_stale_objects(client, bucket: str, prefix: str, keep: set[str]) -> N
             for obj in page.get("Contents", []):
                 if obj["Key"] not in keep:
                     stale.append({"Key": obj["Key"]})
-        for i in range(0, len(stale), 1000):  # delete_objects: max 1000 per chiamata
-            client.delete_objects(Bucket=bucket, Delete={"Objects": stale[i : i + 1000]})
+        # batch dove c'e', DELETE singole dove manca (GCS): vedi app.utils.delete_keys
+        from app.utils import delete_keys
+
+        _, errors = delete_keys(client, bucket, [o["Key"] for o in stale])
+        if errors:
+            raise RuntimeError(f"{len(errors)} oggetti non cancellati, il primo: {errors[0]}")
     except Exception as e:
         raise S3DestinationError(
             f"pulizia dei file obsoleti sotto s3://{bucket}/{p} fallita ({type(e).__name__}): "

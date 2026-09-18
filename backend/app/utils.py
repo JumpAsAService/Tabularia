@@ -1,6 +1,66 @@
+import logging
+
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
+
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+# Endpoint su cui la cancellazione batch (POST ?delete, fino a 1000 chiavi) NON
+# esiste: l'API XML di Google Cloud Storage non la implementa, S3/MinIO/Scaleway
+# si'. Si scopre al primo errore e non si riprova piu' per quel processo.
+_batch_delete_unsupported: set[str] = set()
+_GONE = {"NoSuchKey", "404", "NotFound"}
+
+
+def _is_gone(e: ClientError) -> bool:
+    err = e.response.get("Error", {})
+    return str(err.get("Code", "")) in _GONE or e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404
+
+
+def delete_keys(client, bucket: str, keys: list[str]) -> tuple[int, list[dict]]:
+    """Cancella piu' chiavi: batch dove c'e', una alla volta dove manca (GCS).
+    Semantica S3 ovunque: cancellare una chiave che non esiste NON e' un errore
+    (GCS risponde 404 alla DELETE singola, S3 no). Torna (cancellate, errori
+    per chiave nel formato del batch: [{Key, Code, Message}])."""
+    keys = [k for k in keys if k]
+    if not keys:
+        return 0, []
+    endpoint = str(getattr(getattr(client, "meta", None), "endpoint_url", "") or "")
+    deleted = 0
+    errors: list[dict] = []
+    start = 0
+    if endpoint not in _batch_delete_unsupported:
+        try:
+            for i in range(0, len(keys), 1000):  # limite del batch S3
+                resp = client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in keys[i : i + 1000]]}) or {}
+                deleted += len(resp.get("Deleted", []))
+                errors.extend(resp.get("Errors", []))
+                start = i + 1000
+            return deleted, errors
+        except ClientError as e:
+            # il batch in se' non e' passato (non un errore per chiave): da qui
+            # in poi per questo endpoint si va una chiave alla volta
+            _batch_delete_unsupported.add(endpoint)
+            logger.info("cancellazione batch non disponibile su %s (%s): passo alle DELETE singole",
+                        endpoint or "?", e.response.get("Error", {}).get("Code", "?"))
+    for k in keys[start:]:
+        try:
+            client.delete_object(Bucket=bucket, Key=k)
+            deleted += 1
+        except ClientError as e:
+            if _is_gone(e):
+                deleted += 1  # gia' assente: per noi e' cancellata
+                continue
+            err = e.response.get("Error", {})
+            errors.append({"Key": k, "Code": str(err.get("Code", "")), "Message": str(err.get("Message", ""))})
+            if len(errors) == 1 and k == keys[start]:
+                # anche la singola fallisce subito (es. AccessDenied): inutile
+                # insistere su centinaia di chiavi, l'errore e' lo stesso
+                raise
+    return deleted, errors
 
 
 class StorageService:
@@ -23,6 +83,12 @@ class StorageService:
             config=Config(
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},  # Importante per Rclone!
+                # boto3 >= 1.36 aggiunge di default checksum CRC a blocchi
+                # (aws-chunked) a ogni PUT: Google Cloud Storage li rifiuta con
+                # SignatureDoesNotMatch. "when_required" = solo dove l'API li
+                # esige; su AWS/MinIO/Scaleway non cambia nulla.
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
             ),
         )
 
@@ -170,7 +236,11 @@ class StorageService:
         Returns:
             Dict con informazioni sull'eliminazione
         """
-        self.client.delete_object(Bucket=bucket, Key=object_key)
+        try:
+            self.client.delete_object(Bucket=bucket, Key=object_key)
+        except ClientError as e:
+            if not _is_gone(e):  # GCS: 404 su una chiave assente; S3 no. Idempotente ovunque
+                raise
         return {"bucket": bucket, "key": object_key, "status": "deleted"}
 
     def delete_objects(self, bucket: str, object_keys: list[str]) -> dict:
@@ -184,16 +254,8 @@ class StorageService:
         Returns:
             Dict con informazioni sull'eliminazione
         """
-        objects = [{"Key": key} for key in object_keys]
-        response = self.client.delete_objects(
-            Bucket=bucket,
-            Delete={"Objects": objects},
-        )
-        return {
-            "bucket": bucket,
-            "deleted": len(response.get("Deleted", [])),
-            "errors": response.get("Errors", []),
-        }
+        deleted, errors = delete_keys(self.client, bucket, list(object_keys))
+        return {"bucket": bucket, "deleted": deleted, "errors": errors}
 
     def get_object(self, bucket: str, object_key: str) -> dict:
         """
@@ -238,6 +300,15 @@ class StorageService:
             Params={"Bucket": bucket, "Key": object_key},
             ExpiresIn=expiration,
         )
+
+    def bucket_location(self, bucket: str) -> str:
+        """Regione del bucket come la riporta lo storage (GCS: 'europe-west8',
+        'EU'; S3: 'eu-west-1'; MinIO: ''). Vuota se non determinabile."""
+        try:
+            loc = self.client.get_bucket_location(Bucket=bucket).get("LocationConstraint")
+        except Exception:  # noqa: BLE001 — informativo: chi chiama decide il fallback
+            return ""
+        return str(loc or "")
 
     def object_exists(self, bucket: str, object_key: str) -> bool:
         """True se l'oggetto esiste (HEAD, nessun download). 404/NoSuchKey → False;
