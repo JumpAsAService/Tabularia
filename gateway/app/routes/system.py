@@ -39,13 +39,14 @@ class AppInfoOut(BaseModel):
 
     name: str
     version: str
+    codename: str = ""  # il nome della release (es. «Appio»)
     timezone: str
 
 
 @router.get("/system/info", response_model=AppInfoOut)
 def app_info(user: User = Depends(get_current_user)):
     s = get_settings().app
-    return AppInfoOut(name=s.name, version=s.version, timezone=s.timezone)
+    return AppInfoOut(name=s.name, version=s.version, codename=s.codename, timezone=s.timezone)
 
 
 class MemoryOut(BaseModel):

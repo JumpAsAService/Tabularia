@@ -89,7 +89,7 @@ export function useApi() {
     },
 
     // info di deployment (fuso orario degli schedule, nome, versione)
-    async appInfo(): Promise<{ name: string; version: string; timezone: string }> {
+    async appInfo(): Promise<{ name: string; version: string; codename?: string; timezone: string }> {
       return await apiFetch('/system/info')
     },
 

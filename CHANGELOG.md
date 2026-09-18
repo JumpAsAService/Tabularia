@@ -3,9 +3,11 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## 1.0.0 — 2026-09-18
+## 1.0.0 «Appio» — 2026-09-18
 
-First release. Everything below is what the product does today; see
+First release, named after Appius Claudius Caecus, the censor of 312 BC who
+rewrote the citizen rolls and built Rome's first aqueduct: counting,
+classifying and cleaning the registers, and the first pipeline. Everything below is what the product does today; see
 `docs/deploy/release-checklist.md` for what to do when installing it and for
 the known limits.
 

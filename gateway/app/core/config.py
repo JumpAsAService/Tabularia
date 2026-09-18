@@ -204,6 +204,10 @@ class MonitoringSettings(BaseModel):
 class AppSettings(BaseModel):
     name: str = "Tabularia"
     version: str = "1.0.0"  # la release: esposta da /system/info e nel menu dell'app
+    # il nome della release. Appio Claudio Cieco, censore del 312 a.C.: riscrisse
+    # le liste dei cittadini e costrui' il primo acquedotto — chi conta, classifica
+    # e ripulisce i registri, e la prima pipeline. Un data-prep ante litteram.
+    codename: str = "Appio"
     env_name: str = "development"
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]

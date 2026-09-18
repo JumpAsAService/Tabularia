@@ -30,7 +30,7 @@ const { user, fetchMe, logout } = useAuth()
 const api = useApi()
 const { theme, setTheme } = useTheme()
 // nome e versione dal gateway: e' la release che gira davvero, non quella del bundle
-const appInfo = ref<{ name: string; version: string } | null>(null)
+const appInfo = ref<{ name: string; version: string; codename?: string } | null>(null)
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
 const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
@@ -167,7 +167,7 @@ onMounted(async () => {
             <button class="menu-item" @click="closeMenu(); logout()">
               <LogOut :size="14" /> {{ t('settings.signOut') }}
             </button>
-            <div v-if="appInfo" class="menu-version">{{ appInfo.name }} {{ appInfo.version }}</div>
+            <div v-if="appInfo" class="menu-version">{{ appInfo.name }} {{ appInfo.version }}<template v-if="appInfo.codename"> · {{ appInfo.codename }}</template></div>
           </div>
         </template>
       </div>
