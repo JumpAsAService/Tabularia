@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BrandMark from '~/components/ui/BrandMark.vue'
+import { useAppInfo } from '~/composables/useAppInfo'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
 import { computed, onMounted, ref } from 'vue'
@@ -27,10 +28,9 @@ defineProps<{ fluid?: boolean }>()
 
 const { t } = useI18n()
 const { user, fetchMe, logout } = useAuth()
-const api = useApi()
 const { theme, setTheme } = useTheme()
 // nome e versione dal gateway: e' la release che gira davvero, non quella del bundle
-const appInfo = ref<{ name: string; version: string; codename?: string } | null>(null)
+const { info: appInfo, load: loadAppInfo } = useAppInfo()
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
 const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
@@ -82,7 +82,7 @@ const links = computed(() => [
 
 onMounted(async () => {
   if (!user.value) await fetchMe()
-  try { appInfo.value = await api.appInfo() } catch { /* solo cosmetico */ }
+  await loadAppInfo() // solo cosmetico qui: non fallisce mai
 })
 </script>
 

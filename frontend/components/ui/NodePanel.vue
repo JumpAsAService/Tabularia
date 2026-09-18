@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Node } from '@vue-flow/core'
 import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, FlaskConical, Filter, Plus, X } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
-import { defaultParams, isCompleteSourceFilter, type SourceFilter } from '~/composables/useFlowModel'
+import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type SourceFilter } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
 
 const props = defineProps<{
@@ -20,6 +22,7 @@ const props = defineProps<{
   flows?: { id: number; name: string }[]
   currentFlowId?: number | null
 }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
   (e: 'delete'): void
@@ -110,10 +113,31 @@ function removeSourceFilter(id: string) {
   emit('update', { filters: rest.length ? rest : null })
 }
 
-// campione di sviluppo del nodo sorgente (vedi devSampleOperation in useFlowModel)
+// campione di sviluppo del nodo sorgente (vedi devSampleOperation in useFlowModel).
+// Con il campione automatico acceso (gateway) `sample: null` vale «automatico»
+// e lo spegnimento va salvato esplicito ({ mode: 'off' }); senza, null è «off»
+// come sempre e le due voci coincidono.
+const autoSampleRows = computed(() => getDefaultSampleRows())
+const sampleMode = computed(() => {
+  const m = props.node?.data?.sample?.mode
+  if (!m) return autoSampleRows.value > 0 ? 'auto' : 'off'
+  return m
+})
+const sampleOptions = computed(() => [
+  ...(autoSampleRows.value > 0
+    ? [{ value: 'auto', label: t('nodePanel.sampleAuto', { n: autoSampleRows.value.toLocaleString() }) }]
+    : []),
+  { value: 'off', label: t('nodePanel.sampleOff') },
+  { value: 'first', label: t('nodePanel.sampleFirst') },
+  { value: 'random', label: t('nodePanel.sampleRandom') },
+])
 function setSampleMode(mode: string) {
-  if (mode === 'off') {
+  if (mode === 'auto') {
     emit('update', { sample: null })
+    return
+  }
+  if (mode === 'off') {
+    emit('update', { sample: autoSampleRows.value > 0 ? { mode: 'off' } : null })
     return
   }
   const cur = props.node?.data?.sample ?? {}
@@ -215,12 +239,8 @@ function pickDatasource(id: number | null) {
         <label><FlaskConical :size="12" /> {{ $t('nodePanel.sampleTitle') }}</label>
         <div class="samplerow">
           <Select
-            :model-value="node.data.sample?.mode ?? 'off'"
-            :options="[
-              { value: 'off', label: $t('nodePanel.sampleOff') },
-              { value: 'first', label: $t('nodePanel.sampleFirst') },
-              { value: 'random', label: $t('nodePanel.sampleRandom') },
-            ]"
+            :model-value="sampleMode"
+            :options="sampleOptions"
             @update:model-value="setSampleMode"
           />
           <input
@@ -247,6 +267,7 @@ function pickDatasource(id: number | null) {
           <span v-if="node.data.sample?.mode === 'random'" class="muted">%</span>
         </div>
         <p class="muted outhint">{{ $t('nodePanel.sampleHint') }}</p>
+        <p v-if="autoSampleRows > 0" class="muted outhint">{{ $t('nodePanel.sampleAutoHint', { n: autoSampleRows.toLocaleString() }) }}</p>
       </div>
 
       <div class="dspick">

@@ -118,3 +118,90 @@ def test_strip_removes_marked_ops_everywhere():
     # idempotente e senza effetti su catene pulite
     again, n = strip_dev_sample_ops(clean)
     assert n == 0 and again == clean
+
+
+# ── Campione AUTOMATICO (PREVIEW__DEFAULT_SAMPLE_ROWS) ──────────────────────
+def _with_default(monkeypatch, rows: int):
+    import app.core.config as config_mod
+
+    settings = config_mod.Settings(preview={"default_sample_rows": rows})
+    monkeypatch.setattr(config_mod, "get_settings", lambda: settings)
+    return settings
+
+
+def test_default_sample_shapes():
+    from app.services.flow_resolver import MAX_SAMPLE_ROWS
+
+    # senza campione sul nodo: il default lo campiona
+    assert dev_sample_operation({}, default_rows=100_000) == {"type": "limit", "params": {"n": 100_000, DEV_SAMPLE_MARK: True}}
+    assert dev_sample_operation({"sample": None}, default_rows=100_000)["params"]["n"] == 100_000
+    # tetto di sicurezza come per il campione manuale
+    assert dev_sample_operation({}, default_rows=10**12)["params"]["n"] == MAX_SAMPLE_ROWS
+    # spento ESPLICITAMENTE dall'utente: tutte le righe, anche col default acceso
+    assert dev_sample_operation({"sample": {"mode": "off"}}, default_rows=100_000) is None
+    assert dev_sample_operation({"sample": {"mode": "off"}}) is None
+    # un campione scelto dall'utente vince sul default
+    assert dev_sample_operation({"sample": {"mode": "first", "rows": 10}}, default_rows=100_000)["params"]["n"] == 10
+    assert dev_sample_operation({"sample": {"mode": "random", "percent": 5}}, default_rows=100_000)["type"] == "sample"
+    # un campione manuale malformato NON ricade sul default: era una scelta, non un'assenza
+    assert dev_sample_operation({"sample": {"mode": "first", "rows": 0}}, default_rows=100_000) is None
+    # default spento = comportamento di prima
+    assert dev_sample_operation({}, default_rows=0) is None
+
+
+def test_default_sample_applies_to_every_unsampled_source_in_development(monkeypatch):
+    _with_default(monkeypatch, 100_000)
+    definition, out = _definition()  # nessun campione sui nodi
+    req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="development")
+    ops = req["operations"]
+    assert ops[0] == {"type": "limit", "params": {"n": 100_000, DEV_SAMPLE_MARK: True}}
+    assert ops[1]["type"] == "filter"
+    right_ops = ops[2]["params"]["right"]["operations"]
+    assert right_ops[0] == {"type": "limit", "params": {"n": 100_000, DEV_SAMPLE_MARK: True}}
+
+
+def test_default_sample_respects_explicit_off_and_manual_sample(monkeypatch):
+    _with_default(monkeypatch, 100_000)
+    definition, out = _definition(sample={"mode": "off"}, right_sample={"mode": "random", "percent": 5})
+    req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="development")
+    ops = req["operations"]
+    assert [o["type"] for o in ops] == ["filter", "join"]  # sorgente principale: tutte le righe
+    right_ops = ops[1]["params"]["right"]["operations"]
+    assert right_ops[0]["type"] == "sample" and right_ops[0]["params"]["fraction"] == 0.05
+
+
+def test_default_sample_never_reaches_production(monkeypatch):
+    _with_default(monkeypatch, 100_000)
+    definition, out = _definition()
+    for mode in (None, "production", "prod"):
+        kw = {"engine_mode": mode} if mode else {}
+        req = resolve_output_request(definition, out, lambda i: None, BUCKET, **kw)
+        assert not _has_sample(req["operations"])
+    reqs = build_output_run_requests(definition, lambda i: None, BUCKET)
+    assert not any(_has_sample(r["operations"]) for r in reqs)
+
+
+def test_default_sample_off_by_default(monkeypatch):
+    settings = _with_default(monkeypatch, 0)
+    assert settings.preview.default_sample_rows == 0
+    definition, out = _definition()
+    req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="development")
+    assert not _has_sample(req["operations"])
+
+
+def test_system_info_exposes_default_sample(monkeypatch):
+    import app.routes.system as system_mod
+
+    settings = _with_default(monkeypatch, 100_000)
+    monkeypatch.setattr(system_mod, "get_settings", lambda: settings)
+    info = system_mod.app_info(user=None)
+    assert info.preview_default_sample_rows == 100_000
+    assert info.version == settings.app.version
+
+
+def test_preview_settings_reject_negative():
+    import pytest
+    import app.core.config as config_mod
+
+    with pytest.raises(Exception):
+        config_mod.Settings(preview={"default_sample_rows": -1})

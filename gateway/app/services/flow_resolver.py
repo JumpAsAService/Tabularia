@@ -74,16 +74,35 @@ def source_filter_operations(data: dict) -> list[dict]:
 # ?mode=production) NON viene mai iniettata: i flussi di produzione girano su
 # TUTTI i record. L'operazione porta il marcatore `_dev_sample` così
 # `strip_dev_sample_ops` può rimuoverla per difesa in profondità.
+#
+# Campione AUTOMATICO (PREVIEW__DEFAULT_SAMPLE_ROWS > 0): un nodo SENZA
+# `data.sample` viene campionato alle prime N righe come se l'avesse chiesto;
+# `{mode: "off"}` e' lo spegnimento ESPLICITO da parte dell'utente e vale
+# «tutte le righe» anche con il default acceso. Speculare a `devSampleOperation`
+# in frontend/composables/useFlowModel.ts.
 DEV_SAMPLE_MARK = "_dev_sample"
 MAX_SAMPLE_ROWS = 100_000_000
 
 
-def dev_sample_operation(data: dict) -> Optional[dict]:
-    """Operazione IR del campione di un nodo sorgente, o None se non campionato."""
+def default_sample_rows() -> int:
+    """Il campione automatico configurato (0 = spento), letto a ogni chiamata
+    perche' i test lo cambiano con monkeypatch sulle settings."""
+    from app.core.config import get_settings
+
+    return min(int(get_settings().preview.default_sample_rows or 0), MAX_SAMPLE_ROWS)
+
+
+def dev_sample_operation(data: dict, default_rows: int = 0) -> Optional[dict]:
+    """Operazione IR del campione di un nodo sorgente, o None se non campionato.
+    `default_rows` > 0 = campione automatico per i nodi senza `sample`."""
     sample = (data or {}).get("sample")
     if not isinstance(sample, dict):
+        if default_rows > 0:
+            return {"type": "limit", "params": {"n": min(int(default_rows), MAX_SAMPLE_ROWS), DEV_SAMPLE_MARK: True}}
         return None
     mode = sample.get("mode")
+    if mode == "off":  # spento dall'utente: vince sul default
+        return None
     if mode == "first":
         try:
             n = int(sample.get("rows") or 0)
@@ -183,6 +202,8 @@ class _Resolver:
         self.resolve_ds = resolve_ds
         # SOLO "development" inietta i campioni; qualsiasi altro valore = produzione
         self.dev_sampling = engine_mode == "development"
+        # il campione automatico si legge solo se serve: in produzione e' irrilevante
+        self.default_sample_rows = default_sample_rows() if self.dev_sampling else 0
 
     def chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
         """Catena che termina in target_id: (sorgente risolta, operazioni IR)."""
@@ -210,7 +231,7 @@ class _Resolver:
                 head_ops = source_filter_operations(data)
                 # campione: SOLO in sviluppo, e sui dati già filtrati
                 if self.dev_sampling:
-                    sample_op = dev_sample_operation(data)
+                    sample_op = dev_sample_operation(data, self.default_sample_rows)
                     if sample_op is not None:
                         head_ops.append(sample_op)
                 break

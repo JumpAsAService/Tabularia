@@ -233,6 +233,18 @@ class AppSettings(BaseModel):
         return ZoneInfo(self.timezone)
 
 
+class PreviewSettings(BaseModel):
+    """Campione AUTOMATICO di sviluppo. Con `default_sample_rows` > 0 ogni nodo
+    sorgente che non ha un campione impostato viene letto SOLO per le prime N
+    righe nelle preview dell'editor e nei run di prova (engine_mode
+    "development"): l'utente lo spegne sul nodo scegliendo «tutte le righe»,
+    o lo sostituisce con un campione suo. La produzione non e' mai toccata.
+    Serve quando ogni lettura costa (object storage remoto, warehouse a
+    consumo). 0 = nessun campione automatico. env: PREVIEW__DEFAULT_SAMPLE_ROWS"""
+
+    default_sample_rows: int = Field(default=0, ge=0)
+
+
 class SchedulingSettings(BaseModel):
     # capacità di esecuzione simultanea usata SOLO per evidenziare le fasce critiche
     # nell'heatmap del carico schedule: dovrebbe rispecchiare la concorrenza del
@@ -262,6 +274,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__", extra="ignore")
 
     app: AppSettings = Field(default_factory=AppSettings)
+    preview: PreviewSettings = Field(default_factory=PreviewSettings)
     scheduling: SchedulingSettings = Field(default_factory=SchedulingSettings)
     orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
     db: DbSettings = Field(default_factory=DbSettings)

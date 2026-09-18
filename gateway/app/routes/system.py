@@ -41,12 +41,19 @@ class AppInfoOut(BaseModel):
     version: str
     codename: str = ""  # il nome della release (es. «Appio»)
     timezone: str
+    # campione automatico di sviluppo (righe; 0 = spento): l'editor lo mostra
+    # sul nodo sorgente e lo applica alle preview, speculare al resolver
+    preview_default_sample_rows: int = 0
 
 
 @router.get("/system/info", response_model=AppInfoOut)
 def app_info(user: User = Depends(get_current_user)):
-    s = get_settings().app
-    return AppInfoOut(name=s.name, version=s.version, codename=s.codename, timezone=s.timezone)
+    cfg = get_settings()
+    s = cfg.app
+    return AppInfoOut(
+        name=s.name, version=s.version, codename=s.codename, timezone=s.timezone,
+        preview_default_sample_rows=cfg.preview.default_sample_rows,
+    )
 
 
 class MemoryOut(BaseModel):

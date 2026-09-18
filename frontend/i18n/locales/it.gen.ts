@@ -493,6 +493,8 @@ export default {
   "nodePanel": {
     "sampleTitle": "Campione di sviluppo",
     "sampleOff": "off (tutte le righe)",
+    "sampleAutoHint": "Campione automatico: senza una scelta, preview e run di prova leggono solo le prime {n} righe. Scegli «off (tutte le righe)» per leggere tutto.",
+    "sampleAuto": "automatico (prime {n} righe)",
     "sampleFirst": "prime N righe",
     "sampleRandom": "% casuale",
     "sampleRowsLabel": "righe",
@@ -881,6 +883,7 @@ export default {
   },
   "sourceNode": {
     "sampleFirst": "campione: prime {n} righe",
+    "sampleAuto": "campione automatico: prime {n} righe",
     "filtersBadge": "filtri a monte: {n}",
     "filtersTitle": "Filtri a monte: applicati alla lettura della sorgente, in sviluppo e in produzione",
     "sampleRandom": "campione: {p}% casuale",

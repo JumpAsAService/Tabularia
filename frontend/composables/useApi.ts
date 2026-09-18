@@ -43,6 +43,17 @@ export interface Operation {
   params: Record<string, any>
 }
 
+// info di deployment esposte dal gateway (/system/info)
+export type AppInfo = {
+  name: string
+  version: string
+  codename?: string
+  timezone: string
+  // campione automatico di sviluppo (righe; 0/assente = spento): l'editor lo
+  // applica ai nodi sorgente senza un campione scelto, come fa il gateway
+  preview_default_sample_rows?: number
+}
+
 export function useApi() {
   const { apiFetch } = useApiClient()
 
@@ -89,7 +100,7 @@ export function useApi() {
     },
 
     // info di deployment (fuso orario degli schedule, nome, versione)
-    async appInfo(): Promise<{ name: string; version: string; codename?: string; timezone: string }> {
+    async appInfo(): Promise<AppInfo> {
       return await apiFetch('/system/info')
     },
 

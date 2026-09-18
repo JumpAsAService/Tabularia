@@ -434,6 +434,8 @@ export default {
     "sortKeysNoColumns": "Connectez une chaîne avec des données pour choisir les colonnes de tri.",
     "sampleTitle": "Échantillon de développement",
     "sampleOff": "off (toutes les lignes)",
+    "sampleAutoHint": "Échantillon automatique : sans choix explicite, les aperçus et les exécutions d'essai ne lisent que les {n} premières lignes. Choisissez « off (toutes les lignes) » pour tout lire.",
+    "sampleAuto": "automatique ({n} premières lignes)",
     "sampleFirst": "N premières lignes",
     "sampleRandom": "% aléatoire",
     "sampleRowsLabel": "lignes",
@@ -798,6 +800,7 @@ export default {
   },
   "sourceNode": {
     "sampleFirst": "échantillon : {n} premières lignes",
+    "sampleAuto": "échantillon automatique : {n} premières lignes",
     "filtersBadge": "filtres en amont : {n}",
     "filtersTitle": "Filtres en amont : appliqués à la lecture de la source, en développement et en production",
     "sampleRandom": "échantillon : {p} % aléatoire",

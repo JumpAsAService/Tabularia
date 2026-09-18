@@ -22,6 +22,19 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def _no_deployment_defaults(monkeypatch):
+    """I test non devono dipendere dal .env del deployment (i container li
+    eseguono con l'env_file): il campione automatico di sviluppo resta spento
+    salvo che il test lo imposti da se'."""
+    monkeypatch.delenv("PREVIEW__DEFAULT_SAMPLE_ROWS", raising=False)
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def db_engine():
     engine = create_engine(

@@ -71,12 +71,27 @@ export function sourceFilterCount(data: any): number {
 // (scheduler, "esegui in produzione") il gateway NON lo inietta e rimuove
 // comunque ogni operazione marcata: i flussi di produzione girano su tutti i
 // record. Speculare a `dev_sample_operation` in gateway/services/flow_resolver.py.
-export type SourceSample = { mode: 'first' | 'random'; rows?: number | null; percent?: number | null }
+export type SourceSample = { mode: 'first' | 'random' | 'off'; rows?: number | null; percent?: number | null }
 export const DEV_SAMPLE_MARK = '_dev_sample'
 
-export function devSampleOperation(data: any): Operation | null {
+// Campione AUTOMATICO (PREVIEW__DEFAULT_SAMPLE_ROWS del gateway, via
+// /system/info): un nodo SENZA `sample` legge solo le prime N righe come se
+// l'avesse chiesto; `{ mode: 'off' }` è lo spegnimento esplicito dell'utente
+// e vale «tutte le righe» anche col default acceso. 0 = spento.
+let _defaultSampleRows = 0
+export function setDefaultSampleRows(n: number) {
+  _defaultSampleRows = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
+export function getDefaultSampleRows(): number {
+  return _defaultSampleRows
+}
+
+export function devSampleOperation(data: any, defaultRows: number = _defaultSampleRows): Operation | null {
   const s: SourceSample | null | undefined = data?.sample
-  if (!s || typeof s !== 'object') return null
+  if (!s || typeof s !== 'object') {
+    return defaultRows > 0 ? { type: 'limit', params: { n: defaultRows, [DEV_SAMPLE_MARK]: true } } : null
+  }
+  if (s.mode === 'off') return null // spento dall'utente: vince sul default
   if (s.mode === 'first') {
     const n = Math.floor(Number(s.rows ?? 0))
     if (!(n > 0)) return null
@@ -93,7 +108,10 @@ export function devSampleOperation(data: any): Operation | null {
 /** Etichetta breve del campione attivo (badge sul nodo), o null. */
 export function sampleLabel(data: any, t: (k: string, p?: any) => string): string | null {
   const s: SourceSample | null | undefined = data?.sample
-  if (!s) return null
+  if (!s) {
+    const n = _defaultSampleRows
+    return n > 0 ? t('sourceNode.sampleAuto', { n: n.toLocaleString() }) : null
+  }
   if (s.mode === 'first' && Number(s.rows) > 0) return t('sourceNode.sampleFirst', { n: Number(s.rows).toLocaleString() })
   if (s.mode === 'random' && Number(s.percent) > 0 && Number(s.percent) < 100) return t('sourceNode.sampleRandom', { p: s.percent })
   return null

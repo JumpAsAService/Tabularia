@@ -493,6 +493,8 @@ export default {
   "nodePanel": {
     "sampleTitle": "Development sample",
     "sampleOff": "off (all rows)",
+    "sampleAutoHint": "Automatic sample: unless you choose otherwise, previews and trial runs read only the first {n} rows. Pick \"off (all rows)\" to read everything.",
+    "sampleAuto": "automatic (first {n} rows)",
     "sampleFirst": "first N rows",
     "sampleRandom": "random %",
     "sampleRowsLabel": "rows",
@@ -881,6 +883,7 @@ export default {
   },
   "sourceNode": {
     "sampleFirst": "sample: first {n} rows",
+    "sampleAuto": "automatic sample: first {n} rows",
     "filtersBadge": "upstream filters: {n}",
     "filtersTitle": "Upstream filters: applied when the source is read, in development and in production",
     "sampleRandom": "sample: {p}% random",

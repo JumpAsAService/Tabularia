@@ -434,6 +434,8 @@ export default {
     "sortKeysNoColumns": "Conecta una cadena con datos para elegir las columnas de ordenación.",
     "sampleTitle": "Muestra de desarrollo",
     "sampleOff": "off (todas las filas)",
+    "sampleAutoHint": "Muestra automática: sin una elección, las vistas previas y las ejecuciones de prueba leen solo las primeras {n} filas. Elige «off (todas las filas)» para leerlo todo.",
+    "sampleAuto": "automático (primeras {n} filas)",
     "sampleFirst": "primeras N filas",
     "sampleRandom": "% aleatorio",
     "sampleRowsLabel": "filas",
@@ -798,6 +800,7 @@ export default {
   },
   "sourceNode": {
     "sampleFirst": "muestra: primeras {n} filas",
+    "sampleAuto": "muestra automática: primeras {n} filas",
     "filtersBadge": "filtros previos: {n}",
     "filtersTitle": "Filtros previos: aplicados al leer la fuente, en desarrollo y en producción",
     "sampleRandom": "muestra: {p}% aleatorio",

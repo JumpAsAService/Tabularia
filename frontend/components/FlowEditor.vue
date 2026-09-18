@@ -9,6 +9,7 @@ import { Table2, BarChart3, Wand2, Users } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useFlowPresence } from '~/composables/useFlowPresence'
+import { useAppInfo } from '~/composables/useAppInfo'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -269,6 +270,8 @@ async function saveFlow() {
 }
 
 onMounted(async () => {
+  // campione automatico di sviluppo: va noto PRIMA della prima preview
+  await useAppInfo().load()
   try {
     operations.value = await api.operations()
   } catch (e) {

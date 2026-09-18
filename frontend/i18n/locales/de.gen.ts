@@ -434,6 +434,8 @@ export default {
     "sortKeysNoColumns": "Verbinde eine Kette mit Daten, um die Sortierspalten zu wählen.",
     "sampleTitle": "Entwicklungs-Stichprobe",
     "sampleOff": "aus (alle Zeilen)",
+    "sampleAutoHint": "Automatische Stichprobe: ohne eigene Wahl lesen Vorschauen und Probeläufe nur die ersten {n} Zeilen. Wählen Sie „aus (alle Zeilen)“, um alles zu lesen.",
+    "sampleAuto": "automatisch (erste {n} Zeilen)",
     "sampleFirst": "erste N Zeilen",
     "sampleRandom": "zufällig %",
     "sampleRowsLabel": "Zeilen",
@@ -798,6 +800,7 @@ export default {
   },
   "sourceNode": {
     "sampleFirst": "Stichprobe: erste {n} Zeilen",
+    "sampleAuto": "automatische Stichprobe: erste {n} Zeilen",
     "filtersBadge": "vorgelagerte Filter: {n}",
     "filtersTitle": "Vorgelagerte Filter: beim Lesen der Quelle angewendet, in Entwicklung und Produktion",
     "sampleRandom": "Stichprobe: {p} % zufällig",
