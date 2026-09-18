@@ -113,3 +113,20 @@ def test_the_collector_emits_cumulative_buckets():
     b = {s.labels["le"]: s.value for s in hist.samples if s.name.endswith("_bucket")}
     assert (b["100"], b["250"], b["1000"], b["+Inf"]) == (1, 2, 3, 3)
     assert next(s.value for s in hist.samples if s.name.endswith("_sum")) == 1220.0
+
+
+# ── rilievi della revisione ────────────────────────────────────────────────────
+def test_an_arbitrary_engine_name_cannot_create_unbounded_keys():
+    """Il motore arriva dalla richiesta dell'utente: un nome libero creerebbe
+    chiavi e serie Prometheus senza limite."""
+    for e in ("oracle", "Polars", "x|y|z", "", None):
+        _rec(300, engine=e)
+    assert set(k.split("|")[0] for k in ps.snapshot()["hist"]) == {"unknown", "polars"}
+
+
+def test_stale_entries_are_pruned_when_writing_too(_redis):
+    """Un giorno di grandi lente vecchie non deve tenere fuori quelle di oggi."""
+    for i in range(ps.SLOWEST_KEEP * 4): _rec(50_000 + i, now=1_000_000)
+    _rec(2_000, now=1_000_000 + ps.SLOWEST_WINDOW_SECONDS + 10)
+    assert _redis.zcard(ps.SLOWEST_KEY) == 1
+    assert [e["ms"] for e in ps.slowest(now=1_000_000 + ps.SLOWEST_WINDOW_SECONDS + 20)] == [2000]

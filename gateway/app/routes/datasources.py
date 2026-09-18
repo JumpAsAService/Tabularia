@@ -243,8 +243,9 @@ async def create_db_datasource(
 
     try:
         await launch_ingest_run(session, user, ds, conn)
-    except HTTPException:
-        # engine giù o richiesta rifiutata: niente datasource a metà, creazione atomica
+    except Exception:
+        # engine giù (anche un ConnectError, non solo un HTTPException) o richiesta
+        # rifiutata: niente datasource a metà, creazione atomica
         session.delete(ds)
         session.commit()
         raise
@@ -302,8 +303,8 @@ async def create_sharepoint_datasource(
     session.refresh(ds)
     try:
         await launch_ingest_run(session, user, ds, conn)
-    except HTTPException:
-        session.delete(ds)  # engine giù o richiesta rifiutata: niente datasource a metà
+    except Exception:
+        session.delete(ds)  # engine giù (anche ConnectError) o rifiuto: niente datasource a metà
         session.commit()
         raise
     audit.record_audit(

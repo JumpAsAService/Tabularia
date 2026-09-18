@@ -80,6 +80,10 @@ class PolarsEngine(Engine):
         try:
             lf.sink_parquet(path)
         except Exception as e:  # nodo non supportato dall'engine streaming
+            from app.engine.query_tag import was_interrupted
+
+            if was_interrupted(e):  # preview superata: NON rifare tutto in memoria
+                raise
             logger.warning("sink_parquet streaming fallito (%s), fallback in-memory", e)
             lf.collect(engine="streaming").write_parquet(path)
 

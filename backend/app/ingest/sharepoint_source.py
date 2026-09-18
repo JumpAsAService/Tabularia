@@ -28,7 +28,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 import polars as pl
 from pydantic import BaseModel, Field
@@ -139,7 +139,17 @@ class GraphClient:
         for attempt in range(4):
             r = self._http("GET", url, headers={"Authorization": f"Bearer {self._access_token()}"}, timeout=120, stream=stream)
             if r.status_code in (429, 503) and attempt < 3:
-                self._sleep(min(30.0, float(r.headers.get("Retry-After", 2 ** attempt))))
+                # Retry-After puo' essere una data HTTP, non solo secondi
+                try:
+                    wait = float(r.headers.get("Retry-After", 2 ** attempt))
+                except (TypeError, ValueError):
+                    wait = float(2 ** attempt)
+                if stream:
+                    try:
+                        r.close()
+                    except Exception:
+                        pass
+                self._sleep(min(30.0, wait))
                 continue
             return r
         return r
@@ -199,10 +209,20 @@ class GraphClient:
     def download(self, item_id: str, dest: str) -> None:
         r = self._get(f"{self.conn.graph_base.rstrip('/')}/drives/{self.drive_id()}/items/{item_id}/content", stream=True)
         if r.status_code != 200:
+            try:
+                r.close()
+            except Exception:
+                pass
             raise SharePointError(f"Download non riuscito ({r.status_code}): {_graph_message(r)}")
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(1024 * 1024):
-                f.write(chunk)
+        try:
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(1024 * 1024):
+                    f.write(chunk)
+        finally:
+            try:
+                r.close()  # lo stream va chiuso anche se la scrittura fallisce
+            except Exception:
+                pass
 
 
 def _graph_message(r) -> str:
@@ -259,8 +279,10 @@ def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
                 continue
             # il percorso VERO (con le maiuscole di SharePoint), non quello scritto nel
             # glob: `_file` non deve cambiare se qualcuno riscrive il percorso diversamente
+            # Graph lo restituisce percent-encoded ("Budget%202026"): decodificato,
+            # o children() lo codificherebbe due volte e la cartella darebbe 404
             parent = str((it.get("parentReference") or {}).get("path") or "")
-            real = parent.split("root:", 1)[1].strip("/") if "root:" in parent else folder
+            real = unquote(parent.split("root:", 1)[1]).strip("/") if "root:" in parent else folder
             path = f"{real}/{name}".strip("/")
             if tail:
                 if "folder" in it:
@@ -305,7 +327,10 @@ def read_sheet(local_path: str, sheet: str, shown_as: str) -> pl.DataFrame:
     reserved = [n for n in names if n in (FILE_COLUMN, MODIFIED_COLUMN)]
     if reserved:
         raise SharePointError(f"{shown_as}: '{reserved[0]}' è un nome riservato alla provenienza del file")
-    return pl.read_excel(local_path, sheet_name=sheet, raise_if_empty=False)
+    df = pl.read_excel(local_path, sheet_name=sheet, raise_if_empty=False)
+    # i nomi validati sono quelli RIPULITI dagli spazi: le colonne devono chiamarsi
+    # cosi', o "Importo " in un file e "Importo" in un altro farebbero due colonne
+    return df.rename({c: c.strip() for c in df.columns if c != c.strip()})
 
 
 def ingest_sharepoint_to_parquet(
@@ -333,6 +358,11 @@ def ingest_sharepoint_to_parquet(
             df = read_sheet(local, source.sheet, f.path)
             os.remove(local)
             columns_by_file[f.path] = df.columns
+            if df.height == 0:
+                # solo intestazione (un template vuoto del mese): il lettore la tipizza
+                # tutta String, e nell'unione "rilassata" trascinerebbe a testo ogni
+                # colonna numerica degli altri file. Contato, non concatenato.
+                continue
             frames.append(df.with_columns(
                 pl.lit(f.path).alias(FILE_COLUMN),
                 pl.lit(f.modified_at).str.to_datetime(strict=False, time_zone="UTC").dt.replace_time_zone(None).alias(MODIFIED_COLUMN),
@@ -341,6 +371,8 @@ def ingest_sharepoint_to_parquet(
         # Schemi diversi fra i file: unione PER NOME, null dove manca. Non è un
         # errore — un mese ha una colonna in più — ma va detto, perché un refuso
         # in un'intestazione produce due colonne mezze vuote invece di una.
+        if not frames:
+            raise SharePointError("Tutti i file corrispondenti sono vuoti (solo intestazione)")
         try:
             table = pl.concat(frames, how="diagonal_relaxed")
         except Exception as e:

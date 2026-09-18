@@ -133,6 +133,10 @@ class MatViewStore:
             logger.info("materializzata la sorgente %s in %s (%d righe)", sid, table, rows)
             return self._qualified(table)
         except Exception as e:  # best-effort: sempre giù su s3(), mai un errore
+            from app.engine.query_tag import was_interrupted
+
+            if was_interrupted(e):  # preview superata: non e' un fallimento della copia
+                raise
             # segna il fallimento: senza, si ritenta la copia intera a OGNI preview
             self._mark_failed(sid)
             logger.warning("materializzazione non riuscita per %s, resto su s3(): %s", sid, e)

@@ -71,9 +71,19 @@ def _bucket(ms: float) -> str:
     return "+Inf"
 
 
+KNOWN_ENGINES = ("polars", "duckdb", "chdb", "clickhouse")
+
+
+def _engine_label(engine: str | None) -> str:
+    """Solo nomi noti: il motore arriva dalla richiesta dell'utente, e un nome
+    libero creerebbe chiavi (e serie Prometheus) senza limite."""
+    e = (engine or "polars").strip().lower()
+    return e if e in KNOWN_ENGINES else "unknown"
+
+
 def record(*, engine: str, outcome: str, total_ms: float, phases: dict[str, float] | None = None,
            dataset: str = "", ops: int = 0, source: str = "", cache: bool = True, now: float | None = None) -> None:
-    engine = engine or "default"
+    engine = _engine_label(engine)
     outcome = outcome if outcome in OUTCOMES else "error"
     now = time.time() if now is None else now
     try:
@@ -89,6 +99,15 @@ def record(*, engine: str, outcome: str, total_ms: float, phases: dict[str, floa
                 "source": source, "cache": cache,
                 "phases": {k: round(v) for k, v in (phases or {}).items() if k in PHASES and v >= 1},
             }
+            # prima via le voci SCADUTE, o una giornata di grandi lente vecchie
+            # terrebbe fuori quelle di oggi (il set e' piccolo: leggerlo costa niente)
+            try:
+                stale = [m for m in _r().zrevrange(SLOWEST_KEY, 0, -1)
+                         if now - (json.loads(m).get("at", 0)) > SLOWEST_WINDOW_SECONDS]
+                if stale:
+                    p.zrem(SLOWEST_KEY, *stale)
+            except Exception:
+                pass
             p.zadd(SLOWEST_KEY, {json.dumps(entry, sort_keys=True): total_ms})
             # dimensione LIMITATA: restano solo le più lente
             p.zremrangebyrank(SLOWEST_KEY, 0, -(SLOWEST_KEEP * 4) - 1)

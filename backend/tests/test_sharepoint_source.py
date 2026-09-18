@@ -181,3 +181,48 @@ def test_the_token_is_fetched_once_and_throttling_is_waited_out():
     c = sp.GraphClient(_conn(), http=g.request, sleep=waits.append)
     assert len(sp.find_files(c, "Budget/2026/*.xlsx")) == 2
     assert g.tokens == 1 and waits == [1.0, 1.0]
+
+
+# ── rilievi della revisione ────────────────────────────────────────────────────
+def test_a_header_only_template_does_not_turn_numbers_into_text():
+    """Il lettore tipizza String un foglio con la sola intestazione; nell'unione
+    rilassata Int64+String diventa String: un template vuoto del mese rendeva
+    testo OGNI colonna numerica. Contato fra i file, non concatenato."""
+    tree = {"M/gen.xlsx": GEN, "M/template.xlsx": xlsx([["id", "importo"]])}
+    res, df = _ingest(FakeGraph(tree), "M/*.xlsx")
+    assert df["id"].dtype == pl.Int64 and df["importo"].dtype == pl.Float64
+    assert res["rows_written"] == 2 and [f["path"] for f in res["files"]] == ["M/gen.xlsx", "M/template.xlsx"]
+
+
+def test_only_header_files_are_an_error_not_an_empty_table():
+    with pytest.raises(sp.SharePointError, match="solo intestazione"):
+        _ingest(FakeGraph({"M/t.xlsx": xlsx([["id"]])}), "M/*.xlsx")
+
+
+def test_folders_with_spaces_and_accents_are_found_and_reported_decoded():
+    """Graph restituisce il percorso del genitore percent-encoded: senza
+    decodifica la cartella veniva codificata due volte e dava 404."""
+    tree = {"Budget 2026/età/gen.xlsx": GEN, "Budget 2026/età/feb.xlsx": FEB}
+    res, df = _ingest(FakeGraph(tree), "*/età/*.xlsx")
+    assert [f["path"] for f in res["files"]] == ["Budget 2026/età/feb.xlsx", "Budget 2026/età/gen.xlsx"]
+    assert "%20" not in "".join(df["_file"].unique().to_list())
+
+
+def test_header_whitespace_is_stripped_on_the_real_columns_too():
+    """'Importo ' in un file e 'Importo' in un altro non devono fare due colonne."""
+    tree = {"M/a.xlsx": xlsx([["id", "Importo "], [1, 2.0]]), "M/b.xlsx": xlsx([["id", "Importo"], [2, 3.0]])}
+    _, df = _ingest(FakeGraph(tree), "M/*.xlsx")
+    assert df.columns[:2] == ["id", "Importo"] and df["Importo"].null_count() == 0
+
+
+def test_a_retry_after_http_date_does_not_crash():
+    class G(FakeGraph):
+        def request(self, method, url, **kw):
+            r = super().request(method, url, **kw)
+            if r.status_code == 429:
+                r.headers["Retry-After"] = "Wed, 21 Oct 2026 07:28:00 GMT"
+            return r
+    g = G(TREE); g.throttle_next = 1
+    waits = []
+    c = sp.GraphClient(_conn(), http=g.request, sleep=waits.append)
+    assert len(sp.find_files(c, "Budget/2026/*.xlsx")) == 2 and waits == [1.0]

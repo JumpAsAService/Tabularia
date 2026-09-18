@@ -70,3 +70,17 @@ def test_it_is_for_admins_only(session):
     with pytest.raises(HTTPException) as e:
         require_superuser(make_user(session, email="u@x.it"))
     assert e.value.status_code == 403
+
+
+def test_deleting_a_group_that_holds_permissions_works(session):
+    """Esplodeva in un 500 sul vincolo di chiave esterna dei permessi."""
+    from app.models import Group, Permission
+    from app.models.permission import Capability
+    from app.routes.groups import delete_group
+    from tests.conftest import make_project
+
+    p = make_project(session, name="p")
+    g = Group(name="g"); session.add(g); session.commit(); session.refresh(g)
+    session.add(Permission(project_id=p.id, group_id=g.id, capability=Capability.VIEW)); session.commit()
+    delete_group(g.id, session)
+    assert session.get(Group, g.id) is None and session.query(Permission).count() == 0

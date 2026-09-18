@@ -489,8 +489,14 @@ class ClickHouseEngine(Engine):
                 esistente.command("SELECT 1")
                 cache[chiave] = (esistente, time.monotonic())
                 return esistente
-            except Exception:
+            except Exception as e:
                 cache.pop(chiave, None)
+                if was_interrupted(e):  # preview superata durante la validazione
+                    try:
+                        esistente.close()
+                    except Exception:
+                        pass
+                    raise
                 try:
                     esistente.close()
                 except Exception:
@@ -568,7 +574,9 @@ class ClickHouseEngine(Engine):
                 raw = str(ctx._rows("SELECT value FROM system.settings WHERE name = 'max_threads'")[0][0])
                 digits = re.search(r"\d+", raw)
                 self._server_threads = int(digits.group()) if digits else 0
-            except Exception:
+            except Exception as e:
+                if was_interrupted(e):  # non e' il server: e' la preview superata
+                    raise
                 self._server_threads = 0
         return _effective_scan_threads(self.cfg.parquet_scan_max_threads, self._server_threads)
 

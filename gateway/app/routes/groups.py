@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_superuser
-from app.models import Group, UserGroupLink
+from app.models import Group, UserGroupLink, Permission
 from app.schemas.models import GroupOut, GroupCreate
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -53,5 +53,9 @@ def delete_group(group_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     for link in session.exec(select(UserGroupLink).where(UserGroupLink.group_id == group_id)).all():
         session.delete(link)
+    # anche i PERMESSI concessi al gruppo: la chiave esterna li protegge, e senza
+    # questo la cancellazione esplodeva in un 500
+    for perm in session.exec(select(Permission).where(Permission.group_id == group_id)).all():
+        session.delete(perm)
     session.delete(group)
     session.commit()

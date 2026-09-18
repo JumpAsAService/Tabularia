@@ -88,7 +88,11 @@ class StepCache:
             return True
         try:
             return bool(check(self.bucket, self.object_key(h)))
-        except Exception:
+        except Exception as e:
+            from app.engine.query_tag import was_interrupted
+
+            if was_interrupted(e):
+                raise
             return True
 
     def forget(self, h: str) -> None:

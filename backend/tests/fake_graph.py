@@ -4,7 +4,7 @@ download del contenuto, throttling con Retry-After. In sviluppo non c'è un tena
 vero: questo è ciò contro cui il connettore SharePoint viene provato."""
 import io
 import json
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 import xlsxwriter
 
@@ -49,7 +49,8 @@ class FakeGraph:
             if not path.casefold().startswith(pre.casefold()): continue
             rest = path[len(pre):]
             name = rest.split("/")[0]
-            ref = {"parentReference": {"path": "/drives/DRV/root:/" + path[:len(pre)].strip("/")}}
+            # come Graph: il percorso del genitore e' percent-encoded
+            ref = {"parentReference": {"path": "/drives/DRV/root:/" + quote(path[:len(pre)].strip("/"))}}
             if "/" in rest: out.setdefault(name, {"id": "d:" + pre + name, "name": name, "folder": {}, **ref})
             else: out[name] = {"id": "f:" + path, "name": name, "file": {}, "size": len(data),
                                "lastModifiedDateTime": self.modified, "eTag": "etag-" + name, **ref}

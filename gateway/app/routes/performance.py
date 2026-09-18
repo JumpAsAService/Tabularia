@@ -42,8 +42,9 @@ def runs_performance(days: int = Query(7, ge=1, le=90), session: Session = Depen
     rows = session.exec(
         select(Run).where(Run.started_at >= since).order_by(Run.started_at.desc()).limit(MAX_RUNS)  # type: ignore[attr-defined]
     ).all()
-    flows = {f.id: f.name for f in session.exec(select(Flow)).all()}
-    sources = {d.id: d.name for d in session.exec(select(Datasource)).all()}
+    # solo id e nome: le righe intere porterebbero anche il JSON del grafo
+    flows = dict(session.exec(select(Flow.id, Flow.name)).all())
+    sources = dict(session.exec(select(Datasource.id, Datasource.name)).all())
 
     groups: dict[tuple[str, int | None], dict] = {}
     for r in rows:
