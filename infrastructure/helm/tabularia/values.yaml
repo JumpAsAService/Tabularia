@@ -100,6 +100,23 @@ externalServices:
     parquetScanMaxThreads: 8
     # password → secrets.clickhousePassword
 
+  # Optional engine: Google BigQuery. The parquet files stay in the bucket and
+  # are read as temporary external tables, so the object storage MUST be Google
+  # Cloud Storage (externalServices.storage.endpoint = https://storage.googleapis.com
+  # with HMAC keys). The service account needs "BigQuery Job User" on the
+  # project and read access on the bucket; its JSON key goes in
+  # secrets.bigqueryCredentialsB64 (base64 of the file, one line).
+  bigquery:
+    enabled: false
+    project: ""
+    # Job location: the bucket's region or the multi-region containing it (EU).
+    # Empty = read from the bucket.
+    location: ""
+    # Bytes billed per query above which BigQuery refuses to run it. BigQuery
+    # bills LOGICAL (uncompressed) bytes of the columns touched: a sort over a
+    # wide 25M-row table reads ~19 GB. 20 GiB ≈ 0.12 $ per query. 0 = no cap.
+    maximumBytesBilled: 21474836480
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Secrets
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,9 +126,9 @@ externalServices:
 #
 # Keys expected in an existing Secret — the variable names the pods read:
 #   SECURITY__FERNET_KEY, JWT__SECRET, DB__PASSWORD, STORAGE__ACCESS_KEY,
-#   STORAGE__SECRET_KEY, AUTH__ADMIN_PASSWORD; plus OIDC__CLIENT_SECRET and
-#   CLICKHOUSE_EXTERNAL__PASSWORD when those are enabled, and REDIS__PASSWORD
-#   when your Redis requires authentication.
+#   STORAGE__SECRET_KEY, AUTH__ADMIN_PASSWORD; plus OIDC__CLIENT_SECRET,
+#   CLICKHOUSE_EXTERNAL__PASSWORD and BIGQUERY__CREDENTIALS_B64 when those are
+#   enabled, and REDIS__PASSWORD when your Redis requires authentication.
 existingSecret: ""
 
 secrets:
@@ -138,6 +155,8 @@ secrets:
 
   oidcClientSecret: ""
   clickhousePassword: ""
+  # base64 of the service-account JSON key (base64 -w0 key.json)
+  bigqueryCredentialsB64: ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Application settings (non-secret)
@@ -150,6 +169,11 @@ app:
   # beat keeps its own clock (CELERY__TIMEZONE, UTC by default); the gateway
   # converts schedules to UTC, so this stays correct either way.
   timezone: UTC
+  # Automatic development sample: with a value > 0, source nodes without a
+  # sample of their own are read only for their first N rows in editor previews
+  # and trial runs; users can switch it off per node. Production runs always
+  # read everything. 0 = off. Worth setting when every read is billed.
+  previewDefaultSampleRows: 0
   # Origins allowed to call the API from a browser. The default ingress puts the
   # UI and the API on ONE host, so this can stay empty. Set it only if you serve
   # the frontend from a different hostname than the gateway — otherwise every

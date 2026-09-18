@@ -16,7 +16,7 @@ from app.models import DisabledEngine
 # Motori noti al gateway, sincronizzati col catalogo dell'engine. Vivono qui e
 # non in routes/flows.py perché servono a due rotte diverse: tenerli in una
 # delle due obbligherebbe l'altra a importare da un modulo di rotte.
-KNOWN_ENGINES: tuple[str, ...] = ("polars", "duckdb", "chdb", "clickhouse")
+KNOWN_ENGINES: tuple[str, ...] = ("polars", "duckdb", "chdb", "clickhouse", "bigquery")
 
 
 def disabled_engines(session: Session) -> set[str]:

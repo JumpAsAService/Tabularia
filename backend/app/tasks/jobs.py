@@ -7,6 +7,8 @@ from app.core.config import get_settings
 from app.engine import DataSource, get_engine
 from app.ingest import FileFormat, IngestOptions, get_ingest_service
 
+import time as _time_mod
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +72,13 @@ def preview_task(
         _engine_ms = (_time.perf_counter() - _t0) * 1000
         payload = {"ok": True, "result": result.model_dump()}
         _stats("ok")
+        # step-cache differita (BigQuery): i passi da materializzare vanno a un
+        # task separato, cosi' QUESTA risposta non aspetta i CTAS
+        for src, pending_ops in getattr(engine_impl, "take_pending", lambda: [])():
+            try:
+                materialize_step_task.apply_async(args=[engine, src.bucket, src.key, pending_ops], queue="preview")
+            except Exception as e:  # noqa: BLE001 — senza broker si perde solo la cache
+                logger.warning("materializzazione differita non accodata: %s", e)
         # Il tempo DENTRO il worker, per ogni engine. Confrontalo con quello che
         # misura il chiamante: la differenza e' attesa in coda + trasporto del
         # risultato, non lavoro. Se `serializz` e' alto, pesa il payload (righe x
@@ -105,6 +114,26 @@ def preview_task(
         if isinstance(e, EngineError):
             return {"ok": False, "error": "bad_request", "detail": str(e)}
         raise
+
+
+@celery_app.task(name="app.tasks.jobs.materialize_step_task", ignore_result=True)
+def materialize_step_task(engine: str, bucket: str, key: str, operations: list[dict]) -> dict:
+    """Materializza in cache (BigQuery: tabella nativa) l'output di una catena
+    di operazioni, FUORI dalla preview che l'ha chiesta. Best-effort: un errore
+    qui costa solo la cache, mai la preview."""
+    t0 = _time_mod.perf_counter()
+    try:
+        impl = get_engine(engine)
+        fn = getattr(impl, "materialize", None)
+        if fn is None:
+            return {"ok": False, "skipped": True}
+        written = fn(DataSource(bucket=bucket, key=key), operations)
+        logger.info("materialize_step_task %s ops=%d scritto=%s %.0f ms", engine, len(operations), written,
+                    (_time_mod.perf_counter() - t0) * 1000)
+        return {"ok": True, "written": bool(written)}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("materialize_step_task %s fallito: %s", engine, e)
+        return {"ok": False, "error": str(e)[:300]}
 
 
 @celery_app.task(name="app.tasks.jobs.transform_data_task")
@@ -393,6 +422,15 @@ def evict_cache_task() -> dict:
     """
     settings = get_settings()
     removed = get_engine().cache.evict_expired(settings.cache.ttl_seconds)
+    # la cache nativa di BigQuery ha un indice suo (tabelle, non parquet): le
+    # tabelle scadono da sole sul servizio, qui si allinea l'indice
+    from app.engine import _BIGQUERY_AVAILABLE
+
+    if _BIGQUERY_AVAILABLE:
+        try:
+            removed += get_engine("bigquery").cache.evict_expired(settings.cache.ttl_seconds)
+        except Exception as e:  # noqa: BLE001 — lo sweep non deve fermarsi per un motore opzionale
+            logger.warning("sweep della cache BigQuery non riuscito: %s", e)
     return {"removed": removed, "ttl_seconds": settings.cache.ttl_seconds}
 
 

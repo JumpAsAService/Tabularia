@@ -71,7 +71,7 @@ def _bucket(ms: float) -> str:
     return "+Inf"
 
 
-KNOWN_ENGINES = ("polars", "duckdb", "chdb", "clickhouse")
+KNOWN_ENGINES = ("polars", "duckdb", "chdb", "clickhouse", "bigquery")
 
 
 def _engine_label(engine: str | None) -> str:

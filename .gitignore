@@ -37,3 +37,4 @@ celerybeat-schedule*
 .vscode/
 .idea/
 .claude/settings.local.json
+infrastructure/gcp_keys.json

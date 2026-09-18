@@ -108,6 +108,22 @@ def _make_clickhouse_engine() -> Engine:
 if _CLICKHOUSE_AVAILABLE:
     _ENGINES["clickhouse"] = _make_clickhouse_engine
 
+# BigQuery (serverless Google): opzionale, attivo solo se configurato
+# (BIGQUERY__PROJECT + credenziali) e se il pacchetto e' installato. Client
+# HTTP/gRPC puro, import pigro come per ClickHouse.
+_BIGQUERY_CFG = _get_settings().bigquery
+_BIGQUERY_AVAILABLE = _BIGQUERY_CFG.enabled and importlib.util.find_spec("google.cloud.bigquery") is not None
+
+
+def _make_bigquery_engine() -> Engine:
+    from app.engine.bigquery_engine import BigQueryEngine
+
+    return BigQueryEngine()
+
+
+if _BIGQUERY_AVAILABLE:
+    _ENGINES["bigquery"] = _make_bigquery_engine
+
 # metadati per il picker del frontend (creazione flusso). `available=False` =
 # opzione mostrata ma non ancora selezionabile.
 ENGINE_CATALOG = [
@@ -150,6 +166,19 @@ ENGINE_CATALOG = [
             "le trasformazioni girano sul server, non nel worker."
             if _CLICKHOUSE_AVAILABLE
             else "Server ClickHouse esterno (cloud o self-hosted). Non configurato: imposta CLICKHOUSE_EXTERNAL__HOST."
+        ),
+    },
+    {
+        "id": "bigquery",
+        "label": "BigQuery",
+        "available": _BIGQUERY_AVAILABLE,
+        "optional": True,
+        "description": (
+            f"Google BigQuery (progetto {_BIGQUERY_CFG.project}): legge i parquet dal bucket GCS come tabelle "
+            "esterne e calcola sul servizio, a consumo. "
+            + (f"Step-cache nativa nel dataset {_BIGQUERY_CFG.cache_dataset}." if _BIGQUERY_CFG.cache_dataset else "Senza step-cache: ogni preview rilegge la sorgente.")
+            if _BIGQUERY_AVAILABLE
+            else "Google BigQuery (serverless). Non configurato: imposta BIGQUERY__PROJECT e le credenziali."
         ),
     },
 ]

@@ -3,6 +3,34 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **BigQuery engine (optional).** A fifth engine, `bigquery`, runs the
+  transformations on Google BigQuery: the parquet files stay in the bucket and
+  are read as temporary external tables, results come back through the Storage
+  Read API and are written as parquet like the other engines. Needs Google
+  Cloud Storage as the object storage and a service account
+  (`BIGQUERY__PROJECT`, `BIGQUERY__CREDENTIALS_FILE` or `_B64`). Every query is
+  capped by `BIGQUERY__MAXIMUM_BYTES_BILLED` and labelled with the preview tag,
+  so a superseded preview is cancelled on the service. Native step-cache: the
+  intermediate steps of the editor are written as tables with an expiration in
+  the `BIGQUERY__CACHE_DATASET` dataset (default `tabularia_cache`, created by
+  the engine; needs "BigQuery Data Editor") by a deferred task, so the preview
+  never waits for them and the next clicks read a small native table. Median
+  in pivot and `foreach` are not supported on this engine.
+- **Google Cloud Storage as object storage.** Works through the S3-compatible
+  XML API with HMAC keys. Batch deletes, which GCS does not implement, fall back
+  to single deletes; deleting a missing object is not an error on any storage.
+
+- **Automatic development sample.** With `PREVIEW__DEFAULT_SAMPLE_ROWS` > 0
+  (Helm: `app.previewDefaultSampleRows`), every source node without a sample
+  of its own is read only for its first N rows in editor previews and trial
+  runs. The node shows an "automatic sample" badge; users switch it off per
+  node with "off (all rows)" or pick their own sample. Scheduled runs and
+  "Run in production" are never sampled. Off by default. Meant for
+  deployments where every read is billed (remote object storage, pay-per-use
+  warehouses).
+
 ## 1.0.0 «Appio» — 2026-09-18
 
 First release, named after Appius Claudius Caecus, the censor of 312 BC who

@@ -284,6 +284,59 @@ class SharePointSettings(BaseModel):
     login_base: str = "https://login.microsoftonline.com"
 
 
+class BigQuerySettings(BaseModel):
+    """Engine `bigquery`: le trasformazioni girano su Google BigQuery, che legge i
+    parquet DIRETTAMENTE dal bucket come tabelle esterne temporanee (gs://…) e
+    restituisce il risultato al worker (Storage Read API). Richiede che lo
+    storage sia Google Cloud Storage (STORAGE__ENDPOINT=https://storage.googleapis.com)
+    e un service account con «BigQuery Job User» sul progetto e lettura sul
+    bucket. Disattivato finche' `project` o le credenziali sono vuoti.
+
+    env: BIGQUERY__PROJECT, __CREDENTIALS_FILE (path della chiave JSON) oppure
+    __CREDENTIALS_B64 (la stessa chiave in base64, una riga di .env),
+    __LOCATION, __MAXIMUM_BYTES_BILLED"""
+
+    project: str = ""
+    credentials_file: str = ""
+    credentials_b64: SecretStr = SecretStr("")
+    # regione dei job: DEVE combaciare con quella del bucket (o essere la
+    # multi-regione che lo contiene, es. EU). Vuota = letta dal bucket.
+    location: str = ""
+    # tetto di byte FATTURABILI per singola query: BigQuery rifiuta PRIMA di
+    # eseguire una query che lo supererebbe. 20 GiB = circa 0,12 $ a query
+    # (6,25 $/TiB). 0 = nessun tetto.
+    maximum_bytes_billed: int = 20 * 1024**3
+    # Step-cache NATIVA: l'output dei passi intermedi dell'editor viene scritto
+    # in tabelle di questo dataset (creato dal motore se manca; serve «BigQuery
+    # Data Editor» sul progetto, o il dataset gia' creato con quel ruolo su di
+    # esso) con scadenza = CACHE__TTL_SECONDS; le preview successive leggono la
+    # tabella nativa invece di rileggere il parquet. Vuoto = nessuna cache.
+    cache_dataset: str = "tabularia_cache"
+
+    @field_validator("credentials_b64", mode="before")
+    @classmethod
+    def _ensure_secret_b64(cls, v: object) -> SecretStr:
+        return v if isinstance(v, SecretStr) else SecretStr("" if v is None else str(v))
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.project.strip()) and bool(self.credentials_file.strip() or self.credentials_b64.get_secret_value().strip())
+
+    def credentials_info(self) -> dict:
+        """La chiave JSON del service account come dict (file o base64)."""
+        import base64
+        import json
+
+        raw = self.credentials_b64.get_secret_value().strip()
+        if raw:
+            try:
+                return json.loads(base64.b64decode(raw))
+            except Exception as e:
+                raise ValueError(f"BIGQUERY__CREDENTIALS_B64 non e' una chiave JSON in base64: {e}") from e
+        with open(self.credentials_file, encoding="utf-8") as f:
+            return json.load(f)
+
+
 class IngestSettings(BaseModel):
     """Scrittura dei parquet prodotti dall'ingest."""
 
@@ -348,6 +401,7 @@ class Settings(BaseSettings):
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     clickhouse_external: ClickHouseExternalSettings = Field(default_factory=ClickHouseExternalSettings)
+    bigquery: BigQuerySettings = Field(default_factory=BigQuerySettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
     sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
 

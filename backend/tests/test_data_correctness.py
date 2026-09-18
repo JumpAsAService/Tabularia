@@ -34,7 +34,7 @@ import pytest
 
 from app.engine.cache import StepCache
 from app.engine.polars_engine import PolarsEngine
-from tests.conftest import upload_df
+from tests.conftest import BUCKET, upload_df
 from tests.fakes import FakeRedis
 
 
@@ -50,6 +50,11 @@ def _engine(name: str, storage):
         from app.engine.chdb_engine import ChdbEngine
 
         return ChdbEngine(storage=storage, cache=cache)
+    if name == "bigquery":
+        # storage VERO (GCS): BigQuery legge i parquet dal bucket, non da un finto
+        from app.engine.bigquery_engine import BigQueryEngine
+
+        return BigQueryEngine(storage=storage)
     if name == "clickhouse":
         from app.core.config import ClickHouseExternalSettings
         from app.engine.clickhouse_engine import ClickHouseEngine
@@ -71,7 +76,34 @@ ENGINES = [
     pytest.param("duckdb", marks=pytest.mark.skipif(importlib.util.find_spec("duckdb") is None, reason="duckdb assente")),
     pytest.param("chdb", marks=pytest.mark.skipif(importlib.util.find_spec("chdb") is None, reason="chdb assente")),
     pytest.param("clickhouse", marks=pytest.mark.skipif(not os.getenv("CLICKHOUSE_TEST_HOST"), reason="serve CLICKHOUSE_TEST_HOST")),
+    # LIVE: BIGQUERY_LIVE=1 con BIGQUERY__* e STORAGE__* (GCS) nell'ambiente e
+    # TEST_BUCKET = il bucket vero. Costo: qualche MB fatturato per test.
+    pytest.param("bigquery", marks=pytest.mark.skipif(not os.getenv("BIGQUERY_LIVE"), reason="serve BIGQUERY_LIVE=1 (credenziali GCP)")),
 ]
+
+if os.getenv("BIGQUERY_LIVE"):
+    # In modalita' live TUTTI i motori di questo modulo leggono dallo storage
+    # vero: i parquet di prova vengono caricati sul bucket sotto datasets/ e
+    # tolti a fine sessione. Si lancia con `-k bigquery` per non pagare gli altri.
+    @pytest.fixture
+    def storage():
+        from app.utils import StorageService
+
+        svc = StorageService()
+        uploaded: list[tuple[str, str]] = []
+        real_upload = svc.upload_file
+
+        def tracking_upload(path, bucket, key):
+            uploaded.append((bucket, key))
+            return real_upload(path, bucket, key)
+
+        svc.upload_file = tracking_upload  # type: ignore[method-assign]
+        yield svc
+        for bucket, key in uploaded:  # niente residui sul bucket vero
+            try:
+                svc.delete_object(bucket, key)
+            except Exception:  # noqa: BLE001
+                pass
 
 D = dt.date
 BIG = 9007199254740993  # 2^53 + 1: non rappresentabile come float64
@@ -118,7 +150,7 @@ def ordini(storage):
 def clienti(storage):
     upload_df(storage, CLIENTI, "datasets/clienti_corr.parquet")
     upload_df(storage, CLIENTI.rename({"cliente": "nome"}), "datasets/clienti_nome_corr.parquet")
-    return {"bucket": "data-prep", "key": "datasets/clienti_corr.parquet"}
+    return {"bucket": BUCKET, "key": "datasets/clienti_corr.parquet"}
 
 
 # ── Normalizzazione dei risultati ─────────────────────────────────────────────
@@ -534,7 +566,7 @@ def test_join_full_and_right(storage, ordini, clienti, name):
 
 @pytest.mark.parametrize("name", ENGINES)
 def test_join_different_key_names(storage, ordini, clienti, name):
-    right = {"bucket": "data-prep", "key": "datasets/clienti_nome_corr.parquet"}
+    right = {"bucket": BUCKET, "key": "datasets/clienti_nome_corr.parquet"}
     res = check(name, storage, ordini, [_join("inner", right, left_on=["cliente"], right_on=["nome"])], [
         {"id": 1, "regione": "Lazio"}, {"id": 2, "regione": "Lombardia"}, {"id": 3, "regione": "Irlanda"},
         {"id": 5, "regione": "Lazio"}, {"id": 7, "regione": "Lombardia"},
@@ -551,7 +583,7 @@ def test_join_duplicates_multiply_rows(storage, ordini, clienti, name):
     # destra con chiave duplicata (Rossi ×2) → ogni Rossi di sinistra esce 2 volte
     dup = pl.DataFrame({"cliente": ["Rossi", "Rossi", "Bianchi"], "tag": ["a", "b", "c"]})
     upload_df(storage, dup, "datasets/dup_corr.parquet")
-    right = {"bucket": "data-prep", "key": "datasets/dup_corr.parquet"}
+    right = {"bucket": BUCKET, "key": "datasets/dup_corr.parquet"}
     res = run(name, storage, ordini, [_join("inner", right)])
     assert sorted((r["id"], r["tag"]) for r in res.rows) == [(1, "a"), (1, "b"), (2, "c"), (5, "a"), (5, "b"), (7, "c")]
     res = run(name, storage, ordini, [_join("left", right)])
@@ -567,7 +599,7 @@ def test_union_relaxed_and_strict(storage, ordini, clienti, name):
     assert sorted((r["canale"] or "") for r in res.rows if r["id"] is None) == ["c1", "c2", "c3", "c4", "c5"]
     # strict: stesso schema (la sorgente con sé stessa, filtrata a destra)
     res = run(name, storage, ordini, [{"type": "union", "params": {
-        "right": {"source": {"bucket": "data-prep", "key": "datasets/ordini_corr.parquet"}, "operations": [filt("id", "le", 2)]},
+        "right": {"source": {"bucket": BUCKET, "key": "datasets/ordini_corr.parquet"}, "operations": [filt("id", "le", 2)]},
         "strategy": "strict",
     }}])
     assert [c.name for c in res.columns] == COLS and res.row_count == 10
@@ -758,7 +790,7 @@ def test_run_output_matches_preview_and_keeps_types(storage, ordini, clienti, na
         filt("id", "ne", 3),
     ]
     eng = _engine(name, storage)
-    dest = DataSource(bucket="data-prep", key=f"out/corr_{name}.parquet")
+    dest = DataSource(bucket=BUCKET, key=f"out/corr_{name}.parquet")
     result = eng.run(ordini, ops, dest, use_cache=False)
     assert result.rows_written == 7
     import os as _os
@@ -767,7 +799,7 @@ def test_run_output_matches_preview_and_keeps_types(storage, ordini, clienti, na
     fd, path = tempfile.mkstemp(suffix=".parquet")
     _os.close(fd)
     try:
-        storage.download_file("data-prep", dest.key, path)
+        storage.download_file(BUCKET, dest.key, path)
         out = pl.read_parquet(path)
     finally:
         _os.unlink(path)

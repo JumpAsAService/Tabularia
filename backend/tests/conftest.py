@@ -14,7 +14,11 @@ from app.engine.cache import StepCache
 from app.engine.polars_engine import PolarsEngine
 from tests.fakes import FakeRedis, FakeStorage
 
-BUCKET = "data-prep"
+import os
+
+# Il bucket dei test e' finto (FakeStorage) tranne nelle suite LIVE, dove i
+# parquet vanno sullo storage vero: allora e' quello configurato.
+BUCKET = os.getenv("TEST_BUCKET") or "data-prep"
 
 
 @pytest.fixture

@@ -69,11 +69,17 @@ def plan_hashes(source_id: str, operations: list[dict]) -> list[str]:
 
 
 class StepCache:
-    def __init__(self, storage, redis_client=None):
+    def __init__(self, storage, redis_client=None, namespace: str = ""):
         settings = get_settings()
         self.storage = storage
         self.bucket = settings.storage.bucket
         self.redis = redis_client or redis.Redis.from_url(settings.redis.url, decode_responses=True)
+        # `namespace`: un indice SEPARATO per le cache che non stanno nello
+        # storage (BigQuery: tabelle native). Lo sweep dell'indice comune non
+        # deve vederle, o le scarterebbe come orfane (nessun parquet).
+        suffix = f":{namespace}" if namespace else ""
+        self.index_set = INDEX_SET + suffix
+        self.atime_zset = ATIME_ZSET + suffix if not namespace else f"{INDEX_SET}{suffix}:atime"
 
     def object_key(self, h: str) -> str:
         """Chiave storage del parquet materializzato per l'hash `h`."""
@@ -99,30 +105,30 @@ class StepCache:
         """Toglie una voce dall'indice (SET + ZSET) senza toccare lo storage:
         per le voci ORFANE, il cui blob non esiste più."""
         try:
-            self.redis.srem(INDEX_SET, h)
-            self.redis.zrem(ATIME_ZSET, h)
+            self.redis.srem(self.index_set, h)
+            self.redis.zrem(self.atime_zset, h)
         except redis.RedisError:
             pass
 
     def has(self, h: str) -> bool:
         """Solo presenza nell'indice (nessun effetto collaterale)."""
         try:
-            return bool(self.redis.sismember(INDEX_SET, h))
+            return bool(self.redis.sismember(self.index_set, h))
         except redis.RedisError:
             return False  # cache non raggiungibile → trattala come vuota
 
     def mark(self, h: str) -> None:
         """Registra un hash appena materializzato e ne segna l'accesso."""
         try:
-            self.redis.sadd(INDEX_SET, h)
-            self.redis.zadd(ATIME_ZSET, {h: time.time()})
+            self.redis.sadd(self.index_set, h)
+            self.redis.zadd(self.atime_zset, {h: time.time()})
         except redis.RedisError:
             pass
 
     def touch(self, h: str) -> None:
         """Aggiorna il timestamp di ultimo accesso (chiamato quando si USA la cache)."""
         try:
-            self.redis.zadd(ATIME_ZSET, {h: time.time()})
+            self.redis.zadd(self.atime_zset, {h: time.time()})
         except redis.RedisError:
             pass
 
@@ -172,12 +178,12 @@ class StepCache:
         vengono rimosse.
         """
         now = time.time()
-        in_set = set(self.redis.smembers(INDEX_SET))
-        in_zset = set(self.redis.zrange(ATIME_ZSET, 0, -1))
+        in_set = set(self.redis.smembers(self.index_set))
+        in_zset = set(self.redis.zrange(self.atime_zset, 0, -1))
         for h in in_set - in_zset:
-            self.redis.zadd(ATIME_ZSET, {h: now})
+            self.redis.zadd(self.atime_zset, {h: now})
         for h in in_zset - in_set:
-            self.redis.zrem(ATIME_ZSET, h)
+            self.redis.zrem(self.atime_zset, h)
 
     def evict_expired(self, ttl_seconds: int) -> int:
         """
@@ -191,16 +197,16 @@ class StepCache:
         try:
             self._reconcile()
             cutoff = time.time() - ttl_seconds
-            expired = self.redis.zrangebyscore(ATIME_ZSET, "-inf", cutoff)
-            alive = [h for h in self.redis.zrangebyscore(ATIME_ZSET, cutoff, "+inf")]
+            expired = self.redis.zrangebyscore(self.atime_zset, "-inf", cutoff)
+            alive = [h for h in self.redis.zrangebyscore(self.atime_zset, cutoff, "+inf")]
         except redis.RedisError:
             return 0
 
         for h in expired:
             # delete_object è idempotente (S3): nessun errore se il blob non c'è
             self.storage.delete_object(self.bucket, self.object_key(h))
-            self.redis.srem(INDEX_SET, h)
-            self.redis.zrem(ATIME_ZSET, h)
+            self.redis.srem(self.index_set, h)
+            self.redis.zrem(self.atime_zset, h)
 
         orphans = [h for h in alive if not self.blob_exists(h)]
         for h in orphans:
@@ -216,13 +222,13 @@ class StepCache:
     def clear(self) -> int:
         """Svuota tutta la cache (blob + indici). Ritorna quante voci rimosse."""
         try:
-            hashes = self.redis.smembers(INDEX_SET)
+            hashes = self.redis.smembers(self.index_set)
         except redis.RedisError:
             return 0
         for h in hashes:
             self.storage.delete_object(self.bucket, self.object_key(h))
         try:
-            self.redis.delete(INDEX_SET, ATIME_ZSET)
+            self.redis.delete(self.index_set, self.atime_zset)
         except redis.RedisError:
             pass
         return len(hashes)

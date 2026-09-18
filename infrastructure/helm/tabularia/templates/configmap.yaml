@@ -12,6 +12,7 @@ metadata:
 data:
   APP__ENV_NAME: {{ .Values.app.envName | quote }}
   APP__TIMEZONE: {{ .Values.app.timezone | quote }}
+  PREVIEW__DEFAULT_SAMPLE_ROWS: {{ .Values.app.previewDefaultSampleRows | default 0 | quote }}
 
   # Broker and step-cache index
   REDIS__HOST: {{ required "externalServices.redis.host is required" .Values.externalServices.redis.host | quote }}
@@ -107,4 +108,12 @@ data:
   # query, so they never reach the server's query_log.
   CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION: {{ . | quote }}
 {{- end }}
+{{- end }}
+
+{{- if .Values.externalServices.bigquery.enabled }}
+  # Optional engine: transformations run on Google BigQuery, reading the parquet
+  # files from the (GCS) bucket as temporary external tables.
+  BIGQUERY__PROJECT: {{ required "externalServices.bigquery.project is required when enabled" .Values.externalServices.bigquery.project | quote }}
+  BIGQUERY__LOCATION: {{ .Values.externalServices.bigquery.location | quote }}
+  BIGQUERY__MAXIMUM_BYTES_BILLED: {{ .Values.externalServices.bigquery.maximumBytesBilled | quote }}
 {{- end }}
