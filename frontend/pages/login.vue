@@ -128,7 +128,7 @@ async function onSubmit() {
             <EyeOff v-if="showPassword" :size="16" /><Eye v-else :size="16" />
           </button>
         </div>
-        <p v-if="capsLock" id="login-caps" class="hint"><ArrowUp :size="13" /> {{ $t('login.capsLock') }}</p>
+        <p v-if="capsLock" id="login-caps" class="hint" role="status"><ArrowUp :size="13" /> {{ $t('login.capsLock') }}</p>
       </div>
 
       <p v-if="error" class="err" role="alert"><CircleAlert :size="15" /> <span>{{ error }}</span></p>

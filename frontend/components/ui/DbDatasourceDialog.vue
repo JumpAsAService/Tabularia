@@ -49,19 +49,23 @@ const spFiles = ref<{ path: string; size: number }[] | null>(null)
 const spTotal = ref(0)
 const spChecking = ref(false)
 const spError = ref('')
+let spSeq = 0 // solo l'ULTIMO controllo scrive: due Invio di fila non si sovrappongono
 async function checkFiles() {
-  if (connectionId.value == null || !spPath.value.trim()) return
+  if (connectionId.value == null || !spPath.value.trim() || spChecking.value) return
+  const seq = ++spSeq
+  const path = spPath.value.trim()
   spChecking.value = true
   spError.value = ''
   spFiles.value = null
   try {
-    const res = await connApi.sharepointFiles(connectionId.value, spPath.value.trim())
+    const res = await connApi.sharepointFiles(connectionId.value, path)
+    if (seq !== spSeq || path !== spPath.value.trim()) return
     spFiles.value = res.files
     spTotal.value = res.total
   } catch (e) {
-    spError.value = errMessage(e)
+    if (seq === spSeq) spError.value = errMessage(e)
   } finally {
-    spChecking.value = false
+    if (seq === spSeq) spChecking.value = false
   }
 }
 watch(spPath, () => { spFiles.value = null; spError.value = '' })
@@ -86,6 +90,8 @@ watch(
     spSheet.value = ''
     spFiles.value = null
     spError.value = ''
+    spChecking.value = false
+    spSeq++
     tables.value = []
     tablesError.value = ''
     if (connectionId.value != null && !isSp.value) loadTables(connectionId.value)

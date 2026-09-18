@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isSuperseded } from '~/composables/usePreviewSlots'
 import { reactive, computed, watch, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info, X, Calendar, Play, GripVertical, Search } from 'lucide-vue-next'
@@ -205,8 +206,8 @@ async function loadDistinct(column: string) {
     const vals = await props.fetchDistinct(column)
     distinctCache.set(column, vals)
     distinctValues.value = vals
-  } catch {
-    distinctValues.value = []
+  } catch (e) {
+    if (!isSuperseded(e)) distinctValues.value = []
   } finally {
     distinctLoading.value = false
   }

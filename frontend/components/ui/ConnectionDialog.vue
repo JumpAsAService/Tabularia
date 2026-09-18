@@ -128,8 +128,23 @@ const incomplete = computed(
     !name.value.trim() ||
     (!isS3.value && !host.value.trim()) ||
     (isSmtp.value && !fromAddress.value.trim()) ||
-    (isSp.value && (!username.value.trim() || !database.value.trim())),
+    (isSp.value && (!username.value.trim() || !database.value.trim())) ||
+    // una SharePoint nuova senza secret si salverebbe e fallirebbe a ogni import
+    (isSp.value && !isEdit.value && !password.value),
 )
+
+// cambiando tipo, i campi che l'altro tipo non mostra non devono viaggiare nel
+// draft (porta e schema di un Postgres dentro una SharePoint, il tenant come
+// database di un Postgres)
+watch(dbType, (nuovo, vecchio) => {
+  if (!vecchio || nuovo === vecchio) return
+  if (nuovo === 'sharepoint' || vecchio === 'sharepoint') {
+    port.value = ''
+    dbSchema.value = ''
+    database.value = ''
+    library.value = ''
+  }
+})
 
 // ── Test connection ──────────────────────────────────────────────────────────
 const testing = ref(false)

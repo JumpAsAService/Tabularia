@@ -84,22 +84,40 @@ const ingestRuns = ref<Record<number, RunInfo>>({})
 let pollToken = 0
 onUnmounted(() => { pollToken++ })
 
+// il source_ref di SharePoint e' JSON {path, sheet}: in tooltip si mostra leggibile
+function sourceLabel(d: DatasourceInfo): string {
+  if (d.source_type !== 'sharepoint') return d.source_ref ?? ''
+  try { const r = JSON.parse(d.source_ref ?? '{}'); return `${r.path} · ${r.sheet}` } catch { return d.source_ref ?? '' }
+}
 const isTerminal = (r: RunInfo) => r.status === 'SUCCESS' || r.status === 'FAILURE'
 const isImporting = (id: number) => !!ingestRuns.value[id] && !isTerminal(ingestRuns.value[id])
 
-async function pollIngest(dsId: number, token: number) {
+// `restored`: poll riagganciato dal flag del server, non da un click. Se l'ultimo
+// run e' gia' terminale non si ricarica la pagina: la ricarica farebbe ripartire
+// il watch → altro poll → altra ricarica, senza fine.
+async function pollIngest(dsId: number, token: number, restored = false) {
   try {
     const runs = await dsApi.listRuns(dsId)
     if (token !== pollToken) return
     const last = runs[0]
-    if (!last) return
+    if (!last) { forgetPlaceholder(dsId); return }
     ingestRuns.value = { ...ingestRuns.value, [dsId]: last }
     if (!isTerminal(last)) {
       setTimeout(() => { if (token === pollToken) pollIngest(dsId, token) }, 2500)
-    } else if (last.status === 'SUCCESS') {
+    } else if (last.status === 'SUCCESS' && !restored) {
       await load() // snapshot aggiornato: ricarica la pagina
     }
-  } catch { /* riproverà al prossimo refresh manuale */ }
+  } catch {
+    // il segnaposto messo dal watch non deve restare appeso: altrimenti spinner
+    // per sempre e bottone di refresh disabilitato
+    forgetPlaceholder(dsId)
+  }
+}
+function forgetPlaceholder(dsId: number) {
+  if (ingestRuns.value[dsId]?.id == null) {
+    const { [dsId]: _gone, ...rest } = ingestRuns.value
+    ingestRuns.value = rest
+  }
 }
 
 // Lo stato "sta importando" non può vivere solo qui: un refresh da cinque minuti
@@ -109,7 +127,7 @@ watch(items, (list) => {
   for (const d of list) {
     if (d.refreshing && !isImporting(d.id)) {
       ingestRuns.value = { ...ingestRuns.value, [d.id]: { status: 'STARTED' } as RunInfo }
-      pollIngest(d.id, pollToken)
+      pollIngest(d.id, pollToken, true)
     }
   }
 }, { immediate: true })
@@ -179,7 +197,7 @@ async function saveSchedule(cron: string) {
         <div class="ds-row">
           <button class="ds-head" @click="toggle(d)">
             <ChevronRight :size="14" class="chev" :class="{ rot: expanded === d.id }" />
-            <span class="dname" :title="d.source_ref ?? ''">
+            <span class="dname" :title="sourceLabel(d)">
               <Database :size="14" /> {{ d.name }}
               <span v-if="d.kind === 'database'" class="tag">{{ $t('datasources.tagDb') }}</span>
               <span v-else-if="d.kind === 'flow'" class="tag">{{ $t('datasources.tagFlow') }}</span>

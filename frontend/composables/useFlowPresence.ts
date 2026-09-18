@@ -22,8 +22,10 @@ export function useFlowPresence(flowId: Ref<number | null>) {
   let timer: ReturnType<typeof setTimeout> | null = null
   let current: number | null = null
   let every = 15
+  let stopped = false // dopo lo smontaggio nessun battito deve piu' partire
 
   async function beat() {
+    if (stopped) return
     const id = flowId.value
     if (id == null || document.hidden) return schedule() // scheda nascosta: niente traffico, si lascia scadere
     try {
@@ -42,6 +44,9 @@ export function useFlowPresence(flowId: Ref<number | null>) {
   }
   function schedule() {
     if (timer) clearTimeout(timer)
+    // un beat() in volo allo smontaggio risolve DOPO: senza questo rimetterebbe
+    // il timer e la presenza continuerebbe per tutta la sessione
+    if (stopped) return
     timer = setTimeout(beat, every * 1000)
   }
   function leave(id: number | null) {
@@ -50,6 +55,7 @@ export function useFlowPresence(flowId: Ref<number | null>) {
     apiFetch(`/flows/${id}/presence/${instance}`, { method: 'DELETE', keepalive: true }).catch(() => {})
   }
   const onVisible = () => { if (!document.hidden) beat() }
+  const onPageHide = () => leave(current)
 
   watch(flowId, (id) => {
     if (current !== null && current !== id) leave(current)
@@ -60,11 +66,15 @@ export function useFlowPresence(flowId: Ref<number | null>) {
 
   if (import.meta.client) {
     document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('pagehide', () => leave(current))
+    window.addEventListener('pagehide', onPageHide)
   }
   onBeforeUnmount(() => {
+    stopped = true
     if (timer) clearTimeout(timer)
-    if (import.meta.client) document.removeEventListener('visibilitychange', onVisible)
+    if (import.meta.client) {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pagehide', onPageHide)
+    }
     leave(current)
   })
 

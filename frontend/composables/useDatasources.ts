@@ -19,7 +19,7 @@ export interface DatasourceInfo {
   kind: string
   flow_id: number | null
   connection_id: number | null
-  source_type: 'table' | 'sql' | null
+  source_type: 'table' | 'sql' | 'sharepoint' | null
   source_ref: string | null
   refreshed_at: string | null
   refreshing?: boolean // un ingest è in corso ORA (lo dice il server)

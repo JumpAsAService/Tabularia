@@ -22,8 +22,9 @@ type PreviewBody = Parameters<ReturnType<typeof useApi>['preview']>[0]
 export function isSuperseded(e: any): boolean {
   const code = e?.response?.status ?? e?.statusCode
   if (code === 409) return true
-  const name = e?.name ?? e?.cause?.name
-  return name === 'AbortError' || /abort/i.test(String(e?.cause?.message ?? e?.message ?? ''))
+  // ofetch avvolge sempre in un FetchError con un suo `name`: l'AbortError sta in `cause`
+  if (e?.name === 'AbortError' || e?.cause?.name === 'AbortError') return true
+  return /abort/i.test(String(e?.cause?.message ?? e?.message ?? ''))
 }
 
 function makeId(): string {
@@ -49,11 +50,17 @@ export function usePreviewSlots(scope: string) {
     })
   }
 
+  /** Annulla la richiesta in volo di UN solo slot (es. la preview di un nodo cancellato). */
+  function cancel(slot: string) {
+    inflight.get(slot)?.abort()
+    inflight.delete(slot)
+  }
+
   /** Alla chiusura della pagina: niente lavoro orfano sul server. */
   function cancelAll() {
     for (const ctl of inflight.values()) ctl.abort()
     inflight.clear()
   }
 
-  return { preview, cancelAll }
+  return { preview, cancel, cancelAll }
 }

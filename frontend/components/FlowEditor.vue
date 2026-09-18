@@ -150,8 +150,13 @@ const dataApi = api
 // Quattro slot per editor — anteprima, colonne, valori distinti, grafico: in
 // ognuno una richiesta nuova butta giu' la precedente (vedi usePreviewSlots).
 const previewSlots = usePreviewSlots('ed')
-onUnmounted(() => previewSlots.cancelAll())
-const apiPreview = (body: Parameters<typeof api.preview>[0], slot?: 'preview' | 'cols' | 'values' | 'chart') =>
+onUnmounted(() => {
+  // anche un refresh fermo nei 180 ms di attesa non deve piu' partire
+  previewSeq++
+  columnsSeq++
+  previewSlots.cancelAll()
+})
+const apiPreview = (body: Parameters<typeof api.preview>[0], slot?: 'preview' | 'cols' | 'chart' | `values:${string}`) =>
   previewSlots.preview({ ...body, engine: flowEngine.value }, slot)
 const apiTransform = (body: Parameters<typeof api.transform>[0]) =>
   dataApi.transform({ ...body, engine: flowEngine.value })
@@ -632,6 +637,11 @@ function previewSelected() {
 function deleteSelected() {
   const id = selectedId.value
   if (!id) return
+  // la preview e le colonne del nodo che sparisce non devono piu' scrivere nulla
+  previewSeq++
+  columnsSeq++
+  previewSlots.cancel('preview')
+  previewSlots.cancel('cols')
   // un container foreach porta via anche i figli (il corpo del ciclo)
   const node = findNode(id)
   if (node?.type === 'foreach') {
@@ -718,9 +728,15 @@ async function refreshForNode(nodeId: string) {
   try {
     const cols = leftId ? await ensureColumns(leftId) : []
     if (colSeq === columnsSeq) inputColumns.value = cols
-  } catch {
-    if (colSeq === columnsSeq) inputColumns.value = []
+  } catch (e) {
+    // "superata" = un refresh piu' nuovo ha annullato questa richiesta: non e'
+    // "nessuna colonna", e' "non tocca piu' a me"
+    if (colSeq === columnsSeq && !isSuperseded(e)) inputColumns.value = []
   }
+  // Superato mentre aspettavo: STOP. Ogni richiesta in piu' di questo refresh
+  // vecchio annullerebbe (stesso slot) quella del refresh nuovo, che resterebbe
+  // senza colonne.
+  if (colSeq !== columnsSeq) return
 
   // placeholder disponibili per i nodi dentro un container: colonne del driver
   // (input in alto del container) o chiavi della prima iterazione statica
@@ -730,14 +746,16 @@ async function refreshForNode(nodeId: string) {
     try {
       if (drvId) {
         const ph = (await ensureColumns(drvId)).map((c) => c.name)
-        if (colSeq === columnsSeq) placeholders.value = ph
+        if (colSeq !== columnsSeq) return
+        placeholders.value = ph
       } else {
         const items = container?.data?.params?.items ?? []
         if (colSeq === columnsSeq) placeholders.value = Object.keys(items[0] ?? {})
       }
-    } catch {
-      if (colSeq === columnsSeq) placeholders.value = []
+    } catch (e) {
+      if (colSeq === columnsSeq && !isSuperseded(e)) placeholders.value = []
     }
+    if (colSeq !== columnsSeq) return
   } else if (colSeq === columnsSeq) {
     placeholders.value = []
   }
@@ -749,9 +767,10 @@ async function refreshForNode(nodeId: string) {
     try {
       const right = rightId ? await ensureColumns(rightId) : []
       if (colSeq === columnsSeq) rightColumns.value = right
-    } catch {
-      if (colSeq === columnsSeq) rightColumns.value = []
+    } catch (e) {
+      if (colSeq === columnsSeq && !isSuperseded(e)) rightColumns.value = []
     }
+    if (colSeq !== columnsSeq) return
   } else if (colSeq === columnsSeq) {
     rightColumns.value = []
   }
@@ -770,11 +789,15 @@ async function refreshForNode(nodeId: string) {
 let previewSeq = 0 // solo l'ULTIMA preview lanciata scrive risultato e spegne lo skeleton
 async function runPreview(nodeId: string) {
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
+  // il seq avanza SEMPRE: anche una preview che non parte deve invalidare quella
+  // vecchia ancora in volo, o questa scriverebbe il suo risultato sul nodo nuovo
+  const seq = ++previewSeq
   if (!sourceNode?.data?.parquetKey) {
+    previewSlots.cancel('preview')
     preview.value = null
+    previewLoading.value = false
     return
   }
-  const seq = ++previewSeq
   const t0 = performance.now()
   previewError.value = ''
   previewLoading.value = true
@@ -830,7 +853,7 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
       { type: 'limit', params: { n: 200 } },
     ],
     limit: 200,
-  }, 'values')
+  }, `values:${column}`)
   return res.rows.map((r) => r[column]).filter((v) => v !== null)
 }
 

@@ -35,7 +35,9 @@ const warehouse = ref<WarehousePerf | null>(null)
 const loading = ref(false)
 const error = ref('')
 
+let loadSeq = 0 // solo l'ultimo caricamento scrive: un cambio di finestra non fa vincere la risposta vecchia
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   error.value = ''
   // le tre fonti sono indipendenti: una che non risponde non spegne le altre
@@ -44,6 +46,7 @@ async function load() {
     apiFetch<PreviewsPerf>('/admin/performance/previews?limit=15'),
     apiFetch<WarehousePerf>(`/admin/performance/warehouse?minutes=${minutes.value}&limit=15`),
   ])
+  if (seq !== loadSeq) return
   if (r.status === 'fulfilled') runs.value = r.value; else error.value = errMessage(r.reason)
   if (p.status === 'fulfilled') previews.value = p.value; else error.value ||= errMessage(p.reason)
   if (w.status === 'fulfilled') warehouse.value = w.value; else error.value ||= errMessage(w.reason)
@@ -53,7 +56,13 @@ onMounted(load)
 watch([days, minutes], load)
 
 const nf = new Intl.NumberFormat('it-IT')
-const secs = (s: number | null | undefined) => s == null ? '—' : s < 1 ? `${Math.round(s * 1000)} ms` : s < 90 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`
+const secs = (s: number | null | undefined) => {
+  if (s == null) return '—'
+  if (s < 1) return `${Math.round(s * 1000)} ms`
+  if (s < 90) return `${s.toFixed(1)} s`
+  const tot = Math.round(s) // prima si arrotonda, poi si spezza: mai "1 min 60 s"
+  return `${Math.floor(tot / 60)} min ${tot % 60} s`
+}
 const ms = (v: number | null | undefined) => (v == null ? '—' : secs(v / 1000))
 const bytes = (b: number) => b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b > 1e6 ? `${(b / 1e6).toFixed(0)} MB` : `${Math.round(b / 1e3)} KB`
 const time = (iso: string | number) => new Date(typeof iso === 'number' ? iso * 1000 : iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })

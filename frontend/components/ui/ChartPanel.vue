@@ -107,9 +107,13 @@ async function refresh() {
   const seq = ++refreshSeq
   error.value = ''
   droppedSeries.value = 0
-  if (!xCol.value) return
-  if (needsY.value && !yCol.value) return
-  if (isScatter.value && (!xNumCol.value || !yNumCol.value)) return
+  if (!xCol.value || (needsY.value && !yCol.value) || (isScatter.value && (!xNumCol.value || !yNumCol.value))) {
+    // configurazione incompleta: la query in volo (se c'e') ha un seq vecchio e non
+    // spegnerebbe piu' lo spinner — si spegne qui, e le righe non restano stantie
+    loading.value = false
+    rows.value = []
+    return
+  }
   loading.value = true
   try {
     const by = supportsBy.value && byCol.value ? [byCol.value] : []
