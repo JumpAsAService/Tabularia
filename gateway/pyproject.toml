@@ -1,6 +1,6 @@
 [project]
 name = "gateway"
-version = "0.1.0"
+version = "1.0.0"
 description = "Tabularia control plane: auth, utenti/gruppi, progetti/permessi, proxy verso l'engine"
 readme = "README.md"
 requires-python = ">=3.12"

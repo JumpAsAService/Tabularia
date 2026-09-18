@@ -18,7 +18,7 @@ get_settings().check_required_secrets()
 app = FastAPI(
     title="Data Prep API",
     description="API per Data Preparation Tool",
-    version="0.1.0",
+    version="1.0.0",
 )
 
 app.add_middleware(

@@ -27,7 +27,10 @@ defineProps<{ fluid?: boolean }>()
 
 const { t } = useI18n()
 const { user, fetchMe, logout } = useAuth()
+const api = useApi()
 const { theme, setTheme } = useTheme()
+// nome e versione dal gateway: e' la release che gira davvero, non quella del bundle
+const appInfo = ref<{ name: string; version: string } | null>(null)
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
 const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
@@ -79,6 +82,7 @@ const links = computed(() => [
 
 onMounted(async () => {
   if (!user.value) await fetchMe()
+  try { appInfo.value = await api.appInfo() } catch { /* solo cosmetico */ }
 })
 </script>
 
@@ -163,6 +167,7 @@ onMounted(async () => {
             <button class="menu-item" @click="closeMenu(); logout()">
               <LogOut :size="14" /> {{ t('settings.signOut') }}
             </button>
+            <div v-if="appInfo" class="menu-version">{{ appInfo.name }} {{ appInfo.version }}</div>
           </div>
         </template>
       </div>
@@ -254,6 +259,7 @@ onMounted(async () => {
   padding: 1px 6px;
 }
 .menu-sep { height: 1px; background: var(--border-soft); margin: 2px 0; }
+.menu-version { padding: 6px 6px 2px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .menu-label { font-size: 11px; color: var(--muted); padding: 0 6px; }
 .menu-hint { font-size: 10.5px; color: var(--muted); padding: 0 6px; line-height: 1.35; opacity: 0.85; }
 .engpref { width: 100%; }

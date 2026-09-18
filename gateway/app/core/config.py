@@ -203,7 +203,7 @@ class MonitoringSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
     name: str = "Tabularia"
-    version: str = "0.1.0"
+    version: str = "1.0.0"  # la release: esposta da /system/info e nel menu dell'app
     env_name: str = "development"
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
