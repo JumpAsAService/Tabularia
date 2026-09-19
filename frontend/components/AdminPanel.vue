@@ -6,22 +6,28 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  CheckCircle2, Cpu, Plus, Search, Shield, Trash2, TriangleAlert,
-  User as UserIcon, Users as UsersIcon, X, XCircle,
+  CheckCircle2, Cpu, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
+  User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type GroupOut, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
 import { useEnginePolicy, type EnginePolicy } from '~/composables/useEnginePolicy'
+import { useAi, type AiModel } from '~/composables/useAi'
 
 const api = useProjects()
 const bannersApi = useBanners()
 const engineApi = useEnginePolicy()
+const aiApi = useAi()
+// modelli AI: catalogo del provider + scelta dell'amministratore. `null` =
+// assistente non configurato o provider irraggiungibile (la sezione lo dice)
+const modelli = ref<AiModel[] | null>(null)
+const modelliErrore = ref('')
 const toast = useToast()
 const { user: me } = useAuth()
 const { t } = useI18n()
 
-type Sezione = 'users' | 'groups' | 'banners' | 'engines'
+type Sezione = 'users' | 'groups' | 'banners' | 'engines' | 'ai'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
@@ -59,6 +65,8 @@ const sezioni = computed(() => [
   // il conteggio è quanti motori sono CONSENTITI: è il numero che descrive lo
   // stato dell'installazione, non quanti ne esistono
   { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
+  // quanti modelli sono ABILITATI: zero = l'assistente non e' usabile da nessuno
+  { id: 'ai' as Sezione, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (modelli.value ?? []).filter((m) => m.enabled).length },
 ])
 
 // stessa convenzione delle altre pagine: formattatore locale, tollerante
@@ -88,6 +96,14 @@ async function loadAll() {
     motori.value = await engineApi.list()
   } catch (e) {
     toast.error(errMessage(e))
+  }
+  // a parte: l'assistente puo' non essere configurato, e non e' un errore del pannello
+  try {
+    modelli.value = await aiApi.models()
+    modelliErrore.value = ''
+  } catch (e) {
+    modelli.value = null
+    modelliErrore.value = errMessage(e)
   }
 }
 onMounted(loadAll)
@@ -125,6 +141,22 @@ async function toggleActive(u: UserOut) {
   }
 }
 
+// Admin PERSONALE. Chi lo è già tramite un gruppo resta admin anche senza: per
+// questo l'interruttore su sé stessi è fermo solo quando nessun gruppo lo copre
+// (il server lo rifiuterebbe comunque: non ci si chiude fuori da soli).
+const selfLockout = (u: UserOut) => u.id === me.value?.id && u.is_superuser && !u.admin_groups.length
+
+async function toggleAdmin(u: UserOut) {
+  if (!u.is_superuser && !confirm(t('adminPanel.confirmPromoteUser', { email: u.email }))) return
+  try {
+    await api.updateUser(u.id, { is_superuser: !u.is_superuser })
+    toast.success(t(u.is_superuser ? 'adminPanel.userDemoted' : 'adminPanel.userPromoted', { email: u.email }))
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
 async function deleteUser(u: UserOut) {
   if (!confirm(t('adminPanel.confirmDeleteUser', { email: u.email }))) return
   try {
@@ -146,6 +178,18 @@ async function createGroup() {
     await api.createGroup({ ...ng.value })
     toast.success(t('adminPanel.groupCreated', { name: ng.value.name }))
     ng.value = { name: '', description: '' }
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+// Gruppo di amministratori: tutti i membri, presenti e futuri, sono admin
+async function toggleGroupAdmin(g: GroupOut) {
+  if (!g.is_admin && !confirm(t('adminPanel.confirmPromoteGroup', { name: g.name, n: g.member_count }))) return
+  try {
+    await api.updateGroup(g.id, { is_admin: !g.is_admin })
+    toast.success(t(g.is_admin ? 'adminPanel.groupDemoted' : 'adminPanel.groupPromoted', { name: g.name }))
     await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
@@ -218,6 +262,17 @@ function etichettaLivello(l: string): string {
   return t(`banners.level${l.charAt(0).toUpperCase()}${l.slice(1)}`)
 }
 
+// ── modelli AI ──────────────────────────────────────────────────────────────
+async function toggleModello(m: AiModel) {
+  try {
+    const aggiornato = await aiApi.setModel(m.model_id, !m.enabled)
+    modelli.value = (modelli.value ?? []).map((x) => (x.model_id === aggiornato.model_id ? aggiornato : x))
+    toast.success(t(aggiornato.enabled ? 'adminPanel.aiModelEnabled' : 'adminPanel.aiModelDisabled', { model: m.model_id }))
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
 // ── motori ──────────────────────────────────────────────────────────────────
 async function toggleMotore(m: EnginePolicy) {
   try {
@@ -286,12 +341,17 @@ async function toggleMotore(m: EnginePolicy) {
                     <td>
                       {{ u.email }}
                       <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
+                      <span
+                        v-else-if="u.admin_groups.length"
+                        class="tag via"
+                        :title="$t('adminPanel.adminViaGroupTitle', { groups: u.admin_groups.join(', ') })"
+                      >{{ $t('adminPanel.adminViaGroupTag', { group: u.admin_groups[0] }) }}</span>
                       <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
                       <span v-if="u.sso_only" class="tag sso">{{ $t('adminPanel.ssoTag') }}</span>
                       <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
                     </td>
                     <td>
-                      <span v-for="g in u.groups" :key="g" class="chip">{{ g }}</span>
+                      <span v-for="g in u.groups" :key="g" class="chip" :class="{ adm: u.admin_groups.includes(g) }">{{ g }}</span>
                       <span v-if="!u.groups.length" class="muted small">—</span>
                     </td>
                     <td class="muted small nowrap">{{ quando(u.created_at) }}</td>
@@ -299,6 +359,14 @@ async function toggleMotore(m: EnginePolicy) {
                       {{ u.last_seen_at ? quando(u.last_seen_at) : $t('adminPanel.neverSeen') }}
                     </td>
                     <td class="right nowrap">
+                      <button
+                        class="mini"
+                        :class="{ on: u.is_superuser }"
+                        :aria-pressed="u.is_superuser"
+                        :disabled="selfLockout(u)"
+                        :title="selfLockout(u) ? $t('adminPanel.cannotDemoteSelf') : u.is_superuser ? $t('adminPanel.demoteUserTitle') : $t('adminPanel.promoteUserTitle')"
+                        @click="toggleAdmin(u)"
+                      ><ShieldCheck :size="13" /></button>
                       <button
                         class="mini"
                         :disabled="u.id === me?.id"
@@ -369,11 +437,19 @@ async function toggleMotore(m: EnginePolicy) {
                   >
                     <td>
                       {{ g.name }}
+                      <span v-if="g.is_admin" class="tag">{{ $t('adminPanel.adminTag') }}</span>
                       <div v-if="g.description" class="muted small">{{ g.description }}</div>
                     </td>
                     <td class="muted small">{{ g.member_count }}</td>
                     <td class="muted small nowrap">{{ quando(g.created_at) }}</td>
-                    <td class="right">
+                    <td class="right nowrap">
+                      <button
+                        class="mini"
+                        :class="{ on: g.is_admin }"
+                        :aria-pressed="g.is_admin"
+                        :title="g.is_admin ? $t('adminPanel.demoteGroupTitle') : $t('adminPanel.promoteGroupTitle')"
+                        @click.stop="toggleGroupAdmin(g)"
+                      ><ShieldCheck :size="13" /></button>
                       <button class="mini danger" :title="$t('adminPanel.deleteGroupTitle')" @click.stop="deleteGroup(g)">
                         <Trash2 :size="13" />
                       </button>
@@ -460,6 +536,45 @@ async function toggleMotore(m: EnginePolicy) {
                         @click="toggleMotore(m)"
                       >
                         <component :is="m.allowed ? CheckCircle2 : XCircle" :size="13" />
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+        <template v-else-if="sezione === 'ai'">
+          <div class="card">
+            <h4><Sparkles :size="14" /> {{ $t('adminPanel.aiTitle') }}</h4>
+            <p class="muted small hint">{{ $t('adminPanel.aiHint') }}</p>
+            <p v-if="modelli === null" class="muted small hint">{{ modelliErrore || $t('adminPanel.aiUnavailable') }}</p>
+            <div v-else class="tablewrap">
+              <table class="rows">
+                <thead>
+                  <tr>
+                    <th>{{ $t('adminPanel.colModel') }}</th>
+                    <th>{{ $t('adminPanel.colModelState') }}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="m in modelli" :key="m.model_id">
+                    <td>
+                      {{ m.model_id }}
+                      <span v-if="!m.chat" class="tag off">{{ $t('adminPanel.aiNotChatTag') }}</span>
+                      <span v-else-if="!m.available" class="tag off">{{ $t('adminPanel.aiGoneTag') }}</span>
+                    </td>
+                    <td class="small" :class="m.enabled ? '' : 'muted'">{{ m.enabled ? $t('adminPanel.aiEnabled') : $t('adminPanel.aiDisabled') }}</td>
+                    <td class="right">
+                      <button
+                        v-if="m.chat"
+                        class="mini"
+                        :title="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
+                        :aria-label="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
+                        @click="toggleModello(m)"
+                      >
+                        <component :is="m.enabled ? CheckCircle2 : XCircle" :size="13" />
                       </button>
                     </td>
                   </tr>
@@ -642,6 +757,10 @@ td.right { text-align: right; width: 80px; }
   margin-left: 6px;
 }
 .tag.off { color: var(--muted); }
+/* admin per appartenenza a un gruppo: stesso colore, ma tratteggiato — il
+   privilegio non è suo, è del gruppo */
+.tag.via { border-style: dashed; text-transform: none; letter-spacing: 0; }
+.chip.adm { border-color: var(--accent-hi); color: var(--accent-hi); }
 td.warn { color: var(--warning, #d08700); font-weight: 600; }
 .tag.sso { color: var(--muted); }
 .tag.info { color: var(--accent-hi, #4c8dff); }
@@ -651,6 +770,7 @@ td.warn { color: var(--warning, #d08700); font-weight: 600; }
 .chk input { width: auto; }
 button.mini { padding: 3px 8px; min-height: 24px; }
 button.mini + button.mini { margin-left: 4px; }
+.mini.on { border-color: var(--accent-hi); color: var(--accent-hi); background: var(--panel-2); }
 .mini.danger { border-color: var(--danger); color: var(--danger); }
 .mini.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
 .mini:disabled { opacity: 0.4; cursor: not-allowed; }

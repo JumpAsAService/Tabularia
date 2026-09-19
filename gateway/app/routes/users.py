@@ -1,5 +1,5 @@
 """Gestione utenti e appartenenza ai gruppi. Solo superuser."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
 
 from app.core.security import hash_password
@@ -7,6 +7,8 @@ from app.db.session import get_session
 from app.deps.auth import require_superuser
 from app.models import User, Group, UserGroupLink
 from app.schemas.models import UserOut, UserCreate, UserUpdate
+from app.services import audit
+from app.services.permissions import ensure_still_admin
 
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(require_superuser)])
 
@@ -23,7 +25,11 @@ def _group_names(session: Session) -> dict[int, list[str]]:
     return {k: sorted(v) for k, v in per_utente.items()}
 
 
-def _to_out(user: User, groups: list[str] | None = None) -> UserOut:
+def _admin_group_names(session: Session) -> set[str]:
+    return set(session.exec(select(Group.name).where(Group.is_admin == True)).all())  # noqa: E712
+
+
+def _to_out(user: User, groups: list[str] | None = None, admin_names: set[str] | None = None) -> UserOut:
     return UserOut(
         id=user.id,
         email=user.email,
@@ -35,17 +41,24 @@ def _to_out(user: User, groups: list[str] | None = None) -> UserOut:
         # nessuna password locale ⇒ l'account entra SOLO dall'IdP (vedi services/sso.py)
         sso_only=user.hashed_password is None,
         groups=groups or [],
+        admin_groups=[g for g in (groups or []) if g in (admin_names or set())],
     )
 
 
 @router.get("", response_model=list[UserOut])
 def list_users(session: Session = Depends(get_session)):
     per_utente = _group_names(session)
-    return [_to_out(u, per_utente.get(u.id, [])) for u in session.exec(select(User)).all()]
+    admin_names = _admin_group_names(session)
+    return [_to_out(u, per_utente.get(u.id, []), admin_names) for u in session.exec(select(User)).all()]
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def create_user(body: UserCreate, session: Session = Depends(get_session)):
+def create_user(
+    body: UserCreate,
+    request: Request = None,  # type: ignore[assignment]
+    session: Session = Depends(get_session),
+    current: User = Depends(require_superuser),
+):
     if session.exec(select(User).where(User.email == body.email)).first():
         raise HTTPException(status_code=409, detail="Email già registrata")
     user = User(
@@ -57,6 +70,12 @@ def create_user(body: UserCreate, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
+    if user.is_superuser:
+        audit.record_audit(
+            session, actor=current, action=audit.USER_PROMOTE, request=request,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail={"at_creation": True},
+        )
     return _to_out(user)  # appena creato: nessun gruppo ancora
 
 
@@ -68,8 +87,15 @@ def _get_user(session: Session, user_id: int) -> User:
 
 
 @router.patch("/{user_id}", response_model=UserOut)
-def update_user(user_id: int, body: UserUpdate, session: Session = Depends(get_session)):
+def update_user(
+    user_id: int,
+    body: UserUpdate,
+    request: Request = None,  # type: ignore[assignment]
+    session: Session = Depends(get_session),
+    current: User = Depends(require_superuser),
+):
     user = _get_user(session, user_id)
+    era_admin = user.is_superuser
     if body.full_name is not None:
         user.full_name = body.full_name
     if body.password is not None:
@@ -79,9 +105,19 @@ def update_user(user_id: int, body: UserUpdate, session: Session = Depends(get_s
     if body.is_superuser is not None:
         user.is_superuser = body.is_superuser
     session.add(user)
+    if user.id == current.id:
+        # togliersi il flag o disattivarsi: ammesso solo se si resta admin per
+        # un'altra via (un gruppo di amministratori)
+        ensure_still_admin(session, current)
     session.commit()
     session.refresh(user)
-    return _to_out(user, _group_names(session).get(user.id, []))
+    if user.is_superuser != era_admin:
+        audit.record_audit(
+            session, actor=current, request=request,
+            action=audit.USER_PROMOTE if user.is_superuser else audit.USER_DEMOTE,
+            target_type="user", target_id=user.id, target_label=user.email,
+        )
+    return _to_out(user, _group_names(session).get(user.id, []), _admin_group_names(session))
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -109,8 +145,14 @@ def delete_user(
     # è garantito — stessa lezione dei delete di flussi/progetti
     from sqlalchemy import delete as sa_delete, update as sa_update
 
-    from app.models import AuditLog, Connection, Datasource, Flow, Permission, Project, Run, Upload
+    from app.models import AiChat, AiChatTurn, AuditLog, Connection, Datasource, Flow, Permission, Project, Run, Upload
 
+    # le conversazioni con l'assistente sono personali: se ne vanno con l'account
+    # (prima i turni, che referenziano la chat)
+    chat_ids = [c.id for c in session.exec(select(AiChat).where(AiChat.user_id == user_id)).all()]
+    if chat_ids:
+        session.exec(sa_delete(AiChatTurn).where(AiChatTurn.chat_id.in_(chat_ids)))
+        session.exec(sa_delete(AiChat).where(AiChat.id.in_(chat_ids)))
     session.exec(sa_delete(Permission).where(Permission.user_id == user_id))
     session.exec(sa_delete(UserGroupLink).where(UserGroupLink.user_id == user_id))
     session.exec(sa_delete(Upload).where(Upload.owner_id == user_id))
@@ -132,19 +174,49 @@ def delete_user(
 
 
 @router.put("/{user_id}/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def add_to_group(user_id: int, group_id: int, session: Session = Depends(get_session)):
-    _get_user(session, user_id)
-    if session.get(Group, group_id) is None:
+def add_to_group(
+    user_id: int,
+    group_id: int,
+    request: Request = None,  # type: ignore[assignment]
+    session: Session = Depends(get_session),
+    current: User = Depends(require_superuser),
+):
+    user = _get_user(session, user_id)
+    group = session.get(Group, group_id)
+    if group is None:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     exists = session.get(UserGroupLink, (user_id, group_id))
     if exists is None:
         session.add(UserGroupLink(user_id=user_id, group_id=group_id))
         session.commit()
+        if group.is_admin:
+            # entrare in un gruppo admin È una promozione: deve restare traccia
+            audit.record_audit(
+                session, actor=current, action=audit.ADMIN_GROUP_JOIN, request=request,
+                target_type="user", target_id=user.id, target_label=user.email,
+                detail={"group": group.name},
+            )
 
 
 @router.delete("/{user_id}/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_from_group(user_id: int, group_id: int, session: Session = Depends(get_session)):
+def remove_from_group(
+    user_id: int,
+    group_id: int,
+    request: Request = None,  # type: ignore[assignment]
+    session: Session = Depends(get_session),
+    current: User = Depends(require_superuser),
+):
     link = session.get(UserGroupLink, (user_id, group_id))
     if link is not None:
+        group = session.get(Group, group_id)
+        user = session.get(User, user_id)
         session.delete(link)
+        if user_id == current.id:
+            ensure_still_admin(session, current)
         session.commit()
+        if group is not None and group.is_admin and user is not None:
+            audit.record_audit(
+                session, actor=current, action=audit.ADMIN_GROUP_LEAVE, request=request,
+                target_type="user", target_id=user.id, target_label=user.email,
+                detail={"group": group.name},
+            )

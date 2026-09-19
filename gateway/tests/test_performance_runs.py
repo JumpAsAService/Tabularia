@@ -68,7 +68,7 @@ def test_percentile_of_nothing_and_of_one():
 
 def test_it_is_for_admins_only(session):
     with pytest.raises(HTTPException) as e:
-        require_superuser(make_user(session, email="u@x.it"))
+        require_superuser(make_user(session, email="u@x.it"), session)
     assert e.value.status_code == 403
 
 
@@ -82,5 +82,5 @@ def test_deleting_a_group_that_holds_permissions_works(session):
     p = make_project(session, name="p")
     g = Group(name="g"); session.add(g); session.commit(); session.refresh(g)
     session.add(Permission(project_id=p.id, group_id=g.id, capability=Capability.VIEW)); session.commit()
-    delete_group(g.id, session)
+    delete_group(g.id, session=session, current=make_user(session, email="capo@x.it", is_superuser=True))
     assert session.get(Group, g.id) is None and session.query(Permission).count() == 0

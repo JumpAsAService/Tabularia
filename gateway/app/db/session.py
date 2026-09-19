@@ -109,6 +109,8 @@ _MIGRATIONS = [
     # devono collidere fra loro.
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_oidc_identity ON users (oidc_issuer, oidc_subject)"
     " WHERE oidc_subject IS NOT NULL",
+    # Gruppo di amministratori: i membri sono admin (services/permissions.is_admin)
+    "ALTER TABLE groups ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

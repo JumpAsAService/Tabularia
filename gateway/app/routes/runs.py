@@ -182,7 +182,7 @@ async def _launch_flow_run(
         "input_key": body.input_key,
         "operations": body.operations,
     }
-    ensure_reads_pinned(user, read_payload, engine_bucket)
+    ensure_reads_pinned(session, user, read_payload, engine_bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
 
     # publish con chiavi di ordinamento: ordina il RISULTATO prima di scriverlo,
@@ -930,7 +930,7 @@ def runs_activity(
     # solo esecuzioni di ALTO LIVELLO: gli output/refresh figli di
     # un'orchestrazione sono la stessa esecuzione contata più volte
     conds = [Run.started_at >= start_utc, Run.started_at < end_utc, Run.parent_run_id.is_(None)]
-    if not user.is_superuser:
+    if not perm_service.is_admin(session, user):
         readable = perm_service.readable_project_ids(session, user)
         conds.append(
             or_(
@@ -988,7 +988,7 @@ async def get_run(
         ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
         if ds is not None:
             ensure_can(session, user, ds.project_id, Capability.VIEW)
-        elif not (user.is_superuser or run.launched_by == user.id):
+        elif not (perm_service.is_admin(session, user) or run.launched_by == user.id):
             # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
             raise HTTPException(status_code=404, detail="Run non trovato")
     else:
@@ -1011,7 +1011,7 @@ def search_runs(
     error_detail (sul dataset intero, non solo sulla pagina). Sola lettura: mostra
     lo stato storico, NON riconcilia (una ricerca non deve avere effetti)."""
     conds = []
-    if not user.is_superuser:
+    if not perm_service.is_admin(session, user):
         readable = perm_service.readable_project_ids(session, user)
         conds.append(
             or_(

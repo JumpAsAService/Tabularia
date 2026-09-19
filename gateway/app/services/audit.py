@@ -37,6 +37,14 @@ CONN_CREATE = "connection.create"
 CONN_UPDATE = "connection.update"
 CONN_DELETE = "connection.delete"
 EXPORT_DOWNLOAD = "export.download"
+# Privilegi di amministratore: concessi/tolti a una persona o a un gruppo intero
+USER_PROMOTE = "user.promote"
+USER_DEMOTE = "user.demote"
+GROUP_PROMOTE = "group.promote"
+GROUP_DEMOTE = "group.demote"
+# Entrare/uscire da un gruppo ADMIN cambia i privilegi quanto una promozione
+ADMIN_GROUP_JOIN = "group.admin_join"
+ADMIN_GROUP_LEAVE = "group.admin_leave"
 PERM_GRANT = "permission.grant"
 PERM_REVOKE = "permission.revoke"
 # banner dell'Explore: cambiano ciò che vede TUTTA l'installazione
@@ -45,6 +53,11 @@ BANNER_DELETE = "banner.delete"
 # motori consentiti: cambiano ciò che TUTTA l'installazione può scegliere
 ENGINE_ALLOW = "engine.allow"
 ENGINE_DISALLOW = "engine.disallow"
+# assistente AI: quali modelli si possono usare, e ogni query che l'assistente
+# esegue sui dati per conto di un utente (e' un accesso ai dati come un export)
+AI_MODEL_ENABLE = "ai.model_enable"
+AI_MODEL_DISABLE = "ai.model_disable"
+AI_QUERY = "ai.query"
 # viste salvate (configurazioni del Viewer dentro una cartella). Prefisso
 # "saved_view" e non "view": `VIEW` è già il nome di una capability.
 # invio email dell'output di un run: è l'UNICA destinazione che manda dati fuori

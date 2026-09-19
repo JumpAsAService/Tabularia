@@ -46,4 +46,8 @@ class Group(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     description: str = ""
+    # Gruppo di amministratori: chi vi appartiene è admin finché vi appartiene
+    # (vedi services/permissions.is_admin). Il flag personale `User.is_superuser`
+    # resta e si somma: basta uno dei due.
+    is_admin: bool = False
     created_at: datetime = Field(default_factory=_now)

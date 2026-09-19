@@ -162,7 +162,7 @@ async def preview(
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
-    ensure_reads_pinned(user, payload, get_settings().engine.bucket)
+    ensure_reads_pinned(session, user, payload, get_settings().engine.bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(payload))
     raw = scope_preview_slot(raw, payload, user.id)
     return await _forward(request, "POST", "/tasks/preview", content=raw)
@@ -204,7 +204,7 @@ async def transform(
     payload["output_key"] = f"out/{uuid4().hex}.parquet"
     payload["bucket"] = payload.get("bucket") or engine_bucket
     # sorgenti vincolate al bucket dell'engine + prefissi gestiti (no letture arbitrarie)
-    ensure_reads_pinned(user, payload, engine_bucket)
+    ensure_reads_pinned(session, user, payload, engine_bucket)
     # autorizza le sole chiavi di LETTURA (l'output è generato dal server, non va autorizzato in lettura)
     read_payload = {k: v for k, v in payload.items() if k != "output_key"}
     ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
@@ -218,7 +218,7 @@ async def export(
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
-    ensure_reads_pinned(user, payload, get_settings().engine.bucket)
+    ensure_reads_pinned(session, user, payload, get_settings().engine.bucket)
     keys = collect_storage_keys(payload)
     ensure_can_read_keys(session, user, keys)
     # audit del download: chi scarica cosa (formato, file, sorgente, motore)

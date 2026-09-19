@@ -26,6 +26,8 @@ export interface UserOut {
   last_seen_at: string | null // ultima attività autenticata; null = mai entrato
   sso_only: boolean // nessuna password locale: entra solo dall'IdP
   groups: string[]
+  // is_superuser è il flag PERSONALE; qui i gruppi di amministratori che lo rendono admin comunque
+  admin_groups: string[]
 }
 
 export interface GroupOut {
@@ -34,6 +36,7 @@ export interface GroupOut {
   description: string
   created_at: string | null
   member_count: number
+  is_admin: boolean // i membri sono amministratori
 }
 
 export const CAPABILITIES = ['view', 'run', 'edit', 'connect', 'manage'] as const
@@ -72,6 +75,8 @@ export function useProjects() {
       userId: number,
       body: Partial<{ full_name: string; password: string; is_active: boolean; is_superuser: boolean }>,
     ) => apiFetch<UserOut>(`/users/${userId}`, { method: 'PATCH', body }),
+    updateGroup: (groupId: number, body: Partial<{ description: string; is_admin: boolean }>) =>
+      apiFetch<GroupOut>(`/groups/${groupId}`, { method: 'PATCH', body }),
     deleteGroup: (groupId: number) => apiFetch<void>(`/groups/${groupId}`, { method: 'DELETE' }),
   }
 }

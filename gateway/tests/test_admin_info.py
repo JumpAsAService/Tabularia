@@ -68,7 +68,10 @@ def test_last_seen_is_reported(session):
 
 
 def test_created_user_starts_without_groups(session):
-    out = create_user(body=UserCreate(email="nuovo@x.local", password="segretissima"), session=session)
+    capo = make_user(session, email="capo@x.local", is_superuser=True)
+    out = create_user(
+        body=UserCreate(email="nuovo@x.local", password="segretissima"), session=session, current=capo
+    )
     assert out.groups == [] and out.created_at is not None and out.sso_only is False
 
 
@@ -77,7 +80,8 @@ def test_update_user_keeps_reporting_groups(session):
     g = _gruppo(session, "analytics")
     _iscrivi(session, u.id, g.id)
 
-    out = update_user(user_id=u.id, body=UserUpdate(full_name="Nuovo Nome"), session=session)
+    capo = make_user(session, email="capo@x.local", is_superuser=True)
+    out = update_user(user_id=u.id, body=UserUpdate(full_name="Nuovo Nome"), session=session, current=capo)
     assert out.full_name == "Nuovo Nome" and out.groups == ["analytics"]
 
 

@@ -63,7 +63,12 @@ def get_current_user(
     return user
 
 
-def require_superuser(user: User = Depends(get_current_user)) -> User:
-    if not user.is_superuser:
+def require_superuser(
+    user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> User:
+    # admin EFFETTIVO: flag personale o gruppo di amministratori
+    from app.services.permissions import is_admin
+
+    if not is_admin(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi admin")
     return user

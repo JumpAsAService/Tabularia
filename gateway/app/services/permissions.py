@@ -12,13 +12,55 @@ alberi di progetti restano piccoli, quindi va benissimo.
 """
 from sqlmodel import Session, select
 
-from app.models import Project, Permission, User, UserGroupLink
+from app.models import Group, Project, Permission, User, UserGroupLink
 from app.models.permission import Capability, grant_satisfies
 
 
 def user_group_ids(session: Session, user: User) -> set[int]:
     rows = session.exec(select(UserGroupLink.group_id).where(UserGroupLink.user_id == user.id)).all()
     return set(rows)
+
+
+def admin_group_names(session: Session, user: User) -> list[str]:
+    """Gruppi di amministratori a cui l'utente appartiene (ordinati per nome)."""
+    righe = session.exec(
+        select(Group.name)
+        .where(UserGroupLink.group_id == Group.id)
+        .where(UserGroupLink.user_id == user.id)
+        .where(Group.is_admin == True)  # noqa: E712 — espressione SQL, non un confronto Python
+    ).all()
+    return sorted(righe)
+
+
+def is_admin(session: Session, user: User) -> bool:
+    """Admin EFFETTIVO: flag personale oppure appartenenza a un gruppo admin.
+
+    È l'unica domanda che il resto del gateway deve fare: leggere
+    `user.is_superuser` da solo ignorerebbe i gruppi. Non si scrive mai il
+    risultato sull'oggetto `user` — è una riga ORM e il primo commit della
+    richiesta (basta `last_seen`) renderebbe permanente un privilegio che deve
+    sparire quando si esce dal gruppo."""
+    if user.is_superuser:
+        return True
+    return bool(admin_group_names(session, user))
+
+
+def ensure_still_admin(session: Session, current: User) -> None:
+    """Da chiamare DOPO le modifiche e PRIMA del commit: se chi sta agendo non
+    sarebbe più un admin attivo, annulla tutto con un 409.
+
+    Una guardia sola copre ogni strada (togliersi il flag, disattivarsi, togliere
+    il flag al proprio gruppo, uscirne, eliminarlo) e garantisce anche che resti
+    sempre almeno un admin: chi agisce lo è, e lo resta."""
+    from fastapi import HTTPException
+
+    session.flush()
+    if not (current.is_active and is_admin(session, current)):
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Così perderesti i tuoi privilegi di admin: fallo fare a un altro amministratore",
+        )
 
 
 def _all_projects(session: Session) -> dict[int, Project]:
@@ -55,7 +97,7 @@ def descendant_ids(projects: dict[int, Project], roots: set[int]) -> set[int]:
 
 
 def has_capability(session: Session, user: User, project_id: int, capability: Capability | str) -> bool:
-    if user.is_superuser:
+    if is_admin(session, user):
         return True
     needed = capability.value if isinstance(capability, Capability) else capability
     projects = _all_projects(session)
@@ -75,7 +117,7 @@ def _granted_project_ids(session: Session, user: User, needed: Capability) -> se
     """Progetti dove l'utente ha `needed` (concesso o ereditato: i discendenti
     dei grant). SENZA gli antenati — solo dove la capability vale davvero."""
     projects = _all_projects(session)
-    if user.is_superuser:
+    if is_admin(session, user):
         return set(projects.keys())
     gids = user_group_ids(session, user)
     granted_roots = {

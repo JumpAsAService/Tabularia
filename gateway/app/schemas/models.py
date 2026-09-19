@@ -60,6 +60,9 @@ class UserOut(BaseModel):
     last_seen_at: Optional[UtcDateTime] = None  # ultima attività autenticata
     sso_only: bool = False  # nessuna password locale: entra solo dall'IdP
     groups: list[str] = []
+    # Gruppi di amministratori a cui appartiene: è admin anche se `is_superuser`
+    # (il flag PERSONALE, quello che l'interruttore modifica) è falso.
+    admin_groups: list[str] = []
 
 
 class MeOut(UserOut):
@@ -87,11 +90,17 @@ class GroupOut(BaseModel):
     description: str
     created_at: Optional[UtcDateTime] = None
     member_count: int = 0
+    is_admin: bool = False  # i membri sono amministratori
 
 
 class GroupCreate(BaseModel):
     name: str
     description: str = ""
+
+
+class GroupUpdate(BaseModel):
+    description: Optional[str] = None
+    is_admin: Optional[bool] = None
 
 
 # ── Banners ───────────────────────────────────────────────────────────────────

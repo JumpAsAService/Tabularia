@@ -58,11 +58,11 @@ def collect_read_refs(payload: Any) -> tuple[set[str], set[str]]:
     return buckets, keys
 
 
-def ensure_reads_pinned(user: User, payload: Any, engine_bucket: str) -> None:
+def ensure_reads_pinned(session: Session, user: User, payload: Any, engine_bucket: str) -> None:
     """Ogni sorgente di un non-superuser deve stare NEL bucket dell'engine e sotto
     un prefisso gestito. Senza questo, né gateway né engine vincolano bucket/chiave
     e l'engine (credenziali che leggono tutto) servirebbe qualsiasi (bucket, key)."""
-    if user.is_superuser:
+    if perm_service.is_admin(session, user):
         return
     buckets, keys = collect_read_refs(payload)
     for b in buckets:
@@ -128,7 +128,7 @@ def _can_read_key(session: Session, user: User, key: str, readable: set[int]) ->
 def ensure_can_read_keys(session: Session, user: User, keys: Iterable[str]) -> None:
     """403 alla prima chiave managed non leggibile dall'utente."""
     keys = set(keys)
-    if user.is_superuser or not keys:
+    if not keys or perm_service.is_admin(session, user):
         return
     readable = perm_service.readable_project_ids(session, user)
     for key in sorted(keys):

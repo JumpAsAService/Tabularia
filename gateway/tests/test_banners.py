@@ -80,10 +80,10 @@ def test_delete_missing_is_404(session):
 def test_only_superusers_may_write(session):
     normale = make_user(session, email="tizio@x.local", is_superuser=False)
     with pytest.raises(HTTPException) as e:
-        require_superuser(user=normale)
+        require_superuser(user=normale, session=session)
     assert e.value.status_code == 403
     # il superuser passa la stessa guardia
-    assert require_superuser(user=_admin(session)) is not None
+    assert require_superuser(user=_admin(session), session=session) is not None
 
 
 # ── audit ───────────────────────────────────────────────────────────────────

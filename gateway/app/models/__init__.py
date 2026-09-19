@@ -13,9 +13,11 @@ from app.models.audit import AuditLog
 from app.models.banner import Banner
 from app.models.engine_policy import DisabledEngine
 from app.models.saved_view import SavedView
+from app.models.ai_model import AiModel
+from app.models.ai_chat import AiChat, AiChatTurn
 
 __all__ = [
     "User", "Group", "UserGroupLink", "Project", "Permission", "Capability",
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
-    "AuditLog", "Banner", "DisabledEngine", "SavedView",
+    "AuditLog", "Banner", "DisabledEngine", "SavedView", "AiModel", "AiChat", "AiChatTurn",
 ]

@@ -179,13 +179,22 @@ def active_sessions(session: Session = Depends(get_session)):
     users = session.exec(
         select(User).where(User.last_seen_at.is_not(None)).order_by(User.last_seen_at.desc())
     ).all()
+    # admin EFFETTIVI: anche chi lo è per appartenenza a un gruppo di amministratori
+    from app.models import Group, UserGroupLink
+
+    via_gruppo = set(session.exec(
+        select(UserGroupLink.user_id)
+        .where(UserGroupLink.group_id == Group.id)
+        .where(Group.is_admin == True)  # noqa: E712
+    ).all())
     out: list[ActiveSession] = []
     for u in users:
         seen = u.last_seen_at
         if seen is not None and seen.tzinfo is None:
             seen = seen.replace(tzinfo=timezone.utc)
         out.append(ActiveSession(
-            user_id=u.id, email=u.email, full_name=u.full_name, is_superuser=u.is_superuser,
+            user_id=u.id, email=u.email, full_name=u.full_name,
+            is_superuser=u.is_superuser or u.id in via_gruppo,
             last_seen_at=u.last_seen_at, last_seen_ip=u.last_seen_ip,
             online=(seen is not None and seen >= threshold),
         ))
