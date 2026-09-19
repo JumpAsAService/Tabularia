@@ -28,6 +28,8 @@ def _no_deployment_defaults(monkeypatch):
     eseguono con l'env_file): il campione automatico di sviluppo resta spento
     salvo che il test lo imposti da se'."""
     monkeypatch.delenv("PREVIEW__DEFAULT_SAMPLE_ROWS", raising=False)
+    for name in ("AI__BASE_URL", "AI__ACCESS_KEY", "AI__SECRET_KEY", "AI__DEFAULT_MODEL"):
+        monkeypatch.delenv(name, raising=False)  # l'assistente AI e' spento salvo che il test lo accenda
     from app.core.config import get_settings
 
     get_settings.cache_clear()
@@ -65,6 +67,9 @@ class FakeEngine:
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
+        # preview (assistente AI): corpi ricevuti e risposta da servire
+        self.previews: list[dict] = []
+        self.preview_response: tuple[int, dict] = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
         # catalogo servito da GET /engines. L'engine dice cosa è tecnicamente
         # disponibile; è il GATEWAY a sovrapporci la politica dell'installazione
         # (motori disabilitati dall'admin), quindi qui arrivano tutti "available".
@@ -100,6 +105,12 @@ class FakeEngine:
 
             self.inspects.append(_json.loads(request.content or b"{}"))
             return httpx.Response(200, json={"ok": True, "files": [], "total": 0})
+        if path == "/tasks/preview" and request.method == "POST":
+            import json as _json
+
+            self.previews.append(_json.loads(request.content or b"{}"))
+            status, payload = self.preview_response
+            return httpx.Response(status, json=payload)
         if path == "/tasks/transform-data" and request.method == "POST":
             import json as _json
 

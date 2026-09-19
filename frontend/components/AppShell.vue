@@ -19,7 +19,7 @@ import {
   Share2,
   ScrollText,
   Settings,
-  Gauge,
+  Gauge, Sparkles,
 } from 'lucide-vue-next'
 
 // fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
@@ -67,6 +67,7 @@ const links = computed(() => [
   { to: '/datasources', label: t('nav.datasources'), icon: Database },
   { to: '/lineage', label: t('nav.lineage'), icon: Share2 },
   { to: '/viewer', label: t('nav.viewer'), icon: PieChart },
+  { to: '/chat', label: t('nav.assistant'), icon: Sparkles },
   { to: '/connections', label: t('nav.connections'), icon: Plug },
   { to: '/runs', label: t('nav.runs'), icon: History },
   ...(isSuper.value

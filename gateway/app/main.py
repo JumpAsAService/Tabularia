@@ -29,6 +29,7 @@ from app.routes.lineage import router as lineage_router
 from app.routes.scheduling import router as scheduling_router
 from app.routes.audit import router as audit_router
 from app.routes.system import router as system_router
+from app.routes.ai import router as ai_router
 from app.routes.queue import router as queue_router
 from app.routes.proxy import router as proxy_router
 
@@ -98,6 +99,7 @@ app.include_router(users_router)
 app.include_router(groups_router)
 app.include_router(banners_router)
 app.include_router(engine_policy_router)
+app.include_router(ai_router)
 app.include_router(saved_views_router)
 app.include_router(search_router)
 app.include_router(projects_router)

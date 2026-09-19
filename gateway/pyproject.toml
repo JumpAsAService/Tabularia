@@ -18,6 +18,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "cryptography>=44.0.0",
     "croniter>=6.2.4",
+    "pydantic-ai-slim[openai]>=2.40.0",
 ]
 
 [dependency-groups]
