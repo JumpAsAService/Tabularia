@@ -416,6 +416,22 @@ optgroup { font-style: normal; color: var(--muted); }
   border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
 }
 .node-body { padding: 8px 10px; }
+/* piede del nodo: righe e colonne dall'ultima anteprima (numeri tabellari,
+   stessa voce attenuata del corpo; il «+» dice che il campione era pieno) */
+.node-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 6px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.node-stats .dot { opacity: 0.6; }
+.node-stats .nocache { display: inline-flex; margin-left: auto; color: var(--op-rows, #f59e0b); }
 .node-source { --node-accent: var(--accent-2); }
 
 /* handle più visibili e reattivi, CENTRATI sul bordo del nodo (il tema di

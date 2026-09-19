@@ -89,6 +89,11 @@ ingress:
 In production set `existingSecret` instead of `secrets` and manage the Secret
 with your usual tooling.
 
+Optional keys follow the feature they belong to. With
+`externalServices.clickhouse.aiUsername` set, the Secret must also hold
+`CLICKHOUSE_EXTERNAL__AI_PASSWORD`: the read-only ClickHouse user the AI
+assistant's queries run as (grants in `docs/engines/clickhouse-ai-user.md`).
+
 ## Why the gateway is a singleton
 
 The gateway runs the scheduler **in process**, and that scheduler takes no

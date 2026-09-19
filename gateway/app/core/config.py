@@ -245,6 +245,49 @@ class PreviewSettings(BaseModel):
     default_sample_rows: int = Field(default=0, ge=0)
 
 
+class AiSettings(BaseModel):
+    """Assistente AI (chat sui dati). Parla con un endpoint compatibile OpenAI
+    (Scaleway Generative APIs, o qualunque altro): bastano l'URL e la chiave.
+    Spento finche' `base_url` o `secret_key` sono vuoti. Quali MODELLI si
+    possono usare lo decide l'amministratore dal pannello (tabella ai_models):
+    nessun modello e' abilitato finche' non lo abilita lui.
+
+    env: AI__BASE_URL, AI__ACCESS_KEY, AI__SECRET_KEY, AI__DEFAULT_MODEL,
+    AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES"""
+
+    base_url: str = ""
+    # l'id della chiave (Scaleway lo chiama access key): il protocollo OpenAI
+    # autentica con il solo secret, questo resta per riconoscere la chiave in uso
+    access_key: str = ""
+    secret_key: SecretStr = SecretStr("")
+    # proposto per primo nel selettore, se abilitato dall'amministratore
+    default_model: str = ""
+    # righe massime che una query dell'assistente restituisce (al modello e alla chat)
+    max_result_rows: int = Field(default=200, ge=1, le=2000)
+    # giri del modello per messaggio: il tetto al ciclo di chiamate agli strumenti
+    max_requests: int = Field(default=12, ge=1, le=50)
+    # messaggi di storia che il client puo' rimandare a ogni turno
+    max_history_messages: int = Field(default=60, ge=0, le=400)
+    # Tetti per TURNO, applicati da pydantic-ai stesso (`UsageLimits`). Senza,
+    # un utente qualsiasi puo' far spendere quanto vuole al proprietario della
+    # chiave: il limite sui giri non limita i token (audit 2026-09-19, A8).
+    # env: AI__MAX_COST_PER_TURN_USD, AI__MAX_INPUT_TOKENS_PER_TURN
+    max_cost_per_turn_usd: float = Field(default=0.50, ge=0)
+    max_input_tokens_per_turn: int = Field(default=400_000, ge=1000)
+    # quante chat tenere per utente (le piu' vecchie non vengono cancellate da
+    # sole: e' solo il tetto dell'elenco)
+    max_chats_listed: int = Field(default=100, ge=1, le=500)
+
+    @field_validator("secret_key", mode="before")
+    @classmethod
+    def _ensure_secret(cls, v: object) -> SecretStr:
+        return v if isinstance(v, SecretStr) else SecretStr("" if v is None else str(v))
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.base_url.strip()) and bool(self.secret_key.get_secret_value().strip())
+
+
 class SchedulingSettings(BaseModel):
     # capacità di esecuzione simultanea usata SOLO per evidenziare le fasce critiche
     # nell'heatmap del carico schedule: dovrebbe rispecchiare la concorrenza del
@@ -275,6 +318,7 @@ class Settings(BaseSettings):
 
     app: AppSettings = Field(default_factory=AppSettings)
     preview: PreviewSettings = Field(default_factory=PreviewSettings)
+    ai: AiSettings = Field(default_factory=AiSettings)
     scheduling: SchedulingSettings = Field(default_factory=SchedulingSettings)
     orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
     db: DbSettings = Field(default_factory=DbSettings)

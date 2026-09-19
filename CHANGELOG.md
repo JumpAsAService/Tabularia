@@ -5,6 +5,126 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Conversations with the assistant are saved, and each turn shows what it
+  cost.** The history now lives in the gateway database instead of the browser:
+  conversations survive a closed tab, and reopening one costs nothing — the
+  answers are already there. The chat page lists your own conversations, reopens
+  them with their steps and results, and lets you delete them. Under every
+  answer, and on the conversation as a whole, is the cost of the call. The
+  figure comes from the price data shipped with `pydantic-ai` — we keep no price
+  list of our own to go stale. That lookup is scoped to the *provider*, which
+  for an OpenAI-compatible endpoint only resolves models that exist at OpenAI
+  too, so when it comes back empty we look the same data up by model name. It
+  is an estimate from the model's list price, not your provider's invoice, and
+  the tooltip says so; `—` means the model could not be priced at all, which is
+  not the same as free.
+  Two security consequences: the client no longer sends the history, so it can
+  no longer forge one (an injected `system` part used to reach the model
+  verbatim), and a turn is now capped by cost and input tokens, not only by the
+  number of model round-trips. New tables `ai_chats` and `ai_chat_turns`; new
+  settings `AI__MAX_COST_PER_TURN_USD` and `AI__MAX_INPUT_TOKENS_PER_TURN`.
+  Conversations are private to their author and are deleted with the account.
+  The assistant names each conversation itself from the first question, so the
+  list reads like a set of topics rather than truncated sentences; a search box
+  filters it. While the assistant works, the three-dot placeholder is replaced
+  by a status line — a pulsing dot and a sentence naming the phase it is in
+  (scanning the catalog, reading the fields of X, querying X, writing the
+  answer). The phases are read from the same stream events the steps are read
+  from: nothing there is invented. A conversation is created once its first
+  turn completes, so an interrupted request no longer leaves an empty one.
+- **Security fixes from the 2026-09-19 audit.** Moving a folder now requires
+  MANAGE on the folder being moved, not EDIT: with EDIT alone it granted MANAGE
+  (and therefore CONNECT) over the whole moved subtree. A folder can no longer
+  be moved inside its own subtree. Scheduled datasource refreshes re-check RUN
+  and CONNECT every time they fire and switch themselves off when the
+  permissions are gone, instead of running forever with the schedule author's
+  authority; moving a datasource drops someone else's schedule. The storage
+  credentials are stripped from engine error messages, which could carry them
+  in clear text out of a ClickHouse syntax error — into a toast, into
+  `Run.error_detail` and on to the model provider. The scatter tooltip escapes
+  cell values and column names, which reached `innerHTML` unescaped. The SQL
+  node's allow-list no longer trusts how the parser labels a node: a dotted
+  reference in `FROM`/`JOIN` position is refused whatever its type, closing a
+  bypass through `ARRAY JOIN` that read other tables of the server.
+  The Ingress now routes every prefix the gateway serves — `/ai`, `/search`,
+  `/saved-views`, `/engine-policy` and `/admin/performance` were missing, so on
+  Kubernetes those calls fell through to the frontend and got its 404 page.
+  Development stack only: published ports are bound to localhost and Nuxt
+  DevTools are off — its RPC is unauthenticated and the container has the
+  sources mounted writable.
+- **A dedicated ClickHouse user for the AI assistant (optional).**
+  `CLICKHOUSE_EXTERNAL__AI_USERNAME` / `CLICKHOUSE_EXTERNAL__AI_PASSWORD` (Helm:
+  `externalServices.clickhouse.aiUsername`, `secrets.clickhouseAiPassword`): when
+  both are set and the transport is `s3`, the assistant's queries run on the
+  external ClickHouse as that user instead of the engine's account — a second
+  barrier behind the SQL node allow-list. With `readonly = 2` and only
+  `CREATE TEMPORARY TABLE, S3` it reads the parquet files and nothing else: no
+  `system`, no tables, no `url()`/`file()`. Flows, runs, the Viewer and the
+  editor previews keep the main account. Unset = exactly as before. Grants,
+  what was verified and the one limit (the `S3` grant also covers writes on
+  these versions): `docs/engines/clickhouse-ai-user.md`.
+- **Security: the SQL node can only read its own input (allow-list).** On the
+  engines that run the query on a real server (external ClickHouse, chDB,
+  BigQuery) the free-form SQL node was protected by a deny-list of dangerous
+  table functions. A live test of the AI assistant showed it was not enough:
+  `merge('db', 'regex')` was not on the list and read another table of the
+  server through the node, and `information_schema` listed the tables; on
+  BigQuery an unquoted `dataset.table` passed too. The node now parses the query
+  (sqlglot, scope-aware) and accepts only `self`/`input`, CTEs in their own
+  scope and row generators (`numbers`, `UNNEST`, …); `x IN table`, `dictGet*`,
+  `joinGet`, `getSetting` are refused, and a query that cannot be parsed is
+  refused rather than waved through. This matters for RBAC: the engine reads
+  everything, so a query able to name another table would make the permission
+  on the datasource decorative — for flows and, since the assistant, for anyone
+  with VIEW. DuckDB (locked in-memory sandbox) and Polars were not affected.
+- **Administrator groups, and promotion from the admin page.** A group can be
+  marked as an *administrators group*: every member is an administrator for as
+  long as they belong to it, and stops being one on leaving. With SSO the
+  membership follows the identity provider, so admin rights can be granted from
+  there without `OIDC__SUPERUSER_GROUP`. The Users table gains a promote/demote
+  switch for the personal flag and shows when someone is admin *through* a
+  group. Every path is audited (`user.promote/demote`, `group.promote/demote`,
+  `group.admin_join/admin_leave`) and none lets an administrator lock themselves
+  out: demoting or deactivating yourself, demoting or deleting your only admin
+  group, or leaving it answers 409. New column `groups.is_admin`, added at
+  gateway start-up. `/auth/me` reports the effective role.
+- **AI assistant (optional).** A chat over the catalog, open to every user,
+  built with pydantic-ai against any OpenAI-compatible endpoint (`AI__BASE_URL`,
+  `AI__ACCESS_KEY`, `AI__SECRET_KEY`; verified on Scaleway Generative APIs).
+  The assistant lists, describes and queries only the datasources the user can
+  read; field descriptions reach the model with the columns; queries are one
+  read-only `SELECT … FROM self` run by the engine through the `sql` node, with
+  capped rows, and each one is written to the audit log (`ai.query`). The page
+  shows the steps, the SQL and the result table of every query next to the
+  answer. Administrators enable the models in Admin → AI models: none is
+  usable by default. The conversation is not stored on the server.
+- **Datasource description.** Next to the field descriptions, the Datasources
+  page now edits a description of the datasource itself (what it contains,
+  what one row is, period, caveats; up to 4,000 characters), saved with the
+  same button. The assistant gets a short version when listing the catalog and
+  the full text when describing a datasource, and its catalog search matches
+  words rather than exact substrings (`anagrafica di test` finds
+  `anagrafica_test`), falling back to the full list instead of an empty one.
+
+- **Step-cache written after the answer, and capped.** Every engine used to
+  materialise the previous step *inside* the preview: on a 25M-row table the
+  external ClickHouse copied 2.4 GB to the bucket at every click (40 s), and
+  the next click cancelled and restarted it. The preview now answers after its
+  own query and hands the steps to a separate task, which writes each one once
+  (a lock on Valkey). Steps above `CACHE__MAX_STEP_ROWS` (default 1M) are not
+  cached at all and are remembered as such: a copy as large as the source
+  gains nothing over the original parquet. The final output of a run is cached
+  under the same cap. The preview reports the cache state of the upstream step
+  (`cache_state`, `cache_cap_rows`); the editor shows a mark on the node and a
+  hint in its panel when that step is recomputed at every preview, plus one
+  warning toast per node and session.
+- **Flow editor.** Edges can be removed: a «×» on hover or selection, and
+  Delete/Backspace on a selected edge. Operation and Output nodes show the row
+  and column counts known from their last preview ("100+" when the preview was
+  full), at no extra query.
+
+## Unreleased
+
 - **BigQuery engine (optional).** A fifth engine, `bigquery`, runs the
   transformations on Google BigQuery: the parquet files stay in the bucket and
   are read as temporary external tables, results come back through the Storage

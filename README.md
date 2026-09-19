@@ -2,10 +2,20 @@
 
 **Self-hosted, open-source visual data-preparation platform.** A Tableau Prep–style
 flow editor on pluggable engines: build a pipeline once, preview it on the whole
-dataset, and run it where the compute makes sense — in-process on your own servers, on
-a **managed ClickHouse**, or on **Google BigQuery** — without changing the flow.
-Database sources and destinations, loops, charts, scheduling, cross-flow lineage and an
-audit trail come in the box.
+dataset, and decide *later* where the compute runs.
+
+**The same flow scales from a laptop to a warehouse without being rewritten.** Start
+with nothing installed but Docker: transformations stream through memory in-process,
+no cluster, no external service, no per-query bill. When the data outgrows one
+machine, point the flow at **DuckDB** (same process, spilling to disk), a **managed
+ClickHouse**, or **Google BigQuery** (serverless, nothing to operate) — the flow
+definition does not change by a single node. The parquet stays in your bucket and the
+warehouse reads it **in place**: nothing is copied, nothing streams back through the
+workers. Storage follows the same curve, from MinIO on the same host to S3, Scaleway or
+Google Cloud Storage; deployment from one `docker compose up` to Helm on Kubernetes.
+
+Database sources and destinations, loops, charts, scheduling, cross-flow lineage, an
+AI assistant over your own catalog and an audit trail come in the box.
 
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
@@ -50,6 +60,18 @@ engines, from an in-process library to a serverless warehouse.
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
   ClickHouse, Trino and SharePoint Excel; write results back to a database table or
   publish them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
+- **Ask your data.** An optional AI assistant answers questions in plain language over
+  the datasources you are allowed to read: it finds the table, reads the curated field
+  descriptions, writes and runs the query on your engine, and shows the result table the
+  numbers come from. Conversations are saved and can be reopened, so a question already
+  answered is never paid for twice, and **every turn shows what it cost**. Any
+  OpenAI-compatible endpoint works; an administrator decides which models may be used,
+  and every query lands in the audit log.
+- **Nothing happens to your data that you cannot preview.** Every node shows its row
+  and column count as the preview arrives — no extra query, it is what the preview
+  already returned — and edges can be removed with a click or the keyboard. Repeated
+  previews reuse a per-step cache that is written *after* the answer is on screen, so a
+  second click is fast without the first one waiting for it.
 - **Schedule and forget.** Put flows on a schedule (timezone-aware, DST-safe) and let
   them refresh on their own; a load heatmap shows busy time-bands and collisions
   before they bite.
@@ -90,6 +112,30 @@ The engines agree on one data standard — nulls, casts, joins, aggregates, sort
 pivots — locked by an oracle test suite that runs the same hand-computed expectations
 on all five. The remaining differences are documented, not discovered in production:
 [docs/engines/engine-differences.md](docs/engines/engine-differences.md).
+
+### How far it scales, and what it costs to get there
+
+The flow is a declarative list of operations; the engine is a runtime decision. That
+one property is what lets an installation grow without a migration:
+
+| Stage | Compute | External services | Typical scale |
+|---|---|---|---|
+| **Laptop / one server** | Polars, streaming in the worker's memory | none | up to what the worker's RAM allows |
+| **One bigger machine** | DuckDB, spilling to local disk | none | joins and aggregates past RAM |
+| **Your warehouse** | Managed or self-hosted ClickHouse | a ClickHouse the workers can reach | tens of millions of rows, sub-second aggregates |
+| **Serverless** | BigQuery | a GCP project and a GCS bucket | elastic, no idle cost |
+
+Nothing above is a rewrite: it is a dropdown on the flow, and a flow can use one engine
+in the editor and another in production. Two mechanisms keep the growth honest:
+
+- **A development sample, off in production.** Where every read is billed, an optional
+  sample keeps the editor cheap. It is per source node, switchable, marked in the
+  definition, and **scheduled runs never sample** — you cannot ship a sampled result by
+  accident.
+- **A step cache with a ceiling.** Repeated previews of the same chain reuse the
+  previous step instead of recomputing it. The copy is made *after* the preview has
+  answered, in a separate task, and steps above `CACHE__MAX_STEP_ROWS` are not cached at
+  all: a big intermediate result never makes you wait for a copy you did not ask for.
 
 ### Managed ClickHouse
 
@@ -285,9 +331,12 @@ fill_null · drop_nulls · group_by · pivot · unpivot · join · union · fore
   `refresh` (re-ingest a DB source), `runflow` (invoke another flow).
 
 Every node's output is **content-addressed and cached**: editing the last step of a
-10-step flow recomputes one step, not ten. In-process engines and ClickHouse keep the
-steps as parquet under `cache/`; BigQuery keeps them as expiring native tables. Cache
-entries evict by TTL.
+10-step flow recomputes one step, not ten. The copy is written *after* the preview
+answers, by a separate task, and only for steps up to `CACHE__MAX_STEP_ROWS` (1M by
+default): a step as large as the source is recomputed from the original parquet
+instead of being copied. In-process engines and ClickHouse keep the steps as parquet
+under `cache/`; BigQuery keeps them as expiring native tables. Cache entries evict by
+TTL.
 
 ## Storage layout
 
@@ -332,6 +381,14 @@ published, and the error is recorded on the run and returned by the API.
 
 ## Auth, RBAC & audit
 
+Administrators are granted in two ways: a personal flag, or membership of a group
+marked as an **administrators group** — every member is an administrator for as long as
+they belong to it, which also means the right can be granted from an identity provider
+through SSO group mapping. Both paths are audited, and no administrator can remove
+their own last route to administration: demoting or deactivating yourself, demoting or
+deleting your only admin group, or leaving it, is refused rather than silently
+performed.
+
 - **JWT** login through the gateway; stateless verification with a throttled
   `last_seen` touch for active-session tracking.
 - **RBAC**: users & groups, nested projects, inherited **view / edit / manage /
@@ -348,6 +405,60 @@ published, and the error is recorded on the run and returned by the API.
   `OIDC__ISSUER` is set; local login always stays available as break-glass. See
   [`docs/design/sso-group-mapping.md`](docs/design/sso-group-mapping.md) and the
   runnable Keycloak example in [`docs/examples/keycloak/`](docs/examples/keycloak/).
+
+### Free-form SQL, contained
+
+A flow can carry a node holding hand-written SQL, and the assistant writes one for
+every question. That node is bound to a single rule: **it may read its own input and
+nothing else.** The query is parsed, and anything in a `FROM` or `JOIN` position that
+is not `self` / `input` (or a `WITH` defined in the same query) is refused — table
+functions, another database's tables, `information_schema`, dictionary and settings
+lookups included. A query that cannot be parsed is refused rather than run. On DuckDB
+the node executes in a locked in-memory sandbox with external access disabled; Polars
+only ever sees the registered frame.
+
+This matters because the engine holds credentials that can read the whole bucket: if a
+query could name another table, the permission on a datasource would be decorative.
+
+## AI assistant
+
+Optional, in the gateway, built with [pydantic-ai](https://ai.pydantic.dev) against any
+OpenAI-compatible endpoint (`AI__BASE_URL`, `AI__SECRET_KEY`; verified on Scaleway
+Generative APIs). The agent has three tools and nothing else: `list_datasources`,
+`describe_datasource` (columns, types and the hand-written **field descriptions** — the
+semantic context that makes the query right — plus a few sample rows) and
+`query_datasource` (one read-only `SELECT … FROM self`, executed by the engine through
+the same `sql` node and guardrails as the editor, rows capped by
+`AI__MAX_RESULT_ROWS`). Every tool re-checks the caller's permissions: a datasource
+outside the user's VIEW scope looks exactly like one that does not exist. Each query is
+an audit event (`ai.query`, with the SQL, the model and the row count).
+
+**Conversations are saved** in the gateway's database, private to their author and
+deleted with the account. They can be searched by title, reopened with their steps and
+result tables, and continued — a question already answered costs nothing to read again.
+The assistant names each conversation itself from the first question. Because the
+history lives on the server, the browser sends only a conversation id: it cannot forge
+a history, and a turn is bounded by `AI__MAX_COST_PER_TURN_USD` and
+`AI__MAX_INPUT_TOKENS_PER_TURN`, not merely by a number of model round-trips.
+
+**What a call cost is on screen**, under each answer and for the conversation as a
+whole. The figure comes from the price data shipped with pydantic-ai — there is no
+price list of ours to go stale — and it is an estimate from the model's list price,
+not your provider's invoice; a dash means that model could not be priced, which is not
+the same as free.
+
+While the assistant works, the page names the phase it is actually in — scanning the
+catalog, reading the fields of a datasource, querying it, writing the answer — read
+from the same stream events the steps are read from.
+
+Models are an administrator's decision (Admin → AI models): the provider's catalog is
+listed, nothing is enabled by default, and embedding or audio models cannot be enabled
+for chat.
+
+On the external ClickHouse engine the assistant's queries can run as a **dedicated
+read-only account** (`CLICKHOUSE_EXTERNAL__AI_USERNAME`): a second barrier behind the
+SQL node's allow-list, with no access to `system`, to any table, or to `url()` and
+`file()`. See [docs/engines/clickhouse-ai-user.md](docs/engines/clickhouse-ai-user.md).
 
 ## Scheduling & timezone
 

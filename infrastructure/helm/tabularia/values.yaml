@@ -79,6 +79,10 @@ externalServices:
     secure: true
     database: tabularia
     username: ""
+    # Dedicated read-only user for the AI assistant's queries (second barrier
+    # behind the SQL node allow-list). Empty = the assistant uses `username`.
+    # Password → secrets.clickhouseAiPassword. Grants: docs/engines/clickhouse-ai-user.md
+    aiUsername: ""
     transport: s3         # s3 = server reads/writes parquet directly; push = streamed through the worker
     s3Endpoint: ""
     # Named collection holding the S3 credentials ON the ClickHouse server. With
@@ -117,6 +121,17 @@ externalServices:
     # wide 25M-row table reads ~19 GB. 20 GiB ≈ 0.12 $ per query. 0 = no cap.
     maximumBytesBilled: 21474836480
 
+# AI assistant: a chat over the catalog against any OpenAI-compatible endpoint.
+# Users only reach the datasources they can read; every query is audited. No
+# model is usable until an administrator enables it in Admin → AI models.
+ai:
+  enabled: false
+  baseUrl: ""            # e.g. https://api.scaleway.ai/v1
+  accessKey: ""          # id of the key (informational; auth uses secrets.aiSecretKey)
+  defaultModel: ""
+  maxResultRows: 200
+  maxRequests: 12
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Secrets
 # ─────────────────────────────────────────────────────────────────────────────
@@ -127,8 +142,8 @@ externalServices:
 # Keys expected in an existing Secret — the variable names the pods read:
 #   SECURITY__FERNET_KEY, JWT__SECRET, DB__PASSWORD, STORAGE__ACCESS_KEY,
 #   STORAGE__SECRET_KEY, AUTH__ADMIN_PASSWORD; plus OIDC__CLIENT_SECRET,
-#   CLICKHOUSE_EXTERNAL__PASSWORD and BIGQUERY__CREDENTIALS_B64 when those are
-#   enabled, and REDIS__PASSWORD when your Redis requires authentication.
+#   CLICKHOUSE_EXTERNAL__PASSWORD, BIGQUERY__CREDENTIALS_B64 and AI__SECRET_KEY
+#   when those are enabled, and REDIS__PASSWORD when your Redis requires authentication.
 existingSecret: ""
 
 secrets:
@@ -155,8 +170,12 @@ secrets:
 
   oidcClientSecret: ""
   clickhousePassword: ""
+  # password of externalServices.clickhouse.aiUsername, when set
+  clickhouseAiPassword: ""
   # base64 of the service-account JSON key (base64 -w0 key.json)
   bigqueryCredentialsB64: ""
+  # secret key of the AI provider (OpenAI-compatible endpoint), when ai.enabled
+  aiSecretKey: ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Application settings (non-secret)
@@ -405,25 +424,38 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
   # Paths served by the gateway rather than the frontend.
+  # Prefissi serviti dal GATEWAY; tutto il resto va al frontend. Questa lista
+  # deve contenere OGNI router del gateway: un prefisso dimenticato non dà un
+  # errore di routing, cade sul frontend Nuxt e ottiene la sua pagina 404 — un
+  # sintomo che non somiglia alla causa. È già successo con /ai.
+  #
+  # Per verificarla dopo aver aggiunto un router, dalla radice del repo:
+  #   grep -rn '^router = APIRouter' gateway/app/routes/*.py
+  # (i router senza `prefix=` dichiarano i path sulle singole rotte)
   apiPaths:
-    - /auth
+    - /auth            # include /auth/sso
     - /users
     - /groups
-    - /banners
-    - /projects
     - /permissions
+    - /projects
     - /flows
     - /runs
     - /datasources
     - /connections
+    - /saved-views
     - /lineage
+    - /search
     - /schedule
+    - /banners
     - /audit
     - /system
     - /queue
+    - /engines
+    - /engine-policy
+    - /admin/performance
+    - /ai
     - /tasks
     - /files
-    - /engines
     - /health
 
 # Restricts who may reach the engine API. Strongly recommended: the engine holds

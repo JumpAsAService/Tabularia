@@ -8,6 +8,7 @@ export default {
     datasources: 'Datasources',
     lineage: 'Lineage',
     viewer: 'Viewer',
+    assistant: 'Assistant',
     connections: 'Connections',
     runs: 'Runs',
     queue: 'Queue',

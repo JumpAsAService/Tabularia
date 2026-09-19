@@ -7,6 +7,7 @@ export default {
     datasources: 'Datenquellen',
     lineage: 'Herkunft',
     viewer: 'Viewer',
+    assistant: 'Assistent',
     connections: 'Verbindungen',
     runs: 'Ausführungen',
     queue: 'Warteschlange',

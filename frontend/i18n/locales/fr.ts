@@ -7,6 +7,7 @@ export default {
     datasources: 'Sources de données',
     lineage: 'Lignage',
     viewer: 'Visualiseur',
+    assistant: 'Assistant',
     connections: 'Connexions',
     runs: 'Exécutions',
     queue: 'File',
