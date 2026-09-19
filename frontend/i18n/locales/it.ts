@@ -13,6 +13,7 @@ export default {
     queue: 'Coda',
     monitoring: 'Monitoraggio',
     audit: 'Audit',
+    administration: "Amministrazione",
     admin: 'Admin',
   },
   settings: {

@@ -13,6 +13,7 @@ export default {
     queue: 'Warteschlange',
     monitoring: 'Überwachung',
     audit: 'Audit',
+    administration: "Verwaltung",
     admin: 'Admin',
   },
   settings: {

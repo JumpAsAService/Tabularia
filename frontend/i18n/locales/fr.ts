@@ -13,6 +13,7 @@ export default {
     queue: 'File',
     monitoring: 'Supervision',
     audit: 'Audit',
+    administration: "Administration",
     admin: 'Admin',
   },
   settings: {

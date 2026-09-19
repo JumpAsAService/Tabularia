@@ -13,6 +13,7 @@ export default {
     queue: 'Cola',
     monitoring: 'Monitorización',
     audit: 'Auditoría',
+    administration: "Administración",
     admin: 'Admin',
   },
   settings: {

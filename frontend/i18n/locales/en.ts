@@ -14,6 +14,7 @@ export default {
     queue: 'Queue',
     monitoring: 'Monitoring',
     audit: 'Audit',
+    administration: "Administration",
     admin: 'Admin',
   },
   settings: {

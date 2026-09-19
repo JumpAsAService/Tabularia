@@ -20,6 +20,7 @@ import {
   ScrollText,
   Settings,
   Gauge, Sparkles,
+  ChevronDown,
 } from 'lucide-vue-next'
 
 // fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
@@ -70,16 +71,22 @@ const links = computed(() => [
   { to: '/chat', label: t('nav.assistant'), icon: Sparkles },
   { to: '/connections', label: t('nav.connections'), icon: Plug },
   { to: '/runs', label: t('nav.runs'), icon: History },
-  ...(isSuper.value
-    ? [
-        { to: '/queue', label: t('nav.queue'), icon: Cpu },
-        { to: '/monitoring', label: t('nav.monitoring'), icon: Activity },
-        { to: '/performance', label: t('nav.performance'), icon: Gauge },
-        { to: '/audit', label: t('nav.audit'), icon: ScrollText },
-        { to: '/admin', label: t('nav.admin'), icon: Shield },
-      ]
-    : []),
 ])
+
+/* Amministrazione: cinque destinazioni che nel prodotto sono UN posto, e nella
+   barra erano cinque voci allo stesso livello di Flussi o Datasource. Raccolte
+   sotto una sola voce col suo menù, come l'ingranaggio delle impostazioni: la
+   barra passa da tredici elementi a nove e dice una struttura che esiste già. */
+const adminLinks = computed(() => [
+  { to: '/admin', label: t('nav.admin'), icon: Shield },
+  { to: '/queue', label: t('nav.queue'), icon: Cpu },
+  { to: '/monitoring', label: t('nav.monitoring'), icon: Activity },
+  { to: '/performance', label: t('nav.performance'), icon: Gauge },
+  { to: '/audit', label: t('nav.audit'), icon: ScrollText },
+])
+const adminOpen = ref(false)
+// la voce resta accesa mentre si è in una qualsiasi delle sue pagine
+const inAdmin = computed(() => adminLinks.value.some((l) => route.path === l.to))
 
 onMounted(async () => {
   if (!user.value) await fetchMe()
@@ -104,6 +111,37 @@ onMounted(async () => {
         >
           <component :is="l.icon" :size="14" /> {{ l.label }}
         </NuxtLink>
+
+        <div v-if="isSuper" class="adminwrap">
+          <button
+            type="button"
+            class="navlink"
+            :class="{ on: inAdmin || adminOpen }"
+            aria-haspopup="menu"
+            :aria-expanded="adminOpen"
+            @click="adminOpen = !adminOpen"
+          >
+            <Shield :size="14" /> {{ t('nav.administration') }}
+            <ChevronDown :size="13" class="caret" :class="{ up: adminOpen }" />
+          </button>
+
+          <template v-if="adminOpen">
+            <div class="menu-backdrop" @click="adminOpen = false" />
+            <div class="menu adminmenu" role="menu">
+              <NuxtLink
+                v-for="l in adminLinks"
+                :key="l.to"
+                :to="l.to"
+                class="menu-item"
+                :class="{ on: route.path === l.to }"
+                role="menuitem"
+                @click="adminOpen = false"
+              >
+                <component :is="l.icon" :size="14" /> {{ l.label }}
+              </NuxtLink>
+            </div>
+          </template>
+        </div>
       </nav>
 
       <span class="spacer" />
@@ -319,6 +357,30 @@ onMounted(async () => {
    ridotta spingeva la pagina a scorrere in orizzontale. La navigazione scorre
    dentro la propria barra invece di allargare il documento; il menù a panino
    sarebbe una riprogettazione, non un adattamento. */
+/* il menù dell'amministrazione riusa il pannello delle impostazioni: stessa
+   superficie, stesso raggio, stessa ombra — cambia solo dove si aggancia */
+.adminwrap { position: relative; display: inline-flex; height: 100%; flex: none; }
+.adminwrap .caret { opacity: 0.7; transition: transform 0.15s ease; }
+.adminwrap .caret.up { transform: rotate(180deg); }
+.adminmenu {
+  left: 0;
+  right: auto;
+  min-width: 210px;
+  padding: 4px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: none;
+}
+.menu-item:hover { background: var(--panel-2); }
+.menu-item.on { background: var(--tint-accent); color: var(--accent-hi); }
+
 @media (max-width: 760px) {
   .topbar { gap: 12px; padding: 0 12px; }
   .mainnav { flex: 1; }
