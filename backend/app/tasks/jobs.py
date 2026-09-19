@@ -21,6 +21,7 @@ def preview_task(
     engine: str | None = None,
     no_cache: bool = False,
     sort_keys: list[str] | None = None,
+    principal: str | None = None,
 ) -> dict:
     """Anteprima interattiva del flow (schema + prime N righe), eseguita su un
     worker dedicato invece che nel processo API: così l'engine (Polars/DuckDB)
@@ -44,6 +45,7 @@ def preview_task(
     # Le query di QUESTA preview portano l'id del task come etichetta: se la
     # preview viene superata da una piu' recente, l'engine le uccide sul server.
     from celery import current_task
+    from app.engine.principal import query_principal
     from app.engine.query_tag import query_tag
 
     _tid = getattr(getattr(current_task, "request", None), "id", None)
@@ -61,7 +63,7 @@ def preview_task(
 
     try:
         engine_impl = get_engine(engine)
-        with query_tag(f"tab-prev:{_tid}" if _tid else None):
+        with query_tag(f"tab-prev:{_tid}" if _tid else None), query_principal(principal):
             result = engine_impl.preview(
                 source=DataSource(bucket=bucket, key=input_key),
                 operations=operations,

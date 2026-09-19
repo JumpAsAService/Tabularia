@@ -198,8 +198,12 @@ def test_preview_uses_cache_prefix(storage, src):
     ]
     res = eng.preview(src, ops, limit=10)
     assert res.row_count == 3
-    # la preview materializza il prefisso (tutti gli step tranne l'ultimo)
+    # il prefisso (tutti gli step tranne l'ultimo) va in cache DOPO la risposta
     hashes = plan_hashes(eng._source_id(src), ops)
+    assert not cache.has(hashes[0])
+    from tests.conftest import drain_cache
+
+    assert drain_cache(eng) == 1
     assert cache.has(hashes[0]) and not cache.has(hashes[1])
     # seconda preview: riparte dalla cache e dà lo stesso risultato
     res2 = eng.preview(src, ops, limit=10)

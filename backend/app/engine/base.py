@@ -43,6 +43,12 @@ class PreviewResult(BaseModel):
     rows: list[dict[str, Any]]
     row_count: int = Field(..., description="Numero di righe nel campione restituito")
     truncated: bool = Field(..., description="True se il risultato reale ha più righe del limite")
+    # Stato della step-cache del passo A MONTE di questo nodo (quello da cui le
+    # prossime anteprime ripartirebbero): "hit" in cache, "pending" in scrittura
+    # differita, "skipped" oltre il tetto (ricalcolato a ogni anteprima), "off"
+    # cache non usata (Viewer). None = non c'e' un passo a monte da mettere in cache.
+    cache_state: str | None = Field(default=None)
+    cache_cap_rows: int | None = Field(default=None, description="Tetto di righe della cache, quando conta")
 
 
 class RunResult(BaseModel):

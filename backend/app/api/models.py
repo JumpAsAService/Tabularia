@@ -64,6 +64,10 @@ class PreviewRequest(BaseModel):
     no_cache: bool = Field(default=False, description="Non scrivere/leggere la step-cache (query esplorative del Viewer)")
     # Slot della preview: in ogni slot conta solo l'ULTIMA richiesta — una nuova
     # butta giu' la precedente (vedi api/preview_slots.py). Assente = come prima.
+    # Per conto di chi gira: "ai" = query dell'assistente → utenza ClickHouse
+    # dedicata, se configurata (engine/principal.py). È solo un DECLASSAMENTO:
+    # dichiararlo non dà nulla in più, quindi non serve proteggerlo.
+    principal: Optional[str] = Field(default=None, pattern=r"^ai$", description="Identità della query: 'ai' = assistente")
     slot: Optional[str] = Field(default=None, max_length=96, pattern=r"^[A-Za-z0-9:_-]+$",
                                 description="Slot: una nuova preview sullo stesso slot annulla la precedente")
     # Le chiavi entrano nell'IDENTITA' della copia materializzata: variarle genera

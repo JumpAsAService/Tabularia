@@ -43,7 +43,10 @@ def _columns_of(schema: dict[str, Any]) -> list[ColumnInfo]:
     return [ColumnInfo(name=n, dtype=str(t)) for n, t in schema.items()]
 
 
-class PolarsEngine(Engine):
+from app.engine.stepcache_defer import DeferredStepCache
+
+
+class PolarsEngine(DeferredStepCache, Engine):
     # tag che namespacea la cache a step: engine diversi (Polars/DuckDB) possono
     # produrre parquet leggermente diversi per la stessa catena → non devono
     # condividere i blob della step-cache (chiavati sull'hash del piano)
@@ -146,6 +149,8 @@ class PolarsEngine(Engine):
             return
 
         lf = self._lazy_from_cache(ctx, source, operations, hashes)
+        if self._too_big(ctx, lf, final):
+            return
         path = ctx.tempfile(".parquet")
         try:
             self._sink(lf, path)
@@ -158,6 +163,13 @@ class PolarsEngine(Engine):
         self.cache.mark(final)
         logger.info("materializzato step %d in cache", len(operations))
 
+    def _materialize_session(self, source: DataSource):
+        return self._session()
+
+    def _bounded_rows(self, ctx, lf: pl.LazyFrame, n: int) -> int:
+        """Quante righe ha `lf`, contate al massimo fino a n+1 (head: si ferma presto)."""
+        return int(lf.head(n + 1).select(pl.len()).collect(engine="streaming").item())
+
     # ── Preview (sincrona) ────────────────────────────────────────────────
     def preview(
         self,
@@ -169,11 +181,12 @@ class PolarsEngine(Engine):
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         with self._session() as ctx:
-            # Materializza il PARENT: iterando sui parametri di questo nodo, le
-            # anteprime successive ripartiranno dalla sua cache (una sola op).
-            # Il Viewer passa use_cache=False → niente materializzazione.
+            # Il PARENT va in cache, ma DOPO la risposta (task differito): iterando
+            # sui parametri di questo nodo le anteprime successive ripartiranno
+            # da li'. Il Viewer passa use_cache=False → niente materializzazione.
             if use_cache:
-                self._materialize(ctx, source, ops[:-1])
+                self._defer_materialization(source, ops[:-1])
+            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)
 
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
@@ -194,6 +207,7 @@ class PolarsEngine(Engine):
                 rows=df.to_dicts(),
                 row_count=df.height,
                 truncated=truncated,
+                cache_state=cstate, cache_cap_rows=ccap,
             )
 
     # ── Export (download diretto, anche da nodi intermedi) ────────────────
@@ -273,15 +287,16 @@ class PolarsEngine(Engine):
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
 
-            # L'output finale è anche il risultato dell'ultimo step: mettilo in
-            # cache così ri-run e anteprime del nodo foglia sono immediati.
-            if use_cache and ops and not self.cache.has(hashes[-1]):
-                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
-                self.cache.mark(hashes[-1])
-
             # metadati dal parquet scritto (letti dai metadata, economici)
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
+
+            # L'output finale è anche il risultato dell'ultimo step: mettilo in
+            # cache così ri-run e anteprime del nodo foglia sono immediati —
+            # se sta nel tetto (un output enorme non vale una seconda copia).
+            if use_cache and ops and self._cache_output_allowed(int(rows_written)) and not self.cache.has(hashes[-1]):
+                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
+                self.cache.mark(hashes[-1])
             return RunResult(
                 destination=destination,
                 rows_written=int(rows_written),

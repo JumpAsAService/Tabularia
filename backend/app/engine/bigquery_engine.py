@@ -580,6 +580,11 @@ class BigQueryEngine(Engine):
         """Materializza in cache l'output di `operations` (chiamata dal task
         differito). True se ha scritto qualcosa."""
         ops = _coerce_ops(operations)
+        if not ops:
+            return False
+        final = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])[-1]
+        if not self.cache.try_lock(final):  # due click sullo stesso passo: un solo CTAS
+            return False
         tmp: list[str] = []
         ctx = self._context(source, tmp)
         try:
@@ -594,6 +599,7 @@ class BigQueryEngine(Engine):
             ctx.cancel_all()
             raise
         finally:
+            self.cache.unlock(final)
             self._cleanup(tmp)
 
     def _context(self, source: DataSource, tmp: list[str], preview_limit: int | None = None) -> BigQueryContext:
@@ -649,8 +655,17 @@ class BigQueryEngine(Engine):
                 df = df.head(limit)
             logger.info("bigquery preview | %s | righe=%d", ctx.cost_line(), df.height)
             self._record_phases(ctx)
+            parent = ops[:-1]
+            if not parent:
+                cstate = None
+            elif not cache_on:
+                cstate = "off"
+            else:
+                pf = plan_hashes(self._source_id(source), [op.model_dump() for op in parent])[-1]
+                cstate = "hit" if (self.cache.has(pf) and self.cache.blob_exists(pf)) else "pending"
             return PreviewResult(
                 columns=_columns_of(df.schema), rows=df.to_dicts(), row_count=df.height, truncated=truncated,
+                cache_state=cstate,
             )
         except BaseException:
             ctx.cancel_all()

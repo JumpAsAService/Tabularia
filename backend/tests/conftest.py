@@ -41,6 +41,16 @@ def engine(storage, cache) -> PolarsEngine:
     return PolarsEngine(storage=storage, cache=cache)
 
 
+def drain_cache(engine) -> int:
+    """Esegue le materializzazioni lasciate in sospeso da una preview: e' cio'
+    che fa `materialize_step_task` fuori dalla richiesta. Ritorna quante ne ha
+    scritte davvero."""
+    written = 0
+    for src, ops in engine.take_pending():
+        written += bool(engine.materialize(src, ops))
+    return written
+
+
 def upload_df(storage: FakeStorage, df: pl.DataFrame, key: str) -> DataSource:
     """Carica un DataFrame come parquet nel FakeStorage e ritorna la sorgente."""
     import tempfile, os

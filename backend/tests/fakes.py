@@ -75,6 +75,21 @@ class FakeRedis:
     def zrem(self, key, member):
         self.zsets[key].pop(member, None)
 
+    # ── stringhe (lucchetto SET NX, passi «troppo grandi») ───────────────
+    def set(self, key, value, nx=False, ex=None):
+        if not hasattr(self, "strings"):
+            self.strings: dict[str, str] = {}
+        if nx and key in self.strings:
+            return None
+        self.strings[key] = value
+        return True
+
+    def get(self, key):
+        return getattr(self, "strings", {}).get(key)
+
+    def exists(self, key):
+        return 1 if key in getattr(self, "strings", {}) else 0
+
     # ── contatori / chiavi ───────────────────────────────────────────────
     def incr(self, key):
         self.counters[key] += 1
@@ -85,6 +100,7 @@ class FakeRedis:
             self.sets.pop(k, None)
             self.zsets.pop(k, None)
             self.counters.pop(k, None)
+            getattr(self, "strings", {}).pop(k, None)
 
 
 class BrokenRedis:

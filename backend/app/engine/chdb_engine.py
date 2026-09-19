@@ -138,7 +138,12 @@ class ChdbContext:
         return self.scan(DataSource(**ref))
 
 
-class ChdbEngine(Engine):
+from contextlib import contextmanager
+
+from app.engine.stepcache_defer import DeferredStepCache
+
+
+class ChdbEngine(DeferredStepCache, Engine):
     # tag che namespacea la step-cache: engine diversi non condividono i blob
     engine_name = "chdb"
 
@@ -191,10 +196,25 @@ class ChdbEngine(Engine):
         if self.cache.has(final):
             return
         sql = self._sql_from_cache(ctx, source, operations, hashes)
+        if self._too_big(ctx, sql, final):
+            return
         path = self._write_outfile(ctx, sql)
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
         self.cache.mark(final)
         logger.info("materializzato step %d in cache", len(operations))
+
+    @contextmanager
+    def _materialize_session(self, source: DataSource):
+        sess, state_dir = self._new_session()
+        tmp: list[str] = []
+        try:
+            yield ChdbContext(sess, self.storage, tmp)
+        finally:
+            sess.close()
+            self._cleanup(tmp, state_dir)
+
+    def _bounded_rows(self, ctx, sql: str, n: int) -> int:
+        return ctx.scalar(f"SELECT count() FROM (SELECT 1 FROM ({sql}) LIMIT {n + 1})")
 
     def _write_outfile(self, ctx: ChdbContext, sql: str) -> str:
         """Scrive il risultato di `sql` in un parquet temporaneo, IN STREAMING
@@ -237,7 +257,8 @@ class ChdbEngine(Engine):
         try:
             ctx = ChdbContext(sess, self.storage, tmp, preview_limit=limit + 1)
             if use_cache:
-                self._materialize(ctx, source, ops[:-1])
+                self._defer_materialization(source, ops[:-1])
+            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # DOPO la risposta, in un task a parte
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             try:
@@ -260,6 +281,7 @@ class ChdbEngine(Engine):
                 rows=df.to_dicts(),
                 row_count=df.height,
                 truncated=truncated,
+                cache_state=cstate, cache_cap_rows=ccap,
             )
         finally:
             sess.close()
@@ -283,12 +305,11 @@ class ChdbEngine(Engine):
             out_path = self._write_outfile(ctx, sql)
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
-            if use_cache and ops and not self.cache.has(hashes[-1]):
-                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
-                self.cache.mark(hashes[-1])
-
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
+            if use_cache and ops and self._cache_output_allowed(int(rows_written)) and not self.cache.has(hashes[-1]):
+                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
+                self.cache.mark(hashes[-1])
             return RunResult(
                 destination=destination,
                 rows_written=int(rows_written),

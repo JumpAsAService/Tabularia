@@ -110,7 +110,12 @@ class DuckContext:
         return name
 
 
-class DuckDBEngine(Engine):
+from contextlib import contextmanager
+
+from app.engine.stepcache_defer import DeferredStepCache
+
+
+class DuckDBEngine(DeferredStepCache, Engine):
     # tag che namespacea la step-cache: engine diversi non condividono i blob
     engine_name = "duckdb"
 
@@ -166,6 +171,8 @@ class DuckDBEngine(Engine):
         if self.cache.has(final):
             return
         rel = self._rel_from_cache(ctx, source, operations, hashes)
+        if self._too_big(ctx, rel, final):
+            return
         path = ctx.tempfile()
         try:
             rel.write_parquet(path)
@@ -185,6 +192,19 @@ class DuckDBEngine(Engine):
             except OSError:
                 pass
 
+    @contextmanager
+    def _materialize_session(self, source: DataSource):
+        con = self._connection()
+        tmp: list[str] = []
+        try:
+            yield DuckContext(con, self.storage, tmp)
+        finally:
+            con.close()
+            self._cleanup(tmp)
+
+    def _bounded_rows(self, ctx, rel, n: int) -> int:
+        return int(rel.limit(n + 1).aggregate("count(*)").fetchone()[0])
+
     # ── Preview (sincrona, solo N righe in RAM) ───────────────────────────
     def preview(
         self,
@@ -202,7 +222,8 @@ class DuckDBEngine(Engine):
             # materializza il PARENT: iterando sui parametri dell'ultimo nodo, le
             # anteprime successive ripartono dalla sua cache (Viewer: use_cache=False)
             if use_cache:
-                self._materialize(ctx, source, ops[:-1])
+                self._defer_materialization(source, ops[:-1])
+            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # DOPO la risposta, in un task a parte
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             rel = self._rel_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             try:
@@ -219,6 +240,7 @@ class DuckDBEngine(Engine):
                 rows=df.to_dicts(),
                 row_count=df.height,
                 truncated=truncated,
+                cache_state=cstate, cache_cap_rows=ccap,
             )
         finally:
             con.close()
@@ -248,14 +270,13 @@ class DuckDBEngine(Engine):
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
-            # l'output finale è anche il risultato dell'ultimo step: mettilo in
-            # cache così ri-run e anteprime del nodo foglia sono immediati
-            if use_cache and ops and not self.cache.has(hashes[-1]):
-                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
-                self.cache.mark(hashes[-1])
-
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
+            # l'output finale è anche il risultato dell'ultimo step: mettilo in
+            # cache così ri-run e anteprime del nodo foglia sono immediati (nel tetto)
+            if use_cache and ops and self._cache_output_allowed(int(rows_written)) and not self.cache.has(hashes[-1]):
+                self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
+                self.cache.mark(hashes[-1])
             return RunResult(
                 destination=destination,
                 rows_written=int(rows_written),

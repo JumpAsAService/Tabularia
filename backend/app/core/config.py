@@ -143,6 +143,12 @@ class CacheSettings(BaseModel):
     ttl_seconds: int = 1 * 24 * 3600
     # env: CACHE__SWEEP_INTERVAL_SECONDS — ogni quanto gira l'eviction. Default 1h.
     sweep_interval_seconds: int = 3600
+    # env: CACHE__MAX_STEP_ROWS — un passo con piu' righe di cosi' NON viene
+    # messo in cache: una copia grande quanto la sorgente non fa guadagnare
+    # nulla rispetto a rileggere il parquet originale e costa gigabyte di
+    # scrittura (25M righe = 2,4 GB e 40 s sul ClickHouse esterno). Il passo
+    # viene ricalcolato dalla sorgente. 0 = nessun tetto.
+    max_step_rows: int = 1_000_000
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +187,13 @@ class ClickHouseExternalSettings(BaseModel):
     port: int = 8123
     username: str = "default"
     password: SecretStr = SecretStr("")
+    # Utenza DEDICATA alle query dell'assistente AI (env: CLICKHOUSE_EXTERNAL__
+    # AI_USERNAME / __AI_PASSWORD). Seconda barriera dopo la lista bianca del
+    # nodo sql: sola lettura, niente `system`. Attiva solo con ENTRAMBE
+    # valorizzate; altrimenti l'assistente usa l'utenza qui sopra, come prima.
+    # I grant che le servono: docs/engines/clickhouse-ai-user.md
+    ai_username: str = ""
+    ai_password: SecretStr = SecretStr("")
     # database di lavoro: DEVE esistere; in modalità `push` ospita le tabelle di
     # staging temporanee (l'utente ha bisogno di CREATE/INSERT/DROP su questo db)
     database: str = "default"

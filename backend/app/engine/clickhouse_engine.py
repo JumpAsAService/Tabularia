@@ -46,6 +46,7 @@ from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunRes
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.matview import MatViewStore
 from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
+from app.engine.principal import AI, current_principal
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
 from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
@@ -434,7 +435,12 @@ class ClickHouseContext:
 _was_interrupted = was_interrupted  # definita in query_tag: la usa anche il task
 
 
-class ClickHouseEngine(Engine):
+from contextlib import contextmanager
+
+from app.engine.stepcache_defer import DeferredStepCache
+
+
+class ClickHouseEngine(DeferredStepCache, Engine):
     engine_name = "clickhouse"
 
     def __init__(self, storage=None, cache=None, cfg: ClickHouseExternalSettings | None = None):
@@ -451,6 +457,25 @@ class ClickHouseEngine(Engine):
             )
         self.matviews = MatViewStore(self.cache.redis, self.cfg)
         self._server_threads: int | None = None  # core del server (letto una volta)
+
+    def _credentials(self) -> tuple[str, str]:
+        """Le query dell'assistente AI girano con l'utenza dedicata, se c'è
+        (vedi engine/principal.py). Il client è in cache PER UTENTE (la chiave
+        lo contiene): le due identità non si scambiano mai la connessione."""
+        if self._as_ai():
+            return self.cfg.ai_username, self.cfg.ai_password.get_secret_value()
+        return self.cfg.username or "default", self.cfg.password.get_secret_value()
+
+    def _as_ai(self) -> bool:
+        """True se QUESTA query gira con l'utenza dell'assistente. Solo col
+        trasporto `s3`: in `push` la preview crea tabelle di appoggio sul server,
+        e un'utenza di sola lettura non può — lì resta l'utenza principale."""
+        return bool(
+            current_principal() == AI
+            and self.cfg.transport == "s3"
+            and self.cfg.ai_username
+            and self.cfg.ai_password.get_secret_value()
+        )
 
     def _client(self):
         """Client RIUSATO per thread. Crearlo costa tre round-trip (version+
@@ -469,8 +494,9 @@ class ClickHouseEngine(Engine):
         """
         import clickhouse_connect
 
+        utente, password = self._credentials()
         chiave = (self.cfg.host, self.cfg.port, self.cfg.database or "default",
-                  self.cfg.username or "default", bool(self.cfg.secure))
+                  utente, bool(self.cfg.secure))
         cache = getattr(_CLIENTI_PER_THREAD, "per_chiave", None)
         if cache is None:
             cache = _CLIENTI_PER_THREAD.per_chiave = {}
@@ -506,8 +532,8 @@ class ClickHouseEngine(Engine):
             c = clickhouse_connect.get_client(
                 host=self.cfg.host,
                 port=self.cfg.port,
-                username=self.cfg.username or "default",
-                password=self.cfg.password.get_secret_value(),
+                username=utente,
+                password=password,
                 database=self.cfg.database or "default",
                 secure=self.cfg.secure,
                 connect_timeout=self.cfg.connect_timeout,
@@ -602,9 +628,26 @@ class ClickHouseEngine(Engine):
         if self.cache.has(final):
             return
         sql = self._sql_from_cache(ctx, source, operations, hashes)
+        if self._too_big(ctx, sql, final):
+            return
         self._write(ctx, sql, DataSource(bucket=self.cache.bucket, key=self.cache.object_key(final)))
         self.cache.mark(final)
         logger.info("materializzato step %d in cache", len(operations))
+
+    @contextmanager
+    def _materialize_session(self, source: DataSource):
+        client = self._client()
+        ctx = ClickHouseContext(client, self.storage, self.cfg, [])
+        threads = self._scan_max_threads(ctx)
+        if threads:
+            ctx.settings["max_threads"] = threads
+        try:
+            yield ctx
+        finally:
+            ctx.cleanup()
+
+    def _bounded_rows(self, ctx, sql: str, n: int) -> int:
+        return ctx.scalar(f"SELECT count() FROM (SELECT 1 FROM ({sql}) LIMIT {n + 1})")
 
     # ── scrittura dei risultati ───────────────────────────────────────────
     def _write(self, ctx: ClickHouseContext, sql: str, dest: DataSource) -> str | None:
@@ -676,7 +719,10 @@ class ClickHouseEngine(Engine):
         # LEGGENDO dalla copia finirebbero nello stesso namespace di hash usato dai
         # run, che la copia non ce l'hanno.
         ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
-                                matviews=self.matviews, allow_matview=not use_cache,
+                                matviews=self.matviews,
+                                # la copia materializzata si CREA sul server: l'utenza
+                                # `ai` è di sola lettura, quindi legge dal parquet
+                                allow_matview=not use_cache and not self._as_ai(),
                                 sort_keys=sort_keys)
         if _needs_scan_tuning(ops):
             threads = self._scan_max_threads(ctx)
@@ -684,7 +730,7 @@ class ClickHouseEngine(Engine):
                 ctx.settings["max_threads"] = threads
         try:
             if use_cache:
-                self._materialize(ctx, source, ops[:-1])
+                self._defer_materialization(source, ops[:-1])  # DOPO la risposta, in un task a parte
                 _t = _fase("stepcache", _t)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             # include la risoluzione della copia materializzata: se qui il tempo
@@ -698,7 +744,9 @@ class ClickHouseEngine(Engine):
             truncated = df.height > limit
             if truncated:
                 df = df.head(limit)
+            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)
             res = PreviewResult(
+                cache_state=cstate, cache_cap_rows=ccap,
                 columns=_columns_of(df.schema),
                 rows=df.to_dicts(),
                 row_count=df.height,
@@ -756,20 +804,17 @@ class ClickHouseEngine(Engine):
             if use_cache and ops and not self.cache.has(hashes[-1]):
                 cache_dest = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[-1]))
 
-            if ctx.cfg.transport == "s3" and cache_dest is not None:
-                # una sola esecuzione della catena: scrive in cache, poi copia
-                # server-side sulla destinazione
-                self._write(ctx, sql, cache_dest)
-                self.cache.mark(hashes[-1])
-                self._copy(ctx, cache_dest, destination)
-                local = None
-            else:
-                local = self._write(ctx, sql, destination)
-                if cache_dest is not None:  # push: il file locale c'è, lo ricarica
-                    self.storage.upload_file(local, cache_dest.bucket, cache_dest.key)
-                    self.cache.mark(hashes[-1])
-
+            # una sola esecuzione della catena, sulla destinazione; la copia in
+            # cache viene DOPO, e solo se l'output sta nel tetto (un output da
+            # gigabyte non vale una seconda scrittura)
+            local = self._write(ctx, sql, destination)
             rows_written, columns = self._describe_object(ctx, destination, local)
+            if cache_dest is not None and self._cache_output_allowed(rows_written):
+                if local is None:
+                    self._copy(ctx, destination, cache_dest)  # s3: copia server-side
+                else:
+                    self.storage.upload_file(local, cache_dest.bucket, cache_dest.key)
+                self.cache.mark(hashes[-1])
             return RunResult(destination=destination, rows_written=rows_written, columns=columns)
         finally:
             ctx.cleanup()

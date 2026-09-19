@@ -44,24 +44,35 @@ def test_preview_con_operazione_rotta_indica_nodo_e_posizione(engine, vendite):
 
 
 # ── Cache incrementale ───────────────────────────────────────────────────────
-def test_la_preview_materializza_il_parent_in_cache(engine, vendite, cache):
+def test_la_preview_lascia_il_parent_da_materializzare(engine, vendite, cache):
+    from tests.conftest import drain_cache
+
     ops = FILTRO_IT + [{"type": "limit", "params": {"n": 1}}]
     engine.preview(vendite, ops, limit=10)
     parent_hash = plan_hashes(engine._source_id(vendite), FILTRO_IT)[-1]
+    assert not cache.has(parent_hash)  # la preview NON aspetta la copia
+    assert drain_cache(engine) == 1  # il task differito la scrive
     assert cache.has(parent_hash)  # iterare sui params dell'ultimo nodo ora costa 1 op
+    assert engine.take_pending() == []
 
 
 def test_la_seconda_preview_riusa_la_cache(engine, vendite, fredis):
+    from tests.conftest import drain_cache
+
     ops = FILTRO_IT + [{"type": "limit", "params": {"n": 1}}]
     engine.preview(vendite, ops, limit=10)
+    drain_cache(engine)
     hits_prima = fredis.counters[HITS_KEY]
     engine.preview(vendite, ops, limit=10)
     assert fredis.counters[HITS_KEY] > hits_prima
 
 
 def test_il_risultato_con_cache_e_identico_a_quello_senza(engine, vendite):
+    from tests.conftest import drain_cache
+
     ops = FILTRO_IT + [{"type": "sort", "params": {"by": "vendite"}}]
-    fresco = engine.preview(vendite, ops, limit=10).rows  # popola la cache
+    fresco = engine.preview(vendite, ops, limit=10).rows
+    drain_cache(engine)  # popola la cache
     dal_cache = engine.preview(vendite, ops, limit=10).rows  # riparte dalla cache
     assert fresco == dal_cache
 

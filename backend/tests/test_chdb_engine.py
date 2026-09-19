@@ -176,9 +176,12 @@ def test_step_cache_materializza_il_parent(storage, src):
         {"type": "sort", "params": {"by": "vendite"}},
     ]
     e.preview(src, ops, limit=10)
-    # il parent (ops[:-1]) dev'essere in cache
     hashes = plan_hashes(e._source_id(src), [{"type": ops[0]["type"], "params": ops[0]["params"]}])
-    assert cache.has(hashes[-1])
+    assert not cache.has(hashes[-1])  # la preview non aspetta la copia
+    from tests.conftest import drain_cache
+
+    assert drain_cache(e) == 1
+    assert cache.has(hashes[-1])  # il parent (ops[:-1]) e' in cache
 
 
 def test_namespacing_engine(storage, src):

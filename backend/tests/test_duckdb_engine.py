@@ -176,6 +176,10 @@ def test_step_cache_materializes_parent(storage, src):
     ops = parent + [{"type": "sort", "params": {"by": "vendite"}}]
     eng.preview(src, ops, limit=10)
     parent_hash = plan_hashes(eng._source_id(src), parent)[-1]
+    assert not cache.has(parent_hash)  # la preview non aspetta la copia
+    from tests.conftest import drain_cache
+
+    assert drain_cache(eng) == 1
     assert cache.has(parent_hash)  # il parent (filter) è in cache → l'ultimo nodo riparte da lì
 
 
@@ -187,6 +191,9 @@ def test_step_cache_result_identical(storage, src):
         {"type": "sort", "params": {"by": "vendite", "descending": True}},
     ]
     first = eng.preview(src, ops, limit=10).rows
+    from tests.conftest import drain_cache
+
+    drain_cache(eng)
     second = eng.preview(src, ops, limit=10).rows  # riparte dalla cache del parent
     assert first == second
 

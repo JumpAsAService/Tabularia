@@ -132,6 +132,42 @@ class StepCache:
         except redis.RedisError:
             pass
 
+    # ── lucchetto e passi scartati (materializzazione differita) ────────
+    def _lock_key(self, h: str) -> str:
+        return f"{self.index_set}:lock:{h}"
+
+    def _skip_key(self, h: str) -> str:
+        return f"{self.index_set}:skip:{h}"
+
+    def try_lock(self, h: str, ttl_seconds: int = 900) -> bool:
+        """Prende il lucchetto della materializzazione di `h` (SET NX con
+        scadenza). Valkey giu' → True: meglio una copia doppia che nessuna."""
+        try:
+            return bool(self.redis.set(self._lock_key(h), "1", nx=True, ex=ttl_seconds))
+        except redis.RedisError:
+            return True
+
+    def unlock(self, h: str) -> None:
+        try:
+            self.redis.delete(self._lock_key(h))
+        except redis.RedisError:
+            pass
+
+    def mark_skipped(self, h: str, ttl_seconds: int | None = None) -> None:
+        """Ricorda che il passo `h` e' troppo grande per la cache (per il TTL
+        della cache): i click successivi non lo ricontano."""
+        ttl = ttl_seconds or int(get_settings().cache.ttl_seconds)
+        try:
+            self.redis.set(self._skip_key(h), "1", ex=ttl)
+        except redis.RedisError:
+            pass
+
+    def is_skipped(self, h: str) -> bool:
+        try:
+            return bool(self.redis.exists(self._skip_key(h)))
+        except redis.RedisError:
+            return False
+
     def record_hit(self) -> None:
         """Segna un riuso della cache (per le metriche)."""
         try:
