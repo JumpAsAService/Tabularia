@@ -29,6 +29,8 @@ from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
 from app.services.blobgc import sweep_blob_deletions
 from app.services.orchestrator import orchestrate_bg
+from app.models.permission import Capability
+from app.services import permissions as perm_service
 from app.services.schedule import next_fire
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,17 @@ async def _fire_ds(session: Session, ds: Datasource, now: datetime) -> None:
     conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
     if conn is None:
         _disable_ds(session, ds, "connessione inesistente")
+        return
+    # I permessi si riverificano AL FUOCO, non solo quando lo schedule viene
+    # creato: altrimenti togliere CONNECT a qualcuno non ferma il suo cron, e
+    # chi ha EDIT può spostarsi in casa una datasource schedulata da altri e
+    # farsi rifornire di dati con l'autorità della vittima (audit 2026-09-19,
+    # A7). È ciò che l'orchestratore fa già in `_refresh_and_wait`.
+    if not perm_service.has_capability(session, user, ds.project_id, Capability.RUN):
+        _disable_ds(session, ds, f"RUN mancante per {user.email} sulla cartella della datasource")
+        return
+    if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
+        _disable_ds(session, ds, f"CONNECT mancante per {user.email} sulla cartella della connessione")
         return
     last = session.exec(
         select(Run)

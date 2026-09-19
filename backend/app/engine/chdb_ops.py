@@ -22,6 +22,7 @@ from typing import Any, Callable
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.exceptions import EngineError
 from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, pivot_label, sample_threshold
+from app.engine.sql_guard import ensure_reads_only_input
 
 ChdbOpFn = Callable[..., str]
 
@@ -377,6 +378,9 @@ def op_sql(sql, params, ctx):
             "sql: consentito solo interrogare l'input. Vietate le table function di "
             "accesso esterno (file/url/s3/remote/…), l'esecuzione (executable) e DDL/DML."
         )
+    # lista BIANCA delle tabelle: la lista nera qui sopra resta come prima linea,
+    # ma da sola non bastava (`merge()`, `information_schema`: vedi sql_guard)
+    ensure_reads_only_input(query, "clickhouse")
     # espone l'input come `self` (e alias `input`); resta una SELECT annidabile
     return f"WITH input AS ({sql}), self AS (SELECT * FROM input) {query}"
 

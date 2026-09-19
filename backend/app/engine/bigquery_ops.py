@@ -32,6 +32,7 @@ from typing import Any, Callable
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.exceptions import EngineError
 from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, pivot_label, sample_threshold
+from app.engine.sql_guard import ensure_reads_only_input
 
 BqOpFn = Callable[..., str]
 
@@ -390,6 +391,9 @@ def op_sql(sql, params, ctx):
             "sql: consentito solo interrogare l'input del nodo. Vietati DDL/DML, "
             "script, EXTERNAL_QUERY, ML/AI e i riferimenti a tabelle del progetto."
         )
+    # lista BIANCA: `dataset.tabella` si scrive anche SENZA backtick, e la
+    # step-cache degli altri utenti vive in un dataset dello stesso progetto
+    ensure_reads_only_input(query, "bigquery")
     return f"WITH input AS ({sql}), self AS (SELECT * FROM input) {ctx.map_quoted(query)}"
 
 

@@ -172,6 +172,11 @@ watch(
 )
 watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN], refresh)
 
+// Testo → HTML sicuro. Serve SOLO dentro i formatter dei tooltip di ECharts,
+// che sono l'unico punto del frontend in cui costruiamo HTML da una stringa.
+const esc = (v: unknown) =>
+  String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
+
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 })
 
 const seriesName = computed(() => {
@@ -232,13 +237,13 @@ const TOOLTIP_BASE = computed(() => ({
 const LEGEND_BASE = computed(() => ({ textStyle: { color: ui.value.muted, fontSize: 11 }, top: 0, icon: 'circle' }))
 
 const option = computed(() => {
-  const t = chartType.value
+  const tipo = chartType.value
   const AXIS = AXIS_STYLE.value
   const TOOLTIP = TOOLTIP_BASE.value
   const LEGEND = LEGEND_BASE.value
   const c = ui.value
 
-  if (t === 'pie' || t === 'treemap') {
+  if (tipo === 'pie' || tipo === 'treemap') {
     // top-5 categorie + "Altro" (solo per funzioni additive: una media di medie
     // sarebbe sbagliata → in quel caso solo le top-5)
     const top = rows.value.slice(0, MAX_SERIES)
@@ -246,16 +251,16 @@ const option = computed(() => {
     const data = top.map((r, i) => ({
       name: String(r[xCol.value]),
       value: r.__valore,
-      itemStyle: t === 'pie' ? { color: PALETTE[i] } : undefined,
+      itemStyle: tipo === 'pie' ? { color: PALETTE[i] } : undefined,
     }))
     if (rest.length && ADDITIVE.has(func.value)) {
       data.push({
         name: t('chartPanel.otherGroup', { n: rest.length }),
         value: rest.reduce((s, r) => s + (Number(r.__valore) || 0), 0),
-        itemStyle: t === 'pie' ? { color: OTHER_COLOR } : undefined,
+        itemStyle: tipo === 'pie' ? { color: OTHER_COLOR } : undefined,
       })
     }
-    if (t === 'pie') {
+    if (tipo === 'pie') {
       return {
         backgroundColor: 'transparent',
         tooltip: { ...TOOLTIP, trigger: 'item' },
@@ -291,7 +296,7 @@ const option = computed(() => {
     }
   }
 
-  if (t === 'scatter') {
+  if (tipo === 'scatter') {
     const by = byCol.value
     let seriesDefs: { name: string; rows: Record<string, any>[] }[]
     if (by) {
@@ -315,9 +320,16 @@ const option = computed(() => {
       tooltip: {
         ...TOOLTIP,
         trigger: 'item',
+        // esc() OBBLIGATORIO su ogni pezzo dinamico: un formatter FUNZIONE non
+        // passa dall'escape di ECharts (quello lo fa solo sul formatter
+        // predefinito) e il risultato finisce in innerHTML. `p.data.name` è il
+        // valore grezzo di una cella e i nomi di colonna vengono dal dataset:
+        // senza escape, un `<img src=x onerror=...>` in una colonna di testo
+        // esegue script in chi passa il puntatore su un pallino.
+        // Audit 2026-09-19, A6.
         formatter: (p: any) =>
-          `${p.data.name}<br/>${xFunc.value}(${xNumCol.value}): <b>${fmt.format(p.data.value[0])}</b>` +
-          `<br/>${yFunc.value}(${yNumCol.value}): <b>${fmt.format(p.data.value[1])}</b>`,
+          `${esc(p.data.name)}<br/>${esc(xFunc.value)}(${esc(xNumCol.value)}): <b>${esc(fmt.format(p.data.value[0]))}</b>` +
+          `<br/>${esc(yFunc.value)}(${esc(yNumCol.value)}): <b>${esc(fmt.format(p.data.value[1]))}</b>`,
       },
       xAxis: { type: 'value', ...AXIS, splitLine: { lineStyle: { color: c.borderSoft } } },
       yAxis: { type: 'value', ...AXIS, splitLine: { lineStyle: { color: c.border } } },
@@ -332,7 +344,7 @@ const option = computed(() => {
   }
 
   // bar / line / area
-  const isBar = t === 'bar'
+  const isBar = tipo === 'bar'
   let cats: string[]
   let seriesList: any[]
   if (byCol.value) {
@@ -349,7 +361,7 @@ const option = computed(() => {
             symbol: 'circle',
             symbolSize: 7,
             showSymbol: cats.length <= 30,
-            ...(t === 'area' ? { areaStyle: { opacity: 0.12 } } : {}),
+            ...(tipo === 'area' ? { areaStyle: { opacity: 0.12 } } : {}),
           },
     )
   } else {
@@ -366,7 +378,7 @@ const option = computed(() => {
             symbol: 'circle',
             symbolSize: 8,
             showSymbol: vals.length <= 30,
-            ...(t === 'area' ? { areaStyle: { opacity: 0.15 } } : {}),
+            ...(tipo === 'area' ? { areaStyle: { opacity: 0.15 } } : {}),
           },
     ]
   }

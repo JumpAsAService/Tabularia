@@ -20,6 +20,7 @@ from app.engine import (
     EngineError, OperationError, SourceNotFoundError, UnknownOperationError,
 )
 import logging
+from app.core.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,8 @@ def preview_flow(request: PreviewRequest):
     # continuano a funzionare per tutta la finestra di rollout.
     if request.sort_keys:
         kwargs["sort_keys"] = request.sort_keys
+    if request.principal:  # stessa regola: solo se valorizzato (le preview dell'editor non lo mandano)
+        kwargs["principal"] = request.principal
     # id deciso QUI: serve prima dell'invio per prenotare lo slot
     task_id = str(uuid.uuid4())
     previous = None
@@ -311,10 +314,12 @@ def get_task_status(task_id: str):
     if result.status == "SUCCESS":
         response.result = result.result
     elif result.status == "FAILURE":
-        response.error = str(result.info)
+        response.error = redact_secrets(str(result.info))
         # traceback completo: la causa vera (stack Polars, SQL, batch) che
         # `str(info)` da solo perde — salvato dal gateway in Run.error_detail
-        response.error_detail = result.traceback
+        # il traceback contiene il SQL costruito dall'engine, che senza named
+        # collection porta le chiavi dello storage (audit 2026-09-19, A2)
+        response.error_detail = redact_secrets(result.traceback)
     elif result.status == "PENDING":
         response.message = "Task is pending"
     elif result.status == "STARTED":

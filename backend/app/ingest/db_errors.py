@@ -38,6 +38,8 @@ from typing import Optional
 
 from app.ingest.converters import IngestError
 
+from app.core.redaction import redact_secrets
+
 LABELS = {
     "postgresql": "PostgreSQL",
     "clickhouse": "ClickHouse",
@@ -285,4 +287,6 @@ def describe_db_error(
         message = f"{prefix}: {text}" + (f" {hint}" if hint else "")
     except Exception:  # pragma: no cover — il traduttore non deve mai propagare
         message = f"{label or 'Database'}: {type(exc).__name__}: {exc}"
-    return message[:MAX_LEN]
+    # i segreti non escono MAI verso l'utente: si redige PRIMA di troncare,
+    # altrimenti un taglio a metà chiave lascerebbe visibile il resto
+    return (redact_secrets(message) or message)[:MAX_LEN]

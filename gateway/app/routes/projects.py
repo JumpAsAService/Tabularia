@@ -13,6 +13,7 @@ from app.deps.permissions import ensure_can
 from app.models import Project, User
 from app.models.permission import Capability
 from app.services import permissions as perm_service
+from app.services.permissions import _all_projects, descendant_ids
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -34,7 +35,7 @@ def create_project(
 ):
     if body.parent_id is None:
         # progetti root: solo il superuser può crearli (sono il livello di ingresso)
-        if not user.is_superuser:
+        if not perm_service.is_admin(session, user):
             raise HTTPException(status_code=403, detail="Solo un admin può creare progetti root")
     else:
         if session.get(Project, body.parent_id) is None:
@@ -81,11 +82,25 @@ def update_project(
     if body.description is not None:
         project.description = body.description
     if body.parent_id is not None and body.parent_id != project.parent_id:
-        # spostare un progetto = MANAGE sulla nuova destinazione; niente cicli
-        if body.parent_id == project_id:
-            raise HTTPException(status_code=422, detail="Un progetto non può essere figlio di sé stesso")
+        # Spostare = MANAGE su ENTRAMBI i capi. Su quello spostato perché i
+        # permessi si ereditano verso il basso: chi ha solo EDIT su una cartella
+        # e MANAGE sulla propria sandbox, spostandola dentro la sandbox si
+        # ritroverebbe MANAGE (e quindi CONNECT, che EDIT non concede mai) su
+        # tutto il sottoalbero — e potrebbe poi autoconcedersi un permesso
+        # esplicito che sopravvive al ripristino dell'albero.
+        # Audit 2026-09-19, A1: riprodotto, da 403 a 201.
+        ensure_can(session, user, project_id, Capability.MANAGE)
         if session.get(Project, body.parent_id) is None:
             raise HTTPException(status_code=404, detail="Nuovo parent non trovato")
+        # Niente cicli: non dentro sé stesso e nemmeno dentro un proprio
+        # DISCENDENTE, che staccherebbe il sottoalbero da ogni radice e
+        # toglierebbe l'accesso a chi l'aveva per eredità (A6/M6).
+        progetti = _all_projects(session)
+        if body.parent_id == project_id or body.parent_id in descendant_ids(progetti, {project_id}):
+            raise HTTPException(
+                status_code=422,
+                detail="Un progetto non può essere spostato dentro sé stesso o una sua sottocartella",
+            )
         ensure_can(session, user, body.parent_id, Capability.MANAGE)
         project.parent_id = body.parent_id
     session.add(project)
