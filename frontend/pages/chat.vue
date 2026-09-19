@@ -7,10 +7,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Sparkles, Send, Square, Plus, Database, Search, Check, FileText, ListTree, TableProperties,
-  Code2, CircleAlert, ChevronRight, ShieldAlert, History, Trash2,
+  Code2, CircleAlert, ChevronRight, ShieldAlert, History, Trash2, Download,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
-import { useAi, type AiChatSummary, type AiChatTotal, type AiStatus, type AiTable, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
+import MiniChart from '~/components/ui/MiniChart.vue'
+import { useAi, type AiChartSpec, type AiChatSummary, type AiChatTotal, type AiStatus, type AiTable, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useToast } from '~/composables/useToast'
 import { useProjects } from '~/composables/useProjects'
@@ -36,10 +37,10 @@ const engines = ref<EngineOpt[]>([])
 const engine = ref('')
 const { locale } = useLocale()
 
-type Step = { id: string; name: string; args: Record<string, any>; state: 'running' | 'ok' | 'error'; error?: string; count?: number; table?: AiTable }
+type Step = { id: string; name: string; args: Record<string, any>; state: 'running' | 'ok' | 'error'; error?: string; count?: number; table?: AiTable; chart?: AiChartSpec }
 type Turn =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; open: Record<string, boolean>; usage?: AiUsage; phase?: Phase; phaseOn?: string }
+  | { role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; open: Record<string, boolean>; usage?: AiUsage; phase?: Phase; phaseOn?: string; seq?: number }
 
 // Cosa sta facendo l'assistente in questo istante. NON e' decorazione: ogni
 // fase corrisponde a un evento vero dello stream, cosi' l'indicatore dice il
@@ -181,6 +182,7 @@ async function send(text?: string) {
           step.error = res.error
           step.count = res.count
           step.table = res.table
+          step.chart = res.chart
           live.phase = 'thinking'  // strumento finito: torna a ragionare
           scrollDown()
         },
@@ -188,6 +190,7 @@ async function send(text?: string) {
           chatId.value = done.chat_id
           chatTotal.value = done.chat_total
           live.usage = done.usage
+          if (done.seq !== null) live.seq = done.seq
           void refreshChats()
         },
         onError: (msg) => { live.error = msg },
@@ -237,8 +240,11 @@ async function openChat(id: number) {
     turns.value = d.messages.flatMap((t) => ([
       { role: 'user', text: t.question } as Turn,
       {
-        role: 'assistant', text: t.answer, streaming: false, open: {}, usage: t.usage,
-        steps: t.steps.map((p, i) => ({ id: `${t.seq}-${i}`, name: p.name, args: p.args ?? {}, state: 'ok' as const })),
+        role: 'assistant', text: t.answer, streaming: false, open: {}, usage: t.usage, seq: t.seq,
+        steps: t.steps.map((p, i) => ({
+          id: p.id ?? `${t.seq}-${i}`, name: p.name, args: p.args ?? {}, state: 'ok' as const,
+          table: p.table, chart: p.chart,
+        })),
       } as Turn,
     ]))
     chatId.value = d.id
@@ -261,6 +267,58 @@ async function removeChat(id: number) {
   } catch (e: any) {
     toast.error(errMessage(e))
   }
+}
+
+const grabbing = ref('')
+
+/** Scarica il risultato COMPLETO di un passo: la chat ne mostra al massimo 200
+ *  righe, il file le contiene tutte perché il server riesegue la query salvata. */
+async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt: 'csv' | 'xlsx') {
+  if (!chatId.value || turn.seq === undefined || grabbing.value) return
+  grabbing.value = `${step.id}:${fmt}`
+  try {
+    const blob = await ai.exportStep(chatId.value, turn.seq, step.id, fmt)
+    const nome = `${step.table?.datasource || 'risultato'}.${fmt}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nome
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    toast.error(errMessage(e))
+  } finally {
+    grabbing.value = ''
+  }
+}
+
+/** La conversazione come Markdown: domande, risposte, e per ogni passo la query
+ *  che l'ha prodotto. È il formato che si rilegge fra sei mesi e si incolla in
+ *  un ticket, non uno screenshot. */
+function downloadChat() {
+  const righe: string[] = [`# ${chats.value.find((c) => c.id === chatId.value)?.title || t('chat.pageTitle')}`, '']
+  for (const turn of turns.value) {
+    if (turn.role === 'user') { righe.push(`## ${turn.text}`, ''); continue }
+    for (const s of turn.steps) {
+      const sql = (s.args as any)?.sql
+      if (sql) righe.push('```sql', String(sql), '```', '')
+      if (s.table) {
+        const cols = s.table.columns.map((c) => c.name)
+        righe.push(`| ${cols.join(' | ')} |`, `|${cols.map(() => '---').join('|')}|`)
+        for (const r of s.table.rows) righe.push(`| ${cols.map((c) => String((r as any)[c] ?? '')).join(' | ')} |`)
+        righe.push('')
+      }
+    }
+    if (turn.text) righe.push(turn.text, '')
+    if (turn.usage) righe.push(`*${money(turn.usage.cost_usd)} · ${t('chat.tokens', { i: nf.format(turn.usage.input_tokens), o: nf.format(turn.usage.output_tokens) })}*`, '')
+  }
+  const blob = new Blob([righe.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${(chats.value.find((c) => c.id === chatId.value)?.title || 'conversazione').replace(/[^a-z0-9._-]+/gi, '_')}.md`.toLowerCase()
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 /** Il costo come lo riporta il modello, scritto nella lingua dell'utente.
@@ -337,6 +395,9 @@ watch(draft, async () => {
           </span>
           <button class="mini" type="button" :aria-expanded="chatsOpen" @click="toggleChats">
             <History :size="13" /> {{ $t('chat.history', { n: chats.length }) }}
+          </button>
+          <button v-if="turns.length" class="mini" type="button" :title="$t('chat.downloadChat')" @click="downloadChat">
+            <Download :size="13" /> {{ $t('chat.downloadChatShort') }}
           </button>
           <button v-if="turns.length" class="mini" type="button" @click="reset"><Plus :size="13" /> {{ $t('chat.newConversation') }}</button>
         </header>
@@ -426,6 +487,18 @@ watch(draft, async () => {
                       <span class="muted num">{{ $t(s.table.truncated ? 'chat.rowsMore' : 'chat.rows', { n: nf.format(s.table.row_count) }) }}</span>
                     </div>
                     <DataGrid :result="s.table" />
+                    <MiniChart v-if="s.chart" :spec="s.chart" :rows="s.table.rows" :name="s.table.datasource" />
+                    <!-- il file contiene il risultato INTERO, non le righe mostrate:
+                         il server riesegue la query salvata -->
+                    <p v-if="turn.seq !== undefined && chatId" class="grabs">
+                      <button type="button" class="mini" :disabled="grabbing !== ''" @click="grab(turn, s, 'csv')">
+                        <Download :size="12" /> CSV
+                      </button>
+                      <button type="button" class="mini" :disabled="grabbing !== ''" @click="grab(turn, s, 'xlsx')">
+                        <Download :size="12" /> Excel
+                      </button>
+                      <span v-if="s.table.truncated" class="muted small">{{ $t('chat.grabsWhole') }}</span>
+                    </p>
                   </div>
                 </li>
               </ol>
@@ -613,6 +686,8 @@ watch(draft, async () => {
 .chatsearch:focus-within { border-color: var(--accent); }
 .chatsearch input::-webkit-search-cancel-button { display: none; }
 .chatsearch .count { flex: none; font-variant-numeric: tabular-nums; }
+
+.grabs { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; }
 
 /* costo di un turno: presente ma sottovoce — e' un'informazione, non il contenuto */
 .cost { margin: 6px 0 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 6px; }

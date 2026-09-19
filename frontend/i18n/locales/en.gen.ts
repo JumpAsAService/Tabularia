@@ -1017,6 +1017,10 @@ export default {
     "remove": "Remove the connection"
   },
   "chat": {
+    "downloadChat": "Download the conversation as Markdown",
+    "downloadChatShort": "Download",
+    "downloadPng": "Download the chart as PNG",
+    "grabsWhole": "the file has every row, not only the ones shown",
     "costUnder": "< {v}",
     "deleteChatNamed": "Delete the conversation “{name}”",
     "actThinking": "Thinking…",

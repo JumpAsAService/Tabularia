@@ -25,7 +25,9 @@ import re
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Literal, Optional
+
+from pydantic import BaseModel, Field
 
 from fastapi import Request
 
@@ -190,6 +192,7 @@ How to work:
 4. If a query fails, read the error, fix the SQL and try again. If it keeps failing, say so plainly.
 
 Rules:
+- When the answer is a ranking, a share of a total or a series over time, pass `chart` to `query_datasource` so the result is drawn as well as listed — and always when the user asks for a chart. Omit it for a single number or a couple of rows.
 - Every figure you state must come from a query result in this conversation. Never estimate, never invent, and do the arithmetic (totals, shares, differences) in SQL rather than in your head.
 - Name the datasource you used. If the data cannot answer the question, say what is missing.
 - Never describe what a datasource contains from its name alone: quote its description, or its columns, from a tool result. If it has no description, say so and look at the columns. The same holds for fields: a column without a description is undescribed, and a meaning you infer from its name or its values must be presented as your reading, never as catalog documentation.
@@ -265,7 +268,9 @@ async def describe_datasource(ctx: RunContext[ChatDeps], datasource_id: int) -> 
 CHART_TYPES = ("bar", "hbar", "line", "area", "pie", "donut", "scatter")
 
 
-def _chart_spec(chart: Optional[dict[str, Any]], columns: list[dict[str, Any]]) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+
+
+def _chart_spec(chart: Optional[Any], columns: list[dict[str, Any]]) -> tuple[Optional[dict[str, Any]], Optional[str]]:
     """Controlla la specifica del grafico contro le colonne che la query ha davvero
     restituito.
 
@@ -274,8 +279,6 @@ def _chart_spec(chart: Optional[dict[str, Any]], columns: list[dict[str, Any]]) 
     un motivo, che torna al modello."""
     if not chart:
         return None, None
-    if not isinstance(chart, dict):
-        return None, "The chart must be an object."
     tipo = str(chart.get("type") or "").lower()
     if tipo not in CHART_TYPES:
         return None, f"Unknown chart type {tipo!r}. Use one of: {', '.join(CHART_TYPES)}."
@@ -302,11 +305,15 @@ def _chart_spec(chart: Optional[dict[str, Any]], columns: list[dict[str, Any]]) 
 @agent.tool
 async def query_datasource(
     ctx: RunContext[ChatDeps], datasource_id: int, sql: str, limit: int = 50,
-    chart: Optional[dict[str, Any]] = None,
+    chart_type: Optional[Literal["bar", "hbar", "line", "area", "pie", "donut", "scatter"]] = None,
+    chart_x: Optional[str] = None,
+    chart_y: Optional[str] = None,
+    chart_series: Optional[str] = None,
+    chart_title: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run ONE read-only SELECT on a datasource. The table is named `self` (e.g. `SELECT paese, COUNT(*) AS n FROM self GROUP BY paese ORDER BY n DESC`). Returns columns, rows (capped) and whether the result was truncated.
 
-    Pass `chart` to show the result as a chart under the table, when a picture reads better than the numbers — a ranking, a share of a total, a series over time. Shape: `{"type": "bar"|"hbar"|"line"|"area"|"pie"|"donut"|"scatter", "x": "<column>", "y": "<numeric column>", "series": "<optional column that splits into several series>", "title": "<short>"}`. `x` and `y` must be columns your query actually returns. Omit it for a single number, for a handful of rows that are already readable, or when the result is not numeric: a chart of three rows is noise."""
+    To draw the result as a chart under the table, set `chart_type` together with `chart_x` (the categories) and `chart_y` (the numeric column) — both must be columns your query actually returns. `chart_series` optionally splits the data into several series, `chart_title` is a short title in the user's language. Use bar for a ranking, hbar when the labels are long or the categories many, line or area for a series over time, pie or donut for shares of a total, scatter for two numeric measures. Leave them unset for a single number, for a couple of rows that already read fine, or for a non-numeric result: a chart of three rows is noise."""
     deps = ctx.deps
     cap = get_settings().ai.max_result_rows
     limit = max(1, min(int(limit or 50), cap))
@@ -329,7 +336,11 @@ async def query_datasource(
             "row_count": n_rows, "truncated": bool(res.get("truncated")),
         }
         # il grafico e' dell'utente: si valida, non si esegue niente di nuovo
-        spec, motivo = _chart_spec(chart, colonne)
+        spec, motivo = _chart_spec(
+            {"type": chart_type, "x": chart_x, "y": chart_y, "series": chart_series, "title": chart_title}
+            if chart_type else None,
+            colonne,
+        )
         if spec:
             esito["chart"] = spec
         elif motivo:

@@ -934,6 +934,10 @@ export default {
     "remove": "Quitar la conexión"
   },
   "chat": {
+    "downloadChat": "Descargar la conversación en Markdown",
+    "downloadChatShort": "Descargar",
+    "downloadPng": "Descargar el gráfico en PNG",
+    "grabsWhole": "el archivo contiene todas las filas, no solo las mostradas",
     "costUnder": "< {v}",
     "deleteChatNamed": "Eliminar la conversación «{name}»",
     "actThinking": "Pensando…",

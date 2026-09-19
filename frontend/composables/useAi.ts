@@ -27,11 +27,20 @@ export interface AiToolCall {
   args: Record<string, any>
 }
 
+export interface AiChartSpec {
+  type: 'bar' | 'hbar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter'
+  x: string
+  y: string
+  series?: string
+  title?: string
+}
+
 export interface AiToolResult {
   id: string
   name: string
   ok: boolean
   table?: AiTable
+  chart?: AiChartSpec
   count?: number
   error?: string
 }
@@ -71,7 +80,7 @@ export interface AiTurn {
   seq: number
   question: string
   answer: string
-  steps: { name: string; args: any }[]
+  steps: { id?: string; name: string; args: any; table?: AiTable; chart?: AiChartSpec }[]
   model_id: string
   usage: AiUsage
   created_at: string
@@ -160,6 +169,14 @@ export function useAi() {
   const openChat = (id: number) => apiFetch<AiChatDetail>(`/ai/chats/${id}`)
   const removeChat = (id: number) => apiFetch<void>(`/ai/chats/${id}`, { method: 'DELETE' })
 
+  /** Il risultato INTERO di un passo, non le righe mostrate: il server riesegue
+   *  la query salvata e strema il file. */
+  const exportStep = (chatId: number, seq: number, stepId: string, fmt: 'csv' | 'xlsx') =>
+    apiFetch<Blob>(
+      `/ai/chats/${chatId}/turns/${seq}/steps/${encodeURIComponent(stepId)}/export?fmt=${fmt}`,
+      { responseType: 'blob' },
+    )
+
   return {
     status: () => apiFetch<AiStatus>('/ai/status'),
     models: () => apiFetch<AiModel[]>('/ai/models'),
@@ -169,5 +186,6 @@ export function useAi() {
     chats,
     openChat,
     removeChat,
+    exportStep,
   }
 }

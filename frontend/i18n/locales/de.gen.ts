@@ -934,6 +934,10 @@ export default {
     "remove": "Verbindung entfernen"
   },
   "chat": {
+    "downloadChat": "Unterhaltung als Markdown herunterladen",
+    "downloadChatShort": "Herunterladen",
+    "downloadPng": "Diagramm als PNG herunterladen",
+    "grabsWhole": "die Datei enthält alle Zeilen, nicht nur die angezeigten",
     "costUnder": "< {v}",
     "deleteChatNamed": "Unterhaltung „{name}“ löschen",
     "actThinking": "Denkt nach…",
