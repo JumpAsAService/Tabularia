@@ -25,7 +25,7 @@ import re
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from fastapi import Request
 
@@ -262,9 +262,51 @@ async def describe_datasource(ctx: RunContext[ChatDeps], datasource_id: int) -> 
     return info
 
 
+CHART_TYPES = ("bar", "hbar", "line", "area", "pie", "donut", "scatter")
+
+
+def _chart_spec(chart: Optional[dict[str, Any]], columns: list[dict[str, Any]]) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+    """Controlla la specifica del grafico contro le colonne che la query ha davvero
+    restituito.
+
+    Un grafico che nomina una colonna inesistente e' peggio di nessun grafico: la
+    pagina disegnerebbe il vuoto e l'utente non saprebbe perche'. Si rifiuta con
+    un motivo, che torna al modello."""
+    if not chart:
+        return None, None
+    if not isinstance(chart, dict):
+        return None, "The chart must be an object."
+    tipo = str(chart.get("type") or "").lower()
+    if tipo not in CHART_TYPES:
+        return None, f"Unknown chart type {tipo!r}. Use one of: {', '.join(CHART_TYPES)}."
+    nomi = {str(c.get("name")) for c in columns if isinstance(c, dict)}
+    x, y = str(chart.get("x") or ""), str(chart.get("y") or "")
+    mancanti = [n for n in (x, y) if n not in nomi]
+    if mancanti:
+        return None, (
+            f"The chart names columns the query does not return: {', '.join(mancanti)}. "
+            f"Available: {', '.join(sorted(nomi))}."
+        )
+    serie = chart.get("series")
+    if serie is not None and str(serie) not in nomi:
+        return None, f"The series column {serie!r} is not in the result."
+    spec = {"type": tipo, "x": x, "y": y}
+    if serie is not None:
+        spec["series"] = str(serie)
+    titolo = chart.get("title")
+    if titolo:
+        spec["title"] = str(titolo)[:120]
+    return spec, None
+
+
 @agent.tool
-async def query_datasource(ctx: RunContext[ChatDeps], datasource_id: int, sql: str, limit: int = 50) -> dict[str, Any]:
-    """Run ONE read-only SELECT on a datasource. The table is named `self` (e.g. `SELECT paese, COUNT(*) AS n FROM self GROUP BY paese ORDER BY n DESC`). Returns columns, rows (capped) and whether the result was truncated."""
+async def query_datasource(
+    ctx: RunContext[ChatDeps], datasource_id: int, sql: str, limit: int = 50,
+    chart: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Run ONE read-only SELECT on a datasource. The table is named `self` (e.g. `SELECT paese, COUNT(*) AS n FROM self GROUP BY paese ORDER BY n DESC`). Returns columns, rows (capped) and whether the result was truncated.
+
+    Pass `chart` to show the result as a chart under the table, when a picture reads better than the numbers — a ranking, a share of a total, a series over time. Shape: `{"type": "bar"|"hbar"|"line"|"area"|"pie"|"donut"|"scatter", "x": "<column>", "y": "<numeric column>", "series": "<optional column that splits into several series>", "title": "<short>"}`. `x` and `y` must be columns your query actually returns. Omit it for a single number, for a handful of rows that are already readable, or when the result is not numeric: a chart of three rows is noise."""
     deps = ctx.deps
     cap = get_settings().ai.max_result_rows
     limit = max(1, min(int(limit or 50), cap))
@@ -281,10 +323,19 @@ async def query_datasource(ctx: RunContext[ChatDeps], datasource_id: int, sql: s
         res = await _engine_preview(snapshot, [{"type": "sql", "params": {"query": query}}], limit, deps)
         rows = _trim(res.get("rows", []))
         n_rows = len(rows)
-        return {
-            "datasource": snapshot.name, "columns": res.get("columns", []), "rows": rows,
+        colonne = res.get("columns", [])
+        esito: dict[str, Any] = {
+            "datasource": snapshot.name, "columns": colonne, "rows": rows,
             "row_count": n_rows, "truncated": bool(res.get("truncated")),
         }
+        # il grafico e' dell'utente: si valida, non si esegue niente di nuovo
+        spec, motivo = _chart_spec(chart, colonne)
+        if spec:
+            esito["chart"] = spec
+        elif motivo:
+            # al modello si dice PERCHE', cosi' alla prossima domanda sceglie meglio
+            esito["chart_error"] = motivo
+        return esito
     except _EngineRefusal as e:
         outcome = "failure"
         if e.status >= 500:

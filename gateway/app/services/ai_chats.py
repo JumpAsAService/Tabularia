@@ -181,6 +181,7 @@ def _turno_per_ui(turno: AiChatTurn) -> dict[str, Any]:
     testo: una copia sola non può divergere dall'altra."""
     testo: list[str] = []
     passi: list[dict[str, Any]] = []
+    per_id: dict[str, dict[str, Any]] = {}
     try:
         messaggi = json.loads(turno.messages)
     except ValueError:
@@ -191,7 +192,28 @@ def _turno_per_ui(turno: AiChatTurn) -> dict[str, Any]:
             if tipo == "text" and parte.get("content"):
                 testo.append(str(parte["content"]))
             elif tipo == "tool-call":
-                passi.append({"name": parte.get("tool_name"), "args": parte.get("args")})
+                passo = {
+                    "id": parte.get("tool_call_id"),
+                    "name": parte.get("tool_name"),
+                    "args": parte.get("args"),
+                }
+                passi.append(passo)
+                if passo["id"]:
+                    per_id[str(passo["id"])] = passo
+            elif tipo == "tool-return":
+                # la TABELLA che giustifica la risposta: senza, una conversazione
+                # riapribile mostrerebbe i passi e non le prove
+                passo = per_id.get(str(parte.get("tool_call_id")))
+                contenuto = parte.get("content")
+                if passo is None or not isinstance(contenuto, dict):
+                    continue
+                if isinstance(contenuto.get("rows"), list) and "row_count" in contenuto:
+                    passo["table"] = {
+                        k: contenuto.get(k)
+                        for k in ("datasource", "columns", "rows", "row_count", "truncated")
+                    }
+                if isinstance(contenuto.get("chart"), dict):
+                    passo["chart"] = contenuto["chart"]
     return {
         "seq": turno.seq,
         "question": turno.question,
@@ -244,3 +266,36 @@ def rinomina(session: Session, chat_id: int, titolo: str) -> None:
     chat.title = pulito
     session.add(chat)
     session.commit()
+
+
+def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_id: str) -> tuple[int, str]:
+    """La datasource e la SQL di un passo salvato, per riesportarlo.
+
+    La query si rilegge dal TURNO, non la si accetta dal client: chi scarica non
+    deve poter scegliere che cosa viene eseguito. Ritorna `(datasource_id, sql)`."""
+    _chat_di(session, user, chat_id)  # 404 se non è sua
+    turno = session.exec(
+        select(AiChatTurn).where(AiChatTurn.chat_id == chat_id, AiChatTurn.seq == seq)
+    ).first()
+    if turno is None:
+        raise HTTPException(status_code=404, detail="Passo non trovato")
+    try:
+        messaggi = json.loads(turno.messages)
+    except ValueError:
+        messaggi = []
+    for m in messaggi:
+        for parte in m.get("parts", []) or []:
+            if parte.get("part_kind") != "tool-call" or str(parte.get("tool_call_id")) != str(step_id):
+                continue
+            if parte.get("tool_name") != "query_datasource":
+                raise HTTPException(status_code=422, detail="Questo passo non è una query")
+            args = parte.get("args")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    args = {}
+            if not isinstance(args, dict) or not args.get("sql"):
+                raise HTTPException(status_code=422, detail="Il passo non ha una query da rieseguire")
+            return int(args.get("datasource_id") or 0), str(args["sql"])
+    raise HTTPException(status_code=404, detail="Passo non trovato")

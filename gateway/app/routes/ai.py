@@ -15,12 +15,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from decimal import Decimal
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -28,10 +30,11 @@ from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.db.session import engine as db_engine, get_session
 from app.deps.auth import get_current_user, require_superuser
-from app.models import AiChat, AiModel, User
+from app.models import AiChat, AiModel, Datasource, User
 from app.services import ai_agent, ai_chats, ai_pricing, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import allowed_engines
+from app.services.permissions import readable_project_ids
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -161,6 +164,8 @@ def _tool_result_payload(part: Any) -> dict[str, Any]:
     # describe_datasource ha `rows`, ma li' e' il numero di righe.)
     if isinstance(content, dict) and isinstance(content.get("rows"), list) and isinstance(content.get("columns"), list) and "row_count" in content:
         out["table"] = {k: content.get(k) for k in ("datasource", "columns", "rows", "row_count", "truncated")}
+        if isinstance(content.get("chart"), dict):
+            out["chart"] = content["chart"]
     elif isinstance(content, dict) and content.get("error"):
         out["ok"], out["error"] = False, str(content["error"])[:500]
     elif isinstance(content, dict) and isinstance(content.get("datasources"), list):
@@ -189,6 +194,57 @@ def get_chat(chat_id: int, user: User = Depends(get_current_user), session: Sess
 @router.delete("/chats/{chat_id}", status_code=204)
 def delete_chat(chat_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     ai_chats.elimina(session, user, chat_id)
+
+
+@router.get("/chats/{chat_id}/turns/{seq}/steps/{step_id}/export")
+async def export_step(
+    chat_id: int, seq: int, step_id: str, fmt: str = "csv",
+    request: Request = None,  # type: ignore[assignment]
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Scarica il risultato COMPLETO di una query dell'assistente.
+
+    La chat mostra al massimo `AI__MAX_RESULT_ROWS` righe; il file le contiene
+    tutte, perche' la query viene rieseguita dal motore sul percorso di export
+    normale — streaming, tetto di formato, audit. La SQL si rilegge dal turno
+    salvato: il client manda solo l'id del passo, mai una query."""
+    if fmt not in ("csv", "xlsx"):
+        raise HTTPException(status_code=422, detail="Formato non supportato: usa csv o xlsx")
+    datasource_id, sql = ai_chats.query_del_passo(session, user, chat_id, seq, step_id)
+    # i permessi si ricontrollano ADESSO: la conversazione puo' essere vecchia
+    # e chi l'ha scritta puo' aver perso l'accesso nel frattempo
+    ds = session.get(Datasource, datasource_id)
+    if ds is None or ds.project_id not in readable_project_ids(session, user):
+        raise HTTPException(status_code=404, detail="Datasource non disponibile")
+    nome = re.sub(r"[^A-Za-z0-9._-]+", "_", ds.name)[:60] or "risultato"
+    payload = {
+        "bucket": ds.bucket, "input_key": ds.key,
+        "operations": [{"type": "sql", "params": {"query": sql}}],
+        "format": fmt, "filename": f"{nome}.{fmt}",
+    }
+    engine = await pick_engine(session, None)
+    if engine:
+        payload["engine"] = engine
+    audit.record_audit(
+        session, actor=user, action=audit.EXPORT_DOWNLOAD, request=request,
+        target_type="datasource", target_id=ds.id, target_label=ds.name,
+        detail={"format": fmt, "via": "ai", "chat_id": chat_id, "sql": sql[:2000]},
+    )
+    client = get_engine_client()
+    req = client.build_request("POST", "/tasks/export", json=payload, timeout=600)
+    resp = await client.send(req, stream=True)
+    if resp.status_code >= 400:
+        testo = (await resp.aread()).decode(errors="replace")[:500]
+        await resp.aclose()
+        raise HTTPException(status_code=resp.status_code, detail=f"Export non riuscito: {testo}")
+    return StreamingResponse(
+        resp.aiter_bytes(),
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type"),
+        headers={"Content-Disposition": resp.headers.get("content-disposition", f'attachment; filename="{nome}.{fmt}"')},
+        background=BackgroundTask(resp.aclose),
+    )
 
 
 @router.post("/chat")

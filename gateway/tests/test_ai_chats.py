@@ -138,3 +138,76 @@ async def test_the_routes_are_scoped_to_the_caller(session, due_utenti):
     assert ai_routes.get_chat(chat.id, user=anna, session=session)["id"] == chat.id
     with pytest.raises(HTTPException):
         ai_routes.get_chat(chat.id, user=bruno, session=session)
+
+
+# ── scarico del risultato completo ───────────────────────────────────────────
+
+def _turno_con_query(session, chat_id, ds_id, sql="SELECT 1 AS n FROM self", step="call-1"):
+    import json as _json
+    messaggi = [{"parts": [{
+        "part_kind": "tool-call", "tool_name": "query_datasource", "tool_call_id": step,
+        "args": _json.dumps({"datasource_id": ds_id, "sql": sql}),
+    }]}]
+    t = AiChatTurn(chat_id=chat_id, seq=0, question="d", model_id="m",
+                   messages=_json.dumps(messaggi), input_tokens=1, output_tokens=1, requests=1)
+    session.add(t)
+    session.commit()
+    return t
+
+
+def test_the_query_is_read_back_from_the_turn_not_from_the_caller(session, due_utenti):
+    anna, _, chat = due_utenti
+    _turno_con_query(session, chat.id, 7, sql="SELECT paese FROM self")
+    assert ai_chats.query_del_passo(session, anna, chat.id, 0, "call-1") == (7, "SELECT paese FROM self")
+
+
+def test_you_cannot_export_a_step_of_someone_elses_chat(session, due_utenti):
+    anna, bruno, chat = due_utenti
+    _turno_con_query(session, chat.id, 7)
+    with pytest.raises(HTTPException) as e:
+        ai_chats.query_del_passo(session, bruno, chat.id, 0, "call-1")
+    assert e.value.status_code == 404
+
+
+def test_a_step_that_is_not_a_query_cannot_be_exported(session, due_utenti):
+    import json as _json
+
+    anna, _, chat = due_utenti
+    messaggi = [{"parts": [{"part_kind": "tool-call", "tool_name": "list_datasources",
+                            "tool_call_id": "c9", "args": "{}"}]}]
+    session.add(AiChatTurn(chat_id=chat.id, seq=0, question="d", model_id="m",
+                           messages=_json.dumps(messaggi)))
+    session.commit()
+    with pytest.raises(HTTPException) as e:
+        ai_chats.query_del_passo(session, anna, chat.id, 0, "c9")
+    assert e.value.status_code == 422
+
+
+def test_an_unknown_step_is_not_found(session, due_utenti):
+    anna, _, chat = due_utenti
+    _turno_con_query(session, chat.id, 7)
+    with pytest.raises(HTTPException) as e:
+        ai_chats.query_del_passo(session, anna, chat.id, 0, "non-esiste")
+    assert e.value.status_code == 404
+
+
+def test_reopening_a_conversation_brings_back_the_evidence(session, due_utenti):
+    """Un turno riaperto deve mostrare le TABELLE, non solo i passi."""
+    import json as _json
+
+    anna, _, chat = due_utenti
+    messaggi = [{"parts": [
+        {"part_kind": "tool-call", "tool_name": "query_datasource", "tool_call_id": "c1",
+         "args": _json.dumps({"datasource_id": 7, "sql": "SELECT 1"})},
+        {"part_kind": "tool-return", "tool_call_id": "c1", "content": {
+            "datasource": "ordini", "columns": [{"name": "n"}], "rows": [{"n": 3}],
+            "row_count": 1, "truncated": False, "chart": {"type": "bar", "x": "paese", "y": "n"}}},
+        {"part_kind": "text", "content": "Sono 3."},
+    ]}]
+    session.add(AiChatTurn(chat_id=chat.id, seq=0, question="quanti?", model_id="m",
+                           messages=_json.dumps(messaggi)))
+    session.commit()
+
+    passo = ai_chats.dettaglio(session, anna, chat.id)["messages"][0]["steps"][0]
+    assert passo["table"]["rows"] == [{"n": 3}]
+    assert passo["chart"] == {"type": "bar", "x": "paese", "y": "n"}
