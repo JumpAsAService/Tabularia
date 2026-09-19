@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Rendering della coda dei toast (vedi composables/useToast.ts).
 // Montato una volta sola in app.vue: copre tutte le pagine, editor incluso.
-import { CheckCircle2, XCircle, Info, X } from 'lucide-vue-next'
+import { CheckCircle2, XCircle, TriangleAlert, Info, X } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 
 const { toasts, dismiss } = useToast()
 
-const icons = { success: CheckCircle2, error: XCircle, info: Info }
+const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, info: Info }
 </script>
 
 <template>
@@ -50,6 +50,8 @@ const icons = { success: CheckCircle2, error: XCircle, info: Info }
 .toast.success .ticon { color: var(--accent-2); }
 .toast.error { border-color: rgba(255, 107, 107, 0.5); }
 .toast.error .ticon { color: var(--danger); }
+.toast.warning { border-color: color-mix(in srgb, var(--op-rows, #f59e0b) 45%, transparent); }
+.toast.warning .ticon { color: var(--op-rows, #f59e0b); }
 .toast.info .ticon { color: var(--accent); }
 .ticon { flex: none; margin-top: 1px; }
 .tmsg { flex: 1; line-height: 1.35; overflow-wrap: anywhere; }

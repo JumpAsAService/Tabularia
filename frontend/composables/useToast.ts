@@ -4,7 +4,7 @@
 
 export interface Toast {
   id: number
-  kind: 'success' | 'error' | 'info'
+  kind: 'success' | 'error' | 'warning' | 'info'
   message: string
 }
 
@@ -21,7 +21,7 @@ export function useToast() {
     const id = nextId++
     toasts.value = [...toasts.value, { id, kind, message }]
     // gli errori restano di più: vanno letti, non intravisti
-    const ttl = ttlMs ?? (kind === 'error' ? 6500 : 3500)
+    const ttl = ttlMs ?? (kind === 'error' ? 6500 : kind === 'warning' ? 5000 : 3500)
     if (import.meta.client) setTimeout(() => dismiss(id), ttl)
   }
 
@@ -30,6 +30,8 @@ export function useToast() {
     dismiss,
     success: (message: string) => push('success', message),
     error: (message: string) => push('error', message),
+    // avvisi: qualcosa da sapere, non da riparare
+    warning: (message: string) => push('warning', message),
     info: (message: string) => push('info', message),
   }
 }

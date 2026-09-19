@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, provide } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Node, Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -10,6 +10,9 @@ import { useApi, errMessage } from '~/composables/useApi'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useFlowPresence } from '~/composables/useFlowPresence'
 import { useAppInfo } from '~/composables/useAppInfo'
+import type { NodeStats } from '~/composables/useNodeStats'
+// import esplicito: nel container i componenti nuovi non vengono scansionati
+import FlowEdge from '~/components/edges/FlowEdge.vue'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -46,6 +49,9 @@ const {
   onConnect,
   onNodeClick,
   onPaneClick,
+  onEdgeMouseEnter,
+  onEdgeMouseLeave,
+  getSelectedEdges,
   screenToFlowCoordinate,
   fitView,
 } = useVueFlow()
@@ -114,6 +120,31 @@ function setStatus(msg: string, kind: 'info' | 'ok' | 'error' | 'busy' = 'info')
   else if (kind === 'error') toast.error(msg)
 }
 const busy = ref(false)
+// Righe e colonne note di ogni nodo, dall'ULTIMA preview che l'ha toccato:
+// nessuna query in piu', e mai salvate nel flusso (provide → componenti nodo).
+// `rows` manca quando si conoscono solo le colonne (richiesta `cols`, limit 1).
+const nodeStats = reactive<Record<string, NodeStats>>({})
+// nodi per cui l'avviso «passo a monte oltre il tetto della cache» e' gia'
+// stato mostrato in questa sessione: il toast una volta, poi parla il nodo
+const cacheWarned = new Set<string>()
+provide('nodeStats', nodeStats)
+// arco sotto il puntatore: il suo componente mostra la «×» di rimozione
+const hoveredEdgeId = ref<string | null>(null)
+provide('flowEdgeHovered', hoveredEdgeId)
+// dal tratto alla «×» il puntatore lascia l'arco un istante prima di entrare
+// nel bottone: senza una tolleranza la «×» sparirebbe sotto il cursore
+let edgeLeaveTimer: number | undefined
+onEdgeMouseEnter(({ edge }) => {
+  window.clearTimeout(edgeLeaveTimer)
+  hoveredEdgeId.value = edge.id
+})
+onEdgeMouseLeave(({ edge }) => {
+  window.clearTimeout(edgeLeaveTimer)
+  edgeLeaveTimer = window.setTimeout(() => {
+    if (hoveredEdgeId.value === edge.id) hoveredEdgeId.value = null
+  }, 250)
+})
+
 const preview = ref<PreviewResult | null>(null)
 const previewLoading = ref(false)
 const previewError = ref('')
@@ -315,7 +346,7 @@ function syncSourceKeys() {
       changed = true
     }
   }
-  if (changed) invalidateColumns() // le catene a valle vanno ricalcolate sul nuovo snapshot
+  if (changed) { invalidateColumns(); invalidateStats() } // le catene a valle vanno ricalcolate sul nuovo snapshot
 }
 
 async function refreshDatasources() {
@@ -348,6 +379,40 @@ async function refreshFlows() {
 }
 
 // ── Eventi canvas ─────────────────────────────────────────────────────────
+// Nodi a valle di `fromId` lungo gli archi DATI (fromId compreso): i loro
+// conteggi non valgono piu' quando la catena a monte cambia.
+function invalidateStats(fromId?: string) {
+  if (!fromId) {
+    for (const k of Object.keys(nodeStats)) if (findNode(k)?.type !== 'source') delete nodeStats[k]
+    return
+  }
+  const seen = new Set<string>()
+  const queue = [fromId]
+  while (queue.length) {
+    const id = queue.shift()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    delete nodeStats[id]
+    for (const e of getEdges.value) {
+      if (e.source === id && (e.targetHandle as string) !== 'seq-in') queue.push(e.target)
+    }
+  }
+}
+
+function removeEdgeById(id: string) {
+  const edge = getEdges.value.find((e) => e.id === id)
+  if (!edge) return
+  const isSeq = (edge.targetHandle as string) === 'seq-in'
+  removeEdges([id])
+  if (hoveredEdgeId.value === id) hoveredEdgeId.value = null
+  if (isSeq) return
+  // senza quell'arco il nodo a valle (e tutto cio' che segue) ha un altro input
+  invalidateColumns()
+  invalidateStats(edge.target)
+  if (selectedId.value) refreshForNode(selectedId.value)
+}
+provide('flowEdgeRemove', removeEdgeById)
+
 onConnect((conn: Connection) => {
   const seqSource = (conn.sourceHandle as string) === 'seq-out'
   const seqTarget = (conn.targetHandle as string) === 'seq-in'
@@ -377,6 +442,7 @@ onConnect((conn: Connection) => {
   if (!seqTarget) {
     // solo gli archi DATI cambiano le colonne a valle; la sequenza no
     invalidateColumns()
+    invalidateStats(conn.target!)
     refreshForNode(conn.target!)
   } else {
     autolinkRefreshToSource(conn.source!, conn.target!)
@@ -625,6 +691,7 @@ function patchSelected(patch: Record<string, any>) {
   if (!selectedId.value) return
   updateNodeData(selectedId.value, patch)
   invalidateColumns()
+  invalidateStats(selectedId.value)
   // il nodo SQL NON esegue l'anteprima a ogni modifica: una query può essere
   // pesante e riprovarla a ogni tasto/blur è sprecato. L'anteprima è a comando
   // (bottone «Anteprima» o Cmd/Ctrl+Enter → previewSelected).
@@ -652,6 +719,7 @@ function deleteSelected() {
     if (children.length) removeNodes(children, true)
     children.forEach((c) => delete nodeColumns[c])
   }
+  invalidateStats(id) // il nodo e tutto cio' che lo seguiva
   removeNodes(id, true) // rimuove anche gli archi collegati
   delete nodeColumns[id]
   selectedId.value = null
@@ -666,6 +734,13 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
   const tag = (document.activeElement?.tagName ?? '').toUpperCase()
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
+  // un arco selezionato (click sul tratto) si toglie con lo stesso tasto del nodo
+  const edges = getSelectedEdges.value
+  if (edges.length) {
+    e.preventDefault()
+    edges.forEach((edge) => removeEdgeById(edge.id))
+    return
+  }
   if (!selectedId.value) return
   e.preventDefault()
   deleteSelected()
@@ -704,6 +779,7 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
     limit: 1,
   }, 'cols')
   nodeColumns[nodeId] = res.columns
+  if (!nodeStats[nodeId]) nodeStats[nodeId] = { cols: res.columns.length }
   return res.columns
 }
 
@@ -812,6 +888,14 @@ async function runPreview(nodeId: string) {
       limit: 100,
     }, 'preview')
     nodeColumns[nodeId] = res.columns
+    nodeStats[nodeId] = {
+      rows: res.row_count, truncated: res.truncated, cols: res.columns.length,
+      cacheState: res.cache_state ?? null, cacheCap: res.cache_cap_rows ?? null,
+    }
+    if (res.cache_state === 'skipped' && !cacheWarned.has(nodeId)) {
+      cacheWarned.add(nodeId)
+      toast.warning(t('flowEditor.cacheSkippedToast', { n: (res.cache_cap_rows ?? 0).toLocaleString() }))
+    }
     if (seq === previewSeq) preview.value = res
   } catch (e) {
     // "superata da una piu' recente" non e' un errore: non va mai mostrato
@@ -1347,6 +1431,9 @@ async function pollTask(id: string) {
         :delete-key-code="null"
         :default-edge-options="{ animated: true }"
       >
+        <template #edge-default="props">
+          <FlowEdge v-bind="props" />
+        </template>
         <template #node-source="props">
           <SourceNode :id="props.id" :data="props.data" />
         </template>

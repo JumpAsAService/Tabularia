@@ -11,6 +11,11 @@ export interface PreviewResult {
   rows: Record<string, any>[]
   row_count: number
   truncated: boolean
+  // stato della step-cache del passo A MONTE del nodo: hit | pending | skipped
+  // (oltre il tetto: ricalcolato a ogni anteprima) | off (Viewer); assente se
+  // non c'e' un passo a monte
+  cache_state?: 'hit' | 'pending' | 'skipped' | 'off' | null
+  cache_cap_rows?: number | null
 }
 
 export interface IngestResult {

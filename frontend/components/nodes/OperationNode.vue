@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
+import { RefreshCw } from 'lucide-vue-next'
 import { Handle, Position } from '@vue-flow/core'
+import { useI18n } from 'vue-i18n'
 import { opMeta } from '~/composables/useOpIcons'
+import { useNodeStats } from '~/composables/useNodeStats'
 
 const props = defineProps<{ id: string; data: any }>()
+const { t } = useI18n()
+const stats = useNodeStats(() => props.id, inject, t)
 
 const isJoin = computed(() => props.data?.opType === 'join')
 const isUnion = computed(() => props.data?.opType === 'union')
@@ -39,6 +44,13 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
       <template v-else>
         {{ $t('operationNode.paramCount', { n: paramCount }) }}
       </template>
+    </div>
+
+    <div v-if="stats" class="node-stats" :title="stats.title">
+      <span v-if="stats.rows">{{ stats.rows }}</span>
+      <span v-if="stats.rows" class="dot" aria-hidden="true">·</span>
+      <span>{{ stats.cols }}</span>
+      <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
     </div>
 
     <Handle id="out" type="source" :position="Position.Right" />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Node } from '@vue-flow/core'
 import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, FlaskConical, Filter, Plus, X } from 'lucide-vue-next'
@@ -7,6 +7,7 @@ import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type SourceFilter } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
+import { useNodeStats } from '~/composables/useNodeStats'
 
 const props = defineProps<{
   node: Node | null
@@ -23,6 +24,7 @@ const props = defineProps<{
   currentFlowId?: number | null
 }>()
 const { t } = useI18n()
+const nodeStats = useNodeStats(() => props.node?.id ?? '', inject, t)
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
   (e: 'delete'): void
@@ -661,6 +663,7 @@ function pickDatasource(id: number | null) {
         :options="operations.filter((o) => o !== 'foreach').map((op) => ({ value: op, label: opMeta(op).label || op }))"
         @update:model-value="changeType"
       />
+      <p v-if="nodeStats?.cacheHint" class="muted outhint cachehint"><RefreshCw :size="12" /> {{ nodeStats.cacheHint }}</p>
 
       <div v-if="node.data.opType === 'join'" class="joinhelp">
         <strong class="joinhead"><Link2 :size="13" /> {{ $t('nodePanel.howToConnectJoinTitle') }}</strong>

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // Nodo Output (terminale, stile Tableau Prep): dove finisce il risultato della
 // catena — datasource del catalogo, tabella di database, o file/dataset su S3.
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
-import { Database, HardDriveDownload, CloudUpload, Mail } from 'lucide-vue-next'
+import { useNodeStats } from '~/composables/useNodeStats'
+import { Database, HardDriveDownload, CloudUpload, Mail, RefreshCw } from 'lucide-vue-next'
 
 const props = defineProps<{ id: string; data: any }>()
 const { t } = useI18n()
+const stats = useNodeStats(() => props.id, inject, t)
 
 const destType = computed(() => props.data?.destType ?? 'datasource')
 const icon = computed(() =>
@@ -62,6 +64,12 @@ const summary = computed(() => {
       {{ title }}
     </div>
     <div class="node-body muted">{{ summary }}</div>
+    <div v-if="stats" class="node-stats" :title="stats.title">
+      <span v-if="stats.rows">{{ stats.rows }}</span>
+      <span v-if="stats.rows" class="dot" aria-hidden="true">·</span>
+      <span>{{ stats.cols }}</span>
+      <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
+    </div>
     <!-- uscita di SEQUENZA verso il prossimo nodo di controllo/output -->
     <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />
   </div>
