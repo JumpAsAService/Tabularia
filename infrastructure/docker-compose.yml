@@ -5,8 +5,7 @@ services:
   redis:
     image: valkey/valkey:8-alpine
     container_name: dataprep-valkey
-    ports:
-      - "6379:6379"
+    # nessuna porta sull'host — broker e cache, lo usano solo i container
     volumes:
       - redis_data:/data
     command: valkey-server --appendonly yes
@@ -22,7 +21,7 @@ services:
     image: postgres:16-alpine
     container_name: dataprep-postgres
     ports:
-      - "5433:5432"  # 5433 host: evita conflitti con un eventuale Postgres locale
+      - "127.0.0.1:5433:5432"  # 5433 host: evita conflitti con un eventuale Postgres locale
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -43,8 +42,8 @@ services:
     image: minio/minio:latest
     container_name: dataprep-minio
     ports:
-      - "9002:9000"  # API S3 (9002 host: la 9000 è occupata da ClickHouse)
-      - "9001:9001"  # console web
+      - "127.0.0.1:9002:9000"  # API S3 (9002 host: la 9000 è occupata da ClickHouse)
+      - "127.0.0.1:9001:9001"  # console web
     volumes:
       - minio_data:/data
     environment:
@@ -111,7 +110,7 @@ services:
     container_name: dataprep-gateway
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -254,7 +253,7 @@ services:
       dockerfile: Dockerfile
     container_name: dataprep-frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       # il browser chiama il GATEWAY (unico ingresso pubblico), non l'engine
       - NUXT_PUBLIC_API_BASE=http://localhost:8000
@@ -272,8 +271,7 @@ services:
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.103.0
     container_name: dataprep-victoriametrics
-    ports:
-      - "8428:8428"
+    # nessuna porta sull'host — la interroga Grafana dentro la rete
     volumes:
       - vm_data:/vmdata
       - ./monitoring/scrape.yml:/etc/vm/scrape.yml:ro
@@ -287,7 +285,7 @@ services:
     image: grafana/grafana:11.2.0
     container_name: dataprep-grafana
     ports:
-      - "3001:3000"  # 3000 è già del frontend
+      - "127.0.0.1:3001:3000"  # 3000 è già del frontend
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -312,8 +310,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: dataprep-cadvisor
-    ports:
-      - "8081:8080"
+    # nessuna porta sull'host — lo raschia VictoriaMetrics
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -332,8 +329,7 @@ services:
     pid: host
     volumes:
       - /:/host:ro
-    ports:
-      - "9100:9100"
+    # nessuna porta sull'host — lo raschia VictoriaMetrics
 
   # celery-exporter: task attivi, durate, esiti, profondità coda (via eventi Celery).
   celery-exporter:
@@ -341,8 +337,7 @@ services:
     container_name: dataprep-celery-exporter
     environment:
       - CE_BROKER_URL=redis://redis:6379/0
-    ports:
-      - "9808:9808"
+    # nessuna porta sull'host — lo raschia VictoriaMetrics
     depends_on:
       - redis
 

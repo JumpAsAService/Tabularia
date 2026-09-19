@@ -7,7 +7,7 @@
 // nell'input in alto). I figli di un container foreach vengono messi in fila
 // dentro il container, che si ridimensiona per contenerli.
 
-import type { Node, Edge } from '@vue-flow/core'
+import type { Edge, GraphNode } from '@vue-flow/core'
 import { buildIncoming } from './useFlowModel'
 
 const GAP_X = 70 // spazio orizzontale tra nodi consecutivi
@@ -29,7 +29,8 @@ export interface LayoutResult {
   containerSizes: Map<string, Size>
 }
 
-function widthOf(n: Node, containers: Map<string, Size>): number {
+// GraphNode e non Node: le dimensioni misurate dal DOM stanno sul nodo VIVO
+function widthOf(n: GraphNode, containers: Map<string, Size>): number {
   const c = containers.get(n.id)
   if (c) return c.width
   if (n.dimensions?.width) return n.dimensions.width
@@ -37,7 +38,7 @@ function widthOf(n: Node, containers: Map<string, Size>): number {
   return OP_W
 }
 
-function heightOf(n: Node, containers: Map<string, Size>): number {
+function heightOf(n: GraphNode, containers: Map<string, Size>): number {
   const c = containers.get(n.id)
   if (c) return c.height
   if (n.dimensions?.height) return n.dimensions.height
@@ -46,7 +47,7 @@ function heightOf(n: Node, containers: Map<string, Size>): number {
 }
 
 /** Figli di un container in ordine di catena (poi gli eventuali sciolti). */
-function orderedChildren(nodes: Node[], edges: Edge[], containerId: string): Node[] {
+function orderedChildren(nodes: GraphNode[], edges: Edge[], containerId: string): GraphNode[] {
   // i commenti sono annotazioni: non entrano nella catena del corpo
   const kids = nodes.filter((n) => n.parentNode === containerId && n.type !== 'comment')
   if (!kids.length) return []
@@ -59,7 +60,7 @@ function orderedChildren(nodes: Node[], edges: Edge[], containerId: string): Nod
       hasIn.add(e.target)
     }
   }
-  const out: Node[] = []
+  const out: GraphNode[] = []
   const seen = new Set<string>()
   let cur = kids.find((k) => !hasIn.has(k.id))?.id
   while (cur && !seen.has(cur)) {
@@ -72,7 +73,7 @@ function orderedChildren(nodes: Node[], edges: Edge[], containerId: string): Nod
   return out
 }
 
-export function computeAutoLayout(nodes: Node[], edges: Edge[]): LayoutResult {
+export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResult {
   const inc = buildIncoming(edges)
   // i commenti restano dove l'utente li ha messi: fuori dall'auto-layout
   const top = nodes.filter((n) => !n.parentNode && n.type !== 'comment')
@@ -114,7 +115,7 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[]): LayoutResult {
     let cursor = 0 // ogni ramo destro prende la prima riga libera sopra
 
     const placeChain = (leafId: string, row: number, alignRightX: number | null) => {
-      const chain: Node[] = []
+      const chain: GraphNode[] = []
       const walked = new Set<string>()
       let cur: string | undefined = leafId
       while (cur && !walked.has(cur) && !localRow.has(cur) && !globalRow.has(cur)) {

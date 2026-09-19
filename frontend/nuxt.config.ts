@@ -1,8 +1,15 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+// `process` c'e' davvero: questa configurazione gira in Node. Lo dichiariamo
+// invece di aggiungere @types/node solo per tre righe — e' una dichiarazione
+// di tipo, non cambia nulla a runtime.
+declare const process: { env: Record<string, string | undefined> }
+
 export default defineNuxtConfig({
   // SSR attivo (default). Vue Flow è client-only: viene isolato in <ClientOnly>
   // dentro components/FlowEditor.vue, così non viene mai renderizzato sul server.
-  devtools: { enabled: true },
+  // DevTools SPENTI: il loro canale RPC non e' autenticato e il container di
+  // sviluppo ha i sorgenti montati in scrittura (audit 2026-09-19, A4)
+  devtools: { enabled: false },
 
   runtimeConfig: {
     public: {

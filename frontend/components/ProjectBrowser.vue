@@ -791,7 +791,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             :options="users.map((u) => ({ value: u.id, label: u.email }))"
             :placeholder="$t('projectBrowser.userPlaceholder')"
           />
-          <Select v-model="grantCapability" :options="CAPABILITIES" />
+          <Select v-model="grantCapability" :options="[...CAPABILITIES]" />
           <button class="primary" @click="grant">{{ $t('projectBrowser.grantButton') }}</button>
         </div>
 
