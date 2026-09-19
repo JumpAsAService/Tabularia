@@ -3,7 +3,7 @@ import BrandMark from '~/components/ui/BrandMark.vue'
 import { useAppInfo } from '~/composables/useAppInfo'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   LogOut,
@@ -85,6 +85,32 @@ const adminLinks = computed(() => [
   { to: '/audit', label: t('nav.audit'), icon: ScrollText },
 ])
 const adminOpen = ref(false)
+const adminBtn = ref<HTMLElement | null>(null)
+const adminStyle = ref<Record<string, string>>({})
+
+/** Il menù è sul body: la sua posizione va calcolata dal bottone, che può
+ *  essersi spostato perché la barra scorre. */
+function posizionaAdmin() {
+  const r = adminBtn.value?.getBoundingClientRect()
+  if (!r) return
+  // ancorato a sinistra del bottone, ma mai fuori dallo schermo a destra
+  const left = Math.min(r.left, window.innerWidth - 226)
+  adminStyle.value = { left: `${Math.max(8, left)}px`, top: `${r.bottom + 6}px` }
+}
+
+/** La rotellina verticale scorre la barra in orizzontale: senza, con un mouse
+ *  le voci nascoste si raggiungono solo trascinando, che non si scopre. */
+function navWheel(ev: WheelEvent) {
+  const el = ev.currentTarget as HTMLElement
+  if (el.scrollWidth <= el.clientWidth || ev.deltaX) return
+  el.scrollLeft += ev.deltaY
+  ev.preventDefault()
+}
+
+function toggleAdmin() {
+  adminOpen.value = !adminOpen.value
+  if (adminOpen.value) nextTick(posizionaAdmin)
+}
 // la voce resta accesa mentre si è in una qualsiasi delle sue pagine
 const inAdmin = computed(() => adminLinks.value.some((l) => route.path === l.to))
 
@@ -101,7 +127,7 @@ onMounted(async () => {
         <BrandMark :size="26" /> Tabularia
       </NuxtLink>
 
-      <nav class="mainnav">
+      <nav class="mainnav" @wheel="navWheel">
         <NuxtLink
           v-for="l in links"
           :key="l.to"
@@ -119,15 +145,20 @@ onMounted(async () => {
             :class="{ on: inAdmin || adminOpen }"
             aria-haspopup="menu"
             :aria-expanded="adminOpen"
-            @click="adminOpen = !adminOpen"
+            ref="adminBtn"
+            @click="toggleAdmin"
           >
             <Shield :size="14" /> {{ t('nav.administration') }}
             <ChevronDown :size="13" class="caret" :class="{ up: adminOpen }" />
           </button>
 
-          <template v-if="adminOpen">
+          <!-- teleportato sul body: la navigazione SCORRE, e un contenitore
+               con overflow ritaglia i figli posizionati — il menù finiva
+               tagliato e sembrava aprirsi verso l'alto. Stessa soluzione di
+               Select.vue, che per lo stesso motivo teleporta il suo pannello. -->
+          <Teleport v-if="adminOpen" to="body">
             <div class="menu-backdrop" @click="adminOpen = false" />
-            <div class="menu adminmenu" role="menu">
+            <div class="menu adminmenu" role="menu" :style="adminStyle">
               <NuxtLink
                 v-for="l in adminLinks"
                 :key="l.to"
@@ -140,7 +171,7 @@ onMounted(async () => {
                 <component :is="l.icon" :size="14" /> {{ l.label }}
               </NuxtLink>
             </div>
-          </template>
+          </Teleport>
         </div>
       </nav>
 
@@ -259,10 +290,22 @@ onMounted(async () => {
   height: 100%;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none;
   overscroll-behavior-x: contain;
+  /* Scrollbar sottile, come ovunque nel prodotto, e visibile SOLO quando le voci
+     non entrano: senza, con un mouse non si capisce che la barra si può
+     scorrere (con il dito sì, e per questo prima era nascosta).
+     Costo dichiarato: su Firefox `scrollbar-width: thin` occupa spazio, quindi
+     quando la barra è affollata i link perdono qualche pixel in altezza e la
+     sottolineatura della voce attiva sale di altrettanto. Succede solo nello
+     stato affollato, ed è il prezzo per non nascondere l'unico appiglio. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-gutter: auto;
 }
-.mainnav::-webkit-scrollbar { display: none; }
+.mainnav::-webkit-scrollbar { height: 6px; }
+.mainnav::-webkit-scrollbar-track { background: transparent; }
+.mainnav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.mainnav::-webkit-scrollbar-thumb:hover { background: var(--control-border); }
 .navlink {
   display: inline-flex;
   align-items: center;
@@ -363,8 +406,9 @@ onMounted(async () => {
 .adminwrap .caret { opacity: 0.7; transition: transform 0.15s ease; }
 .adminwrap .caret.up { transform: rotate(180deg); }
 .adminmenu {
-  left: 0;
+  position: fixed;
   right: auto;
+  top: auto;
   min-width: 210px;
   padding: 4px;
 }
