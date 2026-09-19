@@ -205,14 +205,34 @@ onMounted(async () => {
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;
+  flex: none; /* a cedere è la navigazione, che sa scorrere: non il marchio */
 }
-.mainnav { display: flex; align-items: center; gap: 2px; height: 100%; }
+/* La navigazione scorre QUANDO SERVE, non sotto una larghezza decisa a mano.
+   L'adattamento stava in una media query a 760px, ma l'ingombro dipende dal
+   NUMERO di voci — da amministratore sono tredici — non dalla finestra: fra i
+   760px e la larghezza che servirebbe, le voci uscivano dalla barra. È il caso
+   dello zoom del browser, che riduce i pixel CSS senza essere «uno schermo
+   piccolo». `min-width: 0` è indispensabile: senza, un figlio flex non si
+   restringe sotto il proprio contenuto e a scorrere finisce il documento. */
+.mainnav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.mainnav::-webkit-scrollbar { display: none; }
 .navlink {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   height: 100%;
   padding: 0 13px;
+  white-space: nowrap;
+  flex: none;
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
@@ -223,7 +243,7 @@ onMounted(async () => {
 }
 .navlink:hover { color: var(--text); }
 .navlink.on { color: var(--text); border-bottom-color: var(--accent); }
-.spacer { flex: 1; }
+.spacer { flex: 1 1 0; min-width: 0; }
 
 /* ── Impostazioni (ingranaggio + menù) ──────────────────────────────────── */
 .settings { position: relative; }
@@ -301,13 +321,8 @@ onMounted(async () => {
    sarebbe una riprogettazione, non un adattamento. */
 @media (max-width: 760px) {
   .topbar { gap: 12px; padding: 0 12px; }
-  .mainnav {
-    overflow-x: auto;
-    scrollbar-width: none; /* la barra scorre al tocco: la scrollbar sarebbe rumore */
-    flex: 1;
-  }
-  .mainnav::-webkit-scrollbar { display: none; }
-  .navlink { padding: 0 9px; white-space: nowrap; }
+  .mainnav { flex: 1; }
+  .navlink { padding: 0 9px; }
   .content { padding: 16px 14px; }
 }
 </style>
