@@ -34,6 +34,10 @@ onMounted(async () => {
 // colonna dello schema (nome, tipo, descrizione libera) e il bottone Salva.
 const expanded = ref<number | null>(null)
 const drafts = reactive<Record<number, Record<string, string>>>({})
+// descrizione della DATASOURCE (cosa contiene, una riga = cosa, periodo): si
+// cura qui insieme a quelle dei campi, e si salva con lo stesso bottone
+const aboutDrafts = reactive<Record<number, string>>({})
+const MAX_ABOUT = 4000
 const savingDescriptions = ref<number | null>(null)
 const describedCount = (d: DatasourceInfo) => Object.keys(d.column_descriptions ?? {}).length
 
@@ -47,10 +51,13 @@ function toggle(d: DatasourceInfo) {
 }
 function resetDraft(d: DatasourceInfo) {
   drafts[d.id] = Object.fromEntries(d.columns.map((c) => [c.name, d.column_descriptions?.[c.name] ?? '']))
+  aboutDrafts[d.id] = d.description ?? ''
 }
 const draftDescribed = (d: DatasourceInfo) => Object.values(drafts[d.id] ?? {}).filter((v) => v.trim()).length
+const aboutDirty = (d: DatasourceInfo) => (aboutDrafts[d.id] ?? '').trim() !== (d.description ?? '').trim()
 const isDirty = (d: DatasourceInfo) =>
-  !!drafts[d.id] && d.columns.some((c) => (drafts[d.id][c.name] ?? '').trim() !== (d.column_descriptions?.[c.name] ?? ''))
+  aboutDirty(d) ||
+  (!!drafts[d.id] && d.columns.some((c) => (drafts[d.id][c.name] ?? '').trim() !== (d.column_descriptions?.[c.name] ?? '')))
 
 async function saveDescriptions(d: DatasourceInfo) {
   const draft = drafts[d.id]
@@ -61,10 +68,13 @@ async function saveDescriptions(d: DatasourceInfo) {
   )
   savingDescriptions.value = d.id
   try {
-    const updated = await dsApi.update(d.id, { column_descriptions: { ...stale, ...draft } })
+    const updated = await dsApi.update(d.id, {
+      description: (aboutDrafts[d.id] ?? '').trim(),
+      column_descriptions: { ...stale, ...draft },
+    })
     items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
     resetDraft(updated)
-    toast.success(t('datasources.descriptionsSavedToast', { n: describedCount(updated) }))
+    toast.success(t('datasources.docsSavedToast', { n: describedCount(updated) }))
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
@@ -237,11 +247,21 @@ async function saveSchedule(cron: string) {
         </div>
 
         <div v-if="expanded === d.id" class="ds-detail">
-          <div v-if="d.description" class="muted desc">{{ d.description }}</div>
           <div v-if="d.refresh_schedule" class="muted sched">
             <CalendarClock :size="11" /> <code>{{ d.refresh_schedule }}</code>
             <span v-if="d.next_refresh_at"> {{ $t('datasources.nextRefresh', { date: fmtDate(d.next_refresh_at) }) }}</span>
           </div>
+
+          <div class="section-title"><BookText :size="12" /> {{ $t('datasourceAbout.heading') }}</div>
+          <p class="muted hint">{{ $t('datasourceAbout.intro') }}</p>
+          <textarea
+            v-model="aboutDrafts[d.id]"
+            class="about"
+            rows="3"
+            :maxlength="MAX_ABOUT"
+            :placeholder="$t('datasourceAbout.placeholder')"
+            :aria-label="$t('datasourceAbout.heading')"
+          />
 
           <div class="section-title"><BookText :size="12" /> {{ $t('columnDescriptions.heading') }}</div>
           <p class="muted hint">{{ $t('columnDescriptions.intro') }} <strong>{{ d.name }}</strong>. {{ $t('columnDescriptions.introTail') }}</p>
@@ -265,15 +285,15 @@ async function saveSchedule(cron: string) {
                 />
               </div>
             </div>
-            <div class="cd-actions">
-              <span class="muted">{{ $t('columnDescriptions.counter', { n: draftDescribed(d), total: d.columns.length }) }}</span>
-              <span class="spacer" />
-              <button v-if="isDirty(d)" :disabled="savingDescriptions === d.id" @click="resetDraft(d)">{{ $t('columnDescriptions.cancel') }}</button>
-              <button class="primary" :disabled="!isDirty(d) || savingDescriptions === d.id" @click="saveDescriptions(d)">
-                <LoaderCircle v-if="savingDescriptions === d.id" :size="13" class="spin" /><Save v-else :size="13" /> {{ $t('columnDescriptions.save') }}
-              </button>
-            </div>
           </template>
+          <div class="cd-actions">
+            <span v-if="d.columns.length" class="muted">{{ $t('columnDescriptions.counter', { n: draftDescribed(d), total: d.columns.length }) }}</span>
+            <span class="spacer" />
+            <button v-if="isDirty(d)" :disabled="savingDescriptions === d.id" @click="resetDraft(d)">{{ $t('columnDescriptions.cancel') }}</button>
+            <button class="primary" :disabled="!isDirty(d) || savingDescriptions === d.id" @click="saveDescriptions(d)">
+              <LoaderCircle v-if="savingDescriptions === d.id" :size="13" class="spin" /><Save v-else :size="13" /> {{ $t('columnDescriptions.save') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -320,6 +340,7 @@ async function saveSchedule(cron: string) {
 .cd-type { font-size: 11px; }
 .cd-row input { width: 100%; font-size: 12.5px; }
 .cd-actions { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.about { width: 100%; min-height: 64px; max-height: 240px; padding: 8px 10px; font: inherit; font-size: 13px; line-height: 1.45; resize: vertical; }
 .cd-actions .primary { display: inline-flex; align-items: center; gap: 5px; }
 .spacer { flex: 1; }
 @media (max-width: 720px) {

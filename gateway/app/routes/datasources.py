@@ -44,6 +44,9 @@ router = APIRouter(tags=["datasources"])
 
 
 MAX_COLUMN_DESCRIPTION = 2000
+# descrizione della DATASOURCE: cosa contiene, una riga = cosa, periodo,
+# avvertenze. La leggono le persone e l'assistente AI per scegliere la tabella.
+MAX_DATASOURCE_DESCRIPTION = 4000
 
 
 def _load_column_descriptions(ds: Datasource) -> dict[str, str]:
@@ -434,6 +437,13 @@ def update_datasource(
             raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
         ensure_can(session, user, body.project_id, Capability.EDIT)
         target_project = body.project_id
+        # Lo schedule porta con sé l'AUTORITÀ di chi l'ha creato: se la
+        # datasource cambia cartella, quell'autorità non vale più qui. Si
+        # spegne, e chi ha i permessi nella nuova posizione lo rimette.
+        if ds.refresh_schedule and ds.refresh_scheduled_by != user.id:
+            ds.refresh_schedule = None
+            ds.refresh_scheduled_by = None
+            ds.next_refresh_at = None
 
     new_name = body.name.strip() if body.name is not None else ds.name
     if not new_name:
@@ -451,7 +461,10 @@ def update_datasource(
     ds.name = new_name
     ds.project_id = target_project
     if body.description is not None:
-        ds.description = body.description
+        text = body.description.strip()
+        if len(text) > MAX_DATASOURCE_DESCRIPTION:
+            raise HTTPException(status_code=422, detail=f"La descrizione supera {MAX_DATASOURCE_DESCRIPTION} caratteri")
+        ds.description = text
     if body.column_descriptions is not None:
         ds.column_descriptions = json.dumps(clean_column_descriptions(body.column_descriptions), ensure_ascii=False)
     ds.updated_at = datetime.now(timezone.utc)

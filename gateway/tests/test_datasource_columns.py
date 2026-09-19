@@ -55,3 +55,21 @@ def test_update_replaces_map_and_survives_schema_change(session):
     # mappa vuota = cancella tutto
     out = update_datasource(ds.id, DatasourceUpdate(column_descriptions={}), user=admin, session=session)
     assert out.column_descriptions == {}
+
+
+def test_datasource_description_is_trimmed_and_capped(session):
+    """La descrizione della DATASOURCE si cura come quelle dei campi: spazi
+    tolti, lunghezza limitata, e resta quando si salvano solo i campi."""
+    from app.routes.datasources import MAX_DATASOURCE_DESCRIPTION
+
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    make_project(session, name="p")
+    ds = make_datasource(session, columns=json.dumps([{"name": "x", "dtype": "Int64"}]))
+    out = update_datasource(ds.id, DatasourceUpdate(description="  Ordini 2024, una riga per ordine.  "), user=admin, session=session)
+    assert out.description == "Ordini 2024, una riga per ordine."
+    out = update_datasource(ds.id, DatasourceUpdate(column_descriptions={"x": "id"}), user=admin, session=session)
+    assert out.description == "Ordini 2024, una riga per ordine."  # non toccata
+    with pytest.raises(HTTPException) as e:
+        update_datasource(ds.id, DatasourceUpdate(description="x" * (MAX_DATASOURCE_DESCRIPTION + 1)), user=admin, session=session)
+    assert e.value.status_code == 422
+    assert update_datasource(ds.id, DatasourceUpdate(description=""), user=admin, session=session).description == ""
