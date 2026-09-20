@@ -263,6 +263,8 @@ export default {
     "counter": "{n} di {total} descritti",
   },
   "datasources": {
+    "aiReady": "pronta per l'AI",
+    "aiReadyHint": "La tabella e tutti i suoi campi hanno una descrizione: l'assistente può interrogarla senza indovinare cosa contengono.",
     "docsSavedToast": "Descrizioni salvate ({n} campi descritti)",
     "descriptionsSavedToast": "Descrizioni dei campi salvate ({n})",
     "confirmDelete": "Eliminare la datasource \"{name}\"? Viene rimosso anche lo snapshot parquet.",

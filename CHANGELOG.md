@@ -5,6 +5,15 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A datasource says when it is ready for the assistant.** A table whose fields
+  carry no descriptions forces the model to guess from column names, which is
+  exactly how it once invented the contents of a table it had never read. The
+  catalog now marks the ones that are complete — the table has a description and
+  so does every one of its fields — with the same symbol the assistant carries
+  in the navigation, so the connection reads without explanation. Short of that,
+  the existing counter shows how far along it is, which is the part that invites
+  finishing. The rule lives on the server: three surfaces show it, and written
+  three times it would drift on the first change.
 - **Be told when a scheduled flow fails.** "Schedule it and forget" only works
   if something wakes you: a flow that broke at three in the morning stayed
   broken in silence until someone opened the run history or noticed the data was

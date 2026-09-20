@@ -3,7 +3,7 @@
 // con stato live, eliminazione.
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save } from 'lucide-vue-next'
+import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
@@ -211,7 +211,13 @@ async function saveSchedule(cron: string) {
               <Database :size="14" /> {{ d.name }}
               <span v-if="d.kind === 'database'" class="tag">{{ $t('datasources.tagDb') }}</span>
               <span v-else-if="d.kind === 'flow'" class="tag">{{ $t('datasources.tagFlow') }}</span>
-              <span v-if="describedCount(d)" class="desc-badge" :title="$t('columnDescriptions.heading')">
+              <!-- documentata per intero: l'assistente può interrogarla senza
+                   indovinare. Stesso simbolo della voce Assistente, così il
+                   nesso si legge senza spiegazioni. -->
+              <span v-if="d.ai_ready" class="ready-badge" :title="$t('datasources.aiReadyHint')">
+                <Sparkles :size="11" /> {{ $t('datasources.aiReady') }}
+              </span>
+              <span v-else-if="describedCount(d)" class="desc-badge" :title="$t('columnDescriptions.heading')">
                 <BookText :size="11" /> {{ $t('columnDescriptions.counter', { n: describedCount(d), total: d.columns.length }) }}
               </span>
             </span>
@@ -336,6 +342,12 @@ async function saveSchedule(cron: string) {
 .cd-row { display: grid; grid-template-columns: minmax(140px, 220px) 100px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--border-soft); }
 .cd-row:first-child { border-top: 0; }
 .cd-headrow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel); }
+.ready-badge {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 8px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 7px; border-radius: 8px;
+  background: var(--tint-accent); border: 1px solid var(--accent); color: var(--accent-hi);
+}
 .cd-name { font-family: ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cd-type { font-size: 11px; }
 .cd-row input { width: 100%; font-size: 12.5px; }

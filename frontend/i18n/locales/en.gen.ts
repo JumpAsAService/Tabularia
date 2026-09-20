@@ -263,6 +263,8 @@ export default {
     "counter": "{n} of {total} described",
   },
   "datasources": {
+    "aiReady": "AI ready",
+    "aiReadyHint": "The table and every one of its fields have a description: the assistant can query it without guessing what they hold.",
     "docsSavedToast": "Descriptions saved ({n} fields described)",
     "descriptionsSavedToast": "Field descriptions saved ({n})",
     "confirmDelete": "Delete datasource \"{name}\"? The parquet snapshot is removed too.",

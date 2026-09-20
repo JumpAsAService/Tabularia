@@ -488,6 +488,12 @@ class DatasourceOut(BaseModel):
     columns: list[dict] = Field(default_factory=list)
     # {nome colonna: descrizione} (anche per colonne non più nello schema)
     column_descriptions: dict[str, str] = Field(default_factory=dict)
+    # Quanto è documentata: il conteggio serve a mostrare i progressi, il flag a
+    # dire che è finita. Calcolati dal server (services/documented.py) perché la
+    # regola deve valere identica nel catalogo, nell'assistente e nella ricerca.
+    described_columns: int = 0
+    total_columns: int = 0
+    ai_ready: bool = False
     # colonne di ORDER BY con cui il parquet è ordinato (vuoto = nessun ordine)
     sort_keys: list[str] = Field(default_factory=list)
     kind: str

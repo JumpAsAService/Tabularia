@@ -200,6 +200,8 @@ export default {
     "counter": "{n} de {total} descritos",
   },
   "datasources": {
+    "aiReady": "lista para la IA",
+    "aiReadyHint": "La tabla y todos sus campos tienen descripción: el asistente puede consultarla sin adivinar qué contienen.",
     "docsSavedToast": "Descripciones guardadas ({n} campos descritos)",
     "descriptionsSavedToast": "Descripciones de campos guardadas ({n})",
     "confirmDelete": "¿Eliminar la fuente de datos \"{name}\"? La instantánea parquet también se elimina.",

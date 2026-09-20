@@ -15,6 +15,10 @@ export interface DatasourceInfo {
   rows: number | null
   columns: { name: string; dtype: string; description?: string }[]
   column_descriptions: Record<string, string> // {colonna: descrizione}, curate a mano
+  // quanto è documentata; la regola la decide il SERVER (services/documented.py)
+  described_columns: number
+  total_columns: number
+  ai_ready: boolean // descrizione della tabella + tutti i campi descritti
   sort_keys: string[] // colonne di ORDER BY (ordinano parquet + copia materializzata)
   kind: string
   flow_id: number | null

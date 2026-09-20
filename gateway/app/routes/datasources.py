@@ -21,6 +21,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, Run, User
 from app.services import audit
+from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
@@ -115,9 +116,16 @@ def _to_out(ds: Datasource, refreshing: bool = False) -> DatasourceOut:
         f: getattr(ds, f)
         for f in DatasourceOut.model_fields
         # `refreshing` non è una colonna: è calcolato (vedi _refreshing_ids)
-        if f not in ("columns", "column_descriptions", "sort_keys", "refreshing")
+        # i CALCOLATI non stanno sul modello: `getattr` qui esploderebbe
+        if f not in ("columns", "column_descriptions", "sort_keys", "refreshing",
+                     "described_columns", "total_columns", "ai_ready")
     }
-    return DatasourceOut(**fields, columns=cols, column_descriptions=descs, sort_keys=skeys, refreshing=refreshing)
+    descritte, totali = conta_descritte(cols, descs)
+    return DatasourceOut(
+        **fields, columns=cols, column_descriptions=descs, sort_keys=skeys, refreshing=refreshing,
+        described_columns=descritte, total_columns=totali,
+        ai_ready=is_ai_ready(ds.description, descritte, totali),
+    )
 
 
 def _get_ds(session: Session, ds_id: int) -> Datasource:

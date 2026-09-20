@@ -200,6 +200,8 @@ export default {
     "counter": "{n} von {total} beschrieben",
   },
   "datasources": {
+    "aiReady": "KI-bereit",
+    "aiReadyHint": "Die Tabelle und jedes ihrer Felder haben eine Beschreibung: Der Assistent kann sie abfragen, ohne ihren Inhalt zu erraten.",
     "docsSavedToast": "Beschreibungen gespeichert ({n} Felder beschrieben)",
     "descriptionsSavedToast": "Feldbeschreibungen gespeichert ({n})",
     "confirmDelete": "Datenquelle „{name}“ löschen? Der Parquet-Snapshot wird ebenfalls entfernt.",

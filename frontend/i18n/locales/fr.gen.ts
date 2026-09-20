@@ -200,6 +200,8 @@ export default {
     "counter": "{n} sur {total} décrits",
   },
   "datasources": {
+    "aiReady": "prête pour l'IA",
+    "aiReadyHint": "La table et chacun de ses champs ont une description : l'assistant peut l'interroger sans deviner ce qu'ils contiennent.",
     "docsSavedToast": "Descriptions enregistrées ({n} champs décrits)",
     "descriptionsSavedToast": "Descriptions des champs enregistrées ({n})",
     "confirmDelete": "Supprimer la source de données « {name} » ? Le snapshot parquet sera également supprimé.",

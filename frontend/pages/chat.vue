@@ -94,7 +94,8 @@ const shown = computed(() => {
   const list = datasources.value.filter((d) => d.key)
   return q ? list.filter((d) => d.name.toLowerCase().includes(q) || (d.description || '').toLowerCase().includes(q)) : list
 })
-const described = (d: DatasourceInfo) => d.columns.filter((c) => (d.column_descriptions?.[c.name] || c.description || '').trim()).length
+// il conteggio lo fa il SERVER: la regola di «documentata» vive in un posto solo
+const described = (d: DatasourceInfo) => d.described_columns
 const dsName = (id: any) => datasources.value.find((d) => d.id === Number(id))?.name ?? `#${id}`
 const examples = computed(() => [t('chat.example1'), t('chat.example2'), t('chat.example3')])
 
@@ -376,8 +377,13 @@ watch(draft, async () => {
               <span class="ds-meta">
                 <span>{{ folders[d.project_id] ?? '' }}</span>
                 <span v-if="d.rows != null" class="num">{{ $t('chat.dsRows', { n: nf.format(d.rows) }) }}</span>
-                <span v-if="described(d)" class="ds-doc" :title="$t('chat.dsDescribed', { n: described(d), total: d.columns.length })">
-                  <FileText :size="11" /> {{ described(d) }}/{{ d.columns.length }}
+                <!-- documentata per intero: la stessa cosa che il catalogo
+                     marca «pronta per l'AI», detta qui in forma compatta -->
+                <span v-if="d.ai_ready" class="ds-ready" :title="$t('datasources.aiReadyHint')">
+                  <Sparkles :size="11" />
+                </span>
+                <span v-else-if="described(d)" class="ds-doc" :title="$t('chat.dsDescribed', { n: described(d), total: d.total_columns })">
+                  <FileText :size="11" /> {{ described(d) }}/{{ d.total_columns }}
                 </span>
               </span>
             </button>
@@ -574,6 +580,7 @@ watch(draft, async () => {
 .ds-check { color: var(--accent); flex: none; }
 .ds-about { display: block; width: 100%; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ds-meta { display: flex; flex-wrap: wrap; gap: 3px 9px; font-size: 12px; color: var(--muted); }
+.ds-ready { display: inline-flex; align-items: center; color: var(--accent-hi); flex: none; }
 .ds-doc { display: inline-flex; align-items: center; gap: 3px; color: var(--accent-2); }
 .num { font-variant-numeric: tabular-nums; }
 
