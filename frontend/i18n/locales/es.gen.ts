@@ -786,6 +786,9 @@ export default {
     "triggeredByScheduler": "Iniciado por el programador"
   },
   "scheduleDialog": {
+    "notifyLabel": "Avísame si falla",
+    "notifyPlaceholder": "direcciones separadas por comas (vacío = sin aviso)",
+    "notifyHint": "Solo para las ejecuciones programadas, y una sola vez mientras el flujo siga fallando.",
     "engineLabel": "Motor para las ejecuciones programadas",
     "sameAsDevEngine": "igual que desarrollo",
     "cancel": "Cancelar",

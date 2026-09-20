@@ -228,7 +228,7 @@ def create_orchestration_run(
     return run
 
 
-def _finalize_orch_run(run_id: int, status: str, error: str | None = None) -> None:
+async def _finalize_orch_run(run_id: int, status: str, error: str | None = None) -> None:
     """Chiude il run di orchestrazione (sessione propria: gira nel task detached)."""
     with Session(engine) as session:
         run = session.get(Run, run_id)
@@ -239,6 +239,12 @@ def _finalize_orch_run(run_id: int, status: str, error: str | None = None) -> No
         run.finished_at = datetime.now(timezone.utc)
         session.add(run)
         session.commit()
+        session.refresh(run)
+        # l'avviso parte DOPO il commit: si annuncia un fatto già scritto, e non
+        # tiene aperta la transazione per il tempo di una spedizione SMTP
+        from app.services.notifier import notify_failure
+
+        await notify_failure(session, run)
 
 
 ORCHESTRATION_INTERRUPTED = (
@@ -295,7 +301,7 @@ async def orchestrate_bg(
     if flow_id in _running:
         logger.info("orchestrate: flusso %s già in esecuzione, salto", flow_id)
         if orch_run_id is not None:
-            _finalize_orch_run(orch_run_id, "FAILURE", "flusso già in esecuzione")
+            await _finalize_orch_run(orch_run_id, "FAILURE", "flusso già in esecuzione")
         return
     _running.add(flow_id)
     try:
@@ -305,7 +311,7 @@ async def orchestrate_bg(
             if flow is None or user is None or not user.is_active:
                 logger.warning("orchestrate: flusso %s o utente %s non validi", flow_id, user_id)
                 if orch_run_id is not None:
-                    _finalize_orch_run(orch_run_id, "FAILURE", "flusso o utente non validi")
+                    await _finalize_orch_run(orch_run_id, "FAILURE", "flusso o utente non validi")
                 return
             if orch_run_id is None:  # percorso scheduler: nessun tracciante ancora
                 orch_run_id = create_orchestration_run(session, user, flow, trigger_type).id
@@ -315,14 +321,14 @@ async def orchestrate_bg(
                 errors = await orchestrate(session, user, flow, trigger_type=trigger_type, parent_run_id=orch_run_id, engine_mode=engine_mode)
             except (FlowResolveError, OrchestrationError) as e:
                 logger.warning("orchestrate: flusso %s interrotto: %s", flow_id, e)
-                _finalize_orch_run(orch_run_id, "FAILURE", str(e))
+                await _finalize_orch_run(orch_run_id, "FAILURE", str(e))
                 return
             status = "FAILURE" if errors else "SUCCESS"
-            _finalize_orch_run(orch_run_id, status, "; ".join(errors) if errors else None)
+            await _finalize_orch_run(orch_run_id, status, "; ".join(errors) if errors else None)
             logger.info("orchestrate: flusso %s completato (%s)", flow_id, status)
     except Exception:
         logger.exception("orchestrate: flusso %s fallito", flow_id)
         if orch_run_id is not None:
-            _finalize_orch_run(orch_run_id, "FAILURE", "errore interno durante l'orchestrazione")
+            await _finalize_orch_run(orch_run_id, "FAILURE", "errore interno durante l'orchestrazione")
     finally:
         _running.discard(flow_id)

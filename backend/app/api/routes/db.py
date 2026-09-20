@@ -78,6 +78,30 @@ def inspect(request: DbInspectRequest):
         raise HTTPException(status_code=400, detail=_friendly(e, request.connection))
 
 
+class NotifyRequest(BaseModel):
+    """Un avviso in solo testo. La connessione arriva con la password ANCORA
+    cifrata, come ogni altro payload dal gateway: qui la si decifra."""
+
+    connection: dict
+    to: list[str]
+    subject: str
+    body: str
+
+
+@router.post("/notify")
+def notify(request: NotifyRequest):
+    """Spedisce un avviso via SMTP. Separata da `/ingest`: un avviso non ha dati
+    da leggere, e deve poter partire proprio quando il dato manca."""
+    from app.ingest.email_destination import EmailDestinationError, SmtpConnectionSpec, send_notice
+
+    if request.connection.get("db_type") != "smtp":
+        raise HTTPException(status_code=422, detail="Serve una connessione SMTP")
+    try:
+        return send_notice(SmtpConnectionSpec(**request.connection), request.to, request.subject, request.body)
+    except EmailDestinationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 class DbIngestRequest(BaseModel):
     connection: DbConnectionSpec
     source: DbSourceSpec

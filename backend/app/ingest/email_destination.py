@@ -137,6 +137,53 @@ def build_attachment(bucket: str, key: str, spec: EmailSpec) -> tuple[bytes, str
             pass
 
 
+def _spedisci(conn: SmtpConnectionSpec, msg: EmailMessage, destinatari: list[str]) -> None:
+    """Apre, cifra, autentica e spedisce. Estratta perché ci sono due cose da
+    mandare: l'output di un flusso, con il suo allegato, e un avviso, che non ne
+    ha nessuno."""
+    try:
+        if conn.tls == "ssl":
+            server = smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds)
+        else:
+            server = smtplib.SMTP(conn.host, conn.port, timeout=conn.timeout_seconds)
+        with server:
+            if conn.tls == "starttls":
+                server.starttls()
+            if conn.username:
+                server.login(conn.username, conn.resolve_secret())
+            server.send_message(msg, to_addrs=destinatari)
+    except smtplib.SMTPAuthenticationError as e:
+        raise EmailDestinationError(f"Autenticazione SMTP rifiutata da {conn.host}: {e}") from e
+    except smtplib.SMTPException as e:
+        raise EmailDestinationError(f"Invio rifiutato da {conn.host}: {type(e).__name__}: {e}") from e
+    except OSError as e:  # DNS, rete, porta chiusa, TLS
+        raise EmailDestinationError(f"Impossibile raggiungere {conn.host}:{conn.port}: {e}") from e
+
+
+def send_notice(conn: SmtpConnectionSpec, to: list[str], subject: str, body: str) -> dict:
+    """Un avviso in solo testo, senza allegati: serve a dire che un flusso è
+    fallito, e deve arrivare anche quando è proprio il dato a mancare."""
+    destinatari = [a.strip() for a in to if a and a.strip()]
+    if not destinatari:
+        raise EmailDestinationError("Nessun destinatario: indica almeno un indirizzo.")
+    if not conn.from_address.strip():
+        raise EmailDestinationError("La connessione SMTP non ha un indirizzo mittente.")
+
+    msg = EmailMessage()
+    msg["From"] = conn.sender()
+    msg["To"] = ", ".join(destinatari)
+    msg["Subject"] = subject
+    msg["Message-ID"] = make_msgid()
+    # `Auto-Submitted` dice ai server che è posta generata da un programma: evita
+    # che una risposta automatica dall'altra parte inneschi un rimbalzo infinito
+    msg["Auto-Submitted"] = "auto-generated"
+    msg.set_content(body)
+
+    _spedisci(conn, msg, destinatari)
+    logger.info("📧 avviso inviato a %d destinatari", len(destinatari))
+    return {"ok": True, "recipients": len(destinatari)}
+
+
 def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, key: str) -> dict:
     """Genera l'allegato e lo spedisce. Solleva `EmailDestinationError` con un
     messaggio leggibile; il chiamante decide se il run debba fallire."""
@@ -165,23 +212,7 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
     maintype, subtype = _MIME[spec.attachment_format]
     msg.add_attachment(dati, maintype=maintype, subtype=subtype, filename=nome_file)
 
-    try:
-        if conn.tls == "ssl":
-            server = smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds)
-        else:
-            server = smtplib.SMTP(conn.host, conn.port, timeout=conn.timeout_seconds)
-        with server:
-            if conn.tls == "starttls":
-                server.starttls()
-            if conn.username:
-                server.login(conn.username, conn.resolve_secret())
-            server.send_message(msg, to_addrs=destinatari)
-    except smtplib.SMTPAuthenticationError as e:
-        raise EmailDestinationError(f"Autenticazione SMTP rifiutata da {conn.host}: {e}") from e
-    except smtplib.SMTPException as e:
-        raise EmailDestinationError(f"Invio rifiutato da {conn.host}: {type(e).__name__}: {e}") from e
-    except OSError as e:  # DNS, rete, porta chiusa, TLS
-        raise EmailDestinationError(f"Impossibile raggiungere {conn.host}:{conn.port}: {e}") from e
+    _spedisci(conn, msg, destinatari)
 
     logger.info("📧 email inviata a %d destinatari, allegato %s (%d byte)", len(destinatari), nome_file, len(dati))
     return {

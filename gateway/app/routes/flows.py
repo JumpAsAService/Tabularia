@@ -17,7 +17,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Flow, FlowVersion, Project, Run, User
+from app.models import Connection, Flow, FlowVersion, Project, Run, User
 from app.models.permission import Capability
 from app.services import audit, flow_presence
 from pydantic import BaseModel, Field
@@ -554,6 +554,45 @@ async def run_flow_now(
     return {"status": "started", "flow_id": flow.id, "run_id": run.id}
 
 
+def _set_failure_notice(session: Session, user: User, flow: Flow, body: FlowScheduleUpdate) -> None:
+    """Chi avvisare quando un'esecuzione programmata fallisce.
+
+    Gli indirizzi passano dalla stessa barriera del nodo email: una connessione
+    SMTP può limitare i domini a cui spedisce, e l'avviso non è una scorciatoia
+    per aggirarla. E serve CONNECT sulla connessione, come per usarla altrove:
+    altrimenti chi ha solo RUN su un flusso potrebbe far spedire dal server di
+    posta di qualcun altro."""
+    from app.routes.connections import allowed_email_domains
+
+    if body.notify_emails is not None:
+        indirizzi = [a.strip() for a in body.notify_emails.replace(";", ",").split(",") if a.strip()]
+        for a in indirizzi:
+            if "@" not in a or a.startswith("@") or a.endswith("@"):
+                raise HTTPException(status_code=422, detail=f"Indirizzo non valido: {a}")
+        flow.notify_emails = ", ".join(indirizzi) or None
+
+    if body.notify_connection_id is not None:
+        if body.notify_connection_id in (0, -1):  # spegne l'avviso
+            flow.notify_connection_id = None
+        else:
+            conn = session.get(Connection, body.notify_connection_id)
+            if conn is None or conn.db_type != "smtp":
+                raise HTTPException(status_code=422, detail="Serve una connessione SMTP")
+            ensure_can(session, user, conn.project_id, Capability.CONNECT)
+            flow.notify_connection_id = conn.id
+
+    if flow.notify_emails and flow.notify_connection_id:
+        conn = session.get(Connection, flow.notify_connection_id)
+        ammessi = allowed_email_domains(conn) if conn else []
+        if ammessi:
+            fuori = [a for a in flow.notify_emails.split(", ") if a.rsplit("@", 1)[-1].lower() not in ammessi]
+            if fuori:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Questa connessione può spedire solo a {', '.join(ammessi)}: {', '.join(fuori)} non è ammesso",
+                )
+
+
 @router.put("/flows/{flow_id}/schedule", response_model=FlowDetail)
 def set_flow_schedule(
     flow_id: int,
@@ -591,6 +630,8 @@ def set_flow_schedule(
         flow.next_run_at = next_fire(cron, datetime.now(timezone.utc))
     if body.production_engine is not None:  # omesso = invariato; "" = come sviluppo
         flow.production_engine = _validate_production_engine(body.production_engine, session)
+    if body.notify_emails is not None or body.notify_connection_id is not None:
+        _set_failure_notice(session, user, flow, body)
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)
     session.commit()
@@ -598,6 +639,7 @@ def set_flow_schedule(
     audit.record_audit(
         session, actor=user, action=audit.FLOW_SCHEDULE, target_type="flow",
         target_id=flow.id, target_label=flow.name,
-        detail={"cron": flow.run_schedule or "(disattivato)", "production_engine": flow.production_engine}, request=request,
+        detail={"cron": flow.run_schedule or "(disattivato)", "production_engine": flow.production_engine,
+                "notify": bool(flow.notify_emails and flow.notify_connection_id)}, request=request,
     )
     return flow

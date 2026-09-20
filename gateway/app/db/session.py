@@ -111,6 +111,9 @@ _MIGRATIONS = [
     " WHERE oidc_subject IS NOT NULL",
     # Gruppo di amministratori: i membri sono admin (services/permissions.is_admin)
     "ALTER TABLE groups ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
+    # Avviso di fallimento di un'esecuzione programmata (vedi models/flow.py)
+    "ALTER TABLE flows ADD COLUMN IF NOT EXISTS notify_emails TEXT",
+    "ALTER TABLE flows ADD COLUMN IF NOT EXISTS notify_connection_id INTEGER",
 ]
 
 

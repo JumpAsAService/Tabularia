@@ -10,6 +10,7 @@ import {
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
+import { useConnections } from '~/composables/useConnections'
 import {
   useFlows, type FlowSummary, type FlowStats, type FlowVersionInfo,
 } from '~/composables/useFlows'
@@ -22,6 +23,7 @@ const flowsApi = useFlows()
 const projectsApi = useProjects()
 const runsApi = useRuns()
 const api = useApi()
+const connectionsApi = useConnections()
 const toast = useToast()
 const { t } = useI18n()
 
@@ -87,6 +89,12 @@ onMounted(async () => {
     engines.value = await api.engines()
   } catch {
     /* fallback: solo Polars (già in default) */
+  }
+  try {
+    const conns = await connectionsApi.list()
+    smtpConnections.value = conns.filter((c) => c.db_type === 'smtp').map((c) => ({ id: c.id, name: c.name }))
+  } catch {
+    /* senza connessioni SMTP la sezione dell'avviso non compare, e basta */
   }
 })
 
@@ -197,14 +205,18 @@ function fmtDur(secs: number | null | undefined): string {
   return `${Math.floor(secs / 60)}m ${Math.round(secs % 60)}s`
 }
 
+// Connessioni SMTP disponibili: senza almeno una, l'avviso non si può spedire e
+// la sezione nel dialogo non compare affatto — meglio assente che disabilitata.
+const smtpConnections = ref<{ id: number; name: string }[]>([])
+
 // ── Scheduling (dialog condiviso) ────────────────────────────────────────────
 const scheduleFor = ref<FlowSummary | null>(null)
 const savingSchedule = ref(false)
-async function saveSchedule(cron: string, productionEngine?: string) {
+async function saveSchedule(cron: string, productionEngine?: string, notify?: { emails: string; connectionId: number }) {
   if (!scheduleFor.value) return
   savingSchedule.value = true
   try {
-    const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim(), productionEngine)
+    const updated = await flowsApi.setSchedule(scheduleFor.value.id, cron.trim(), productionEngine, notify)
     items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
     toast.success(cron.trim() ? t('flows.scheduleSuccess', { cron: updated.run_schedule }) : t('flows.scheduleDisabled'))
     scheduleFor.value = null
@@ -342,6 +354,9 @@ async function saveSchedule(cron: string, productionEngine?: string) {
       :busy="savingSchedule"
       :engines="availableEngines"
       :production-engine="scheduleFor?.production_engine ?? null"
+      :smtp-connections="smtpConnections"
+      :notify-emails="scheduleFor?.notify_emails ?? null"
+      :notify-connection-id="scheduleFor?.notify_connection_id ?? null"
       @save="saveSchedule"
       @cancel="scheduleFor = null"
     />

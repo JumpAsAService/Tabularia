@@ -786,6 +786,9 @@ export default {
     "triggeredByScheduler": "Vom Scheduler gestartet"
   },
   "scheduleDialog": {
+    "notifyLabel": "Bei Fehlschlag benachrichtigen",
+    "notifyPlaceholder": "Adressen durch Komma getrennt (leer = keine Benachrichtigung)",
+    "notifyHint": "Nur für geplante Ausführungen, und nur einmal, solange der Ablauf fehlerhaft bleibt.",
     "engineLabel": "Engine für geplante Ausführungen",
     "sameAsDevEngine": "wie Entwicklung",
     "cancel": "Abbrechen",

@@ -786,6 +786,9 @@ export default {
     "triggeredByScheduler": "Démarré par le planificateur"
   },
   "scheduleDialog": {
+    "notifyLabel": "Me prévenir en cas d'échec",
+    "notifyPlaceholder": "adresses séparées par des virgules (vide = aucun avis)",
+    "notifyHint": "Uniquement pour les exécutions planifiées, et une seule fois tant que le flux reste en échec.",
     "engineLabel": "Moteur des exécutions planifiées",
     "sameAsDevEngine": "identique au développement",
     "cancel": "Annuler",

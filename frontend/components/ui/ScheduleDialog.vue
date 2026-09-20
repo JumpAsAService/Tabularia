@@ -20,10 +20,15 @@ const props = defineProps<{
   // se assenti il selettore non compare (datasources)
   engines?: { id: string; label: string }[]
   productionEngine?: string | null
+  // (solo flussi) avviso quando un'esecuzione programmata fallisce: connessioni
+  // SMTP disponibili e impostazione attuale. Assenti = la sezione non compare.
+  smtpConnections?: { id: number; name: string }[]
+  notifyEmails?: string | null
+  notifyConnectionId?: number | null
 }>()
 const emit = defineEmits<{
   // productionEngine: '' = come sviluppo; undefined = invariato (nessun selettore o disattivazione)
-  (e: 'save', cron: string, productionEngine?: string): void
+  (e: 'save', cron: string, productionEngine?: string, notify?: { emails: string; connectionId: number }): void
   (e: 'cancel'): void
 }>()
 // fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
@@ -32,6 +37,15 @@ useDialogA11y(card, () => props.open, () => emit('cancel'))
 
 const prodEngine = ref('')
 const prodChoice = () => (props.engines?.length ? prodEngine.value : undefined)
+
+const notifyTo = ref('')
+const notifyConn = ref<number>(0)
+/** Indirizzi vuoti = avviso spento: si manda la coppia vuota, non `undefined`,
+ *  altrimenti togliere gli indirizzi non lo spegnerebbe mai. */
+const notifyChoice = () =>
+  props.smtpConnections?.length
+    ? { emails: notifyTo.value.trim(), connectionId: notifyTo.value.trim() ? notifyConn.value : 0 }
+    : undefined
 
 const api = useApi()
 const cronInput = ref('')
@@ -45,6 +59,8 @@ watch(
     if (!o) return
     cronInput.value = props.current ?? ''
     prodEngine.value = props.productionEngine ?? ''
+    notifyTo.value = props.notifyEmails ?? ''
+    notifyConn.value = props.notifyConnectionId ?? props.smtpConnections?.[0]?.id ?? 0
     if (!tzLoaded) {
       tzLoaded = true
       try { tz.value = (await api.appInfo()).timezone } catch { /* fallback UTC */ }
@@ -95,7 +111,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
           type="text"
           spellcheck="false"
           :placeholder="$t('scheduleDialog.cronPlaceholder')"
-          @keyup.enter="emit('save', cronInput, prodChoice())"
+          @keyup.enter="emit('save', cronInput, prodChoice(), notifyChoice())"
         />
         <p v-if="cronDescription.text" class="sd-desc" :class="{ bad: !cronDescription.ok }">
           {{ cronDescription.ok ? '↳ ' : '' }}{{ cronDescription.text }}
@@ -114,11 +130,28 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
           </select>
         </template>
 
+        <!-- L'avviso sta qui e non in una pagina a parte perché è la seconda
+             metà dello schedule: si può dimenticare un flusso solo se qualcosa
+             avverte quando smette di funzionare. -->
+        <template v-if="smtpConnections?.length">
+          <label class="sd-engine-label">{{ $t('scheduleDialog.notifyLabel') }}</label>
+          <input
+            v-model="notifyTo"
+            type="text"
+            :placeholder="$t('scheduleDialog.notifyPlaceholder')"
+            :aria-label="$t('scheduleDialog.notifyLabel')"
+          >
+          <select v-if="notifyTo.trim()" v-model="notifyConn" class="sd-notify-conn">
+            <option v-for="c in smtpConnections" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+          <p class="sd-desc">{{ $t('scheduleDialog.notifyHint') }}</p>
+        </template>
+
         <div class="sd-actions">
           <button v-if="current" class="danger" :disabled="busy" @click="emit('save', '')">{{ $t('scheduleDialog.disable') }}</button>
           <span class="sd-spacer" />
           <button :disabled="busy" @click="emit('cancel')">{{ $t('scheduleDialog.cancel') }}</button>
-          <button class="primary" :disabled="busy || !cronInput.trim() || !cronDescription.ok" @click="emit('save', cronInput, prodChoice())">
+          <button class="primary" :disabled="busy || !cronInput.trim() || !cronDescription.ok" @click="emit('save', cronInput, prodChoice(), notifyChoice())">
             {{ $t('scheduleDialog.save') }}
           </button>
         </div>

@@ -37,6 +37,12 @@ class Flow(SQLModel, table=True):
     run_schedule: Optional[str] = None
     run_scheduled_by: Optional[int] = Field(default=None, foreign_key="users.id")
     next_run_at: Optional[datetime] = Field(default=None, index=True)
+    # Avviso quando un'esecuzione PROGRAMMATA fallisce: «metti in schedule e
+    # dimentica» funziona solo se qualcosa ti sveglia. Gli indirizzi sono un
+    # elenco separato da virgole; vuoto o senza connessione = nessun avviso.
+    # Le esecuzioni manuali non avvisano: chi le lancia sta guardando.
+    notify_emails: Optional[str] = None
+    notify_connection_id: Optional[int] = Field(default=None, foreign_key="connections.id")
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

@@ -5,6 +5,25 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Be told when a scheduled flow fails.** "Schedule it and forget" only works
+  if something wakes you: a flow that broke at three in the morning stayed
+  broken in silence until someone opened the run history or noticed the data was
+  stale. A flow can now carry a list of addresses and an SMTP connection, set
+  where the schedule is set, because it is the other half of the same decision.
+
+  Three rules, each of them a choice rather than an omission. Only scheduled
+  runs notify — whoever presses Run is already watching the screen, and noise
+  teaches people to ignore the real ones. Only the *transition* into failure
+  notifies: a broken flow firing every five minutes would send three hundred
+  mails a day and by the third nobody reads them, so it speaks again only after
+  a run has succeeded in between. And a notice that cannot be sent never changes
+  anything — the run has already failed, and an error there would only make it
+  harder to understand.
+
+  The addresses go through the same barrier as the email output node: a
+  connection that restricts its domains restricts these too, and configuring one
+  needs CONNECT on the connection, so a person with only RUN on a flow cannot
+  send from someone else's mail server.
 - **Conversations with the assistant are saved, and each turn shows what it
   cost.** The history now lives in the gateway database instead of the browser:
   conversations survive a closed tab, and reopening one costs nothing — the

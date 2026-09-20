@@ -869,6 +869,9 @@ export default {
     "triggeredByScheduler": "Started by the scheduler"
   },
   "scheduleDialog": {
+    "notifyLabel": "Tell me if it fails",
+    "notifyPlaceholder": "addresses separated by commas (empty = no notice)",
+    "notifyHint": "Scheduled runs only, and once only for as long as the flow stays broken.",
     "engineLabel": "Engine for scheduled runs",
     "sameAsDevEngine": "same as development",
     "cancel": "Cancel",

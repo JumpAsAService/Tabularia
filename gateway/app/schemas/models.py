@@ -224,6 +224,9 @@ class FlowOut(BaseModel):
     production_engine: Optional[str] = None  # motore dei run SCHEDULATI; null = come engine
     run_schedule: Optional[str] = None  # cron; null = non schedulato
     next_run_at: Optional[UtcDateTime] = None
+    # avviso quando un'esecuzione PROGRAMMATA fallisce (vedi services/notifier.py)
+    notify_emails: Optional[str] = None
+    notify_connection_id: Optional[int] = None
     created_at: Optional[UtcDateTime] = None
     updated_at: Optional[UtcDateTime] = None
     # stato dell'ULTIMO run (per l'indicatore nella lista, senza aprire l'expander):
@@ -249,6 +252,11 @@ class FlowScheduleUpdate(BaseModel):
     `production_engine`: omesso = invariato; "" = torna uguale allo sviluppo."""
     cron: Optional[str] = None
     production_engine: Optional[str] = None
+    # Avviso di fallimento: indirizzi separati da virgola e la connessione SMTP
+    # che li spedisce. `""` spegne l'avviso; omessi = invariati.
+    notify_emails: Optional[str] = None
+    notify_connection_id: Optional[int] = None
+
 
 
 class FlowUpdate(BaseModel):

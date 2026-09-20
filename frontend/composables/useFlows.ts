@@ -10,7 +10,9 @@ export interface FlowSummary {
   owner_name: string | null // nome di chi ha creato il flusso
   engine: string // motore di SVILUPPO (editor, run manuali)
   production_engine: string | null // motore dei run SCHEDULATI; null = come engine
-  run_schedule: string | null // cron; null = non schedulato
+  run_schedule: string | null
+  notify_emails?: string | null
+  notify_connection_id?: number | null // cron; null = non schedulato
   next_run_at: string | null
   created_at: string | null
   updated_at: string | null
@@ -80,10 +82,20 @@ export function useFlows() {
 
     // imposta/disabilita l'esecuzione schedulata (cron a 5 campi; '' = disabilita)
     // production_engine: omesso = invariato; '' = come sviluppo
-    setSchedule: (id: number, cron: string, production_engine?: string) =>
+    setSchedule: (
+      id: number,
+      cron: string,
+      production_engine?: string,
+      notify?: { emails: string; connectionId: number },
+    ) =>
       apiFetch<FlowDetail>(`/flows/${id}/schedule`, {
         method: 'PUT',
-        body: { cron, ...(production_engine === undefined ? {} : { production_engine }) },
+        body: {
+          cron,
+          ...(production_engine === undefined ? {} : { production_engine }),
+          // omessi = invariati; stringa vuota e 0 = avviso spento
+          ...(notify === undefined ? {} : { notify_emails: notify.emails, notify_connection_id: notify.connectionId }),
+        },
       }),
 
     // esegue subito l'orchestrazione (refresh → output → runflow) in background.
