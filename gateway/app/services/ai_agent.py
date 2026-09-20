@@ -192,6 +192,7 @@ How to work:
 4. If a query fails, read the error, fix the SQL and try again. If it keeps failing, say so plainly.
 
 Rules:
+- A question about two datasources is one query, not two: join them with `join_datasource_id` instead of querying each and combining the numbers yourself. Adding up figures from two separate results is exactly how a wrong total gets stated confidently.
 - When the answer is a ranking, a share of a total or a series over time, pass `chart` to `query_datasource` so the result is drawn as well as listed — and always when the user asks for a chart. Omit it for a single number or a couple of rows.
 - Every figure you state must come from a query result in this conversation. Never estimate, never invent, and do the arithmetic (totals, shares, differences) in SQL rather than in your head.
 - Name the datasource you used. If the data cannot answer the question, say what is missing.
@@ -265,6 +266,37 @@ async def describe_datasource(ctx: RunContext[ChatDeps], datasource_id: int) -> 
     return info
 
 
+def _chiavi(testo: Optional[str]) -> list[str]:
+    return [c.strip() for c in (testo or "").replace(";", ",").split(",") if c.strip()]
+
+
+def _join_operation(session, user, ds_id, left_on, right_on, how):
+    """L'operazione di join verso una SECONDA datasource, o `(None, None)`.
+
+    La sicurezza sta tutta qui: il lato destro arriva come ID e viene risolto
+    con `_readable_datasource`, cioe' con gli stessi permessi di tutto il resto.
+    Il modello non vede ne' bucket ne' chiavi, e la SQL continua a leggere solo
+    `self` — che dopo questa operazione e' il risultato gia' unito. La lista
+    bianca del nodo sql resta quella che e'."""
+    if ds_id is None:
+        return None, None
+    sinistra, destra = _chiavi(left_on), _chiavi(right_on)
+    if not sinistra or not destra:
+        raise ModelRetry("To join, give both join_left_on and join_right_on: the key columns on each side.")
+    if len(sinistra) != len(destra):
+        raise ModelRetry(
+            f"The join keys must match in number: {len(sinistra)} on the left, {len(destra)} on the right."
+        )
+    altra = _readable_datasource(session, user, ds_id)
+    params = {
+        "right": {"source": {"bucket": altra.bucket, "key": altra.key}, "operations": []},
+        "left_on": sinistra,
+        "right_on": destra,
+        "how": how or "inner",
+    }
+    return {"type": "join", "params": params}, altra.name
+
+
 CHART_TYPES = ("bar", "hbar", "line", "area", "pie", "donut", "scatter")
 
 
@@ -305,6 +337,10 @@ def _chart_spec(chart: Optional[Any], columns: list[dict[str, Any]]) -> tuple[Op
 @agent.tool
 async def query_datasource(
     ctx: RunContext[ChatDeps], datasource_id: int, sql: str, limit: int = 50,
+    join_datasource_id: Optional[int] = None,
+    join_left_on: Optional[str] = None,
+    join_right_on: Optional[str] = None,
+    join_how: Optional[Literal["inner", "left", "full"]] = None,
     chart_type: Optional[Literal["bar", "hbar", "line", "area", "pie", "donut", "scatter"]] = None,
     chart_x: Optional[str] = None,
     chart_y: Optional[str] = None,
@@ -312,6 +348,8 @@ async def query_datasource(
     chart_title: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run ONE read-only SELECT on a datasource. The table is named `self` (e.g. `SELECT paese, COUNT(*) AS n FROM self GROUP BY paese ORDER BY n DESC`). Returns columns, rows (capped) and whether the result was truncated.
+
+    To answer a question that spans TWO datasources, set `join_datasource_id` to the second one together with `join_left_on` and `join_right_on` (the key columns on each side, comma-separated if the key has several parts). The two are joined before your SQL runs, and `self` is the joined result — so write the query against the columns of both. `join_how` is inner by default; use left to keep rows that have no match. A column that exists on both sides and is not a key gets the suffix `_right`. Call `describe_datasource` on both first, so you join on columns that exist.
 
     To draw the result as a chart under the table, set `chart_type` together with `chart_x` (the categories) and `chart_y` (the numeric column) — both must be columns your query actually returns. `chart_series` optionally splits the data into several series, `chart_title` is a short title in the user's language. Use bar for a ranking, hbar when the labels are long or the categories many, line or area for a series over time, pie or donut for shares of a total, scatter for two numeric measures. Leave them unset for a single number, for a couple of rows that already read fine, or for a non-numeric result: a chart of three rows is noise."""
     deps = ctx.deps
@@ -325,14 +363,22 @@ async def query_datasource(
     with deps.session_factory() as session:
         ds = _readable_datasource(session, deps.user, datasource_id)
         snapshot = Datasource(id=ds.id, name=ds.name, project_id=ds.project_id, bucket=ds.bucket, key=ds.key, sort_keys=ds.sort_keys)
+        # La seconda datasource si risolve da un ID sotto gli STESSI permessi:
+        # il modello non nomina mai un bucket o una chiave, quindi la join non
+        # e' una strada per leggere qualcosa fuori dai permessi di chi chiede.
+        join_op, join_nome = _join_operation(
+            session, deps.user, join_datasource_id, join_left_on, join_right_on, join_how,
+        )
     outcome, n_rows = "success", 0
     try:
-        res = await _engine_preview(snapshot, [{"type": "sql", "params": {"query": query}}], limit, deps)
+        operazioni = ([join_op] if join_op else []) + [{"type": "sql", "params": {"query": query}}]
+        res = await _engine_preview(snapshot, operazioni, limit, deps)
         rows = _trim(res.get("rows", []))
         n_rows = len(rows)
         colonne = res.get("columns", [])
         esito: dict[str, Any] = {
-            "datasource": snapshot.name, "columns": colonne, "rows": rows,
+            "datasource": f"{snapshot.name} ⋈ {join_nome}" if join_nome else snapshot.name,
+            "columns": colonne, "rows": rows,
             "row_count": n_rows, "truncated": bool(res.get("truncated")),
         }
         # il grafico e' dell'utente: si valida, non si esegue niente di nuovo

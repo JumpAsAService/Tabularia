@@ -366,3 +366,58 @@ async def test_the_engine_is_chosen_among_the_available_and_allowed_ones(session
     # disponibile sull'engine ma NON consentito, o consentito ma non disponibile: fuori entrambi
     fake_engine.engines = [{"id": "duckdb", "label": "DuckDB", "available": False}, {"id": "clickhouse", "label": "CH", "available": True}]
     assert await ai_routes.pick_engine(session, None) == "clickhouse"
+
+
+# ── join fra due datasource ──────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_a_join_resolves_the_second_datasource_under_the_same_permissions(session, ai_on, fake_engine):
+    """Il lato destro arriva come ID e passa dagli stessi permessi: il modello
+    non nomina mai un bucket né una chiave."""
+    _, user, visible, hidden = _catalog(session)
+    altra = make_datasource(session, name="clienti", project_id=visible.project_id, key="datasets/9/c.parquet")
+    fake_engine.preview_response = (200, {"columns": [{"name": "n", "dtype": "Int64"}], "rows": [{"n": 7}],
+                                          "row_count": 1, "truncated": False})
+
+    out = await ai_agent.query_datasource(
+        _ctx(session, user), visible.id, "SELECT count(*) AS n FROM self",
+        join_datasource_id=altra.id, join_left_on="cliente_id", join_right_on="id",
+    )
+    ops = fake_engine.previews[-1]["operations"]
+    assert ops[0]["type"] == "join"
+    assert ops[0]["params"]["right"]["source"]["key"] == "datasets/9/c.parquet"
+    assert ops[0]["params"]["left_on"] == ["cliente_id"] and ops[0]["params"]["right_on"] == ["id"]
+    assert ops[0]["params"]["how"] == "inner"
+    assert ops[1]["type"] == "sql"  # la SQL gira DOPO, su `self` = il risultato unito
+    assert out["datasource"] == "ordini ⋈ clienti"
+
+
+@pytest.mark.anyio
+async def test_you_cannot_join_a_datasource_you_cannot_read(session, ai_on, fake_engine):
+    _, user, visible, hidden = _catalog(session)
+    with pytest.raises(ModelRetry):
+        await ai_agent.query_datasource(
+            _ctx(session, user), visible.id, "SELECT 1 AS n FROM self",
+            join_datasource_id=hidden.id, join_left_on="a", join_right_on="b",
+        )
+    assert fake_engine.previews == []  # l'engine non viene nemmeno chiamato
+
+
+@pytest.mark.anyio
+async def test_mismatched_keys_are_refused_with_a_reason(session, ai_on, fake_engine):
+    _, user, visible, _ = _catalog(session)
+    altra = make_datasource(session, name="clienti", project_id=visible.project_id)
+    for left, right in (("a,b", "x"), ("", "x"), ("a", "")):
+        with pytest.raises(ModelRetry):
+            await ai_agent.query_datasource(
+                _ctx(session, user), visible.id, "SELECT 1 AS n FROM self",
+                join_datasource_id=altra.id, join_left_on=left, join_right_on=right,
+            )
+
+
+@pytest.mark.anyio
+async def test_without_a_join_nothing_changes(session, ai_on, fake_engine):
+    _, user, visible, _ = _catalog(session)
+    fake_engine.preview_response = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
+    await ai_agent.query_datasource(_ctx(session, user), visible.id, "SELECT 1 AS n FROM self")
+    assert [o["type"] for o in fake_engine.previews[-1]["operations"]] == ["sql"]

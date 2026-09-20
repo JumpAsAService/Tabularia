@@ -5,6 +5,16 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The assistant can answer across two datasources.** It could only ever query
+  one, because the SQL node may read nothing but its own input — so a question
+  spanning two tables got two separate queries and a total the model added up in
+  its head, which is how a confident wrong number happens. It now joins them:
+  the model names the second datasource by **id**, never a bucket or a key, and
+  the gateway resolves it under the same permissions as everything else, builds
+  the join as a flow operation, and runs the SQL on the joined result. The
+  allow-list is untouched — the query still sees only `self` — so the capability
+  costs nothing in containment: a datasource the caller cannot read cannot be
+  joined, and the engine is not even called.
 - **A datasource says when it is ready for the assistant.** A table whose fields
   carry no descriptions forces the model to guess from column names, which is
   exactly how it once invented the contents of a table it had never read. The
