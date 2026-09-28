@@ -6,7 +6,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import User
 from app.services import audit, login_throttle
-from app.services.permissions import is_admin, user_group_ids
+from app.services.permissions import is_admin, is_observer, user_group_ids
 from app.schemas.models import LoginRequest, Token, MeOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -63,5 +63,6 @@ def me(user: User = Depends(get_current_user), session: Session = Depends(get_se
         # EFFETTIVO: flag personale o gruppo di amministratori. È ciò con cui il
         # frontend decide se mostrare l'amministrazione.
         is_superuser=is_admin(session, user),
+        is_observer=is_observer(session, user),
         groups=list(names),
     )

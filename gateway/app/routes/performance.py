@@ -15,10 +15,10 @@ from sqlmodel import Session, select
 
 from app.core.engine_client import get_engine_client
 from app.db.session import get_session
-from app.deps.auth import require_superuser
+from app.deps.auth import require_observer
 from app.models import Datasource, Flow, Run
 
-router = APIRouter(prefix="/admin/performance", tags=["performance"], dependencies=[Depends(require_superuser)])
+router = APIRouter(prefix="/admin/performance", tags=["performance"], dependencies=[Depends(require_observer)])
 
 # tetto alle righe lette: la finestra è scelta dall'admin, ma un'installazione con
 # milioni di run non deve poter piantare il gateway con una pagina di statistiche

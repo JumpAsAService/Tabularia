@@ -16,14 +16,16 @@ from sqlmodel import Session, func, select
 
 from app.core.config import get_settings
 from app.db.session import get_session
-from app.deps.auth import require_superuser
+from app.deps.auth import get_current_user, require_observer
+from app.services.masking import mask_email
+from app.services.permissions import is_admin
 from app.models import AuditLog, User
 from app.schemas.models import UtcDateTime, Page
 from app.services import audit as audit_svc
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["audit"], dependencies=[Depends(require_superuser)])
+router = APIRouter(tags=["audit"], dependencies=[Depends(require_observer)])
 
 # finestra entro cui un utente è considerato "attivo ora" (last_seen recente)
 ACTIVE_WINDOW = timedelta(minutes=15)
@@ -54,12 +56,20 @@ class ActiveSession(BaseModel):
     online: bool  # last_seen entro ACTIVE_WINDOW
 
 
-def _to_out(e: AuditLog) -> AuditEntryOut:
+def _to_out(e: AuditLog, pieno: bool = True) -> AuditEntryOut:
+    """Una voce dell'audit. `pieno=False` per un OSSERVATORE: resta CHE COSA è
+    stato fatto — che è il senso del registro — e spariscono chi l'ha fatto e da
+    dove. L'attore mascherato è stabile, quindi «queste tre azioni sono la stessa
+    persona» si vede ancora."""
     try:
         detail = json.loads(e.detail) if e.detail else None
     except json.JSONDecodeError:
         detail = {"_raw": e.detail}
-    return AuditEntryOut(**e.model_dump(exclude={"detail"}), detail=detail)
+    out = AuditEntryOut(**e.model_dump(exclude={"detail"}), detail=detail)
+    if not pieno:
+        out.actor_label = mask_email(out.actor_label) if "@" in (out.actor_label or "") else out.actor_label
+        out.ip = None
+    return out
 
 
 @router.get("/audit", response_model=Page[AuditEntryOut])
@@ -73,6 +83,7 @@ def list_audit(
     until: Optional[datetime] = Query(None, description="fino al timestamp (incluso)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    chi_chiede: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     """Eventi di audit, dal più recente, paginati e filtrabili."""
@@ -96,11 +107,12 @@ def list_audit(
     if until is not None:
         base = base.where(AuditLog.ts <= until)
 
+    pieno = is_admin(session, chi_chiede)  # chi comanda vede; chi guarda no
     total = session.exec(select(func.count()).select_from(base.subquery())).one()
     rows = session.exec(
         base.order_by(AuditLog.ts.desc()).offset(offset).limit(limit)
     ).all()
-    return Page(items=[_to_out(e) for e in rows], total=total)
+    return Page(items=[_to_out(e, pieno) for e in rows], total=total)
 
 
 @router.get("/audit/actions", response_model=list[str])
@@ -171,9 +183,13 @@ def access_activity(
 
 
 @router.get("/audit/sessions", response_model=list[ActiveSession])
-def active_sessions(session: Session = Depends(get_session)):
+def active_sessions(
+    session: Session = Depends(get_session),
+    chi_chiede: User = Depends(get_current_user),
+):
     """Utenti con attività recente (il JWT è stateless: 'attivo ora' = last_seen
     entro la finestra). Ordinati dal più recente. Chi non è mai stato visto è escluso."""
+    pieno = is_admin(session, chi_chiede)  # chi comanda vede; chi guarda no
     now = datetime.now(timezone.utc)
     threshold = now - ACTIVE_WINDOW
     users = session.exec(
@@ -193,9 +209,14 @@ def active_sessions(session: Session = Depends(get_session)):
         if seen is not None and seen.tzinfo is None:
             seen = seen.replace(tzinfo=timezone.utc)
         out.append(ActiveSession(
-            user_id=u.id, email=u.email, full_name=u.full_name,
+            user_id=u.id,
+            # un OSSERVATORE vede quante sessioni ci sono e se sono vive, non
+            # chi c'è dietro né da dove entra (vedi services/masking.py)
+            email=u.email if pieno else mask_email(u.email),
+            full_name=u.full_name if pieno else "",
             is_superuser=u.is_superuser or u.id in via_gruppo,
-            last_seen_at=u.last_seen_at, last_seen_ip=u.last_seen_ip,
+            last_seen_at=u.last_seen_at,
+            last_seen_ip=u.last_seen_ip if pieno else None,
             online=(seen is not None and seen >= threshold),
         ))
     return out

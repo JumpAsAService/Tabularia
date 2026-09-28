@@ -17,7 +17,7 @@ const { t } = useI18n()
 
 // guardia UX (il gateway impone la RBAC vera: /queue è require_superuser)
 watchEffect(() => {
-  if (user.value && !user.value.is_superuser) router.replace('/')
+  if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
 
 const POLL_MS = 2000

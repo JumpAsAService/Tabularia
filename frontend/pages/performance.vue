@@ -17,7 +17,7 @@ const router = useRouter()
 const { apiFetch } = useApiClient()
 const { t } = useI18n()
 // guardia UX: la RBAC vera la impone il gateway (require_superuser)
-watchEffect(() => { if (user.value && !user.value.is_superuser) router.replace('/') })
+watchEffect(() => { if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/') })
 
 interface RunItem { kind: 'flow' | 'ingest'; id: number | null; name: string | null; runs: number; failures: number; median_s: number | null; p95_s: number | null; max_s: number | null; total_s: number; median_wait_s: number | null; rows: number; last_error: string | null }
 interface RunsPerf { days: number; truncated: boolean; totals: { runs: number; failures: number; median_wait_s: number | null; p95_wait_s: number | null }; items: RunItem[] }

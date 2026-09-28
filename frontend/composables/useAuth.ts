@@ -6,6 +6,9 @@ export interface Me {
   full_name: string
   is_active: boolean
   is_superuser: boolean
+  // LEGGE i pannelli di amministrazione senza poterci scrivere: un
+  // amministratore lo è per definizione (vedi permissions.is_observer)
+  is_observer?: boolean
   groups: string[]
 }
 

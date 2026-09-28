@@ -16,6 +16,11 @@ from app.schemas.models import GroupCreate, MeOut, UserCreate, UserUpdate
 from tests.conftest import make_user
 
 
+def _chi(session):
+    """Chi legge l'elenco: un amministratore, quindi senza mascheramento."""
+    return make_user(session, email="capo-lettore@x.local", is_superuser=True)
+
+
 def _gruppo(session, nome: str) -> Group:
     g = Group(name=nome)
     session.add(g)
@@ -45,7 +50,7 @@ def test_list_users_exposes_dates_and_memberships(session):
     _iscrivi(session, u.id, g1.id)
     _iscrivi(session, u.id, g2.id)
 
-    riga = next(x for x in list_users(session=session) if x.id == u.id)
+    riga = next(x for x in list_users(session=session, chi_chiede=_chi(session)) if x.id == u.id)
     assert riga.created_at is not None
     assert riga.groups == ["analytics", "finanza"]  # ordinati, non a caso
     assert riga.sso_only is False  # ha una password locale
@@ -53,7 +58,7 @@ def test_list_users_exposes_dates_and_memberships(session):
 
 def test_user_without_local_password_is_flagged_sso_only(session):
     solo_sso = make_user(session, email="idp@x.local", hashed_password=None)
-    riga = next(x for x in list_users(session=session) if x.id == solo_sso.id)
+    riga = next(x for x in list_users(session=session, chi_chiede=_chi(session)) if x.id == solo_sso.id)
     assert riga.sso_only is True
 
 
@@ -62,7 +67,7 @@ def test_last_seen_is_reported(session):
     u = make_user(session, email="visto@x.local", last_seen_at=quando)
     mai = make_user(session, email="mai@x.local")
 
-    righe = {x.id: x for x in list_users(session=session)}
+    righe = {x.id: x for x in list_users(session=session, chi_chiede=_chi(session))}
     assert righe[u.id].last_seen_at is not None
     assert righe[mai.id].last_seen_at is None  # non è mai entrato
 

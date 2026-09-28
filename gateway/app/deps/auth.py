@@ -72,3 +72,19 @@ def require_superuser(
     if not is_admin(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi admin")
     return user
+
+
+def require_observer(
+    user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> User:
+    """Per LEGGERE un pannello di amministrazione: amministratore od osservatore.
+
+    Le rotte di scrittura restano su `require_superuser`. La separazione è per
+    METODO e non per pannello: un pannello «di sola lettura» che contenga una
+    rotta di scrittura sarebbe un buco silenzioso, mentre così ogni POST, PUT e
+    DELETE resta chiuso per costruzione."""
+    from app.services.permissions import is_observer
+
+    if not is_observer(session, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi di lettura amministrativa")
+    return user

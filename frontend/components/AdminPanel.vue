@@ -25,6 +25,11 @@ const modelli = ref<AiModel[] | null>(null)
 const modelliErrore = ref('')
 const toast = useToast()
 const { user: me } = useAuth()
+// Un OSSERVATORE apre i pannelli e non li tocca. Si nasconde invece di
+// disabilitare: un modulo grigio invita a provarci e poi frustra, mentre il
+// server risponderebbe 403 comunque. I dati personali che si vedono qui sono
+// già mascherati dal server (services/masking.py).
+const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 
 type Sezione = 'users' | 'groups' | 'banners' | 'engines' | 'ai'
@@ -361,6 +366,7 @@ async function toggleMotore(m: EnginePolicy) {
                     <td class="right nowrap">
                       <button
                         class="mini"
+                        v-if="canWrite"
                         :class="{ on: u.is_superuser }"
                         :aria-pressed="u.is_superuser"
                         :disabled="selfLockout(u)"
@@ -369,6 +375,7 @@ async function toggleMotore(m: EnginePolicy) {
                       ><ShieldCheck :size="13" /></button>
                       <button
                         class="mini"
+                        v-if="canWrite"
                         :disabled="u.id === me?.id"
                         :title="u.is_active ? $t('adminPanel.disableUserTitle') : $t('adminPanel.enableUserTitle')"
                         @click="toggleActive(u)"
@@ -377,6 +384,7 @@ async function toggleMotore(m: EnginePolicy) {
                       </button>
                       <button
                         class="mini danger"
+                        v-if="canWrite"
                         :disabled="u.id === me?.id"
                         :title="u.id === me?.id ? $t('adminPanel.cannotDeleteSelf') : $t('adminPanel.deleteUserTitle')"
                         @click="deleteUser(u)"
@@ -393,7 +401,7 @@ async function toggleMotore(m: EnginePolicy) {
             </div>
           </div>
 
-          <div class="card form">
+          <div v-if="canWrite" class="card form">
             <h4><Plus :size="13" /> {{ $t('adminPanel.newUserTitle') }}</h4>
             <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" />
             <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
@@ -445,12 +453,13 @@ async function toggleMotore(m: EnginePolicy) {
                     <td class="right nowrap">
                       <button
                         class="mini"
+                        v-if="canWrite"
                         :class="{ on: g.is_admin }"
                         :aria-pressed="g.is_admin"
                         :title="g.is_admin ? $t('adminPanel.demoteGroupTitle') : $t('adminPanel.promoteGroupTitle')"
                         @click.stop="toggleGroupAdmin(g)"
                       ><ShieldCheck :size="13" /></button>
-                      <button class="mini danger" :title="$t('adminPanel.deleteGroupTitle')" @click.stop="deleteGroup(g)">
+                      <button class="mini danger" v-if="canWrite" :title="$t('adminPanel.deleteGroupTitle')" @click.stop="deleteGroup(g)">
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -475,7 +484,7 @@ async function toggleMotore(m: EnginePolicy) {
                   <tr v-for="u in membri" :key="u.id">
                     <td>{{ u.email }}</td>
                     <td class="right">
-                      <button class="mini" :title="$t('adminPanel.removeFromGroupTitle')" @click="removeMember(u)">
+                      <button class="mini" v-if="canWrite" :title="$t('adminPanel.removeFromGroupTitle')" @click="removeMember(u)">
                         <X :size="13" />
                       </button>
                     </td>
@@ -485,6 +494,7 @@ async function toggleMotore(m: EnginePolicy) {
               </table>
             </div>
 
+            <template v-if="canWrite">
             <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.addToGroupTitle') }}</h4>
             <Select
               v-model="daAggiungere"
@@ -492,9 +502,10 @@ async function toggleMotore(m: EnginePolicy) {
               :placeholder="$t('adminPanel.userPlaceholder')"
             />
             <button :disabled="!daAggiungere" @click="addMember">{{ $t('adminPanel.addButton') }}</button>
+            </template>
           </div>
 
-          <div class="card form">
+          <div v-if="canWrite" class="card form">
             <h4><Plus :size="13" /> {{ $t('adminPanel.newGroupTitle') }}</h4>
             <input v-model="ng.name" type="text" :placeholder="$t('adminPanel.groupNamePlaceholder')" />
             <input v-model="ng.description" type="text" :placeholder="$t('adminPanel.descriptionPlaceholder')" />
@@ -531,6 +542,7 @@ async function toggleMotore(m: EnginePolicy) {
                     <td class="right">
                       <button
                         class="mini"
+                        v-if="canWrite"
                         :title="m.allowed ? $t('adminPanel.disallowEngineTitle') : $t('adminPanel.allowEngineTitle')"
                         :aria-label="m.allowed ? $t('adminPanel.disallowEngineTitle') : $t('adminPanel.allowEngineTitle')"
                         @click="toggleMotore(m)"
@@ -568,7 +580,7 @@ async function toggleMotore(m: EnginePolicy) {
                     <td class="small" :class="m.enabled ? '' : 'muted'">{{ m.enabled ? $t('adminPanel.aiEnabled') : $t('adminPanel.aiDisabled') }}</td>
                     <td class="right">
                       <button
-                        v-if="m.chat"
+                        v-if="m.chat && canWrite"
                         class="mini"
                         :title="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
                         :aria-label="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
@@ -605,7 +617,7 @@ async function toggleMotore(m: EnginePolicy) {
                     <td>{{ b.message }}</td>
                     <td class="muted small nowrap">{{ quando(b.created_at) }}</td>
                     <td class="right">
-                      <button class="mini danger" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
+                      <button class="mini danger" v-if="canWrite" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -616,7 +628,7 @@ async function toggleMotore(m: EnginePolicy) {
             </div>
           </div>
 
-          <div class="card form">
+          <div v-if="canWrite" class="card form">
             <h4><Plus :size="13" /> {{ $t('adminPanel.newBannerTitle') }}</h4>
             <input v-model="nb.message" type="text" :placeholder="$t('adminPanel.bannerMessagePlaceholder')" @keyup.enter="createBanner" />
             <Select

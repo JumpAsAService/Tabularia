@@ -114,6 +114,9 @@ _MIGRATIONS = [
     # Avviso di fallimento di un'esecuzione programmata (vedi models/flow.py)
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS notify_emails TEXT",
     "ALTER TABLE flows ADD COLUMN IF NOT EXISTS notify_connection_id INTEGER",
+    # Ruolo osservatore: legge i pannelli admin, non scrive (vedi models/user.py)
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_observer BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE groups ADD COLUMN IF NOT EXISTS is_observer BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

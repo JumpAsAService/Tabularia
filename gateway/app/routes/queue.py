@@ -8,12 +8,12 @@ esposto sull'host: l'unica via a questi comandi è questo router autenticato.
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.engine_client import get_engine_client
-from app.deps.auth import require_superuser
+from app.deps.auth import require_observer, require_superuser
 
-router = APIRouter(prefix="/queue", tags=["queue"], dependencies=[Depends(require_superuser)])
+router = APIRouter(prefix="/queue", tags=["queue"])
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_observer)])
 async def queue_overview():
     """Panoramica near-real-time: worker online, job in esecuzione, job in attesa."""
     client = get_engine_client()
@@ -23,7 +23,7 @@ async def queue_overview():
     return resp.json()
 
 
-@router.post("/jobs/{task_id}/stop")
+@router.post("/jobs/{task_id}/stop", dependencies=[Depends(require_superuser)])
 async def stop_job(task_id: str):
     """Ferma (revoca + terminate) un job in esecuzione su un worker, o lo rimuove
     dalla coda se ancora in attesa."""

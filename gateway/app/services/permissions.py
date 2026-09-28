@@ -63,6 +63,30 @@ def ensure_still_admin(session: Session, current: User) -> None:
         )
 
 
+def observer_group_names(session: Session, user: User) -> list[str]:
+    """Gruppi di osservatori a cui l'utente appartiene."""
+    righe = session.exec(
+        select(Group.name)
+        .where(UserGroupLink.group_id == Group.id)
+        .where(UserGroupLink.user_id == user.id)
+        .where(Group.is_observer == True)  # noqa: E712
+    ).all()
+    return sorted(righe)
+
+
+def is_observer(session: Session, user: User) -> bool:
+    """Può LEGGERE i pannelli di amministrazione.
+
+    Un amministratore lo è per definizione: chi comanda vede. Come per
+    `is_admin`, il risultato non si scrive mai sull'oggetto utente — si ricalcola
+    a ogni richiesta, così togliere il ruolo ha effetto subito."""
+    if is_admin(session, user):
+        return True
+    if user.is_observer:
+        return True
+    return bool(observer_group_names(session, user))
+
+
 def _all_projects(session: Session) -> dict[int, Project]:
     return {p.id: p for p in session.exec(select(Project)).all()}
 

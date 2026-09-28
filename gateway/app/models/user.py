@@ -24,6 +24,11 @@ class User(SQLModel, table=True):
     hashed_password: Optional[str] = None
     is_active: bool = True
     is_superuser: bool = False
+    # Osservatore: LEGGE i pannelli di amministrazione e non scrive nulla. Nasce
+    # per aprire un'installazione a sconosciuti (una demo) senza dare i comandi,
+    # ma è un ruolo vero — chi verifica che le cose girino senza poterle toccare.
+    # Un amministratore è già osservatore: non serve dargli entrambi.
+    is_observer: bool = False
     created_at: datetime = Field(default_factory=_now)
     # ultima attività autenticata (per le "sessioni attive" dell'audit): il JWT è
     # stateless, quindi tracciamo l'ultimo istante/IP visti (aggiornati con
@@ -50,4 +55,6 @@ class Group(SQLModel, table=True):
     # (vedi services/permissions.is_admin). Il flag personale `User.is_superuser`
     # resta e si somma: basta uno dei due.
     is_admin: bool = False
+    # come `is_admin`, ma di sola lettura (vedi User.is_observer)
+    is_observer: bool = False
     created_at: datetime = Field(default_factory=_now)

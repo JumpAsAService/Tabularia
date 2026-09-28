@@ -67,6 +67,10 @@ class UserOut(BaseModel):
 
 class MeOut(UserOut):
     groups: list[str] = []
+    # LEGGE i pannelli di amministrazione. Un amministratore lo è per
+    # definizione: il frontend controlla questo per mostrare la voce di menù, e
+    # `is_superuser` per mostrare i comandi.
+    is_observer: bool = False
 
 
 class UserCreate(BaseModel):

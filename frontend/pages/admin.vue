@@ -7,7 +7,7 @@ const router = useRouter()
 
 // il gateway rifiuta comunque le API admin: qui solo UX (niente pagina vuota)
 watchEffect(() => {
-  if (user.value && !user.value.is_superuser) router.replace('/')
+  if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
 </script>
 

@@ -61,3 +61,36 @@ def test_the_database_error_path_redacts(chiavi, monkeypatch):
     exc = Exception(f"server response: Code: 62. DB::Exception: Syntax error near '{sk}' (SYNTAX_ERROR)")
     fuori = describe_db_error(exc, "clickhouse", "host", 8443)
     assert sk not in fuori
+
+
+# ── testo delle query nel pannello Prestazioni ───────────────────────────────
+
+def test_the_arguments_of_a_storage_function_are_emptied():
+    """Il query_log di ClickHouse maschera la chiave segreta ma NON quella di
+    accesso, e lascia in chiaro endpoint, bucket e percorso — verificato su un
+    ClickHouse 24.8. In un elenco di query lente non servono a nulla."""
+    from app.core.redaction import redact_storage_args
+
+    q = ("SELECT count() FROM s3('https://s3.it-mil.scw.cloud/bucket/datasets/1/x.parquet', "
+         "'AK_VISIBILE', '[HIDDEN]', 'Parquet') WHERE paese = 'IT'")
+    fuori = redact_storage_args(q)
+    assert "AK_VISIBILE" not in fuori and "bucket/datasets" not in fuori
+    assert "s3(…)" in fuori
+    # il senso della query resta leggibile: è il motivo per cui la si mostra
+    assert "SELECT count()" in fuori and "paese = 'IT'" in fuori
+
+
+def test_nested_parentheses_do_not_defeat_it():
+    from app.core.redaction import redact_storage_args
+
+    q = "SELECT * FROM s3('https://x/y', 'AK', 'SK', 'Parquet') JOIN url('http://z/w', 'CSV') USING (id)"
+    fuori = redact_storage_args(q)
+    assert "AK" not in fuori and "http://z/w" not in fuori
+    assert fuori.count("(…)") == 2
+
+
+def test_a_query_without_storage_functions_is_untouched():
+    from app.core.redaction import redact_storage_args
+
+    q = "SELECT paese, count() FROM self GROUP BY paese"
+    assert redact_storage_args(q) == q

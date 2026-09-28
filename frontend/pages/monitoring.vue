@@ -11,7 +11,7 @@ const config = useRuntimeConfig()
 
 // il contenuto è telemetria, non dati: la guardia è solo UX coerente con /admin
 watchEffect(() => {
-  if (user.value && !user.value.is_superuser) router.replace('/')
+  if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
 
 const dashboardUrl = computed(

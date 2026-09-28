@@ -5,6 +5,29 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **An observer role: reads the administration panels, writes nothing.** Granted
+  by a flag on the person or by a group, like administration itself; an
+  administrator is already an observer, because whoever commands sees.
+
+  The split is by **method**, not by panel: every GET on an admin surface accepts
+  an observer, every POST, PUT, PATCH and DELETE stays with the administrator. A
+  panel declared "read-only" that happened to contain a write route would be a
+  silent hole; this way the containment is structural.
+
+  **The panels open, the personal data does not.** They hold emails, IP addresses
+  and the trace of who did what — what an administrator needs to decide, and what
+  someone who only watches does not need at all. For an observer, addresses are
+  masked to `a***@example.com` (the domain stays: it says inside or outside the
+  organisation), names are dropped and IPs are omitted. The audit still says
+  *what* happened, which is the point of the register, and the mask is stable, so
+  "these three actions are the same person" is still visible.
+
+  Also, for everyone and not only for observers: the heavy-query list in the
+  Performance tab now empties the arguments of `s3(...)` and `url(...)`.
+  ClickHouse masks the secret key in its query log by itself, but not the access
+  key, and leaves the endpoint, the bucket and the object path in clear — checked
+  against a ClickHouse 24.8. In a list of slow queries none of that says anything
+  useful.
 - **What an installation open to strangers needed.** Three gaps that were there
   all along, found while planning a public demo.
 

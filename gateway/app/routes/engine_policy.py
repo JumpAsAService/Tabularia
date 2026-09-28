@@ -23,7 +23,7 @@ from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.db.session import get_session
-from app.deps.auth import require_superuser
+from app.deps.auth import require_observer, require_superuser
 from app.models import DisabledEngine, Flow, User
 from app.schemas.models import EnginePolicyOut, EnginePolicyUpdate
 from app.services import audit
@@ -57,7 +57,7 @@ def _stato(session: Session) -> list[EnginePolicyOut]:
 
 @router.get("", response_model=list[EnginePolicyOut])
 def list_engine_policy(
-    user: User = Depends(require_superuser),
+    user: User = Depends(require_observer),
     session: Session = Depends(get_session),
 ):
     """Tutti i motori noti, con lo stato e quanti flussi li usano ancora."""

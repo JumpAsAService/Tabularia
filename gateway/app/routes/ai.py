@@ -29,7 +29,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.db.session import engine as db_engine, get_session
-from app.deps.auth import get_current_user, require_superuser
+from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import AiChat, AiModel, Datasource, User
 from app.services import ai_agent, ai_chats, ai_pricing, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
@@ -75,7 +75,7 @@ class AiModelUpdate(BaseModel):
 
 
 @router.get("/models", response_model=list[AiModelOut])
-async def list_ai_models(user: User = Depends(require_superuser), session: Session = Depends(get_session)) -> list[AiModelOut]:
+async def list_ai_models(user: User = Depends(require_observer), session: Session = Depends(get_session)) -> list[AiModelOut]:
     offered = await provider_models()
     chosen = {m.model_id: m.enabled for m in session.exec(select(AiModel)).all()}
     out = [AiModelOut(model_id=m, enabled=bool(chosen.get(m)), chat=is_chat_model(m), available=True) for m in offered]

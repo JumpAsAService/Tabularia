@@ -21,7 +21,7 @@ const { t } = useI18n()
 
 const { user } = useAuth()
 const router = useRouter()
-watch(() => user.value, (u) => { if (u && !u.is_superuser) router.replace('/') }, { immediate: true })
+watch(() => user.value, (u) => { if (u && !u.is_superuser && !u.is_observer) router.replace('/') }, { immediate: true })
 
 const api = useApi()
 

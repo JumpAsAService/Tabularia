@@ -21,6 +21,8 @@ in un messaggio d'eccezione.
 """
 from __future__ import annotations
 
+import re
+
 MASK = "***"
 # sotto questa lunghezza non si redige: una "chiave" di pochi caratteri
 # comparirebbe ovunque per caso e mangerebbe il messaggio
@@ -68,4 +70,29 @@ def redact_secrets(text: str | None) -> str | None:
                 pulito = pulito.replace(segreto, MASK)
         return pulito
     except Exception:  # pragma: no cover — la redazione non deve mai propagare
+        return text
+
+
+# argomenti di una table function che tocca lo storage o la rete: dentro ci sono
+# URL, bucket, percorsi e — su ClickHouse senza named collection — le chiavi
+_ARG_STORAGE = re.compile(
+    r"\b(s3|s3Cluster|url|urlCluster|remote|remoteSecure|azureBlobStorage|gcs|hdfs)\s*\((?:[^()]|\([^()]*\))*\)",
+    re.IGNORECASE,
+)
+
+
+def redact_storage_args(text: str | None) -> str | None:
+    """Svuota gli argomenti di `s3(...)`, `url(...)` e simili.
+
+    Il `query_log` di ClickHouse maschera la chiave SEGRETA da sé, ma non la
+    chiave di ACCESSO, e insieme a quella restano in chiaro l'endpoint, il bucket
+    e il percorso dell'oggetto — verificato su un ClickHouse 24.8 il 2026-09-28.
+    In un elenco di query lente quegli argomenti non dicono niente di utile: a
+    chi guarda serve sapere QUALE query pesa, non su quale chiave.
+    """
+    if not text:
+        return text
+    try:
+        return _ARG_STORAGE.sub(lambda m: f"{m.group(1)}(…)", text)
+    except Exception:  # pragma: no cover
         return text

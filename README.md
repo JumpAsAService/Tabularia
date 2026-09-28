@@ -1,5 +1,7 @@
 # Tabularia
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/JumpAsAService)
+
 **Self-hosted, open-source visual data-preparation platform.** A Tableau Prep–style
 flow editor on pluggable engines: build a pipeline once, preview it on the whole
 dataset, and decide *later* where the compute runs.

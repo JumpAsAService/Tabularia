@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 
 from app.core.config import get_settings
 from app.observability import preview_stats
+from app.core.redaction import redact_secrets, redact_storage_args
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/observability", tags=["observability"])
@@ -67,7 +68,10 @@ def warehouse(minutes: int = Query(60, ge=5, le=1440), limit: int = Query(20, ge
         "queries": [
             {"at": r[0].isoformat() + "+00:00" if r[0].tzinfo is None else r[0].isoformat(), "kind": r[1], "ok": r[2] == "QueryFinish",
              "exception_code": r[3], "duration_ms": r[4], "read_rows": r[5], "read_bytes": r[6], "memory_bytes": r[7],
-             "origin": "preview" if str(r[8]).startswith("tab-prev:") else "run", "query": r[9]}
+             "origin": "preview" if str(r[8]).startswith("tab-prev:") else "run",
+             # il testo serve a riconoscere QUALE query pesa, non su quale chiave:
+             # gli argomenti di s3()/url() se ne vanno (vedi core/redaction.py)
+             "query": redact_secrets(redact_storage_args(r[9]))}
             for r in rows
         ],
     }

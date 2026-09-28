@@ -4,13 +4,17 @@ from sqlmodel import Session, select
 
 from app.core.security import hash_password
 from app.db.session import get_session
-from app.deps.auth import require_superuser
+from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import User, Group, UserGroupLink
 from app.schemas.models import UserOut, UserCreate, UserUpdate
 from app.services import audit
-from app.services.permissions import ensure_still_admin
+from app.services.masking import mask_email
+from app.services.permissions import ensure_still_admin, is_admin
 
-router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(require_superuser)])
+# Guardia per ROTTA e non per router: l'elenco è una lettura amministrativa
+# (la vede anche un osservatore, con i dati personali mascherati), tutto il
+# resto resta da amministratore.
+router = APIRouter(prefix="/users", tags=["users"])
 
 
 def _group_names(session: Session) -> dict[int, list[str]]:
@@ -45,14 +49,25 @@ def _to_out(user: User, groups: list[str] | None = None, admin_names: set[str] |
     )
 
 
-@router.get("", response_model=list[UserOut])
-def list_users(session: Session = Depends(get_session)):
+@router.get("", response_model=list[UserOut], dependencies=[Depends(require_observer)])
+def list_users(
+    session: Session = Depends(get_session),
+    chi_chiede: User = Depends(get_current_user),
+):
     per_utente = _group_names(session)
     admin_names = _admin_group_names(session)
-    return [_to_out(u, per_utente.get(u.id, []), admin_names) for u in session.exec(select(User)).all()]
+    righe = [_to_out(u, per_utente.get(u.id, []), admin_names) for u in session.exec(select(User)).all()]
+    # Un OSSERVATORE (non amministratore) vede l'elenco senza i dati personali:
+    # gli serve sapere quanti account ci sono e com'è distribuito l'accesso, non
+    # chi sono le persone né da dove entrano.
+    if not is_admin(session, chi_chiede):
+        for r in righe:
+            r.email = mask_email(r.email)
+            r.full_name = ""
+    return righe
 
 
-@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_superuser)])
 def create_user(
     body: UserCreate,
     request: Request = None,  # type: ignore[assignment]
@@ -86,7 +101,7 @@ def _get_user(session: Session, user_id: int) -> User:
     return user
 
 
-@router.patch("/{user_id}", response_model=UserOut)
+@router.patch("/{user_id}", response_model=UserOut, dependencies=[Depends(require_superuser)])
 def update_user(
     user_id: int,
     body: UserUpdate,
@@ -120,7 +135,7 @@ def update_user(
     return _to_out(user, _group_names(session).get(user.id, []), _admin_group_names(session))
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_superuser)])
 def delete_user(
     user_id: int,
     session: Session = Depends(get_session),
@@ -173,7 +188,7 @@ def delete_user(
     session.commit()
 
 
-@router.put("/{user_id}/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.put("/{user_id}/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_superuser)])
 def add_to_group(
     user_id: int,
     group_id: int,
@@ -198,7 +213,7 @@ def add_to_group(
             )
 
 
-@router.delete("/{user_id}/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_superuser)])
 def remove_from_group(
     user_id: int,
     group_id: int,

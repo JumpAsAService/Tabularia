@@ -37,6 +37,9 @@ const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
 
 const isSuper = computed(() => !!user.value?.is_superuser)
+// Chi può VEDERE i pannelli: amministratore od osservatore. La voce di menù
+// guarda questo, i comandi dentro i pannelli guardano `isSuper`.
+const canObserve = computed(() => isSuper.value || !!user.value?.is_observer)
 
 // opzioni motore per il selettore (solo quelli disponibili)
 const engineOptions = computed(() =>
@@ -138,7 +141,7 @@ onMounted(async () => {
           <component :is="l.icon" :size="14" /> {{ l.label }}
         </NuxtLink>
 
-        <div v-if="isSuper" class="adminwrap">
+        <div v-if="canObserve" class="adminwrap">
           <button
             type="button"
             class="navlink"

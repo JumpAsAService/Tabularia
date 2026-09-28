@@ -112,7 +112,7 @@ def test_group_admin_gets_the_same_powers_as_a_personal_admin(session):
     # /auth/me dice al frontend di aprire l'amministrazione
     assert auth_routes.me(user=anna, session=session).is_superuser is True
     # nell'elenco utenti il flag PERSONALE resta falso, con l'origine in chiaro
-    riga = next(u for u in user_routes.list_users(session=session) if u.email == "anna@x.it")
+    riga = next(u for u in user_routes.list_users(session=session, chi_chiede=root) if u.email == "anna@x.it")
     assert riga.is_superuser is False and riga.admin_groups == ["Amministratori"]
 
 
