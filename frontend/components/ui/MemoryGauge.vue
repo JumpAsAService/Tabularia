@@ -35,7 +35,7 @@ const { memory, unavailable, level } = useSystemMemory()
       />
     </span>
     <span class="txt">{{ formatGB(memory.used_bytes) }} / {{ formatGB(memory.total_bytes) }}</span>
-    <span v-if="!compact" class="free muted">· {{ formatGB(memory.available_bytes) }} liberi</span>
+    <span v-if="!compact" class="free muted">· {{ $t('memoryGauge.free', { gb: formatGB(memory.available_bytes) }) }}</span>
   </span>
 </template>
 

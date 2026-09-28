@@ -40,12 +40,12 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
     </div>
     <div v-else-if="error" class="pad" style="color: var(--danger)">{{ error }}</div>
     <div v-else-if="!result" class="muted pad">
-      Seleziona un nodo per vedere l'anteprima del risultato.
+      {{ $t('dataGrid.selectNode') }}
     </div>
     <template v-else>
       <div class="pad muted">
-        {{ result.row_count }} righe{{ result.truncated ? ' (troncato)' : '' }} ·
-        {{ result.columns.length }} colonne
+        {{ $t(result.truncated ? 'dataGrid.summaryTruncated' : 'dataGrid.summary',
+              { rows: result.row_count, cols: result.columns.length }) }}
       </div>
       <table class="data">
         <thead>
