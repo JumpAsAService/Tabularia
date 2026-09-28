@@ -19,6 +19,15 @@ Google Cloud Storage; deployment from one `docker compose up` to Helm on Kuberne
 Database sources and destinations, loops, charts, scheduling, cross-flow lineage, an
 AI assistant over your own catalog and an audit trail come in the box.
 
+<p align="center">
+  <img src="docs/media/build-a-flow.gif" width="100%"
+       alt="Building a flow step by step: a source, a filter, a group by and a sort, with the preview refreshing at every step">
+</p>
+
+<p align="center"><em>A source, a filter, a group by and a sort — the preview refreshes at every step.
+12 million rows on an external ClickHouse; in the editor the optional development sample
+keeps it instant, production runs never sample.</em></p>
+
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
@@ -59,6 +68,12 @@ engines, from an in-process library to a serverless warehouse.
   dataset by the engine you choose. Any configuration can be **saved as a view** into a
   folder, next to flows and datasources. A view stores the configuration and never the
   rows, so reopening it reads today's data — it is a lens, not a copy.
+
+  <p align="center">
+    <img src="docs/media/pivot-and-chart.gif" width="100%"
+         alt="A saved view in the Viewer: the table pivoted by month, then the same data as a chart">
+  </p>
+
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
   ClickHouse, Trino and SharePoint Excel; write results back to a database table or
   publish them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
@@ -292,6 +307,14 @@ Verified against a real project: the cross-engine oracle suite passes on BigQuer
 `select · drop · rename · cast · compute · sql · filter · sort · limit · unique ·
 fill_null · drop_nulls · group_by · pivot · unpivot · join · union · foreach`
 
+<p align="center">
+  <img src="docs/media/preview-any-step.gif" width="100%"
+       alt="Clicking any node in the flow shows its parameters on the right and its output below">
+</p>
+
+<p align="center"><em>Click any node: its parameters on the right, its output below —
+no run, no waiting for the whole pipeline.</em></p>
+
 - **`foreach`** is a loop container: it iterates its body over a driver table with
   `{{placeholder}}` substitution, appending results with bounded memory.
 - **Upstream filters** per source node: AND-ed `{column, operator, value}` conditions set in
@@ -423,6 +446,14 @@ This matters because the engine holds credentials that can read the whole bucket
 query could name another table, the permission on a datasource would be decorative.
 
 ## AI assistant
+
+<p align="center">
+  <img src="docs/media/ask-your-data.gif" width="100%"
+       alt="Asking the assistant which category has the lowest margin: it finds the datasource, runs the query and charts the answer">
+</p>
+
+<p align="center"><em>It names the datasource it used, shows the table the numbers come from,
+and tells you what the answer cost.</em></p>
 
 Optional, in the gateway, built with [pydantic-ai](https://ai.pydantic.dev) against any
 OpenAI-compatible endpoint (`AI__BASE_URL`, `AI__SECRET_KEY`; verified on Scaleway
