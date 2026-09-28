@@ -268,13 +268,25 @@ async def chat(
     engine = await pick_engine(session, body.engine)
     # Conversazione NUOVA: la riga si crea quando il turno è finito (vedi
     # ai_chats.crea), così una richiesta interrotta non lascia una chat vuota.
+    # Il tetto giornaliero si controlla PRIMA di aprire lo stream: un rifiuto
+    # deve arrivare come errore della richiesta, non come evento a metà risposta.
+    if cfg.max_cost_per_day_usd:
+        speso = ai_chats.speso_oggi(session, user)
+        if speso >= Decimal(str(cfg.max_cost_per_day_usd)):
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Hai raggiunto il tetto di spesa di oggi per l'assistente "
+                    f"({speso:.4f} $ su {cfg.max_cost_per_day_usd} $). Riprova domani."
+                ),
+            )
     chat = ai_chats.apri(session, user, body.chat_id, body.model, engine) if body.chat_id else None
     chat_id = chat.id if chat is not None else None
     history = ai_chats.storia(session, chat, cfg.max_history_messages) if chat is not None else []
 
     deps = ai_agent.ChatDeps(
         user=user, session_factory=_new_session, engine=engine, model_id=body.model,
-        locale=body.locale, request=request,
+        locale=body.locale, request=request, chat_id=chat_id,
         focus=ai_agent.readable_focus(session, user, body.focus),
     )
     model = ai_agent.build_model(body.model)

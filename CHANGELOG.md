@@ -5,6 +5,32 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **What an installation open to strangers needed.** Three gaps that were there
+  all along, found while planning a public demo.
+
+  Uploading a file asked only for a login — no capability at all — so a
+  read-only account could write into the installation's bucket. An upload has no
+  folder to ask permission on, which is why it was never gated; the question that
+  does make sense is whether this person creates things or only looks at them, so
+  it now needs EDIT somewhere.
+
+  The assistant had a ceiling per turn and none per day: a thousand turns under
+  the ceiling still cost a thousand times. `AI__MAX_COST_PER_DAY_USD` caps what
+  one account can spend between midnights, refused before the stream opens so it
+  arrives as an error and not as a broken answer. A turn whose model could not be
+  priced counts as zero — not because it was free, but because guessing would be
+  worse than admitting we do not know.
+
+  Repeated sign-in attempts had no brake beyond bcrypt: 25 in under seven seconds
+  during the audit. Now five attempts pass and the sixth waits, doubling with
+  each further failure, counted per (address, email) so an office behind one NAT
+  cannot lock itself out and switching account does not reset the count. A
+  successful sign-in clears it.
+
+  Also fixed, and it only shows up with several people on one account: the
+  assistant's preview slot was scoped per user, so a second question cancelled
+  the first person's answer mid-stream. It is scoped per conversation now, which
+  is also right for one person with two tabs open.
 - **The assistant can answer across two datasources.** It could only ever query
   one, because the SQL node may read nothing but its own input — so a question
   spanning two tables got two separate queries and a total the model added up in

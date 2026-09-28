@@ -156,3 +156,20 @@ def visible_project_ids(session: Session, user: User) -> set[int]:
     for pid in list(visible):
         visible.update(ancestor_ids(projects, pid))  # mostra il percorso
     return visible
+
+
+def can_upload(session: Session, user: User) -> bool:
+    """Può caricare un file chi ha EDIT da qualche parte.
+
+    L'upload non appartiene a una cartella — il file arriva prima di sapere dove
+    finirà — quindi non c'è un progetto su cui chiedere il permesso, e per questo
+    la rotta finora chiedeva solo di essere autenticati: qualunque account, anche
+    di sola lettura, poteva scrivere nel bucket dell'installazione.
+
+    La domanda giusta non è «dove», è «questa persona crea contenuti o soltanto
+    li guarda». Chi ha EDIT su almeno una cartella sta costruendo qualcosa e avrà
+    dove metterlo; chi ha solo VIEW non ha un posto dove quel file possa andare.
+    """
+    if is_admin(session, user):
+        return True
+    return bool(_granted_project_ids(session, user, Capability.EDIT))

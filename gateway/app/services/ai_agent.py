@@ -75,6 +75,9 @@ class ChatDeps:
     model_id: str
     locale: str = "en"
     request: Request | None = None
+    # conversazione in corso: identifica lo slot della preview (vedi
+    # _engine_preview). `None` su una chat nuova.
+    chat_id: int | None = None
     # datasource che l'utente ha messo a fuoco nella pagina (gia' filtrate sui
     # suoi permessi): [{id, name}]. Solo un suggerimento di contesto: ogni
     # strumento ricontrolla comunque l'accesso.
@@ -134,15 +137,22 @@ def _trim(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 async def _engine_preview(ds: Datasource, operations: list[dict], limit: int, deps: ChatDeps) -> dict[str, Any]:
     """Una preview sull'engine, come la farebbe il Viewer (senza step-cache).
-    Lo slot `u<id>:ai` fa si' che una nuova query dell'assistente per lo stesso
-    utente butti giu' la precedente ancora in corso."""
+
+    Lo slot e' per CONVERSAZIONE, non per utente: serve a far vincere la domanda
+    piu' recente *nella stessa chat*, quando qualcuno riformula mentre la
+    risposta arriva. Legato all'utente, due conversazioni in parallelo si
+    ammazzavano a vicenda — due schede aperte dalla stessa persona, o due persone
+    su un account condiviso, come in una demo pubblica. Chat nuova: nessuno slot,
+    perche' non c'e' niente da superare."""
     body: dict[str, Any] = {
         "bucket": ds.bucket, "input_key": ds.key, "operations": operations,
-        "limit": limit, "no_cache": True, "slot": f"u{deps.user.id}:ai",
+        "limit": limit, "no_cache": True,
         # l'engine ClickHouse esegue queste query con l'utenza dedicata `ai`, se
         # configurata (CLICKHOUSE_EXTERNAL__AI_USERNAME/__AI_PASSWORD)
         "principal": "ai",
     }
+    if deps.chat_id:
+        body["slot"] = f"u{deps.user.id}:c{deps.chat_id}:ai"
     if deps.engine:
         body["engine"] = deps.engine
     try:

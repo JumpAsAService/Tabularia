@@ -299,3 +299,30 @@ def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_i
                 raise HTTPException(status_code=422, detail="Il passo non ha una query da rieseguire")
             return int(args.get("datasource_id") or 0), str(args["sql"])
     raise HTTPException(status_code=404, detail="Passo non trovato")
+
+
+def speso_oggi(session: Session, user: User) -> Decimal:
+    """Quanto ha speso questa persona con l'assistente da mezzanotte UTC.
+
+    Si somma dai turni già salvati, che è l'unico registro di cui ci fidiamo: i
+    costi sono stringhe decimali esatte e la somma non introduce errore. I turni
+    di un modello non prezzabile contano zero — non perché siano gratis, ma
+    perché non sappiamo quanto costino, e stimare al posto di sapere è peggio
+    che ammetterlo."""
+    from datetime import datetime, timezone
+
+    inizio = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    righe = session.exec(
+        select(AiChatTurn.cost_usd)
+        .join(AiChat, AiChat.id == AiChatTurn.chat_id)
+        .where(AiChat.user_id == user.id, AiChatTurn.created_at >= inizio)
+    ).all()
+    totale = Decimal(0)
+    for (v,) in ((r,) if not isinstance(r, tuple) else r for r in righe):
+        if not v:
+            continue
+        try:
+            totale += Decimal(v)
+        except InvalidOperation:
+            continue
+    return totale

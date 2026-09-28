@@ -118,7 +118,8 @@ async def test_query_runs_a_sql_node_on_the_right_source_and_is_audited(session,
     assert sent["bucket"] == visible.bucket and sent["input_key"] == "datasets/1/o.parquet"
     assert sent["operations"] == [{"type": "sql", "params": {"query": "SELECT paese, count(*) AS n FROM self GROUP BY paese"}}]
     assert sent["limit"] == 7  # tetto AI__MAX_RESULT_ROWS
-    assert sent["no_cache"] is True and sent["slot"] == f"u{user.id}:ai" and sent["engine"] == "clickhouse"
+    # nessuno slot su una chat nuova: non c'è una domanda precedente da superare
+    assert sent["no_cache"] is True and "slot" not in sent and sent["engine"] == "clickhouse"
     assert sent["sort_keys"] == ["paese"]
     # l'engine ClickHouse le esegue con l'utenza dedicata di sola lettura, se c'è
     assert sent["principal"] == "ai"
@@ -421,3 +422,20 @@ async def test_without_a_join_nothing_changes(session, ai_on, fake_engine):
     fake_engine.preview_response = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
     await ai_agent.query_datasource(_ctx(session, user), visible.id, "SELECT 1 AS n FROM self")
     assert [o["type"] for o in fake_engine.previews[-1]["operations"]] == ["sql"]
+
+
+@pytest.mark.anyio
+async def test_two_conversations_do_not_cancel_each_other(session, ai_on, fake_engine):
+    """Lo slot è per CHAT: su un account condiviso — una demo pubblica — la
+    domanda di uno non deve interrompere la risposta di un altro."""
+    _, user, visible, _ = _catalog(session)
+    fake_engine.preview_response = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
+    for chat_id in (7, 9):
+        ctx = SimpleNamespace(deps=ai_agent.ChatDeps(
+            user=user, session_factory=lambda: nullcontext(session), engine=None,
+            model_id="m", locale="it", chat_id=chat_id,
+        ))
+        await ai_agent.query_datasource(ctx, visible.id, "SELECT 1 AS n FROM self")
+    slot_a, slot_b = fake_engine.previews[-2]["slot"], fake_engine.previews[-1]["slot"]
+    assert slot_a != slot_b
+    assert slot_a.endswith(":c7:ai") and slot_b.endswith(":c9:ai")

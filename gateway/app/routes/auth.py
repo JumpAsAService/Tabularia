@@ -5,7 +5,7 @@ from app.core.security import create_access_token, verify_password
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import User
-from app.services import audit
+from app.services import audit, login_throttle
 from app.services.permissions import is_admin, user_group_ids
 from app.schemas.models import LoginRequest, Token, MeOut
 
@@ -14,6 +14,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=Token)
 def login(body: LoginRequest, request: Request, session: Session = Depends(get_session)):
+    # Freno sui tentativi ripetuti: prima di toccare il database, così un
+    # dizionario non costa nemmeno una query (vedi services/login_throttle.py).
+    ip = request.client.host if request.client else None
+    attesa = login_throttle.attesa_richiesta(ip, body.email)
+    if attesa > 0:
+        audit.record_audit(
+            session, actor=None, actor_label=body.email, action=audit.LOGIN_FAILED,
+            outcome="failure", detail={"reason": "troppi tentativi"}, request=request,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Troppi tentativi di accesso. Riprova fra {int(attesa) + 1} secondi.",
+            headers={"Retry-After": str(int(attesa) + 1)},
+        )
     user = session.exec(select(User).where(User.email == body.email)).first()
     # utente solo-SSO (nessuna password locale): entra solo dall'IdP
     if user is None or not user.hashed_password or not verify_password(body.password, user.hashed_password):
@@ -22,6 +36,7 @@ def login(body: LoginRequest, request: Request, session: Session = Depends(get_s
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
             outcome="failure", detail={"reason": "credenziali errate"}, request=request,
         )
+        login_throttle.registra_errore(ip, body.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email o password errati")
     if not user.is_active:
         audit.record_audit(
@@ -29,6 +44,7 @@ def login(body: LoginRequest, request: Request, session: Session = Depends(get_s
             detail={"reason": "utente disattivato"}, request=request,
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Utente disattivato")
+    login_throttle.registra_successo(ip, body.email)
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
     return Token(access_token=create_access_token(user.id))
 

@@ -273,6 +273,13 @@ class AiSettings(BaseModel):
     # chiave: il limite sui giri non limita i token (audit 2026-09-19, A8).
     # env: AI__MAX_COST_PER_TURN_USD, AI__MAX_INPUT_TOKENS_PER_TURN
     max_cost_per_turn_usd: float = Field(default=0.50, ge=0)
+    # Tetto GIORNALIERO per utente, in dollari. Il tetto per turno da solo non
+    # basta: mille turni sotto soglia costano comunque mille volte. Serve
+    # soprattutto su un'installazione aperta a sconosciuti (una demo pubblica),
+    # dove ogni domanda passa dalla chiave di chi ospita.
+    # 0 = nessun tetto (comportamento precedente).
+    # env: AI__MAX_COST_PER_DAY_USD
+    max_cost_per_day_usd: float = Field(default=0, ge=0)
     max_input_tokens_per_turn: int = Field(default=400_000, ge=1000)
     # quante chat tenere per utente (le piu' vecchie non vengono cancellate da
     # sole: e' solo il tetto dell'elenco)

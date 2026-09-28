@@ -29,6 +29,7 @@ from app.models import Upload, User
 from app.services import audit
 from app.services.engine_policy import disabled_engines
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
+from app.services.permissions import can_upload
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +253,16 @@ async def upload(
     La risposta dell'engine è un piccolo JSON (IngestResult): si bufferizza per
     registrare chi possiede il dataset appena creato — è la base del controllo
     di lettura sugli upload non ancora dentro un flusso salvato.
+
+    Serve EDIT da qualche parte: l'upload non ha una cartella su cui chiedere il
+    permesso, e senza questo controllo un account di sola lettura poteva scrivere
+    nel bucket dell'installazione (vedi permissions.can_upload).
     """
+    if not can_upload(session, user):
+        raise HTTPException(
+            status_code=403,
+            detail="Per caricare un file serve il permesso di modifica su almeno una cartella",
+        )
     client = get_engine_client()
     engine_req = client.build_request(
         "POST",
