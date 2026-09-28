@@ -8,6 +8,15 @@
         "value": "montserrat",
         "createdAt": "2026-09-13T15:53:08.721Z",
         "reason": "scelta deliberata documentata nel codice: assets/main.css righe 1-2 la dichiarano 'l'alternativa libera a Gotham', woff2 auto-ospitato da 38K senza CDN; precede questa sessione"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/assets/main.css"
+        ],
+        "createdAt": "2026-09-28T20:50:05.485Z",
+        "reason": "main.css riga 415: il bordo colorato a sinistra è su `.node` del canvas, dove CODIFICA il tipo di nodo (sorgente/trasformazione/output) via --node-accent, come in ogni editor a nodi. Non è l'accento decorativo di una card. Precede questa sessione e non è stato toccato."
       }
     ]
   }
