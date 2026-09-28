@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Queue (solo superuser): stato near-real-time dei worker Celery e dei job —
+// Queue: stato near-real-time dei worker Celery e dei job —
 // in esecuzione e in attesa — con la possibilità di FERMARE un job in corso.
 // Il numero di worker è dinamico (in produzione può essere diverso): mostriamo
 // quelli online in quel momento. Polling ogni 2s; nessun websocket.
@@ -19,6 +19,11 @@ const { t } = useI18n()
 watchEffect(() => {
   if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
+
+// Un OSSERVATORE legge la pagina; i comandi restano all'amministratore.
+// `is_observer` da /auth/me è EFFETTIVO: tiene conto dei gruppi.
+const canSee = computed(() => !!user.value?.is_superuser || !!user.value?.is_observer)
+const canWrite = computed(() => !!user.value?.is_superuser)
 
 const POLL_MS = 2000
 const data = ref<QueueOverview | null>(null)
@@ -86,7 +91,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
 
 <template>
   <AppShell>
-    <template v-if="user?.is_superuser">
+    <template v-if="canSee">
       <div class="page-head">
         <h1><Cpu :size="18" /> {{ $t('queue.pageTitle') }}</h1>
         <div class="head-actions">
@@ -146,7 +151,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
           <code class="jid" :title="j.task_id">{{ j.task_id?.slice(0, 8) }}</code>
           <span class="jworker muted">{{ j.worker }}</span>
           <span class="jrt muted">{{ fmtRuntime(j.runtime_s) }}</span>
-          <button class="mini danger" :disabled="stopping[j.task_id]" @click="stop(j.task_id)">
+          <button v-if="canWrite" class="mini danger" :disabled="stopping[j.task_id]" @click="stop(j.task_id)">
             <Square :size="12" /> {{ stopping[j.task_id] ? $t('queue.stoppingLabel') : $t('queue.stopLabel') }}
           </button>
         </div>
@@ -165,7 +170,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
             <code class="jid" :title="j.task_id">{{ j.task_id?.slice(0, 8) }}</code>
             <span class="jworker muted">prefetch · {{ j.worker }}</span>
             <span class="jrt muted">—</span>
-            <button class="mini danger" :disabled="stopping[j.task_id]" @click="stop(j.task_id)">
+            <button v-if="canWrite" class="mini danger" :disabled="stopping[j.task_id]" @click="stop(j.task_id)">
               <Square :size="12" /> {{ stopping[j.task_id] ? $t('queue.removingLabel') : $t('queue.removeLabel') }}
             </button>
           </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Prestazioni (solo superuser). Tre domande, tre fonti, NESSUNA tabella nuova:
+// Prestazioni. Tre domande, tre fonti, NESSUNA tabella nuova:
 //  - quali flussi e refresh costano di più, e quanto si aspetta un worker libero
 //    → aggregati calcolati al volo dalla tabella dei run;
 //  - come vanno le preview e QUALI sono state lente → contatori a dimensione
@@ -18,6 +18,10 @@ const { apiFetch } = useApiClient()
 const { t } = useI18n()
 // guardia UX: la RBAC vera la impone il gateway (require_superuser)
 watchEffect(() => { if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/') })
+
+// Un OSSERVATORE legge la pagina; i comandi restano all'amministratore.
+// `is_observer` da /auth/me è EFFETTIVO: tiene conto dei gruppi.
+const canSee = computed(() => !!user.value?.is_superuser || !!user.value?.is_observer)
 
 interface RunItem { kind: 'flow' | 'ingest'; id: number | null; name: string | null; runs: number; failures: number; median_s: number | null; p95_s: number | null; max_s: number | null; total_s: number; median_wait_s: number | null; rows: number; last_error: string | null }
 interface RunsPerf { days: number; truncated: boolean; totals: { runs: number; failures: number; median_wait_s: number | null; p95_wait_s: number | null }; items: RunItem[] }
@@ -77,7 +81,7 @@ const minuteOptions = computed(() => [15, 60, 360, 1440].map((m) => ({ value: m,
 
 <template>
   <AppShell>
-    <template v-if="user?.is_superuser">
+    <template v-if="canSee">
       <div class="page-head">
         <h1><Gauge :size="18" /> {{ $t('performance.pageTitle') }}</h1>
         <div class="head-actions">

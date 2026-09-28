@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Monitoring (solo superuser): la dashboard Grafana "Data Prep — Overview"
+// Monitoring: la dashboard Grafana "Data Prep — Overview"
 // embeddata in kiosk mode (niente chrome di Grafana, solo i pannelli).
 // Richiede GF_SECURITY_ALLOW_EMBEDDING + anonimo Viewer (vedi docker-compose).
 import { computed, watchEffect } from 'vue'
@@ -14,6 +14,11 @@ watchEffect(() => {
   if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
 
+// Un OSSERVATORE legge la pagina; i comandi restano all'amministratore.
+// `is_observer` da /auth/me è EFFETTIVO: tiene conto dei gruppi.
+const canSee = computed(() => !!user.value?.is_superuser || !!user.value?.is_observer)
+const canWrite = computed(() => !!user.value?.is_superuser)
+
 const dashboardUrl = computed(
   () =>
     `${config.public.grafanaUrl}/d/dataprep-overview/data-prep-overview` +
@@ -24,12 +29,12 @@ const grafanaHome = computed(() => config.public.grafanaUrl)
 
 <template>
   <AppShell>
-    <template v-if="user?.is_superuser">
+    <template v-if="canSee">
       <div class="mon-head">
         <p class="muted">
           {{ $t('monitoring.liveMetrics') }}
         </p>
-        <a :href="grafanaHome" target="_blank" rel="noopener" class="ext">
+        <a v-if="canWrite" :href="grafanaHome" target="_blank" rel="noopener" class="ext">
           <ExternalLink :size="13" /> {{ $t('monitoring.openGrafana') }}
         </a>
       </div>

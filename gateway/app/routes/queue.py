@@ -1,9 +1,14 @@
-"""Coda di esecuzione (Celery) — pannello SOLO ADMIN.
+"""Coda di esecuzione (Celery) — pannello di amministrazione.
 
 Il gateway non parla direttamente con Celery: la coda vive nel data plane
 (engine + worker + broker Valkey). Qui si fa da proxy verso gli endpoint di
-ispezione/revoca dell'engine, dietro `require_superuser`. L'engine interno non è
-esposto sull'host: l'unica via a questi comandi è questo router autenticato.
+ispezione/revoca dell'engine. L'engine interno non è esposto sull'host: l'unica
+via a questi comandi è questo router autenticato.
+
+La panoramica la LEGGE anche un osservatore; FERMARE un job resta
+dell'amministratore. Ciò che si vede è solo nome del task, id, worker e durata
+(vedi `_job` in backend/app/api/routes/tasks.py): gli argomenti dei task, che
+contengono percorsi e parametri, non escono dal data plane.
 """
 from fastapi import APIRouter, Depends, HTTPException
 
