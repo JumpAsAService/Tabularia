@@ -6,11 +6,16 @@ aprano, e che i dati personali dentro NON si aprano con loro.
 import pytest
 from fastapi import HTTPException
 
+from sqlmodel import select
+
 from app.deps.auth import require_observer, require_superuser
-from app.models import AuditLog, Group, UserGroupLink
+from app.models import AuditLog, Group, User, UserGroupLink
 from app.routes import audit as audit_routes
 from app.routes import engine_policy as policy_routes
+from app.routes import groups as group_routes
 from app.routes import users as user_routes
+from app.schemas.models import GroupUpdate, UserCreate, UserUpdate
+from app.services import audit as audit_svc
 from app.services import permissions
 from app.services.masking import mask_email
 from tests.conftest import make_user
@@ -159,3 +164,89 @@ def test_the_same_address_always_gives_the_same_mask():
     """Serve a riconoscere che due azioni sono della stessa persona senza sapere chi."""
     assert mask_email("alice@x.it") == mask_email("alice@x.it")
     assert mask_email("alice@x.it") != mask_email("bruno@x.it")
+
+
+# ── si concede dal pannello, non con una riga di SQL ──────────────────────────
+
+def test_an_administrator_can_grant_and_revoke_it(session):
+    """Il ruolo è inutile se per accenderlo serve psql: questo è il percorso che
+    usa il bottone del pannello."""
+    capo = make_user(session, email="capo3@x.it", is_superuser=True)
+    ospite = make_user(session, email="ospite2@x.it")
+
+    fuori = user_routes.update_user(
+        ospite.id, UserUpdate(is_observer=True), request=None, session=session, current=capo,
+    )
+    assert fuori.is_observer is True
+    assert permissions.is_observer(session, session.get(User, ospite.id)) is True
+
+    fuori = user_routes.update_user(
+        ospite.id, UserUpdate(is_observer=False), request=None, session=session, current=capo,
+    )
+    assert fuori.is_observer is False
+    assert permissions.is_observer(session, session.get(User, ospite.id)) is False
+
+
+def test_granting_it_leaves_a_trace(session):
+    """Apre audit, sessioni ed elenco utenti: vale la traccia quanto una promozione."""
+    capo = make_user(session, email="capo4@x.it", is_superuser=True)
+    ospite = make_user(session, email="ospite3@x.it")
+    user_routes.update_user(
+        ospite.id, UserUpdate(is_observer=True), request=None, session=session, current=capo,
+    )
+    azioni = [a.action for a in session.exec(select(AuditLog)).all()]
+    assert audit_svc.OBSERVER_GRANT in azioni
+    assert audit_svc.USER_PROMOTE not in azioni  # non è una promozione ad admin
+
+    user_routes.update_user(
+        ospite.id, UserUpdate(is_observer=False), request=None, session=session, current=capo,
+    )
+    assert audit_svc.OBSERVER_REVOKE in [a.action for a in session.exec(select(AuditLog)).all()]
+
+
+def test_it_can_be_granted_at_creation(session):
+    """L'account dimostrativo si crea in un colpo, con la spunta nel form."""
+    capo = make_user(session, email="capo5@x.it", is_superuser=True)
+    fuori = user_routes.create_user(
+        UserCreate(email="demo@x.it", password="segretissima", is_observer=True),
+        request=None, session=session, current=capo,
+    )
+    assert fuori.is_observer is True
+    assert audit_svc.OBSERVER_GRANT in [a.action for a in session.exec(select(AuditLog)).all()]
+
+
+def test_a_group_can_be_switched_to_observer(session):
+    """La via da usare con l'SSO: il flag personale lo riscrive l'IdP a ogni login."""
+    capo = make_user(session, email="capo6@x.it", is_superuser=True)
+    g = Group(name="Ospiti")
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    anna = make_user(session, email="anna2@x.it")
+    session.add(UserGroupLink(user_id=anna.id, group_id=g.id))
+    session.commit()
+    assert permissions.is_observer(session, anna) is False
+
+    fuori = group_routes.update_group(
+        g.id, GroupUpdate(is_observer=True), request=None, session=session, current=capo,
+    )
+    assert fuori.is_observer is True
+    assert permissions.is_observer(session, session.get(User, anna.id)) is True
+    assert audit_svc.GROUP_OBSERVER_GRANT in [a.action for a in session.exec(select(AuditLog)).all()]
+
+
+def test_the_list_says_which_group_grants_it(session):
+    """Come per gli admin: nell'elenco si deve vedere che il permesso è del
+    gruppo, altrimenti si cerca un flag personale che non c'è."""
+    g = Group(name="Ospiti", is_observer=True)
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    anna = make_user(session, email="anna3@x.it")
+    session.add(UserGroupLink(user_id=anna.id, group_id=g.id))
+    session.commit()
+    capo = make_user(session, email="capo7@x.it", is_superuser=True)
+
+    riga = next(u for u in user_routes.list_users(session=session, chi_chiede=capo) if u.id == anna.id)
+    assert riga.is_observer is False  # nessun flag personale
+    assert riga.observer_groups == ["Ospiti"]

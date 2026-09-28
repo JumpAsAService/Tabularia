@@ -33,7 +33,16 @@ def _admin_group_names(session: Session) -> set[str]:
     return set(session.exec(select(Group.name).where(Group.is_admin == True)).all())  # noqa: E712
 
 
-def _to_out(user: User, groups: list[str] | None = None, admin_names: set[str] | None = None) -> UserOut:
+def _observer_group_names(session: Session) -> set[str]:
+    return set(session.exec(select(Group.name).where(Group.is_observer == True)).all())  # noqa: E712
+
+
+def _to_out(
+    user: User,
+    groups: list[str] | None = None,
+    admin_names: set[str] | None = None,
+    observer_names: set[str] | None = None,
+) -> UserOut:
     return UserOut(
         id=user.id,
         email=user.email,
@@ -46,6 +55,8 @@ def _to_out(user: User, groups: list[str] | None = None, admin_names: set[str] |
         sso_only=user.hashed_password is None,
         groups=groups or [],
         admin_groups=[g for g in (groups or []) if g in (admin_names or set())],
+        is_observer=user.is_observer,
+        observer_groups=[g for g in (groups or []) if g in (observer_names or set())],
     )
 
 
@@ -56,7 +67,11 @@ def list_users(
 ):
     per_utente = _group_names(session)
     admin_names = _admin_group_names(session)
-    righe = [_to_out(u, per_utente.get(u.id, []), admin_names) for u in session.exec(select(User)).all()]
+    observer_names = _observer_group_names(session)
+    righe = [
+        _to_out(u, per_utente.get(u.id, []), admin_names, observer_names)
+        for u in session.exec(select(User)).all()
+    ]
     # Un OSSERVATORE (non amministratore) vede l'elenco senza i dati personali:
     # gli serve sapere quanti account ci sono e com'è distribuito l'accesso, non
     # chi sono le persone né da dove entrano.
@@ -81,6 +96,7 @@ def create_user(
         full_name=body.full_name,
         hashed_password=hash_password(body.password),
         is_superuser=body.is_superuser,
+        is_observer=body.is_observer,
     )
     session.add(user)
     session.commit()
@@ -88,6 +104,12 @@ def create_user(
     if user.is_superuser:
         audit.record_audit(
             session, actor=current, action=audit.USER_PROMOTE, request=request,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail={"at_creation": True},
+        )
+    if user.is_observer:
+        audit.record_audit(
+            session, actor=current, action=audit.OBSERVER_GRANT, request=request,
             target_type="user", target_id=user.id, target_label=user.email,
             detail={"at_creation": True},
         )
@@ -111,6 +133,7 @@ def update_user(
 ):
     user = _get_user(session, user_id)
     era_admin = user.is_superuser
+    era_osservatore = user.is_observer
     if body.full_name is not None:
         user.full_name = body.full_name
     if body.password is not None:
@@ -119,6 +142,8 @@ def update_user(
         user.is_active = body.is_active
     if body.is_superuser is not None:
         user.is_superuser = body.is_superuser
+    if body.is_observer is not None:
+        user.is_observer = body.is_observer
     session.add(user)
     if user.id == current.id:
         # togliersi il flag o disattivarsi: ammesso solo se si resta admin per
@@ -132,7 +157,16 @@ def update_user(
             action=audit.USER_PROMOTE if user.is_superuser else audit.USER_DEMOTE,
             target_type="user", target_id=user.id, target_label=user.email,
         )
-    return _to_out(user, _group_names(session).get(user.id, []), _admin_group_names(session))
+    if user.is_observer != era_osservatore:
+        audit.record_audit(
+            session, actor=current, request=request,
+            action=audit.OBSERVER_GRANT if user.is_observer else audit.OBSERVER_REVOKE,
+            target_type="user", target_id=user.id, target_label=user.email,
+        )
+    return _to_out(
+        user, _group_names(session).get(user.id, []),
+        _admin_group_names(session), _observer_group_names(session),
+    )
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_superuser)])

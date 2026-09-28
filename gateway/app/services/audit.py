@@ -45,6 +45,12 @@ GROUP_DEMOTE = "group.demote"
 # Entrare/uscire da un gruppo ADMIN cambia i privilegi quanto una promozione
 ADMIN_GROUP_JOIN = "group.admin_join"
 ADMIN_GROUP_LEAVE = "group.admin_leave"
+# Osservatore: legge i pannelli di amministrazione senza poterci scrivere. Vale
+# la traccia quanto una promozione — apre l'audit, le sessioni e l'elenco utenti
+OBSERVER_GRANT = "user.observer_grant"
+OBSERVER_REVOKE = "user.observer_revoke"
+GROUP_OBSERVER_GRANT = "group.observer_grant"
+GROUP_OBSERVER_REVOKE = "group.observer_revoke"
 PERM_GRANT = "permission.grant"
 PERM_REVOKE = "permission.revoke"
 # banner dell'Explore: cambiano ciò che vede TUTTA l'installazione

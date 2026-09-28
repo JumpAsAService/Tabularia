@@ -63,14 +63,23 @@ class UserOut(BaseModel):
     # Gruppi di amministratori a cui appartiene: è admin anche se `is_superuser`
     # (il flag PERSONALE, quello che l'interruttore modifica) è falso.
     admin_groups: list[str] = []
+    # Osservatore: LEGGE i pannelli di amministrazione, non scrive nulla. Come
+    # sopra, qui il flag è quello PERSONALE e i gruppi sono l'altra via.
+    # Un amministratore è osservatore per definizione, senza che il flag sia
+    # acceso: chi legge questo campo sta guardando un interruttore, non un
+    # permesso — per il permesso c'è `permissions.is_observer`.
+    is_observer: bool = False
+    observer_groups: list[str] = []
 
 
 class MeOut(UserOut):
+    """Sé stessi. Attenzione: a differenza di `UserOut`, qui `is_superuser` e
+    `is_observer` sono EFFETTIVI — `routes/auth.py` li calcola con
+    `permissions.is_admin`/`is_observer`, quindi tengono conto dei gruppi. È il
+    campo su cui il frontend decide che cosa mostrare, e deve rispondere alla
+    domanda «posso?», non «ho il flag?»."""
+
     groups: list[str] = []
-    # LEGGE i pannelli di amministrazione. Un amministratore lo è per
-    # definizione: il frontend controlla questo per mostrare la voce di menù, e
-    # `is_superuser` per mostrare i comandi.
-    is_observer: bool = False
 
 
 class UserCreate(BaseModel):
@@ -78,6 +87,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=6)
     full_name: str = ""
     is_superuser: bool = False
+    is_observer: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -85,6 +95,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(default=None, min_length=6)
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
+    is_observer: Optional[bool] = None
 
 
 # ── Groups ────────────────────────────────────────────────────────────────────
@@ -95,6 +106,7 @@ class GroupOut(BaseModel):
     created_at: Optional[UtcDateTime] = None
     member_count: int = 0
     is_admin: bool = False  # i membri sono amministratori
+    is_observer: bool = False  # i membri leggono i pannelli, senza scrivere
 
 
 class GroupCreate(BaseModel):
@@ -105,6 +117,7 @@ class GroupCreate(BaseModel):
 class GroupUpdate(BaseModel):
     description: Optional[str] = None
     is_admin: Optional[bool] = None
+    is_observer: Optional[bool] = None
 
 
 # ── Banners ───────────────────────────────────────────────────────────────────

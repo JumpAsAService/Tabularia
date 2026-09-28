@@ -6,7 +6,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  CheckCircle2, Cpu, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
+  CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
@@ -40,7 +40,7 @@ const groups = ref<GroupOut[]>([])
 const banners = ref<Banner[]>([])
 const motori = ref<EnginePolicy[]>([])
 
-const nu = ref({ email: '', password: '', full_name: '', is_superuser: false })
+const nu = ref({ email: '', password: '', full_name: '', is_superuser: false, is_observer: false })
 const ng = ref({ name: '', description: '' })
 const nb = ref<{ message: string; level: BannerLevel }>({ message: '', level: 'warning' })
 const gruppoSelezionato = ref<number | null>(null)
@@ -129,7 +129,7 @@ async function createUser() {
   try {
     await api.createUser({ ...nu.value })
     toast.success(t('adminPanel.userCreated', { email: nu.value.email }))
-    nu.value = { email: '', password: '', full_name: '', is_superuser: false }
+    nu.value = { email: '', password: '', full_name: '', is_superuser: false, is_observer: false }
     await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
@@ -156,6 +156,21 @@ async function toggleAdmin(u: UserOut) {
   try {
     await api.updateUser(u.id, { is_superuser: !u.is_superuser })
     toast.success(t(u.is_superuser ? 'adminPanel.userDemoted' : 'adminPanel.userPromoted', { email: u.email }))
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+// Osservatore: apre i pannelli di amministrazione in LETTURA (audit, sessioni,
+// utenti, motori, prestazioni), con i dati personali mascherati e nessun
+// comando. È il flag dell'account dimostrativo: un ospite può guardare tutto
+// senza toccare niente. Indipendente da admin, che legge già per definizione.
+async function toggleObserver(u: UserOut) {
+  if (!u.is_observer && !confirm(t('adminPanel.confirmObserveUser', { email: u.email }))) return
+  try {
+    await api.updateUser(u.id, { is_observer: !u.is_observer })
+    toast.success(t(u.is_observer ? 'adminPanel.observerRevoked' : 'adminPanel.observerGranted', { email: u.email }))
     await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
@@ -195,6 +210,19 @@ async function toggleGroupAdmin(g: GroupOut) {
   try {
     await api.updateGroup(g.id, { is_admin: !g.is_admin })
     toast.success(t(g.is_admin ? 'adminPanel.groupDemoted' : 'adminPanel.groupPromoted', { name: g.name }))
+    await loadAll()
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
+}
+
+// Come sopra, per tutti i membri presenti e futuri: è la via da usare con l'SSO,
+// dove il flag personale viene riscritto a ogni login dall'IdP
+async function toggleGroupObserver(g: GroupOut) {
+  if (!g.is_observer && !confirm(t('adminPanel.confirmObserveGroup', { name: g.name, n: g.member_count }))) return
+  try {
+    await api.updateGroup(g.id, { is_observer: !g.is_observer })
+    toast.success(t(g.is_observer ? 'adminPanel.groupObserverRevoked' : 'adminPanel.groupObserverGranted', { name: g.name }))
     await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
@@ -351,6 +379,14 @@ async function toggleMotore(m: EnginePolicy) {
                         class="tag via"
                         :title="$t('adminPanel.adminViaGroupTitle', { groups: u.admin_groups.join(', ') })"
                       >{{ $t('adminPanel.adminViaGroupTag', { group: u.admin_groups[0] }) }}</span>
+                      <span
+                        v-if="!u.is_superuser && !u.admin_groups.length && (u.is_observer || u.observer_groups.length)"
+                        class="tag obs"
+                        :class="{ via: !u.is_observer }"
+                        :title="u.observer_groups.length
+                          ? $t('adminPanel.observerViaGroupTitle', { groups: u.observer_groups.join(', ') })
+                          : $t('adminPanel.observerTagTitle')"
+                      >{{ $t('adminPanel.observerTag') }}</span>
                       <span v-if="!u.is_active" class="tag off">{{ $t('adminPanel.disabledTag') }}</span>
                       <span v-if="u.sso_only" class="tag sso">{{ $t('adminPanel.ssoTag') }}</span>
                       <div v-if="u.full_name" class="muted small">{{ u.full_name }}</div>
@@ -364,6 +400,16 @@ async function toggleMotore(m: EnginePolicy) {
                       {{ u.last_seen_at ? quando(u.last_seen_at) : $t('adminPanel.neverSeen') }}
                     </td>
                     <td class="right nowrap">
+                      <button
+                        class="mini"
+                        v-if="canWrite"
+                        :class="{ on: u.is_observer }"
+                        :aria-pressed="u.is_observer"
+                        :title="u.is_superuser || u.admin_groups.length
+                          ? $t('adminPanel.observerImpliedTitle')
+                          : u.is_observer ? $t('adminPanel.revokeObserverTitle') : $t('adminPanel.grantObserverTitle')"
+                        @click="toggleObserver(u)"
+                      ><Eye :size="13" /></button>
                       <button
                         class="mini"
                         v-if="canWrite"
@@ -407,6 +453,7 @@ async function toggleMotore(m: EnginePolicy) {
             <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
             <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" />
             <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> {{ $t('adminPanel.superuserLabel') }}</label>
+            <label class="chk"><input v-model="nu.is_observer" type="checkbox" /> {{ $t('adminPanel.observerLabel') }}</label>
             <button class="primary" @click="createUser">{{ $t('adminPanel.createUserButton') }}</button>
           </div>
         </template>
@@ -446,11 +493,22 @@ async function toggleMotore(m: EnginePolicy) {
                     <td>
                       {{ g.name }}
                       <span v-if="g.is_admin" class="tag">{{ $t('adminPanel.adminTag') }}</span>
+                      <span v-else-if="g.is_observer" class="tag obs">{{ $t('adminPanel.observerTag') }}</span>
                       <div v-if="g.description" class="muted small">{{ g.description }}</div>
                     </td>
                     <td class="muted small">{{ g.member_count }}</td>
                     <td class="muted small nowrap">{{ quando(g.created_at) }}</td>
                     <td class="right nowrap">
+                      <button
+                        class="mini"
+                        v-if="canWrite"
+                        :class="{ on: g.is_observer }"
+                        :aria-pressed="g.is_observer"
+                        :title="g.is_admin
+                          ? $t('adminPanel.observerImpliedTitle')
+                          : g.is_observer ? $t('adminPanel.revokeGroupObserverTitle') : $t('adminPanel.grantGroupObserverTitle')"
+                        @click.stop="toggleGroupObserver(g)"
+                      ><Eye :size="13" /></button>
                       <button
                         class="mini"
                         v-if="canWrite"
@@ -774,6 +832,9 @@ td.right { text-align: right; width: 80px; }
 .tag.via { border-style: dashed; text-transform: none; letter-spacing: 0; }
 .chip.adm { border-color: var(--accent-hi); color: var(--accent-hi); }
 td.warn { color: var(--warning, #d08700); font-weight: 600; }
+/* osservatore: grigio, non nel colore d'accento — è un permesso di sola
+   lettura, non un privilegio da evidenziare come l'amministrazione */
+.tag.obs { color: var(--muted); }
 .tag.sso { color: var(--muted); }
 .tag.info { color: var(--accent-hi, #4c8dff); }
 .tag.warning { color: var(--warning, #d08700); }

@@ -24,7 +24,8 @@ def list_groups(session: Session = Depends(get_session)):
     return [
         GroupOut(
             id=g.id, name=g.name, description=g.description,
-            created_at=g.created_at, member_count=conteggi.get(g.id, 0), is_admin=g.is_admin,
+            created_at=g.created_at, member_count=conteggi.get(g.id, 0),
+            is_admin=g.is_admin, is_observer=g.is_observer,
         )
         for g in session.exec(select(Group)).all()
     ]
@@ -55,16 +56,21 @@ def update_group(
     session: Session = Depends(get_session),
     current: User = Depends(require_superuser),
 ):
-    """Descrizione e, soprattutto, il flag ADMIN: da quel momento ogni membro
-    del gruppo è amministratore, e smette di esserlo uscendone."""
+    """Descrizione e, soprattutto, i due flag: ADMIN (da quel momento ogni membro
+    del gruppo è amministratore, e smette di esserlo uscendone) e OSSERVATORE
+    (ogni membro legge i pannelli senza poterci scrivere). Sono indipendenti: un
+    gruppo admin non ha bisogno del secondo, perché chi amministra legge già."""
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     era_admin = group.is_admin
+    era_osservatore = group.is_observer
     if body.description is not None:
         group.description = body.description
     if body.is_admin is not None:
         group.is_admin = body.is_admin
+    if body.is_observer is not None:
+        group.is_observer = body.is_observer
     session.add(group)
     if era_admin and not group.is_admin:
         ensure_still_admin(session, current)
@@ -80,9 +86,17 @@ def update_group(
             target_type="group", target_id=group.id, target_label=group.name,
             detail={"members": membri},
         )
+    if group.is_observer != era_osservatore:
+        audit.record_audit(
+            session, actor=current, request=request,
+            action=audit.GROUP_OBSERVER_GRANT if group.is_observer else audit.GROUP_OBSERVER_REVOKE,
+            target_type="group", target_id=group.id, target_label=group.name,
+            detail={"members": membri},
+        )
     return GroupOut(
         id=group.id, name=group.name, description=group.description,
-        created_at=group.created_at, member_count=membri, is_admin=group.is_admin,
+        created_at=group.created_at, member_count=membri,
+        is_admin=group.is_admin, is_observer=group.is_observer,
     )
 
 

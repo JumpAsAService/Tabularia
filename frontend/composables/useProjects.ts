@@ -28,6 +28,10 @@ export interface UserOut {
   groups: string[]
   // is_superuser è il flag PERSONALE; qui i gruppi di amministratori che lo rendono admin comunque
   admin_groups: string[]
+  // osservatore: legge i pannelli di amministrazione, non scrive nulla. Stessa
+  // coppia: flag personale + gruppi che lo concedono
+  is_observer: boolean
+  observer_groups: string[]
 }
 
 export interface GroupOut {
@@ -37,6 +41,7 @@ export interface GroupOut {
   created_at: string | null
   member_count: number
   is_admin: boolean // i membri sono amministratori
+  is_observer: boolean // i membri leggono i pannelli, senza scrivere
 }
 
 export const CAPABILITIES = ['view', 'run', 'edit', 'connect', 'manage'] as const
@@ -61,7 +66,13 @@ export function useProjects() {
 
     // utenti / gruppi (per popolare i selettori dei permessi e l'admin)
     users: () => apiFetch<UserOut[]>('/users'),
-    createUser: (body: { email: string; password: string; full_name?: string; is_superuser?: boolean }) =>
+    createUser: (body: {
+      email: string
+      password: string
+      full_name?: string
+      is_superuser?: boolean
+      is_observer?: boolean
+    }) =>
       apiFetch<UserOut>('/users', { method: 'POST', body }),
     deleteUser: (userId: number) => apiFetch<void>(`/users/${userId}`, { method: 'DELETE' }),
     groups: () => apiFetch<GroupOut[]>('/groups'),
@@ -73,9 +84,15 @@ export function useProjects() {
       apiFetch<void>(`/users/${userId}/groups/${groupId}`, { method: 'DELETE' }),
     updateUser: (
       userId: number,
-      body: Partial<{ full_name: string; password: string; is_active: boolean; is_superuser: boolean }>,
+      body: Partial<{
+        full_name: string
+        password: string
+        is_active: boolean
+        is_superuser: boolean
+        is_observer: boolean
+      }>,
     ) => apiFetch<UserOut>(`/users/${userId}`, { method: 'PATCH', body }),
-    updateGroup: (groupId: number, body: Partial<{ description: string; is_admin: boolean }>) =>
+    updateGroup: (groupId: number, body: Partial<{ description: string; is_admin: boolean; is_observer: boolean }>) =>
       apiFetch<GroupOut>(`/groups/${groupId}`, { method: 'PATCH', body }),
     deleteGroup: (groupId: number) => apiFetch<void>(`/groups/${groupId}`, { method: 'DELETE' }),
   }
