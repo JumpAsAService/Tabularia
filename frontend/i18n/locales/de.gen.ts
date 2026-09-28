@@ -317,6 +317,8 @@ export default {
     "ready": "Bereit: {rows} Zeilen",
     "refreshLinked": "Refresh mit der Datasource «{name}» verknüpft",
     "resizeHint": "Ziehen zum Anpassen der Größe",
+    "resizePanel": "Breite des Bereichs: ziehen oder Pfeiltasten verwenden",
+    "resizePreview": "Höhe der Datenansicht: ziehen oder Pfeiltasten verwenden",
     "runStarted": "Run #{id} gestartet…",
     "runTimeout": "Zeitüberschreitung beim Warten auf den Run.",
     "saveFailed": "Speichern fehlgeschlagen: {error}",

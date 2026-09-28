@@ -380,6 +380,8 @@ export default {
     "ready": "Ready: {rows} rows",
     "refreshLinked": "Refresh linked to datasource «{name}»",
     "resizeHint": "Drag to resize",
+    "resizePanel": "Panel width: drag, or use the arrow keys",
+    "resizePreview": "Data view height: drag, or use the arrow keys",
     "runStarted": "Run #{id} started…",
     "runTimeout": "timeout waiting for the run.",
     "saveFailed": "Save failed: {error}",

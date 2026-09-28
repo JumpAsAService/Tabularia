@@ -317,6 +317,8 @@ export default {
     "ready": "Prêt : {rows} lignes",
     "refreshLinked": "Refresh lié à la source de données «{name}»",
     "resizeHint": "Faites glisser pour redimensionner",
+    "resizePanel": "Largeur du panneau : faites glisser ou utilisez les flèches",
+    "resizePreview": "Hauteur de la vue des données : faites glisser ou utilisez les flèches",
     "runStarted": "Run #{id} démarré…",
     "runTimeout": "délai dépassé en attendant le run.",
     "saveFailed": "Échec de l'enregistrement : {error}",

@@ -317,6 +317,8 @@ export default {
     "ready": "Listo: {rows} filas",
     "refreshLinked": "Refresh vinculado a la datasource «{name}»",
     "resizeHint": "Arrastra para redimensionar",
+    "resizePanel": "Ancho del panel: arrastra o usa las flechas",
+    "resizePreview": "Altura de la vista de datos: arrastra o usa las flechas",
     "runStarted": "Run #{id} iniciado…",
     "runTimeout": "tiempo de espera agotado esperando el run.",
     "saveFailed": "Error al guardar: {error}",

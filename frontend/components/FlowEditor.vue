@@ -82,31 +82,94 @@ let commentCounter = 0
 
 const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
 
-// ── Pannello destro ridimensionabile (larghezza ricordata) ────────────────
+// ── Pannello destro e vista dati ridimensionabili (misure ricordate) ──────
 const PANEL_MIN = 280
 const PANEL_MAX = 640
 const panelWidth = ref(
   Math.min(PANEL_MAX, Math.max(PANEL_MIN, Number(localStorage.getItem('tabularia.panelWidth')) || 340)),
 )
-// minmax(0,1fr) come in main.css: preview larghe (pivot) non devono spingere il pannello fuori schermo
-const appStyle = computed(() => ({ gridTemplateColumns: `200px minmax(0, 1fr) ${panelWidth.value}px` }))
 
-function startPanelResize(ev: MouseEvent) {
+// La tabella sotto il canvas: quanto è alta lo decide chi guarda i dati. Il
+// tetto non è un numero fisso ma «quel che resta»: al canvas devono sempre
+// rimanere abbastanza pixel da vedere i nodi che si stanno collegando.
+const GRID_MIN = 120
+const CANVAS_MIN = 220
+// la toolbar sta nella stessa colonna di righe: se non la si toglie dal conto,
+// il canvas finisce sotto il minimo proprio quando si tira la tabella in alto
+const gridMax = () => {
+  const toolbar = document.querySelector('.app > .toolbar')?.getBoundingClientRect().height ?? 0
+  return Math.max(GRID_MIN, window.innerHeight - toolbar - CANVAS_MIN)
+}
+const gridHeight = ref(
+  Number(localStorage.getItem('tabularia.gridHeight')) || Math.round(window.innerHeight * 0.34),
+)
+function clampGrid(px: number) {
+  return Math.min(gridMax(), Math.max(GRID_MIN, Math.round(px)))
+}
+gridHeight.value = clampGrid(gridHeight.value)
+// una finestra rimpicciolita non deve lasciare la tabella più alta dello schermo
+const ripiega = () => { gridHeight.value = clampGrid(gridHeight.value) }
+onMounted(() => window.addEventListener('resize', ripiega))
+onUnmounted(() => window.removeEventListener('resize', ripiega))
+
+// minmax(0,1fr) come in main.css: preview larghe (pivot) non devono spingere il pannello fuori schermo
+const appStyle = computed(() => ({
+  gridTemplateColumns: `200px minmax(0, 1fr) ${panelWidth.value}px`,
+  gridTemplateRows: `auto minmax(0, 1fr) ${gridHeight.value}px`,
+}))
+
+/** Una maniglia: trascina col mouse, e con le frecce da tastiera (è un
+ *  `separator`, non una decorazione: chi non usa il mouse deve poterla muovere). */
+function trascina(
+  ev: MouseEvent,
+  cursore: 'col-resize' | 'row-resize',
+  aggiorna: (e: MouseEvent) => void,
+  ricorda: () => void,
+) {
   ev.preventDefault()
-  const onMove = (e: MouseEvent) => {
-    panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, window.innerWidth - e.clientX))
-  }
   const onUp = () => {
-    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mousemove', aggiorna)
     window.removeEventListener('mouseup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    localStorage.setItem('tabularia.panelWidth', String(panelWidth.value))
+    ricorda()
   }
-  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mousemove', aggiorna)
   window.addEventListener('mouseup', onUp)
-  document.body.style.cursor = 'col-resize'
+  document.body.style.cursor = cursore
   document.body.style.userSelect = 'none'
+}
+
+function startPanelResize(ev: MouseEvent) {
+  trascina(
+    ev, 'col-resize',
+    (e) => { panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, window.innerWidth - e.clientX)) },
+    () => localStorage.setItem('tabularia.panelWidth', String(panelWidth.value)),
+  )
+}
+
+function startGridResize(ev: MouseEvent) {
+  trascina(
+    ev, 'row-resize',
+    (e) => { gridHeight.value = clampGrid(window.innerHeight - e.clientY) },
+    () => localStorage.setItem('tabularia.gridHeight', String(gridHeight.value)),
+  )
+}
+
+const PASSO = 24  // pixel per pressione; con Shift si va dieci volte più svelti
+function tastiPannello(e: KeyboardEvent) {
+  const d = e.key === 'ArrowLeft' ? PASSO : e.key === 'ArrowRight' ? -PASSO : 0
+  if (!d) return
+  e.preventDefault()
+  panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, panelWidth.value + d * (e.shiftKey ? 10 : 1)))
+  localStorage.setItem('tabularia.panelWidth', String(panelWidth.value))
+}
+function tastiVista(e: KeyboardEvent) {
+  const d = e.key === 'ArrowUp' ? PASSO : e.key === 'ArrowDown' ? -PASSO : 0
+  if (!d) return
+  e.preventDefault()
+  gridHeight.value = clampGrid(gridHeight.value + d * (e.shiftKey ? 10 : 1))
+  localStorage.setItem('tabularia.gridHeight', String(gridHeight.value))
 }
 const status = ref(t('flowEditor.statusInitial'))
 // tipo di stato → icona nella toolbar (spinner / check / errore)
@@ -1465,7 +1528,16 @@ async function pollTask(id: string) {
     </div>
 
     <div class="panel">
-      <div class="panel-resizer" :title="$t('flowEditor.resizeHint')" @mousedown="startPanelResize" />
+      <div
+        class="panel-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        tabindex="0"
+        :aria-label="$t('flowEditor.resizePanel')"
+        :title="$t('flowEditor.resizeHint')"
+        @mousedown="startPanelResize"
+        @keydown="tastiPannello"
+      />
       <NodePanel
         :node="selectedNode"
         :operations="operations"
@@ -1500,6 +1572,16 @@ async function pollTask(id: string) {
     />
 
     <div class="grid">
+      <div
+        class="grid-resizer"
+        role="separator"
+        aria-orientation="horizontal"
+        tabindex="0"
+        :aria-label="$t('flowEditor.resizePreview')"
+        :title="$t('flowEditor.resizeHint')"
+        @mousedown="startGridResize"
+        @keydown="tastiVista"
+      />
       <div class="viewtabs">
         <button :class="{ active: viewTab === 'table' }" @click="viewTab = 'table'">
           <Table2 :size="13" /> {{ $t('flowEditor.tableTab') }}

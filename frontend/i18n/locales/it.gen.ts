@@ -380,6 +380,8 @@ export default {
     "ready": "Pronto: {rows} righe",
     "refreshLinked": "Refresh collegato alla datasource «{name}»",
     "resizeHint": "Trascina per ridimensionare",
+    "resizePanel": "Larghezza del pannello: trascina, o usa le frecce",
+    "resizePreview": "Altezza della vista dati: trascina, o usa le frecce",
     "runStarted": "Run #{id} avviato…",
     "runTimeout": "timeout in attesa del run.",
     "saveFailed": "Salvataggio fallito: {error}",
