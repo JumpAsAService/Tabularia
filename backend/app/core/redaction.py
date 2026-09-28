@@ -73,12 +73,40 @@ def redact_secrets(text: str | None) -> str | None:
         return text
 
 
-# argomenti di una table function che tocca lo storage o la rete: dentro ci sono
-# URL, bucket, percorsi e — su ClickHouse senza named collection — le chiavi
-_ARG_STORAGE = re.compile(
-    r"\b(s3|s3Cluster|url|urlCluster|remote|remoteSecure|azureBlobStorage|gcs|hdfs)\s*\((?:[^()]|\([^()]*\))*\)",
-    re.IGNORECASE,
+# funzioni che toccano lo storage o la rete: dentro ci sono URL, bucket,
+# percorsi e — su ClickHouse senza named collection — le chiavi
+_NOMI_STORAGE = (
+    "s3", "s3Cluster", "url", "urlCluster", "remote", "remoteSecure",
+    "azureBlobStorage", "gcs", "hdfs",
 )
+_APERTURA = re.compile(r"\b(" + "|".join(_NOMI_STORAGE) + r")\s*\(", re.IGNORECASE)
+
+
+def _fine_argomenti(testo: str, inizio: int) -> int | None:
+    """Indice della parentesi che chiude quella aperta in `inizio`, o None se il
+    testo FINISCE prima. Conta le parentesi solo fuori dagli apici, perché un URL
+    o un percorso può contenerne."""
+    profondita = 0
+    apice = None
+    i = inizio
+    while i < len(testo):
+        c = testo[i]
+        if apice:
+            if c == "\\":
+                i += 2
+                continue
+            if c == apice:
+                apice = None
+        elif c in "'\"`":
+            apice = c
+        elif c == "(":
+            profondita += 1
+        elif c == ")":
+            profondita -= 1
+            if profondita == 0:
+                return i
+        i += 1
+    return None
 
 
 def redact_storage_args(text: str | None) -> str | None:
@@ -89,10 +117,51 @@ def redact_storage_args(text: str | None) -> str | None:
     e il percorso dell'oggetto — verificato su un ClickHouse 24.8 il 2026-09-28.
     In un elenco di query lente quegli argomenti non dicono niente di utile: a
     chi guarda serve sapere QUALE query pesa, non su quale chiave.
+
+    Due trappole, entrambe trovate dal vivo:
+
+    - il testo può essere TRONCATO (il `query_log` si legge a fette): la
+      parentesi non si chiude mai, e proprio lì dentro sta la chiave d'accesso.
+      Senza chiusura si redige fino alla fine — meglio perdere la coda di una
+      query che pubblicare una credenziale;
+    - `s3(` può comparire DENTRO una stringa (`WHERE nome LIKE '%s3(%'`): lì non
+      è una chiamata e non si tocca, altrimenti si rovina una query legittima.
     """
     if not text:
         return text
     try:
-        return _ARG_STORAGE.sub(lambda m: f"{m.group(1)}(…)", text)
+        fuori = []
+        i = 0
+        apice = None
+        while i < len(text):
+            c = text[i]
+            if apice:                      # dentro una stringa: si copia e basta
+                fuori.append(c)
+                if c == "\\" and i + 1 < len(text):
+                    fuori.append(text[i + 1])
+                    i += 2
+                    continue
+                if c == apice:
+                    apice = None
+                i += 1
+                continue
+            if c in "'\"`":
+                apice = c
+                fuori.append(c)
+                i += 1
+                continue
+            m = _APERTURA.match(text, i)
+            if m:
+                apre = m.end() - 1
+                chiude = _fine_argomenti(text, apre)
+                fuori.append(text[i:m.end()])
+                fuori.append("\u2026)")
+                if chiude is None:         # troncata: si taglia qui
+                    return "".join(fuori)
+                i = chiude + 1
+                continue
+            fuori.append(c)
+            i += 1
+        return "".join(fuori)
     except Exception:  # pragma: no cover
         return text

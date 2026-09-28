@@ -54,7 +54,7 @@ def warehouse(minutes: int = Query(60, ge=5, le=1440), limit: int = Query(20, ge
         client = get_engine("clickhouse")._client()
         rows = client.query(
             "SELECT query_start_time, query_kind, type, exception_code, query_duration_ms, read_rows, read_bytes, "
-            "memory_usage, log_comment, substring(replaceRegexpAll(query, '\\\\s+', ' '), 1, 160) "
+            "memory_usage, log_comment, substring(replaceRegexpAll(query, '\\\\s+', ' '), 1, 4000) "
             "FROM system.query_log WHERE event_time > now() - INTERVAL %(m)s MINUTE AND type IN ('QueryFinish', 'ExceptionWhileProcessing') "
             "AND query_kind IN ('Select', 'Insert') AND query NOT LIKE '%%system.query_log%%' "
             "ORDER BY query_duration_ms DESC LIMIT %(n)s",
@@ -71,7 +71,9 @@ def warehouse(minutes: int = Query(60, ge=5, le=1440), limit: int = Query(20, ge
              "origin": "preview" if str(r[8]).startswith("tab-prev:") else "run",
              # il testo serve a riconoscere QUALE query pesa, non su quale chiave:
              # gli argomenti di s3()/url() se ne vanno (vedi core/redaction.py)
-             "query": redact_secrets(redact_storage_args(r[9]))}
+             # si TAGLIA DOPO aver redatto: ClickHouse tagliava a 160 caratteri
+             # e spezzava `s3(` a metà, lasciando la chiave d'accesso in chiaro
+             "query": (redact_secrets(redact_storage_args(r[9])) or "")[:200]}
             for r in rows
         ],
     }

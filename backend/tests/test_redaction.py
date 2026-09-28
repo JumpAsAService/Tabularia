@@ -94,3 +94,47 @@ def test_a_query_without_storage_functions_is_untouched():
 
     q = "SELECT paese, count() FROM self GROUP BY paese"
     assert redact_storage_args(q) == q
+
+
+# ── il testo TRONCATO: è lì che stava il buco ────────────────────────────────
+
+def test_a_truncated_storage_call_is_redacted_to_the_end():
+    """Il `query_log` si legge a fette: se il taglio cade dentro `s3(`, la
+    parentesi non si chiude mai e la chiave d'accesso resta in chiaro. Trovato
+    dal vivo il 2026-09-28 nel pannello Prestazioni."""
+    from app.core.redaction import redact_storage_args
+
+    tronca = ("INSERT INTO FUNCTION s3('https://s3.it-mil.scw.cloud/bucket/x.parquet', "
+              "'SCWAWW2XAESEMPIO")
+    fuori = redact_storage_args(tronca)
+    assert "SCWAWW2XAESEMPIO" not in fuori
+    assert "s3.it-mil.scw.cloud" not in fuori and "bucket" not in fuori
+    assert fuori.startswith("INSERT INTO FUNCTION s3(")
+
+
+def test_a_storage_call_nested_two_levels_deep_is_redacted():
+    from app.core.redaction import redact_storage_args
+
+    q = ("SELECT * FROM (SELECT * FROM s3('https://x/y.parquet','K','S','Parquet') "
+         "WHERE toYYYYMM(d) = 202601) t")
+    fuori = redact_storage_args(q)
+    assert "y.parquet" not in fuori and "'K'" not in fuori
+    assert "toYYYYMM(d) = 202601" in fuori  # il resto della query resta leggibile
+
+
+def test_the_name_inside_a_string_is_not_a_call():
+    """`WHERE nome LIKE '%s3(%'` non è una chiamata: redigerla rovinerebbe una
+    query legittima senza proteggere niente."""
+    from app.core.redaction import redact_storage_args
+
+    q = "SELECT * FROM t WHERE nome LIKE '%s3(%' AND a = 1"
+    assert redact_storage_args(q) == q
+
+
+def test_several_calls_in_one_query_all_go():
+    from app.core.redaction import redact_storage_args
+
+    q = "SELECT * FROM s3('https://a/1.parquet','K','S') UNION ALL SELECT * FROM s3('https://b/2.parquet','K','S')"
+    fuori = redact_storage_args(q)
+    assert "1.parquet" not in fuori and "2.parquet" not in fuori
+    assert fuori.count("s3(…)") == 2
