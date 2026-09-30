@@ -16,6 +16,7 @@ from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
 from app.routes.groups import router as groups_router
 from app.routes.banners import router as banners_router
+from app.routes.privacy import router as privacy_router
 from app.routes.engine_policy import router as engine_policy_router
 from app.routes.saved_views import router as saved_views_router
 from app.routes.search import router as search_router
@@ -98,6 +99,7 @@ app.include_router(sso_router)
 app.include_router(users_router)
 app.include_router(groups_router)
 app.include_router(banners_router)
+app.include_router(privacy_router)
 app.include_router(engine_policy_router)
 app.include_router(ai_router)
 app.include_router(saved_views_router)

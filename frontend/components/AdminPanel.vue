@@ -12,11 +12,13 @@ import {
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type GroupOut, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
+import { usePrivacy, type PrivacyNotice } from '~/composables/usePrivacy'
 import { useEnginePolicy, type EnginePolicy } from '~/composables/useEnginePolicy'
 import { useAi, type AiModel } from '~/composables/useAi'
 
 const api = useProjects()
 const bannersApi = useBanners()
+const privacyApi = usePrivacy()
 const engineApi = useEnginePolicy()
 const aiApi = useAi()
 // modelli AI: catalogo del provider + scelta dell'amministratore. `null` =
@@ -32,12 +34,14 @@ const { user: me } = useAuth()
 const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 
-type Sezione = 'users' | 'groups' | 'banners' | 'engines' | 'ai'
+type Sezione = 'users' | 'groups' | 'banners' | 'privacy' | 'engines' | 'ai'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
 const groups = ref<GroupOut[]>([])
 const banners = ref<Banner[]>([])
+const privacy = ref<PrivacyNotice | null>(null)
+const salvandoPrivacy = ref(false)
 const motori = ref<EnginePolicy[]>([])
 
 const nu = ref({ email: '', password: '', full_name: '', is_superuser: false, is_observer: false })
@@ -67,6 +71,7 @@ const sezioni = computed(() => [
   { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: users.value.length },
   { id: 'groups' as Sezione, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
   { id: 'banners' as Sezione, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
+  { id: 'privacy' as Sezione, label: t('adminPanel.privacyTitle'), icon: ShieldCheck, badge: 0 },
   // il conteggio è quanti motori sono CONSENTITI: è il numero che descrive lo
   // stato dell'installazione, non quanti ne esistono
   { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
@@ -98,6 +103,7 @@ async function loadAll() {
     users.value = await api.users()
     groups.value = await api.groups()
     banners.value = await bannersApi.list()
+    try { privacy.value = await privacyApi.get() } catch { privacy.value = null }
     motori.value = await engineApi.list()
   } catch (e) {
     toast.error(errMessage(e))
@@ -261,6 +267,28 @@ async function removeMember(u: UserOut) {
     await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
+  }
+}
+
+// ── informativa sulla privacy ───────────────────────────────────────────────
+// Una sola, si modifica in posto. Il testo di partenza descrive quello che il
+// prodotto raccoglie davvero: chi installa resta libero di riscriverlo — è lui
+// il titolare — ma parte da qualcosa di vero.
+async function salvaPrivacy() {
+  if (!privacy.value) return
+  salvandoPrivacy.value = true
+  try {
+    privacy.value = await privacyApi.update({
+      enabled: privacy.value.enabled,
+      summary: privacy.value.summary,
+      body: privacy.value.body,
+      url: privacy.value.url,
+    })
+    toast.success(t('adminPanel.privacySaved'))
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    salvandoPrivacy.value = false
   }
 }
 
@@ -572,6 +600,29 @@ async function toggleMotore(m: EnginePolicy) {
         </template>
 
         <!-- ── MOTORI ─────────────────────────────────────────────────────── -->
+        <template v-else-if="sezione === 'privacy'">
+          <div class="card">
+            <h4><ShieldCheck :size="14" /> {{ $t('adminPanel.privacyTitle') }}</h4>
+            <p class="muted small hint">{{ $t('adminPanel.privacyHint') }}</p>
+            <template v-if="privacy">
+              <label class="chk">
+                <input v-model="privacy.enabled" type="checkbox" :disabled="!canWrite" />
+                {{ $t('adminPanel.privacyEnabled') }}
+              </label>
+              <label class="dlabel" for="pv-sum">{{ $t('adminPanel.privacySummary') }}</label>
+              <input id="pv-sum" v-model="privacy.summary" type="text" :disabled="!canWrite" />
+              <label class="dlabel" for="pv-body">{{ $t('adminPanel.privacyBody') }}</label>
+              <textarea id="pv-body" v-model="privacy.body" rows="16" :disabled="!canWrite" />
+              <label class="dlabel" for="pv-url">{{ $t('adminPanel.privacyUrl') }}</label>
+              <input id="pv-url" v-model="privacy.url" type="url" :disabled="!canWrite"
+                     placeholder="https://" />
+              <button v-if="canWrite" class="primary" :disabled="salvandoPrivacy" @click="salvaPrivacy">
+                {{ $t('adminPanel.privacySave') }}
+              </button>
+            </template>
+          </div>
+        </template>
+
         <template v-else-if="sezione === 'engines'">
           <div class="card">
             <h4><Cpu :size="14" /> {{ $t('adminPanel.enginesTitle') }}</h4>

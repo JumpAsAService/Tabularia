@@ -53,6 +53,8 @@ GROUP_OBSERVER_GRANT = "group.observer_grant"
 GROUP_OBSERVER_REVOKE = "group.observer_revoke"
 PERM_GRANT = "permission.grant"
 PERM_REVOKE = "permission.revoke"
+# informativa sulla privacy: cambia ciò che l'installazione DICHIARA a tutti
+PRIVACY_UPDATE = "privacy.update"
 # banner dell'Explore: cambiano ciò che vede TUTTA l'installazione
 BANNER_CREATE = "banner.create"
 BANNER_DELETE = "banner.delete"
