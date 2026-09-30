@@ -101,21 +101,22 @@ def record_audit(
     """Scrive un evento di audit. Non solleva mai: un fallimento qui non deve
     rompere l'azione dell'utente.
 
-    Di un OSSERVATORE l'indirizzo IP non si scrive: resta CHE COSA è stato fatto
-    e da chi, che è il senso del registro, e sparisce da dove. Vedi
-    `permissions.is_observer_only`.
+    Di un OSSERVATORE non si scrivono né l'indirizzo IP né lo user-agent: resta
+    CHE COSA è stato fatto e da chi, che è il senso del registro, e spariscono
+    da dove e con che cosa. Vedi `permissions.is_observer_only`.
 
     La regola guarda l'ATTORE, quindi non copre il login FALLITO, dove attore
-    non ce n'è: lì chi ha digitato la password può non essere l'osservatore, e
-    l'indirizzo è l'unica traccia di un tentativo di forzatura. Se anche quello
-    va tolto, è una decisione diversa e va presa apposta."""
+    non ce n'è — e lì l'indirizzo si TIENE apposta: è il segnale su cui poggiano
+    i controlli contro i tentativi di forzatura (scelta dell'utente,
+    2026-09-30). Il test `test_a_failed_login_still_records_the_address` lo
+    fissa, così resta una scelta e non una svista."""
     try:
-        senza_ip = False
+        minimizza = False
         if actor is not None:
             try:
                 from app.services.permissions import is_observer_only
 
-                senza_ip = is_observer_only(session, actor)
+                minimizza = is_observer_only(session, actor)
             except Exception:  # pragma: no cover — nel dubbio si scrive l'evento
                 logger.debug("ruolo non risolvibile per l'audit", exc_info=True)
         entry = AuditLog(
@@ -127,8 +128,8 @@ def record_audit(
             target_id=target_id,
             target_label=target_label,
             detail=json.dumps(detail, default=str, ensure_ascii=False) if detail else None,
-            ip=None if senza_ip else client_ip(request),
-            user_agent=(request.headers.get("user-agent") if request else None),
+            ip=None if minimizza else client_ip(request),
+            user_agent=None if minimizza else (request.headers.get("user-agent") if request else None),
         )
         session.add(entry)
         session.commit()

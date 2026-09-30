@@ -271,6 +271,7 @@ def test_an_observers_address_is_not_written_to_the_audit(session):
 
     voce = session.exec(select(AuditLog).where(AuditLog.actor_id == ospite.id)).one()
     assert voce.ip is None
+    assert voce.user_agent is None            # né browser né sistema operativo
     assert voce.action == "flow.run"          # che cosa è stato fatto resta
     assert voce.actor_label == ospite.email   # e chi, per un amministratore
 
@@ -284,6 +285,7 @@ def test_an_administrators_address_is_still_written(session):
 
     voce = session.exec(select(AuditLog).where(AuditLog.actor_id == capo.id)).one()
     assert voce.ip == "203.0.113.77"
+    assert voce.user_agent == "prova"
 
 
 def test_an_ordinary_user_is_still_traced(session):
