@@ -87,6 +87,18 @@ def is_observer(session: Session, user: User) -> bool:
     return bool(observer_group_names(session, user))
 
 
+def is_observer_only(session: Session, user: User) -> bool:
+    """Osservatore e NIENT'ALTRO: legge i pannelli, non amministra.
+
+    Serve a una domanda sola, e non è una domanda di autorizzazione: di chi NON
+    teniamo l'indirizzo IP. Un amministratore è osservatore per definizione, ma
+    di lui l'IP si tiene — è chi può cambiare le cose, ed è la traccia che serve
+    quando qualcosa va storto. Un osservatore invece guarda e basta: il suo
+    indirizzo non risponde a nessuna domanda che ci porremmo davvero, e un dato
+    che non serve è meglio non averlo (scelta dell'utente, 2026-09-30)."""
+    return is_observer(session, user) and not is_admin(session, user)
+
+
 def _all_projects(session: Session) -> dict[int, Project]:
     return {p.id: p for p in session.exec(select(Project)).all()}
 

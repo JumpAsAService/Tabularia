@@ -28,7 +28,13 @@ _credentials_error = HTTPException(
 
 
 def _touch_last_seen(session: Session, user: User, request: Request) -> None:
-    """Aggiorna last_seen (throttled) per la vista 'sessioni attive' dell'audit."""
+    """Aggiorna last_seen (throttled) per la vista 'sessioni attive' dell'audit.
+
+    Di un OSSERVATORE l'indirizzo non si tiene: si aggiorna solo il momento, che
+    è quel che serve a dire «c'è qualcuno collegato adesso». Vedi
+    `permissions.is_observer_only` per il perché."""
+    from app.services.permissions import is_observer_only
+
     now = datetime.now(timezone.utc)
     seen = user.last_seen_at
     if seen is not None and seen.tzinfo is None:
@@ -36,8 +42,14 @@ def _touch_last_seen(session: Session, user: User, request: Request) -> None:
     if seen is not None and now - seen < _LAST_SEEN_THROTTLE:
         return
     try:
-        fwd = request.headers.get("x-forwarded-for")
-        user.last_seen_ip = (fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else None))
+        if is_observer_only(session, user):
+            # anche cancellare quello che c'era: il ruolo può essere stato dato
+            # dopo, e un indirizzo raccolto prima resterebbe lì per sempre
+            user.last_seen_ip = None
+        else:
+            fwd = request.headers.get("x-forwarded-for")
+            user.last_seen_ip = (fwd.split(",")[0].strip() if fwd
+                                 else (request.client.host if request.client else None))
         user.last_seen_at = now
         session.add(user)
         session.commit()

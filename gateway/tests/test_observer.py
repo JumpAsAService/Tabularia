@@ -250,3 +250,108 @@ def test_the_list_says_which_group_grants_it(session):
     riga = next(u for u in user_routes.list_users(session=session, chi_chiede=capo) if u.id == anna.id)
     assert riga.is_observer is False  # nessun flag personale
     assert riga.observer_groups == ["Ospiti"]
+
+
+# ── l'indirizzo IP di un osservatore non si raccoglie proprio ────────────────
+
+class _Finta:
+    """Una richiesta quel tanto che basta a `record_audit` e a `_touch_last_seen`."""
+
+    def __init__(self, ip="203.0.113.77"):
+        self.headers = {"user-agent": "prova", "x-forwarded-for": ip}
+        self.client = type("C", (), {"host": ip})()
+
+
+def test_an_observers_address_is_not_written_to_the_audit(session):
+    """Mascherare la vista non basta: il dato non deve proprio entrare."""
+    from app.services import audit as audit_svc
+
+    ospite = _osservatore(session, email="ospite-ip@x.it")
+    audit_svc.record_audit(session, actor=ospite, action="flow.run", request=_Finta())
+
+    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == ospite.id)).one()
+    assert voce.ip is None
+    assert voce.action == "flow.run"          # che cosa è stato fatto resta
+    assert voce.actor_label == ospite.email   # e chi, per un amministratore
+
+
+def test_an_administrators_address_is_still_written(session):
+    """Chi può cambiare le cose lascia la traccia: è il senso del registro."""
+    from app.services import audit as audit_svc
+
+    capo = make_user(session, email="capo-ip@x.it", is_superuser=True)
+    audit_svc.record_audit(session, actor=capo, action="flow.run", request=_Finta())
+
+    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == capo.id)).one()
+    assert voce.ip == "203.0.113.77"
+
+
+def test_an_ordinary_user_is_still_traced(session):
+    """La rinuncia vale per gli OSSERVATORI, non per tutti: chi carica, modifica
+    ed esegue resta tracciato."""
+    from app.services import audit as audit_svc
+
+    tizio = make_user(session, email="tizio-ip@x.it")
+    audit_svc.record_audit(session, actor=tizio, action="datasource.create", request=_Finta())
+
+    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == tizio.id)).one()
+    assert voce.ip == "203.0.113.77"
+
+
+def test_an_admin_by_group_keeps_being_traced(session):
+    """`is_observer` è vero anche per gli admin: se la regola guardasse quello,
+    smetteremmo di tracciare proprio chi comanda."""
+    from app.services import audit as audit_svc
+
+    g = Group(name="Capi", is_admin=True)
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    anna = make_user(session, email="anna-ip@x.it")
+    session.add(UserGroupLink(user_id=anna.id, group_id=g.id))
+    session.commit()
+
+    audit_svc.record_audit(session, actor=anna, action="flow.run", request=_Finta())
+    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == anna.id)).one()
+    assert voce.ip == "203.0.113.77"
+
+
+def test_last_seen_keeps_the_moment_and_drops_the_address(session):
+    """Le «sessioni attive» devono dire CHE c'è qualcuno collegato, non da dove."""
+    from app.deps.auth import _touch_last_seen
+
+    ospite = _osservatore(session, email="ospite-seen@x.it")
+    _touch_last_seen(session, ospite, _Finta())
+    session.refresh(ospite)
+    assert ospite.last_seen_at is not None
+    assert ospite.last_seen_ip is None
+
+
+def test_an_address_collected_before_the_role_is_erased(session):
+    """Il ruolo può arrivare dopo: al primo passaggio l'indirizzo vecchio va via,
+    altrimenti resterebbe lì per sempre."""
+    from app.deps.auth import _touch_last_seen
+
+    u = make_user(session, email="prima-poi@x.it")
+    _touch_last_seen(session, u, _Finta())
+    session.refresh(u)
+    assert u.last_seen_ip == "203.0.113.77"
+
+    u.is_observer = True
+    u.last_seen_at = None          # scavalca il freno del throttle
+    session.add(u)
+    session.commit()
+    _touch_last_seen(session, u, _Finta())
+    session.refresh(u)
+    assert u.last_seen_ip is None
+
+
+def test_a_failed_login_still_records_the_address(session):
+    """Senza attore la regola non può applicarsi, ed è giusto così: lì l'indirizzo
+    è l'unica traccia di un tentativo di forzatura. Documentato, non dimenticato."""
+    from app.services import audit as audit_svc
+
+    audit_svc.record_audit(session, actor=None, actor_label="ospite-ip@x.it",
+                           action=audit_svc.LOGIN_FAILED, outcome="failure", request=_Finta())
+    voce = session.exec(select(AuditLog).where(AuditLog.action == audit_svc.LOGIN_FAILED)).one()
+    assert voce.ip == "203.0.113.77"
