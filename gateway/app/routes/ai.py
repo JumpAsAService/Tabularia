@@ -270,6 +270,20 @@ async def chat(
     # ai_chats.crea), così una richiesta interrotta non lascia una chat vuota.
     # Il tetto giornaliero si controlla PRIMA di aprire lo stream: un rifiuto
     # deve arrivare come errore della richiesta, non come evento a metà risposta.
+    # Prima il tetto dell'INSTALLAZIONE: dove l'account è condiviso — una demo
+    # aperta a sconosciuti — il tetto per utente non protegge niente, perché
+    # l'utente è uno solo e la chiave da pagare pure.
+    if cfg.max_cost_per_day_total_usd:
+        speso_tutti = ai_chats.speso_oggi_tutti(session)
+        if speso_tutti >= Decimal(str(cfg.max_cost_per_day_total_usd)):
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "L'assistente non è disponibile per il resto della giornata: "
+                    "questa installazione ha raggiunto il suo tetto di spesa. "
+                    "Riprova domani."
+                ),
+            )
     if cfg.max_cost_per_day_usd:
         speso = ai_chats.speso_oggi(session, user)
         if speso >= Decimal(str(cfg.max_cost_per_day_usd)):

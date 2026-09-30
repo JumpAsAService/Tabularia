@@ -6,6 +6,8 @@ caratteristiche della demo: sono buchi che valgono sempre.
 import pytest
 from fastapi import HTTPException
 
+from sqlmodel import delete, select
+
 from app.services import login_throttle, permissions
 from app.models.permission import Capability, Permission
 from tests.conftest import make_project, make_user
@@ -44,35 +46,74 @@ def test_an_administrator_can_always_upload(session):
 
 # ── tetto di spesa giornaliero dell'assistente ───────────────────────────────
 
-def test_the_daily_spend_sums_only_todays_turns(session):
+def test_the_daily_spend_sums_only_today(session):
     from datetime import datetime, timedelta, timezone
-    from app.models import AiChat, AiChatTurn
+    from app.models import AiSpend
     from app.services import ai_chats
 
     anna = make_user(session, email="anna@x.it")
-    chat = ai_chats.crea(session, anna, "d", "m", None)
     oggi = datetime.now(timezone.utc).replace(tzinfo=None)
-    session.add(AiChatTurn(chat_id=chat.id, seq=0, cost_usd="0.010", created_at=oggi))
-    session.add(AiChatTurn(chat_id=chat.id, seq=1, cost_usd="0.005", created_at=oggi))
+    session.add(AiSpend(user_id=anna.id, cost_usd="0.010", ts=oggi))
+    session.add(AiSpend(user_id=anna.id, cost_usd="0.005", ts=oggi))
     # ieri non conta
-    session.add(AiChatTurn(chat_id=chat.id, seq=2, cost_usd="9.99", created_at=oggi - timedelta(days=1)))
+    session.add(AiSpend(user_id=anna.id, cost_usd="9.99", ts=oggi - timedelta(days=1)))
     # costo sconosciuto conta zero: non è «gratis», è «non lo sappiamo»
-    session.add(AiChatTurn(chat_id=chat.id, seq=3, cost_usd=None, created_at=oggi))
+    session.add(AiSpend(user_id=anna.id, cost_usd=None, ts=oggi))
     session.commit()
     assert str(ai_chats.speso_oggi(session, anna)) == "0.015"
 
 
 def test_the_spend_is_per_user(session):
-    from app.services import ai_chats
-    from app.models import AiChatTurn
     from datetime import datetime, timezone
+    from app.models import AiSpend
+    from app.services import ai_chats
 
     anna, bruno = make_user(session, email="a@x.it"), make_user(session, email="b@x.it")
-    chat = ai_chats.crea(session, anna, "d", "m", None)
-    session.add(AiChatTurn(chat_id=chat.id, seq=0, cost_usd="0.5",
-                           created_at=datetime.now(timezone.utc).replace(tzinfo=None)))
+    session.add(AiSpend(user_id=anna.id, cost_usd="0.5",
+                        ts=datetime.now(timezone.utc).replace(tzinfo=None)))
     session.commit()
     assert ai_chats.speso_oggi(session, bruno) == 0
+
+
+def test_the_whole_installation_has_its_own_ceiling(session):
+    """Dove l'account è condiviso il tetto per utente non protegge niente: il
+    conto è uno solo, e va guardato tutto insieme."""
+    from datetime import datetime, timezone
+    from app.models import AiSpend
+    from app.services import ai_chats
+
+    anna, bruno = make_user(session, email="a2@x.it"), make_user(session, email="b2@x.it")
+    ora = datetime.now(timezone.utc).replace(tzinfo=None)
+    session.add(AiSpend(user_id=anna.id, cost_usd="0.30", ts=ora))
+    session.add(AiSpend(user_id=bruno.id, cost_usd="0.20", ts=ora))
+    session.commit()
+    assert str(ai_chats.speso_oggi(session, anna)) == "0.30"
+    assert str(ai_chats.speso_oggi_tutti(session)) == "0.50"
+
+
+def test_deleting_the_conversation_does_not_reset_the_ceiling(session):
+    """È il motivo per cui il registro della spesa esiste: le chat di un
+    osservatore si cancellano quando se ne va, e se il tetto leggesse da lì
+    basterebbe aprirne una nuova per ricominciare a spendere."""
+    from decimal import Decimal
+    from app.models import AiChat, AiChatTurn
+    from app.services import ai_chats
+
+    ospite = make_user(session, email="ospite-spesa@x.it")
+    chat = ai_chats.crea(session, ospite, "quanto vendiamo?", "m", None)
+    ai_chats.salva_turno(session, chat.id, domanda="quanto vendiamo?", messaggi=[],
+                         model_id="m", input_tokens=10, output_tokens=5, requests=1,
+                         cost=Decimal("0.40"))
+    assert str(ai_chats.speso_oggi(session, ospite)) == "0.40"
+
+    # via la conversazione, contenuto compreso
+    session.exec(delete(AiChatTurn).where(AiChatTurn.chat_id == chat.id))
+    session.exec(delete(AiChat).where(AiChat.id == chat.id))
+    session.commit()
+
+    assert session.exec(select(AiChat).where(AiChat.user_id == ospite.id)).all() == []
+    assert str(ai_chats.speso_oggi(session, ospite)) == "0.40"      # il conto resta
+    assert str(ai_chats.speso_oggi_tutti(session)) == "0.40"
 
 
 # ── freno sul login ──────────────────────────────────────────────────────────

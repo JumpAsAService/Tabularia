@@ -62,3 +62,31 @@ class AiChatTurn(SQLModel, table=True):
     # è determinabile per quel modello, che è diverso da «zero».
     cost_usd: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
+
+
+class AiSpend(SQLModel, table=True):
+    """Quanto è costato ogni giro dell'assistente. Solo il conto, mai il testo.
+
+    Sta separato dalle conversazioni per una ragione precisa: le chat di un
+    OSSERVATORE si cancellano quando se ne va (è un account condiviso su una
+    demo pubblica, e le domande di uno sconosciuto non devono restare né essere
+    leggibili dal visitatore successivo). Se il tetto di spesa leggesse da lì,
+    cancellare una chat azzererebbe il contatore e basterebbe aprirne una nuova
+    per ricominciare a spendere. Qui invece non cancella nessuno.
+
+    Non contiene domanda, risposta né strumenti: modello, token, costo e
+    momento. `turn_id` è solo una chiave per ritrovare la riga quando il costo
+    arriva dopo — resta anche quando il turno non c'è più.
+    """
+
+    __tablename__ = "ai_spend"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ts: datetime = Field(default_factory=_now, index=True)
+    user_id: int = Field(index=True)
+    turn_id: Optional[int] = Field(default=None, index=True)
+    model_id: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    # come in AiChatTurn: stringa decimale esatta, `None` = costo non determinabile
+    cost_usd: Optional[str] = None

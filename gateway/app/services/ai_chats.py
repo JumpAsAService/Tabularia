@@ -20,7 +20,7 @@ from typing import Any, Optional
 from fastapi import HTTPException
 from sqlmodel import Session, func, select
 
-from app.models import AiChat, AiChatTurn, User
+from app.models import AiChat, AiChatTurn, AiSpend, User
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,8 @@ def salva_turno(
     session: Session, chat_id: int, *, domanda: str, messaggi: list[Any], model_id: str,
     input_tokens: int, output_tokens: int, requests: int, cost: Optional[Decimal],
 ) -> AiChatTurn:
+    chat_di = session.get(AiChat, chat_id)
+    utente_id = chat_di.user_id if chat_di is not None else 0
     prossimo = session.exec(
         select(func.coalesce(func.max(AiChatTurn.seq), -1)).where(AiChatTurn.chat_id == chat_id)
     ).one() + 1
@@ -107,6 +109,13 @@ def salva_turno(
         cost_usd=(str(cost) if cost is not None else None),
     )
     session.add(turno)
+    session.flush()  # serve l'id del turno per legarci la riga di spesa
+    # la contabilità va nel suo registro: le chat si possono cancellare, il conto no
+    session.add(AiSpend(
+        user_id=utente_id, turn_id=turno.id, model_id=model_id,
+        input_tokens=input_tokens or 0, output_tokens=output_tokens or 0,
+        cost_usd=(str(cost) if cost is not None else None),
+    ))
     chat = session.get(AiChat, chat_id)
     if chat is not None:
         from app.models.ai_chat import _now
@@ -252,6 +261,12 @@ def aggiungi_costo(session: Session, turno_id: int, extra: Optional[Decimal]) ->
     base = Decimal(turno.cost_usd) if turno.cost_usd else Decimal(0)
     turno.cost_usd = str(base + extra)
     session.add(turno)
+    # e la stessa somma nel registro, che è quello su cui poggiano i tetti
+    riga = session.exec(select(AiSpend).where(AiSpend.turn_id == turno_id)).first()
+    if riga is not None:
+        b = Decimal(riga.cost_usd) if riga.cost_usd else Decimal(0)
+        riga.cost_usd = str(b + extra)
+        session.add(riga)
     session.commit()
 
 
@@ -301,24 +316,9 @@ def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_i
     raise HTTPException(status_code=404, detail="Passo non trovato")
 
 
-def speso_oggi(session: Session, user: User) -> Decimal:
-    """Quanto ha speso questa persona con l'assistente da mezzanotte UTC.
-
-    Si somma dai turni già salvati, che è l'unico registro di cui ci fidiamo: i
-    costi sono stringhe decimali esatte e la somma non introduce errore. I turni
-    di un modello non prezzabile contano zero — non perché siano gratis, ma
-    perché non sappiamo quanto costino, e stimare al posto di sapere è peggio
-    che ammetterlo."""
-    from datetime import datetime, timezone
-
-    inizio = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-    righe = session.exec(
-        select(AiChatTurn.cost_usd)
-        .join(AiChat, AiChat.id == AiChatTurn.chat_id)
-        .where(AiChat.user_id == user.id, AiChatTurn.created_at >= inizio)
-    ).all()
+def _somma(righe) -> Decimal:
     totale = Decimal(0)
-    for (v,) in ((r,) if not isinstance(r, tuple) else r for r in righe):
+    for v in righe:
         if not v:
             continue
         try:
@@ -326,3 +326,30 @@ def speso_oggi(session: Session, user: User) -> Decimal:
         except InvalidOperation:
             continue
     return totale
+
+
+def _inizio_giornata():
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+
+
+def speso_oggi(session: Session, user: User) -> Decimal:
+    """Quanto ha speso OGGI questo utente con l'assistente.
+
+    Si legge dal registro `ai_spend` e non dalle conversazioni: le chat di un
+    osservatore si cancellano quando se ne va, e un tetto che sparisce insieme
+    ai dati che deve contare non è un tetto."""
+    righe = session.exec(
+        select(AiSpend.cost_usd).where(AiSpend.user_id == user.id, AiSpend.ts >= _inizio_giornata())
+    ).all()
+    return _somma(righe)
+
+
+def speso_oggi_tutti(session: Session) -> Decimal:
+    """Quanto ha speso OGGI l'installazione intera.
+
+    È il tetto che conta dove l'account è condiviso: su una demo pubblica tutti
+    entrano con lo stesso ospite e il conto è uno solo."""
+    righe = session.exec(select(AiSpend.cost_usd).where(AiSpend.ts >= _inizio_giornata())).all()
+    return _somma(righe)

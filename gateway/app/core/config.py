@@ -280,6 +280,13 @@ class AiSettings(BaseModel):
     # 0 = nessun tetto (comportamento precedente).
     # env: AI__MAX_COST_PER_DAY_USD
     max_cost_per_day_usd: float = Field(default=0, ge=0)
+    # Tetto GIORNALIERO dell'INTERA installazione, in dollari. Quello per utente
+    # non basta dove l'account è condiviso: su una demo pubblica tutti entrano
+    # con lo stesso ospite, e il conto è uno solo. Raggiunto il tetto
+    # l'assistente si dichiara non disponibile fino al giorno dopo.
+    # 0 = nessun tetto.
+    # env: AI__MAX_COST_PER_DAY_TOTAL_USD
+    max_cost_per_day_total_usd: float = Field(default=0, ge=0)
     max_input_tokens_per_turn: int = Field(default=400_000, ge=1000)
     # quante chat tenere per utente (le piu' vecchie non vengono cancellate da
     # sole: e' solo il tetto dell'elenco)
