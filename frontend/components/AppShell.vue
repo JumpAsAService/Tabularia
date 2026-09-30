@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import BrandMark from '~/components/ui/BrandMark.vue'
-import PrivacyBar from '~/components/ui/PrivacyBar.vue'
 import { useAppInfo } from '~/composables/useAppInfo'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
@@ -248,9 +247,6 @@ onMounted(async () => {
     </header>
 
     <main class="content" :class="{ fluid }">
-      <!-- informativa sulla privacy: in cima a OGNI pagina, non solo all'Explore,
-           perché i dati si raccolgono ovunque si lavori -->
-      <PrivacyBar />
       <slot />
     </main>
   </div>

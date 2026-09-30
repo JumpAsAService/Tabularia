@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// Informativa sulla privacy in cima all'applicazione. A differenza dei banner
-// di avvertimento questa SI CHIUDE: è un'informazione da leggere una volta, non
-// un allarme da tenere sotto gli occhi. La chiusura vale finché il testo non
-// cambia (vedi usePrivacy).
+// Informativa sulla privacy, sotto la card di accesso: si legge PRIMA di
+// entrare, non dopo. Una riga discreta e un dialogo col testo intero — sulla
+// pagina di accesso c'è un'unica cosa da fare, e questa non deve competerci.
+//
+// Non si chiude: non è un avviso da togliersi davanti, è una riga che sta lì
+// ogni volta che si entra. Per questo non ricorda nulla nel browser.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ShieldCheck, X, ExternalLink } from 'lucide-vue-next'
@@ -17,30 +19,23 @@ const aperta = ref(false)
 const card = ref<HTMLElement | null>(null)
 useDialogA11y(card, () => aperta.value, () => { aperta.value = false })
 
-const daMostrare = computed(() =>
-  !!nota.value?.enabled && !!nota.value.summary && api.chiusaPer.value !== versione.value)
-const versione = computed(() => nota.value?.updated_at ?? null)
+const daMostrare = computed(() => !!nota.value?.enabled && !!nota.value.summary)
 
 onMounted(async () => {
-  api.leggiChiusura()
-  // un'informativa che non si carica non deve rompere la pagina
+  // un'informativa che non si carica non deve impedire di entrare
   try { nota.value = await api.get() } catch { nota.value = null }
 })
 </script>
 
 <template>
-  <div v-if="daMostrare" class="pv" role="region" :aria-label="t('privacy.title')">
-    <ShieldCheck :size="15" aria-hidden="true" />
+  <p v-if="daMostrare" class="pv">
+    <ShieldCheck :size="13" aria-hidden="true" />
     <span class="pv-text">{{ nota!.summary }}</span>
-    <button class="pv-btn" type="button" @click="aperta = true">{{ t('privacy.details') }}</button>
-    <a v-if="nota!.url" class="pv-btn" :href="nota!.url" target="_blank" rel="noopener">
+    <button class="pv-link" type="button" @click="aperta = true">{{ t('privacy.details') }}</button>
+    <a v-if="nota!.url" class="pv-link" :href="nota!.url" target="_blank" rel="noopener">
       {{ t('privacy.full') }} <ExternalLink :size="11" />
     </a>
-    <button class="pv-x" type="button" :aria-label="t('privacy.dismiss')"
-            :title="t('privacy.dismiss')" @click="api.chiudi(versione)">
-      <X :size="14" />
-    </button>
-  </div>
+  </p>
 
   <Teleport to="body">
     <div v-if="aperta" class="pv-backdrop" @mousedown.self="aperta = false">
@@ -62,22 +57,20 @@ onMounted(async () => {
 
 <style scoped>
 .pv {
-  display: flex; align-items: center; gap: 9px;
-  padding: 8px 14px; margin: 0 0 10px;
-  border: 1px solid var(--border-soft); border-left: 2px solid var(--accent);
-  border-radius: 8px; background: var(--panel-2);
-  font-size: 12.5px; line-height: 1.4;
+  /* sotto la card, in tono minore: informa senza chiedere attenzione */
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex-wrap: wrap; margin: 14px auto 0; max-width: min(520px, calc(100vw - 32px));
+  font-size: 12px; line-height: 1.45; color: var(--muted); text-align: center;
 }
-.pv svg { flex: none; color: var(--accent); }
-/* una riga sola, troncata con i puntini: il testo intero sta in «Dettagli» */
-.pv-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pv-btn {
-  flex: none; display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 9px; min-height: 22px; font-size: 12px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: transparent; color: var(--text); text-decoration: none; cursor: pointer;
+.pv > svg { flex: none; }
+.pv-text { min-width: 0; }
+.pv-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--accent); font: inherit; text-decoration: underline;
+  text-underline-offset: 2px;
 }
-.pv-btn:hover { border-color: var(--accent); }
+.pv-link:hover { color: var(--text); }
 .pv-x { flex: none; padding: 2px 5px; min-height: 22px; background: transparent; border: 0; cursor: pointer; color: var(--muted); }
 .pv-x:hover { color: var(--text); }
 .pv-backdrop {
@@ -91,5 +84,5 @@ onMounted(async () => {
 }
 .pv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .pv-head h3 { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 16px; }
-.pv-link { margin-top: 12px; }
+.pv-card .pv-link { margin-top: 12px; }
 </style>

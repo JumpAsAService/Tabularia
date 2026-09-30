@@ -11,8 +11,8 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.db.session import get_session
-from app.deps.auth import get_current_user, require_superuser
-from app.models import PrivacyNotice, User
+from app.deps.auth import require_superuser
+from app.models import PrivacyNotice, User  # noqa: F401 — User serve alla PUT
 from app.models.privacy import _now
 from app.schemas.models import UtcDateTime
 from app.services import audit
@@ -126,9 +126,14 @@ def _leggi(session: Session) -> PrivacyNotice:
 
 
 @router.get("/privacy-notice", response_model=PrivacyOut)
-def get_privacy(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    n = _leggi(session)
-    return _out(n)
+def get_privacy(session: Session = Depends(get_session)):
+    """PUBBLICA, senza autenticazione, ed è il punto: l'informativa si legge
+    PRIMA di entrare. Dirla solo a chi è già dentro significherebbe informare
+    qualcuno dopo avergli preso i dati.
+
+    Non espone niente che non sia destinato a essere letto da chiunque: è un
+    testo che l'organizzazione pubblica di proposito."""
+    return _out(_leggi(session))
 
 
 @router.put("/privacy-notice", response_model=PrivacyOut)

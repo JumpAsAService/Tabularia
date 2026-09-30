@@ -8,6 +8,7 @@ import { useLocale } from '~/composables/useLocale'
 import OrderingField from '~/components/ui/OrderingField.vue'
 import Select from '~/components/ui/Select.vue'
 import BrandMark from '~/components/ui/BrandMark.vue'
+import PrivacyNotice from '~/components/ui/PrivacyNotice.vue'
 
 const { login, ssoConfig, ssoLogin } = useAuth()
 const { t } = useI18n()
@@ -146,6 +147,10 @@ async function onSubmit() {
         </button>
       </template>
     </form>
+
+    <!-- l'informativa si legge PRIMA di entrare: è il solo momento in cui
+         qualcuno può ancora decidere di non entrare -->
+    <PrivacyNotice />
 
     <!-- i due lati del campo, nominati: a sinistra ciò che entra, a destra ciò che esce -->
     <p class="side raw" aria-hidden="true">{{ $t('login.rawSide') }}</p>

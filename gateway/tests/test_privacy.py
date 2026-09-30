@@ -10,11 +10,20 @@ from app.services import audit as audit_svc
 from tests.conftest import make_user
 
 
+def test_it_is_readable_without_signing_in(session):
+    """Si legge PRIMA di entrare: chiedere di autenticarsi per sapere che cosa
+    si raccoglie significherebbe informare qualcuno dopo avergli preso i dati."""
+    import inspect
+
+    parametri = inspect.signature(privacy_routes.get_privacy).parameters
+    assert "user" not in parametri and "current" not in parametri
+    assert privacy_routes.get_privacy(session=session).enabled is True
+
+
 def test_the_first_read_creates_it_with_a_text_that_is_actually_true(session):
     """Il testo di partenza non è un modulo da riempire: dice quello che il
     prodotto raccoglie davvero, ed è verificabile leggendo il codice."""
-    tizio = make_user(session, email="tizio@x.it")
-    fuori = privacy_routes.get_privacy(user=tizio, session=session)
+    fuori = privacy_routes.get_privacy(session=session)
 
     assert fuori.enabled is True and fuori.summary
     # le tre rinunce di cui il prodotto è responsabile
@@ -29,9 +38,8 @@ def test_the_first_read_creates_it_with_a_text_that_is_actually_true(session):
 
 
 def test_it_is_one_row_not_a_list(session):
-    tizio = make_user(session, email="tizio2@x.it")
-    privacy_routes.get_privacy(user=tizio, session=session)
-    privacy_routes.get_privacy(user=tizio, session=session)
+    privacy_routes.get_privacy(session=session)
+    privacy_routes.get_privacy(session=session)
     assert len(session.exec(select(PrivacyNotice)).all()) == 1
 
 
@@ -54,8 +62,7 @@ def test_an_administrator_rewrites_it_and_it_leaves_a_trace(session):
 def test_it_can_be_switched_off(session):
     capo = make_user(session, email="capo2@x.it", is_superuser=True)
     privacy_routes.update_privacy(PrivacyUpdate(enabled=False), current=capo, session=session)
-    tizio = make_user(session, email="tizio3@x.it")
-    assert privacy_routes.get_privacy(user=tizio, session=session).enabled is False
+    assert privacy_routes.get_privacy(session=session).enabled is False
 
 
 def test_an_observer_reads_it_but_cannot_rewrite_it(session):
@@ -67,7 +74,7 @@ def test_an_observer_reads_it_but_cannot_rewrite_it(session):
     session.add(ospite)
     session.commit()
 
-    assert privacy_routes.get_privacy(user=ospite, session=session).enabled is True
+    assert privacy_routes.get_privacy(session=session).enabled is True
     with pytest.raises(HTTPException) as e:
         require_superuser(ospite, session)
     assert e.value.status_code == 403
@@ -82,8 +89,7 @@ def test_the_retention_window_is_filled_in_from_the_configuration(session, monke
 
     cfg = get_settings()
     monkeypatch.setattr(cfg.audit, "retention_minutes", 60, raising=False)
-    tizio = make_user(session, email="tizio-par@x.it")
-    fuori = privacy_routes.get_privacy(user=tizio, session=session)
+    fuori = privacy_routes.get_privacy(session=session)
 
     assert "{audit_retention}" not in fuori.body        # sostituito nel testo mostrato
     assert "1 hour" in fuori.body
@@ -94,8 +100,7 @@ def test_no_expiry_is_said_in_words_not_left_blank(session, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings().audit, "retention_minutes", 0, raising=False)
-    tizio = make_user(session, email="tizio-par2@x.it")
-    fuori = privacy_routes.get_privacy(user=tizio, session=session)
+    fuori = privacy_routes.get_privacy(session=session)
     assert "none — entries are kept until an administrator removes them" in fuori.body
 
 
