@@ -170,7 +170,10 @@ async function onSubmit() {
      raggiungere. dvh segue la barra degli indirizzi mobile; 100vh è il fallback. */
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 72px 16px;
+  /* in basso si lascia posto alla barra dell'informativa, che è FISSATA in
+     fondo: senza, su uno schermo basso — o con il blocco SSO — la card
+     finirebbe sotto la barra e non ci si arriverebbe con lo scorrimento */
+  padding: 72px 16px 132px;
   background: var(--bg);
 }
 .login ::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); }
@@ -286,7 +289,9 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
 .side {
   position: absolute;
   z-index: 1;
-  bottom: 22px;
+  /* sopra la barra dell'informativa, che è fissata in fondo: senza, le due
+     etichette del campo ci finirebbero sotto */
+  bottom: 88px;
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
@@ -303,7 +308,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
 /* su schermi stretti o bassi le etichette finirebbero sotto la card */
 @media (max-width: 720px), (max-height: 640px) {
   .side { display: none; }
-  .login { padding: 64px 16px 24px; }
+  .login { padding: 64px 16px 140px; }
 }
 /* viewport basso con SSO + errore + avviso maiuscole: la card si stringe */
 @media (max-height: 640px) {
