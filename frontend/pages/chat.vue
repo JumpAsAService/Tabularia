@@ -11,6 +11,8 @@ import {
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import MiniChart from '~/components/ui/MiniChart.vue'
+import AiDisclosure from '~/components/ui/AiDisclosure.vue'
+import { useAiDisclosure } from '~/composables/useAiDisclosure'
 import { useAi, type AiChartSpec, type AiChatSummary, type AiChatTotal, type AiStatus, type AiTable, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useToast } from '~/composables/useToast'
@@ -90,7 +92,17 @@ const chatsFiltered = computed(() => {
   })
 })
 
-const ready = computed(() => !!status.value?.enabled && !!status.value.models.length)
+// Consenso informato: vale per CHIUNQUE, osservatori compresi — anzi per loro
+// soprattutto, perché su un account condiviso ogni visitatore è una persona
+// diversa e va informata di suo (per questo si ricorda nel browser e non
+// sull'utente). Entra dentro `ready`, così tutto ciò che già lo rispetta —
+// casella, invio, esempi, scelta di modello e motore — resta bloccato da solo.
+const { accettata, leggi: leggiConsenso, accetta: accettaConsenso } = useAiDisclosure()
+const ready = computed(() =>
+  !!status.value?.enabled && !!status.value.models.length && accettata.value === true)
+// bloccati dal consenso, non da una mancanza: serve a non dare messaggi falsi
+const attesaConsenso = computed(() =>
+  accettata.value !== true && !!status.value?.enabled && !!status.value.models.length)
 const modelOptions = computed(() => (status.value?.models ?? []).map((m) => ({ value: m, label: m })))
 const engineOptions = computed(() => engines.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label || e.id })))
 const shown = computed(() => {
@@ -104,6 +116,7 @@ const dsName = (id: any) => datasources.value.find((d) => d.id === Number(id))?.
 const examples = computed(() => [t('chat.example1'), t('chat.example2'), t('chat.example3')])
 
 onMounted(async () => {
+  leggiConsenso()
   try {
     status.value = await ai.status()
     model.value = status.value.default_model ?? status.value.models[0] ?? ''
@@ -359,6 +372,8 @@ watch(draft, async () => {
 
 <template>
   <AppShell fluid>
+    <!-- il cancello: la chat non si usa finché non si è letto con chi si parla -->
+    <AiDisclosure :open="accettata === false" @accept="accettaConsenso" />
     <div class="chat">
       <!-- ── catalogo: cio' che l'assistente puo' leggere ─────────────────── -->
       <details class="rail" open>
@@ -536,11 +551,13 @@ watch(draft, async () => {
 
         <form class="composer" @submit.prevent="send()">
           <div class="field">
+            <!-- in attesa del consenso l'assistente C'È: dire «non disponibile»
+                 sarebbe falso, e il motivo è già scritto nel dialogo davanti -->
             <textarea
               ref="input"
               v-model="draft"
               rows="1"
-              :placeholder="ready ? $t('chat.placeholder') : $t('chat.placeholderOff')"
+              :placeholder="ready || attesaConsenso ? $t('chat.placeholder') : $t('chat.placeholderOff')"
               :aria-label="$t('chat.placeholder')"
               :disabled="!ready"
               @keydown="onKey"
