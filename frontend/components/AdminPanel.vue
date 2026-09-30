@@ -280,8 +280,8 @@ async function salvaPrivacy() {
   try {
     privacy.value = await privacyApi.update({
       enabled: privacy.value.enabled,
-      summary: privacy.value.summary,
-      body: privacy.value.body,
+      summary: privacy.value.summary_template,
+      body: privacy.value.body_template,
       url: privacy.value.url,
     })
     toast.success(t('adminPanel.privacySaved'))
@@ -610,9 +610,10 @@ async function toggleMotore(m: EnginePolicy) {
                 {{ $t('adminPanel.privacyEnabled') }}
               </label>
               <label class="dlabel" for="pv-sum">{{ $t('adminPanel.privacySummary') }}</label>
-              <input id="pv-sum" v-model="privacy.summary" type="text" :disabled="!canWrite" />
+              <input id="pv-sum" v-model="privacy.summary_template" type="text" :disabled="!canWrite" />
               <label class="dlabel" for="pv-body">{{ $t('adminPanel.privacyBody') }}</label>
-              <textarea id="pv-body" v-model="privacy.body" rows="16" :disabled="!canWrite" />
+              <p class="muted small hint">{{ $t('adminPanel.privacyPlaceholders') }}</p>
+              <textarea id="pv-body" v-model="privacy.body_template" rows="16" :disabled="!canWrite" />
               <label class="dlabel" for="pv-url">{{ $t('adminPanel.privacyUrl') }}</label>
               <input id="pv-url" v-model="privacy.url" type="url" :disabled="!canWrite"
                      placeholder="https://" />

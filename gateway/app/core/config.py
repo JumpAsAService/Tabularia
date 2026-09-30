@@ -302,6 +302,23 @@ class AiSettings(BaseModel):
         return bool(self.base_url.strip()) and bool(self.secret_key.get_secret_value().strip())
 
 
+class AuditSettings(BaseModel):
+    """Per quanto si tiene il registro delle azioni.
+
+    Il default è ZERO, cioè PER SEMPRE: è il comportamento che le installazioni
+    esistenti hanno oggi, e cancellare un registro di sicurezza non può essere
+    una cosa che succede a qualcuno senza che l'abbia chiesta. Chi apre
+    un'installazione a sconosciuti — una demo pubblica — la accende e si tiene
+    meno dati da custodire.
+
+    Si misura in MINUTI apposta: su una demo la finestra utile è un'ora, non un
+    anno, e un'unità grossa avrebbe costretto a scrivere frazioni.
+    """
+
+    # env: AUDIT__RETENTION_MINUTES — 0 = nessuna cancellazione
+    retention_minutes: int = Field(default=0, ge=0)
+
+
 class SchedulingSettings(BaseModel):
     # capacità di esecuzione simultanea usata SOLO per evidenziare le fasce critiche
     # nell'heatmap del carico schedule: dovrebbe rispecchiare la concorrenza del
@@ -342,6 +359,7 @@ class Settings(BaseSettings):
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
+    audit: AuditSettings = Field(default_factory=AuditSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

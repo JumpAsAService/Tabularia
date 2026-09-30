@@ -26,6 +26,7 @@ export default {
     "summaryTruncated": "{rows} righe (troncate) · {cols} colonne",
   },
   "adminPanel": {
+    "privacyPlaceholders": "Segnaposto disponibili: {audit_retention} — diventa la finestra di conservazione configurata nell'ambiente. Scriverlo invece del numero impedisce che l'informativa e la configurazione si allontanino.",
     "privacyTitle": "Privacy",
     "privacyHint": "L'informativa mostrata in cima a ogni pagina. Il testo di partenza descrive quello che questa installazione raccoglie davvero: riscrivilo se il tuo trattamento è diverso.",
     "privacyEnabled": "mostra l'informativa a tutti",

@@ -26,6 +26,7 @@ export default {
     "summaryTruncated": "{rows} lignes (tronquées) · {cols} colonnes",
   },
   "adminPanel": {
+    "privacyPlaceholders": "Espace réservé disponible : {audit_retention} — devient la durée de conservation configurée dans l'environnement. L'écrire au lieu du nombre évite que l'avis et la configuration divergent.",
     "privacyTitle": "Confidentialité",
     "privacyHint": "L'avis affiché en haut de chaque page. Le texte de départ décrit ce que cette installation collecte réellement : réécrivez-le si votre traitement diffère.",
     "privacyEnabled": "montrer l'avis à tout le monde",

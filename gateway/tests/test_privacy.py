@@ -23,7 +23,9 @@ def test_the_first_read_creates_it_with_a_text_that_is_actually_true(session):
     assert "questions to the assistant are not saved" in fuori.body
     # e le due cose scomode, dette lo stesso
     assert "sent to the model provider" in fuori.body
-    assert "no automatic expiry" in fuori.body
+    # la conservazione non è un numero copiato a mano: è letta dalla configurazione
+    assert "Automatic deletion of audit entries:" in fuori.body
+    assert "{audit_retention}" in fuori.body_template
 
 
 def test_it_is_one_row_not_a_list(session):
@@ -69,3 +71,52 @@ def test_an_observer_reads_it_but_cannot_rewrite_it(session):
     with pytest.raises(HTTPException) as e:
         require_superuser(ospite, session)
     assert e.value.status_code == 403
+
+
+# ── il valore di conservazione è un PARAMETRO, non un numero copiato ─────────
+
+def test_the_retention_window_is_filled_in_from_the_configuration(session, monkeypatch):
+    """Serve a una cosa sola: che l'informativa non possa mentire. Se qualcuno
+    cambia la finestra e si dimentica del testo, il testo si aggiorna da solo."""
+    from app.core.config import get_settings
+
+    cfg = get_settings()
+    monkeypatch.setattr(cfg.audit, "retention_minutes", 60, raising=False)
+    tizio = make_user(session, email="tizio-par@x.it")
+    fuori = privacy_routes.get_privacy(user=tizio, session=session)
+
+    assert "{audit_retention}" not in fuori.body        # sostituito nel testo mostrato
+    assert "1 hour" in fuori.body
+    assert "{audit_retention}" in fuori.body_template   # intatto in quello da modificare
+
+
+def test_no_expiry_is_said_in_words_not_left_blank(session, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings().audit, "retention_minutes", 0, raising=False)
+    tizio = make_user(session, email="tizio-par2@x.it")
+    fuori = privacy_routes.get_privacy(user=tizio, session=session)
+    assert "none — entries are kept until an administrator removes them" in fuori.body
+
+
+@pytest.mark.parametrize("minuti,atteso", [
+    (1, "1 minute"), (45, "45 minutes"), (60, "1 hour"), (120, "2 hours"),
+    (1440, "1 day"), (43200, "30 days"), (90, "90 minutes"),
+])
+def test_the_window_is_said_the_way_a_person_would(minuti, atteso):
+    from app.routes.privacy import _durata
+
+    assert _durata(minuti) == atteso
+
+
+def test_an_unknown_placeholder_is_left_alone(session, monkeypatch):
+    """Chi scrive un'informativa non deve poterla rompere con una graffa."""
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings().audit, "retention_minutes", 60, raising=False)
+    capo = make_user(session, email="capo-par@x.it", is_superuser=True)
+    fuori = privacy_routes.update_privacy(
+        PrivacyUpdate(body="Conserviamo per {audit_retention}. Scrivi a {qualcosa}."),
+        current=capo, session=session,
+    )
+    assert fuori.body == "Conserviamo per 1 hour. Scrivi a {qualcosa}."

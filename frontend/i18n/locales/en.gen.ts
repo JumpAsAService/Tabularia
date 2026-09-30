@@ -26,6 +26,7 @@ export default {
     "summaryTruncated": "{rows} rows (truncated) · {cols} columns",
   },
   "adminPanel": {
+    "privacyPlaceholders": "Available placeholder: {audit_retention} — becomes the retention window configured in the environment. Writing it instead of the number keeps the notice and the configuration from drifting apart.",
     "privacyTitle": "Privacy",
     "privacyHint": "The notice shown at the top of every page. The starting text describes what this installation actually collects: rewrite it if your processing differs.",
     "privacyEnabled": "show the notice to everyone",

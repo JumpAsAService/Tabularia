@@ -26,6 +26,7 @@ export default {
     "summaryTruncated": "{rows} filas (truncadas) · {cols} columnas",
   },
   "adminPanel": {
+    "privacyPlaceholders": "Marcador disponible: {audit_retention} — se convierte en el periodo de conservación configurado en el entorno. Escribirlo en vez del número evita que el aviso y la configuración se separen.",
     "privacyTitle": "Privacidad",
     "privacyHint": "El aviso que se muestra arriba en cada página. El texto inicial describe lo que esta instalación recoge de verdad: reescríbelo si tu tratamiento es distinto.",
     "privacyEnabled": "mostrar el aviso a todos",

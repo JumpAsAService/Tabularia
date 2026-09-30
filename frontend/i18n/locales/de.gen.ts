@@ -26,6 +26,7 @@ export default {
     "summaryTruncated": "{rows} Zeilen (gekürzt) · {cols} Spalten",
   },
   "adminPanel": {
+    "privacyPlaceholders": "Verfügbarer Platzhalter: {audit_retention} — wird zur in der Umgebung konfigurierten Aufbewahrungsfrist. Ihn statt der Zahl zu schreiben verhindert, dass Hinweis und Konfiguration auseinanderlaufen.",
     "privacyTitle": "Datenschutz",
     "privacyHint": "Der Hinweis oben auf jeder Seite. Der Ausgangstext beschreibt, was diese Installation tatsächlich erhebt: schreiben Sie ihn um, wenn Ihre Verarbeitung abweicht.",
     "privacyEnabled": "Hinweis allen zeigen",

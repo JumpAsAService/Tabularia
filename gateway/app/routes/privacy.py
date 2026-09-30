@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_superuser
 from app.models import PrivacyNotice, User
@@ -48,7 +49,7 @@ TESTO_PREDEFINITO = """\
 
 ## How long it is kept
 
-- Audit entries are kept until an administrator removes them: there is no automatic expiry.
+- Automatic deletion of audit entries: {audit_retention}.
 - Deleting an account removes its content and its conversations, but not its audit entries — the record of what was done has to outlive the account that did it.
 
 ## Who to ask
@@ -57,10 +58,41 @@ Set a contact here for access, correction and erasure requests.
 """
 
 
+def _durata(minuti: int) -> str:
+    """La finestra di conservazione detta come la direbbe una persona."""
+    if minuti <= 0:
+        return "none — entries are kept until an administrator removes them"
+    if minuti % 1440 == 0:
+        giorni = minuti // 1440
+        return f"{giorni} day" if giorni == 1 else f"{giorni} days"
+    if minuti % 60 == 0:
+        ore = minuti // 60
+        return f"{ore} hour" if ore == 1 else f"{ore} hours"
+    return f"{minuti} minute" if minuti == 1 else f"{minuti} minutes"
+
+
+def rendi(testo: str) -> str:
+    """Sostituisce i segnaposto col valore VERO della configurazione.
+
+    Serve a una cosa sola: che l'informativa non possa mentire. Se domani
+    qualcuno cambia `AUDIT__RETENTION_MINUTES` e si dimentica di riscrivere il
+    testo, il testo si aggiorna da solo — perché il numero non è scritto lì
+    dentro, è letto da dove la decisione vive davvero.
+
+    Un segnaposto sconosciuto resta com'è invece di far saltare la pagina: chi
+    scrive un'informativa non deve rischiare di romperla con una graffa.
+    """
+    return testo.replace("{audit_retention}", _durata(get_settings().audit.retention_minutes))
+
+
 class PrivacyOut(BaseModel):
     enabled: bool
+    # con i segnaposto già sostituiti: è ciò che si mostra
     summary: str
     body: str
+    # come li ha scritti l'amministratore: è ciò che si modifica
+    summary_template: str
+    body_template: str
     url: str
     updated_at: UtcDateTime | None = None
 
@@ -70,6 +102,15 @@ class PrivacyUpdate(BaseModel):
     summary: str | None = None
     body: str | None = None
     url: str | None = None
+
+
+def _out(n: PrivacyNotice) -> "PrivacyOut":
+    return PrivacyOut(
+        enabled=n.enabled,
+        summary=rendi(n.summary), body=rendi(n.body),
+        summary_template=n.summary, body_template=n.body,
+        url=n.url, updated_at=n.updated_at,
+    )
 
 
 def _leggi(session: Session) -> PrivacyNotice:
@@ -87,8 +128,7 @@ def _leggi(session: Session) -> PrivacyNotice:
 @router.get("/privacy-notice", response_model=PrivacyOut)
 def get_privacy(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     n = _leggi(session)
-    return PrivacyOut(enabled=n.enabled, summary=n.summary, body=n.body, url=n.url,
-                      updated_at=n.updated_at)
+    return _out(n)
 
 
 @router.put("/privacy-notice", response_model=PrivacyOut)
@@ -112,5 +152,4 @@ def update_privacy(
     audit.record_audit(session, actor=current, action=audit.PRIVACY_UPDATE,
                        target_type="privacy_notice", target_id=n.id,
                        detail={"enabled": n.enabled})
-    return PrivacyOut(enabled=n.enabled, summary=n.summary, body=n.body, url=n.url,
-                      updated_at=n.updated_at)
+    return _out(n)

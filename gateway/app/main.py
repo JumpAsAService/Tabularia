@@ -11,6 +11,7 @@ from app.db.session import backfill_flow_versions, init_db
 from app.db.seed import seed_admin
 from app.services.orchestrator import close_interrupted_orchestrations
 from app.services.scheduler import scheduler_loop
+from app.services.audit_retention import retention_loop
 from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
@@ -55,15 +56,18 @@ async def lifespan(app: FastAPI):
     # scheduler in-process del refresh delle datasource database
     stop = asyncio.Event()
     scheduler = asyncio.create_task(scheduler_loop(stop))
+    # scadenza del registro delle azioni: parte solo se è configurata
+    pulizia = asyncio.create_task(retention_loop(stop))
     try:
         yield
     finally:
         stop.set()
-        scheduler.cancel()
-        try:
-            await scheduler
-        except asyncio.CancelledError:
-            pass
+        for task in (scheduler, pulizia):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await close_engine_client()
 
 
