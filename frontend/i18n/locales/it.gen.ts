@@ -1047,6 +1047,8 @@ export default {
     "remove": "Rimuovi il collegamento"
   },
   "chat": {
+    "historyUnavailable": "cronologia non disponibile",
+    "historyUnavailableWhy": "Le conversazioni non vengono salvate per questo account: per averne la cronologia serve un'autorizzazione maggiore.",
     "downloadChat": "Scarica la conversazione in Markdown",
     "downloadChatShort": "Scarica",
     "downloadPng": "Scarica il grafico in PNG",

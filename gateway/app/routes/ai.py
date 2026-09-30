@@ -17,6 +17,7 @@ import json
 import logging
 import re
 from decimal import Decimal
+from uuid import uuid4
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 
@@ -31,6 +32,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import engine as db_engine, get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import AiChat, AiModel, Datasource, User
+from app.services.permissions import is_observer_only
 from app.services import ai_agent, ai_chats, ai_pricing, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import allowed_engines
@@ -180,7 +182,14 @@ def _tool_result_payload(part: Any) -> dict[str, Any]:
 # ── conversazioni salvate ────────────────────────────────────────────────────
 @router.get("/chats")
 def list_chats(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Le conversazioni di CHI CHIEDE, dalla piu' recente. Mai quelle di altri."""
+    """Le conversazioni di CHI CHIEDE, dalla piu' recente. Mai quelle di altri.
+
+    Per un OSSERVATORE l'elenco è vuoto per costruzione — le sue conversazioni
+    non si salvano — ma lo si dice qui a voce alta: se un domani qualcosa
+    scrivesse una chat a suo nome, non verrebbe comunque servita a chiunque
+    entri con l'account condiviso."""
+    if is_observer_only(session, user):
+        return []
     return ai_chats.elenco(session, user, get_settings().ai.max_chats_listed)
 
 
@@ -294,12 +303,23 @@ async def chat(
                     f"({speso:.4f} $ su {cfg.max_cost_per_day_usd} $). Riprova domani."
                 ),
             )
-    chat = ai_chats.apri(session, user, body.chat_id, body.model, engine) if body.chat_id else None
+    # OSSERVATORE: la conversazione non si salva da nessuna parte. È un account
+    # condiviso su un'installazione aperta — una demo pubblica — e le domande di
+    # uno sconosciuto non devono restare né essere leggibili dal visitatore
+    # successivo. Resta solo la contabilità, senza testo, perché il tetto di
+    # spesa deve continuare a vedere quanto costa chi entra da lì.
+    effimero = is_observer_only(session, user)
+    chat = (ai_chats.apri(session, user, body.chat_id, body.model, engine)
+            if body.chat_id and not effimero else None)
     chat_id = chat.id if chat is not None else None
     history = ai_chats.storia(session, chat, cfg.max_history_messages) if chat is not None else []
 
+    # senza chat non c'è chiave di slot: due visitatori dell'ospite condiviso
+    # si annullerebbero le anteprime a vicenda
+    slot_key = uuid4().hex[:12] if effimero else None
     deps = ai_agent.ChatDeps(
         user=user, session_factory=_new_session, engine=engine, model_id=body.model,
+        slot_key=slot_key,
         locale=body.locale, request=request, chat_id=chat_id,
         focus=ai_agent.readable_focus(session, user, body.focus),
     )
@@ -352,6 +372,13 @@ async def chat(
                             # sessione PROPRIA: quella della richiesta e' gia'
                             # chiusa, lo stream vive piu' a lungo
                             with _new_session() as s_salva:
+                                if effimero:
+                                    ai_chats.registra_spesa(
+                                        s_salva, user_id=user.id, model_id=body.model,
+                                        input_tokens=usage.input_tokens,
+                                        output_tokens=usage.output_tokens, cost=costo,
+                                    )
+                                    raise _NienteDaSalvare
                                 if chat_id is None:
                                     chat_id = ai_chats.crea(s_salva, user, body.message, body.model, engine).id
                                 turno = ai_chats.salva_turno(
@@ -361,6 +388,8 @@ async def chat(
                                     output_tokens=usage.output_tokens, requests=usage.requests, cost=costo,
                                 )
                                 riepilogo = ai_chats.riepilogo(s_salva, s_salva.get(AiChat, chat_id))
+                        except _NienteDaSalvare:
+                            riepilogo = None  # osservatore: non c'è nulla da riepilogare
                         except Exception:  # noqa: BLE001 — la risposta e' gia' stata data: non si perde per un errore di salvataggio
                             logger.exception("assistente: turno non salvato (chat %s)", chat_id)
                             riepilogo = None
@@ -401,6 +430,12 @@ async def chat(
 # reference debole, e senza questo il titolo sparirebbe a meta' a discrezione
 # del garbage collector.
 _in_volo: set = set()
+
+
+class _NienteDaSalvare(Exception):
+    """Non è un errore: dice solo che per questo turno non c'è conversazione da
+    scrivere (osservatore). Serve a uscire dal blocco di salvataggio senza
+    passare per il `except` che logga un guasto."""
 
 
 async def _nomina_chat(chat_id: int, turno_id: int, model_id: str, domanda: str, locale: str) -> None:

@@ -964,6 +964,8 @@ export default {
     "remove": "Supprimer la connexion"
   },
   "chat": {
+    "historyUnavailable": "historique indisponible",
+    "historyUnavailableWhy": "Les conversations ne sont pas enregistrées pour ce compte : conserver un historique demande plus de droits.",
     "downloadChat": "Télécharger la conversation en Markdown",
     "downloadChatShort": "Télécharger",
     "downloadPng": "Télécharger le graphique en PNG",

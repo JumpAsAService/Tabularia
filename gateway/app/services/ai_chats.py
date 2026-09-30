@@ -316,6 +316,24 @@ def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_i
     raise HTTPException(status_code=404, detail="Passo non trovato")
 
 
+def registra_spesa(
+    session: Session, *, user_id: int, model_id: str,
+    input_tokens: int, output_tokens: int, cost: Optional[Decimal],
+) -> None:
+    """Segna quanto è costato un giro di cui NON si salva la conversazione.
+
+    È la contabilità degli OSSERVATORI: le loro domande non si scrivono da
+    nessuna parte, ma il conto sì — altrimenti il tetto giornaliero non vedrebbe
+    la spesa di chi entra dall'account condiviso, cioè proprio quella da tenere
+    d'occhio."""
+    session.add(AiSpend(
+        user_id=user_id, turn_id=None, model_id=model_id,
+        input_tokens=input_tokens or 0, output_tokens=output_tokens or 0,
+        cost_usd=(str(cost) if cost is not None else None),
+    ))
+    session.commit()
+
+
 def _somma(righe) -> Decimal:
     totale = Decimal(0)
     for v in righe:

@@ -964,6 +964,8 @@ export default {
     "remove": "Verbindung entfernen"
   },
   "chat": {
+    "historyUnavailable": "Verlauf nicht verfügbar",
+    "historyUnavailableWhy": "Für dieses Konto werden Unterhaltungen nicht gespeichert: für einen Verlauf sind höhere Rechte nötig.",
     "downloadChat": "Unterhaltung als Markdown herunterladen",
     "downloadChatShort": "Herunterladen",
     "downloadPng": "Diagramm als PNG herunterladen",

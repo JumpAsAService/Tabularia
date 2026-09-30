@@ -1047,6 +1047,8 @@ export default {
     "remove": "Remove the connection"
   },
   "chat": {
+    "historyUnavailable": "history unavailable",
+    "historyUnavailableWhy": "Conversations are not saved for this account: keeping a history needs a higher permission level.",
     "downloadChat": "Download the conversation as Markdown",
     "downloadChatShort": "Download",
     "downloadPng": "Download the chart as PNG",

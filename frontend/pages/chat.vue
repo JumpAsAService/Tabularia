@@ -26,6 +26,10 @@ import Select from '~/components/ui/Select.vue'
 const { t } = useI18n()
 const toast = useToast()
 const { user } = useAuth()
+// Osservatore e non amministratore: per lui la conversazione non viene salvata
+// da nessuna parte (account condiviso su un'installazione aperta). Stessa
+// condizione del gateway: `is_observer` da /auth/me è vero anche per gli admin.
+const senzaStorico = computed(() => !!user.value?.is_observer && !user.value?.is_superuser)
 const ai = useAi()
 const dsApi = useDatasources()
 const projectsApi = useProjects()
@@ -230,6 +234,7 @@ function toggleChats() {
 
 // ── conversazioni salvate ───────────────────────────────────────────────────
 async function refreshChats() {
+  if (senzaStorico.value) return   // non c'è storico da chiedere
   try { chats.value = await ai.chats() } catch { /* l'elenco non e' essenziale */ }
 }
 
@@ -399,9 +404,12 @@ watch(draft, async () => {
           <span v-if="chatTotal && chatTotal.turns" class="total" :title="$t('chat.costHint')">
             {{ $t('chat.chatTotal', { c: money(chatTotal.cost_usd) }) }}
           </span>
-          <button class="mini" type="button" :aria-expanded="chatsOpen" @click="toggleChats">
+          <button v-if="!senzaStorico" class="mini" type="button" :aria-expanded="chatsOpen" @click="toggleChats">
             <History :size="13" /> {{ $t('chat.history', { n: chats.length }) }}
           </button>
+          <span v-else class="nohistory" :title="$t('chat.historyUnavailableWhy')">
+            <History :size="13" aria-hidden="true" /> {{ $t('chat.historyUnavailable') }}
+          </span>
           <button v-if="turns.length" class="mini" type="button" :title="$t('chat.downloadChat')" @click="downloadChat">
             <Download :size="13" /> {{ $t('chat.downloadChatShort') }}
           </button>
@@ -675,6 +683,10 @@ watch(draft, async () => {
 /* `.small` e `.mini` vivono in listpage.css, che questa pagina non importa:
    senza queste righe la meta rendeva piu' grande del titolo che le sta sopra e
    il cestino non era rosso. Definite qui, alla misura che il mondo prescrive. */
+.nohistory {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted); padding: 3px 8px;
+}
 .chats .small, .chatsearch .count { font-size: 12px; }
 .talk-head .mini, .chats .mini { padding: 3px 8px; min-height: 24px; }
 .chats .mini.danger { border-color: var(--danger); color: var(--danger); }

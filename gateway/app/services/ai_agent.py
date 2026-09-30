@@ -78,6 +78,10 @@ class ChatDeps:
     # conversazione in corso: identifica lo slot della preview (vedi
     # _engine_preview). `None` su una chat nuova.
     chat_id: int | None = None
+    # chiave dello slot di anteprima quando la chat NON esiste (osservatori: le
+    # loro conversazioni non si salvano). Senza, due visitatori dell'account
+    # condiviso finirebbero sullo stesso slot e si annullerebbero le query.
+    slot_key: str | None = None
     # datasource che l'utente ha messo a fuoco nella pagina (gia' filtrate sui
     # suoi permessi): [{id, name}]. Solo un suggerimento di contesto: ogni
     # strumento ricontrolla comunque l'accesso.
@@ -151,8 +155,9 @@ async def _engine_preview(ds: Datasource, operations: list[dict], limit: int, de
         # configurata (CLICKHOUSE_EXTERNAL__AI_USERNAME/__AI_PASSWORD)
         "principal": "ai",
     }
-    if deps.chat_id:
-        body["slot"] = f"u{deps.user.id}:c{deps.chat_id}:ai"
+    chiave = deps.chat_id or deps.slot_key
+    if chiave:
+        body["slot"] = f"u{deps.user.id}:c{chiave}:ai"
     if deps.engine:
         body["engine"] = deps.engine
     try:

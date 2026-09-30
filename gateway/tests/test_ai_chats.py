@@ -7,6 +7,8 @@ una inesistente.
 import pytest
 from fastapi import HTTPException
 
+from sqlmodel import select
+
 from app.models import AiChat, AiChatTurn
 from app.routes import ai as ai_routes
 from app.services import ai_chats
@@ -211,3 +213,50 @@ def test_reopening_a_conversation_brings_back_the_evidence(session, due_utenti):
     passo = ai_chats.dettaglio(session, anna, chat.id)["messages"][0]["steps"][0]
     assert passo["table"]["rows"] == [{"n": 3}]
     assert passo["chart"] == {"type": "bar", "x": "paese", "y": "n"}
+
+
+# ── osservatore: la conversazione non si salva, il conto sì ──────────────────
+
+def test_an_observer_gets_no_history_even_if_a_chat_exists(session):
+    """L'elenco è vuoto per costruzione — le sue chat non si scrivono — ma la
+    rotta lo dice comunque: se un domani qualcosa ne creasse una a suo nome, non
+    finirebbe davanti a chiunque entri con l'account condiviso."""
+    from app.routes import ai as ai_routes
+    from app.services import ai_chats
+
+    ospite = make_user(session, email="ospite-chat@x.it")
+    ospite.is_observer = True
+    session.add(ospite)
+    session.commit()
+    ai_chats.crea(session, ospite, "una domanda rimasta lì", "m", None)
+
+    assert ai_routes.list_chats(user=ospite, session=session) == []
+
+
+def test_an_ordinary_user_keeps_their_history(session):
+    from app.routes import ai as ai_routes
+    from app.services import ai_chats
+
+    tizio = make_user(session, email="tizio-chat@x.it")
+    chat = ai_chats.crea(session, tizio, "d", "m", None)
+    ai_chats.salva_turno(session, chat.id, domanda="d", messaggi=[], model_id="m",
+                         input_tokens=1, output_tokens=1, requests=1, cost=None)
+    assert len(ai_routes.list_chats(user=tizio, session=session)) == 1
+
+
+def test_the_bill_survives_without_a_conversation(session):
+    """È il patto: niente testo, ma il tetto giornaliero deve vedere la spesa di
+    chi entra dall'account condiviso — che è proprio quella da sorvegliare."""
+    from decimal import Decimal
+    from app.models import AiChat, AiSpend
+    from app.services import ai_chats
+
+    ospite = make_user(session, email="ospite-conto@x.it")
+    ai_chats.registra_spesa(session, user_id=ospite.id, model_id="m",
+                            input_tokens=100, output_tokens=20, cost=Decimal("0.02"))
+
+    assert session.exec(select(AiChat).where(AiChat.user_id == ospite.id)).all() == []
+    riga = session.exec(select(AiSpend).where(AiSpend.user_id == ospite.id)).one()
+    assert riga.turn_id is None and riga.cost_usd == "0.02"
+    assert str(ai_chats.speso_oggi(session, ospite)) == "0.02"
+    assert str(ai_chats.speso_oggi_tutti(session)) == "0.02"
