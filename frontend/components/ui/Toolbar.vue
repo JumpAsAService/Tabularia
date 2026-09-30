@@ -31,6 +31,10 @@ const props = defineProps<{
   engine?: string
   // motore di PRODUZIONE (run schedulati); null/uguale = nessuna differenza da mostrare
   productionEngine?: string | null
+  // osservatore: prova le trasformazioni, non salva, non esegue, non carica.
+  // Il server impone comunque le stesse cose; qui si tolgono i bottoni che
+  // porterebbero a un 403
+  readOnly?: boolean
 }>()
 
 const ENGINE_LABELS: Record<string, string> = { polars: 'Polars', duckdb: 'DuckDB', chdb: 'chDB', clickhouse: 'ClickHouse' }
@@ -101,18 +105,18 @@ const statusIcon = computed(() => {
       :placeholder="$t('toolbar.folderPlaceholder')"
       @update:model-value="emit('update:projectId', $event)"
     />
-    <button :disabled="busy" :title="$t('toolbar.saveFlowTitle')" @click="emit('save')"><Save :size="15" /> {{ $t('toolbar.save') }}</button>
+    <button v-if="!readOnly" :disabled="busy" :title="$t('toolbar.saveFlowTitle')" @click="emit('save')"><Save :size="15" /> {{ $t('toolbar.save') }}</button>
 
     <span class="sep" />
 
-    <label class="filebtn">
+    <label v-if="!readOnly" class="filebtn">
       <Upload :size="15" /> {{ $t('toolbar.uploadFile') }}
       <input type="file" accept=".csv,.tsv,.txt,.json,.ndjson,.jsonl,.xlsx,.xls,.parquet" @change="onFile" />
     </label>
 
-    <button @click="emit('add-source')"><Plus :size="15" /> {{ $t('toolbar.source') }}</button>
+    <button v-if="!readOnly" @click="emit('add-source')"><Plus :size="15" /> {{ $t('toolbar.source') }}</button>
     <button @click="emit('add-op')"><Plus :size="15" /> {{ $t('toolbar.operation') }}</button>
-    <button class="primary" :disabled="!canRun || busy" @click="emit('run')"><Play :size="15" /> {{ $t('toolbar.run') }}</button>
+    <button v-if="!readOnly" class="primary" :disabled="!canRun || busy" @click="emit('run')"><Play :size="15" /> {{ $t('toolbar.run') }}</button>
 
     <span class="status muted" :class="statusKind">
       <component

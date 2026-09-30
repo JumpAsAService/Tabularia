@@ -298,6 +298,7 @@ export default {
     "loadingEditor": "Editor wird geladen…"
   },
   "flowEditor": {
+    "readOnlyNodes": "Nur-Lese-Konto: es können nur Transformationsknoten hinzugefügt werden",
     "cacheSkippedToast": "Vorgelagerter Schritt über der Cache-Grenze ({n} Zeilen): Vorschauen dieses Knotens rechnen ab der Quelle neu.",
     "chooseSmtpConnection": "SMTP-Verbindung wählen",
     "connectionNotSmtp": "Die gewählte Verbindung ist kein SMTP",

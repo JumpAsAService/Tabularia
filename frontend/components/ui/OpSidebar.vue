@@ -9,7 +9,8 @@ import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const { t } = useI18n()
 
-const props = defineProps<{ operations: string[] }>()
+// readOnly: osservatore — solo trasformazioni, niente sorgenti, controllo, output
+const props = defineProps<{ operations: string[]; readOnly?: boolean }>()
 
 // ── ricerca: filtra le voci della palette per etichetta (o nome operazione) ──
 const query = ref('')
@@ -27,12 +28,12 @@ const transformOps = computed(() =>
 const hasForeach = computed(() => props.operations.includes('foreach'))
 
 // visibilità delle singole voci fisse e dei rispettivi gruppi
-const showSource = computed(() => match(t(SOURCE_META.label), 'source'))
-const showForeach = computed(() => hasForeach.value && match(t(opMeta('foreach').label), 'foreach'))
-const showRefresh = computed(() => match(t('opSidebar.refreshDatasourceLabel'), 'refresh'))
-const showRunflow = computed(() => match(t('opSidebar.runFlowLabel'), 'runflow'))
-const showOutput = computed(() => match(t('opSidebar.outputLabel'), 'output'))
-const showComment = computed(() => match(t('opSidebar.noteLabel'), 'comment', 'commento'))
+const showSource = computed(() => !props.readOnly && match(t(SOURCE_META.label), 'source'))
+const showForeach = computed(() => !props.readOnly && hasForeach.value && match(t(opMeta('foreach').label), 'foreach'))
+const showRefresh = computed(() => !props.readOnly && match(t('opSidebar.refreshDatasourceLabel'), 'refresh'))
+const showRunflow = computed(() => !props.readOnly && match(t('opSidebar.runFlowLabel'), 'runflow'))
+const showOutput = computed(() => !props.readOnly && match(t('opSidebar.outputLabel'), 'output'))
+const showComment = computed(() => !props.readOnly && match(t('opSidebar.noteLabel'), 'comment', 'commento'))
 const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value)
 const noResults = computed(
   () =>

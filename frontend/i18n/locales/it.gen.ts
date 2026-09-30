@@ -361,6 +361,7 @@ export default {
     "loadingEditor": "Caricamento editor…"
   },
   "flowEditor": {
+    "readOnlyNodes": "Account di sola lettura: puoi aggiungere solo nodi di trasformazione",
     "cacheSkippedToast": "Passo a monte oltre il tetto della cache ({n} righe): le anteprime di questo nodo ricalcolano dalla sorgente.",
     "backendUnreachable": "Backend non raggiungibile: {error}",
     "chartTab": "Grafico",

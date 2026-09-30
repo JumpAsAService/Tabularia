@@ -177,6 +177,15 @@ def readable_project_ids(session: Session, user: User) -> set[int]:
     return _granted_project_ids(session, user, Capability.VIEW)
 
 
+def runnable_project_ids(session: Session, user: User) -> set[int]:
+    """Progetti dove l'utente può ESEGUIRE (RUN o superiore).
+
+    Leggere e far girare non sono la stessa cosa: chi ha solo VIEW guarda
+    anteprime, chi ha RUN mette al lavoro i worker e scrive risultati. Il piano
+    dati deve chiederselo con lo stesso rigore del percorso ufficiale dei run."""
+    return _granted_project_ids(session, user, Capability.RUN)
+
+
 def connectable_project_ids(session: Session, user: User) -> set[int]:
     """Progetti dove l'utente può usare/gestire le CONNESSIONI dati (CONNECT,
     ortogonale a VIEW: chi ha solo VIEW non vede le connessioni)."""

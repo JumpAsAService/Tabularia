@@ -37,6 +37,9 @@ CONN_CREATE = "connection.create"
 CONN_UPDATE = "connection.update"
 CONN_DELETE = "connection.delete"
 EXPORT_DOWNLOAD = "export.download"
+# esecuzione DIRETTA dal piano dati (editor, senza flusso salvato): è un run
+# come gli altri e lascia la stessa traccia
+TRANSFORM_RUN = "transform.run"
 # Privilegi di amministratore: concessi/tolti a una persona o a un gruppo intero
 USER_PROMOTE = "user.promote"
 USER_DEMOTE = "user.demote"

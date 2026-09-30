@@ -28,7 +28,7 @@ from app.deps.auth import get_current_user
 from app.models import Upload, User
 from app.services import audit
 from app.services.engine_policy import disabled_engines
-from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
+from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_can_run_keys, ensure_reads_pinned
 from app.services.permissions import can_upload
 
 logger = logging.getLogger(__name__)
@@ -208,7 +208,18 @@ async def transform(
     ensure_reads_pinned(session, user, payload, engine_bucket)
     # autorizza le sole chiavi di LETTURA (l'output è generato dal server, non va autorizzato in lettura)
     read_payload = {k: v for k, v in payload.items() if k != "output_key"}
-    ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
+    keys = collect_storage_keys(read_payload)
+    ensure_can_read_keys(session, user, keys)
+    # …e poi il permesso di ESEGUIRE: questo non è un'anteprima, è un run senza
+    # flusso salvato. Leggere non basta — vale la stessa soglia di /flows/{id}/runs
+    ensure_can_run_keys(session, user, keys)
+    audit.record_audit(
+        session, actor=user, action=audit.TRANSFORM_RUN,
+        target_type="transform", target_label=payload.get("input_key"),
+        detail={"engine": payload.get("engine"), "source_keys": sorted(keys),
+                "operations": len(payload.get("operations") or [])},
+        request=request,
+    )
     return await _forward(request, "POST", "/tasks/transform-data", content=json.dumps(payload).encode())
 
 

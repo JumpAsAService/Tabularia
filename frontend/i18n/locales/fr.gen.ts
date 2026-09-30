@@ -298,6 +298,7 @@ export default {
     "loadingEditor": "Chargement de l'éditeur…"
   },
   "flowEditor": {
+    "readOnlyNodes": "Compte en lecture seule : seuls des nœuds de transformation peuvent être ajoutés",
     "cacheSkippedToast": "Étape amont au-dessus du plafond du cache ({n} lignes) : les aperçus de ce nœud recalculent depuis la source.",
     "chooseSmtpConnection": "choisissez la connexion SMTP",
     "connectionNotSmtp": "la connexion choisie n'est pas SMTP",

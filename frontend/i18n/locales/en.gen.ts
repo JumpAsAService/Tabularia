@@ -361,6 +361,7 @@ export default {
     "loadingEditor": "Loading editor…"
   },
   "flowEditor": {
+    "readOnlyNodes": "Read-only account: only transformation nodes can be added",
     "cacheSkippedToast": "Upstream step above the cache cap ({n} rows): previews of this node recompute from the source.",
     "backendUnreachable": "Backend unreachable: {error}",
     "chartTab": "Chart",

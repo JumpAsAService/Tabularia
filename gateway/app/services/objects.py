@@ -125,6 +125,30 @@ def _can_read_key(session: Session, user: User, key: str, readable: set[int]) ->
     return False
 
 
+def ensure_can_run_keys(session: Session, user: User, keys: Iterable[str]) -> None:
+    """403 alla prima chiave managed su cui l'utente non può ESEGUIRE.
+
+    `/tasks/transform-data` fa lavorare i worker e scrive un parquet: è un run,
+    anche se non ha un flusso salvato dietro. Prima chiedeva solo di poter
+    LEGGERE le sorgenti, e un ospite di sola lettura (VIEW) eseguiva quello che
+    il percorso ufficiale `/flows/{id}/runs` gli nega con `Capability.RUN`
+    (audit 2026-09-30, trovato con le credenziali dell'ospite della demo).
+
+    La risoluzione chiave→progetto è la stessa della lettura — datasource,
+    upload propri, run, definizioni dei flussi — cambia solo l'insieme dei
+    progetti: quelli con RUN, non quelli con VIEW."""
+    keys = set(keys)
+    if not keys or perm_service.is_admin(session, user):
+        return
+    runnable = perm_service.runnable_project_ids(session, user)
+    for key in sorted(keys):
+        if not _can_read_key(session, user, key, runnable):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permesso 'run' mancante per eseguire su '{key}': serve RUN sul progetto",
+            )
+
+
 def ensure_can_read_keys(session: Session, user: User, keys: Iterable[str]) -> None:
     """403 alla prima chiave managed non leggibile dall'utente."""
     keys = set(keys)

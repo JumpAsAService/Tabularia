@@ -7,6 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 
 import { Table2, BarChart3, Wand2, Users } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
+import { useAuth } from '~/composables/useAuth'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useFlowPresence } from '~/composables/useFlowPresence'
 import { useAppInfo } from '~/composables/useAppInfo'
@@ -81,6 +82,27 @@ let outputCounter = 0
 let commentCounter = 0
 
 const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
+
+// ── Osservatore nell'editor ────────────────────────────────────────────────
+// Un osservatore entra, aggiunge nodi di TRASFORMAZIONE e ne guarda l'anteprima.
+// Non salva, non esegue, non carica file, non aggiunge sorgenti, controllo o
+// output: non perché il server glielo lascerebbe fare — /flows, /files e
+// /tasks/transform-data lo rifiutano — ma perché offrirglielo per poi dirgli
+// 403 è scortese. `is_observer` da /auth/me è EFFETTIVO: vero anche per gli
+// admin, quindi si guarda pure `is_superuser`.
+const { user: chiEntra, fetchMe } = useAuth()
+// Finché non si sa chi è entrato, il cancello resta CHIUSO: un attimo senza
+// «Salva» per un amministratore è niente, un attimo con «Esegui» per un
+// osservatore è un 403 in faccia. L'editor non passa da AppShell, che è l'unico
+// posto che carica l'utente: lo si carica qui al mount.
+const soloOsservatore = computed(() =>
+  chiEntra.value === null || (!!chiEntra.value.is_observer && !chiEntra.value.is_superuser))
+const TRASFORMAZIONE = (kind: string) => kind.startsWith('op:') && kind !== 'op:foreach'
+function negatoAllOsservatore(): boolean {
+  if (!soloOsservatore.value) return false
+  setStatus(t('flowEditor.readOnlyNodes'), 'error')
+  return true
+}
 
 // ── Pannello destro e vista dati ridimensionabili (misure ricordate) ──────
 const PANEL_MIN = 280
@@ -337,6 +359,7 @@ async function loadFlow(id: number) {
 }
 
 async function saveFlow() {
+  if (negatoAllOsservatore()) return
   if (projectId.value === null) {
     setStatus(t('flowEditor.chooseProjectToSave'), 'error')
     return
@@ -364,6 +387,7 @@ async function saveFlow() {
 }
 
 onMounted(async () => {
+  if (!chiEntra.value) await fetchMe()
   // campione automatico di sviluppo: va noto PRIMA della prima preview
   await useAppInfo().load()
   try {
@@ -543,6 +567,7 @@ function targetSourceId(): string {
 }
 
 async function onUpload(file: File) {
+  if (negatoAllOsservatore()) return
   const sid = targetSourceId()
   busy.value = true
   setStatus(t('flowEditor.uploading', { name: file.name }), 'busy')
@@ -604,6 +629,7 @@ async function pollConversion(sid: string, taskId: string) {
 }
 
 function addSource() {
+  if (negatoAllOsservatore()) return
   const id = `src-${++sourceCounter}`
   addNodes({
     id,
@@ -656,6 +682,7 @@ function onCanvasDragOver(ev: DragEvent) {
 function onCanvasDrop(ev: DragEvent) {
   const kind = ev.dataTransfer?.getData('application/tabularia')
   if (!kind) return
+  if (!TRASFORMAZIONE(kind) && negatoAllOsservatore()) return
   const position = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
 
   if (kind === 'source') {
@@ -1150,6 +1177,7 @@ const hasControlNodes = () =>
   getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow')
 
 function run() {
+  if (negatoAllOsservatore()) return
   // flussi con nodi di controllo → orchestrazione server (refresh→output→runflow),
   // niente dialog: la configurazione sta sui nodi
   if (hasControlNodes()) {
@@ -1469,6 +1497,7 @@ async function pollTask(id: string) {
       :project-id="projectId"
       :engine="flowEngine"
       :production-engine="flowProductionEngine"
+      :read-only="soloOsservatore"
       @upload="onUpload"
       @add-op="addOperation"
       @add-source="addSource"
@@ -1484,7 +1513,7 @@ async function pollTask(id: string) {
     </p>
 
     <div class="sidebar">
-      <OpSidebar :operations="operations" />
+      <OpSidebar :operations="operations" :read-only="soloOsservatore" />
     </div>
 
     <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
