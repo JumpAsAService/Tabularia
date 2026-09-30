@@ -8,6 +8,7 @@
 
 CREATE SCHEMA IF NOT EXISTS catalogo;
 CREATE SCHEMA IF NOT EXISTS vendite;
+-- le tabelle di riferimento «pubbliche» (calendario, regioni) stanno in schema_ref.sql
 
 -- ── Catalogo prodotti ───────────────────────────────────────────────────────
 DROP TABLE IF EXISTS vendite.costi_commerciali CASCADE;

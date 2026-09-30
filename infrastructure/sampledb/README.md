@@ -61,16 +61,21 @@ Buone analisi da provare: *quota categoria per mese* (mix-prodotto), *quota
 canale per mese* (mix-canale), *% evasa/annullata per deposito nel tempo*
 (anomalie), oltre al margine di riga per rete commerciale.
 
-## Come popolarli
+## Come si accendono
+
+Sono un **profilo** di compose (`samples`): con il profilo attivo, `up -d` tira su
+i due database e il contenitore `sampledb-init`, che li riempie se sono vuoti e
+poi costruisce la cartella «Sample» in Tabularia (vedi sotto).
 
 ```bash
-# 1) avvia i due database
-docker compose -f infrastructure/docker-compose.sampledb.yml \
-    up -d sampledb-postgres sampledb-clickhouse
+# in infrastructure/.env
+COMPOSE_PROFILES=samples
+SAMPLES_SCALE=small        # small | medium | robusta
+#SAMPLES_ENGINE=           # motore dei flussi; vuoto = il primo consentito dalla policy
+#SAMPLES_RUN_FLOWS=true    # esegue i flussi una volta, così le tabelle prodotte esistono
 
-# 2) genera i dati (scala small | medium | robusta; default robusta ≈ 10–20 GB)
-SAMPLEDB_SCALE=small docker compose -f infrastructure/docker-compose.sampledb.yml \
-    --profile generate run --rm sampledb-generator
+docker compose -f infrastructure/docker-compose.yml up -d
+docker compose -f infrastructure/docker-compose.yml logs -f sampledb-init
 ```
 
 Scale (indicative):
@@ -81,9 +86,32 @@ Scale (indicative):
 | `medium`  | 30 000 | 1 M | ~3,5 M | 2 M | qualche minuto |
 | `robusta` | 150 000 | 12 M | ~42 M | 60 M | ~10–20 GB, più lungo |
 
-Rigenerabile: lo schema viene ricreato da zero a ogni run (DROP + CREATE).
+I dati restano nei volumi `sampledb_pg` e `sampledb_ch`: al riavvio il
+contenitore li trova pieni e non li rigenera. Per cambiare scala si svuotano i
+volumi (`docker volume rm`) e si riparte. Il generatore da solo, senza cartella
+Sample, resta `python generate.py` con le stesse variabili.
 
-## Connessioni in Tabularia
+## La cartella «Sample» in Tabularia
+
+`seed_tabularia.py` entra come amministratore e crea, cercando ogni oggetto per
+nome prima di crearlo (rilanciare non duplica niente):
+
+| dove | cosa |
+|---|---|
+| `Sample` | le due connessioni (gestionale, CRM) e quattro viste salvate (i report) |
+| `Sample / Flows` | undici flussi; tre schedulati (`0 6 1 * *`, `30 5 * * *`, `0 7 * * 1`) |
+| `Sample / Private tables` | le nove tabelle aziendali e le tabelle prodotte dai flussi |
+| `Sample / Public tables` | `ref.calendario` (giorni, settimane ISO, festività italiane) e `ref.regioni` |
+
+Otto tabelle su undici hanno le descrizioni di colonna, tre no, di proposito:
+si vede la differenza fra una datasource pronta per l'assistente e una che non
+lo è. I flussi usano solo SQL portabile (`EXTRACT`, `CASE WHEN`, `||`, `round`,
+`coalesce`) e girano sul motore che la policy dell'installazione consente.
+
+**Nessun permesso viene concesso**: la cartella nasce senza grant, come ogni
+altra. Chi la vede lo decide l'amministratore.
+
+## Connessioni
 
 | | host | porta | database | user / pass |
 |---|---|---|---|---|

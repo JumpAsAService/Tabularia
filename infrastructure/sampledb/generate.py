@@ -8,7 +8,7 @@
 
 Dimensioni realistiche con Faker (nomi, aziende, indirizzi); tabelle-fatto
 grandi con numpy (veloce), caricate a blocchi via COPY (Postgres) e insert_df
-(ClickHouse). Scala regolabile con SAMPLEDB_SCALE=small|medium|robusta.
+(ClickHouse). Scala regolabile con SAMPLES_SCALE=small|medium|robusta.
 
 Il margine di riga si costruisce così (in Tabularia, unendo le due sorgenti):
     ricavo   = quantita * prezzo_unitario * (1 - sconto_pct/100)
@@ -46,7 +46,8 @@ CH = dict(
     password=os.getenv("CH_PASSWORD", "analytics"),
     database=os.getenv("CH_DB", "analytics"),
 )
-SCALE = os.getenv("SAMPLEDB_SCALE", "robusta").lower()
+# SAMPLES_SCALE è il nome nuovo (quello del compose); SAMPLEDB_SCALE resta per chi lo usava
+SCALE = (os.getenv("SAMPLES_SCALE") or os.getenv("SAMPLEDB_SCALE") or "small").lower()
 SEED = int(os.getenv("SAMPLEDB_SEED", "42"))
 
 # finestra temporale dei dati (l'app "oggi" è metà 2026): ~3 anni fino a lì
@@ -75,7 +76,7 @@ PRESETS = {
     "robusta": dict(capi=8, ispettori=56, agenti=700,  clienti=150_000, ordini=12_000_000, attivita=60_000_000),
 }
 if SCALE not in PRESETS:
-    sys.exit(f"SAMPLEDB_SCALE non valido: {SCALE!r} (usa small|medium|robusta)")
+    sys.exit(f"SAMPLES_SCALE non valido: {SCALE!r} (usa small|medium|robusta)")
 P = PRESETS[SCALE]
 
 rng = np.random.default_rng(SEED)
@@ -247,6 +248,77 @@ def run_sql_file(cur, path: str) -> None:
 
 
 # ── generazione ──────────────────────────────────────────────────────────────
+REGIONI = [
+    # regione, macroarea, capoluogo, abitanti (arrotondati), km²
+    ("Piemonte", "Nord-Ovest", "Torino", 4_250_000, 25_387), ("Valle d'Aosta", "Nord-Ovest", "Aosta", 123_000, 3_261),
+    ("Lombardia", "Nord-Ovest", "Milano", 9_950_000, 23_864), ("Liguria", "Nord-Ovest", "Genova", 1_500_000, 5_416),
+    ("Trentino-Alto Adige", "Nord-Est", "Trento", 1_080_000, 13_606), ("Veneto", "Nord-Est", "Venezia", 4_850_000, 18_345),
+    ("Friuli-Venezia Giulia", "Nord-Est", "Trieste", 1_190_000, 7_924), ("Emilia-Romagna", "Nord-Est", "Bologna", 4_440_000, 22_453),
+    ("Toscana", "Centro", "Firenze", 3_660_000, 22_987), ("Umbria", "Centro", "Perugia", 855_000, 8_464),
+    ("Marche", "Centro", "Ancona", 1_480_000, 9_401), ("Lazio", "Centro", "Roma", 5_710_000, 17_232),
+    ("Abruzzo", "Sud", "L'Aquila", 1_270_000, 10_832), ("Molise", "Sud", "Campobasso", 290_000, 4_461),
+    ("Campania", "Sud", "Napoli", 5_600_000, 13_671), ("Puglia", "Sud", "Bari", 3_900_000, 19_541),
+    ("Basilicata", "Sud", "Potenza", 535_000, 10_073), ("Calabria", "Sud", "Catanzaro", 1_840_000, 15_222),
+    ("Sicilia", "Isole", "Palermo", 4_800_000, 25_832), ("Sardegna", "Isole", "Cagliari", 1_570_000, 24_100),
+]
+FESTE_FISSE = {(1, 1): "Capodanno", (1, 6): "Epifania", (4, 25): "Liberazione", (5, 1): "Festa del lavoro",
+               (6, 2): "Festa della Repubblica", (8, 15): "Ferragosto", (11, 1): "Ognissanti",
+               (12, 8): "Immacolata", (12, 25): "Natale", (12, 26): "Santo Stefano"}
+NOMI_GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+
+
+def _pasqua(anno: int) -> date:
+    """Algoritmo di Gauss/Meeus per la Pasqua gregoriana."""
+    a, b, c = anno % 19, anno // 100, anno % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mese = (h + l - 7 * m + 114) // 31
+    giorno = ((h + l - 7 * m + 114) % 31) + 1
+    return date(anno, mese, giorno)
+
+
+def gen_ref(cur) -> None:
+    """Le tabelle PUBBLICHE: un calendario e le regioni. Dati che chiunque
+    potrebbe pubblicare — il contrario di ordini e clienti — e che nei flussi
+    si uniscono ai dati aziendali (il mese, la macroarea)."""
+    from datetime import timedelta
+
+    righe = []
+    g = date(DATA_INIZIO.year, 1, 1)
+    fine = date(DATA_FINE.year + 1, 12, 31)   # un anno oltre i dati: le schedulazioni guardano avanti
+    pasquette = {a: _pasqua(a) + timedelta(days=1) for a in range(g.year, fine.year + 1)}
+    while g <= fine:
+        festa = FESTE_FISSE.get((g.month, g.day))
+        if festa is None and pasquette[g.year] == g:
+            festa = "Lunedì dell'Angelo"
+        iso = g.isocalendar()
+        righe.append((g, g.year, (g.month - 1) // 3 + 1, g.month, g.year * 100 + g.month, iso[1],
+                      g.isoweekday(), NOMI_GIORNI[g.weekday()], g.isoweekday() >= 6, festa is not None, festa))
+        g += timedelta(days=1)
+    copy_df(cur, "ref.calendario", pd.DataFrame(righe, columns=[
+        "giorno", "anno", "trimestre", "mese", "anno_mese", "settimana_iso", "giorno_settimana",
+        "nome_giorno", "fine_settimana", "festivo", "nome_festa"]))
+    copy_df(cur, "ref.regioni", pd.DataFrame(REGIONI, columns=["regione", "macroarea", "capoluogo", "popolazione", "superficie_kmq"]))
+
+
+def ensure_ref(pg) -> bool:
+    """Aggiunge le tabelle pubbliche a un database generato PRIMA che esistessero.
+    Torna True se ha dovuto crearle."""
+    with pg.cursor() as cur:
+        cur.execute("SELECT to_regclass('ref.calendario')")
+        if cur.fetchone()[0] is not None:
+            return False
+        run_sql_file(cur, os.path.join(HERE, "schema_ref.sql"))
+        gen_ref(cur)
+    pg.commit()
+    return True
+
+
 def gen_agenti() -> pd.DataFrame:
     """Rete commerciale gerarchica: capi_area → ispettori → agenti."""
     rows = []
@@ -555,6 +627,7 @@ def main() -> None:
     log("Creo lo schema Postgres…")
     with pg.cursor() as cur:
         run_sql_file(cur, os.path.join(HERE, "schema_postgres.sql"))
+        run_sql_file(cur, os.path.join(HERE, "schema_ref.sql"))
     pg.commit()
     log("Creo lo schema ClickHouse…")
     for stmt in open(os.path.join(HERE, "schema_clickhouse.sql"), encoding="utf-8").read().split(";"):
@@ -574,6 +647,11 @@ def main() -> None:
     log(f"  {len(clienti):,} clienti inseriti")
     agente_of = clienti.attrs["agente_of"]
     canale_of = clienti.attrs["canale_of"]
+
+    log("Genero i dati di riferimento pubblici (calendario, regioni)…")
+    with pg.cursor() as cur:
+        gen_ref(cur)
+    pg.commit()
 
     log("Genero il catalogo prodotti + listino + costi di produzione…")
     prod = build_prodotti()

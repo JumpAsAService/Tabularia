@@ -583,19 +583,46 @@ workers refuse to start without a valid key, in development too. With
 database, timezone and engines are all env-driven — pointing at managed services is a
 config change, not a code change.
 
-## Sample database (optional)
+## Sample data (optional)
 
-A realistic, opt-in **cured-meats company** dataset (Postgres ERP + ClickHouse CRM,
-generated with Faker/numpy) is available to exercise the connectors and build the
-line-level margin case. It ships built-in seasonality — monthly volume, product &
-channel seasonal mix, and per-warehouse fulfilment anomalies — so pivots tell a story.
-See [`infrastructure/sampledb/README.md`](infrastructure/sampledb/README.md).
+A realistic, opt-in **cured-meats company** dataset — an ERP on Postgres and a CRM
+on ClickHouse, generated with Faker/numpy — plus an init container that builds a
+ready-made **`Sample`** folder in Tabularia on top of it. The data ships built-in
+seasonality (monthly volume, product & channel seasonal mix, per-warehouse
+fulfilment anomalies) so pivots tell a story. Details in
+[`infrastructure/sampledb/README.md`](infrastructure/sampledb/README.md).
+
+Turn it on with the `samples` compose profile:
 
 ```bash
-SAMPLEDB_SCALE=small docker compose \
-  -f infrastructure/docker-compose.sampledb.yml \
-  --profile generate run --rm sampledb-generator
+# in infrastructure/.env
+COMPOSE_PROFILES=samples
+SAMPLES_SCALE=small        # small | medium | robusta
 ```
+
+```bash
+docker compose -f infrastructure/docker-compose.yml up -d
+```
+
+The `sampledb-init` container waits for the gateway and the two sample databases,
+fills them if they are empty (seconds at `small`, longer at `robusta`), then logs in
+as the administrator and creates, idempotently by name:
+
+| Where | What |
+|---|---|
+| `Sample` | the two connections (ERP, CRM) and four saved views (reports) |
+| `Sample / Flows` | eleven flows — margin by category, cost to serve, RFM segments, CRM workload, leaderboards, private ⋈ public joins — three of them scheduled |
+| `Sample / Private tables` | the nine company tables, and the tables the flows produce |
+| `Sample / Public tables` | reference tables anyone could publish: a calendar with Italian holidays, the twenty regions |
+
+Some tables carry column descriptions and some deliberately do not, so the
+difference an assistant-ready datasource makes is visible. The flows are run once
+so their output tables exist and the reports have something to show
+(`SAMPLES_RUN_FLOWS=false` skips that). The folder is created with **no permissions
+on it**: who gets to see it is the administrator's call, like any other folder.
+
+Restarting the stack does not duplicate anything: the container finds what it
+made and stops.
 
 ## Internationalization & themes
 

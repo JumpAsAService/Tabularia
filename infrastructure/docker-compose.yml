@@ -341,12 +341,106 @@ services:
     depends_on:
       - redis
 
+  # ── Dati di esempio (profilo `samples`) ────────────────────────────────────
+  # Si accendono con COMPOSE_PROFILES=samples nel .env (o `--profile samples`):
+  # due database esterni finti — un gestionale su Postgres e un CRM su
+  # ClickHouse — e un contenitore di inizializzazione che li riempie alla scala
+  # richiesta (SAMPLES_SCALE) e crea in Tabularia la cartella «Sample» con
+  # connessioni, tabelle, flussi, schedulazioni e viste. Gira una volta ed esce;
+  # rilanciarlo non duplica niente. Stessi nomi di volume del vecchio
+  # docker-compose.sampledb.yml: i dati già generati restano.
+  sampledb-postgres:
+    image: postgres:16-alpine
+    container_name: sampledb-postgres
+    profiles: ["samples"]
+    environment:
+      - POSTGRES_USER=shop
+      - POSTGRES_PASSWORD=shop
+      - POSTGRES_DB=shop
+    ports:
+      - "127.0.0.1:5434:5432"  # solo dall'host, solo per curiosare
+    volumes:
+      - sampledb_pg:/var/lib/postgresql/data
+    command:
+      - postgres
+      - "-c"
+      - "max_wal_size=8GB"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "work_mem=256MB"
+      - "-c"
+      - "maintenance_work_mem=1GB"
+      - "-c"
+      - "synchronous_commit=off"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sampledb-clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: sampledb-clickhouse
+    profiles: ["samples"]
+    environment:
+      - CLICKHOUSE_USER=analytics
+      - CLICKHOUSE_PASSWORD=analytics
+      - CLICKHOUSE_DB=analytics
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ports:
+      - "127.0.0.1:8124:8123"
+    volumes:
+      - sampledb_ch:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sampledb-init:
+    build: ./sampledb
+    container_name: sampledb-init
+    profiles: ["samples"]
+    entrypoint: ["python", "seed_tabularia.py"]
+    environment:
+      - SAMPLES_SCALE=${SAMPLES_SCALE:-small}
+      - SAMPLES_ENGINE=${SAMPLES_ENGINE:-}
+      - SAMPLES_RUN_FLOWS=${SAMPLES_RUN_FLOWS:-true}
+      - GATEWAY_URL=http://gateway:8000
+      - AUTH__ADMIN_EMAIL=${AUTH__ADMIN_EMAIL}
+      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD}
+      - PG_HOST=sampledb-postgres
+      - PG_PORT=5432
+      - PG_DB=shop
+      - PG_USER=shop
+      - PG_PASSWORD=shop
+      - CH_HOST=sampledb-clickhouse
+      - CH_PORT=8123
+      - CH_DB=analytics
+      - CH_USER=analytics
+      - CH_PASSWORD=analytics
+    depends_on:
+      sampledb-postgres:
+        condition: service_healthy
+      sampledb-clickhouse:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   redis_data:
   minio_data:
   postgres_data:
   vm_data:
   grafana_data:
+  sampledb_pg:
+  sampledb_ch:
 
 networks:
   default:
