@@ -1,5 +1,7 @@
 # ── Secrets: NEVER commit ────────────────────────────────────────────────────
 infrastructure/.env
+infrastructure/.env.*
+!infrastructure/.env.example
 backend/app/config/secrets.toml
 *.pem
 *.key
