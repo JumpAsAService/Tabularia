@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 
 from app.core.security import create_access_token, verify_password
 from app.db.session import get_session
-from app.deps.auth import get_current_user
+from app.deps.auth import get_current_user, require_observer
 from app.models import User
 from app.services import audit, login_throttle
 from app.services.permissions import is_admin, is_observer, user_group_ids
@@ -66,3 +66,13 @@ def me(user: User = Depends(get_current_user), session: Session = Depends(get_se
         is_observer=is_observer(session, user),
         groups=list(names),
     )
+
+
+@router.get("/observer", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_observer)])
+def puo_osservare() -> None:
+    """«Può vedere il monitoraggio?» — sì (204) per amministratori e osservatori,
+    401/403 per gli altri. La chiama il reverse proxy (`forward_auth`) prima di
+    lasciar passare una richiesta verso Grafana, che di suo è anonimo perché
+    l'iframe non può condividere la sessione dell'app. Nessun corpo, nessuna
+    query oltre a quelle della guardia: viene chiamata a ogni richiesta."""
+    return None

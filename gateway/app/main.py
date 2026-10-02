@@ -80,6 +80,10 @@ app = FastAPI(
     description="Control plane: auth, utenti/gruppi, progetti/permessi, proxy verso l'engine",
     version=settings.app.version,
     lifespan=lifespan,
+    # dietro un proxy che toglie un prefisso: /docs e lo schema lo riportano,
+    # e il reindirizzamento per la barra finale (che lo perderebbe) si spegne
+    root_path=settings.app.root_path,
+    redirect_slashes=settings.app.redirect_slashes,
 )
 
 app.add_middleware(

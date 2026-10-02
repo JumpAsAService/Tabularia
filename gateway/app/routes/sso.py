@@ -27,6 +27,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/sso", tags=["auth"])
 
 
+def _cookie_path() -> str:
+    """Il percorso del cookie di transazione COME LO VEDE IL BROWSER: dietro un
+    proxy che pubblica il gateway sotto un prefisso (APP__ROOT_PATH) le rotte
+    del flusso stanno sotto quel prefisso, e un cookie scritto senza non
+    tornerebbe mai indietro. Scrittura e cancellazione devono coincidere."""
+    return f"{get_settings().app.root_path}/auth/sso"
+
+
 def _redirect_with(fragment: str) -> RedirectResponse:
     base = get_settings().oidc.post_login_url
     sep = "&" if "#" in base else "#"
@@ -41,7 +49,7 @@ def _fail(session: Session, request: Request, err: sso.SsoError, email: str | No
         detail={"reason": err.code}, request=request,
     )
     response = _redirect_with(f"error={err.code}")
-    response.delete_cookie(sso.TX_COOKIE, path="/auth/sso")
+    response.delete_cookie(sso.TX_COOKIE, path=_cookie_path())
     return response
 
 
@@ -73,7 +81,7 @@ def sso_login(request: Request):
         httponly=True,                 # mai leggibile da JavaScript
         samesite="lax",                # il ritorno dall'IdP è una navigazione GET
         secure=cfg.redirect_uri.startswith("https://"),
-        path="/auth/sso",              # inviato solo alle rotte del flusso
+        path=_cookie_path(),           # inviato solo alle rotte del flusso
     )
     return response
 
@@ -117,5 +125,5 @@ def sso_callback(
         request=request,
     )
     response = _redirect_with(f"token={create_access_token(user.id)}")
-    response.delete_cookie(sso.TX_COOKIE, path="/auth/sso")
+    response.delete_cookie(sso.TX_COOKIE, path=_cookie_path())
     return response

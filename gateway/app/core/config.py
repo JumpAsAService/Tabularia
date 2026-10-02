@@ -1,4 +1,5 @@
 import os
+import re
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
@@ -212,6 +213,36 @@ class AppSettings(BaseModel):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
+    # Prefisso sotto cui un reverse proxy pubblica il gateway, TOGLIENDOLO prima
+    # di inoltrare (es. `/api`, quando un solo host serve interfaccia e API).
+    # Le rotte non cambiano: serve a ciò che il proxy non può
+    # correggere, cioè i percorsi che il gateway scrive per il browser — il
+    # cookie della transazione SSO, gli indirizzi di /docs e i reindirizzamenti
+    # (vedi redirect_slashes). Vuoto = pubblicato alla radice, come in sviluppo.
+    # env: APP__ROOT_PATH
+    root_path: str = ""
+
+    @field_validator("root_path")
+    @classmethod
+    def _valid_root_path(cls, v: str) -> str:
+        v = (v or "").strip().strip("/")
+        if not v:
+            return ""
+        v = "/" + v
+        if not re.fullmatch(r"(/[A-Za-z0-9._~-]+)+", v):
+            raise ValueError(
+                f"APP__ROOT_PATH non valido: '{v}' — è un percorso (es. '/api'), non un URL"
+            )
+        return v
+
+    @property
+    def redirect_slashes(self) -> bool:
+        """Il reindirizzamento automatico «barra finale» di FastAPI costruisce
+        l'indirizzo SENZA il prefisso: sotto un proxy che lo toglie porterebbe
+        fuori dall'API (`/api/users/` → `/users`, una pagina del frontend).
+        Quindi è acceso solo alla radice; sotto un prefisso, una barra di troppo
+        è un 404."""
+        return not self.root_path
     # fuso orario del DEPLOYMENT per lo SCHEDULING: le espressioni cron sono
     # interpretate in questo fuso (orario a PARETE locale, DST incluso) e poi
     # convertite in UTC per lo storage. NON tocca la visualizzazione dei timestamp
