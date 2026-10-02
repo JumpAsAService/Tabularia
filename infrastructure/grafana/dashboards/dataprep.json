@@ -103,7 +103,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "container_memory_working_set_bytes{name=~\"dataprep-.*|infrastructure-.*\"}",
+          "expr": "container_memory_working_set_bytes{name=~\"dataprep-.*|infrastructure-.*|tabularia-.*\"}",
           "legendFormat": "{{name}}",
           "datasource": {
             "type": "prometheus",
@@ -267,7 +267,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "container_memory_working_set_bytes{image=\"infrastructure-worker\"}",
+          "expr": "container_memory_working_set_bytes{name=~\".*worker-[0-9]+\"}",
           "legendFormat": "{{name}}",
           "datasource": {
             "type": "prometheus",
