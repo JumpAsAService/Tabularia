@@ -10,9 +10,10 @@ import { formatGB, useSystemMemory } from '~/composables/useSystemMemory'
 import { MemoryStick } from 'lucide-vue-next'
 
 // compact: nella toolbar dell'editor lo spazio è poco → si omette "liberi"
-withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
+const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 
-const { memory, unavailable, level } = useSystemMemory()
+// nell'editor (compact) il dato serve fresco: lì si guarda la memoria mentre un flusso gira
+const { memory, unavailable, level } = useSystemMemory({ fast: props.compact })
 </script>
 
 <template>
