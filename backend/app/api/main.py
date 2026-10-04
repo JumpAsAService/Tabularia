@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -15,10 +17,29 @@ from app.api.routes.dbt import router as dbt_router
 # la chiave Fernet è obbligatoria in ogni ambiente: senza, meglio non partire
 get_settings().check_required_secrets()
 
+
+def allarga_i_thread() -> int:
+    """Porta a `APP__ENGINE_API_THREADS` il numero di richieste sincrone servite insieme
+    (vedi `AppSettings.engine_api_threads`). Va chiamata dentro il ciclo degli eventi:
+    il limite appartiene a lui."""
+    import anyio.to_thread
+
+    limite = anyio.to_thread.current_default_thread_limiter()
+    limite.total_tokens = get_settings().app.engine_api_threads
+    return int(limite.total_tokens)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    allarga_i_thread()
+    yield
+
+
 app = FastAPI(
     title="Data Prep API",
     description="API per Data Preparation Tool",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

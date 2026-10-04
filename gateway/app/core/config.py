@@ -24,6 +24,15 @@ class DbSettings(BaseModel):
     name: str = "tabularia"
     # override completo: se valorizzato, ignora host/port/... sopra
     url: Optional[str] = None
+    # Connessioni tenute aperte verso Postgres. Vuoto = una per thread
+    # (APP__GATEWAY_THREADS), che è quante ne servono: ogni thread ne usa al
+    # massimo una alla volta. Più basso, quelle che mancano vengono aperte e
+    # chiuse a ogni richiesta. env: DB__POOL_SIZE
+    pool_size: Optional[int] = Field(default=None, ge=1)
+    # Quante in più nei momenti di punta (lavori di fondo compresi): queste sì
+    # si chiudono appena rese. Pool + margine deve stare sotto il
+    # `max_connections` di Postgres (100 di serie). env: DB__MAX_OVERFLOW
+    max_overflow: int = Field(default=10, ge=0)
 
     @computed_field
     @property
@@ -234,6 +243,13 @@ class AppSettings(BaseModel):
                 f"APP__ROOT_PATH non valido: '{v}' — è un percorso (es. '/api'), non un URL"
             )
         return v
+
+    # Quanti thread servono insieme le rotte e le dipendenze sincrone. Python
+    # esegue un thread alla volta: oltre un certo numero i thread non lavorano di
+    # più, si contendono l'interprete. Il nome è diverso da quello dell'engine
+    # (APP__ENGINE_API_THREADS) perché i due servizi leggono lo stesso file
+    # d'ambiente e vogliono valori opposti. env: APP__GATEWAY_THREADS
+    gateway_threads: int = Field(default=40, ge=4)
 
     @property
     def redirect_slashes(self) -> bool:

@@ -1,16 +1,82 @@
 import logging
 import time
 
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import event, text
+from sqlalchemy.exc import InvalidatePoolError, OperationalError
 from sqlmodel import create_engine, select, Session, SQLModel
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# pool_pre_ping: evita connessioni morte dopo idle; utile in dev con restart di Postgres.
-engine = create_engine(get_settings().db.dsn, echo=False, pool_pre_ping=True)
+# Una connessione usata un attimo fa è viva. Chiederglielo a OGNI uso
+# (`pool_pre_ping`) costa un giro verso Postgres per ogni passo di ogni
+# richiesta: sotto carico era il 14% del tempo del gateway. Si chiede solo a
+# quelle rimaste ferme nel pool, che sono le uniche che un riavvio di Postgres
+# o un firewall possono aver chiuso senza che nessuno se ne accorgesse.
+PING_SE_FERMA_DA_S = 5.0
+
+
+def ping_solo_se_ferma(eng, ferma_da_s: float = PING_SE_FERMA_DA_S) -> None:
+    """Prova la connessione all'uscita dal pool solo se è ferma da un po'.
+
+    Se non risponde butta via tutte quelle aperte prima (come fa `pool_pre_ping`)
+    e il pool ne apre una nuova: chi l'ha chiesta non vede niente. Quel che resta
+    scoperto è Postgres che cade nei secondi subito dopo un uso: la prima
+    richiesta fallisce, e il suo errore invalida il pool per le successive."""
+
+    @event.listens_for(eng, "connect")
+    def _nuova(dbapi_conn, record):
+        record.info["resa"] = time.monotonic()
+
+    @event.listens_for(eng, "checkin")
+    def _resa(dbapi_conn, record):
+        record.info["resa"] = time.monotonic()
+
+    @event.listens_for(eng, "checkout")
+    def _presa(dbapi_conn, record, proxy):
+        if time.monotonic() - record.info.get("resa", 0.0) < ferma_da_s:
+            return
+        try:
+            eng.dialect.do_ping(dbapi_conn)
+        except Exception as e:
+            raise InvalidatePoolError("connessione morta mentre era ferma nel pool") from e
+
+
+def _crea_engine(**opzioni):
+    eng = create_engine(get_settings().db.dsn, echo=False, **opzioni)
+    ping_solo_se_ferma(eng)
+    return eng
+
+
+def _misura_del_pool() -> int:
+    s = get_settings()
+    return s.db.pool_size or s.app.gateway_threads
+
+
+# Ogni thread tiene al massimo una connessione alla volta (vedi `a_fine_rotta`),
+# quindi il pool va a misura dei thread. Con i 5 della libreria le altre erano
+# «di troppo»: aperte e CHIUSE a ogni richiesta — 16.000 sessioni su Postgres in
+# dieci minuti di carico, e ogni apertura è un processo che Postgres fa nascere.
+engine = _crea_engine(pool_size=_misura_del_pool(), max_overflow=get_settings().db.max_overflow)
+
+# Poche connessioni tenute SEMPRE in autocommit, per le letture «una e via»
+# (l'utente che ogni richiesta carica): lì una SELECT è un giro solo verso
+# Postgres, senza BEGIN né ROLLBACK attorno. Sono connessioni a parte, e non
+# quelle del pool principale messe in autocommit per l'occasione, perché il
+# driver nel rimetterle a posto manda a Postgres un comando in più a ogni
+# richiesta (`SET default_transaction_isolation`). Chi ne prende una la tiene
+# per una SELECT e non aspetta nient'altro: se sono tutte occupate si fa la
+# coda per qualche millisecondo, senza il rischio di stallo delle altre.
+_engine_letture = _crea_engine(
+    isolation_level="AUTOCOMMIT", pool_size=max(2, _misura_del_pool() // 4), max_overflow=0
+)
+_LETTURE = {engine: _engine_letture}
+
+
+def engine_di_lettura(bind):
+    """L'engine in autocommit che legge lo stesso database di `bind`."""
+    return _LETTURE.get(bind) or bind.execution_options(isolation_level="AUTOCOMMIT")
 
 
 def wait_for_db(max_attempts: int = 30, delay: float = 2.0) -> None:

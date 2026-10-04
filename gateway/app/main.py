@@ -45,6 +45,9 @@ async def lifespan(app: FastAPI):
     get_settings().check_required_secrets()
     get_settings().check_sso_config()  # SSO acceso ⇒ configurazione completa
     get_settings().check_production_safety()
+    import anyio.to_thread
+
+    anyio.to_thread.current_default_thread_limiter().total_tokens = get_settings().app.gateway_threads
     # crea le tabelle e semina l'admin da env (idempotente)
     init_db()
     seed_admin()

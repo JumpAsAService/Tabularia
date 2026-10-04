@@ -378,6 +378,12 @@ class AppSettings(BaseModel):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
+    # Quante richieste sincrone l'API dell'engine serve insieme. Ogni anteprima in
+    # corso occupa un thread per tutta la sua durata (aspetta il worker
+    # controllando il risultato ogni quarto di secondo): con il default della
+    # libreria, 40, la quarantunesima resta in coda anche se i worker sono liberi.
+    # Sono thread che dormono, costano poco. env: APP__ENGINE_API_THREADS
+    engine_api_threads: int = Field(default=200, ge=40)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

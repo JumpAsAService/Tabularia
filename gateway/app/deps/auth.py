@@ -5,10 +5,11 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
 from app.core.security import decode_access_token
-from app.db.session import get_session
+from app.db.session import engine_di_lettura, get_session
 from app.models import User
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,28 @@ def _fine_passo(session: Session) -> None:
     session.rollback()
 
 
+def _carica_utente(session: Session, user_id: int) -> User | None:
+    """Legge l'utente con una connessione presa e resa qui, fuori da ogni transazione.
+
+    È la lettura che OGNI richiesta fa. Dentro la sessione della richiesta
+    costava quattro giri verso Postgres (ping, BEGIN, la SELECT, il ROLLBACK di
+    fine passo) e il rollback faceva scadere l'utente, che la rotta rileggeva un
+    attimo dopo. Così è un giro solo: una SELECT per chiave in autocommit vede
+    esattamente quello che vedrebbe in una transazione appena aperta (vedi
+    `engine_di_lettura`). L'oggetto passa poi alla sessione della richiesta già
+    caricato (`merge(load=False)` non tocca il database), e la rotta lo trova lì
+    come l'ha sempre trovato."""
+    bind = session.get_bind()
+    if not isinstance(bind, Engine):  # sessione legata a una connessione già aperta
+        return session.get(User, user_id)
+    with Session(engine_di_lettura(bind)) as lettura:
+        user = lettura.get(User, user_id)
+        if user is None:
+            return None
+        lettura.expunge(user)
+    return session.merge(user, load=False)
+
+
 def get_current_user(
     request: Request,
     token: str = Depends(oauth2_scheme),
@@ -86,11 +109,14 @@ def get_current_user(
         user_id = int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         raise _credentials_error
-    user = session.get(User, user_id)
+    user = _carica_utente(session, user_id)
     if user is None or not user.is_active:
         raise _credentials_error
+    # Niente `_fine_passo` qui: la sessione della richiesta non ha preso
+    # connessioni (la lettura ne ha usata una sua, già resa) e `_touch_last_seen`,
+    # la volta al minuto che scrive, chiude da sé con commit o rollback. Un
+    # rollback in più farebbe solo scadere l'utente appena caricato.
     _touch_last_seen(session, user, request)
-    _fine_passo(session)
     return user
 
 

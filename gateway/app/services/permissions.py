@@ -149,10 +149,14 @@ def has_capability(session: Session, user: User, project_id: int, capability: Ca
     return False
 
 
-def _granted_project_ids(session: Session, user: User, needed: Capability) -> set[int]:
+def _granted_project_ids(
+    session: Session, user: User, needed: Capability, projects: dict[int, Project] | None = None
+) -> set[int]:
     """Progetti dove l'utente ha `needed` (concesso o ereditato: i discendenti
-    dei grant). SENZA gli antenati — solo dove la capability vale davvero."""
-    projects = _all_projects(session)
+    dei grant). SENZA gli antenati — solo dove la capability vale davvero.
+    `projects`: l'albero, se chi chiama l'ha già letto."""
+    if projects is None:
+        projects = _all_projects(session)
     if is_admin(session, user):
         return set(projects.keys())
     gids = user_group_ids(session, user)
@@ -166,7 +170,9 @@ def _granted_project_ids(session: Session, user: User, needed: Capability) -> se
     return descendant_ids(projects, granted_roots)  # eredità verso il basso
 
 
-def readable_project_ids(session: Session, user: User) -> set[int]:
+def readable_project_ids(
+    session: Session, user: User, projects: dict[int, Project] | None = None
+) -> set[int]:
     """Progetti di cui l'utente può LEGGERE il contenuto (VIEW o superiore).
 
     Differenza fondamentale con `visible_project_ids`: quella aggiunge gli
@@ -174,7 +180,7 @@ def readable_project_ids(session: Session, user: User) -> set[int]:
     contenuto degli antenati NON è leggibile. Per filtrare contenuti
     (datasource, flussi, run) usare SEMPRE questa.
     """
-    return _granted_project_ids(session, user, Capability.VIEW)
+    return _granted_project_ids(session, user, Capability.VIEW, projects)
 
 
 def runnable_project_ids(session: Session, user: User) -> set[int]:
@@ -192,15 +198,26 @@ def connectable_project_ids(session: Session, user: User) -> set[int]:
     return _granted_project_ids(session, user, Capability.CONNECT)
 
 
-def visible_project_ids(session: Session, user: User) -> set[int]:
+def visible_project_ids(
+    session: Session, user: User, projects: dict[int, Project] | None = None
+) -> set[int]:
     """Progetti che l'utente può vedere NELL'ALBERO: i leggibili più i loro
     antenati (solo per rendere navigabile il percorso fino alla radice — il
     CONTENUTO degli antenati non è leggibile: vedi `readable_project_ids`)."""
-    projects = _all_projects(session)
-    visible = readable_project_ids(session, user)
+    if projects is None:
+        projects = _all_projects(session)
+    visible = readable_project_ids(session, user, projects)
     for pid in list(visible):
         visible.update(ancestor_ids(projects, pid))  # mostra il percorso
     return visible
+
+
+def visible_projects(session: Session, user: User) -> list[Project]:
+    """Le cartelle di `visible_project_ids`, lette una volta sola: l'albero serve
+    per calcolare i permessi ed è lo stesso da cui si prende la risposta."""
+    projects = _all_projects(session)
+    visible = visible_project_ids(session, user, projects)
+    return [p for pid, p in projects.items() if pid in visible]
 
 
 def can_upload(session: Session, user: User) -> bool:

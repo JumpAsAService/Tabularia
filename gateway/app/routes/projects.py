@@ -22,10 +22,7 @@ router = APIRouter(route_class=RottaCheRilascia, prefix="/projects", tags=["proj
 
 @router.get("", response_model=list[ProjectOut])
 def list_projects(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    visible = perm_service.visible_project_ids(session, user)
-    if not visible:
-        return []
-    return session.exec(select(Project).where(Project.id.in_(visible))).all()
+    return perm_service.visible_projects(session, user)
 
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
