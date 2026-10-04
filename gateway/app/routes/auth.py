@@ -8,8 +8,9 @@ from app.models import User
 from app.services import audit, login_throttle
 from app.services.permissions import is_admin, is_observer, user_group_ids
 from app.schemas.models import LoginRequest, Token, MeOut
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=Token)

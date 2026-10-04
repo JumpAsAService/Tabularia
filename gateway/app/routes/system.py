@@ -22,9 +22,10 @@ from pydantic import BaseModel
 from app.core.config import get_settings
 from app.deps.auth import get_current_user
 from app.models import User
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["system"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["system"])
 
 _TOTAL = "node_memory_MemTotal_bytes"
 _AVAILABLE = "node_memory_MemAvailable_bytes"

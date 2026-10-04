@@ -26,8 +26,9 @@ from app.models.permission import Capability
 from app.schemas.models import SavedViewCreate, SavedViewOut, SavedViewUpdate
 from app.services import audit
 from app.services import permissions as perm_service
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(tags=["saved-views"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["saved-views"])
 
 
 def _get_view(session: Session, view_id: int) -> SavedView:

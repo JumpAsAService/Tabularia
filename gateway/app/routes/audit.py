@@ -22,10 +22,11 @@ from app.services.permissions import is_admin
 from app.models import AuditLog, User
 from app.schemas.models import UtcDateTime, Page
 from app.services import audit as audit_svc
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["audit"], dependencies=[Depends(require_observer)])
+router = APIRouter(route_class=RottaCheRilascia, tags=["audit"], dependencies=[Depends(require_observer)])
 
 # finestra entro cui un utente è considerato "attivo ora" (last_seen recente)
 ACTIVE_WINDOW = timedelta(minutes=15)

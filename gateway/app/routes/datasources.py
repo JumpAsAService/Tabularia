@@ -38,10 +38,11 @@ from app.services import permissions as perm_service
 from app.services.blobgc import schedule_blob_deletion
 from app.services.pagination import paginate
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["datasources"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["datasources"])
 
 
 MAX_COLUMN_DESCRIPTION = 2000

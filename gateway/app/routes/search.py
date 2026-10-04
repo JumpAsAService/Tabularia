@@ -27,8 +27,9 @@ from app.deps.auth import get_current_user
 from app.models import Connection, Datasource, Flow, Project, SavedView, User
 from app.schemas.models import SearchHit, SearchOut
 from app.services import permissions as perm_service
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(tags=["search"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["search"])
 
 # ordine di presentazione a parità di rilevanza: prima i contenitori, poi ciò che
 # si apre più spesso. Serve anche a rendere deterministico l'ordinamento.

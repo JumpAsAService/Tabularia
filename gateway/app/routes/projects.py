@@ -15,8 +15,9 @@ from app.models.permission import Capability
 from app.services import permissions as perm_service
 from app.services.permissions import _all_projects, descendant_ids
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/projects", tags=["projects"])
 
 
 @router.get("", response_model=list[ProjectOut])

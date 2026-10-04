@@ -147,6 +147,72 @@ def backfill_flow_versions() -> None:
             session.commit()
 
 
-def get_session():
-    with Session(engine) as session:
+async def get_session():
+    """La sessione della richiesta.
+
+    Generatore ASINCRONO di proposito: così la chiusura finale avviene sul ciclo
+    degli eventi e non in un thread. Con un generatore sincrono FastAPI la
+    eseguirebbe in un thread preso dallo stesso insieme limitato delle rotte:
+    una richiesta che ha finito e deve solo rendere la connessione resterebbe in
+    coda per un thread, dietro a richieste ferme ad aspettare proprio quella
+    connessione (vedi `deps/auth._fine_passo`). Chiudere non aspetta mai il
+    pool: rende, non prende.
+    """
+    session = Session(engine)
+    try:
         yield session
+    finally:
+        session.close()
+
+
+# ── La rotta sincrona rilascia prima di uscire dal suo thread ────────────────
+def _oggetti_orm(valore):
+    """Gli oggetti ORM dentro ciò che una rotta restituisce (anche in liste e
+    dizionari: `{"items": [...]}`)."""
+    if hasattr(valore, "_sa_instance_state"):
+        yield valore
+    elif isinstance(valore, (list, tuple, set, frozenset)):
+        for v in valore:
+            yield from _oggetti_orm(v)
+    elif isinstance(valore, dict):
+        for v in valore.values():
+            yield from _oggetti_orm(v)
+
+
+def a_fine_rotta(fn):
+    """Avvolge una rotta SINCRONA: quando la rotta ha finito, rende la
+    connessione al pool prima di uscire dal thread.
+
+    Dopo la rotta FastAPI valida la risposta in un altro thread. Una rotta che
+    esce con la transazione aperta lascia la richiesta con una connessione in
+    mano mentre aspetta quel thread — e sotto una raffica i thread sono tutti
+    occupati da richieste che aspettano una connessione (vedi
+    `deps/auth._fine_passo`: è lo stesso stallo, un passo più avanti).
+
+    Prima di chiudere, ciò che la rotta restituisce viene reso leggibile senza
+    database: un oggetto ORM «scaduto» da un commit (basta quello dell'audit)
+    verrebbe ricaricato alla prima lettura, cioè nel thread sbagliato e senza
+    più una sessione. Lo si ricarica qui: sono le stesse query che avrebbe fatto
+    la validazione, solo nel thread giusto.
+    """
+    import functools
+
+    from sqlalchemy import inspect as sa_inspect
+
+    @functools.wraps(fn)
+    def avvolta(*args, **kwargs):
+        sessione = next((x for x in kwargs.values() if isinstance(x, Session)), None)
+        try:
+            risultato = fn(*args, **kwargs)
+            if sessione is not None:
+                for obj in _oggetti_orm(risultato):
+                    stato = sa_inspect(obj)
+                    if stato.persistent and stato.session is sessione and stato.unloaded:
+                        sessione.refresh(obj)
+            return risultato
+        finally:
+            if sessione is not None:
+                sessione.close()
+
+    avvolta.rilascia_a_fine_rotta = True
+    return avvolta

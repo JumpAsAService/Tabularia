@@ -34,10 +34,11 @@ from app.models.permission import Capability
 from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["connections"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["connections"])
 
 SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3", "smtp", "sharepoint"}
 

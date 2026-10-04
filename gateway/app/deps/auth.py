@@ -58,6 +58,24 @@ def _touch_last_seen(session: Session, user: User, request: Request) -> None:
         session.rollback()
 
 
+def _fine_passo(session: Session) -> None:
+    """Chiude la transazione di lettura prima di uscire da una dipendenza.
+
+    Ogni dipendenza sincrona gira in un thread suo, e la rotta in un altro. Se
+    questa uscisse con la transazione aperta, la richiesta si terrebbe una
+    connessione del pool mentre aspetta un thread per il passo successivo — e
+    sotto una raffica quei thread sono tutti occupati da richieste che
+    aspettano una connessione. Misurato: 60 richieste insieme → gateway fermo
+    30 secondi e più di metà in errore.
+
+    `rollback` e non `commit`: qui si è solo letto, e un commit potrebbe rendere
+    permanente qualcosa che un chiamante avesse appoggiato sull'oggetto. Gli
+    oggetti restano agganciati alla sessione: chi li legge nel passo dopo li
+    ricarica, con una connessione presa e resa lì.
+    """
+    session.rollback()
+
+
 def get_current_user(
     request: Request,
     token: str = Depends(oauth2_scheme),
@@ -72,6 +90,7 @@ def get_current_user(
     if user is None or not user.is_active:
         raise _credentials_error
     _touch_last_seen(session, user, request)
+    _fine_passo(session)
     return user
 
 
@@ -83,6 +102,7 @@ def require_superuser(
 
     if not is_admin(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi admin")
+    _fine_passo(session)
     return user
 
 
@@ -99,4 +119,5 @@ def require_observer(
 
     if not is_observer(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi di lettura amministrativa")
+    _fine_passo(session)
     return user

@@ -9,8 +9,9 @@ from app.models import Project, Permission, User, Group
 from app.services import audit
 from app.models.permission import Capability
 from app.schemas.models import PermissionOut, PermissionCreate
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(tags=["permissions"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["permissions"])
 
 
 @router.get("/projects/{project_id}/permissions", response_model=list[PermissionOut])

@@ -9,8 +9,9 @@ from app.models import Group, User, UserGroupLink, Permission
 from app.schemas.models import GroupOut, GroupCreate, GroupUpdate
 from app.services import audit
 from app.services.permissions import ensure_still_admin
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(prefix="/groups", tags=["groups"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/groups", tags=["groups"])
 
 
 @router.get("", response_model=list[GroupOut], dependencies=[Depends(get_current_user)])

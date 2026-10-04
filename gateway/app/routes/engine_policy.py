@@ -28,8 +28,9 @@ from app.models import DisabledEngine, Flow, User
 from app.schemas.models import EnginePolicyOut, EnginePolicyUpdate
 from app.services import audit
 from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(prefix="/engine-policy", tags=["engine-policy"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/engine-policy", tags=["engine-policy"])
 
 
 def _flows_using(session: Session, engine_id: str) -> int:

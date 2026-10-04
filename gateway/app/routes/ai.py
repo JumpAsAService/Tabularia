@@ -37,9 +37,10 @@ from app.services import ai_agent, ai_chats, ai_pricing, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import allowed_engines
 from app.services.permissions import readable_project_ids
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/ai", tags=["ai"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/ai", tags=["ai"])
 
 
 def _new_session() -> Session:

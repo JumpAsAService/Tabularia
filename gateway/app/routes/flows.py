@@ -37,8 +37,9 @@ from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(tags=["flows"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["flows"])
 
 # engine SELEZIONABILI alla creazione (sincronizzato col catalogo dell'engine:
 # solo quelli `available=True`).

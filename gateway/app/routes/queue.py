@@ -14,8 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.engine_client import get_engine_client
 from app.deps.auth import require_observer, require_superuser
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(prefix="/queue", tags=["queue"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/queue", tags=["queue"])
 
 
 @router.get("", dependencies=[Depends(require_observer)])

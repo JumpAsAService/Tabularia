@@ -13,10 +13,11 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import User
 from app.services import lineage as lineage_service
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["lineage"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["lineage"])
 
 
 class LineageNode(BaseModel):

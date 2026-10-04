@@ -21,10 +21,11 @@ from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_session
 from app.services import audit, sso
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth/sso", tags=["auth"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/auth/sso", tags=["auth"])
 
 
 def _cookie_path() -> str:

@@ -12,10 +12,11 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import User
 from app.services.schedule_load import compute_schedule_load
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["scheduling"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["scheduling"])
 
 
 class LoadCell(BaseModel):

@@ -13,8 +13,9 @@ from app.deps.auth import get_current_user, require_superuser
 from app.models import Banner, User
 from app.schemas.models import BannerCreate, BannerOut
 from app.services import audit
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(prefix="/banners", tags=["banners"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/banners", tags=["banners"])
 
 
 @router.get("", response_model=list[BannerOut], dependencies=[Depends(get_current_user)])

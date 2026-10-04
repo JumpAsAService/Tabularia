@@ -39,10 +39,11 @@ from app.schemas.models import (
     RunSearchOut,
 )
 from app.services.blobgc import schedule_blob_deletion
+from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["runs"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["runs"])
 
 
 def _get_flow(session: Session, flow_id: int) -> Flow:

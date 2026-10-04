@@ -16,8 +16,9 @@ from app.models import PrivacyNotice, User  # noqa: F401 — User serve alla PUT
 from app.models.privacy import _now
 from app.schemas.models import UtcDateTime
 from app.services import audit
+from app.core.routing import RottaCheRilascia
 
-router = APIRouter(tags=["privacy"])
+router = APIRouter(route_class=RottaCheRilascia, tags=["privacy"])
 
 SOMMARIO_PREDEFINITO = (
     "What this installation records about you — and what it deliberately does not."

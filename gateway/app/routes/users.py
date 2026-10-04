@@ -10,11 +10,12 @@ from app.schemas.models import UserOut, UserCreate, UserUpdate
 from app.services import audit
 from app.services.masking import mask_email
 from app.services.permissions import ensure_still_admin, is_admin
+from app.core.routing import RottaCheRilascia
 
 # Guardia per ROTTA e non per router: l'elenco è una lettura amministrativa
 # (la vede anche un osservatore, con i dati personali mascherati), tutto il
 # resto resta da amministratore.
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(route_class=RottaCheRilascia, prefix="/users", tags=["users"])
 
 
 def _group_names(session: Session) -> dict[int, list[str]]:
