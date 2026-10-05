@@ -68,6 +68,10 @@ class FakeEngine:
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
         # preview (assistente AI): corpi ricevuti e risposta da servire
+        # data contracts: richieste ricevute su /contracts/* e risposte da servire
+        self.contract_calls: list[tuple[str, dict]] = []
+        self.contract_response: tuple[int, dict] = (200, {"outcome": "passed", "rows": 3, "errors": 0, "warnings": 0, "rules": []})
+        self.profile_response: tuple[int, dict] = (200, {"profile": {"rows": 3, "columns": []}, "proposal": {"description": "", "rules": []}})
         self.previews: list[dict] = []
         self.preview_response: tuple[int, dict] = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
         # catalogo servito da GET /engines. L'engine dice cosa è tecnicamente
@@ -110,6 +114,12 @@ class FakeEngine:
 
             self.previews.append(_json.loads(request.content or b"{}"))
             status, payload = self.preview_response
+            return httpx.Response(status, json=payload)
+        if path in ("/contracts/evaluate", "/contracts/profile") and request.method == "POST":
+            import json as _json
+
+            self.contract_calls.append((path, _json.loads(request.content or b"{}")))
+            status, payload = self.contract_response if path.endswith("evaluate") else self.profile_response
             return httpx.Response(status, json=payload)
         if path == "/tasks/transform-data" and request.method == "POST":
             import json as _json

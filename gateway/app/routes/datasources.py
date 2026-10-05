@@ -21,6 +21,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, Run, User
 from app.services import audit
+from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
@@ -94,7 +95,7 @@ def _refreshing_ids(session: Session, rows: list[Datasource]) -> set[int]:
     return {i for i in found if i is not None}
 
 
-def _to_out(ds: Datasource, refreshing: bool = False) -> DatasourceOut:
+def _to_out(ds: Datasource, refreshing: bool = False, contract: dict | None = None) -> DatasourceOut:
     try:
         cols = json.loads(ds.columns or "[]")
     except json.JSONDecodeError:
@@ -119,14 +120,23 @@ def _to_out(ds: Datasource, refreshing: bool = False) -> DatasourceOut:
         # `refreshing` non è una colonna: è calcolato (vedi _refreshing_ids)
         # i CALCOLATI non stanno sul modello: `getattr` qui esploderebbe
         if f not in ("columns", "column_descriptions", "sort_keys", "refreshing",
-                     "described_columns", "total_columns", "ai_ready")
+                     "described_columns", "total_columns", "ai_ready", "contract")
     }
     descritte, totali = conta_descritte(cols, descs)
     return DatasourceOut(
         **fields, columns=cols, column_descriptions=descs, sort_keys=skeys, refreshing=refreshing,
         described_columns=descritte, total_columns=totali,
         ai_ready=is_ai_ready(ds.description, descritte, totali),
+        contract=contract,
     )
+
+
+def _to_out_many(session: Session, rows: list[Datasource]) -> list[DatasourceOut]:
+    """Un elenco di datasource con ciò che si calcola per tutte insieme: chi sta
+    importando e lo stato del data contract — una query ciascuno, non una a riga."""
+    busy = _refreshing_ids(session, rows)
+    stato = contract_service.summaries(session, [d.id for d in rows])
+    return [_to_out(d, d.id in busy, stato.get(d.id)) for d in rows]
 
 
 def _get_ds(session: Session, ds_id: int) -> Datasource:
@@ -149,8 +159,7 @@ def list_all_datasources(user: User = Depends(get_current_user), session: Sessio
     rows = session.exec(
         select(Datasource).where(Datasource.project_id.in_(readable)).order_by(Datasource.name)
     ).all()
-    busy = _refreshing_ids(session, rows)
-    return [_to_out(d, d.id in busy) for d in rows]
+    return _to_out_many(session, rows)
 
 
 @router.get("/datasources/search", response_model=Page[DatasourceOut])
@@ -171,8 +180,7 @@ def search_datasources(
         like = f"%{q}%"
         base = base.where(or_(Datasource.name.ilike(like), Datasource.description.ilike(like)))
     rows, total = paginate(session, base, Datasource.name, limit, offset)
-    busy = _refreshing_ids(session, rows)
-    return Page(items=[_to_out(d, d.id in busy) for d in rows], total=total)
+    return Page(items=_to_out_many(session, rows), total=total)
 
 
 @router.get("/projects/{project_id}/datasources", response_model=list[DatasourceOut])
@@ -187,8 +195,7 @@ def list_project_datasources(
     rows = session.exec(
         select(Datasource).where(Datasource.project_id == project_id).order_by(Datasource.name)
     ).all()
-    busy = _refreshing_ids(session, rows)
-    return [_to_out(d, d.id in busy) for d in rows]
+    return _to_out_many(session, rows)
 
 
 @router.post(
@@ -510,6 +517,7 @@ async def delete_datasource(
         run.datasource_id = None
         session.add(run)
     session.delete(ds)
+    contract_service.forget(session, ds_id)  # contratto, versioni e referti se ne vanno con lei
     if key:  # datasource database mai ingerita: nessun blob da eliminare
         schedule_blob_deletion(session, bucket, key, reason=f"datasource {ds_id} eliminata")
     session.commit()

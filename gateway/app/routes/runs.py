@@ -30,6 +30,7 @@ from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.connections import allowed_email_domains, engine_connection_payload
 from app.services import audit
+from app.services import contracts as contract_service
 from app.schemas.models import (
     ActivityBucket,
     Page,
@@ -454,6 +455,9 @@ async def _launch_flow_run(
             "mirror": mirror_payload,
             "email": email_payload,
             "engine": engine_name,  # motore di sviluppo o di produzione (vedi engine_mode)
+            # il data contract della datasource che si sta per sovrascrivere: il
+            # worker lo valuta sull'output, e il referto decide se pubblicarlo
+            **({"contract": contract} if (contract := contract_service.payload(session, publish_target_id)) else {}),
         },
     )
     if resp.status_code >= 400:
@@ -500,6 +504,10 @@ async def launch_ingest_run(
     bucket = get_settings().engine.bucket
     output_key = snapshot_key(ds.id)
     client = get_engine_client()
+    # il data contract della datasource, se ne ha uno acceso: il worker lo valuta
+    # sui dati appena letti e il referto decide se lo snapshot viene scambiato
+    documento = contract_service.payload(session, ds.id)
+    contratto = {"contract": documento} if documento else {}
     if conn.db_type == "sharepoint":
         # stesso giro dei database (run, snapshot swap, refresh, scheduler): cambia
         # solo CHI porta i dati. `source_ref` è il JSON {path, sheet}.
@@ -511,6 +519,7 @@ async def launch_ingest_run(
                 "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", "")},
                 "bucket": bucket,
                 "output_key": output_key,
+                **contratto,
             },
         )
     else:
@@ -521,6 +530,7 @@ async def launch_ingest_run(
                 "source": {"mode": ds.source_type, "ref": ds.source_ref, "sort_keys": json.loads(ds.sort_keys or "[]")},
                 "bucket": bucket,
                 "output_key": output_key,
+                **contratto,
             },
         )
     if resp.status_code >= 400:
@@ -605,6 +615,49 @@ async def _revoke_task(run: Run) -> None:
         logger.info("run %s scaduto: task %s revocato sull'engine", run.id, run.task_id)
     except Exception as e:
         logger.warning("run %s: revoca del task %s non riuscita: %s", run.id, run.task_id, e)
+
+
+def _contract_target_id(session: Session, run: Run) -> int | None:
+    """La datasource su cui i dati di questo run andrebbero a finire: quella che
+    un refresh aggiorna, o quella che un flusso sta per sovrascrivere."""
+    if run.datasource_id is not None:
+        return run.datasource_id
+    if run.publish_name and run.publish_project_id:
+        target = _find_datasource(session, run.publish_project_id, run.publish_name)
+        return target.id if target is not None else None
+    return None
+
+
+def _refuse_snapshot(session: Session, run: Run, report: dict) -> None:
+    """Il data contract ha rifiutato i dati di questo run (una regola bloccante è
+    violata): NON si scambia lo snapshot. La datasource resta com'è — stessa
+    chiave, stesse righe — e chi la legge continua a vedere gli ultimi dati
+    buoni. Il parquet rifiutato va in cancellazione differita, e il referto resta
+    nello storico. NON committa: lo fa `_reconcile`, insieme al claim del run."""
+    schedule_blob_deletion(session, run.output_bucket, run.output_key, reason=f"run {run.id} rifiutato dal data contract")
+    ds_id = _contract_target_id(session, run)
+    contract = contract_service.get(session, ds_id) if ds_id is not None else None
+    if contract is not None:
+        contract_service.record_result(
+            session, contract, report, trigger="refresh" if run.kind == "ingest" else "publish",
+            run_id=run.id, snapshot_key=run.output_key, blocked=True,
+        )
+    logger.warning("run %s: dati rifiutati dal data contract della datasource %s", run.id, ds_id)
+
+
+def _record_contract(session: Session, run: Run, report: dict | None, trigger: str) -> None:
+    """I dati sono stati pubblicati: il referto che li accompagnava diventa lo
+    stato del contratto. Solo se lo scambio è avvenuto davvero — un run superato
+    da uno più recente non pubblica niente, e il suo referto non parla dei dati
+    che la datasource sta servendo. NON committa."""
+    if report is None or run.datasource_id is None:
+        return
+    ds = session.get(Datasource, run.datasource_id)
+    if ds is None or ds.snapshot_run_id != run.id:
+        return
+    contract = contract_service.get(session, ds.id)
+    if contract is not None:
+        contract_service.record_result(session, contract, report, trigger=trigger, run_id=run.id, snapshot_key=run.output_key)
 
 
 def _is_stale_swap(ds: Datasource, run: Run) -> bool:
@@ -726,8 +779,25 @@ async def _reconcile(session: Session, run: Run) -> Run:
     # in fondo. Se l'effetto fallisce si fa rollback e il run NON diventa terminale,
     # così il prossimo _reconcile ritenta — invece di restare SUCCESS con lo swap/
     # publish perso per sempre.
+    # Data contract: il worker ha valutato i dati appena scritti (se la datasource
+    # di destinazione ne ha uno). Con una regola BLOCCANTE violata il task è
+    # riuscito ma il run no: i dati non vengono pubblicati.
+    contract_report = result.get("contract") if new_status == "SUCCESS" and isinstance(result.get("contract"), dict) else None
+    if contract_report is not None and contract_service.payload(session, _contract_target_id(session, run)) is None:
+        # il contratto è stato tolto o spento mentre il run girava: il referto
+        # parla di una promessa che non c'è più, e non decide niente
+        contract_report = None
+    refused = contract_report is not None and contract_report.get("outcome") == "failed"
+
     values: dict = {"status": new_status, "finished_at": datetime.now(timezone.utc)}
-    if new_status == "SUCCESS":
+    if refused:
+        values = {
+            "status": "FAILURE",
+            "finished_at": values["finished_at"],
+            "rows_written": result.get("rows_written"),
+            "error": contract_service.broken_rules_message(contract_report)[:2000],
+        }
+    elif new_status == "SUCCESS":
         values["rows_written"] = result.get("rows_written")
         # esito della copia best-effort: il run resta SUCCESS anche se è fallita,
         # ma l'errore va registrato qui dentro — nello STESSO claim atomico —
@@ -751,8 +821,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
             session.refresh(run)
             return run
         try:
-            if new_status == "SUCCESS" and run.kind == "ingest":
+            if refused:
+                _refuse_snapshot(session, run, contract_report)
+            elif new_status == "SUCCESS" and run.kind == "ingest":
                 _finalize_ingest(session, run, result)
+                _record_contract(session, run, contract_report, "refresh")
             elif (
                 new_status == "SUCCESS"
                 and run.publish_name
@@ -760,6 +833,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
                 and run.datasource_id is None
             ):
                 _publish_datasource(session, run, result)
+                _record_contract(session, run, contract_report, "publish")
             session.commit()  # claim + effetto: atomici
             session.refresh(run)
             return run

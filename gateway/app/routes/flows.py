@@ -561,35 +561,19 @@ def _set_failure_notice(session: Session, user: User, flow: Flow, body: FlowSche
     per aggirarla. E serve CONNECT sulla connessione, come per usarla altrove:
     altrimenti chi ha solo RUN su un flusso potrebbe far spedire dal server di
     posta di qualcun altro."""
-    from app.routes.connections import allowed_email_domains
+    from app.services import notify_targets
 
     if body.notify_emails is not None:
-        indirizzi = [a.strip() for a in body.notify_emails.replace(";", ",").split(",") if a.strip()]
-        for a in indirizzi:
-            if "@" not in a or a.startswith("@") or a.endswith("@"):
-                raise HTTPException(status_code=422, detail=f"Indirizzo non valido: {a}")
-        flow.notify_emails = ", ".join(indirizzi) or None
+        flow.notify_emails = ", ".join(notify_targets.parse_recipients(body.notify_emails)) or None
 
     if body.notify_connection_id is not None:
         if body.notify_connection_id in (0, -1):  # spegne l'avviso
             flow.notify_connection_id = None
         else:
-            conn = session.get(Connection, body.notify_connection_id)
-            if conn is None or conn.db_type != "smtp":
-                raise HTTPException(status_code=422, detail="Serve una connessione SMTP")
-            ensure_can(session, user, conn.project_id, Capability.CONNECT)
-            flow.notify_connection_id = conn.id
+            flow.notify_connection_id = notify_targets.smtp_connection(session, user, body.notify_connection_id).id
 
     if flow.notify_emails and flow.notify_connection_id:
-        conn = session.get(Connection, flow.notify_connection_id)
-        ammessi = allowed_email_domains(conn) if conn else []
-        if ammessi:
-            fuori = [a for a in flow.notify_emails.split(", ") if a.rsplit("@", 1)[-1].lower() not in ammessi]
-            if fuori:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Questa connessione può spedire solo a {', '.join(ammessi)}: {', '.join(fuori)} non è ammesso",
-                )
+        notify_targets.ensure_deliverable(session.get(Connection, flow.notify_connection_id), flow.notify_emails.split(", "))
 
 
 @router.put("/flows/{flow_id}/schedule", response_model=FlowDetail)

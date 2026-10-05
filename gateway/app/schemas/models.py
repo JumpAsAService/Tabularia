@@ -492,6 +492,16 @@ class RunActivityOut(BaseModel):
 
 
 # ── Datasources (dataset nominati nel catalogo) ───────────────────────────────
+class ContractSummary(BaseModel):
+    """Lo stato del data contract di una datasource, per gli elenchi."""
+    status: str  # pending | passed | warning | failed
+    checked_at: Optional[UtcDateTime] = None
+    errors: int = 0
+    warnings: int = 0
+    blocked: bool = False  # l'ultimo aggiornamento è stato rifiutato
+    version: int = 1
+
+
 class DatasourceOut(BaseModel):
     id: int
     name: str
@@ -527,6 +537,9 @@ class DatasourceOut(BaseModel):
     refresh_schedule: Optional[str] = None
     next_refresh_at: Optional[UtcDateTime] = None
     updated_at: Optional[UtcDateTime] = None
+    # Il data contract, se ce n'è uno acceso: ciò che serve per l'icona di stato
+    # (vedi services/contracts.summary). None = nessun contratto.
+    contract: Optional[ContractSummary] = None
 
 
 class DatasourceUpdate(BaseModel):

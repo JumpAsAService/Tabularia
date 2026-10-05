@@ -209,6 +209,11 @@ _MIGRATIONS = [
     f"WHERE {LIVE_ORCHESTRATION}",
     "CREATE INDEX IF NOT EXISTS ix_runs_orchestration_queue ON runs (id) "
     "WHERE kind = 'orchestration' AND status = 'PENDING'",
+    # data contracts: chi avvisare, e la coda degli avvisi da mandare
+    "ALTER TABLE data_contracts ADD COLUMN IF NOT EXISTS notify_emails TEXT",
+    "ALTER TABLE data_contracts ADD COLUMN IF NOT EXISTS notify_connection_id INTEGER",
+    "ALTER TABLE data_contract_results ADD COLUMN IF NOT EXISTS notify VARCHAR",
+    "CREATE INDEX IF NOT EXISTS ix_contract_results_to_notify ON data_contract_results (id) WHERE notify = 'pending'",
 ]
 
 

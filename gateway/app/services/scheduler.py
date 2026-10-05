@@ -33,6 +33,7 @@ from app.models import Connection, Datasource, Flow, Run, User
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
 from app.services.blobgc import sweep_blob_deletions
+from app.services import contracts as contract_service
 from app.services import flow_presence, login_throttle, orchestrator
 from app.models.permission import Capability
 from app.services import permissions as perm_service
@@ -236,6 +237,21 @@ async def _tick() -> None:
             except Exception:
                 logger.exception("scheduler: esecuzione flusso %s fallita", flow.id)
                 _advance_flow(session, flow, now)
+
+        # data contracts: la freschezza è l'unica regola che si rompe da sola,
+        # col passare del tempo — qui la si ricontrolla
+        try:
+            scaduti = contract_service.sweep_freshness(session, now)
+            if scaduti:
+                logger.info("scheduler: %d data contract hanno cambiato stato per la freschezza", scaduti)
+        except Exception:
+            logger.exception("scheduler: controllo della freschezza dei data contract fallito")
+        # …e chi ha chiesto di essere avvisato lo viene, quando uno stato cambia
+        from app.services import contract_notifier  # tardivo: passa dalle rotte delle connessioni
+
+        mandati = await contract_notifier.deliver_pending(session)
+        if mandati:
+            logger.info("scheduler: %d avvisi di data contract inviati", mandati)
 
         # stato di breve durata condiviso fra le repliche: via le righe scadute
         try:
