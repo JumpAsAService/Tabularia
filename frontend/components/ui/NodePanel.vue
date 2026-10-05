@@ -660,7 +660,7 @@ function pickDatasource(id: number | null) {
       <label>{{ $t('nodePanel.typeLabel') }}</label>
       <Select
         :model-value="node.data.opType"
-        :options="operations.filter((o) => o !== 'foreach').map((op) => ({ value: op, label: opMeta(op).label || op }))"
+        :options="operations.filter((o) => o !== 'foreach').map((op) => ({ value: op, label: opMeta(op).label ? t(opMeta(op).label) : op }))"
         @update:model-value="changeType"
       />
       <p v-if="nodeStats?.cacheHint" class="muted outhint cachehint"><RefreshCw :size="12" /> {{ nodeStats.cacheHint }}</p>
