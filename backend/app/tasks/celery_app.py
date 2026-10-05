@@ -15,7 +15,7 @@ celery_app = Celery(
     "data_prep",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.jobs"],
+    include=["app.tasks.jobs", "app.tasks.contract_jobs"],
 )
 
 celery_app.conf.update(
@@ -58,6 +58,8 @@ celery_app.conf.update(
     task_default_queue="celery",
     task_routes={
         "app.tasks.jobs.preview_task": {"queue": "preview"},
+        # le verifiche di un contratto chieste a mano sono interattive come un'anteprima
+        "app.tasks.contract_jobs.*": {"queue": "preview"},
     },
 )
 

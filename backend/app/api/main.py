@@ -12,6 +12,7 @@ from app.api.routes.db import router as db_router
 from app.api.routes.sharepoint import router as sharepoint_router
 from app.api.routes.observability import router as observability_router
 from app.api.routes.dbt import router as dbt_router
+from app.api.routes.contracts import router as contracts_router
 
 
 # la chiave Fernet è obbligatoria in ogni ambiente: senza, meglio non partire
@@ -62,6 +63,7 @@ app.include_router(db_router)
 app.include_router(sharepoint_router)
 app.include_router(observability_router)
 app.include_router(dbt_router)
+app.include_router(contracts_router)
 
 @app.get("/engines")
 def list_engines():

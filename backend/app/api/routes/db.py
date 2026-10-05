@@ -107,6 +107,7 @@ class DbIngestRequest(BaseModel):
     source: DbSourceSpec
     output_key: str
     bucket: Optional[str] = None  # default: bucket configurato dell'engine
+    contract: Optional[dict] = None  # data contract della datasource che si aggiorna
 
 
 @router.post("/ingest", response_model=TaskResponse)
@@ -119,6 +120,9 @@ def ingest(request: DbIngestRequest):
         source=request.source.model_dump(),
         bucket=bucket,
         output_key=request.output_key,
+        # solo se c'è: un worker non ancora aggiornato non conosce il parametro
+        # (vedi /tasks/transform-data)
+        **({"contract": request.contract} if request.contract else {}),
     )
     logger.info("📩 Submitting ingest_database_task: %s → %s", request.connection.db_type, request.output_key)
     return TaskResponse(

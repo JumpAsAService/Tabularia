@@ -148,9 +148,14 @@ def transform_data_task(
     mirror: dict[str, Any] | None = None,
     email: dict[str, Any] | None = None,
     engine: str | None = None,
+    contract: dict[str, Any] | None = None,
 ) -> dict:
     """
     Esegue un flow di trasformazione (run completo) su un parquet dello storage.
+
+    `contract`: il data contract della datasource su cui l'output verrà
+    pubblicato. Lo si valuta sul parquet appena scritto e il referto torna col
+    risultato: è il gateway a decidere se pubblicare (vedi check_before_publish).
 
     Legge `input_key`, applica la catena di `operations` con l'engine Polars in
     streaming e scrive il risultato in `output_key`. Se `destination` è
@@ -190,6 +195,18 @@ def transform_data_task(
         "columns": [c.model_dump() for c in result.columns],
         "processed_at": time.time(),
     }
+
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        out["contract"] = check_before_publish(bucket, output_key, contract)
+        if out["contract"]["outcome"] == "failed":
+            # Una regola bloccante è violata: il gateway non pubblicherà questi
+            # dati. Niente di ciò che segue deve portarli fuori — la copia su S3
+            # e l'email consegnerebbero a qualcuno proprio ciò che il contratto
+            # ha rifiutato.
+            logger.warning("contratto violato su %s: output non consegnato", output_key)
+            return out
 
     if destination:
         dest_type = destination.get("type", "database")
@@ -298,6 +315,7 @@ def ingest_sharepoint_task(
     source: dict[str, Any],
     bucket: str,
     output_key: str,
+    contract: dict[str, Any] | None = None,
 ) -> dict:
     """Scarica da SharePoint i file Excel che corrispondono al percorso (anche con
     glob), li impila e scrive il parquet. Stessa forma di `ingest_database_task`:
@@ -317,6 +335,10 @@ def ingest_sharepoint_task(
         f"✅ Completed ingest_sharepoint_task: {output_key} "
         f"({result['rows_written']} righe da {len(result['files'])} file)"
     )
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
 
 
@@ -326,10 +348,14 @@ def ingest_database_task(
     source: dict[str, Any],
     bucket: str,
     output_key: str,
+    contract: dict[str, Any] | None = None,
 ) -> dict:
     """
     Ingest da database: esegue la sorgente (tabella o SQL) e scrive il risultato
     in parquet su storage, in streaming (batch Arrow → ParquetWriter).
+
+    `contract`: il data contract della datasource che si sta aggiornando,
+    valutato sul parquet appena scritto (vedi transform_data_task).
 
     `connection.password_encrypted` è cifrata (Fernet, chiave condivisa col
     gateway): la password in chiaro non transita mai nel broker.
@@ -350,7 +376,7 @@ def ingest_database_task(
         f"✅ Completed ingest_database_task: {output_key} "
         f"({result['rows_written']} righe, {len(result['columns'])} colonne)"
     )
-    return {
+    out = {
         "status": "success",
         "bucket": bucket,
         "output_key": output_key,
@@ -358,6 +384,11 @@ def ingest_database_task(
         "columns": result["columns"],
         "processed_at": time.time(),
     }
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        out["contract"] = check_before_publish(bucket, output_key, contract)
+    return out
 
 
 @celery_app.task(name="app.tasks.jobs.convert_to_parquet_task")

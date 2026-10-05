@@ -53,6 +53,7 @@ def submit_transform_data_task(request: TransformDataRequest):
             ("mirror", request.mirror),
             ("email", request.email),
             ("engine", request.engine),
+            ("contract", request.contract),
         )
         if v is not None
     }

@@ -36,6 +36,9 @@ class TransformDataRequest(BaseModel):
         default=None, description="Invio dell'output come email con allegato"
     )
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
+    # data contract della datasource su cui l'output verrà pubblicato: valutato
+    # sul parquet appena scritto, il referto torna col risultato del task
+    contract: Optional[dict[str, Any]] = Field(default=None, description="Data contract da valutare sull'output")
 
 
 class TaskResponse(BaseModel):

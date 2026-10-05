@@ -38,6 +38,7 @@ class SharePointIngestRequest(BaseModel):
     source: SharePointSourceSpec
     bucket: str = ""
     output_key: str
+    contract: dict | None = None  # data contract della datasource che si aggiorna
 
 
 @router.post("/inspect")
@@ -68,6 +69,8 @@ def ingest(request: SharePointIngestRequest):
         source=request.source.model_dump(),
         bucket=request.bucket or get_settings().storage.bucket,
         output_key=request.output_key,
+        # solo se c'è: un worker non ancora aggiornato non conosce il parametro
+        **({"contract": request.contract} if request.contract else {}),
     )
     logger.info("📩 Submitting ingest_sharepoint_task: %s → %s", request.source.path, request.output_key)
     return TaskResponse(task_id=task.id, status="submitted", message=f"Ingesting SharePoint {request.source.path} → {request.output_key}")
