@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, provide } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, provide } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Node, Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls, ControlButton } from '@vue-flow/controls'
 
-import { Table2, BarChart3, Wand2, Users } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2 } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
 import { useAuth } from '~/composables/useAuth'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
@@ -17,6 +17,8 @@ import FlowEdge from '~/components/edges/FlowEdge.vue'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
+import { createFlowHistory } from '~/composables/useFlowHistory'
+import { buildClip, instantiateClip, readClip, writeClip, type ClipNode, type FlowClip } from '~/composables/useFlowClipboard'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
 import { useRuns, type PublishSpec, type DestinationSpec } from '~/composables/useRuns'
@@ -53,6 +55,9 @@ const {
   onEdgeMouseEnter,
   onEdgeMouseLeave,
   getSelectedEdges,
+  getSelectedNodes,
+  addSelectedNodes,
+  removeSelectedNodes,
   screenToFlowCoordinate,
   fitView,
 } = useVueFlow()
@@ -313,7 +318,17 @@ async function loadFlow(id: number) {
   projectId.value = f.project_id
   flowEngine.value = f.engine || 'polars'
   flowProductionEngine.value = f.production_engine ?? null
-  const def = JSON.parse(f.definition || '{}')
+  applyDefinition(JSON.parse(f.definition || '{}'))
+  selectedId.value = null
+  history.reset() // un flusso appena caricato non ha niente da annullare
+  setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok')
+}
+
+// Mette sul canvas una definizione (quella salvata, o un'istantanea della
+// cronologia). `keepCounters`: i contatori degli id non tornano MAI indietro —
+// dopo un annulla un nodo nuovo non deve riprendere l'id di uno appena sparito,
+// o erediterebbe le sue colonne e i suoi conteggi in cache.
+function applyDefinition(def: any, keepCounters = false) {
   // normalizza: sorgenti salvate senza bucket (flussi vecchi/esterni) ricevono
   // quello di default, altrimenti preview/run partirebbero senza bucket (422)
   let nodes = (def.nodes ?? []).map((n: any) => {
@@ -350,12 +365,54 @@ async function loadFlow(id: number) {
     Math.max(0, ...(def.nodes ?? [])
       .filter((n: any) => String(n.id).startsWith(prefix))
       .map((n: any) => Number(String(n.id).slice(prefix.length)) || 0))
-  opCounter = maxN('op-')
-  sourceCounter = maxN('src-')
-  outputCounter = Math.max(maxN('out-'), maxN('ctl-')) // out- e ctl- condividono il contatore
-  commentCounter = maxN('cmt-')
-  selectedId.value = null
-  setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok')
+  const base = (attuale: number) => (keepCounters ? attuale : 0)
+  opCounter = Math.max(base(opCounter), maxN('op-'))
+  sourceCounter = Math.max(base(sourceCounter), maxN('src-'))
+  outputCounter = Math.max(base(outputCounter), maxN('out-'), maxN('ctl-')) // out- e ctl- condividono il contatore
+  commentCounter = Math.max(base(commentCounter), maxN('cmt-'))
+}
+
+// ── Annulla / ripeti ─────────────────────────────────────────────────────
+// La cronologia vede il canvas nella stessa forma in cui si salva: ogni
+// modifica che cambia `serializeCanvas()` diventa un passo da sola (vedi
+// useFlowHistory). Non è salvata: vive finché l'editor resta aperto.
+const canUndo = ref(false)
+const canRedo = ref(false)
+const history = createFlowHistory({
+  serialize: serializeCanvas,
+  restore: restoreSnapshot,
+  onChange: () => {
+    canUndo.value = history.canUndo()
+    canRedo.value = history.canRedo()
+  },
+})
+watch(serializeCanvas, () => history.touch())
+onUnmounted(() => history.dispose())
+
+function restoreSnapshot(snapshot: string) {
+  // anteprima e colonne in volo riguardano un canvas che non c'è più
+  previewSeq++
+  columnsSeq++
+  previewSlots.cancel('preview')
+  previewSlots.cancel('cols')
+  applyDefinition(JSON.parse(snapshot), true)
+  for (const k of Object.keys(nodeColumns)) delete nodeColumns[k]
+  invalidateStats()
+  if (selectedId.value && !findNode(selectedId.value)) selectedId.value = null
+  if (selectedId.value) {
+    refreshForNode(selectedId.value)
+  } else {
+    preview.value = null
+    inputColumns.value = []
+    rightColumns.value = []
+  }
+}
+
+function undo() {
+  if (history.undo()) setStatus(t('flowEditor.undone'), 'info')
+}
+function redo() {
+  if (history.redo()) setStatus(t('flowEditor.redone'), 'info')
 }
 
 async function saveFlow() {
@@ -412,6 +469,7 @@ onMounted(async () => {
   } catch (e) {
     setStatus(t('flowEditor.flowLoadFailed', { error: errMessage(e) }), 'error')
   }
+  if (flowId.value === null) history.reset() // flusso nuovo: si parte dal canvas iniziale
 })
 
 // ── Catalogo datasources (per il picker del nodo sorgente) ────────────────
@@ -439,7 +497,9 @@ function syncSourceKeys() {
 async function refreshDatasources() {
   try {
     datasources.value = await dsApi.list()
-    syncSourceKeys()
+    // riagganciare una sorgente al suo snapshot nuovo non è una modifica
+    // dell'utente: annullarla riporterebbe a una chiave che non esiste più
+    history.quietly(syncSourceKeys)
   } catch {
     datasources.value = []
   }
@@ -613,7 +673,8 @@ async function pollConversion(sid: string, taskId: string) {
     }
     if (st.status === 'SUCCESS') {
       const info: any = st.result ?? {}
-      updateNodeData(sid, { rows: info.rows ?? null, columns: info.columns ?? [] })
+      // la fine della conversione completa il caricamento: non è un passo a sé
+      history.quietly(() => updateNodeData(sid, { rows: info.rows ?? null, columns: info.columns ?? [] }))
       nodeColumns[sid] = info.columns ?? []
       setStatus(t('flowEditor.ready', { rows: info.rows }), 'ok')
       await refreshForNode(sid)
@@ -795,23 +856,29 @@ function previewSelected() {
 }
 
 function deleteSelected() {
-  const id = selectedId.value
-  if (!id) return
-  // la preview e le colonne del nodo che sparisce non devono piu' scrivere nulla
+  if (selectedId.value) deleteNodes([selectedId.value])
+}
+
+function deleteNodes(ids: string[]) {
+  if (!ids.length) return
+  // la preview e le colonne dei nodi che spariscono non devono piu' scrivere nulla
   previewSeq++
   columnsSeq++
   previewSlots.cancel('preview')
   previewSlots.cancel('cols')
-  // un container foreach porta via anche i figli (il corpo del ciclo)
-  const node = findNode(id)
-  if (node?.type === 'foreach') {
-    const children = getNodes.value.filter((n) => n.parentNode === id).map((n) => n.id)
-    if (children.length) removeNodes(children, true)
-    children.forEach((c) => delete nodeColumns[c])
+  for (const id of ids) {
+    // un container foreach porta via anche i figli (il corpo del ciclo)
+    const node = findNode(id)
+    if (!node) continue // già andato via con il suo container
+    if (node.type === 'foreach') {
+      const children = getNodes.value.filter((n) => n.parentNode === id).map((n) => n.id)
+      if (children.length) removeNodes(children, true)
+      children.forEach((c) => delete nodeColumns[c])
+    }
+    invalidateStats(id) // il nodo e tutto cio' che lo seguiva
+    removeNodes(id, true) // rimuove anche gli archi collegati
+    delete nodeColumns[id]
   }
-  invalidateStats(id) // il nodo e tutto cio' che lo seguiva
-  removeNodes(id, true) // rimuove anche gli archi collegati
-  delete nodeColumns[id]
   selectedId.value = null
   preview.value = null
   inputColumns.value = []
@@ -819,11 +886,116 @@ function deleteSelected() {
   invalidateColumns()
 }
 
-// Canc / Backspace elimina il nodo selezionato (ma non mentre si scrive in un campo)
+// ── Copia / taglia / incolla / duplica ───────────────────────────────────
+// I nodi su cui agiscono: la selezione multipla del canvas (riquadro con
+// Maiusc, o Ctrl/Cmd+click) se c'è, altrimenti il nodo aperto nel pannello.
+function selectedIds(): string[] {
+  const multi = getSelectedNodes.value.map((n) => n.id)
+  if (multi.length > 1) return multi
+  return selectedId.value ? [selectedId.value] : multi
+}
+
+function clipOfSelection(): FlowClip | null {
+  const canvas = JSON.parse(serializeCanvas())
+  return buildClip(canvas.nodes, canvas.edges, selectedIds())
+}
+
+let pasteCount = 0 // ogni incolla dello stesso pezzo cade un po' più in là del precedente
+
+function copySelection(): boolean {
+  const clip = clipOfSelection()
+  if (!clip) return false
+  writeClip(clip)
+  pasteCount = 0
+  setStatus(t('flowEditor.nodesCopied', { n: clip.nodes.length }), 'ok')
+  return true
+}
+
+function newNodeId(n: ClipNode): string {
+  if (n.type === 'source') return `src-${++sourceCounter}`
+  if (n.type === 'output') return `out-${++outputCounter}`
+  if (n.type === 'refresh' || n.type === 'runflow') return `ctl-${++outputCounter}`
+  if (n.type === 'comment') return `cmt-${++commentCounter}`
+  return `op-${++opCounter}` // operation e foreach
+}
+
+function pasteClip(clip: FlowClip) {
+  const passo = 40 * ++pasteCount
+  // un osservatore incolla ciò che può anche aggiungere a mano: le trasformazioni
+  const ammesso = (n: ClipNode) => !soloOsservatore.value || n.type === 'operation'
+  const { nodes, edges } = instantiateClip(clip, newNodeId, { x: passo, y: passo }, ammesso)
+  if (!nodes.length) {
+    negatoAllOsservatore()
+    return
+  }
+  addNodes(nodes.map((n) => (n.parentNode ? { ...n, extent: 'parent' as const } : n)))
+  addEdges(edges.map((e) => ({
+    ...e,
+    sourceHandle: e.sourceHandle ?? undefined,
+    targetHandle: e.targetHandle ?? undefined,
+    class: e.targetHandle === 'seq-in' ? 'edge-seq' : undefined,
+  })))
+  invalidateColumns()
+  // i nodi incollati restano selezionati: si spostano insieme, si ricopiano, si tolgono
+  const nuovi = new Set(nodes.map((n) => n.id))
+  selectedId.value = nodes[0].id
+  nextTick(() => {
+    removeSelectedNodes(getSelectedNodes.value)
+    addSelectedNodes(getNodes.value.filter((n) => nuovi.has(n.id)))
+  })
+  refreshForNode(nodes[0].id)
+  setStatus(t('flowEditor.nodesPasted', { n: nodes.length }), 'ok')
+}
+
+function duplicateSelection() {
+  const clip = clipOfSelection()
+  if (!clip) return
+  pasteCount = 0 // accanto all'originale; non tocca ciò che si era copiato
+  pasteClip(clip)
+}
+
+function cutSelection() {
+  const ids = selectedIds()
+  if (copySelection()) deleteNodes(ids)
+}
+
+// Nei campi valgono le scorciatoie del browser: lì Ctrl+Z annulla il testo,
+// Ctrl+C copia il testo, Canc cancella un carattere.
+function scriveInUnCampo(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes((el?.tagName ?? '').toUpperCase()) || !!el?.isContentEditable
+}
+
+// Scorciatoie del canvas: annulla/ripeti, copia/taglia/incolla/duplica, e
+// Canc / Backspace che elimina ciò che è selezionato.
 function onKeydown(e: KeyboardEvent) {
+  if (scriveInUnCampo() || runDialogOpen.value) return
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    const tasto = e.key.toLowerCase()
+    if (tasto === 'z' || tasto === 'y') {
+      e.preventDefault()
+      if (tasto === 'y' || e.shiftKey) redo()
+      else undo()
+    } else if (tasto === 'c' || tasto === 'x') {
+      // con del testo evidenziato (una cella dell'anteprima) si copia il testo
+      if (window.getSelection()?.toString()) return
+      if (!selectedIds().length) return
+      e.preventDefault()
+      if (tasto === 'x') cutSelection()
+      else copySelection()
+    } else if (tasto === 'v') {
+      const clip = readClip()
+      if (!clip) return
+      e.preventDefault()
+      pasteClip(clip)
+    } else if (tasto === 'd') {
+      if (!selectedIds().length) return
+      e.preventDefault() // altrimenti il browser apre «aggiungi ai preferiti»
+      duplicateSelection()
+    }
+    return
+  }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
-  const tag = (document.activeElement?.tagName ?? '').toUpperCase()
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
   // un arco selezionato (click sul tratto) si toglie con lo stesso tasto del nodo
   const edges = getSelectedEdges.value
   if (edges.length) {
@@ -831,9 +1003,10 @@ function onKeydown(e: KeyboardEvent) {
     edges.forEach((edge) => removeEdgeById(edge.id))
     return
   }
-  if (!selectedId.value) return
+  const ids = selectedIds()
+  if (!ids.length) return
   e.preventDefault()
-  deleteSelected()
+  deleteNodes(ids)
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
@@ -1551,6 +1724,12 @@ async function pollTask(id: string) {
         <Controls>
           <ControlButton :title="$t('flowEditor.orderFlowTitle')" @click="autoLayout">
             <Wand2 :size="13" />
+          </ControlButton>
+          <ControlButton :title="$t('flowEditor.undoTitle')" :aria-label="$t('flowEditor.undoTitle')" :disabled="!canUndo" @click="undo">
+            <Undo2 :size="13" />
+          </ControlButton>
+          <ControlButton :title="$t('flowEditor.redoTitle')" :aria-label="$t('flowEditor.redoTitle')" :disabled="!canRedo" @click="redo">
+            <Redo2 :size="13" />
           </ControlButton>
         </Controls>
       </VueFlow>

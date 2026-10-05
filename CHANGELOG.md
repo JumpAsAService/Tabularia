@@ -5,6 +5,14 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Undo, redo, copy and paste in the flow editor.** Ctrl/Cmd+Z and Shift+Z (or
+  Y) walk back and forth through the changes to the canvas — a node added, moved,
+  deleted, a parameter edited, an edge drawn — and Ctrl/Cmd+C, X, V and D copy,
+  cut, paste and duplicate the selected nodes with the edges between them, also
+  from one flow to another. A drag is one step, not one per pixel; loading a flow
+  or re-attaching a source to its fresh snapshot is not a step at all, because
+  undoing it would lead to a state nobody chose. The shortcuts stay out of the
+  way while typing in a field or selecting text.
 - **The gateway can run in more than one copy, and orchestration scales on its
   own.** One gateway process served about 95 requests a second, and everything
   that was not a request — the scheduler, the running orchestrations, the login

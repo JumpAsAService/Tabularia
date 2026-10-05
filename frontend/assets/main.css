@@ -527,6 +527,9 @@ optgroup { font-style: normal; color: var(--muted); }
   fill: var(--text);
 }
 .vue-flow__controls-button:hover { background: var(--border); }
+.vue-flow__controls-button:disabled { cursor: default; }
+.vue-flow__controls-button:disabled:hover { background: var(--panel-2); }
+.vue-flow__controls-button:disabled svg { opacity: 0.35; }
 
 /* ── Vista dati (tab Tabella | Grafico) ──────────────────────────────── */
 .grid {
