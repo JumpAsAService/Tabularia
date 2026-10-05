@@ -30,6 +30,8 @@
   --accent-2: #6ee7b7;
   --violet: #a78bfa;
   --danger: #ff6b6b;
+  --warning: #f5b53d;
+  --on-warning: #1a1205; /* testo sul riempimento --warning */
   --radius: 10px;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
@@ -71,6 +73,8 @@
   --accent-2: #0a7d56;
   --violet: #7c3aed;
   --danger: #e02424;
+  --warning: #b45309;
+  --on-warning: #ffffff; /* testo sul riempimento --warning */
   --shadow-1: 0 1px 2px rgba(20, 30, 60, 0.08);
   --shadow-2: 0 6px 20px rgba(20, 30, 60, 0.12);
   --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
@@ -103,6 +107,8 @@
   --accent-2: #50fa7b;
   --violet: #ff79c6;
   --danger: #ff5555;
+  --warning: #ffb86c;
+  --on-warning: #1a1205; /* testo sul riempimento --warning */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
@@ -136,6 +142,8 @@
   --violet: #ae81ff;
   /* era #f92672: 3,93:1 sul pannello — è il colore dei messaggi di errore */
   --danger: #fb4a8b;
+  --warning: #fd971f;
+  --on-warning: #1a1205; /* testo sul riempimento --warning */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
@@ -573,3 +581,12 @@ table.data th {
 table.data tbody tr:nth-child(even) { background: var(--row-even); }
 table.data tbody tr:hover { background: var(--row-hover); }
 table.data td.null { color: var(--muted); font-style: italic; }
+
+/* ── Data contract: l'icona di stato di una datasource ───────────────────── */
+/* Tre forme diverse (spunta, punto esclamativo, croce) oltre ai tre colori:
+   chi non distingue il rosso dal verde legge la forma. */
+.contract-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; vertical-align: middle; color: var(--muted); }
+.contract-badge.passed { color: var(--accent-2); }
+.contract-badge.warning { color: var(--warning); }
+.contract-badge.failed { color: var(--danger); }
+.contract-badge-text { font-size: 11px; font-weight: 600; }

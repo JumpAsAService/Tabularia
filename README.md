@@ -89,6 +89,14 @@ engines, from an in-process library to a serverless warehouse.
   already returned — and edges can be removed with a click or the keyboard. Repeated
   previews reuse a per-step cache that is written *after* the answer is on screen, so a
   second click is fast without the first one waiting for it.
+- **Data contracts: bad data does not get published.** A datasource can carry a
+  contract — columns, types and rules on the values — checked every time new data
+  arrives, *before* it is published. Each rule is either a **warning** (published,
+  and reported) or an **error** (blocked: the datasource keeps serving the last good
+  data and the run says which rule broke). The state shows as an icon wherever the
+  datasource appears, down to the source nodes of the flows that read it; a change of
+  state can send an email; the contract exports to the open
+  [ODCS](https://bitol-io.github.io/open-data-contract-standard/) format.
 - **Schedule and forget.** Put flows on a schedule (timezone-aware, DST-safe) and let
   them refresh on their own; a load heatmap shows busy time-bands and collisions
   before they bite.

@@ -1147,4 +1147,156 @@ export default {
     "intro": "What it contains, what one row stands for, the period covered, the caveats. People who find it in the catalog read it, and so does the AI assistant, to pick the right table.",
     "placeholder": "e.g. Orders shipped from the ERP, one row per order line. Since 2020, refreshed nightly. Amounts are net of VAT; returns carry a negative quantity."
   },
+  "contracts": {
+    "title": "Data contract — {name}",
+    "close": "Close",
+    "loading": "Loading the contract…",
+    "open": "Data contract",
+    "intro": "A data contract is what this datasource promises to whoever uses it: which columns it has, of which type, and which rules its values follow. The rules are checked every time new data arrives, before it is published.",
+    "state": {
+      "pending": "Data contract: not checked on the current data yet",
+      "passed": "Data contract respected",
+      "warning": "Data contract with warnings — rules not respected: {n}",
+      "failed": "Data contract violated — blocking rules not respected: {n}",
+      "blocked": "Data contract violated: the last update was refused and the previous data is still served"
+    },
+    "short": {
+      "pending": "Not checked",
+      "passed": "Respected",
+      "warning": "Warning",
+      "failed": "Violated",
+      "blocked": "Update refused"
+    },
+    "blockedExplain": "The last update broke a blocking rule and was not published ({when}). The datasource still serves the previous data.",
+    "checkedAt": "Checked {when} · version {version}",
+    "neverChecked": "Not checked on the current data yet.",
+    "severity": {
+      "warning": "Warning",
+      "error": "Error"
+    },
+    "severityHint": {
+      "warning": "not blocking: the new data is published and the violation is reported",
+      "error": "blocking: the new data is not published and the datasource keeps the last good data"
+    },
+    "severityOf": "Severity of the rule",
+    "propose": "Propose from the data",
+    "proposeReplace": "Replace the rules written so far with the ones proposed from the current data?",
+    "enabled": "Contract active",
+    "unsaved": "Unsaved changes: save to check them on the data",
+    "tableGroup": "Whole table",
+    "columnGone": "the datasource no longer has this column",
+    "addRule": "Add rule",
+    "addRuleTo": "Add a rule to {name}",
+    "removeRule": "Remove the rule",
+    "kind": {
+      "column": "Column and type",
+      "not_null": "Not null",
+      "unique": "Unique",
+      "accepted_values": "Accepted values",
+      "range": "Range",
+      "pattern": "Pattern",
+      "row_count": "Row count",
+      "freshness": "Freshness",
+      "expression": "SQL condition"
+    },
+    "kindHint": {
+      "column": "The column exists and, if a type is chosen, is of that type",
+      "not_null": "No row has a null in this column",
+      "unique": "No two rows share the same value (nulls count as values)",
+      "accepted_values": "Every non-null value is one of those listed",
+      "range": "Every non-null value lies between the minimum and the maximum; either one may be left empty",
+      "pattern": "Every non-null value matches the regular expression in full",
+      "row_count": "The number of rows lies between the minimum and the maximum; either one may be left empty",
+      "freshness": "The data is at most this many hours old: the last update, or the newest value of a date column",
+      "expression": "A SQL condition that must be true on every row; a null result counts as a violation"
+    },
+    "field": {
+      "dtype": "Expected type",
+      "anyType": "any type",
+      "values": "values, separated by commas",
+      "min": "min",
+      "max": "max",
+      "regex": "regular expression, e.g. [A-Z]+-[0-9]+",
+      "maxAge": "Maximum age in hours",
+      "hoursOf": "hours at most since",
+      "freshnessOf": "What the age is measured on",
+      "snapshot": "the last update",
+      "sql": "e.g. shipped_at >= ordered_at"
+    },
+    "dtype": {
+      "integer": "integer",
+      "number": "number",
+      "string": "text",
+      "boolean": "boolean",
+      "date": "date",
+      "datetime": "date and time"
+    },
+    "problem": {
+      "not_a_contract": "The contract is not in a valid form",
+      "too_many_rules": "Too many rules: a contract holds 200 at most",
+      "unknown_kind": "Unknown kind of rule",
+      "bad_severity": "The severity must be Warning or Error",
+      "missing_column": "Choose the column",
+      "bad_dtype": "Unknown type",
+      "empty_values": "List at least one accepted value",
+      "too_many_values": "Too many accepted values: 500 at most",
+      "bad_values": "The accepted values must be texts, numbers or booleans",
+      "no_bounds": "Give a minimum, a maximum, or both",
+      "bad_bounds": "The bounds are not valid: check that they are numbers and that the minimum does not exceed the maximum",
+      "bad_regex": "The regular expression is not valid",
+      "bad_max_age": "The maximum age must be a number of hours greater than zero",
+      "empty_expression": "Write the SQL condition"
+    },
+    "result": {
+      "error": "Could not be evaluated: {error}",
+      "violations": "rows in violation: {n}",
+      "rows": "rows: {n}",
+      "age": "age: {hours} h",
+      "isType": "the column is of type {type}",
+      "missing": "the column is missing",
+      "sample": "e.g. {values}"
+    },
+    "outcome": {
+      "ok": "Respected",
+      "warning": "Not respected: warning",
+      "error": "Not respected: blocking",
+      "none": "Not checked yet"
+    },
+    "history": "History of the checks",
+    "historyEmpty": "No checks recorded yet.",
+    "trigger": {
+      "refresh": "Refresh",
+      "publish": "Flow run",
+      "save": "Contract saved",
+      "manual": "Checked by hand",
+      "freshness": "Freshness over time"
+    },
+    "refused": "Update refused",
+    "remove": "Remove the contract",
+    "removeConfirm": "Remove the data contract from this datasource? Its rules will no longer be checked. The history of the checks stays.",
+    "removed": "Data contract removed",
+    "checkNow": "Check now",
+    "saveFirst": "Save the changes first",
+    "save": "Save and check",
+    "create": "Create the contract",
+    "saved": "Data contract saved",
+    "savedPassed": "Data contract saved: the current data respects it",
+    "savedNotRespected": "Data contract saved. The current data does not respect it: the rules that fail are marked",
+    "savedUnchecked": "Contract saved, but it could not be checked: {error}",
+    "invalid": "Some rules are incomplete: they are marked in red",
+    "exportOdcs": "Export as ODCS",
+    "exportOdcsTitle": "Download the saved contract in the open ODCS format (YAML), to hand it to a catalog or another tool",
+    "notify": {
+      "title": "Notifications",
+      "hint": "An email when the state of the contract changes because of new data or of time passing: an update refused, a rule no longer respected, everything fine again. One message per change, not one per check.",
+      "emails": "Addresses to notify",
+      "emailsPlaceholder": "addresses, separated by commas",
+      "connection": "SMTP connection to send with",
+      "noConnection": "SMTP connection…",
+      "incomplete": "Notifications need both: at least one address and an SMTP connection.",
+      "otherConnection": "connection #{id}",
+      "noSmtp": "There is no SMTP connection you can use: create one in Connections to receive the notifications."
+    },
+    "discardConfirm": "Close without saving the changes to the contract?"
+  },
 }

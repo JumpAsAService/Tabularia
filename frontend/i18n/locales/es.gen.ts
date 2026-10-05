@@ -1064,4 +1064,156 @@ export default {
     "intro": "Qué contiene, qué representa una fila, el periodo cubierto, las advertencias. La leen quienes la encuentran en el catálogo y el asistente de IA, para elegir la tabla correcta.",
     "placeholder": "p. ej. Pedidos servidos desde el ERP, una fila por línea de pedido. Desde 2020, actualizada cada noche. Importes sin IVA; las devoluciones llevan cantidad negativa."
   },
+  "contracts": {
+    "title": "Data contract — {name}",
+    "close": "Cerrar",
+    "loading": "Cargando el contrato…",
+    "open": "Data contract",
+    "intro": "Un data contract es lo que esta datasource promete a quien la usa: qué columnas tiene, de qué tipo, y qué reglas cumplen sus valores. Las reglas se comprueban cada vez que llegan datos nuevos, antes de publicarlos.",
+    "state": {
+      "pending": "Data contract: aún no comprobado sobre los datos actuales",
+      "passed": "Data contract cumplido",
+      "warning": "Data contract con avisos — reglas no cumplidas: {n}",
+      "failed": "Data contract incumplido — reglas bloqueantes no cumplidas: {n}",
+      "blocked": "Data contract incumplido: la última actualización fue rechazada y la datasource sigue sirviendo los datos anteriores"
+    },
+    "short": {
+      "pending": "Sin comprobar",
+      "passed": "Cumplido",
+      "warning": "Aviso",
+      "failed": "Incumplido",
+      "blocked": "Actualización rechazada"
+    },
+    "blockedExplain": "La última actualización incumplía una regla bloqueante y no se publicó ({when}). La datasource sigue sirviendo los datos anteriores.",
+    "checkedAt": "Comprobado {when} · versión {version}",
+    "neverChecked": "Aún no comprobado sobre los datos actuales.",
+    "severity": {
+      "warning": "Aviso",
+      "error": "Error"
+    },
+    "severityHint": {
+      "warning": "no bloqueante: los datos nuevos se publican y el incumplimiento se notifica",
+      "error": "bloqueante: los datos nuevos no se publican y la datasource conserva los últimos datos válidos"
+    },
+    "severityOf": "Severidad de la regla",
+    "propose": "Proponer a partir de los datos",
+    "proposeReplace": "¿Sustituir las reglas escritas hasta ahora por las propuestas a partir de los datos actuales?",
+    "enabled": "Contrato activo",
+    "unsaved": "Cambios sin guardar: guarda para comprobarlos sobre los datos",
+    "tableGroup": "Tabla entera",
+    "columnGone": "la datasource ya no tiene esta columna",
+    "addRule": "Añadir regla",
+    "addRuleTo": "Añadir una regla a {name}",
+    "removeRule": "Quitar la regla",
+    "kind": {
+      "column": "Columna y tipo",
+      "not_null": "Nunca nula",
+      "unique": "Única",
+      "accepted_values": "Valores admitidos",
+      "range": "Intervalo",
+      "pattern": "Formato",
+      "row_count": "Número de filas",
+      "freshness": "Frescura",
+      "expression": "Condición SQL"
+    },
+    "kindHint": {
+      "column": "La columna existe y, si se elige un tipo, es de ese tipo",
+      "not_null": "Ninguna fila tiene un valor nulo en esta columna",
+      "unique": "No hay dos filas con el mismo valor (los nulos cuentan como valores)",
+      "accepted_values": "Cada valor no nulo es uno de los de la lista",
+      "range": "Cada valor no nulo está entre el mínimo y el máximo; uno de los dos puede quedar vacío",
+      "pattern": "Cada valor no nulo coincide por completo con la expresión regular",
+      "row_count": "El número de filas está entre el mínimo y el máximo; uno de los dos puede quedar vacío",
+      "freshness": "Los datos tienen como mucho estas horas: la última actualización, o el valor más reciente de una columna de fechas",
+      "expression": "Una condición SQL que debe ser verdadera en cada fila; un resultado nulo cuenta como incumplimiento"
+    },
+    "field": {
+      "dtype": "Tipo esperado",
+      "anyType": "cualquier tipo",
+      "values": "valores, separados por comas",
+      "min": "mín",
+      "max": "máx",
+      "regex": "expresión regular, p. ej. [A-Z]+-[0-9]+",
+      "maxAge": "Antigüedad máxima en horas",
+      "hoursOf": "horas como máximo desde",
+      "freshnessOf": "Sobre qué se mide la antigüedad",
+      "snapshot": "la última actualización",
+      "sql": "p. ej. enviado_el >= pedido_el"
+    },
+    "dtype": {
+      "integer": "entero",
+      "number": "número",
+      "string": "texto",
+      "boolean": "booleano",
+      "date": "fecha",
+      "datetime": "fecha y hora"
+    },
+    "problem": {
+      "not_a_contract": "El contrato no tiene una forma válida",
+      "too_many_rules": "Demasiadas reglas: un contrato admite 200 como máximo",
+      "unknown_kind": "Tipo de regla desconocido",
+      "bad_severity": "La severidad debe ser Aviso o Error",
+      "missing_column": "Elige la columna",
+      "bad_dtype": "Tipo desconocido",
+      "empty_values": "Indica al menos un valor admitido",
+      "too_many_values": "Demasiados valores admitidos: 500 como máximo",
+      "bad_values": "Los valores admitidos deben ser textos, números o booleanos",
+      "no_bounds": "Indica un mínimo, un máximo o ambos",
+      "bad_bounds": "Los límites no son válidos: comprueba que sean números y que el mínimo no supere el máximo",
+      "bad_regex": "La expresión regular no es válida",
+      "bad_max_age": "La antigüedad máxima debe ser un número de horas mayor que cero",
+      "empty_expression": "Escribe la condición SQL"
+    },
+    "result": {
+      "error": "No se pudo evaluar: {error}",
+      "violations": "filas que incumplen: {n}",
+      "rows": "filas: {n}",
+      "age": "antigüedad: {hours} h",
+      "isType": "la columna es de tipo {type}",
+      "missing": "falta la columna",
+      "sample": "p. ej. {values}"
+    },
+    "outcome": {
+      "ok": "Cumplida",
+      "warning": "No cumplida: aviso",
+      "error": "No cumplida: bloqueante",
+      "none": "Aún sin comprobar"
+    },
+    "history": "Historial de comprobaciones",
+    "historyEmpty": "Ninguna comprobación registrada.",
+    "trigger": {
+      "refresh": "Refresh",
+      "publish": "Ejecución del flujo",
+      "save": "Contrato guardado",
+      "manual": "Comprobación manual",
+      "freshness": "Frescura en el tiempo"
+    },
+    "refused": "Actualización rechazada",
+    "remove": "Quitar el contrato",
+    "removeConfirm": "¿Quitar el data contract de esta datasource? Sus reglas dejarán de comprobarse. El historial de comprobaciones se conserva.",
+    "removed": "Data contract quitado",
+    "checkNow": "Comprobar ahora",
+    "saveFirst": "Guarda primero los cambios",
+    "save": "Guardar y comprobar",
+    "create": "Crear el contrato",
+    "saved": "Data contract guardado",
+    "savedPassed": "Data contract guardado: los datos actuales lo cumplen",
+    "savedNotRespected": "Data contract guardado. Los datos actuales no lo cumplen: las reglas que fallan están marcadas",
+    "savedUnchecked": "Contrato guardado, pero no se pudo comprobar: {error}",
+    "invalid": "Algunas reglas están incompletas: están marcadas en rojo",
+    "exportOdcs": "Exportar en ODCS",
+    "exportOdcsTitle": "Descargar el contrato guardado en el formato abierto ODCS (YAML), para entregarlo a un catálogo o a otra herramienta",
+    "notify": {
+      "title": "Avisos",
+      "hint": "Un correo cuando el estado del contrato cambia por la llegada de datos nuevos o por el paso del tiempo: una actualización rechazada, una regla que deja de cumplirse, todo en orden de nuevo. Un mensaje por cambio, no uno por comprobación.",
+      "emails": "Direcciones a avisar",
+      "emailsPlaceholder": "direcciones, separadas por comas",
+      "connection": "Conexión SMTP con la que enviar",
+      "noConnection": "conexión SMTP…",
+      "incomplete": "Los avisos necesitan las dos cosas: al menos una dirección y una conexión SMTP.",
+      "otherConnection": "conexión #{id}",
+      "noSmtp": "No hay ninguna conexión SMTP que puedas usar: crea una en Conexiones para recibir los avisos."
+    },
+    "discardConfirm": "¿Cerrar sin guardar los cambios del contrato?"
+  },
 }

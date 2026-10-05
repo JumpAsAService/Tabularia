@@ -5,6 +5,55 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Data contracts: what a datasource promises to whoever uses it.** A flow
+  that publishes garbage on time is worse than one that fails: the failure is in
+  the run history, the garbage is in everybody's dashboards. A datasource can now
+  carry a contract — which columns it has, of which type, and the rules its
+  values follow — and the rules are checked **every time new data arrives, before
+  it is published**: on a refresh from a database or SharePoint and on a flow
+  that overwrites the datasource.
+
+  **Two severities, per rule, and nothing in between.** A *warning* does not
+  block: the new data is published and the violation is reported. An *error*
+  blocks: the new data is not published, the run fails saying which rule broke,
+  and the datasource **keeps serving the last good data** — same snapshot, same
+  rows, as if the update had never been attempted. The check sits between the
+  write and the swap, so there is no moment in which the bad data is readable.
+
+  Nine kinds of rule: column present and of a type, not null, unique (one column
+  or several), accepted values, range, pattern, row count, freshness, and a free
+  SQL condition that must hold on every row. One evaluator for every engine, so a
+  contract means the same thing whether the flow ran on Polars or on BigQuery. A
+  rule that cannot be evaluated (its column is gone, the expression does not run)
+  does not hold — silence is not consent. Freshness is the only rule that breaks
+  without anything arriving, so the scheduler re-reads it as time passes.
+
+  **The state is an icon wherever the datasource appears** — the Explore, the
+  Datasources page, the Viewer, and the source nodes of the editor, so whoever
+  builds on a datasource sees whether its producer is keeping the promise: a
+  plain shield (not checked yet), a shield with a check (respected), with an
+  exclamation mark (warnings), with a cross (violated, or the last update was
+  refused). Shape and colour both change, and the state is also written out in
+  the tooltip. The dialog groups the rules by column and puts next to each one
+  its **last result** — how many rows broke it, a few offending values — rather
+  than a separate report to cross-reference. *Propose from the data* writes a
+  first contract from what the datasource contains today; a history keeps every
+  check and every refusal; people who can only read the folder read the contract
+  and its report, without the commands.
+
+  **Be told when the state changes.** A contract can carry addresses and an SMTP
+  connection, with the same barriers as the failure notice of a flow. One mail
+  per *change* of state, not per check — a refresh refused every night says so
+  once — and only for what happens on its own: whoever saves a contract or
+  presses *Check now* is already looking. The mail is sent by the scheduler from
+  a queue, never inside the transaction that publishes the data, and with several
+  orchestrators exactly one of them sends it.
+
+  **Export to ODCS.** The contract downloads as an Open Data Contract Standard
+  v3.0.2 document (YAML), validated against the official schema: columns with
+  logical and physical types, `required` and `unique` for the blocking rules,
+  every rule as a quality check with its severity, freshness as a service level.
+  Export only: the contract in Tabularia stays the source.
 - **Undo, redo, copy and paste in the flow editor.** Ctrl/Cmd+Z and Shift+Z (or
   Y) walk back and forth through the changes to the canvas — a node added, moved,
   deleted, a parameter edited, an edge drawn — and Ctrl/Cmd+C, X, V and D copy,

@@ -474,6 +474,8 @@ onMounted(async () => {
 
 // ── Catalogo datasources (per il picker del nodo sorgente) ────────────────
 const datasources = ref<DatasourceInfo[]>([])
+// lo stato del data contract di ogni datasource, per l'icona sui nodi sorgente
+provide('datasourceContracts', computed(() => new Map(datasources.value.filter((d) => d.contract).map((d) => [d.id, d.contract!] as const))))
 
 // Riaggancia le sorgenti-datasource già sul canvas allo snapshot CORRENTE del
 // catalogo: la chiave nel nodo può essere STANTIA (un refresh/overwrite sostituisce

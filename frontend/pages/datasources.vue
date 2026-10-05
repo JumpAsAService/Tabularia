@@ -3,7 +3,7 @@
 // con stato live, eliminazione.
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles } from 'lucide-vue-next'
+import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
@@ -13,6 +13,8 @@ import type { RunInfo } from '~/composables/useRuns'
 const dsApi = useDatasources()
 const projectsApi = useProjects()
 const toast = useToast()
+// il data contract della datasource aperta nel dialogo (null = chiuso)
+const contractFor = ref<DatasourceInfo | null>(null)
 const { t } = useI18n()
 
 // ricerca server-side (nome/descrizione, su tutto il dataset) + paginazione
@@ -211,6 +213,7 @@ async function saveSchedule(cron: string) {
               <Database :size="14" /> {{ d.name }}
               <span v-if="d.kind === 'database'" class="tag">{{ $t('datasources.tagDb') }}</span>
               <span v-else-if="d.kind === 'flow'" class="tag">{{ $t('datasources.tagFlow') }}</span>
+              <ContractBadge :contract="d.contract" :size="15" />
               <!-- documentata per intero: l'assistente può interrogarla senza
                    indovinare. Stesso simbolo della voce Assistente, così il
                    nesso si legge senza spiegazioni. -->
@@ -248,6 +251,7 @@ async function saveSchedule(cron: string) {
               :disabled="isImporting(d.id)"
               @click="refresh(d)"
             ><RefreshCw :size="13" /></button>
+            <button class="mini" :title="$t('contracts.open')" :aria-label="$t('contracts.open')" @click="contractFor = d"><ScrollText :size="13" /></button>
             <button class="mini danger" :title="$t('datasources.deleteTitle')" @click="remove(d)"><Trash2 :size="13" /></button>
           </div>
         </div>
@@ -306,6 +310,7 @@ async function saveSchedule(cron: string) {
 
     <Pager :offset="offset" :page-size="pageSize" :total="total" :loading="loading" @prev="prev" @next="next" />
 
+    <ContractDialog :open="contractFor !== null" :datasource="contractFor" @close="contractFor = null" @changed="load()" />
     <ScheduleDialog
       :open="!!scheduleFor"
       :title="scheduleFor?.name ?? ''"

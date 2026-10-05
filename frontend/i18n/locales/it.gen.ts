@@ -1147,4 +1147,156 @@ export default {
     "intro": "Cosa contiene, cosa rappresenta una riga, il periodo coperto, le avvertenze. La leggono le persone che la trovano nel catalogo e l'assistente AI, per scegliere la tabella giusta.",
     "placeholder": "es. Ordini evasi dal gestionale, una riga per riga d'ordine. Dal 2020, aggiornata ogni notte. Gli importi sono al netto dell'IVA; i resi hanno quantità negativa."
   },
+  "contracts": {
+    "title": "Data contract — {name}",
+    "close": "Chiudi",
+    "loading": "Carico il contratto…",
+    "open": "Data contract",
+    "intro": "Un data contract è ciò che questa datasource promette a chi la usa: quali colonne ha, di che tipo, e quali regole rispettano i valori. Le regole si verificano ogni volta che arrivano dati nuovi, prima di pubblicarli.",
+    "state": {
+      "pending": "Data contract: non ancora verificato sui dati correnti",
+      "passed": "Data contract rispettato",
+      "warning": "Data contract con avvisi — regole non rispettate: {n}",
+      "failed": "Data contract violato — regole bloccanti non rispettate: {n}",
+      "blocked": "Data contract violato: l'ultimo aggiornamento è stato rifiutato e la datasource serve ancora i dati di prima"
+    },
+    "short": {
+      "pending": "Non verificato",
+      "passed": "Rispettato",
+      "warning": "Avviso",
+      "failed": "Violato",
+      "blocked": "Aggiornamento rifiutato"
+    },
+    "blockedExplain": "L'ultimo aggiornamento violava una regola bloccante e non è stato pubblicato ({when}). La datasource serve ancora i dati di prima.",
+    "checkedAt": "Verificato {when} · versione {version}",
+    "neverChecked": "Non ancora verificato sui dati correnti.",
+    "severity": {
+      "warning": "Avviso",
+      "error": "Errore"
+    },
+    "severityHint": {
+      "warning": "non bloccante: i dati nuovi si pubblicano e la violazione viene segnalata",
+      "error": "bloccante: i dati nuovi non si pubblicano e la datasource resta sugli ultimi dati buoni"
+    },
+    "severityOf": "Severità della regola",
+    "propose": "Proponi dai dati",
+    "proposeReplace": "Sostituire le regole scritte finora con quelle proposte dai dati correnti?",
+    "enabled": "Contratto attivo",
+    "unsaved": "Modifiche non salvate: salva per verificarle sui dati",
+    "tableGroup": "Tabella intera",
+    "columnGone": "la datasource non ha più questa colonna",
+    "addRule": "Aggiungi regola",
+    "addRuleTo": "Aggiungi una regola a {name}",
+    "removeRule": "Togli la regola",
+    "kind": {
+      "column": "Colonna e tipo",
+      "not_null": "Mai nulla",
+      "unique": "Univoca",
+      "accepted_values": "Valori ammessi",
+      "range": "Intervallo",
+      "pattern": "Formato",
+      "row_count": "Numero di righe",
+      "freshness": "Freschezza",
+      "expression": "Condizione SQL"
+    },
+    "kindHint": {
+      "column": "La colonna esiste e, se scegli un tipo, è di quel tipo",
+      "not_null": "Nessuna riga ha un valore nullo in questa colonna",
+      "unique": "Non ci sono due righe con lo stesso valore (i nulli contano come valori)",
+      "accepted_values": "Ogni valore non nullo è uno di quelli elencati",
+      "range": "Ogni valore non nullo sta fra il minimo e il massimo; uno dei due può restare vuoto",
+      "pattern": "Ogni valore non nullo corrisponde per intero all'espressione regolare",
+      "row_count": "Il numero di righe sta fra il minimo e il massimo; uno dei due può restare vuoto",
+      "freshness": "I dati hanno al più queste ore: l'ultimo aggiornamento, oppure il valore più recente di una colonna di date",
+      "expression": "Una condizione SQL che deve essere vera su ogni riga; un risultato nullo conta come violazione"
+    },
+    "field": {
+      "dtype": "Tipo atteso",
+      "anyType": "qualsiasi tipo",
+      "values": "valori, separati da virgole",
+      "min": "min",
+      "max": "max",
+      "regex": "espressione regolare, es. [A-Z]+-[0-9]+",
+      "maxAge": "Età massima in ore",
+      "hoursOf": "ore al massimo da",
+      "freshnessOf": "Su cosa si misura l'età",
+      "snapshot": "l'ultimo aggiornamento",
+      "sql": "es. spedito_il >= ordinato_il"
+    },
+    "dtype": {
+      "integer": "intero",
+      "number": "numero",
+      "string": "testo",
+      "boolean": "booleano",
+      "date": "data",
+      "datetime": "data e ora"
+    },
+    "problem": {
+      "not_a_contract": "Il contratto non ha una forma valida",
+      "too_many_rules": "Troppe regole: un contratto ne tiene al più 200",
+      "unknown_kind": "Tipo di regola sconosciuto",
+      "bad_severity": "La severità deve essere Avviso o Errore",
+      "missing_column": "Scegli la colonna",
+      "bad_dtype": "Tipo sconosciuto",
+      "empty_values": "Elenca almeno un valore ammesso",
+      "too_many_values": "Troppi valori ammessi: al più 500",
+      "bad_values": "I valori ammessi devono essere testi, numeri o booleani",
+      "no_bounds": "Indica un minimo, un massimo o entrambi",
+      "bad_bounds": "Gli estremi non sono validi: controlla che siano numeri e che il minimo non superi il massimo",
+      "bad_regex": "L'espressione regolare non è valida",
+      "bad_max_age": "L'età massima deve essere un numero di ore maggiore di zero",
+      "empty_expression": "Scrivi la condizione SQL"
+    },
+    "result": {
+      "error": "Non si è potuta valutare: {error}",
+      "violations": "righe in violazione: {n}",
+      "rows": "righe: {n}",
+      "age": "età: {hours} h",
+      "isType": "la colonna è di tipo {type}",
+      "missing": "la colonna manca",
+      "sample": "es. {values}"
+    },
+    "outcome": {
+      "ok": "Rispettata",
+      "warning": "Non rispettata: avviso",
+      "error": "Non rispettata: bloccante",
+      "none": "Non ancora verificata"
+    },
+    "history": "Storico delle verifiche",
+    "historyEmpty": "Nessuna verifica registrata.",
+    "trigger": {
+      "refresh": "Refresh",
+      "publish": "Esecuzione del flusso",
+      "save": "Contratto salvato",
+      "manual": "Verifica a mano",
+      "freshness": "Freschezza nel tempo"
+    },
+    "refused": "Aggiornamento rifiutato",
+    "remove": "Togli il contratto",
+    "removeConfirm": "Togliere il data contract da questa datasource? Le sue regole non verranno più verificate. Lo storico delle verifiche resta.",
+    "removed": "Data contract tolto",
+    "checkNow": "Verifica adesso",
+    "saveFirst": "Prima salva le modifiche",
+    "save": "Salva e verifica",
+    "create": "Crea il contratto",
+    "saved": "Data contract salvato",
+    "savedPassed": "Data contract salvato: i dati correnti lo rispettano",
+    "savedNotRespected": "Data contract salvato. I dati correnti non lo rispettano: le regole che non reggono sono segnate",
+    "savedUnchecked": "Contratto salvato, ma non si è potuto verificare: {error}",
+    "invalid": "Alcune regole sono incomplete: sono segnate in rosso",
+    "exportOdcs": "Esporta in ODCS",
+    "exportOdcsTitle": "Scarica il contratto salvato nel formato aperto ODCS (YAML), da consegnare a un catalogo o a un altro strumento",
+    "notify": {
+      "title": "Avvisi",
+      "hint": "Un'email quando lo stato del contratto cambia per l'arrivo di dati nuovi o per il tempo che passa: un aggiornamento rifiutato, una regola non più rispettata, tutto di nuovo a posto. Un messaggio a cambio di stato, non uno a verifica.",
+      "emails": "Indirizzi da avvisare",
+      "emailsPlaceholder": "indirizzi, separati da virgole",
+      "connection": "Connessione SMTP con cui spedire",
+      "noConnection": "connessione SMTP…",
+      "incomplete": "Per gli avvisi servono tutti e due: almeno un indirizzo e una connessione SMTP.",
+      "otherConnection": "connessione #{id}",
+      "noSmtp": "Non c'è una connessione SMTP che puoi usare: creane una in Connessioni per ricevere gli avvisi."
+    },
+    "discardConfirm": "Chiudere senza salvare le modifiche al contratto?"
+  },
 }

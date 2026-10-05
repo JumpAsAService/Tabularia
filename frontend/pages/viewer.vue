@@ -12,6 +12,7 @@ import {
 import { useApi, errMessage, type Operation, type ColumnInfo } from '~/composables/useApi'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
+import ContractBadge from '~/components/ui/ContractBadge.vue'
 import { useSavedViews, type SavedView, type SavedViewSpec } from '~/composables/useSavedViews'
 import { useProjects, type Project } from '~/composables/useProjects'
 
@@ -419,6 +420,7 @@ onMounted(async () => {
           class="dssel"
           @update:model-value="onPickDatasource"
         />
+        <ContractBadge v-if="selectedDs" :contract="selectedDs.contract" :size="16" />
       </div>
     </div>
 

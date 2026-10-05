@@ -3,6 +3,7 @@
 // query su una connessione esterna, aggiornabile con `refresh`.
 import type { RunInfo } from '~/composables/useRuns'
 import { pagedQuery, type Page } from '~/composables/useApi'
+import type { ContractSummary } from '~/composables/useContracts'
 
 export interface DatasourceInfo {
   id: number
@@ -30,6 +31,8 @@ export interface DatasourceInfo {
   refresh_schedule: string | null // espressione cron; null = non schedulato
   next_refresh_at: string | null
   updated_at: string | null
+  // il data contract, se ce n'è uno acceso: stato per l'icona (null = nessuno)
+  contract?: ContractSummary | null
 }
 
 export interface DbDatasourceDraft {

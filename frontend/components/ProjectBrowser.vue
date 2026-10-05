@@ -39,6 +39,7 @@ import {
   Search,
   Settings2,
   Home,
+  ScrollText,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -46,6 +47,8 @@ import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
+import ContractBadge from '~/components/ui/ContractBadge.vue'
+import ContractDialog from '~/components/ui/ContractDialog.vue'
 import {
   useProjects,
   CAPABILITIES,
@@ -74,6 +77,7 @@ const error = ref('')
 
 const flows = ref<FlowSummary[]>([])
 const dsList = ref<DatasourceInfo[]>([])
+const contractFor = ref<DatasourceInfo | null>(null) // la datasource di cui è aperto il data contract
 const savedViews = ref<SavedView[]>([])
 const connections = ref<ConnectionInfo[]>([])
 const canConnect = ref(false)
@@ -673,6 +677,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </span>
               <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
+              <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
             </td>
             <td class="rmeta muted">{{ r.meta }}</td>
             <td class="racts">
@@ -710,6 +715,14 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 :disabled="!!ingestRuns[r.id] && !isTerminal(ingestRuns[r.id])"
                 @click="refreshDatasource(r.raw)"
               ><RefreshCw :size="13" /></button>
+
+              <button
+                v-if="r.kind === 'datasource'"
+                class="mini"
+                :title="$t('contracts.open')"
+                :aria-label="$t('contracts.open')"
+                @click="contractFor = r.raw"
+              ><ScrollText :size="13" /></button>
 
               <button
                 v-if="r.kind === 'connection'"
@@ -812,6 +825,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       @confirm="saveConnection"
       @cancel="showConnDialog = false"
     />
+    <ContractDialog :open="contractFor !== null" :datasource="contractFor" @close="contractFor = null" @changed="loadFolder(currentId)" />
     <DbDatasourceDialog
       :open="showDbDsDialog"
       :connections="usableConnections"
@@ -934,6 +948,7 @@ table.rows tr:hover td { background: var(--row-hover); }
 tr.folderrow .kicon { color: var(--accent-2); }
 .kicon { color: var(--muted); flex-shrink: 0; }
 .rname { width: 55%; }
+.rname :deep(.contract-badge) { margin-left: 5px; }
 .asname {
   display: inline-flex;
   align-items: center;

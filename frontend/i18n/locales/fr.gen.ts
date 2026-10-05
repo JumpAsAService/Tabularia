@@ -1064,4 +1064,156 @@ export default {
     "intro": "Ce qu'elle contient, ce que représente une ligne, la période couverte, les mises en garde. Elle est lue par ceux qui la trouvent dans le catalogue et par l'assistant IA, pour choisir la bonne table.",
     "placeholder": "p. ex. Commandes expédiées depuis l'ERP, une ligne par ligne de commande. Depuis 2020, mise à jour chaque nuit. Montants hors TVA ; les retours ont une quantité négative."
   },
+  "contracts": {
+    "title": "Data contract — {name}",
+    "close": "Fermer",
+    "loading": "Chargement du contrat…",
+    "open": "Data contract",
+    "intro": "Un data contract est ce que cette datasource promet à ceux qui l'utilisent : quelles colonnes elle a, de quel type, et quelles règles suivent leurs valeurs. Les règles sont vérifiées à chaque arrivée de nouvelles données, avant leur publication.",
+    "state": {
+      "pending": "Data contract : pas encore vérifié sur les données actuelles",
+      "passed": "Data contract respecté",
+      "warning": "Data contract avec avertissements — règles non respectées : {n}",
+      "failed": "Data contract violé — règles bloquantes non respectées : {n}",
+      "blocked": "Data contract violé : la dernière mise à jour a été refusée et la datasource sert encore les données précédentes"
+    },
+    "short": {
+      "pending": "Non vérifié",
+      "passed": "Respecté",
+      "warning": "Avertissement",
+      "failed": "Violé",
+      "blocked": "Mise à jour refusée"
+    },
+    "blockedExplain": "La dernière mise à jour violait une règle bloquante et n'a pas été publiée ({when}). La datasource sert encore les données précédentes.",
+    "checkedAt": "Vérifié {when} · version {version}",
+    "neverChecked": "Pas encore vérifié sur les données actuelles.",
+    "severity": {
+      "warning": "Avertissement",
+      "error": "Erreur"
+    },
+    "severityHint": {
+      "warning": "non bloquant : les nouvelles données sont publiées et la violation est signalée",
+      "error": "bloquant : les nouvelles données ne sont pas publiées et la datasource garde les dernières données valides"
+    },
+    "severityOf": "Sévérité de la règle",
+    "propose": "Proposer à partir des données",
+    "proposeReplace": "Remplacer les règles écrites jusqu'ici par celles proposées à partir des données actuelles ?",
+    "enabled": "Contrat actif",
+    "unsaved": "Modifications non enregistrées : enregistrez pour les vérifier sur les données",
+    "tableGroup": "Table entière",
+    "columnGone": "la datasource n'a plus cette colonne",
+    "addRule": "Ajouter une règle",
+    "addRuleTo": "Ajouter une règle à {name}",
+    "removeRule": "Retirer la règle",
+    "kind": {
+      "column": "Colonne et type",
+      "not_null": "Jamais nulle",
+      "unique": "Unique",
+      "accepted_values": "Valeurs admises",
+      "range": "Intervalle",
+      "pattern": "Format",
+      "row_count": "Nombre de lignes",
+      "freshness": "Fraîcheur",
+      "expression": "Condition SQL"
+    },
+    "kindHint": {
+      "column": "La colonne existe et, si un type est choisi, elle est de ce type",
+      "not_null": "Aucune ligne n'a de valeur nulle dans cette colonne",
+      "unique": "Deux lignes n'ont jamais la même valeur (les nuls comptent comme des valeurs)",
+      "accepted_values": "Chaque valeur non nulle est l'une de celles de la liste",
+      "range": "Chaque valeur non nulle se trouve entre le minimum et le maximum ; l'un des deux peut rester vide",
+      "pattern": "Chaque valeur non nulle correspond entièrement à l'expression régulière",
+      "row_count": "Le nombre de lignes se trouve entre le minimum et le maximum ; l'un des deux peut rester vide",
+      "freshness": "Les données ont au plus ce nombre d'heures : la dernière mise à jour, ou la valeur la plus récente d'une colonne de dates",
+      "expression": "Une condition SQL qui doit être vraie sur chaque ligne ; un résultat nul compte comme une violation"
+    },
+    "field": {
+      "dtype": "Type attendu",
+      "anyType": "n'importe quel type",
+      "values": "valeurs, séparées par des virgules",
+      "min": "min",
+      "max": "max",
+      "regex": "expression régulière, ex. [A-Z]+-[0-9]+",
+      "maxAge": "Âge maximal en heures",
+      "hoursOf": "heures au plus depuis",
+      "freshnessOf": "Sur quoi l'âge est mesuré",
+      "snapshot": "la dernière mise à jour",
+      "sql": "ex. expedie_le >= commande_le"
+    },
+    "dtype": {
+      "integer": "entier",
+      "number": "nombre",
+      "string": "texte",
+      "boolean": "booléen",
+      "date": "date",
+      "datetime": "date et heure"
+    },
+    "problem": {
+      "not_a_contract": "Le contrat n'a pas une forme valide",
+      "too_many_rules": "Trop de règles : un contrat en contient 200 au plus",
+      "unknown_kind": "Type de règle inconnu",
+      "bad_severity": "La sévérité doit être Avertissement ou Erreur",
+      "missing_column": "Choisissez la colonne",
+      "bad_dtype": "Type inconnu",
+      "empty_values": "Indiquez au moins une valeur admise",
+      "too_many_values": "Trop de valeurs admises : 500 au plus",
+      "bad_values": "Les valeurs admises doivent être des textes, des nombres ou des booléens",
+      "no_bounds": "Indiquez un minimum, un maximum ou les deux",
+      "bad_bounds": "Les bornes ne sont pas valides : vérifiez que ce sont des nombres et que le minimum ne dépasse pas le maximum",
+      "bad_regex": "L'expression régulière n'est pas valide",
+      "bad_max_age": "L'âge maximal doit être un nombre d'heures supérieur à zéro",
+      "empty_expression": "Écrivez la condition SQL"
+    },
+    "result": {
+      "error": "N'a pas pu être évaluée : {error}",
+      "violations": "lignes en violation : {n}",
+      "rows": "lignes : {n}",
+      "age": "âge : {hours} h",
+      "isType": "la colonne est de type {type}",
+      "missing": "la colonne manque",
+      "sample": "ex. {values}"
+    },
+    "outcome": {
+      "ok": "Respectée",
+      "warning": "Non respectée : avertissement",
+      "error": "Non respectée : bloquante",
+      "none": "Pas encore vérifiée"
+    },
+    "history": "Historique des vérifications",
+    "historyEmpty": "Aucune vérification enregistrée.",
+    "trigger": {
+      "refresh": "Refresh",
+      "publish": "Exécution du flux",
+      "save": "Contrat enregistré",
+      "manual": "Vérification manuelle",
+      "freshness": "Fraîcheur dans le temps"
+    },
+    "refused": "Mise à jour refusée",
+    "remove": "Retirer le contrat",
+    "removeConfirm": "Retirer le data contract de cette datasource ? Ses règles ne seront plus vérifiées. L'historique des vérifications reste.",
+    "removed": "Data contract retiré",
+    "checkNow": "Vérifier maintenant",
+    "saveFirst": "Enregistrez d'abord les modifications",
+    "save": "Enregistrer et vérifier",
+    "create": "Créer le contrat",
+    "saved": "Data contract enregistré",
+    "savedPassed": "Data contract enregistré : les données actuelles le respectent",
+    "savedNotRespected": "Data contract enregistré. Les données actuelles ne le respectent pas : les règles en défaut sont signalées",
+    "savedUnchecked": "Contrat enregistré, mais il n'a pas pu être vérifié : {error}",
+    "invalid": "Certaines règles sont incomplètes : elles sont marquées en rouge",
+    "exportOdcs": "Exporter en ODCS",
+    "exportOdcsTitle": "Télécharger le contrat enregistré au format ouvert ODCS (YAML), à remettre à un catalogue ou à un autre outil",
+    "notify": {
+      "title": "Notifications",
+      "hint": "Un e-mail quand l'état du contrat change à cause de nouvelles données ou du temps qui passe : une mise à jour refusée, une règle qui n'est plus respectée, tout de nouveau en ordre. Un message par changement, pas un par vérification.",
+      "emails": "Adresses à prévenir",
+      "emailsPlaceholder": "adresses, séparées par des virgules",
+      "connection": "Connexion SMTP pour l'envoi",
+      "noConnection": "connexion SMTP…",
+      "incomplete": "Les notifications demandent les deux : au moins une adresse et une connexion SMTP.",
+      "otherConnection": "connexion #{id}",
+      "noSmtp": "Aucune connexion SMTP que vous puissiez utiliser : créez-en une dans Connexions pour recevoir les notifications."
+    },
+    "discardConfirm": "Fermer sans enregistrer les modifications du contrat ?"
+  },
 }
