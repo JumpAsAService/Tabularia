@@ -29,7 +29,7 @@ from app.routes.runs import (
 from app.services.objects import MANAGED_PREFIXES
 from app.services.orchestrator import (
     ORCHESTRATION_INTERRUPTED,
-    close_interrupted_orchestrations,
+    chiudi_orfane,
 )
 from tests.conftest import make_datasource, make_run
 
@@ -203,10 +203,14 @@ def test_snapshot_keys_do_not_collide_within_the_same_second():
     assert len(keys) == 50  # il suffisso casuale evita la collisione
 
 
-# ── C3: orchestrazioni orfane chiuse all'avvio ──────────────────────────────
+# ── C3: orchestrazioni orfane chiuse ────────────────────────────────────────
+# Nate come controllo all'avvio del gateway (un processo solo). Con più processi
+# l'avvio di uno non dice niente sugli altri: è orfana l'orchestrazione il cui
+# BATTITO è fermo, e la chiude il primo orchestratore che se ne accorge. Il resto
+# sta in test_orchestration_queue.py.
 @pytest.fixture
 def orch_db(db_engine, monkeypatch):
-    """`close_interrupted_orchestrations` apre una sessione propria (gira fuori da
+    """Le funzioni dell'orchestratore aprono una sessione propria (girano fuori da
     una richiesta): la si punta al DB di test."""
     import app.services.orchestrator as orch_mod
 
@@ -214,11 +218,13 @@ def orch_db(db_engine, monkeypatch):
     return db_engine
 
 
-async def test_startup_closes_orphaned_orchestrations(session, orch_db):
+async def test_orphaned_orchestrations_are_closed(session, orch_db):
+    # STARTED senza battito: è di una versione che non lo scriveva, cioè di un
+    # processo che non c'è più
     stuck = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=1)
     session.commit()
 
-    assert close_interrupted_orchestrations() == 1
+    assert await chiudi_orfane() == 1
 
     session.expire_all()
     reloaded = session.get(Run, stuck.id)
@@ -227,22 +233,77 @@ async def test_startup_closes_orphaned_orchestrations(session, orch_db):
     assert reloaded.error == ORCHESTRATION_INTERRUPTED
 
 
-async def test_startup_leaves_finished_and_engine_backed_runs_alone(session, orch_db):
+async def test_orphan_sweep_leaves_finished_and_engine_backed_runs_alone(session, orch_db):
     done = make_run(session, kind="orchestration", status="SUCCESS", task_id="", flow_id=1)
-    # un run di flusso ha un task sull'engine: lo riconcilia `_reconcile`, non l'avvio
+    # un run di flusso ha un task sull'engine: lo riconcilia `_reconcile`
     flow_run = make_run(session, kind="flow", status="STARTED", task_id="t-live", flow_id=1)
     session.commit()
 
-    close_interrupted_orchestrations()
+    await chiudi_orfane()
 
     session.expire_all()
     assert session.get(Run, done.id).status == "SUCCESS"
     assert session.get(Run, flow_run.id).status == "STARTED"
 
 
-async def test_startup_close_is_idempotent(session, orch_db):
+async def test_orphan_sweep_is_idempotent(session, orch_db):
     make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=1)
     session.commit()
 
-    assert close_interrupted_orchestrations() == 1
-    assert close_interrupted_orchestrations() == 0  # un riavvio successivo non ha nulla da fare
+    assert await chiudi_orfane() == 1
+    assert await chiudi_orfane() == 0  # un secondo giro, o un altro processo, non ha nulla da fare
+
+
+# ── più processi che riconciliano insieme ───────────────────────────────────
+async def test_a_stale_started_answer_does_not_reopen_a_closed_run(session, db_engine, fake_engine):
+    """Due processi riconciliano lo stesso run. Uno chiede lo stato all'engine e
+    riceve STARTED; prima che lo scriva, l'altro lo ha già chiuso. Scrivere
+    STARTED sull'oggetto lo riaprirebbe (e il giro dopo rifarebbe la chiusura,
+    con i suoi effetti): l'UPDATE è condizionato allo stato non terminale."""
+    from sqlmodel import Session
+
+    run = make_run(session, kind="flow", status="PENDING", task_id="t-gara", flow_id=1)
+    fake_engine.task_states["t-gara"] = {"status": "STARTED", "result": {}, "error": None}
+    with Session(db_engine) as altro:  # l'altro processo lo chiude nel frattempo
+        r = altro.get(Run, run.id)
+        r.status = "SUCCESS"
+        altro.add(r); altro.commit()
+    # questo processo ha ancora in mano l'oggetto letto prima (PENDING)
+    assert run.status == "PENDING"
+    dopo = await _reconcile(session, run)
+    assert dopo.status == "SUCCESS"
+    session.expire_all()
+    assert session.get(Run, run.id).status == "SUCCESS"
+
+
+async def test_blob_sweep_tolerates_a_row_another_process_already_removed(session, db_engine, fake_engine):
+    from datetime import datetime, timedelta, timezone
+
+    from sqlmodel import Session, select
+
+    from app.models import PendingBlobDeletion
+    from app.services.blobgc import sweep_blob_deletions
+
+    passato = datetime.now(timezone.utc) - timedelta(hours=1)
+    for chiave in ("a", "b"):
+        session.add(PendingBlobDeletion(bucket="data-prep", key=f"datasets/{chiave}.parquet", reason="t", delete_after=passato))
+    session.commit()
+
+    vero = fake_engine._handler
+
+    def un_altro_arriva_prima(request):
+        # mentre questo processo chiama l'engine per la prima riga, un altro
+        # finisce la sua passata e toglie tutte le righe
+        with Session(db_engine) as altro:
+            for riga in altro.exec(select(PendingBlobDeletion)).all():
+                altro.delete(riga)
+            altro.commit()
+        return vero(request)
+
+    import httpx
+
+    import app.core.engine_client as ec
+
+    ec._client = httpx.AsyncClient(transport=httpx.MockTransport(un_altro_arriva_prima), base_url="http://engine")
+    assert await sweep_blob_deletions(session) == 0  # nessun errore: le ha tolte l'altro
+    assert session.exec(select(PendingBlobDeletion)).all() == []

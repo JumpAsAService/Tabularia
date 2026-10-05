@@ -25,7 +25,8 @@ This page remains the reference for *why*; the chart is *how*.
 | Component | Image | Command | Exposure | Replicas |
 |---|---|---|---|---|
 | Frontend (Nuxt 3) | `frontend/Dockerfile.prod`, see [Frontend](#frontend) | image default | public | N |
-| Gateway (FastAPI control plane) | `gateway/Dockerfile`, see [Gateway image](#gateway-image-gatewaydockerfile) | image default | public | **exactly 1**, strategy `Recreate` |
+| Gateway (FastAPI control plane) | `gateway/Dockerfile`, see [Gateway image](#gateway-image-gatewaydockerfile) | image default, `APP__ROLE=api` | public | N |
+| Orchestrator (the gateway's background work) | `gateway/Dockerfile` | image default, `APP__ROLE=orchestrator` | none | 1, or more for failover |
 | Engine API | `backend/Dockerfile`, see [Backend image](#backend-image-backenddockerfile) | image default | **internal only** | N |
 | Run worker | `backend/Dockerfile` | `celery -A app.tasks.celery_app worker -E -Q celery --loglevel=info` | none | N |
 | Preview worker | `backend/Dockerfile` | `celery -A app.tasks.celery_app worker -E -Q preview --loglevel=info` | none | N |
@@ -38,10 +39,22 @@ This page remains the reference for *why*; the chart is *how*.
 Use the **image default command** for the gateway and the engine API. The compose file
 overrides them with `--reload`, which must not reach production.
 
-- **Gateway: one replica, `Recreate`.** The flow and refresh scheduler runs inside the
-  gateway process and has no distributed lock. Two gateway pods — including the old and
-  new pod overlapping during a rolling update — fire every schedule twice. The gateway
-  also runs the lightweight schema migrations and seeds the admin user at startup.
+- **Gateway: two workloads from one image, told apart by `APP__ROLE`.** With `api` a
+  process only answers requests, and can be replicated freely: one process uses one
+  core (about 95 requests a second), sessions are a signed token, and the sign-in
+  throttle and the editor's presence notice live in Postgres. With `orchestrator` it
+  only does the background work — schedules, flow executions, reconciliation,
+  clean-up — and is not exposed. Several orchestrators share the work through the
+  database: a schedule slot and a queued execution are each taken by exactly one, and
+  a unique index keeps a flow from having two executions running. `all` (the default,
+  one process doing both) is what the development compose file runs.
+- **Schema.** The first process of a new version creates or migrates the schema at
+  startup, under a Postgres advisory lock, and seeds the admin user. A process that
+  finds the schema current does not touch it, so restarts and scale-ups run no DDL
+  against a database that other replicas are using.
+- **Database connections.** Each gateway and orchestrator process keeps its own pool,
+  up to `APP__GATEWAY_THREADS` × 1.25 + `DB__MAX_OVERFLOW` (25 with twelve threads):
+  size Postgres' `max_connections` for the sum.
 - **Beat: one replica.** Two beats enqueue every periodic task twice.
 - **Postgres** holds all control-plane metadata (users, groups, permissions, versioned
   flows, encrypted connection credentials, runs, audit log): back it up.
@@ -182,6 +195,9 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `APP__ENV_NAME=production` | ✓ | | enables the production guard: the gateway refuses to start with development secrets. It has **no effect** on the engine or the workers — nothing reads it there |
 | `SECURITY__FERNET_KEY` *secret* | ✓ | ✓ | **same value everywhere**; encrypts database credentials; every process refuses to start without a valid key |
 | `APP__TIMEZONE` | ✓ | | timezone in which the **gateway** interprets cron schedules. Celery beat keeps its own clock (`CELERY__TIMEZONE`, UTC by default), but the gateway converts schedules to UTC before enqueuing, so leaving beat on UTC is correct |
+| `APP__ROLE` | ✓ | | what a gateway process does: `api` (answer requests), `orchestrator` (schedules, flow executions, clean-up) or `all` (both, the default). Set per workload, not in the shared ConfigMap |
+| `APP__GATEWAY_THREADS` | ✓ | | threads per gateway process (default 40; 12 is what the chart and the measurements use: fewer serve more). The connection pool follows it |
+| `ORCHESTRATOR__DEAD_AFTER_SECONDS`, `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS`, `ORCHESTRATOR__MAX_CONCURRENT` | ✓ | | when a silent execution is given up for dead (60), when a queued one is no longer started (900), how many one orchestrator carries at once (20) |
 | `DB__HOST`, `DB__PORT`, `DB__USER`, `DB__PASSWORD` *secret*, `DB__NAME` | ✓ | | metadata Postgres |
 | `JWT__SECRET` *secret*, `JWT__ACCESS_TTL_MINUTES` | ✓ | | session tokens, default lifetime 720 minutes |
 | `AUTH__ADMIN_EMAIL`, `AUTH__ADMIN_PASSWORD` *secret*, `AUTH__ADMIN_NAME` | ✓ | | break-glass admin, seeded at first start |
@@ -222,8 +238,13 @@ served page, compiled assets are served, and `/` redirects to `/login` without a
 
 ## Known application limits that affect operations
 
-- **Single-instance scheduler** — gateway at one replica with `Recreate` (above).
-- **Orchestrations interrupted by a gateway restart** can stay in the running state.
-  Rollouts make restarts frequent, so expect to spot them in the run history.
+- **Flow executions are not resumed.** An execution whose orchestrator stops or dies
+  is closed as failed, with a message that says so — at once on a clean stop, after
+  `ORCHESTRATOR__DEAD_AFTER_SECONDS` (a minute) when the process is killed. The steps
+  already done have written their output; the flow has to be launched again. Rollouts
+  of the orchestrator make this visible in the run history.
+- **Versions before the queue must not run next to this one.** A gateway from before
+  `APP__ROLE` existed ran the scheduler in process and knows nothing of the queue:
+  stop it before starting the new version (the chart's README has the two commands).
 - **Sessions are stateless JWTs** with no server-side revocation: disabling a user or
   removing them from an SSO group takes effect when their token expires.

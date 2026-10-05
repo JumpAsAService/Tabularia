@@ -5,11 +5,11 @@ misurati durante l'audit del 2026-09-19 (M5). Su un indirizzo pubblico — una
 demo, un link in un post — le credenziali finiscono in un commento e il resto lo
 fa uno script.
 
-Il conteggio sta IN MEMORIA, e va detto perché è una scelta con un limite: il
-gateway è singleton (una replica, strategia `Recreate`, vedi la chart), quindi un
-solo processo vede tutti i tentativi; un riavvio azzera i contatori. Con più
-repliche servirebbe Valkey. Per quello che deve fare — rendere inutile un
-dizionario, non resistere a una botnet — questo basta e non aggiunge dipendenze.
+Il conteggio sta in una TABELLA (`login_attempts`), non in memoria: con più
+repliche del gateway un dizionario per processo conterebbe cinque errori per
+replica, e il freno si allenterebbe proprio quando l'installazione cresce. Costa
+una lettura per chiave a ogni accesso, che è raro. Per quello che deve fare —
+rendere inutile un dizionario, non resistere a una botnet — basta.
 
 Si conta per **(indirizzo IP, email)** insieme: per solo IP, un ufficio dietro
 un NAT si bloccherebbe a vicenda; per sola email, basta cambiare account per
@@ -19,8 +19,13 @@ non si porta dietro niente.
 from __future__ import annotations
 
 import logging
-import time
-from threading import Lock
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import case, delete, update
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
+
+from app.models.shared_state import LoginAttempt
 
 logger = logging.getLogger(__name__)
 
@@ -29,52 +34,70 @@ SOGLIA = 5
 FINESTRA_SECONDI = 300.0
 BLOCCO_SECONDI = 60.0
 BLOCCO_MASSIMO = 900.0
-_MAX_CHIAVI = 10_000  # tetto di memoria: oltre, si buttano le voci scadute
-
-_lock = Lock()
-_tentativi: dict[tuple[str, str], tuple[int, float]] = {}
 
 
 def _chiave(ip: str | None, email: str) -> tuple[str, str]:
     return (ip or "?", (email or "").strip().lower())
 
 
-def _pulisci(adesso: float) -> None:
-    scaduti = [k for k, (_, ultimo) in _tentativi.items() if adesso - ultimo > FINESTRA_SECONDI]
-    for k in scaduti:
-        _tentativi.pop(k, None)
+def _adesso() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)  # colonne naive = UTC
 
 
-def attesa_richiesta(ip: str | None, email: str) -> float:
+def attesa_richiesta(session: Session, ip: str | None, email: str) -> float:
     """Secondi da aspettare prima di poter riprovare. `0` = si può procedere."""
-    adesso = time.monotonic()
-    with _lock:
-        falliti, ultimo = _tentativi.get(_chiave(ip, email), (0, 0.0))
-    if falliti < SOGLIA or adesso - ultimo > FINESTRA_SECONDI:
+    riga = session.get(LoginAttempt, _chiave(ip, email))
+    if riga is None:
+        return 0.0
+    falliti, da = riga.failures, (_adesso() - riga.last_at).total_seconds()
+    session.rollback()  # solo una lettura: non si tiene aperta la transazione
+    if falliti < SOGLIA or da > FINESTRA_SECONDI:
         return 0.0
     # raddoppia a ogni errore oltre la soglia, con un tetto
     blocco = min(BLOCCO_SECONDI * (2 ** (falliti - SOGLIA)), BLOCCO_MASSIMO)
-    rimasti = blocco - (adesso - ultimo)
-    return max(0.0, rimasti)
+    return max(0.0, blocco - da)
 
 
-def registra_errore(ip: str | None, email: str) -> None:
-    adesso = time.monotonic()
-    with _lock:
-        if len(_tentativi) > _MAX_CHIAVI:
-            _pulisci(adesso)
-        falliti, ultimo = _tentativi.get(_chiave(ip, email), (0, 0.0))
-        if adesso - ultimo > FINESTRA_SECONDI:
-            falliti = 0
-        _tentativi[_chiave(ip, email)] = (falliti + 1, adesso)
+def registra_errore(session: Session, ip: str | None, email: str) -> None:
+    """Un errore in più. L'incremento lo fa il database (`failures + 1`), così due
+    repliche che registrano insieme non se ne perdono uno."""
+    chiave_ip, chiave_email = _chiave(ip, email)
+    adesso = _adesso()
+    scaduta = adesso - timedelta(seconds=FINESTRA_SECONDI)
+
+    def incrementa() -> int:
+        esito = session.exec(
+            update(LoginAttempt)
+            .where(LoginAttempt.ip == chiave_ip, LoginAttempt.email == chiave_email)
+            .values(
+                # oltre la finestra si ricomincia da capo
+                failures=case((LoginAttempt.last_at < scaduta, 1), else_=LoginAttempt.failures + 1),
+                last_at=adesso,
+            )
+        )
+        session.commit()
+        return esito.rowcount
+
+    if incrementa():
+        return
+    try:
+        session.add(LoginAttempt(ip=chiave_ip, email=chiave_email, failures=1, last_at=adesso))
+        session.commit()
+    except IntegrityError:  # un'altra replica ha scritto il primo errore un attimo prima
+        session.rollback()
+        incrementa()
 
 
-def registra_successo(ip: str | None, email: str) -> None:
-    with _lock:
-        _tentativi.pop(_chiave(ip, email), None)
+def registra_successo(session: Session, ip: str | None, email: str) -> None:
+    chiave_ip, chiave_email = _chiave(ip, email)
+    session.exec(delete(LoginAttempt).where(LoginAttempt.ip == chiave_ip, LoginAttempt.email == chiave_email))
+    session.commit()
 
 
-def azzera() -> None:
-    """Solo per i test: i contatori sono di processo e sopravvivono fra un test e l'altro."""
-    with _lock:
-        _tentativi.clear()
+def pulisci(session: Session) -> int:
+    """Toglie i conteggi che non frenano più nessuno (lo chiama lo scheduler)."""
+    tolte = session.exec(
+        delete(LoginAttempt).where(LoginAttempt.last_at < _adesso() - timedelta(seconds=FINESTRA_SECONDI))
+    )
+    session.commit()
+    return tolte.rowcount or 0

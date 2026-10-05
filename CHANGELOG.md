@@ -5,6 +5,26 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The gateway can run in more than one copy, and orchestration scales on its
+  own.** One gateway process served about 95 requests a second, and everything
+  that was not a request — the scheduler, the running orchestrations, the login
+  throttle, who has a flow open — lived in its memory, so a second copy would
+  have run every schedule twice. `APP__ROLE` now splits the two jobs: `api`
+  answers requests, `orchestrator` runs schedules and flows, `all` (the default)
+  does both, exactly as before, for an installation that wants one process.
+
+  An orchestration is a row in `runs` that waits to be claimed: any orchestrator
+  takes it with a conditional update, beats while it works, and if it dies the
+  others close its runs after a minute instead of leaving them running forever.
+  A unique index allows one live orchestration per flow, whichever copy is asked.
+  The login throttle and editor presence moved to tables for the same reason.
+  Schema changes run once, behind a lock, and only when there is something to
+  apply. The Helm chart (1.1.0) deploys the two roles separately; coming from
+  chart 1.0.x, scale the old gateway to zero first.
+
+  Found on the way: **the failure notice of a scheduled flow never fired.** It
+  looked for runs of kind `flow`, and what the scheduler runs is the
+  orchestration. It does now.
 - **An observer role: reads the administration panels, writes nothing.** Granted
   by a flag on the person or by a group, like administration itself; an
   administrator is already an observer, because whoever commands sees.

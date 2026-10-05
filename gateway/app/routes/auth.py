@@ -15,10 +15,11 @@ router = APIRouter(route_class=RottaCheRilascia, prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=Token)
 def login(body: LoginRequest, request: Request, session: Session = Depends(get_session)):
-    # Freno sui tentativi ripetuti: prima di toccare il database, così un
-    # dizionario non costa nemmeno una query (vedi services/login_throttle.py).
+    # Freno sui tentativi ripetuti, prima di tutto il resto: a chi è frenato si
+    # risponde con una lettura per chiave, senza arrivare a bcrypt (vedi
+    # services/login_throttle.py).
     ip = request.client.host if request.client else None
-    attesa = login_throttle.attesa_richiesta(ip, body.email)
+    attesa = login_throttle.attesa_richiesta(session, ip, body.email)
     if attesa > 0:
         audit.record_audit(
             session, actor=None, actor_label=body.email, action=audit.LOGIN_FAILED,
@@ -37,7 +38,7 @@ def login(body: LoginRequest, request: Request, session: Session = Depends(get_s
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
             outcome="failure", detail={"reason": "credenziali errate"}, request=request,
         )
-        login_throttle.registra_errore(ip, body.email)
+        login_throttle.registra_errore(session, ip, body.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email o password errati")
     if not user.is_active:
         audit.record_audit(
@@ -45,7 +46,7 @@ def login(body: LoginRequest, request: Request, session: Session = Depends(get_s
             detail={"reason": "utente disattivato"}, request=request,
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Utente disattivato")
-    login_throttle.registra_successo(ip, body.email)
+    login_throttle.registra_successo(session, ip, body.email)
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
     return Token(access_token=create_access_token(user.id))
 

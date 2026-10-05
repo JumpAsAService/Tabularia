@@ -2,7 +2,8 @@
 {{/*
 Two policies, for two different reasons.
 
-1. The engine API accepts traffic only from the gateway and the workers. It does
+1. The engine API accepts traffic only from the gateway (both its workloads: the
+   pods that answer requests and the orchestrator) and the workers. It does
    no authorisation of its own and holds credentials that read the whole bucket,
    so "internal only" should be enforced by the network, not by the absence of an
    Ingress.
@@ -37,6 +38,11 @@ spec:
               app.kubernetes.io/name: {{ include "tabularia.name" . }}
               app.kubernetes.io/instance: {{ .Release.Name }}
               app.kubernetes.io/component: gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: orchestrator
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ include "tabularia.name" . }}

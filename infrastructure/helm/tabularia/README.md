@@ -94,19 +94,40 @@ Optional keys follow the feature they belong to. With
 `CLICKHOUSE_EXTERNAL__AI_PASSWORD`: the read-only ClickHouse user the AI
 assistant's queries run as (grants in `docs/engines/clickhouse-ai-user.md`).
 
-## Why the gateway is a singleton
+## Scaling the gateway
 
-The gateway runs the scheduler **in process**, and that scheduler takes no
-distributed lock. With two replicas, every cron schedule fires twice: two
-refreshes of the same datasource, two runs of the same flow, and on an output
-that appends, duplicated rows.
+The gateway has two jobs, and the chart runs them as two Deployments built from
+the same image. What tells them apart is one variable, `APP__ROLE`.
 
-The chart therefore does not expose a replica count for it, and pins the strategy
-to `Recreate` so a rolling update never briefly runs two.
+| Deployment | Role | What it does | Scale with |
+|---|---|---|---|
+| `…-gateway` | `api` | answers requests; the Ingress points here | `gateway.replicas`, or `gateway.autoscaling` |
+| `…-orchestrator` | `orchestrator` | fires the schedules, executes the flows, reconciles runs, cleans up; no Service, nothing calls it | `gateway.orchestrator.replicas` |
 
-This is a genuine capacity limit, not just a footnote: the gateway also proxies
-uploads and builds CSV and Excel exports. Give it CPU and memory headroom rather
-than replicas. Lifting it needs an advisory lock in the application.
+**Requests.** One Python process uses one core and tops out around 95 requests a
+second — a few hundred people clicking at once. Past that, add replicas. Nothing
+is tied to a pod: sessions are a signed token, and the sign-in throttle and the
+editor's "also open by" notice live in PostgreSQL. Measured with 500 simulated
+users on one eight-core machine: one replica saturated (95th percentile of page
+requests 5.8 s), three answered all of them in 0.12 s at 44% CPU each.
+
+**Background work.** Orchestrators share their work through the database. A
+schedule slot is taken by whoever moves the next run time forward first, a queued
+flow execution by whoever signs it first, and a unique index keeps a flow from
+ever having two executions running — so more than one orchestrator never means
+anything firing twice. Each says "still here" on the executions it carries every
+ten seconds; if a pod dies, another orchestrator closes them as interrupted after
+`orchestrator.deadAfterSeconds`. They are **not resumed**: the steps already done
+have written their output, and the flow has to be launched again. One
+orchestrator is enough for most installations; the second is there for failover.
+
+**Database connections.** Every gateway and orchestrator pod keeps its own pool,
+up to `threads + threads/4 + 10` connections (25 with the default twelve
+threads). Keep `(gateway replicas + orchestrator replicas) × 25` below your
+PostgreSQL's `max_connections`.
+
+A single process doing both jobs still exists (`APP__ROLE=all`, the application's
+default, and what the development compose file runs); the chart does not use it.
 
 ## Why beat is a singleton
 
@@ -122,7 +143,8 @@ itself, so one small pod is enough.
 | Engine API | freely | receives uploads, builds exports |
 | Run worker | freely | the heavy one; size `/tmp` and memory together |
 | Preview worker | freely | keeps interactive previews off the run queue |
-| Gateway | **no** | see above |
+| Gateway | freely | one core per replica; see above |
+| Orchestrator | freely | one is enough, a second is for failover; see above |
 | Beat | **no** | see above |
 
 ### Autoscaling
@@ -131,7 +153,8 @@ The HPAs in this chart scale on CPU because that is what works everywhere, but
 CPU is a poor signal here: a worker waiting on a slow database uses almost no CPU
 while being entirely busy. The signal that matches the work is **queue length** —
 the Redis lists `celery` and `preview`. Use KEDA if you can; `templates/hpa.yaml`
-carries a ready trigger.
+carries a ready trigger. The gateway is the exception: it is busy exactly when it
+burns CPU, so `gateway.autoscaling` on CPU is the right signal for it.
 
 Scaling in can also interrupt a run, which is why workers get a long termination
 grace period. Prefer letting the queue drain over aggressive scale-in.
@@ -186,17 +209,36 @@ this application:
 | Request buffering | the proxy must not spool uploads to its own disk | off |
 | Read timeout | previews wait for the engine synchronously | 300 s |
 
-Add rate limiting on `/auth/login`: the application has no login throttling of
-its own.
+The application slows down repeated failed sign-ins per client address and email
+(the count is shared by all gateway replicas), which defeats a password list but
+not a distributed attack: rate limiting `/auth/login` at the proxy is still worth
+having.
 
 The engine API has no Ingress and must never get one. Enable `networkPolicy` to
 make that structural.
 
 ## Upgrades
 
-The gateway creates and migrates its schema at startup and closes orchestrations
-interrupted by the previous shutdown. Because it is `Recreate`, expect a short
-gap during upgrades.
+The first gateway or orchestrator pod of a new version creates or migrates the
+schema at startup; the others, and every later restart or scale-up, find it
+current and skip it. Pods of both Deployments roll: a new one is ready before an
+old one stops, so requests are not dropped.
+
+Flow executions in progress **are** interrupted when the orchestrator pod
+carrying them stops: they are closed as failed with a message that says so, and
+are not resumed. Upgrade when no long flow is running, or relaunch afterwards.
+
+**Coming from chart 1.0.x** (one gateway pod that also ran the scheduler): that
+version does not know about the queue, and must not run next to the new one.
+Scale it to zero first, then upgrade:
+
+```bash
+kubectl -n <namespace> scale deployment/<release>-tabularia-gateway --replicas=0
+helm upgrade …
+```
+
+Rolling back to it works the same way in reverse (scale both Deployments to zero
+first); it closes whatever executions it finds queued or running.
 
 Workers finish the task in flight before stopping, up to
 `worker.terminationGracePeriodSeconds` (one hour by default). Set it to at least

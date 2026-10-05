@@ -10,7 +10,7 @@ description: |
 type: application
 
 # Chart version — bump on every chart change.
-version: 1.0.0
+version: 1.1.0
 
 # Version of Tabularia this chart was written against. Overridden per component
 # by image.tag values when you pin your own builds.
@@ -26,4 +26,4 @@ keywords:
 annotations:
   # Constraints the operator must know before scaling anything. They are
   # enforced by the templates and explained in README.md.
-  tabularia.io/singleton-components: "gateway, beat"
+  tabularia.io/singleton-components: "beat"

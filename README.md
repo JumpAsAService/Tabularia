@@ -217,7 +217,7 @@ pinned in the spec.
 | Runtime component | Role |
 |---|---|
 | Web UI | Nuxt 3 app, calls the gateway only (JWT) |
-| Gateway | FastAPI control plane: auth, RBAC, audit, in-process scheduler; proxies to the engine after the permission check |
+| Gateway | FastAPI control plane: auth, RBAC, audit; proxies to the engine after the permission check. Also fires the schedules and executes the flows — in the same process here, or as a separate `orchestrator` role when the gateway is replicated (`APP__ROLE`) |
 | PostgreSQL | control-plane metadata (users, groups, projects, versioned flows, connections, runs, schedules, audit) |
 | Engine API | FastAPI on the private network: turns every preview and run into a Celery task |
 | Valkey | Celery broker, step-cache index, preview slots |

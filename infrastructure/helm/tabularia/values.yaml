@@ -1,7 +1,8 @@
 # Tabularia — configuration.
 #
 # Read README.md first: it explains WHY the chart is shaped this way, especially
-# why the gateway and beat are pinned to a single replica.
+# how the gateway is split into two workloads and why beat is pinned to a single
+# replica.
 #
 # The only values you MUST set before the first install are under `secrets`
 # (or `existingSecret`), `externalServices` and `ingress.hosts`.
@@ -263,10 +264,22 @@ cache:
 
 # How long a flow waits for its refresh and output steps before giving up.
 # These mirror the application defaults; raise them for very long refreshes.
+# (The orchestrator PODS are configured under gateway.orchestrator below.)
 orchestrator:
   refreshWaitSeconds: 600
   outputWaitSeconds: 600
   pollIntervalSeconds: 3
+  # Flow executions one orchestrator pod carries at once; the rest wait in the
+  # queue. Each uses a database connection while it asks the engine for a
+  # step's state, so keep it below the pod's pool (gateway.threads + 10).
+  maxConcurrent: 20
+  # An execution whose pod has not said "still here" for this long belongs to a
+  # dead pod: another orchestrator closes it as interrupted. Node clocks must
+  # agree within this margin.
+  deadAfterSeconds: 60
+  # An execution still queued after this long is not started any more (no
+  # orchestrator running, or all of them full): it is closed as failed.
+  queueTimeoutSeconds: 900
 
 # The RAM badge in the UI reads a node-exporter. This chart does not deploy one
 # (see README → What this chart does not deploy). Leave it empty and the badge
@@ -278,22 +291,54 @@ monitoring:
 # Components
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Control plane: the only public entry point for the API. Auth, RBAC, metadata,
-# and the in-process scheduler.
-#
-# replicas is NOT configurable on purpose. The scheduler takes no distributed
-# lock, so two gateways fire every schedule twice. The template also forces the
-# Recreate strategy: a rolling update would briefly run two of them.
+# Control plane: the only public entry point for the API. Auth, RBAC, metadata.
+# It runs as two workloads from the same image — see README → Scaling the
+# gateway.
 gateway:
-  # strategy is pinned to Recreate; see README → Why the gateway is a singleton.
+  # Pods that answer requests. One Python process uses one core and tops out
+  # around 95 requests a second (a few hundred people clicking at once): past
+  # that, add replicas. Measured with 500 simulated users: one replica
+  # saturated (95th percentile 5.8 s), three answered in 0.12 s.
+  replicas: 1
+  # Threads per process. Fewer serve more: Python runs one at a time and they
+  # only contend (measured: 68 requests/s with 40, 79 with 6).
+  threads: 12
+  # CPU is a good signal here, unlike for the workers: the gateway is busy
+  # exactly when it burns CPU.
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
   resources:
-    requests: { cpu: 100m, memory: 256Mi }
+    requests: { cpu: 250m, memory: 256Mi }
     limits: { memory: 1Gi }
   tmpSizeLimit: 1Gi       # session scratch only
   nodeSelector: {}
   tolerations: []
   affinity: {}
   podAnnotations: {}
+
+  # Pods that do the background work: schedules, flow executions, clean-up.
+  # One is enough for most installations. A second takes over the queue if the
+  # first dies: the executions the dead one was carrying are closed as
+  # interrupted after orchestrator.deadAfterSeconds (they are not resumed).
+  orchestrator:
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 1Gi }
+    tmpSizeLimit: 1Gi
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    podAnnotations: {}
+
+  # DATABASE CONNECTIONS. Every gateway and orchestrator pod keeps its own pool:
+  # up to threads + threads/4 + 10, so 25 with twelve threads. Keep
+  #   (gateway replicas + orchestrator replicas) x 25
+  # under your PostgreSQL's max_connections (100 by default), with room for
+  # whatever else connects to it.
 
 # Data plane HTTP API. Internal only — never expose it: it trusts the gateway
 # for authorisation and holds credentials that read the whole bucket.
@@ -363,7 +408,7 @@ previewWorker:
 
 # The clock. Enqueues periodic jobs (cache eviction, storage stats); the workers
 # execute them. MUST stay at one replica: N beats enqueue everything N times.
-# Like the gateway, replicas are not configurable and the strategy is Recreate.
+# Replicas are not configurable and the strategy is Recreate.
 beat:
   resources:
     requests: { cpu: 50m, memory: 128Mi }

@@ -64,6 +64,14 @@ oidc:
 
 # Sizing below assumes datasets of a few GB. Raise tmpSizeLimit and memory
 # together: peak memory is roughly concurrency × dataset size.
+# One core per replica. Two for availability; add more when people wait (one
+# replica serves about 95 requests a second). Each pod, and each orchestrator,
+# keeps up to 25 connections to PostgreSQL: size its max_connections for the sum.
+gateway:
+  replicas: 2
+  orchestrator:
+    replicas: 1     # 2 for failover: the survivor takes over the queue
+
 engineApi:
   replicaCount: 2
   resources:
@@ -110,7 +118,8 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    # The application has no login throttling of its own.
+    # The application slows down repeated failed sign-ins per address and
+    # email; this caps the rate from any one client on top of that.
     nginx.ingress.kubernetes.io/limit-rps: "5"
 
 # Strongly recommended in production: without it the engine API is reachable from

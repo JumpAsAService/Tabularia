@@ -97,7 +97,10 @@ services:
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Gateway (control plane): UNICO ingresso pubblico (:8000). Auth + RBAC + Postgres,
-  # poi inoltra all'engine interno.
+  # poi inoltra all'engine interno. Qui è UN processo che fa tutto (APP__ROLE=all,
+  # il predefinito): risponde alle richieste, fa scattare le schedulazioni ed
+  # esegue i flussi. In produzione gli stessi due mestieri si possono separare e
+  # replicare (APP__ROLE=api / orchestrator): vedi infrastructure/.env.example.
   gateway:
     # immagine UNICA del gateway (vedi gateway/Dockerfile): in sviluppo con
     # pytest, in produzione senza; stesse regole, utente non root

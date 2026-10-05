@@ -1,59 +1,82 @@
 {{/*
-Control plane — the only public entry point for the API.
+Control plane — the only public entry point for the API — as TWO workloads built
+from the same image. The gateway has two jobs, and each scales on its own:
 
-SINGLETON BY DESIGN. The gateway runs an in-process scheduler that takes no
-distributed lock, so a second replica fires every schedule a second time:
-duplicate refreshes, duplicate runs, duplicate rows in append outputs. The
-replica count is therefore not exposed as a value, and the strategy is Recreate
-so that a rolling update never briefly runs two.
+  gateway        answers requests (APP__ROLE=api). Stateless: sessions are a
+                 signed token, and the sign-in throttle and the editor's "also
+                 open by" notice live in Postgres. One Python process uses one
+                 core, so this is the one to replicate when people wait.
 
-This is a real capacity limit: the gateway also proxies uploads and builds CSV
-and Excel exports. Give it headroom rather than replicas.
+  orchestrator   does the background work (APP__ROLE=orchestrator): fires the
+                 schedules, executes the flows, reconciles runs, cleans up. It
+                 has no Service: nothing calls it. Several can run; they share
+                 the work through the database — a schedule slot and a flow
+                 execution are each taken by exactly one, and a flow never has
+                 two executions running.
+
+Both roll: a new pod starts before an old one stops. For the orchestrator that
+means the executions the old pod was carrying are closed as interrupted when it
+stops (they are not resumed) — see README → Upgrades.
 */}}
+{{- define "tabularia.gateway.deployment" -}}
+{{- $ := .root -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "tabularia.fullname" . }}-gateway
+  name: {{ include "tabularia.fullname" $ }}-{{ .component }}
   labels:
-    {{- include "tabularia.labels" . | nindent 4 }}
-    app.kubernetes.io/component: gateway
+    {{- include "tabularia.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ .component }}
 spec:
-  replicas: 1
+  {{- if not .autoscaled }}
+  replicas: {{ .cfg.replicas }}
+  {{- end }}
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "tabularia.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
-      app.kubernetes.io/component: gateway
+      app.kubernetes.io/name: {{ include "tabularia.name" $ }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ .component }}
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- with .Values.gateway.podAnnotations }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- with .cfg.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "tabularia.labels" . | nindent 8 }}
-        app.kubernetes.io/component: gateway
+        {{- include "tabularia.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ .component }}
     spec:
-      {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
-      serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
+      serviceAccountName: {{ include "tabularia.serviceAccountName" $ }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: gateway
+        - name: {{ .component }}
           image: {{ include "tabularia.image" (dict "root" $ "component" "gateway") }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
           securityContext:
-            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
           ports:
             - name: http
               containerPort: 8000
+          env:
+            # What this process does. Set here and not in the shared ConfigMap:
+            # it is the one setting that differs between the two workloads.
+            - name: APP__ROLE
+              value: {{ .role | quote }}
+            - name: APP__GATEWAY_THREADS
+              value: {{ $.Values.gateway.threads | quote }}
           envFrom:
-            {{- include "tabularia.envFrom" . | nindent 12 }}
-          # The schema is created and migrated at startup, and interrupted
-          # orchestrations are closed then too. Give it room before probing.
+            {{- include "tabularia.envFrom" $ | nindent 12 }}
+          # The first pod of a new version creates or migrates the schema at
+          # startup (the others find it done and skip it). Give it room before
+          # probing.
           startupProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 5
@@ -66,26 +89,30 @@ spec:
             periodSeconds: 20
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.gateway.resources | nindent 12 }}
+            {{- toYaml .cfg.resources | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
       volumes:
         - name: tmp
           emptyDir:
-            sizeLimit: {{ .Values.gateway.tmpSizeLimit }}
-      {{- with .Values.gateway.nodeSelector }}
+            sizeLimit: {{ .cfg.tmpSizeLimit }}
+      {{- with .cfg.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.gateway.tolerations }}
+      {{- with .cfg.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.gateway.affinity }}
+      {{- with .cfg.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}
+{{ include "tabularia.gateway.deployment" (dict "root" $ "component" "gateway" "role" "api" "cfg" .Values.gateway "autoscaled" .Values.gateway.autoscaling.enabled) }}
+---
+{{ include "tabularia.gateway.deployment" (dict "root" $ "component" "orchestrator" "role" "orchestrator" "cfg" .Values.gateway.orchestrator "autoscaled" false) }}
 ---
 apiVersion: v1
 kind: Service

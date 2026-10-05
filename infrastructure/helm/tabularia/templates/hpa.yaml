@@ -21,9 +21,13 @@ Note also that scaling IN can interrupt a run: workers get a long termination
 grace period precisely so a task finishes, so set a generous
 `stabilizationWindowSeconds` or let the queue drain instead.
 
-There is no autoscaler for the gateway or beat: both are singletons by design.
+The gateway is the exception: it is busy exactly when it burns CPU (one Python
+process, one core), so CPU utilisation is the right signal for it.
+
+There is no autoscaler for the orchestrator (one or two are plenty, and scaling
+one in interrupts the flows it is executing) nor for beat (a singleton).
 */}}
-{{- range $name, $cfg := dict "engine" $.Values.engineApi "worker" $.Values.worker "preview-worker" $.Values.previewWorker "frontend" $.Values.frontend }}
+{{- range $name, $cfg := dict "engine" $.Values.engineApi "worker" $.Values.worker "preview-worker" $.Values.previewWorker "frontend" $.Values.frontend "gateway" $.Values.gateway }}
 {{- if $cfg.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2

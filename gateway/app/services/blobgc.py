@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -49,27 +50,34 @@ async def sweep_blob_deletions(session: Session, now: datetime | None = None) ->
     Best-effort: se l'engine non conferma la cancellazione la riga resta e si
     riprova al giro dopo; un 404 (già sparito) conta come fatto."""
     now = now or datetime.now(timezone.utc)
-    due = session.exec(
-        select(PendingBlobDeletion).where(PendingBlobDeletion.delete_after <= now)
-    ).all()
+    # valori semplici, non oggetti: dopo ogni commit qui sotto gli oggetti
+    # scadrebbero, e rileggere una riga che un altro processo ha già tolto è un errore
+    due = [
+        (r.id, r.bucket, r.key)
+        for r in session.exec(select(PendingBlobDeletion).where(PendingBlobDeletion.delete_after <= now)).all()
+    ]
+    session.rollback()  # lettura finita: niente transazione aperta durante le chiamate all'engine
     if not due:
         return 0
     client = get_engine_client()
     removed = 0
-    for row in due:
+    for row_id, bucket, key in due:
         try:
-            resp = await client.delete(
-                "/files/object", params={"bucket": row.bucket, "key": row.key}
-            )
+            resp = await client.delete("/files/object", params={"bucket": bucket, "key": key})
         except Exception as e:  # engine irraggiungibile → riprova al prossimo tick
-            logger.warning("sweep blob %s/%s rimandato: %s", row.bucket, row.key, e)
+            logger.warning("sweep blob %s/%s rimandato: %s", bucket, key, e)
             continue
         if resp.status_code < 400 or resp.status_code == 404:
-            session.delete(row)
-            removed += 1
+            # Per id e non `session.delete(riga)`: con più processi che fanno la
+            # stessa passata la riga può averla già tolta un altro, e l'ORM lo
+            # tratterebbe come un errore (cancellare due volte lo stesso blob è
+            # innocuo: la seconda trova 404, che conta come fatto). E commit
+            # SUBITO: la DELETE tiene un lucchetto sulla riga finché non si
+            # conferma, e tenerlo per le chiamate all'engine che seguono fermerebbe
+            # un altro processo arrivato alla stessa riga per tutto quel tempo.
+            tolta = session.exec(delete(PendingBlobDeletion).where(PendingBlobDeletion.id == row_id))
+            session.commit()
+            removed += tolta.rowcount or 0
         else:
-            logger.warning(
-                "sweep blob %s/%s non eliminato (%s): riprovo", row.bucket, row.key, resp.status_code
-            )
-    session.commit()
+            logger.warning("sweep blob %s/%s non eliminato (%s): riprovo", bucket, key, resp.status_code)
     return removed

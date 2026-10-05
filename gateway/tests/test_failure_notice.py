@@ -47,11 +47,13 @@ def scenario(session, monkeypatch):
     return flow, conn, inviati
 
 
-def _run(session, flow, *, status="FAILURE", trigger="schedule", quando=None, error="boom"):
+def _run(session, flow, *, status="FAILURE", trigger="schedule", quando=None, error="boom", kind="orchestration"):
+    """L'esecuzione programmata di un flusso è il run di ORCHESTRAZIONE: è quello
+    che l'orchestratore passa al notificatore."""
     t = quando or datetime.now(timezone.utc).replace(tzinfo=None)
     return make_run(
-        session, kind="flow", flow_id=flow.id, status=status, trigger_type=trigger,
-        error=error, started_at=t, finished_at=t,
+        session, kind=kind, flow_id=flow.id, status=status, trigger_type=trigger,
+        error=error, started_at=t, finished_at=t, task_id="" if kind == "orchestration" else "t-1",
     )
 
 
@@ -155,3 +157,27 @@ def test_a_malformed_address_is_refused(session, scenario):
     with pytest.raises(HTTPException) as e:
         flow_routes._set_failure_notice(session, capo, flow, FlowScheduleUpdate(notify_emails="non-un-indirizzo"))
     assert e.value.status_code == 422
+
+
+def test_the_notice_is_about_the_orchestration_not_its_output_runs(session, scenario):
+    """Per mesi qui c'era scritto kind == "flow": l'orchestratore passa il run di
+    orchestrazione, e l'avviso non partiva mai. I run "flow" sono i figli (uno per
+    nodo Output) e da soli non avvisano."""
+    flow, _, inviati = scenario
+    _avvisa(session, _run(session, flow, kind="flow"))
+    assert inviati == []
+    _avvisa(session, _run(session, flow))
+    assert len(inviati) == 1
+
+
+def test_a_rejected_launch_does_not_count_as_a_previous_failure(session, scenario):
+    """Un lancio manuale respinto perché il flusso girava già non è un'esecuzione
+    fallita: non deve zittire l'avviso della prossima che fallisce davvero."""
+    from datetime import timedelta
+
+    flow, _, inviati = scenario
+    ora = datetime.now(timezone.utc).replace(tzinfo=None)
+    _run(session, flow, status="SUCCESS", quando=ora - timedelta(hours=2), error=None)
+    _run(session, flow, trigger="manual", quando=ora - timedelta(hours=1), error="flusso già in esecuzione")
+    _avvisa(session, _run(session, flow, quando=ora))
+    assert len(inviati) == 1

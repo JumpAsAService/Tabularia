@@ -618,6 +618,39 @@ def _is_stale_swap(ds: Datasource, run: Run) -> bool:
     return ds.snapshot_run_id is not None and run.id is not None and run.id < ds.snapshot_run_id
 
 
+QUEUE_TIMEOUT_SECONDS = get_settings().orchestrator.queue_timeout_seconds
+QUEUE_TIMED_OUT = (
+    "Rimasta in coda troppo a lungo senza che un orchestratore la prendesse in carico: "
+    "non è stata eseguita. Rilancia il flusso."
+)
+
+
+async def close_if_queued_too_long(session: Session, run: Run) -> Run:
+    """Un'esecuzione in coda da più di `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS` non
+    parte più: la si chiude come fallita. Altrimenti un lancio fatto mentre non
+    c'era nessun orchestratore partirebbe ore dopo, quando qualcuno ne riaccende
+    uno — e nel frattempo terrebbe occupato il flusso per lo scheduler.
+
+    Lo fa chiunque la guardi (anche un processo che risponde soltanto: è così che
+    chi ha lanciato vede l'esito anche a orchestratori spenti) e l'orchestratore
+    prima di prendere dalla coda. UPDATE condizionato: la chiude uno solo."""
+    creata = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
+    if (datetime.now(timezone.utc) - creata).total_seconds() <= QUEUE_TIMEOUT_SECONDS:
+        return run
+    chiusa = session.exec(
+        update(Run)
+        .where(Run.id == run.id, Run.status == "PENDING")
+        .values(status="FAILURE", error=QUEUE_TIMED_OUT, finished_at=datetime.now(timezone.utc))
+    )
+    session.commit()
+    session.refresh(run)
+    if chiusa.rowcount == 1:
+        from app.services.notifier import notify_failure
+
+        await notify_failure(session, run)
+    return run
+
+
 async def _reconcile(session: Session, run: Run) -> Run:
     """Allinea un run non terminale allo stato del task sull'engine.
 
@@ -630,7 +663,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
     if run.status in TERMINAL_STATES:
         return run
     if run.kind == "orchestration":
-        return run  # non è un task engine: lo stato lo gestisce l'orchestratore
+        # non è un task engine: lo stato lo gestisce l'orchestratore. Qui si fa
+        # una cosa sola: accorgersi che è rimasta in coda oltre il tempo massimo
+        if run.status == "PENDING":
+            return await close_if_queued_too_long(session, run)
+        return run
     client = get_engine_client()
     try:
         resp = await client.get(f"/tasks/{run.task_id}")
@@ -673,10 +710,13 @@ async def _reconcile(session: Session, run: Run) -> Run:
         return run
 
     if new_status not in TERMINAL_STATES:  # es. PENDING → STARTED
-        run.status = new_status
+        # UPDATE condizionato, non l'oggetto: fra la domanda all'engine e qui un
+        # altro processo può aver già chiuso il run, e riscriverlo STARTED lo
+        # riaprirebbe (il giro dopo lo richiuderebbe, rifacendo la pubblicazione)
+        valori: dict = {"status": new_status}
         if new_status == "STARTED" and run.engine_started_at is None:
-            run.engine_started_at = datetime.now(timezone.utc)  # inizio reale
-        session.add(run)
+            valori["engine_started_at"] = datetime.now(timezone.utc)  # inizio reale
+        session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**valori))
         session.commit()
         session.refresh(run)
         return run

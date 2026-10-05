@@ -4,7 +4,7 @@ import re
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
 from functools import lru_cache
-from typing import Optional
+from typing import Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -219,6 +219,14 @@ class AppSettings(BaseModel):
     # e ripulisce i registri, e la prima pipeline. Un data-prep ante litteram.
     codename: str = "Appio"
     env_name: str = "development"
+    # Cosa fa QUESTO processo. Il gateway ha due mestieri: rispondere alle
+    # richieste, e portare avanti il lavoro di fondo (schedulazioni, esecuzione
+    # dei flussi, pulizie). `all` li fa entrambi, come è sempre stato: un processo
+    # solo. Per avere più repliche si separano: `api` risponde e basta, quante
+    # copie si vuole; `orchestrator` fa solo il lavoro di fondo, anche lui in più
+    # copie (il lavoro se lo dividono dal database, senza doppioni).
+    # env: APP__ROLE
+    role: Literal["all", "api", "orchestrator"] = "all"
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
@@ -385,6 +393,27 @@ class OrchestratorSettings(BaseModel):
     output_wait_seconds: int = 600
     # env: ORCHESTRATOR__POLL_INTERVAL_SECONDS — cadenza di polling durante l'attesa
     poll_interval_seconds: float = 3.0
+    # ── Coda delle orchestrazioni ────────────────────────────────────────────
+    # Un'esecuzione di flusso nasce come riga «in coda» e la prende un processo
+    # che fa da orchestratore (APP__ROLE): possono essere più d'uno.
+    # env: ORCHESTRATOR__QUEUE_POLL_SECONDS — ogni quanto si guarda la coda
+    queue_poll_seconds: float = Field(default=1.0, gt=0)
+    # env: ORCHESTRATOR__MAX_CONCURRENT — orchestrazioni portate avanti insieme
+    # da UN processo; le altre restano in coda. Ognuna usa una connessione a
+    # Postgres mentre interroga l'engine: va tenuto sotto la misura del pool
+    # (DB__POOL_SIZE), o un engine lento le esaurisce.
+    max_concurrent: int = Field(default=20, ge=1)
+    # env: ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS — un'esecuzione rimasta in coda
+    # più di così (nessun orchestratore acceso, o tutti pieni) non viene più
+    # eseguita: si chiude come fallita. Senza, un lancio fatto a orchestratori
+    # spenti partirebbe ore dopo, quando nessuno se lo aspetta più.
+    queue_timeout_seconds: float = Field(default=900.0, gt=0)
+    # env: ORCHESTRATOR__HEARTBEAT_SECONDS — ogni quanto chi esegue dice «ci sono»
+    heartbeat_seconds: float = Field(default=10.0, gt=0)
+    # env: ORCHESTRATOR__DEAD_AFTER_SECONDS — silenzio oltre il quale
+    # un'orchestrazione è data per persa (il processo è morto) e viene chiusa.
+    # Gli orologi delle macchine devono essere allineati entro questo margine.
+    dead_after_seconds: float = Field(default=60.0, gt=0)
 
 
 class Settings(BaseSettings):

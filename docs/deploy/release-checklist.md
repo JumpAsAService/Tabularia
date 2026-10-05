@@ -6,8 +6,11 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
 ## Before
 
 1. **Schema.** The gateway applies its lightweight migrations itself at startup
-   (`create_all` plus idempotent `ALTER … ADD COLUMN IF NOT EXISTS`). It is a
-   singleton with a `Recreate` strategy, so two versions never migrate at once.
+   (`create_all` plus idempotent `ALTER … ADD COLUMN IF NOT EXISTS`). Several
+   processes may start together: a Postgres advisory lock puts them in line, and
+   a process that finds the schema of its own version already applied (a
+   fingerprint kept in `schema_state`) skips the statements altogether — so only
+   the first process of a new version migrates, and a restart never does.
    To rehearse an upgrade, run the previous version's `init_db` on a scratch
    database and then the new one; both must succeed and the second must be a
    no-op the second time.

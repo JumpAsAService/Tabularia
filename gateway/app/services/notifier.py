@@ -48,8 +48,13 @@ def _gia_falliva(session: Session, flow_id: int, run_id: int) -> bool:
     ripeterlo a ogni scatto trasforma la notifica in rumore da filtrare."""
     precedente = session.exec(
         select(Run)
-        .where(Run.flow_id == flow_id, Run.kind == "flow", Run.parent_run_id.is_(None), Run.id != run_id)
-        .order_by(Run.started_at.desc())
+        .where(
+            Run.flow_id == flow_id, Run.kind == "orchestration", Run.id != run_id,
+            Run.status.in_(TERMINAL_STATES),  # type: ignore[union-attr]
+            # un lancio respinto perché il flusso girava già non è un'esecuzione
+            (Run.error.is_(None)) | (Run.error != "flusso già in esecuzione"),  # type: ignore[union-attr]
+        )
+        .order_by(Run.started_at.desc(), Run.id.desc())
     ).first()
     return precedente is not None and precedente.status == "FAILURE"
 
@@ -73,7 +78,11 @@ def _corpo(flow: Flow, run: Run) -> str:
 async def notify_failure(session: Session, run: Run) -> None:
     """Manda l'avviso, se il flusso lo ha chiesto e le condizioni ci sono."""
     try:
-        if run.kind != "flow" or run.status != "FAILURE" or run.trigger_type != "schedule":
+        # L'esecuzione programmata di un flusso È il run di orchestrazione (i run
+        # di tipo "flow" sono i suoi figli, uno per nodo Output). Finché qui c'era
+        # scritto "flow" l'avviso non partiva mai: chi lo chiama passa
+        # l'orchestrazione.
+        if run.kind != "orchestration" or run.status != "FAILURE" or run.trigger_type != "schedule":
             return
         flow = session.get(Flow, run.flow_id) if run.flow_id else None
         if flow is None:

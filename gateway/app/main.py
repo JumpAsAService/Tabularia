@@ -7,9 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
-from app.db.session import backfill_flow_versions, init_db
+from app.db.session import backfill_flow_versions, init_db, lucchetto_di_avvio, wait_for_db
 from app.db.seed import seed_admin
-from app.services.orchestrator import close_interrupted_orchestrations
+from app.services.orchestrator import coda_loop
 from app.services.scheduler import scheduler_loop
 from app.services.audit_retention import retention_loop
 from app.routes.auth import router as auth_router
@@ -38,6 +38,23 @@ from app.routes.proxy import router as proxy_router
 logging.basicConfig(level=logging.INFO)
 
 
+def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
+    """Il lavoro di fondo, per chi lo fa (`APP__ROLE`): un processo che risponde
+    soltanto (`api`) non ne avvia. Ogni voce regge più processi che la fanno
+    insieme, senza doppioni."""
+    if get_settings().app.role == "api":
+        return []
+    return [
+        # schedulazioni: refresh delle datasource ed esecuzioni dei flussi
+        asyncio.create_task(scheduler_loop(stop)),
+        # la coda delle esecuzioni dei flussi, e le orchestrazioni rimaste senza
+        # nessuno che le porti avanti (processo morto): si chiudono dicendolo
+        asyncio.create_task(coda_loop(stop)),
+        # scadenza del registro delle azioni: parte solo se è configurata
+        asyncio.create_task(retention_loop(stop)),
+    ]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # la chiave Fernet è obbligatoria SEMPRE; in produzione anche i default di
@@ -48,24 +65,20 @@ async def lifespan(app: FastAPI):
     import anyio.to_thread
 
     anyio.to_thread.current_default_thread_limiter().total_tokens = get_settings().app.gateway_threads
-    # crea le tabelle e semina l'admin da env (idempotente)
-    init_db()
-    seed_admin()
-    backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
-    # orchestrazioni rimaste appese da un riavvio precedente: nessuno le
-    # riconcilia (non hanno un task sull'engine), quindi resterebbero STARTED per
-    # sempre. Si chiudono qui, dicendo che sono state interrotte.
-    close_interrupted_orchestrations()
-    # scheduler in-process del refresh delle datasource database
+    # crea le tabelle e semina l'admin da env (idempotente). Uno alla volta: più
+    # processi possono partire insieme
+    wait_for_db()
+    with lucchetto_di_avvio():
+        init_db()
+        seed_admin()
+        backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
     stop = asyncio.Event()
-    scheduler = asyncio.create_task(scheduler_loop(stop))
-    # scadenza del registro delle azioni: parte solo se è configurata
-    pulizia = asyncio.create_task(retention_loop(stop))
+    fondo = avvia_lavoro_di_fondo(stop)
     try:
         yield
     finally:
         stop.set()
-        for task in (scheduler, pulizia):
+        for task in fondo:
             task.cancel()
             try:
                 await task
@@ -104,31 +117,34 @@ def health():
     return {"status": "ok"}
 
 
-# control plane
-app.include_router(auth_router)
-app.include_router(sso_router)
-app.include_router(users_router)
-app.include_router(groups_router)
-app.include_router(banners_router)
-app.include_router(privacy_router)
-app.include_router(engine_policy_router)
-app.include_router(ai_router)
-app.include_router(saved_views_router)
-app.include_router(search_router)
-app.include_router(projects_router)
-app.include_router(permissions_router)
-app.include_router(flows_router)
-app.include_router(runs_router)
-app.include_router(datasources_router)
-app.include_router(connections_router)
-app.include_router(lineage_router)
-app.include_router(scheduling_router)
-app.include_router(audit_router)
-app.include_router(system_router)
-app.include_router(queue_router)
-# data plane (proxy verso l'engine interno)
-app.include_router(proxy_router)
-app.include_router(performance_routes.router)
+# Un processo che fa solo da orchestratore non serve l'API: non è raggiunto dal
+# proxy e risponde soltanto al controllo di salute.
+if settings.app.role != "orchestrator":
+    # control plane
+    app.include_router(auth_router)
+    app.include_router(sso_router)
+    app.include_router(users_router)
+    app.include_router(groups_router)
+    app.include_router(banners_router)
+    app.include_router(privacy_router)
+    app.include_router(engine_policy_router)
+    app.include_router(ai_router)
+    app.include_router(saved_views_router)
+    app.include_router(search_router)
+    app.include_router(projects_router)
+    app.include_router(permissions_router)
+    app.include_router(flows_router)
+    app.include_router(runs_router)
+    app.include_router(datasources_router)
+    app.include_router(connections_router)
+    app.include_router(lineage_router)
+    app.include_router(scheduling_router)
+    app.include_router(audit_router)
+    app.include_router(system_router)
+    app.include_router(queue_router)
+    # data plane (proxy verso l'engine interno)
+    app.include_router(proxy_router)
+    app.include_router(performance_routes.router)
 
 
 @app.get("/", tags=["health"])

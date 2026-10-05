@@ -1,11 +1,13 @@
 import logging
 import time
+from contextlib import contextmanager
 
 from sqlalchemy import event, text
 from sqlalchemy.exc import InvalidatePoolError, OperationalError
 from sqlmodel import create_engine, select, Session, SQLModel
 
 from app.core.config import get_settings
+from app.models.run import LIVE_ORCHESTRATION, ORCHESTRATION_INTERRUPTED
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,12 @@ _engine_letture = _crea_engine(
     isolation_level="AUTOCOMMIT", pool_size=max(2, _misura_del_pool() // 4), max_overflow=0
 )
 _LETTURE = {engine: _engine_letture}
+
+# Il battito delle orchestrazioni ha una connessione SUA. Se usasse il pool
+# delle richieste, il giorno in cui quello si esaurisce (engine lento, molte
+# esecuzioni insieme) il battito resterebbe in fila con tutti gli altri, e dopo
+# un minuto le esecuzioni vive verrebbero date per morte e chiuse.
+engine_battito = _crea_engine(pool_size=1, max_overflow=0)
 
 
 def engine_di_lettura(bind):
@@ -183,17 +191,113 @@ _MIGRATIONS = [
     # Ruolo osservatore: legge i pannelli admin, non scrive (vedi models/user.py)
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_observer BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE groups ADD COLUMN IF NOT EXISTS is_observer BOOLEAN NOT NULL DEFAULT FALSE",
+    # Coda delle orchestrazioni (gateway in più repliche): modalità del motore,
+    # chi la esegue e il suo battito
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS engine_mode VARCHAR",
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS claimed_by VARCHAR",
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMP",
+    # Le orchestrazioni rimaste STARTED senza battito sono di una versione che
+    # non lo scriveva: quel processo non c'è più (era uno solo, e per arrivare
+    # qui è stato fermato). Si chiudono, come faceva il controllo all'avvio —
+    # e prima dell'indice unico, che con due righe vive dello stesso flusso non
+    # si potrebbe creare. Da qui in poi ogni riga STARTED ha il battito, e
+    # questa istruzione non trova più niente.
+    "UPDATE runs SET status = 'FAILURE', finished_at = now() AT TIME ZONE 'utc', "
+    f"error = '{ORCHESTRATION_INTERRUPTED}' "
+    f"WHERE {LIVE_ORCHESTRATION} AND heartbeat_at IS NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_runs_one_live_orchestration ON runs (flow_id) "
+    f"WHERE {LIVE_ORCHESTRATION}",
+    "CREATE INDEX IF NOT EXISTS ix_runs_orchestration_queue ON runs (id) "
+    "WHERE kind = 'orchestration' AND status = 'PENDING'",
 ]
 
 
+# Più processi possono partire insieme (repliche): creare le tabelle, applicare
+# gli ALTER e seminare l'admin in parallelo vuol dire fare a gara sulle stesse
+# istruzioni. Un lucchetto di Postgres li mette in fila; sono tutte idempotenti,
+# quindi chi arriva secondo trova il lavoro fatto. Se il processo muore con il
+# lucchetto in mano, Postgres lo libera chiudendo la connessione.
+_LUCCHETTO_AVVIO = 7461627531
+
+
+@contextmanager
+def lucchetto_di_avvio(eng=None):
+    eng = eng or engine
+    if eng.dialect.name != "postgresql":
+        yield
+        return
+    with eng.connect() as conn:
+        conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _LUCCHETTO_AVVIO})
+        conn.commit()
+        try:
+            yield
+        finally:
+            try:
+                conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _LUCCHETTO_AVVIO})
+                conn.commit()
+            except Exception:
+                # non si è riusciti a renderlo: la connessione non torna nel pool
+                # (chiudendola, Postgres lo libera)
+                conn.invalidate()
+                raise
+
+
+def impronta_dello_schema() -> str:
+    """Un'impronta di tutto ciò che `init_db` farebbe: le migrazioni, e le tabelle,
+    colonne e indici dei modelli. Cambia se e solo se c'è qualcosa da applicare."""
+    import hashlib
+
+    import app.models  # noqa: F401 — registra i modelli su SQLModel.metadata
+
+    tabelle = SQLModel.metadata.tables
+    parti = [
+        *_MIGRATIONS,
+        *sorted(f"{t.name}.{c.name}" for t in tabelle.values() for c in t.columns),
+        *sorted(i.name for t in tabelle.values() for i in t.indexes if i.name),
+    ]
+    return hashlib.sha256("\n".join(parti).encode()).hexdigest()
+
+
+def _schema_gia_applicato(impronta: str) -> bool:
+    try:
+        with engine.connect() as conn:
+            return conn.execute(text("SELECT value FROM schema_state WHERE key = 'impronta'")).scalar() == impronta
+    except Exception:  # la tabella non c'è ancora: prima installazione, o versione precedente
+        return False
+
+
 def init_db() -> None:
-    """Crea le tabelle se non esistono e applica gli ALTER idempotenti."""
+    """Crea le tabelle se non esistono e applica gli ALTER idempotenti — SOLO se
+    lo schema non è già quello di questa versione.
+
+    Con un processo solo si rifaceva tutto a ogni avvio: innocuo, non c'era
+    nessun altro. Con più repliche un avvio è una cosa di tutti i giorni (una
+    replica in più, una che riparte) e avviene mentre le altre lavorano: un
+    `ALTER TABLE … IF NOT EXISTS` prende un lucchetto ESCLUSIVO sulla tabella
+    anche quando non ha niente da fare, si mette in fila dietro la transazione
+    più lunga in corso, e tutte le altre query su quella tabella si mettono in
+    fila dietro di lui. Quindi: se l'impronta registrata è quella di questa
+    versione non si tocca niente; altrimenti (un aggiornamento vero) si applica,
+    ma senza aspettare un lucchetto più di qualche secondo — meglio fallire
+    l'avvio e riprovare che fermare l'installazione."""
     wait_for_db()  # tollera il DB non ancora pronto (reboot, restart di Postgres)
     import app.models  # noqa: F401 — registra i modelli su SQLModel.metadata
+
+    impronta = impronta_dello_schema()
+    if _schema_gia_applicato(impronta):
+        return
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
+        conn.execute(text("SET LOCAL lock_timeout = '10s'"))
         for stmt in _MIGRATIONS:
             conn.execute(text(stmt))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS schema_state (key VARCHAR PRIMARY KEY, value VARCHAR NOT NULL)"))
+        conn.execute(
+            text("INSERT INTO schema_state (key, value) VALUES ('impronta', :v) "
+                 "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"),
+            {"v": impronta},
+        )
+    logger.info("schema del database applicato (impronta %s)", impronta[:12])
 
 
 def backfill_flow_versions() -> None:

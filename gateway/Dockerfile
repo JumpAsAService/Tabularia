@@ -10,9 +10,12 @@
 # Il docker-compose di sviluppo la accende.
 #
 # Il gateway non scrive file su disco: /tmp resta comunque l'unica directory
-# scrivibile, per le librerie che creano file temporanei. In produzione va
-# eseguito con UNA sola replica, perché lo scheduler gira dentro il processo e
-# non ha un lock distribuito: vedi docs/deploy/kubernetes.md.
+# scrivibile, per le librerie che creano file temporanei.
+#
+# La stessa immagine fa due mestieri, scelti con APP__ROLE: `api` risponde alle
+# richieste (quante repliche si vuole), `orchestrator` fa il lavoro di fondo —
+# schedulazioni, esecuzione dei flussi, pulizie — anche lui in più copie. `all`,
+# il predefinito, li fa entrambi in un processo solo. Vedi docs/deploy/kubernetes.md.
 
 ########################
 #   Stage 1: builder   #

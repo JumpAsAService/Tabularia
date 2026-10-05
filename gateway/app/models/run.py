@@ -1,11 +1,22 @@
 from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, Text
+from sqlalchemy import Column, Index, Text, text
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# la condizione dell'indice unico parziale (anche nelle migrazioni di db/session.py)
+LIVE_ORCHESTRATION = "kind = 'orchestration' AND status = 'STARTED'"
+
+# cosa si scrive su un'orchestrazione che nessuno finirà (niente apici: entra
+# anche in un'istruzione SQL delle migrazioni)
+ORCHESTRATION_INTERRUPTED = (
+    "Orchestrazione interrotta: il processo che la eseguiva si è fermato e i passi rimanenti "
+    "non sono stati eseguiti. Controlla cosa è già stato prodotto e rilancia il flusso."
+)
 
 
 class Run(SQLModel, table=True):
@@ -18,6 +29,19 @@ class Run(SQLModel, table=True):
     a SUCCESS l'output diventa una Datasource riusabile come sorgente.
     """
     __tablename__ = "runs"
+    __table_args__ = (
+        # Di un flusso gira UNA orchestrazione alla volta, e lo garantisce il
+        # database: con più processi che eseguono, un elenco in memoria non lo
+        # vede nessun altro. Chi prova a far partire la seconda riceve l'errore
+        # dell'indice (vedi `orchestrator.rivendica`).
+        Index(
+            "uq_runs_one_live_orchestration",
+            "flow_id",
+            unique=True,
+            postgresql_where=text(LIVE_ORCHESTRATION),
+            sqlite_where=text(LIVE_ORCHESTRATION),
+        ),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
     # kind="flow": esecuzione di un flusso (flow_id valorizzato).
     # kind="ingest": refresh di una datasource database (datasource_id valorizzato).
@@ -78,6 +102,16 @@ class Run(SQLModel, table=True):
     # risultato che non c'è. Il dettaglio sta qui perché l'audit registra COSA è
     # uscito e verso chi, mentre questa colonna dice se è arrivato.
     email: Optional[str] = Field(default=None, sa_column=Column("email", Text))
+
+    # ── solo per kind="orchestration" ───────────────────────────────────────
+    # Nasce PENDING = in coda; chi la esegue la porta a STARTED firmandola.
+    # "development" | "production": con quale motore lanciare gli output
+    engine_mode: Optional[str] = None
+    # il processo che la sta eseguendo, e l'ultima volta che ha detto «ci sono».
+    # Un'orchestrazione STARTED il cui battito è fermo da troppo è di un processo
+    # morto: nessuno la finirà, e va chiusa dicendolo.
+    claimed_by: Optional[str] = None
+    heartbeat_at: Optional[datetime] = None
 
     started_at: datetime = Field(default_factory=_now)
     # istante in cui il task ha cominciato a girare DAVVERO sul worker (Celery

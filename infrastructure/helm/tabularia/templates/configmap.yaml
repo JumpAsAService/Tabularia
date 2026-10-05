@@ -67,6 +67,9 @@ data:
   ORCHESTRATOR__REFRESH_WAIT_SECONDS: {{ .Values.orchestrator.refreshWaitSeconds | quote }}
   ORCHESTRATOR__OUTPUT_WAIT_SECONDS: {{ .Values.orchestrator.outputWaitSeconds | quote }}
   ORCHESTRATOR__POLL_INTERVAL_SECONDS: {{ .Values.orchestrator.pollIntervalSeconds | quote }}
+  ORCHESTRATOR__MAX_CONCURRENT: {{ .Values.orchestrator.maxConcurrent | quote }}
+  ORCHESTRATOR__DEAD_AFTER_SECONDS: {{ .Values.orchestrator.deadAfterSeconds | quote }}
+  ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS: {{ .Values.orchestrator.queueTimeoutSeconds | quote }}
 
 {{- if .Values.oidc.enabled }}
   # Single sign-on. Setting OIDC__ISSUER is what switches SSO on; local login

@@ -322,7 +322,7 @@ def flow_presence_beat(
     guardando; nessun altro."""
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.VIEW)
-    others = flow_presence.beat(flow_id, body.instance, user.id, user.email, user.full_name or "")
+    others = flow_presence.beat(session, flow_id, body.instance, user.id, user.email, user.full_name or "")
     return PresenceOut(
         others=[PresenceOther(**{**o, "since": datetime.fromtimestamp(o["since"], timezone.utc)}) for o in others],
         heartbeat_seconds=flow_presence.HEARTBEAT_SECONDS,
@@ -338,7 +338,7 @@ def flow_presence_leave(
 ):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.VIEW)
-    flow_presence.leave(flow_id, instance)
+    flow_presence.leave(session, flow_id, instance)
 
 
 @router.get("/flows/{flow_id}", response_model=FlowDetail)
@@ -527,8 +527,8 @@ async def run_flow_now(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Esegue subito l'ORCHESTRAZIONE del flusso (nodi refresh/output/runflow
-    nell'ordine degli archi) come task di background, con l'autorità dell'utente.
+    """Mette in coda l'ORCHESTRAZIONE del flusso (nodi refresh/output/runflow
+    nell'ordine degli archi), che un orchestratore esegue con l'autorità dell'utente.
     Serve RUN sul progetto; la RBAC dei singoli passi (CONNECT dei refresh,
     EDIT/CONNECT degli output) è ri-verificata durante l'orchestrazione.
 
@@ -539,14 +539,12 @@ async def run_flow_now(
     `mode`: "development" (default) usa il motore dell'editor; "production" usa
     il motore di produzione del flusso — come farebbe lo scheduler — per
     provarlo a mano prima di schedulare."""
-    import asyncio
-
-    from app.services.orchestrator import create_orchestration_run, orchestrate_bg
+    from app.services.orchestrator import create_orchestration_run, sveglia
 
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
-    run = create_orchestration_run(session, user, flow)
-    asyncio.create_task(orchestrate_bg(flow.id, user.id, orch_run_id=run.id, engine_mode=mode))
+    run = create_orchestration_run(session, user, flow, engine_mode=mode)
+    sveglia()
     audit.record_audit(
         session, actor=user, action=audit.FLOW_RUN, target_type="flow",
         target_id=flow.id, target_label=flow.name, detail={"run_id": run.id, "trigger": "manual", "engine_mode": mode},
