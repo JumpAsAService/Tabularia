@@ -7,7 +7,7 @@
     "repository": {
       "url": "git@github.com-tabularia:JumpAsAService/Tabularia.git",
       "link_mode": "local-only",
-      "revision": "c20d0a6505bb6ff395166be53381cd72bfad6c54"
+      "revision": "9bee698db427e2149c93c210374943addc5988c1"
     },
     "views": [
       {
@@ -16,10 +16,22 @@
         "focus": [
           "webui",
           "gateway",
+          "orchestrator",
           "postgres",
           "backend"
         ],
-        "note": "The browser only talks to the gateway: JWT, RBAC and metadata, then a proxy to the engine."
+        "note": "The browser talks to the gateway only: JWT, RBAC, metadata, then a proxy to the engine. Schedules and flows run in the orchestrator."
+      },
+      {
+        "id": "orchestration",
+        "label": "Orchestration",
+        "focus": [
+          "gateway",
+          "orchestrator",
+          "postgres",
+          "backend"
+        ],
+        "note": "A run waits as a row in Postgres; any orchestrator claims it with a conditional update and beats while it works."
       },
       {
         "id": "data-plane",
@@ -73,7 +85,7 @@
     {
       "id": "gateway",
       "type": "security",
-      "label": "Gateway",
+      "label": "Gateway API",
       "sublabel": "FastAPI · JWT + RBAC",
       "pos": [
         240,
@@ -83,14 +95,15 @@
         140,
         60
       ],
-      "tag": "public",
+      "tag": "public · N replicas",
       "sources": [
         {
-          "path": "gateway/app/main.py"
+          "path": "gateway/app/main.py",
+          "label": "APP__ROLE=api|all"
         },
         {
-          "path": "gateway/app/services/scheduler.py",
-          "label": "in-process scheduler"
+          "path": "gateway/app/routes/proxy.py",
+          "label": "proxy to the engine"
         }
       ]
     },
@@ -118,7 +131,7 @@
       "id": "postgres",
       "type": "database",
       "label": "PostgreSQL",
-      "sublabel": "metadata and audit",
+      "sublabel": "metadata · run queue",
       "brand": "postgresql",
       "pos": [
         240,
@@ -130,7 +143,12 @@
       ],
       "sources": [
         {
-          "path": "gateway/app/db/session.py"
+          "path": "gateway/app/db/session.py",
+          "label": "schema, once, behind a lock"
+        },
+        {
+          "path": "gateway/app/models/run.py",
+          "label": "runs = the queue"
         }
       ]
     },
@@ -151,6 +169,35 @@
       "sources": [
         {
           "path": "backend/app/api/main.py"
+        }
+      ]
+    },
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Orchestrator",
+      "sublabel": "APP__ROLE=orchestrator",
+      "pos": [
+        460,
+        520
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "tag": "same image · scales",
+      "sources": [
+        {
+          "path": "gateway/app/services/orchestrator.py",
+          "label": "claims runs · heartbeat"
+        },
+        {
+          "path": "gateway/app/services/scheduler.py",
+          "label": "cron, compare-and-swap"
+        },
+        {
+          "path": "gateway/app/services/contract_notifier.py",
+          "label": "contract alerts"
         }
       ]
     },
@@ -312,6 +359,7 @@
         "metrics",
         "gateway",
         "postgres",
+        "orchestrator",
         "backend",
         "valkey",
         "preview",
@@ -323,13 +371,14 @@
     },
     {
       "kind": "security-group",
-      "label": "data plane · no published ports",
+      "label": "private network · no published ports",
       "wraps": [
         "backend",
         "valkey",
         "preview",
         "worker",
-        "beat"
+        "beat",
+        "orchestrator"
       ],
       "pad": 14
     }
@@ -344,8 +393,22 @@
     {
       "from": "gateway",
       "to": "postgres",
-      "label": "SQL · metadata",
+      "label": "metadata · enqueues runs",
       "labelDy": 24
+    },
+    {
+      "from": "orchestrator",
+      "to": "postgres",
+      "label": "claims · beats",
+      "variant": "emphasis",
+      "labelDy": -12
+    },
+    {
+      "from": "orchestrator",
+      "to": "backend",
+      "label": "runs the steps",
+      "variant": "emphasis",
+      "labelDy": -62
     },
     {
       "from": "gateway",
@@ -423,9 +486,9 @@
       "dot": "cyan",
       "title": "Control plane",
       "items": [
-        "The gateway is the only exposed service: JWT login, per-project RBAC, append-only audit log",
-        "Metadata (users, versioned flows, runs, datasources, encrypted connections) lives in PostgreSQL",
-        "The scheduler runs inside the gateway: on cron it launches flows in production mode on the production engine"
+        "The gateway is the only exposed service: JWT login, per-project RBAC, append-only audit log — and it can run in several copies",
+        "Metadata (users, versioned flows, runs, datasources, encrypted connections, data contracts) lives in PostgreSQL",
+        "Schedules and flow runs belong to the orchestrator role: the queue is the runs table, claimed with a conditional update, so no schedule fires twice"
       ]
     },
     {
@@ -434,7 +497,7 @@
       "items": [
         "Every preview and every run is a Celery task: the preview queue stays responsive during long runs",
         "Engines run in-process in the worker (Polars, DuckDB, chDB); cloud ClickHouse is an optional remote engine",
-        "Content-addressed step cache: parquet under cache/ plus an index on Valkey, 24 h TTL swept hourly"
+        "A data contract is checked by the worker on what it just wrote, before the snapshot swap: a blocking violation refuses the publication"
       ]
     },
     {

@@ -9,32 +9,72 @@
     "repository": {
       "url": "git@github.com-tabularia:JumpAsAService/Tabularia.git",
       "link_mode": "local-only",
-      "revision": "6a033486c1d6986e1676432ee202367b65b14375"
+      "revision": "9bee698db427e2149c93c210374943addc5988c1"
     },
     "views": [
       {
         "id": "access-control",
         "label": "Access control",
-        "focus": ["users", "groups", "user_groups", "permissions"],
+        "focus": [
+          "users",
+          "groups",
+          "user_groups",
+          "permissions"
+        ],
         "note": "Who exists, who belongs to which group, and which capability is granted on which project."
       },
       {
         "id": "catalog",
         "label": "Project catalog",
-        "focus": ["projects", "flows", "flow_versions", "connections", "datasources"],
+        "focus": [
+          "projects",
+          "flows",
+          "flow_versions",
+          "connections",
+          "datasources",
+          "saved_views"
+        ],
         "note": "Every catalog object hangs off a project, which is the unit RBAC is checked against."
       },
       {
         "id": "execution",
         "label": "Execution",
-        "focus": ["flows", "datasources", "runs"],
-        "note": "A run records one execution of a flow and, when it publishes, the datasource it wrote."
+        "focus": [
+          "flows",
+          "datasources",
+          "runs",
+          "data_contracts",
+          "data_contract_results"
+        ],
+        "note": "A run records one execution and the datasource it wrote; a data contract decides whether what it wrote gets published."
       },
       {
         "id": "operational",
         "label": "Operational records",
-        "focus": ["audit_logs", "banners", "uploads", "pending_blob_deletions"],
-        "note": "Tables written by the platform itself rather than by the catalog."
+        "focus": [
+          "audit_logs",
+          "banners",
+          "uploads",
+          "pending_blob_deletions",
+          "login_attempts",
+          "flow_presence",
+          "schema_state",
+          "privacy_notice",
+          "disabled_engines"
+        ],
+        "note": "Tables the platform writes for itself; three of them are the state several gateway copies share."
+      },
+      {
+        "id": "ai",
+        "label": "AI assistant",
+        "focus": [
+          "ai_models",
+          "ai_chats",
+          "ai_chat_turns",
+          "ai_spend",
+          "users"
+        ],
+        "note": "Models an administrator enabled, saved conversations with their turns and cost, and a daily spend counter per user."
       }
     ]
   },
@@ -45,27 +85,60 @@
       "label": "audit_logs",
       "sublabel": "append-only trail",
       "tag": "actor_label survives",
-      "pos": [60, 60],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/audit.py", "label": "AuditLog" }]
+      "pos": [
+        60,
+        60
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/audit.py",
+          "label": "AuditLog"
+        }
+      ]
     },
     {
       "id": "banners",
       "type": "database",
       "label": "banners",
       "sublabel": "admin notices",
-      "pos": [310, 60],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/banner.py", "label": "Banner" }]
+      "pos": [
+        310,
+        60
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/banner.py",
+          "label": "Banner"
+        }
+      ]
     },
     {
       "id": "uploads",
       "type": "database",
       "label": "uploads",
       "sublabel": "raw file + parquet",
-      "pos": [560, 60],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/upload.py", "label": "Upload" }]
+      "pos": [
+        560,
+        60
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/upload.py",
+          "label": "Upload"
+        }
+      ]
     },
     {
       "id": "pending_blob_deletions",
@@ -73,9 +146,20 @@
       "label": "pending_blob_deletions",
       "sublabel": "deferred deletions",
       "tag": "no foreign key",
-      "pos": [60, 280],
-      "size": [200, 66],
-      "sources": [{ "path": "gateway/app/models/blob_deletion.py", "label": "PendingBlobDeletion" }]
+      "pos": [
+        60,
+        280
+      ],
+      "size": [
+        200,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/blob_deletion.py",
+          "label": "PendingBlobDeletion"
+        }
+      ]
     },
     {
       "id": "users",
@@ -83,9 +167,20 @@
       "label": "users",
       "sublabel": "local or SSO identity",
       "tag": "unique (issuer, subject)",
-      "pos": [310, 280],
-      "size": [165, 70],
-      "sources": [{ "path": "gateway/app/models/user.py", "label": "User" }]
+      "pos": [
+        310,
+        280
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/user.py",
+          "label": "User"
+        }
+      ]
     },
     {
       "id": "user_groups",
@@ -93,9 +188,20 @@
       "label": "user_groups",
       "sublabel": "membership join",
       "tag": "composite key",
-      "pos": [310, 500],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/user.py", "label": "UserGroup" }]
+      "pos": [
+        310,
+        500
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/user.py",
+          "label": "UserGroup"
+        }
+      ]
     },
     {
       "id": "groups",
@@ -103,9 +209,20 @@
       "label": "groups",
       "sublabel": "IdP groups, by name",
       "tag": "unique name",
-      "pos": [310, 720],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/user.py", "label": "Group" }]
+      "pos": [
+        310,
+        720
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/user.py",
+          "label": "Group"
+        }
+      ]
     },
     {
       "id": "permissions",
@@ -113,18 +230,40 @@
       "label": "permissions",
       "sublabel": "capability per project",
       "tag": "user_id XOR group_id",
-      "pos": [560, 500],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/permission.py", "label": "Permission" }]
+      "pos": [
+        560,
+        500
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/permission.py",
+          "label": "Permission"
+        }
+      ]
     },
     {
       "id": "projects",
       "type": "database",
       "label": "projects",
       "sublabel": "RBAC scope, self-nesting",
-      "pos": [810, 500],
-      "size": [165, 70],
-      "sources": [{ "path": "gateway/app/models/project.py", "label": "Project" }]
+      "pos": [
+        810,
+        500
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/project.py",
+          "label": "Project"
+        }
+      ]
     },
     {
       "id": "connections",
@@ -132,9 +271,20 @@
       "label": "connections",
       "sublabel": "credentials, Fernet",
       "tag": "unique (project_id, name)",
-      "pos": [810, 720],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/connection.py", "label": "Connection" }]
+      "pos": [
+        810,
+        720
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/connection.py",
+          "label": "Connection"
+        }
+      ]
     },
     {
       "id": "flow_versions",
@@ -142,29 +292,62 @@
       "label": "flow_versions",
       "sublabel": "immutable history",
       "tag": "unique (flow_id, version)",
-      "pos": [1060, 60],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/flow_version.py", "label": "FlowVersion" }]
+      "pos": [
+        1060,
+        60
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/flow_version.py",
+          "label": "FlowVersion"
+        }
+      ]
     },
     {
       "id": "flows",
       "type": "database",
       "label": "flows",
       "sublabel": "definition + schedule",
-      "tag": "engine, production_engine",
-      "pos": [1060, 280],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/flow.py", "label": "Flow" }]
+      "tag": "engine · notify_connection_id",
+      "pos": [
+        1060,
+        280
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/flow.py",
+          "label": "Flow"
+        }
+      ]
     },
     {
       "id": "runs",
       "type": "backend",
       "label": "runs",
-      "sublabel": "one execution, one task",
-      "tag": "parent_run_id self-ref",
-      "pos": [1060, 500],
-      "size": [165, 70],
-      "sources": [{ "path": "gateway/app/models/run.py", "label": "Run" }]
+      "sublabel": "one execution · the queue",
+      "tag": "claimed_by, heartbeat_at",
+      "pos": [
+        1060,
+        500
+      ],
+      "size": [
+        165,
+        70
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/run.py",
+          "label": "Run"
+        }
+      ]
     },
     {
       "id": "datasources",
@@ -172,40 +355,464 @@
       "label": "datasources",
       "sublabel": "published parquet",
       "tag": "snapshot_run_id guard",
-      "pos": [1060, 720],
-      "size": [165, 66],
-      "sources": [{ "path": "gateway/app/models/datasource.py", "label": "Datasource" }]
+      "pos": [
+        1060,
+        720
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/datasource.py",
+          "label": "Datasource"
+        }
+      ]
+    },
+    {
+      "id": "login_attempts",
+      "type": "security",
+      "label": "login_attempts",
+      "sublabel": "sign-in throttle",
+      "pos": [
+        60,
+        500
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "shared by replicas",
+      "sources": [
+        {
+          "path": "gateway/app/models/shared_state.py",
+          "label": "LoginAttempt"
+        }
+      ]
+    },
+    {
+      "id": "flow_presence",
+      "type": "security",
+      "label": "flow_presence",
+      "sublabel": "who has a flow open",
+      "pos": [
+        60,
+        720
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "shared by replicas",
+      "sources": [
+        {
+          "path": "gateway/app/models/shared_state.py",
+          "label": "FlowPresence"
+        }
+      ]
+    },
+    {
+      "id": "schema_state",
+      "type": "messagebus",
+      "label": "schema_state",
+      "sublabel": "schema fingerprint",
+      "pos": [
+        60,
+        940
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "no model: raw DDL",
+      "sources": [
+        {
+          "path": "gateway/app/db/session.py",
+          "label": "init_db"
+        }
+      ]
+    },
+    {
+      "id": "privacy_notice",
+      "type": "database",
+      "label": "privacy_notice",
+      "sublabel": "the policy text",
+      "pos": [
+        310,
+        940
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/privacy.py",
+          "label": "PrivacyNotice"
+        }
+      ]
+    },
+    {
+      "id": "disabled_engines",
+      "type": "database",
+      "label": "disabled_engines",
+      "sublabel": "engine policy",
+      "pos": [
+        560,
+        940
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/engine_policy.py",
+          "label": "DisabledEngine"
+        }
+      ]
+    },
+    {
+      "id": "saved_views",
+      "type": "database",
+      "label": "saved_views",
+      "sublabel": "a Viewer configuration",
+      "pos": [
+        1060,
+        940
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "unique (project_id, name)",
+      "sources": [
+        {
+          "path": "gateway/app/models/saved_view.py",
+          "label": "SavedView"
+        }
+      ]
+    },
+    {
+      "id": "ai_models",
+      "type": "database",
+      "label": "ai_models",
+      "sublabel": "models an admin enabled",
+      "pos": [
+        60,
+        1160
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/ai_model.py",
+          "label": "AiModel"
+        }
+      ]
+    },
+    {
+      "id": "ai_chats",
+      "type": "database",
+      "label": "ai_chats",
+      "sublabel": "a saved conversation",
+      "pos": [
+        310,
+        1160
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/ai_chat.py",
+          "label": "AiChat"
+        }
+      ]
+    },
+    {
+      "id": "ai_chat_turns",
+      "type": "database",
+      "label": "ai_chat_turns",
+      "sublabel": "question, answer, cost",
+      "pos": [
+        560,
+        1160
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "sources": [
+        {
+          "path": "gateway/app/models/ai_chat.py",
+          "label": "AiChatTurn"
+        }
+      ]
+    },
+    {
+      "id": "ai_spend",
+      "type": "messagebus",
+      "label": "ai_spend",
+      "sublabel": "daily spend per user",
+      "pos": [
+        810,
+        1160
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "counter, no key",
+      "sources": [
+        {
+          "path": "gateway/app/models/ai_chat.py",
+          "label": "AiSpend"
+        }
+      ]
+    },
+    {
+      "id": "data_contracts",
+      "type": "security",
+      "label": "data_contracts",
+      "sublabel": "one per datasource",
+      "pos": [
+        60,
+        1380
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "state behind the icon",
+      "sources": [
+        {
+          "path": "gateway/app/models/contract.py",
+          "label": "DataContract"
+        }
+      ]
+    },
+    {
+      "id": "data_contract_versions",
+      "type": "database",
+      "label": "data_contract_versions",
+      "sublabel": "every saved document",
+      "pos": [
+        310,
+        1380
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "unique (datasource, version)",
+      "sources": [
+        {
+          "path": "gateway/app/models/contract.py",
+          "label": "DataContractVersion"
+        }
+      ]
+    },
+    {
+      "id": "data_contract_results",
+      "type": "backend",
+      "label": "data_contract_results",
+      "sublabel": "one check, one report",
+      "pos": [
+        560,
+        1380
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "notify queue",
+      "sources": [
+        {
+          "path": "gateway/app/models/contract.py",
+          "label": "DataContractResult"
+        }
+      ]
     }
   ],
   "boundaries": [
     {
       "kind": "security-group",
       "label": "Access control",
-      "wraps": ["users", "user_groups", "groups", "permissions"]
+      "wraps": [
+        "users",
+        "user_groups",
+        "groups",
+        "permissions"
+      ]
     },
     {
       "kind": "region",
       "label": "Catalog and execution",
-      "wraps": ["projects", "connections", "flow_versions", "flows", "runs", "datasources"]
+      "wraps": [
+        "projects",
+        "connections",
+        "flow_versions",
+        "flows",
+        "runs",
+        "datasources"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "AI assistant",
+      "wraps": [
+        "ai_models",
+        "ai_chats",
+        "ai_chat_turns",
+        "ai_spend"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Data contracts · no foreign keys by design",
+      "wraps": [
+        "data_contracts",
+        "data_contract_versions",
+        "data_contract_results"
+      ]
     }
   ],
   "connections": [
-    { "id": "audit-user", "from": "audit_logs", "to": "users", "label": "actor_id", "variant": "dashed" },
-    { "id": "banner-user", "from": "banners", "to": "users", "label": "created_by", "variant": "dashed", "labelDy": 90 },
-    { "id": "upload-user", "from": "uploads", "to": "users", "label": "owner_id", "variant": "dashed" },
-    { "id": "ug-user", "from": "user_groups", "to": "users", "label": "user_id" },
-    { "id": "ug-group", "from": "user_groups", "to": "groups", "label": "group_id", "labelDy": 90 },
-    { "id": "perm-user", "from": "permissions", "to": "users", "label": "user_id" },
-    { "id": "perm-group", "from": "permissions", "to": "groups", "label": "group_id" },
-    { "id": "perm-project", "from": "permissions", "to": "projects", "label": "project_id", "variant": "emphasis" },
-    { "id": "conn-project", "from": "connections", "to": "projects", "label": "project_id" },
-    { "id": "flow-project", "from": "flows", "to": "projects", "label": "project_id" },
-    { "id": "fv-flow", "from": "flow_versions", "to": "flows", "label": "flow_id", "labelDy": 90 },
-    { "id": "run-flow", "from": "runs", "to": "flows", "label": "flow_id" },
-    { "id": "run-ds", "from": "runs", "to": "datasources", "label": "datasource_id", "labelDy": 90 },
-    { "id": "ds-project", "from": "datasources", "to": "projects", "label": "project_id" },
-    { "id": "ds-conn", "from": "datasources", "to": "connections", "label": "connection_id", "labelDy": 24 },
-    { "id": "ds-flow", "from": "datasources", "to": "flows", "label": "flow_id", "fromSide": "right", "toSide": "right", "via": [[1290, 753], [1290, 313]] }
+    {
+      "id": "audit-user",
+      "from": "audit_logs",
+      "to": "users",
+      "label": "actor_id",
+      "variant": "dashed"
+    },
+    {
+      "id": "banner-user",
+      "from": "banners",
+      "to": "users",
+      "label": "created_by",
+      "variant": "dashed",
+      "labelDy": 90
+    },
+    {
+      "id": "upload-user",
+      "from": "uploads",
+      "to": "users",
+      "label": "owner_id",
+      "variant": "dashed"
+    },
+    {
+      "id": "ug-user",
+      "from": "user_groups",
+      "to": "users",
+      "label": "user_id"
+    },
+    {
+      "id": "ug-group",
+      "from": "user_groups",
+      "to": "groups",
+      "label": "group_id",
+      "labelDy": 90
+    },
+    {
+      "id": "perm-user",
+      "from": "permissions",
+      "to": "users",
+      "label": "user_id"
+    },
+    {
+      "id": "perm-group",
+      "from": "permissions",
+      "to": "groups",
+      "label": "group_id"
+    },
+    {
+      "id": "perm-project",
+      "from": "permissions",
+      "to": "projects",
+      "label": "project_id",
+      "variant": "emphasis"
+    },
+    {
+      "id": "conn-project",
+      "from": "connections",
+      "to": "projects",
+      "label": "project_id"
+    },
+    {
+      "id": "flow-project",
+      "from": "flows",
+      "to": "projects",
+      "label": "project_id"
+    },
+    {
+      "id": "fv-flow",
+      "from": "flow_versions",
+      "to": "flows",
+      "label": "flow_id",
+      "labelDy": 90
+    },
+    {
+      "id": "run-flow",
+      "from": "runs",
+      "to": "flows",
+      "label": "flow_id"
+    },
+    {
+      "id": "run-ds",
+      "from": "runs",
+      "to": "datasources",
+      "label": "datasource_id",
+      "labelDy": 90
+    },
+    {
+      "id": "ds-project",
+      "from": "datasources",
+      "to": "projects",
+      "label": "project_id"
+    },
+    {
+      "id": "ds-conn",
+      "from": "datasources",
+      "to": "connections",
+      "label": "connection_id",
+      "labelDy": 24
+    },
+    {
+      "id": "ds-flow",
+      "from": "datasources",
+      "to": "flows",
+      "label": "flow_id",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1290,
+          753
+        ],
+        [
+          1290,
+          313
+        ]
+      ]
+    },
+    {
+      "id": "turn-chat",
+      "from": "ai_chat_turns",
+      "to": "ai_chats",
+      "label": "chat_id"
+    },
+    {
+      "id": "view-ds",
+      "from": "saved_views",
+      "to": "datasources",
+      "label": "datasource_id",
+      "labelDy": -60
+    }
   ],
   "cards": [
     {
@@ -233,6 +840,7 @@
       "title": "Execution",
       "items": [
         "runs.parent_run_id is a self-reference, not drawn: a parent run fans out into child runs.",
+        "runs is also the orchestration queue: a PENDING row is claimed by one orchestrator (claimed_by) with a conditional update and kept alive by heartbeat_at.",
         "runs.datasource_id and datasources.snapshot_run_id point at each other, so snapshot_run_id is a plain integer with no foreign key to avoid a circular constraint.",
         "started_at includes queue time; engine_started_at records when the engine actually began, and drives the staleness clock.",
         "pending_blob_deletions deliberately has no foreign key: it must survive the rows whose objects it deletes."
@@ -242,11 +850,21 @@
       "dot": "amber",
       "title": "Foreign keys listed, not drawn",
       "items": [
-        "Ownership and actor columns all point at users.id: projects.owner_id, flows.owner_id, connections.owner_id, datasources.owner_id, runs.launched_by, flow_versions.created_by.",
-        "Scheduling actors: flows.run_scheduled_by, datasources.refresh_scheduled_by.",
-        "Publish target: runs.publish_project_id points at projects.id.",
+        "Ownership and actor columns all point at users.id: projects.owner_id, flows.owner_id, connections.owner_id, datasources.owner_id, saved_views.owner_id, runs.launched_by, flow_versions.created_by, ai_models.updated_by, privacy_notice.updated_by, disabled_engines.disabled_by.",
+        "Scheduling actors: flows.run_scheduled_by, datasources.refresh_scheduled_by. Failure notices: flows.notify_connection_id points at connections.id.",
+        "Publish target: runs.publish_project_id points at projects.id. saved_views.project_id points at projects.id like every catalog object.",
         "Self-references: projects.parent_id and runs.parent_run_id.",
-        "All 26 foreign keys are nullable except the project_id columns, so deleting a user never cascades away history."
+        "All 35 foreign keys are nullable except the project_id columns, so deleting a user never cascades away history."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Replicas and contracts",
+      "items": [
+        "login_attempts, flow_presence and schema_state moved out of process memory so the gateway can run in several copies; the scheduler sweeps the expired rows.",
+        "schema_state holds a fingerprint of the applied schema: a start-up applies DDL only when it differs, behind an advisory lock.",
+        "data_contracts, data_contract_versions and data_contract_results carry no foreign key on purpose: SQLite does not enforce them in tests, and the rows are removed explicitly when the datasource goes.",
+        "data_contract_results.notify is the outbox of the alerts: pending rows are sent by the scheduler, claimed one at a time."
       ]
     }
   ]

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo.svg" width="96" height="96" alt="Tabularia logo">
+</p>
+
 # Tabularia
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/JumpAsAService)
@@ -225,7 +229,8 @@ pinned in the spec.
 | Runtime component | Role |
 |---|---|
 | Web UI | Nuxt 3 app, calls the gateway only (JWT) |
-| Gateway | FastAPI control plane: auth, RBAC, audit; proxies to the engine after the permission check. Also fires the schedules and executes the flows — in the same process here, or as a separate `orchestrator` role when the gateway is replicated (`APP__ROLE`) |
+| Gateway | FastAPI control plane: auth, RBAC, audit; proxies to the engine after the permission check. Stateless between requests, so it runs in as many copies as you like (`APP__ROLE=api`) |
+| Orchestrator | the same image in another role (`APP__ROLE=orchestrator`): fires the schedules and runs the flows. Each run is a row in Postgres that any orchestrator claims with a conditional update, so copies never fire a schedule twice. `APP__ROLE=all` (the default) does both jobs in one process |
 | PostgreSQL | control-plane metadata (users, groups, projects, versioned flows, connections, runs, schedules, audit) |
 | Engine API | FastAPI on the private network: turns every preview and run into a Celery task |
 | Valkey | Celery broker, step-cache index, preview slots |
@@ -238,11 +243,15 @@ pinned in the spec.
 
 The **gateway** (control plane) is the only public ingress: it owns the metadata
 Postgres and enforces auth + RBAC on every call before proxying to the internal
-**engine** (data plane), which stays stateless (Valkey + object storage only).
+**engine** (data plane), which stays stateless (Valkey + object storage only). Nothing
+that outlives a request lives in a gateway process — the run queue, the login throttle
+and "who has this flow open" are tables — which is what lets the API tier scale out and
+the **orchestrator** tier scale separately: one process at ~100 requests/s, three copies
+served 500 concurrent users at a 0.12 s p95 on one laptop.
 
 That metadata Postgres has a diagram of its own:
 **[Open the metadata database schema](https://jumpasaservice.github.io/Tabularia/architecture/metadata-schema.html)**
-— 14 tables and all 26 foreign keys, read back from a live database rather than
+— 27 tables and all 35 foreign keys, read back from a live database rather than
 transcribed from the models, and generated with Archify from
 [`docs/architecture/metadata-schema.architecture.json`](docs/architecture/metadata-schema.architecture.json).
 
@@ -506,7 +515,10 @@ SQL node's allow-list, with no access to `system`, to any table, or to `url()` a
 Cron-style schedules are evaluated in a **deployment-wide timezone** (`APP__TIMEZONE`,
 DST-aware) and stored/returned in UTC; the frontend displays browser-local time. A
 schedule-load heatmap surfaces busy bands and collisions against a configurable
-worker capacity.
+worker capacity. Schedules fire from the **orchestrator** role: a due slot is taken with
+a compare-and-swap on the time the process saw, so with several orchestrators exactly
+one fires it; a flow whose last run failed on schedule sends an email, once, to the
+addresses set next to the schedule.
 
 ## Monitoring
 
@@ -521,7 +533,7 @@ the external ClickHouse's slowest queries without any extra table.
 | Service | Role |
 |---|---|
 | `frontend` | Nuxt 3 app (SSR) — http://localhost:3000 |
-| `gateway` | FastAPI control plane (auth, RBAC, audit, scheduling) — :8000 |
+| `gateway` | FastAPI control plane (auth, RBAC, audit) in role `all`: it also fires schedules and runs flows. Split it into `api` and `orchestrator` copies when you scale (see [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md)) — :8000 |
 | `backend` | FastAPI engine (preview) |
 | `worker` / `preview-worker` | Celery workers (runs, DB ingest / preview) |
 | `postgres` | control-plane metadata |

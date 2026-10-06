@@ -5085,8 +5085,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       </div>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[{"id":"access-control","label":"Access control","focus":["users","groups","user_groups","permissions"],"note":"Who exists, who belongs to which group, and which capability is granted on which project."},{"id":"catalog","label":"Project catalog","focus":["projects","flows","flow_versions","connections","datasources"],"note":"Every catalog object hangs off a project, which is the unit RBAC is checked against."},{"id":"execution","label":"Execution","focus":["flows","datasources","runs"],"note":"A run records one execution of a flow and, when it publishes, the datasource it wrote."},{"id":"operational","label":"Operational records","focus":["audit_logs","banners","uploads","pending_blob_deletions"],"note":"Tables written by the platform itself rather than by the catalog."}]</script>
-    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"git@github.com-tabularia:JumpAsAService/Tabularia.git","revision":"6a033486c1d6986e1676432ee202367b65b14375","shortRevision":"6a03348","label":"github.com-tabularia:JumpAsAService/Tabularia.git","linkMode":"local-only"},"referenceCount":14,"nodes":{"audit_logs":[{"path":"gateway/app/models/audit.py","label":"AuditLog"}],"banners":[{"path":"gateway/app/models/banner.py","label":"Banner"}],"uploads":[{"path":"gateway/app/models/upload.py","label":"Upload"}],"pending_blob_deletions":[{"path":"gateway/app/models/blob_deletion.py","label":"PendingBlobDeletion"}],"users":[{"path":"gateway/app/models/user.py","label":"User"}],"user_groups":[{"path":"gateway/app/models/user.py","label":"UserGroup"}],"groups":[{"path":"gateway/app/models/user.py","label":"Group"}],"permissions":[{"path":"gateway/app/models/permission.py","label":"Permission"}],"projects":[{"path":"gateway/app/models/project.py","label":"Project"}],"connections":[{"path":"gateway/app/models/connection.py","label":"Connection"}],"flow_versions":[{"path":"gateway/app/models/flow_version.py","label":"FlowVersion"}],"flows":[{"path":"gateway/app/models/flow.py","label":"Flow"}],"runs":[{"path":"gateway/app/models/run.py","label":"Run"}],"datasources":[{"path":"gateway/app/models/datasource.py","label":"Datasource"}]}}</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"access-control","label":"Access control","focus":["users","groups","user_groups","permissions"],"note":"Who exists, who belongs to which group, and which capability is granted on which project."},{"id":"catalog","label":"Project catalog","focus":["projects","flows","flow_versions","connections","datasources","saved_views"],"note":"Every catalog object hangs off a project, which is the unit RBAC is checked against."},{"id":"execution","label":"Execution","focus":["flows","datasources","runs","data_contracts","data_contract_results"],"note":"A run records one execution and the datasource it wrote; a data contract decides whether what it wrote gets published."},{"id":"operational","label":"Operational records","focus":["audit_logs","banners","uploads","pending_blob_deletions","login_attempts","flow_presence","schema_state","privacy_notice","disabled_engines"],"note":"Tables the platform writes for itself; three of them are the state several gateway copies share."},{"id":"ai","label":"AI assistant","focus":["ai_models","ai_chats","ai_chat_turns","ai_spend","users"],"note":"Models an administrator enabled, saved conversations with their turns and cost, and a daily spend counter per user."}]</script>
+    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"git@github.com-tabularia:JumpAsAService/Tabularia.git","revision":"9bee698db427e2149c93c210374943addc5988c1","shortRevision":"9bee698","label":"github.com-tabularia:JumpAsAService/Tabularia.git","linkMode":"local-only"},"referenceCount":27,"nodes":{"audit_logs":[{"path":"gateway/app/models/audit.py","label":"AuditLog"}],"banners":[{"path":"gateway/app/models/banner.py","label":"Banner"}],"uploads":[{"path":"gateway/app/models/upload.py","label":"Upload"}],"pending_blob_deletions":[{"path":"gateway/app/models/blob_deletion.py","label":"PendingBlobDeletion"}],"users":[{"path":"gateway/app/models/user.py","label":"User"}],"user_groups":[{"path":"gateway/app/models/user.py","label":"UserGroup"}],"groups":[{"path":"gateway/app/models/user.py","label":"Group"}],"permissions":[{"path":"gateway/app/models/permission.py","label":"Permission"}],"projects":[{"path":"gateway/app/models/project.py","label":"Project"}],"connections":[{"path":"gateway/app/models/connection.py","label":"Connection"}],"flow_versions":[{"path":"gateway/app/models/flow_version.py","label":"FlowVersion"}],"flows":[{"path":"gateway/app/models/flow.py","label":"Flow"}],"runs":[{"path":"gateway/app/models/run.py","label":"Run"}],"datasources":[{"path":"gateway/app/models/datasource.py","label":"Datasource"}],"login_attempts":[{"path":"gateway/app/models/shared_state.py","label":"LoginAttempt"}],"flow_presence":[{"path":"gateway/app/models/shared_state.py","label":"FlowPresence"}],"schema_state":[{"path":"gateway/app/db/session.py","label":"init_db"}],"privacy_notice":[{"path":"gateway/app/models/privacy.py","label":"PrivacyNotice"}],"disabled_engines":[{"path":"gateway/app/models/engine_policy.py","label":"DisabledEngine"}],"saved_views":[{"path":"gateway/app/models/saved_view.py","label":"SavedView"}],"ai_models":[{"path":"gateway/app/models/ai_model.py","label":"AiModel"}],"ai_chats":[{"path":"gateway/app/models/ai_chat.py","label":"AiChat"}],"ai_chat_turns":[{"path":"gateway/app/models/ai_chat.py","label":"AiChatTurn"}],"ai_spend":[{"path":"gateway/app/models/ai_chat.py","label":"AiSpend"}],"data_contracts":[{"path":"gateway/app/models/contract.py","label":"DataContract"}],"data_contract_versions":[{"path":"gateway/app/models/contract.py","label":"DataContractVersion"}],"data_contract_results":[{"path":"gateway/app/models/contract.py","label":"DataContractResult"}]}}</script>
     <script id="archify-i18n-data" type="application/json">{"locale":"en","messages":{"viewer.kind.frontend":"Frontend","viewer.kind.backend":"Backend","viewer.kind.database":"Database","viewer.kind.cloud":"Cloud","viewer.kind.security":"Security","viewer.kind.messagebus":"Message bus","viewer.kind.external":"External","viewer.kind.neutral":"Neutral","viewer.kind.node":"Node","viewer.kind.start":"Start","viewer.kind.active":"Active","viewer.kind.waiting":"Waiting","viewer.kind.decision":"Decision","viewer.kind.success":"Success","viewer.kind.failure":"Failure","viewer.toolbar.actions":"Diagram actions","viewer.theme.toggle.title":"Toggle theme (T)","viewer.theme.toggle":"Toggle color theme","viewer.theme.dark":"Dark","viewer.theme.light":"Light","viewer.preset.choose.title":"Choose visual style (S cycles)","viewer.preset.choose":"Choose visual style","viewer.preset.style":"Style","viewer.preset.menu":"Visual style","viewer.preset.identity":"Visual identity","viewer.preset.cycles":"S cycles","viewer.preset.classic":"Classic","viewer.preset.classic.short":"Classic","viewer.preset.classic.hint":"Stable technical default","viewer.preset.flow":"Signal Flow","viewer.preset.flow.short":"Flow","viewer.preset.flow.hint":"Motion-forward presentation","viewer.preset.blueprint":"Blueprint","viewer.preset.blueprint.hint":"Engineering review","viewer.preset.editorial":"Editorial","viewer.preset.editorial.hint":"Publication and launch notes","viewer.preset.badge.signalFlow":"SIGNAL FLOW","viewer.preset.badge.blueprint":"BLUEPRINT / REV 01","viewer.preset.badge.editorial":"EDITORIAL / FIELD NOTE","viewer.preset.badge.editorialPlate":"ARCHIFY / PLATE 04","viewer.preset.current":"Visual style: {style}. Choose visual style","viewer.motion.live":"Live","viewer.motion.still":"Still","viewer.motion.pause":"Pause motion","viewer.motion.resume":"Resume motion","viewer.motion.reduced":"Motion paused by reduced-motion preference","viewer.motion.hidden":"Motion paused while this page is hidden","viewer.motion.yielding":"Pause motion; currently yielding to {owner}","viewer.motion.yielding.title":"Live preview enabled · yielding to {owner}","viewer.owner.story":"the guided story","viewer.owner.chapter":"the active chapter","viewer.owner.chapterPreview":"the chapter delta preview","viewer.owner.handoff":"the chapter handoff","viewer.owner.route":"Route Probe","viewer.owner.lens":"Semantic Lens","viewer.owner.relationship":"Relationship Preview","viewer.owner.intent":"Intent Trace","viewer.owner.focus":"semantic focus","viewer.owner.legend":"legend preview","viewer.owner.reader":"reader interaction","viewer.present.enter":"Enter presentation stage","viewer.present.enter.title":"Presentation stage (F)","viewer.present.exit":"Exit presentation stage","viewer.present.exit.title":"Exit presentation stage (F or Escape)","viewer.present.present":"Present","viewer.present.exit.label":"Exit","viewer.export.button":"Export","viewer.export.button.title":"Export diagram (E)","viewer.export.diagram":"Export diagram","viewer.export.menu":"Export","viewer.export.subtitle":"Portable, clean outputs","viewer.export.share":"Share","viewer.export.shareCard":"Share Card","viewer.export.routeShareCard":"Route Share Card","viewer.export.reachShareCard":"Reach Share Card","viewer.export.copyShareCard":"Copy Share Card","viewer.export.copyDiagram":"Copy diagram","viewer.export.clipboardPng":"PNG to clipboard","viewer.export.raster":"Raster images","viewer.export.image":"Image","viewer.export.lossless":"Lossless image","viewer.export.compact":"Compact image","viewer.export.modern":"Modern image","viewer.export.vectorMotion":"Vector and motion","viewer.export.vectorMotion.heading":"Vector \u0026 motion","viewer.export.editable":"Editable vector","viewer.export.motion6s":"6s motion","viewer.export.unsupported":"Not supported by this browser","viewer.export.clipboardUnsupported":"Clipboard image write not supported by this browser","viewer.export.clipboardUnsupported.period":"Clipboard image write not supported by this browser.","viewer.export.clipboardUnsupported.short":"Clipboard image write not supported in this browser.","viewer.export.motionUnavailable":"Motion capture unavailable in this browser","viewer.export.webmUnavailable":"WebM unavailable in this browser","viewer.export.failed":"Export failed: {message}","viewer.export.unknownVariant":"Unknown Share Card variant: {variant}","viewer.export.routeRequired":"Trace a route before exporting a Route Share Card","viewer.export.reachRequired":"Trace authored reach before exporting a Reach Share Card","viewer.export.unknown":"unknown","viewer.export.routeFailed":"Route Share Card export failed: {message}","viewer.export.reachFailed":"Reach Share Card export failed: {message}","viewer.export.copyFailed":"Copy failed: {message}","viewer.export.copiedPng":"Copied PNG to clipboard","viewer.export.copiedShare":"Copied Share Card","viewer.export.downloadedShare":"Downloaded Share Card","viewer.export.downloadedRoute":"Downloaded Route Share Card","viewer.export.downloadedReach":"Downloaded Reach Share Card","viewer.export.downloadedWebm":"Downloaded WebM","viewer.export.recording":"Recording 6 seconds of motion…","viewer.export.card.routeSummary.one":"Route: {source} → {target} · {count} directed hop","viewer.export.card.routeSummary.other":"Route: {source} → {target} · {count} directed hops","viewer.export.card.reachSummary":"Authored {direction} from {origin} · {nodes} · {links} · max {hops}","viewer.export.card.node.one":"{count} node","viewer.export.card.node.other":"{count} nodes","viewer.export.card.link.one":"{count} link","viewer.export.card.link.other":"{count} links","viewer.export.card.hop.one":"{count} hop","viewer.export.card.hop.other":"{count} hops","viewer.export.card.routeBadge":"ARCHIFY · ROUTE · {hops}","viewer.export.card.reachBadge":"ARCHIFY · {direction} REACH","viewer.export.card.defaultBadge":"ARCHIFY · {preset} · {theme}","viewer.export.direction.upstream":"Upstream","viewer.export.direction.downstream":"Downstream","viewer.export.error.canvasUnavailable":"Canvas unavailable for {label}","viewer.export.error.contextUnavailable":"2D canvas context unavailable for {label}","viewer.export.error.toBlobUnavailable":"canvas.toBlob unavailable for {label}","viewer.export.error.toBlobNull":"canvas.toBlob returned no data for {label}","viewer.export.error.variantsCombined":"Share Card variants cannot be combined","viewer.export.error.viewerState":"Share Card export could not remove temporary viewer state","viewer.export.error.routeState":"Route Card export could not preserve the resolved route safely","viewer.export.error.reachState":"Reach Card export could not preserve authored reach safely","viewer.export.error.webmRequirements":"WebM motion export requires a trace animation and browser MediaRecorder support","viewer.export.error.mediaRecorder":"MediaRecorder failed","viewer.export.error.emptyWebm":"MediaRecorder produced an empty WebM","viewer.export.error.webmBackground":"SVG background could not be loaded for WebM export","viewer.guided.region":"Guided diagram views","viewer.guided.previous":"Previous guided view","viewer.guided.previous.title":"Previous guided view ([)","viewer.guided.next":"Next guided view","viewer.guided.next.title":"Next guided view (])","viewer.guided.views":"Guided views","viewer.guided.explore":"Explore this system","viewer.guided.intro":"Step through curated paths without changing the source diagram.","viewer.guided.trail":"Story trail","viewer.guided.beat":"Beat","viewer.guided.nextBeat":"Next","viewer.guided.play":"Play guided story","viewer.guided.play.title":"Play guided story (P)","viewer.guided.pause":"Pause guided story","viewer.guided.pause.title":"Pause guided story (P)","viewer.guided.replay":"Replay guided story","viewer.guided.replay.title":"Replay guided story (P)","viewer.guided.playStory":"Play story","viewer.guided.pauseStory":"Pause","viewer.guided.replayStory":"Replay story","viewer.guided.motionUnavailable":"Story playback unavailable while motion is Still","viewer.guided.enableMotion":"Switch motion to Live to play the guided story","viewer.guided.selectBeatLink":"Select a Story Beat to copy its exact link","viewer.guided.copyMoment":"Copy moment","viewer.guided.momentCopied":"Moment link copied","viewer.guided.momentCopyFailed":"Could not copy story moment link","viewer.guided.copied":"Copied","viewer.guided.copyFailed":"Copy failed","viewer.guided.showAll":"Show all","viewer.guided.showAll.aria":"Show entire diagram","viewer.guided.chapters":"Story chapters","viewer.guided.storyTrail":"Story trail for {label}: {count} beats","viewer.guided.chapter.open":"Open chapter {index} of {total}: {label}, {count} stops","viewer.guided.chapter.current":"Current chapter {index} of {total}: {label}, {count} stops","viewer.guided.chapter.selectedNodes":"{count} selected nodes","viewer.guided.chapter.stops":"{count} stops","viewer.guided.chapter.stop.one":"{count} stop","viewer.guided.chapter.stop.other":"{count} stops","viewer.guided.chapter.current.title":"{label} — current chapter, {count} stops","viewer.guided.chapter.delta.expanded":"{stay} stay, {enter} enter, {leave} leave","viewer.guided.chapter.delta.aria":"Open chapter {index} of {total}: {label}. Chapter focus delta: {delta}","viewer.guided.chapter.delta.title":"{label} — {delta} chapter focus","viewer.guided.handoff":"{from} → {to} · via {label}","viewer.guided.share.chapter":"Chapter {index} / {total}","viewer.guided.share.initial":"Chapter 01 / 01","viewer.guided.share.default":"Guided chapter","viewer.guided.state.ready":"Ready","viewer.guided.state.playing":"Playing","viewer.guided.state.settled":"Settled","viewer.guided.state.paused":"Paused","viewer.guided.state.pinned":"Pinned","viewer.guided.state.still":"Still","viewer.guided.share.step":"Step {index} / {total} · {label}","viewer.guided.share.staticMoment":"{step} · Static moment","viewer.guided.share.complete":"{count} steps complete · {note}","viewer.guided.share.settled":"Path settled for reading.","viewer.guided.share.staticPath":"{count} steps · Static path","viewer.guided.share.ready":"{count} steps · Ready","viewer.guided.share.aria":"{state} chapter {index} of {total}: {label}. {beat}. {route}","viewer.guided.beat.start":"Beat {index} / {total} · {label} · starting point","viewer.guided.beat.forward":"Beat {index} / {total} · {from} → {to}","viewer.guided.beat.reverse":"Beat {index} / {total} · {from} → {to} · reverse authored link","viewer.guided.beat.multiple":"Beat {index} / {total} · {from} ⇄ {to} · {count} authored links","viewer.guided.beat.group":"Beat {index} / {total} · {from} · {to} · grouped · no direct link","viewer.guided.beat.aria.prefix":"Story beat {index} of {total}: {label}. ","viewer.guided.beat.aria.start":"Starting point.","viewer.guided.beat.aria.forward":"From {from} through one authored forward relationship.","viewer.guided.beat.aria.reverse":"From {from}; the authored relationship points from {to} to {from}.","viewer.guided.beat.aria.multiple":"From {from} through {count} authored relationships; shown without arbitrary motion.","viewer.guided.beat.aria.group":"Grouped from {from} with no direct authored relationship.","viewer.guided.caption.start":"Starting point","viewer.guided.caption.grouped":"Grouped transition · no direct authored link","viewer.guided.caption.more":" +{count} more","viewer.guided.caption.reverse":"Reverse authored relationship","viewer.guided.caption.relationships":"{count} authored relationships","viewer.guided.caption.relationship":"Authored relationship","viewer.guided.caption.direction":"authored direction: {from} → {to}","viewer.guided.caption.starting":"Authored starting point","viewer.guided.beatLink":"Copy link to current story moment: Beat {index} of {total}: {label}","viewer.guided.noStory":"This diagram has no authored guided story.","viewer.guide.eyebrow":"Diagram guide","viewer.guide.close":"Close diagram guide","viewer.guide.inspecting":"Inspecting compiled semantics","viewer.guide.actions":"Diagram exploration actions","viewer.guide.find":"Find any node","viewer.guide.find.hint":"Search labels, responsibilities, kinds, and stable IDs.","viewer.guide.route":"Trace a route","viewer.guide.route.aria":"Trace a directed route","viewer.guide.route.hint":"Ask how two semantic nodes connect in authored direction.","viewer.guide.map":"See the whole system","viewer.guide.map.hint":"Open Semantic Radar with a live viewport and stable nodes.","viewer.guide.lens":"Compare semantic kinds","viewer.guide.lens.hint":"Count roles, reveal their traffic, and compare direct authored links.","viewer.guide.story":"Play the guided story","viewer.guide.story.hint":"Walk the authored chapters and real relationships.","viewer.guide.present":"Enter Presentation Stage","viewer.guide.present.hint":"Give the live diagram the viewport without changing export.","viewer.guide.shortcuts":"Additional keyboard shortcuts","viewer.guide.shortcut.export":"Export","viewer.guide.shortcut.theme":"Theme","viewer.guide.shortcut.style":"Style","viewer.guide.shortcut.reset":"Reset","viewer.guide.shortcut.zoomIn":"Zoom in","viewer.guide.shortcut.zoomOut":"Zoom out","viewer.guide.shortcut.close":"Close","viewer.guide.facts":"{nodes} · {relationships} · {views}","viewer.guide.fact.node.one":"{count} semantic node","viewer.guide.fact.node.other":"{count} semantic nodes","viewer.guide.fact.relationship.one":"{count} relationship","viewer.guide.fact.relationship.other":"{count} relationships","viewer.guide.fact.view.one":"{count} guided view","viewer.guide.fact.view.other":"{count} guided views","viewer.guide.story.available.one":"Walk {count} authored chapter and its real relationships.","viewer.guide.story.available.other":"Walk {count} authored chapters and their real relationships.","viewer.guide.story.unavailable":"No authored guided story in this diagram.","viewer.guide.open":"Open diagram guide","viewer.guide.noStory":"This diagram has no authored guided story.","viewer.finder.title":"Find a node","viewer.finder.close":"Close node finder","viewer.finder.placeholder":"Search labels or IDs","viewer.finder.search":"Search diagram nodes","viewer.finder.results":"Diagram nodes","viewer.finder.empty":"No matching nodes","viewer.finder.result.focus":"Focus {label}","viewer.finder.result.routeStart":"Choose {label} as route start","viewer.finder.result.routeTarget":"Choose {label} as route destination, {links}","viewer.finder.status.empty":"No matching nodes","viewer.finder.status.count.one":"{count} matching node","viewer.finder.status.count.other":"{count} matching nodes","viewer.finder.noun.nodes":"nodes","viewer.finder.link.one":"{count} link","viewer.finder.link.other":"{count} links","viewer.finder.result.focus.one":"Focus {label}, {count} related connection","viewer.finder.result.focus.other":"Focus {label}, {count} related connections","viewer.finder.status.filtered":"{visible} of {available} {noun}","viewer.finder.status.all":"{available} {noun}","viewer.passport.eyebrow":"Semantic passport","viewer.passport.metadata":"Node metadata","viewer.passport.evidence":"Verified source evidence","viewer.passport.verified":"Verified source","viewer.passport.verificationScope":"Verified against local Git at the pinned revision. Remote access has not been checked.","viewer.passport.reach":"Authored reach","viewer.passport.reach.trace":"Trace authored reachability","viewer.passport.upstream":"Upstream","viewer.passport.downstream":"Downstream","viewer.passport.upstream.trace":"Trace upstream authored reachability","viewer.passport.downstream.trace":"Trace downstream authored reachability","viewer.passport.close":"Close semantic passport","viewer.passport.copy":"Copy link","viewer.passport.copy.focus":"Copy link to focused node","viewer.passport.relations":"Relations","viewer.passport.relations.show":"Show connected relationships","viewer.passport.relations.hide":"Hide connected relationships","viewer.passport.relations.list":"Connected relationships","viewer.passport.copyRelation":"Copy relation","viewer.passport.copyNode":"Copy node","viewer.passport.copyPinned":"Copy link to pinned relationship","viewer.passport.copySource":"Copy link to source node","viewer.passport.copy.focused.success":"Focused node link copied","viewer.passport.copy.pinned.success":"Pinned relationship link copied","viewer.passport.copy.focused.failed":"Could not copy focused node link","viewer.passport.copy.pinned.failed":"Could not copy pinned relationship link","viewer.passport.relationship.none":"No connected relationships","viewer.passport.relationship.count.one":"{count} relation","viewer.passport.relationship.count.other":"{count} relations","viewer.passport.relationship.show.one":"Show {count} connected relationship","viewer.passport.relationship.show.other":"Show {count} connected relationships","viewer.passport.relationship.summary":"{out} outgoing · {in} incoming{loops}","viewer.passport.relationship.loops":" · {count} loop","viewer.passport.relationship.explorer":"Direct relationship explorer","viewer.passport.relationship.help":"Use arrow keys to explore relationships. Press Enter or Space to pin details; Escape clears.","viewer.passport.relationship.loopsBack":"loops back","viewer.passport.relationship.connectsTo":"connects to","viewer.passport.relationship.connectsFrom":"connects from","viewer.passport.relationship.pinned":"Pinned relationship · {from} → {to} · {label}","viewer.passport.relationship.inspect":"Inspect relationship {index} of {total}: {from} to {to}, {label}. Press Enter for details.","viewer.passport.relationship.group.out":"Outgoing","viewer.passport.relationship.group.in":"Incoming","viewer.passport.relationship.group.loop":"Self loops","viewer.passport.relationship.row":"{group}: {relationship}, {neighbor}","viewer.passport.relationship.direction.out":"OUT →","viewer.passport.relationship.direction.in":"← IN","viewer.passport.relationship.direction.loop":"LOOP","viewer.passport.sourceCount.one":"{count} verified source reference","viewer.passport.sourceCount.other":"{count} verified source references","viewer.passport.sourceMarker":"SRC","viewer.passport.beacon.one":"{count} verified source; focus this node to inspect","viewer.passport.beacon.other":"{count} verified sources; focus this node to inspect","viewer.passport.repository.open":"Open verified repository revision {revision}","viewer.passport.source.open":"Open verified source {path} at revision {revision}","viewer.passport.source.openLink":"Open ↗","viewer.passport.reach.upstream.one":"Trace {count} upstream authored node","viewer.passport.reach.upstream.other":"Trace {count} upstream authored nodes","viewer.passport.reach.downstream.one":"Trace {count} downstream authored node","viewer.passport.reach.downstream.other":"Trace {count} downstream authored nodes","viewer.passport.reach.noUpstream":"No upstream authored nodes","viewer.passport.reach.noDownstream":"No downstream authored nodes","viewer.passport.reach.status":"{direction} · {nodes} nodes · {links} links · max {hops} hops","viewer.route.eyebrow":"Route probe","viewer.route.start":"Choose a start node","viewer.route.start.find":"Find start","viewer.route.start.find.aria":"Find a route start","viewer.route.copy":"Copy link","viewer.route.copy.aria":"Copy link to traced route","viewer.route.clear":"Clear","viewer.route.clear.aria":"Clear route probe","viewer.route.traced":"Traced route","viewer.route.pickTwo":"Pick two semantic nodes on the diagram","viewer.route.pickOne":"Pick a semantic node on the diagram","viewer.route.controls":"Route journey controls","viewer.route.previous":"Previous route position","viewer.route.play":"Play route journey","viewer.route.pause":"Pause route journey","viewer.route.replay":"Replay route journey","viewer.route.next":"Next route position","viewer.route.journey":"Journey","viewer.route.pause.label":"Pause","viewer.route.replay.label":"Replay","viewer.route.overview":"Overview","viewer.route.overview.aria":"Show complete route overview","viewer.route.instructions":"Choose the source, then the destination. Direction matters.","viewer.route.destination":"Choose a destination from {label}","viewer.route.destination.find":"Find target","viewer.route.destination.find.aria":"Find a reachable route destination","viewer.route.differentDestination":"Choose a different destination","viewer.route.distinct":"A route needs two distinct semantic nodes.","viewer.route.unreachable":"No directed route to {label}","viewer.route.unreachable.detail":"{target} is not reachable from {source}. Pick a highlighted destination.","viewer.route.start.instructions":"Select the source. The next step will reveal only directed destinations.","viewer.route.copy.success":"Traced route link copied","viewer.route.copy.failed":"Could not copy traced route link","viewer.route.position":"Route position {index} of {total}: {label}","viewer.route.step":"Step {index} of {total} · {phase} · {label}","viewer.route.motionRequired":"Automatic journey requires Live motion","viewer.route.trigger.clear":"Clear traced route","viewer.route.overview.status":"{nodes} · {hops} · shortest authored route","viewer.route.overview.node.one":"{count} node","viewer.route.overview.node.other":"{count} nodes","viewer.route.overview.hop.one":"{count} directed hop","viewer.route.overview.hop.other":"{count} directed hops","viewer.route.phase.playing":"Playing","viewer.route.phase.complete":"Complete","viewer.route.phase.inspecting":"Inspecting","viewer.route.destination.count.one":"{count} directed destination available. Pick a highlighted node.","viewer.route.destination.count.other":"{count} directed destinations available. Pick a highlighted node.","viewer.route.noOutgoing":"No outgoing route starts here. Clear and choose another source.","viewer.route.result.title":"{source} to {target}","viewer.route.finder.source.title":"Choose route start","viewer.route.finder.source.placeholder":"Search route sources","viewer.route.finder.source.empty":"No matching route sources","viewer.route.finder.source.results":"Nodes that can start a route","viewer.route.finder.source.noun":"route sources","viewer.route.finder.source.badge":"start","viewer.route.finder.target.title":"Destination from {label}","viewer.route.finder.target.placeholder":"Search reachable destinations","viewer.route.finder.target.empty":"No matching reachable destinations","viewer.route.finder.target.results":"Reachable route destinations","viewer.route.finder.target.noun":"reachable destinations","viewer.route.hop.one":"{count} hop","viewer.route.hop.other":"{count} hops","viewer.lens.eyebrow":"Semantic lens","viewer.lens.title":"Compare system roles","viewer.lens.close":"Close semantic lens","viewer.lens.instruction":"Choose up to two semantic kinds. One reveals its real traffic; two compare only direct authored relationships.","viewer.lens.kinds":"Semantic kinds","viewer.lens.choose":"Choose a kind to inspect its nodes and touching relationships.","viewer.lens.copy":"Copy link to semantic lens","viewer.lens.clear":"Clear semantic lens","viewer.lens.open":"Open semantic lens","viewer.lens.openActive":"Open active semantic lens","viewer.lens.legend":"Semantic legend","viewer.lens.legend.inspect.one":"Inspect {label}, {count} node","viewer.lens.legend.inspect.other":"Inspect {label}, {count} nodes","viewer.lens.kind.count.one":"{label}, {count} node","viewer.lens.kind.count.other":"{label}, {count} nodes","viewer.lens.compare.one":"{first} → {second}: {forward} · {second} → {first}: {reverse} · {count} direct relationship","viewer.lens.compare.other":"{first} → {second}: {forward} · {second} → {first}: {reverse} · {count} direct relationships","viewer.lens.single":"{nodes} · {relationships} · connected peers remain visible","viewer.lens.node.one":"{count} {label} node","viewer.lens.node.other":"{count} {label} nodes","viewer.lens.relationship.one":"{count} touching relationship","viewer.lens.relationship.other":"{count} touching relationships","viewer.radar.title":"Semantic radar","viewer.radar.building":"Building overview","viewer.radar.openFull":"Open full semantic radar","viewer.radar.open":"Open radar","viewer.radar.close":"Close semantic radar","viewer.radar.surface":"Diagram overview. Click a node to focus it, or use arrow keys to pan.","viewer.radar.click":"Click node","viewer.radar.drag":"Drag to pan","viewer.radar.space":"Semantic radar needs more MAP space.","viewer.radar.nodes":"Semantic diagram radar nodes","viewer.radar.focus":"Focus {label} from Semantic Radar","viewer.radar.status":"{count} nodes · {viewport}","viewer.radar.fullMap":"{count} nodes · full map","viewer.radar.compacted":"Radar compacted to avoid covering the Semantic Passport or MAP controls.","viewer.radar.cancelWaiting":"Cancel semantic radar waiting for more MAP space","viewer.radar.needsSpace":"Semantic radar needs more visible MAP space","viewer.radar.viewport.full":"full map","viewer.radar.viewport.width":"{percent}% width","viewer.radar.viewport.scale":"{percent}% viewport","viewer.nav.controls":"Diagram view controls","viewer.nav.route":"Trace a directed route","viewer.nav.route.title":"Trace route (R)","viewer.nav.route.short":"PATH","viewer.nav.radar":"Open semantic radar","viewer.nav.radar.title":"Semantic radar (M)","viewer.nav.radar.short":"MAP","viewer.nav.lens":"Open semantic lens","viewer.nav.lens.title":"Semantic lens (L)","viewer.nav.lens.short":"LENS","viewer.nav.find":"Find a node","viewer.nav.find.title":"Find a node (/)","viewer.nav.guide":"Open diagram guide","viewer.nav.guide.title":"Diagram guide (?)","viewer.nav.zoomOut":"Zoom out","viewer.nav.zoomOut.title":"Zoom out (-)","viewer.nav.reset":"Reset diagram view","viewer.nav.reset.title":"Reset view (0)","viewer.nav.read":"READ","viewer.nav.zoomIn":"Zoom in","viewer.nav.zoomIn.title":"Zoom in (+)","viewer.nav.camera":"{hint}. Reset diagram view","viewer.nav.camera.title":"{semantic}{hint} · reset view (0)","viewer.nav.camera.semantic":"Semantic camera active · ","viewer.nav.level.map":"MAP","viewer.nav.level.read":"READ","viewer.nav.level.full":"FULL","viewer.nav.level.auto":"AUTO","viewer.nav.detail.map":"Zoom in to reveal relationship labels and node context","viewer.nav.detail.read":"Zoom in again to reveal tags and annotations","viewer.nav.detail.full":"Full diagram detail","viewer.intent.summary":"{label}. {out} outgoing, {in} incoming{loops}. {total} connections. Press Enter for details.","viewer.intent.loops":", {count} self loop","viewer.common.copied":"Copied","viewer.common.copyFailed":"Copy failed","viewer.common.copyLink":"Copy link","viewer.common.clear":"Clear","viewer.common.close":"Close"}}</script>
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>
@@ -5130,7 +5130,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / PLATE 04">
-      <svg viewBox="0 0 1295 874" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+      <svg viewBox="0 0 1295 1534" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
         <title id="archify-diagram-title">Tabularia Metadata Database</title>
         <desc id="archify-diagram-description">An architecture diagram generated by Archify.</desc>
         <!-- Definitions -->
@@ -5160,6 +5160,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="Catalog and execution" x="780" y="30" width="475" height="776" rx="12" class="c-region" stroke-width="1"/>
 
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="AI assistant" x="30" y="1130" width="975" height="116" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="3" data-composition-frame-label="Data contracts · no foreign keys by design" x="30" y="1350" width="725" height="116" rx="8" class="c-security-group" stroke-width="1"/>
+
         <!-- Connection paths (before components for correct z-order) -->
         <path data-edge-from="audit_logs" data-edge-to="users" data-edge-label="actor_id" data-edge-key="0" data-edge-id="audit-user" data-composition-points="225,93;267.5,93;267.5,315;310,315" d="M 225 93 L 259.5 93 Q 267.5 93 267.5 101 L 267.5 307 Q 267.5 315 275.5 315 L 310 315" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="banners" data-edge-to="users" data-edge-label="created_by" data-edge-key="1" data-edge-id="banner-user" data-composition-points="392.5,126;392.5,280" d="M 392.5 126 L 392.5 280" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
@@ -5177,6 +5181,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <path data-edge-from="datasources" data-edge-to="projects" data-edge-label="project_id" data-edge-key="13" data-edge-id="ds-project" data-composition-points="1060,746;1017.5,746;1017.5,542;975,542" d="M 1060 746 L 1025.5 746 Q 1017.5 746 1017.5 738 L 1017.5 550 Q 1017.5 542 1009.5 542 L 975 542" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="datasources" data-edge-to="connections" data-edge-label="connection_id" data-edge-key="14" data-edge-id="ds-conn" data-composition-points="1060,760;975,760" d="M 1060 760 L 975 760" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="datasources" data-edge-to="flows" data-edge-label="flow_id" data-edge-key="15" data-edge-id="ds-flow" data-composition-points="1225,753;1290,753;1290,313;1225,313" d="M 1225 753 L 1282 753 Q 1290 753 1290 745 L 1290 321 Q 1290 313 1282 313 L 1225 313" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="ai_chat_turns" data-edge-to="ai_chats" data-edge-label="chat_id" data-edge-key="16" data-edge-id="turn-chat" data-composition-points="560,1193;475,1193" d="M 560 1193 L 475 1193" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="saved_views" data-edge-to="datasources" data-edge-label="datasource_id" data-edge-key="17" data-edge-id="view-ds" data-composition-points="1142.5,940;1142.5,786" d="M 1142.5 940 L 1142.5 786" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
         <g id="node-audit_logs" data-node-id="audit_logs" data-node-label="audit_logs" tabindex="0" role="button" aria-label="Focus audit_logs, append-only trail, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="append-only trail" data-node-tag="actor_label survives" data-node-context="Architecture component">
@@ -5321,8 +5327,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="1142.5" y="118" class="t-database" font-size="7" text-anchor="middle">unique (flow_id, version)</text>
         </g>
 
-        <g id="node-flows" data-node-id="flows" data-node-label="flows" tabindex="0" role="button" aria-label="Focus flows, definition + schedule, Catalog and execution" aria-pressed="false" data-node-kind="database" data-node-sublabel="definition + schedule" data-node-tag="engine, production_engine" data-node-context="Catalog and execution">
-          <title>flows · definition + schedule · Catalog and execution · engine, production_engine</title>
+        <g id="node-flows" data-node-id="flows" data-node-label="flows" tabindex="0" role="button" aria-label="Focus flows, definition + schedule, Catalog and execution" aria-pressed="false" data-node-kind="database" data-node-sublabel="definition + schedule" data-node-tag="engine · notify_connection_id" data-node-context="Catalog and execution">
+          <title>flows · definition + schedule · Catalog and execution · engine · notify_connection_id</title>
           <rect x="1060" y="280" width="165" height="66" rx="6" class="c-mask"/>
           <rect x="1060" y="280" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1066 286) scale(0.6875)">
@@ -5331,19 +5337,19 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           </g>
           <text data-node-label="" data-detail-anchor="" x="1142.5" y="311" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">flows</text>
         <text data-detail="context" x="1142.5" y="327" class="t-muted" font-size="9" text-anchor="middle">definition + schedule</text>
-        <text data-detail="fine" x="1142.5" y="338" class="t-database" font-size="7" text-anchor="middle">engine, production_engine</text>
+        <text data-detail="fine" x="1142.5" y="338" class="t-database" font-size="7" text-anchor="middle">engine · notify_connection_id</text>
         </g>
 
-        <g id="node-runs" data-node-id="runs" data-node-label="runs" tabindex="0" role="button" aria-label="Focus runs, one execution, one task, Catalog and execution" aria-pressed="false" data-node-kind="backend" data-node-sublabel="one execution, one task" data-node-tag="parent_run_id self-ref" data-node-context="Catalog and execution">
-          <title>runs · one execution, one task · Catalog and execution · parent_run_id self-ref</title>
+        <g id="node-runs" data-node-id="runs" data-node-label="runs" tabindex="0" role="button" aria-label="Focus runs, one execution · the queue, Catalog and execution" aria-pressed="false" data-node-kind="backend" data-node-sublabel="one execution · the queue" data-node-tag="claimed_by, heartbeat_at" data-node-context="Catalog and execution">
+          <title>runs · one execution · the queue · Catalog and execution · claimed_by, heartbeat_at</title>
           <rect x="1060" y="500" width="165" height="70" rx="6" class="c-mask"/>
           <rect x="1060" y="500" width="165" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1066 506) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="1142.5" y="533" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">runs</text>
-        <text data-detail="context" x="1142.5" y="549" class="t-muted" font-size="9" text-anchor="middle">one execution, one task</text>
-        <text data-detail="fine" x="1142.5" y="562" class="t-backend" font-size="7" text-anchor="middle">parent_run_id self-ref</text>
+        <text data-detail="context" x="1142.5" y="549" class="t-muted" font-size="9" text-anchor="middle">one execution · the queue</text>
+        <text data-detail="fine" x="1142.5" y="562" class="t-backend" font-size="7" text-anchor="middle">claimed_by, heartbeat_at</text>
         </g>
 
         <g id="node-datasources" data-node-id="datasources" data-node-label="datasources" tabindex="0" role="button" aria-label="Focus datasources, published parquet, Catalog and execution" aria-pressed="false" data-node-kind="database" data-node-sublabel="published parquet" data-node-tag="snapshot_run_id guard" data-node-context="Catalog and execution">
@@ -5357,6 +5363,173 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <text data-node-label="" data-detail-anchor="" x="1142.5" y="751" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">datasources</text>
         <text data-detail="context" x="1142.5" y="767" class="t-muted" font-size="9" text-anchor="middle">published parquet</text>
         <text data-detail="fine" x="1142.5" y="778" class="t-database" font-size="7" text-anchor="middle">snapshot_run_id guard</text>
+        </g>
+
+        <g id="node-login_attempts" data-node-id="login_attempts" data-node-label="login_attempts" tabindex="0" role="button" aria-label="Focus login_attempts, sign-in throttle, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="sign-in throttle" data-node-tag="shared by replicas" data-node-context="Architecture component">
+          <title>login_attempts · sign-in throttle · Architecture component · shared by replicas</title>
+          <rect x="60" y="500" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="60" y="500" width="165" height="66" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(66 506) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="531" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">login_attempts</text>
+        <text data-detail="context" x="142.5" y="547" class="t-muted" font-size="9" text-anchor="middle">sign-in throttle</text>
+        <text data-detail="fine" x="142.5" y="558" class="t-security" font-size="7" text-anchor="middle">shared by replicas</text>
+        </g>
+
+        <g id="node-flow_presence" data-node-id="flow_presence" data-node-label="flow_presence" tabindex="0" role="button" aria-label="Focus flow_presence, who has a flow open, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="who has a flow open" data-node-tag="shared by replicas" data-node-context="Architecture component">
+          <title>flow_presence · who has a flow open · Architecture component · shared by replicas</title>
+          <rect x="60" y="720" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="60" y="720" width="165" height="66" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(66 726) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="751" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">flow_presence</text>
+        <text data-detail="context" x="142.5" y="767" class="t-muted" font-size="9" text-anchor="middle">who has a flow open</text>
+        <text data-detail="fine" x="142.5" y="778" class="t-security" font-size="7" text-anchor="middle">shared by replicas</text>
+        </g>
+
+        <g id="node-schema_state" data-node-id="schema_state" data-node-label="schema_state" tabindex="0" role="button" aria-label="Focus schema_state, schema fingerprint, Architecture component" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="schema fingerprint" data-node-tag="no model: raw DDL" data-node-context="Architecture component">
+          <title>schema_state · schema fingerprint · Architecture component · no model: raw DDL</title>
+          <rect x="60" y="940" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="60" y="940" width="165" height="66" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(66 946) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="971" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">schema_state</text>
+        <text data-detail="context" x="142.5" y="987" class="t-muted" font-size="9" text-anchor="middle">schema fingerprint</text>
+        <text data-detail="fine" x="142.5" y="998" class="t-messagebus" font-size="7" text-anchor="middle">no model: raw DDL</text>
+        </g>
+
+        <g id="node-privacy_notice" data-node-id="privacy_notice" data-node-label="privacy_notice" tabindex="0" role="button" aria-label="Focus privacy_notice, the policy text, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="the policy text" data-node-context="Architecture component">
+          <title>privacy_notice · the policy text · Architecture component</title>
+          <rect x="310" y="940" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="310" y="940" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(316 946) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="392.5" y="971" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">privacy_notice</text>
+        <text data-detail="context" x="392.5" y="987" class="t-muted" font-size="9" text-anchor="middle">the policy text</text>
+        </g>
+
+        <g id="node-disabled_engines" data-node-id="disabled_engines" data-node-label="disabled_engines" tabindex="0" role="button" aria-label="Focus disabled_engines, engine policy, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="engine policy" data-node-context="Architecture component">
+          <title>disabled_engines · engine policy · Architecture component</title>
+          <rect x="560" y="940" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="560" y="940" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(566 946) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="642.5" y="971" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">disabled_engines</text>
+        <text data-detail="context" x="642.5" y="987" class="t-muted" font-size="9" text-anchor="middle">engine policy</text>
+        </g>
+
+        <g id="node-saved_views" data-node-id="saved_views" data-node-label="saved_views" tabindex="0" role="button" aria-label="Focus saved_views, a Viewer configuration, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="a Viewer configuration" data-node-tag="unique (project_id, name)" data-node-context="Architecture component">
+          <title>saved_views · a Viewer configuration · Architecture component · unique (project_id, name)</title>
+          <rect x="1060" y="940" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="1060" y="940" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1066 946) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1142.5" y="971" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">saved_views</text>
+        <text data-detail="context" x="1142.5" y="987" class="t-muted" font-size="9" text-anchor="middle">a Viewer configuration</text>
+        <text data-detail="fine" x="1142.5" y="998" class="t-database" font-size="7" text-anchor="middle">unique (project_id, name)</text>
+        </g>
+
+        <g id="node-ai_models" data-node-id="ai_models" data-node-label="ai_models" tabindex="0" role="button" aria-label="Focus ai_models, models an admin enabled, AI assistant" aria-pressed="false" data-node-kind="database" data-node-sublabel="models an admin enabled" data-node-context="AI assistant">
+          <title>ai_models · models an admin enabled · AI assistant</title>
+          <rect x="60" y="1160" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="60" y="1160" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(66 1166) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="1191" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ai_models</text>
+        <text data-detail="context" x="142.5" y="1207" class="t-muted" font-size="9" text-anchor="middle">models an admin enabled</text>
+        </g>
+
+        <g id="node-ai_chats" data-node-id="ai_chats" data-node-label="ai_chats" tabindex="0" role="button" aria-label="Focus ai_chats, a saved conversation, AI assistant" aria-pressed="false" data-node-kind="database" data-node-sublabel="a saved conversation" data-node-context="AI assistant">
+          <title>ai_chats · a saved conversation · AI assistant</title>
+          <rect x="310" y="1160" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="310" y="1160" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(316 1166) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="392.5" y="1191" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ai_chats</text>
+        <text data-detail="context" x="392.5" y="1207" class="t-muted" font-size="9" text-anchor="middle">a saved conversation</text>
+        </g>
+
+        <g id="node-ai_chat_turns" data-node-id="ai_chat_turns" data-node-label="ai_chat_turns" tabindex="0" role="button" aria-label="Focus ai_chat_turns, question, answer, cost, AI assistant" aria-pressed="false" data-node-kind="database" data-node-sublabel="question, answer, cost" data-node-context="AI assistant">
+          <title>ai_chat_turns · question, answer, cost · AI assistant</title>
+          <rect x="560" y="1160" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="560" y="1160" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(566 1166) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="642.5" y="1191" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ai_chat_turns</text>
+        <text data-detail="context" x="642.5" y="1207" class="t-muted" font-size="9" text-anchor="middle">question, answer, cost</text>
+        </g>
+
+        <g id="node-ai_spend" data-node-id="ai_spend" data-node-label="ai_spend" tabindex="0" role="button" aria-label="Focus ai_spend, daily spend per user, AI assistant" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="daily spend per user" data-node-tag="counter, no key" data-node-context="AI assistant">
+          <title>ai_spend · daily spend per user · AI assistant · counter, no key</title>
+          <rect x="810" y="1160" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="810" y="1160" width="165" height="66" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(816 1166) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="892.5" y="1191" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ai_spend</text>
+        <text data-detail="context" x="892.5" y="1207" class="t-muted" font-size="9" text-anchor="middle">daily spend per user</text>
+        <text data-detail="fine" x="892.5" y="1218" class="t-messagebus" font-size="7" text-anchor="middle">counter, no key</text>
+        </g>
+
+        <g id="node-data_contracts" data-node-id="data_contracts" data-node-label="data_contracts" tabindex="0" role="button" aria-label="Focus data_contracts, one per datasource, Data contracts · no foreign keys by design" aria-pressed="false" data-node-kind="security" data-node-sublabel="one per datasource" data-node-tag="state behind the icon" data-node-context="Data contracts · no foreign keys by design">
+          <title>data_contracts · one per datasource · Data contracts · no foreign keys by design · state behind the icon</title>
+          <rect x="60" y="1380" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="60" y="1380" width="165" height="66" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(66 1386) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="142.5" y="1411" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">data_contracts</text>
+        <text data-detail="context" x="142.5" y="1427" class="t-muted" font-size="9" text-anchor="middle">one per datasource</text>
+        <text data-detail="fine" x="142.5" y="1438" class="t-security" font-size="7" text-anchor="middle">state behind the icon</text>
+        </g>
+
+        <g id="node-data_contract_versions" data-node-id="data_contract_versions" data-node-label="data_contract_versions" tabindex="0" role="button" aria-label="Focus data_contract_versions, every saved document, Data contracts · no foreign keys by design" aria-pressed="false" data-node-kind="database" data-node-sublabel="every saved document" data-node-tag="unique (datasource, version)" data-node-context="Data contracts · no foreign keys by design">
+          <title>data_contract_versions · every saved document · Data contracts · no foreign keys by design · unique (datasource, version)</title>
+          <rect x="310" y="1380" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="310" y="1380" width="165" height="66" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(316 1386) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="392.5" y="1411" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">data_contract_versions</text>
+        <text data-detail="context" x="392.5" y="1427" class="t-muted" font-size="9" text-anchor="middle">every saved document</text>
+        <text data-detail="fine" x="392.5" y="1438" class="t-database" font-size="7" text-anchor="middle">unique (datasource, version)</text>
+        </g>
+
+        <g id="node-data_contract_results" data-node-id="data_contract_results" data-node-label="data_contract_results" tabindex="0" role="button" aria-label="Focus data_contract_results, one check, one report, Data contracts · no foreign keys by design" aria-pressed="false" data-node-kind="backend" data-node-sublabel="one check, one report" data-node-tag="notify queue" data-node-context="Data contracts · no foreign keys by design">
+          <title>data_contract_results · one check, one report · Data contracts · no foreign keys by design · notify queue</title>
+          <rect x="560" y="1380" width="165" height="66" rx="6" class="c-mask"/>
+          <rect x="560" y="1380" width="165" height="66" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(566 1386) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="642.5" y="1411" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">data_contract_results</text>
+        <text data-detail="context" x="642.5" y="1427" class="t-muted" font-size="9" text-anchor="middle">one check, one report</text>
+        <text data-detail="fine" x="642.5" y="1438" class="t-backend" font-size="7" text-anchor="middle">notify queue</text>
         </g>
 
         <!-- Connection labels -->
@@ -5424,6 +5597,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <rect x="1268.2" y="513" width="43.6" height="14" rx="3" class="c-mask"/>
           <text x="1290" y="523" class="t-muted" font-size="8" text-anchor="middle">flow_id</text>
         </g>
+        <g data-detail="context" data-edge-from="ai_chat_turns" data-edge-to="ai_chats" data-edge-label="chat_id" data-edge-key="16" data-edge-id="turn-chat">
+          <rect x="495.7" y="1173" width="43.6" height="14" rx="3" class="c-mask"/>
+          <text x="517.5" y="1183" class="t-muted" font-size="8" text-anchor="middle">chat_id</text>
+        </g>
+        <g data-detail="context" data-edge-from="saved_views" data-edge-to="datasources" data-edge-label="datasource_id" data-edge-key="17" data-edge-id="view-ds">
+          <rect x="1106.3" y="860" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="1142.5" y="870" class="t-muted" font-size="8" text-anchor="middle">datasource_id</text>
+        </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
         <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="security-group" data-composition-frame-label="Access control">
@@ -5436,24 +5617,34 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <text data-boundary-label="" x="788" y="53" class="t-cloud" font-size="9" font-weight="600">Catalog and execution</text>
         </g>
 
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="AI assistant">
+          <rect data-graph-role="structural-frame-label-mask" x="34" y="1140" width="74.8" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="38" y="1153" class="t-cloud" font-size="9" font-weight="600">AI assistant</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="security-group" data-composition-frame-label="Data contracts · no foreign keys by design">
+          <rect data-graph-role="structural-frame-label-mask" x="34" y="1360" width="236.79999999999998" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="38" y="1373" class="t-security" font-size="9" font-weight="600">Data contracts · no foreign keys by design</text>
+        </g>
+
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
-          <text x="40" y="838" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="858" data-legend-width="78">
-            <rect x="40" y="849" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="62" y="858" class="t-muted" font-size="10" font-weight="500">Backend</text>
+          <text x="40" y="1498" class="t-primary" font-size="12" font-weight="650">Legend</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="1518" data-legend-width="78">
+            <rect x="40" y="1509" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="62" y="1518" class="t-muted" font-size="10" font-weight="500">Backend</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="140" data-legend-baseline="858" data-legend-width="83">
-            <rect x="140" y="849" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="162" y="858" class="t-muted" font-size="10" font-weight="500">Database</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="140" data-legend-baseline="1518" data-legend-width="83">
+            <rect x="140" y="1509" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="162" y="1518" class="t-muted" font-size="10" font-weight="500">Database</text>
           </g>
-          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Security" data-legend-x="245" data-legend-baseline="858" data-legend-width="83">
-            <rect x="245" y="849" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
-            <text x="267" y="858" class="t-muted" font-size="10" font-weight="500">Security</text>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Security" data-legend-x="245" data-legend-baseline="1518" data-legend-width="83">
+            <rect x="245" y="1509" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="267" y="1518" class="t-muted" font-size="10" font-weight="500">Security</text>
           </g>
-          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="Message bus" data-legend-x="350" data-legend-baseline="858" data-legend-width="98">
-            <rect x="350" y="849" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
-            <text x="372" y="858" class="t-muted" font-size="10" font-weight="500">Message bus</text>
+          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="Message bus" data-legend-x="350" data-legend-baseline="1518" data-legend-width="98">
+            <rect x="350" y="1509" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
+            <text x="372" y="1518" class="t-muted" font-size="10" font-weight="500">Message bus</text>
           </g>
         </g>
       </svg>
@@ -5675,6 +5866,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>&bull; runs.parent_run_id is a self-reference, not drawn: a parent run fans out into child runs.</li>
+          <li>&bull; runs is also the orchestration queue: a PENDING row is claimed by one orchestrator (claimed_by) with a conditional update and kept alive by heartbeat_at.</li>
           <li>&bull; runs.datasource_id and datasources.snapshot_run_id point at each other, so snapshot_run_id is a plain integer with no foreign key to avoid a circular constraint.</li>
           <li>&bull; started_at includes queue time; engine_started_at records when the engine actually began, and drives the staleness clock.</li>
           <li>&bull; pending_blob_deletions deliberately has no foreign key: it must survive the rows whose objects it deletes.</li>
@@ -5687,11 +5879,24 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <h3>Foreign keys listed, not drawn</h3>
         </div>
         <ul>
-          <li>&bull; Ownership and actor columns all point at users.id: projects.owner_id, flows.owner_id, connections.owner_id, datasources.owner_id, runs.launched_by, flow_versions.created_by.</li>
-          <li>&bull; Scheduling actors: flows.run_scheduled_by, datasources.refresh_scheduled_by.</li>
-          <li>&bull; Publish target: runs.publish_project_id points at projects.id.</li>
+          <li>&bull; Ownership and actor columns all point at users.id: projects.owner_id, flows.owner_id, connections.owner_id, datasources.owner_id, saved_views.owner_id, runs.launched_by, flow_versions.created_by, ai_models.updated_by, privacy_notice.updated_by, disabled_engines.disabled_by.</li>
+          <li>&bull; Scheduling actors: flows.run_scheduled_by, datasources.refresh_scheduled_by. Failure notices: flows.notify_connection_id points at connections.id.</li>
+          <li>&bull; Publish target: runs.publish_project_id points at projects.id. saved_views.project_id points at projects.id like every catalog object.</li>
           <li>&bull; Self-references: projects.parent_id and runs.parent_run_id.</li>
-          <li>&bull; All 26 foreign keys are nullable except the project_id columns, so deleting a user never cascades away history.</li>
+          <li>&bull; All 35 foreign keys are nullable except the project_id columns, so deleting a user never cascades away history.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot violet"></div>
+          <h3>Replicas and contracts</h3>
+        </div>
+        <ul>
+          <li>&bull; login_attempts, flow_presence and schema_state moved out of process memory so the gateway can run in several copies; the scheduler sweeps the expired rows.</li>
+          <li>&bull; schema_state holds a fingerprint of the applied schema: a start-up applies DDL only when it differs, behind an advisory lock.</li>
+          <li>&bull; data_contracts, data_contract_versions and data_contract_results carry no foreign key on purpose: SQLite does not enforce them in tests, and the rows are removed explicitly when the datasource goes.</li>
+          <li>&bull; data_contract_results.notify is the outbox of the alerts: pending rows are sent by the scheduler, claimed one at a time.</li>
         </ul>
       </div>
     </div>
