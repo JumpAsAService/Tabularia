@@ -529,7 +529,10 @@ Set `OPENLINEAGE__URL` (and `OPENLINEAGE__API_KEY` if the collector wants one) a
 every run that closes is reported with the official OpenLineage client: a flow run is
 a job named after its folder path, its output nodes are child jobs with a
 `ParentRunFacet`, a datasource refresh is a job of its own. Inputs are the datasources
-read (the parquet in the bucket, with schema and snapshot version), database tables
+read — named as in Tabularia under their folder path (`tabularia://<namespace>` +
+`/Folder/name`), with schema and snapshot version, the parquet they serve as a symlink
+and the Tabularia id in a `tabularia` facet
+([schema](docs/openlineage/TabulariaDatasetFacet.json)) — database tables
 (`postgres://host:5432` · `db.schema.table`, the standard naming), the tables a SQL
 query reads (extracted with sqlglot, the query itself in the `sql` facet) and
 SharePoint files; outputs are the datasources published, the tables written, the

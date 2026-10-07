@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JumpAsAService/Tabularia/blob/main/docs/openlineage/TabulariaDatasetFacet.json",
+  "title": "TabulariaDatasetFacet",
+  "description": "A dataset facet Tabularia attaches to its own datasources: how to get from the catalog back to the object in Tabularia. The dataset is named after the folder path and the datasource name (`tabularia://<namespace>` + `/Folder/Subfolder/name`); the parquet it currently serves is in the `symlinks` facet and in `dataSource.uri`.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/DatasetFacet" },
+    {
+      "type": "object",
+      "properties": {
+        "datasourceId": { "type": "integer", "description": "The id of the datasource in Tabularia: GET /datasources/{id}" },
+        "projectId": { "type": "integer", "description": "The id of the folder (project) that holds it" },
+        "kind": { "type": "string", "enum": ["flow", "database", "upload"], "description": "How the datasource is produced: by a flow, by a refresh from a database or SharePoint, by an upload" },
+        "folder": { "type": "string", "description": "The folder path, as shown in Tabularia (e.g. Sample/Flows)" }
+      },
+      "required": ["datasourceId", "projectId", "kind", "folder"],
+      "additionalProperties": true
+    }
+  ]
+}

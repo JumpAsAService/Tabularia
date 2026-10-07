@@ -11,8 +11,9 @@ exposes at `/system/info` and in the app's settings menu.
   Astro, or any collector) or `OPENLINEAGE__FILE` (JSON Lines) and every run
   that closes becomes a job — a flow run named after its folder path, its
   output nodes as child jobs with a parent facet, a datasource refresh on its
-  own — with what it read and wrote: datasources (schema and snapshot version),
-  database tables under the standard naming, the tables of a SQL query (the
+  own — with what it read and wrote: datasources (named as in Tabularia under
+  their folder path, with schema, snapshot version, the parquet as a symlink
+  and the Tabularia id in a facet), database tables under the standard naming, the tables of a SQL query (the
   query in the `sql` facet), SharePoint files, published datasources, tables
   written, S3/GCS objects. Events leave after the commit that closes the run,
   from a background thread, so a collector that is down never fails a run.

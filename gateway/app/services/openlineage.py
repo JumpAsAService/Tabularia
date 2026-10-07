@@ -9,14 +9,20 @@ libreria ufficiale, verso Marquez o qualunque altro collector compatibile:
 - l'esecuzione di un flusso = un job (nome = percorso della cartella + nome del
   flusso), i run dei suoi nodi Output = job figli con `ParentRunFacet`;
 - il refresh di una datasource da database o SharePoint = un job a sé;
-- input: la datasource letta (parquet nel bucket), la tabella del database, la
+- input: la datasource letta (col nome che ha in Tabularia, sotto il percorso
+  della cartella; il parquet nel bucket come symlink, l'id nel facet
+  `tabularia`), la tabella del database, la
   query SQL (tabelle estratte con sqlglot, testo nel facet `sql`), il file
   SharePoint; output: la datasource pubblicata, la tabella scritta, l'oggetto
   S3/GCS, la copia-specchio. Un'email non è un dataset e non compare.
 
-I nomi dei dataset seguono le convenzioni di naming di OpenLineage (namespace
+I dataset esterni seguono le convenzioni di naming di OpenLineage (namespace
 `postgres://host:porta`, nome `db.schema.tabella`; `s3://bucket` + percorso), così
 un catalogo che riceve lineage anche da altri strumenti incrocia gli stessi nodi.
+Le datasource di Tabularia invece si chiamano come nel catalogo di Tabularia
+(`tabularia://<namespace>` + `/Cartella/Sottocartella/nome`): è il nome che chi
+guarda il catalogo riconosce; il percorso fisico del parquet sta nel facet
+`symlinks` (e in `dataSource.uri`), l'id e la cartella nel facet `tabularia`.
 
 Gli eventi partono DOPO il commit che chiude il run, da un thread di servizio:
 un collector giù o lento non ferma mai un'esecuzione, e non tiene aperta la
@@ -194,27 +200,57 @@ def _schema_facet(columns_json: str | None):
     return schema_dataset.SchemaDatasetFacet(fields=campi) if campi else None
 
 
-def datasource_dataset(ds: Datasource, output: bool = False, rows: int | None = None):
-    """La datasource come dataset: nome STABILE (`/datasets/<id>`), lo snapshot
-    corrente nel facet `datasetVersion`."""
+def _tabularia_facet():
+    """Il facet `tabularia`: l'id della datasource, la cartella e il tipo — ciò che
+    serve per risalire dal catalogo all'oggetto di Tabularia (via API: /datasources/<id>)."""
+    import attr
+    from openlineage.client.facet_v2 import DatasetFacet
+
+    @attr.define
+    class TabulariaDatasetFacet(DatasetFacet):
+        datasourceId: int = attr.field()  # noqa: N815
+        projectId: int = attr.field()  # noqa: N815
+        kind: str = attr.field()
+        folder: str = attr.field()
+
+        @staticmethod
+        def _get_schema() -> str:
+            return f"{PRODUCER}/blob/main/docs/openlineage/TabulariaDatasetFacet.json"
+
+    return TabulariaDatasetFacet
+
+
+def datasource_name(session: Session, ds: Datasource) -> str:
+    percorso = _project_path(session, ds.project_id)
+    return f"/{percorso}/{ds.name}" if percorso else f"/{ds.name}"
+
+
+def datasource_dataset(session: Session, ds: Datasource, output: bool = False, rows: int | None = None):
+    """La datasource come dataset: il NOME che ha in Tabularia sotto il percorso
+    della cartella; il parquet dello snapshot corrente come symlink e nel facet
+    `datasetVersion`; l'id nel facet `tabularia`."""
     from openlineage.client.event_v2 import InputDataset, OutputDataset
     from openlineage.client.facet_v2 import (
         dataset_version_dataset, datasource_dataset, documentation_dataset, output_statistics_output_dataset, storage_dataset,
+        symlinks_dataset,
     )
 
-    ns = _storage_namespace(ds.bucket)
+    ns = f"tabularia://{namespace()}"
+    fisico = _storage_namespace(ds.bucket)
     facets: dict[str, Any] = {
-        "dataSource": datasource_dataset.DatasourceDatasetFacet(name=ds.name, uri=f"{ns}/{ds.key}"),
+        "dataSource": datasource_dataset.DatasourceDatasetFacet(name=ds.name, uri=f"{fisico}/{ds.key}"),
         "storage": storage_dataset.StorageDatasetFacet(storageLayer="object-storage", fileFormat="parquet"),
+        "tabularia": _tabularia_facet()(datasourceId=ds.id, projectId=ds.project_id, kind=ds.kind, folder=_project_path(session, ds.project_id)),
     }
     if ds.key:
         facets["datasetVersion"] = dataset_version_dataset.DatasetVersionDatasetFacet(datasetVersion=ds.key)
+        facets["symlinks"] = symlinks_dataset.SymlinksDatasetFacet(identifiers=[symlinks_dataset.Identifier(namespace=fisico, name="/" + ds.key, type="LOCATION")])
     schema = _schema_facet(ds.columns)
     if schema:
         facets["schema"] = schema
     if ds.description:
         facets["documentation"] = documentation_dataset.DocumentationDatasetFacet(description=ds.description)
-    nome = f"/datasets/{ds.id}"
+    nome = datasource_name(session, ds)
     if output:
         out_facets = {}
         if rows is not None:
@@ -312,7 +348,7 @@ def flow_inputs(session: Session, flow: Flow) -> list:
         d = n.get("data") or {}
         ds = session.get(Datasource, d["datasourceId"]) if d.get("datasourceId") is not None else None
         if ds is not None:
-            dataset = datasource_dataset(ds)
+            dataset = datasource_dataset(session, ds)
         elif d.get("parquetKey"):
             dataset = object_dataset("", d.get("bucket") or get_settings().engine.bucket, d["parquetKey"], "parquet")
         else:
@@ -332,8 +368,8 @@ def _find_datasource(session: Session, project_id: int | None, name: str) -> Dat
 
 def flow_outputs(session: Session, flow: Flow) -> list:
     """Ciò che il flusso scrive, letto dai nodi Output della definizione (senza
-    eseguirlo). Una datasource che il flusso creerà al primo run non ha ancora un
-    id: il suo dataset porta il nome di catalogo (`tabularia://…`) finché non esiste."""
+    eseguirlo). Una datasource che il flusso creerà al primo run non esiste ancora:
+    il suo dataset ha già il nome che avrà (cartella + nome), senza i facet."""
     from openlineage.client.event_v2 import OutputDataset
 
     outputs = []
@@ -345,7 +381,7 @@ def flow_outputs(session: Session, flow: Flow) -> list:
         if tipo == "datasource":
             ds = _find_datasource(session, d.get("projectId"), (d.get("name") or "").strip())
             if ds is not None:
-                outputs.append(datasource_dataset(ds, output=True))
+                outputs.append(datasource_dataset(session, ds, output=True))
             elif d.get("name"):
                 percorso = _project_path(session, d.get("projectId"))
                 outputs.append(OutputDataset(namespace=f"tabularia://{namespace()}", name=f"/{percorso}/{d['name'].strip()}".replace("//", "/")))
@@ -405,7 +441,7 @@ def _run_outputs(session: Session, run: Run) -> list:
     if run.datasource_id is not None and run.publish_name:
         ds = session.get(Datasource, run.datasource_id)
         if ds is not None:
-            outputs.append(datasource_dataset(ds, output=True, rows=run.rows_written))
+            outputs.append(datasource_dataset(session, ds, output=True, rows=run.rows_written))
     if run.destination:
         try:
             dest = json.loads(run.destination)
@@ -475,7 +511,7 @@ def run_events(session: Session, run: Run) -> list:
         inputs, job_facets = origin_inputs(session, ds)
         job_facets["jobType"] = job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType="REFRESH")
         job = Job(namespace=namespace(), name=job_name_for_refresh(session, ds), facets=job_facets)
-        outputs = [datasource_dataset(ds, output=True, rows=run.rows_written)] if run.status == "SUCCESS" else [datasource_dataset(ds, output=True)]
+        outputs = [datasource_dataset(session, ds, output=True, rows=run.rows_written if run.status == "SUCCESS" else None)]
         if run.parent_run_id is not None:
             padre = session.get(Run, run.parent_run_id)
             padre_flow = session.get(Flow, padre.flow_id) if padre is not None and padre.flow_id else None

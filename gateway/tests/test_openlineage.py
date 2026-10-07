@@ -32,6 +32,12 @@ class _Cattura(Transport):
         self.eventi.append(json.loads(Serde.to_json(event)))
 
 
+@pytest.fixture(autouse=True)
+def _namespace_fisso(monkeypatch):
+    # il contenitore di sviluppo può avere un namespace suo nell'ambiente: i nomi attesi qui no
+    monkeypatch.setattr(get_settings().openlineage, "namespace", "tabularia")
+
+
 @pytest.fixture
 def cattura(monkeypatch):
     t = _Cattura()
@@ -77,10 +83,15 @@ def test_i_nomi_dei_dataset_seguono_le_convenzioni_di_openlineage(session, scena
     assert ol.table_dataset_name(ch, "fatti") == "analytics.fatti"
     d = ol.table_dataset(scena.pg, "vendite.ordini")
     assert (d.namespace, d.name) == ("postgres://db.x.it:5432", "erp.vendite.ordini")
-    ds = ol.datasource_dataset(scena.ordini)
-    assert (ds.namespace, ds.name) == ("s3://" + scena.ordini.bucket, f"/datasets/{scena.ordini.id}")
+    ds = ol.datasource_dataset(session, scena.ordini)
+    assert (ds.namespace, ds.name) == ("tabularia://tabularia", "/Sample/Flows/orders")   # il nome di Tabularia, sotto la cartella
     assert ds.facets["datasetVersion"].datasetVersion == "datasets/41/v3.parquet"
+    assets = ds.facets["symlinks"].identifiers
+    assert (assets[0].namespace, assets[0].name, assets[0].type) == ("s3://" + scena.ordini.bucket, "/datasets/41/v3.parquet", "LOCATION")
+    assert (ds.facets["tabularia"].datasourceId, ds.facets["tabularia"].folder, ds.facets["tabularia"].kind) == (scena.ordini.id, "Sample/Flows", "database")
     assert [f.name for f in ds.facets["schema"].fields] == ["id", "canale"]
+    serializzato = ol.to_json([ol.job_events_for_flow(session, scena.flow)[0]])[0]["inputs"][0]["facets"]["tabularia"]
+    assert serializzato["datasourceId"] == scena.ordini.id and serializzato["_schemaURL"].endswith("TabulariaDatasetFacet.json")
     assert ol.job_name_for_flow(session, scena.flow) == "Sample/Flows/Margin by Category"
     assert ol.run_uuid(7) == ol.run_uuid(7) and ol.run_uuid(7) != ol.run_uuid(8)
 
@@ -99,9 +110,9 @@ def test_il_lineage_statico_del_flusso_legge_la_definizione(session, scena):
     (ev,) = ol.to_json(ol.job_events_for_flow(session, scena.flow))
     assert ev["job"] == {"namespace": "tabularia", "name": "Sample/Flows/Margin by Category", "facets": ev["job"]["facets"]}
     assert ev["job"]["facets"]["documentation"]["description"] == "Margine per categoria"
-    assert [i["name"] for i in ev["inputs"]] == [f"/datasets/{scena.ordini.id}", f"/datasets/{scena.clienti.id}"]   # senza doppioni
+    assert [i["name"] for i in ev["inputs"]] == ["/Sample/Flows/orders", "/Sample/Flows/customers"]   # senza doppioni
     assert [(o["namespace"], o["name"]) for o in ev["outputs"]] == [
-        ("tabularia://tabularia", "/Sample/Flows/Margin"),              # non esiste ancora: nome di catalogo
+        ("tabularia://tabularia", "/Sample/Flows/Margin"),              # non esiste ancora: ha già il nome che avrà
         ("postgres://db.x.it:5432", "erp.report.margini"),
     ]
     assert ev["outputs"][1]["facets"]["lifecycleStateChange"]["lifecycleStateChange"] == "OVERWRITE"
@@ -145,9 +156,10 @@ def test_un_run_di_output_racconta_cosa_ha_scritto_e_da_chi_dipende(session, sce
     assert fine["run"]["runId"] == ol.run_uuid(figlio.id)
     assert fine["run"]["facets"]["parent"]["run"]["runId"] == ol.run_uuid(orch.id)
     assert fine["run"]["facets"]["parent"]["job"]["name"] == "Sample/Flows/Margin by Category"
-    assert [i["name"] for i in fine["inputs"]] == [f"/datasets/{scena.ordini.id}", f"/datasets/{scena.clienti.id}"]
+    assert [i["name"] for i in fine["inputs"]] == ["/Sample/Flows/orders", "/Sample/Flows/customers"]
     (out,) = fine["outputs"]
-    assert out["name"] == f"/datasets/{pubblicata.id}" and out["outputFacets"]["outputStatistics"]["rowCount"] == 185
+    assert out["name"] == "/Sample/Flows/Margin" and out["outputFacets"]["outputStatistics"]["rowCount"] == 185
+    assert out["facets"]["tabularia"]["datasourceId"] == pubblicata.id
     assert start["outputs"] == []
 
     _, fallito = ol.to_json(ol.run_events(session, tabella))
@@ -156,7 +168,7 @@ def test_un_run_di_output_racconta_cosa_ha_scritto_e_da_chi_dipende(session, sce
 
     _, orch_fine = ol.to_json(ol.run_events(session, orch))
     assert orch_fine["job"]["name"] == "Sample/Flows/Margin by Category" and "parent" not in orch_fine["run"]["facets"]
-    assert sorted(o["name"] for o in orch_fine["outputs"]) == [f"/datasets/{pubblicata.id}", "erp.report.margini"]   # l'unione dei figli
+    assert sorted(o["name"] for o in orch_fine["outputs"]) == ["/Sample/Flows/Margin", "erp.report.margini"]   # l'unione dei figli
 
 
 def test_il_refresh_di_una_datasource_e_un_job_dalla_tabella_al_parquet(session, scena):
@@ -164,7 +176,7 @@ def test_il_refresh_di_una_datasource_e_un_job_dalla_tabella_al_parquet(session,
     _, fine = ol.to_json(ol.run_events(session, run))
     assert fine["job"]["name"] == "Sample/Flows/orders (refresh)" and fine["job"]["facets"]["jobType"]["jobType"] == "REFRESH"
     assert [(i["namespace"], i["name"]) for i in fine["inputs"]] == [("postgres://db.x.it:5432", "erp.vendite.ordini")]
-    assert fine["outputs"][0]["name"] == f"/datasets/{scena.ordini.id}" and fine["outputs"][0]["outputFacets"]["outputStatistics"]["rowCount"] == 12
+    assert fine["outputs"][0]["name"] == "/Sample/Flows/orders" and fine["outputs"][0]["outputFacets"]["outputStatistics"]["rowCount"] == 12
 
 
 # ── spento / acceso ──────────────────────────────────────────────────────────
