@@ -177,6 +177,7 @@ secrets:
   bigqueryCredentialsB64: ""
   # secret key of the AI provider (OpenAI-compatible endpoint), when ai.enabled
   aiSecretKey: ""
+  openlineageApiKey: ""   # bearer token for the OpenLineage collector, if it wants one
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Application settings (non-secret)
@@ -265,6 +266,13 @@ cache:
 # How long a flow waits for its refresh and output steps before giving up.
 # These mirror the application defaults; raise them for very long refreshes.
 # (The orchestrator PODS are configured under gateway.orchestrator below.)
+# OpenLineage (optional): report every run to an external catalog. Off when url
+# and file are empty. The API key, if any, goes in secrets.openlineageApiKey.
+openlineage:
+  url: ""              # e.g. http://marquez.lineage.svc:5000
+  namespace: tabularia
+  file: ""             # JSON Lines inside the pod, instead of or besides the URL
+
 orchestrator:
   refreshWaitSeconds: 600
   outputWaitSeconds: 600

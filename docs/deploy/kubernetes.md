@@ -196,6 +196,7 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `SECURITY__FERNET_KEY` *secret* | ✓ | ✓ | **same value everywhere**; encrypts database credentials; every process refuses to start without a valid key |
 | `APP__TIMEZONE` | ✓ | | timezone in which the **gateway** interprets cron schedules. Celery beat keeps its own clock (`CELERY__TIMEZONE`, UTC by default), but the gateway converts schedules to UTC before enqueuing, so leaving beat on UTC is correct |
 | `APP__ROLE` | ✓ | | what a gateway process does: `api` (answer requests), `orchestrator` (schedules, flow executions, clean-up) or `all` (both, the default). Set per workload, not in the shared ConfigMap |
+| `OPENLINEAGE__URL` | | | OpenLineage collector (Marquez, DataHub…); with `OPENLINEAGE__FILE` (JSON Lines) and `OPENLINEAGE__NAMESPACE`. Empty = off. The API key goes in the secret (`secrets.openlineageApiKey`) |
 | `APP__GATEWAY_THREADS` | ✓ | | threads per gateway process (default 40; 12 is what the chart and the measurements use: fewer serve more). The connection pool follows it |
 | `ORCHESTRATOR__DEAD_AFTER_SECONDS`, `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS`, `ORCHESTRATOR__MAX_CONCURRENT` | ✓ | | when a silent execution is given up for dead (60), when a queued one is no longer started (900), how many one orchestrator carries at once (20) |
 | `DB__HOST`, `DB__PORT`, `DB__USER`, `DB__PASSWORD` *secret*, `DB__NAME` | ✓ | | metadata Postgres |

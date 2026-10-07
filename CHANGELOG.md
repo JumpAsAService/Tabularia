@@ -5,6 +5,20 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **OpenLineage, optionally.** The lineage Tabularia already derives for its own
+  Lineage page can now be told to an external catalog in the OpenLineage
+  standard, with the official client: set `OPENLINEAGE__URL` (Marquez, DataHub,
+  Astro, or any collector) or `OPENLINEAGE__FILE` (JSON Lines) and every run
+  that closes becomes a job — a flow run named after its folder path, its
+  output nodes as child jobs with a parent facet, a datasource refresh on its
+  own — with what it read and wrote: datasources (schema and snapshot version),
+  database tables under the standard naming, the tables of a SQL query (the
+  query in the `sql` facet), SharePoint files, published datasources, tables
+  written, S3/GCS objects. Events leave after the commit that closes the run,
+  from a background thread, so a collector that is down never fails a run.
+  `GET /flows/{id}/openlineage` exports a flow's dependencies as a static job
+  event without running it, and `POST` sends it to the collector. Verified
+  against a local Marquez.
 - **Data contracts: what a datasource promises to whoever uses it.** A flow
   that publishes garbage on time is worse than one that fails: the failure is in
   the run history, the garbage is in everybody's dashboards. A datasource can now

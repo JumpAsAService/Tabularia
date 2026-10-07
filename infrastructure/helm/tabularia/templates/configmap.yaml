@@ -70,6 +70,9 @@ data:
   ORCHESTRATOR__MAX_CONCURRENT: {{ .Values.orchestrator.maxConcurrent | quote }}
   ORCHESTRATOR__DEAD_AFTER_SECONDS: {{ .Values.orchestrator.deadAfterSeconds | quote }}
   ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS: {{ .Values.orchestrator.queueTimeoutSeconds | quote }}
+  OPENLINEAGE__URL: {{ .Values.openlineage.url | quote }}
+  OPENLINEAGE__NAMESPACE: {{ .Values.openlineage.namespace | quote }}
+  OPENLINEAGE__FILE: {{ .Values.openlineage.file | quote }}
 
 {{- if .Values.oidc.enabled }}
   # Single sign-on. Setting OIDC__ISSUER is what switches SSO on; local login

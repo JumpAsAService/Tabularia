@@ -416,6 +416,18 @@ class OrchestratorSettings(BaseModel):
     dead_after_seconds: float = Field(default=60.0, gt=0)
 
 
+class OpenLineageSettings(BaseModel):
+    """Lineage verso un catalogo esterno nello standard OpenLineage (Marquez,
+    DataHub, Astro…). Spento se non c'è né `url` né `file`. Vale anche la
+    configurazione standard della libreria (OPENLINEAGE_URL / OPENLINEAGE_CONFIG)."""
+    url: str = ""              # endpoint HTTP del collector, es. http://marquez:5000
+    endpoint: str = "api/v1/lineage"
+    api_key: str = ""          # Bearer token, se il collector lo chiede
+    file: str = ""             # in alternativa o in aggiunta: JSON Lines su disco
+    namespace: str = "tabularia"   # il namespace dei job di questa installazione
+    timeout_seconds: float = Field(default=10.0, gt=0)
+
+
 class Settings(BaseSettings):
     """
     Configurazione del gateway. Priorità: init > env > default.
@@ -436,6 +448,7 @@ class Settings(BaseSettings):
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     audit: AuditSettings = Field(default_factory=AuditSettings)
+    openlineage: OpenLineageSettings = Field(default_factory=OpenLineageSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

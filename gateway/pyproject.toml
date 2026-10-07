@@ -19,6 +19,8 @@ dependencies = [
     "cryptography>=44.0.0",
     "croniter>=6.2.4",
     "pydantic-ai-slim[openai]>=2.40.0",
+    "openlineage-python>=1.53.0",
+    "sqlglot>=25.0.0",
 ]
 
 [dependency-groups]

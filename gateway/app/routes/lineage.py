@@ -5,14 +5,17 @@ connessioni e destinazioni esterne. Derivato on-demand e filtrato per RBAC
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.db.session import get_session
 from app.deps.auth import get_current_user
-from app.models import User
+from app.deps.permissions import ensure_can
+from app.models import Flow, User
+from app.models.permission import Capability
 from app.services import lineage as lineage_service
+from app.services import openlineage
 from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
@@ -48,6 +51,35 @@ def _serialize(g: lineage_service._Graph, center: Optional[str]) -> LineageGraph
         edges=[LineageEdge(**e) for e in g.edges],
         center=center,
     )
+
+
+@router.get("/flows/{flow_id}/openlineage")
+def flow_openlineage(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[dict]:
+    """Il lineage del flusso nello standard OpenLineage: un `JobEvent` con ciò che
+    legge e scrive, ricostruito dalla definizione (senza eseguire). Da scaricare
+    come file o da dare a un collector."""
+    flow = session.get(Flow, flow_id)
+    if flow is None:
+        raise HTTPException(status_code=404, detail="Flusso non trovato")
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    return openlineage.to_json(openlineage.job_events_for_flow(session, flow))
+
+
+@router.post("/flows/{flow_id}/openlineage", status_code=status.HTTP_202_ACCEPTED)
+def emit_flow_openlineage(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> dict:
+    """Manda al collector configurato il lineage statico del flusso (per popolare
+    un catalogo con i flussi che esistono già, senza aspettare che girino)."""
+    flow = session.get(Flow, flow_id)
+    if flow is None:
+        raise HTTPException(status_code=404, detail="Flusso non trovato")
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    if not openlineage.enabled():
+        raise HTTPException(status_code=409, detail="OpenLineage non è configurato (OPENLINEAGE__URL o OPENLINEAGE__FILE)")
+    try:
+        inviati = openlineage.emit_flow(session, flow)
+    except Exception as e:  # noqa: BLE001 — chi lo chiede a mano vuole sapere perché non è andata
+        raise HTTPException(status_code=502, detail=f"Il collector OpenLineage ha rifiutato l'invio: {str(e)[:300]}")
+    return {"events": inviati}
 
 
 @router.get("/lineage", response_model=LineageGraph)

@@ -31,6 +31,7 @@ from app.models.run import TERMINAL_STATES
 from app.routes.connections import allowed_email_domains, engine_connection_payload
 from app.services import audit
 from app.services import contracts as contract_service
+from app.services import openlineage
 from app.schemas.models import (
     ActivityBucket,
     Page,
@@ -836,6 +837,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
                 _record_contract(session, run, contract_report, "publish")
             session.commit()  # claim + effetto: atomici
             session.refresh(run)
+            openlineage.run_closed(session, run)  # dopo il commit: racconta un fatto già scritto
             return run
         except Exception:
             session.rollback()  # il run torna non terminale

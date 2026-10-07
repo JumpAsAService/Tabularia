@@ -109,7 +109,10 @@ engines, from an in-process library to a serverless warehouse.
   "who entered, who ran what, which data was downloaded" — with a 24-hour access chart.
 - **See how everything connects.** A dedicated **Lineage** view maps datasources and
   flows across the whole workspace: provenance, impact/blast-radius, staleness and
-  broken references at a glance.
+  broken references at a glance. Optionally the same lineage is **told to an external
+  catalog in the [OpenLineage](https://openlineage.io) standard** (Marquez, DataHub,
+  Astro…): every run becomes a job with the tables, queries, files and datasources
+  it read and wrote, and a flow's dependencies can be exported without running it.
 - **Multi-user from day one.** JWT login or SSO (Keycloak, Entra ID, Auth0, Okta),
   users & groups, nested projects with inherited view / edit / manage / connect
   permissions. Everyone works in the same place, safely.
@@ -519,6 +522,26 @@ worker capacity. Schedules fire from the **orchestrator** role: a due slot is ta
 a compare-and-swap on the time the process saw, so with several orchestrators exactly
 one fires it; a flow whose last run failed on schedule sends an email, once, to the
 addresses set next to the schedule.
+
+## OpenLineage (optional)
+
+Set `OPENLINEAGE__URL` (and `OPENLINEAGE__API_KEY` if the collector wants one) and
+every run that closes is reported with the official OpenLineage client: a flow run is
+a job named after its folder path, its output nodes are child jobs with a
+`ParentRunFacet`, a datasource refresh is a job of its own. Inputs are the datasources
+read (the parquet in the bucket, with schema and snapshot version), database tables
+(`postgres://host:5432` · `db.schema.table`, the standard naming), the tables a SQL
+query reads (extracted with sqlglot, the query itself in the `sql` facet) and
+SharePoint files; outputs are the datasources published, the tables written, the
+S3/GCS objects and mirror copies. Emails are not datasets. Events leave after the
+commit that closes the run, from a background thread: a collector that is down never
+fails a run. `OPENLINEAGE__FILE` writes the same events as JSON Lines instead of, or
+besides, the HTTP collector; the library's own `OPENLINEAGE_URL` / `OPENLINEAGE_CONFIG`
+work too, for Kafka and the other transports.
+
+`GET /flows/{id}/openlineage` returns the flow's dependencies as a static `JobEvent`
+built from its definition — to download, or to `POST` to the collector so that a
+catalog knows the flows before they ever run.
 
 ## Monitoring
 

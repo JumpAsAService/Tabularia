@@ -326,8 +326,10 @@ async def _finalize_orch_run(run_id: int, status: str, error: str | None = None,
         run = session.get(Run, run_id)
         # l'avviso parte DOPO il commit: si annuncia un fatto già scritto, e non
         # tiene aperta la transazione per il tempo di una spedizione SMTP
+        from app.services import openlineage
         from app.services.notifier import notify_failure
 
+        openlineage.run_closed(session, run)
         await notify_failure(session, run)
 
 
