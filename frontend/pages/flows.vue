@@ -177,6 +177,25 @@ async function deleteFlow(f: FlowSummary) {
 
 const exporting = ref<number | null>(null)
 const exportMenuFlow = ref<FlowSummary | null>(null)
+async function exportOpenLineage(f: FlowSummary) {
+  exportMenuFlow.value = null
+  exporting.value = f.id
+  try {
+    const eventi = await api.exportFlowOpenLineage(f.id)
+    const blob = new Blob([JSON.stringify(eventi, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${f.name.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '') || 'flow'}_openlineage.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    exporting.value = null
+  }
+}
+
 async function exportDbt(f: FlowSummary, target: 'duckdb' | 'native') {
   exportMenuFlow.value = null
   exporting.value = f.id
@@ -374,6 +393,9 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
           </button>
           <button class="export-opt" @click="exportDbt(exportMenuFlow, 'native')">
             <strong>{{ $t('flows.exportDbtNativeLabel') }}</strong><span>{{ $t('flows.exportDbtNative') }}</span>
+          </button>
+          <button class="export-opt" @click="exportOpenLineage(exportMenuFlow)">
+            <strong>OpenLineage</strong><span>{{ $t('flows.exportOpenLineage') }}</span>
           </button>
           <button class="export-cancel" @click="exportMenuFlow = null">{{ $t('flows.exportDbtCancel') }}</button>
         </div>

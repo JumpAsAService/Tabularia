@@ -61,6 +61,16 @@ def enabled() -> bool:
     return bool(s.url or s.file or os.environ.get("OPENLINEAGE_URL") or os.environ.get("OPENLINEAGE_CONFIG"))
 
 
+def describe() -> str:
+    """Una riga per il log di avvio: dove vanno gli eventi, o che non vanno."""
+    s = get_settings().openlineage
+    if not enabled():
+        return "OpenLineage spento (nessun OPENLINEAGE__URL né OPENLINEAGE__FILE)"
+    dove = [x for x in (f"HTTP {s.url} ({s.endpoint})" if s.url else "", f"file {s.file}" if s.file else "",
+                        "configurazione della libreria (OPENLINEAGE_URL/OPENLINEAGE_CONFIG)" if not (s.url or s.file) else "") if x]
+    return f"OpenLineage acceso: eventi verso {' + '.join(dove)}, namespace «{s.namespace}»"
+
+
 def set_client(client: Any) -> None:
     """Per i test: un client con un trasporto che cattura gli eventi."""
     global _client
@@ -244,7 +254,10 @@ def datasource_dataset(session: Session, ds: Datasource, output: bool = False, r
     }
     if ds.key:
         facets["datasetVersion"] = dataset_version_dataset.DatasetVersionDatasetFacet(datasetVersion=ds.key)
-        facets["symlinks"] = symlinks_dataset.SymlinksDatasetFacet(identifiers=[symlinks_dataset.Identifier(namespace=fisico, name="/" + ds.key, type="LOCATION")])
+    # il symlink è la CARTELLA della datasource nel bucket, non il file dello snapshot:
+    # Marquez registra ogni symlink come un alias del dataset, e un alias nuovo a ogni
+    # run (un parquet nuovo per snapshot) farebbe crescere il catalogo a ogni esecuzione
+    facets["symlinks"] = symlinks_dataset.SymlinksDatasetFacet(identifiers=[symlinks_dataset.Identifier(namespace=fisico, name=f"/datasets/{ds.id}", type="LOCATION")])
     schema = _schema_facet(ds.columns)
     if schema:
         facets["schema"] = schema
@@ -482,13 +495,59 @@ def _senza_statistiche(outputs: list) -> list:
     return [OutputDataset(namespace=o.namespace, name=o.name, facets=o.facets, outputFacets={}) for o in outputs]
 
 
+def _parent_facet(session: Session, run: Run):
+    """Il `ParentRunFacet` SOLO per i nodi Output del flusso stesso, che il
+    catalogo mette sotto il job del flusso («Flusso.uscita»).
+
+    Marquez rinomina ogni figlio in «<padre>.<figlio>»: un refresh di datasource
+    o l'uscita di un sotto-flusso (`Run flow`), che portano il parent_run_id della
+    radice, finirebbero in un job diverso da quello che hanno quando girano da
+    soli. Per loro il legame con l'orchestrazione sta nel facet `tabularia` del
+    run (`parentRunId`), non nella gerarchia dei job."""
+    from openlineage.client.facet_v2 import parent_run
+
+    if run.parent_run_id is None or run.kind != "flow":
+        return None
+    padre = session.get(Run, run.parent_run_id)
+    if padre is None or padre.flow_id != run.flow_id:
+        return None
+    flow = session.get(Flow, padre.flow_id)
+    return parent_run.ParentRunFacet(
+        run=parent_run.Run(runId=run_uuid(run.parent_run_id)),
+        job=parent_run.Job(namespace=namespace(), name=job_name_for_flow(session, flow)),
+    )
+
+
+def _tabularia_run_facet(run: Run):
+    """Il facet `tabularia` del run: l'id del run in Tabularia, chi l'ha lanciato
+    (manuale/schedulato), il motore e l'orchestrazione che lo contiene — anche
+    quando il job NON è un figlio nella gerarchia del catalogo."""
+    import attr
+    from openlineage.client.facet_v2 import RunFacet
+
+    @attr.define
+    class TabulariaRunFacet(RunFacet):
+        runId: int = attr.field()  # noqa: N815
+        kind: str = attr.field()
+        trigger: str = attr.field()
+        engine: str | None = attr.field(default=None)
+        parentRunId: str | None = attr.field(default=None)  # noqa: N815
+
+        @staticmethod
+        def _get_schema() -> str:
+            return f"{PRODUCER}/blob/main/docs/openlineage/TabulariaRunFacet.json"
+
+    return TabulariaRunFacet(runId=run.id, kind=run.kind, trigger=run.trigger_type or "manual", engine=run.engine or None,
+                             parentRunId=run_uuid(run.parent_run_id) if run.parent_run_id is not None else None)
+
+
 def run_events(session: Session, run: Run) -> list:
     """START e COMPLETE/FAIL del run, costruiti quando il run si è CHIUSO: i due
     eventi arrivano insieme, con i tempi veri, e Marquez ne ricava la durata."""
     from openlineage.client.event_v2 import Job, Run as OlRun, RunEvent, RunState
     from openlineage.client.facet_v2 import error_message_run, job_type_job, parent_run
 
-    run_facets: dict[str, Any] = {}
+    run_facets: dict[str, Any] = {"tabularia": _tabularia_run_facet(run)}
     if run.kind == "orchestration":
         flow = session.get(Flow, run.flow_id) if run.flow_id else None
         if flow is None:
@@ -506,11 +565,9 @@ def run_events(session: Session, run: Run) -> list:
         # un figlio col nome del padre, e un run lanciato dall'editor (senza padre)
         # finirebbe altrimenti in un job diverso dallo stesso Output orchestrato
         job = Job(namespace=namespace(), name=f"{job_name_for_flow(session, flow)}.{_output_label(run)}", facets=extra)
-        if run.parent_run_id is not None:
-            run_facets["parent"] = parent_run.ParentRunFacet(
-                run=parent_run.Run(runId=run_uuid(run.parent_run_id)),
-                job=parent_run.Job(namespace=namespace(), name=job_name_for_flow(session, flow)),
-            )
+        padre = _parent_facet(session, run)
+        if padre is not None:
+            run_facets["parent"] = padre
         inputs = flow_inputs(session, flow)
         outputs = _run_outputs(session, run)
     elif run.kind == "ingest":
@@ -521,14 +578,9 @@ def run_events(session: Session, run: Run) -> list:
         job_facets["jobType"] = job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType="REFRESH")
         job = Job(namespace=namespace(), name=job_name_for_refresh(session, ds), facets=job_facets)
         outputs = [datasource_dataset(session, ds, output=True, rows=run.rows_written if run.status == "SUCCESS" else None)]
-        if run.parent_run_id is not None:
-            padre = session.get(Run, run.parent_run_id)
-            padre_flow = session.get(Flow, padre.flow_id) if padre is not None and padre.flow_id else None
-            if padre_flow is not None:
-                run_facets["parent"] = parent_run.ParentRunFacet(
-                    run=parent_run.Run(runId=run_uuid(run.parent_run_id)),
-                    job=parent_run.Job(namespace=namespace(), name=job_name_for_flow(session, padre_flow)),
-                )
+        padre = _parent_facet(session, run)
+        if padre is not None:
+            run_facets["parent"] = padre
     else:
         return []
 

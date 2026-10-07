@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JumpAsAService/Tabularia/blob/main/docs/openlineage/TabulariaRunFacet.json",
+  "title": "TabulariaRunFacet",
+  "description": "A run facet Tabularia attaches to every run it reports: the run in Tabularia and the orchestration that contains it, also when the job is not a child in the catalog's job hierarchy (a datasource refresh or a nested flow's output triggered by an orchestration).",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunFacet" },
+    {
+      "type": "object",
+      "properties": {
+        "runId": { "type": "integer", "description": "The id of the run in Tabularia: GET /runs/{id}" },
+        "kind": { "type": "string", "enum": ["orchestration", "flow", "ingest"], "description": "orchestration = a flow run; flow = one output node of it; ingest = a datasource refresh" },
+        "trigger": { "type": "string", "description": "manual or schedule" },
+        "engine": { "type": ["string", "null"], "description": "The engine the run executed on, when known" },
+        "parentRunId": { "type": ["string", "null"], "description": "The OpenLineage runId of the orchestration this run belongs to, if any" }
+      },
+      "required": ["runId", "kind", "trigger"],
+      "additionalProperties": true
+    }
+  ]
+}

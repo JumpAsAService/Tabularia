@@ -473,6 +473,7 @@ export default {
     "exportDbtNativeLabel": "Warehouse nativo",
     "exportDbtNative": "Gira nel DB di origine (SQL tradotto)",
     "exportDbtCancel": "Annulla",
+    "exportOpenLineage": "Le dipendenze del flusso come eventi OpenLineage (JSON): cosa legge e cosa scrive, per un catalogo, senza eseguirlo",
     "preferredTag": "preferita",
     "promoteButton": "Promuovi",
     "promoteSuccess": "Versione v{version} promossa",

@@ -179,6 +179,10 @@ export function useApi() {
     async exportFlowDbt(flowId: number, target: 'duckdb' | 'native' = 'duckdb'): Promise<Blob> {
       return await apiFetch<Blob>(`/flows/${flowId}/export/dbt?target=${target}`, { responseType: 'blob' })
     },
+    /** Le dipendenze del flusso come eventi OpenLineage (JSON), ricostruite dalla definizione. */
+    async exportFlowOpenLineage(flowId: number): Promise<unknown[]> {
+      return await apiFetch<unknown[]>(`/flows/${flowId}/openlineage`)
+    },
   }
 }
 

@@ -74,6 +74,9 @@ async def lifespan(app: FastAPI):
         seed_admin()
         backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
     stop = asyncio.Event()
+    from app.services import openlineage
+
+    logger.info(openlineage.describe())
     fondo = avvia_lavoro_di_fondo(stop)
     try:
         yield
@@ -91,6 +94,8 @@ async def lifespan(app: FastAPI):
 settings = get_settings()
 
 from app.routes import performance as performance_routes
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=f"{settings.app.name} — Gateway",

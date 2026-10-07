@@ -543,8 +543,10 @@ besides, the HTTP collector; the library's own `OPENLINEAGE_URL` / `OPENLINEAGE_
 work too, for Kafka and the other transports.
 
 `GET /flows/{id}/openlineage` returns the flow's dependencies as a static `JobEvent`
-built from its definition — to download, or to `POST` to the collector so that a
-catalog knows the flows before they ever run.
+built from its definition — to download (also from the Flows page, under *Export*), or
+to `POST` to the collector so that a catalog knows the flows before they ever run.
+The full mapping, the dataset naming and the collector set-ups are in
+[docs/openlineage.md](docs/openlineage.md).
 
 ## Monitoring
 
