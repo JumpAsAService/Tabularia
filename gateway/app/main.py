@@ -88,6 +88,9 @@ async def lifespan(app: FastAPI):
                 await task
             except asyncio.CancelledError:
                 pass
+        # gli eventi di lineage ancora in coda: al più 5 s, poi via (un rolling
+        # update non deve aspettare un collector lento)
+        await asyncio.to_thread(openlineage.wait_idle, 5.0)
         await close_engine_client()
 
 

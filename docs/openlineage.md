@@ -19,12 +19,13 @@ fails a run.
 | `OPENLINEAGE__API_KEY` | Bearer token, if the collector wants one. |
 | `OPENLINEAGE__FILE` | Write the same events as JSON Lines to this path, instead of or besides the URL (air-gapped setups, custom pipelines). |
 | `OPENLINEAGE__NAMESPACE` | The namespace of this installation's jobs, default `tabularia`. One per installation (`tabularia-prod`, `tabularia-staging`…). |
-| `OPENLINEAGE__TIMEOUT_SECONDS` | HTTP timeout per event, default 10. |
+| `OPENLINEAGE__TIMEOUT_SECONDS` | HTTP timeout per attempt, default 10; an event is tried three times at most. |
 
 The library's own configuration works too: `OPENLINEAGE_URL`, `OPENLINEAGE_API_KEY`,
-or `OPENLINEAGE_CONFIG=/path/openlineage.yml` for Kafka, composite or custom
-transports — see the
-[client documentation](https://openlineage.io/docs/client/python). Set the variables
+or `OPENLINEAGE_CONFIG=/path/openlineage.yml` for composite or custom transports —
+see the
+[client documentation](https://openlineage.io/docs/client/python). The Kafka
+transport needs the `confluent-kafka` package, which the image does not ship. Set the variables
 on every gateway and orchestrator process (they are the ones that close runs); the
 Helm chart takes them from `openlineage.*` and `secrets.openlineageApiKey`. The
 gateway logs one line at start-up saying where events go.
@@ -101,13 +102,38 @@ its first run already has the name it will have.
 to populate a catalog with the flows that exist before any of them runs, or after
 changing a flow's definition. Both need VIEW on the flow's folder.
 
+## What leaves the installation
+
+Only metadata: folder and flow names, flow descriptions, datasource names and column
+names with their types and descriptions, table names, the text of the SQL query of a
+query-based datasource, bucket paths, row counts, run times and the error message of
+a failed run. No rows of data, no user names or e-mail addresses, no credentials
+(connection passwords never reach the gateway's events). Mind that a query text or
+an error message can quote a literal value: if that matters, keep the collector inside
+the same trust boundary as Tabularia.
+
 ## Guarantees and limits
 
 - **Never in the way.** Events are built in the transaction that closes the run,
-  from the data already written, and sent afterwards by a worker thread with the
-  library's retries. If the collector refuses them, the run is still closed and the
-  error is in the gateway log. An event is not retried later: lineage is a chronicle,
-  not a contract; the static export can rebuild the dependencies at any time.
+  from the data already written, and handed to a worker thread through a bounded
+  queue (500 closed runs per process, at most ~30 MB): closing a run never waits for
+  the collector. The
+  thread tries each event three times at most, `OPENLINEAGE__TIMEOUT_SECONDS` each;
+  if the collector refuses or does not answer, the run is still closed and a warning
+  with the run's id is in the log of the process that closed it. When the queue is full — a collector down for long — new
+  events are dropped and the log says so once a minute. A process that stops (a
+  rolling update) waits up to 5 seconds for its queue to drain, no more. An event is
+  not retried later: lineage is a chronicle, not a contract; the static export can
+  rebuild the dependencies at any time.
+- **Cost.** Building a run's events in the closing transaction takes 5–15 ms of
+  Python and 6–17 reads (a datasource of 150 columns, a flow with three sources);
+  serialising an event takes 3 ms in the worker thread; a full queue of 500 wide runs
+  holds about 28 MB. Under a storm of runs (eleven flows in a loop, about two runs
+  closing per second) the API processes serve the same requests per second with
+  lineage on or off, whether the collector is fast or answers in 2 seconds, and the
+  processes that emit spend about 5 points of a core more. A collector running on
+  the same machine is a different matter: Marquez takes about one core while it
+  ingests, and that is what slows everything else down.
 - **Replicas.** Each gateway and orchestrator process sends its own events; the run
   id is a UUID derived from the run's id in Tabularia, the same from any process.
 - **Dataset level.** Column-level lineage is not emitted yet.

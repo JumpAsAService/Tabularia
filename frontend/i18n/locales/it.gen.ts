@@ -468,7 +468,7 @@ export default {
     "noFlows": "Nessun flusso: creane uno da una cartella o con Nuovo flusso.",
     "noResultsSearch": "Nessun flusso per la ricerca.",
     "openEditorTitle": "Apri nell'editor",
-    "exportDbtTitle": "Esporta come progetto dbt",
+    "exportDbtTitle": "Esporta il flusso",
     "exportDbtFederated": "Federato — legge i DB di origine live",
     "exportDbtNativeLabel": "Warehouse nativo",
     "exportDbtNative": "Gira nel DB di origine (SQL tradotto)",

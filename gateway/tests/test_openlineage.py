@@ -306,3 +306,44 @@ def test_il_collector_di_datahub_vuole_un_altro_endpoint(monkeypatch):
     assert c.transport.config.endpoint == "openapi/openlineage/api/v1/lineage" and c.transport.config.url == "https://datahub.acme.it"
     ol.set_client(None)
     assert "datahub.acme.it" in ol.describe() and "openapi/openlineage" in ol.describe()
+
+
+# ── la coda: mai in mezzo ai piedi ───────────────────────────────────────────
+def test_un_collector_che_non_risponde_non_rallenta_la_chiusura_e_la_coda_non_cresce_all_infinito(session, scena, monkeypatch):
+    import threading, time
+
+    blocco = threading.Event()
+
+    class _Lento(Transport):
+        kind = "lento"
+
+        def emit(self, event):
+            blocco.wait(5)      # un collector che non risponde (per il tempo del test)
+
+    ol.set_client(OpenLineageClient(transport=_Lento()))
+    monkeypatch.setattr(get_settings().openlineage, "url", "http://collector:5000")
+    monkeypatch.setattr(ol, "QUEUE_MAX", 3)
+    monkeypatch.setattr(ol, "_coda", None)
+    monkeypatch.setattr(ol, "_worker", None)
+    monkeypatch.setattr(ol, "_scartati", 0)
+    run = make_run(session, kind="ingest", datasource_id=scena.ordini.id, status="SUCCESS", task_id="t12")
+    t0 = time.monotonic()
+    for _ in range(6):
+        ol.run_closed(session, run)
+    assert time.monotonic() - t0 < 1.0            # chi chiude il run non aspetta mai il collector
+    assert ol.pending() <= 3 and ol._scartati >= 2  # oltre il tetto si scarta, con un avviso
+    blocco.set()
+    ol.wait_idle(timeout=3)
+    ol.set_client(None)
+
+
+def test_la_configurazione_standard_della_libreria_vale_anche_senza_le_nostre_variabili(tmp_path, monkeypatch):
+    ol.set_client(None)
+    monkeypatch.setattr(get_settings().openlineage, "url", "")
+    monkeypatch.setattr(get_settings().openlineage, "file", "")
+    cfg = tmp_path / "openlineage.yml"
+    cfg.write_text("transport:\n  type: console\n")
+    monkeypatch.setenv("OPENLINEAGE_CONFIG", str(cfg))
+    assert ol.enabled() is True and "libreria" in ol.describe()
+    assert ol._get_client().transport.kind == "console"
+    ol.set_client(None)

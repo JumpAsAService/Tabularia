@@ -404,7 +404,7 @@ export default {
     "noFlows": "Keine Flows: Erstellen Sie einen aus einem Ordner oder mit Neuer Flow.",
     "noResultsSearch": "Keine Flows für diese Suche gefunden.",
     "openEditorTitle": "Im Editor öffnen",
-    "exportDbtTitle": "Als dbt-Projekt exportieren",
+    "exportDbtTitle": "Flow exportieren",
     "exportDbtFederated": "Föderiert — liest die Quell-DBs live",
     "exportDbtNativeLabel": "Natives Warehouse",
     "exportDbtNative": "Läuft in der Quell-DB (übersetztes SQL)",

@@ -24,20 +24,23 @@ Le datasource di Tabularia invece si chiamano come nel catalogo di Tabularia
 guarda il catalogo riconosce; il percorso fisico del parquet sta nel facet
 `symlinks` (e in `dataSource.uri`), l'id e la cartella nel facet `tabularia`.
 
-Gli eventi partono DOPO il commit che chiude il run, da un thread di servizio:
-un collector giù o lento non ferma mai un'esecuzione, e non tiene aperta la
-transazione. Un evento perso (il processo muore prima di mandarlo) non si
-ritenta: il lineage è una cronaca, non un contratto; l'export statico
-(`job_events_for_flow`) ricostruisce comunque le dipendenze dalla definizione.
+Gli eventi partono DOPO il commit che chiude il run, da un thread di servizio
+con una coda LIMITATA: un collector giù o lento non ferma mai un'esecuzione, non
+tiene aperta la transazione e non riempie la memoria (a coda piena l'evento si
+scarta, con un avviso nel log). Un evento perso non si ritenta: il lineage è
+una cronaca, non un contratto; l'export statico (`job_events_for_flow`)
+ricostruisce comunque le dipendenze dalla definizione.
 """
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
+import queue
 import threading
+import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
@@ -50,9 +53,14 @@ from app.services import permissions as perm_service
 logger = logging.getLogger(__name__)
 
 PRODUCER = "https://github.com/JumpAsAService/Tabularia"
+QUEUE_MAX = 500                # run chiusi in attesa di spedizione, per processo: oltre, si scarta
+                               # (al banco: 57 KB a run con datasource da 150 colonne → al più ~28 MB)
 _LOCK = threading.Lock()
 _client: Any = None            # OpenLineageClient, costruito una volta (o iniettato dai test)
-_worker: ThreadPoolExecutor | None = None
+_coda: "queue.Queue[tuple[int, list] | None] | None" = None
+_worker: threading.Thread | None = None
+_scartati = 0                  # eventi scartati a coda piena (per il log e i test)
+_ultimo_avviso = 0.0
 
 
 # ── accensione ───────────────────────────────────────────────────────────────
@@ -89,7 +97,10 @@ def _get_client() -> Any:
         s = get_settings().openlineage
         configurazioni = []
         if s.url:
-            http = {"type": "http", "url": s.url, "endpoint": s.endpoint, "timeout": s.timeout_seconds}
+            # pochi tentativi: un collector morto non deve tenere il thread per minuti
+            # su ogni evento (la coda è limitata, ma intanto si accumula)
+            http = {"type": "http", "url": s.url, "endpoint": s.endpoint, "timeout": s.timeout_seconds,
+                    "retry": {"total": 2, "connect": 2, "read": 2, "backoff_factor": 0.3, "status_forcelist": [500, 502, 503, 504], "allowed_methods": ["HEAD", "POST"]}}
             if s.api_key:
                 http["auth"] = {"type": "api_key", "apiKey": s.api_key}
             configurazioni.append(http)
@@ -105,12 +116,42 @@ def _get_client() -> Any:
         return _client
 
 
-def _pool() -> ThreadPoolExecutor:
-    global _worker
+def _lavoro(coda: "queue.Queue") -> None:
+    """Il thread di spedizione: prende dalla SUA coda e manda, finché non riceve None."""
+    while True:
+        voce = coda.get()
+        if voce is None:
+            coda.task_done()
+            return
+        run_id, eventi = voce
+        try:
+            _emit(eventi)
+            logger.info("openlineage: %d eventi per il run %s", len(eventi), run_id)
+        except Exception as e:  # noqa: BLE001 — il run è già chiuso: il lineage non deve pesare su niente
+            logger.warning("openlineage: eventi del run %s non inviati: %s", run_id, str(e)[:300])
+        finally:
+            coda.task_done()
+
+
+def _accoda(run_id: int, eventi: list) -> bool:
+    """Mette gli eventi in coda senza mai aspettare. A coda piena li scarta."""
+    global _coda, _worker, _scartati, _ultimo_avviso
     with _LOCK:
-        if _worker is None:
-            _worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="openlineage")
-        return _worker
+        if _coda is None:
+            _coda = queue.Queue(maxsize=QUEUE_MAX)
+        if _worker is None or not _worker.is_alive():
+            _worker = threading.Thread(target=_lavoro, args=(_coda,), name="openlineage", daemon=True)
+            _worker.start()
+    try:
+        _coda.put_nowait((run_id, eventi))
+        return True
+    except queue.Full:
+        _scartati += 1
+        if time.monotonic() - _ultimo_avviso > 60:
+            _ultimo_avviso = time.monotonic()
+            logger.warning("openlineage: coda piena (%d run in attesa), scarto gli eventi del run %s (%d scartati finora): il collector non sta rispondendo",
+                           QUEUE_MAX, run_id, _scartati)
+        return False
 
 
 # ── nomi ─────────────────────────────────────────────────────────────────────
@@ -176,25 +217,26 @@ def table_dataset_name(conn: Connection, table: str) -> str:
     return ".".join(p for p in parti if p)
 
 
-def _tables_in_sql(conn: Connection, sql: str) -> list[str]:
-    """Le tabelle lette da una query, con sqlglot nel dialetto della connessione.
-    Best effort: una query che sqlglot non capisce dà una lista vuota (il testo
-    della query resta nel facet `sql`)."""
+@functools.lru_cache(maxsize=512)
+def _qualified_tables(db_type: str | None, sql: str) -> tuple[str, ...]:
+    """I nomi qualificati delle tabelle lette da una query (parse sqlglot, qualche
+    millisecondo): in cache per testo e dialetto, perché la stessa datasource si
+    chiude run dopo run. Best effort: una query che sqlglot non capisce dà niente."""
     try:
         import sqlglot
         from sqlglot import exp
 
-        albero = sqlglot.parse_one(sql, read=_SCHEMI.get(conn.db_type))
+        albero = sqlglot.parse_one(sql, read=_SCHEMI.get(db_type))
         cte = {c.alias_or_name for c in albero.find_all(exp.CTE)}
-        nomi = []
-        for t in albero.find_all(exp.Table):
-            if t.name in cte or not t.name:
-                continue
-            qualificato = ".".join(p for p in (t.catalog, t.db, t.name) if p)
-            nomi.append(table_dataset_name(conn, qualificato))
-        return sorted(set(nomi))
+        return tuple(sorted({".".join(p for p in (t.catalog, t.db, t.name) if p) for t in albero.find_all(exp.Table) if t.name and t.name not in cte}))
     except Exception:  # noqa: BLE001 — una query strana non deve rompere il lineage
-        return []
+        return ()
+
+
+def _tables_in_sql(conn: Connection, sql: str) -> list[str]:
+    """Le tabelle lette da una query, coi nomi standard della connessione (il testo
+    della query resta nel facet `sql`)."""
+    return sorted({table_dataset_name(conn, q) for q in _qualified_tables(conn.db_type, sql)})
 
 
 # ── dataset ──────────────────────────────────────────────────────────────────
@@ -210,9 +252,11 @@ def _schema_facet(columns_json: str | None):
     return schema_dataset.SchemaDatasetFacet(fields=campi) if campi else None
 
 
+@functools.cache
 def _tabularia_facet():
     """Il facet `tabularia`: l'id della datasource, la cartella e il tipo — ciò che
-    serve per risalire dal catalogo all'oggetto di Tabularia (via API: /datasources/<id>)."""
+    serve per risalire dal catalogo all'oggetto di Tabularia (via API: /datasources/<id>).
+    La classe si definisce UNA volta: costruirla con attrs costa millisecondi."""
     import attr
     from openlineage.client.facet_v2 import DatasetFacet
 
@@ -518,10 +562,8 @@ def _parent_facet(session: Session, run: Run):
     )
 
 
-def _tabularia_run_facet(run: Run):
-    """Il facet `tabularia` del run: l'id del run in Tabularia, chi l'ha lanciato
-    (manuale/schedulato), il motore e l'orchestrazione che lo contiene — anche
-    quando il job NON è un figlio nella gerarchia del catalogo."""
+@functools.cache
+def _tabularia_run_facet_class():
     import attr
     from openlineage.client.facet_v2 import RunFacet
 
@@ -537,8 +579,15 @@ def _tabularia_run_facet(run: Run):
         def _get_schema() -> str:
             return f"{PRODUCER}/blob/main/docs/openlineage/TabulariaRunFacet.json"
 
-    return TabulariaRunFacet(runId=run.id, kind=run.kind, trigger=run.trigger_type or "manual", engine=run.engine or None,
-                             parentRunId=run_uuid(run.parent_run_id) if run.parent_run_id is not None else None)
+    return TabulariaRunFacet
+
+
+def _tabularia_run_facet(run: Run):
+    """Il facet `tabularia` del run: l'id del run in Tabularia, chi l'ha lanciato
+    (manuale/schedulato), il motore e l'orchestrazione che lo contiene — anche
+    quando il job NON è un figlio nella gerarchia del catalogo."""
+    return _tabularia_run_facet_class()(runId=run.id, kind=run.kind, trigger=run.trigger_type or "manual", engine=run.engine or None,
+                                        parentRunId=run_uuid(run.parent_run_id) if run.parent_run_id is not None else None)
 
 
 def run_events(session: Session, run: Run) -> list:
@@ -614,24 +663,16 @@ def _emit(events: list) -> int:
     return n
 
 
-def _emit_in_background(run_id: int, eventi: list) -> None:
-    try:
-        _emit(eventi)
-        logger.info("openlineage: %d eventi per il run %s", len(eventi), run_id)
-    except Exception:  # noqa: BLE001 — il run è già chiuso: il lineage non deve pesare su niente
-        logger.exception("openlineage: eventi del run %s non inviati", run_id)
-
-
 def run_closed(session: Session, run: Run) -> None:
     """Da chiamare DOPO il commit che chiude un run. Gli eventi si costruiscono
-    qui, con la sessione di chi chiama (qualche lettura); la spedizione va in un
+    qui, con la sessione di chi chiama (qualche lettura); la spedizione va al
     thread di servizio. Non blocca, non solleva."""
     if not enabled():
         return
     try:
         eventi = run_events(session, run)
         if eventi:
-            _pool().submit(_emit_in_background, run.id, eventi)
+            _accoda(run.id, eventi)
     except Exception:  # noqa: BLE001
         logger.exception("openlineage: eventi del run %s non costruiti", run.id)
 
@@ -643,11 +684,27 @@ def emit_flow(session: Session, flow: Flow) -> int:
 
 
 def wait_idle(timeout: float = 10.0) -> None:
-    """Per i test e lo spegnimento: aspetta che la coda si svuoti."""
-    global _worker
+    """Per i test e lo spegnimento: aspetta che la coda si svuoti (al più
+    `timeout` secondi), poi congeda il thread."""
+    global _coda, _worker
     with _LOCK:
-        w, _worker = _worker, None
-    if w is not None:
-        w.shutdown(wait=True)
+        coda, worker = _coda, _worker
+        _coda, _worker = None, None
+    if coda is None:
+        return
+    fine = time.monotonic() + timeout
+    while coda.unfinished_tasks and time.monotonic() < fine:
+        time.sleep(0.02)
+    try:
+        coda.put(None, timeout=max(0.0, fine - time.monotonic()))   # congedo: il thread esce quando ci arriva
+    except queue.Full:
+        pass                                                        # resta daemon: muore col processo
+    if worker is not None:
+        worker.join(timeout=1.0)
+
+
+def pending() -> int:
+    """Eventi in attesa di spedizione in questo processo (per i test e la diagnosi)."""
+    return _coda.qsize() if _coda is not None else 0
 
 

@@ -468,7 +468,7 @@ export default {
     "noFlows": "No flows: create one from a folder or with New flow.",
     "noResultsSearch": "No flows match your search.",
     "openEditorTitle": "Open in editor",
-    "exportDbtTitle": "Export as dbt project",
+    "exportDbtTitle": "Export flow",
     "exportDbtFederated": "Federated — reads the source DBs live",
     "exportDbtNativeLabel": "Native warehouse",
     "exportDbtNative": "Runs in the source DB (translated SQL)",

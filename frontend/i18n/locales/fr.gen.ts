@@ -404,7 +404,7 @@ export default {
     "noFlows": "Aucun flux : créez-en un depuis un dossier ou avec Nouveau flux.",
     "noResultsSearch": "Aucun flux ne correspond à votre recherche.",
     "openEditorTitle": "Ouvrir dans l'éditeur",
-    "exportDbtTitle": "Exporter en projet dbt",
+    "exportDbtTitle": "Exporter le flux",
     "exportDbtFederated": "Fédéré — lit les BD sources en direct",
     "exportDbtNativeLabel": "Warehouse natif",
     "exportDbtNative": "S'exécute dans la BD source (SQL traduit)",

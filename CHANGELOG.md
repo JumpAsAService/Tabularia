@@ -16,7 +16,8 @@ exposes at `/system/info` and in the app's settings menu.
   and the Tabularia id in a facet), database tables under the standard naming, the tables of a SQL query (the
   query in the `sql` facet), SharePoint files, published datasources, tables
   written, S3/GCS objects. Events leave after the commit that closes the run,
-  from a background thread, so a collector that is down never fails a run.
+  through a bounded queue and a background thread, so a collector that is down
+  or slow never fails or delays a run. Only metadata leaves the installation.
   `GET /flows/{id}/openlineage` exports a flow's dependencies as a static job
   event without running it, and `POST` sends it to the collector. Verified
   against a local Marquez.
