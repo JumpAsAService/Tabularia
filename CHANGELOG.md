@@ -5,6 +5,21 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The dbt export grows up.** It already produced a model per output; now the
+  project is one you can put in a repository as it is: the steps shared by
+  several outputs are `ephemeral` models referenced with `ref()`, database
+  outputs in append are `incremental` models (and, natively, land in the
+  destination table), `sources.yml` carries the tables' and columns'
+  descriptions, `schema.yml` carries every model's columns and descriptions and
+  the datasource's **data contract as dbt tests** with its severities, a
+  datasource defined by a SQL query is an ephemeral model (run in the source
+  database through DuckDB's `postgres_query`/`mysql_query` when federated), the
+  output of another flow brings that flow's models along, and a file the flow
+  reads becomes a seed (up to 50 000 rows). The native translation now casts
+  `ROUND` for PostgreSQL and refuses `pivot` with a clear message instead of a
+  broken model. All of it is verified with a real `dbt seed/run/test` in a
+  throwaway container, and every Sample flow's result is compared with what
+  Tabularia publishes. Guide: `docs/dbt-export.md`.
 - **OpenLineage, optionally.** The lineage Tabularia already derives for its own
   Lineage page can now be told to an external catalog in the OpenLineage
   standard, with the official client: set `OPENLINEAGE__URL` (Marquez, DataHub,

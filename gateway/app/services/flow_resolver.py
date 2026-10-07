@@ -207,16 +207,25 @@ class _Resolver:
 
     def chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
         """Catena che termina in target_id: (sorgente risolta, operazioni IR)."""
+        source, ops, _ids = self.chain_with_ids(target_id)
+        return source, ops
+
+    def chain_with_ids(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict], list[str]]:
+        """Come `chain`, più l'id del nodo di OGNI operazione, allineato: serve a chi
+        deve riconoscere i passi condivisi fra più uscite (l'export dbt). Le
+        operazioni iniettate dal nodo sorgente (filtri a monte, campione) portano
+        l'id del nodo sorgente con il suffisso `#head`."""
         target = self.by_id.get(target_id)
         if target and target.get("parentNode"):
             upstream_id = self.inc.get(target["parentNode"], {}).get("left")
-            up_src, up_ops = self.chain(upstream_id) if upstream_id else (None, [])
+            up_src, up_ops, up_ids = self.chain_with_ids(upstream_id) if upstream_id else (None, [], [])
             op = self._operation_for(target["parentNode"], until=target_id)
-            return up_src, [*up_ops, op]
+            return up_src, [*up_ops, op], [*up_ids, target["parentNode"]]
 
         op_ids: list[str] = []
         seen: set[str] = set()
         source: Optional[tuple[str, str]] = None
+        source_id: Optional[str] = None
         head_ops: list[dict] = []  # operazioni del nodo sorgente: filtri a monte, poi campione
         cur: Optional[str] = target_id
         while cur and cur not in seen:
@@ -226,6 +235,7 @@ class _Resolver:
                 break
             if node.get("type") == "source":
                 source = _resolve_source(node, self.resolve_ds)
+                source_id = cur
                 data = node.get("data") or {}
                 # filtri a monte: SEMPRE (sviluppo e produzione)
                 head_ops = source_filter_operations(data)
@@ -240,7 +250,8 @@ class _Resolver:
             cur = self.inc.get(cur, {}).get("left")
 
         op_ids.reverse()
-        return source, [*head_ops, *(self._operation_for(i) for i in op_ids)]
+        head_ids = [f"{source_id}#head"] * len(head_ops)
+        return source, [*head_ops, *(self._operation_for(i) for i in op_ids)], [*head_ids, *op_ids]
 
     def _operation_for(self, node_id: str, until: Optional[str] = None) -> dict:
         node = self.by_id[node_id]
@@ -390,6 +401,28 @@ def resolve_output_request(
             "(o la datasource sorgente non ha uno snapshot)"
         )
     return _output_body(node, source, operations, default_bucket)
+
+
+def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_bucket: str) -> list[dict]:
+    """Per OGNI nodo Output (modalità produzione, senza campioni): il corpo-run, il
+    nodo stesso e gli id dei nodi delle sue operazioni — ciò che serve all'export
+    dbt per riconoscere i passi condivisi. Un Output senza sorgente risolvibile
+    solleva FlowResolveError, come `resolve_output_request`."""
+    nodes = definition.get("nodes") or []
+    outputs = [n for n in nodes if n.get("type") == "output"]
+    if not outputs:
+        raise FlowResolveError("il flusso non ha nodi Output: non c'è nulla da esportare")
+    resolver = _Resolver(nodes, definition.get("edges") or [], resolve_ds, "production")
+    out = []
+    for node in outputs:
+        source, operations, ids = resolver.chain_with_ids(node["id"])
+        if source is None:
+            raise FlowResolveError(
+                f"output {_output_label(node)}: nessuna sorgente con dati a monte "
+                "(o la datasource sorgente non ha uno snapshot)"
+            )
+        out.append({"node": node, "body": _output_body(node, source, operations, default_bucket), "op_ids": ids})
+    return out
 
 
 def build_output_run_requests(

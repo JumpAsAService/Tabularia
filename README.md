@@ -113,6 +113,11 @@ engines, from an in-process library to a serverless warehouse.
   catalog in the [OpenLineage](https://openlineage.io) standard** (Marquez, DataHub,
   Astro…): every run becomes a job with the tables, queries, files and datasources
   it read and wrote, and a flow's dependencies can be exported without running it.
+- **Leave with your work.** Any flow exports as a **dbt project**: one model per output,
+  the shared steps as `ref()`-ed models, `sources.yml`, `schema.yml` with descriptions and
+  the data contract as dbt tests, seeds for the files it reads. Run it with dbt-duckdb
+  against the live source databases, or natively in the warehouse. Verified with a real
+  `dbt run` and compared with what Tabularia publishes.
 - **Multi-user from day one.** JWT login or SSO (Keycloak, Entra ID, Auth0, Okta),
   users & groups, nested projects with inherited view / edit / manage / connect
   permissions. Everyone works in the same place, safely.
@@ -522,6 +527,23 @@ worker capacity. Schedules fire from the **orchestrator** role: a due slot is ta
 a compare-and-swap on the time the process saw, so with several orchestrators exactly
 one fires it; a flow whose last run failed on schedule sends an email, once, to the
 addresses set next to the schedule.
+
+## Export to dbt
+
+A flow is not locked in the tool: from the Flows page, *Export* turns it into a dbt
+project. One model per output node (`table`, or `incremental` in append for database
+tables written in append), the steps shared by several outputs as `ephemeral` models
+referenced with `ref()`, `sources.yml` with the tables, their descriptions and columns,
+`schema.yml` with every model's columns and descriptions and the **data contract as dbt
+tests** (`not_null`, `unique`, `accepted_values` on the columns; range, pattern, row
+count and expressions as singular tests, each with the contract's severity), a seed for
+every file the flow reads, a SQL-query datasource as an ephemeral model, and the
+models of the upstream flows whose outputs the flow reads. Two targets: **dbt-duckdb**,
+which attaches the source databases and runs the very SQL Tabularia runs, and the
+**native warehouse** (dbt-postgres, dbt-mysql, dbt-clickhouse), with the SQL translated
+by sqlglot. Every Sample flow is exported, run with a real dbt and compared with the
+datasource Tabularia publishes. The details, the mapping and the limits are in
+[docs/dbt-export.md](docs/dbt-export.md).
 
 ## OpenLineage (optional)
 
