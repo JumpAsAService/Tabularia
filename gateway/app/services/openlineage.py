@@ -476,6 +476,12 @@ def _output_label(run: Run) -> str:
     return f"output {run.id}"
 
 
+def _senza_statistiche(outputs: list) -> list:
+    from openlineage.client.event_v2 import OutputDataset
+
+    return [OutputDataset(namespace=o.namespace, name=o.name, facets=o.facets, outputFacets={}) for o in outputs]
+
+
 def run_events(session: Session, run: Run) -> list:
     """START e COMPLETE/FAIL del run, costruiti quando il run si è CHIUSO: i due
     eventi arrivano insieme, con i tempi veri, e Marquez ne ricava la durata."""
@@ -496,7 +502,10 @@ def run_events(session: Session, run: Run) -> list:
         if flow is None:
             return []
         extra: dict[str, Any] = {"jobType": job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType="OUTPUT")}
-        job = Job(namespace=namespace(), name=f"{job_name_for_flow(session, flow)} › {_output_label(run)}", facets=extra)
+        # «<flusso>.<output>» SEMPRE, con o senza orchestrazione: Marquez prefissa da sé
+        # un figlio col nome del padre, e un run lanciato dall'editor (senza padre)
+        # finirebbe altrimenti in un job diverso dallo stesso Output orchestrato
+        job = Job(namespace=namespace(), name=f"{job_name_for_flow(session, flow)}.{_output_label(run)}", facets=extra)
         if run.parent_run_id is not None:
             run_facets["parent"] = parent_run.ParentRunFacet(
                 run=parent_run.Run(runId=run_uuid(run.parent_run_id)),
@@ -524,7 +533,9 @@ def run_events(session: Session, run: Run) -> list:
         return []
 
     ol_run = OlRun(runId=run_uuid(run.id), facets=run_facets)
-    start = RunEvent(eventTime=_iso(run.started_at), producer=PRODUCER, run=ol_run, job=job, eventType=RunState.START, inputs=inputs, outputs=[])
+    # gli output si dichiarano già allo START (senza statistiche): con START vuoto e
+    # COMPLETE pieno il catalogo vedrebbe due versioni del job a ogni esecuzione
+    start = RunEvent(eventTime=_iso(run.started_at), producer=PRODUCER, run=ol_run, job=job, eventType=RunState.START, inputs=inputs, outputs=_senza_statistiche(outputs))
     fine_facets = dict(run_facets)
     if run.status != "SUCCESS" and run.error:
         fine_facets["errorMessage"] = error_message_run.ErrorMessageRunFacet(message=run.error[:2000], programmingLanguage="python")

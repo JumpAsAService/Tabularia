@@ -152,7 +152,7 @@ def test_un_run_di_output_racconta_cosa_ha_scritto_e_da_chi_dipende(session, sce
     start, fine = ol.to_json(ol.run_events(session, figlio))
     assert (start["eventType"], fine["eventType"]) == ("START", "COMPLETE")
     assert start["eventTime"] == "2026-10-07T08:01:00.000Z" and fine["eventTime"] == "2026-10-07T08:02:00.000Z"
-    assert fine["job"]["name"] == "Sample/Flows/Margin by Category › datasource Margin"
+    assert fine["job"]["name"] == "Sample/Flows/Margin by Category.datasource Margin"
     assert fine["run"]["runId"] == ol.run_uuid(figlio.id)
     assert fine["run"]["facets"]["parent"]["run"]["runId"] == ol.run_uuid(orch.id)
     assert fine["run"]["facets"]["parent"]["job"]["name"] == "Sample/Flows/Margin by Category"
@@ -160,7 +160,7 @@ def test_un_run_di_output_racconta_cosa_ha_scritto_e_da_chi_dipende(session, sce
     (out,) = fine["outputs"]
     assert out["name"] == "/Sample/Flows/Margin" and out["outputFacets"]["outputStatistics"]["rowCount"] == 185
     assert out["facets"]["tabularia"]["datasourceId"] == pubblicata.id
-    assert start["outputs"] == []
+    assert [o["name"] for o in start["outputs"]] == [out["name"]] and start["outputs"][0]["outputFacets"] == {}   # dichiarati, senza statistiche
 
     _, fallito = ol.to_json(ol.run_events(session, tabella))
     assert fallito["eventType"] == "FAIL" and fallito["run"]["facets"]["errorMessage"]["message"] == "tabella bloccata"

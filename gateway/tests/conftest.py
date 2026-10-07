@@ -212,3 +212,17 @@ def make_run(session, **kw):
     session.commit()
     session.refresh(r)
     return r
+
+
+@pytest.fixture(autouse=True)
+def _openlineage_spento(monkeypatch):
+    """Nessun test manda lineage a un collector vero: il contenitore di sviluppo
+    può avere OPENLINEAGE__URL nell'ambiente, e i run che i test chiudono
+    finirebbero in Marquez. Chi vuole provare l'emissione lo accende da sé."""
+    from app.core.config import get_settings
+
+    s = get_settings().openlineage
+    monkeypatch.setattr(s, "url", "")
+    monkeypatch.setattr(s, "file", "")
+    monkeypatch.delenv("OPENLINEAGE_URL", raising=False)
+    monkeypatch.delenv("OPENLINEAGE_CONFIG", raising=False)
