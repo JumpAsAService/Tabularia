@@ -3,6 +3,150 @@ Non-secret configuration, mirroring the .env surface the application already
 uses in docker-compose. Keeping the same variable names means anything you learn
 from the compose setup transfers directly.
 */}}
+{{- define "tabularia.configData" -}}
+APP__ENV_NAME: {{ include "tabularia.env" (.Values.app.envName) }}
+APP__TIMEZONE: {{ include "tabularia.env" (.Values.app.timezone) }}
+# Audit log retention in minutes; 0 = kept forever
+AUDIT__RETENTION_MINUTES: {{ include "tabularia.env" (.Values.app.auditRetentionMinutes) }}
+PREVIEW__DEFAULT_SAMPLE_ROWS: {{ include "tabularia.env" (.Values.app.previewDefaultSampleRows | default 0) }}
+
+# Broker and step-cache index
+REDIS__HOST: {{ required "externalServices.redis.host is required" .Values.externalServices.redis.host | quote }}
+REDIS__PORT: {{ include "tabularia.env" (.Values.externalServices.redis.port) }}
+REDIS__DB: {{ include "tabularia.env" (.Values.externalServices.redis.db) }}
+
+# Object storage — the durable side of the system
+STORAGE__ENDPOINT: {{ required "externalServices.storage.endpoint is required" .Values.externalServices.storage.endpoint | quote }}
+STORAGE__BUCKET: {{ include "tabularia.env" (.Values.externalServices.storage.bucket) }}
+STORAGE__REGION: {{ include "tabularia.env" (.Values.externalServices.storage.region) }}
+# The gateway keeps its OWN copy of the bucket name and compares it against the
+# bucket in every request, rejecting a mismatch with 403. Rendering it from the
+# same value is what stops the two from drifting apart.
+ENGINE__BUCKET: {{ include "tabularia.env" (.Values.externalServices.storage.bucket) }}
+
+# Metadata database (gateway only, but harmless elsewhere)
+DB__HOST: {{ required "externalServices.postgres.host is required" .Values.externalServices.postgres.host | quote }}
+DB__PORT: {{ include "tabularia.env" (.Values.externalServices.postgres.port) }}
+DB__NAME: {{ include "tabularia.env" (.Values.externalServices.postgres.database) }}
+DB__USER: {{ include "tabularia.env" (.Values.externalServices.postgres.user) }}
+
+{{- with .Values.app.corsOrigins }}
+# A JSON list: the setting is a list[str] and pydantic parses it as JSON.
+# Only needed when the frontend is served from a different host than the API.
+APP__CORS_ORIGINS: {{ toJson . | quote }}
+{{- end }}
+{{- with .Values.monitoring.nodeExporterUrl }}
+# Powers the RAM badge. Unset, the badge simply disappears.
+MONITORING__NODE_EXPORTER_URL: {{ . | quote }}
+{{- end }}
+
+JWT__ACCESS_TTL_MINUTES: {{ include "tabularia.env" (.Values.auth.jwtAccessTtlMinutes) }}
+AUTH__ADMIN_EMAIL: {{ include "tabularia.env" (.Values.auth.adminEmail) }}
+AUTH__ADMIN_NAME: {{ include "tabularia.env" (.Values.auth.adminName) }}
+
+# Engine API, reached only from inside the cluster
+ENGINE__BASE_URL: "http://{{ include "tabularia.fullname" . }}-engine:{{ .Values.service.gatewayPort }}"
+# Read by the engine API: how long it waits for a preview worker before
+# revoking the job and answering 504.
+PREVIEW_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.engine.previewTimeoutSeconds) }}
+# How long a run may take. The worker kills the task at the hard limit, and the
+# gateway declares a run lost only after that — which is why the stale timeout
+# must stay above it. Every workload reads this same ConfigMap, so the two
+# halves of that agreement cannot drift apart between engine and gateway.
+CELERY__TASK_TIME_LIMIT: {{ include "tabularia.env" (.Values.engine.taskTimeLimitSeconds) }}
+CELERY__TASK_SOFT_TIME_LIMIT: {{ include "tabularia.env" (.Values.engine.taskSoftTimeLimitSeconds) }}
+ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.engine.runStaleTimeoutSeconds) }}
+
+CACHE__TTL_SECONDS: {{ include "tabularia.env" (.Values.cache.ttlSeconds) }}
+CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIntervalSeconds) }}
+
+ORCHESTRATOR__REFRESH_WAIT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.refreshWaitSeconds) }}
+ORCHESTRATOR__OUTPUT_WAIT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.outputWaitSeconds) }}
+ORCHESTRATOR__POLL_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.pollIntervalSeconds) }}
+ORCHESTRATOR__MAX_CONCURRENT: {{ include "tabularia.env" (.Values.orchestrator.maxConcurrent) }}
+ORCHESTRATOR__DEAD_AFTER_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.deadAfterSeconds) }}
+ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.queueTimeoutSeconds) }}
+OPENLINEAGE__URL: {{ include "tabularia.env" (.Values.openlineage.url) }}
+OPENLINEAGE__NAMESPACE: {{ include "tabularia.env" (.Values.openlineage.namespace) }}
+OPENLINEAGE__FILE: {{ include "tabularia.env" (.Values.openlineage.file) }}
+OPENLINEAGE__ENDPOINT: {{ include "tabularia.env" (.Values.openlineage.endpoint) }}
+OPENLINEAGE__TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.openlineage.timeoutSeconds) }}
+
+{{- if .Values.oidc.enabled }}
+# Single sign-on. Setting OIDC__ISSUER is what switches SSO on; local login
+# stays available as a break-glass path.
+OIDC__ISSUER: {{ required "oidc.issuer is required when oidc.enabled" .Values.oidc.issuer | quote }}
+OIDC__CLIENT_ID: {{ required "oidc.clientId is required when oidc.enabled" .Values.oidc.clientId | quote }}
+OIDC__REDIRECT_URI: {{ required "oidc.redirectUri is required when oidc.enabled" .Values.oidc.redirectUri | quote }}
+OIDC__SCOPES: {{ include "tabularia.env" (.Values.oidc.scopes) }}
+OIDC__GROUPS_CLAIM: {{ include "tabularia.env" (.Values.oidc.groupsClaim) }}
+OIDC__GROUP_ALLOWLIST: {{ include "tabularia.env" (.Values.oidc.groupAllowlist) }}
+# Who may sign in (empty / false = no filter, the historical behaviour)
+OIDC__ALLOWED_EMAIL_DOMAINS: {{ include "tabularia.env" (.Values.oidc.allowedEmailDomains) }}
+OIDC__REQUIRE_ALLOWLISTED_GROUP: {{ include "tabularia.env" (.Values.oidc.requireAllowlistedGroup) }}
+OIDC__AUTO_CREATE_GROUPS: {{ include "tabularia.env" (.Values.oidc.autoCreateGroups) }}
+OIDC__AUTHORITATIVE: {{ include "tabularia.env" (.Values.oidc.authoritative) }}
+OIDC__SUPERUSER_GROUP: {{ include "tabularia.env" (.Values.oidc.superuserGroup) }}
+OIDC__POST_LOGIN_URL: {{ include "tabularia.env" (.Values.oidc.postLoginUrl) }}
+OIDC__BUTTON_LABEL: {{ include "tabularia.env" (.Values.oidc.buttonLabel) }}
+{{- end }}
+
+{{- if .Values.externalServices.clickhouse.enabled }}
+# Optional engine: transformations execute on the remote server instead of in
+# the worker process.
+CLICKHOUSE_EXTERNAL__HOST: {{ required "externalServices.clickhouse.host is required when enabled" .Values.externalServices.clickhouse.host | quote }}
+CLICKHOUSE_EXTERNAL__PORT: {{ include "tabularia.env" (.Values.externalServices.clickhouse.port) }}
+CLICKHOUSE_EXTERNAL__SECURE: {{ include "tabularia.env" (.Values.externalServices.clickhouse.secure) }}
+CLICKHOUSE_EXTERNAL__DATABASE: {{ include "tabularia.env" (.Values.externalServices.clickhouse.database) }}
+CLICKHOUSE_EXTERNAL__USERNAME: {{ include "tabularia.env" (.Values.externalServices.clickhouse.username) }}
+CLICKHOUSE_EXTERNAL__TRANSPORT: {{ include "tabularia.env" (.Values.externalServices.clickhouse.transport) }}
+CLICKHOUSE_EXTERNAL__S3_ENDPOINT: {{ include "tabularia.env" (.Values.externalServices.clickhouse.s3Endpoint) }}
+CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT: {{ include "tabularia.env" (.Values.externalServices.clickhouse.connectTimeout) }}
+CLICKHOUSE_EXTERNAL__MAX_EXECUTION_TIME: {{ include "tabularia.env" (.Values.externalServices.clickhouse.maxExecutionTime) }}
+CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS: {{ include "tabularia.env" (.Values.externalServices.clickhouse.materializeMinRows) }}
+CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE: {{ include "tabularia.env" (.Values.externalServices.clickhouse.materializeDatabase) }}
+CLICKHOUSE_EXTERNAL__MATERIALIZE_TTL_SECONDS: {{ include "tabularia.env" (.Values.externalServices.clickhouse.materializeTtlSeconds) }}
+CLICKHOUSE_EXTERNAL__PARQUET_SCAN_MAX_THREADS: {{ include "tabularia.env" (.Values.externalServices.clickhouse.parquetScanMaxThreads) }}
+{{- with .Values.externalServices.clickhouse.aiUsername }}
+# Read-only user for the AI assistant's queries (password in the Secret)
+CLICKHOUSE_EXTERNAL__AI_USERNAME: {{ . | quote }}
+{{- end }}
+{{- with .Values.externalServices.clickhouse.s3NamedCollection }}
+# Credentials held on the ClickHouse server: the S3 keys never travel inside a
+# query, so they never reach the server's query_log.
+CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION: {{ . | quote }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.ai.enabled }}
+# AI assistant (gateway): an OpenAI-compatible endpoint
+AI__BASE_URL: {{ required "ai.baseUrl is required when ai.enabled" .Values.ai.baseUrl | quote }}
+AI__ACCESS_KEY: {{ include "tabularia.env" (.Values.ai.accessKey) }}
+AI__DEFAULT_MODEL: {{ include "tabularia.env" (.Values.ai.defaultModel) }}
+AI__MAX_RESULT_ROWS: {{ include "tabularia.env" (.Values.ai.maxResultRows) }}
+AI__MAX_REQUESTS: {{ include "tabularia.env" (.Values.ai.maxRequests) }}
+# Spending caps (dollars): per turn, per user per day, whole installation per day
+AI__MAX_COST_PER_TURN_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerTurnUsd) }}
+AI__MAX_COST_PER_DAY_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerDayUsd) }}
+AI__MAX_COST_PER_DAY_TOTAL_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerDayTotalUsd) }}
+{{- end }}
+
+{{- if .Values.externalServices.bigquery.enabled }}
+# Optional engine: transformations run on Google BigQuery, reading the parquet
+# files from the (GCS) bucket as temporary external tables.
+BIGQUERY__PROJECT: {{ required "externalServices.bigquery.project is required when enabled" .Values.externalServices.bigquery.project | quote }}
+BIGQUERY__LOCATION: {{ include "tabularia.env" (.Values.externalServices.bigquery.location) }}
+BIGQUERY__MAXIMUM_BYTES_BILLED: {{ include "tabularia.env" (.Values.externalServices.bigquery.maximumBytesBilled) }}
+{{- end }}
+{{- end -}}
+
+{{- /* extraEnv adds what this file does not set; it never overrides it */ -}}
+{{- $fixed := include "tabularia.configData" . | fromYaml -}}
+{{- range $name, $_ := .Values.extraEnv }}
+{{- if hasKey $fixed $name }}
+{{- fail (printf "extraEnv.%s: the chart already sets %s from its own value in values.yaml - change that one" $name $name) }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,129 +154,11 @@ metadata:
   labels:
     {{- include "tabularia.labels" . | nindent 4 }}
 data:
-  APP__ENV_NAME: {{ .Values.app.envName | quote }}
-  APP__TIMEZONE: {{ .Values.app.timezone | quote }}
-  PREVIEW__DEFAULT_SAMPLE_ROWS: {{ .Values.app.previewDefaultSampleRows | default 0 | quote }}
-
-  # Broker and step-cache index
-  REDIS__HOST: {{ required "externalServices.redis.host is required" .Values.externalServices.redis.host | quote }}
-  REDIS__PORT: {{ .Values.externalServices.redis.port | quote }}
-  REDIS__DB: {{ .Values.externalServices.redis.db | quote }}
-
-  # Object storage — the durable side of the system
-  STORAGE__ENDPOINT: {{ required "externalServices.storage.endpoint is required" .Values.externalServices.storage.endpoint | quote }}
-  STORAGE__BUCKET: {{ .Values.externalServices.storage.bucket | quote }}
-  STORAGE__REGION: {{ .Values.externalServices.storage.region | quote }}
-  # The gateway keeps its OWN copy of the bucket name and compares it against the
-  # bucket in every request, rejecting a mismatch with 403. Rendering it from the
-  # same value is what stops the two from drifting apart.
-  ENGINE__BUCKET: {{ .Values.externalServices.storage.bucket | quote }}
-
-  # Metadata database (gateway only, but harmless elsewhere)
-  DB__HOST: {{ required "externalServices.postgres.host is required" .Values.externalServices.postgres.host | quote }}
-  DB__PORT: {{ .Values.externalServices.postgres.port | quote }}
-  DB__NAME: {{ .Values.externalServices.postgres.database | quote }}
-  DB__USER: {{ .Values.externalServices.postgres.user | quote }}
-
-{{- with .Values.app.corsOrigins }}
-  # A JSON list: the setting is a list[str] and pydantic parses it as JSON.
-  # Only needed when the frontend is served from a different host than the API.
-  APP__CORS_ORIGINS: {{ toJson . | quote }}
+  {{- /* nindent would leave two spaces on the blank lines */ -}}
+  {{- regexReplaceAll "(?m)^ +$" (include "tabularia.configData" . | nindent 2) "" }}
+{{- with .Values.extraEnv }}
+  # extraEnv
+{{- range $name, $value := . }}
+  {{ $name }}: {{ include "tabularia.env" $value }}
 {{- end }}
-{{- with .Values.monitoring.nodeExporterUrl }}
-  # Powers the RAM badge. Unset, the badge simply disappears.
-  MONITORING__NODE_EXPORTER_URL: {{ . | quote }}
-{{- end }}
-
-  JWT__ACCESS_TTL_MINUTES: {{ .Values.auth.jwtAccessTtlMinutes | quote }}
-  AUTH__ADMIN_EMAIL: {{ .Values.auth.adminEmail | quote }}
-  AUTH__ADMIN_NAME: {{ .Values.auth.adminName | quote }}
-
-  # Engine API, reached only from inside the cluster
-  ENGINE__BASE_URL: "http://{{ include "tabularia.fullname" . }}-engine:{{ .Values.service.gatewayPort }}"
-  # Read by the engine API: how long it waits for a preview worker before
-  # revoking the job and answering 504.
-  PREVIEW_TIMEOUT_SECONDS: {{ .Values.engine.previewTimeoutSeconds | quote }}
-  # How long a run may take. The worker kills the task at the hard limit, and the
-  # gateway declares a run lost only after that — which is why the stale timeout
-  # must stay above it. Every workload reads this same ConfigMap, so the two
-  # halves of that agreement cannot drift apart between engine and gateway.
-  CELERY__TASK_TIME_LIMIT: {{ .Values.engine.taskTimeLimitSeconds | quote }}
-  CELERY__TASK_SOFT_TIME_LIMIT: {{ .Values.engine.taskSoftTimeLimitSeconds | quote }}
-  ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ .Values.engine.runStaleTimeoutSeconds | quote }}
-
-  CACHE__TTL_SECONDS: {{ .Values.cache.ttlSeconds | quote }}
-  CACHE__SWEEP_INTERVAL_SECONDS: {{ .Values.cache.sweepIntervalSeconds | quote }}
-
-  ORCHESTRATOR__REFRESH_WAIT_SECONDS: {{ .Values.orchestrator.refreshWaitSeconds | quote }}
-  ORCHESTRATOR__OUTPUT_WAIT_SECONDS: {{ .Values.orchestrator.outputWaitSeconds | quote }}
-  ORCHESTRATOR__POLL_INTERVAL_SECONDS: {{ .Values.orchestrator.pollIntervalSeconds | quote }}
-  ORCHESTRATOR__MAX_CONCURRENT: {{ .Values.orchestrator.maxConcurrent | quote }}
-  ORCHESTRATOR__DEAD_AFTER_SECONDS: {{ .Values.orchestrator.deadAfterSeconds | quote }}
-  ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS: {{ .Values.orchestrator.queueTimeoutSeconds | quote }}
-  OPENLINEAGE__URL: {{ .Values.openlineage.url | quote }}
-  OPENLINEAGE__NAMESPACE: {{ .Values.openlineage.namespace | quote }}
-  OPENLINEAGE__FILE: {{ .Values.openlineage.file | quote }}
-
-{{- if .Values.oidc.enabled }}
-  # Single sign-on. Setting OIDC__ISSUER is what switches SSO on; local login
-  # stays available as a break-glass path.
-  OIDC__ISSUER: {{ required "oidc.issuer is required when oidc.enabled" .Values.oidc.issuer | quote }}
-  OIDC__CLIENT_ID: {{ required "oidc.clientId is required when oidc.enabled" .Values.oidc.clientId | quote }}
-  OIDC__REDIRECT_URI: {{ required "oidc.redirectUri is required when oidc.enabled" .Values.oidc.redirectUri | quote }}
-  OIDC__SCOPES: {{ .Values.oidc.scopes | quote }}
-  OIDC__GROUPS_CLAIM: {{ .Values.oidc.groupsClaim | quote }}
-  OIDC__GROUP_ALLOWLIST: {{ .Values.oidc.groupAllowlist | quote }}
-  # Who may sign in (empty / false = no filter, the historical behaviour)
-  OIDC__ALLOWED_EMAIL_DOMAINS: {{ .Values.oidc.allowedEmailDomains | quote }}
-  OIDC__REQUIRE_ALLOWLISTED_GROUP: {{ .Values.oidc.requireAllowlistedGroup | quote }}
-  OIDC__AUTO_CREATE_GROUPS: {{ .Values.oidc.autoCreateGroups | quote }}
-  OIDC__AUTHORITATIVE: {{ .Values.oidc.authoritative | quote }}
-  OIDC__SUPERUSER_GROUP: {{ .Values.oidc.superuserGroup | quote }}
-  OIDC__POST_LOGIN_URL: {{ .Values.oidc.postLoginUrl | quote }}
-  OIDC__BUTTON_LABEL: {{ .Values.oidc.buttonLabel | quote }}
-{{- end }}
-
-{{- if .Values.externalServices.clickhouse.enabled }}
-  # Optional engine: transformations execute on the remote server instead of in
-  # the worker process.
-  CLICKHOUSE_EXTERNAL__HOST: {{ required "externalServices.clickhouse.host is required when enabled" .Values.externalServices.clickhouse.host | quote }}
-  CLICKHOUSE_EXTERNAL__PORT: {{ .Values.externalServices.clickhouse.port | quote }}
-  CLICKHOUSE_EXTERNAL__SECURE: {{ .Values.externalServices.clickhouse.secure | quote }}
-  CLICKHOUSE_EXTERNAL__DATABASE: {{ .Values.externalServices.clickhouse.database | quote }}
-  CLICKHOUSE_EXTERNAL__USERNAME: {{ .Values.externalServices.clickhouse.username | quote }}
-  CLICKHOUSE_EXTERNAL__TRANSPORT: {{ .Values.externalServices.clickhouse.transport | quote }}
-  CLICKHOUSE_EXTERNAL__S3_ENDPOINT: {{ .Values.externalServices.clickhouse.s3Endpoint | quote }}
-  CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT: {{ .Values.externalServices.clickhouse.connectTimeout | quote }}
-  CLICKHOUSE_EXTERNAL__MAX_EXECUTION_TIME: {{ .Values.externalServices.clickhouse.maxExecutionTime | quote }}
-  CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS: {{ .Values.externalServices.clickhouse.materializeMinRows | quote }}
-  CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE: {{ .Values.externalServices.clickhouse.materializeDatabase | quote }}
-  CLICKHOUSE_EXTERNAL__MATERIALIZE_TTL_SECONDS: {{ .Values.externalServices.clickhouse.materializeTtlSeconds | quote }}
-  CLICKHOUSE_EXTERNAL__PARQUET_SCAN_MAX_THREADS: {{ .Values.externalServices.clickhouse.parquetScanMaxThreads | quote }}
-{{- with .Values.externalServices.clickhouse.aiUsername }}
-  # Read-only user for the AI assistant's queries (password in the Secret)
-  CLICKHOUSE_EXTERNAL__AI_USERNAME: {{ . | quote }}
-{{- end }}
-{{- with .Values.externalServices.clickhouse.s3NamedCollection }}
-  # Credentials held on the ClickHouse server: the S3 keys never travel inside a
-  # query, so they never reach the server's query_log.
-  CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION: {{ . | quote }}
-{{- end }}
-{{- end }}
-
-{{- if .Values.ai.enabled }}
-  # AI assistant (gateway): an OpenAI-compatible endpoint
-  AI__BASE_URL: {{ required "ai.baseUrl is required when ai.enabled" .Values.ai.baseUrl | quote }}
-  AI__ACCESS_KEY: {{ .Values.ai.accessKey | quote }}
-  AI__DEFAULT_MODEL: {{ .Values.ai.defaultModel | quote }}
-  AI__MAX_RESULT_ROWS: {{ .Values.ai.maxResultRows | quote }}
-  AI__MAX_REQUESTS: {{ .Values.ai.maxRequests | quote }}
-{{- end }}
-
-{{- if .Values.externalServices.bigquery.enabled }}
-  # Optional engine: transformations run on Google BigQuery, reading the parquet
-  # files from the (GCS) bucket as temporary external tables.
-  BIGQUERY__PROJECT: {{ required "externalServices.bigquery.project is required when enabled" .Values.externalServices.bigquery.project | quote }}
-  BIGQUERY__LOCATION: {{ .Values.externalServices.bigquery.location | quote }}
-  BIGQUERY__MAXIMUM_BYTES_BILLED: {{ .Values.externalServices.bigquery.maximumBytesBilled | quote }}
 {{- end }}

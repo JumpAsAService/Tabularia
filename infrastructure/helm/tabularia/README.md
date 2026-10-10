@@ -94,6 +94,14 @@ Optional keys follow the feature they belong to. With
 `CLICKHOUSE_EXTERNAL__AI_PASSWORD`: the read-only ClickHouse user the AI
 assistant's queries run as (grants in `docs/engines/clickhouse-ai-user.md`).
 
+Every other setting in `infrastructure/.env.example` goes through `extraEnv`, by
+its variable name (`DB__POOL_SIZE`, `INGEST__PARQUET_ROW_GROUP_ROWS`…): it lands in
+the shared ConfigMap. A name the chart already sets from a value of its own is
+refused when the chart renders, so there is one place for each setting. Numbers
+are written out in full: Helm reads every number in a values file as a float, and
+`quote` would hand a million to the pods as `1e+06`, which the application refuses
+as an integer.
+
 ## Scaling the gateway
 
 The gateway has two jobs, and the chart runs them as two Deployments built from

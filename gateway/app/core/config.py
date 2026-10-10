@@ -34,9 +34,9 @@ class DbSettings(BaseModel):
     # `max_connections` di Postgres (100 di serie). env: DB__MAX_OVERFLOW
     max_overflow: int = Field(default=10, ge=0)
     # Migrazioni dello schema (Alembic): true = il gateway migra da sé all'avvio
-    # (sviluppo); false = le applica un passo separato (`python -m app.db.migra`,
-    # Job di Helm, servizio del compose) e il gateway controlla soltanto che il
-    # database non sia indietro. env: DB__AUTO_MIGRATE
+    # (sviluppo); false = le applica un passo separato (`python -m app.db.migra`:
+    # init container di Helm, servizio del compose) e il gateway controlla
+    # soltanto che il database non sia indietro. env: DB__AUTO_MIGRATE
     auto_migrate: bool = False
 
     @computed_field

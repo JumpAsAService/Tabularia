@@ -45,6 +45,8 @@ existingSecret: tabularia-secrets
 app:
   envName: production
   timezone: Europe/Rome
+  # What your privacy policy promises for the audit log, in minutes (0 = forever).
+  auditRetentionMinutes: 0
 
 auth:
   adminEmail: admin@example.com

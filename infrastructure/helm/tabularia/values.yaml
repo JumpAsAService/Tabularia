@@ -132,6 +132,12 @@ ai:
   defaultModel: ""
   maxResultRows: 200
   maxRequests: 12
+  # Spending caps, in dollars. Per turn it is always on; per user per day and for
+  # the whole installation per day are off at 0. Without them anyone who can
+  # chat can spend on the key's owner: set both where strangers can sign in.
+  maxCostPerTurnUsd: 0.50
+  maxCostPerDayUsd: 0
+  maxCostPerDayTotalUsd: 0
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Secrets
@@ -144,7 +150,10 @@ ai:
 #   SECURITY__FERNET_KEY, JWT__SECRET, DB__PASSWORD, STORAGE__ACCESS_KEY,
 #   STORAGE__SECRET_KEY, AUTH__ADMIN_PASSWORD; plus OIDC__CLIENT_SECRET,
 #   CLICKHOUSE_EXTERNAL__PASSWORD, BIGQUERY__CREDENTIALS_B64 and AI__SECRET_KEY
-#   when those are enabled, and REDIS__PASSWORD when your Redis requires authentication.
+#   when those are enabled, CLICKHOUSE_EXTERNAL__AI_PASSWORD with
+#   externalServices.clickhouse.aiUsername, OPENLINEAGE__API_KEY when the
+#   collector asks for one, and REDIS__PASSWORD when your Redis requires
+#   authentication.
 existingSecret: ""
 
 secrets:
@@ -201,6 +210,11 @@ app:
   # browser call is blocked by the preflight, with the error visible only in the
   # browser console.
   corsOrigins: []         # e.g. ["https://app.example.com"]
+  # How long the audit log is kept, in MINUTES; older entries are deleted.
+  # 0 = forever, the default: deleting a security record is never something that
+  # happens without asking. The privacy notice an administrator publishes can
+  # quote this value, so set it to what your policy promises.
+  auditRetentionMinutes: 0
 
 auth:
   adminEmail: admin@example.com
@@ -263,16 +277,24 @@ cache:
   ttlSeconds: 86400
   sweepIntervalSeconds: 3600
 
+# OpenLineage (optional): report every run to an external catalog. Off when url
+# and file are empty. The API key, if any, goes in secrets.openlineageApiKey.
+# See docs/openlineage.md.
+openlineage:
+  url: ""              # e.g. http://marquez.lineage.svc:5000
+  # Path of the lineage endpoint on the collector: api/v1/lineage for Marquez
+  # and Astro, openapi/openlineage/api/v1/lineage for DataHub.
+  endpoint: api/v1/lineage
+  namespace: tabularia
+  # JSON Lines inside the pod, instead of or besides the URL. The root
+  # filesystem is read-only, so the path must be under /tmp — and the file goes
+  # with the pod: for a durable record use the URL.
+  file: ""
+  timeoutSeconds: 10
+
 # How long a flow waits for its refresh and output steps before giving up.
 # These mirror the application defaults; raise them for very long refreshes.
 # (The orchestrator PODS are configured under gateway.orchestrator below.)
-# OpenLineage (optional): report every run to an external catalog. Off when url
-# and file are empty. The API key, if any, goes in secrets.openlineageApiKey.
-openlineage:
-  url: ""              # e.g. http://marquez.lineage.svc:5000
-  namespace: tabularia
-  file: ""             # JSON Lines inside the pod, instead of or besides the URL
-
 orchestrator:
   refreshWaitSeconds: 600
   outputWaitSeconds: 600
@@ -295,15 +317,22 @@ orchestrator:
 monitoring:
   nodeExporterUrl: ""     # e.g. http://node-exporter.monitoring:9100/metrics
 
+# Any other setting from infrastructure/.env.example that has no value of its own
+# in this file, by its variable name. It goes into the shared ConfigMap, so every
+# pod reads it. Not for secrets: put those in existingSecret. A name this chart
+# already sets is refused, so there is never a doubt about which value wins.
+#   extraEnv:
+#     DB__POOL_SIZE: "12"
+#     INGEST__PARQUET_ROW_GROUP_ROWS: "500000"
+#     AI__MAX_HISTORY_MESSAGES: "40"
+extraEnv: {}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Components
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Control plane: the only public entry point for the API. Auth, RBAC, metadata.
-# It runs as two workloads from the same image — see README → Scaling the
-# gateway.
-# Database schema migrations (Alembic). An init container in every gateway pod runs
-# `python -m app.db.migra` before the application: a fresh database is created, an
+# Database schema migrations (Alembic). An init container in every gateway and
+# orchestrator pod runs `python -m app.db.migra` before the application: a fresh database is created, an
 # existing one is brought to the version of the image, a database from before
 # Alembic is adopted. Concurrent pods queue on a Postgres advisory lock; the
 # application only checks that the database is not behind (DB__AUTO_MIGRATE=false).
@@ -315,6 +344,9 @@ migrations:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
 
+# Control plane: the only public entry point for the API. Auth, RBAC, metadata.
+# It runs as two workloads from the same image — see README → Scaling the
+# gateway.
 gateway:
   # Pods that answer requests. One Python process uses one core and tops out
   # around 95 requests a second (a few hundred people clicking at once): past

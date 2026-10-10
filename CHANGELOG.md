@@ -5,20 +5,33 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
-- **Database migrations with Alembic.** The gateway's schema was `create_all` plus a list
-  of idempotent `ALTER … IF NOT EXISTS` run at startup: additions only, no version, a
-  manual "every new column needs its ALTER" rule, and drift — a database created today and
-  one upgraded over months differed (a missing foreign key, TEXT vs VARCHAR, server
+- **Helm chart: the engine starts with ClickHouse or BigQuery switched on.** Helm reads
+  every number in a values file as a float, and the chart wrote a million or more in
+  exponent form: `CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS: "5e+06"` by default, and
+  `BIGQUERY__MAXIMUM_BYTES_BILLED: "2.147483648e+10"`, which the engine refuses as
+  integers — with either engine enabled its pods would not start. Whole numbers are
+  now written out in full, for every setting. The chart also gains what the
+  application learned since 1.1.0: `app.auditRetentionMinutes`, the AI spending caps,
+  `openlineage.endpoint` and `timeoutSeconds`, and `extraEnv` for any other variable
+  of `infrastructure/.env.example` (a name the chart already sets is refused).
+  `.env.example` documents the variables it lacked (`DB__AUTO_MIGRATE`,
+  `APP__ROOT_PATH`, the OpenLineage endpoint and timeout, the chDB and cross-join
+  limits).
+- **Database migrations with Alembic.** The gateway's schema was `create_all` plus a
+  list of idempotent `ALTER … IF NOT EXISTS` run at startup: additions only, no version,
+  a manual "every new column needs its ALTER" rule, and drift — a database created today
+  and one upgraded over months differed (a missing foreign key, TEXT vs VARCHAR, server
   defaults on one side only). Now the schema has Alembic revisions generated from the
   models, a single command (`python -m app.db.migra`) runs them in one transaction under
   an advisory lock and then compares the database with the models, and in production it
   is a step of its own: a `migrate` init container in the Helm chart (1.2.0); the
   development compose migrates at startup (`DB__AUTO_MIGRATE=true`). Otherwise the
-  application only checks the revision and refuses to start on a database behind its code. A database from before Alembic is adopted on the first run;
-  revisions go forward only and follow expand/contract rules so rolling updates keep
-  working. Three indexes that lived only in the old ALTER list — one of them the unique
-  SSO identity — are now declared in the models; a test fails when models and
-  revisions disagree. See docs/database-migrations.md.
+  application only checks the revision and refuses to start on a database behind its
+  code. A database from before Alembic is adopted on the first run; revisions go forward
+  only and follow expand/contract rules so rolling updates keep working. Three indexes
+  that lived only in the old ALTER list — one of them the unique SSO identity — are now
+  declared in the models; a test fails when models and revisions disagree. See
+  docs/database-migrations.md.
 - **The dbt export's oracles are in the repository.** `e2e/dbt_export/` holds the
   end-to-end checks that prove an exported project gives the data Tabularia publishes
   — every operation on three targets, contracts, lifecycle, the folder in a team

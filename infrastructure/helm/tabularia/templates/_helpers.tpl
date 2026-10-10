@@ -64,6 +64,20 @@ the same .env to every service. It keeps the deployment honest: SECURITY__FERNET
 in particular MUST be identical everywhere or stored database credentials become
 undecryptable.
 */}}
+{{/*
+A value for an environment variable, quoted. Helm reads every number in a values
+file as a float, and `quote` prints a float of a million or more in exponent form
+("5e+06"), which the application refuses as an integer — the engine would not
+start. Whole numbers are printed in full; everything else as it is.
+*/}}
+{{- define "tabularia.env" -}}
+{{- if and (kindIs "float64" .) (eq (float64 (int64 .)) .) -}}
+{{- int64 . | toString | quote -}}
+{{- else -}}
+{{- toString . | quote -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "tabularia.envFrom" -}}
 - configMapRef:
     name: {{ include "tabularia.configMapName" . }}

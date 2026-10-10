@@ -198,10 +198,12 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `SECURITY__FERNET_KEY` *secret* | ✓ | ✓ | **same value everywhere**; encrypts database credentials; every process refuses to start without a valid key |
 | `APP__TIMEZONE` | ✓ | | timezone in which the **gateway** interprets cron schedules. Celery beat keeps its own clock (`CELERY__TIMEZONE`, UTC by default), but the gateway converts schedules to UTC before enqueuing, so leaving beat on UTC is correct |
 | `APP__ROLE` | ✓ | | what a gateway process does: `api` (answer requests), `orchestrator` (schedules, flow executions, clean-up) or `all` (both, the default). Set per workload, not in the shared ConfigMap |
-| `OPENLINEAGE__URL` | | | OpenLineage collector (Marquez, DataHub…); with `OPENLINEAGE__FILE` (JSON Lines) and `OPENLINEAGE__NAMESPACE`. Empty = off. The API key goes in the secret (`secrets.openlineageApiKey`) |
+| `OPENLINEAGE__URL` | ✓ | | OpenLineage collector (Marquez, DataHub…); with `OPENLINEAGE__FILE` (JSON Lines) and `OPENLINEAGE__NAMESPACE`. Empty = off. The API key goes in the secret (`secrets.openlineageApiKey`) |
 | `APP__GATEWAY_THREADS` | ✓ | | threads per gateway process (default 40; 12 is what the chart and the measurements use: fewer serve more). The connection pool follows it |
 | `ORCHESTRATOR__DEAD_AFTER_SECONDS`, `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS`, `ORCHESTRATOR__MAX_CONCURRENT` | ✓ | | when a silent execution is given up for dead (60), when a queued one is no longer started (900), how many one orchestrator carries at once (20) |
 | `DB__HOST`, `DB__PORT`, `DB__USER`, `DB__PASSWORD` *secret*, `DB__NAME` | ✓ | | metadata Postgres |
+| `DB__AUTO_MIGRATE` | ✓ | | leave it `false` (the default): the schema is migrated by the init container (`python -m app.db.migra`) and the gateway only checks it. `true` is for the development compose |
+| `AUDIT__RETENTION_MINUTES` | ✓ | | how long the audit log is kept, in minutes; `0` (the default) = forever. The privacy notice can quote it (`app.auditRetentionMinutes`) |
 | `JWT__SECRET` *secret*, `JWT__ACCESS_TTL_MINUTES` | ✓ | | session tokens, default lifetime 720 minutes |
 | `AUTH__ADMIN_EMAIL`, `AUTH__ADMIN_PASSWORD` *secret*, `AUTH__ADMIN_NAME` | ✓ | | break-glass admin, seeded at first start |
 | `APP__CORS_ORIGINS` | ✓ | | JSON list with the public frontend URL, e.g. `["https://app.example.com"]`. Needed **only** when the frontend is served from a different host than the gateway; the reference ingress puts both on one host, where it can stay unset (`app.corsOrigins` in the chart) |
@@ -212,8 +214,13 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `CELERY__WORKER_CONCURRENCY` | | ✓ | per worker pod |
 | `CACHE__TTL_SECONDS`, `CACHE__SWEEP_INTERVAL_SECONDS` | | ✓ | step cache lifetime and sweep cadence |
 | `CLICKHOUSE_EXTERNAL__*` | | ✓ | optional ClickHouse engine, off when the host is empty |
+| `BIGQUERY__*` | | ✓ | optional BigQuery engine, off when the project is empty; credentials *secret* |
+| `AI__*` | ✓ | | optional AI assistant, off without a base URL and a key (*secret*). Set the spending caps (`AI__MAX_COST_PER_DAY_USD`, `AI__MAX_COST_PER_DAY_TOTAL_USD`) wherever people you do not know can sign in |
 | `OIDC__*` | ✓ | | optional SSO, off when the issuer is empty |
 | `NUXT_PUBLIC_API_BASE`, `NUXT_PUBLIC_BUCKET` | | | frontend, read at startup: public gateway URL and default bucket |
+
+The Helm chart sets the variables above from named values; any other one from
+`infrastructure/.env.example` goes through `extraEnv`, by its variable name.
 
 **SSO behind real hostnames.** `OIDC__REDIRECT_URI` is
 `https://<gateway host>/auth/sso/callback` and must be registered, identical, on the
