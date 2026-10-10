@@ -9,7 +9,7 @@
     "repository": {
       "url": "git@github.com-tabularia:JumpAsAService/Tabularia.git",
       "link_mode": "local-only",
-      "revision": "9bee698db427e2149c93c210374943addc5988c1"
+      "revision": "74517139c976cffc143ca3cc1adbc1bda8d79496"
     },
     "views": [
       {
@@ -58,11 +58,11 @@
           "pending_blob_deletions",
           "login_attempts",
           "flow_presence",
-          "schema_state",
+          "alembic_version",
           "privacy_notice",
           "disabled_engines"
         ],
-        "note": "Tables the platform writes for itself; three of them are the state several gateway copies share."
+        "note": "Tables the platform writes for itself; two of them are the state several gateway copies share."
       },
       {
         "id": "ai",
@@ -72,9 +72,10 @@
           "ai_chats",
           "ai_chat_turns",
           "ai_spend",
-          "users"
+          "users",
+          "dbt_ai_texts"
         ],
-        "note": "Models an administrator enabled, saved conversations with their turns and cost, and a daily spend counter per user."
+        "note": "Models an administrator enabled, saved conversations with turns and cost, a daily spend counter, and the AI texts of dbt exports."
       }
     ]
   },
@@ -413,10 +414,10 @@
       ]
     },
     {
-      "id": "schema_state",
+      "id": "alembic_version",
       "type": "messagebus",
-      "label": "schema_state",
-      "sublabel": "schema fingerprint",
+      "label": "alembic_version",
+      "sublabel": "schema revision",
       "pos": [
         60,
         940
@@ -425,11 +426,11 @@
         165,
         66
       ],
-      "tag": "no model: raw DDL",
+      "tag": "Alembic, no model",
       "sources": [
         {
-          "path": "gateway/app/db/session.py",
-          "label": "init_db"
+          "path": "gateway/app/db/migra.py",
+          "label": "migra"
         }
       ]
     },
@@ -470,6 +471,27 @@
         {
           "path": "gateway/app/models/engine_policy.py",
           "label": "DisabledEngine"
+        }
+      ]
+    },
+    {
+      "id": "dbt_ai_texts",
+      "type": "database",
+      "label": "dbt_ai_texts",
+      "sublabel": "AI texts of dbt exports",
+      "pos": [
+        810,
+        940
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "per flow version",
+      "sources": [
+        {
+          "path": "gateway/app/models/dbt_ai_text.py",
+          "label": "DbtAiText"
         }
       ]
     },
@@ -832,7 +854,8 @@
         "projects nests through parent_id, a self-reference not drawn as an arrow; RBAC is checked against the project.",
         "flow_versions keeps immutable definition history, unique on (flow_id, version).",
         "connections and datasources are each unique on (project_id, name), so names only have to be unique inside a project.",
-        "A datasource can come from a flow, from a database connection, or from neither: all three columns are nullable."
+        "A datasource can come from a flow, from a database connection, or from neither: all three columns are nullable.",
+        "dbt_ai_texts remembers what the AI wrote for a flow's dbt export, per flow version, so exporting the same version again gives the same files."
       ]
     },
     {
@@ -861,8 +884,8 @@
       "dot": "violet",
       "title": "Replicas and contracts",
       "items": [
-        "login_attempts, flow_presence and schema_state moved out of process memory so the gateway can run in several copies; the scheduler sweeps the expired rows.",
-        "schema_state holds a fingerprint of the applied schema: a start-up applies DDL only when it differs, behind an advisory lock.",
+        "login_attempts and flow_presence moved out of process memory so the gateway can run in several copies; the scheduler sweeps the expired rows.",
+        "alembic_version holds the schema's revision: a migration step moves it forward before a release, and a gateway refuses a database behind its code.",
         "data_contracts, data_contract_versions and data_contract_results carry no foreign key on purpose: SQLite does not enforce them in tests, and the rows are removed explicitly when the datasource goes.",
         "data_contract_results.notify is the outbox of the alerts: pending rows are sent by the scheduler, claimed one at a time."
       ]

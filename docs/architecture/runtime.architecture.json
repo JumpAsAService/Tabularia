@@ -7,7 +7,7 @@
     "repository": {
       "url": "git@github.com-tabularia:JumpAsAService/Tabularia.git",
       "link_mode": "local-only",
-      "revision": "9bee698db427e2149c93c210374943addc5988c1"
+      "revision": "74517139c976cffc143ca3cc1adbc1bda8d79496"
     },
     "views": [
       {
@@ -143,8 +143,8 @@
       ],
       "sources": [
         {
-          "path": "gateway/app/db/session.py",
-          "label": "schema, once, behind a lock"
+          "path": "gateway/app/db/migra.py",
+          "label": "schema: a migration step"
         },
         {
           "path": "gateway/app/models/run.py",
