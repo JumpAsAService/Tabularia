@@ -461,6 +461,22 @@ def test_group_by_std_var_median(storage, ordini, name):
 
 
 @pytest.mark.parametrize("name", ENGINES)
+def test_std_var_di_un_solo_valore_sono_null_e_non_nan(storage, ordini, name):
+    """std/var campionarie di un solo valore: NULL su TUTTI i motori. ClickHouse dava NaN
+    (`stddevSamp` di un valore), che «riempi i NULL» a valle non sostituisce; `check`
+    normalizza NaN a None, quindi qui si guarda il valore GREZZO (decisione dell'utente,
+    2026-10-10: «sistemiamolo a null e basta»). Vale anche nel pivot."""
+    ops = [{"type": "group_by", "params": {"by": ["canale"], "aggregations": [_agg("importo", "std", "sd"), _agg("importo", "var", "vr")]}}]
+    res = run(name, storage, ordini, ops)
+    dettaglio = next(r for r in res.rows if r.get("canale") == "Dettaglio")
+    assert dettaglio["sd"] is None and dettaglio["vr"] is None, f"[{name}] {dettaglio}"
+    piv = [{"type": "pivot", "params": {"index": ["canale"], "on": ["attivo"], "values": "importo", "func": "std"}}]
+    res = run(name, storage, ordini, piv)
+    grezzi = [v for r in res.rows for k, v in r.items() if k != "canale"]
+    assert not any(isinstance(v, float) and math.isnan(v) for v in grezzi), f"[{name}] {res.rows}"
+
+
+@pytest.mark.parametrize("name", ENGINES)
 def test_group_by_multiple_keys_with_nulls(storage, ordini, name):
     ops = [{"type": "group_by", "params": {"by": ["canale", "attivo"], "aggregations": [_agg("id", "count", "n")]}}]
     check(name, storage, ordini, ops, [

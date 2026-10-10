@@ -44,7 +44,9 @@ five engines (BigQuery live, against a real project):
 - comparisons with `NULL` are false — `ne` and `not_in` do **not** keep nulls;
 - aggregates ignore nulls; `count` and `distinct count` never count nulls; `sum`, `mean`,
   `min`, `max` over an all-null group return `NULL`;
-- `std` and `var` are the **sample** versions (n−1), and `NULL` with fewer than 2 values;
+- `std` and `var` are the **sample** versions (n−1), and `NULL` with fewer than 2 values —
+  on every engine, the ClickHouse ones included (ClickHouse alone would give `NaN`), and in
+  the pivot too;
 - `median` uses linear interpolation (R7);
 - sorting always puts **nulls last**, ascending and descending — a "top N" never returns
   nulls;
@@ -90,7 +92,6 @@ Legitimate dialect differences. Know them, choose accordingly.
 | Topic | Behaviour |
 |---|---|
 | Integer overflow in `sum` | Polars and chDB wrap around silently; DuckDB and BigQuery raise an error. |
-| `std` / `var` of a single value | Polars, DuckDB and BigQuery give `NULL`; the ClickHouse engines give `NaN`, which is **not** replaced by "fill null" downstream. |
 | `first` / `last`, and which row `unique` keeps | Deterministic in practice in-process, but not guaranteed on a parallel ClickHouse server nor on BigQuery (`ANY_VALUE`, `ROW_NUMBER` over an unordered partition). Sort explicitly if the choice matters. |
 | Casting text to `datetime` | The ClickHouse engines parse almost anything, including a numeric string read as a Unix timestamp; Polars, DuckDB and BigQuery only accept standard formats and return `NULL` otherwise. |
 | Casting text to `date` | Permissiveness varies: `2024-1-5` works on Polars, DuckDB and BigQuery, `2024/01/05` only on DuckDB. Use ISO dates. |

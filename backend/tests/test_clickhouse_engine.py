@@ -164,6 +164,25 @@ def test_compute_and_rename(storage, src):
     assert {r["paese"]: r["x2"] for r in res.rows}["DE"] == 500
 
 
+def test_compute_con_extract_e_colonna_url(storage, src):
+    # EXTRACT(… FROM …) e un nome come `url` erano rifiutati dal controllo a parole (2026-10-10)
+    ops = [{"type": "compute", "params": {"columns": [{"name": "url", "expr": "vendite * 3"}, {"name": "x", "expr": "EXTRACT(YEAR FROM toDate('2024-05-06')) + url * 0"}]}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    assert {r["paese"]: r["x"] for r in res.rows}["DE"] == 2024
+
+
+def test_compute_rifiuta_table_function_e_dizionari(storage, src):
+    for cattiva in ("(SELECT 1 FROM s3('http://minio:9000/x.parquet'))", "dictGet('d', 'v', toUInt64(1))"):
+        with pytest.raises(EngineError, match="non consentita"):
+            _engine(storage).preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": cattiva}]}}], limit=5)
+
+
+def test_nodo_sql_con_un_suo_with(storage, src):
+    q = "WITH grandi AS (SELECT * FROM input WHERE vendite > 100), conta AS (SELECT count() AS n FROM self) SELECT paese, vendite, (SELECT n FROM conta) AS tutte FROM grandi"
+    res = _engine(storage).preview(src, [{"type": "sql", "params": {"query": q}}], limit=10)
+    assert res.row_count >= 1 and {c.name for c in res.columns} == {"paese", "vendite", "tutte"}
+
+
 def test_preview_truncated(storage, src):
     res = _engine(storage).preview(src, [], limit=2)
     assert res.row_count == 2 and res.truncated

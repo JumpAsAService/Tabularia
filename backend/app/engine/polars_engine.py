@@ -18,6 +18,14 @@ from contextlib import contextmanager
 from typing import Any, Iterator
 
 import polars as pl
+from polars.exceptions import PanicException
+
+# Un errore interno di Polars (panic in Rust, es. un tipo Arrow che il lettore
+# streaming non conosce) arriva in Python come PanicException, che deriva da
+# BaseException e NON da Exception: senza nominarla, nessun `except Exception` la
+# ferma e il processo del worker esce a metà lavoro (WorkerLostError, run fallito
+# senza spiegazione). Trovato dall'oracolo dell'export dbt il 2026-10-10.
+_ERRORI_POLARS = (Exception, PanicException)
 
 from app.engine.base import (
     ColumnInfo,
@@ -82,7 +90,7 @@ class PolarsEngine(DeferredStepCache, Engine):
         del collect classico."""
         try:
             lf.sink_parquet(path)
-        except Exception as e:  # nodo non supportato dall'engine streaming
+        except _ERRORI_POLARS as e:  # nodo non supportato dall'engine streaming
             from app.engine.query_tag import was_interrupted
 
             if was_interrupted(e):  # preview superata: NON rifare tutto in memoria
@@ -126,7 +134,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                 lf = fn(lf, op.params, ctx)
             except EngineError:
                 raise
-            except Exception as e:  # errore Polars su questa operazione
+            except _ERRORI_POLARS as e:  # errore Polars su questa operazione
                 raise OperationError(op.type, i, str(e)) from e
         return lf
 
@@ -156,7 +164,7 @@ class PolarsEngine(DeferredStepCache, Engine):
             self._sink(lf, path)
         except EngineError:
             raise
-        except Exception as e:
+        except _ERRORI_POLARS as e:
             raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
@@ -196,7 +204,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                 df = lf.limit(limit + 1).collect(engine="streaming")
             except EngineError:
                 raise
-            except Exception as e:  # errori Polars a tempo di esecuzione (lazy)
+            except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
             truncated = df.height > limit
@@ -246,7 +254,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                         lf.sink_csv(out_path)
                     except EngineError:
                         raise
-                    except Exception as e:  # nodo non supportato dallo streaming
+                    except _ERRORI_POLARS as e:  # nodo non supportato dallo streaming
                         logger.warning("sink_csv streaming fallito (%s), fallback in-memory", e)
                         lf.collect(engine="streaming").write_csv(out_path)
                 elif fmt == "xlsx":
@@ -261,7 +269,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                     raise EngineError(f"formato di export non supportato: '{fmt}' (usa csv o xlsx)")
             except EngineError:
                 raise
-            except Exception as e:  # errori Polars a tempo di esecuzione (lazy)
+            except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
     # ── Run (materializza l'output completo) ──────────────────────────────
@@ -282,7 +290,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                 self._sink(lf, out_path)
             except EngineError:
                 raise
-            except Exception as e:  # errori Polars a tempo di esecuzione (lazy)
+            except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
                 raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)

@@ -20,6 +20,7 @@ import re
 from typing import Any, Callable
 
 from app.engine.context import MAX_CROSS_JOIN_ROWS
+from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
 from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, pivot_label, sample_threshold
 from app.engine.sql_guard import ensure_reads_only_input
@@ -266,6 +267,17 @@ _AGG = {
 }
 
 
+def _aggregato(func: str, col_sql: str, cond: str | None = None) -> str:
+    """L'aggregazione in SQL ClickHouse (col combinatore -If se c'è una condizione).
+    std/var campionarie: NULL con meno di due valori, come Polars, DuckDB e BigQuery
+    (ClickHouse dà NaN, che «riempi i NULL» a valle non sostituisce)."""
+    suff, extra = ("If", f", {cond}") if cond else ("", "")
+    espr = f"{_AGG[func]}{suff}({col_sql}{extra})"
+    if func in ("std", "var"):
+        return f"if(count{suff}({col_sql}{extra}) > 1, {espr}, NULL)"
+    return espr
+
+
 @_register("group_by")
 def op_group_by(sql, params, ctx):
     by = _as_list(_require(params, "by"))
@@ -277,18 +289,13 @@ def op_group_by(sql, params, ctx):
         if func not in _AGG:
             raise EngineError(f"group_by: funzione non supportata '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
-        expr = f"uniqExact({_qi(col)})" if func == "n_unique" else f"{_AGG[func]}({_qi(col)})"
+        expr = f"uniqExact({_qi(col)})" if func == "n_unique" else _aggregato(func, _qi(col))
         parts.append(f"{expr} AS {_qi(alias)}")
     return f"SELECT {', '.join(parts)} FROM {_sub(sql)} GROUP BY {by_sql}"
 
 
 # ── compute (espressioni scalari, SENZA subquery né lettura file/rete) ─────────
-_FORBIDDEN_IN_EXPR = re.compile(
-    r"\b(?:select|from|with|insert|attach|create|"
-    r"file|url|s3|hdfs|remote|remoteSecure|mysql|postgresql|jdbc|odbc|"
-    r"clusterAllReplicas|cluster|dictionary|merge|numbers|zeros)\b",
-    re.IGNORECASE,
-)
+# il controllo è in app/engine/espressioni.py (analizza l'espressione, non cerca parole)
 
 
 @_register("compute")
@@ -302,10 +309,11 @@ def op_compute(sql, params, ctx):
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
             raise EngineError("compute: nome ed espressione sono obbligatori")
-        if _FORBIDDEN_IN_EXPR.search(expr):
+        if espressione_vietata(expr, "clickhouse"):
             raise EngineError(
                 f"compute: espressione di '{name}' non consentita (niente subquery, "
-                "FROM o table function di lettura — solo espressioni scalari)."
+                "tabelle, table function o funzioni che leggono dati fuori dalla riga — "
+                "solo espressioni scalari)."
             )
         expr = _utf8_functions(expr)
         if name in existing:
@@ -381,8 +389,15 @@ def op_sql(sql, params, ctx):
     # lista BIANCA delle tabelle: la lista nera qui sopra resta come prima linea,
     # ma da sola non bastava (`merge()`, `information_schema`: vedi sql_guard)
     ensure_reads_only_input(query, "clickhouse")
-    # espone l'input come `self` (e alias `input`); resta una SELECT annidabile
-    return f"WITH input AS ({sql}), self AS (SELECT * FROM input) {query}"
+    # espone l'input come `self` (e alias `input`); resta una SELECT annidabile.
+    # Una query col SUO `WITH` riceve le nostre CTE in testa al suo elenco: due WITH di
+    # fila non sono SQL valido (trovato dall'oracolo dell'export dbt il 2026-10-10:
+    # su ClickHouse un nodo sql con WITH falliva con SYNTAX_ERROR, su Polars no)
+    nostre = f"input AS ({sql}), self AS (SELECT * FROM input)"
+    proprio = re.match(r"(?is)^\s*with\s+", query)
+    if proprio:
+        return f"WITH {nostre}, {query[proprio.end():]}"
+    return f"WITH {nostre} {query}"
 
 
 # ── join / union (leggono il lato destro dalla sorgente annidata) ─────────────
@@ -498,7 +513,7 @@ def op_pivot(sql, params, ctx):
         colname = PIVOT_LABEL_SEP.join(pivot_label(v) for v in combo)
         # combinatore -If: aggrega solo le righe della combinazione; nessuna riga
         # (o soli NULL) → NULL, tranne count/n_unique → 0 (Int64 come altrove)
-        expr = f"{_AGG[func]}If({_qi(values)}, {cond})"
+        expr = _aggregato(func, _qi(values), cond)
         if func in ("count", "n_unique"):
             expr = f"toInt64({expr})"
         cols.append(f"{expr} AS {_qi(colname)}")

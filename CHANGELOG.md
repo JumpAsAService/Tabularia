@@ -5,6 +5,39 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **`std` and `var` of a single value are NULL on ClickHouse too.** The ClickHouse and
+  chDB engines gave `NaN` where Polars, DuckDB and BigQuery give `NULL`, in an aggregate
+  and in a pivot, and "fill null" downstream did not replace it. Now every engine gives
+  `NULL`, and so does a dbt project on ClickHouse. A cross-engine test reads the raw
+  value (the old one turned `NaN` into `NULL` before comparing, so it never saw it).
+- **PostgreSQL `numeric` columns are numbers.** Amounts and prices from Postgres were
+  imported as text, so they could not be summed or compared with a number; they are now
+  doubles, like the decimals of a CSV or an Excel file. The new type arrives with the
+  next refresh of each datasource: a flow that treated such a column as text, or a
+  contract `column` rule that declared it `string`, needs a look then (a blocking rule
+  keeps the old data and says so). Doubles and not exact decimals: the Postgres driver
+  does not say the precision, and the engines compute doubles the same way. Also found
+  by the dbt export oracle: on ClickHouse the same value read as text was `100` instead
+  of `100.00`.
+- **ClickHouse: `EXTRACT(YEAR FROM data)` and a `WITH` in the sql node.** ClickHouse
+  is the engine almost every customer runs, and two everyday things failed on it.
+  The compute check looked for words, so `EXTRACT(… FROM …)`, `TRIM(… FROM …)` or a
+  column named `url` were refused as if they were subqueries; it now parses the
+  expression and refuses only what reads outside the row — subqueries, tables and
+  table functions (`s3()`, `file()`, `remote()`…), dictionaries, `joinGet`, models.
+  A sql node whose query had its own `WITH` failed with a syntax error, because the
+  engine put a second `WITH` in front of it; the engine's `input`/`self` now join the
+  query's own list. Both found by running the dbt export oracle with ClickHouse as
+  the reference engine, against a local ClickHouse reading the parquet in MinIO
+  through `s3()`, as in production.
+- **A Polars panic no longer kills a worker.** Found by the same oracle: Postgres
+  `numeric` columns were written to parquet as an opaque Arrow extension type, on
+  which Polars' streaming reader panics as soon as a filter or a null check is
+  pushed into the read; the panic is a `BaseException`, which no `except Exception`
+  stopped, so the worker process exited mid-task and the run failed with
+  "Worker exited prematurely". The import now writes the plain text underneath (the
+  type users already saw), the Polars engine catches panics as errors, and every
+  task turns a panic that still slips through into an ordinary failed run.
 - **No more surprise logouts.** The frontend dropped the session whenever its
   "who am I?" request failed for any reason: a page change while the request was
   still in flight, a network hiccup, or a 502/503 while a gateway restarted — so a

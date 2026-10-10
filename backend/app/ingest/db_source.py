@@ -146,9 +146,47 @@ def _batches_postgresql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         with c.cursor() as cur:
             cur.execute(query)
             reader = cur.fetch_record_batch()  # RecordBatchReader: streaming vero
-            yield reader.schema
+            yield _schema_senza_estensioni(reader.schema)
             for batch in reader:
-                yield batch
+                yield _batch_senza_estensioni(batch)
+
+
+# Il driver ADBC di Postgres restituisce i tipi che Arrow non ha (numeric, e gli
+# altri tipi «di casa» di Postgres) come ESTENSIONE opaca (`arrow.opaque`) sopra
+# un testo. Scritta così nel parquet, Polars la legge come testo ma il suo
+# lettore in streaming va in PANIC appena un filtro o un controllo dei NULL viene
+# spinto dentro la lettura di quella colonna — e il worker usciva a metà lavoro.
+# Si scrive senza involucro (trovato dall'oracolo dell'export dbt il 2026-10-10):
+# · `numeric` è un NUMERO (Float64): importi e prezzi si sommano, come quelli di un
+#   CSV o di un Excel (scelta dell'utente, 2026-10-10; prima erano testo e `sum` li
+#   rifiutava). Float64 e non decimal: il driver non dice precisione e scala, e i
+#   cinque motori calcolano i double allo stesso modo (ClickHouse tronca le divisioni
+#   fra decimali alla scala della colonna, gli altri no). NaN e ±Infinity restano tali.
+# · gli altri tipi opachi restano il loro testo.
+def _tipo_senza_estensione(t):
+    if isinstance(t, pa.OpaqueType) and t.type_name == "numeric":
+        return pa.float64()
+    if isinstance(t, pa.BaseExtensionType):
+        base = t.storage_type
+        return pa.string() if (pa.types.is_string(base) or pa.types.is_large_string(base) or str(base) in ("string_view", "utf8_view")) else base
+    return t
+
+
+def _schema_senza_estensioni(schema):
+    if not any(isinstance(f.type, pa.BaseExtensionType) for f in schema):
+        return schema
+    return pa.schema([pa.field(f.name, _tipo_senza_estensione(f.type), nullable=f.nullable) for f in schema])
+
+
+def _batch_senza_estensioni(batch):
+    if not any(isinstance(f.type, pa.BaseExtensionType) for f in batch.schema):
+        return batch
+    cols = []
+    for arr in batch.columns:
+        if isinstance(arr.type, pa.BaseExtensionType):
+            arr = pc.cast(arr.storage, _tipo_senza_estensione(arr.type))
+        cols.append(arr)
+    return pa.RecordBatch.from_arrays(cols, schema=_schema_senza_estensioni(batch.schema))
 
 
 # ClickHouse esporta in Arrow i tipi temporali come INTERI grezzi (Date→uint16

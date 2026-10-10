@@ -1,6 +1,6 @@
 import logging
 
-from celery import Celery
+from celery import Celery, Task
 from celery.signals import worker_ready
 from app.core.config import get_settings, resolve_max_memory_per_child_kb
 
@@ -11,11 +11,30 @@ settings = get_settings()
 # decifrare le credenziali non deve nemmeno partire senza
 settings.check_required_secrets()
 
+class _TaskCheNonUccideIlWorker(Task):
+    """Rete di sicurezza per OGNI task (run, anteprime, contratti, export): un panic
+    di Polars (PanicException, figlia di BaseException e non di Exception) che
+    sfugge al motore farebbe uscire il processo figlio di Celery a metà lavoro
+    (WorkerLostError: il run fallisce senza un perché e il worker si riavvia). Qui
+    diventa un errore del task come gli altri, col suo messaggio."""
+
+    def __call__(self, *args, **kwargs):
+        from polars.exceptions import PanicException
+
+        try:
+            return super().__call__(*args, **kwargs)
+        except PanicException as e:
+            from app.engine.exceptions import EngineError
+
+            raise EngineError(f"Errore interno del motore di calcolo (Polars): {str(e)[:400]}") from None
+
+
 celery_app = Celery(
     "data_prep",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
     include=["app.tasks.jobs", "app.tasks.contract_jobs"],
+    task_cls=_TaskCheNonUccideIlWorker,
 )
 
 celery_app.conf.update(
