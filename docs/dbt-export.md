@@ -296,9 +296,15 @@ columns in order, rows, and order where the order is the point:
 - **the dbt lifecycle**: `parse`, `compile`, `docs generate`; a table written in append
   doubles on the second `dbt run` (as two Tabularia runs do) and `--full-refresh` starts
   over — natively, in the flow's own destination table;
-- **ClickHouse** as native warehouse, and every Sample flow in both targets.
+- **ClickHouse** as native warehouse and as the ClickHouse target, and every Sample
+  flow in every target its export plan allows;
+- **the folder package** copied into a team project with its own model and
+  `sources.yml`; **determinism** across exports and restarts; the **dialog** in a
+  browser; the **AI** with the real provider.
 
-The tools are durable scripts and run again on every change.
+The oracles are in the repository, in [`e2e/dbt_export/`](../e2e/dbt_export/README.md):
+`python3 e2e/dbt_export/esegui.py` runs them against a running stack and says which
+are green. Run them after any change to the exporter or to the engines it mirrors.
 
 ## Limits
 

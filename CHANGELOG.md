@@ -5,6 +5,14 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The dbt export's oracles are in the repository.** `e2e/dbt_export/` holds the
+  end-to-end checks that prove an exported project gives the data Tabularia publishes
+  — every operation on three targets, contracts, lifecycle, the folder in a team
+  project, every Sample flow, determinism, the dialog in a browser, the AI — with the
+  image of the real dbt they run (`Dockerfile.dbt`) and a runner (`esegui.py veloce |
+  completo | browser | ai`) that checks the prerequisites, runs them against a stack
+  and says which are green. Everything installation-specific comes from environment
+  variables.
 - **A dbt model for ClickHouse is read by ClickHouse before it is written.** sqlglot
   translated Postgres constructs ClickHouse does not have (`SIMILAR TO`, `LATERAL`,
   `TABLESAMPLE`) without an error, and the data team found out at `dbt run`. Every

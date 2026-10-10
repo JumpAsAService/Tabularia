@@ -1,0 +1,10 @@
+# L'immagine con dbt VERO per gli oracoli dell'export (e2e/dbt_export): dbt-core con
+# gli adapter dei tre target. Versioni fissate: quelle con cui gli oracoli sono verdi.
+#   docker build -f e2e/dbt_export/Dockerfile.dbt -t tabularia-dbt-e2e e2e/dbt_export
+# (esegui.py la costruisce da solo se manca)
+FROM python:3.12.15-slim
+RUN pip install --no-cache-dir --quiet \
+        "dbt-core==1.12.5" "dbt-duckdb==1.11.0" "dbt-postgres==1.11.0" "dbt-clickhouse==1.10.3" \
+        "duckdb==1.5.6" "clickhouse-connect==1.10.0" "psycopg2-binary==2.9.13" \
+    && dbt --version
+WORKDIR /progetto
