@@ -8,7 +8,7 @@ strade che eliminano una datasource romperebbe solo in produzione.
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Column, Text, UniqueConstraint
+from sqlalchemy import Column, Index, Text, UniqueConstraint, text
 from sqlmodel import Field, SQLModel
 
 
@@ -68,6 +68,11 @@ class DataContractVersion(SQLModel, table=True):
 class DataContractResult(SQLModel, table=True):
     """Una valutazione del contratto: lo storico."""
     __tablename__ = "data_contract_results"
+    __table_args__ = (
+        # la coda degli avvisi da mandare: solo le righe in attesa
+        Index("ix_contract_results_to_notify", "id",
+              postgresql_where=text("notify = 'pending'"), sqlite_where=text("notify = 'pending'")),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     datasource_id: int = Field(index=True)

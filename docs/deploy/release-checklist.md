@@ -5,15 +5,19 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
 
 ## Before
 
-1. **Schema.** The gateway applies its lightweight migrations itself at startup
-   (`create_all` plus idempotent `ALTER … ADD COLUMN IF NOT EXISTS`). Several
-   processes may start together: a Postgres advisory lock puts them in line, and
-   a process that finds the schema of its own version already applied (a
-   fingerprint kept in `schema_state`) skips the statements altogether — so only
-   the first process of a new version migrates, and a restart never does.
-   To rehearse an upgrade, run the previous version's `init_db` on a scratch
-   database and then the new one; both must succeed and the second must be a
-   no-op the second time.
+1. **Schema.** Database migrations are a step of their own, run before the new
+   gateways start: `python -m app.db.migra` from the new gateway image (the Helm
+   chart runs it as an init container; in a compose deployment it is a one-shot
+   service the gateways wait for). It applies the Alembic revisions in one
+   transaction under a Postgres advisory lock, then checks the database against
+   the models and rolls everything back on any difference. A gateway refuses to
+   start on a database behind its code. Revisions go forward only and are written
+   so the previous version keeps working during a rolling update; undoing a
+   migration means restoring the backup below. A database from before Alembic
+   (until 2026-10) is adopted by the first run, nothing to do by hand. To
+   rehearse an upgrade, restore the backup on a scratch database and run the step
+   against it, then `python -m app.db.migra controlla`. See
+   [database-migrations.md](../database-migrations.md).
 2. **Backups.** Take a backup of the Postgres metadata database. Object storage
    is append-only by design (every refresh writes a new snapshot), but the
    metadata is not.

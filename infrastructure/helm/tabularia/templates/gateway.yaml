@@ -56,6 +56,29 @@ spec:
       serviceAccountName: {{ include "tabularia.serviceAccountName" $ }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- if $.Values.migrations.enabled }}
+      initContainers:
+        # The database schema, before the application starts: the Alembic
+        # migrations (gateway/app/db/migra.py). The first pod of a new version
+        # does the work, the others find it done — a Postgres advisory lock
+        # queues them. The application itself never migrates (DB__AUTO_MIGRATE
+        # stays false): it only checks the database is not behind its code.
+        # Migrations are written to work with the previous version still
+        # running (expand/contract), so a rolling update is safe.
+        - name: migrate
+          image: {{ include "tabularia.image" (dict "root" $ "component" "gateway") }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          command: ["python", "-m", "app.db.migra"]
+          envFrom:
+            {{- include "tabularia.envFrom" $ | nindent 12 }}
+          resources:
+            {{- toYaml $.Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
       containers:
         - name: {{ .component }}
           image: {{ include "tabularia.image" (dict "root" $ "component" "gateway") }}
@@ -74,9 +97,8 @@ spec:
               value: {{ $.Values.gateway.threads | quote }}
           envFrom:
             {{- include "tabularia.envFrom" $ | nindent 12 }}
-          # The first pod of a new version creates or migrates the schema at
-          # startup (the others find it done and skip it). Give it room before
-          # probing.
+          # The schema is migrated by the init container above; the application
+          # starts once it is done. Room before probing for a cold start.
           startupProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 5

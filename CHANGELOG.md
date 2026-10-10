@@ -5,6 +5,20 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Database migrations with Alembic.** The gateway's schema was `create_all` plus a list
+  of idempotent `ALTER … IF NOT EXISTS` run at startup: additions only, no version, a
+  manual "every new column needs its ALTER" rule, and drift — a database created today and
+  one upgraded over months differed (a missing foreign key, TEXT vs VARCHAR, server
+  defaults on one side only). Now the schema has Alembic revisions generated from the
+  models, a single command (`python -m app.db.migra`) runs them in one transaction under
+  an advisory lock and then compares the database with the models, and in production it
+  is a step of its own: a `migrate` init container in the Helm chart (1.2.0); the
+  development compose migrates at startup (`DB__AUTO_MIGRATE=true`). Otherwise the
+  application only checks the revision and refuses to start on a database behind its code. A database from before Alembic is adopted on the first run;
+  revisions go forward only and follow expand/contract rules so rolling updates keep
+  working. Three indexes that lived only in the old ALTER list — one of them the unique
+  SSO identity — are now declared in the models; a test fails when models and
+  revisions disagree. See docs/database-migrations.md.
 - **The dbt export's oracles are in the repository.** `e2e/dbt_export/` holds the
   end-to-end checks that prove an exported project gives the data Tabularia publishes
   — every operation on three targets, contracts, lifecycle, the folder in a team

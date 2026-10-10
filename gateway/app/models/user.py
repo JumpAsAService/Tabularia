@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional
+from sqlalchemy import Index
 from sqlmodel import SQLModel, Field
 
 
@@ -16,6 +17,11 @@ class UserGroupLink(SQLModel, table=True):
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
+    __table_args__ = (
+        # un'identità dell'IdP (issuer + subject) appartiene a UN account solo: è il
+        # vincolo che impedisce di entrare in un account altrui con lo SSO
+        Index("uq_users_oidc_identity", "oidc_issuer", "oidc_subject", unique=True),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
     full_name: str = ""

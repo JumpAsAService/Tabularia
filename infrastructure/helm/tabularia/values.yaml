@@ -302,6 +302,19 @@ monitoring:
 # Control plane: the only public entry point for the API. Auth, RBAC, metadata.
 # It runs as two workloads from the same image — see README → Scaling the
 # gateway.
+# Database schema migrations (Alembic). An init container in every gateway pod runs
+# `python -m app.db.migra` before the application: a fresh database is created, an
+# existing one is brought to the version of the image, a database from before
+# Alembic is adopted. Concurrent pods queue on a Postgres advisory lock; the
+# application only checks that the database is not behind (DB__AUTO_MIGRATE=false).
+# Disable it only if you run the same command as a step of your own pipeline
+# before upgrading. See docs/database-migrations.md.
+migrations:
+  enabled: true
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
 gateway:
   # Pods that answer requests. One Python process uses one core and tops out
   # around 95 requests a second (a few hundred people clicking at once): past

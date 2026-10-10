@@ -240,7 +240,7 @@ pinned in the spec.
 | Web UI | Nuxt 3 app, calls the gateway only (JWT) |
 | Gateway | FastAPI control plane: auth, RBAC, audit; proxies to the engine after the permission check. Stateless between requests, so it runs in as many copies as you like (`APP__ROLE=api`) |
 | Orchestrator | the same image in another role (`APP__ROLE=orchestrator`): fires the schedules and runs the flows. Each run is a row in Postgres that any orchestrator claims with a conditional update, so copies never fire a schedule twice. `APP__ROLE=all` (the default) does both jobs in one process |
-| PostgreSQL | control-plane metadata (users, groups, projects, versioned flows, connections, runs, schedules, audit) |
+| PostgreSQL | control-plane metadata (users, groups, projects, versioned flows, connections, runs, schedules, audit); its schema evolves through Alembic revisions ([database migrations](docs/database-migrations.md)) |
 | Engine API | FastAPI on the private network: turns every preview and run into a Celery task |
 | Valkey | Celery broker, step-cache index, preview slots |
 | Run worker / preview worker | Celery workers on two queues (`celery`: runs, DB ingest, export · `preview`: interactive previews); in-process engines (Polars, DuckDB, chDB) and the clients of the external ones |
@@ -260,7 +260,7 @@ served 500 concurrent users at a 0.12 s p95 on one laptop.
 
 That metadata Postgres has a diagram of its own:
 **[Open the metadata database schema](https://jumpasaservice.github.io/Tabularia/architecture/metadata-schema.html)**
-— 27 tables and all 35 foreign keys, read back from a live database rather than
+— 28 tables and all 35 foreign keys, read back from a live database rather than
 transcribed from the models, and generated with Archify from
 [`docs/architecture/metadata-schema.architecture.json`](docs/architecture/metadata-schema.architecture.json).
 
@@ -663,6 +663,16 @@ workers refuse to start without a valid key, in development too. With
 (`JWT__SECRET`, admin and DB passwords) until they are overridden. Storage, broker,
 database, timezone and engines are all env-driven — pointing at managed services is a
 config change, not a code change.
+
+**Database schema:** the metadata schema is versioned with Alembic revisions in
+[`gateway/app/db/migrations/versions/`](gateway/app/db/migrations/versions/). The
+development compose migrates at startup (`DB__AUTO_MIGRATE=true`). Everywhere else the
+migration is a step of its own, `python -m app.db.migra`, run before the new version
+starts (the Helm chart does it in an init container): it applies the revisions in one
+transaction and checks the result against the models, and a gateway refuses to start on
+a database behind its code. Revisions go forward only and keep the previous version
+working during a rolling update; an installation from before Alembic is adopted by the
+first run. How to add a revision: [`docs/database-migrations.md`](docs/database-migrations.md).
 
 ## Sample data (optional)
 

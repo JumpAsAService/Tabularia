@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
-from app.db.session import backfill_flow_versions, init_db, lucchetto_di_avvio, wait_for_db
+from app.db.migra import prepara_database
+from app.db.session import backfill_flow_versions, lucchetto_di_avvio
 from app.db.seed import seed_admin
 from app.services.orchestrator import coda_loop
 from app.services.scheduler import scheduler_loop
@@ -66,11 +67,11 @@ async def lifespan(app: FastAPI):
     import anyio.to_thread
 
     anyio.to_thread.current_default_thread_limiter().total_tokens = get_settings().app.gateway_threads
-    # crea le tabelle e semina l'admin da env (idempotente). Uno alla volta: più
-    # processi possono partire insieme
-    wait_for_db()
+    # lo schema: migrato (sviluppo, DB__AUTO_MIGRATE) o controllato (produzione: lo
+    # migra un passo separato) — vedi app/db/migra.py. Poi l'admin da env
+    # (idempotente). Uno alla volta: più processi possono partire insieme
+    prepara_database()
     with lucchetto_di_avvio():
-        init_db()
         seed_admin()
         backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
     stop = asyncio.Event()

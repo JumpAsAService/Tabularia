@@ -48,10 +48,12 @@ overrides them with `--reload`, which must not reach production.
   database: a schedule slot and a queued execution are each taken by exactly one, and
   a unique index keeps a flow from having two executions running. `all` (the default,
   one process doing both) is what the development compose file runs.
-- **Schema.** The first process of a new version creates or migrates the schema at
-  startup, under a Postgres advisory lock, and seeds the admin user. A process that
-  finds the schema current does not touch it, so restarts and scale-ups run no DDL
-  against a database that other replicas are using.
+- **Schema.** Migrations (Alembic) are a step of their own: `python -m app.db.migra`,
+  run by an init container in the Helm chart before the application starts, under a
+  Postgres advisory lock. The application never migrates in production; it checks that
+  the database is not behind its code and refuses to start if it is (a newer database
+  is fine: that is the previous version during a rolling update). It seeds the admin
+  user. See [database-migrations.md](../database-migrations.md).
 - **Database connections.** Each gateway and orchestrator process keeps its own pool,
   up to `APP__GATEWAY_THREADS` × 1.25 + `DB__MAX_OVERFLOW` (25 with twelve threads):
   size Postgres' `max_connections` for the sum.
@@ -152,7 +154,7 @@ The gateway itself writes no files, so a small `emptyDir` on `/tmp` is enough. T
 dependencies are included only with `--build-arg WITH_DEV=true`, which the local compose
 sets. Production size: 199 MB.
 
-*Verified* read-only against an empty PostgreSQL: the startup migrations create the
+*Verified* read-only against an empty PostgreSQL: the migration step creates the
 schema, the admin user is seeded, login works. The `securityContext` shown for the backend
 applies unchanged.
 

@@ -21,6 +21,7 @@ dependencies = [
     "pydantic-ai-slim[openai]>=2.40.0",
     "openlineage-python>=1.53.0",
     "sqlglot>=25.0.0",
+    "alembic>=1.16",
 ]
 
 [dependency-groups]

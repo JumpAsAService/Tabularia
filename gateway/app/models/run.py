@@ -41,6 +41,13 @@ class Run(SQLModel, table=True):
             postgresql_where=text(LIVE_ORCHESTRATION),
             sqlite_where=text(LIVE_ORCHESTRATION),
         ),
+        # la coda delle orchestrazioni da rivendicare: solo le righe in attesa
+        Index(
+            "ix_runs_orchestration_queue",
+            "id",
+            postgresql_where=text("kind = 'orchestration' AND status = 'PENDING'"),
+            sqlite_where=text("kind = 'orchestration' AND status = 'PENDING'"),
+        ),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
     # kind="flow": esecuzione di un flusso (flow_id valorizzato).

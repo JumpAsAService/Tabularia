@@ -125,6 +125,9 @@ services:
       - ENGINE__BUCKET=${STORAGE__BUCKET:-data-prep}
       - DB__HOST=postgres
       - DB__PORT=5432
+      # sviluppo: il gateway applica da sé le migrazioni dello schema all'avvio
+      # (in produzione le applica un passo separato: python -m app.db.migra)
+      - DB__AUTO_MIGRATE=true
       # i sorgenti montati appartengono all'utente dell'host, non all'utente 10001
       # del container: pytest non prova a scriverci la sua cache
       - PYTEST_ADDOPTS=-p no:cacheprovider

@@ -219,10 +219,18 @@ make that structural.
 
 ## Upgrades
 
-The first gateway or orchestrator pod of a new version creates or migrates the
-schema at startup; the others, and every later restart or scale-up, find it
-current and skip it. Pods of both Deployments roll: a new one is ready before an
-old one stops, so requests are not dropped.
+The database schema is migrated by an init container (`migrate`) in every gateway
+and orchestrator pod, before the application starts: `python -m app.db.migra`
+(Alembic) creates a fresh database, brings an existing one to the version of the
+image, and adopts a database from before Alembic. The first pod of a new version
+does the work; the others queue on a Postgres advisory lock and find it done. The
+application only checks that the database is not behind (`DB__AUTO_MIGRATE` stays
+false) and refuses to start if it is. Migrations are written to work with the
+previous version still running (expand/contract), so pods of both Deployments
+roll: a new one is ready before an old one stops, and requests are not dropped.
+`migrations.enabled: false` drops the init container, for a pipeline that runs
+the same command itself before upgrading. See
+[docs/database-migrations.md](../../../docs/database-migrations.md).
 
 Flow executions in progress **are** interrupted when the orchestrator pod
 carrying them stops: they are closed as failed with a message that says so, and

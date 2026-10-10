@@ -146,8 +146,8 @@ maintains.
 
 - `users.hashed_password` is **nullable**: an SSO-only user has no local password, and
   local login refuses those accounts outright (no empty-password back door). Forward
-  migration in [`gateway/app/db/session.py`](../../gateway/app/db/session.py) (the
-  project does lightweight in-code migrations there).
+  migration: today an Alembic revision, see
+  [database-migrations.md](../database-migrations.md).
 - *(Optional)* add `users.idp` and `users.external_id` to disambiguate identities
   across providers and pin an account to an IdP subject (`sub`). Not required if email
   is the stable key.
