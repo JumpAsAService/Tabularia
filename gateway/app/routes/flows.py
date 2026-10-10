@@ -18,6 +18,8 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Flow, FlowVersion, Project, Run, User
+from app.services.dbt_export import OpzioniDbt
+from app.core.lingua import lingua_della_richiesta
 from app.models.permission import Capability
 from app.services import audit, flow_presence
 from pydantic import BaseModel, Field
@@ -250,39 +252,134 @@ def _snapshot_version(session: Session, flow: Flow, user: User, note: str) -> No
     session.commit()
 
 
+def _flusso_per_dbt(session: Session, user: User, flow_id: int) -> Flow:
+    """Solo per gli amministratori (effettivi: flag personale o gruppo admin; NON gli
+    osservatori). Il progetto è autosufficiente: porta dentro i flussi a monte, il
+    testo delle query e, come seed, i DATI delle sorgenti che non stanno in un
+    database — anche di cartelle che chi vede il flusso non vede. È uno strumento
+    del team data, non dell'utente comune (scelta dell'utente, 2026-10-10)."""
+    flow = _get_flow(session, flow_id)
+    ensure_can(session, user, flow.project_id, Capability.VIEW)
+    if not perm_service.is_admin(session, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="L'export dbt è riservato agli amministratori: il progetto porta con sé dati e definizioni anche di altre cartelle",
+        )
+    return flow
+
+
 @router.get("/flows/{flow_id}/export/dbt")
 async def export_flow_dbt(
     flow_id: int,
     request: Request,
-    target: str = Query("duckdb", pattern="^(duckdb|native)$"),
+    target: str = Query("duckdb", pattern="^(duckdb|native|clickhouse)$"),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Esporta il flusso come progetto dbt (zip). `target=duckdb` (federazione)
-    o `native` (warehouse di origine, SQL tradotto via sqlglot). Il gateway
-    risolve flusso→operazioni e sorgenti→tabelle DB, l'engine compila e zippa."""
-    from app.services.dbt_export import DbtExportError, build_export_payload
+    """Esporta il flusso come progetto dbt (zip). `target=duckdb` (federazione),
+    `native` (warehouse di origine, SQL tradotto via sqlglot) o `clickhouse` (il
+    ClickHouse del cliente, che legge le sorgenti Postgres/MySQL dal vivo). Il gateway
+    risolve flusso→operazioni e sorgenti→tabelle DB, l'engine compila e zippa.
+    Senza opzioni: il progetto completo con i valori di default (vedi POST)."""
+    return await _esporta_dbt(_flusso_per_dbt(session, user, flow_id), request, user, session, target, None)
 
-    flow = _get_flow(session, flow_id)
-    ensure_can(session, user, flow.project_id, Capability.VIEW)
+
+@router.post("/flows/{flow_id}/export/dbt")
+async def export_flow_dbt_con_opzioni(
+    flow_id: int,
+    opzioni: OpzioniDbt,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """L'export dbt con le scelte del dialogo di download: target, progetto completo o
+    cartella per un progetto esistente, nomi, sorgenti già dichiarate, schema,
+    materializzazioni, test, email (vedi `OpzioniDbt`)."""
+    return await _esporta_dbt(_flusso_per_dbt(session, user, flow_id), request, user, session, opzioni.target, opzioni)
+
+
+@router.get("/flows/{flow_id}/export/dbt/plan")
+def export_flow_dbt_plan(
+    flow_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Quello che serve al dialogo di download: i target possibili (o perché no, nella
+    lingua di chi chiede), le sorgenti di ciascuno col nome di default, le uscite con le
+    materializzazioni ammesse."""
+    from app.services.dbt_export import piano_export
+
+    from app.services.dbt_ai import modello_ai
+
+    piano = piano_export(session, _flusso_per_dbt(session, user, flow_id), get_settings().engine.bucket,
+                         lingua_della_richiesta(request))
+    modello = modello_ai(session)
+    piano["ai"] = {"available": modello is not None, "model": modello}
+    return piano
+
+
+async def _esporta_dbt(flow: Flow, request: Request, user: User, session: Session, target: str, opzioni: OpzioniDbt | None):
+    from app.services import dbt_ai
+    from app.services.dbt_export import DbtExportError, _costruisci
+    from app.services.messaggi_dbt import messaggio_dell_engine, messaggio_dell_errore, traduci
+
+    lingua = lingua_della_richiesta(request)
     try:
-        payload = build_export_payload(session, flow, get_settings().engine.bucket, target)
+        payload, progetto = _costruisci(session, flow, get_settings().engine.bucket, target, user.email, opzioni)
+        if opzioni is not None and opzioni.ai_descriptions:
+            # descrizioni dove mancano, scritte dall'AI e ricordate per versione (services/dbt_ai.py)
+            await dbt_ai.descrivi(session, user, flow, sorted(progetto.flussi_visti), payload)
     except DbtExportError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
 
-    resp = await get_engine_client().post("/dbt/export", json=payload)
-    if resp.status_code != 200:
-        detail = "export dbt non riuscito"
+    proposte: dict[str, str] = {}   # modello → chiave della traduzione proposta dall'AI
+    tentativi: dict[str, int] = {}  # modello → proposte chieste
+    richieste: dict[str, dict] = {}  # modello → quello che l'engine ha detto servire alla traduzione
+    while True:
+        resp = await get_engine_client().post("/dbt/export", json=payload)
+        if resp.status_code == 200:
+            break
         try:
-            detail = resp.json().get("detail", detail)
+            grezzo = resp.json().get("detail")
         except Exception:
-            pass
+            grezzo = None
+        prm = (grezzo.get("params") or {}) if isinstance(grezzo, dict) else {}
+        modello = prm.get("model")
+        if (opzioni is not None and opzioni.ai_translations and isinstance(grezzo, dict) and grezzo.get("code") in dbt_ai.TRADUCIBILI
+                and modello and modello not in proposte and len(proposte) < dbt_ai.MAX_TRADUZIONI):
+            # l'engine non traduce questo modello: una proposta dell'AI, che l'engine poi verifica
+            try:
+                proposta, proposte[modello] = await dbt_ai.traduci(session, user, flow, prm)
+            except DbtExportError as e:
+                raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
+            tentativi[modello] = 1
+            richieste[modello] = prm
+            payload.setdefault("overrides", {})[modello] = proposta
+            continue
+        if isinstance(grezzo, dict) and grezzo.get("code") == "ai_translation_invalid" and prm.get("model") in proposte:
+            modello = prm["model"]
+            dbt_ai.dimentica(session, flow, proposte[modello])   # scartata: non si riusa
+            if tentativi.get(modello, 0) < dbt_ai.TENTATIVI:
+                # un secondo tentativo, con davanti il motivo (nella lingua dell'AI: inglese)
+                try:
+                    proposta, proposte[modello] = await dbt_ai.traduci(
+                        session, user, flow, richieste[modello],
+                        scartata=(payload["overrides"][modello], messaggio_dell_engine(grezzo, "en")))
+                except DbtExportError as e:
+                    raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
+                tentativi[modello] += 1
+                payload["overrides"][modello] = proposta
+                continue
+        detail = messaggio_dell_engine(grezzo, lingua) if grezzo is not None else traduci("internal", {"detail": f"engine {resp.status_code}"}, lingua)
         raise HTTPException(status_code=resp.status_code if resp.status_code >= 400 else 502, detail=detail)
 
     audit.record_audit(
         session, actor=user, action=audit.EXPORT_DOWNLOAD,
         target_type="flow", target_id=flow.id, target_label=flow.name,
-        detail={"format": "dbt", "target": target}, request=request,
+        detail={"format": "dbt", "target": target, **({"options": opzioni.model_dump(by_alias=True)} if opzioni else {}),
+                **({"ai": {"model": (payload.get("ai") or {}).get("model"), "translated": sorted(proposte)}} if (payload.get("ai") or proposte) else {})},
+        request=request,
     )
     fname = "".join(c if (c.isalnum() or c in "-_") else "_" for c in flow.name).strip("_") or "flow"
     return Response(
@@ -511,6 +608,9 @@ def delete_flow(flow_id: int, request: Request, user: User = Depends(get_current
     session.exec(sa_update(Datasource).where(Datasource.flow_id == flow_id).values(flow_id=None))
     session.exec(sa_delete(Run).where(Run.flow_id == flow_id))
     session.exec(sa_delete(FlowVersion).where(FlowVersion.flow_id == flow_id))
+    from app.models import DbtAiText
+
+    session.exec(sa_delete(DbtAiText).where(DbtAiText.flow_id == flow_id))   # i testi AI dei suoi export dbt
     session.delete(flow)
     session.commit()
     audit.record_audit(

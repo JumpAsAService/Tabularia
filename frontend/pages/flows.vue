@@ -2,7 +2,7 @@
 // Flussi nelle cartelle leggibili, con ricerca server-side + paginazione. Ogni
 // flusso ha un expander (come le Esecuzioni) con metriche d'esecuzione, la
 // timeline (Gantt) dei run e lo storico versioni con promozione.
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
@@ -11,6 +11,8 @@ import {
 import { errMessage, useApi } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useConnections } from '~/composables/useConnections'
+import { useAuth } from '~/composables/useAuth'
+import DbtExportDialog from '~/components/ui/DbtExportDialog.vue'
 import {
   useFlows, type FlowSummary, type FlowStats, type FlowVersionInfo,
 } from '~/composables/useFlows'
@@ -26,6 +28,10 @@ const api = useApi()
 const connectionsApi = useConnections()
 const toast = useToast()
 const { t } = useI18n()
+// l'export dbt è degli amministratori (anche per gruppo): il progetto porta con sé
+// dati e definizioni di altre cartelle. OpenLineage resta per chiunque veda il flusso.
+const { user: me } = useAuth()
+const canExportDbt = computed(() => !!me.value?.is_superuser)
 
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
   usePagedList<FlowSummary>((p) => flowsApi.listPaged(p))
@@ -196,22 +202,11 @@ async function exportOpenLineage(f: FlowSummary) {
   }
 }
 
-async function exportDbt(f: FlowSummary, target: 'duckdb' | 'native') {
+// l'export dbt ha le sue opzioni: si apre il suo dialogo (solo amministratori)
+const dbtFlow = ref<FlowSummary | null>(null)
+function openDbtExport(f: FlowSummary) {
   exportMenuFlow.value = null
-  exporting.value = f.id
-  try {
-    const blob = await api.exportFlowDbt(f.id, target)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${f.name.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '') || 'flow'}_dbt_${target}.zip`
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    toast.error(errMessage(e))
-  } finally {
-    exporting.value = null
-  }
+  dbtFlow.value = f
 }
 
 function fmtDate(iso: string | null): string {
@@ -380,7 +375,9 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
       @cancel="scheduleFor = null"
     />
 
-    <!-- dialog centrato di scelta target export dbt -->
+    <DbtExportDialog :flow="dbtFlow" @close="dbtFlow = null" />
+
+    <!-- dialog centrato di scelta dell'export: dbt (con le sue opzioni) o OpenLineage -->
     <Teleport to="body">
       <div v-if="exportMenuFlow" class="export-overlay" @click.self="exportMenuFlow = null">
         <div class="export-card">
@@ -388,11 +385,8 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
             <strong>{{ $t('flows.exportDbtTitle') }}</strong>
             <span class="muted">{{ exportMenuFlow.name }}</span>
           </div>
-          <button class="export-opt" @click="exportDbt(exportMenuFlow, 'duckdb')">
-            <strong>dbt-duckdb</strong><span>{{ $t('flows.exportDbtFederated') }}</span>
-          </button>
-          <button class="export-opt" @click="exportDbt(exportMenuFlow, 'native')">
-            <strong>{{ $t('flows.exportDbtNativeLabel') }}</strong><span>{{ $t('flows.exportDbtNative') }}</span>
+          <button v-if="canExportDbt" class="export-opt" @click="openDbtExport(exportMenuFlow)">
+            <strong>dbt</strong><span>{{ $t('flows.exportDbtProject') }}</span>
           </button>
           <button class="export-opt" @click="exportOpenLineage(exportMenuFlow)">
             <strong>OpenLineage</strong><span>{{ $t('flows.exportOpenLineage') }}</span>

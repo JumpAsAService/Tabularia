@@ -8,6 +8,7 @@ L'engine (data plane) è sostituito da un client httpx con `MockTransport`: le
 funzioni che parlano con l'engine (`_reconcile` via GET /tasks/{id}, il cleanup
 via DELETE /files/object) girano offline e le loro chiamate sono ispezionabili.
 """
+import json
 import httpx
 import pytest
 from sqlalchemy import StaticPool
@@ -64,6 +65,9 @@ class FakeEngine:
         self.transforms: list[dict] = []  # corpi ricevuti su POST /tasks/transform-data
         self.ingests: list[tuple[str, dict]] = []  # (rotta, corpo) degli ingest accodati
         self.inspects: list[dict] = []  # corpi ricevuti su POST /sharepoint/inspect
+        self.dbt_exports: list[dict] = []  # corpi ricevuti su POST /dbt/export
+        self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
+        self.dbt_export_script: list[tuple[int, dict] | None] = []  # risposte in fila, una per chiamata (None = lo zip)
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
@@ -132,6 +136,15 @@ class FakeEngine:
                 self.revoked.append(tid)
                 return httpx.Response(200, json={"task_id": tid, "status": "revoked"})
             return httpx.Response(200, json=self.task_states.get(tid, self.default_state))
+        if path == "/dbt/export" and request.method == "POST":
+            self.dbt_exports.append(json.loads(request.content or b"{}"))
+            if self.dbt_export_script:
+                prossima = self.dbt_export_script.pop(0)
+                if prossima is not None:
+                    return httpx.Response(prossima[0], json=prossima[1])
+            elif self.dbt_export_response is not None:
+                return httpx.Response(self.dbt_export_response[0], json=self.dbt_export_response[1])
+            return httpx.Response(200, content=b"PK\x05\x06" + b"\x00" * 18, headers={"content-type": "application/zip"})
         if path == "/files/object" and request.method == "DELETE":
             if self.delete_status < 400:  # cancellazione effettiva riuscita
                 self.deleted.append(

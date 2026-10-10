@@ -59,6 +59,39 @@ export type AppInfo = {
   preview_default_sample_rows?: number
 }
 
+export type DbtTarget = 'clickhouse' | 'duckdb' | 'native'
+export type DbtMaterialization = 'table' | 'view' | 'incremental'
+
+export interface DbtExportPlan {
+  flow: string
+  default_folder: string
+  targets: {
+    id: DbtTarget
+    available: boolean
+    reason: string | null
+    sources: { key: string; connection: string; schema: string; default_name: string; tables: string[] }[]
+  }[]
+  outputs: { key: string; model: string; flow: string; label: string | null; materialized: DbtMaterialization; materializations: DbtMaterialization[] }[]
+  /** l'assistente AI configurato e un modello abilitato: le opzioni AI si mostrano solo allora */
+  ai?: { available: boolean; model: string | null }
+}
+
+/** Le opzioni del download, come le valida il gateway (`OpzioniDbt`). */
+export interface DbtExportOptions {
+  target: DbtTarget
+  package: 'project' | 'folder'
+  folder: string
+  prefix: string
+  layers: boolean
+  sources: Record<string, { name: string | null; declared: boolean }>
+  schema?: string
+  materializations: Record<string, DbtMaterialization>
+  tests: boolean
+  emails: boolean
+  ai_descriptions?: boolean
+  ai_translations?: boolean
+}
+
 export function useApi() {
   const { apiFetch } = useApiClient()
 
@@ -176,8 +209,13 @@ export function useApi() {
 
     // esporta un flusso come progetto dbt (zip). target: 'duckdb' (federato) |
     // 'native' (warehouse di origine, SQL tradotto via sqlglot)
-    async exportFlowDbt(flowId: number, target: 'duckdb' | 'native' = 'duckdb'): Promise<Blob> {
-      return await apiFetch<Blob>(`/flows/${flowId}/export/dbt?target=${target}`, { responseType: 'blob' })
+    /** Cosa serve al dialogo dell'export dbt: target possibili, sorgenti, uscite (solo admin). */
+    async dbtExportPlan(flowId: number): Promise<DbtExportPlan> {
+      return await apiFetch<DbtExportPlan>(`/flows/${flowId}/export/dbt/plan`)
+    },
+    /** Il progetto dbt (zip) con le scelte del dialogo. */
+    async exportFlowDbt(flowId: number, options: DbtExportOptions): Promise<Blob> {
+      return await apiFetch<Blob>(`/flows/${flowId}/export/dbt`, { method: 'POST', body: options, responseType: 'blob' })
     },
     /** Le dipendenze del flusso come eventi OpenLineage (JSON), ricostruite dalla definizione. */
     async exportFlowOpenLineage(flowId: number): Promise<unknown[]> {

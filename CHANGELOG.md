@@ -5,11 +5,52 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A dbt model for ClickHouse is read by ClickHouse before it is written.** sqlglot
+  translated Postgres constructs ClickHouse does not have (`SIMILAR TO`, `LATERAL`,
+  `TABLESAMPLE`) without an error, and the data team found out at `dbt run`. Every
+  ClickHouse model now goes through `EXPLAIN AST` (chDB, or the engine's ClickHouse; no
+  execution); a syntax error refuses the export with ClickHouse's words or, with the AI
+  option, gets an AI translation that must pass the same check — with a second attempt,
+  the reason in front, when the first does not (the model sometimes sent the query back
+  as it was). Checked live, three times out of three: a
+  Postgres query with `SIMILAR TO` became `match(...)`, ran in dbt on ClickHouse and
+  gave the rows Tabularia publishes.
+- **The dbt export can ask the AI.** Two options in the export dialog, shown when the
+  assistant has an enabled model and off by default: descriptions written by AI where
+  they are missing (a paragraph on what each flow does, a sentence for every column of
+  the outputs, sources and seeds without one — in English, marked `(AI)`, from the
+  structure of the flow and at most 3 sample values per column), and an AI translation
+  where a query does not translate, used only if it passes Tabularia's own checks (one
+  SELECT, nothing that writes, no table function, only the tables the model reads, the
+  same columns). What the AI writes is kept per version of the flow, so re-exporting
+  gives the same zip without a new call; spending goes through the assistant's
+  accounting and caps.
 - **`std` and `var` of a single value are NULL on ClickHouse too.** The ClickHouse and
   chDB engines gave `NaN` where Polars, DuckDB and BigQuery give `NULL`, in an aggregate
   and in a pivot, and "fill null" downstream did not replace it. Now every engine gives
   `NULL`, and so does a dbt project on ClickHouse. A cross-engine test reads the raw
   value (the old one turned `NaN` into `NULL` before comparing, so it never saw it).
+- **A dbt export is the same every time, and says no in your language.** The same
+  version of a flow with the same options now gives the same zip, byte for byte: the
+  files no longer carry the export time (the version and when it was saved do; who
+  exported it is in the README only), the zip entries are in order with a fixed date,
+  and the steps shared by several outputs are named in the same order in every gateway
+  process (they followed the order of a Python set, which changes between processes).
+  Re-exporting into a repository shows only what changed in the flow. Why a target is
+  not available and why a download was refused now come in the language of the
+  interface: gateway and engine send a code, the gateway words it in English, Italian,
+  German, Spanish or French (the frontend sends the interface language as
+  `Accept-Language`).
+- **The dbt export asks how the data team wants it.** Export → dbt opens a dialog:
+  where it runs (a target that cannot work for the flow is disabled, with the reason),
+  a complete project or a **folder to copy into an existing project** (with an
+  `INTEGRATION.md`: what their profile needs, which sources they must already declare,
+  `dbt build -s +tag:<flow>`), a folder name and a model prefix, staging /
+  intermediate / marts layers, the schema, the team's own source names and the sources
+  their project already declares, the materialization of each output, the contract
+  tests and the emails in or out. The choices are remembered per flow; a refusal from
+  the engine is shown in the dialog, in words. Checked by copying the folder into a
+  project with its own model and `sources.yml`, on ClickHouse and DuckDB.
 - **PostgreSQL `numeric` columns are numbers.** Amounts and prices from Postgres were
   imported as text, so they could not be summed or compared with a number; they are now
   doubles, like the decimals of a CSV or an Excel file. The new type arrives with the
@@ -19,6 +60,27 @@ exposes at `/system/info` and in the app's settings menu.
   does not say the precision, and the engines compute doubles the same way. Also found
   by the dbt export oracle: on ClickHouse the same value read as text was `100` instead
   of `100.00`.
+- **The dbt export runs on your ClickHouse.** A third target, next to the federated
+  DuckDB and the native one: dbt-clickhouse on the ClickHouse Tabularia computes on
+  (or another, through `CLICKHOUSE_HOST`), the usual setup of a customer whose data
+  sits in Postgres or MySQL. ClickHouse reads those sources live through database
+  engines — one `tab_src_<connection>_<schema>` database per source schema, created
+  once by `dbt run-operation create_tabularia_sources` with the passwords from env
+  vars (and the file log off, so they do not land in `logs/dbt.log`) — and
+  `sources.yml` points at them; from there on everything runs in ClickHouse. Sources
+  can sit on several connections, a datasource defined by a SQL query is translated to
+  ClickHouse over the same databases, semi and anti joins are ClickHouse's own `LEFT
+  SEMI/ANTI JOIN` (as in the engine), and the profile sets `join_use_nulls`. In the
+  Flows page it is the first dbt option of the Export dialog.
+- **A dbt model says what it does and where it comes from.** The SQL of an exported
+  model is one `WITH` list with a step per node, each named after what it does
+  (`filter_canale`, `aggregate_by_canale`, `left_join_customers`) and opened by a
+  comment in plain words, laid out one clause per line. The head of the file says
+  which flow, which version (and when it was saved) and which output it comes from,
+  and who built it; `schema.yml` carries the same under `config.meta.tabularia`,
+  with the tags `tabularia` and the flow's name, so `dbt run -s tag:tabularia` picks
+  everything that came from the app. Contract `accepted_values` tests use the
+  `arguments:` form, so dbt 1.12 no longer warns about them.
 - **ClickHouse: `EXTRACT(YEAR FROM data)` and a `WITH` in the sql node.** ClickHouse
   is the engine almost every customer runs, and two everyday things failed on it.
   The compute check looked for words, so `EXTRACT(… FROM …)`, `TRIM(… FROM …)` or a
@@ -30,6 +92,20 @@ exposes at `/system/info` and in the app's settings menu.
   query's own list. Both found by running the dbt export oracle with ClickHouse as
   the reference engine, against a local ClickHouse reading the parquet in MinIO
   through `s3()`, as in production.
+- **The dbt export gives the data Tabularia publishes, checked case by case.** An
+  oracle runs every operation of the editor (60 cases, both targets) on tricky data
+  through Tabularia and through a real dbt and compares the results column by
+  column. It found, and this fixes: the cast (no trimming, rounding instead of
+  truncation), the sort (no `NULLS LAST`), a compute that replaced a column moved it
+  to the end, right/full joins lost the key of right-only rows, pivot labels, an
+  unpivot that dropped NULL rows, a `sql` node with its own `WITH` that did not
+  compile; natively, upper-case column names lost their case (sqlglot lowercased
+  them, and expanding `*` again lowercased every alias born mid-flow), `TRY_CAST`,
+  `contains`, `ends_with`, `UNION BY NAME`, semi/anti joins had no equivalent; a
+  SharePoint datasource was taken for a database table. The first step of every
+  model now casts the sources to the types Tabularia read them with, seeds declare
+  their column types instead of letting dbt guess, and contract rules map to tests
+  that pass, warn or fail exactly when Tabularia's check does.
 - **A Polars panic no longer kills a worker.** Found by the same oracle: Postgres
   `numeric` columns were written to parquet as an opaque Arrow extension type, on
   which Polars' streaming reader panics as soon as a filter or a null check is
@@ -50,6 +126,13 @@ exposes at `/system/info` and in the app's settings menu.
   appended to its signature); Nuxt 3.21.11 and Vue 3.5.43 with their server
   renderer fixes; the production frontend image no longer ships npm, yarn or
   corepack.
+- **The dbt export is for administrators.** A dbt project is self-contained: it
+  carries the upstream flows, the text of SQL queries and, as seeds, the data of
+  sources that are not in a database — including those of folders the person
+  viewing the flow cannot see. So only administrators (the personal flag or an
+  admin group: the way to give it to the data team) can export it; observers and
+  ordinary users see only the OpenLineage option in the Export dialog, and the
+  route answers 403.
 - **The dbt export grows up.** It already produced a model per output; now the
   project is one you can put in a repository as it is: the steps shared by
   several outputs are `ephemeral` models referenced with `ref()`, database

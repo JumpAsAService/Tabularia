@@ -18,11 +18,12 @@ from app.models.ai_chat import AiChat, AiChatTurn, AiSpend
 from app.models.privacy import PrivacyNotice
 from app.models.shared_state import FlowPresence, LoginAttempt
 from app.models.contract import DataContract, DataContractResult, DataContractVersion
+from app.models.dbt_ai_text import DbtAiText
 
 __all__ = [
     "User", "Group", "UserGroupLink", "Project", "Permission", "Capability",
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
     "AuditLog", "Banner", "DisabledEngine", "SavedView", "AiModel", "AiChat", "AiChatTurn", "AiSpend", "PrivacyNotice",
     "FlowPresence", "LoginAttempt",
-    "DataContract", "DataContractResult", "DataContractVersion",
+    "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
 ]
