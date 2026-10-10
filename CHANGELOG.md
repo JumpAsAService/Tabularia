@@ -5,6 +5,18 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **No more surprise logouts.** The frontend dropped the session whenever its
+  "who am I?" request failed for any reason: a page change while the request was
+  still in flight, a network hiccup, or a 502/503 while a gateway restarted — so a
+  rolling update logged out everyone loading a page. Now only a 401 (expired or
+  forged token, deactivated user) ends the session, as the rest of the API client
+  already did. Verified in the browser: 117 rapid page loads, and all gateways
+  stopped and restarted, without losing the session; a forged token and a
+  deactivated user still land on the login page.
+- **Dependencies.** PyJWT 2.15.1 (2.13 accepted a token with stray characters
+  appended to its signature); Nuxt 3.21.11 and Vue 3.5.43 with their server
+  renderer fixes; the production frontend image no longer ships npm, yarn or
+  corepack.
 - **The dbt export grows up.** It already produced a model per output; now the
   project is one you can put in a repository as it is: the steps shared by
   several outputs are `ephemeral` models referenced with `ref()`, database

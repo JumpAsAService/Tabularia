@@ -60,9 +60,19 @@ export function useAuth() {
       user.value = await $fetch<Me>(`${base}/auth/me`, {
         headers: { Authorization: `Bearer ${token.value}` },
       })
-    } catch {
-      token.value = null
-      user.value = null
+    } catch (e: any) {
+      // Solo un 401 dice che il token non vale più (scaduto, manomesso, utente
+      // disattivato): allora si esce, come fa useApiClient. Una richiesta interrotta
+      // da un cambio di pagina, un errore di rete o un 5xx (un gateway che si
+      // riavvia) NON sono un logout: il token resta e la pagina dopo riprova.
+      // Prima qualunque errore cancellava il token, e chi navigava in fretta o
+      // durante un riavvio si ritrovava al login (trovato il 2026-10-10).
+      const code = e?.response?.status ?? e?.statusCode
+      if (code === 401) {
+        token.value = null
+        user.value = null
+        if (import.meta.client) navigateTo('/login')
+      }
     }
     return user.value
   }
