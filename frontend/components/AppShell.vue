@@ -4,6 +4,7 @@ import { useAppInfo } from '~/composables/useAppInfo'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
 import { computed, onMounted, ref, nextTick } from 'vue'
+import { usePopover } from '~/composables/usePopover'
 import { useI18n } from 'vue-i18n'
 import {
   LogOut,
@@ -64,6 +65,8 @@ function toggleMenu() {
 function closeMenu() {
   menuOpen.value = false
 }
+const settingsPanel = ref<HTMLElement | null>(null)
+usePopover(menuOpen, settingsPanel, closeMenu)
 
 const links = computed(() => [
   { to: '/', label: t('nav.explore'), icon: FolderTree },
@@ -110,9 +113,25 @@ function navWheel(ev: WheelEvent) {
   ev.preventDefault()
 }
 
+const adminMenu = ref<HTMLElement | null>(null)
 function toggleAdmin() {
   adminOpen.value = !adminOpen.value
-  if (adminOpen.value) nextTick(posizionaAdmin)
+  if (adminOpen.value) nextTick(() => { posizionaAdmin(); voceAdmin(0) })
+}
+// menù vero (role=menu): le frecce scorrono le voci, Esc chiude e torna al bottone
+function voceAdmin(i: number) {
+  const voci = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  if (voci.length) voci[(i + voci.length) % voci.length].focus()
+}
+function onAdminKey(e: KeyboardEvent) {
+  const voci = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  const qui = voci.indexOf(document.activeElement as HTMLElement)
+  if (e.key === 'ArrowDown') { e.preventDefault(); voceAdmin(qui + 1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); voceAdmin(qui - 1) }
+  else if (e.key === 'Home') { e.preventDefault(); voceAdmin(0) }
+  else if (e.key === 'End') { e.preventDefault(); voceAdmin(-1) }
+  else if (e.key === 'Escape') { e.preventDefault(); adminOpen.value = false; adminBtn.value?.focus() }
+  else if (e.key === 'Tab') adminOpen.value = false
 }
 // la voce resta accesa mentre si è in una qualsiasi delle sue pagine
 const inAdmin = computed(() => adminLinks.value.some((l) => route.path === l.to))
@@ -124,10 +143,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="shell">
+  <div v-label-fields class="shell">
     <header class="topbar">
       <NuxtLink to="/" class="brand">
-        <BrandMark :size="26" /> Tabularia
+        <BrandMark :size="26" /> <span class="brand-name">Tabularia</span>
       </NuxtLink>
 
       <nav class="mainnav" @wheel="navWheel">
@@ -161,7 +180,7 @@ onMounted(async () => {
                Select.vue, che per lo stesso motivo teleporta il suo pannello. -->
           <Teleport v-if="adminOpen" to="body">
             <div class="menu-backdrop" @click="adminOpen = false" />
-            <div class="menu adminmenu" role="menu" :style="adminStyle">
+            <div ref="adminMenu" class="menu adminmenu" role="menu" :style="adminStyle" @keydown="onAdminKey">
               <NuxtLink
                 v-for="l in adminLinks"
                 :key="l.to"
@@ -189,7 +208,6 @@ onMounted(async () => {
           :class="{ on: menuOpen }"
           :title="t('settings.title')"
           :aria-label="t('settings.title')"
-          aria-haspopup="menu"
           :aria-expanded="menuOpen"
           @click="toggleMenu"
         >
@@ -198,7 +216,7 @@ onMounted(async () => {
 
         <template v-if="menuOpen">
           <div class="menu-backdrop" @click="closeMenu" />
-          <div class="menu">
+          <div ref="settingsPanel" class="menu">
             <div v-if="user" class="menu-user">
               <span class="menu-email">{{ user.email }}</span>
               <span v-if="isSuper" class="menu-role">{{ t('settings.admin') }}</span>
@@ -206,7 +224,7 @@ onMounted(async () => {
 
             <div class="menu-sep" />
 
-            <div class="menu-label">{{ t('settings.theme') }}</div>
+            <label class="menu-label">{{ t('settings.theme') }}</label>
             <Select
               :model-value="theme"
               :options="themeOptions"
@@ -216,7 +234,7 @@ onMounted(async () => {
 
             <div class="menu-sep" />
 
-            <div class="menu-label">{{ t('settings.language') }}</div>
+            <label class="menu-label">{{ t('settings.language') }}</label>
             <Select
               :model-value="locale"
               :options="localeOptions"
@@ -226,7 +244,7 @@ onMounted(async () => {
 
             <div class="menu-sep" />
 
-            <div class="menu-label">{{ t('settings.engine') }}</div>
+            <label class="menu-label">{{ t('settings.engine') }}</label>
             <Select
               :model-value="preferredEngine"
               :options="engineOptions"
@@ -365,7 +383,7 @@ onMounted(async () => {
 }
 .menu-sep { height: 1px; background: var(--border-soft); margin: 2px 0; }
 .menu-version { padding: 6px 6px 2px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.menu-label { font-size: 11px; color: var(--muted); padding: 0 6px; }
+.menu-label { display: block; font-size: 11px; color: var(--muted); padding: 0 6px; }
 .menu-hint { font-size: 10.5px; color: var(--muted); padding: 0 6px; line-height: 1.35; opacity: 0.85; }
 .engpref { width: 100%; }
 .engpref :deep(.sel-trigger) { width: 100%; }
@@ -428,9 +446,24 @@ onMounted(async () => {
 .menu-item:hover { background: var(--panel-2); }
 .menu-item.on { background: var(--tint-accent); color: var(--accent-hi); }
 
+/* La navigazione ha la precedenza: prima si stringono gli spazi, poi il nome del
+   marchio lascia il solo segno (resta per gli screen reader). La ricerca e
+   l'indicatore di memoria si stringono da sé. Misurato: con nove voci da admin, a
+   1440px Connections, Runs e Administration finivano fuori dalla parte visibile. */
+@media (max-width: 1600px) {
+  .topbar { gap: 16px; }
+  .navlink { padding: 0 10px; }
+}
+@media (max-width: 1100px) {
+  .brand-name {
+    position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+}
 @media (max-width: 760px) {
   .topbar { gap: 12px; padding: 0 12px; }
   .mainnav { flex: 1; }
+  .spacer { display: none; } /* altrimenti divide a metà con la navigazione lo spazio libero */
   .navlink { padding: 0 9px; }
   .content { padding: 16px 14px; }
 }

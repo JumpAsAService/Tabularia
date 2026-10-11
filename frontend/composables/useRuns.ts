@@ -2,6 +2,17 @@
 // capability RUN sul progetto del flusso; la cronologia basta VIEW.
 import type { Page } from '~/composables/useApi'
 
+// a che punto è un run non terminato (solo per quelli; vedi useRunProgress)
+export interface RunProgress {
+  // queued · running · waiting (il database non ha ancora mandato righe) ·
+  // reading · files (SharePoint) · saving · checking (data contract)
+  phase: string
+  seconds: number // contati dal gateway
+  rows?: number | null
+  file?: number | null
+  files?: number | null
+}
+
 export interface RunInfo {
   id: number
   kind?: string
@@ -18,6 +29,7 @@ export interface RunInfo {
   destination: string | null // JSON: {db_type, host, database, table, mode}
   started_at: string | null
   finished_at: string | null
+  progress?: RunProgress | null
   // presenti solo nella ricerca globale /runs
   flow_name?: string | null
   source_name?: string | null

@@ -25,7 +25,7 @@ from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
-from app.routes.runs import _reconcile, launch_ingest_run
+from app.routes.runs import _reconcile, launch_ingest_run, run_out
 from app.schemas.models import (
     DatasourceOut,
     DatasourceUpdate,
@@ -434,7 +434,7 @@ async def list_datasource_runs(
         .order_by(Run.started_at.desc())
         .limit(50)
     ).all()
-    return [await _reconcile(session, r) for r in runs]
+    return [run_out(session, await _reconcile(session, r)) for r in runs]
 
 
 @router.patch("/datasources/{ds_id}", response_model=DatasourceOut)

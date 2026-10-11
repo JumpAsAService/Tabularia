@@ -42,6 +42,6 @@ const contract = computed(() => (props.data?.datasourceId != null ? contracts?.v
 .srcname { display: flex; align-items: center; gap: 5px; }
 /* handle di sequenza (orchestrazione), stesso viola degli archi di controllo */
 .handle-seq { background: #c084fc !important; }
-.filters { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: #60a5fa; font-weight: 500; }
-.sample { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: #fbbf24; font-weight: 500; }
+.filters { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: color-mix(in srgb, #60a5fa var(--enc-text-mix), var(--text)); font-weight: 500; }
+.sample { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: color-mix(in srgb, #fbbf24 var(--enc-text-mix), var(--text)); font-weight: 500; }
 </style>

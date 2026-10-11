@@ -54,7 +54,7 @@ function onDragStart(ev: DragEvent, kind: string) {
   <aside class="opsidebar">
     <div class="searchbar">
       <Search :size="14" class="search-icon" />
-      <input v-model="query" type="text" class="search-input" :placeholder="$t('opSidebar.searchPlaceholder')" />
+      <input v-model="query" type="text" class="search-input" :placeholder="$t('opSidebar.searchPlaceholder')" :aria-label="$t('opSidebar.searchPlaceholder')" />
       <button v-if="query" class="search-clear" :title="$t('opSidebar.clearSearch')" @click="query = ''">✕</button>
     </div>
 

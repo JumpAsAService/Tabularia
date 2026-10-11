@@ -20,7 +20,7 @@ import logging
 import os
 import re
 import tempfile
-from typing import Any, Iterator, Literal
+from typing import Any, Callable, Iterator, Literal
 from urllib.parse import quote as _urlquote
 
 import polars as pl
@@ -685,8 +685,14 @@ def ingest_db_to_parquet(
     bucket: str,
     key: str,
     storage=None,
+    progress: Callable[..., None] | None = None,
 ) -> dict:
-    """Esegue la sorgente e scrive `bucket/key` (parquet). Ritorna righe e schema."""
+    """Esegue la sorgente e scrive `bucket/key` (parquet). Ritorna righe e schema.
+
+    `progress(fase, rows=…)`, per chi guarda l'import: «waiting» finché il database
+    non manda la prima riga (connessione, calcolo, ordinamento), «reading» a ogni
+    batch col conto delle righe, «saving» mentre il parquet va sullo storage."""
+    avanza = progress or (lambda *a, **k: None)
     if storage is None:
         from app.utils import get_storage_service
 
@@ -697,6 +703,7 @@ def ingest_db_to_parquet(
 
     # errori del driver → messaggio del server del database, non l'eccezione Python
     gen = _guarded(_open_batches(conn, query, get_settings().ingest.db_read_timeout_seconds), conn)
+    avanza("waiting")
     try:
         schema = next(gen)
     except StopIteration:  # nessun driver arriva qui, ma il contratto va difeso
@@ -727,10 +734,12 @@ def ingest_db_to_parquet(
                 blocco.append(batch)
                 in_blocco += batch.num_rows
                 rows += batch.num_rows
+                avanza("reading", rows=rows)
                 if in_blocco >= soglia:
                     _scarica()
             _scarica()  # l'ultimo blocco, quasi sempre piu' corto della soglia
 
+        avanza("saving", rows=rows)
         storage.create_bucket(bucket)
         storage.upload_file(tmp, bucket, key)
 

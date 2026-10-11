@@ -40,6 +40,9 @@ export function useDialogA11y(
     if (!aperto()) return
 
     if (e.key === 'Escape') {
+      // un Select (o altro elemento a comparsa) aperto dentro il dialogo si chiude
+      // da sé: chiudere qui tutto il dialogo buttava via quello che si era scritto
+      if ((e.target as HTMLElement | null)?.closest?.('[aria-haspopup][aria-expanded="true"], [role="combobox"][aria-expanded="true"]')) return
       e.preventDefault()
       e.stopPropagation()
       chiudi()

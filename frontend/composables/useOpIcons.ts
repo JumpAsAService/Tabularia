@@ -2,6 +2,7 @@
 // Un posto solo: aggiungendo un'operazione all'engine basta estendere qui.
 import type { FunctionalComponent } from 'vue'
 import {
+  Shuffle,
   Columns3,
   EyeOff,
   PenLine,
@@ -43,6 +44,7 @@ const OP_META: Record<string, OpMeta> = {
   sort:       { icon: ArrowUpDown, label: 'ops.sort',            color: '#f59e0b' },
   limit:      { icon: Scissors,    label: 'ops.limit',      color: '#f59e0b' },
   unique:     { icon: Fingerprint, label: 'ops.unique',      color: '#f59e0b' },
+  sample:     { icon: Shuffle,     label: 'ops.sample',      color: '#f59e0b' },
   fill_null:  { icon: PaintBucket, label: 'ops.fill_null',       color: '#a78bfa' },
   drop_nulls: { icon: Eraser,      label: 'ops.drop_nulls',       color: '#a78bfa' },
   group_by:   { icon: Sigma,       label: 'ops.group_by',         color: '#6ee7b7' },

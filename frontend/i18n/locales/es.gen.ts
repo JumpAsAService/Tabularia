@@ -18,6 +18,12 @@ export default {
     "accept": "Entendido",
   },
   "memoryGauge": {
+    "summary": "RAM del host: {used} en uso · {available} disponible · {total} en total ({pct} % — {level})",
+    "level1": "libre",
+    "level2": "ok",
+    "level3": "media",
+    "level4": "alta",
+    "level5": "crítica",
     "free": "{gb} libres",
   },
   "dataGrid": {
@@ -252,7 +258,19 @@ export default {
     "cancel": "Cancelar",
     "counter": "{n} de {total} descritos",
   },
+  "runProgress": {
+    "queued": "en cola · {time}",
+    "running": "en curso · {time}",
+    "waiting": "la base de datos está preparando los datos · {time}",
+    "reading": "{n} filas recibidas · {time}",
+    "files": "archivo {file} de {files} · {time}",
+    "saving": "guardando · {time}",
+    "checking": "comprobando el contrato · {time}"
+  },
   "datasources": {
+    "announceStarted": "{name}: importación iniciada",
+    "announceDone": "{name}: importación completada, {n} filas",
+    "announceFailed": "{name}: la importación ha fallado",
     "aiReady": "lista para la IA",
     "aiReadyHint": "La tabla y todos sus campos tienen descripción: el asistente puede consultarla sin adivinar qué contienen.",
     "docsSavedToast": "Descripciones guardadas ({n} campos descritos)",
@@ -303,6 +321,11 @@ export default {
     "loadingEditor": "Cargando editor…"
   },
   "flowEditor": {
+    "leaveTitle": "Cambios sin guardar",
+    "leaveBody": "Los cambios en «{name}» aún no se han guardado. Si sales ahora, se perderán.",
+    "leaveStay": "Quedarse",
+    "leaveDiscard": "Salir sin guardar",
+    "leaveSave": "Guardar y salir",
     "readOnlyNodes": "Cuenta de solo lectura: solo se pueden añadir nodos de transformación",
     "cacheSkippedToast": "Paso anterior por encima del límite de la caché ({n} filas): las vistas previas de este nodo recalculan desde la fuente.",
     "chooseSmtpConnection": "elige la conexión SMTP",
@@ -642,7 +665,7 @@ export default {
   "operationNode": {
     "joinLabel": "unión {how}",
     "operationFallback": "operación",
-    "paramCount": "{n} parámetros",
+    "paramCount": "sin parámetros | {n} parámetro | {n} parámetros",
     "tableInputLabel": "tabla",
     "unionAlign": "alinear por nombre",
     "unionStrict": "esquemas idénticos"
@@ -908,6 +931,8 @@ export default {
     "dismiss": "Cerrar"
   },
   "toolbar": {
+    "unsaved": "Sin guardar",
+    "unsavedTitle": "Hay cambios aún sin guardar (Ctrl+S guarda)",
     "engineTitleProd": "Motor de desarrollo: {engine} · producción: {prod}",
     "engineTitle": "Motor de ejecución del flujo: {engine}",
     "flowNamePlaceholder": "Nombre del flujo…",

@@ -4,6 +4,10 @@ import type { PreviewResult } from '~/composables/useApi'
 
 const props = defineProps<{ result: PreviewResult | null; loading?: boolean; error?: string }>()
 
+// numeri a destra con cifre tabellari; i VALORI restano grezzi: nell'anteprima di un
+// passo si vuole vedere il dato esatto, non una sua versione formattata
+const isNum = (dtype: string) => /Int|Float|Decimal/i.test(dtype)
+
 function fmt(v: any): string {
   if (v === null || v === undefined) return '∅'
   if (typeof v === 'object') return JSON.stringify(v)
@@ -50,7 +54,7 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
       <table class="data">
         <thead>
           <tr>
-            <th v-for="c in result.columns" :key="c.name">
+            <th v-for="c in result.columns" :key="c.name" :class="{ num: isNum(c.dtype) }">
               {{ c.name }}<br /><span class="muted" style="font-weight: 400">{{ c.dtype }}</span>
             </th>
           </tr>
@@ -60,7 +64,7 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
             <td
               v-for="c in result.columns"
               :key="c.name"
-              :class="{ null: row[c.name] === null || row[c.name] === undefined }"
+              :class="{ null: row[c.name] === null || row[c.name] === undefined, num: isNum(c.dtype) }"
             >
               {{ fmt(row[c.name]) }}
             </td>
@@ -72,6 +76,8 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 </template>
 
 <style scoped>
+.data th.num, .data td.num { text-align: right; }
+.data td.num { font-variant-numeric: tabular-nums; }
 .datagrid { height: 100%; overflow: auto; }
 .pad { padding: 8px; }
 </style>

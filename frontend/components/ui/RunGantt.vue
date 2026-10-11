@@ -3,6 +3,7 @@
 // tempo, colorata per esito. È la timeline delle attività del flusso.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { CustomChart } from 'echarts/charts'
@@ -14,6 +15,7 @@ import { useChartTheme } from '~/composables/useChartTheme'
 use([CanvasRenderer, CustomChart, GridComponent, TooltipComponent, DataZoomComponent])
 
 const { t } = useI18n()
+const fmtx = useFormat()
 
 const props = defineProps<{ runs: RunInfo[] }>()
 
@@ -31,7 +33,7 @@ const COLORS = computed<Record<string, string>>(() => ({
 }))
 
 function fmt(s: string): string {
-  return new Date(s).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+  return fmtx.dateTime(s)
 }
 
 // solo gli ultimi 20 run (più recenti in alto): oltre, il grafico diventa

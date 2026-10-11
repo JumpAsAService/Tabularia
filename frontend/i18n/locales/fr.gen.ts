@@ -18,6 +18,12 @@ export default {
     "accept": "J'ai compris",
   },
   "memoryGauge": {
+    "summary": "RAM de l'hôte : {used} utilisée · {available} disponible · {total} au total ({pct} % — {level})",
+    "level1": "libre",
+    "level2": "ok",
+    "level3": "moyenne",
+    "level4": "élevée",
+    "level5": "critique",
     "free": "{gb} libres",
   },
   "dataGrid": {
@@ -252,7 +258,19 @@ export default {
     "cancel": "Annuler",
     "counter": "{n} sur {total} décrits",
   },
+  "runProgress": {
+    "queued": "en file d'attente · {time}",
+    "running": "en cours · {time}",
+    "waiting": "la base de données prépare les données · {time}",
+    "reading": "{n} lignes reçues · {time}",
+    "files": "fichier {file} sur {files} · {time}",
+    "saving": "enregistrement · {time}",
+    "checking": "vérification du contrat · {time}"
+  },
   "datasources": {
+    "announceStarted": "{name} : import lancé",
+    "announceDone": "{name} : import terminé, {n} lignes",
+    "announceFailed": "{name} : échec de l'import",
     "aiReady": "prête pour l'IA",
     "aiReadyHint": "La table et chacun de ses champs ont une description : l'assistant peut l'interroger sans deviner ce qu'ils contiennent.",
     "docsSavedToast": "Descriptions enregistrées ({n} champs décrits)",
@@ -303,6 +321,11 @@ export default {
     "loadingEditor": "Chargement de l'éditeur…"
   },
   "flowEditor": {
+    "leaveTitle": "Modifications non enregistrées",
+    "leaveBody": "Les modifications de « {name} » ne sont pas encore enregistrées. Si vous quittez maintenant, elles seront perdues.",
+    "leaveStay": "Rester",
+    "leaveDiscard": "Quitter sans enregistrer",
+    "leaveSave": "Enregistrer et quitter",
     "readOnlyNodes": "Compte en lecture seule : seuls des nœuds de transformation peuvent être ajoutés",
     "cacheSkippedToast": "Étape amont au-dessus du plafond du cache ({n} lignes) : les aperçus de ce nœud recalculent depuis la source.",
     "chooseSmtpConnection": "choisissez la connexion SMTP",
@@ -642,7 +665,7 @@ export default {
   "operationNode": {
     "joinLabel": "jointure {how}",
     "operationFallback": "opération",
-    "paramCount": "{n} paramètres",
+    "paramCount": "aucun paramètre | {n} paramètre | {n} paramètres",
     "tableInputLabel": "table",
     "unionAlign": "aligner par nom",
     "unionStrict": "schémas identiques"
@@ -908,6 +931,8 @@ export default {
     "dismiss": "Fermer"
   },
   "toolbar": {
+    "unsaved": "Non enregistré",
+    "unsavedTitle": "Des modifications ne sont pas encore enregistrées (Ctrl+S enregistre)",
     "engineTitleProd": "Moteur de développement : {engine} · production : {prod}",
     "engineTitle": "Moteur d'exécution du flux : {engine}",
     "flowNamePlaceholder": "Nom du flux…",

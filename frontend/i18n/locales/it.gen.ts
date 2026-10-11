@@ -18,6 +18,12 @@ export default {
     "accept": "Ho capito",
   },
   "memoryGauge": {
+    "summary": "RAM dell'host: {used} usata · {available} disponibile · {total} totale ({pct}% — {level})",
+    "level1": "libera",
+    "level2": "ok",
+    "level3": "media",
+    "level4": "alta",
+    "level5": "critica",
     "free": "{gb} liberi",
   },
   "dataGrid": {
@@ -315,7 +321,19 @@ export default {
     "cancel": "Annulla",
     "counter": "{n} di {total} descritti",
   },
+  "runProgress": {
+    "queued": "in coda · {time}",
+    "running": "in corso · {time}",
+    "waiting": "il database prepara i dati · {time}",
+    "reading": "{n} righe ricevute · {time}",
+    "files": "file {file} di {files} · {time}",
+    "saving": "salvataggio · {time}",
+    "checking": "controllo del contratto · {time}"
+  },
   "datasources": {
+    "announceStarted": "{name}: importazione avviata",
+    "announceDone": "{name}: importazione completata, {n} righe",
+    "announceFailed": "{name}: importazione non riuscita",
     "aiReady": "pronta per l'AI",
     "aiReadyHint": "La tabella e tutti i suoi campi hanno una descrizione: l'assistente può interrogarla senza indovinare cosa contengono.",
     "docsSavedToast": "Descrizioni salvate ({n} campi descritti)",
@@ -366,6 +384,11 @@ export default {
     "loadingEditor": "Caricamento editor…"
   },
   "flowEditor": {
+    "leaveTitle": "Modifiche non salvate",
+    "leaveBody": "Le modifiche a «{name}» non sono ancora salvate. Se esci ora le perdi.",
+    "leaveStay": "Resta",
+    "leaveDiscard": "Esci senza salvare",
+    "leaveSave": "Salva ed esci",
     "readOnlyNodes": "Account di sola lettura: puoi aggiungere solo nodi di trasformazione",
     "cacheSkippedToast": "Passo a monte oltre il tetto della cache ({n} righe): le anteprime di questo nodo ricalcolano dalla sorgente.",
     "backendUnreachable": "Backend non raggiungibile: {error}",
@@ -720,7 +743,7 @@ export default {
   "operationNode": {
     "joinLabel": "join {how}",
     "operationFallback": "operazione",
-    "paramCount": "{n} parametri",
+    "paramCount": "nessun parametro | {n} parametro | {n} parametri",
     "tableInputLabel": "tabella",
     "unionAlign": "allinea per nome",
     "unionStrict": "schemi identici"
@@ -991,6 +1014,8 @@ export default {
     "dismiss": "Chiudi"
   },
   "toolbar": {
+    "unsaved": "Non salvato",
+    "unsavedTitle": "Ci sono modifiche non ancora salvate (Ctrl+S salva)",
     "engineTitleProd": "Engine di sviluppo: {engine} · produzione: {prod}",
     "engineTitle": "Motore di esecuzione del flusso: {engine}",
     "flowNamePlaceholder": "Nome flusso…",

@@ -1,25 +1,37 @@
 <script setup lang="ts">
 // Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
 // con stato live, eliminazione.
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
 import { usePagedList } from '~/composables/usePagedList'
 import type { RunInfo } from '~/composables/useRuns'
+import RunProgressText from '~/components/ui/RunProgressText.vue'
 
 const dsApi = useDatasources()
 const projectsApi = useProjects()
 const toast = useToast()
 // il data contract della datasource aperta nel dialogo (null = chiuso)
 const contractFor = ref<DatasourceInfo | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const fmtx = useFormat()
 
 // ricerca server-side (nome/descrizione, su tutto il dataset) + paginazione
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
-  usePagedList<DatasourceInfo>((p) => dsApi.listPaged(p))
+  usePagedList<DatasourceInfo>((p) => dsApi.listPaged(p), { initialQuery: String(useRoute().query.q ?? '') })
+
+// Arrivando dalla ricerca globale (?ds=<id>): la riga si apre e viene in vista, una volta.
+const target = Number(useRoute().query.ds) || null
+watch(items, (list) => {
+  const d = target != null ? list.find((x) => x.id === target) : undefined
+  if (!d || expanded.value === d.id) return
+  toggle(d)
+  nextTick(() => document.getElementById(`ds-${d.id}`)?.scrollIntoView({ block: 'center' }))
+})
 
 const folderName = ref<Record<number, string>>({})
 onMounted(async () => {
@@ -85,14 +97,22 @@ async function saveDescriptions(d: DatasourceInfo) {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) +
-    ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  return iso ? fmtx.dateTime(iso) : ''
 }
 
 // ── Refresh con stato live (stesso pattern del ProjectBrowser) ──────────────
 const ingestRuns = ref<Record<number, RunInfo>>({})
+// Annunci per gli screen reader, una volta sola per import: inizio (dal click) e
+// fine. L'avanzamento che ticchetta non si annuncia: sarebbe una voce al secondo.
+const announcement = ref('')
+const watched = new Set<number>() // import visti in corso: la loro fine si annuncia
+function announceEnd(dsId: number, run: RunInfo) {
+  if (!watched.delete(dsId)) return
+  const name = items.value.find((x) => x.id === dsId)?.name ?? `#${dsId}`
+  announcement.value = run.status === 'SUCCESS'
+    ? t('datasources.announceDone', { name, n: fmtx.count(run.rows_written ?? 0) })
+    : t('datasources.announceFailed', { name })
+}
 let pollToken = 0
 onUnmounted(() => { pollToken++ })
 
@@ -115,9 +135,11 @@ async function pollIngest(dsId: number, token: number, restored = false) {
     if (!last) { forgetPlaceholder(dsId); return }
     ingestRuns.value = { ...ingestRuns.value, [dsId]: last }
     if (!isTerminal(last)) {
+      watched.add(dsId)
       setTimeout(() => { if (token === pollToken) pollIngest(dsId, token) }, 2500)
-    } else if (last.status === 'SUCCESS' && !restored) {
-      await load() // snapshot aggiornato: ricarica la pagina
+    } else {
+      announceEnd(dsId, last)
+      if (last.status === 'SUCCESS' && !restored) await load() // snapshot aggiornato: ricarica la pagina
     }
   } catch {
     // il segnaposto messo dal watch non deve restare appeso: altrimenti spinner
@@ -148,6 +170,8 @@ async function refresh(d: DatasourceInfo) {
   try {
     const run = await dsApi.refresh(d.id)
     ingestRuns.value = { ...ingestRuns.value, [d.id]: run }
+    watched.add(d.id)
+    announcement.value = t('datasources.announceStarted', { name: d.name })
     pollIngest(d.id, pollToken)
   } catch (e) {
     toast.error(errMessage(e))
@@ -191,10 +215,11 @@ async function saveSchedule(cron: string) {
 
 <template>
   <AppShell>
+    <p class="sr-only" role="status">{{ announcement }}</p>
     <div class="page-head">
       <h1><Database :size="18" /> {{ $t('datasources.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('datasources.searchPlaceholder')" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('datasources.searchPlaceholder')" :aria-label="$t('datasources.searchPlaceholder')" /></span>
       </div>
     </div>
 
@@ -205,10 +230,11 @@ async function saveSchedule(cron: string) {
     </p>
 
     <div v-else class="dsl">
-      <div v-for="d in items" :key="d.id" class="ds" :class="{ open: expanded === d.id }">
+      <div v-for="d in items" :id="`ds-${d.id}`" :key="d.id" class="ds" :class="{ open: expanded === d.id }">
         <div class="ds-row">
           <button class="ds-head" @click="toggle(d)">
             <ChevronRight :size="14" class="chev" :class="{ rot: expanded === d.id }" />
+            <span class="dcell">
             <span class="dname" :title="sourceLabel(d)">
               <Database :size="14" /> {{ d.name }}
               <span v-if="d.kind === 'database'" class="tag">{{ $t('datasources.tagDb') }}</span>
@@ -224,15 +250,21 @@ async function saveSchedule(cron: string) {
                 <BookText :size="11" /> {{ $t('columnDescriptions.counter', { n: describedCount(d), total: d.columns.length }) }}
               </span>
             </span>
+            <!-- a che punto è l'import: sotto il nome, dove c'è posto in ogni
+                 lingua e che resta visibile anche sul telefono -->
+            <span v-if="isImporting(d.id)" class="dprog">
+              <RunProgressText :run="ingestRuns[d.id]" :sr-label="$t('datasources.importingStatus')" />
+            </span>
+            </span>
             <span class="folder muted"><Folder :size="12" /> {{ folderName[d.project_id] ?? `#${d.project_id}` }}</span>
             <span class="rows muted">
               <template v-if="isImporting(d.id)">
-                <span class="okline"><LoaderCircle :size="12" class="spin" /> {{ $t('datasources.importingStatus') }}</span>
+                <span class="okline" :title="$t('datasources.importingStatus')"><LoaderCircle :size="12" class="spin" /></span>
               </template>
               <template v-else-if="ingestRuns[d.id]?.status === 'FAILURE'">
                 <span class="koline" :title="ingestRuns[d.id].error ?? ''">{{ $t('datasources.importFailedStatus') }}</span>
               </template>
-              <template v-else>{{ d.rows != null ? d.rows.toLocaleString('it-IT') : '—' }}</template>
+              <template v-else>{{ fmtx.count(d.rows) }}</template>
             </span>
             <span class="when muted">{{ fmtDate(d.refreshed_at ?? d.updated_at) }}</span>
           </button>
@@ -291,6 +323,7 @@ async function saveSchedule(cron: string) {
                   type="text"
                   maxlength="2000"
                   :placeholder="$t('columnDescriptions.placeholder')"
+                  :aria-label="`${$t('columnDescriptions.colDescription')}: ${c.name}`"
                   @keyup.enter="saveDescriptions(d)"
                 />
               </div>
@@ -333,6 +366,8 @@ async function saveSchedule(cron: string) {
 .ds-head:hover { background: var(--panel-2); }
 .chev { color: var(--muted); transition: transform 0.15s; flex: none; }
 .chev.rot { transform: rotate(90deg); }
+.dcell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dprog { font-size: 12px; color: var(--accent-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .dname { display: inline-flex; align-items: center; gap: 7px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .desc-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--accent-2); font-weight: 500; }
 .folder { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; }

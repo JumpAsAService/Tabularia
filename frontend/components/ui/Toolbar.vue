@@ -15,7 +15,6 @@ import {
   Cpu,
 } from 'lucide-vue-next'
 
-const { logout } = useAuth()
 const { t } = useI18n()
 
 const props = defineProps<{
@@ -35,6 +34,8 @@ const props = defineProps<{
   // Il server impone comunque le stesse cose; qui si tolgono i bottoni che
   // porterebbero a un 403
   readOnly?: boolean
+  // modifiche non ancora salvate (lo decide l'editor)
+  dirty?: boolean
 }>()
 
 const ENGINE_LABELS: Record<string, string> = { polars: 'Polars', duckdb: 'DuckDB', chdb: 'chDB', clickhouse: 'ClickHouse' }
@@ -55,6 +56,7 @@ const emit = defineEmits<{
   (e: 'run'): void
   (e: 'save'): void
   (e: 'update:flowName', name: string): void
+  (e: 'logout'): void
   (e: 'update:projectId', id: number | null): void
 }>()
 
@@ -95,17 +97,20 @@ const statusIcon = computed(() => {
       type="text"
       :value="flowName"
       :placeholder="$t('toolbar.flowNamePlaceholder')"
+      :aria-label="$t('toolbar.flowNamePlaceholder')"
       @input="emit('update:flowName', ($event.target as HTMLInputElement).value)"
     />
+    <span v-if="dirty" class="unsaved" :title="$t('toolbar.unsavedTitle')"><span class="dot" aria-hidden="true" />{{ $t('toolbar.unsaved') }}</span>
     <Select
       v-if="projects?.length && projectId === null"
       class="projsel"
       :model-value="projectId"
       :options="projects.map((p) => ({ value: p.id, label: p.name }))"
       :placeholder="$t('toolbar.folderPlaceholder')"
+      :aria-label="$t('toolbar.folderPlaceholder')"
       @update:model-value="emit('update:projectId', $event)"
     />
-    <button v-if="!readOnly" :disabled="busy" :title="$t('toolbar.saveFlowTitle')" @click="emit('save')"><Save :size="15" /> {{ $t('toolbar.save') }}</button>
+    <button v-if="!readOnly" :disabled="busy" :title="`${$t('toolbar.saveFlowTitle')} (Ctrl+S)`" @click="emit('save')"><Save :size="15" /> {{ $t('toolbar.save') }}</button>
 
     <span class="sep" />
 
@@ -133,11 +138,14 @@ const statusIcon = computed(() => {
     <MemoryGauge compact />
     <span class="sep" />
     <NuxtLink to="/" class="navbtn"><ArrowLeft :size="13" /> {{ $t('toolbar.projects') }}</NuxtLink>
-    <button class="navbtn" :title="$t('toolbar.logoutTitle')" :aria-label="$t('toolbar.logoutTitle')" @click="logout"><LogOut :size="13" /></button>
+    <button class="navbtn" :title="$t('toolbar.logoutTitle')" :aria-label="$t('toolbar.logoutTitle')" @click="emit('logout')"><LogOut :size="13" /></button>
   </div>
 </template>
 
 <style scoped>
+/* modifiche non salvate: un punto e una parola, accanto al nome del flusso */
+.unsaved { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--warning); white-space: nowrap; }
+.unsaved .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .toolbar-inner {
   display: flex;
   align-items: center;
@@ -159,10 +167,10 @@ const statusIcon = computed(() => {
   white-space: nowrap;
   cursor: default;
 }
-.enginebadge.polars { color: #6ee7b7; background: rgba(110, 231, 183, 0.12); border-color: rgba(110, 231, 183, 0.35); }
-.enginebadge.duckdb { color: #fbbf24; background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.35); }
-.enginebadge.chdb { color: #fb923c; background: rgba(251, 146, 60, 0.12); border-color: rgba(251, 146, 60, 0.35); }
-.enginebadge.clickhouse { color: #60a5fa; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); }
+.enginebadge.polars { color: color-mix(in srgb, #6ee7b7 var(--enc-text-mix), var(--text)); background: rgba(110, 231, 183, 0.12); border-color: rgba(110, 231, 183, 0.35); }
+.enginebadge.duckdb { color: color-mix(in srgb, #fbbf24 var(--enc-text-mix), var(--text)); background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.35); }
+.enginebadge.chdb { color: color-mix(in srgb, #fb923c var(--enc-text-mix), var(--text)); background: rgba(251, 146, 60, 0.12); border-color: rgba(251, 146, 60, 0.35); }
+.enginebadge.clickhouse { color: color-mix(in srgb, #60a5fa var(--enc-text-mix), var(--text)); background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); }
 .enginebadge .prod { margin-left: 5px; opacity: 0.8; font-weight: 500; }
 .flowname { width: 170px; }
 .projsel { width: 140px; }

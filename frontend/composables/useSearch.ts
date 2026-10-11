@@ -32,8 +32,9 @@ export function searchHitTarget(hit: SearchHit): string {
   switch (hit.kind) {
     case 'flow': return `/editor?flow=${hit.id}`
     case 'view': return `/viewer?view=${hit.id}`
-    case 'datasource': return `/datasources?ds=${hit.id}`
-    case 'connection': return `/connections?conn=${hit.id}`
+    // col nome come ricerca: la lista è paginata, e la voce può stare oltre la prima pagina
+    case 'datasource': return `/datasources?q=${encodeURIComponent(hit.name)}&ds=${hit.id}`
+    case 'connection': return `/connections?q=${encodeURIComponent(hit.name)}&conn=${hit.id}`
     case 'folder': return `/?folder=${hit.id}`
   }
 }

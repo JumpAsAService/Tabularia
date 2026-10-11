@@ -437,6 +437,21 @@ class RunCreate(BaseModel):
     email: Optional[RunEmailSpec] = None
 
 
+class RunProgress(BaseModel):
+    """A che punto è un run non ancora terminato, per chi lo guarda."""
+    # queued (in coda) · running (in esecuzione, l'engine non dice di più) ·
+    # waiting (il database non ha ancora mandato righe) · reading (righe in
+    # arrivo) · files (SharePoint, file `file` di `files`) · saving (il parquet
+    # va sullo storage) · checking (il data contract)
+    phase: str
+    # secondi dall'inizio dell'esecuzione (in coda: dal lancio), contati dal
+    # gateway: l'orologio del browser può essere sbagliato
+    seconds: int
+    rows: Optional[int] = None
+    file: Optional[int] = None
+    files: Optional[int] = None
+
+
 class RunOut(BaseModel):
     id: int
     kind: str = "flow"
@@ -458,6 +473,7 @@ class RunOut(BaseModel):
     email: Optional[str] = None
     started_at: Optional[UtcDateTime]
     finished_at: Optional[UtcDateTime]
+    progress: Optional[RunProgress] = None  # solo per i run in corso (vedi runs.run_out)
 
 
 class RunSearchOut(RunOut):

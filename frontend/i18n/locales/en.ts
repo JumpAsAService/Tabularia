@@ -160,6 +160,7 @@ export default {
     join: 'Join',
     union: 'Union (append rows)',
     foreach: 'Foreach loop',
+    sample: 'Sample rows',
     source: 'Source',
   },
   params: {

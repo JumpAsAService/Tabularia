@@ -38,6 +38,7 @@ from app.schemas.models import (
     RunActivityOut,
     RunCreate,
     RunOut,
+    RunProgress,
     RunSearchOut,
 )
 from app.services.blobgc import schedule_blob_deletion
@@ -596,6 +597,32 @@ def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
     return error
 
 
+# L'avanzamento dei run in corso che l'engine riporta (fase, righe, file): vive
+# per la sola richiesta, in `session.info`, non in tabella — cambia ogni due
+# secondi e nessuno lo rilegge. _reconcile lo mette, run_out lo usa.
+_AVANZAMENTO = "avanzamento_run"
+
+
+def run_out(session: Session, run: Run) -> RunOut:
+    """Il run per il browser; se non è terminato, con l'avanzamento: la fase
+    (quella dell'engine, oppure in coda / in esecuzione quando non la dice), i
+    conteggi e i secondi trascorsi."""
+    out = RunOut.model_validate(run.model_dump())
+    if run.status in TERMINAL_STATES:
+        return out
+    if run.status == "PENDING":
+        fase: dict = {"phase": "queued", "seconds": int(_age_seconds(run.started_at))}
+    else:
+        dall_engine = session.info.get(_AVANZAMENTO, {}).get(run.id) or {}
+        fase = {k: dall_engine[k] for k in ("phase", "rows", "file", "files") if k in dall_engine}
+        fase.setdefault("phase", "running")
+        fase["seconds"] = int(_age_seconds(run.engine_started_at or run.started_at))
+    try:
+        return out.model_copy(update={"progress": RunProgress(**fase)})
+    except ValueError:  # un engine che manda altro: si mostra senza avanzamento
+        return out
+
+
 def _age_seconds(dt: datetime | None) -> float:
     if dt is None:
         return 0.0
@@ -734,6 +761,8 @@ async def _reconcile(session: Session, run: Run) -> Run:
         return run
 
     new_status = data.get("status", run.status)
+    if isinstance(data.get("progress"), dict):
+        session.info.setdefault(_AVANZAMENTO, {})[run.id] = data["progress"]
     result = data.get("result") or {}
     error = data.get("error")
     error_detail = data.get("error_detail")  # traceback completo dell'engine
@@ -1014,7 +1043,7 @@ async def list_runs(
     runs = session.exec(
         select(Run).where(Run.flow_id == flow_id).order_by(Run.started_at.desc()).limit(50)
     ).all()
-    return [await _reconcile(session, r) for r in runs]
+    return [run_out(session, await _reconcile(session, r)) for r in runs]
 
 
 # NB: registrato PRIMA di /runs/{run_id} così "activity" non è preso per un id
@@ -1114,7 +1143,7 @@ async def get_run(
     else:
         flow = _get_flow(session, run.flow_id)
         ensure_can(session, user, flow.project_id, Capability.VIEW)
-    return await _reconcile(session, run)
+    return run_out(session, await _reconcile(session, run))
 
 
 @router.get("/runs", response_model=Page[RunSearchOut])

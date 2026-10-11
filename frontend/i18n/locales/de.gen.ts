@@ -18,6 +18,12 @@ export default {
     "accept": "Verstanden",
   },
   "memoryGauge": {
+    "summary": "Host-RAM: {used} belegt · {available} verfügbar · {total} gesamt ({pct} % — {level})",
+    "level1": "frei",
+    "level2": "ok",
+    "level3": "mittel",
+    "level4": "hoch",
+    "level5": "kritisch",
     "free": "{gb} frei",
   },
   "dataGrid": {
@@ -252,7 +258,19 @@ export default {
     "cancel": "Abbrechen",
     "counter": "{n} von {total} beschrieben",
   },
+  "runProgress": {
+    "queued": "in der Warteschlange · {time}",
+    "running": "läuft · {time}",
+    "waiting": "die Datenbank bereitet die Daten vor · {time}",
+    "reading": "{n} Zeilen empfangen · {time}",
+    "files": "Datei {file} von {files} · {time}",
+    "saving": "wird gespeichert · {time}",
+    "checking": "Vertrag wird geprüft · {time}"
+  },
   "datasources": {
+    "announceStarted": "{name}: Import gestartet",
+    "announceDone": "{name}: Import abgeschlossen, {n} Zeilen",
+    "announceFailed": "{name}: Import fehlgeschlagen",
     "aiReady": "KI-bereit",
     "aiReadyHint": "Die Tabelle und jedes ihrer Felder haben eine Beschreibung: Der Assistent kann sie abfragen, ohne ihren Inhalt zu erraten.",
     "docsSavedToast": "Beschreibungen gespeichert ({n} Felder beschrieben)",
@@ -303,6 +321,11 @@ export default {
     "loadingEditor": "Editor wird geladen…"
   },
   "flowEditor": {
+    "leaveTitle": "Nicht gespeicherte Änderungen",
+    "leaveBody": "Die Änderungen an „{name}“ sind noch nicht gespeichert. Wenn Sie jetzt gehen, gehen sie verloren.",
+    "leaveStay": "Bleiben",
+    "leaveDiscard": "Ohne Speichern verlassen",
+    "leaveSave": "Speichern und verlassen",
     "readOnlyNodes": "Nur-Lese-Konto: es können nur Transformationsknoten hinzugefügt werden",
     "cacheSkippedToast": "Vorgelagerter Schritt über der Cache-Grenze ({n} Zeilen): Vorschauen dieses Knotens rechnen ab der Quelle neu.",
     "chooseSmtpConnection": "SMTP-Verbindung wählen",
@@ -642,7 +665,7 @@ export default {
   "operationNode": {
     "joinLabel": "Join {how}",
     "operationFallback": "Operation",
-    "paramCount": "{n} Parameter",
+    "paramCount": "keine Parameter | {n} Parameter | {n} Parameter",
     "tableInputLabel": "Tabelle",
     "unionAlign": "nach Name ausrichten",
     "unionStrict": "identische Schemata"
@@ -908,6 +931,8 @@ export default {
     "dismiss": "Schließen"
   },
   "toolbar": {
+    "unsaved": "Nicht gespeichert",
+    "unsavedTitle": "Es gibt noch nicht gespeicherte Änderungen (Strg+S speichert)",
     "engineTitleProd": "Entwicklungs-Engine: {engine} · Produktion: {prod}",
     "engineTitle": "Ausführungs-Engine des Flows: {engine}",
     "flowNamePlaceholder": "Flow-Name…",

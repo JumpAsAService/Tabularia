@@ -54,6 +54,8 @@ class TaskStatusResponse(BaseModel):
     error: Optional[str] = None
     error_detail: Optional[str] = None  # traceback completo su FAILURE (per il debug)
     message: Optional[str] = None
+    # STARTED: a che punto è un import (fase, righe, file) — vedi jobs._Avanzamento
+    progress: Optional[dict[str, Any]] = None
 
 
 class PreviewRequest(BaseModel):

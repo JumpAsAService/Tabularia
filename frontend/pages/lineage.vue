@@ -14,10 +14,12 @@ import {
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 
 const api = useApi()
 const { fitView } = useVueFlow()
 const { t } = useI18n()
+const fmtx = useFormat()
 
 const graph = ref<LineageGraph>({ nodes: [], edges: [] })
 const loading = ref(false)
@@ -166,7 +168,8 @@ const rfEdges = computed<Edge[]>(() =>
       label: m?.label ?? e.kind,
       animated: e.kind === 'read' || e.kind === 'publish',
       style: { stroke: m?.color ?? '#8b93a7', strokeWidth: 1.8, strokeDasharray: m?.dashed ? '5 5' : undefined },
-      labelStyle: { fill: m?.color ?? '#8b93a7', fontSize: 10, fontWeight: 600 },
+      // l'etichetta è TESTO: il colore dell'arco mescolato col testo del tema quanto basta per l'AA
+      labelStyle: { fill: `color-mix(in srgb, ${m?.color ?? '#8b93a7'} var(--enc-text-mix), var(--text))`, fontSize: 10, fontWeight: 600 },
       labelBgStyle: { fill: 'var(--panel)', fillOpacity: 0.85 },
     } as Edge
   }),
@@ -225,8 +228,7 @@ const canOpen = (n: LineageNode | null) =>
   !!n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted
 
 function fmtDate(iso?: string | null) {
-  if (!iso) return '—'
-  try { return new Date(iso).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return iso }
+  return fmtx.dateTime(iso)
 }
 
 // motivo di un riferimento non risolto
@@ -552,7 +554,7 @@ function nodeIcon(t: string) {
 /* salute / problemi */
 .ln-problems { gap: 6px; }
 .ln-prob { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.ln-prob.stale { color: #d97706; }
+.ln-prob.stale { color: color-mix(in srgb, #d97706 var(--enc-text-mix), var(--text)); }
 .ln-prob.never { color: var(--muted); }
 .ln-prob.restr { color: var(--danger); }
 
@@ -561,7 +563,7 @@ function nodeIcon(t: string) {
   flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 5px;
 }
-:deep(.ln-badge.stale) { color: #d97706; background: rgba(217, 119, 6, 0.14); }
+:deep(.ln-badge.stale) { color: color-mix(in srgb, #d97706 var(--enc-text-mix), var(--text)); background: rgba(217, 119, 6, 0.14); }
 :deep(.ln-badge.never) { color: var(--muted); background: var(--panel-2); }
 :deep(.ln-badge.restr) { color: var(--danger); background: rgba(255, 107, 107, 0.14); }
 
@@ -581,7 +583,7 @@ function nodeIcon(t: string) {
   display: flex; align-items: center; gap: 7px;
   font-size: 11.5px; padding: 7px 9px; border-radius: 8px; line-height: 1.3;
 }
-.ln-detail-warn.stale { color: #d97706; background: rgba(217, 119, 6, 0.12); }
+.ln-detail-warn.stale { color: color-mix(in srgb, #d97706 var(--enc-text-mix), var(--text)); background: rgba(217, 119, 6, 0.12); }
 .ln-detail-warn.never { color: var(--muted); background: var(--panel-2); }
 .ln-detail-warn.restr { color: var(--danger); background: rgba(255, 107, 107, 0.12); }
 .ln-detail-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }

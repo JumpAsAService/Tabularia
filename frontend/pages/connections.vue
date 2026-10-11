@@ -2,7 +2,7 @@
 // Tutte le connessioni usabili (capability CONNECT): test in-place, modifica,
 // eliminazione. La creazione resta nella cartella (Explore), dove la
 // connessione vive e prende i permessi.
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plug, Search, Trash2, Folder, Pencil, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
@@ -21,7 +21,14 @@ const { t } = useI18n()
 
 // ricerca server-side (nome/host/database, su tutto il dataset) + paginazione
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
-  usePagedList<ConnectionInfo>((p) => connApi.listPaged(p))
+  usePagedList<ConnectionInfo>((p) => connApi.listPaged(p), { initialQuery: String(useRoute().query.q ?? '') })
+// arrivando dalla ricerca globale (?conn=<id>): la riga è evidenziata e in vista
+const target = Number(useRoute().query.conn) || null
+watch(items, (list) => {
+  if (target != null && list.some((c) => c.id === target)) {
+    nextTick(() => document.getElementById(`conn-${target}`)?.scrollIntoView({ block: 'center' }))
+  }
+})
 
 const folderName = ref<Record<number, string>>({})
 onMounted(async () => {
@@ -86,7 +93,7 @@ async function remove(c: ConnectionInfo) {
     <div class="page-head">
       <h1><Plug :size="18" /> {{ $t('connections.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('connections.searchPlaceholder')" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('connections.searchPlaceholder')" :aria-label="$t('connections.searchPlaceholder')" /></span>
       </div>
     </div>
 
@@ -101,7 +108,7 @@ async function remove(c: ConnectionInfo) {
         <tr><th>{{ $t('connections.colName') }}</th><th>{{ $t('connections.colType') }}</th><th>{{ $t('connections.colHostDatabase') }}</th><th>{{ $t('connections.colFolder') }}</th><th /></tr>
       </thead>
       <tbody>
-        <tr v-for="c in items" :key="c.id">
+        <tr v-for="c in items" :id="`conn-${c.id}`" :key="c.id" :class="{ target: c.id === target }">
           <td>
             <span class="rowlink"><Plug :size="14" /> {{ c.name }}</span>
             <div v-if="c.description" class="muted desc">{{ c.description }}</div>
@@ -140,3 +147,8 @@ async function remove(c: ConnectionInfo) {
 </template>
 
 <style scoped src="~/assets/listpage.css" />
+
+<style scoped>
+/* la connessione aperta dalla ricerca globale: si ritrova a colpo d'occhio */
+tr.target td { background: var(--tint-accent); }
+</style>

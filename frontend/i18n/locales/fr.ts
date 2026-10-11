@@ -159,6 +159,7 @@ export default {
     join: 'Jointure',
     union: 'Union (ajouter des lignes)',
     foreach: 'Boucle foreach',
+    sample: 'Échantillon de lignes',
     source: 'Source',
   },
   params: {

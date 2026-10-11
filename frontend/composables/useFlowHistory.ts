@@ -117,6 +117,8 @@ export function createFlowHistory(opts: FlowHistoryOptions) {
     },
     canUndo: () => past.length > 0,
     canRedo: () => future.length > 0,
+    /** L'ultimo stato fermo (null finché il primo non si è assestato). */
+    current: () => present,
   }
 }
 

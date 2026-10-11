@@ -12,6 +12,35 @@ import time as _time_mod
 logger = logging.getLogger(__name__)
 
 
+class _Avanzamento:
+    """L'avanzamento di un import per chi lo guarda: fase e conteggi come meta
+    dello stato STARTED nel backend dei risultati, che l'engine restituisce in
+    `/tasks/{id}` e il gateway passa al browser. Al più ogni INTERVALLO secondi
+    nella stessa fase, sempre al cambio di fase. Fuori da un worker (test,
+    chiamata diretta) non fa niente; un guasto qui non deve mai fermare l'import."""
+
+    INTERVALLO = 2.0
+
+    def __init__(self) -> None:
+        from celery import current_task
+
+        self._task = current_task if current_task and current_task.request.id else None
+        self._fase: str | None = None
+        self._quando = 0.0
+
+    def __call__(self, fase: str, **conti: int) -> None:
+        if self._task is None:
+            return
+        ora = _time_mod.monotonic()
+        if fase == self._fase and ora - self._quando < self.INTERVALLO:
+            return
+        self._fase, self._quando = fase, ora
+        try:
+            self._task.update_state(state="STARTED", meta={"phase": fase, **conti})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("avanzamento non registrato: %s", e)
+
+
 @celery_app.task(name="app.tasks.jobs.preview_task")
 def preview_task(
     bucket: str,
@@ -330,13 +359,17 @@ def ingest_sharepoint_task(
     conn = SharePointConnectionSpec(**connection)
     src = SharePointSourceSpec(**source)
     logger.info(f"🚀 Starting ingest_sharepoint_task: {conn.site_url} :: {src.path} [{src.sheet}] → {output_key}")
-    result = ingest_sharepoint_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service())
+    avanza = _Avanzamento()
+    result = ingest_sharepoint_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
+                                          progress=avanza)
     logger.info(
         f"✅ Completed ingest_sharepoint_task: {output_key} "
         f"({result['rows_written']} righe da {len(result['files'])} file)"
     )
     if contract:
         from app.contracts.service import check_before_publish
+
+        avanza("checking", rows=result["rows_written"])
 
         result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
@@ -365,11 +398,13 @@ def ingest_database_task(
     conn = DbConnectionSpec(**connection)
     logger.info(f"🚀 Starting ingest_database_task: {conn.db_type}@{conn.host} → {output_key}")
 
+    avanza = _Avanzamento()
     result = ingest_db_to_parquet(
         conn=conn,
         source=DbSourceSpec(**source),
         bucket=bucket,
         key=output_key,
+        progress=avanza,
     )
 
     logger.info(
@@ -387,6 +422,7 @@ def ingest_database_task(
     if contract:
         from app.contracts.service import check_before_publish
 
+        avanza("checking", rows=result["rows_written"])
         out["contract"] = check_before_publish(bucket, output_key, contract)
     return out
 

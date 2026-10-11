@@ -159,6 +159,7 @@ export default {
     join: 'Join',
     union: 'Union (accoda righe)',
     foreach: 'Ciclo foreach',
+    sample: 'Campione di righe',
     source: 'Source',
   },
   params: {

@@ -19,4 +19,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   })
 
   nuxtApp.vueApp.use(i18n)
+  // <html lang> dal server, e aggiornato al cambio lingua: la sintesi vocale legge
+  // l'interfaccia con la voce della lingua giusta (prima il server non lo scriveva)
+  useHead({ htmlAttrs: { lang: computed(() => i18n.global.locale.value) } })
 })

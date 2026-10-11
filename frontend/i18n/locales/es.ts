@@ -159,6 +159,7 @@ export default {
     join: 'Join',
     union: 'Unión (añadir filas)',
     foreach: 'Bucle foreach',
+    sample: 'Muestra de filas',
     source: 'Origen',
   },
   params: {

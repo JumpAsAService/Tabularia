@@ -7,6 +7,7 @@
 //  - cosa pesa sul warehouse → il query_log che ClickHouse tiene da sé.
 import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { Gauge, RefreshCw, CircleAlert, Workflow, Database } from 'lucide-vue-next'
 import { useApiClient } from '~/composables/useApiClient'
 import { errMessage } from '~/composables/useApi'
@@ -16,6 +17,7 @@ const { user } = useAuth()
 const router = useRouter()
 const { apiFetch } = useApiClient()
 const { t } = useI18n()
+const fmtx = useFormat()
 // guardia UX: la RBAC vera la impone il gateway (require_superuser)
 watchEffect(() => { if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/') })
 
@@ -59,7 +61,7 @@ async function load() {
 onMounted(load)
 watch([days, minutes], load)
 
-const nf = new Intl.NumberFormat('it-IT')
+const nf = { format: (n: number) => fmtx.count(n) } // nella lingua dell'interfaccia
 const secs = (s: number | null | undefined) => {
   if (s == null) return '—'
   if (s < 1) return `${Math.round(s * 1000)} ms`
@@ -69,7 +71,7 @@ const secs = (s: number | null | undefined) => {
 }
 const ms = (v: number | null | undefined) => (v == null ? '—' : secs(v / 1000))
 const bytes = (b: number) => b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b > 1e6 ? `${(b / 1e6).toFixed(0)} MB` : `${Math.round(b / 1e3)} KB`
-const time = (iso: string | number) => new Date(typeof iso === 'number' ? iso * 1000 : iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+const time = (iso: string | number) => fmtx.dateTime(typeof iso === 'number' ? iso * 1000 : iso)
 const total = (e: EngineStat) => e.ok + e.superseded + e.error
 // la fase che ha pesato di più: è ciò che dice DOVE guardare
 const dominant = (p: Record<string, number>) => Object.entries(p).sort((a, b) => b[1] - a[1])[0]

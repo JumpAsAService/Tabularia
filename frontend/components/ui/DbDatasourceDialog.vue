@@ -153,6 +153,7 @@ function confirm() {
     <div v-if="open" class="dd-backdrop" @mousedown.self="emit('cancel')">
       <div
         ref="card"
+        v-label-fields
         class="dd-card"
         role="dialog"
         aria-modal="true"

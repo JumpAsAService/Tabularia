@@ -45,9 +45,9 @@ def apri_export(nome):
     ff.js(f"""
       const azioni = Array.from(document.querySelectorAll('.flow-actions')).find(a => a.parentElement.innerText.includes({json.dumps(nome)}));
       azioni.querySelector('button svg.lucide-download').closest('button').click(); return 1""")
-    ff.aspetta("!!document.querySelector('.export-overlay .export-card')", 10)
-    ff.js("Array.from(document.querySelectorAll('.export-overlay .export-opt')).find(b => b.querySelector('strong').innerText.trim() === 'dbt').click(); return 1")
-    return ff.aspetta("!!document.querySelector('.dx-card') && !document.querySelector('.export-overlay') && document.querySelectorAll('.dx-card input[name=dx-target]').length === 3", 30)
+    ff.aspetta("!!document.querySelector('[role=dialog] .export-body')", 10)
+    ff.js("Array.from(document.querySelectorAll('[role=dialog] .export-opt')).find(b => b.querySelector('strong').innerText.trim() === 'dbt').click(); return 1")
+    return ff.aspetta("!!document.querySelector('.dx-card') && !document.querySelector('.export-body') && document.querySelectorAll('.dx-card input[name=dx-target]').length === 3", 30)
 
 
 def scrivi(selettore, valore):

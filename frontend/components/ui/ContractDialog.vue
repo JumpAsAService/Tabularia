@@ -533,7 +533,7 @@ function chiudi() {
 .cd-sev { display: inline-flex; border: 1px solid var(--control-border); border-radius: 8px; overflow: hidden; }
 .cd-sev button { border: 0; border-radius: 0; padding: 3px 9px; font-size: 11.5px; background: transparent; color: var(--muted); box-shadow: none; }
 .cd-sev button.on.warning { background: var(--warning); color: var(--on-warning); font-weight: 600; }
-.cd-sev button.on.error { background: var(--danger); color: #fff; font-weight: 600; }
+.cd-sev button.on.error { background: var(--danger-fill); color: var(--on-danger); font-weight: 600; }
 .cd-via { display: grid; place-items: center; padding: 4px; border: 0; background: transparent; color: var(--muted); box-shadow: none; }
 .cd-via:hover { color: var(--danger); }
 .cd-sotto { grid-column: 2 / -1; margin: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }

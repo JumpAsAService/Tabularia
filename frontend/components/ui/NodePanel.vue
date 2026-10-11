@@ -713,7 +713,7 @@ function pickDatasource(id: number | null) {
 .filterrow { padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: 6px; }
 .filterrow.incomplete { border-style: dashed; }
 .filterhead { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-.filterhead .warn { margin-left: auto; text-transform: none; letter-spacing: 0; color: #fbbf24; }
+.filterhead .warn { margin-left: auto; text-transform: none; letter-spacing: 0; color: color-mix(in srgb, #fbbf24 var(--enc-text-mix), var(--text)); }
 .filterhead .x { margin-left: auto; padding: 1px 4px; background: none; border: 0; color: var(--muted); cursor: pointer; }
 .filterhead .warn + .x { margin-left: 0; }
 .filterhead .x:hover { color: var(--danger, #f87171); }

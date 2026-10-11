@@ -34,7 +34,8 @@ onMounted(async () => {
       <ShieldCheck :size="18" aria-hidden="true" />
       <p class="pv-text">{{ nota!.summary }}</p>
       <div class="pv-acts">
-        <button class="pv-btn" type="button" @click="aperta = true">{{ t('privacy.details') }}</button>
+        <!-- neutro: sulla pagina di accesso l'azione principale è «Sign in» -->
+        <button class="pv-btn ghost" type="button" @click="aperta = true">{{ t('privacy.details') }}</button>
         <a v-if="nota!.url" class="pv-btn ghost" :href="nota!.url" target="_blank" rel="noopener">
           {{ t('privacy.full') }} <ExternalLink :size="12" />
         </a>
@@ -82,12 +83,12 @@ onMounted(async () => {
 .pv-btn {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 7px 16px; min-height: 34px;
-  border: 1px solid var(--accent); border-radius: 8px;
-  background: var(--accent); color: #fff;
+  border: 1px solid transparent; border-radius: 8px;
+  background: var(--grad-accent); color: var(--on-accent); /* bianco su --accent: 1,65 in monokai */
   font: inherit; font-size: 13.5px; font-weight: 600;
   text-decoration: none; cursor: pointer; white-space: nowrap;
 }
-.pv-btn:hover { filter: brightness(1.08); }
+.pv-btn:hover { filter: brightness(0.92); }
 .pv-btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
 .pv-btn.ghost:hover { border-color: var(--accent); filter: none; }
 /* su schermo stretto il testo va sopra e i bottoni sotto, larghi */

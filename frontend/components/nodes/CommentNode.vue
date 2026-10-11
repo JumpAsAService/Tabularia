@@ -72,7 +72,7 @@ function commit() {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #fbbf24;
+  color: color-mix(in srgb, #fbbf24 var(--enc-text-mix), var(--text));
   border-bottom: 1px solid rgba(251, 191, 36, 0.3);
   flex-shrink: 0;
 }

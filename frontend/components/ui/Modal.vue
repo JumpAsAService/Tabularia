@@ -20,6 +20,7 @@ useDialogA11y(card, () => props.open, () => emit('close'))
     <div v-if="open" class="modal-backdrop" @mousedown.self="emit('close')">
       <div
         ref="card"
+        v-label-fields
         class="modal-card"
         role="dialog"
         aria-modal="true"

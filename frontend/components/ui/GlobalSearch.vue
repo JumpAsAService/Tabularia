@@ -116,7 +116,8 @@ const mostrati = computed(() => flat.value.length)
 
 <template>
   <div class="gs">
-    <span class="box" :class="{ active: open && q }">
+    <!-- un <label>: cliccare la lente porta nel campo anche quando è chiuso (telefono) -->
+    <label class="box" :class="{ active: open && q }">
       <Search :size="14" />
       <input
         v-model="q"
@@ -129,7 +130,7 @@ const mostrati = computed(() => flat.value.length)
       <button v-if="q" class="x" :aria-label="$t('globalSearch.clear')" @click="q = ''; close()">
         <X :size="12" />
       </button>
-    </span>
+    </label>
 
     <template v-if="open && q.trim()">
       <div class="backdrop" @click="close" />
@@ -178,7 +179,7 @@ const mostrati = computed(() => flat.value.length)
   background: var(--panel-2);
   color: var(--muted);
 }
-.box.active { border-color: var(--accent); }
+.box.active, .box:focus-within { border-color: var(--accent); }
 .box input {
   border: none;
   background: transparent;
@@ -186,6 +187,19 @@ const mostrati = computed(() => flat.value.length)
   color: var(--text);
   width: 190px;
   font-size: 13px;
+}
+/* La navigazione ha la precedenza nella barra: sotto i 1600px il campo si stringe
+   e si riallarga mentre lo si usa; sul telefono resta la lente, e il campo si apre
+   al clic o col Tab. Senza transizione: animare la larghezza ricalcolerebbe il
+   layout di tutta la barra a ogni fotogramma. */
+@media (max-width: 1600px) {
+  .box input { width: 140px; } /* 20px sono di padding: il segnaposto ne vuole ~115 */
+  .box:focus-within input { width: 220px; }
+}
+@media (max-width: 760px) {
+  .box { cursor: pointer; }
+  .box input { width: 0; padding-inline: 0; }
+  .box:focus-within input { width: 46vw; padding-inline: 4px; }
 }
 .box .x { padding: 1px 5px; min-height: 0; }
 
@@ -250,7 +264,6 @@ const mostrati = computed(() => flat.value.length)
 /* `.spin` NON si ridefinisce: è già globale in main.css:230 con le sue keyframes */
 
 @media (max-width: 900px) {
-  .box input { width: 110px; }
   .results { width: 320px; }
 }
 </style>

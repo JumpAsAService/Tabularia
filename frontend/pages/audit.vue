@@ -13,11 +13,13 @@ import {
   LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { useChartTheme } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
 const { t } = useI18n()
+const fmtx = useFormat()
 
 const { user } = useAuth()
 const router = useRouter()
@@ -145,7 +147,7 @@ function meta(a: string) {
   return ACTION_META.value[a] ?? { icon: Circle, color: ui.value.muted, label: a }
 }
 function fmtDate(iso: string) {
-  try { return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'medium' }) } catch { return iso }
+  return fmtx.dateTime(iso, { seconds: true }) // nel registro l'ordine al secondo conta
 }
 function fmtAgo(iso: string | null) {
   if (!iso) return '—'
@@ -215,7 +217,7 @@ function detailSummary(e: AuditEntry): string {
 
       <!-- filtri -->
       <div class="filters">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('audit.searchPlaceholder')" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('audit.searchPlaceholder')" :aria-label="$t('audit.searchPlaceholder')" /></span>
         <select v-model="action" class="fsel">
           <option value="">{{ $t('audit.allActions') }}</option>
           <option v-for="a in actions" :key="a" :value="a">{{ meta(a).label }}</option>

@@ -340,7 +340,11 @@ def ingest_sharepoint_to_parquet(
     key: str,
     storage,
     client: GraphClient | None = None,
+    progress: Callable[..., None] | None = None,
 ) -> dict[str, Any]:
+    """`progress(fase, …)` per chi guarda l'import: «files» a ogni file (file, files,
+    rows letti finora), «saving» mentre il parquet va sullo storage."""
+    avanza = progress or (lambda *a, **k: None)
     client = client or GraphClient(conn)
     files = find_files(client, source.path)
     if not files:
@@ -351,13 +355,16 @@ def ingest_sharepoint_to_parquet(
 
     frames: list[pl.DataFrame] = []
     columns_by_file: dict[str, list[str]] = {}
+    letti = 0
     with tempfile.TemporaryDirectory() as tmp:
         for i, f in enumerate(files):
+            avanza("files", file=i + 1, files=len(files), rows=letti)
             local = os.path.join(tmp, f"{i}{os.path.splitext(f.path)[1]}")
             client.download(f.id, local)
             df = read_sheet(local, source.sheet, f.path)
             os.remove(local)
             columns_by_file[f.path] = df.columns
+            letti += df.height
             if df.height == 0:
                 # solo intestazione (un template vuoto del mese): il lettore la tipizza
                 # tutta String, e nell'unione "rilassata" trascinerebbe a testo ogni
@@ -386,6 +393,7 @@ def ingest_sharepoint_to_parquet(
         if drift:
             logger.warning("sharepoint %s: colonne non presenti in tutti i file: %s", source.path, drift)
 
+        avanza("saving", rows=table.height)
         out = os.path.join(tmp, "out.parquet")
         table.write_parquet(out, compression="zstd", row_group_size=get_settings().ingest.parquet_row_group_rows)
         storage.upload_file(out, bucket, key)

@@ -14,8 +14,7 @@ export function useLocale() {
   function setLocale(code: LocaleCode) {
     if (!isLocale(code)) return
     locale.value = code
-    cookie.value = code
-    if (import.meta.client) document.documentElement.setAttribute('lang', code)
+    cookie.value = code // <html lang> segue `locale` da plugins/i18n.ts
   }
 
   return { locale, setLocale, locales: LOCALES }

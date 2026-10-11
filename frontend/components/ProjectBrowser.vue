@@ -17,6 +17,7 @@
 // rete. Quella che attraversa le cartelle è `/search` (vedi useSearch.ts).
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import {
   ChevronRight,
   Folder,
@@ -44,6 +45,9 @@ import {
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
+import RunProgressText from '~/components/ui/RunProgressText.vue'
+import { usePopover } from '~/composables/usePopover'
+import { useDialogA11y } from '~/composables/useDialogA11y'
 import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
@@ -69,6 +73,7 @@ const viewsApi = useSavedViews()
 const { user } = useAuth()
 const toast = useToast()
 const { t } = useI18n()
+const fmtx = useFormat()
 const route = useRoute()
 
 const projects = ref<Project[]>([])
@@ -129,6 +134,8 @@ interface Row {
   id: number
   name: string
   meta: string
+  /** import in corso con l'avanzamento: la cella lo mostra col suo orologio */
+  progressRun?: RunInfo
   /** valorizzato = la riga è un collegamento; altrimenti è solo testo */
   to?: string
   raw: any
@@ -143,13 +150,7 @@ const KIND_ICON: Record<Kind, any> = {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return (
-    d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }) +
-    ' ' +
-    d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-  )
+  return iso ? fmtx.dateTime(iso) : ''
 }
 
 const rows = computed<Row[]>(() => {
@@ -162,14 +163,15 @@ const rows = computed<Row[]>(() => {
   }
   for (const d of dsList.value) {
     const stato = ingestRuns.value[d.id]
-    const meta = stato && !isTerminal(stato)
+    const inCorso = !!stato && !isTerminal(stato)
+    const meta = inCorso
       ? t('projectBrowser.importingLabel')
       : stato?.status === 'FAILURE'
         ? t('projectBrowser.importFailedLabel')
-        : [d.rows != null ? t('projectBrowser.rowsCount', { n: d.rows }) : '', fmtDate(d.refreshed_at ?? d.updated_at)]
+        : [d.rows != null ? t('projectBrowser.rowsCount', { n: fmtx.count(d.rows) }) : '', fmtDate(d.refreshed_at ?? d.updated_at)]
             .filter(Boolean)
             .join(' · ')
-    out.push({ kind: 'datasource', id: d.id, name: d.name, meta, raw: d })
+    out.push({ kind: 'datasource', id: d.id, name: d.name, meta, raw: d, progressRun: inCorso && stato?.progress ? stato : undefined })
   }
   for (const v of savedViews.value) {
     out.push({ kind: 'view', id: v.id, name: v.name, meta: v.datasource_name ?? '', to: `/viewer?view=${v.id}`, raw: v })
@@ -403,6 +405,8 @@ const engineStep = ref(false) // secondo livello del menù: scelta del motore
 const newFolderName = ref('')
 
 function closeNew() { newMenu.value = false; engineStep.value = false; newFolderName.value = '' }
+const newPop = ref<HTMLElement | null>(null)
+usePopover(newMenu, newPop, closeNew)
 
 function createFlowWith(engineId: string) {
   closeNew()
@@ -423,6 +427,9 @@ async function createFolder() {
 
 // ── Pannello laterale: amministrazione della cartella ───────────────────────
 const settingsOpen = ref(false)
+// il cassetto ha uno sfondo che copre la pagina: è modale come i dialoghi
+const drawerEl = ref<HTMLElement | null>(null)
+useDialogA11y(drawerEl, () => settingsOpen.value && canManage.value && !!current.value, () => { settingsOpen.value = false })
 const grantSubjectType = ref<'group' | 'user'>('group')
 const grantGroupId = ref<number | null>(null)
 const grantUserId = ref<number | null>(null)
@@ -577,7 +584,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
       <span class="searchbox">
         <Search :size="14" />
-        <input v-model="q" type="text" :placeholder="$t('projectBrowser.searchPlaceholder')" />
+        <input v-model="q" type="text" :placeholder="$t('projectBrowser.searchPlaceholder')" :aria-label="$t('projectBrowser.searchPlaceholder')" />
         <button v-if="q" class="x" :title="$t('projectBrowser.clearSearch')" :aria-label="$t('projectBrowser.clearSearch')" @click="q = ''">
           <X :size="12" />
         </button>
@@ -590,7 +597,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <div class="newwrap">
         <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
-        <div v-if="newMenu" class="menu-pop">
+        <div v-if="newMenu" ref="newPop" class="menu-pop">
           <template v-if="!engineStep">
             <div class="menu-label">{{ $t('projectBrowser.newFolderLabel') }}</div>
             <div class="menu-row">
@@ -679,7 +686,12 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
               <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
             </td>
-            <td class="rmeta muted">{{ r.meta }}</td>
+            <td class="rmeta muted">
+              <span class="rmeta-text" :title="r.progressRun ? undefined : r.meta">
+                <RunProgressText v-if="r.progressRun" :run="r.progressRun" :sr-label="r.meta" />
+                <template v-else>{{ r.meta }}</template>
+              </span>
+            </td>
             <td class="racts">
               <button
                 v-if="r.kind === 'flow'"
@@ -751,7 +763,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                   <LoaderCircle v-else :size="14" class="spin rwip" />
                   <span class="rwhen">{{ fmtDate(run.started_at) }}</span>
                   <span class="muted">{{ fmtDuration(run) }}</span>
-                  <span v-if="run.rows_written != null" class="muted">{{ $t('projectBrowser.rowsCount', { n: run.rows_written }) }}</span>
+                  <span v-if="run.rows_written != null" class="muted">{{ $t('projectBrowser.rowsCount', { n: fmtx.count(run.rows_written) }) }}</span>
                   <span v-if="run.publish_name" class="rpub"><Database :size="12" /> {{ run.publish_name }}</span>
                   <span v-if="run.error" class="rerr" :title="run.error">{{ run.error.slice(0, 80) }}</span>
                 </li>
@@ -765,7 +777,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     <!-- Amministrazione della cartella: fuori dallo scorrimento dei dati -->
     <template v-if="settingsOpen && canManage && current">
       <div class="drawer-backdrop" @click="settingsOpen = false" />
-      <aside class="drawer" role="dialog" :aria-label="$t('projectBrowser.folderSettingsTitle')">
+      <aside ref="drawerEl" v-label-fields class="drawer" role="dialog" aria-modal="true" tabindex="-1" :aria-label="$t('projectBrowser.folderSettingsTitle')">
         <div class="drawer-head">
           <span class="dtitle"><Settings2 :size="15" /> {{ current.name }}</span>
           <button class="mini" :aria-label="$t('projectBrowser.closeDrawer')" @click="settingsOpen = false"><X :size="14" /></button>
@@ -963,6 +975,9 @@ tr.folderrow .kicon { color: var(--accent-2); }
 .asname:hover:not(.plain) { color: var(--accent); box-shadow: none; }
 .asname.plain { cursor: default; }
 .rmeta { font-size: 12px; white-space: nowrap; }
+/* una descrizione lunga non deve allargare la tabella fino a spingere le azioni
+   fuori dallo schermo (fra 721 e ~1170px succedeva): si taglia, intera nel tooltip */
+.rmeta-text { display: block; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; }
 .racts { text-align: right; white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
 .tag {
   font-size: 10px;
@@ -1025,7 +1040,7 @@ table.perm td.right { text-align: right; width: 32px; }
 .dangerzone { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 button.mini { padding: 2px 8px; min-height: 24px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
-button.danger:hover { background: var(--danger); color: #fff; }
+button.danger:hover { background: var(--danger-fill); color: var(--on-danger); }
 
 @media (max-width: 720px) {
   .bar { flex-wrap: wrap; }

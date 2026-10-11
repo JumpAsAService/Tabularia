@@ -707,7 +707,7 @@ watch(draft, async () => {
 .chats .small, .chatsearch .count { font-size: 12px; }
 .talk-head .mini, .chats .mini { padding: 3px 8px; min-height: 24px; }
 .chats .mini.danger { border-color: var(--danger); color: var(--danger); }
-.chats .mini.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.chats .mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
 
 /* ricerca sulle conversazioni: la stessa pillola delle pagine a elenco */
 .chatsearch {

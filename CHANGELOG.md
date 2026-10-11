@@ -5,6 +5,64 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Interface: the nine major findings of the 2026-10-11 UI/UX review, fixed.** The
+  review (audit 13/20, critique 22/40, report in
+  `docs/audit/FRONTEND-AUDIT-2026-10-11.md`) found nothing blocking and nine major
+  issues; all nine are closed, each verified in the browser.
+
+  *Navigation.* The top bar gave the navigation only what the search box and the
+  memory gauge left over: at 1440px Connections, Runs and Administration were out of
+  view, and on a phone the navigation was zero pixels wide with the settings gear off
+  screen. The navigation now has precedence: the memory gauge keeps its bars (numbers
+  in its tooltip, now translated) below 1800px and hides on a phone, the search
+  narrows and widens while in use, the brand keeps its mark below 1100px. All nine
+  entries are visible at 1440px. Global search now lands on the datasource or
+  connection it found, even past the first page. Explore no longer overflows between
+  721 and ~1170px and Flows keeps its row actions on a phone.
+
+  *Numbers and dates* follow the interface language everywhere (they were Italian in
+  16 places, whatever the language): «42,007,616», «Oct 11, 10:27 AM», never
+  «11/10/26». The Viewer aligns numbers right with tabular figures, gives a column the
+  same decimals and does not group integers (a period like 202607 no longer reads
+  «202.607»); its number formatter is built once, not per cell.
+
+  *Contrast.* Primary buttons in the default dark theme were white on #4f8cff, 3.22:1;
+  their fill is now the light theme's gradient (4.58:1) and hover darkens instead of
+  lightening. The privacy notice, the run status pills, the engine badge, node labels
+  and lineage edge labels pass AA in all four themes (measured in the browser: 16/16
+  above 4.5), through a per-theme `--enc-text-mix` for encoding colours used as text
+  and `--danger-fill` / `--on-danger` for red fills.
+
+  *Accessibility.* Form labels are now real labels (a `v-label-fields` directive links
+  each label to the field after it; unnamed fields went to zero on the pages
+  measured), the Select is a combobox with a listbox, `<html lang>` is sent by the
+  server, the flow export choice is a real dialog, the Administration menu works with
+  arrows and Esc, the settings panel, the «New» panels and «Save view» take focus and
+  close with Esc, the folder drawer is modal, groups in Admin are selectable from the
+  keyboard, and Esc inside a Select no longer closes the whole dialog with what had
+  been typed.
+
+  *Editor.* Unsaved changes are marked next to the flow name, leaving (Projects, sign
+  out, a link) asks to stay, leave without saving or save and leave, closing the tab
+  triggers the browser's warning, and Ctrl/Cmd+S saves. Nodes carry the operation's
+  name instead of its id and say in one line what they do («stato = evaso», «agente_id
+  → ricavo, ordini, clienti») instead of «1 parameters». A flow opens fitted to its
+  nodes (a 32-node flow is wholly in view) instead of zoomed 2× on empty canvas.
+
+  *Import progress* no longer speaks every second to screen readers: the ticking text
+  is hidden from them, the page announces start and end once, and the clock ticks in
+  its own small component instead of redrawing the page.
+- **An import says where it is.** While a datasource is imported or refreshed, the
+  Datasources page (under the name) and the Explore show the phase and the time since
+  it started: queued, the database preparing the data (the query has gone out and no
+  row has come back yet — the long silence of a large sort), the rows received so far,
+  file 3 of 12 for SharePoint, saving to storage, checking the data contract. Every
+  database gets it, because the phases come from the writer they all share. The worker
+  reports them at most every two seconds in the task's own state, the engine returns
+  them with the status and the gateway adds the seconds, counted on the server and run
+  on in the browser between two polls; nothing is stored. There is no percentage: the
+  total of a query is not known in advance. With an engine from before, only the time
+  shows.
 - **Large ClickHouse tables import instead of failing after five minutes.** ClickHouse
   sends no row until it has the first one: with sort keys on columns outside the
   table's own key it reads and sorts the whole table first, and the client gave up

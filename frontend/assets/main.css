@@ -35,8 +35,19 @@
   --radius: 10px;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
-  --grad-accent: linear-gradient(135deg, #4f8cff 0%, #7c6cff 100%);
+  /* Il riempimento dei primari NON è --accent: bianco su #4f8cff fa 3,22:1 (e 3,86 su
+     #7c6cff), sotto l'AA per il testo dei bottoni. È lo stesso gradiente del tema
+     chiaro: 4,63 e 4,58. --accent resta #4f8cff per bordi, fuoco e collegamenti. */
+  --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
   --on-accent: #fff;                      /* testo sui bottoni primari (su accento) */
+  /* rosso PIENO con testo sopra (hover dei bottoni danger, selezioni): bianco su
+     --danger fa 2,78:1; su questo 4,59 */
+  --danger-fill: #d63c3c;
+  --on-danger: #fff;
+  /* I colori di CODIFICA (motori, categorie, archi) quando diventano TESTO si
+     mescolano col testo del tema quanto basta per l'AA (misurato su panel e bg):
+     color-mix(in srgb, <colore> var(--enc-text-mix), var(--text)). */
+  --enc-text-mix: 100%;
   /* testo sul RIEMPIMENTO --accent-2 (solo .tag.right lo usa così): scuro dove il
      verde è chiaro. Il tema chiaro lo ribalta, avendo un verde scuro. */
   --on-accent-2: #0f1117;
@@ -78,6 +89,9 @@
   --shadow-1: 0 1px 2px rgba(20, 30, 60, 0.08);
   --shadow-2: 0 6px 20px rgba(20, 30, 60, 0.12);
   --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
+  --danger-fill: #e02424; /* bianco sopra: 4,72 */
+  --on-danger: #fff;
+  --enc-text-mix: 40%;    /* i colori di codifica nascono per lo scuro: qui vanno scuriti */
 
   --scrim: rgba(20, 28, 48, 0.35);
   --topbar-bg: rgba(255, 255, 255, 0.88);
@@ -113,6 +127,9 @@
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
   --on-accent: #21222c;                   /* accento chiaro → testo scuro sui bottoni */
+  --danger-fill: #d63c3c; /* bianco sopra: 4,59 (su #ff5555 era 3,14) */
+  --on-danger: #fff;
+  --enc-text-mix: 80%;
 
   --scrim: rgba(20, 21, 28, 0.6);
   --topbar-bg: rgba(40, 42, 54, 0.92);
@@ -148,6 +165,9 @@
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
   --on-accent: #1e1f1c;                   /* accento chiaro → testo scuro sui bottoni */
+  --danger-fill: #c8306a; /* bianco sopra: 5,14 (su #fb4a8b era 3,25) */
+  --on-danger: #fff;
+  --enc-text-mix: 85%;
 
   --scrim: rgba(20, 21, 18, 0.6);
   --topbar-bg: rgba(39, 40, 34, 0.92);
@@ -204,7 +224,9 @@ button.primary {
   color: var(--on-accent);
   font-weight: 500;
 }
-button.primary:hover { filter: brightness(1.12); box-shadow: 0 2px 12px rgba(79, 140, 255, 0.35); }
+/* l'hover SCURISCE: schiarire portava il bianco sul primario sotto l'AA (3,80 col
+   chiaro); scurito di 0,92 resta sopra 5,2 in tutti i temi. Il bagliore segue il tema. */
+button.primary:hover { filter: brightness(0.92); box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
 button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
 /* Navigazione da tastiera: i campi avevano il loro anello (più sotto), i bottoni
    no — restava quello di default del browser, poco visibile su questi fondi.
@@ -219,6 +241,12 @@ button:focus-visible {
    screen reader ne annunci il titolo: è un fuoco programmatico, non deve
    disegnare un anello attorno all'intero riquadro */
 [role="dialog"]:focus { outline: none; }
+/* testo per gli screen reader soltanto (es. un «importazione…» stabile accanto a un
+   testo che ticchetta, o gli annunci di inizio e fine di un import) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 
 /* Bersagli tattili. La densità di questa interfaccia è voluta e su desktop con
    mouse resta intatta: si allarga SOLO dove il puntatore è grossolano (dito,

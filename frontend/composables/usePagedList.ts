@@ -8,10 +8,10 @@ import { skeletonPad } from '~/composables/useSkeleton'
 
 export function usePagedList<T>(
   fetcher: (p: { q?: string; limit: number; offset: number }) => Promise<Page<T>>,
-  opts: { pageSize?: number } = {},
+  opts: { pageSize?: number; initialQuery?: string } = {},
 ) {
   const pageSize = opts.pageSize ?? 50
-  const q = ref('')
+  const q = ref(opts.initialQuery ?? '') // es. arrivando dalla ricerca globale
   const offset = ref(0)
   const total = ref(0)
   const items = ref<T[]>([]) as Ref<T[]>

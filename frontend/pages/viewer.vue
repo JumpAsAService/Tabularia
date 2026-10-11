@@ -6,6 +6,8 @@
 // dati trasformati. Nulla viene salvato.
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
+import { usePopover } from '~/composables/usePopover'
 import {
   PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save,
 } from 'lucide-vue-next'
@@ -27,6 +29,7 @@ const viewsApi = useSavedViews()
 const projectsApi = useProjects()
 const toast = useToast()
 const { t } = useI18n()
+const fmtx = useFormat()
 
 // ── sorgente + motore ─────────────────────────────────────────────────────
 const datasources = ref<DatasourceInfo[]>([])
@@ -201,7 +204,19 @@ async function apply() {
   }
 }
 
-const cell = (v: any) => (v === null || v === undefined ? '' : typeof v === 'number' ? new Intl.NumberFormat('it-IT', { maximumFractionDigits: 4 }).format(v) : String(v))
+// Un formatter per colonna numerica, dai valori in vista: stessi decimali su tutta
+// la colonna e interi senza separatore delle migliaia (vedi useFormat). Si
+// ricalcola quando cambiano i dati, non a ogni tasto nei filtri.
+const isNumCol = (dtype: string) => /Int|Float|Decimal/i.test(dtype)
+const colFormat = computed(() => {
+  const m: Record<string, (v: unknown) => string> = {}
+  for (const c of tableCols.value) {
+    if (isNumCol(c.dtype)) m[c.name] = fmtx.columnFormatter(displayRows.value.map((r: any) => r[c.name]))
+  }
+  return m
+})
+const cell = (col: string, v: any) =>
+  v === null || v === undefined ? '' : colFormat.value[col] ? colFormat.value[col](v) : typeof v === 'object' ? JSON.stringify(v) : String(v)
 
 // export della vista corrente (csv/xlsx). Riusa /tasks/export → gira su Polars,
 // a prescindere dal motore scelto per la visualizzazione.
@@ -258,6 +273,8 @@ const savedViews = ref<SavedView[]>([])
 const projects = ref<Project[]>([])
 const currentViewId = ref<number | null>(null)
 const saveOpen = ref(false)
+const savePop = ref<HTMLElement | null>(null)
+usePopover(saveOpen, savePop, () => { saveOpen.value = false })
 const saveName = ref('')
 const saveProjectId = ref<number | null>(null)
 const saving = ref(false)
@@ -395,7 +412,7 @@ onMounted(async () => {
             <Save :size="14" /> {{ $t('viewer.saveViewButton') }}
           </button>
           <div v-if="saveOpen" class="menu-backdrop" @click="saveOpen = false" />
-          <div v-if="saveOpen" class="savepop">
+          <div v-if="saveOpen" ref="savePop" class="savepop">
             <label class="lbl">{{ $t('viewer.viewNameLabel') }}</label>
             <input v-model="saveName" type="text" :placeholder="$t('viewer.viewNamePlaceholder')" @keyup.enter="saveView" />
             <label class="lbl">{{ $t('viewer.viewFolderLabel') }}</label>
@@ -417,6 +434,7 @@ onMounted(async () => {
           :options="dsOptions"
           searchable
           :placeholder="$t('viewer.datasourcePlaceholder')"
+          :aria-label="$t('viewer.datasourcePlaceholder')"
           class="dssel"
           @update:model-value="onPickDatasource"
         />
@@ -523,14 +541,14 @@ onMounted(async () => {
           <table v-else-if="rows.length" class="dt">
             <thead>
               <tr>
-                <th v-for="c in tableCols" :key="c.name" :class="{ num: /Int|Float|Decimal/i.test(c.dtype) }">
+                <th v-for="c in tableCols" :key="c.name" :class="{ num: isNumCol(c.dtype) }">
                   {{ c.name }}<span class="dtype">{{ c.dtype }}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(row, i) in displayRows" :key="i">
-                <td v-for="c in tableCols" :key="c.name" :class="{ num: /Int|Float|Decimal/i.test(c.dtype) }">{{ cell(row[c.name]) }}</td>
+                <td v-for="c in tableCols" :key="c.name" :class="{ num: isNumCol(c.dtype) }">{{ cell(c.name, row[c.name]) }}</td>
               </tr>
             </tbody>
           </table>
@@ -628,13 +646,15 @@ onMounted(async () => {
   border-bottom: 1px solid var(--border-soft);
   border-right: 1px solid var(--border-soft); /* separatore di colonna */
   padding: 5px 12px;
-  text-align: center;
+  text-align: left;
   white-space: nowrap;
   vertical-align: top;
 }
 .dt th:last-child, .dt td:last-child { border-right: none; }
 .dt th { position: sticky; top: 0; background: var(--panel); z-index: 1; font-weight: 600; vertical-align: bottom; }
 .dt .dtype { display: block; font-size: 9px; color: var(--muted); font-weight: 400; text-transform: lowercase; }
+/* i numeri a destra con cifre tabellari: unità sotto unità, come promette il login */
+.dt td.num, .dt th.num { text-align: right; }
 .dt td.num { font-variant-numeric: tabular-nums; }
 .dt tbody tr:hover { background: var(--panel-2); }
 

@@ -18,6 +18,12 @@ export default {
     "accept": "I understand",
   },
   "memoryGauge": {
+    "summary": "Host RAM: {used} used · {available} available · {total} total ({pct}% — {level})",
+    "level1": "free",
+    "level2": "ok",
+    "level3": "medium",
+    "level4": "high",
+    "level5": "critical",
     "free": "{gb} free",
   },
   "dataGrid": {
@@ -315,7 +321,19 @@ export default {
     "cancel": "Cancel",
     "counter": "{n} of {total} described",
   },
+  "runProgress": {
+    "queued": "queued · {time}",
+    "running": "running · {time}",
+    "waiting": "the database is preparing the data · {time}",
+    "reading": "{n} rows received · {time}",
+    "files": "file {file} of {files} · {time}",
+    "saving": "saving · {time}",
+    "checking": "checking the contract · {time}"
+  },
   "datasources": {
+    "announceStarted": "{name}: import started",
+    "announceDone": "{name}: import completed, {n} rows",
+    "announceFailed": "{name}: import failed",
     "aiReady": "AI ready",
     "aiReadyHint": "The table and every one of its fields have a description: the assistant can query it without guessing what they hold.",
     "docsSavedToast": "Descriptions saved ({n} fields described)",
@@ -366,6 +384,11 @@ export default {
     "loadingEditor": "Loading editor…"
   },
   "flowEditor": {
+    "leaveTitle": "Unsaved changes",
+    "leaveBody": "The changes to “{name}” are not saved yet. If you leave now they are lost.",
+    "leaveStay": "Stay",
+    "leaveDiscard": "Leave without saving",
+    "leaveSave": "Save and leave",
     "readOnlyNodes": "Read-only account: only transformation nodes can be added",
     "cacheSkippedToast": "Upstream step above the cache cap ({n} rows): previews of this node recompute from the source.",
     "backendUnreachable": "Backend unreachable: {error}",
@@ -720,7 +743,7 @@ export default {
   "operationNode": {
     "joinLabel": "{how} join",
     "operationFallback": "operation",
-    "paramCount": "{n} parameters",
+    "paramCount": "no parameters | {n} parameter | {n} parameters",
     "tableInputLabel": "table",
     "unionAlign": "align by name",
     "unionStrict": "identical schemas"
@@ -991,6 +1014,8 @@ export default {
     "dismiss": "Dismiss"
   },
   "toolbar": {
+    "unsaved": "Unsaved",
+    "unsavedTitle": "There are changes not saved yet (Ctrl+S saves)",
     "engineTitleProd": "Development engine: {engine} · production: {prod}",
     "engineTitle": "Flow execution engine: {engine}",
     "flowNamePlaceholder": "Flow name…",

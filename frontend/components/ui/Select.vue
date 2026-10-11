@@ -72,6 +72,12 @@ const panelStyle = ref<Record<string, string>>({})
 
 const PANEL_MAX_H = 280
 
+// id per collegare trigger, lista e opzione evidenziata (pattern combobox/listbox
+// dell'ARIA): esistono solo a pannello aperto, cioè nel browser — niente SSR
+const uid = Math.random().toString(36).slice(2, 9)
+const listId = `sel-list-${uid}`
+const optId = (i: number) => `sel-${uid}-${i}`
+
 function positionPanel() {
   const r = triggerEl.value?.getBoundingClientRect()
   if (!r) return
@@ -146,7 +152,14 @@ function onKeydown(ev: KeyboardEvent) {
     return
   }
   const flat = filtered.value
-  if (ev.key === 'Escape') { ev.preventDefault(); close() }
+  if (ev.key === 'Tab') {
+    // il pannello è teleportato sul body: senza, il Tab dalla ricerca uscirebbe
+    // dal dialogo. Si chiude e si riparte dal trigger (il Tab prosegue da lì).
+    close()
+    triggerEl.value?.focus()
+    return
+  }
+  if (ev.key === 'Escape') { ev.preventDefault(); close(); triggerEl.value?.focus() }
   else if (ev.key === 'ArrowDown') {
     ev.preventDefault()
     hi.value = Math.min(hi.value + 1, flat.length - 1)
@@ -178,6 +191,11 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
     class="sel-trigger"
     :class="{ open, disabled }"
     v-bind="$attrs"
+    role="combobox"
+    aria-haspopup="listbox"
+    :aria-expanded="open"
+    :aria-controls="open ? listId : undefined"
+    :aria-activedescendant="open && !searchable && hi >= 0 ? optId(hi) : undefined"
     :disabled="disabled"
     @click="toggle"
     @keydown="onKeydown"
@@ -197,18 +215,27 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
           v-model="query"
           type="text"
           class="sel-search-input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          :aria-controls="listId"
+          :aria-activedescendant="hi >= 0 ? optId(hi) : undefined"
+          :aria-label="t('select.search')"
           :placeholder="t('select.search')"
           @input="onQueryInput"
           @keydown="onKeydown"
         />
       </div>
-      <div class="sel-list">
-        <template v-for="(g, gi) in groups" :key="gi">
-          <div v-if="g.group" class="sel-group">{{ g.group }}</div>
+      <div :id="listId" class="sel-list" role="listbox">
+        <div v-for="(g, gi) in groups" :key="gi" :role="g.group ? 'group' : 'presentation'" :aria-label="g.group ?? undefined">
+          <div v-if="g.group" class="sel-group" aria-hidden="true">{{ g.group }}</div>
           <div
             v-for="o in g.items"
+            :id="optId(flatIndex(o))"
             :key="String(o.value)"
             class="sel-opt"
+            role="option"
+            :aria-selected="o.value === modelValue"
             :class="{ active: o.value === modelValue, hi: flatIndex(o) === hi }"
             @click="pick(o)"
             @mousemove="hi = flatIndex(o)"
@@ -217,7 +244,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
             <span v-else class="check-spacer" />
             <span class="sel-opt-label">{{ labelOf(o) }}</span>
           </div>
-        </template>
+        </div>
         <p v-if="!norm.length" class="sel-empty">{{ $t('select.noOptions') }}</p>
         <p v-else-if="!filtered.length" class="sel-empty">{{ $t('select.noResults') }}</p>
       </div>

@@ -91,7 +91,7 @@ table.list tbody tr:hover td { background: var(--panel-2); }
 /* min-height: il minimo AA per un bersaglio è 24px e il solo padding ne dava 22 */
 button.mini { padding: 3px 8px; min-height: 24px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
-button.danger:hover { background: var(--danger); color: #fff; }
+button.danger:hover { background: var(--danger-fill); color: var(--on-danger); }
 .err { color: var(--danger); }
 td .muted, td.muted { display: table-cell; }
 td.muted svg { vertical-align: -2px; margin-right: 4px; }

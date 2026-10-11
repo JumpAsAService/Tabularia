@@ -4,11 +4,13 @@
 // su tutto il dataset) + paginazione; click su una riga per il traceback completo.
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
 
 const { t } = useI18n()
+const fmtx = useFormat()
 const runsApi = useRuns()
 const status = ref<'FAILURE' | 'SUCCESS' | ''>('FAILURE') // di default gli errori
 const expanded = ref<number | null>(null)
@@ -27,8 +29,7 @@ function toggle(id: number) {
 }
 
 function fmtDate(s: string | null): string {
-  if (!s) return '—'
-  return new Date(s).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+  return fmtx.dateTime(s)
 }
 
 // chi ha avviato il run: se schedulato mostriamo "schedule", altrimenti il nome
@@ -61,7 +62,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
         </div>
         <span class="searchbox">
           <Search :size="14" />
-          <input v-model="q" type="text" :placeholder="$t('runs.searchPlaceholder')" />
+          <input v-model="q" type="text" :placeholder="$t('runs.searchPlaceholder')" :aria-label="$t('runs.searchPlaceholder')" />
         </span>
         <button class="mini" :title="$t('runs.refresh')" :aria-label="$t('runs.refresh')" @click="load"><RefreshCw :size="14" /></button>
       </div>
@@ -127,8 +128,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .chev { color: var(--muted); transition: transform 0.15s; flex: none; }
 .chev.rot { transform: rotate(90deg); }
 .stpill { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px; text-align: center; }
-.stpill.failure { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.stpill.success { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+.stpill.failure { background: color-mix(in srgb, var(--danger) 15%, transparent); color: color-mix(in srgb, var(--danger) 70%, var(--text)); }
+.stpill.success { background: color-mix(in srgb, var(--accent-2) 15%, transparent); color: color-mix(in srgb, var(--accent-2) 70%, var(--text)); }
 .stpill.pending, .stpill.started { background: rgba(148, 163, 184, 0.15); color: var(--muted); }
 .who { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }

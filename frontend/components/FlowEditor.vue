@@ -18,6 +18,8 @@ import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { createFlowHistory } from '~/composables/useFlowHistory'
+import { onBeforeRouteLeave } from 'vue-router'
+import Modal from '~/components/ui/Modal.vue'
 import { buildClip, instantiateClip, readClip, writeClip, type ClipNode, type FlowClip } from '~/composables/useFlowClipboard'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
@@ -60,6 +62,7 @@ const {
   removeSelectedNodes,
   screenToFlowCoordinate,
   fitView,
+  onNodesInitialized,
 } = useVueFlow()
 
 const initialNodes: Node[] = [
@@ -95,7 +98,7 @@ const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
 // /tasks/transform-data lo rifiutano — ma perché offrirglielo per poi dirgli
 // 403 è scortese. `is_observer` da /auth/me è EFFETTIVO: vero anche per gli
 // admin, quindi si guarda pure `is_superuser`.
-const { user: chiEntra, fetchMe } = useAuth()
+const { user: chiEntra, fetchMe, logout } = useAuth()
 // Finché non si sa chi è entrato, il cancello resta CHIUSO: un attimo senza
 // «Salva» per un amministratore è niente, un attimo con «Esegui» per un
 // osservatore è un 403 in faccia. L'editor non passa da AppShell, che è l'unico
@@ -318,6 +321,9 @@ async function loadFlow(id: number) {
   projectId.value = f.project_id
   flowEngine.value = f.engine || 'polars'
   flowProductionEngine.value = f.production_engine ?? null
+  savedName.value = f.name
+  adottaRiferimento = true
+  adattaVista = true
   applyDefinition(JSON.parse(f.definition || '{}'))
   selectedId.value = null
   history.reset() // un flusso appena caricato non ha niente da annullare
@@ -378,12 +384,33 @@ function applyDefinition(def: any, keepCounters = false) {
 // useFlowHistory). Non è salvata: vive finché l'editor resta aperto.
 const canUndo = ref(false)
 const canRedo = ref(false)
+
+// ── Modifiche non salvate ─────────────────────────────────────────────────
+// Prima si usciva dall'editor (Projects, Esci, chiudere la scheda) e il lavoro
+// spariva senza un avviso (audit 2026-10-11, F3). Il confronto è fra lo stato
+// fermo della cronologia e quello dell'ultimo caricamento o salvataggio; più il
+// nome. Un osservatore non salva: niente avvisi per lui.
+const savedSnap = ref<string | null>(null)
+const currentSnap = ref<string | null>(null)
+const savedName = ref('')
+let adottaRiferimento = true
+const dirty = computed(() =>
+  !soloOsservatore.value && savedSnap.value !== null &&
+  (currentSnap.value !== savedSnap.value || flowName.value.trim() !== savedName.value))
+
 const history = createFlowHistory({
   serialize: serializeCanvas,
   restore: restoreSnapshot,
   onChange: () => {
     canUndo.value = history.canUndo()
     canRedo.value = history.canRedo()
+    currentSnap.value = history.current()
+    // il primo stato fermo dopo un caricamento (o un flusso nuovo) è quello «salvato»:
+    // le misure che il canvas prende dopo aver disegnato i nodi non sono modifiche
+    if (adottaRiferimento && currentSnap.value !== null) {
+      savedSnap.value = currentSnap.value
+      adottaRiferimento = false
+    }
   },
 })
 watch(serializeCanvas, () => history.touch())
@@ -425,23 +452,76 @@ async function saveFlow() {
     setStatus(t('flowEditor.nameFlowPrompt'), 'error')
     return
   }
+  history.flush() // una modifica ancora «calda» fa parte di ciò che si salva
+  const definizione = serializeCanvas()
   try {
     if (flowId.value !== null) {
-      await flowsApi.update(flowId.value, { name: flowName.value.trim(), definition: serializeCanvas() })
+      await flowsApi.update(flowId.value, { name: flowName.value.trim(), definition: definizione })
     } else {
       const f = await flowsApi.create(projectId.value, {
         name: flowName.value.trim(),
-        definition: serializeCanvas(),
+        definition: definizione,
         engine: flowEngine.value,
       })
       flowId.value = f.id
       router.replace({ query: { flow: String(f.id) } }) // l'URL ora punta al flusso salvato
     }
+    savedSnap.value = currentSnap.value = definizione
+    savedName.value = flowName.value.trim()
     setStatus(t('flowEditor.flowSaved', { name: flowName.value.trim() }), 'ok')
   } catch (e) {
     setStatus(t('flowEditor.saveFailed', { error: errMessage(e) }), 'error')
   }
 }
+
+// Uscire con modifiche non salvate chiede cosa fare: restare, uscire senza
+// salvare, salvare e uscire. Vale per ogni navigazione dell'app; chiudere la
+// scheda o ricaricare passa dall'avviso del browser.
+const leaveOpen = ref(false)
+let decidiUscita: ((esci: boolean) => void) | null = null
+let uscitaConfermata = false
+function chiediUscita(): Promise<boolean> {
+  history.flush()
+  if (!dirty.value) return Promise.resolve(true)
+  leaveOpen.value = true
+  return new Promise((resolve) => { decidiUscita = resolve })
+}
+function rispondiUscita(esci: boolean) {
+  leaveOpen.value = false
+  if (esci) uscitaConfermata = true
+  decidiUscita?.(esci)
+  decidiUscita = null
+}
+async function salvaEdEsci() {
+  await saveFlow()
+  rispondiUscita(!dirty.value) // se il salvataggio non è riuscito si resta, col messaggio in vista
+}
+onBeforeRouteLeave(() => (uscitaConfermata ? true : chiediUscita()))
+// l'uscita dall'account passa di qui PRIMA di togliere la sessione: un «resta»
+// dopo il logout lascerebbe l'editor aperto senza sessione
+async function esci() {
+  if (!(await chiediUscita())) return
+  uscitaConfermata = true
+  logout()
+}
+function avvisoDelBrowser(e: BeforeUnloadEvent) {
+  history.flush()
+  if (!dirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+onMounted(() => window.addEventListener('beforeunload', avvisoDelBrowser))
+onUnmounted(() => window.removeEventListener('beforeunload', avvisoDelBrowser))
+
+// La vista si adatta quando i nodi caricati hanno le loro misure: adattarla
+// all'avvio (prima che il flusso arrivi dal server) zoomava a 2× sul vuoto.
+// `maxZoom: 1`: un flusso piccolo resta a grandezza naturale.
+let adattaVista = false
+onNodesInitialized(() => {
+  if (!adattaVista) return
+  adattaVista = false
+  fitView({ padding: 0.15, maxZoom: 1 })
+})
 
 onMounted(async () => {
   if (!chiEntra.value) await fetchMe()
@@ -469,7 +549,12 @@ onMounted(async () => {
   } catch (e) {
     setStatus(t('flowEditor.flowLoadFailed', { error: errMessage(e) }), 'error')
   }
-  if (flowId.value === null) history.reset() // flusso nuovo: si parte dal canvas iniziale
+  if (flowId.value === null) {
+    // flusso nuovo: si parte dal canvas iniziale, che è anche il riferimento «salvato»
+    adottaRiferimento = true
+    adattaVista = true
+    history.reset()
+  }
 })
 
 // ── Catalogo datasources (per il picker del nodo sorgente) ────────────────
@@ -971,6 +1056,13 @@ function scriveInUnCampo(): boolean {
 // Scorciatoie del canvas: annulla/ripeti, copia/taglia/incolla/duplica, e
 // Canc / Backspace che elimina ciò che è selezionato.
 function onKeydown(e: KeyboardEvent) {
+  // Ctrl/Cmd+S salva il flusso, anche mentre si scrive in un campo (prima apriva
+  // il «Salva pagina» del browser)
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    if (!runDialogOpen.value && !soloOsservatore.value) saveFlow()
+    return
+  }
   if (scriveInUnCampo() || runDialogOpen.value) return
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     const tasto = e.key.toLowerCase()
@@ -1660,7 +1752,7 @@ async function pollTask(id: string) {
 </script>
 
 <template>
-  <div class="app" :style="appStyle">
+  <div v-label-fields class="app" :style="appStyle">
     <Toolbar
       class="toolbar"
       :status="status"
@@ -1678,6 +1770,8 @@ async function pollTask(id: string) {
       @add-source="addSource"
       @run="run"
       @save="saveFlow"
+      @logout="esci"
+      :dirty="dirty"
       @update:flow-name="flowName = $event"
       @update:project-id="projectId = $event"
     />
@@ -1694,7 +1788,7 @@ async function pollTask(id: string) {
     <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
       <VueFlow
         :nodes="initialNodes"
-        fit-view-on-init
+        :min-zoom="0.2"
         :delete-key-code="null"
         :default-edge-options="{ animated: true }"
       >
@@ -1805,5 +1899,18 @@ async function pollTask(id: string) {
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
+    <Modal :open="leaveOpen" :title="$t('flowEditor.leaveTitle')" :width="440" @close="rispondiUscita(false)">
+      <p class="leave-body">{{ $t('flowEditor.leaveBody', { name: flowName.trim() || '—' }) }}</p>
+      <template #footer>
+        <button @click="rispondiUscita(false)">{{ $t('flowEditor.leaveStay') }}</button>
+        <button class="danger" @click="rispondiUscita(true)">{{ $t('flowEditor.leaveDiscard') }}</button>
+        <button class="primary" @click="salvaEdEsci">{{ $t('flowEditor.leaveSave') }}</button>
+      </template>
+    </Modal>
   </div>
 </template>
+
+<style scoped>
+/* il testo del dialogo «modifiche non salvate» */
+.leave-body { margin: 0; line-height: 1.5; }
+</style>

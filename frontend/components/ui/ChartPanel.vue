@@ -5,6 +5,7 @@
 // aggregato: ogni punto è un gruppo (es. un prodotto), X e Y due aggregazioni.
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart, TreemapChart, ScatterChart } from 'echarts/charts'
@@ -27,6 +28,7 @@ import { useChartTheme } from '~/composables/useChartTheme'
 use([CanvasRenderer, BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent])
 
 const { t } = useI18n()
+const fmtx = useFormat()
 
 const props = defineProps<{
   columns: ColumnInfo[] // colonne in uscita dal nodo selezionato
@@ -177,7 +179,7 @@ watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN]
 const esc = (v: unknown) =>
   String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
 
-const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 })
+const fmt = { format: (n: number) => fmtx.number(n, 2) } // nella lingua dell'interfaccia
 
 const seriesName = computed(() => {
   if (isScatter.value) return `${yFunc.value}(${yNumCol.value})`

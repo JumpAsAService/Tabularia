@@ -4,6 +4,7 @@
 // I conteggi distinguono esito (successi/falliti) e origine (manuali/schedulati).
 import { computed, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { HeatmapChart, BarChart } from 'echarts/charts'
@@ -18,6 +19,7 @@ import { skeletonPad } from '~/composables/useSkeleton'
 import { useChartTheme } from '~/composables/useChartTheme'
 
 const { t } = useI18n()
+const fmtx = useFormat()
 
 use([
   CanvasRenderer, HeatmapChart, BarChart,
@@ -97,9 +99,7 @@ const maxTotal = computed(() =>
 )
 
 function fmtDayIT(iso: string): string {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('it-IT', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  })
+  return fmtx.date(iso + 'T00:00:00', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 const calendarOption = computed(() => {

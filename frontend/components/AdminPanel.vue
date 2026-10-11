@@ -5,6 +5,7 @@
 // toast; le conferme dai confirm() del browser, come nel resto dell'app.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles,
@@ -33,6 +34,7 @@ const { user: me } = useAuth()
 // già mascherati dal server (services/masking.py).
 const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
+const fmtx = useFormat()
 
 type Sezione = 'users' | 'groups' | 'banners' | 'privacy' | 'engines' | 'ai'
 const sezione = ref<Sezione>('users')
@@ -81,12 +83,7 @@ const sezioni = computed(() => [
 
 // stessa convenzione delle altre pagine: formattatore locale, tollerante
 function quando(iso: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
-  } catch {
-    return iso
-  }
+  return fmtx.dateTime(iso)
 }
 
 const gruppoCorrente = computed(() => groups.value.find((g) => g.id === gruppoSelezionato.value) ?? null)
@@ -378,7 +375,7 @@ async function toggleMotore(m: EnginePolicy) {
 
             <div class="rowsearch">
               <Search :size="13" />
-              <input v-model="qUsers" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" />
+              <input v-model="qUsers" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" :aria-label="$t('adminPanel.searchPlaceholder')" />
               <span class="muted count">{{ utentiFiltrati.length }}/{{ users.length }}</span>
               <button v-if="qUsers" class="x" :title="$t('adminPanel.clearSearch')" @click="qUsers = ''">
                 <X :size="12" />
@@ -477,9 +474,9 @@ async function toggleMotore(m: EnginePolicy) {
 
           <div v-if="canWrite" class="card form">
             <h4><Plus :size="13" /> {{ $t('adminPanel.newUserTitle') }}</h4>
-            <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" />
-            <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
-            <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" />
+            <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" :aria-label="$t('adminPanel.emailPlaceholder')" />
+            <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" :aria-label="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
+            <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" :aria-label="$t('adminPanel.fullNamePlaceholder')" />
             <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> {{ $t('adminPanel.superuserLabel') }}</label>
             <label class="chk"><input v-model="nu.is_observer" type="checkbox" /> {{ $t('adminPanel.observerLabel') }}</label>
             <button class="primary" @click="createUser">{{ $t('adminPanel.createUserButton') }}</button>
@@ -493,7 +490,7 @@ async function toggleMotore(m: EnginePolicy) {
 
             <div class="rowsearch">
               <Search :size="13" />
-              <input v-model="qGroups" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" />
+              <input v-model="qGroups" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" :aria-label="$t('adminPanel.searchPlaceholder')" />
               <span class="muted count">{{ gruppiFiltrati.length }}/{{ groups.length }}</span>
               <button v-if="qGroups" class="x" :title="$t('adminPanel.clearSearch')" @click="qGroups = ''">
                 <X :size="12" />
@@ -519,7 +516,8 @@ async function toggleMotore(m: EnginePolicy) {
                     @click="gruppoSelezionato = g.id"
                   >
                     <td>
-                      {{ g.name }}
+                      <!-- la riga si sceglie col mouse; questo bottone è la via da tastiera -->
+                      <button type="button" class="rowpick" :aria-pressed="g.id === gruppoSelezionato" @click.stop="gruppoSelezionato = g.id">{{ g.name }}</button>
                       <span v-if="g.is_admin" class="tag">{{ $t('adminPanel.adminTag') }}</span>
                       <span v-else-if="g.is_observer" class="tag obs">{{ $t('adminPanel.observerTag') }}</span>
                       <div v-if="g.description" class="muted small">{{ g.description }}</div>
@@ -586,6 +584,7 @@ async function toggleMotore(m: EnginePolicy) {
               v-model="daAggiungere"
               :options="nonMembri.map((u) => ({ value: u.id, label: u.email }))"
               :placeholder="$t('adminPanel.userPlaceholder')"
+              :aria-label="$t('adminPanel.userPlaceholder')"
             />
             <button :disabled="!daAggiungere" @click="addMember">{{ $t('adminPanel.addButton') }}</button>
             </template>
@@ -593,8 +592,8 @@ async function toggleMotore(m: EnginePolicy) {
 
           <div v-if="canWrite" class="card form">
             <h4><Plus :size="13" /> {{ $t('adminPanel.newGroupTitle') }}</h4>
-            <input v-model="ng.name" type="text" :placeholder="$t('adminPanel.groupNamePlaceholder')" />
-            <input v-model="ng.description" type="text" :placeholder="$t('adminPanel.descriptionPlaceholder')" />
+            <input v-model="ng.name" type="text" :placeholder="$t('adminPanel.groupNamePlaceholder')" :aria-label="$t('adminPanel.groupNamePlaceholder')" />
+            <input v-model="ng.description" type="text" :placeholder="$t('adminPanel.descriptionPlaceholder')" :aria-label="$t('adminPanel.descriptionPlaceholder')" />
             <button class="primary" @click="createGroup">{{ $t('adminPanel.createGroupButton') }}</button>
           </div>
         </template>
@@ -758,6 +757,8 @@ async function toggleMotore(m: EnginePolicy) {
 </template>
 
 <style scoped>
+.rowpick { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.rowpick:hover { color: var(--accent); box-shadow: none; }
 .page-head { margin-bottom: 16px; }
 .page-head h1 {
   margin: 0;
@@ -897,7 +898,7 @@ button.mini { padding: 3px 8px; min-height: 24px; }
 button.mini + button.mini { margin-left: 4px; }
 .mini.on { border-color: var(--accent-hi); color: var(--accent-hi); background: var(--panel-2); }
 .mini.danger { border-color: var(--danger); color: var(--danger); }
-.mini.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
 .mini:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }

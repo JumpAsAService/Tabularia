@@ -63,7 +63,7 @@ defineProps<{ id: string; data: any }>()
   transform: translate(-100%, -50%);
   font-size: 9px;
   line-height: 1;
-  color: #f472b6;
+  color: color-mix(in srgb, #f472b6 var(--enc-text-mix), var(--text));
   pointer-events: none;
   white-space: nowrap;
 }

@@ -711,7 +711,7 @@ label { font-size: 12px; color: var(--muted); }
 .chk input { width: auto; }
 .daterange { display: flex; align-items: center; gap: 6px; }
 .phbtn { padding: 4px 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
-.chk.ph { color: #f472b6; font-family: ui-monospace, monospace; font-size: 12px; }
+.chk.ph { color: color-mix(in srgb, #f472b6 var(--enc-text-mix), var(--text)); font-family: ui-monospace, monospace; font-size: 12px; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .rowsearch { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--muted); }
 .rowsearch input { flex: 1; border: none; background: transparent; outline: none; color: var(--text); font-size: 12.5px; min-width: 0; }

@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-vue-next'
 import { Handle, Position } from '@vue-flow/core'
 import { useI18n } from 'vue-i18n'
 import { opMeta } from '~/composables/useOpIcons'
+import { opSummary } from '~/composables/opSummary'
 import { useNodeStats } from '~/composables/useNodeStats'
 
 const props = defineProps<{ id: string; data: any }>()
@@ -16,6 +17,10 @@ const isUnion = computed(() => props.data?.opType === 'union')
 const needsRight = computed(() => isJoin.value || isUnion.value)
 const meta = computed(() => opMeta(props.data?.opType ?? ''))
 const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
+// il nome dell'operazione come nella palette (tradotto), non l'id interno; e in
+// una riga cosa fa coi suoi parametri, invece di «1 parameters»
+const title = computed(() => (meta.value.label.startsWith('ops.') ? t(meta.value.label) : props.data?.opType) || t('operationNode.operationFallback'))
+const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.params))
 </script>
 
 <template>
@@ -34,15 +39,16 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
 
     <div class="node-title">
       <component :is="meta.icon" :size="13" class="node-icon" />
-      {{ data.opType || $t('operationNode.operationFallback') }}
+      {{ title }}
     </div>
     <div class="node-body muted">
       <template v-if="isJoin">{{ $t('operationNode.joinLabel', { how: data.params?.how || 'inner' }) }}</template>
       <template v-else-if="isUnion">
         {{ data.params?.strategy === 'strict' ? $t('operationNode.unionStrict') : $t('operationNode.unionAlign') }}
       </template>
+      <span v-else-if="summary" class="summary" :title="summary">{{ summary }}</span>
       <template v-else>
-        {{ $t('operationNode.paramCount', { n: paramCount }) }}
+        {{ $t('operationNode.paramCount', { n: paramCount }, paramCount) }}
       </template>
     </div>
 
@@ -58,6 +64,11 @@ const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
 </template>
 
 <style scoped>
+/* il riassunto è fatto di nomi di colonna ed espressioni: dato, quindi monospace */
+.summary {
+  display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+}
 .node-join { min-width: 180px; position: relative; }
 .handle-right { background: var(--accent-2) !important; }
 .node-icon { color: var(--node-accent); }

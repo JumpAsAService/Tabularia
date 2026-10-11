@@ -327,6 +327,10 @@ def get_task_status(task_id: str):
         response.message = "Task is pending"
     elif result.status == "STARTED":
         response.message = "Task is running"
+        # meta di STARTED: {pid, hostname} di Celery, o l'avanzamento di un import
+        info = result.info
+        if isinstance(info, dict) and isinstance(info.get("phase"), str):
+            response.progress = {k: info[k] for k in ("phase", "rows", "file", "files") if info.get(k) is not None}
     elif result.status == "RETRY":
         response.message = "Task is being retried"
     

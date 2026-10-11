@@ -159,6 +159,7 @@ export default {
     join: 'Join',
     union: 'Union (Zeilen anhängen)',
     foreach: 'Foreach-Schleife',
+    sample: 'Zeilenstichprobe',
     source: 'Quelle',
   },
   params: {

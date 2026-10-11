@@ -3,7 +3,10 @@
 // flusso ha un expander (come le Esecuzioni) con metriche d'esecuzione, la
 // timeline (Gantt) dei run e lo storico versioni con promozione.
 import { computed, onMounted, reactive, ref } from 'vue'
+import Modal from '~/components/ui/Modal.vue'
+import { usePopover } from '~/composables/usePopover'
 import { useI18n } from 'vue-i18n'
+import { useFormat } from '~/composables/useFormat'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
   CheckCircle2, XCircle, LoaderCircle, Circle, Download, Play,
@@ -28,6 +31,7 @@ const api = useApi()
 const connectionsApi = useConnections()
 const toast = useToast()
 const { t } = useI18n()
+const fmtx = useFormat()
 // l'export dbt è degli amministratori (anche per gruppo): il progetto porta con sé
 // dati e definizioni di altre cartelle. OpenLineage resta per chiunque veda il flusso.
 const { user: me } = useAuth()
@@ -41,6 +45,8 @@ const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
+const newPop = ref<HTMLElement | null>(null)
+usePopover(newMenu, newPop, () => { newMenu.value = false })
 function createWith(engineId: string) {
   newMenu.value = false
   navigateTo(`/editor?engine=${engineId}`)
@@ -210,8 +216,7 @@ function openDbtExport(f: FlowSummary) {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+  return fmtx.dateTime(iso)
 }
 function fmtDur(secs: number | null | undefined): string {
   if (secs == null) return '—'
@@ -247,11 +252,11 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
     <div class="page-head">
       <h1><Workflow :size="18" /> Flows <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
-        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('flows.searchPlaceholder')" /></span>
+        <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('flows.searchPlaceholder')" :aria-label="$t('flows.searchPlaceholder')" /></span>
         <div class="newflow">
           <button class="btn-link" aria-haspopup="menu" :aria-expanded="newMenu" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('flows.newFlowButton') }}</button>
           <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
-          <div v-if="newMenu" class="menu-pop">
+          <div v-if="newMenu" ref="newPop" class="menu-pop">
             <div class="menu-label">{{ $t('flows.engineMenuTitle') }}</div>
             <button
               v-for="e in engines"
@@ -377,24 +382,21 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 
     <DbtExportDialog :flow="dbtFlow" @close="dbtFlow = null" />
 
-    <!-- dialog centrato di scelta dell'export: dbt (con le sue opzioni) o OpenLineage -->
-    <Teleport to="body">
-      <div v-if="exportMenuFlow" class="export-overlay" @click.self="exportMenuFlow = null">
-        <div class="export-card">
-          <div class="export-card-head">
-            <strong>{{ $t('flows.exportDbtTitle') }}</strong>
-            <span class="muted">{{ exportMenuFlow.name }}</span>
-          </div>
-          <button v-if="canExportDbt" class="export-opt" @click="openDbtExport(exportMenuFlow)">
-            <strong>dbt</strong><span>{{ $t('flows.exportDbtProject') }}</span>
-          </button>
-          <button class="export-opt" @click="exportOpenLineage(exportMenuFlow)">
-            <strong>OpenLineage</strong><span>{{ $t('flows.exportOpenLineage') }}</span>
-          </button>
-          <button class="export-cancel" @click="exportMenuFlow = null">{{ $t('flows.exportDbtCancel') }}</button>
-        </div>
+    <!-- scelta dell'export: dbt (con le sue opzioni) o OpenLineage. Sul guscio comune
+         dei dialoghi: fuoco dentro, Tab confinato, Esc chiude (prima era un overlay
+         senza ruolo né tastiera) -->
+    <Modal :open="!!exportMenuFlow" :title="$t('flows.exportDbtTitle')" :width="400" @close="exportMenuFlow = null">
+      <div v-if="exportMenuFlow" class="export-body">
+        <span class="muted">{{ exportMenuFlow.name }}</span>
+        <button v-if="canExportDbt" class="export-opt" @click="openDbtExport(exportMenuFlow)">
+          <strong>dbt</strong><span>{{ $t('flows.exportDbtProject') }}</span>
+        </button>
+        <button class="export-opt" @click="exportOpenLineage(exportMenuFlow)">
+          <strong>OpenLineage</strong><span>{{ $t('flows.exportOpenLineage') }}</span>
+        </button>
+        <button class="export-cancel" @click="exportMenuFlow = null">{{ $t('flows.exportDbtCancel') }}</button>
       </div>
-    </Teleport>
+    </Modal>
   </AppShell>
 </template>
 
@@ -413,7 +415,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .flow { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
 .flow.open { border-color: var(--border); }
 .flow-row { display: flex; align-items: center; }
-.flow-head { flex: 1; display: grid; grid-template-columns: 18px minmax(160px, 1.4fr) minmax(90px, 1fr) auto 150px; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
+.flow-head { flex: 1; min-width: 0; display: grid; grid-template-columns: 18px minmax(160px, 1.4fr) minmax(90px, 1fr) auto 150px; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
 .flow-head:hover { background: var(--panel-2); }
 .chev { color: var(--muted); transition: transform 0.15s; flex: none; }
 .chev.rot { transform: rotate(90deg); }
@@ -428,19 +430,18 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
 .flow-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
+/* Schermi stretti: la griglia della riga chiede ~750px e il contenitore taglia ciò
+   che sborda — le azioni finivano fuori. Restano nome e azioni, come in Datasources;
+   cartella, pianificazione e data si leggono aprendo la riga. */
+@media (max-width: 760px) {
+  .flow-head { grid-template-columns: 18px minmax(0, 1fr); }
+  .flow-head .folder, .flow-head .sched-badge, .flow-head .when { display: none; }
+  .flow-actions { padding-right: 6px; gap: 2px; }
+}
 
 /* dialog centrato di scelta target export dbt (duckdb federato / nativo) */
-.export-overlay {
-  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
-  background: var(--scrim, rgba(0, 0, 0, 0.5)); padding: 20px;
-}
-.export-card {
-  width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: var(--shadow-2); padding: 14px; display: flex; flex-direction: column; gap: 8px;
-}
-.export-card-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
-.export-card-head strong { font-size: 14px; }
-.export-card-head .muted { font-size: 12px; }
+.export-body { display: flex; flex-direction: column; gap: 8px; }
+.export-body > .muted { font-size: 12px; margin-bottom: 2px; }
 .export-opt {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   padding: 11px 12px; text-align: left; width: 100%;
