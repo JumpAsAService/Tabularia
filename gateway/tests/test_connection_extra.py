@@ -159,3 +159,48 @@ def test_the_options_come_back_but_the_password_never_does(session, scena):
     assert "password" not in campi and "password_encrypted" not in campi
     assert campi["has_password"] is True
     assert "segreta" not in json.dumps(campi, default=str)  # default=str: c'è updated_at
+
+
+# ── SQL Server: il TLS ──────────────────────────────────────────────────────
+# `extra.tls` = verify (default: certificato verificato) | trust (autofirmato) | none.
+def _sqlserver(session, user, project_id, *, extra=None, name="vendite"):
+    body = ConnectionCreate(name=name, db_type="sqlserver", host="sql.x.it", username="u", password="p", database="vendite",
+                            **({"extra": json.dumps(extra)} if extra is not None else {}))
+    return create_connection(project_id, body, request=None, user=user, session=session)
+
+
+def test_sqlserver_il_tls_arriva_all_engine_e_di_default_verifica(session, scena):
+    admin, p = scena
+    con = _sqlserver(session, admin, p.id, extra={"tls": "trust"})
+    senza = _sqlserver(session, admin, p.id, name="vendite2")
+    assert engine_connection_payload(session.get(Connection, con.id))["extra"] == {"tls": "trust"}
+    assert engine_connection_payload(session.get(Connection, senza.id))["extra"] == {"tls": "verify"}
+
+
+def test_sqlserver_un_tls_sconosciuto_si_rifiuta_al_salvataggio(session, scena):
+    admin, p = scena
+    with pytest.raises(HTTPException) as e:
+        _sqlserver(session, admin, p.id, extra={"tls": "forse"})
+    assert e.value.status_code == 422 and "verify, trust or none" in e.value.detail
+    creata = _sqlserver(session, admin, p.id)
+    with pytest.raises(HTTPException):
+        update_connection(creata.id, ConnectionUpdate(extra=json.dumps({"tls": "forse"})), request=None, user=admin, session=session)
+
+
+@pytest.mark.anyio
+async def test_sqlserver_la_prova_del_form_porta_il_tls(session, scena, monkeypatch):
+    """Il pulsante «Test» prova la connessione PRIMA del salvataggio: senza il TLS
+    un server col certificato autofirmato fallirebbe anche con «trust» scelto."""
+    import app.routes.connections as rc
+
+    admin, p = scena
+    visto = {}
+
+    async def finto(payload, action, path=""):
+        visto.update(payload)
+        return {"ok": True}
+
+    monkeypatch.setattr(rc, "_engine_inspect", finto)
+    body = ConnectionCreate(name="x", db_type="sqlserver", host="h", username="u", password="p", database="d", extra=json.dumps({"tls": "trust"}))
+    await rc.test_draft_connection(p.id, body, user=admin, session=session)
+    assert visto["extra"] == {"tls": "trust"}

@@ -280,3 +280,91 @@ def test_ingest_traduce_l_errore_del_driver_e_conserva_la_causa(monkeypatch, sto
         db_source.ingest_db_to_parquet(conn, src, "data-prep", "datasets/x.parquet", storage=storage)
     assert str(info.value).startswith("ClickHouse: Limit for result exceeded")
     assert info.value.__cause__ is original
+
+
+# ── Oracle (python-oracledb, Thin) ────────────────────────────────────────────
+# Messaggi catturati dal driver vero contro Oracle Free 23ai il 2026-10-11.
+class _OracleLike(Exception):
+    """La forma delle eccezioni di python-oracledb: il primo argomento è un
+    oggetto `_Error` con `.message` (codice, testo e a volte altre righe)."""
+
+    def __init__(self, message):
+        super().__init__(type("_Error", (), {"message": message})())
+
+
+_OracleLike.__module__ = "oracledb.exceptions"
+
+
+@pytest.mark.parametrize("message, expected", [
+    (
+        "ORA-01017: invalid credential or not authorized; logon denied\n"
+        "Help: https://docs.oracle.com/error-help/db/ora-01017/",
+        "Oracle: invalid credential or not authorized; logon denied (ORA-01017). "
+        "Check the connection's username and password.",
+    ),
+    (
+        'ORA-00942: table or view "TABULARIA"."NON_ESISTE" does not exist\n'
+        "Help: https://docs.oracle.com/error-help/db/ora-00942/",
+        'Oracle: table or view "TABULARIA"."NON_ESISTE" does not exist (ORA-00942).',
+    ),
+    (
+        # un «cannot connect» non dice niente: conta la causa più interna
+        "DPY-6005: cannot connect to database (CONNECTION_ID=IUJC5+wYMMcQXZy6IusEpA==).\n"
+        'DPY-6001: Service "NONESISTE" is not registered with the listener at host "172.22.0.17" port 1521. (Similar to ORA-12514)',
+        'Oracle: Service "NONESISTE" is not registered with the listener at host "172.22.0.17" port 1521. '
+        "(Similar to ORA-12514) (DPY-6001). Check the service name in the connection's Database field.",
+    ),
+])
+def test_oracle(message, expected):
+    assert describe_db_error(_OracleLike(message), "oracle", "oracletest", 1521) == expected
+
+
+def test_oracle_cannot_connect_for_a_network_reason_says_the_network_reason():
+    e = _OracleLike("DPY-6005: cannot connect to database (CONNECTION_ID=x==).\n[Errno 111] Connection refused")
+    e.__cause__ = ConnectionRefusedError(111, "Connection refused")
+    assert describe_db_error(e, "oracle", "oracletest", 1599) == (
+        "Oracle: Connection refused by oracletest:1599: no service is listening on that port."
+    )
+
+
+# ── SQL Server (mssql-python) ─────────────────────────────────────────────────
+# Forme catturate dal driver vero contro SQL Server 2022 il 2026-10-11.
+class _MssqlLike(Exception):
+    """La forma delle eccezioni di mssql-python: `driver_error` (la classe ODBC) e
+    `ddbc_error` (il testo del server, dietro i prefissi [Microsoft][…])."""
+
+    def __init__(self, driver_error, ddbc_error):
+        super().__init__(f"Driver Error: {driver_error}; DDBC Error: {ddbc_error}")
+        self.driver_error, self.ddbc_error = driver_error, ddbc_error
+
+
+_MssqlLike.__module__ = "mssql_python.exceptions"
+
+
+@pytest.mark.parametrize("driver_error, ddbc_error, porta, expected", [
+    ("Invalid authorization specification", "[Microsoft][SQL Server]Login failed for user 'lettore'.", 1433,
+     "SQL Server: Login failed for user 'lettore'. Check the connection's username, password and database: "
+     "SQL Server reports a database that does not exist, or that the user cannot open, as a failed login."),
+    ("Base table or view not found", "[Microsoft][SQL Server]Invalid object name 'dbo.non_esiste'.", 1433,
+     "SQL Server: Invalid object name 'dbo.non_esiste'."),
+    ("Syntax error or access violation", "[Microsoft][SQL Server]The SELECT permission was denied on the object 'segreta', database 'prova', schema 'dbo'.", 1433,
+     "SQL Server: The SELECT permission was denied on the object 'segreta', database 'prova', schema 'dbo'. "
+     "The connection's user lacks the required privileges on this object."),
+    ("Client unable to establish connection", "[Microsoft]SSL Provider: [error:0A000086:SSL routines::certificate verify failed:self-signed certificate]", 1433,
+     "SQL Server: the TLS certificate of mssqltest:1433 cannot be verified (certificate verify failed: self-signed certificate). "
+     "Give the server a certificate that can be verified, or choose «trust the server's certificate» in the connection (self-signed certificates)."),
+    ("Client unable to establish connection", "[Microsoft]TCP Provider: Error code 0x2AFA", 1433,
+     "SQL Server: Cannot resolve host mssqltest: check the server name."),
+    ("Client unable to establish connection", "[Microsoft]TCP Provider: Error code 0x2749", 1599,
+     "SQL Server: Connection refused by mssqltest:1599: no service is listening on that port."),
+])
+def test_sqlserver(driver_error, ddbc_error, porta, expected):
+    assert describe_db_error(_MssqlLike(driver_error, ddbc_error), "sqlserver", "mssqltest", porta) == expected
+
+
+def test_sqlserver_tipo_che_arrow_non_porta():
+    e = RuntimeError("Unsupported data type for Arrow batch fetch for column - v, Type - -150, column ID - 2")
+    assert describe_db_error(e, "sqlserver", "mssqltest", 1433) == (
+        "SQL Server: column v has a type that cannot be imported (sql_variant). "
+        "Convert it in a SQL source, e.g. CAST(col AS NVARCHAR(4000))."
+    )

@@ -582,7 +582,7 @@ _OOM_MESSAGE = (
 # Messaggi già tradotti dal backend col testo del SERVER del database
 # (backend/app/ingest/db_errors.py, MESSAGE_PREFIXES): un «out of memory» lì è
 # del database, non del worker, e non va sostituito col messaggio da OOM.
-_DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "S3:", "Database:")
+_DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:")
 
 
 def _friendly_error(error: str | None, error_detail: str | None) -> str | None:

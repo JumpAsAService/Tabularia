@@ -71,7 +71,7 @@ Every run carries a `tabularia` run facet
 | Dataset | `namespace` | `name` | Facets |
 |---|---|---|---|
 | A Tabularia datasource | `tabularia://<namespace>` | `/<folder path>/<name>` — the name you see in Tabularia | `schema`, `documentation`, `datasetVersion` (the snapshot key), `symlinks` → its folder in the bucket (`s3://bucket` + `/datasets/<id>`, stable across snapshots), `dataSource` (uri of the parquet it serves now), `tabularia` (see below) |
-| A database table | `postgres://host:5432`, `mysql://host:3306`, `clickhouse://host:8443`, `trino://host:8080` | `db.schema.table` (Postgres, Trino) · `db.table` (MySQL, ClickHouse) | `dataSource`; on outputs `lifecycleStateChange` (`OVERWRITE` for replace, `ALTER` for append) and `outputStatistics` |
+| A database table | `postgres://host:5432`, `mysql://host:3306`, `clickhouse://host:8443`, `trino://host:8080`, `oracle://host:1521`, `mssql://host:1433` | `db.schema.table` (Postgres, Trino, SQL Server; `dbo` when no schema is given) · `db.table` (MySQL, ClickHouse) · `service.SCHEMA.TABLE` (Oracle, with Oracle's upper case for unquoted names) | `dataSource`; on outputs `lifecycleStateChange` (`OVERWRITE` for replace, `ALTER` for append) and `outputStatistics` |
 | An object in a bucket | `s3://bucket` or `gs://bucket` | `/path/key` | `storage`, `outputStatistics` |
 | A SharePoint file | `sharepoint://site host/sites/…` | `/path/file.xlsx#Sheet` | `dataSource` |
 | A file uploaded in the editor | `s3://bucket` | `/uploads/…parquet` | `storage` |

@@ -677,3 +677,25 @@ def test_il_piano_dice_se_l_ai_c_e(session, scena, monkeypatch):
     assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": False, "model": None}
     monkeypatch.setattr(dbt_ai, "modello_ai", lambda s: "m-1")
     assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": True, "model": "m-1"}
+
+
+@pytest.mark.parametrize("db_type", ["oracle", "sqlserver"])
+def test_un_flusso_che_legge_da_oracle_o_sql_server_e_rifiutato_con_un_motivo(session, scena, db_type):
+    """Oracle e SQL Server sono sorgenti per Tabularia, non per dbt: DuckDB non li
+    federa, non c'è un adapter nativo, ClickHouse non li legge (lo rifiuta l'engine).
+    Mai un 500."""
+    ora = Connection(name="contabilita", db_type=db_type, project_id=scena.cartella.id, owner_id=scena.capo.id,
+                     host="ora.x.it", port=None, database="ORCLPDB1", db_schema="", username="fin")
+    session.add(ora); session.commit()
+    righe = make_datasource(session, name="ledger", project_id=scena.cartella.id, key="datasets/9/v1.parquet", kind="database", connection_id=ora.id,
+                            source_type="table", source_ref="FIN.LEDGER", columns=json.dumps([{"name": "ID", "dtype": "Int64"}]))
+    flow = make_flow(session, name="Ledger", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+        _nodo_src("a", righe.id),
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Ledger out", "projectId": scena.cartella.id, "overwrite": True}},
+    ], "edges": [_edge("a", "o")]}))
+    for target, codice in (("duckdb", "not_federable"), ("native", "no_native_adapter")):
+        with pytest.raises(d.DbtExportError) as e:
+            d.build_export_payload(session, flow, "data-prep", target)
+        assert e.value.code == codice
+    p = d.build_export_payload(session, flow, "data-prep", "clickhouse")
+    assert p["clickhouse"]["connections"][0]["db_type"] == db_type

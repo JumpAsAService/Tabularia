@@ -11,11 +11,14 @@ che produce PRIMA lo schema Arrow, POI i RecordBatch):
 - clickhouse        → clickhouse-connect (query_arrow_stream, Arrow nativo)
 - mysql / mariadb   → PyMySQL con cursore unbuffered (fetchmany → Arrow)
 - trino             → client DBAPI ufficiale (paginazione naturale → Arrow)
+- oracle            → python-oracledb in modalità Thin (fetch_df_batches → Arrow)
+- sqlserver         → mssql-python, il driver di Microsoft (arrow_reader → Arrow)
 """
 from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 from typing import Any, Iterator, Literal
 from urllib.parse import quote as _urlquote
@@ -41,9 +44,11 @@ DEFAULT_PORTS = {
     "mariadb": 3306,
     "clickhouse": 8123,  # porta HTTP (clickhouse-connect), non la nativa 9000
     "trino": 8080,
+    "oracle": 1521,
+    "sqlserver": 1433,
 }
 
-DbType = Literal["postgresql", "mysql", "mariadb", "clickhouse", "trino"]
+DbType = Literal["postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver"]
 
 
 class DbSourceError(IngestError):
@@ -59,8 +64,10 @@ class DbConnectionSpec(BaseModel):
     # `password` in chiaro (solo per prove dirette sull'engine in sviluppo)
     password: str = ""
     password_encrypted: str = ""
-    database: str = ""
-    db_schema: str = ""  # schema Postgres / schema Trino; vuoto = default
+    database: str = ""   # Oracle: il SERVICE NAME (es. FREEPDB1, ORCLPDB1)
+    db_schema: str = ""  # schema Postgres / schema Trino / owner Oracle; vuoto = default
+    # opzioni del tipo, dal campo `extra` della connessione (SQL Server: {"tls": …})
+    extra: dict = {}
 
     @property
     def port_or_default(self) -> int:
@@ -85,7 +92,60 @@ class DbSourceSpec(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # Costruzione della query
 # ─────────────────────────────────────────────────────────────────────────────
-_IDENT_QUOTE = {"postgresql": '"', "trino": '"', "mysql": "`", "mariadb": "`", "clickhouse": "`"}
+_IDENT_QUOTE = {"postgresql": '"', "trino": '"', "mysql": "`", "mariadb": "`", "clickhouse": "`", "oracle": '"'}
+
+
+def _tsql_ident(parte: str) -> str:
+    """Un identificatore T-SQL fra parentesi quadre: `dbo` → `[dbo]`; uno già fra
+    quadre (`[Ordini 2024]`, come lo restituisce l'elenco) resta com'è."""
+    if len(parte) >= 2 and parte.startswith("[") and parte.endswith("]"):
+        interno = parte[1:-1]
+        if not interno or "]" in interno.replace("]]", ""):
+            raise DbSourceError(f"Invalid name: {parte}")
+        return parte
+    return "[" + parte.replace("]", "]]") + "]"
+
+
+def _tsql_query(sql: str, conn: DbConnectionSpec, source: DbSourceSpec) -> str:
+    """La SQL dell'utente su SQL Server. Non si avvolge in `SELECT * FROM (…)`: in
+    T-SQL una tabella derivata non può contenere una CTE né un ORDER BY, e sono
+    frequenti. Si controlla invece che sia UNA sola query di lettura — un batch T-SQL
+    potrebbe portare dietro `; DELETE …` — e si manda così com'è. Con le chiavi di
+    ordinamento: si avvolge se si può, altrimenti (CTE) l'ORDER BY va in coda."""
+    import sqlglot
+    from sqlglot import exp
+
+    try:
+        statement = [s for s in sqlglot.parse(sql, read="tsql") if s is not None]
+    except Exception:  # noqa: BLE001 — sintassi che sqlglot non conosce: decide il server, nell'involucro
+        statement = None
+    if statement is not None:
+        if len(statement) != 1 or not isinstance(statement[0], exp.Query):
+            raise DbSourceError("SQL Server: the SQL source must be a single SELECT (a WITH … SELECT is fine).")
+        if statement[0].find(exp.Into) is not None:  # per sqlglot è una SELECT, per SQL Server crea una tabella
+            raise DbSourceError("SQL Server: the SQL source must only read: SELECT … INTO creates a table, remove the INTO.")
+    keys = [k.strip() for k in (source.sort_keys or []) if k and k.strip()]
+    if not keys:
+        return sql if statement is not None else f"SELECT * FROM ({sql}) AS _q"
+    ordine = " ORDER BY " + ", ".join(_tsql_ident(k) for k in keys)
+    if statement is not None and statement[0].find(exp.With) is not None:
+        return sql + ordine
+    return f"SELECT * FROM ({sql}) AS _q" + ordine
+
+
+def _oracle_ident(parte: str) -> str:
+    """Un identificatore Oracle, con la regola di Oracle: SENZA virgolette si
+    legge in maiuscolo (`hr.employees` è HR.EMPLOYEES, come in SQL Developer);
+    FRA virgolette resta com'è (`HR."conti 2024"`). L'elenco delle tabelle
+    restituisce i nomi già in questa forma, quindi scegliere dalla lista torna."""
+    if len(parte) >= 2 and parte.startswith('"') and parte.endswith('"'):
+        interno = parte[1:-1]
+        if not interno or '"' in interno:
+            raise DbSourceError(f"Nome non valido: {parte}")
+        return f'"{interno}"'
+    if '"' in parte:
+        raise DbSourceError(f"Nome non valido: {parte}")
+    return f'"{parte.upper()}"'
 
 
 def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
@@ -102,7 +162,27 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
         sql = source.ref.strip().rstrip(";").strip()
         if not sql:
             raise DbSourceError("La query SQL è vuota")
-        return _with_order_by(f"SELECT * FROM ({sql}) AS _q", conn, source)
+        if conn.db_type == "sqlserver":
+            return _tsql_query(sql, conn, source)
+        # Oracle non vuole AS davanti all'alias di una tabella, né un alias con «_»
+        alias = " q" if conn.db_type == "oracle" else " AS _q"
+        return _with_order_by(f"SELECT * FROM ({sql}){alias}", conn, source)
+
+    if conn.db_type == "oracle":
+        parts = [p.strip() for p in source.ref.split(".") if p.strip()]
+        if not parts:
+            raise DbSourceError("Il nome della tabella è vuoto")
+        if len(parts) == 1 and conn.db_schema:
+            parts = [conn.db_schema, parts[0]]
+        return _with_order_by("SELECT * FROM " + ".".join(_oracle_ident(p) for p in parts), conn, source)
+
+    if conn.db_type == "sqlserver":
+        parts = [p.strip() for p in source.ref.split(".") if p.strip()]
+        if not parts:
+            raise DbSourceError("Il nome della tabella è vuoto")
+        if len(parts) == 1 and conn.db_schema:
+            parts = [conn.db_schema, parts[0]]
+        return _with_order_by("SELECT * FROM " + ".".join(_tsql_ident(p) for p in parts), conn, source)
 
     q = _IDENT_QUOTE[conn.db_type]
     parts = [p.strip() for p in source.ref.split(".") if p.strip()]
@@ -123,6 +203,10 @@ def _with_order_by(base: str, conn: DbConnectionSpec, source: DbSourceSpec) -> s
     keys = [k.strip() for k in (source.sort_keys or []) if k and k.strip()]
     if not keys:
         return base
+    if conn.db_type == "oracle":
+        return f"{base} ORDER BY " + ", ".join(_oracle_ident(k) for k in keys)
+    if conn.db_type == "sqlserver":
+        return f"{base} ORDER BY " + ", ".join(_tsql_ident(k) for k in keys)
     q = _IDENT_QUOTE[conn.db_type]
     for k in keys:
         if q in k:
@@ -323,12 +407,193 @@ def _batches_trino(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         c.close()
 
 
+# ── Oracle ──────────────────────────────────────────────────────────────────
+# python-oracledb in modalità Thin: puro Python, nessun Oracle Instant Client
+# nell'immagine. `fetch_df_batches` legge dal server un blocco di righe alla volta
+# e lo consegna come data frame Arrow (PyCapsule): niente righe Python di mezzo.
+# Prima si DESCRIVE la query (WHERE 1 = 0), per due cose che vanno decise prima
+# di leggere: i timestamp con fuso, che il driver consegnerebbe senza fuso (si
+# portano in UTC sul server, lo standard dei motori sono istanti UTC naive), e i
+# tipi che non arrivano in Arrow o in Parquet, rifiutati nominando le colonne.
+_ORACLE_CON_FUSO = {"DB_TYPE_TIMESTAMP_TZ", "DB_TYPE_TIMESTAMP_LTZ"}
+_ORACLE_RIFIUTATI = {
+    "DB_TYPE_INTERVAL_DS", "DB_TYPE_INTERVAL_YM", "DB_TYPE_OBJECT", "DB_TYPE_XMLTYPE",
+    "DB_TYPE_BFILE", "DB_TYPE_CURSOR",
+}
+# il nostro ORDER BY finale (solo identificatori quotati, a livello esterno: la SQL
+# dell'utente sta sempre fra parentesi), da rimettere fuori dall'involucro
+_ORDER_BY_FINALE = re.compile(r'^(.*) ORDER BY ((?:"[^"]+")(?:, "[^"]+")*)$', re.S)
+
+
+def _oracle_tipo(t) -> str:
+    return getattr(t, "name", str(t))
+
+
+def _oracle_connect(conn: DbConnectionSpec):
+    import oracledb
+
+    if not conn.database:
+        raise DbSourceError("Oracle: the connection needs the service name in the Database field (e.g. FREEPDB1, ORCLPDB1).")
+    return oracledb.connect(
+        user=conn.username,
+        password=conn.resolve_password(),
+        host=conn.host,
+        port=conn.port_or_default,
+        service_name=conn.database,
+        tcp_connect_timeout=10,
+    )
+
+
+def _oracle_tipo_arrow(colonna) -> pa.DataType:
+    """Il tipo Arrow di una colonna dalla sola descrizione: serve quando il risultato
+    è vuoto e non c'è un batch da cui prenderlo. Stessa mappa del driver."""
+    nome, precisione, scala = _oracle_tipo(colonna[1]), colonna[4], colonna[5]
+    if nome == "DB_TYPE_NUMBER":
+        return pa.int64() if scala == 0 and precisione and 0 < precisione <= 18 else pa.float64()
+    if nome == "DB_TYPE_BINARY_FLOAT":
+        return pa.float32()
+    if nome == "DB_TYPE_BINARY_DOUBLE":
+        return pa.float64()
+    if nome == "DB_TYPE_BINARY_INTEGER":
+        return pa.int64()
+    if nome in ("DB_TYPE_DATE", "DB_TYPE_TIMESTAMP") or nome in _ORACLE_CON_FUSO:
+        return pa.timestamp("us")
+    if nome == "DB_TYPE_BOOLEAN":
+        return pa.bool_()
+    if nome in ("DB_TYPE_RAW", "DB_TYPE_LONG_RAW", "DB_TYPE_BLOB"):
+        return pa.large_binary()
+    if nome in ("DB_TYPE_CLOB", "DB_TYPE_NCLOB", "DB_TYPE_LONG"):
+        return pa.large_string()
+    return pa.string()
+
+
+def _oracle_normalizza(tabella: pa.Table) -> pa.Table:
+    """DATE arriva in secondi, TIMESTAMP(0..3) in secondi o millisecondi: tutto in
+    microsecondi come gli altri driver (i nanosecondi di TIMESTAMP(7..9) restano)."""
+    campi = []
+    for f in tabella.schema:
+        if pa.types.is_timestamp(f.type) and f.type.unit in ("s", "ms"):
+            campi.append(pa.field(f.name, pa.timestamp("us"), f.nullable))
+        else:
+            campi.append(f)
+    schema = pa.schema(campi)
+    return tabella if schema.equals(tabella.schema) else tabella.cast(schema)
+
+
+def _batches_oracle(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+    c = _oracle_connect(conn)
+    try:
+        with c.cursor() as cur:
+            cur.execute(f"SELECT * FROM ({query}) d WHERE 1 = 0")
+            descrizione = list(cur.description or [])
+        nomi = [d[0] for d in descrizione]
+        if len(set(nomi)) != len(nomi):
+            raise DbSourceError("Oracle: the query returns columns with the same name: give them distinct aliases (e.g. a.id AS a_id).")
+        rifiutate = [f"{d[0]} ({_oracle_tipo(d[1]).removeprefix('DB_TYPE_')})" for d in descrizione if _oracle_tipo(d[1]) in _ORACLE_RIFIUTATI]
+        if rifiutate:
+            raise DbSourceError(
+                "Oracle: these columns have a type that cannot be imported: " + ", ".join(rifiutate)
+                + ". Convert them in a SQL source, e.g. TO_CHAR(col) or CAST(col AS VARCHAR2(4000))."
+            )
+        finale = query
+        con_fuso = {d[0] for d in descrizione if _oracle_tipo(d[1]) in _ORACLE_CON_FUSO}
+        if con_fuso:
+            base, ordine = query, None
+            m = _ORDER_BY_FINALE.match(query)
+            if m:
+                base, ordine = m.group(1), m.group(2)
+            colonne = ", ".join(
+                f'SYS_EXTRACT_UTC(o."{n}") AS "{n}"' if n in con_fuso else f'o."{n}"' for n in nomi
+            )
+            finale = f"SELECT {colonne} FROM ({base}) o" + (f" ORDER BY {ordine}" if ordine else "")
+
+        primo = True
+        for blocco in c.fetch_df_batches(statement=finale, size=BATCH_ROWS):
+            tabella = _oracle_normalizza(pa.table(blocco))
+            if tabella.num_rows == 0 and not primo:
+                continue
+            if primo:
+                yield tabella.schema
+                primo = False
+            yield from tabella.to_batches()
+        if primo:  # nessuna riga: lo schema dalla sola descrizione
+            yield pa.schema([pa.field(d[0], _oracle_tipo_arrow(d)) for d in descrizione])
+    finally:
+        c.close()
+
+
+# ── SQL Server ──────────────────────────────────────────────────────────────
+# mssql-python, il driver ufficiale di Microsoft: porta con sé lo strato ODBC (DDBC),
+# niente driver da installare. `arrow_reader` converte il risultato in Arrow nel suo
+# C++ e lo consegna un blocco alla volta. I tipi si allineano agli altri driver:
+# decimali interi fino a 18 cifre → Int64, gli altri decimali e money → Float64
+# (come NUMBER di Oracle e numeric di Postgres); datetimeoffset arriva già in UTC e
+# perde solo il fuso (lo standard dei motori: istanti UTC naive).
+_TLS_SQLSERVER = {
+    "verify": "Encrypt=yes;TrustServerCertificate=no",   # default: cifrato, certificato verificato
+    "trust": "Encrypt=yes;TrustServerCertificate=yes",   # certificato autofirmato del server
+    "none": "Encrypt=no",
+}
+
+
+def _odbc_valore(v: str) -> str:
+    """Un valore di stringa di connessione ODBC: fra graffe, con le graffe chiuse
+    raddoppiate, così `;` `=` e `}` in una password non rompono niente."""
+    return "{" + str(v).replace("}", "}}") + "}"
+
+
+def _sqlserver_connect(conn: DbConnectionSpec):
+    import mssql_python
+
+    tls = (conn.extra or {}).get("tls") or "verify"
+    if tls not in _TLS_SQLSERVER:
+        raise DbSourceError(f"SQL Server: unknown TLS option {tls!r} (verify, trust, none).")
+    # un'istanza con nome (`host\\SQLEXPRESS`) si raggiunge senza porta (SQL Browser)
+    server = conn.host if ("\\" in conn.host and not conn.port) else f"{conn.host},{conn.port_or_default}"
+    parti = [f"Server={_odbc_valore(server)}", f"UID={_odbc_valore(conn.username)}", f"PWD={_odbc_valore(conn.resolve_password())}"]
+    if conn.database:
+        parti.append(f"Database={_odbc_valore(conn.database)}")
+    stringa = ";".join(parti) + ";" + _TLS_SQLSERVER[tls]
+    return mssql_python.connect(stringa, attrs_before={mssql_python.SQL_ATTR_LOGIN_TIMEOUT: 10})
+
+
+def _sqlserver_tipo(t: pa.DataType) -> pa.DataType:
+    if pa.types.is_decimal(t):
+        return pa.int64() if t.scale == 0 and t.precision <= 18 else pa.float64()
+    if pa.types.is_timestamp(t) and t.tz is not None:
+        return pa.timestamp(t.unit)
+    return t
+
+
+def _sqlserver_schema(schema: pa.Schema) -> pa.Schema:
+    return pa.schema([pa.field(f.name, _sqlserver_tipo(f.type), f.nullable) for f in schema])
+
+
+def _batches_sqlserver(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+    c = _sqlserver_connect(conn)
+    try:
+        cur = c.cursor()
+        cur.execute(query)
+        nomi = [d[0] for d in (cur.description or [])]
+        if len(set(nomi)) != len(nomi):
+            raise DbSourceError("SQL Server: the query returns columns with the same name: give them distinct aliases (e.g. a.id AS a_id).")
+        with cur.arrow_reader(batch_size=BATCH_ROWS) as reader:
+            schema = _sqlserver_schema(reader.schema)
+            yield schema
+            for batch in reader:
+                yield batch if batch.schema.equals(schema) else batch.cast(schema)
+    finally:
+        c.close()
+
+
 _DRIVERS = {
     "postgresql": _batches_postgresql,
     "mysql": _batches_mysql,
     "mariadb": _batches_mysql,  # protocollo condiviso: stesso driver
     "clickhouse": _batches_clickhouse,
     "trino": _batches_trino,
+    "oracle": _batches_oracle,
+    "sqlserver": _batches_sqlserver,
 }
 
 
@@ -497,6 +762,24 @@ _TABLES_QUERY = {
         "SELECT table_name AS t FROM information_schema.tables "
         "WHERE table_schema = current_schema ORDER BY 1"
     ),
+    # tabelle e viste degli schemi non di sistema (Oracle 12c+: oracle_maintained),
+    # nella forma che build_query rilegge: maiuscolo semplice nudo, il resto fra
+    # virgolette
+    "oracle": (
+        "SELECT CASE WHEN REGEXP_LIKE(owner, '^[A-Z][A-Z0-9_$#]*$') THEN owner ELSE '\"' || owner || '\"' END"
+        " || '.' || CASE WHEN REGEXP_LIKE(nome, '^[A-Z][A-Z0-9_$#]*$') THEN nome ELSE '\"' || nome || '\"' END AS t"
+        " FROM (SELECT owner, table_name AS nome FROM all_tables WHERE dropped = 'NO'"
+        " UNION ALL SELECT owner, view_name FROM all_views)"
+        " WHERE owner IN (SELECT username FROM all_users WHERE oracle_maintained = 'N') ORDER BY 1"
+    ),
+    # tabelle e viste del database della connessione; un nome con caratteri speciali
+    # torna fra parentesi quadre, la forma che build_query rilegge
+    "sqlserver": (
+        "SELECT CASE WHEN TABLE_SCHEMA LIKE '%[^A-Za-z0-9_]%' THEN QUOTENAME(TABLE_SCHEMA) ELSE TABLE_SCHEMA END"
+        " + '.' + CASE WHEN TABLE_NAME LIKE '%[^A-Za-z0-9_]%' OR TABLE_NAME LIKE '[0-9]%' THEN QUOTENAME(TABLE_NAME) ELSE TABLE_NAME END AS t"
+        " FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE IN ('BASE TABLE', 'VIEW')"
+        " AND TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA') ORDER BY 1"
+    ),
 }
 
 
@@ -512,7 +795,7 @@ def _collect_first_column(conn: DbConnectionSpec, query: str) -> list[str]:
 def test_connection(conn: DbConnectionSpec) -> None:
     """Apre la connessione ed esegue una query banale sullo stesso percorso
     dell'ingest: se non solleva, la connessione è utilizzabile."""
-    _collect_first_column(conn, "SELECT 1 AS ok")
+    _collect_first_column(conn, "SELECT 1 AS ok FROM DUAL" if conn.db_type == "oracle" else "SELECT 1 AS ok")
 
 
 def list_tables(conn: DbConnectionSpec) -> list[str]:

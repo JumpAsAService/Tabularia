@@ -67,6 +67,12 @@ FROM python:3.12-slim-bookworm AS runtime
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
 
+# SQL Server (mssql-python): il driver porta con sé il suo strato ODBC, niente driver
+# Microsoft da installare, ma su Linux vuole il caricatore dinamico e Kerberos.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libltdl7 libkrb5-3 libgssapi-krb5-2 \
+ && rm -rf /var/lib/apt/lists/*
+
 # HOME=/tmp: l'utente non ha home, e qualche libreria vuole scrivere cache lì.
 # MALLOC_ARENA_MAX=2: con i molti thread di Polars/Arrow limita la
 # frammentazione della memoria, come nel compose.

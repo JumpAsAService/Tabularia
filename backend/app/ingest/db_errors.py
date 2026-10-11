@@ -25,6 +25,11 @@ riprodotte verbatim in tests/test_db_errors.py:
   driver, l'eco della query e `SQLSTATE`.
 - MySQL/MariaDB (PyMySQL): args = (codice, messaggio).
 - Trino: `TrinoQueryError.message` ed `.error_name`.
+- Oracle (python-oracledb, Thin): `ORA-NNNNN: messaggio` del server; i `DPY-6NNN`
+  («cannot connect») portano dentro la causa di rete o un ORA del listener.
+- SQL Server (mssql-python): `.ddbc_error` col testo del server dietro i prefissi
+  `[Microsoft][SQL Server]`; la rete arriva come codice Winsock (`TCP Provider:
+  Error code 0x2AFA`), il TLS come errore OpenSSL dell'`SSL Provider`.
 - Rete, per tutti: DNS, connessione rifiutata, timeout, TLS, riconosciuti dal
   testo della catena di eccezioni.
 
@@ -46,6 +51,8 @@ LABELS = {
     "mysql": "MySQL",
     "mariadb": "MariaDB",
     "trino": "Trino",
+    "oracle": "Oracle",
+    "sqlserver": "SQL Server",
     "s3": "S3",
 }
 
@@ -68,6 +75,7 @@ _PERM_HINT = "The connection's user lacks the required privileges on this object
 _READONLY_HINT = "The connection's user is read-only: it cannot be used as a destination."
 _SERVER_MEMORY_HINT = "The database server ran out of memory for this query: reduce the data."
 _NET_HINT = "The server is unreachable: check host, port and network."
+_SERVICE_HINT = "Check the service name in the connection's Database field."
 
 # ClickHouse: codice → suggerimento (nomi da ErrorCodes.cpp)
 _CH_HINTS = {
@@ -99,6 +107,40 @@ _MYSQL_HINTS = {
     3024: _TIMEOUT_HINT, 1290: _READONLY_HINT,
     2003: _NET_HINT, 2005: _NET_HINT, 2006: _NET_HINT, 2013: _NET_HINT,
 }
+
+# Oracle: codice → suggerimento
+_ORACLE_HINTS = {
+    "ORA-01017": _AUTH_HINT,          # invalid username/password
+    "ORA-28000": _AUTH_HINT,          # account locked
+    "ORA-01045": _PERM_HINT,          # no CREATE SESSION
+    "ORA-01031": _PERM_HINT,          # insufficient privileges
+    "ORA-01013": _TIMEOUT_HINT,       # user requested cancel (call timeout)
+    "DPY-4024": _TIMEOUT_HINT,        # call timeout
+    "ORA-04030": _SERVER_MEMORY_HINT, # out of process memory
+    "ORA-04031": _SERVER_MEMORY_HINT, # shared pool
+    "ORA-16000": _READONLY_HINT,      # read-only database
+    "ORA-12514": _SERVICE_HINT,       # service not registered with the listener
+    "DPY-6001": _SERVICE_HINT,        # idem, in modalità Thin
+}
+# SQL Server
+_SQLSERVER_PREFIX_RE = re.compile(r"^(?:\[[^\]]+\])+\s*")
+_SQLSERVER_TCP_RE = re.compile(r"TCP Provider: Error code (0x[0-9A-Fa-f]+)")
+# codici Winsock → la stessa causa che il riconoscitore di rete sa dire
+_SQLSERVER_TCP = {"0X2AF9": "Name or service not known", "0X2AFA": "Name or service not known",
+                  "0X274D": "Connection refused", "0X2749": "Connection refused", "0X2751": "Connection refused",
+                  "0X274C": "timed out"}
+_SQLSERVER_ARROW_RE = re.compile(r"Unsupported data type for Arrow batch fetch for column - (.+?), Type - (-?\d+)")
+_SQLSERVER_TIPI = {"-150": "sql_variant", "-151": "a CLR type: geometry, geography, hierarchyid"}
+_SQLSERVER_LOGIN_HINT = (
+    "Check the connection's username, password and database: SQL Server reports a database "
+    "that does not exist, or that the user cannot open, as a failed login."
+)
+_SQLSERVER_TLS_HINT = (
+    "Give the server a certificate that can be verified, or choose «trust the server's "
+    "certificate» in the connection (self-signed certificates)."
+)
+
+_ORACLE_CODE_RE = re.compile(r"\b((?:ORA|DPY)-\d{4,5}):\s*([^\n]+)")
 
 _CH_EXC_RE = re.compile(r"Code:\s*(\d+)\.\s*DB::Exception:\s*")
 _CH_NAME_RE = re.compile(r"\(([A-Z][A-Z0-9_]{2,})\)")
@@ -195,6 +237,63 @@ def _trino(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
     return None
 
 
+def _oracle(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
+    """Il messaggio del server Oracle. Un ORA vince su un DPY. Un «DPY-6005: cannot
+    connect» non dice niente da solo: il perché sta nelle righe dopo — una causa di
+    rete (lasciata al riconoscitore di rete, che la dice meglio) o un altro DPY,
+    come «DPY-6001: Service … is not registered with the listener», il più interno,
+    che si mostra."""
+    for e in chain:
+        if not (type(e).__module__ or "").startswith("oracledb"):
+            continue
+        err = e.args[0] if e.args else None
+        testo = getattr(err, "message", None) or str(e)
+        codici = _ORACLE_CODE_RE.findall(testo)
+        if not codici:
+            return None
+        ora = [(c, m) for c, m in codici if c.startswith("ORA-")]
+        if ora:
+            codice, messaggio = ora[0]
+        elif any(p.search(t) for t in _texts(chain) for _, p in _NET_PATTERNS):
+            return None
+        else:
+            codice, messaggio = codici[-1]
+        messaggio = re.sub(r"\s*\(CONNECTION_ID=[^)]*\)", "", messaggio).strip().rstrip(".")
+        return f"{messaggio} ({codice}).", _ORACLE_HINTS.get(codice)
+    return None
+
+
+def _sqlserver(chain: list[BaseException], texts: list[str], host: Optional[str], port: Optional[int]) -> Optional[tuple[str, Optional[str]]]:
+    for t in texts:
+        m = _SQLSERVER_ARROW_RE.search(t)
+        if m:
+            tipo = _SQLSERVER_TIPI.get(m.group(2), f"ODBC type {m.group(2)}")
+            return (f"column {m.group(1)} has a type that cannot be imported ({tipo}).",
+                    "Convert it in a SQL source, e.g. CAST(col AS NVARCHAR(4000)).")
+    for e in chain:
+        if not (type(e).__module__ or "").startswith("mssql_python"):
+            continue
+        ddbc = str(getattr(e, "ddbc_error", None) or "").strip()
+        driver = str(getattr(e, "driver_error", None) or "").strip()
+        if "certificate verify failed" in ddbc:
+            causa = ddbc.split("::", 1)[-1].rstrip("]").strip().replace("failed:", "failed: ")
+            dove = f"{host}:{port}" if host and port else (host or "the server")
+            return f"the TLS certificate of {dove} cannot be verified ({causa}).", _SQLSERVER_TLS_HINT
+        m = _SQLSERVER_TCP_RE.search(ddbc)
+        if m and m.group(1).upper() in _SQLSERVER_TCP:
+            return _network([_SQLSERVER_TCP[m.group(1).upper()]], host, port), None
+        testo = _SQLSERVER_PREFIX_RE.sub("", ddbc) or driver
+        if not testo:
+            return None
+        testo = testo.rstrip(".")
+        if "Login failed for user" in testo:
+            return f"{testo}.", _SQLSERVER_LOGIN_HINT
+        if "permission was denied" in testo:
+            return f"{testo}.", _PERM_HINT
+        return f"{testo}.", None
+    return None
+
+
 def _mysql(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
     for e in chain:
         args = getattr(e, "args", ())
@@ -272,6 +371,8 @@ def describe_db_error(
         for extractor, name in (
             (lambda: _clickhouse(texts), "ClickHouse"),
             (lambda: _trino(chain), "Trino"),
+            (lambda: _oracle(chain), "Oracle"),
+            (lambda: _sqlserver(chain, texts, host, port), "SQL Server"),
             (lambda: _mysql(chain), "MySQL"),
             (lambda: _postgres(chain, texts), "PostgreSQL"),
         ):

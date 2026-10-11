@@ -23,6 +23,12 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "pymysql>=1.1.0",
+    # Oracle in modalità Thin (puro Python, niente Instant Client): fetch_df_batches
+    # dà i risultati in streaming come batch Arrow
+    "oracledb>=3.4",
+    # SQL Server: il driver ufficiale di Microsoft, autonomo (DDBC, niente ODBC da
+    # installare); arrow_reader dà i risultati in streaming come batch Arrow
+    "mssql-python>=1.15",
     "python-multipart>=0.0.32",
     "redis>=8.0.0",
     "sqlglot>=25.0.0",

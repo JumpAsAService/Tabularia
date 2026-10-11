@@ -688,3 +688,18 @@ def test_una_query_postgres_che_clickhouse_non_legge_e_una_proposta_che_non_legg
     with zipfile.ZipFile(io.BytesIO(_zip(_richiesta_export(**base, overrides={"src_q": "SELECT id, canale FROM vendite.ordini WHERE match(canale, '^w')"})))) as z:
         sql = z.read("models/src_q.sql").decode()
     assert "tab_src_1_vendite.ordini" in sql and "Translated by AI from postgres" in sql
+
+
+def test_il_target_clickhouse_rifiuta_oracle_con_un_motivo():
+    # ClickHouse non legge Oracle dal vivo: niente database federato, un rifiuto chiaro
+    ch = d.TargetClickHouse([{"id": 9, "name": "contabilita", "db_type": "oracle", "host": "ora.x.it", "database": "ORCLPDB1"}], "ch.local")
+    with pytest.raises(d.DbtExportError) as e:
+        ch.database_per(9, "FIN")
+    assert e.value.code == "clickhouse_cannot_read" and e.value.params["db_type"] == "oracle"
+
+
+def test_il_target_clickhouse_rifiuta_sql_server_con_un_motivo():
+    ch = d.TargetClickHouse([{"id": 9, "name": "vendite", "db_type": "sqlserver", "host": "sql.x.it", "database": "vendite"}], "ch.local")
+    with pytest.raises(d.DbtExportError) as e:
+        ch.database_per(9, "dbo")
+    assert e.value.code == "clickhouse_cannot_read" and e.value.params["db_type"] == "sqlserver"

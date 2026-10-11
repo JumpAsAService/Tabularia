@@ -79,8 +79,9 @@ engines, from an in-process library to a serverless warehouse.
   </p>
 
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
-  ClickHouse, Trino and SharePoint Excel; write results back to a database table or
-  publish them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
+  ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint Excel; write results
+  back to a database table (Oracle and SQL Server are sources only, for now) or publish
+  them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
 - **Ask your data.** An optional AI assistant answers questions in plain language over
   the datasources you are allowed to read: it finds the table, reads the curated field
   descriptions, writes and runs the query on your engine, and shows the result table the
@@ -247,7 +248,7 @@ pinned in the spec.
 | Celery beat | cache eviction and storage statistics |
 | Object storage | one bucket, all parquet: `datasets/` snapshots, `cache/` steps, `out/` results. MinIO locally; any S3 (Scaleway, AWS…) or Google Cloud Storage through its S3 API in the cloud |
 | External engines *(optional)* | a managed ClickHouse reading and writing the parquet through `s3()`; Google BigQuery reading it as temporary external tables over GCS |
-| External databases | sources ingested via ADBC into parquet snapshots; Output nodes can write tables back |
+| External databases | sources streamed in Arrow batches into parquet snapshots (Postgres through ADBC, Oracle through python-oracledb in Thin mode, SQL Server through Microsoft's mssql-python; no vendor client in the image), whole row groups whatever the driver's batch; Output nodes can write tables back |
 | VictoriaMetrics + Grafana | scrape the engine `/metrics`, celery-exporter, cAdvisor and node-exporter |
 
 The **gateway** (control plane) is the only public ingress: it owns the metadata

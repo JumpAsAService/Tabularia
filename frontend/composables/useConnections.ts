@@ -40,6 +40,10 @@ export const DB_TYPES = [
   { value: 'mariadb', label: 'MariaDB' },
   { value: 'clickhouse', label: 'ClickHouse' },
   { value: 'trino', label: 'Trino' },
+  // database = service name (FREEPDB1, ORCLPDB1); schema = owner, vuoto = l'utente
+  { value: 'oracle', label: 'Oracle' },
+  // extra.tls: verify (certificato verificato) | trust (autofirmato) | none
+  { value: 'sqlserver', label: 'Microsoft SQL Server' },
   // object storage: host=endpoint, username=access key, database=bucket, schema=region
   { value: 's3', label: 'S3 / object storage' },
   // posta: le tre impostazioni senza colonna naturale (mittente, TLS, domini

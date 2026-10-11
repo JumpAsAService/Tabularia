@@ -347,3 +347,22 @@ def test_la_configurazione_standard_della_libreria_vale_anche_senza_le_nostre_va
     assert ol.enabled() is True and "libreria" in ol.describe()
     assert ol._get_client().transport.kind == "console"
     ol.set_client(None)
+
+
+def test_i_nomi_oracle_seguono_la_convenzione_e_la_regola_delle_maiuscole():
+    # namespace oracle://host:porta, nome servizio.SCHEMA.TABELLA; senza virgolette
+    # maiuscolo (come l'import), fra virgolette com'è
+    ora = Connection(name="contabilita", db_type="oracle", host="ora.x.it", port=None, database="ORCLPDB1", db_schema="", username="fin", project_id=1)
+    assert ol.table_dataset_name(ora, "ledger") == "ORCLPDB1.FIN.LEDGER"
+    assert ol.table_dataset_name(ora, 'hr."conti 2024"') == "ORCLPDB1.HR.conti 2024"
+    d = ol.table_dataset(ora, "hr.employees")
+    assert (d.namespace, d.name) == ("oracle://ora.x.it:1521", "ORCLPDB1.HR.EMPLOYEES")
+
+
+def test_i_nomi_sqlserver_seguono_la_convenzione():
+    # namespace mssql://host:porta (convenzione di OpenLineage), nome database.schema.tabella (dbo di default)
+    ms = Connection(name="vendite", db_type="sqlserver", host="sql.x.it", port=None, database="vendite", db_schema="", username="u", project_id=1)
+    assert ol.table_dataset_name(ms, "ordini") == "vendite.dbo.ordini"
+    assert ol.table_dataset_name(ms, "dbo.[conti 2024]") == "vendite.dbo.conti 2024"
+    d = ol.table_dataset(ms, "sales.ordini")
+    assert (d.namespace, d.name) == ("mssql://sql.x.it:1433", "vendite.sales.ordini")

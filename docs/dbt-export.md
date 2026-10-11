@@ -183,6 +183,7 @@ as a `post-hook` if you need it.
 | A SQL query on a database | `src_<name>`, an ephemeral model with the query. Federated: it runs in the source database through DuckDB's `postgres_query`/`mysql_query`; native: the query as written |
 | The output of another flow | that flow's models are included too (recursively, with a cycle check) and referenced with `ref()` |
 | A file (uploaded in the editor, imported, SharePoint) | a **seed**: the data as CSV at export time, up to 50 000 rows. Beyond that the export says to import the file into a database |
+| A table or query on Oracle or SQL Server | not exported: DuckDB does not federate them, ClickHouse does not read them, and there is no native target for them. The export says so, with the connection's name |
 
 ### Reading a model
 

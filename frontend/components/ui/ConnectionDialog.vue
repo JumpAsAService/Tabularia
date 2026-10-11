@@ -47,6 +47,8 @@ const dbSchema = ref('')
 const fromAddress = ref('')
 const fromName = ref('')
 const tls = ref('starttls')
+// SQL Server: come trattare il TLS (`extra.tls`)
+const sqlTls = ref('verify')
 const allowedDomains = ref('')
 
 const isEdit = computed(() => !!props.existing)
@@ -84,11 +86,18 @@ watch(
     fromAddress.value = opts.from_address ?? ''
     fromName.value = opts.from_name ?? ''
     tls.value = opts.tls ?? 'starttls'
+    sqlTls.value = c?.db_type === 'sqlserver' ? (opts.tls ?? 'verify') : 'verify'
     allowedDomains.value = Array.isArray(opts.allowed_domains)
       ? opts.allowed_domains.join(', ')
       : (opts.allowed_domains ?? '')
   },
 )
+
+// la porta di default del tipo, come suggerimento (vuota = quella)
+const DEFAULT_PORTS: Record<string, string> = {
+  postgresql: '5432', mysql: '3306', mariadb: '3306', clickhouse: '8123', trino: '8080', oracle: '1521', sqlserver: '1433', smtp: '587',
+}
+const portPlaceholder = computed(() => DEFAULT_PORTS[dbType.value] ?? '')
 
 function draft(): ConnectionDraft {
   return {
@@ -116,7 +125,9 @@ function draft(): ConnectionDraft {
           }
         : isSp.value
           ? { library: library.value.trim() }
-          : {},
+          : dbType.value === 'sqlserver'
+            ? { tls: sqlTls.value }
+            : {},
     ),
   }
 }
@@ -201,7 +212,7 @@ function confirm() {
           </div>
           <div v-if="!isS3 && !isSp" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
-            <input v-model="port" type="text" inputmode="numeric" :placeholder="isSmtp ? '587' : '5432'" />
+            <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
           </div>
           <div class="cd-field cd-wide">
             <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
@@ -262,17 +273,28 @@ function confirm() {
           <template v-else>
             <div class="cd-field">
               <label>
-                {{ isS3 ? $t('connectionDialog.bucketLabel') : dbType === 'trino' ? $t('connectionDialog.catalogLabel') : $t('connectionDialog.databaseLabel') }}
+                {{ isS3 ? $t('connectionDialog.bucketLabel') : dbType === 'trino' ? $t('connectionDialog.catalogLabel') : dbType === 'oracle' ? $t('connectionDialog.serviceNameLabel') : $t('connectionDialog.databaseLabel') }}
                 <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span>
               </label>
-              <input v-model="database" type="text" :placeholder="isS3 ? $t('connectionDialog.bucketPlaceholder') : ''" />
+              <input v-model="database" type="text" :placeholder="isS3 ? $t('connectionDialog.bucketPlaceholder') : dbType === 'oracle' ? 'ORCLPDB1' : ''" />
             </div>
             <div class="cd-field">
               <label>{{ isS3 ? $t('connectionDialog.regionLabel') : $t('connectionDialog.schemaLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
               <input
                 v-model="dbSchema"
                 type="text"
-                :placeholder="isS3 ? 'eu-south-1' : dbType === 'postgresql' ? 'public' : ''"
+                :placeholder="isS3 ? 'eu-south-1' : dbType === 'postgresql' ? 'public' : dbType === 'oracle' ? 'HR' : dbType === 'sqlserver' ? 'dbo' : ''"
+              />
+            </div>
+            <div v-if="dbType === 'sqlserver'" class="cd-field cd-wide">
+              <label>{{ $t('connectionDialog.sqlTlsLabel') }}</label>
+              <Select
+                v-model="sqlTls"
+                :options="[
+                  { value: 'verify', label: $t('connectionDialog.sqlTlsVerify') },
+                  { value: 'trust', label: $t('connectionDialog.sqlTlsTrust') },
+                  { value: 'none', label: $t('connectionDialog.sqlTlsNone') },
+                ]"
               />
             </div>
           </template>

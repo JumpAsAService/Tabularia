@@ -182,8 +182,11 @@ def job_name_for_refresh(session: Session, ds: Datasource) -> str:
     return f"{percorso}/{ds.name} (refresh)" if percorso else f"{ds.name} (refresh)"
 
 
-_PORTE = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306, "clickhouse": 8443, "trino": 8080}
-_SCHEMI = {"postgresql": "postgres", "mysql": "mysql", "mariadb": "mysql", "clickhouse": "clickhouse", "trino": "trino"}
+_PORTE = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306, "clickhouse": 8443, "trino": 8080, "oracle": 1521, "sqlserver": 1433}
+_SCHEMI = {"postgresql": "postgres", "mysql": "mysql", "mariadb": "mysql", "clickhouse": "clickhouse", "trino": "trino", "oracle": "oracle", "sqlserver": "tsql"}
+# lo schema dell'URI del namespace, quando non è il nome del dialetto sqlglot
+# (la convenzione di OpenLineage: `mssql://host:porta`)
+_NAMESPACE = {"sqlserver": "mssql"}
 
 
 def _host_port(conn: Connection) -> str:
@@ -204,8 +207,27 @@ def table_dataset_name(conn: Connection, table: str) -> str:
     """`db.schema.tabella` per Postgres e Trino, `db.tabella` per MySQL e ClickHouse,
     come vuole la convenzione di naming di OpenLineage. Un nome già qualificato
     dall'utente (`schema.tabella`) si rispetta."""
+    if conn.db_type == "oracle":
+        # `servizio.SCHEMA.TABELLA`, con la regola di Oracle (come l'import): senza
+        # virgolette maiuscolo, fra virgolette com'è; lo schema di default è quello
+        # della connessione, o l'utente
+        def _ora(parte: str) -> str:
+            parte = parte.strip()
+            return parte[1:-1] if len(parte) > 1 and parte[0] == parte[-1] == '"' else parte.upper()
+
+        nomi = [_ora(p) for p in table.strip().split(".") if p.strip()]
+        if len(nomi) == 1:
+            nomi = [_ora(conn.db_schema) if conn.db_schema else (conn.username or "").upper(), *nomi]
+        return ".".join(p for p in [conn.database, *nomi] if p)
     parti = [p.strip('"`[]') for p in table.strip().split(".") if p.strip()]
     tipo = conn.db_type
+    if tipo == "sqlserver":
+        # `database.schema.tabella`; lo schema di default è quello della connessione, o dbo
+        if len(parti) == 1:
+            parti = [conn.db_schema or "dbo", *parti]
+        if len(parti) == 2:
+            parti = [conn.database, *parti]
+        return ".".join(p for p in parti if p)
     if tipo in ("postgresql", "trino"):
         if len(parti) == 1:
             parti = [conn.db_schema or "public", *parti] if tipo == "postgresql" else [conn.db_schema or "default", *parti]
@@ -320,7 +342,7 @@ def table_dataset(conn: Connection, table: str, output: bool = False, rows: int 
     from openlineage.client.event_v2 import InputDataset, OutputDataset
     from openlineage.client.facet_v2 import datasource_dataset, lifecycle_state_change_dataset, output_statistics_output_dataset
 
-    ns = f"{_SCHEMI.get(conn.db_type, conn.db_type)}://{_host_port(conn)}"
+    ns = f"{_NAMESPACE.get(conn.db_type) or _SCHEMI.get(conn.db_type, conn.db_type)}://{_host_port(conn)}"
     nome = table_dataset_name(conn, table)
     facets: dict[str, Any] = {"dataSource": datasource_dataset.DatasourceDatasetFacet(name=conn.name, uri=ns)}
     if output:

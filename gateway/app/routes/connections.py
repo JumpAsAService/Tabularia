@@ -40,7 +40,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(route_class=RottaCheRilascia, tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "s3", "smtp", "sharepoint"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint"}
+# SQL Server: come trattare il TLS (`extra.tls`); vuoto = verify
+_TLS_SQLSERVER = ("verify", "trust", "none")
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
@@ -65,10 +67,11 @@ def _name_taken(session: Session, project_id: int, name: str, exclude_id: int | 
     return session.exec(stmt).first() is not None
 
 
-def _valid_extra(extra: str | None) -> str:
+def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
     """Le opzioni del tipo sono testo opaco per il gateway, ma devono essere un
     OGGETTO JSON: accettarne uno rotto sposterebbe l'errore da chi salva la
-    connessione a chi, giorni dopo, si chiede perché l'email non parte."""
+    connessione a chi, giorni dopo, si chiede perché l'email non parte. Quelle che
+    l'engine legge davvero (il TLS di SQL Server) si controllano qui."""
     import json as _json
 
     grezzo = (extra or "{}").strip() or "{}"
@@ -78,7 +81,24 @@ def _valid_extra(extra: str | None) -> str:
         raise HTTPException(status_code=422, detail="Le opzioni della connessione non sono JSON valido")
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="Le opzioni della connessione devono essere un oggetto JSON")
+    if db_type == "sqlserver" and data.get("tls") not in (None, "", *_TLS_SQLSERVER):
+        raise HTTPException(status_code=422, detail="SQL Server: the TLS option must be verify, trust or none")
     return grezzo
+
+
+def _db_options(db_type: str, extra: str | None) -> dict:
+    """Le opzioni del tipo che l'engine usa per collegarsi (oggi: il TLS di SQL
+    Server). Gli altri database non ne hanno: un oggetto vuoto."""
+    if db_type != "sqlserver":
+        return {}
+    import json as _json
+
+    try:
+        data = _json.loads(extra or "{}")
+    except _json.JSONDecodeError:
+        data = {}
+    tls = data.get("tls") if isinstance(data, dict) else None
+    return {"tls": tls if tls in _TLS_SQLSERVER else "verify"}
 
 
 def smtp_options(conn: Connection) -> dict:
@@ -134,6 +154,7 @@ def engine_connection_payload(conn: Connection) -> dict:
         "password_encrypted": conn.password_encrypted,
         "database": conn.database,
         "db_schema": conn.db_schema,
+        "extra": _db_options(conn.db_type, conn.extra),
     }
 
 
@@ -281,7 +302,7 @@ def create_connection(
         password_encrypted=encrypt_secret(body.password) if body.password else "",
         database=body.database,
         db_schema=body.db_schema,
-        extra=_valid_extra(body.extra),
+        extra=_valid_extra(body.extra, body.db_type),
     )
     session.add(conn)
     session.commit()
@@ -325,7 +346,7 @@ def update_connection(
         if value is not None:
             setattr(conn, field, value)
     if body.extra is not None:
-        conn.extra = _valid_extra(body.extra)
+        conn.extra = _valid_extra(body.extra, conn.db_type)
     if body.password is not None:
         # stringa vuota = rimuovi la password; valorizzata = sostituisci
         conn.password_encrypted = encrypt_secret(body.password) if body.password else ""
@@ -393,6 +414,7 @@ async def test_draft_connection(
             "password_encrypted": secret,
             "database": body.database,
             "db_schema": body.db_schema,
+            "extra": _db_options(body.db_type, body.extra),
         }
     return await _engine_inspect(payload, "test")
 

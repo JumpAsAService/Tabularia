@@ -5,6 +5,39 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Microsoft SQL Server as a source.** A connection to SQL Server (host, port,
+  database, user; tried on SQL Server 2022) imports a table, a view or a SQL query,
+  refreshes it and schedules it like the other databases. It streams: mssql-python,
+  Microsoft's own driver, carries its ODBC layer inside the wheel — no Microsoft ODBC
+  driver in the image, three small system libraries only — and hands over Arrow
+  batches; the shared writer gathers them into whole row groups (2.5 million rows in 5
+  seconds, three row groups of up to a million, the worker's memory following the row
+  group). The connection chooses how to encrypt: verify the server's certificate (the
+  default), trust a self-signed one, or no encryption. A SQL source is sent as
+  written, CTEs and `ORDER BY` included, but it must be one query that reads: a batch
+  carrying `; DELETE …`, or a `SELECT … INTO` that would create a table, is refused
+  before it reaches the server. Integer `decimal` up to 18 digits arrives as Int64,
+  other decimals and `money` as Float64, `datetimeoffset` as UTC, `xml` as text;
+  `geography`, `geometry` and `hierarchyid` arrive in their binary form (`.STAsText()`
+  or `.ToString()` in a SQL source for text), and `sql_variant` is refused naming the
+  column. The server's own messages reach the user, with what to check: a failed login
+  (which is also how SQL Server reports a database that does not exist), a certificate
+  that cannot be verified, a host that does not resolve or refuses. A dbt export of a
+  flow reading from SQL Server is refused with the reason, as for Oracle.
+- **Oracle as a source.** A connection to Oracle (12c and later; host, port, service
+  name, user) imports a table, a view or a SQL query, refreshes it and schedules it
+  like the other databases. It streams: python-oracledb in Thin mode — pure Python,
+  no Oracle client in the image — hands over Arrow batches straight from the server,
+  and the shared writer gathers them into whole row groups (2.5 million rows: three
+  row groups of up to a million, 139,000 rows/s, the worker's memory following the
+  row group, not the table). Oracle's rules apply: names without quotes are read in
+  upper case, quoted ones as written, and the table list returns them in that form.
+  `NUMBER` without precision (and over 18 digits) arrives as Float64, like
+  Postgres `numeric`; `TIMESTAMP WITH TIME ZONE` is converted to UTC on the server;
+  intervals, XML and object types are refused naming the columns, with a hint to
+  convert them in a SQL source. The server's own messages reach the user
+  (`ORA-01017`, a service name not registered with the listener). A dbt export of a
+  flow reading from Oracle is refused with the reason: no dbt target can read it.
 - **Ready for production on Kubernetes: Helm chart 2.0, tried on a real cluster.**
   The chart had never run on one; it now has, on minikube with Calico and
   ingress-nginx: install, three upgrades, the migration step queued across three
