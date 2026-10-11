@@ -51,6 +51,10 @@ class DbSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # JWT (firma dei token di accesso)
 # ─────────────────────────────────────────────────────────────────────────────
+# lunghezza minima del segreto JWT in produzione (`openssl rand -hex 32` ne dà 64)
+JWT_SECRET_MIN = 32
+
+
 class JwtSettings(BaseModel):
     # CAMBIALO in produzione (env JWT__SECRET). Default solo per dev.
     secret: SecretStr = SecretStr("change-me-in-production")
@@ -510,8 +514,16 @@ class Settings(BaseSettings):
         if not self.is_production():
             return
         problems = []
-        if self.jwt.secret.get_secret_value() == "change-me-in-production":
+        segreto = self.jwt.secret.get_secret_value()
+        if segreto == "change-me-in-production":
             problems.append("JWT__SECRET è il default di sviluppo (genera: openssl rand -hex 32)")
+        elif len(segreto) < JWT_SECRET_MIN:
+            # firma ogni sessione (HS256): uno corto si indovina offline da un
+            # solo token, e chi lo indovina si firma da sé un token da admin
+            problems.append(
+                f"JWT__SECRET è troppo corto ({len(segreto)} caratteri, ne servono almeno "
+                f"{JWT_SECRET_MIN}; genera: openssl rand -hex 32)"
+            )
         if self.auth.admin_password.get_secret_value() == "admin":
             problems.append("AUTH__ADMIN_PASSWORD è il default 'admin'")
         if self.db.password.get_secret_value() == "tabularia" and not self.db.url:

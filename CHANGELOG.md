@@ -5,15 +5,33 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Ready for production on compose: the open findings of the 2026-10-08 audit.** "Run
+  now" on a flow that is already queued or running answers 409, in the language of the
+  interface, instead of queueing a row that could only be refused: repeated, it pushed
+  every other flow down the queue. The check and the enqueue are serialized per flow
+  with a Postgres advisory lock, so it holds across gateway replicas and against the
+  scheduler (twenty launches at once on three replicas: one accepted, nineteen 409). The
+  gateway's control calls to the engine (launch, status, revoke, clean-up) give up after
+  30 seconds: a hung engine or a half-open connection used to keep an execution "alive"
+  forever, its flow blocked and its schedules skipped until a restart. In production
+  `JWT__SECRET` must be at least 32 characters. Every page now carries a
+  Content-Security-Policy, set by the frontend server: scripts only from the app (Nuxt's
+  inline ones allowed by hash), requests only to the site and the gateway, so an
+  injected script can neither run nor send the session token away; vue-i18n compiles
+  messages without `eval` to live with it. The session cookie is `Secure` over HTTPS. A
+  CSV download stops at `EXPORT__MAX_ROWS` (5,000,000 by default) with a clear message
+  instead of filling the browser's memory — and the engine's reason for refusing a
+  download (that one, or Excel's row limit) now reaches the user instead of a bare "400
+  Bad Request". anyio, cryptography, urllib3 and pydantic-settings updated.
 - **Helm chart: the engine starts with ClickHouse or BigQuery switched on.** Helm reads
   every number in a values file as a float, and the chart wrote a million or more in
   exponent form: `CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS: "5e+06"` by default, and
   `BIGQUERY__MAXIMUM_BYTES_BILLED: "2.147483648e+10"`, which the engine refuses as
-  integers — with either engine enabled its pods would not start. Whole numbers are
-  now written out in full, for every setting. The chart also gains what the
-  application learned since 1.1.0: `app.auditRetentionMinutes`, the AI spending caps,
-  `openlineage.endpoint` and `timeoutSeconds`, and `extraEnv` for any other variable
-  of `infrastructure/.env.example` (a name the chart already sets is refused).
+  integers — with either engine enabled its pods would not start. Whole numbers are now
+  written out in full, for every setting. The chart also gains what the application
+  learned since chart 1.1.0: `app.auditRetentionMinutes`, the AI spending caps,
+  `openlineage.endpoint` and `timeoutSeconds`, and `extraEnv` for any other variable of
+  `infrastructure/.env.example` (a name the chart already sets is refused).
   `.env.example` documents the variables it lacked (`DB__AUTO_MIGRATE`,
   `APP__ROOT_PATH`, the OpenLineage endpoint and timeout, the chDB and cross-join
   limits).

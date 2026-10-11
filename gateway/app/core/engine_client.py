@@ -9,6 +9,14 @@ from app.core.config import get_settings
 
 _client: httpx.AsyncClient | None = None
 
+# Per le chiamate di CONTROLLO del lavoro di fondo: lanciare un task, leggerne lo
+# stato, revocarlo, cancellare un oggetto. L'engine le serve in millisecondi (mette
+# in coda o legge Celery), e una che non torna — engine inchiodato, connessione TCP
+# mezza aperta — terrebbe ferma l'esecuzione che la aspetta, col battito che la
+# dichiara viva per sempre. Il client resta senza tetto per tutto il resto: upload
+# ed export in streaming, anteprime (il loro tetto è sull'engine).
+CONTROLLO = httpx.Timeout(30.0, connect=5.0)
+
 
 def get_engine_client() -> httpx.AsyncClient:
     global _client

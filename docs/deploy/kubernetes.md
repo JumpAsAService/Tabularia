@@ -212,6 +212,7 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `REDIS__HOST`, `REDIS__PORT`, `REDIS__DB` | | ✓ | broker and cache index |
 | `STORAGE__ENDPOINT`, `STORAGE__ACCESS_KEY`, `STORAGE__SECRET_KEY` *secret*, `STORAGE__BUCKET`, `STORAGE__REGION` | | ✓ | object storage |
 | `CELERY__WORKER_CONCURRENCY` | | ✓ | per worker pod |
+| `EXPORT__MAX_ROWS` | | ✓ | rows a CSV download may have (default 5,000,000; `0` = no cap): the browser holds the whole file in memory |
 | `CACHE__TTL_SECONDS`, `CACHE__SWEEP_INTERVAL_SECONDS` | | ✓ | step cache lifetime and sweep cadence |
 | `CLICKHOUSE_EXTERNAL__*` | | ✓ | optional ClickHouse engine, off when the host is empty |
 | `BIGQUERY__*` | | ✓ | optional BigQuery engine, off when the project is empty; credentials *secret* |
@@ -242,6 +243,12 @@ Nitro on port 3000. Size: 176 MB.
   comes from the browser. The frontend pods need no route to the gateway.
 - **Same hardening as the other images**: uid/gid 10001, read-only root filesystem, `/tmp`
   the only writable path; the `securityContext` shown for the backend applies unchanged.
+- **Content-Security-Policy from the frontend itself.** Every page carries one: scripts
+  only from `/_nuxt` plus Nuxt's own inline scripts, allowed by hash; `fetch` only to the
+  site and to `NUXT_PUBLIC_API_BASE`; frames only the site and `NUXT_PUBLIC_GRAFANA_URL`.
+  Nothing to configure on the ingress. The session cookie is `Secure` when the page is
+  served over HTTPS — behind a proxy that terminates TLS, through `X-Forwarded-Proto`,
+  which ingress-nginx sets.
 
 *Verified* read-only: the login page renders, a gateway URL set at startup ends up in the
 served page, compiled assets are served, and `/` redirects to `/login` without a session.

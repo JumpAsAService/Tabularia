@@ -14,6 +14,7 @@ anteprima costa "cache del parent + 1 operazione" invece dell'intera catena.
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -230,11 +231,15 @@ class PolarsEngine(DeferredStepCache, Engine):
         fmt: str,
         out_path: str,
         limit: int | None = None,
+        max_rows: int | None = None,
     ) -> None:
         """
         Esegue la catena e scrive il risultato in `out_path` (csv o xlsx).
 
-        - csv: streaming (`sink_csv`) → memoria costante, qualsiasi dimensione.
+        - csv: streaming (`sink_csv`) → memoria costante. Con `max_rows` scrive al
+          più max_rows+1 righe e le conta nel file: una riga in più vuol dire oltre
+          il tetto, ed è un errore (il flusso si esegue una volta sola, e il disco
+          resta limitato).
         - xlsx: il formato è uno ZIP non streamabile e ha un tetto di ~1M righe;
           contiamo prima le righe (in streaming, costo memoria zero) e rifiutiamo
           oltre il tetto con un errore chiaro. Sotto il tetto, collect + write_excel.
@@ -250,13 +255,24 @@ class PolarsEngine(DeferredStepCache, Engine):
 
             try:
                 if fmt == "csv":
+                    # un `limit` già sotto il tetto basta a sé
+                    tetto = max_rows if max_rows and not (limit and limit <= max_rows) else None
+                    lf_csv = lf.limit(tetto + 1) if tetto else lf
                     try:
-                        lf.sink_csv(out_path)
+                        lf_csv.sink_csv(out_path)
                     except EngineError:
                         raise
                     except _ERRORI_POLARS as e:  # nodo non supportato dallo streaming
                         logger.warning("sink_csv streaming fallito (%s), fallback in-memory", e)
-                        lf.collect(engine="streaming").write_csv(out_path)
+                        lf_csv.collect(engine="streaming").write_csv(out_path)
+                    if tetto and os.path.getsize(out_path) > 0:
+                        # riletto dal file: conta le righe vere anche con a-capo nei valori
+                        n = pl.scan_csv(out_path, infer_schema=False).select(pl.len()).collect().item()
+                        if n > tetto:
+                            raise EngineError(
+                                f"il risultato ha più di {tetto:,} righe: oltre il tetto dell'export CSV. "
+                                f"Scrivilo con un nodo Output (datasource, tabella o bucket), o riduci con filter/limit."
+                            )
                 elif fmt == "xlsx":
                     n = lf.select(pl.len()).collect(engine="streaming").item()
                     if n > self.XLSX_MAX_ROWS:

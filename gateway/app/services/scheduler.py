@@ -167,6 +167,7 @@ async def _fire_flow(session: Session, flow: Flow, now: datetime, visto: datetim
     if preso.rowcount != 1:
         session.rollback()  # lo slot l'ha preso un altro processo
         return
+    orchestrator.in_fila_per_il_flusso(session, flow_id)  # in fila con «Esegui ora»
     if orchestrator.flusso_in_corso(session, flow_id):
         session.commit()
         logger.info("scheduler: flusso %s (%s) ancora in esecuzione, salto lo slot", flow_id, nome)

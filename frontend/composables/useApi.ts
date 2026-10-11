@@ -204,7 +204,23 @@ export function useApi() {
       filename?: string
       engine?: string // motore che calcola lo snapshot; il file lo scrive Polars
     }): Promise<Blob> {
-      return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
+      try {
+        return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
+      } catch (e: any) {
+        // con responseType 'blob' anche il corpo dell'errore arriva come Blob: senza
+        // leggerlo il motivo (troppe righe per Excel o per il CSV, sorgente sparita)
+        // resterebbe dietro un «400 Bad Request»
+        if (e?.data instanceof Blob) {
+          let data: unknown = null
+          try {
+            data = JSON.parse(await e.data.text())
+          } catch {
+            /* non è JSON: resta il messaggio generico */
+          }
+          if (data) throw Object.assign(new Error(e.message), { data, status: e.status, statusCode: e.statusCode })
+        }
+        throw e
+      }
     },
 
     // esporta un flusso come progetto dbt (zip). target: 'duckdb' (federato) |

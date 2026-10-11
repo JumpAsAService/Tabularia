@@ -20,6 +20,7 @@ from app.engine import (
     EngineError, OperationError, SourceNotFoundError, UnknownOperationError,
 )
 import logging
+from app.core.config import get_settings
 from app.core.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
@@ -190,6 +191,7 @@ def export_flow(request: ExportRequest):
     os.close(fd)
 
     engine_name = (request.engine or "polars").lower()
+    max_rows = get_settings().export.max_rows or None
     snapshot: DataSource | None = None
     try:
         if engine_name != "polars" and operations:
@@ -199,9 +201,9 @@ def export_flow(request: ExportRequest):
             # calcola col motore scelto (dialetto corretto); niente step-cache
             get_engine(engine_name).run(source=src, operations=operations, destination=snapshot, use_cache=False)
             # Polars scrive il file dai dati già calcolati (operations vuote)
-            get_engine("polars").export(source=snapshot, operations=[], fmt=request.format, out_path=path, limit=request.limit)
+            get_engine("polars").export(source=snapshot, operations=[], fmt=request.format, out_path=path, limit=request.limit, max_rows=max_rows)
         else:
-            get_engine("polars").export(source=src, operations=operations, fmt=request.format, out_path=path, limit=request.limit)
+            get_engine("polars").export(source=src, operations=operations, fmt=request.format, out_path=path, limit=request.limit, max_rows=max_rows)
     except SourceNotFoundError as e:
         os.unlink(path)
         raise HTTPException(status_code=404, detail=str(e))

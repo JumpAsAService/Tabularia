@@ -619,6 +619,16 @@ def delete_flow(flow_id: int, request: Request, user: User = Depends(get_current
     )
 
 
+# il 409 di «Esegui ora», nella lingua dell'interfaccia di chi chiede
+_GIA_IN_CORSO = {
+    "en": "The flow is already queued or running: it can be run again once it has finished.",
+    "it": "Il flusso è già in coda o in esecuzione: si potrà rilanciare quando avrà finito.",
+    "de": "Der Flow ist bereits in der Warteschlange oder läuft: Er kann erneut gestartet werden, wenn er fertig ist.",
+    "es": "El flow ya está en cola o en ejecución: se podrá lanzar de nuevo cuando termine.",
+    "fr": "Le flux est déjà en file d'attente ou en cours : il pourra être relancé une fois terminé.",
+}
+
+
 @router.post("/flows/{flow_id}/run-now", status_code=status.HTTP_202_ACCEPTED)
 async def run_flow_now(
     flow_id: int,
@@ -639,10 +649,19 @@ async def run_flow_now(
     `mode`: "development" (default) usa il motore dell'editor; "production" usa
     il motore di produzione del flusso — come farebbe lo scheduler — per
     provarlo a mano prima di schedulare."""
-    from app.services.orchestrator import create_orchestration_run, sveglia
+    from app.services.orchestrator import create_orchestration_run, flusso_in_corso, in_fila_per_il_flusso, sveglia
 
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
+    # Un lancio in più non partirebbe comunque (l'orchestratore lo chiude come
+    # «già in esecuzione»), ma resterebbe una riga in `runs` e un giro della coda
+    # a testa: ripetuto, spinge in fondo le esecuzioni degli altri flussi.
+    in_fila_per_il_flusso(session, flow.id)  # controllo e accodamento in fila, fra repliche
+    if flusso_in_corso(session, flow.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_GIA_IN_CORSO.get(lingua_della_richiesta(request), _GIA_IN_CORSO["en"]),
+        )
     run = create_orchestration_run(session, user, flow, engine_mode=mode)
     sveglia()
     audit.record_audit(

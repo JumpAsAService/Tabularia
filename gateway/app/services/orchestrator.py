@@ -50,7 +50,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from math import ceil
 
-from sqlalchemy import delete, or_, update
+from sqlalchemy import delete, or_, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -291,6 +291,23 @@ def create_orchestration_run(
         session.commit()
         session.refresh(run)
     return run
+
+
+# spazio di nomi dei lucchetti consultivi «coda del flusso» (il secondo numero è l'id)
+_LUCCHETTO_CODA = 74610001
+
+
+def in_fila_per_il_flusso(session: Session, flow_id: int) -> None:
+    """Mette in fila, fino alla fine della transazione, chi sta per guardare se il
+    flusso ha già un'esecuzione e per accodarne una: «Esegui ora» da più repliche
+    del gateway, e lo scheduler. Senza, due richieste insieme vedono entrambe la
+    coda vuota e accodano entrambe (dal vivo: 2 lanci su 20 passavano). Lucchetto
+    consultivo di Postgres legato alla transazione: lo rilascia il commit. Su
+    SQLite (i test) non serve: c'è un processo solo."""
+    if session.get_bind().dialect.name == "postgresql":
+        session.connection().execute(
+            text("SELECT pg_advisory_xact_lock(:spazio, :flusso)"), {"spazio": _LUCCHETTO_CODA, "flusso": flow_id}
+        )
 
 
 def flusso_in_corso(session: Session, flow_id: int) -> bool:

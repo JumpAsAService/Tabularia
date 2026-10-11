@@ -130,6 +130,42 @@ def test_export_xlsx_oltre_il_tetto_righe_suggerisce_il_csv(engine, vendite, mon
         os.unlink(path)
 
 
+def test_export_csv_oltre_il_tetto_righe_si_ferma_e_suggerisce_un_output(engine, vendite):
+    # 6 righe: con un tetto di 5 si rifiuta (il browser raccoglierebbe tutto in memoria)
+    path = _tmp(".csv")
+    try:
+        with pytest.raises(EngineError, match="nodo Output"):
+            engine.export(vendite, [], fmt="csv", out_path=path, max_rows=5)
+    finally:
+        os.unlink(path)
+
+
+@pytest.mark.parametrize("max_rows, limit, righe", [(6, None, 6), (None, None, 6), (5, 3, 3), (5, 5, 5)])
+def test_export_csv_al_tetto_o_sotto_passa(engine, vendite, max_rows, limit, righe):
+    # al tetto esatto passa; senza tetto passa tutto; un limit sotto il tetto basta a sé
+    path = _tmp(".csv")
+    try:
+        engine.export(vendite, [], fmt="csv", out_path=path, limit=limit, max_rows=max_rows)
+        assert pl.read_csv(path).height == righe
+    finally:
+        os.unlink(path)
+
+
+def test_export_csv_conta_le_righe_vere_anche_con_a_capo_nei_valori(engine, storage):
+    # 3 righe, una con un a-capo dentro il valore: sono 3, non 4 — il tetto di 3 regge
+    from tests.conftest import upload_df
+
+    src = upload_df(storage, pl.DataFrame({"note": ["una", "due\nrighe", "tre"]}), "datasets/note.parquet")
+    path = _tmp(".csv")
+    try:
+        engine.export(src, [], fmt="csv", out_path=path, max_rows=3)
+        assert pl.read_csv(path).height == 3
+        with pytest.raises(EngineError):
+            engine.export(src, [], fmt="csv", out_path=path, max_rows=2)
+    finally:
+        os.unlink(path)
+
+
 def test_export_formato_sconosciuto_da_errore_chiaro(engine, vendite):
     path = _tmp(".bin")
     try:

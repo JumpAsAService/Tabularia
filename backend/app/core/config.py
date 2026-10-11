@@ -369,6 +369,16 @@ class IngestSettings(BaseModel):
     parquet_row_group_rows: int = Field(default=1_000_000, ge=1, le=20_000_000)
 
 
+class ExportSettings(BaseModel):
+    """Download diretto di un risultato (CSV/Excel) dall'editor, dal viewer e dalla chat."""
+
+    # Righe massime di un export CSV. L'engine lo scrive in streaming, ma il
+    # browser lo raccoglie tutto in memoria prima di salvarlo (fetch → Blob): oltre
+    # qualche milione di righe la scheda muore. Più grande si scrive con un nodo
+    # Output (datasource, tabella, bucket). 0 = nessun tetto. env: EXPORT__MAX_ROWS
+    max_rows: int = Field(default=5_000_000, ge=0)
+
+
 class AppSettings(BaseModel):
     # NB: nessun codice del backend legge `env_name` — il guard di produzione
     # vive solo nel gateway. Resta qui perché la configurazione condivisa la
@@ -422,6 +432,7 @@ class Settings(BaseSettings):
     clickhouse_external: ClickHouseExternalSettings = Field(default_factory=ClickHouseExternalSettings)
     bigquery: BigQuerySettings = Field(default_factory=BigQuerySettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
+    export: ExportSettings = Field(default_factory=ExportSettings)
     sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
 
     # ─────────────────────────────────────────────────────────────────────────

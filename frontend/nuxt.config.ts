@@ -25,6 +25,16 @@ export default defineNuxtConfig({
   // nomi componenti senza prefisso di cartella (SourceNode, DataGrid, ...)
   components: [{ path: '~/components', pathPrefix: false }],
 
+  vite: {
+    define: {
+      // vue-i18n compila i messaggi in JIT (un albero interpretato) invece di
+      // generare codice con `new Function`: la Content-Security-Policy di
+      // server/plugins/csp.ts non ammette eval, e senza questo le traduzioni
+      // non si compilerebbero
+      __INTLIFY_JIT_COMPILATION__: true,
+    },
+  },
+
   css: [
     '@vue-flow/core/dist/style.css',
     '@vue-flow/core/dist/theme-default.css',

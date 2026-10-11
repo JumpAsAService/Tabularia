@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.engine_client import get_engine_client
+from app.core.engine_client import CONTROLLO, get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -447,6 +447,7 @@ async def _launch_flow_run(
     client = get_engine_client()
     resp = await client.post(
         "/tasks/transform-data",
+        timeout=CONTROLLO,
         json={
             "bucket": body.bucket,
             "input_key": body.input_key,
@@ -515,6 +516,7 @@ async def launch_ingest_run(
         ref = json.loads(ds.source_ref or "{}")
         resp = await client.post(
             "/sharepoint/ingest",
+            timeout=CONTROLLO,
             json={
                 "connection": engine_connection_payload(conn),
                 "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", "")},
@@ -526,6 +528,7 @@ async def launch_ingest_run(
     else:
         resp = await client.post(
             "/db/ingest",
+            timeout=CONTROLLO,
             json={
                 "connection": engine_connection_payload(conn),
                 "source": {"mode": ds.source_type, "ref": ds.source_ref, "sort_keys": json.loads(ds.sort_keys or "[]")},
@@ -612,7 +615,7 @@ async def _revoke_task(run: Run) -> None:
     if not run.task_id:
         return
     try:
-        await get_engine_client().delete(f"/tasks/{run.task_id}")
+        await get_engine_client().delete(f"/tasks/{run.task_id}", timeout=CONTROLLO)
         logger.info("run %s scaduto: task %s revocato sull'engine", run.id, run.task_id)
     except Exception as e:
         logger.warning("run %s: revoca del task %s non riuscita: %s", run.id, run.task_id, e)
@@ -724,7 +727,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
         return run
     client = get_engine_client()
     try:
-        resp = await client.get(f"/tasks/{run.task_id}")
+        resp = await client.get(f"/tasks/{run.task_id}", timeout=CONTROLLO)
         data = resp.json()
     except Exception as e:  # engine irraggiungibile → riconcilieremo dopo
         logger.warning("riconciliazione run %s rimandata: %s", run.id, e)

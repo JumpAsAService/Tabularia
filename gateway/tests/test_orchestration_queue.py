@@ -17,14 +17,17 @@ test tengono ferme le garanzie che il `set` dava gratis:
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 import app.services.orchestrator as orch
 from app.models import Flow, Run
 from app.models.run import ORCHESTRATION_INTERRUPTED
+from app.routes.flows import run_flow_now
 from app.services import scheduler
 from tests.conftest import make_flow, make_project, make_run, make_user
 
@@ -64,6 +67,33 @@ def test_un_lancio_e_una_riga_in_coda(session, coda):
     run = orch.create_orchestration_run(session, utente, flusso, "manual", "production")
     assert (run.kind, run.status, run.engine_mode, run.trigger_type) == ("orchestration", "PENDING", "production", "manual")
     assert run.claimed_by is None and run.heartbeat_at is None and run.launched_by == utente.id
+
+
+async def test_esegui_ora_rifiuta_un_flusso_gia_in_coda_o_in_corso(session, coda):
+    """Ogni «Esegui ora» di troppo costava una riga in `runs` e un giro della coda,
+    e ripetuto spingeva in fondo le esecuzioni degli altri flussi: ora è un 409,
+    nella lingua di chi chiede, e non scrive niente."""
+    utente, cartella = coda
+    flusso = _flusso(session, utente, cartella)
+
+    async def esegui_ora(request=None):
+        return await run_flow_now(flusso.id, request=request, mode="development", user=utente, session=session)
+
+    primo = await esegui_ora()
+    with pytest.raises(HTTPException) as e:                       # in coda
+        await esegui_ora()
+    assert e.value.status_code == 409 and "already queued or running" in e.value.detail
+    orch.rivendica(5)
+    session.expire_all()
+    italiano = SimpleNamespace(headers={"accept-language": "it-IT,it;q=0.9,en;q=0.8"})
+    with pytest.raises(HTTPException) as e:                       # in esecuzione
+        await esegui_ora(italiano)
+    assert e.value.status_code == 409 and "già in coda o in esecuzione" in e.value.detail
+    assert len(session.exec(select(Run).where(Run.flow_id == flusso.id)).all()) == 1
+    await orch.esegui(primo["run_id"])                            # finito: si rilancia
+    session.expire_all()
+    secondo = await esegui_ora()
+    assert secondo["run_id"] != primo["run_id"] and _stato(session, secondo["run_id"]).status == "PENDING"
 
 
 # ── prendere dalla coda ──────────────────────────────────────────────────────

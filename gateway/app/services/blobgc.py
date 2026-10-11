@@ -15,7 +15,7 @@ from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.engine_client import get_engine_client
+from app.core.engine_client import CONTROLLO, get_engine_client
 from app.models.blob_deletion import PendingBlobDeletion
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ async def sweep_blob_deletions(session: Session, now: datetime | None = None) ->
     removed = 0
     for row_id, bucket, key in due:
         try:
-            resp = await client.delete("/files/object", params={"bucket": bucket, "key": key})
+            resp = await client.delete("/files/object", params={"bucket": bucket, "key": key}, timeout=CONTROLLO)
         except Exception as e:  # engine irraggiungibile → riprova al prossimo tick
             logger.warning("sweep blob %s/%s rimandato: %s", bucket, key, e)
             continue

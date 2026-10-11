@@ -166,6 +166,7 @@ secrets:
 
   # Signs session tokens. Changing it logs everyone out immediately, which is
   # also the only way to invalidate a leaked token (see README → Known limits).
+  # At least 32 characters: the gateway refuses a shorter one. openssl rand -hex 32
   jwtSecret: ""
 
   dbPassword: ""

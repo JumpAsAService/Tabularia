@@ -13,8 +13,16 @@ export interface Me {
 }
 
 // Cookie condiviso: leggibile sia lato server (middleware) sia lato client.
+// `Secure` quando la pagina arriva in HTTPS, così il token non viaggia mai in
+// chiaro; in sviluppo su http://localhost resta com'è.
 export const useAuthToken = () =>
-  useCookie<string | null>('tab_token', { sameSite: 'lax', maxAge: 60 * 60 * 24, path: '/' })
+  useCookie<string | null>('tab_token', { sameSite: 'lax', maxAge: 60 * 60 * 24, path: '/', secure: inHttps() })
+
+// Dietro un proxy che termina il TLS il server Nuxt riceve http: conta il
+// protocollo che il proxy dichiara in X-Forwarded-Proto.
+function inHttps(): boolean {
+  return useRequestURL({ xForwardedProto: true }).protocol === 'https:'
+}
 
 export function useAuth() {
   const base = useRuntimeConfig().public.apiBase as string

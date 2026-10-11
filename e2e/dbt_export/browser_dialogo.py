@@ -63,8 +63,11 @@ proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", P
 try:
     ff = Firefox()
     ff.invia("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1000})
-    ff.vai(f"{BASE}/login")
-    ff.js("localStorage.clear(); localStorage.setItem('tabularia-theme', 'dark'); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
+    # si entra da un file statico, non da /login: con il cookie di sessione di un giro
+    # precedente (utente ormai cancellato) l'app rimanda al login, e quel rimando può
+    # sostituire la navigazione verso il callback (1 volta su 5)
+    ff.vai(f"{BASE}/favicon.svg")
+    ff.js("document.cookie = 'tab_token=; path=/; max-age=0'; localStorage.clear(); localStorage.setItem('tabularia-theme', 'dark'); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
     ff.vai(f"{BASE}/auth/callback#token={admin}")
     ff.aspetta("!location.pathname.startsWith('/auth/callback')", 20)
     ff.vai(f"{BASE}/flows")
