@@ -5,6 +5,7 @@ services:
   redis:
     image: valkey/valkey:8-alpine
     container_name: dataprep-valkey
+    restart: unless-stopped
     # nessuna porta sull'host — broker e cache, lo usano solo i container
     volumes:
       - redis_data:/data
@@ -20,6 +21,12 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: dataprep-postgres
+    # Riparte da solo come i servizi dell'app. Al riavvio della macchina Docker riaccende
+    # SOLO i container con una politica di riavvio, e lo fa ignorando depends_on: con
+    # backend e gateway «unless-stopped» e questo no, il gateway ripartiva senza Postgres,
+    # rinunciava dopo un minuto e restava acceso ma morto (uvicorn --reload non lo
+    # rilancia) — l'interfaccia dava «NetworkError» finché non lo si riavviava a mano.
+    restart: unless-stopped
     ports:
       - "127.0.0.1:5433:5432"  # 5433 host: evita conflitti con un eventuale Postgres locale
     volumes:
@@ -41,6 +48,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: dataprep-minio
+    restart: unless-stopped
     ports:
       - "127.0.0.1:9002:9000"  # API S3 (9002 host: la 9000 è occupata da ClickHouse)
       - "127.0.0.1:9001:9001"  # console web
@@ -258,6 +266,7 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
     container_name: dataprep-frontend
+    restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -277,6 +286,7 @@ services:
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.103.0
     container_name: dataprep-victoriametrics
+    restart: unless-stopped
     # nessuna porta sull'host — la interroga Grafana dentro la rete
     volumes:
       - vm_data:/vmdata
@@ -290,6 +300,7 @@ services:
   grafana:
     image: grafana/grafana:11.2.0
     container_name: dataprep-grafana
+    restart: unless-stopped
     ports:
       - "127.0.0.1:3001:3000"  # 3000 è già del frontend
     environment:
@@ -316,6 +327,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: dataprep-cadvisor
+    restart: unless-stopped
     # nessuna porta sull'host — lo raschia VictoriaMetrics
     volumes:
       - /:/rootfs:ro
@@ -330,6 +342,7 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: dataprep-node-exporter
+    restart: unless-stopped
     command:
       - "--path.rootfs=/host"
     pid: host
@@ -341,6 +354,7 @@ services:
   celery-exporter:
     image: danihodovic/celery-exporter:latest
     container_name: dataprep-celery-exporter
+    restart: unless-stopped
     environment:
       - CE_BROKER_URL=redis://redis:6379/0
     # nessuna porta sull'host — lo raschia VictoriaMetrics
@@ -358,6 +372,7 @@ services:
   sampledb-postgres:
     image: postgres:16-alpine
     container_name: sampledb-postgres
+    restart: unless-stopped
     profiles: ["samples"]
     environment:
       - POSTGRES_USER=shop
@@ -388,6 +403,7 @@ services:
   sampledb-clickhouse:
     image: clickhouse/clickhouse-server:24.8
     container_name: sampledb-clickhouse
+    restart: unless-stopped
     profiles: ["samples"]
     environment:
       - CLICKHOUSE_USER=analytics
