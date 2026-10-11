@@ -3,7 +3,17 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## Unreleased
+## 1.1.0 «Appio» — 2026-10-11
+
+Second release, still «Appio». Since 1.0.0 Tabularia is ready for production on one
+machine with Docker Compose and on Kubernetes with Helm chart 2.0; the metadata
+database moves forward with Alembic migrations; the gateway runs in more than one
+copy; flows export as dbt projects and as OpenLineage, datasources carry data
+contracts, and an optional AI assistant answers over the datasources a user may read.
+Oracle and Microsoft SQL Server join the sources, BigQuery the engines and Google
+Cloud Storage the object stores. Before upgrading read
+`docs/deploy/release-checklist.md`: the migration step, a JWT secret of at least 32
+characters in production, and the order in which the services roll out.
 
 - **Interface: the nine major findings of the 2026-10-11 UI/UX review, fixed.** The
   review (audit 13/20, critique 22/40, report in
@@ -618,8 +628,6 @@ exposes at `/system/info` and in the app's settings menu.
   Delete/Backspace on a selected edge. Operation and Output nodes show the row
   and column counts known from their last preview ("100+" when the preview was
   full), at no extra query.
-
-## Unreleased
 
 - **BigQuery engine (optional).** A fifth engine, `bigquery`, runs the
   transformations on Google BigQuery: the parquet files stay in the bucket and

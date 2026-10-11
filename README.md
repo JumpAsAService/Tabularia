@@ -35,7 +35,7 @@ keeps it instant, production runs never sample.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.0.0 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.1.0 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

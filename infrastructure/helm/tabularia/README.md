@@ -34,18 +34,24 @@ depend on them, and both degrade quietly rather than breaking:
 
 ## Building the images
 
-There is no public registry; build and push the three images yourself.
+The release images are public on Docker Hub and the chart pulls them by default:
+`jumpasaservice/tabularia-backend`, `jumpasaservice/tabularia-gateway` and
+`jumpasaservice/tabularia-frontend`, tagged with the release (`1.1.0`). The backend
+one is built without chDB.
+
+To run your own builds instead, build from a checkout of the release tag, push them
+to your registry, and set `image.registry` and the tags:
 
 ```bash
 # Engine, workers and beat all run this one image.
-docker build -t <registry>/tabularia-backend:0.1.0 backend/
+docker build -t <registry>/tabularia-backend:1.1.0 backend/
 #   Add --build-arg WITH_CHDB=true only if your flows use the embedded chDB
-#   engine: it takes the image from 727 MB to 1.36 GB.
+#   engine: it takes the image from about 800 MB to about 1.4 GB.
 
-docker build -t <registry>/tabularia-gateway:0.1.0 gateway/     # 199 MB
+docker build -t <registry>/tabularia-gateway:1.1.0 gateway/
 
 # NOTE the -f: frontend/Dockerfile is the hot-reload DEVELOPMENT server.
-docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:0.1.0 frontend/   # 176 MB
+docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.1.0 frontend/
 ```
 
 All three run as uid 10001 with a read-only root filesystem.

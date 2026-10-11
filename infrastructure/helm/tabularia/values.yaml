@@ -13,29 +13,30 @@ fullnameOverride: ""
 # ─────────────────────────────────────────────────────────────────────────────
 # Images
 # ─────────────────────────────────────────────────────────────────────────────
-# Build and push these yourself from the repository; there is no public
-# registry. See README.md → "Building the images".
+# The release images are public on Docker Hub (jumpasaservice/tabularia-*),
+# tagged with the release. To run images you build and push yourself, point
+# `registry` and the tags at them: see README.md → "Building the images".
 image:
-  registry: ""            # e.g. registry.example.com/tabularia — empty = Docker Hub style names
+  registry: "jumpasaservice"  # Docker Hub namespace; or e.g. registry.example.com/tabularia
   pullPolicy: IfNotPresent
   pullSecrets: []         # [{ name: regcred }]
 
   # One image serves the engine API, both workers and beat.
-  # Built WITHOUT chDB by default (727 MB). Build with --build-arg WITH_CHDB=true
-  # (1.36 GB) only if your flows use the embedded chDB engine.
+  # The published one is built WITHOUT chDB. Build your own with
+  # --build-arg WITH_CHDB=true only if your flows use the embedded chDB engine.
   backend:
     repository: tabularia-backend
-    tag: "0.1.0"
+    tag: "1.1.0"
 
   gateway:
     repository: tabularia-gateway
-    tag: "0.1.0"
+    tag: "1.1.0"
 
-  # IMPORTANT: build from frontend/Dockerfile.prod, not frontend/Dockerfile
-  # (that one is the hot-reload development server).
+  # If you build it yourself: from frontend/Dockerfile.prod, not
+  # frontend/Dockerfile (that one is the hot-reload development server).
   frontend:
     repository: tabularia-frontend
-    tag: "0.1.0"
+    tag: "1.1.0"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # External services — not deployed by this chart
