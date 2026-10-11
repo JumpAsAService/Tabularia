@@ -323,7 +323,7 @@ def _fix_clickhouse_temporals(batch, targets: dict):
     return pa.RecordBatch.from_arrays(cols, schema=pa.schema(fields))
 
 
-def _batches_clickhouse(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | None = None) -> Iterator[Any]:
     import clickhouse_connect
 
     client = clickhouse_connect.get_client(
@@ -333,6 +333,8 @@ def _batches_clickhouse(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         password=conn.resolve_password(),
         database=conn.database or "default",
         connect_timeout=10,
+        # None = il default della libreria (300 s): prova ed elenco tabelle
+        **({"send_receive_timeout": read_timeout} if read_timeout else {}),
     )
     try:
         # tipi ClickHouse da uno schema LIMIT 0: individuano le colonne temporali
@@ -597,8 +599,13 @@ _DRIVERS = {
 }
 
 
-def _open_batches(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
-    return _DRIVERS[conn.db_type](conn, query)
+def _open_batches(conn: DbConnectionSpec, query: str, read_timeout: int | None = None) -> Iterator[Any]:
+    # fra i driver delle sorgenti solo clickhouse-connect ha un tempo massimo di
+    # lettura suo (vedi IngestSettings.db_read_timeout_seconds)
+    driver = _DRIVERS[conn.db_type]
+    if read_timeout and conn.db_type == "clickhouse":
+        return driver(conn, query, read_timeout=read_timeout)
+    return driver(conn, query)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -689,7 +696,7 @@ def ingest_db_to_parquet(
     logger.info("db-ingest %s@%s → %s (%s)", conn.db_type, conn.host, key, query[:200])
 
     # errori del driver → messaggio del server del database, non l'eccezione Python
-    gen = _guarded(_open_batches(conn, query), conn)
+    gen = _guarded(_open_batches(conn, query, get_settings().ingest.db_read_timeout_seconds), conn)
     try:
         schema = next(gen)
     except StopIteration:  # nessun driver arriva qui, ma il contratto va difeso

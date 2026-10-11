@@ -269,7 +269,7 @@ def test_ingest_traduce_l_errore_del_driver_e_conserva_la_causa(monkeypatch, sto
 
     original = ProtocolError("Connection broken: IncompleteRead(198 bytes read)", IncompleteRead(CH_PARTIAL))
 
-    def failing_driver(conn, query):
+    def failing_driver(conn, query, **_):  # l'import passa a ClickHouse anche read_timeout
         raise original
         yield  # generatore, come i driver veri
 

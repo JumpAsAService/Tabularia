@@ -5,6 +5,18 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Large ClickHouse tables import instead of failing after five minutes.** ClickHouse
+  sends no row until it has the first one: with sort keys on columns outside the
+  table's own key it reads and sorts the whole table first, and the client gave up
+  after 300 seconds without data — the library's default — whenever nothing kept the
+  connection alive: always with a `readonly=1` user, which cannot ask for the progress
+  headers that do it, and behind a proxy that holds them back. Imports from ClickHouse
+  and writes into it now wait `INGEST__DB_READ_TIMEOUT_SECONDS` (default 3000, below
+  the task's own limit); the connection test and the table list keep 300. The message
+  told the user to check host, port and firewall; it now says the server accepted the
+  query and was still computing it. Measured on 50 million rows (3.4 GB) sorted
+  outside the key by a read-only user on one thread: 14 seconds before the first byte,
+  growing with the table.
 - **Microsoft SQL Server as a source.** A connection to SQL Server (host, port,
   database, user; tried on SQL Server 2022) imports a table, a view or a SQL query,
   refreshes it and schedules it like the other databases. It streams: mssql-python,

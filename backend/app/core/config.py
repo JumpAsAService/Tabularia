@@ -367,6 +367,19 @@ class IngestSettings(BaseModel):
     # scorretto, e serve a poter esercitare la soglia nei test senza generare
     # milioni di righe
     parquet_row_group_rows: int = Field(default=1_000_000, ge=1, le=20_000_000)
+    # Quanto si aspetta, senza ricevere nulla, la risposta di ClickHouse durante un
+    # import o una scrittura (env: INGEST__DB_READ_TIMEOUT_SECONDS). ClickHouse non
+    # manda niente finché non ha la prima riga: con le chiavi di ordinamento su
+    # colonne fuori dalla chiave della tabella deve leggere e ordinare TUTTO prima
+    # (50M righe, 3,4 GB, un thread: 14 s di silenzio; cresce con la tabella). Il
+    # client tiene viva la connessione con le intestazioni di avanzamento, ma non
+    # con un'utenza `readonly=1` (non può chiederle) né dietro un proxy che le
+    # trattiene: lì il default di clickhouse-connect, 300 s, faceva fallire gli
+    # import delle tabelle grandi dopo cinque minuti. Gli altri driver delle
+    # sorgenti non hanno un limite loro. Resta SOTTO `CELERY__TASK_SOFT_TIME_LIMIT`,
+    # così chi aspetta legge questo errore e non quello del task ucciso. La prova
+    # della connessione e l'elenco delle tabelle tengono i 300 s: rispondono subito.
+    db_read_timeout_seconds: int = Field(default=3000, ge=10)
 
 
 class ExportSettings(BaseModel):

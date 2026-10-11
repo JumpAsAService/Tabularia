@@ -31,6 +31,9 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    download; 0 = no cap). And `JWT__SECRET` must be at least 32 characters in
    production: a shorter one now stops the gateway at startup — generate one with
    `openssl rand -hex 32` before upgrading (everyone signs in again).
+   `INGEST__DB_READ_TIMEOUT_SECONDS` (default 3000): how long an import from
+   ClickHouse waits for the first rows; keep it below
+   `CELERY__TASK_SOFT_TIME_LIMIT`.
 
 ## Rollout order
 

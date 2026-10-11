@@ -152,6 +152,10 @@ _PG_LINE_RE = re.compile(r"\b(ERROR|FATAL):\s+(.+)")
 _SQLSTATE_RE = re.compile(r"SQLSTATE:\s*([0-9A-Z]{5})")
 _ADBC_PREFIX_RE = re.compile(r"^[A-Z_]+:\s*(?:\[[\w-]+\]\s*)?(?:Failed to [^:]*:\s*)?")
 
+# connessione stabilita e query accettata, ma nessun byte entro il tempo massimo
+# di lettura (urllib3: «Read timed out. (read timeout=300)»): NON è la rete
+_READ_TIMEOUT_RE = re.compile(r"Read timed out\.?(?:\s*\(read timeout=(\d+(?:\.\d+)?)\))?", re.I)
+
 _NET_PATTERNS = (
     ("dns", re.compile(
         r"Name or service not known|Failed to resolve|could not translate host name|"
@@ -326,6 +330,11 @@ def _network(texts: list[str], host: Optional[str], port: Optional[int]) -> Opti
     blob = "\n".join(texts)
     where = f"{host}:{port}" if host and port else host
     target = where or "the server"
+    lento = _READ_TIMEOUT_RE.search(blob)
+    if lento:
+        quanto = f"{float(lento.group(1)):g} seconds" if lento.group(1) else "the time limit"
+        return (f"{target} accepted the query but sent no data for {quanto}: the database was still "
+                "computing the result, as happens with large sorts and heavy queries.")
     for kind, rx in _NET_PATTERNS:
         if not rx.search(blob):
             continue

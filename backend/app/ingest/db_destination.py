@@ -26,6 +26,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pydantic import BaseModel
 
+from app.core.config import get_settings
 from app.ingest.converters import IngestError
 from app.ingest.db_errors import describe_db_error
 from app.ingest.db_source import _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec
@@ -156,6 +157,8 @@ def _write_clickhouse(
         password=conn.resolve_password(),
         database=conn.database or "default",
         connect_timeout=10,
+        # INSERT … SELECT dalla staging e post-SQL (un OPTIMIZE) possono tacere a lungo
+        send_receive_timeout=get_settings().ingest.db_read_timeout_seconds,
     )
     # ClickHouse non ha transazioni sull'INSERT in streaming: scrivere direttamente
     # nella tabella (TRUNCATE + insert a batch) la lascerebbe in stato PARZIALE se
