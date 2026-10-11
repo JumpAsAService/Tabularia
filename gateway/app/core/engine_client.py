@@ -6,6 +6,7 @@ Docker privata (ENGINE__BASE_URL, es. http://backend:8000).
 import httpx
 
 from app.core.config import get_settings
+from app.core.crypto import INTESTAZIONE_INTERNA, token_interno
 
 _client: httpx.AsyncClient | None = None
 
@@ -24,7 +25,8 @@ def get_engine_client() -> httpx.AsyncClient:
         s = get_settings()
         # timeout=None sul singolo client: gli upload di file grandi (GB) non devono
         # scadere; i controlli di durata restano sull'engine/worker.
-        _client = httpx.AsyncClient(base_url=s.engine.base_url, timeout=None)
+        # ogni richiesta si presenta: l'engine risponde solo a chi porta il token
+        _client = httpx.AsyncClient(base_url=s.engine.base_url, timeout=None, headers={INTESTAZIONE_INTERNA: token_interno()})
     return _client
 
 

@@ -5,6 +5,23 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Ready for production on Kubernetes: Helm chart 2.0, tried on a real cluster.**
+  The chart had never run on one; it now has, on minikube with Calico and
+  ingress-nginx: install, three upgrades, the migration step queued across three
+  pods, the live tour 153/153, single sign-on through Keycloak 11/11 and every page
+  in Firefox 14/14. What changed: the gateway is published under `/api` on the UI's
+  host (the old per-path routing sent pages such as `/flows` and the SSO return to
+  the API, so reloading a page showed JSON and SSO did not work); the engine API
+  refuses any caller without the gateway's internal token — derived from the
+  Fernet key, so nothing to configure, in compose too — and the NetworkPolicy that
+  admits only the gateway and the workers is on by default; the gateway reads the
+  client's real address past `gateway.trustedProxies`, so a stranger's wrong
+  passwords no longer lock the administrator out; each role loses the secrets it
+  has no use for; CORS is closed by default; no pod mounts the service account
+  token; PodDisruptionBudgets; two gateway replicas; the RAM badge is off, not
+  failing, without a node-exporter. **Upgrade the gateway before the engine this
+  time** (release checklist, chart README → Upgrades): a new engine refuses an old
+  gateway.
 - **Ready for production on compose: the open findings of the 2026-10-08 audit.** "Run
   now" on a flow that is already queued or running answers 409, in the language of the
   interface, instead of queueing a row that could only be refused: repeated, it pushed

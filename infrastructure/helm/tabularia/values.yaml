@@ -232,7 +232,7 @@ oidc:
   enabled: false
   issuer: ""
   clientId: ""
-  redirectUri: ""         # https://<public host>/auth/sso/callback
+  redirectUri: ""         # https://<public host>/api/auth/sso/callback
   scopes: "openid profile email"
   groupsClaim: groups     # use "roles" for Entra ID app roles
   groupAllowlist: ""
@@ -352,8 +352,16 @@ gateway:
   # Pods that answer requests. One Python process uses one core and tops out
   # around 95 requests a second (a few hundred people clicking at once): past
   # that, add replicas. Measured with 500 simulated users: one replica
-  # saturated (95th percentile 5.8 s), three answered in 0.12 s.
-  replicas: 1
+  # saturated (95th percentile 5.8 s), three answered in 0.12 s. Two by default,
+  # so that a node drain or a crash never leaves nobody answering.
+  replicas: 2
+  # Who may tell the gateway the client's address (X-Forwarded-For): the ingress
+  # controller's pods. uvicorn reads the chain from the right and stops at the
+  # first address NOT in this list, so a client cannot pass off a forged one.
+  # The default trusts the private ranges, where pod networks live; narrow it to
+  # your controller's pod CIDR. Behind a cloud load balancer the controller must
+  # see the client at all: externalTrafficPolicy: Local, or the PROXY protocol.
+  trustedProxies: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
   # Threads per process. Fewer serve more: Python runs one at a time and they
   # only contend (measured: 68 requests/s with 40, 79 with 6).
   threads: 12
@@ -394,8 +402,9 @@ gateway:
   # under your PostgreSQL's max_connections (100 by default), with room for
   # whatever else connects to it.
 
-# Data plane HTTP API. Internal only — never expose it: it trusts the gateway
-# for authorisation and holds credentials that read the whole bucket.
+# Data plane HTTP API. Internal only — never expose it: it answers only requests
+# carrying the gateway's internal token, and holds credentials that read the
+# whole bucket.
 engineApi:
   replicaCount: 2
   resources:
@@ -476,8 +485,10 @@ beat:
 # Server-rendered UI. Stateless, scale freely.
 frontend:
   replicaCount: 2
-  # Read by the BROWSER, so these must be the public URLs, not cluster DNS.
-  publicApiBase: ""       # REQUIRED, e.g. https://tabularia.example.com
+  # Read by the BROWSER. Empty = ingress.apiPrefix on the host the page came from,
+  # which is what the bundled ingress serves. Set an absolute URL only to serve
+  # the API from another host (then list the UI's origin in app.corsOrigins).
+  publicApiBase: ""
   publicGrafanaUrl: ""    # optional, powers the Monitoring tab iframe
   resources:
     requests: { cpu: 50m, memory: 128Mi }
@@ -522,51 +533,31 @@ ingress:
     # Previews are synchronous and can take as long as engine.previewTimeoutSeconds.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-  # Paths served by the gateway rather than the frontend.
-  # Prefissi serviti dal GATEWAY; tutto il resto va al frontend. Questa lista
-  # deve contenere OGNI router del gateway: un prefisso dimenticato non dà un
-  # errore di routing, cade sul frontend Nuxt e ottiene la sua pagina 404 — un
-  # sintomo che non somiglia alla causa. È già successo con /ai.
-  #
-  # Per verificarla dopo aver aggiunto un router, dalla radice del repo:
-  #   grep -rn '^router = APIRouter' gateway/app/routes/*.py
-  # (i router senza `prefix=` dichiarano i path sulle singole rotte)
-  apiPaths:
-    - /auth            # include /auth/sso
-    - /users
-    - /groups
-    - /permissions
-    - /projects
-    - /flows
-    - /runs
-    - /datasources
-    - /connections
-    - /saved-views
-    - /lineage
-    - /search
-    - /schedule
-    - /banners
-    - /audit
-    - /system
-    - /queue
-    - /engines
-    - /engine-policy
-    - /admin/performance
-    - /ai
-    - /tasks
-    - /files
-    - /health
+  # The gateway's prefix on the same host as the UI. Not stripped: the gateway
+  # answers under it (APP__ROOT_PATH) and the frontend calls it there, so the
+  # identity provider's redirect URI is https://<host>/api/auth/sso/callback.
+  apiPrefix: /api
 
 # Restricts who may reach the engine API. Strongly recommended: the engine holds
 # storage credentials and, through database connections, can reach anything the
 # cluster can reach (see README → Known limits, SSRF).
+# ON by default: without it every pod in the cluster can call the engine API.
+# It needs a CNI that enforces NetworkPolicy (Calico, Cilium, the managed ones
+# of GKE/EKS/AKS when switched on); on one that does not, it is inert. The
+# engine also refuses any caller without the gateway's internal token, derived
+# from the Fernet key — a second lock behind the network, not instead of it.
+# A Prometheus in another namespace that scrapes the engine's /metrics needs a
+# rule of its own.
 networkPolicy:
-  enabled: false
+  enabled: true
   # Extra CIDRs the workers must reach: your databases, object storage, IdP.
   egressCIDRs: []
 
 serviceAccount:
   create: true
+  # No pod talks to the Kubernetes API, so none gets the account's token. Workload
+  # identity (IRSA, GKE) brings its own credentials and is not affected.
+  automountToken: false
   name: ""
   annotations: {}         # e.g. IRSA / Workload Identity for S3 access
 
@@ -577,6 +568,12 @@ podSecurityContext:
   fsGroup: 10001
   seccompProfile:
     type: RuntimeDefault
+
+# One PodDisruptionBudget per scalable component, at most one pod down at a time:
+# a node drain moves them one by one instead of all at once. With a single
+# replica it blocks nothing.
+podDisruptionBudget:
+  enabled: true
 
 # The images ship no writable paths: everything scratch goes to the /tmp
 # emptyDir mounted per component.

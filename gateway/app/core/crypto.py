@@ -5,6 +5,8 @@ cifra la password a riposo nel suo Postgres e la invia GIÀ CIFRATA all'engine
 (`password_encrypted`), che la decifra solo nel worker al momento di aprire la
 connessione. La password in chiaro non transita mai nel broker Celery.
 """
+import hashlib
+import hmac
 from functools import lru_cache
 
 from cryptography.fernet import Fernet
@@ -36,3 +38,23 @@ def encrypt_secret(plain: str) -> str:
 
 def decrypt_secret(token: str) -> str:
     return _fernet().decrypt(token.encode()).decode()
+
+
+# ── Il gateway si presenta all'engine ────────────────────────────────────────
+# L'API dell'engine non ha utenti suoi: risponde a chi la raggiunge, con le chiavi
+# del bucket. La rete la chiude (compose: rete interna; Helm: NetworkPolicy), e
+# questo è il secondo lucchetto (audit 2026-10-08, A4): ogni richiesta del
+# gateway porta un token che solo chi ha la chiave Fernet sa calcolare. Derivato,
+# non configurato: gateway ed engine la condividono già, quindi non c'è un
+# segreto in più da generare, distribuire o sbagliare. L'etichetta lo separa
+# dagli altri usi della chiave. DEVE restare identica nel gateway e nell'engine.
+INTESTAZIONE_INTERNA = "X-Tabularia-Internal"
+_ETICHETTA_INTERNA = b"tabularia: gateway -> engine API"
+
+
+@lru_cache
+def token_interno() -> str:
+    chiave = get_settings().security.fernet_key
+    if not chiave:
+        raise RuntimeError("SECURITY__FERNET_KEY non impostata: serve anche al token fra gateway ed engine")
+    return hmac.new(chiave.encode(), _ETICHETTA_INTERNA, hashlib.sha256).hexdigest()

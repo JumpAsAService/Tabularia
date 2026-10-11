@@ -34,9 +34,15 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
 
 ## Rollout order
 
-1. **Workers first, then the API, then the gateway.** A new API talking to an
-   old preview worker cancels previews with a signal the old worker does not
-   clean up after; it recovers only when the running query ends.
+1. **The gateway first (and the orchestrators), then the workers, then the
+   engine API.** From this release the engine API answers only requests that
+   carry the gateway's internal token: a new engine behind an old gateway
+   refuses everything (401) until the gateway is upgraded, while an old engine
+   simply ignores the token of a new gateway. Workers before the API, because a
+   new API talking to an old preview worker cancels previews with a signal the
+   old worker does not clean up after. With compose: `docker compose up -d
+   gateway orchestrator`, then `docker compose up -d`; with Helm, see the chart
+   README → Upgrades.
 2. **Recreate, do not restart, the beat and worker containers** (`docker compose
    up -d --force-recreate` or a rolling replacement of the pods): a restart
    keeps the old code and the old memory limits.

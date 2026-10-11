@@ -78,6 +78,28 @@ start. Whole numbers are printed in full; everything else as it is.
 {{- end -}}
 {{- end -}}
 
+{{/*
+Secrets a role must NOT hold. Every pod reads the one Secret (envFrom); these
+`env` entries, which win over envFrom, empty what the role has no use for — as
+the production compose file does.
+  gateway-only: the engine roles run users' SQL and connections, and whoever took
+  one over must not find the key that signs sessions or the metadata password.
+  engine-only: the gateway needs neither the storage nor the warehouse keys.
+*/}}
+{{- define "tabularia.withoutGatewaySecrets" -}}
+{{- range list "JWT__SECRET" "DB__PASSWORD" "DB__URL" "AUTH__ADMIN_PASSWORD" "OIDC__CLIENT_SECRET" "AI__SECRET_KEY" "OPENLINEAGE__API_KEY" }}
+- name: {{ . }}
+  value: ""
+{{- end }}
+{{- end -}}
+
+{{- define "tabularia.withoutEngineSecrets" -}}
+{{- range list "STORAGE__ACCESS_KEY" "STORAGE__SECRET_KEY" "REDIS__PASSWORD" "CLICKHOUSE_EXTERNAL__PASSWORD" "CLICKHOUSE_EXTERNAL__AI_PASSWORD" "BIGQUERY__CREDENTIALS_B64" }}
+- name: {{ . }}
+  value: ""
+{{- end }}
+{{- end -}}
+
 {{- define "tabularia.envFrom" -}}
 - configMapRef:
     name: {{ include "tabularia.configMapName" . }}
@@ -137,6 +159,7 @@ spec:
     spec:
       {{- include "tabularia.imagePullSecrets" $root | nindent 6 }}
       serviceAccountName: {{ include "tabularia.serviceAccountName" $root }}
+      automountServiceAccountToken: {{ $root.Values.serviceAccount.automountToken }}
       securityContext:
         {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
       # Long-running tasks: let Celery finish the task in flight instead of
@@ -161,6 +184,7 @@ spec:
             # pools that inflates resident memory. Capping the arenas flattens it.
             - name: MALLOC_ARENA_MAX
               value: "2"
+            {{- include "tabularia.withoutGatewaySecrets" $root | nindent 12 }}
           resources:
             {{- toYaml $cfg.resources | nindent 12 }}
           volumeMounts:

@@ -3,10 +3,10 @@
 Two policies, for two different reasons.
 
 1. The engine API accepts traffic only from the gateway (both its workloads: the
-   pods that answer requests and the orchestrator) and the workers. It does
-   no authorisation of its own and holds credentials that read the whole bucket,
-   so "internal only" should be enforced by the network, not by the absence of an
-   Ingress.
+   pods that answer requests and the orchestrator) and the workers. It holds
+   credentials that read the whole bucket, so "internal only" is enforced by the
+   network, not by the absence of an Ingress — and, behind it, by the internal
+   token every gateway request carries.
 
 2. Egress from the backend roles is restricted to the destinations you list.
    This is the mitigation for the open SSRF gap: a user who can create database

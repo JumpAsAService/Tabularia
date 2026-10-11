@@ -1,0 +1,25 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{/*
+At most one pod of each scalable component down at a time during voluntary
+disruptions (node drains, cluster upgrades): they move one by one. maxUnavailable
+rather than minAvailable, so that a component scaled to one replica is never
+blocked from moving. Beat is left out: it is a singleton with Recreate.
+*/}}
+{{- range $componente := list "gateway" "orchestrator" "engine" "worker" "preview-worker" "frontend" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "tabularia.fullname" $ }}-{{ $componente }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $componente }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" $ }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $componente }}
+{{- end }}
+{{- end }}

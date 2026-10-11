@@ -58,7 +58,7 @@ oidc:
   enabled: false
   issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
   clientId: <application-id>
-  redirectUri: https://tabularia.example.com/auth/sso/callback
+  redirectUri: https://tabularia.example.com/api/auth/sso/callback
   postLoginUrl: https://tabularia.example.com/auth/callback
   # Entra ID: app roles are readable names, the groups claim carries object IDs.
   groupsClaim: roles
@@ -71,6 +71,8 @@ oidc:
 # keeps up to 25 connections to PostgreSQL: size its max_connections for the sum.
 gateway:
   replicas: 2
+  # your ingress controller's pod CIDR: who may report the client's address
+  trustedProxies: "10.244.0.0/16"
   orchestrator:
     replicas: 1     # 2 for failover: the survivor takes over the queue
 
@@ -100,7 +102,6 @@ previewWorker:
 
 frontend:
   replicaCount: 2
-  publicApiBase: https://tabularia.example.com
   publicGrafanaUrl: https://grafana.example.com
 
 ingress:
@@ -120,9 +121,10 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    # The application slows down repeated failed sign-ins per address and
-    # email; this caps the rate from any one client on top of that.
-    nginx.ingress.kubernetes.io/limit-rps: "5"
+    # No site-wide limit-rps: it counts pages and assets too, and an office
+    # behind one NAT gets 503s. The application already slows failed sign-ins
+    # per real client address (gateway.trustedProxies); to cap /api/auth/login
+    # at the edge as well, give it an Ingress of its own (README → Ingress).
 
 # Strongly recommended in production: without it the engine API is reachable from
 # any pod, and the workers can connect anywhere the cluster can reach.

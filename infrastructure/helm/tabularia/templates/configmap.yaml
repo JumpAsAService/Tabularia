@@ -30,15 +30,17 @@ DB__PORT: {{ include "tabularia.env" (.Values.externalServices.postgres.port) }}
 DB__NAME: {{ include "tabularia.env" (.Values.externalServices.postgres.database) }}
 DB__USER: {{ include "tabularia.env" (.Values.externalServices.postgres.user) }}
 
-{{- with .Values.app.corsOrigins }}
-# A JSON list: the setting is a list[str] and pydantic parses it as JSON.
-# Only needed when the frontend is served from a different host than the API.
-APP__CORS_ORIGINS: {{ toJson . | quote }}
-{{- end }}
-{{- with .Values.monitoring.nodeExporterUrl }}
-# Powers the RAM badge. Unset, the badge simply disappears.
-MONITORING__NODE_EXPORTER_URL: {{ . | quote }}
-{{- end }}
+# A JSON list (pydantic parses it as JSON). Empty, the default: the UI and the
+# API share one host and no other origin may call it with credentials. Left
+# unset, the application would fall back to its development origins.
+APP__CORS_ORIGINS: {{ toJson (.Values.app.corsOrigins | default list) | quote }}
+# The prefix the gateway is published under (see templates/ingress.yaml): the
+# gateway needs it for the paths it writes for the browser — the SSO cookie,
+# /docs, redirects.
+APP__ROOT_PATH: {{ .Values.ingress.apiPrefix | quote }}
+# Powers the RAM badge. Empty, the badge is off: rendered anyway, or the
+# application would fall back to the docker-compose address and fail every poll.
+MONITORING__NODE_EXPORTER_URL: {{ .Values.monitoring.nodeExporterUrl | default "" | quote }}
 
 JWT__ACCESS_TTL_MINUTES: {{ include "tabularia.env" (.Values.auth.jwtAccessTtlMinutes) }}
 AUTH__ADMIN_EMAIL: {{ include "tabularia.env" (.Values.auth.adminEmail) }}

@@ -54,6 +54,7 @@ spec:
     spec:
       {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
       serviceAccountName: {{ include "tabularia.serviceAccountName" $ }}
+      automountServiceAccountToken: {{ $.Values.serviceAccount.automountToken }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       {{- if $.Values.migrations.enabled }}
@@ -73,6 +74,8 @@ spec:
           command: ["python", "-m", "app.db.migra"]
           envFrom:
             {{- include "tabularia.envFrom" $ | nindent 12 }}
+          env:
+            {{- include "tabularia.withoutEngineSecrets" $ | nindent 12 }}
           resources:
             {{- toYaml $.Values.migrations.resources | nindent 12 }}
           volumeMounts:
@@ -85,6 +88,21 @@ spec:
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          # The client's address: ingress controllers add it to X-Forwarded-For,
+          # and uvicorn reads the chain from the right, past the proxies it
+          # trusts. Without this every request seems to come from the
+          # controller, and the sign-in throttle, keyed by (address, email),
+          # becomes per email: five wrong passwords lock anyone out, the
+          # administrator included. Keep-alive above the controller's (60 s),
+          # or a request can land on a connection the gateway just closed: 502.
+          command:
+            - uvicorn
+            - app.main:app
+            - --host=0.0.0.0
+            - --port=8000
+            - --proxy-headers
+            - --forwarded-allow-ips={{ $.Values.gateway.trustedProxies }}
+            - --timeout-keep-alive=75
           ports:
             - name: http
               containerPort: 8000
@@ -95,6 +113,7 @@ spec:
               value: {{ .role | quote }}
             - name: APP__GATEWAY_THREADS
               value: {{ $.Values.gateway.threads | quote }}
+            {{- include "tabularia.withoutEngineSecrets" $ | nindent 12 }}
           envFrom:
             {{- include "tabularia.envFrom" $ | nindent 12 }}
           # The schema is migrated by the init container above; the application

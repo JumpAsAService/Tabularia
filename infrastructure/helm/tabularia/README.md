@@ -77,9 +77,6 @@ secrets:
   storageSecretKey: "…"
   adminPassword: "…"
 
-frontend:
-  publicApiBase: https://tabularia.example.com
-
 ingress:
   hosts:
     - host: tabularia.example.com
@@ -217,15 +214,51 @@ this application:
 | Request buffering | the proxy must not spool uploads to its own disk | off |
 | Read timeout | previews wait for the engine synchronously | 300 s |
 
-The application slows down repeated failed sign-ins per client address and email
-(the count is shared by all gateway replicas), which defeats a password list but
-not a distributed attack: rate limiting `/auth/login` at the proxy is still worth
-having.
+**One host, the API under `/api`.** The frontend gets `/`, the gateway
+`ingress.apiPrefix` (`/api`), not stripped: the gateway knows its prefix
+(`APP__ROOT_PATH`) and answers under it, so no controller-specific rewrite is
+needed and the browser calls the API relatively. Routing the gateway's own paths
+instead cannot work: `/flows`, `/runs`, `/auth/callback` are also pages of the
+frontend. The identity provider's redirect URI is
+`https://<host>/api/auth/sso/callback`.
 
-The engine API has no Ingress and must never get one. Enable `networkPolicy` to
-make that structural.
+**The client's real address.** The gateway reads it from `X-Forwarded-For`,
+from the right, past the proxies in `gateway.trustedProxies` (private ranges by
+default; narrow it to your controller's pod CIDR). The sign-in throttle is keyed
+by (address, email) and shared by all replicas, so a stranger's wrong passwords
+do not lock out the administrator. It defeats a password list, not a
+distributed attack: to cap `/api/auth/login` at the edge as well, give that path
+an Ingress of its own with the controller's rate-limit annotations — not the
+whole site, which counts pages and assets and hurts an office behind one NAT.
+
+**The engine API** has no Ingress and must never get one. The NetworkPolicy (on
+by default; it needs a CNI that enforces it) admits only the gateway, the
+orchestrator and the workers, and every request must carry the gateway's
+internal token, derived from the Fernet key. Each role also loses the secrets
+it has no use for: the engine roles never see the session key or the metadata
+password, the gateway never sees the storage or warehouse keys.
 
 ## Upgrades
+
+**Coming from chart 1.x to 2.0** — values that changed meaning:
+
+- `ingress.apiPaths` is gone: the gateway is published under `ingress.apiPrefix`
+  (`/api`). Register the new SSO redirect URI on the identity provider,
+  `https://<host>/api/auth/sso/callback`, before upgrading.
+- `frontend.publicApiBase` is optional (the default is `/api` on the same host);
+  remove it unless the API lives on another host.
+- `networkPolicy.enabled` is now `true`; `gateway.replicas` is 2;
+  `gateway.trustedProxies` is new; no pod mounts the service account token
+  (`serviceAccount.automountToken`).
+- **Upgrade in two steps this time.** The engine now refuses requests without the
+  gateway's internal token, which the 1.x gateway does not send. Upgrade the
+  gateway and the orchestrator first — the old engine ignores the token — then
+  the rest:
+
+  ```bash
+  helm upgrade … --set image.backend.tag=<the version you run now>   # gateway and orchestrator
+  helm upgrade …                                                     # engine and workers
+  ```
 
 The database schema is migrated by an init container (`migrate`) in every gateway
 and orchestrator pod, before the application starts: `python -m app.db.migra`

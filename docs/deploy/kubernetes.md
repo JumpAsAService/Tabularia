@@ -65,11 +65,19 @@ overrides them with `--reload`, which must not reach production.
 
 ## Networking
 
-- **Public**: the frontend and the gateway only. The browser calls the gateway directly
-  (`NUXT_PUBLIC_API_BASE` = public gateway URL).
+- **Public**: the frontend and the gateway, on one host: `/` to the frontend, `/api` to
+  the gateway (not stripped; the gateway knows its prefix through `APP__ROOT_PATH`).
+  The browser calls the API relatively (`NUXT_PUBLIC_API_BASE=/api`). Routing the
+  gateway's own paths instead cannot work: they are also pages of the frontend.
 - **Internal**: the engine API is reached only by the gateway, through
-  `ENGINE__BASE_URL` (cluster DNS, e.g. `http://engine:8000`). It has no authentication
-  of its own: keep it off the ingress.
+  `ENGINE__BASE_URL` (cluster DNS, e.g. `http://engine:8000`). Keep it off the ingress:
+  it answers only requests carrying the gateway's internal token, derived from
+  `SECURITY__FERNET_KEY` (nothing to configure), and a NetworkPolicy should admit only
+  the gateway, the orchestrator and the workers — the chart ships one, on by default.
+- **The client's address**: the gateway reads `X-Forwarded-For` from the right, past
+  the proxies it trusts (`--forwarded-allow-ips`, the chart's `gateway.trustedProxies`).
+  Without it every client seems to be the ingress controller, and the sign-in
+  throttle, keyed by (address, email), lets anyone lock the administrator out.
 
 Ingress settings the application depends on:
 
@@ -224,8 +232,8 @@ The Helm chart sets the variables above from named values; any other one from
 `infrastructure/.env.example` goes through `extraEnv`, by its variable name.
 
 **SSO behind real hostnames.** `OIDC__REDIRECT_URI` is
-`https://<gateway host>/auth/sso/callback` and must be registered, identical, on the
-identity provider; `OIDC__POST_LOGIN_URL` is `https://<frontend host>/auth/callback`.
+`https://<host>/api/auth/sso/callback` and must be registered, identical, on the
+identity provider; `OIDC__POST_LOGIN_URL` is `https://<host>/auth/callback`.
 See [`docs/examples/keycloak/`](../examples/keycloak/).
 
 ## Frontend

@@ -105,7 +105,13 @@ async def _read_memory() -> MemoryOut:
 @router.get("/system/memory", response_model=MemoryOut)
 async def system_memory(user: User = Depends(get_current_user)) -> MemoryOut:
     """RAM dell'host in tempo reale (usata/disponibile). Serve l'autenticazione,
-    ma nessuna capability: è un indicatore di salute, non un dato di progetto."""
+    ma nessuna capability: è un indicatore di salute, non un dato di progetto.
+
+    Senza un node-exporter (MONITORING__NODE_EXPORTER_URL vuoto, come in una
+    installazione Kubernetes che non ne ha) il badge è spento: 404 subito, senza
+    tentare la chiamata né scrivere un avviso ogni volta che un browser chiede."""
+    if not get_settings().monitoring.node_exporter_url.strip():
+        raise HTTPException(status_code=404, detail="memory badge not configured")
     try:
         return await _read_memory()
     except Exception as e:  # node-exporter giù/irraggiungibile → l'UI nasconde il badge

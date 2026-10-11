@@ -1,8 +1,12 @@
 {{- if .Values.ingress.enabled }}
 {{/*
 One hostname serves both the UI and the API: the browser calls the gateway at
-the same origin, which keeps cookies and CORS simple. API prefixes are routed to
-the gateway, everything else to the frontend.
+the same origin, which keeps cookies and CORS simple. The gateway sits under one
+prefix (ingress.apiPrefix, /api), everything else goes to the frontend. The
+prefix is NOT stripped: the gateway knows it (APP__ROOT_PATH) and answers under
+it, so no controller-specific rewrite is needed. Routing the gateway's own paths
+instead (/flows, /runs, /auth…) cannot work: they are also pages of the
+frontend, and reloading one would show the API's JSON.
 
 Three settings matter more than the rest, and the defaults of most controllers
 get them wrong for this application:
@@ -37,16 +41,14 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- /* API prefixes first: longest-prefix routing sends these to the gateway */}}
-          {{- range $.Values.ingress.apiPaths }}
-          - path: {{ . }}
+          {{- /* the API first: longest-prefix routing sends it to the gateway */}}
+          - path: {{ required "ingress.apiPrefix is required, e.g. /api" $.Values.ingress.apiPrefix }}
             pathType: Prefix
             backend:
               service:
                 name: {{ include "tabularia.fullname" $ }}-gateway
                 port:
                   number: {{ $.Values.service.gatewayPort }}
-          {{- end }}
           {{- range .paths }}
           - path: {{ .path }}
             pathType: {{ .pathType }}

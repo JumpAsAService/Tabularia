@@ -13,6 +13,7 @@ from app.api.routes.sharepoint import router as sharepoint_router
 from app.api.routes.observability import router as observability_router
 from app.api.routes.dbt import router as dbt_router
 from app.api.routes.contracts import router as contracts_router
+from app.api.solo_dal_gateway import SoloDalGateway
 
 
 # la chiave Fernet è obbligatoria in ogni ambiente: senza, meglio non partire
@@ -50,6 +51,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Solo il gateway: tutto tranne /healthcheck e /metrics vuole il suo token
+app.add_middleware(SoloDalGateway)
 
 # Metriche Prometheus: request/latency automatiche + collector custom della cache,
 # esposte su GET /metrics (scrape-ate da VictoriaMetrics).

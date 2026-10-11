@@ -36,6 +36,7 @@ spec:
     spec:
       {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -48,8 +49,11 @@ spec:
             - name: http
               containerPort: 3000
           env:
+            # Relative by default: the browser calls the gateway on the host it
+            # loaded the page from, under ingress.apiPrefix. Set publicApiBase
+            # only to serve the API from another host.
             - name: NUXT_PUBLIC_API_BASE
-              value: {{ required "frontend.publicApiBase is required: it is the PUBLIC gateway URL the browser calls" .Values.frontend.publicApiBase | quote }}
+              value: {{ .Values.frontend.publicApiBase | default .Values.ingress.apiPrefix | quote }}
             - name: NUXT_PUBLIC_BUCKET
               value: {{ .Values.externalServices.storage.bucket | quote }}
             {{- with .Values.frontend.publicGrafanaUrl }}
