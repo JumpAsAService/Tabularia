@@ -4,7 +4,7 @@ Servizio pubblico che fa da unico ingresso all'applicazione. Possiede:
 
 - **Postgres** (metadati: utenti, gruppi, progetti/cartelle, permessi)
 - **Auth** JWT (login, `current_user`)
-- **RBAC** stile Tableau: permessi su progetti, ereditati lungo l'albero delle cartelle
+- **RBAC**: permessi su progetti, ereditati lungo l'albero delle cartelle
 - **Proxy** verso l'**engine** interno (Celery + Polars), che non è esposto pubblicamente
 
 ```

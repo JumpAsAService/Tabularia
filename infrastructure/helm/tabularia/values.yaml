@@ -161,8 +161,9 @@ secrets:
   # Encrypts database credentials stored in the metadata DB. MUST be the same
   # value for gateway, engine API and every worker, and MUST NOT change after
   # the first connection is saved — rotating it makes stored credentials
-  # undecryptable. Generate with:
-  #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  # undecryptable. Generate with either:
+  #   openssl rand -base64 32 | tr '+/' '-_'
+  #   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
   fernetKey: ""
 
   # Signs session tokens. Changing it logs everyone out immediately. A single

@@ -76,7 +76,9 @@ externalServices:
   storage:  { endpoint: https://s3.example.com, bucket: tabularia, region: eu-west-1 }
 
 secrets:
-  fernetKey: "<python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'>"
+  # fernetKey: openssl rand -base64 32 | tr '+/' '-_'
+  #        or: python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+  fernetKey: "<one of the two commands above>"
   jwtSecret: "<openssl rand -hex 32>"
   dbPassword: "…"
   storageAccessKey: "…"

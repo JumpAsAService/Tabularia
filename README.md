@@ -6,9 +6,9 @@
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/JumpAsAService)
 
-**Self-hosted, open-source visual data-preparation platform.** A Tableau Prep–style
-flow editor on pluggable engines: build a pipeline once, preview it on the whole
-dataset, and decide *later* where the compute runs.
+**Self-hosted, open-source visual data-preparation platform.** A visual flow editor
+on pluggable engines: build a pipeline once, preview it on the whole dataset, and
+decide *later* where the compute runs.
 
 **The same flow scales from a laptop to a warehouse without being rewritten.** Start
 with nothing installed but Docker: transformations stream through memory in-process,
@@ -56,8 +56,7 @@ engines, from an in-process library to a serverless warehouse.
 ## What you get
 
 - **Build pipelines visually — no code.** Drag transformations onto a canvas, connect
-  them, and preview the result at any step. Familiar to anyone who has used Tableau
-  Prep, Alteryx, or Knime.
+  them, and preview the result at any step.
 - **No sampling, ever — unless you ask for it.** Previews, profiles and charts run on
   the *whole* dataset through a streaming engine: what you see in the editor is what
   you ship. Where every read is billed, an optional development sample keeps the
@@ -640,9 +639,13 @@ Requires Docker and Docker Compose.
 git clone git@github.com:JumpAsAService/Tabularia.git
 cd Tabularia/infrastructure
 cp .env.example .env        # then edit: secrets, admin credentials, timezone
-# required in every environment: the key that encrypts DB-connection passwords
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-#   → paste it as SECURITY__FERNET_KEY in .env (compose refuses to start without it)
+# required in every environment: the key that encrypts DB-connection passwords.
+# Generate one and paste it as SECURITY__FERNET_KEY in .env (compose refuses to start without it):
+openssl rand -base64 32 | tr '+/' '-_'
+#   or with Python (standard library only, nothing to install):
+#   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+#   neither installed (e.g. Windows)? Docker alone is enough:
+#   docker run --rm python:3.12-alpine python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 docker compose up -d
 ```
 
@@ -754,10 +757,10 @@ Copyright © 2025–2026 Leonardo Trivelli.
 Licensed under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
 For commercial licensing options, contact the author.
 
-Tabularia is **not affiliated with, endorsed by, or sponsored by Salesforce, Inc.**
-"Tableau" and "Tableau Prep" are trademarks of Salesforce, Inc., referenced solely
-for comparison purposes. "BigQuery" and "Google Cloud" are trademarks of Google LLC;
-"ClickHouse" is a trademark of ClickHouse, Inc.
+"BigQuery" and "Google Cloud" are trademarks of Google LLC; "ClickHouse" is a
+trademark of ClickHouse, Inc. Other product and company names mentioned here are
+trademarks of their respective owners, named only to say what Tabularia works with;
+Tabularia is not affiliated with, endorsed by or sponsored by any of them.
 
 ### Third-party services
 
