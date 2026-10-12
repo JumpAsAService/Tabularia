@@ -486,6 +486,37 @@ const dbDsBusy = ref(false)
 const dbDsError = ref('')
 const usableConnections = ref<ConnectionInfo[]>([])
 
+// ── la riga intera apre ciò che nomina ──────────────────────────────────────
+// Il controllo vero resta il NOME (bottone o link): da tastiera e per uno screen
+// reader c'è un solo punto per riga, e i bottoni a destra restano a sé. Il clic
+// sul resto della riga fa la stessa cosa del nome, tranne quando cade su un altro
+// controllo o chiude una selezione di testo.
+const router = useRouter()
+function apribile(r: Row): boolean {
+  return r.kind === 'folder' || r.kind === 'connection' || !!r.to
+}
+function clicRiga(e: MouseEvent, r: Row) {
+  if (!apribile(r)) return
+  // la colonna delle azioni non apre: fra un bottone e l'altro un clic mancato
+  // non deve portare via dalla pagina
+  if ((e.target as HTMLElement | null)?.closest('button, a, input, select, textarea, label, [role="listbox"], [role="option"], .racts')) return
+  if (window.getSelection()?.toString()) return
+  const nuovaScheda = e.button === 1 || e.ctrlKey || e.metaKey || e.shiftKey
+  if (e.type === 'auxclick' && e.button !== 1) return
+  if (r.to) {
+    // come farebbe il link: Ctrl/Cmd/Maiusc o il clic centrale aprono altrove
+    if (nuovaScheda) {
+      e.preventDefault()
+      window.open(router.resolve(r.to).href, '_blank', 'noopener')
+    } else {
+      navigateTo(r.to)
+    }
+  } else if (e.type === 'click') {
+    if (r.kind === 'folder') openFolder(r.id)
+    else if (r.kind === 'connection') openConnDialog(r.raw)
+  }
+}
+
 function openConnDialog(conn: ConnectionInfo | null) {
   closeNew()
   editingConn.value = conn
@@ -672,9 +703,16 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     <table v-else class="rows">
       <tbody>
         <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
-          <tr :class="{ folderrow: r.kind === 'folder' }">
+          <tr
+            :class="{ folderrow: r.kind === 'folder', apribile: apribile(r) }"
+            @click="clicRiga($event, r)"
+            @auxclick="clicRiga($event, r)"
+          >
             <td class="rname">
               <button v-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id)">
+                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+              </button>
+              <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </button>
               <NuxtLink v-else-if="r.to" :to="r.to" class="asname">
@@ -954,9 +992,22 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
 /* ── lista unica ──────────────────────────────────────────────────────────── */
 /* niente linea sotto OGNI riga: separa l'hover, non un reticolo di hairline */
-table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.rows td { padding: 7px 8px; }
+/* `separate` e non `collapse`: con le celle collassate gli angoli arrotondati non
+   si disegnano, e la riga cliccabile deve leggersi come un bottone */
+table.rows { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+table.rows td { padding: 7px 8px; transition: background 0.12s; }
 table.rows tr:hover td { background: var(--row-hover); }
+table.rows tr > td:first-child { border-radius: 8px 0 0 8px; }
+table.rows tr > td:last-child { border-radius: 0 8px 8px 0; }
+/* la riga che apre qualcosa: si prende per intero, risponde al clic e al fuoco */
+table.rows tr.apribile { cursor: pointer; }
+table.rows tr.apribile:hover td,
+table.rows tr.apribile:has(.asname:focus-visible) td { background: var(--tint-accent); }
+table.rows tr.apribile:hover .asname,
+table.rows tr.apribile:has(.asname:focus-visible) .asname { color: var(--accent); }
+table.rows tr.apribile:active td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+/* i controlli dentro la riga tengono il loro puntatore */
+table.rows tr.apribile .racts { cursor: default; }
 tr.folderrow .kicon { color: var(--accent-2); }
 .kicon { color: var(--muted); flex-shrink: 0; }
 .rname { width: 55%; }

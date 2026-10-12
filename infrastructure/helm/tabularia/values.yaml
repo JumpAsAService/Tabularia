@@ -165,8 +165,8 @@ secrets:
   #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
   fernetKey: ""
 
-  # Signs session tokens. Changing it logs everyone out immediately, which is
-  # also the only way to invalidate a leaked token (see README → Known limits).
+  # Signs session tokens. Changing it logs everyone out immediately. A single
+  # session is closed from the Audit page instead.
   # At least 32 characters: the gateway refuses a shorter one. openssl rand -hex 32
   jwtSecret: ""
 
@@ -221,9 +221,30 @@ app:
 auth:
   adminEmail: admin@example.com
   adminName: Administrator
-  # Session lifetime. There is no per-session revocation: a leaked token stays
-  # valid for this long unless you disable the account or rotate JWT_SECRET.
+  # The longest a session lasts, in minutes. Sessions can be closed before:
+  # sign-out, the user's "Your sessions" dialog, an administrator on the Audit
+  # page, a password change, a disabled account.
   jwtAccessTtlMinutes: 720
+  # Minutes without activity after which a session closes; 0 = never. The open
+  # page signs out by itself after a one-minute warning, and the gateway refuses
+  # a session no request has used for that long.
+  sessionIdleMinutes: 0
+  # Domain of the session cookie. Empty = the gateway's host, right for the
+  # bundled ingress (UI and API on one host). If the UI and the API are on two
+  # hosts of one domain (app.example.com, api.example.com), set the shared domain,
+  # "example.com": the UI's server must see the cookie. Two unrelated domains do
+  # not work — the browser keeps the cookie to its own site.
+  cookieDomain: ""
+  # API tokens (docs/api.md): people may create their own unless false; service
+  # accounts always can, through an administrator. Every token expires.
+  personalTokens: true
+  apiTokenMaxDays: 365
+
+# Webhooks (Administration → Webhooks): call history kept for these days, and how
+# long a receiver may take to answer.
+webhooks:
+  retentionDays: 30
+  timeoutSeconds: 10
 
 # Optional single sign-on. With issuer empty, Tabularia keeps local email +
 # password login and the login page shows no SSO button.
@@ -267,6 +288,11 @@ engine:
   # alone does not allow longer runs — it only makes you wait longer to be told
   # the run died at the hard limit. To allow longer runs, raise both.
   runStaleTimeoutSeconds: 3900
+  # Administration → Settings changes some engine parameters without restarts
+  # (row group size, import read timeout, export cap, task time limits, caches;
+  # docs/engine-settings.md). The values here stay the starting point. false =
+  # only these values: the panel shows them and cannot change them.
+  settingsPanel: true
   # Ceiling on a preview. The engine API does not compute it: it submits the job
   # to the `preview` queue and waits this long for a worker to answer, then
   # revokes the task and returns 504. Keep the ingress read timeout above it.
@@ -488,7 +514,8 @@ frontend:
   replicaCount: 2
   # Read by the BROWSER. Empty = ingress.apiPrefix on the host the page came from,
   # which is what the bundled ingress serves. Set an absolute URL only to serve
-  # the API from another host (then list the UI's origin in app.corsOrigins).
+  # the API from another host of the same domain (then list the UI's origin in
+  # app.corsOrigins and set auth.cookieDomain).
   publicApiBase: ""
   publicGrafanaUrl: ""    # optional, powers the Monitoring tab iframe
   resources:

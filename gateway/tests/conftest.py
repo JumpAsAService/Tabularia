@@ -174,6 +174,13 @@ def make_user(session, **kw):
     return u
 
 
+def token_di(session, user, request=None, metodo="password"):
+    """Un token valido per `user`: apre una sessione vera, come fa il login."""
+    from app.services import sessions
+
+    return sessions.apri(session, user, request, metodo)[1]
+
+
 def make_project(session, **kw):
     kw.setdefault("name", "proj")
     p = Project(**kw)

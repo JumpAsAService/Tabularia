@@ -1,17 +1,16 @@
-// Protegge tutte le rotte: senza token → /login. Libere: /login e /auth/callback (SSO).
-// rotte raggiungibili SENZA token: la login e il ritorno dall'IdP (che il token
-// lo porta nel frammento dell'URL e lo salva proprio lì)
-const PUBLIC_PATHS = ['/login', '/auth/callback']
-
+// Protegge tutte le rotte: senza sessione → /login. Libere: /login e /auth/callback (SSO).
+// «Senza sessione» è quel che sa il client (useSessionPresent): il cookie è
+// HttpOnly, e se c'è ma non vale più lo dirà il primo 401.
 export default defineNuxtRouteMiddleware((to) => {
-  const token = useAuthToken()
+  const present = useSessionPresent()
+  // il ritorno dall'IdP: il cookie l'ha appena scritto il gateway
   if (to.path === '/auth/callback') return
   if (to.path === '/login') {
-    // già loggato? evita di rimanere sulla login
-    if (token.value) return navigateTo('/')
+    // già dentro? evita di rimanere sulla login
+    if (present.value) return navigateTo('/')
     return
   }
-  if (!token.value) {
+  if (!present.value) {
     return navigateTo('/login')
   }
 })

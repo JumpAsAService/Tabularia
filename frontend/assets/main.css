@@ -180,7 +180,59 @@
   color-scheme: dark;
 }
 
+/* ── Imperium (marmo e porpora: i colori di Roma, in chiave moderna) ─────────
+   Un tema CHIARO. Fondi di travertino e marmo, testo d'inchiostro; la porpora di
+   Tiro, il rosso-viola del laticlavio dei senatori e del manto imperiale, per
+   l'azione, il fuoco e la pagina attiva; l'oro come dettaglio (terzo colore dei
+   grafici); il rosso pompeiano per gli errori, l'alloro per i successi, l'ocra
+   bruciata per gli avvisi. La porpora sta verso il viola (tinta 335°) e il rosso
+   degli errori verso l'arancio (8°): un bottone primario non sembra mai un
+   errore. Niente texture né capitali «romane»: il carattere sta nei colori.
+   Contrasti misurati sul pannello (#fbf8f3) salvo dove indicato. */
+:root[data-theme="imperium"] {
+  --bg: #f2ece3;          /* travertino */
+  --bg-soft: #fdfbf7;
+  --panel: #fbf8f3;       /* marmo */
+  --panel-2: #efe7dc;
+  --border: #ddd1c2;
+  --border-soft: #e9e0d4;
+  --control-border: #8a7b70; /* 3,95:1 sul fondo dei campi, 3,85 sul pannello */
+  --text: #2a1c21;        /* inchiostro: 15,4:1 */
+  --muted: #6b5c56;       /* 5,2:1 anche su panel-2 */
+  --accent: #8a1c4a;      /* porpora di Tiro: 8,5:1, 7,6 sul fondo */
+  --accent-hi: #6c1539;   /* 9,5:1 su panel-2 (intestazioni della griglia) */
+  --accent-2: #4a6a26;    /* alloro: 5,1:1 su panel-2, bianco sopra 6,2 */
+  --on-accent-2: #ffffff;
+  --violet: #7a5a0e;      /* oro scurito per il chiaro: 5,2:1 su panel-2 */
+  --danger: #b5321e;      /* rosso pompeiano: 5,0:1 su panel-2 */
+  --warning: #a64a08;     /* ocra bruciata, lontana dall'oro: 4,75:1 su panel-2 */
+  --on-warning: #ffffff;  /* 5,8:1 */
+  --shadow-1: 0 1px 2px rgba(60, 30, 25, 0.08);
+  --shadow-2: 0 6px 20px rgba(60, 30, 25, 0.13);
+  /* porpora, dalla più accesa alla più cupa: bianco sopra, 7,7:1 e 11,1:1 */
+  --grad-accent: linear-gradient(135deg, #9a2352 0%, #6e1a40 100%);
+  --on-accent: #fff;
+  --danger-fill: #b5321e; /* bianco sopra: 6,1:1 */
+  --on-danger: #fff;
+  --enc-text-mix: 40%;    /* i colori di codifica nascono per lo scuro: peggior caso 4,8:1 */
+
+  --scrim: rgba(42, 28, 33, 0.35);
+  --topbar-bg: rgba(251, 248, 243, 0.9);
+  --row-even: rgba(90, 50, 40, 0.025);
+  --row-hover: rgba(138, 28, 74, 0.06);   /* la porpora passa sotto il puntatore */
+  --sheen: rgba(90, 50, 40, 0.02);
+  --edge: #c2b2a3;
+  --tint-accent: rgba(138, 28, 74, 0.09);
+  --shimmer: rgba(90, 50, 40, 0.06);
+  color-scheme: light;
+}
+
 * { box-sizing: border-box; }
+
+/* Le superfici che disegna il browser seguono il tema: la selezione del testo e
+   le caselle di spunta prendono l'accento invece del blu di sistema. */
+:root { accent-color: var(--accent); }
+::selection { background: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--text); }
 
 html, body, #__nuxt {
   margin: 0;
@@ -267,6 +319,7 @@ button:focus-visible {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 select, input[type="text"], input[type="email"], input[type="password"], input[type="number"],
+input[type="url"], input[type="search"], input[type="tel"],
 input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
   font: inherit;
   color: var(--text);
@@ -280,7 +333,8 @@ input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
 select:focus, input:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+  /* l'alone prende l'accento del tema (era il blu del tema scuro, in ogni tema) */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
 
@@ -427,18 +481,18 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 .panel-resizer:hover, .panel-resizer:active,
 .grid-resizer:hover, .grid-resizer:active {
-  background: rgba(79, 140, 255, 0.35);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 /* con la tastiera la maniglia si vede: senza, si sposterebbe qualcosa di
    invisibile (le frecce la muovono, Shift la muove di dieci passi) */
 .panel-resizer:focus-visible, .grid-resizer:focus-visible {
-  background: rgba(79, 140, 255, 0.55);
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
   outline: none;
 }
 .canvas {
   position: relative;
   background:
-    radial-gradient(1200px 600px at 30% 0%, rgba(79, 140, 255, 0.05), transparent 60%),
+    radial-gradient(1200px 600px at 30% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 60%),
     var(--bg);
 }
 
@@ -458,7 +512,7 @@ optgroup { font-style: normal; color: var(--muted); }
 .node:hover { box-shadow: var(--shadow-2); }
 .vue-flow__node.selected .node {
   border-color: var(--node-accent);
-  box-shadow: 0 0 0 1px var(--node-accent), 0 4px 20px rgba(79, 140, 255, 0.25);
+  box-shadow: 0 0 0 1px var(--node-accent), 0 4px 20px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .node-title {
   padding: 7px 10px;

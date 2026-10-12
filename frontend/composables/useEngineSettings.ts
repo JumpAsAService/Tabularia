@@ -1,0 +1,53 @@
+// Impostazioni del motore (Amministrazione → Impostazioni): i parametri che il
+// motore legge quando servono, cambiati dal pannello senza riavvii. Quali sono e
+// con che limiti lo dice il motore; il gateway li conserva e li fa applicare.
+
+export type SettingUnit = 'rows' | 'seconds' | 'bytes' | 'threads'
+export type SettingCategory = 'import' | 'export' | 'execution' | 'cache' | 'clickhouse' | 'bigquery'
+
+export interface EngineSetting {
+  key: string // "<sezione>.<campo>", es. "ingest.parquet_row_group_rows"
+  category: SettingCategory
+  unit: SettingUnit
+  min: number
+  max: number
+  env_var: string // la variabile d'ambiente: il valore di partenza
+  env_value: number
+  value: number | null // dal pannello; null = vale l'ambiente
+  applied: number | null // quello che il motore sta applicando adesso
+  updated_at: string | null
+  updated_by: string | null
+}
+
+export interface EngineSettings {
+  items: EngineSetting[]
+  editable: boolean
+  panel_enabled: boolean // ENGINE__SETTINGS_PANEL
+  unavailable: SettingCategory[] // motori che questa installazione non ha
+  refresh_seconds: number
+}
+
+// un rifiuto del motore: un codice, la frase la scrive il pannello nella lingua di chi guarda
+export interface SettingError {
+  key: string
+  code: 'unknown' | 'integer' | 'min' | 'max' | 'below' | 'above'
+  limit?: number
+  other?: string
+}
+
+export const SETTING_CATEGORIES: SettingCategory[] = ['import', 'export', 'execution', 'cache', 'clickhouse', 'bigquery']
+
+// la chiave nelle traduzioni: vue-i18n legge i punti come un percorso
+export const settingI18nKey = (key: string) => key.replace(/\./g, '_')
+
+export const GIB = 1024 ** 3
+
+export function useEngineSettings() {
+  const { apiFetch } = useApiClient()
+  return {
+    get: () => apiFetch<EngineSettings>('/admin/engine-settings'),
+    // solo quelle che cambiano: un numero imposta, null torna al valore dell'ambiente
+    save: (values: Record<string, number | null>) =>
+      apiFetch<EngineSettings>('/admin/engine-settings', { method: 'PUT', body: { values } }),
+  }
+}

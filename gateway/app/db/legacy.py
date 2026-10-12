@@ -11,6 +11,9 @@ Un database così ha le tabelle ma non `alembic_version`. Per portarlo in Alembi
 3. lo si marca alla revisione di base (0001) e lo si confronta con i modelli.
 Non va mai modificato: le modifiche allo schema da qui in poi sono revisioni Alembic
 (gateway/migrations/versions)."""
+import re
+from pathlib import Path
+
 from sqlalchemy import text
 
 from app.models.run import LIVE_ORCHESTRATION, ORCHESTRATION_INTERRUPTED
@@ -141,6 +144,12 @@ RIALLINEO = [
 ]
 
 
+def _tabelle_della_base() -> set[str]:
+    """Le tabelle che crea la revisione di base, lette dal suo file (che non cambia più)."""
+    base = Path(__file__).parent / "migrations" / "versions" / "0001_baseline.py"
+    return set(re.findall(r"op\.create_table\('(\w+)'", base.read_text()))
+
+
 def adotta(conn) -> None:
     """Porta un database di prima di Alembic allo stato della revisione di base.
     `conn` è una connessione in una transazione: tutto o niente."""
@@ -149,6 +158,16 @@ def adotta(conn) -> None:
     import app.models  # noqa: F401 — registra i modelli
 
     conn.execute(text("SET LOCAL lock_timeout = '10s'"))
-    SQLModel.metadata.create_all(conn)          # le tabelle nate dopo l'ultimo avvio, se mancano
+    # le tabelle nate dopo l'ultimo avvio, se mancano: SOLO quelle della base. Le
+    # tabelle delle revisioni successive le crea la loro revisione, subito dopo;
+    # create_all su tutti i modelli le avrebbe create prima, e la revisione si
+    # sarebbe fermata trovandole già lì (successo con 0002, la tabella delle sessioni).
+    # Limite che resta: una tabella della base che MANCA si crea dai modelli di oggi,
+    # con le colonne aggiunte dalle revisioni successive. Oggi l'unica tabella della
+    # base che una revisione cambia è `users` (0003), che un database da adottare ha
+    # sempre; una revisione futura che cambi un'altra tabella della base va provata
+    # con l'adozione di un database a cui quella tabella manca
+    base = _tabelle_della_base()
+    SQLModel.metadata.create_all(conn, tables=[t for t in SQLModel.metadata.sorted_tables if t.name in base])
     for istruzione in ALTER_PRIMA_DI_ALEMBIC + RIALLINEO:
         conn.execute(text(istruzione))

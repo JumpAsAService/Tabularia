@@ -1,30 +1,27 @@
 <script setup lang="ts">
-// Atterraggio del login SSO. Il gateway rimanda qui col token nel FRAMMENTO
-// dell'URL (#token=…): il frammento non viaggia verso nessun server, quindi il
-// token non finisce nei log di accesso né nell'header Referer. Qui lo si sposta
-// nel cookie di sessione (lo stesso del login locale) e si ripulisce subito la
-// barra degli indirizzi.
+// Atterraggio del login SSO. Il gateway rimanda qui DOPO aver scritto il cookie
+// della sessione (HttpOnly, lo stesso del login locale): il token non passa né
+// dall'URL né dal JavaScript, qui si chiede solo «chi sono?». Un errore arriva
+// invece nel FRAMMENTO dell'URL (#error=<codice>), che si ripulisce subito.
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { KeyRound } from 'lucide-vue-next'
 
-const { adoptToken } = useAuth()
+const { completeSso } = useAuth()
 const { t } = useI18n()
 const error = ref('')
 
 onMounted(async () => {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-  const token = params.get('token')
-  const code = params.get('error')
+  const code = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('error')
   // via il frammento dalla cronologia prima di qualsiasi altra cosa
   history.replaceState(null, '', window.location.pathname)
 
-  if (!token) {
-    await navigateTo(`/login?sso_error=${encodeURIComponent(code || 'sso_failed')}`)
+  if (code) {
+    await navigateTo(`/login?sso_error=${encodeURIComponent(code)}`)
     return
   }
   try {
-    const me = await adoptToken(token)
+    const me = await completeSso()
     if (!me) throw new Error('me')
     await navigateTo('/')
   } catch {

@@ -98,6 +98,7 @@ class FakeRedis:
     def delete(self, *keys):
         for k in keys:
             self.sets.pop(k, None)
+            getattr(self, "strings", {}).pop(k, None)
             self.zsets.pop(k, None)
             self.counters.pop(k, None)
             getattr(self, "strings", {}).pop(k, None)

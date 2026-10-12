@@ -44,7 +44,31 @@ class Firefox:
         return risposta[3]
 
     def vai(self, url):
+        # Il vecchio modo di entrare, il token nel frammento della pagina di ritorno
+        # dall'SSO, non c'è più (la sessione è un cookie HttpOnly che scrive il
+        # gateway): si traduce in `entra`, così le prove scritte prima funzionano.
+        if "/auth/callback#token=" in url:
+            base, token = url.split("/auth/callback#token=", 1)
+            self.entra(base, token)
+            url = base + "/"
         self.invia("WebDriver:Navigate", {"url": url})
+
+    def entra(self, base, token):
+        """Apre in questo browser la sessione di `token` come la apre il gateway
+        all'accesso: il cookie HttpOnly `tab_token` sul sito dell'interfaccia."""
+        qui = self.invia("WebDriver:GetCurrentURL", {})
+        if not (qui["value"] if isinstance(qui, dict) else qui).startswith(base):
+            self.invia("WebDriver:Navigate", {"url": f"{base}/favicon.svg"})
+        self.invia("WebDriver:AddCookie", {"cookie": {
+            "name": "tab_token", "value": token, "path": "/", "httpOnly": True, "sameSite": "Lax"}})
+
+    def cookie_sessione(self):
+        """Il valore del cookie della sessione (il JavaScript della pagina non lo vede)."""
+        risposta = self.invia("WebDriver:GetCookies", {})
+        for c in risposta["value"] if isinstance(risposta, dict) else risposta:
+            if c["name"] == "tab_token":
+                return c["value"]
+        return None
 
     def js(self, script):
         return self.invia("WebDriver:ExecuteScript", {"script": script, "args": []})["value"]

@@ -2,7 +2,11 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -13,9 +17,17 @@ from app.db.seed import seed_admin
 from app.services.orchestrator import coda_loop
 from app.services.scheduler import scheduler_loop
 from app.services.audit_retention import retention_loop
+from app.services.webhooks import consegna_loop as webhooks_loop
+from app.services.regolazioni_motore import spingi_loop as regolazioni_loop
+from app.services.siem import inoltro_loop as siem_loop
 from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
+from app.routes.api_tokens import router as api_tokens_router
+from app.routes.service_accounts import router as service_accounts_router
+from app.routes.webhooks import router as webhooks_router
+from app.routes.engine_settings import router as engine_settings_router
+from app.routes.siem import router as siem_router
 from app.routes.groups import router as groups_router
 from app.routes.banners import router as banners_router
 from app.routes.privacy import router as privacy_router
@@ -54,6 +66,13 @@ def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
         asyncio.create_task(coda_loop(stop)),
         # scadenza del registro delle azioni: parte solo se è configurata
         asyncio.create_task(retention_loop(stop)),
+        # le consegne dei webhook, ogni paio di secondi (services/webhooks.py)
+        asyncio.create_task(webhooks_loop(stop)),
+        # le impostazioni del motore dal pannello, rispedite al motore ogni minuto:
+        # se Valkey si svuota o il motore riparte, tornano da sole
+        asyncio.create_task(regolazioni_loop(stop)),
+        # il registro di audit verso il SIEM (Splunk), ogni pochi secondi, se acceso
+        asyncio.create_task(siem_loop(stop)),
     ]
 
 
@@ -101,9 +120,30 @@ from app.routes import performance as performance_routes
 
 logger = logging.getLogger(__name__)
 
+# La pagina /docs è la documentazione per chi integra: in inglese, come docs/api.md
+_DESCRIZIONE_API = (
+    "The Tabularia API: everything the interface does goes through it.\n\n"
+    "**Sign in** with an API token in the header `Authorization: Bearer tab_…` "
+    "(Settings → API tokens, or a service account under Administration). Read-only "
+    "tokens refuse every request that changes something.\n\n"
+    "**Stable** for integrations: `auth/me`, `projects`, `flows`, `flows/{id}/run-now`, "
+    "`runs`, `datasources`, `datasources/{id}/refresh`, `tasks/export`, `lineage`, and the "
+    "webhooks. The rest may change between minor versions. The guide, with recipes and "
+    "webhook signature checks, is docs/api.md in the repository."
+)
+_GRUPPI = [
+    {"name": "auth", "description": "Sign-in, the current account, sessions."},
+    {"name": "api-tokens", "description": "API tokens: your own, and every token for administrators."},
+    {"name": "service-accounts", "description": "Integrations that sign in only with a token (administrators)."},
+    {"name": "webhooks", "description": "Calls Tabularia makes when a flow or a refresh finishes (administrators)."},
+    {"name": "settings", "description": "Engine settings changed from the administration panel, without restarts (administrators)."},
+    {"name": "siem", "description": "Forwarding of the audit log to a SIEM: Splunk HTTP Event Collector (administrators)."},
+]
+
 app = FastAPI(
     title=f"{settings.app.name} — Gateway",
-    description="Control plane: auth, utenti/gruppi, progetti/permessi, proxy verso l'engine",
+    description=_DESCRIZIONE_API,
+    openapi_tags=_GRUPPI,
     version=settings.app.version,
     lifespan=lifespan,
     # dietro un proxy che toglie un prefisso: /docs e lo schema lo riportano,
@@ -120,6 +160,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.exception_handler(RequestValidationError)
+async def _richiesta_non_valida(request: Request, exc: RequestValidationError):
+    """Il 422 di FastAPI, tranne quando il valore rifiutato non si scrive in JSON:
+    `NaN` e `Infinity` li accetta il parser, e rimandarli indietro nell'errore
+    faceva un 500 (anche sul login, senza essere entrati). Lì l'errore dice dove e
+    perché, senza ripetere il valore."""
+    try:
+        return await request_validation_exception_handler(request, exc)
+    except ValueError:
+        errori = [{k: v for k, v in e.items() if k not in ("input", "ctx")} for e in exc.errors()]
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errori)})
+
+
 @app.get("/health", include_in_schema=False)
 def health():
     """Liveness: l'app sta servendo. Usato dall'healthcheck del container per
@@ -134,6 +187,11 @@ if settings.app.role != "orchestrator":
     app.include_router(auth_router)
     app.include_router(sso_router)
     app.include_router(users_router)
+    app.include_router(api_tokens_router)
+    app.include_router(service_accounts_router)
+    app.include_router(webhooks_router)
+    app.include_router(engine_settings_router)
+    app.include_router(siem_router)
     app.include_router(groups_router)
     app.include_router(banners_router)
     app.include_router(privacy_router)

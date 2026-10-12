@@ -52,7 +52,7 @@ export default defineNuxtConfig({
       script: [
         {
           innerHTML:
-            "try{var t=localStorage.getItem('tabularia-theme');if(t&&['light','dracula','monokai'].indexOf(t)>=0)document.documentElement.setAttribute('data-theme',t)}catch(e){}",
+            "try{var t=localStorage.getItem('tabularia-theme');if(t&&['light','dracula','monokai','imperium'].indexOf(t)>=0)document.documentElement.setAttribute('data-theme',t)}catch(e){}",
           tagPosition: 'head',
         },
       ],

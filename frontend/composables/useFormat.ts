@@ -22,6 +22,14 @@ function dateFormat(locale: string, opts: Intl.DateTimeFormatOptions): Intl.Date
   return f
 }
 
+const relativeCache = new Map<string, Intl.RelativeTimeFormat>()
+
+function relativeFormat(locale: string): Intl.RelativeTimeFormat {
+  let f = relativeCache.get(locale)
+  if (!f) relativeCache.set(locale, (f = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })))
+  return f
+}
+
 function toDate(v: string | number | Date): Date | null {
   const d = v instanceof Date ? v : new Date(v)
   return Number.isNaN(d.getTime()) ? null : d
@@ -61,6 +69,20 @@ export function useFormat() {
     return dateFormat(locale.value, o).format(d)
   }
 
+  /** Quanto tempo fa, nella lingua dell'interfaccia: «now», «5 minutes ago»,
+   *  «3 ore fa», «yesterday». Oltre la settimana, la data. */
+  function ago(v: string | number | Date | null | undefined): string {
+    const d = v == null ? null : toDate(v)
+    if (!d) return '—'
+    const s = Math.round((d.getTime() - Date.now()) / 1000)
+    const f = relativeFormat(locale.value)
+    if (Math.abs(s) < 60) return f.format(0, 'second')
+    if (Math.abs(s) < 3600) return f.format(Math.round(s / 60), 'minute')
+    if (Math.abs(s) < 86400) return f.format(Math.round(s / 3600), 'hour')
+    if (Math.abs(s) < 7 * 86400) return f.format(Math.round(s / 86400), 'day')
+    return dateTime(d)
+  }
+
   /** Il formatter di una colonna numerica di una griglia dati: stessi decimali su
    *  tutta la colonna (il massimo visto, fino a 4) e interi SENZA separatore delle
    *  migliaia — un codice o un periodo AAAAMM raggruppato («202.607») si legge
@@ -82,5 +104,5 @@ export function useFormat() {
     return (v) => (typeof v === 'number' ? f.format(v) : v == null ? '' : String(v))
   }
 
-  return { count, number, dateTime, date, columnFormatter, locale }
+  return { count, number, dateTime, date, ago, columnFormatter, locale }
 }

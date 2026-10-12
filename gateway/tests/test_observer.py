@@ -132,18 +132,17 @@ def test_the_audit_keeps_what_happened_and_drops_who(session):
 
 
 def test_the_active_sessions_hide_the_addresses(session):
-    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from app.services import sessions
 
     ospite = _osservatore(session)
     u = make_user(session, email="bruno@esempio.it")
-    u.last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    u.last_seen_ip = "203.0.113.9"
-    session.add(u)
-    session.commit()
+    sessions.apri(session, u, _Finta(), "password")
 
-    righe = audit_routes.active_sessions(session=session, chi_chiede=ospite)
+    righe = audit_routes.active_sessions(request=SimpleNamespace(), limit=100, session=session, chi_chiede=ospite).items
     mia = next(r for r in righe if r.user_id == u.id)
-    assert mia.email == "b***@esempio.it" and mia.last_seen_ip is None
+    assert mia.email == "b***@esempio.it" and mia.ip is None and mia.user_agent is None
     assert mia.online is True  # lo STATO resta visibile
 
 
@@ -322,11 +321,15 @@ def test_last_seen_keeps_the_moment_and_drops_the_address(session):
     """Le «sessioni attive» devono dire CHE c'è qualcuno collegato, non da dove."""
     from app.deps.auth import _touch_last_seen
 
+    from app.services import sessions
+
     ospite = _osservatore(session, email="ospite-seen@x.it")
-    _touch_last_seen(session, ospite, _Finta())
+    aperta = sessions.apri(session, ospite, _Finta(), "password")[0]
+    _touch_last_seen(session, ospite, aperta, _Finta())
     session.refresh(ospite)
+    session.refresh(aperta)
     assert ospite.last_seen_at is not None
-    assert ospite.last_seen_ip is None
+    assert ospite.last_seen_ip is None and aperta.ip is None and aperta.user_agent is None
 
 
 def test_an_address_collected_before_the_role_is_erased(session):
@@ -334,18 +337,24 @@ def test_an_address_collected_before_the_role_is_erased(session):
     altrimenti resterebbe lì per sempre."""
     from app.deps.auth import _touch_last_seen
 
+    from app.services import sessions
+
     u = make_user(session, email="prima-poi@x.it")
-    _touch_last_seen(session, u, _Finta())
+    aperta = sessions.apri(session, u, _Finta(), "password")[0]
+    _touch_last_seen(session, u, aperta, _Finta())
     session.refresh(u)
-    assert u.last_seen_ip == "203.0.113.77"
+    session.refresh(aperta)
+    # l'indirizzo sta nella sessione, non più sull'utente
+    assert aperta.ip == "203.0.113.77" and u.last_seen_ip is None
 
     u.is_observer = True
     u.last_seen_at = None          # scavalca il freno del throttle
     session.add(u)
     session.commit()
-    _touch_last_seen(session, u, _Finta())
+    _touch_last_seen(session, u, aperta, _Finta())
     session.refresh(u)
-    assert u.last_seen_ip is None
+    session.refresh(aperta)
+    assert u.last_seen_ip is None and aperta.ip is None and aperta.user_agent is None
 
 
 def test_a_failed_login_still_records_the_address(session):

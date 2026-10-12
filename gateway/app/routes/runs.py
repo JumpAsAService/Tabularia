@@ -31,7 +31,7 @@ from app.models.run import TERMINAL_STATES
 from app.routes.connections import allowed_email_domains, engine_connection_payload
 from app.services import audit
 from app.services import contracts as contract_service
-from app.services import openlineage
+from app.services import openlineage, webhooks
 from app.schemas.models import (
     ActivityBucket,
     Page,
@@ -726,6 +726,9 @@ async def close_if_queued_too_long(session: Session, run: Run) -> Run:
         .where(Run.id == run.id, Run.status == "PENDING")
         .values(status="FAILURE", error=QUEUE_TIMED_OUT, finished_at=datetime.now(timezone.utc))
     )
+    if chiusa.rowcount == 1:
+        session.refresh(run)
+        webhooks.accoda_per_run(session, run)  # nella stessa transazione della chiusura
     session.commit()
     session.refresh(run)
     if chiusa.rowcount == 1:
@@ -867,6 +870,10 @@ async def _reconcile(session: Session, run: Run) -> Run:
             ):
                 _publish_datasource(session, run, result)
                 _record_contract(session, run, contract_report, "publish")
+            # le consegne dei webhook nascono nella stessa transazione: chiuso il
+            # run, l'avviso c'è (riletto qui per avere stato e fine nuovi)
+            session.refresh(run)
+            webhooks.accoda_per_run(session, run)
             session.commit()  # claim + effetto: atomici
             session.refresh(run)
             openlineage.run_closed(session, run)  # dopo il commit: racconta un fatto già scritto

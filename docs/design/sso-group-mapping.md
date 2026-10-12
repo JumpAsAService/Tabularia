@@ -45,9 +45,10 @@ Because RBAC only reads `user_groups`, the mapping problem reduces to **keeping
 
 ## Design principles
 
-1. **Keep the internal JWT.** After validating the IdP token, issue the *existing*
-   Tabularia JWT via `create_access_token(user.id)`. `get_current_user`, RBAC, and
-   audit stay byte-for-byte the same. This is the smallest-blast-radius choice.
+1. **Keep the internal session.** After validating the IdP token, open the *same*
+   Tabularia session a local sign-in opens (`sessions.apri`, method `sso`).
+   `get_current_user`, RBAC, and audit stay byte-for-byte the same. This is the
+   smallest-blast-radius choice.
 2. **Groups map by name.** An IdP claim `groups: ["analytics", "finance"]` maps 1:1
    onto `Group.name`. No IDs, no external coupling in the RBAC layer.
 3. **JIT provisioning.** Create the `User` on first SSO login from the token's `email`
@@ -71,9 +72,9 @@ Browser                Gateway                         IdP (Keycloak/Entra)
    │                      │  validate (JWKS, iss, aud, nonce) │
    │                      │  JIT-provision user               │
    │                      │  sync user_groups from claim      │
-   │                      │  issue INTERNAL JWT               │
-   │<─── internal JWT (same as local login) ──────────────────┤
-   │  ... every later request unchanged (Bearer internal JWT) │
+   │                      │  open INTERNAL session            │
+   │<─── session cookie (same as local login) ────────────────┤
+   │  ... every later request unchanged (HttpOnly cookie)     │
 ```
 
 ## The two seams
@@ -91,10 +92,12 @@ the button; it exposes only `enabled` and the label, never issuer or client id.
 Only asymmetric signatures are accepted (`RS*`, `PS*`, `ES*`): never `none`, never
 `HS*` with the client secret as key.
 
-The internal token reaches the browser through the URL **fragment**
-(`OIDC__POST_LOGIN_URL#token=…`), which browsers never send to a server: it stays out
-of access logs and `Referer`. The landing page moves it into the session cookie and
-clears the address bar immediately.
+The internal session reaches the browser as the same `HttpOnly` cookie a local sign-in
+gets, written on the redirect to `OIDC__POST_LOGIN_URL`: the token never appears in a
+URL nor in JavaScript, and the landing page only asks who signed in. (Earlier
+versions carried the token in the URL **fragment**, `#token=…`.) Errors still come back
+in the fragment, as `#error=<code>`, which holds no secret; the landing page clears
+the address bar immediately.
 
 ### 2. Group sync — one reconcile function
 On successful validation, `provision_and_sync()` reconciles membership from the token's
@@ -184,8 +187,9 @@ The gateway self-configures from `${OIDC__ISSUER}/.well-known/openid-configurati
   (cache + rotate), and check `iss`, `aud` (= client_id), `exp`, and the `nonce` bound
   to the login request. Reject unsigned/`alg:none`.
 - **CSRF on the callback.** Bind and verify `state`; use PKCE for the code flow.
-- **Session lifetime.** The internal JWT TTL (`JWT__ACCESS_TTL_MINUTES`, 12h) governs
-  the Tabularia session; group changes at the IdP take effect on the next SSO login.
+- **Session lifetime.** The Tabularia session lasts at most `JWT__ACCESS_TTL_MINUTES`
+  (12h), less with an idle timeout (`AUTH__SESSION_IDLE_MINUTES`); group changes at the
+  IdP take effect on the next SSO login.
   For faster deprovisioning, shorten the TTL or re-sync on a schedule.
 - **Deprovisioning.** With `AUTHORITATIVE=true`, dropping a user from an IdP group
   removes the corresponding Tabularia access at next login; disabling the user at the
@@ -212,9 +216,9 @@ OIDC front door was the work.
 - **One IdP per deployment.** Multiple simultaneous providers would need `users.idp` to
   disambiguate identities; email is the stable key today.
 - **No SCIM / background sync.** Membership is reconciled at login. A user removed from
-  an IdP group keeps their Tabularia access until the internal JWT expires
-  (`JWT__ACCESS_TTL_MINUTES`, 12h by default) and they sign in again. Shorten the TTL
-  where faster deprovisioning matters.
+  an IdP group keeps their Tabularia access until their session ends
+  (`JWT__ACCESS_TTL_MINUTES`, 12h by default, or the idle timeout) and they sign in
+  again — or at once, if an administrator closes their sessions from the Audit page.
 - **No single logout.** Signing out of Tabularia drops the local session; the IdP
   session is untouched.
 - **Group auto-creation is off by default.** Mapping onto admin-curated groups keeps

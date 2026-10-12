@@ -72,6 +72,17 @@ class MatViewStore:
         self.redis = redis_client
         self.cfg = cfg
 
+    # soglia e durata delle copie si regolano dal pannello (core/regolazioni.py)
+    @property
+    def cfg(self):
+        from app.core import regolazioni
+
+        return regolazioni.sovrapposte(self._cfg, "clickhouse_external")
+
+    @cfg.setter
+    def cfg(self, valore) -> None:
+        self._cfg = valore
+
     # ── identità ────────────────────────────────────────────────────────────
     @staticmethod
     def _sid(source, sort_keys=None) -> str:

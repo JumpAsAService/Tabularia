@@ -21,6 +21,20 @@ import os
 BUCKET = os.getenv("TEST_BUCKET") or "data-prep"
 
 
+@pytest.fixture(autouse=True)
+def regolazioni_isolate(monkeypatch):
+    """Ogni test parte senza regolazioni dal pannello, su un Valkey finto tutto suo:
+    quelle messe sul Valkey di sviluppo cambierebbero i risultati (un row group o
+    un tetto diversi). Chi le prova le scrive qui (`regolazioni.scrivi`)."""
+    from app.core import regolazioni
+
+    finto = FakeRedis()
+    monkeypatch.setattr(regolazioni, "_client", lambda: finto)
+    regolazioni.dimentica()
+    yield finto
+    regolazioni.dimentica()
+
+
 @pytest.fixture
 def storage() -> FakeStorage:
     return FakeStorage()

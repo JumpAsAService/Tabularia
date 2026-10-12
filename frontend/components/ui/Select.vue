@@ -271,7 +271,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .sel-trigger:hover { border-color: var(--accent); box-shadow: none; transform: none; }
-.sel-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18); }
+.sel-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .sel-trigger.disabled { opacity: 0.45; cursor: not-allowed; }
 .sel-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sel-label.ph { color: var(--muted); }

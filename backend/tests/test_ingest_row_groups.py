@@ -74,3 +74,20 @@ def test_the_last_partial_block_is_not_lost(monkeypatch):
 def test_the_default_is_a_million_rows():
     from app.core.config import Settings
     assert Settings().ingest.parquet_row_group_rows == 1_000_000
+
+
+
+def test_a_batch_bigger_than_the_threshold_is_split(monkeypatch):
+    """Postgres consegna anche decine di migliaia di righe in un batch: con la soglia
+    sotto (dal pannello, 10.000) usciva UN row group solo (trovato sul prodtest:
+    25.000 righe, 1 blocco)."""
+    md = _scrivi(monkeypatch, n_righe=250, batch_rows=250, soglia=100)
+    assert md.num_rows == 250
+    assert [md.row_group(i).num_rows for i in range(md.num_row_groups)] == [100, 100, 50]
+
+
+def test_no_tiny_row_group_after_each_block(monkeypatch):
+    """Batch da 30 e soglia 100: il blocco si chiude a 120 righe. Si scrivono 100 e
+    le 20 passano al blocco dopo, invece di un row group da 20 ogni volta."""
+    md = _scrivi(monkeypatch, n_righe=450, batch_rows=30, soglia=100)
+    assert [md.row_group(i).num_rows for i in range(md.num_row_groups)] == [100, 100, 100, 100, 50]

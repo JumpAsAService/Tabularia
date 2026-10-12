@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 
 
 # header hop-by-hop da non ritrasmettere
-_SKIP_REQUEST_HEADERS = {"host", "content-length", "authorization", "connection"}
+# `authorization` e `cookie` portano la sessione dell'utente: all'engine non servono
+# (si fida del gateway col token interno) e non devono arrivarci
+_SKIP_REQUEST_HEADERS = {"host", "content-length", "authorization", "cookie", "x-tabularia-csrf", "connection"}
 # header di risposta da passare al browser (content-disposition = nome file download)
 _PASS_RESPONSE_HEADERS = {"content-type", "content-disposition", "content-length"}
 
@@ -166,9 +168,15 @@ async def _read_json(request: Request) -> tuple[bytes, Any]:
         chunks.append(chunk)
     raw = b"".join(chunks)
     try:
-        return raw, (json.loads(raw) if raw else {})
-    except json.JSONDecodeError:
+        # NaN e Infinity: il parser di Python li accetta, l'engine poi non li sa
+        # riscrivere e rispondeva 500. Non sono JSON: si fermano qui
+        return raw, (json.loads(raw, parse_constant=_non_json) if raw else {})
+    except ValueError:  # JSONDecodeError compreso
         raise HTTPException(status_code=422, detail="Il body non è JSON valido")
+
+
+def _non_json(costante: str):
+    raise ValueError(f"{costante} non è un valore JSON")
 
 
 # ── Rotte dati inoltrate all'engine ───────────────────────────────────────────

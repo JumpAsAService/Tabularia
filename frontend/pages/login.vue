@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LogIn, KeyRound, Eye, EyeOff, CircleAlert, ArrowUp } from 'lucide-vue-next'
+import { LogIn, KeyRound, Eye, EyeOff, CircleAlert, ArrowUp, Clock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useLocale } from '~/composables/useLocale'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
@@ -18,6 +18,8 @@ const email = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
+// perché si è qui senza averlo chiesto (?reason=idle: uscita per inattività)
+const notice = ref('')
 const showPassword = ref(false)
 const capsLock = ref(false)
 
@@ -49,8 +51,10 @@ const sso = ref<{ enabled: boolean; button_label: string }>({ enabled: false, bu
 onMounted(async () => {
   sso.value = await ssoConfig()
   // il callback SSO rimanda qui con ?sso_error=<codice> se qualcosa è andato storto
-  const code = new URLSearchParams(window.location.search).get('sso_error')
+  const query = new URLSearchParams(window.location.search)
+  const code = query.get('sso_error')
   if (code) error.value = t('login.ssoError', { code })
+  if (query.get('reason') === 'idle') notice.value = t('login.signedOutIdle')
 })
 
 // una password sbagliata per il Blocco Maiuscole è l'errore più frequente e il
@@ -133,6 +137,7 @@ async function onSubmit() {
       </div>
 
       <p v-if="error" class="err" role="alert"><CircleAlert :size="15" /> <span>{{ error }}</span></p>
+      <p v-else-if="notice" class="err note" role="status"><Clock :size="15" /> <span>{{ notice }}</span></p>
 
       <button class="primary submit" type="submit" :disabled="busy">
         <span v-if="busy" class="spin" aria-hidden="true" /><LogIn v-else :size="15" />
@@ -259,6 +264,9 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
   line-height: 1.4;
 }
 .err svg { flex: none; margin-top: 1px; color: var(--danger); }
+/* un avviso, non un errore: stessa forma, colori quieti */
+.err.note { background: var(--panel-2); color: var(--text); }
+.err.note svg { color: var(--muted); }
 
 .submit, .sso {
   display: inline-flex;

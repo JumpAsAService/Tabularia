@@ -633,7 +633,7 @@ onMounted(async () => {
 .result { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .rtabs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .rtabs button { padding: 5px 10px; }
-.rtabs button.active { border-color: var(--accent); background: rgba(79, 140, 255, 0.12); }
+.rtabs button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .rtabs .apply { margin-left: 8px; }
 .rmeta { margin-left: auto; font-size: 12px; }
 .expbtns { display: flex; gap: 4px; }

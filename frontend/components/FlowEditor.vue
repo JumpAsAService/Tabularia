@@ -496,7 +496,11 @@ async function salvaEdEsci() {
   await saveFlow()
   rispondiUscita(!dirty.value) // se il salvataggio non è riuscito si resta, col messaggio in vista
 }
-onBeforeRouteLeave(() => (uscitaConfermata ? true : chiediUscita()))
+// un'uscita voluta dall'account (per inattività) non chiede delle modifiche: la
+// sessione è già chiusa, e il dialogo resterebbe appeso su un salvataggio che
+// risponde 401. Una sessione persa per altro (scaduta, revocata) chiede ancora.
+const uscitaVoluta = useLeaving()
+onBeforeRouteLeave(() => (uscitaConfermata || uscitaVoluta.value ? true : chiediUscita()))
 // l'uscita dall'account passa di qui PRIMA di togliere la sessione: un «resta»
 // dopo il logout lascerebbe l'editor aperto senza sessione
 async function esci() {

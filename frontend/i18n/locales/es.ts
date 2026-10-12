@@ -25,6 +25,8 @@ export default {
     engineHint: 'Predeterminado para el Visor y los nuevos flujos. Al crear, se sigue eligiendo a mano.',
     language: 'Idioma',
     signOut: 'Cerrar sesión',
+    sessions: 'Tus sesiones',
+    apiTokens: 'Tokens de API',
     admin: 'admin',
   },
   sharepoint: {
@@ -113,6 +115,7 @@ export default {
     signInWithSso: 'Entrar con SSO',
     ssoCompleting: 'Completando el acceso…',
     ssoError: 'Error de acceso SSO ({code}). Inténtalo de nuevo o entra con tu correo.',
+    signedOutIdle: 'La sesión se cerró por inactividad. Vuelve a entrar para continuar.',
   },
   outputNode: {
     titleDatabase: 'Salida a base de datos',

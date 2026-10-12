@@ -34,7 +34,7 @@ from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
 from app.services.blobgc import sweep_blob_deletions
 from app.services import contracts as contract_service
-from app.services import flow_presence, login_throttle, orchestrator
+from app.services import api_tokens, flow_presence, login_throttle, orchestrator, sessions, webhooks
 from app.models.permission import Capability
 from app.services import permissions as perm_service
 from app.services.schedule import next_fire
@@ -258,6 +258,11 @@ async def _tick() -> None:
         try:
             login_throttle.pulisci(session)
             flow_presence.pulisci(session)
+            # sessioni scadute o ferme da troppo: con loro se ne vanno gli indirizzi
+            sessions.pulisci(session)
+            # token API scaduti, e il registro delle consegne dei webhook oltre la finestra
+            api_tokens.pulisci(session)
+            webhooks.pulisci(session)
         except Exception:
             logger.exception("scheduler: pulizia dello stato condiviso fallita")
 

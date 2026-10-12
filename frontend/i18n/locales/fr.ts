@@ -25,6 +25,8 @@ export default {
     engineHint: 'Par défaut pour le Visualiseur et les nouveaux flux. À la création, il reste choisi à la main.',
     language: 'Langue',
     signOut: 'Déconnexion',
+    sessions: 'Vos sessions',
+    apiTokens: 'Jetons d\'API',
     admin: 'admin',
   },
   sharepoint: {
@@ -113,6 +115,7 @@ export default {
     signInWithSso: 'Se connecter avec le SSO',
     ssoCompleting: 'Connexion en cours…',
     ssoError: 'Échec de la connexion SSO ({code}). Réessayez ou connectez-vous avec votre e-mail.',
+    signedOutIdle: 'La session a été fermée pour inactivité. Reconnectez-vous pour continuer.',
   },
   outputNode: {
     titleDatabase: 'Sortie base de données',

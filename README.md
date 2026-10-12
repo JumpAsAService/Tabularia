@@ -107,7 +107,8 @@ engines, from an in-process library to a serverless warehouse.
   before they bite.
 - **Full history & governance.** Every run is recorded with downloadable results; an
   **audit log** captures logins, flow runs, data exports and permission changes —
-  "who entered, who ran what, which data was downloaded" — with a 24-hour access chart.
+  "who entered, who ran what, which data was downloaded" — with a 24-hour access chart,
+  and can be forwarded to **Splunk** as it happens, nothing skipped when Splunk is down.
 - **See how everything connects.** A dedicated **Lineage** view maps datasources and
   flows across the whole workspace: provenance, impact/blast-radius, staleness and
   broken references at a glance. Optionally the same lineage is **told to an external
@@ -120,13 +121,16 @@ engines, from an in-process library to a serverless warehouse.
   which reads the source databases live, with dbt-duckdb, or natively in the source
   database — as a complete project or as a folder for the data team's own project.
   Verified with a real `dbt run` and compared with what Tabularia publishes.
-- **Multi-user from day one.** JWT login or SSO (Keycloak, Entra ID, Auth0, Okta),
-  users & groups, nested projects with inherited view / edit / manage / connect
-  permissions. Everyone works in the same place, safely.
+- **Multi-user from day one.** Password or SSO sign-in (Keycloak, Entra ID, Auth0, Okta)
+  with sessions you can see and close, users & groups, nested projects with inherited
+  view / edit / manage / connect permissions. Everyone works in the same place, safely.
+- **Connects to the rest of your stack.** API tokens and **service accounts** let
+  schedulers and CI run flows and read results; **webhooks** call your systems when a
+  run finishes. Engine limits are tuned from the administration panel, without restarts.
 - **Yours to run.** Self-hosted, AGPL-3.0 open source, no per-seat fees, no data
   leaving your infrastructure. Point it at managed S3 / Postgres / Redis if you prefer.
 - **Speaks your language, looks the part.** UI in **English, Italian, French, German,
-  Spanish**, with **Dark, Light, Dracula and Monokai** themes, selectable per user.
+  Spanish**, with **Dark, Light, Imperium, Dracula and Monokai** themes, selectable per user.
 
 ## Run it on your engine — or on your warehouse
 
@@ -261,9 +265,12 @@ served 500 concurrent users at a 0.12 s p95 on one laptop.
 
 That metadata Postgres has a diagram of its own:
 **[Open the metadata database schema](https://jumpasaservice.github.io/Tabularia/architecture/metadata-schema.html)**
-— 28 tables and all 35 foreign keys, read back from a live database rather than
-transcribed from the models, and generated with Archify from
+— the 28 tables and 35 foreign keys of release 1.1.0, read back from a live database
+rather than transcribed from the models, and generated with Archify from
 [`docs/architecture/metadata-schema.architecture.json`](docs/architecture/metadata-schema.architecture.json).
+Six tables added since are not drawn yet: `user_sessions`, `api_tokens`, `webhooks`,
+`webhook_deliveries`, `engine_settings` and `siem_destinations` (schema revisions
+0002–0005, now 34 tables and 40 foreign keys).
 
 ## Declarative IR & pluggable engines
 
@@ -441,8 +448,24 @@ their own last route to administration: demoting or deactivating yourself, demot
 deleting your only admin group, or leaving it, is refused rather than silently
 performed.
 
-- **JWT** login through the gateway; stateless verification with a throttled
-  `last_seen` touch for active-session tracking.
+- **Sessions** that can be closed: every sign-in (password or SSO) is a row the
+  gateway checks on each request, in the same query as the user. The browser keeps it
+  in an `HttpOnly` cookie no script can read; sign-out really ends it; people see and
+  close their own sessions, administrators anyone's from the Audit page; a password
+  change or a disabled account closes them; an optional idle timeout
+  (`AUTH__SESSION_IDLE_MINUTES`) signs an unattended page out after a warning.
+- **An API for integrations** ([docs/api.md](docs/api.md)): personal API tokens and
+  **service accounts** for schedulers and CI, read-only or read-write, always
+  expiring, revocable, recorded in the audit log; **webhooks** that call another
+  system when a flow or a datasource refresh finishes, signed with HMAC and retried.
+- **Engine settings from the panel** ([docs/engine-settings.md](docs/engine-settings.md)):
+  administrators change the parameters the engine reads when it needs them (row group
+  size, import read timeout, export cap, task time limits, step cache, ClickHouse and
+  BigQuery limits) from Administration → Settings, without restarts. The environment
+  stays the starting point; every change is checked by the engine and audited.
+- **Audit log to Splunk** ([docs/siem-splunk.md](docs/siem-splunk.md)): every audit entry
+  forwarded to the Splunk HTTP Event Collector within seconds, nothing skipped when
+  Splunk is down, configured and tested from Administration → SIEM.
 - **RBAC**: users & groups, nested projects, inherited **view / edit / manage /
   connect** permissions; access resolves to a set of `readable_project_ids` applied on
   every query. Object-level permissions extend to connections and datasources on the
@@ -719,8 +742,8 @@ made and stops.
 ## Internationalization & themes
 
 UI copy lives in per-language i18n catalogs (`en`, `it`, `fr`, `de`, `es`), selected
-per user and persisted via cookie for SSR safety. Themes (`dark`, `light`, `dracula`,
-`monokai`) are CSS-variable palettes on `:root[data-theme]`, persisted in localStorage
+per user and persisted via cookie for SSR safety. Themes (`dark`, `light`, `imperium`,
+`dracula`, `monokai`) are CSS-variable palettes on `:root[data-theme]`, persisted in localStorage
 with an anti-flash head script. Code and comments are English-only; end-user strings
 are translated.
 

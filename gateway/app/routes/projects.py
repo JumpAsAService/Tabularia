@@ -127,6 +127,16 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
     has_conn = session.exec(select(Connection).where(Connection.project_id == project_id)).first()
     if has_conn:
         raise HTTPException(status_code=409, detail="Il progetto contiene connessioni: spostale o eliminale prima")
+    # un webhook limitato a questa cartella: toglierla in silenzio lo allargherebbe
+    # a tutte, e la chiave esterna lo impedirebbe comunque con un 500
+    from app.models import Webhook
+
+    osservata = session.exec(select(Webhook).where(Webhook.project_id == project_id)).first()
+    if osservata:
+        raise HTTPException(
+            status_code=409,
+            detail=f"La cartella è quella del webhook «{osservata.name}»: cambiane la cartella o toglilo prima",
+        )
 
     # run storici che avevano questo progetto come DESTINAZIONE di publish
     # (vivono sotto flussi di altri progetti): staccali, la cronologia resta

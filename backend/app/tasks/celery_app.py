@@ -1,12 +1,15 @@
 import logging
 
 from celery import Celery, Task
-from celery.signals import worker_ready
-from app.core.config import get_settings, resolve_max_memory_per_child_kb
+from celery.signals import before_task_publish, worker_ready
+from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_dall_ambiente
 
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
+# la configurazione del worker viene dall'AMBIENTE: è quella che vale all'avvio e,
+# per i limiti di tempo, la riserva per un messaggio che non li porta (vedi
+# `_limiti_di_tempo_in_vigore` più sotto, dove contano le regolazioni del pannello)
+settings = settings_dall_ambiente()
 # la chiave Fernet è obbligatoria in ogni ambiente: il worker che dovrà
 # decifrare le credenziali non deve nemmeno partire senza
 settings.check_required_secrets()
@@ -98,9 +101,26 @@ celery_app.conf.beat_schedule = {
     # usate; il task si auto-salta se la feature è spenta
     "evict-matviews": {
         "task": "app.tasks.jobs.evict_matview_task",
-        "schedule": float(max(300, settings.clickhouse_external.materialize_ttl_seconds // 2)),
+        # ogni 5 minuti, fisso: la durata delle copie si regola dal pannello mentre
+        # beat legge la sua configurazione una volta sola (con quella dell'ambiente,
+        # 30 min, si passava ogni 15 e una copia da 1 minuto restava 15)
+        "schedule": 300.0,
     },
 }
+
+
+@before_task_publish.connect
+def _limiti_di_tempo_in_vigore(headers=None, **_):
+    """La durata massima di un task viaggia nel suo messaggio: quella in vigore
+    QUANDO viene spedito, che l'amministratore regola dal pannello senza riavviare
+    i worker (Celery usa quella del messaggio, e la propria configurazione solo se
+    manca). Un task che ne dichiara di sue le tiene."""
+    if not isinstance(headers, dict):
+        return
+    if any(x is not None for x in (headers.get("timelimit") or (None, None))):
+        return
+    c = get_settings().celery
+    headers["timelimit"] = (c.task_time_limit, c.task_soft_time_limit)
 
 
 @worker_ready.connect

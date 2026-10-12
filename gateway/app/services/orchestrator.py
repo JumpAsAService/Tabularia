@@ -337,6 +337,11 @@ async def _finalize_orch_run(run_id: int, status: str, error: str | None = None,
             .where(Run.id == run_id, aperto)
             .values(status=status, error=error[:2000] if error else None, finished_at=datetime.now(timezone.utc))
         )
+        if chiuso.rowcount == 1:
+            # i webhook nella stessa transazione della chiusura (vedi services/webhooks.py)
+            from app.services import webhooks
+
+            webhooks.accoda_per_run(session, session.get(Run, run_id))
         session.commit()
         if chiuso.rowcount != 1:
             return
@@ -514,6 +519,10 @@ async def chiudi_orfane() -> int:
                 .where(Run.id == run_id, orfana)
                 .values(status="FAILURE", error=ORCHESTRATION_INTERRUPTED, finished_at=datetime.now(timezone.utc))
             )
+            if chiusa.rowcount == 1:
+                from app.services import webhooks
+
+                webhooks.accoda_per_run(session, session.get(Run, run_id))  # nella stessa transazione
             session.commit()
             if chiusa.rowcount != 1:
                 continue
@@ -544,14 +553,19 @@ def chiudi_le_mie(solo_le_precedenti: bool) -> int:
     restano le eventuali firmate e mai partite."""
     mie = Run.claimed_by.startswith(ISTANZA.rsplit(":", 1)[0] + ":", autoescape=True) if solo_le_precedenti else Run.claimed_by == ISTANZA  # type: ignore[union-attr]
     altra_firma = Run.claimed_by != ISTANZA if solo_le_precedenti else True
+    from app.services import webhooks
+
     with Session(engine) as session:
         chiuse = session.exec(
             update(Run)
             .where(Run.kind == "orchestration", Run.status == "STARTED", mie, altra_firma)
             .values(status="FAILURE", error=ORCHESTRATION_INTERRUPTED, finished_at=datetime.now(timezone.utc))
-        )
+            .returning(Run.id)
+        ).all()
+        for (run_id,) in chiuse:
+            webhooks.accoda_per_run(session, session.get(Run, run_id))  # nella stessa transazione
         session.commit()
-        return chiuse.rowcount or 0
+        return len(chiuse)
 
 
 # ── Il lavoratore ────────────────────────────────────────────────────────────

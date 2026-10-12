@@ -488,14 +488,35 @@ class Settings(BaseSettings):
 # Singleton instance
 # ─────────────────────────────────────────────────────────────────────────────
 @lru_cache
+def settings_dall_ambiente() -> Settings:
+    """Le impostazioni dell'ambiente (variabili, `.env`), lette una volta per
+    processo: l'infrastruttura (indirizzi, credenziali) e i valori di partenza di
+    tutto il resto."""
+    return Settings()
+
+
 def get_settings() -> Settings:
-    """
-    Returns cached settings instance.
-    
+    """Le impostazioni in vigore: l'ambiente, con sopra le regolazioni che
+    l'amministratore ha cambiato dal pannello (vedi core/regolazioni.py). Finché
+    non ce ne sono è lo stesso oggetto di `settings_dall_ambiente()`.
+
     Usage:
         settings = get_settings()
         settings.redis.url
         settings.storage.bucket
     """
-    return Settings()
+    from app.core import regolazioni
+
+    return regolazioni.applicate(settings_dall_ambiente())
+
+
+def _svuota_cache() -> None:
+    """Come `lru_cache.cache_clear()`, che i test chiamano dopo aver cambiato l'ambiente."""
+    from app.core import regolazioni
+
+    settings_dall_ambiente.cache_clear()
+    regolazioni.dimentica()
+
+
+get_settings.cache_clear = _svuota_cache  # type: ignore[attr-defined]
 

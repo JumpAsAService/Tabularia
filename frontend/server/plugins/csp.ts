@@ -1,11 +1,11 @@
 // Content-Security-Policy dell'interfaccia (audit 2026-10-08, M7).
 //
-// Il token di sessione sta in un cookie che il JavaScript legge, perché va
-// nell'intestazione Authorization delle chiamate al gateway: un XSS qualsiasi se
-// lo porterebbe via. La politica chiude le due strade che servono a farlo:
-// eseguire script che non sono nostri (solo i file di /_nuxt e gli script inline
-// che Nuxt scrive, autorizzati uno per uno con il loro hash) e mandare dati
-// altrove (fetch e immagini solo verso il sito stesso e il gateway).
+// Il token di sessione sta in un cookie HttpOnly che il JavaScript non legge, ma
+// uno script iniettato potrebbe comunque usare la sessione finché la pagina è
+// aperta. La politica chiude le due strade che servono a farlo: eseguire script
+// che non sono nostri (solo i file di /_nuxt e gli script inline che Nuxt scrive,
+// autorizzati uno per uno con il loro hash) e mandare dati altrove (fetch e
+// immagini solo verso il sito stesso e il gateway).
 //
 // Gli hash si calcolano sugli script dell'<head> e della coda del <body>, quelli
 // di Nuxt, MAI sull'HTML dell'app: un contenuto reso come HTML verrebbe

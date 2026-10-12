@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import BrandMark from '~/components/ui/BrandMark.vue'
+import SessionsDialog from '~/components/ui/SessionsDialog.vue'
+import ApiTokensDialog from '~/components/ui/ApiTokensDialog.vue'
 import { useAppInfo } from '~/composables/useAppInfo'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
@@ -22,6 +24,8 @@ import {
   Settings,
   Gauge, Sparkles,
   ChevronDown,
+  MonitorSmartphone,
+  KeyRound,
 } from 'lucide-vue-next'
 
 // fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
@@ -54,6 +58,8 @@ const themeOptions = computed(() => [
   { value: 'light', label: t('settings.light') },
   { value: 'dracula', label: 'Dracula' },
   { value: 'monokai', label: 'Monokai' },
+  // i colori di Roma: marmo e porpora di Tiro (nome proprio, come i due sopra)
+  { value: 'imperium', label: 'Imperium' },
 ])
 
 // menù impostazioni (ingranaggio in alto a destra): nome utente + tema + motore + logout
@@ -67,6 +73,10 @@ function closeMenu() {
 }
 const settingsPanel = ref<HTMLElement | null>(null)
 usePopover(menuOpen, settingsPanel, closeMenu)
+// «Le tue sessioni»: dove si è collegati, e chiudere le altre
+const sessionsOpen = ref(false)
+// «Token API»: le credenziali dei propri script (se l'installazione le permette)
+const tokensOpen = ref(false)
 
 const links = computed(() => [
   { to: '/', label: t('nav.explore'), icon: FolderTree },
@@ -255,6 +265,12 @@ onMounted(async () => {
 
             <div class="menu-sep" />
 
+            <button class="menu-item" @click="closeMenu(); sessionsOpen = true">
+              <MonitorSmartphone :size="14" /> {{ t('settings.sessions') }}
+            </button>
+            <button v-if="user?.personal_tokens" class="menu-item" @click="closeMenu(); tokensOpen = true">
+              <KeyRound :size="14" /> {{ t('settings.apiTokens') }}
+            </button>
             <button class="menu-item" @click="closeMenu(); logout()">
               <LogOut :size="14" /> {{ t('settings.signOut') }}
             </button>
@@ -267,6 +283,8 @@ onMounted(async () => {
     <main class="content" :class="{ fluid }">
       <slot />
     </main>
+    <SessionsDialog :open="sessionsOpen" @close="sessionsOpen = false" />
+    <ApiTokensDialog :open="tokensOpen" @close="tokensOpen = false" />
   </div>
 </template>
 

@@ -41,6 +41,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from botocore.exceptions import ClientError
 
+from app.core import regolazioni
 from app.core.config import ClickHouseExternalSettings, get_settings
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
@@ -455,8 +456,19 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             raise EngineError(
                 "engine ClickHouse esterno non configurato: imposta CLICKHOUSE_EXTERNAL__HOST (e credenziali)."
             )
-        self.matviews = MatViewStore(self.cache.redis, self.cfg)
+        self.matviews = MatViewStore(self.cache.redis, self._cfg)
         self._server_threads: int | None = None  # core del server (letto una volta)
+
+    # il motore vive quanto il processo: la sua sezione delle impostazioni passa a
+    # ogni uso dalle regolazioni del pannello (thread di scansione, tetto di
+    # esecuzione, materializzazione), che così valgono senza ricrearlo
+    @property
+    def cfg(self) -> ClickHouseExternalSettings:
+        return regolazioni.sovrapposte(self._cfg, "clickhouse_external")
+
+    @cfg.setter
+    def cfg(self, valore: ClickHouseExternalSettings) -> None:
+        self._cfg = valore
 
     def _credentials(self) -> tuple[str, str]:
         """Le query dell'assistente AI girano con l'utenza dedicata, se c'è

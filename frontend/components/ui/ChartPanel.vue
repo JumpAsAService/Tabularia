@@ -483,7 +483,7 @@ const option = computed(() => {
 .topn { width: 64px; padding: 4px 8px; font-size: 12px; }
 .typebtns { display: flex; gap: 2px; }
 .typebtns button { padding: 4px 8px; }
-.typebtns button.active { border-color: var(--accent); background: rgba(79, 140, 255, 0.12); }
+.typebtns button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 button.mini { padding: 4px 8px; }
 .plot { flex: 1; min-height: 0; }
 .plot > * { width: 100%; height: 100%; }

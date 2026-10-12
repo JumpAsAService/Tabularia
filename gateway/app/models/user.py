@@ -36,10 +36,12 @@ class User(SQLModel, table=True):
     # Un amministratore è già osservatore: non serve dargli entrambi.
     is_observer: bool = False
     created_at: datetime = Field(default_factory=_now)
-    # ultima attività autenticata (per le "sessioni attive" dell'audit): il JWT è
-    # stateless, quindi tracciamo l'ultimo istante/IP visti (aggiornati con
-    # throttling nel dependency di auth, non a ogni richiesta).
+    # ultima attività autenticata (la colonna «visto» della pagina Admin),
+    # aggiornata con throttling nel dependency di auth, non a ogni richiesta.
     last_seen_at: Optional[datetime] = Field(default=None, index=True)
+    # NON PIÙ SCRITTA (2026-10): l'indirizzo sta nella sessione (user_sessions.ip) e
+    # se ne va con lei; la migrazione 0002 l'ha svuotata. Resta finché una revisione
+    # successiva non la toglie (expand/contract: il codice vecchio la scrive ancora).
     last_seen_ip: Optional[str] = None
 
     # Identità presso l'IdP, quando l'account è collegato a un single sign-on.
@@ -50,6 +52,12 @@ class User(SQLModel, table=True):
     # non è mai entrato dall'IdP.
     oidc_issuer: Optional[str] = Field(default=None, index=True)
     oidc_subject: Optional[str] = Field(default=None, index=True)
+
+    # Account di SERVIZIO: un'integrazione (Airflow, una CI, uno script di
+    # reparto), non una persona. Non entra dal modulo né dall'SSO: solo con un
+    # token API (vedi models/api_token.py). Prende i permessi come gli altri, da
+    # gruppi e cartelle. L'email è sintetica (dominio .invalid, che non riceve posta).
+    is_service: bool = Field(default=False, sa_column_kwargs={"server_default": "false"})
 
 
 class Group(SQLModel, table=True):

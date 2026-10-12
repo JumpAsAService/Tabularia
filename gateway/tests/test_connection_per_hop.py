@@ -29,10 +29,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.core.security import create_access_token
 from app.db import session as db_session
 from app.deps import auth
-from tests.conftest import make_user
+from tests.conftest import make_user, token_di
 
 
 def _richiesta():
@@ -67,8 +66,9 @@ def test_l_autenticazione_non_esce_con_una_connessione_in_mano(db_engine, sessio
     # visto un attimo fa: `last_seen` non va aggiornato, quindi nessun commit
     # rilascia la connessione per caso — è il caso di quasi tutte le richieste
     u = make_user(session, email="a@x.local", last_seen_at=datetime.now(timezone.utc))
+    token = token_di(session, u)
     spia = _spia(db_engine)
-    utente = auth.get_current_user(_richiesta(), token=create_access_token(u.id), session=session)
+    utente = auth.get_current_user(_richiesta(), token=token, session=session)
     assert spia.prese == 1 and spia.in_mano == 0
     # l'utente resta agganciato alla sessione: chi lo legge dopo lo ritrova
     assert utente in session
@@ -85,11 +85,13 @@ def test_l_autenticazione_costa_una_lettura_e_la_rotta_non_rilegge_l_utente(db_e
     from sqlmodel import Session
 
     with Session(db_engine) as s:
-        uid = make_user(s, email="c@x.local", last_seen_at=datetime.now(timezone.utc)).id
+        u = make_user(s, email="c@x.local", last_seen_at=datetime.now(timezone.utc))
+        uid, token = u.id, token_di(s, u)
     spia = _spia(db_engine)
     with Session(db_engine) as richiesta:  # la sessione nuova che ogni richiesta riceve
-        utente = auth.get_current_user(_richiesta(), token=create_access_token(uid), session=richiesta)
-        assert len(spia.comandi) == 1 and "FROM users" in spia.comandi[0]
+        utente = auth.get_current_user(_richiesta(), token=token, session=richiesta)
+        # una lettura sola anche con la sessione: è in JOIN con l'utente
+        assert len(spia.comandi) == 1 and "FROM users" in spia.comandi[0] and "user_sessions" in spia.comandi[0]
         # quello che la rotta fa per prima cosa: leggerne i campi
         assert not sa_inspect(utente).expired
         assert (utente.id, utente.email, utente.is_active, utente.is_superuser) == (uid, "c@x.local", True, False)
@@ -99,11 +101,17 @@ def test_l_autenticazione_costa_una_lettura_e_la_rotta_non_rilegge_l_utente(db_e
 def test_un_utente_disattivato_o_sparito_e_respinto_come_prima(db_engine):
     from sqlmodel import Session
 
+    from app.core.security import create_access_token
+
     with Session(db_engine) as s:
-        spento = make_user(s, email="spento@x.local", is_active=False).id
-    for uid in (spento, 99999):
+        spento = make_user(s, email="spento@x.local")
+        token_spento = token_di(s, spento)  # entrato quando era attivo…
+        spento.is_active = False               # …e disattivato dopo
+        s.add(spento)
+        s.commit()
+    for token in (token_spento, create_access_token(99999, "nessuna-sessione")):
         with Session(db_engine) as richiesta, pytest.raises(HTTPException) as e:
-            auth.get_current_user(_richiesta(), token=create_access_token(uid), session=richiesta)
+            auth.get_current_user(_richiesta(), token=token, session=richiesta)
         assert e.value.status_code == 401
 
 
@@ -117,9 +125,10 @@ def test_l_utente_caricato_si_puo_modificare_e_salvare_dalla_rotta(db_engine):
     from app.models import User
 
     with Session(db_engine) as s:
-        uid = make_user(s, email="d@x.local", last_seen_at=datetime.now(timezone.utc)).id
+        u = make_user(s, email="d@x.local", last_seen_at=datetime.now(timezone.utc))
+        uid, token = u.id, token_di(s, u)
     with Session(db_engine) as richiesta:
-        utente = auth.get_current_user(_richiesta(), token=create_access_token(uid), session=richiesta)
+        utente = auth.get_current_user(_richiesta(), token=token, session=richiesta)
         utente.full_name = "Nome Nuovo"
         richiesta.add(utente)
         richiesta.commit()
@@ -129,7 +138,7 @@ def test_l_utente_caricato_si_puo_modificare_e_salvare_dalla_rotta(db_engine):
 
 def test_nemmeno_quando_ha_appena_aggiornato_last_seen(session):
     u = make_user(session, email="b@x.local")  # last_seen_at nullo: l'aggiorna e fa commit
-    auth.get_current_user(_richiesta(), token=create_access_token(u.id), session=session)
+    auth.get_current_user(_richiesta(), token=token_di(session, u), session=session)
     assert not session.in_transaction()
     session.refresh(u)
     assert u.last_seen_at is not None

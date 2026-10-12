@@ -43,6 +43,12 @@ APP__ROOT_PATH: {{ .Values.ingress.apiPrefix | quote }}
 MONITORING__NODE_EXPORTER_URL: {{ .Values.monitoring.nodeExporterUrl | default "" | quote }}
 
 JWT__ACCESS_TTL_MINUTES: {{ include "tabularia.env" (.Values.auth.jwtAccessTtlMinutes) }}
+AUTH__SESSION_IDLE_MINUTES: {{ include "tabularia.env" (.Values.auth.sessionIdleMinutes) }}
+AUTH__COOKIE_DOMAIN: {{ .Values.auth.cookieDomain | default "" | quote }}
+AUTH__PERSONAL_TOKENS: {{ .Values.auth.personalTokens | quote }}
+AUTH__API_TOKEN_MAX_DAYS: {{ include "tabularia.env" (.Values.auth.apiTokenMaxDays) }}
+WEBHOOKS__RETENTION_DAYS: {{ include "tabularia.env" (.Values.webhooks.retentionDays) }}
+WEBHOOKS__TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.webhooks.timeoutSeconds) }}
 AUTH__ADMIN_EMAIL: {{ include "tabularia.env" (.Values.auth.adminEmail) }}
 AUTH__ADMIN_NAME: {{ include "tabularia.env" (.Values.auth.adminName) }}
 
@@ -58,6 +64,9 @@ PREVIEW_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.engine.previewTimeo
 CELERY__TASK_TIME_LIMIT: {{ include "tabularia.env" (.Values.engine.taskTimeLimitSeconds) }}
 CELERY__TASK_SOFT_TIME_LIMIT: {{ include "tabularia.env" (.Values.engine.taskSoftTimeLimitSeconds) }}
 ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.engine.runStaleTimeoutSeconds) }}
+# Administration → Settings may override some of the values in this ConfigMap at
+# runtime (docs/engine-settings.md); false keeps this ConfigMap the only source
+ENGINE__SETTINGS_PANEL: {{ .Values.engine.settingsPanel | quote }}
 
 CACHE__TTL_SECONDS: {{ include "tabularia.env" (.Values.cache.ttlSeconds) }}
 CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIntervalSeconds) }}

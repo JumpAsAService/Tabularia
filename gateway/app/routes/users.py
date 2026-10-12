@@ -7,7 +7,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import User, Group, UserGroupLink
 from app.schemas.models import UserOut, UserCreate, UserUpdate
-from app.services import audit
+from app.services import audit, sessions
 from app.services.masking import mask_email
 from app.services.permissions import ensure_still_admin, is_admin
 from app.core.routing import RottaCheRilascia
@@ -58,6 +58,7 @@ def _to_out(
         admin_groups=[g for g in (groups or []) if g in (admin_names or set())],
         is_observer=user.is_observer,
         observer_groups=[g for g in (groups or []) if g in (observer_names or set())],
+        is_service=user.is_service,
     )
 
 
@@ -90,6 +91,10 @@ def create_user(
     session: Session = Depends(get_session),
     current: User = Depends(require_superuser),
 ):
+    # un utente con password è una credenziale che dura: non la crea un token API
+    from app.routes.api_tokens import nega_se_da_token
+
+    nega_se_da_token(request)
     if session.exec(select(User).where(User.email == body.email)).first():
         raise HTTPException(status_code=409, detail="Email già registrata")
     user = User(
@@ -133,8 +138,27 @@ def update_user(
     current: User = Depends(require_superuser),
 ):
     user = _get_user(session, user_id)
+    if body.password is not None:
+        # una password è una credenziale che dura: non la imposta un token API
+        from app.routes.api_tokens import nega_se_da_token
+
+        nega_se_da_token(request)
+        if user.is_service:
+            raise HTTPException(status_code=422, detail="Un account di servizio entra solo con un token: niente password")
     era_admin = user.is_superuser
     era_osservatore = user.is_observer
+    if ((body.is_superuser and not era_admin) or (body.is_observer and not era_osservatore)
+            or (body.is_active and not user.is_active)):
+        # un ruolo in più o un account riattivato (con la sua password) sono vie
+        # d'ingresso che resterebbero dopo la revoca di un token trapelato
+        from app.routes.api_tokens import nega_se_da_token
+        from app.services import api_tokens as _api_tokens
+
+        nega_se_da_token(request, _api_tokens.NIENTE_RUOLI_DA_TOKEN)
+    # una password nuova o un account disattivato chiudono le sessioni aperte e
+    # ritirano i token API: chi conosceva la vecchia password, o ne aveva copiato
+    # un token, resta fuori — anche se l'account viene riattivato dopo
+    chiudi_sessioni = body.password is not None or body.is_active is False
     if body.full_name is not None:
         user.full_name = body.full_name
     if body.password is not None:
@@ -150,7 +174,29 @@ def update_user(
         # togliersi il flag o disattivarsi: ammesso solo se si resta admin per
         # un'altra via (un gruppo di amministratori)
         ensure_still_admin(session, current)
+    chiuse = ritirati = 0
+    if chiudi_sessioni:
+        # nella stessa transazione della modifica: o tutte e due, o nessuna. Chi
+        # cambia la propria password resta dentro con la sessione da cui lo fa
+        tranne = sessions.sid_corrente(request) if request is not None and user.id == current.id else None
+        chiuse = sessions.chiudi_tutte(session, user.id, tranne=tranne, commit=False)
+        # anche i token API: chi aveva la password vecchia poteva essersene creato uno
+        from app.services import api_tokens
+
+        ritirati = api_tokens.revoca_tutti(session, user.id, commit=False)
+    if user.is_observer and not era_osservatore:
+        from app.services import api_tokens
+
+        session.flush()
+        ritirati += api_tokens.ritira_se_osservatore(session, [user.id])
     session.commit()
+    if chiuse or ritirati:
+        motivo = ("password" if body.password is not None else "deactivated" if body.is_active is False else "observer")
+        audit.record_audit(
+            session, actor=current, request=request, action=audit.SESSION_REVOKE,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail={"sessions": chiuse, "tokens": ritirati, "reason": motivo},
+        )
     session.refresh(user)
     if user.is_superuser != era_admin:
         audit.record_audit(
@@ -189,13 +235,22 @@ def delete_user(
     """
     if user_id == current.id:
         raise HTTPException(status_code=409, detail="Non puoi eliminare il tuo stesso account")
-    user = _get_user(session, user_id)
+    _get_user(session, user_id)
+    elimina_utente(session, user_id)
 
+
+def elimina_utente(session: Session, user_id: int) -> None:
+    """Toglie un utente (persona o account di servizio) e ciò che è solo suo;
+    vedi `delete_user` per che cosa resta e perché."""
+    user = _get_user(session, user_id)
     # statement bulk espliciti: l'ordine (prima i referenzianti, poi l'utente)
     # è garantito — stessa lezione dei delete di flussi/progetti
     from sqlalchemy import delete as sa_delete, update as sa_update
 
-    from app.models import AiChat, AiChatTurn, AuditLog, Connection, Datasource, Flow, Permission, Project, Run, Upload
+    from app.models import (
+        AiChat, AiChatTurn, ApiToken, AuditLog, Connection, Datasource, Flow, Permission, Project, Run, Upload,
+        UserSession, Webhook,
+    )
 
     # le conversazioni con l'assistente sono personali: se ne vanno con l'account
     # (prima i turni, che referenziano la chat)
@@ -205,6 +260,8 @@ def delete_user(
         session.exec(sa_delete(AiChat).where(AiChat.id.in_(chat_ids)))
     session.exec(sa_delete(Permission).where(Permission.user_id == user_id))
     session.exec(sa_delete(UserGroupLink).where(UserGroupLink.user_id == user_id))
+    session.exec(sa_delete(UserSession).where(UserSession.user_id == user_id))
+    session.exec(sa_delete(ApiToken).where(ApiToken.user_id == user_id))
     session.exec(sa_delete(Upload).where(Upload.owner_id == user_id))
     # `audit_logs.actor_id` è una FK verso users: senza azzerarla il DELETE
     # viola il vincolo e l'API risponde 500. Non è un caso limite — `auth.login`
@@ -217,6 +274,9 @@ def delete_user(
         (Datasource, Datasource.owner_id),
         (Connection, Connection.owner_id),
         (Run, Run.launched_by),
+        # chi ha creato un token o un webhook: il token o il webhook restano
+        (ApiToken, ApiToken.created_by),
+        (Webhook, Webhook.created_by),
     ):
         session.exec(sa_update(model).where(col == user_id).values({col.key: None}))
     session.delete(user)
@@ -236,8 +296,19 @@ def add_to_group(
     if group is None:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     exists = session.get(UserGroupLink, (user_id, group_id))
+    if exists is None and (group.is_admin or group.is_observer):
+        # entrare in un gruppo admin od osservatore È ricevere quel ruolo
+        from app.routes.api_tokens import nega_se_da_token
+        from app.services import api_tokens
+
+        nega_se_da_token(request, api_tokens.NIENTE_RUOLI_DA_TOKEN)
     if exists is None:
         session.add(UserGroupLink(user_id=user_id, group_id=group_id))
+        if group.is_observer:
+            from app.services import api_tokens
+
+            session.flush()
+            api_tokens.ritira_se_osservatore(session, [user_id])
         session.commit()
         if group.is_admin:
             # entrare in un gruppo admin È una promozione: deve restare traccia

@@ -41,8 +41,8 @@ overrides them with `--reload`, which must not reach production.
 
 - **Gateway: two workloads from one image, told apart by `APP__ROLE`.** With `api` a
   process only answers requests, and can be replicated freely: one process uses one
-  core (about 95 requests a second), sessions are a signed token, and the sign-in
-  throttle and the editor's presence notice live in Postgres. With `orchestrator` it
+  core (about 95 requests a second), and sessions, the sign-in throttle and the
+  editor's presence notice live in Postgres. With `orchestrator` it
   only does the background work — schedules, flow executions, reconciliation,
   clean-up — and is not exposed. Several orchestrators share the work through the
   database: a schedule slot and a queued execution are each taken by exactly one, and
@@ -212,11 +212,16 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `DB__HOST`, `DB__PORT`, `DB__USER`, `DB__PASSWORD` *secret*, `DB__NAME` | ✓ | | metadata Postgres |
 | `DB__AUTO_MIGRATE` | ✓ | | leave it `false` (the default): the schema is migrated by the init container (`python -m app.db.migra`) and the gateway only checks it. `true` is for the development compose |
 | `AUDIT__RETENTION_MINUTES` | ✓ | | how long the audit log is kept, in minutes; `0` (the default) = forever. The privacy notice can quote it (`app.auditRetentionMinutes`) |
-| `JWT__SECRET` *secret*, `JWT__ACCESS_TTL_MINUTES` | ✓ | | session tokens, default lifetime 720 minutes |
+| `JWT__SECRET` *secret*, `JWT__ACCESS_TTL_MINUTES` | ✓ | | signs the session tokens; the longest a session lasts, 720 minutes by default |
+| `AUTH__COOKIE_DOMAIN` | ✓ | | the session cookie's domain; empty (the default) = the gateway's host. Set the shared domain (`example.com`) only when the UI and the API are on two hosts of it (`auth.cookieDomain`) |
+| `AUTH__PERSONAL_TOKENS`, `AUTH__API_TOKEN_MAX_DAYS` | ✓ | | API tokens (docs/api.md): whether people may create their own (`true`), and the longest a token may last (365 days) — `auth.personalTokens`, `auth.apiTokenMaxDays` |
+| `WEBHOOKS__RETENTION_DAYS`, `WEBHOOKS__TIMEOUT_SECONDS` | ✓ | | webhook call history kept (30 days) and how long a receiver may take (10 s). Calls go out from the **orchestrator** pods, which the chart's egress policy does not restrict; if your cluster limits their egress otherwise, open it to the receivers |
+| `AUTH__SESSION_IDLE_MINUTES` | ✓ | | minutes without activity after which a session closes; `0` (the default) = never. The open page signs out by itself after a one-minute warning (`auth.sessionIdleMinutes` in the chart) |
 | `AUTH__ADMIN_EMAIL`, `AUTH__ADMIN_PASSWORD` *secret*, `AUTH__ADMIN_NAME` | ✓ | | break-glass admin, seeded at first start |
-| `APP__CORS_ORIGINS` | ✓ | | JSON list with the public frontend URL, e.g. `["https://app.example.com"]`. Needed **only** when the frontend is served from a different host than the gateway; the reference ingress puts both on one host, where it can stay unset (`app.corsOrigins` in the chart) |
+| `APP__CORS_ORIGINS` | ✓ | | JSON list with the public frontend URL, e.g. `["https://app.example.com"]`. Needed **only** when the frontend is served from a different host than the gateway — then set `AUTH__COOKIE_DOMAIN` too; the reference ingress puts both on one host, where it can stay unset (`app.corsOrigins` in the chart). `*` is refused: the session is a cookie |
 | `ENGINE__BASE_URL` | ✓ | | internal URL of the engine API |
 | `ENGINE__BUCKET` | ✓ | | the gateway's own copy of the bucket name; it compares it against the bucket in every request and rejects a mismatch with 403. It **must equal** `STORAGE__BUCKET`, so the chart and the compose file both derive it from the same single value — set it by hand only if you know why |
+| `ENGINE__SETTINGS_PANEL` | ✓ | | Administration → Settings may change some engine parameters at runtime (row group size, read timeout, export cap, task time limits, caches; docs/engine-settings.md). `false` keeps the environment the only source (`engine.settingsPanel`) |
 | `REDIS__HOST`, `REDIS__PORT`, `REDIS__DB` | | ✓ | broker and cache index |
 | `STORAGE__ENDPOINT`, `STORAGE__ACCESS_KEY`, `STORAGE__SECRET_KEY` *secret*, `STORAGE__BUCKET`, `STORAGE__REGION` | | ✓ | object storage |
 | `CELERY__WORKER_CONCURRENCY` | | ✓ | per worker pod |
@@ -254,9 +259,10 @@ Nitro on port 3000. Size: 176 MB.
 - **Content-Security-Policy from the frontend itself.** Every page carries one: scripts
   only from `/_nuxt` plus Nuxt's own inline scripts, allowed by hash; `fetch` only to the
   site and to `NUXT_PUBLIC_API_BASE`; frames only the site and `NUXT_PUBLIC_GRAFANA_URL`.
-  Nothing to configure on the ingress. The session cookie is `Secure` when the page is
-  served over HTTPS — behind a proxy that terminates TLS, through `X-Forwarded-Proto`,
-  which ingress-nginx sets.
+  Nothing to configure on the ingress. The session cookie is written by the gateway,
+  `HttpOnly` (no script on the page can read it) and `SameSite=Lax`, and `Secure` when
+  the page is served over HTTPS — behind a proxy that terminates TLS, through
+  `X-Forwarded-Proto`, which ingress-nginx sets.
 
 *Verified* read-only: the login page renders, a gateway URL set at startup ends up in the
 served page, compiled assets are served, and `/` redirects to `/login` without a session.
@@ -271,5 +277,11 @@ served page, compiled assets are served, and `/` redirects to `/login` without a
 - **Versions before the queue must not run next to this one.** A gateway from before
   `APP__ROLE` existed ran the scheduler in process and knows nothing of the queue:
   stop it before starting the new version (the chart's README has the two commands).
-- **Sessions are stateless JWTs** with no server-side revocation: disabling a user or
-  removing them from an SSO group takes effect when their token expires.
+- **The interface and the gateway must be on the same domain.** The browser's session
+  is a cookie the gateway writes (`HttpOnly`, `SameSite=Lax`), and the interface's
+  server must see it too — the reference ingress serves both from one host, with the
+  gateway under `/api`. Two hosts of one domain work with `AUTH__COOKIE_DOMAIN`; two
+  unrelated domains leave the browser without a session.
+- **Removing someone from an SSO group takes effect at their next sign-in**, or at once
+  if an administrator closes their sessions (Audit page). Disabling the account, or
+  changing its password, closes them by itself.

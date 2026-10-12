@@ -63,13 +63,12 @@ proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", P
 try:
     ff = Firefox()
     ff.invia("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1000})
-    # si entra da un file statico, non da /login: con il cookie di sessione di un giro
-    # precedente (utente ormai cancellato) l'app rimanda al login, e quel rimando può
-    # sostituire la navigazione verso il callback (1 volta su 5)
+    # si prepara il browser da un file statico, non da /login: con il cookie di
+    # sessione di un giro precedente (utente ormai cancellato) l'app rimanderebbe al login
     ff.vai(f"{BASE}/favicon.svg")
-    ff.js("document.cookie = 'tab_token=; path=/; max-age=0'; localStorage.clear(); localStorage.setItem('tabularia-theme', 'dark'); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
-    ff.vai(f"{BASE}/auth/callback#token={admin}")
-    ff.aspetta("!location.pathname.startsWith('/auth/callback')", 20)
+    ff.js("localStorage.clear(); localStorage.setItem('tabularia-theme', 'dark'); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
+    # la sessione dell'amministratore, nel cookie HttpOnly come la scrive il gateway
+    ff.entra(BASE, admin)
     ff.vai(f"{BASE}/flows")
     ok("la pagina Flows elenca i flussi", ff.aspetta("document.querySelectorAll('.flow-actions').length > 3", 30))
     # lo zip che la pagina manda al download, catturato in base64 senza scaricare davvero

@@ -26,7 +26,7 @@ export interface ChartUi {
   accent: string
   /** --violet: terza categoria (es. esecuzioni, refresh) */
   violet: string
-  /** solo il tema "light" ha sfondo chiaro; dark/dracula/monokai sono scuri */
+  /** il tema ha lo sfondo chiaro (light, imperium): lo dice il suo `color-scheme` */
   isLight: boolean
 }
 
@@ -44,6 +44,14 @@ const FALLBACK: ChartUi = {
   accent: '#4f8cff',
   violet: '#a78bfa',
   isLight: false,
+}
+
+/** Un colore del tema con trasparenza, per le scale delle heatmap (i token sono
+ *  esadecimali #rrggbb; un formato diverso passa com'è, senza trasparenza). */
+export function withAlpha(colore: string, alpha: number): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colore.trim())
+  if (!m) return colore
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`
 }
 
 export function useChartTheme() {
@@ -64,7 +72,8 @@ export function useChartTheme() {
       danger: g('--danger', FALLBACK.danger),
       accent: g('--accent', FALLBACK.accent),
       violet: g('--violet', FALLBACK.violet),
-      isLight: document.documentElement.getAttribute('data-theme') === 'light',
+      // non dal nome: i temi chiari sono più d'uno, e ognuno dichiara il suo color-scheme
+      isLight: s.getPropertyValue('color-scheme').trim() === 'light',
     }
   }
 

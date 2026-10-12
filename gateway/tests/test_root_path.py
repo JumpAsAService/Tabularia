@@ -110,7 +110,6 @@ def test_la_rotta_risponde_solo_a_chi_puo_osservare(session):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from app.core.security import create_access_token
     from app.db.session import get_session
     from app.routes import auth as auth_routes
     from tests.conftest import make_user
@@ -123,7 +122,9 @@ def test_la_rotta_risponde_solo_a_chi_puo_osservare(session):
     normale = make_user(session, email="normale@x.local")
     osservatore = make_user(session, email="osservatore@x.local", is_observer=True)
     admin = make_user(session, email="admin@x.local", is_superuser=True)
-    portatore = lambda u: {"Authorization": f"Bearer {create_access_token(u.id)}"}
+    from tests.conftest import token_di
+
+    portatore = lambda u: {"Authorization": f"Bearer {token_di(session, u)}"}
 
     assert client.get("/auth/observer").status_code == 401
     # ciò che il proxy manda quando il cookie non c'è: «Bearer » e basta

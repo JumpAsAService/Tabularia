@@ -5,10 +5,10 @@ Se l'SSO non è configurato le rotte esistono comunque ma rispondono "spento":
 pulsante. Il login locale non viene toccato in nessun caso (break-glass se l'IdP
 è irraggiungibile).
 
-Consegna del token al frontend: redirect a `OIDC__POST_LOGIN_URL` con il token
-nel FRAMMENTO dell'URL (`#token=…`). Il frammento non viene inviato al server,
-quindi non finisce nei log di accesso né nell'header Referer; la pagina di
-callback lo legge, lo salva nel cookie di sessione e ripulisce subito l'URL.
+Consegna della sessione al browser: lo stesso cookie `HttpOnly` del login locale,
+scritto sulla risposta che rimanda a `OIDC__POST_LOGIN_URL`. Il token non passa
+mai dall'URL né dal JavaScript; la pagina di callback chiede solo «chi sono?».
+Un errore torna invece nel frammento (`#error=<codice>`), che non contiene segreti.
 """
 import logging
 import secrets
@@ -18,9 +18,8 @@ from fastapi.responses import RedirectResponse
 from sqlmodel import Session
 
 from app.core.config import get_settings
-from app.core.security import create_access_token
 from app.db.session import get_session
-from app.services import audit, sso
+from app.services import audit, sessions, sso
 from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
@@ -96,8 +95,8 @@ def sso_callback(
     error_description: str = "",
     session: Session = Depends(get_session),
 ):
-    """Ritorno dall'IdP: valida, provisiona, sincronizza i gruppi ed emette il
-    TOKEN INTERNO (lo stesso del login locale)."""
+    """Ritorno dall'IdP: valida, provisiona, sincronizza i gruppi e apre una
+    sessione INTERNA (la stessa del login locale)."""
     cfg = get_settings().oidc
     if not cfg.enabled:
         return _redirect_with("error=sso_disabled")
@@ -125,6 +124,12 @@ def sso_callback(
         detail={k: v for k, v in detail.items() if v not in ((), [], False)} or None,
         request=request,
     )
-    response = _redirect_with(f"token={create_access_token(user.id)}")
+    sessions.chiudi_quella_del_cookie(session, request)
+    try:
+        riga, token = sessions.apri(session, user, request, "sso")
+    except sessions.AccessoSuperato:  # disattivato mentre tornava dall'IdP
+        return _fail(session, request, sso.SsoError("utente disattivato durante l'accesso", "sso_failed"), user.email)
+    response = RedirectResponse(get_settings().oidc.post_login_url, status_code=status.HTTP_303_SEE_OTHER)
+    sessions.scrivi_cookie(response, request, token, riga)
     response.delete_cookie(sso.TX_COOKIE, path=_cookie_path())
     return response

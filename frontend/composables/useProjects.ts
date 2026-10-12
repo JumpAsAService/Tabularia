@@ -32,6 +32,8 @@ export interface UserOut {
   // coppia: flag personale + gruppi che lo concedono
   is_observer: boolean
   observer_groups: string[]
+  // account di servizio: un'integrazione, entra solo con un token API
+  is_service?: boolean
 }
 
 export interface GroupOut {

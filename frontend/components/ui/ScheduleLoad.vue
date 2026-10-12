@@ -13,7 +13,7 @@ import VChart from 'vue-echarts'
 import { CalendarClock, TriangleAlert, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import { useApi, errMessage, type ScheduleLoad } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
-import { useChartTheme } from '~/composables/useChartTheme'
+import { useChartTheme, withAlpha } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, HeatmapChart, VisualMapComponent, TooltipComponent, GridComponent])
 
@@ -101,7 +101,8 @@ const option = computed(() => {
     visualMap: {
       min: 0, max: maxCount.value, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
       itemWidth: 12, itemHeight: 90, textStyle: { color: c.muted, fontSize: 10 },
-      inRange: { color: ['rgba(79,140,255,0.10)', '#4f8cff', '#7c6cff'] },
+      // l'accento del tema, più pieno dove il carico è più alto
+      inRange: { color: [withAlpha(c.accent, 0.12), withAlpha(c.accent, 0.6), c.accent] },
     },
     series: [{
       type: 'heatmap', data: points,

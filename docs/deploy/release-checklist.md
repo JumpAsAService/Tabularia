@@ -34,6 +34,20 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `INGEST__DB_READ_TIMEOUT_SECONDS` (default 3000): how long an import from
    ClickHouse waits for the first rows; keep it below
    `CELERY__TASK_SOFT_TIME_LIMIT`.
+   **New after 1.1.0:** `AUTH__SESSION_IDLE_MINUTES` (default 0 = off): minutes
+   without activity after which a session closes. Sessions are now rows in the
+   metadata database (revision 0002 of the migration step): the upgrade **signs
+   everyone out once**, and the interface must keep reaching the gateway on the same
+   site (the session is an `HttpOnly` cookie the gateway writes).
+   API tokens, service accounts and webhooks (revision 0003): `AUTH__PERSONAL_TOKENS`
+   (default `true`), `AUTH__API_TOKEN_MAX_DAYS` (365), `WEBHOOKS__RETENTION_DAYS`
+   (30), `WEBHOOKS__TIMEOUT_SECONDS` (10). Webhook calls leave from the
+   orchestrators: if your network limits their egress, open it to the receivers.
+   Engine settings from the panel (revision 0004): `ENGINE__SETTINGS_PANEL` (default
+   `true`; `false` keeps the environment the only source, see
+   `docs/engine-settings.md`). Audit log to Splunk (revision 0005): no variable, off
+   until an administrator turns it on; the calls to Splunk leave from the
+   orchestrators like webhooks (`docs/siem-splunk.md`).
 
 ## Rollout order
 
@@ -45,7 +59,8 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    new API talking to an old preview worker cancels previews with a signal the
    old worker does not clean up after. With compose: `docker compose up -d
    gateway orchestrator`, then `docker compose up -d`; with Helm, see the chart
-   README → Upgrades.
+   README → Upgrades. **The interface last** when upgrading past 1.1.0: it signs
+   in with a cookie an older gateway does not read.
 2. **Recreate, do not restart, the beat and worker containers** (`docker compose
    up -d --force-recreate` or a rolling replacement of the pods): a restart
    keeps the old code and the old memory limits.
@@ -59,6 +74,8 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
 1. Open the sign-in screen in the dark and light themes, sign in, check the
    version in the settings menu (it comes from the gateway, so it is the
    version actually running).
+   Open **Your sessions** in the same menu: this browser is listed as «this
+   device». Sign out, then press Back: the app must not come back.
 2. Open a flow with a large source and click through five or six nodes
    quickly: the preview of the last node should appear, the others should be
    cancelled, nothing should hang.

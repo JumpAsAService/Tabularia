@@ -70,6 +70,8 @@ class UserOut(BaseModel):
     # permesso — per il permesso c'è `permissions.is_observer`.
     is_observer: bool = False
     observer_groups: list[str] = []
+    # account di servizio: un'integrazione, entra solo con un token API
+    is_service: bool = False
 
 
 class MeOut(UserOut):
@@ -80,6 +82,13 @@ class MeOut(UserOut):
     domanda «posso?», non «ho il flag?»."""
 
     groups: list[str] = []
+    # AUTH__SESSION_IDLE_MINUTES: la pagina esce da sé dopo tanti minuti senza
+    # che nessuno la tocchi (0 = mai)
+    session_idle_minutes: int = 0
+    # AUTH__PERSONAL_TOKENS: l'utente può crearsi token API per i suoi script
+    personal_tokens: bool = False
+    # AUTH__API_TOKEN_MAX_DAYS: la scadenza più lontana che un token può avere
+    api_token_max_days: int = 365
 
 
 class UserCreate(BaseModel):

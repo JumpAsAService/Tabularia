@@ -2,7 +2,7 @@
 // localStorage, condiviso a livello di modulo. È il DEFAULT dove non viene
 // chiesto esplicitamente (Viewer, nuovo flusso aperto senza scelta); alla
 // CREAZIONE del flusso il motore resta scelto a mano dal menù dedicato.
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 
 // `optional`: engine che esiste solo se configurato lato server (non disponibile = non configurato, non "in arrivo")
@@ -54,9 +54,6 @@ export function usePreferredEngine() {
     prefInit = true
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) preferredEngine.value = saved
-    watch(preferredEngine, (e) => {
-      try { localStorage.setItem(STORAGE_KEY, e) } catch { /* storage negato */ }
-    })
   }
 
   // carica il catalogo una sola volta (idempotente): utile per il selettore in
@@ -67,8 +64,11 @@ export function usePreferredEngine() {
     try { catalog.value = await api.engines() } catch { catalogLoaded = false }
   }
 
+  // si salva qui, quando la si sceglie: un `watch` creato dal primo componente
+  // moriva con lui, e dopo un cambio di pagina la scelta non si salvava più
   function setPreferredEngine(id: string) {
     preferredEngine.value = id
+    try { localStorage.setItem(STORAGE_KEY, id) } catch { /* storage negato */ }
   }
 
   // motore da usare come default: la preferita se (ancora) disponibile, altrimenti

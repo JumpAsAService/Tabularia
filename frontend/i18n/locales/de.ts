@@ -25,6 +25,8 @@ export default {
     engineHint: 'Standard für Viewer und neue Flüsse. Bei der Erstellung wird sie weiterhin manuell gewählt.',
     language: 'Sprache',
     signOut: 'Abmelden',
+    sessions: 'Ihre Sitzungen',
+    apiTokens: 'API-Token',
     admin: 'Admin',
   },
   sharepoint: {
@@ -113,6 +115,7 @@ export default {
     signInWithSso: 'Mit SSO anmelden',
     ssoCompleting: 'Anmeldung läuft…',
     ssoError: 'SSO-Anmeldung fehlgeschlagen ({code}). Erneut versuchen oder mit E-Mail anmelden.',
+    signedOutIdle: 'Die Sitzung wurde wegen Inaktivität beendet. Melden Sie sich erneut an, um fortzufahren.',
   },
   outputNode: {
     titleDatabase: 'Datenbank-Ausgabe',

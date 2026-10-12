@@ -768,7 +768,7 @@ label { font-size: 12px; color: var(--muted); }
 .exportbtns button { flex: 1; }
 .joinhelp {
   font-size: 12px;
-  background: rgba(79, 140, 255, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;

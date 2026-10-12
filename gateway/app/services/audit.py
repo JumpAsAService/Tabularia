@@ -23,6 +23,18 @@ LOGIN = "auth.login"
 LOGIN_FAILED = "auth.login_failed"
 SSO_LOGIN = "auth.sso_login"            # login via IdP esterno (OIDC)
 SSO_LOGIN_FAILED = "auth.sso_login_failed"
+LOGOUT = "auth.logout"
+# sessioni chiuse da chi le possiede (le sue) o da un amministratore (di altri)
+SESSION_REVOKE = "auth.session_revoke"
+# token API e account di servizio (vedi services/api_tokens.py)
+TOKEN_CREATE = "token.create"
+TOKEN_REVOKE = "token.revoke"
+SERVICE_ACCOUNT_CREATE = "service_account.create"
+SERVICE_ACCOUNT_DELETE = "service_account.delete"
+# webhook (vedi services/webhooks.py)
+WEBHOOK_CREATE = "webhook.create"
+WEBHOOK_UPDATE = "webhook.update"
+WEBHOOK_DELETE = "webhook.delete"
 FLOW_CREATE = "flow.create"
 FLOW_UPDATE = "flow.update"
 FLOW_DELETE = "flow.delete"
@@ -65,6 +77,9 @@ BANNER_CREATE = "banner.create"
 BANNER_DELETE = "banner.delete"
 # motori consentiti: cambiano ciò che TUTTA l'installazione può scegliere
 ENGINE_ALLOW = "engine.allow"
+ENGINE_SETTINGS_UPDATE = "engine_settings.update"
+SIEM_UPDATE = "siem.update"
+SIEM_TEST = "siem.test"
 ENGINE_DISALLOW = "engine.disallow"
 # assistente AI: quali modelli si possono usare, e ogni query che l'assistente
 # esegue sui dati per conto di un utente (e' un accesso ai dati come un export)
@@ -126,6 +141,12 @@ def record_audit(
                 minimizza = is_observer_only(session, actor)
             except Exception:  # pragma: no cover — nel dubbio si scrive l'evento
                 logger.debug("ruolo non risolvibile per l'audit", exc_info=True)
+        # fatto con un token API: si dice con quale (il nome, mai il segreto)
+        from app.services.api_tokens import nome_corrente
+
+        via = nome_corrente(request)
+        if via:
+            detail = {**(detail or {}), "token": via}
         entry = AuditLog(
             actor_id=actor.id if actor else None,
             actor_label=actor_label or (actor.email if actor else "anonimo"),

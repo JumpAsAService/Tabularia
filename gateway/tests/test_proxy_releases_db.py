@@ -165,9 +165,10 @@ def test_l_autenticazione_del_proxy_non_lascia_la_connessione_in_mano(session, a
     tenendo ferma una risorsa che altri thread stanno aspettando. Con 60
     anteprime insieme: gateway fermo 28 secondi. Deve prendere e rendere nello
     stesso passo, e restituire un utente leggibile senza database."""
-    from app.core.security import create_access_token
+    from tests.conftest import token_di
 
-    utente = proxy._utente(_richiesta(method="GET"), token=create_access_token(admin.id), session=session)
+    token = token_di(session, admin)
+    utente = proxy._utente(_richiesta(method="GET"), token=token, session=session)
     assert not session.in_transaction()
     assert (utente.id, utente.email, utente.is_superuser) == (admin.id, "capo@x.local", True)
 

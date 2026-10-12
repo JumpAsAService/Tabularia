@@ -24,7 +24,7 @@ Runs behind a gateway (JWT auth, RBAC on users, groups and projects, optional OI
 
 ## Capabilities and Constraints
 
-- Frontend: Nuxt 3, hand-written CSS with design tokens in `frontend/assets/main.css`; four themes (dark default, light, dracula, monokai) switched through `data-theme`; IBM Plex Sans self-hosted; lucide icons.
+- Frontend: Nuxt 3, hand-written CSS with design tokens in `frontend/assets/main.css`; five themes (dark default, light, dracula, monokai, imperium) switched through `data-theme`; IBM Plex Sans self-hosted; lucide icons.
 - Five locales (en base, it, fr, de, es); every visible string goes through i18n.
 - No image-generation or asset pipeline: visuals are drawn in code.
 

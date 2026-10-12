@@ -1,8 +1,8 @@
 """SSO OIDC opzionale: porta d'ingresso verso un IdP esterno (Keycloak, Entra
 ID/MSAL, Auth0, Okta…) e sincronizzazione dei gruppi.
 
-Principio: l'IdP dimostra CHI è l'utente, poi si emette il SOLITO token interno
-(`create_access_token`). `get_current_user`, l'RBAC e l'audit restano identici —
+Principio: l'IdP dimostra CHI è l'utente, poi si apre la SOLITA sessione interna
+(`sessions.apri`). `get_current_user`, l'RBAC e l'audit restano identici —
 il raggio d'impatto è confinato a queste due cuciture:
 
 1. **accettazione**: authorization code flow con PKCE, `state` e `nonce`; l'
@@ -357,6 +357,9 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
             created = True
         elif not omonimo.is_active:
             raise SsoError(f"utente {email} disattivato in Tabularia", "user_disabled")
+        elif omonimo.is_service:
+            # un account di servizio entra solo con un token, mai da un IdP
+            raise SsoError(f"{email} è un account di servizio", "identity_conflict")
         elif omonimo.oidc_subject:
             # quell'account appartiene già a un'ALTRA identità dell'IdP: due
             # persone non possono rivendicare lo stesso utente

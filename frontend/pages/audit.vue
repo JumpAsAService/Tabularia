@@ -10,11 +10,12 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { deviceLabel } from '~/composables/sessionDevice'
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -60,11 +61,33 @@ function next() { if (offset.value + pageSize < total.value) { offset.value += p
 function prev() { if (offset.value > 0) { offset.value = Math.max(0, offset.value - pageSize); load() } }
 
 // ── sessioni attive ──────────────────────────────────────────────────────────
+// Una per browser o script. L'amministratore ne chiude una (l'osservatore guarda):
+// quel browser esce alla richiesta dopo.
 const sessions = ref<ActiveSession[]>([])
+const sessionsTotal = ref(0) // tutte le aperte: l'elenco porta solo le più recenti
 async function loadSessions() {
-  try { sessions.value = await api.auditSessions() } catch { /* ignore */ }
+  try {
+    const page = await api.auditSessions()
+    sessions.value = page.items
+    sessionsTotal.value = page.total
+  } catch { /* ignore */ }
 }
 const onlineCount = computed(() => sessions.value.filter((s) => s.online).length)
+const canRevoke = computed(() => !!user.value?.is_superuser)
+const revoking = ref<string | null>(null)
+async function revoke(s: ActiveSession) {
+  const who = s.full_name || s.email
+  if (!confirm(t('audit.revokeConfirm', { who, device: deviceLabel(s.user_agent) ?? t('sessions.unknownDevice') }))) return
+  revoking.value = s.id
+  try {
+    await api.revokeSession(s.id)
+    await Promise.all([loadSessions(), load()])
+  } catch (e: any) {
+    error.value = e?.message ?? t('audit.errorGeneric')
+  } finally {
+    revoking.value = null
+  }
+}
 
 // ── grafico accessi ultime 24h ───────────────────────────────────────────────
 const access = ref<AccessActivity | null>(null)
@@ -122,6 +145,17 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'auth.login': { icon: LogIn, color: u.success, label: t('audit.loginAction') },
     'auth.login_failed': { icon: XCircle, color: u.danger, label: t('audit.loginFailedAction') },
     'auth.logout': { icon: LogOut, color: u.muted, label: t('audit.logoutAction') },
+    'auth.session_revoke': { icon: LogOut, color: u.danger, label: t('audit.sessionRevokeAction') },
+    'token.create': { icon: KeyRound, color: u.accent, label: t('audit.tokenCreateAction') },
+    'token.revoke': { icon: KeyRound, color: u.danger, label: t('audit.tokenRevokeAction') },
+    'service_account.create': { icon: Shield, color: u.accent, label: t('audit.serviceAccountCreateAction') },
+    'service_account.delete': { icon: Shield, color: u.danger, label: t('audit.serviceAccountDeleteAction') },
+    'webhook.create': { icon: Plug, color: u.accent, label: t('audit.webhookCreateAction') },
+    'webhook.update': { icon: Plug, color: u.accent, label: t('audit.webhookUpdateAction') },
+    'webhook.delete': { icon: Plug, color: u.danger, label: t('audit.webhookDeleteAction') },
+    'engine_settings.update': { icon: SlidersHorizontal, color: u.accent, label: t('audit.engineSettingsUpdateAction') },
+    'siem.update': { icon: Radar, color: u.accent, label: t('audit.siemUpdateAction') },
+    'siem.test': { icon: Radar, color: u.muted, label: t('audit.siemTestAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'flow.create': { icon: Workflow, color: u.accent, label: t('audit.flowCreateAction') },
@@ -201,15 +235,29 @@ function detailSummary(e: AuditEntry): string {
       <section class="sess">
         <div class="sess-head">
           <span class="sess-title">{{ $t('audit.sessionsTitle') }}</span>
-          <span class="sess-count"><Circle :size="8" class="dot on" /> {{ $t('audit.sessionsCount', { online: onlineCount, total: sessions.length }) }}</span>
+          <span class="sess-count"><Circle :size="8" class="dot on" /> {{ $t('audit.sessionsCount', { online: onlineCount, total: sessionsTotal }) }}<template v-if="sessions.length < sessionsTotal"> · {{ $t('audit.sessionsShown', { n: sessions.length }) }}</template></span>
         </div>
         <div class="sess-grid">
-          <div v-for="s in sessions" :key="s.user_id" class="sess-card" :class="{ off: !s.online }">
+          <div v-for="s in sessions" :key="s.id" class="sess-card" :class="{ off: !s.online }">
             <Circle :size="8" class="dot" :class="{ on: s.online }" />
             <div class="sess-who">
-              <span class="sess-name">{{ s.full_name || s.email }}<span v-if="s.is_superuser" class="adm">{{ $t('audit.adminBadge') }}</span></span>
-              <span class="sess-meta muted">{{ s.last_seen_ip || '—' }} · {{ fmtAgo(s.last_seen_at) }}</span>
+              <span class="sess-name">
+                {{ s.full_name || s.email }}<span v-if="s.is_superuser" class="adm">{{ $t('audit.adminBadge') }}</span><span v-if="s.current" class="here">{{ $t('sessions.thisDevice') }}</span>
+              </span>
+              <span class="sess-meta muted">
+                <template v-if="deviceLabel(s.user_agent)">{{ deviceLabel(s.user_agent) }} · </template>{{ s.ip || '—' }} · {{ fmtAgo(s.last_seen_at) }}<template v-if="s.method === 'sso'"> · SSO</template>
+              </span>
             </div>
+            <button
+              v-if="canRevoke && !s.current"
+              class="sess-revoke"
+              :disabled="revoking === s.id"
+              :title="$t('audit.revokeTitle')"
+              :aria-label="$t('audit.revokeAria', { who: s.full_name || s.email })"
+              @click="revoke(s)"
+            >
+              <LogOut :size="13" />
+            </button>
           </div>
           <p v-if="!sessions.length" class="muted empty">{{ $t('audit.noSessions') }}</p>
         </div>
@@ -308,6 +356,9 @@ function detailSummary(e: AuditEntry): string {
 .sess-name { font-size: 13px; font-weight: 550; display: inline-flex; align-items: center; gap: 6px; }
 .adm { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent); background: var(--tint-accent); border-radius: 4px; padding: 0 5px; }
 .sess-meta { font-size: 11px; }
+.here { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent-hi); background: var(--tint-accent); border-radius: 4px; padding: 0 5px; }
+.sess-revoke { margin-left: auto; padding: 4px 6px; color: var(--muted); background: transparent; border-color: transparent; }
+.sess-revoke:hover { color: var(--danger); border-color: var(--danger); box-shadow: none; }
 .empty { font-size: 12.5px; }
 
 /* filtri */

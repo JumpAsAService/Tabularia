@@ -1,5 +1,5 @@
 // Client dell'API dati. Passa dal gateway (che autentica e inoltra all'engine).
-// Tutte le chiamate viaggiano con il Bearer token via useApiClient().
+// Tutte le chiamate viaggiano col cookie della sessione (HttpOnly) via useApiClient().
 
 export interface ColumnInfo {
   name: string
@@ -164,8 +164,23 @@ export function useApi() {
     async auditActions(): Promise<string[]> {
       return await apiFetch<string[]>('/audit/actions')
     },
-    async auditSessions(): Promise<ActiveSession[]> {
-      return await apiFetch<ActiveSession[]>('/audit/sessions')
+    // le più recenti, e quante sono in tutto
+    async auditSessions(): Promise<Page<ActiveSession>> {
+      return await apiFetch<Page<ActiveSession>>('/audit/sessions')
+    },
+    // l'amministratore chiude la sessione di qualcuno: fuori alla richiesta dopo
+    async revokeSession(id: string): Promise<void> {
+      await apiFetch(`/audit/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    },
+    // le proprie sessioni
+    async mySessions(): Promise<MySession[]> {
+      return await apiFetch<MySession[]>('/auth/sessions')
+    },
+    async closeMySession(id: string): Promise<void> {
+      await apiFetch(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    },
+    async closeOtherSessions(): Promise<void> {
+      await apiFetch('/auth/sessions/close-others', { method: 'POST' })
     },
     async auditAccessActivity(hours = 24): Promise<AccessActivity> {
       return await apiFetch<AccessActivity>(`/audit/access-activity?hours=${hours}`)
@@ -304,13 +319,23 @@ export interface AuditEntry {
   ip: string | null
   user_agent: string | null
 }
-export interface ActiveSession {
+// Una sessione aperta (un browser, uno script): la vede chi la possiede in
+// «Le tue sessioni»; l'amministratore vede quelle di tutti nell'Audit.
+export interface MySession {
+  id: string
+  created_at: string
+  last_seen_at: string
+  expires_at: string
+  ip: string | null
+  user_agent: string | null
+  method: 'password' | 'sso' | string
+  current: boolean // quella da cui si guarda
+}
+export interface ActiveSession extends MySession {
   user_id: number
   email: string
   full_name: string
   is_superuser: boolean
-  last_seen_at: string | null
-  last_seen_ip: string | null
   online: boolean
 }
 export interface AccessBucket {

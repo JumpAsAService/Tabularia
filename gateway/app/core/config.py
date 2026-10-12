@@ -59,6 +59,7 @@ class JwtSettings(BaseModel):
     # CAMBIALO in produzione (env JWT__SECRET). Default solo per dev.
     secret: SecretStr = SecretStr("change-me-in-production")
     algorithm: str = "HS256"
+    # la durata MASSIMA di una sessione: oltre, si rientra anche se si è attivi
     access_ttl_minutes: int = 12 * 60  # 12h
 
 
@@ -70,6 +71,27 @@ class AuthSettings(BaseModel):
     admin_email: str = "admin@tabularia.local"
     admin_password: SecretStr = SecretStr("admin")
     admin_name: str = "Administrator"
+    # env: AUTH__SESSION_IDLE_MINUTES — dopo quanti minuti senza attività una
+    # sessione si chiude. 0 = mai (conta solo la durata massima, JWT__ACCESS_TTL_MINUTES).
+    # Vale due volte: il gateway rifiuta una sessione rimasta ferma più a lungo, e
+    # la pagina aperta esce da sé quando nessuno la tocca da altrettanto.
+    session_idle_minutes: int = Field(default=0, ge=0)
+    # env: AUTH__COOKIE_DOMAIN — il dominio del cookie della sessione. Vuoto (il
+    # default) = l'host del gateway, giusto quando interfaccia e gateway stanno sullo
+    # stesso host (il gateway sotto /api). Con l'interfaccia su un altro host dello
+    # stesso dominio (app.example.com e api.example.com) va il dominio comune,
+    # `example.com`: il server dell'interfaccia deve vedere il cookie per sapere se
+    # c'è una sessione. Due domini diversi non funzionano: il browser non manda il
+    # cookie da un sito all'altro.
+    cookie_domain: Optional[str] = None
+    # env: AUTH__PERSONAL_TOKENS — ogni utente può crearsi token API per i suoi
+    # script (valgono con i SUOI permessi). Spento, i token li hanno solo gli
+    # account di servizio, creati dall'amministratore.
+    personal_tokens: bool = True
+    # env: AUTH__API_TOKEN_MAX_DAYS — la scadenza più lontana di un token API.
+    # Ogni token ne ha una: una credenziale senza scadenza è una credenziale che
+    # nessuno ricorda di aver dato.
+    api_token_max_days: int = Field(default=365, ge=1, le=3650)
 
 
 def _celery_hard_limit_seconds() -> int:
@@ -112,6 +134,11 @@ class EngineSettings(BaseModel):
     run_stale_timeout_seconds: int = Field(
         default_factory=lambda: _celery_hard_limit_seconds() + 300
     )
+    # env: ENGINE__SETTINGS_PANEL — l'amministratore regola alcuni parametri del
+    # motore da Amministrazione → Impostazioni (row group, timeout, tetti, cache…;
+    # vedi services/regolazioni_motore.py). false = solo l'ambiente: il pannello li
+    # mostra senza poterli cambiare, e quelli salvati prima smettono di valere.
+    settings_panel: bool = True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,6 +275,20 @@ class AppSettings(BaseModel):
     # env: APP__ROOT_PATH
     root_path: str = ""
 
+    @field_validator("cors_origins")
+    @classmethod
+    def _no_wildcard_origin(cls, v: list[str]) -> list[str]:
+        # La sessione del browser è un cookie, e CORS è con le credenziali: con "*"
+        # Starlette rispecchia QUALUNQUE origine, e qualunque sito visitato potrebbe
+        # usare la sessione di chi lo visita (intestazione anti-CSRF compresa).
+        for origine in v:
+            if origine.strip() in ("*", "null"):
+                raise ValueError(
+                    f"APP__CORS_ORIGINS non può contenere '{origine.strip()}': elenca gli indirizzi "
+                    "dell'interfaccia (es. [\"https://app.example.com\"]), o lascialo vuoto con un host solo"
+                )
+        return v
+
     @field_validator("root_path")
     @classmethod
     def _valid_root_path(cls, v: str) -> str:
@@ -366,6 +407,16 @@ class AiSettings(BaseModel):
         return bool(self.base_url.strip()) and bool(self.secret_key.get_secret_value().strip())
 
 
+class WebhookSettings(BaseModel):
+    """Chiamate verso sistemi esterni alla fine di un'esecuzione (vedi services/webhooks.py)."""
+
+    # env: WEBHOOKS__RETENTION_DAYS — per quanti giorni si tiene il registro delle
+    # consegne (riuscite o no); poi lo pulisce lo scheduler
+    retention_days: int = Field(default=30, ge=1)
+    # env: WEBHOOKS__TIMEOUT_SECONDS — quanto si aspetta la risposta del ricevente
+    timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+
+
 class AuditSettings(BaseModel):
     """Per quanto si tiene il registro delle azioni.
 
@@ -457,6 +508,7 @@ class Settings(BaseSettings):
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     audit: AuditSettings = Field(default_factory=AuditSettings)
+    webhooks: WebhookSettings = Field(default_factory=WebhookSettings)
     openlineage: OpenLineageSettings = Field(default_factory=OpenLineageSettings)
 
     def is_production(self) -> bool:

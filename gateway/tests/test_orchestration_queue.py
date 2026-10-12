@@ -425,10 +425,11 @@ async def test_un_processo_che_risponde_soltanto_non_avvia_lavoro_di_fondo(monke
             avviati.append(nome)
         return ciclo
 
-    for nome in ("scheduler_loop", "coda_loop", "retention_loop"):
+    cicli = ["scheduler_loop", "coda_loop", "retention_loop", "webhooks_loop", "regolazioni_loop", "siem_loop"]
+    for nome in cicli:
         monkeypatch.setattr(main, nome, finto(nome))
 
-    for ruolo, attesi in (("api", []), ("all", ["scheduler_loop", "coda_loop", "retention_loop"]), ("orchestrator", ["scheduler_loop", "coda_loop", "retention_loop"])):
+    for ruolo, attesi in (("api", []), ("all", cicli), ("orchestrator", cicli)):
         avviati.clear()
         monkeypatch.setenv("APP__ROLE", ruolo)
         get_settings.cache_clear()

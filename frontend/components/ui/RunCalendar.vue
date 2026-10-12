@@ -16,7 +16,7 @@ import { ChevronLeft } from 'lucide-vue-next'
 import { useRuns, type ActivityBucket, type RunActivity } from '~/composables/useRuns'
 import { errMessage } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
-import { useChartTheme } from '~/composables/useChartTheme'
+import { useChartTheme, withAlpha } from '~/composables/useChartTheme'
 
 const { t } = useI18n()
 const fmtx = useFormat()
@@ -136,7 +136,8 @@ const calendarOption = computed(() => {
       textStyle: { fontSize: 10, color: ui.value.muted },
       // rampa sequenziale: è codifica del DATO (intensità), non cromo, quindi
       // resta fissa come la scala di un grafico
-      inRange: { color: ['#bbf7d0', '#4ade80', '#15803d'] },
+      // il colore del successo del tema, più pieno dove i run sono di più
+      inRange: { color: [withAlpha(ui.value.success, 0.28), withAlpha(ui.value.success, 0.62), ui.value.success] },
       text: [t('runCalendar.visualMapMore'), t('runCalendar.visualMapLess')],
     },
     calendar: {

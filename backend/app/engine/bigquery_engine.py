@@ -417,6 +417,18 @@ class BigQueryContext:
 class BigQueryEngine(Engine):
     engine_name = "bigquery"
 
+    # il tetto dei byte fatturati si regola dal pannello (core/regolazioni.py):
+    # il motore vive quanto il processo, la sua sezione passa di lì a ogni uso
+    @property
+    def cfg(self) -> BigQuerySettings:
+        from app.core import regolazioni
+
+        return regolazioni.sovrapposte(self._cfg, "bigquery")
+
+    @cfg.setter
+    def cfg(self, valore: BigQuerySettings) -> None:
+        self._cfg = valore
+
     def __init__(self, storage=None, cache=None, cfg: BigQuerySettings | None = None):
         if storage is None:
             from app.utils import get_storage_service

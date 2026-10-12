@@ -26,6 +26,8 @@ export default {
     engineHint: 'Default for Viewer and new flows. On creation it is still chosen by hand.',
     language: 'Language',
     signOut: 'Sign out',
+    sessions: 'Your sessions',
+    apiTokens: 'API tokens',
     admin: 'admin',
   },
   sharepoint: {
@@ -114,6 +116,7 @@ export default {
     signInWithSso: 'Sign in with SSO',
     ssoCompleting: 'Completing sign-in…',
     ssoError: 'Single sign-on failed ({code}). Try again or sign in with your email.',
+    signedOutIdle: 'You were signed out because the page was left unused. Sign in again to continue.',
   },
   outputNode: {
     titleDatabase: 'Database output',

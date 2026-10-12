@@ -66,6 +66,13 @@ def update_group(
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     era_admin = group.is_admin
     era_osservatore = group.is_observer
+    if (body.is_admin and not era_admin) or (body.is_observer and not era_osservatore):
+        # ogni membro riceverebbe il ruolo: una via d'ingresso che resterebbe dopo
+        # la revoca di un token trapelato
+        from app.routes.api_tokens import nega_se_da_token
+        from app.services import api_tokens
+
+        nega_se_da_token(request, api_tokens.NIENTE_RUOLI_DA_TOKEN)
     if body.description is not None:
         group.description = body.description
     if body.is_admin is not None:
@@ -75,6 +82,12 @@ def update_group(
     session.add(group)
     if era_admin and not group.is_admin:
         ensure_still_admin(session, current)
+    if group.is_observer and not era_osservatore:
+        from app.services import api_tokens
+
+        session.flush()
+        membri_ids = session.exec(select(UserGroupLink.user_id).where(UserGroupLink.group_id == group_id)).all()
+        api_tokens.ritira_se_osservatore(session, membri_ids)
     session.commit()
     session.refresh(group)
     membri = session.exec(

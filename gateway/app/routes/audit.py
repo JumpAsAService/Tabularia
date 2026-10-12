@@ -9,19 +9,20 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlmodel import Session, func, select
 
 from app.core.config import get_settings
 from app.db.session import get_session
-from app.deps.auth import get_current_user, require_observer
+from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.services.masking import mask_email
 from app.services.permissions import is_admin
-from app.models import AuditLog, User
+from app.models import AuditLog, User, UserSession
 from app.schemas.models import UtcDateTime, Page
 from app.services import audit as audit_svc
+from app.services import sessions as sessions_svc
 from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
@@ -48,20 +49,29 @@ class AuditEntryOut(BaseModel):
 
 
 class ActiveSession(BaseModel):
+    """Una sessione aperta (un browser, uno script) e di chi è."""
+    id: str
     user_id: int
     email: str
     full_name: str
     is_superuser: bool
-    last_seen_at: Optional[UtcDateTime]
-    last_seen_ip: Optional[str]
-    online: bool  # last_seen entro ACTIVE_WINDOW
+    created_at: UtcDateTime
+    last_seen_at: UtcDateTime
+    expires_at: UtcDateTime
+    ip: Optional[str]
+    user_agent: Optional[str]
+    method: str
+    online: bool  # attiva entro ACTIVE_WINDOW
+    current: bool  # quella da cui guarda chi chiede
 
 
 def _to_out(e: AuditLog, pieno: bool = True) -> AuditEntryOut:
     """Una voce dell'audit. `pieno=False` per un OSSERVATORE: resta CHE COSA è
-    stato fatto — che è il senso del registro — e spariscono chi l'ha fatto e da
-    dove. L'attore mascherato è stabile, quindi «queste tre azioni sono la stessa
-    persona» si vede ancora."""
+    stato fatto — che è il senso del registro — e spariscono chi l'ha fatto, da
+    dove e con che cosa. Anche la persona su cui si è agito, quando il bersaglio è
+    un'email (sessioni chiuse, utenti promossi o aggiunti a un gruppo): sarebbe la
+    stessa persona dell'attore, in chiaro accanto alla sua maschera. Le maschere
+    sono stabili, quindi «queste tre azioni sono la stessa persona» si vede ancora."""
     try:
         detail = json.loads(e.detail) if e.detail else None
     except json.JSONDecodeError:
@@ -69,7 +79,12 @@ def _to_out(e: AuditLog, pieno: bool = True) -> AuditEntryOut:
     out = AuditEntryOut(**e.model_dump(exclude={"detail"}), detail=detail)
     if not pieno:
         out.actor_label = mask_email(out.actor_label) if "@" in (out.actor_label or "") else out.actor_label
+        if "@" in (out.target_label or ""):
+            out.target_label = mask_email(out.target_label)
         out.ip = None
+        out.user_agent = None
+        if isinstance(out.detail, dict) and out.detail.get("prefix"):
+            out.detail = {**out.detail, "prefix": "tab_…"}  # come in /admin/api-tokens
     return out
 
 
@@ -88,13 +103,22 @@ def list_audit(
     session: Session = Depends(get_session),
 ):
     """Eventi di audit, dal più recente, paginati e filtrabili."""
+    pieno = is_admin(session, chi_chiede)  # chi comanda vede; chi guarda no
     base = select(AuditLog)
     if q:
         like = f"%{q}%"
-        base = base.where(or_(
-            AuditLog.actor_label.ilike(like), AuditLog.target_label.ilike(like),
-            AuditLog.action.ilike(like), AuditLog.ip.ilike(like),
-        ))
+        if pieno:
+            base = base.where(or_(
+                AuditLog.actor_label.ilike(like), AuditLog.target_label.ilike(like),
+                AuditLog.action.ilike(like), AuditLog.ip.ilike(like),
+            ))
+        else:
+            # l'osservatore cerca solo su quel che vede: sugli IP e sulle email che
+            # gli sono nascosti, contare le righe trovate li ricostruirebbe a tentativi
+            base = base.where(or_(
+                AuditLog.action.ilike(like),
+                and_(AuditLog.target_label.ilike(like), ~AuditLog.target_label.contains("@")),
+            ))
     if action:
         base = base.where(AuditLog.action == action)
     if target_type:
@@ -108,7 +132,6 @@ def list_audit(
     if until is not None:
         base = base.where(AuditLog.ts <= until)
 
-    pieno = is_admin(session, chi_chiede)  # chi comanda vede; chi guarda no
     total = session.exec(select(func.count()).select_from(base.subquery())).one()
     rows = session.exec(
         base.order_by(AuditLog.ts.desc()).offset(offset).limit(limit)
@@ -183,19 +206,23 @@ def access_activity(
     )
 
 
-@router.get("/audit/sessions", response_model=list[ActiveSession])
+@router.get("/audit/sessions", response_model=Page[ActiveSession])
 def active_sessions(
+    request: Request,
+    limit: int = Query(100, ge=1, le=500),
     session: Session = Depends(get_session),
     chi_chiede: User = Depends(get_current_user),
 ):
-    """Utenti con attività recente (il JWT è stateless: 'attivo ora' = last_seen
-    entro la finestra). Ordinati dal più recente. Chi non è mai stato visto è escluso."""
+    """Le sessioni aperte, una per browser o script, dalla più recente: le prime
+    `limit`, e quante sono in tutto (su una demo pubblica ogni accesso dell'ospite
+    è una riga). Sono le righe che tengono validi i token: chiuderne una (DELETE)
+    butta fuori quel browser alla richiesta dopo."""
     pieno = is_admin(session, chi_chiede)  # chi comanda vede; chi guarda no
-    now = datetime.now(timezone.utc)
-    threshold = now - ACTIVE_WINDOW
-    users = session.exec(
-        select(User).where(User.last_seen_at.is_not(None)).order_by(User.last_seen_at.desc())
-    ).all()
+    threshold = sessions_svc.adesso() - ACTIVE_WINDOW
+    aperte = sessions_svc.aperte(session, limite=limit)
+    utenti = {u.id: u for u in session.exec(
+        select(User).where(User.id.in_({s.user_id for s in aperte}))
+    ).all()} if aperte else {}
     # admin EFFETTIVI: anche chi lo è per appartenenza a un gruppo di amministratori
     from app.models import Group, UserGroupLink
 
@@ -204,20 +231,51 @@ def active_sessions(
         .where(UserGroupLink.group_id == Group.id)
         .where(Group.is_admin == True)  # noqa: E712
     ).all())
+    corrente = sessions_svc.sid_corrente(request)
     out: list[ActiveSession] = []
-    for u in users:
-        seen = u.last_seen_at
-        if seen is not None and seen.tzinfo is None:
-            seen = seen.replace(tzinfo=timezone.utc)
+    for s in aperte:
+        u = utenti.get(s.user_id)
+        if u is None:
+            continue
         out.append(ActiveSession(
+            # l'osservatore non chiude niente: gli basta distinguere le righe
+            id=s.id if pieno else sessions_svc.maniglia(s.id),
             user_id=u.id,
             # un OSSERVATORE vede quante sessioni ci sono e se sono vive, non
             # chi c'è dietro né da dove entra (vedi services/masking.py)
             email=u.email if pieno else mask_email(u.email),
             full_name=u.full_name if pieno else "",
             is_superuser=u.is_superuser or u.id in via_gruppo,
-            last_seen_at=u.last_seen_at,
-            last_seen_ip=u.last_seen_ip if pieno else None,
-            online=(seen is not None and seen >= threshold),
+            created_at=s.created_at,
+            last_seen_at=s.last_seen_at,
+            expires_at=s.expires_at,
+            ip=s.ip if pieno else None,
+            user_agent=s.user_agent if pieno else None,
+            method=s.method,
+            online=s.last_seen_at >= threshold,
+            current=s.id == corrente,
         ))
-    return out
+    return Page(items=out, total=sessions_svc.quante_aperte(session))
+
+
+@router.delete("/audit/sessions/{sid}", status_code=204)
+def revoke_session(
+    sid: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    admin: User = Depends(require_superuser),
+):
+    """Chiude la sessione di qualcun altro (o la propria): il suo token smette di
+    valere alla richiesta dopo. Solo amministratori: l'osservatore guarda."""
+    riga = session.get(UserSession, sid)
+    if riga is None:
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+    proprietario = session.get(User, riga.user_id)
+    sessions_svc.chiudi(session, sid)
+    audit_svc.record_audit(
+        session, actor=admin, action=audit_svc.SESSION_REVOKE, request=request,
+        target_type="user", target_id=riga.user_id,
+        target_label=proprietario.email if proprietario else None,
+        detail={"sessions": 1},
+    )
+    return None

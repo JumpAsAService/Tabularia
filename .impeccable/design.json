@@ -511,6 +511,35 @@
         "sheen": "rgba(255, 255, 255, 0.03)",
         "tint-accent": "rgba(102, 217, 239, 0.15)",
         "shimmer": "rgba(248, 248, 242, 0.07)"
+      },
+      "imperium": {
+        "selector": ":root[data-theme=\"imperium\"]",
+        "colorScheme": "light",
+        "bg": "#f2ece3",
+        "bg-soft": "#fdfbf7",
+        "panel": "#fbf8f3",
+        "panel-2": "#efe7dc",
+        "border": "#ddd1c2",
+        "border-soft": "#e9e0d4",
+        "control-border": "#8a7b70",
+        "text": "#2a1c21",
+        "muted": "#6b5c56",
+        "accent": "#8a1c4a",
+        "accent-hi": "#6c1539",
+        "accent-2": "#4a6a26",
+        "violet": "#7a5a0e",
+        "danger": "#b5321e",
+        "on-accent": "#fff",
+        "on-accent-2": "#ffffff",
+        "edge": "#c2b2a3",
+        "grad-accent": "linear-gradient(135deg, #9a2352 0%, #6e1a40 100%)",
+        "scrim": "rgba(42, 28, 33, 0.35)",
+        "topbar-bg": "rgba(251, 248, 243, 0.9)",
+        "row-even": "rgba(90, 50, 40, 0.025)",
+        "row-hover": "rgba(138, 28, 74, 0.06)",
+        "sheen": "rgba(90, 50, 40, 0.02)",
+        "tint-accent": "rgba(138, 28, 74, 0.09)",
+        "shimmer": "rgba(90, 50, 40, 0.06)"
       }
     },
     "typographyMeta": {
@@ -552,7 +581,7 @@
       {
         "name": "shadow-2",
         "value": "0 4px 16px rgba(0, 0, 0, 0.45)",
-        "purpose": "Anything floating: dialogs, menus, Select panels, toasts, nodes on hover. Light: 0 6px 20px rgba(20, 30, 60, 0.12); dracula and monokai: 0.5 alpha."
+        "purpose": "Anything floating: dialogs, menus, Select panels, toasts, nodes on hover. Light: 0 6px 20px rgba(20, 30, 60, 0.12); dracula and monokai: 0.5 alpha; imperium: like light, in a warm brown."
       },
       {
         "name": "focus-glow",
@@ -740,7 +769,7 @@
   ],
   "narrative": {
     "northStar": "The Quiet Instrument",
-    "overview": "Tabularia is a working tool that people keep open all day: a flow canvas, preview grids, run histories, catalogs. The interface is built like an instrument housing around the data. Surfaces are a stack of close, cool neutrals; chrome is small, sentence-case and low-contrast against itself; the only saturated things on a screen are the primary action, the operation-category colour of a node, and the state of a run. The product principle \"the data is the subject; the interface recedes\" is visible in the build as density (13.5px body, 12px data cells, 52px top bar, 6px control padding) rather than as emptiness.\n\nThe whole palette lives in CSS custom properties on `:root` and is swapped by a single `data-theme` attribute on `<html>`: dark (default, midnight blue), light (cool greys, not pure white pages), dracula and monokai (the editor palettes this audience already lives in). Components never know which theme is active; they name roles. Charts and the sign-in canvas, which cannot read CSS variables, resolve the same tokens at runtime and re-resolve when the theme changes.\n\nMotion is functional and brief (0.1 to 0.22s state transitions, a skeleton shimmer, a dashed flow on data edges). There is exactly one authored motion moment in the product: the ordering field behind the sign-in card, where scattered, dirty numeric values settle into a right-aligned table. It is the product's purpose drawn in its own material (monospace numbers, table rules, theme tokens) and it is not a pattern to repeat elsewhere.",
+    "overview": "Tabularia is a working tool that people keep open all day: a flow canvas, preview grids, run histories, catalogs. The interface is built like an instrument housing around the data. Surfaces are a stack of close, cool neutrals; chrome is small, sentence-case and low-contrast against itself; the only saturated things on a screen are the primary action, the operation-category colour of a node, and the state of a run. The product principle \"the data is the subject; the interface recedes\" is visible in the build as density (13.5px body, 12px data cells, 52px top bar, 6px control padding) rather than as emptiness.\n\nThe whole palette lives in CSS custom properties on `:root` and is swapped by a single `data-theme` attribute on `<html>`: dark (default, midnight blue), light (cool greys, not pure white pages), dracula and monokai (the editor palettes this audience already lives in), and imperium (the colours of Rome in a modern key: travertine and marble, Tyrian purple for the action, gold as a detail, Pompeian red, laurel). Components never know which theme is active; they name roles. Charts and the sign-in canvas, which cannot read CSS variables, resolve the same tokens at runtime and re-resolve when the theme changes.\n\nMotion is functional and brief (0.1 to 0.22s state transitions, a skeleton shimmer, a dashed flow on data edges). There is exactly one authored motion moment in the product: the ordering field behind the sign-in card, where scattered, dirty numeric values settle into a right-aligned table. It is the product's purpose drawn in its own material (monospace numbers, table rules, theme tokens) and it is not a pattern to repeat elsewhere.",
     "keyCharacteristics": [
       "Four themes from one role vocabulary; dark is the default, selection persisted per browser.",
       "Dense by intent: 13.5px base, 12px data, controls at 6px vertical padding; density relaxes only under `pointer: coarse`.",

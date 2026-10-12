@@ -8,10 +8,18 @@ import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
-  User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles,
+  User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
+  SlidersHorizontal, Radar,
 } from 'lucide-vue-next'
+// import espliciti: nel container i componenti nuovi non vengono scansionati
+import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
+import WebhooksSection from '~/components/admin/WebhooksSection.vue'
+import EngineSettingsSection from '~/components/admin/EngineSettingsSection.vue'
+import SiemSection from '~/components/admin/SiemSection.vue'
+import { useSiem } from '~/composables/useSiem'
+import { useEngineSettings } from '~/composables/useEngineSettings'
 import { errMessage } from '~/composables/useApi'
-import { useProjects, type GroupOut, type UserOut } from '~/composables/useProjects'
+import { useProjects, type GroupOut, type Project, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
 import { usePrivacy, type PrivacyNotice } from '~/composables/usePrivacy'
 import { useEnginePolicy, type EnginePolicy } from '~/composables/useEnginePolicy'
@@ -22,6 +30,9 @@ const bannersApi = useBanners()
 const privacyApi = usePrivacy()
 const engineApi = useEnginePolicy()
 const aiApi = useAi()
+const integr = useIntegrations()
+const impostazioniApi = useEngineSettings()
+const siemApi = useSiem()
 // modelli AI: catalogo del provider + scelta dell'amministratore. `null` =
 // assistente non configurato o provider irraggiungibile (la sezione lo dice)
 const modelli = ref<AiModel[] | null>(null)
@@ -36,7 +47,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Sezione = 'users' | 'groups' | 'banners' | 'privacy' | 'engines' | 'ai'
+type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'siem' | 'ai'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
@@ -62,21 +73,36 @@ function combacia(q: string, ...campi: (string | null | undefined)[]): boolean {
   return campi.filter(Boolean).join(' ').toLowerCase().includes(ago)
 }
 
+// le PERSONE: gli account di servizio hanno la loro sezione
+const persone = computed(() => users.value.filter((u) => !u.is_service))
 const utentiFiltrati = computed(() =>
-  users.value.filter((u) => combacia(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
+  persone.value.filter((u) => combacia(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
 )
+// conteggi delle due sezioni che caricano da sé (account di servizio, webhook)
+const nServizio = ref(0)
+const nWebhook = ref(0)
+// quante impostazioni del motore sono cambiate dal pannello (le altre valgono dall'ambiente)
+const nImpostazioni = ref(0)
+// l'inoltro dell'audit al SIEM: acceso o no
+const siemAcceso = ref(false)
+// le cartelle, per il filtro dei webhook
+const cartelle = ref<Project[]>([])
 const gruppiFiltrati = computed(() =>
   groups.value.filter((g) => combacia(qGroups.value, g.name, g.description)),
 )
 
 const sezioni = computed(() => [
-  { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: users.value.length },
+  { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: persone.value.length },
   { id: 'groups' as Sezione, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
+  { id: 'service' as Sezione, label: t('integrations.serviceAccountsTitle'), icon: Bot, badge: nServizio.value },
+  { id: 'webhooks' as Sezione, label: t('integrations.webhooksTitle'), icon: WebhookIcon, badge: nWebhook.value },
   { id: 'banners' as Sezione, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
   { id: 'privacy' as Sezione, label: t('adminPanel.privacyTitle'), icon: ShieldCheck, badge: 0 },
   // il conteggio è quanti motori sono CONSENTITI: è il numero che descrive lo
   // stato dell'installazione, non quanti ne esistono
   { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
+  { id: 'settings' as Sezione, label: t('engineSettings.navTitle'), icon: SlidersHorizontal, badge: nImpostazioni.value },
+  { id: 'siem' as Sezione, label: t('siem.navTitle'), icon: Radar, badge: siemAcceso.value ? 1 : 0 },
   // quanti modelli sono ABILITATI: zero = l'assistente non e' usabile da nessuno
   { id: 'ai' as Sezione, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (modelli.value ?? []).filter((m) => m.enabled).length },
 ])
@@ -102,9 +128,20 @@ async function loadAll() {
     banners.value = await bannersApi.list()
     try { privacy.value = await privacyApi.get() } catch { privacy.value = null }
     motori.value = await engineApi.list()
+    cartelle.value = await api.list()
   } catch (e) {
     toast.error(errMessage(e))
   }
+  // i conteggi delle due sezioni che caricano da sé, per la navigazione
+  try {
+    ;[nServizio.value, nWebhook.value] = (await Promise.all([integr.serviceAccounts(), integr.webhooks()])).map((x) => x.length)
+  } catch { /* le sezioni lo diranno quando si aprono */ }
+  try {
+    nImpostazioni.value = (await impostazioniApi.get()).items.filter((v) => v.value !== null).length
+  } catch { /* motore giù: la sezione lo dirà quando si apre */ }
+  try {
+    siemAcceso.value = (await siemApi.get()).enabled
+  } catch { /* la sezione lo dirà quando si apre */ }
   // a parte: l'assistente puo' non essere configurato, e non e' un errore del pannello
   try {
     modelli.value = await aiApi.models()
@@ -371,12 +408,12 @@ async function toggleMotore(m: EnginePolicy) {
         <!-- ── UTENTI ─────────────────────────────────────────────────────── -->
         <template v-if="sezione === 'users'">
           <div class="card">
-            <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ users.length }}</span></h4>
+            <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ persone.length }}</span></h4>
 
             <div class="rowsearch">
               <Search :size="13" />
               <input v-model="qUsers" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" :aria-label="$t('adminPanel.searchPlaceholder')" />
-              <span class="muted count">{{ utentiFiltrati.length }}/{{ users.length }}</span>
+              <span class="muted count">{{ utentiFiltrati.length }}/{{ persone.length }}</span>
               <button v-if="qUsers" class="x" :title="$t('adminPanel.clearSearch')" @click="qUsers = ''">
                 <X :size="12" />
               </button>
@@ -665,6 +702,22 @@ async function toggleMotore(m: EnginePolicy) {
             </div>
           </div>
         </template>
+        <template v-else-if="sezione === 'siem'">
+          <SiemSection @state="siemAcceso = $event" />
+        </template>
+
+        <template v-else-if="sezione === 'settings'">
+          <EngineSettingsSection @count="nImpostazioni = $event" />
+        </template>
+
+        <template v-else-if="sezione === 'service'">
+          <ServiceAccountsSection :can-write="canWrite" :groups="groups" @count="nServizio = $event" />
+        </template>
+
+        <template v-else-if="sezione === 'webhooks'">
+          <WebhooksSection :can-write="canWrite" :projects="cartelle" @count="nWebhook = $event" />
+        </template>
+
         <template v-else-if="sezione === 'ai'">
           <div class="card">
             <h4><Sparkles :size="14" /> {{ $t('adminPanel.aiTitle') }}</h4>

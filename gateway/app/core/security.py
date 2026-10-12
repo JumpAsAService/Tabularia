@@ -20,14 +20,16 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
-def create_access_token(subject: int | str) -> str:
+def create_access_token(subject: int | str, session_id: str, expires_at: datetime | None = None) -> str:
+    """Il token di una sessione (vedi services/sessions.py, che è chi lo chiede):
+    vale finché la riga `session_id` esiste, e mai oltre `expires_at`."""
     s = get_settings()
     now = datetime.now(timezone.utc)
-    payload = {
-        "sub": str(subject),
-        "iat": now,
-        "exp": now + timedelta(minutes=s.jwt.access_ttl_minutes),
-    }
+    if expires_at is None:
+        expires_at = now + timedelta(minutes=s.jwt.access_ttl_minutes)
+    elif expires_at.tzinfo is None:  # le colonne sono naive UTC
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    payload = {"sub": str(subject), "sid": session_id, "iat": now, "exp": expires_at}
     return jwt.encode(payload, s.jwt.secret.get_secret_value(), algorithm=s.jwt.algorithm)
 
 

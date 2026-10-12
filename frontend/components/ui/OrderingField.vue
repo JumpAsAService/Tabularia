@@ -9,7 +9,7 @@
 // invece che detto; e non è la pioggia di Matrix: nulla cade, tutto si sistema.
 //
 // Un canvas solo, decorativo (aria-hidden). Colori letti dai token del tema,
-// quindi segue dark / light / dracula / monokai senza saperne niente.
+// quindi segue dark / light / dracula / monokai / imperium senza saperne niente.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = withDefaults(

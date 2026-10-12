@@ -125,7 +125,7 @@ def test_tx_token_scaduto_o_di_tipo_errato():
     from app.core.security import create_access_token
 
     with pytest.raises(sso.SsoError) as e:
-        sso.read_tx_token(create_access_token(1), "s")
+        sso.read_tx_token(create_access_token(1, "sid"), "s")
     assert e.value.code == "tx_invalid"
 
 
@@ -451,22 +451,23 @@ def test_il_login_locale_rifiuta_un_utente_solo_sso(session):
     password vuota. Il login locale resta per gli utenti che ne hanno una."""
     from app.routes.auth import login
     from app.schemas.models import LoginRequest
-    from fastapi import HTTPException
+    from fastapi import HTTPException, Response
 
     user, _ = sso.provision_and_sync(session, claims("solo-sso@x.local", groups=[]), cfg())
     assert user.hashed_password is None
     for password in ("", "x", "qualsiasi"):
         with pytest.raises(HTTPException) as e:
-            login(LoginRequest(email="solo-sso@x.local", password=password), FakeRequest(), session)
+            login(LoginRequest(email="solo-sso@x.local", password=password), FakeRequest(), Response(), session)
         assert e.value.status_code == 401
 
 
-def test_callback_ok_emette_il_token_interno_e_scrive_l_audit(session, monkeypatch):
-    """Percorso felice della rotta: token INTERNO nel frammento, cookie di
-    transazione cancellato, evento di audit col delta dei gruppi."""
+def test_callback_ok_apre_la_sessione_interna_e_scrive_l_audit(session, monkeypatch):
+    """Percorso felice della rotta: sessione INTERNA nel cookie HttpOnly e niente
+    token nell'URL, cookie di transazione cancellato, evento di audit col delta
+    dei gruppi."""
     from app.core import config as config_mod
     from app.core.security import decode_access_token
-    from app.models import AuditLog
+    from app.models import AuditLog, UserSession
     from app.routes import sso as sso_routes
 
     enabled = Settings(oidc={"issuer": "https://idp/realms/t", "client_id": "c", "client_secret": "s",
@@ -483,12 +484,19 @@ def test_callback_ok_emette_il_token_interno_e_scrive_l_audit(session, monkeypat
     res = sso_routes.sso_callback(FakeRequest({sso.TX_COOKIE: tx_cookie}), code="ok", state="s1", session=session)
 
     assert res.status_code == 303
-    location = res.headers["location"]
-    assert location.startswith("https://app.example/auth/callback#token=")
-    # è il TOKEN INTERNO di Tabularia, identico a quello del login locale
-    assert int(decode_access_token(location.split("#token=")[1])["sub"]) == user.id
+    # il token non passa dall'URL: né nel frammento né altrove
+    assert res.headers["location"] == "https://app.example/auth/callback"
+    cookies = res.headers.getlist("set-cookie")
+    sessione = next(c for c in cookies if c.startswith("tab_token="))
+    assert "HttpOnly" in sessione and "Path=/" in sessione and "SameSite=lax" in sessione
+    # è il TOKEN INTERNO di Tabularia, con una sessione aperta come quella del login locale
+    payload = decode_access_token(sessione.split(";")[0].split("=", 1)[1])
+    assert int(payload["sub"]) == user.id
+    riga = session.get(UserSession, payload["sid"])
+    assert riga is not None and riga.user_id == user.id and riga.method == "sso"
     # il cookie di transazione è a uso singolo
-    assert 'tab_sso_tx=""' in res.headers.get("set-cookie", "") or "Max-Age=0" in res.headers.get("set-cookie", "")
+    transazione = next(c for c in cookies if c.startswith("tab_sso_tx="))
+    assert 'tab_sso_tx=""' in transazione or "Max-Age=0" in transazione
 
     entry = session.exec(select(AuditLog).where(AuditLog.action == "auth.sso_login")).first()
     assert entry is not None and entry.actor_id == user.id and "analytics" in (entry.detail or "")

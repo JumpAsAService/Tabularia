@@ -1,10 +1,10 @@
-// Wrapper di $fetch che allega il Bearer token e gestisce il 401 (→ /login).
+// Wrapper di $fetch che manda il cookie della sessione (con l'intestazione
+// anti-CSRF) e gestisce il 401 (→ /login).
 // Usato da tutte le chiamate autenticate (dati + control plane).
 import { LOCALE_COOKIE } from '~/plugins/i18n'
 
 export function useApiClient() {
   const base = useRuntimeConfig().public.apiBase as string
-  const token = useAuthToken()
   const lingua = useCookie<string | null>(LOCALE_COOKIE)
 
   /** La lingua dell'interfaccia (il cookie che la tiene): il gateway scrive in quella
@@ -19,16 +19,15 @@ export function useApiClient() {
   }
 
   async function apiFetch<T>(path: string, opts: Record<string, any> = {}): Promise<T> {
-    const headers: Record<string, string> = { ...(opts.headers || {}) }
-    if (token.value) headers.Authorization = `Bearer ${token.value}`
+    const headers: Record<string, string> = { ...CSRF_HEADERS, ...(opts.headers || {}) }
     const l = linguaCorrente()
     if (l && !headers['Accept-Language']) headers['Accept-Language'] = l
     try {
-      return await $fetch<T>(`${base}${path}`, { ...opts, headers })
+      return await $fetch<T>(`${base}${path}`, { ...opts, headers, credentials: 'include' })
     } catch (e: any) {
       const code = e?.response?.status ?? e?.statusCode
       if (code === 401) {
-        token.value = null
+        dropSession()
         if (import.meta.client) navigateTo('/login')
       }
       throw e

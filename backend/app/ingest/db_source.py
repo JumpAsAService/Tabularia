@@ -719,16 +719,25 @@ def ingest_db_to_parquet(
         # puo' leggere solo le colonne che servono — sarebbero migliaia di
         # richieste da poche decine di KB — e finisce per scaricare tutto il file.
         # Qui i batch si ACCUMULANO fino alla soglia e si scrivono insieme.
-        soglia = get_settings().ingest.parquet_row_group_rows
+        # Il blocco si scrive di ESATTAMENTE `soglia` righe e il resto passa al
+        # blocco dopo: un batch del driver piu' grande della soglia (Postgres ne
+        # consegna anche decine di migliaia insieme) usciva come un row group
+        # solo, e uno appena sopra lasciava ogni volta un row group minuscolo.
+        soglia = max(1, get_settings().ingest.parquet_row_group_rows)
         with pq.ParquetWriter(tmp, schema, compression="zstd") as writer:
             blocco: list = []
             in_blocco = 0
 
-            def _scarica() -> None:
+            def _scarica(fine: bool = False) -> None:
                 nonlocal blocco, in_blocco
-                if blocco:
-                    writer.write_table(pa.Table.from_batches(blocco, schema))
-                    blocco, in_blocco = [], 0
+                if not blocco:
+                    return
+                tabella = pa.Table.from_batches(blocco, schema)
+                while tabella.num_rows >= soglia or (fine and tabella.num_rows):
+                    n = min(soglia, tabella.num_rows)
+                    writer.write_table(tabella.slice(0, n), row_group_size=n)
+                    tabella = tabella.slice(n)
+                blocco, in_blocco = tabella.to_batches(), tabella.num_rows
 
             for batch in gen:
                 blocco.append(batch)
@@ -737,7 +746,7 @@ def ingest_db_to_parquet(
                 avanza("reading", rows=rows)
                 if in_blocco >= soglia:
                     _scarica()
-            _scarica()  # l'ultimo blocco, quasi sempre piu' corto della soglia
+            _scarica(fine=True)  # l'ultimo blocco, quasi sempre piu' corto della soglia
 
         avanza("saving", rows=rows)
         storage.create_bucket(bucket)

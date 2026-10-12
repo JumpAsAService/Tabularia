@@ -117,8 +117,8 @@ the same image. What tells them apart is one variable, `APP__ROLE`.
 
 **Requests.** One Python process uses one core and tops out around 95 requests a
 second — a few hundred people clicking at once. Past that, add replicas. Nothing
-is tied to a pod: sessions are a signed token, and the sign-in throttle and the
-editor's "also open by" notice live in PostgreSQL. Measured with 500 simulated
+is tied to a pod: sessions, the sign-in throttle and the editor's "also open by"
+notice live in PostgreSQL. Measured with 500 simulated
 users on one eight-core machine: one replica saturated (95th percentile of page
 requests 5.8 s), three answered all of them in 0.12 s at 44% CPU each.
 
@@ -201,8 +201,9 @@ Two rules:
 Every process refuses to start without it, in every environment — that is
 deliberate, so a missing key fails at deploy time rather than at the first run.
 
-`JWT__SECRET` signs sessions. Changing it logs everyone out, which is also the
-only way to invalidate a leaked token (see Known limits).
+`JWT__SECRET` signs sessions. Changing it logs everyone out. One leaked session
+does not need it: an administrator closes it from the Audit page, and a password
+change closes all of that user's sessions.
 
 One Secret is mounted by every pod, so the engine pods also receive gateway-only
 values. That keeps the chart readable; split it per component if your policy
@@ -252,7 +253,9 @@ password, the gateway never sees the storage or warehouse keys.
   (`/api`). Register the new SSO redirect URI on the identity provider,
   `https://<host>/api/auth/sso/callback`, before upgrading.
 - `frontend.publicApiBase` is optional (the default is `/api` on the same host);
-  remove it unless the API lives on another host.
+  remove it unless the API lives on another host of the same domain, and then set
+  `auth.cookieDomain` to that domain: the session is a cookie the UI's server must
+  see.
 - `networkPolicy.enabled` is now `true`; `gateway.replicas` is 2;
   `gateway.trustedProxies` is new; no pod mounts the service account token
   (`serviceAccount.automountToken`).
@@ -278,6 +281,15 @@ roll: a new one is ready before an old one stops, and requests are not dropped.
 `migrations.enabled: false` drops the init container, for a pipeline that runs
 the same command itself before upgrading. See
 [docs/database-migrations.md](../../../docs/database-migrations.md).
+
+**Coming from chart 2.0 with app 1.1** (sessions): the new interface signs in with
+a cookie the old gateway does not read. Upgrade the gateway first, keeping the
+interface you run now, then the rest; everyone signs in again once:
+
+```bash
+helm upgrade … --set image.frontend.tag=<the version you run now>   # gateway, orchestrator, migration
+helm upgrade …                                                       # the interface
+```
 
 Flow executions in progress **are** interrupted when the orchestrator pod
 carrying them stops: they are closed as failed with a message that says so, and
@@ -311,10 +323,6 @@ limits, and they are documented in [`docs/audit`](../../../docs/audit).
   is open by default. If your issuer is the whole company directory, set
   `oidc.allowedEmailDomains` or `oidc.requireAllowlistedGroup`, or restrict
   assignment on the provider side.
-- **Sessions cannot be revoked individually.** Disabling or deleting a user takes
-  effect immediately, but a leaked token of an account that stays active remains
-  valid for `auth.jwtAccessTtlMinutes` (12 hours by default) unless you rotate
-  `JWT__SECRET`, which signs everyone out.
 - **Outbound connections are not filtered.** A user who can create database
   connections can make the engine connect to anything the cluster reaches,
   including cloud metadata endpoints. Enable `networkPolicy` with an explicit

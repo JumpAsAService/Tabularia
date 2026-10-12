@@ -13,6 +13,7 @@ from app.api.routes.sharepoint import router as sharepoint_router
 from app.api.routes.observability import router as observability_router
 from app.api.routes.dbt import router as dbt_router
 from app.api.routes.contracts import router as contracts_router
+from app.api.routes.regolazioni import router as regolazioni_router
 from app.api.solo_dal_gateway import SoloDalGateway
 
 
@@ -68,6 +69,7 @@ app.include_router(sharepoint_router)
 app.include_router(observability_router)
 app.include_router(dbt_router)
 app.include_router(contracts_router)
+app.include_router(regolazioni_router)
 
 @app.get("/engines")
 def list_engines():

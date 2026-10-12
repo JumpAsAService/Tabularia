@@ -96,8 +96,8 @@ function addFree() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: rgba(79, 140, 255, 0.14);
-  border: 1px solid rgba(79, 140, 255, 0.4);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 999px;
   padding: 1px 4px 1px 9px;
   font-size: 12px;

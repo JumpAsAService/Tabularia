@@ -147,6 +147,8 @@ def test_the_wait_grows_with_the_attempts(session):
 
 
 def test_the_route_answers_429_with_retry_after(session):
+    from fastapi import Response
+
     from app.routes import auth as auth_routes
     from app.schemas.models import LoginRequest
     from types import SimpleNamespace
@@ -155,7 +157,7 @@ def test_the_route_answers_429_with_retry_after(session):
     for _ in range(login_throttle.SOGLIA):
         login_throttle.registra_errore(session, "7.7.7.7", "a@x.it")
     with pytest.raises(HTTPException) as e:
-        auth_routes.login(LoginRequest(email="a@x.it", password="x"), request=request, session=session)
+        auth_routes.login(LoginRequest(email="a@x.it", password="x"), request=request, response=Response(), session=session)
     assert e.value.status_code == 429 and "Retry-After" in (e.value.headers or {})
 
 

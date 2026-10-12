@@ -89,13 +89,23 @@ def test_una_differenza_coi_modelli_ferma_il_passo_senza_mezze_modifiche(databas
         assert any("zz_a_mano" in str(d) for d in m.differenze(c))
     with pytest.raises(RuntimeError, match="non è quello dei modelli"):
         m.migra(database_temporaneo)
-    # un database di prima di Alembic che non torna: l'adozione si annulla tutta
+    # un database di prima di Alembic che non torna: l'adozione si annulla tutta.
+    # «Di prima di Alembic» = lo schema della BASE, senza tabelle né colonne delle
+    # revisioni successive: lo si costruisce così, non togliendo pezzi allo schema
+    # di oggi (che a ogni revisione nuova lascerebbe indietro qualcosa)
     with database_temporaneo.begin() as c:
+        c.execute(text("DROP SCHEMA public CASCADE"))
+        c.execute(text("CREATE SCHEMA public"))
+    with database_temporaneo.begin() as c:
+        m.command.upgrade(m._config(c), m.BASE)
         c.execute(text("DROP TABLE alembic_version"))
-    with pytest.raises(RuntimeError):
+        c.execute(text("ALTER TABLE users ADD COLUMN zz_a_mano INTEGER"))
+    with pytest.raises(RuntimeError, match="non è quello dei modelli"):
         m.migra(database_temporaneo)
     with database_temporaneo.connect() as c:
         assert m.revisione(c) is None and not inspect(c).has_table("alembic_version")
+        # niente a metà: nemmeno le tabelle delle revisioni dopo la base
+        assert not inspect(c).has_table("user_sessions")
 
 
 def test_senza_migrazione_automatica_il_gateway_si_ferma_solo_se_il_database_e_indietro(database_temporaneo):

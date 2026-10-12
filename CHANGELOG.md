@@ -3,6 +3,157 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **Audit log to Splunk** (Administration → SIEM, described in `docs/siem-splunk.md`):
+  every audit entry goes to Splunk through the HTTP Event Collector within about
+  fifteen seconds, one event per entry with CIM-friendly `user` and `src`. The audit
+  table is the queue: forwarding moves on only when Splunk confirms, waits and
+  retries (5 s up to 5 min) when it does not, and resumes from the first unconfirmed
+  entry, so nothing is skipped. Delivery is at least once, and each event carries
+  the entry's `id` to deduplicate. With several replicas one process sends, under a
+  lock in the database. A test button shows Splunk's own answer; the panel shows sent
+  and waiting entries and the last error. The HEC token is stored encrypted and never
+  shown again; observers see the state without the address or errors; API tokens
+  cannot change the destination. Certificate verification is on by default and can
+  be turned off for Splunk's factory self-signed certificate. Schema revision 0005.
+- **Engine settings from the administration panel** (Administration → Settings,
+  described in `docs/engine-settings.md`): twelve parameters the engine reads when it
+  needs them, grouped as Import, Export, Execution, Step cache, ClickHouse and BigQuery,
+  each with a description in the five languages. A change applies to every engine
+  process within ten seconds, without restarts; task time limits apply from the next
+  task, because they now travel in each task's message. The environment stays the
+  starting value and one click goes back to it. The engine checks every value (ranges
+  narrower than the environment's, the soft time limit below the hard one, the import
+  read timeout below the soft limit) and the hard limit cannot exceed
+  `ENGINE__RUN_STALE_TIMEOUT_SECONDS` minus five minutes. Values live in the gateway's
+  database (schema revision 0004) and are sent again every minute, so a flushed Valkey
+  heals itself. Administrators change them, observers see them, API tokens cannot
+  change them, and each change is in the audit log with the old and new values.
+  `ENGINE__SETTINGS_PANEL=false` keeps the environment the only source.
+- **Fixed: a database import wrote one row group per driver batch larger than the row
+  group size**, instead of splitting it (25,000 rows delivered at once came out as one
+  block with a 10,000-row setting), and left a tiny row group after every block. Blocks
+  are now exactly the configured size, except the last.
+- **API tokens, service accounts and webhooks**: an API for integrations, described
+  in `docs/api.md` (and on the `/docs` page the gateway serves, now in English).
+  - **Personal API tokens** (Settings → API tokens) for one's own scripts, and
+    **service accounts** (Administration → Service accounts) for schedulers, CI and
+    department scripts: they sign in only with a token, never with a password or
+    SSO, and get permissions from groups and folders like anyone else. Tokens are
+    read-only or read-and-write, never more powerful than their account, always
+    expire (at most `AUTH__API_TOKEN_MAX_DAYS`, 365 days), and are shown once:
+    only a fingerprint is kept. Administrators see and revoke every token. Each
+    action records the token's name in the audit log. A token cannot create other
+    tokens, users or passwords, and is accepted only in the `Authorization` header.
+    A read-only token can still export and preview. A new password, or deactivating
+    the account, revokes its tokens with its sessions (reactivating does not bring
+    them back). A token cannot reactivate an account or make one an administrator or
+    an observer, so revoking a leaked token closes the door it opened.
+    `AUTH__PERSONAL_TOKENS=false` leaves tokens to service accounts only, and
+    switches off the personal ones already given out. Observer accounts have no
+    personal tokens, and lose the ones they had when they become observers.
+  - **Webhooks** (Administration → Webhooks): Tabularia calls an address when a flow
+    run or a datasource refresh succeeds or fails, optionally only for one folder.
+    Calls are signed (`X-Tabularia-Signature`, HMAC-SHA256 with the webhook's
+    secret), queued in the same transaction that closes the run, retried for about
+    seven hours, and delivered at least once (deduplicate on
+    `X-Tabularia-Delivery`). Runs closed because their process died, the gateway
+    shut down or they waited too long in the queue send `flow.run.failed` too.
+    Loopback, link-local, multicast and the clouds' metadata addresses are refused,
+    and the connection goes to the address that was checked, with the certificate
+    checked against the name. Up to 16 calls go out at once per process, at most 2
+    to the same webhook, so a receiver that is down does not hold up the others;
+    `SSL_CERT_FILE` adds a company certificate authority. The call history, with
+    a resend button, is kept `WEBHOOKS__RETENTION_DAYS` (30). A folder a webhook
+    watches cannot be deleted until the webhook is changed.
+  - Schema revision 0003 (three tables and `users.is_service`).
+- **Fixed: an observer could find hidden IP addresses and email addresses in the
+  audit log by searching for them** and counting the results. An observer's search
+  now looks only at what the observer sees (the action, and targets that are not an
+  email address).
+- **Fixed: `NaN` or `Infinity` in a JSON body gave a 500 instead of a 422**, on any
+  route, including sign-in.
+- **Fixed: inputs of type url had the browser's default look**, and focused inputs,
+  open selects, the selected node and a few active buttons glowed in the default
+  theme's blue in every theme. They follow the theme's accent now.
+- **Fixed: changing the theme after moving to another page did nothing** until the
+  page was reloaded, and the choice was not saved. The theme was applied by a watcher
+  created by the first page's top bar, which went away with that page. The preferred
+  engine had the same fault (chosen, but forgotten at the next load). Both are now
+  applied and saved at the moment they are chosen.
+- **Explore: a row opens from anywhere on it**, not just from its name. Folders,
+  flows, saved views and connections respond across the whole row, look like a button
+  under the pointer and while pressed; the action buttons on the right stay separate,
+  Ctrl/Cmd-click and middle-click open flows and views in a new tab, and selecting
+  text in a row does not open it. Datasources, which open nothing, no longer look
+  clickable.
+- **A new theme, Imperium**, in Settings → Theme: the colours of Rome in a modern
+  key. Light: travertine and marble surfaces, ink text, Tyrian purple for the main
+  action, the focus and the current page, gold as a detail, Pompeian red for errors,
+  laurel for success. Every colour measured for AA. Two charts that kept fixed colours
+  in every theme (the run calendar and the schedule load) now follow the theme, and
+  so do text selection and checkboxes.
+- **Sessions that can be closed.** A session was a signed token and nothing more:
+  signing out only dropped the browser's cookie, and a copied token kept working for
+  up to twelve hours; nobody could sign anyone out, a new password closed nothing, and
+  the token sat in a cookie the page's JavaScript could read. Now every sign-in,
+  password or SSO, is a row in a new `user_sessions` table, and the gateway checks it
+  on each request in the same query that loads the user (no extra round trip).
+  - The browser keeps the session in an `HttpOnly`, `SameSite=Lax` cookie the gateway
+    writes — `Secure` over HTTPS — so no script on the page can read it. Requests
+    that change something and arrive with the cookie alone must carry an
+    `X-Tabularia-Csrf` header, which a page on another site cannot add. Scripts and
+    the API keep using `Authorization: Bearer`, unchanged.
+  - Signing out ends the session on the server: the token stops working wherever it
+    was copied.
+  - **Your sessions**, in the settings menu: where the account is signed in (browser
+    and system, address, last activity, password or SSO), with a button to close one
+    or all the others.
+  - The Audit page lists the open sessions one per browser or script, and an
+    administrator closes any of them; observers see them masked and cannot close them.
+    Closing is recorded in the audit log, and so is signing out.
+  - A password set by an administrator, or a disabled account, closes that user's
+    sessions (an administrator changing their own password stays signed in where
+    they did it).
+  - `AUTH__SESSION_IDLE_MINUTES` (`auth.sessionIdleMinutes` in the chart; 0, the
+    default, = off): after that many minutes without a key, click or scroll, the
+    page warns for a minute, then signs out and says why on the sign-in page. The
+    activity is shared between the tabs, so working in one keeps the others open.
+    The gateway refuses a session no request has used for that long.
+    `JWT__ACCESS_TTL_MINUTES` stays the longest a session lasts.
+  - SSO no longer passes the token through the address bar (`#token=…`): the gateway
+    writes the cookie on its redirect, and the landing page only asks who signed in.
+  - Expired and idle sessions are deleted by the orchestrator's clean-up, and with
+    them the addresses they kept. An observer's session keeps neither address nor
+    browser, as in the audit log. The last address of each user, which was kept
+    forever on the user row (`users.last_seen_ip`) and no longer shown anywhere, is
+    not written any more, and the upgrade clears it.
+  - A sign-in that was still checking the old password while an administrator set a
+    new one does not open a session: the two now wait for each other.
+  - Observers no longer read in the audit log the email of the person a session,
+    promotion or group change was about, nor the browser it came from.
+  - **Upgrading signs everyone out once**: tokens from before carry no session and
+    are refused. Upgrade the gateway before the interface. The interface and the
+    gateway stay on one host (gateway under `/api`, as the chart and the compose file
+    already do); on two hosts of one domain, set `AUTH__COOKIE_DOMAIN`
+    (`auth.cookieDomain`). `APP__CORS_ORIGINS` now refuses `*`.
+  - The shared observer account of a public demo sees and closes only its own
+    session: closing the others would sign every visitor out.
+  - For scripts using the API: `/audit/sessions` returns a page (`items`, `total`;
+    the 100 most recent by default, `?limit=` up to 500), one row per session with
+    `id`, `ip` and `user_agent` (it was one row per user with `last_seen_ip`); new
+    `POST /auth/logout`, `GET /auth/sessions`, `DELETE /auth/sessions/{id}` and
+    `POST /auth/sessions/close-others`; `/auth/login` leaves `access_token` empty
+    when the request carries `X-Tabularia-Csrf` (the browser), and returns it as
+    before otherwise.
+  - The session cookie no longer travels past the gateway: the engine does not
+    receive it.
+- **Fixed: adopting a database from before Alembic** would have stopped at the first
+  revision after the baseline: the adoption created every table of the current
+  models, the new revision found its table already there. It now creates only the
+  baseline's tables.
+
 ## 1.1.0 «Appio» — 2026-10-11
 
 Second release, still «Appio». Since 1.0.0 Tabularia is ready for production on one

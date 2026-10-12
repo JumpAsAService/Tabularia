@@ -112,14 +112,14 @@ export interface AiChatBody {
 export function useAi() {
   const { apiFetch } = useApiClient()
   const base = useRuntimeConfig().public.apiBase as string
-  const token = useAuthToken()
 
   async function chat(body: AiChatBody, handlers: AiChatHandlers, signal?: AbortSignal): Promise<void> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
-    if (token.value) headers.Authorization = `Bearer ${token.value}`
-    const resp = await fetch(`${base}/ai/chat`, { method: 'POST', headers, body: JSON.stringify(body), signal })
+    const headers: Record<string, string> = { ...CSRF_HEADERS, 'Content-Type': 'application/json', Accept: 'text/event-stream' }
+    const resp = await fetch(`${base}/ai/chat`, {
+      method: 'POST', headers, body: JSON.stringify(body), signal, credentials: 'include',
+    })
     if (resp.status === 401) {
-      token.value = null
+      dropSession()
       navigateTo('/login')
       return
     }
