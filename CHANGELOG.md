@@ -153,6 +153,13 @@ exposes at `/system/info` and in the app's settings menu.
   revision after the baseline: the adoption created every table of the current
   models, the new revision found its table already there. It now creates only the
   baseline's tables.
+- **Fixed: the development compose did not start on a new machine.** It asked for
+  `minio/minio:latest`, which has been withdrawn from Docker Hub; machines that had
+  it cached never noticed. It now uses the community fork pinned to a release,
+  `pgsty/minio:RELEASE.2026-08-04T00-00-00Z`, as the production compose already
+  did; `MINIO_IMAGE` replaces it.
+- **The quickstart generates the Fernet key without extra packages**: with `openssl`
+  or a Python one-liner that needs only the standard library, or with Docker alone.
 
 ## 1.1.0 «Appio» — 2026-10-11
 
