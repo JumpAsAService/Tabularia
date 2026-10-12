@@ -74,7 +74,8 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
 
 - Two people saving the same flow: last save wins. The editor says who else has
   it open; the version history keeps the overwritten work.
-- CSV export has no row cap. Excel export stops at 1,048,575 rows.
+- CSV export stops at `EXPORT__MAX_ROWS` (5,000,000 by default). Excel export stops
+  at 1,048,575 rows.
 - The step cache in the editor materializes every intermediate step; on very
   large sources use the source node's development sample.
 - Sort keys cannot be edited after import; re-import to change them.
