@@ -42,7 +42,13 @@ def api(m, p, c=None, grezzo=False, multipart=None):
 
 def entra():
     global TOK
-    TOK = api("POST", "/auth/login", {"email": env("AUTH__ADMIN_EMAIL"), "password": env("AUTH__ADMIN_PASSWORD")})[1]["access_token"]
+    codice, corpo = api("POST", "/auth/login", {"email": env("AUTH__ADMIN_EMAIL"), "password": env("AUTH__ADMIN_PASSWORD")})
+    if codice != 200 or not isinstance(corpo, dict) or not corpo.get("access_token"):
+        # il motivo, invece di un TypeError: freno del login, gateway che riparte, password
+        # sbagliata. Un'eccezione normale, non SystemExit: chi aspetta un gateway che
+        # riparte (deterministico.riavvia) la ritenta
+        raise RuntimeError(f"accesso dell'amministratore non riuscito: {codice} {str(corpo)[:300]}")
+    TOK = corpo["access_token"]
 
 
 def env_del_contenitore(nome, chiave):

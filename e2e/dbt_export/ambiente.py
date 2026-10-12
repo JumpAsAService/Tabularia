@@ -22,10 +22,19 @@ QUI = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(QUI))
 
 
+# un percorso relativo vale da dove si lancia il comando: esegui.py avvia gli oracoli
+# dalla loro cartella, e da lì «infrastructure/…/.env» non si troverebbe più
+if os.environ.get("TABULARIA_ENV"):
+    os.environ["TABULARIA_ENV"] = os.path.abspath(os.environ["TABULARIA_ENV"])
+
+
 def _file_env() -> dict:
     percorso = os.environ.get("TABULARIA_ENV")
-    if not percorso or not os.path.exists(percorso):
+    if not percorso:
         return {}
+    if not os.path.exists(percorso):
+        # prima tornava vuoto in silenzio: l'accesso partiva senza credenziali (422)
+        raise SystemExit(f"TABULARIA_ENV punta a un file che non c'è: {percorso}")
     out = {}
     for riga in open(percorso):
         if "=" in riga and not riga.lstrip().startswith("#"):
