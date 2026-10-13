@@ -37,7 +37,10 @@ depend on them, and both degrade quietly rather than breaking:
 The release images are public on Docker Hub and the chart pulls them by default:
 `jumpasaservice/tabularia-backend`, `jumpasaservice/tabularia-gateway` and
 `jumpasaservice/tabularia-frontend`, tagged with the release (`1.1.0`). The backend
-one is built without chDB.
+one is built without chDB. Releases are built by the release workflow for amd64 and
+arm64, and each image is scanned for secrets before it is pushed
+([docs/release-process.md](../../../docs/release-process.md)); 1.1.0 itself was
+published by hand, for amd64 only.
 
 To run your own builds instead, build from a checkout of the release tag, push them
 to your registry, and set `image.registry` and the tags:

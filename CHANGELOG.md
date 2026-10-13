@@ -160,6 +160,12 @@ exposes at `/system/info` and in the app's settings menu.
   did; `MINIO_IMAGE` replaces it.
 - **The quickstart generates the Fernet key without extra packages**: with `openssl`
   or a Python one-liner that needs only the standard library, or with Docker alone.
+- **Release images published by CI, for amd64 and arm64** (`docs/release-process.md`).
+  A `v*` tag builds the three images from scratch, smoke-tests them, and pushes each
+  one only after two secret scans pass: the maintainer's own secrets, matched by
+  fingerprint layer by layer (deleted files and nested archives included) without CI
+  ever holding them, and TruffleHog for anybody's live cloud credentials. The tag
+  must agree with the version in the code and in the Helm chart.
 
 ## 1.1.0 «Appio» — 2026-10-11
 

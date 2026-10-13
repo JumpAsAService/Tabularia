@@ -1,0 +1,282 @@
+# Builds the three release images for amd64 and arm64, checks them, certifies that they
+# hold no secrets, and only then pushes them to Docker Hub. See docs/release-process.md.
+#
+# A tag v1.2.0 publishes jumpasaservice/tabularia-{backend,gateway,frontend} as
+#   1.2.0-amd64, 1.2.0-arm64   the single-architecture images, pushed after their scans
+#   1.2.0                      both architectures under one name
+#   1.2                        when 1.2.0 is the highest 1.2.x tag
+#   latest                     when 1.2.0 is the highest stable tag
+# A pre-release tag (v1.2.0-rc.1) publishes its own name only.
+#
+# Run by hand (Actions → Release images → Run workflow) it builds any existing tag;
+# with "publish" off it stops after the scans: a dry run that pushes nothing.
+
+name: Release images
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build, e.g. v1.2.0"
+        required: true
+      publish:
+        description: "Push to Docker Hub (off: build, test and scan only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-images-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NAMESPACE: jumpasaservice
+
+jobs:
+  prepare:
+    name: Version and tags
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      revision: ${{ steps.version.outputs.revision }}
+      tags: ${{ steps.tags.outputs.tags }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: src
+
+      - name: Check out the release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+          path: ci
+
+      - name: The tag and the version in the code agree
+        id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$ ]]; then
+            echo "::error::$TAG is not a release tag (vMAJOR.MINOR.PATCH[-pre])"; exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          cd src
+          python3 - "$version" <<'EOF'
+          import json, re, sys, tomllib
+          want = sys.argv[1].split("-")[0]
+          found = {
+              "backend/pyproject.toml": tomllib.load(open("backend/pyproject.toml", "rb"))["project"]["version"],
+              "gateway/pyproject.toml": tomllib.load(open("gateway/pyproject.toml", "rb"))["project"]["version"],
+              "frontend/package.json": json.load(open("frontend/package.json"))["version"],
+              "gateway/app/core/config.py": re.search(r'^\s*version: str = "([^"]+)"', open("gateway/app/core/config.py").read(), re.M).group(1),
+              "infrastructure/helm/tabularia/Chart.yaml": re.search(r'^appVersion: "([^"]+)"', open("infrastructure/helm/tabularia/Chart.yaml").read(), re.M).group(1),
+          }
+          # the image tags the chart installs by default
+          for values in ("infrastructure/helm/tabularia/values.yaml", "infrastructure/helm/tabularia/values-production.example.yaml"):
+              for i, tag in enumerate(re.findall(r'\btag: "([^"]+)"', open(values).read())):
+                  found[f"{values} (image tag {i + 1})"] = tag
+          wrong = {f: v for f, v in found.items() if v != want}
+          for f, v in wrong.items():
+              print(f"::error file={f}::version {v}, the tag says {want}")
+          sys.exit(1 if wrong else 0)
+          EOF
+          {
+            echo "version=$version"
+            echo "revision=$(git rev-parse HEAD)"
+            echo "publish=$PUBLISH"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Tags to publish
+        id: tags
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tags="$VERSION"
+          if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+)\.[0-9]+$ ]]; then
+            minor="${BASH_REMATCH[1]}"
+            stable() { git -C src tag --list "$1" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1; }
+            # moving tags only move forward: a fix to an older line does not take them back
+            [[ "$(stable "v$minor.*")" == "v$VERSION" ]] && tags="$tags $minor"
+            [[ "$(stable 'v*')" == "v$VERSION" ]] && tags="$tags latest"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "Tags: $tags" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test the secret checks
+        env:
+          PUSH_GUARD_TRUFFLEHOG: "0"
+        run: |
+          python3 -m venv /tmp/scan
+          /tmp/scan/bin/pip install --quiet --require-hashes -r ci/.github/scripts/requirements.txt
+          /tmp/scan/bin/python ci/.github/scripts/test_image_secret_scan.py
+          /tmp/scan/bin/python ci/.github/scripts/test_push_guard.py
+
+  image:
+    name: ${{ matrix.component }} ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        component: [backend, gateway, frontend]
+        arch: [amd64, arm64]
+        include:
+          # frontend/Dockerfile is the hot-reload development server
+          - component: frontend
+            dockerfile: Dockerfile.prod
+    env:
+      IMAGE: jumpasaservice/tabularia-${{ matrix.component }}:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      COMPONENT: ${{ matrix.component }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.revision }}
+          persist-credentials: false
+          path: src
+
+      - name: Check out the release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+          path: ci
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: src/${{ matrix.component }}
+          file: src/${{ matrix.component }}/${{ matrix.dockerfile || 'Dockerfile' }}
+          platforms: linux/${{ matrix.arch }}
+          # a release is built from scratch, on fresh base images
+          pull: true
+          no-cache: true
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.title=tabularia-${{ matrix.component }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.revision }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - name: Smoke test
+        run: |
+          check() { if [[ "$2" != "$3" ]]; then echo "::error::$1 is '$2', expected '$3'"; exit 1; fi; }
+          check "user" "$(docker inspect -f '{{.Config.User}}' "$IMAGE")" "10001:10001"
+          check "architecture" "$(docker inspect -f '{{.Architecture}}' "$IMAGE")" "$ARCH"
+          check "version label" "$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$IMAGE")" "$VERSION"
+          case "$COMPONENT" in
+            backend)
+              # the published engine is built without chDB
+              docker run --rm --read-only "$IMAGE" python -c \
+                'import importlib.util as u, polars, duckdb; assert u.find_spec("chdb") is None' ;;
+            gateway)
+              docker run --rm --read-only "$IMAGE" python -c 'import app.db.migra, alembic' ;;
+            frontend)
+              cid=$(docker run -d --read-only --tmpfs /tmp -p 127.0.0.1:3000:3000 "$IMAGE")
+              for _ in $(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:3000/login && break; sleep 1; done
+              status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/login)
+              docker rm -f "$cid" > /dev/null
+              check "/login" "$status" "200" ;;
+          esac
+
+      - name: Save the image for the scans
+        run: docker save "$IMAGE" -o image.tar
+
+      - name: Scan for your secrets (fingerprints)
+        env:
+          SECRET_FINGERPRINTS: ${{ secrets.SECRET_FINGERPRINTS }}
+        run: |
+          python3 -m venv /tmp/scan
+          /tmp/scan/bin/pip install --quiet --require-hashes -r ci/.github/scripts/requirements.txt
+          /tmp/scan/bin/python ci/.github/scripts/image_secret_scan.py scan image.tar
+
+      - name: Scan for live credentials (TruffleHog)
+        run: |
+          # image and cloud detectors: .github/scripts/trufflehog.env, shared with the pre-push guard
+          TRUFFLEHOG_IMAGE=$(sed -n 's/^TRUFFLEHOG_IMAGE=//p' ci/.github/scripts/trufflehog.env)
+          CLOUD_DETECTORS=$(sed -n 's/^CLOUD_DETECTORS=//p' ci/.github/scripts/trufflehog.env)
+          # JSON only, and only the detector, the file and the verification state make it
+          # to the log: the plain output prints the credential, and this log is public
+          report() {
+            python3 -c '
+          import json, sys
+          for line in sys.stdin:
+              try:
+                  r = json.loads(line)
+              except ValueError:
+                  continue
+              where = r.get("SourceMetadata", {}).get("Data", {}).get("Docker", {}).get("file")
+              state = "verified" if r.get("Verified") else "verification failed" if r.get("VerificationError") else "unverified"
+              print("::error::%s credential (%s) in %s" % (r.get("DetectorName"), state, where))
+          '
+          }
+          docker run --rm -v "$PWD:/w:ro" "$TRUFFLEHOG_IMAGE" docker --image file:///w/image.tar \
+            --results=verified --fail --fail-on-scan-errors --no-update --json 2> trufflehog-all.log | report
+          docker run --rm -v "$PWD:/w:ro" "$TRUFFLEHOG_IMAGE" docker --image file:///w/image.tar \
+            --results=verified,unknown --include-detectors="$CLOUD_DETECTORS" \
+            --fail --fail-on-scan-errors --no-update --json 2> trufflehog-cloud.log | report
+
+      - name: Log in to Docker Hub
+        if: needs.prepare.outputs.publish == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.NAMESPACE }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push
+        if: needs.prepare.outputs.publish == 'true'
+        run: docker push "$IMAGE"
+
+  publish:
+    name: Multi-architecture tags
+    needs: [prepare, image]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAGS: ${{ needs.prepare.outputs.tags }}
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.NAMESPACE }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Join the architectures under the release tags
+        run: |
+          for component in backend gateway frontend; do
+            repo="$NAMESPACE/tabularia-$component"
+            args=()
+            for tag in $TAGS; do args+=(-t "$repo:$tag"); done
+            docker buildx imagetools create "${args[@]}" "$repo:$VERSION-amd64" "$repo:$VERSION-arm64"
+            platforms=$(docker buildx imagetools inspect "$repo:$VERSION" | grep -oE 'linux/(amd64|arm64)' | sort -u | tr '\n' ' ')
+            if [[ "$platforms" != "linux/amd64 linux/arm64 " ]]; then
+              echo "::error::$repo:$VERSION has platforms '$platforms'"; exit 1
+            fi
+            echo "$repo: $TAGS ($platforms)" >> "$GITHUB_STEP_SUMMARY"
+          done

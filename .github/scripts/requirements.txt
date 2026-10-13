@@ -1,0 +1,5 @@
+# For image_secret_scan.py in CI: numpy only, pinned to the hashes of its wheels for
+# Python 3.12 on Linux x86_64 and aarch64 (the ubuntu-24.04 and ubuntu-24.04-arm runners).
+numpy==2.5.3 \
+    --hash=sha256:b7e18c623bb5c95acb3b3328861272816ba199fb531921c5d6d0b675f1fde9e3 \
+    --hash=sha256:76c2c1e6bfa5c84adc6434dfbf013aa92096a7985221762c8f11fedfd20fff58
