@@ -13,6 +13,9 @@ export interface SelectOption {
   value: any
   label?: string
   group?: string
+  // where the option lives (a folder path): a second, quieter line under the name,
+  // matched by the search too. For objects whose names repeat across folders.
+  hint?: string
 }
 
 // due root (trigger + Teleport): class/style dei parent vanno esplicitamente sul trigger
@@ -48,7 +51,7 @@ const searchable = computed(() => props.searchable || norm.value.length > SEARCH
 const filtered = computed<SelectOption[]>(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return norm.value
-  return norm.value.filter((o) => labelOf(o).toLowerCase().includes(q))
+  return norm.value.filter((o) => labelOf(o).toLowerCase().includes(q) || !!o.hint?.toLowerCase().includes(q))
 })
 
 // opzioni (filtrate) raggruppate preservando l'ordine (group undefined = fuori gruppo)
@@ -82,10 +85,14 @@ function positionPanel() {
   const r = triggerEl.value?.getBoundingClientRect()
   if (!r) return
   const below = window.innerHeight - r.bottom
+  // with paths under the names, a little more room before they are cut, but never
+  // past the window's right edge: the panel opens from the trigger's left side
+  const widest = norm.value.some((o) => o.hint) ? 440 : 320
+  const room = window.innerWidth - r.left - 8
   const style: Record<string, string> = {
     left: `${r.left}px`,
     minWidth: `${r.width}px`,
-    maxWidth: `${Math.max(r.width, 320)}px`,
+    maxWidth: `${Math.max(r.width, Math.min(widest, room))}px`,
   }
   if (below < PANEL_MAX_H + 8 && r.top > below) {
     style.bottom = `${window.innerHeight - r.top + 4}px` // si apre verso l'alto
@@ -190,6 +197,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
     type="button"
     class="sel-trigger"
     :class="{ open, disabled }"
+    :title="selected?.hint ? `${labelOf(selected)} — ${selected.hint}` : undefined"
     v-bind="$attrs"
     role="combobox"
     aria-haspopup="listbox"
@@ -201,7 +209,11 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
     @keydown="onKeydown"
   >
     <span class="sel-label" :class="{ ph: !selected }">
-      {{ selected ? labelOf(selected) : placeholder ?? '—' }}
+      <template v-if="selected">
+        <span class="sel-name">{{ labelOf(selected) }}</span>
+        <span v-if="selected.hint" class="sel-hint">{{ selected.hint }}</span>
+      </template>
+      <template v-else>{{ placeholder ?? '—' }}</template>
     </span>
     <ChevronDown :size="13" class="chev" :class="{ flip: open }" />
   </button>
@@ -242,7 +254,11 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
           >
             <Check v-if="o.value === modelValue" :size="13" class="check" />
             <span v-else class="check-spacer" />
-            <span class="sel-opt-label">{{ labelOf(o) }}</span>
+            <span v-if="o.hint" class="sel-opt-text">
+              <span class="sel-opt-label">{{ labelOf(o) }}</span>
+              <span class="sel-opt-hint" :title="o.hint">{{ o.hint }}</span>
+            </span>
+            <span v-else class="sel-opt-label">{{ labelOf(o) }}</span>
           </div>
         </div>
         <p v-if="!norm.length" class="sel-empty">{{ $t('select.noOptions') }}</p>
@@ -273,7 +289,11 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
 .sel-trigger:hover { border-color: var(--accent); box-shadow: none; transform: none; }
 .sel-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .sel-trigger.disabled { opacity: 0.45; cursor: not-allowed; }
-.sel-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-label { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the name keeps its width; the path gives way first, and the name is cut only
+   when it alone is wider than the field */
+.sel-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.sel-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
 .sel-label.ph { color: var(--muted); }
 .chev { color: var(--muted); flex-shrink: 0; transition: transform 0.15s; }
 .chev.flip { transform: rotate(180deg); }
@@ -345,5 +365,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
 .sel-opt .check { color: var(--accent); flex-shrink: 0; }
 .sel-opt .check-spacer { width: 13px; flex-shrink: 0; }
 .sel-opt-label { overflow: hidden; text-overflow: ellipsis; }
+.sel-opt-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.sel-opt-hint { overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; line-height: 1.3; color: var(--muted); }
 .sel-empty { margin: 6px 8px; font-size: 12px; color: var(--muted); }
 </style>

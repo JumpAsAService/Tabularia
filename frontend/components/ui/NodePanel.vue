@@ -8,6 +8,7 @@ import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type SourceFilter } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
 import { useNodeStats } from '~/composables/useNodeStats'
+import { useFolderPaths } from '~/composables/useFolderPaths'
 
 const props = defineProps<{
   node: Node | null
@@ -19,11 +20,13 @@ const props = defineProps<{
   fetchDistinct?: (column: string) => Promise<any[]>
   datasources?: DatasourceInfo[]
   projects?: { id: number; name: string }[]
-  connections?: { id: number; name: string; db_type: string; database?: string }[]
-  flows?: { id: number; name: string }[]
+  connections?: { id: number; name: string; db_type: string; database?: string; project_id?: number }[]
+  flows?: { id: number; name: string; project_id?: number }[]
   currentFlowId?: number | null
 }>()
 const { t } = useI18n()
+// names repeat across folders: every catalog picker shows where each option lives
+const { pathOf } = useFolderPaths()
 const nodeStats = useNodeStats(() => props.node?.id ?? '', inject, t)
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -279,7 +282,7 @@ function pickDatasource(id: number | null) {
           :model-value="node.data.datasourceId ?? null"
           :options="(datasources ?? [])
             .filter((d) => d.key)
-            .map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${$t('nodePanel.rowsCountLabel', { rows: d.rows })})` : d.name }))"
+            .map((d) => ({ value: d.id, label: d.rows != null ? `${d.name} (${$t('nodePanel.rowsCountLabel', { rows: d.rows })})` : d.name, hint: pathOf(d.project_id) }))"
           :placeholder="$t('nodePanel.chooseDatasourcePlaceholder')"
           @update:model-value="pickDatasource"
         />
@@ -369,6 +372,7 @@ function pickDatasource(id: number | null) {
             :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
               value: c.id,
               label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
+              hint: pathOf(c.project_id),
             }))"
             :placeholder="$t('nodePanel.connectionPlaceholder')"
             @update:model-value="(v: any) => emit('update', { mirrorConnectionId: v })"
@@ -402,6 +406,7 @@ function pickDatasource(id: number | null) {
           :options="(connections ?? []).filter((c) => c.db_type === 's3').map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (bucket ${c.database})` : c.name,
+            hint: pathOf(c.project_id),
           }))"
           :placeholder="$t('nodePanel.connectionPlaceholder')"
           @update:model-value="(v: any) => emit('update', { connectionId: v })"
@@ -458,6 +463,7 @@ function pickDatasource(id: number | null) {
           :options="(connections ?? []).filter((c) => c.db_type === 'smtp').map((c) => ({
             value: c.id,
             label: c.name,
+            hint: pathOf(c.project_id),
           }))"
           :placeholder="$t('nodePanel.connectionPlaceholder')"
           @update:model-value="(v: any) => emit('update', { connectionId: v })"
@@ -539,6 +545,7 @@ function pickDatasource(id: number | null) {
           :options="(connections ?? []).filter((c) => !['s3', 'smtp', 'sharepoint'].includes(c.db_type)).map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
+            hint: pathOf(c.project_id),
           }))"
           :placeholder="$t('nodePanel.connectionPlaceholder')"
           @update:model-value="(v: any) => emit('update', { connectionId: v })"
@@ -585,7 +592,7 @@ function pickDatasource(id: number | null) {
       <Select
         searchable
         :model-value="node.data.datasourceId ?? null"
-        :options="(datasources ?? []).filter((d) => d.kind === 'database').map((d) => ({ value: d.id, label: d.name }))"
+        :options="(datasources ?? []).filter((d) => d.kind === 'database').map((d) => ({ value: d.id, label: d.name, hint: pathOf(d.project_id) }))"
         :placeholder="$t('nodePanel.chooseDbDatasourcePlaceholder')"
         @update:model-value="pickRefreshDatasource"
       />
@@ -603,7 +610,7 @@ function pickDatasource(id: number | null) {
       <label>{{ $t('nodePanel.flowToRunLabel') }}</label>
       <Select
         :model-value="node.data.flowId ?? null"
-        :options="(flows ?? []).filter((f) => f.id !== currentFlowId).map((f) => ({ value: f.id, label: f.name }))"
+        :options="(flows ?? []).filter((f) => f.id !== currentFlowId).map((f) => ({ value: f.id, label: f.name, hint: pathOf(f.project_id) }))"
         :placeholder="$t('nodePanel.chooseFlowPlaceholder')"
         @update:model-value="pickRunFlow"
       />

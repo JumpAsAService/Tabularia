@@ -8,6 +8,7 @@ import { errMessage } from '~/composables/useApi'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import type { DbDatasourceDraft, SharePointDatasourceDraft } from '~/composables/useDatasources'
 import { useDialogA11y } from '~/composables/useDialogA11y'
+import { useFolderPaths } from '~/composables/useFolderPaths'
 
 const props = defineProps<{
   open: boolean
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const connApi = useConnections()
+const { pathOf } = useFolderPaths() // connection names repeat across folders
 
 // fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
 const card = ref<HTMLElement | null>(null)
@@ -171,7 +173,7 @@ function confirm() {
         <label>{{ $t('dbDatasourceDialog.connectionLabel') }}</label>
         <Select
           v-model="connectionId"
-          :options="connections.map((c) => ({ value: c.id, label: `${c.name} (${c.db_type})` }))"
+          :options="connections.map((c) => ({ value: c.id, label: `${c.name} (${c.db_type})`, hint: pathOf(c.project_id) }))"
           :placeholder="$t('dbDatasourceDialog.connectionPlaceholder')"
         />
         <p v-if="!connections.length" class="muted dd-hint">

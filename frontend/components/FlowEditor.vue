@@ -607,10 +607,10 @@ async function refreshConnections() {
 }
 
 // ── Flussi (per il picker del nodo "Esegui flusso") ───────────────────────
-const flowsList = ref<{ id: number; name: string }[]>([])
+const flowsList = ref<{ id: number; name: string; project_id: number }[]>([])
 async function refreshFlows() {
   try {
-    flowsList.value = (await flowsApi.list()).map((f) => ({ id: f.id, name: f.name }))
+    flowsList.value = (await flowsApi.list()).map((f) => ({ id: f.id, name: f.name, project_id: f.project_id }))
   } catch {
     flowsList.value = []
   }

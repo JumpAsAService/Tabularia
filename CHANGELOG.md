@@ -160,6 +160,12 @@ exposes at `/system/info` and in the app's settings menu.
   did; `MINIO_IMAGE` replaces it.
 - **The quickstart generates the Fernet key without extra packages**: with `openssl`
   or a Python one-liner that needs only the standard library, or with Docker alone.
+- **Pickers show where things live.** Datasources, flows, saved views and connections
+  have names that are unique only inside their folder, so two "orders" in two folders
+  looked the same. Their pickers (source, refresh and run-flow nodes, the Output
+  node's connections, the viewer, the database datasource dialog) now show the folder
+  path under each name, the name first and never cut for the path; searching a
+  folder name finds what lives in it.
 - **Sort keys can be changed after the import.** A database datasource's sort keys
   are edited in Datasources → open the row → Order, picked from its columns in the
   order ticked, and apply from the next refresh. They used to be fixed at creation:

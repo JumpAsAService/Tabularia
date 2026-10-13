@@ -17,6 +17,7 @@ import { useDatasources, type DatasourceInfo } from '~/composables/useDatasource
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import { useSavedViews, type SavedView, type SavedViewSpec } from '~/composables/useSavedViews'
 import { useProjects, type Project } from '~/composables/useProjects'
+import { useFolderPaths } from '~/composables/useFolderPaths'
 
 const api = useApi()
 // Tabella e grafico su due slot: un Apply (o un ritocco al grafico) butta giu'
@@ -29,6 +30,7 @@ const viewsApi = useSavedViews()
 const projectsApi = useProjects()
 const toast = useToast()
 const { t } = useI18n()
+const { pathOf } = useFolderPaths() // datasource and view names repeat across folders
 const fmtx = useFormat()
 
 // ── sorgente + motore ─────────────────────────────────────────────────────
@@ -44,7 +46,7 @@ const engine = ref(preferredEngine.value)
 
 const selectedDs = computed(() => datasources.value.find((d) => d.id === dsId.value) || null)
 const dsOptions = computed(() =>
-  datasources.value.filter((d) => d.key).map((d) => ({ value: d.id, label: d.name })),
+  datasources.value.filter((d) => d.key).map((d) => ({ value: d.id, label: d.name, hint: pathOf(d.project_id) })),
 )
 const engineOptions = computed(() =>
   engines.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label })),
@@ -280,7 +282,7 @@ const saveProjectId = ref<number | null>(null)
 const saving = ref(false)
 
 const savedViewOptions = computed(() =>
-  savedViews.value.map((v) => ({ value: v.id, label: v.name })),
+  savedViews.value.map((v) => ({ value: v.id, label: v.name, hint: pathOf(v.project_id) })),
 )
 
 function buildSpec(): SavedViewSpec {
