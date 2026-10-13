@@ -18,8 +18,12 @@ export function usePagedList<T>(
   const loading = ref(true)
   const error = ref('')
 
-  async function load() {
-    loading.value = true
+  // `quiet`: the rows update in place, with no skeleton and nothing emptied on an
+  // error, for refreshes the user did not ask for (an import that just finished):
+  // the list blinking out and back in reads as a crash
+  async function load(opts: { quiet?: boolean } = {}) {
+    const quiet = opts.quiet === true
+    if (!quiet) loading.value = true
     const t0 = performance.now()
     try {
       const r = await fetcher({ q: q.value.trim() || undefined, limit: pageSize, offset: offset.value })
@@ -27,12 +31,15 @@ export function usePagedList<T>(
       total.value = r.total
       error.value = ''
     } catch (e) {
+      if (quiet) return // keep what is on screen; the next load will tell
       error.value = errMessage(e)
       items.value = []
       total.value = 0
     } finally {
-      await skeletonPad(t0) // lo skeleton resta visibile un minimo: niente flash
-      loading.value = false
+      if (!quiet) {
+        await skeletonPad(t0) // lo skeleton resta visibile un minimo: niente flash
+        loading.value = false
+      }
     }
   }
 
@@ -59,6 +66,6 @@ export function usePagedList<T>(
     }
   }
 
-  onMounted(load)
+  onMounted(() => load())
   return { q, items, total, offset, pageSize, loading, error, load, next, prev }
 }

@@ -143,6 +143,9 @@ function announceEnd(dsId: number, run: RunInfo) {
   announcement.value = run.status === 'SUCCESS'
     ? t('datasources.announceDone', { name, n: fmtx.count(run.rows_written ?? 0) })
     : t('datasources.announceFailed', { name })
+  // the same words on screen: the end of an import watched here gets a message
+  if (run.status === 'SUCCESS') toast.success(announcement.value)
+  else toast.error(run.error ? `${announcement.value}: ${run.error}` : announcement.value)
 }
 let pollToken = 0
 onUnmounted(() => { pollToken++ })
@@ -170,7 +173,8 @@ async function pollIngest(dsId: number, token: number, restored = false) {
       setTimeout(() => { if (token === pollToken) pollIngest(dsId, token) }, 2500)
     } else {
       announceEnd(dsId, last)
-      if (last.status === 'SUCCESS' && !restored) await load() // snapshot aggiornato: ricarica la pagina
+      // new snapshot: rows, columns and dates update in place, the open row stays open
+      if (last.status === 'SUCCESS' && !restored) await load({ quiet: true })
     }
   } catch {
     // il segnaposto messo dal watch non deve restare appeso: altrimenti spinner

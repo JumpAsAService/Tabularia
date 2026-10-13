@@ -160,6 +160,11 @@ exposes at `/system/info` and in the app's settings menu.
   did; `MINIO_IMAGE` replaces it.
 - **The quickstart generates the Fernet key without extra packages**: with `openssl`
   or a Python one-liner that needs only the standard library, or with Docker alone.
+- **Fixed: the end of an import blanked the Datasources list**, which looked like a
+  crash: the whole page reloaded behind a skeleton. The rows now update in place,
+  the open row stays open, and a message says "import completed, N rows" or, when
+  it failed, why. Explore says the same at the end of a refresh started there. Only
+  imports seen running get a message, not ones that ended before the page opened.
 - **Pickers show where things live.** Datasources, flows, saved views and connections
   have names that are unique only inside their folder, so two "orders" in two folders
   looked the same. Their pickers (source, refresh and run-flow nodes, the Output

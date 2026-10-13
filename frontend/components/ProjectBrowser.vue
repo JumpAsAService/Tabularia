@@ -326,6 +326,8 @@ function fmtDuration(run: RunInfo): string {
 // ── Import/refresh delle datasource database ────────────────────────────────
 const ingestRuns = ref<Record<number, RunInfo>>({})
 let ingestToken = 0
+// imports seen running here: their end gets a message (one found already over does not)
+const watchedIngest = new Set<number>()
 
 async function pollIngest(dsId: number, token: number) {
   try {
@@ -335,8 +337,16 @@ async function pollIngest(dsId: number, token: number) {
     if (!last) return
     ingestRuns.value = { ...ingestRuns.value, [dsId]: last }
     if (!isTerminal(last)) {
+      watchedIngest.add(dsId)
       setTimeout(() => { if (token === ingestToken) pollIngest(dsId, token) }, 2500)
-    } else if (last.status === 'SUCCESS' && currentId.value) {
+      return
+    }
+    if (watchedIngest.delete(dsId)) {
+      const name = dsList.value.find((d) => d.id === dsId)?.name ?? `#${dsId}`
+      if (last.status === 'SUCCESS') toast.success(t('datasources.announceDone', { name, n: fmtx.count(last.rows_written ?? 0) }))
+      else toast.error(last.error ? `${t('datasources.announceFailed', { name })}: ${last.error}` : t('datasources.announceFailed', { name }))
+    }
+    if (last.status === 'SUCCESS' && currentId.value) {
       dsList.value = await dsApi.listByProject(currentId.value)
     }
   } catch { /* transitorio: riproverà al prossimo refresh */ }
