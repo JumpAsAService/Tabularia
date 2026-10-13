@@ -13,8 +13,8 @@ let pending: Promise<void> | null = null
 export function useFolderPaths() {
   const api = useProjects()
 
-  function load(): Promise<void> {
-    if (Date.now() - loadedAt < FRESH_MS) return Promise.resolve()
+  function load(force = false): Promise<void> {
+    if (!force && Date.now() - loadedAt < FRESH_MS) return Promise.resolve()
     pending ??= api
       .list()
       .then((list) => {

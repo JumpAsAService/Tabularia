@@ -852,7 +852,7 @@ export default {
     "editConnectionTitle": "Verbindung bearbeiten",
     "engineMenuLabel": "Ausführungs-Engine",
     "flowDeleted": "Ablauf „{name}“ gelöscht",
-    "flowMoved": "Ablauf „{name}“ verschoben",
+    "movedTo": "„{name}“ ist jetzt in {folder}",
     "flowsLabel": "Abläufe",
     "folderButton": "Ordner",
     "folderDeleted": "Ordner „{name}“ gelöscht",

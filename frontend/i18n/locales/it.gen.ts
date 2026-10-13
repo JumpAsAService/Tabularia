@@ -945,7 +945,7 @@ export default {
     "editConnectionTitle": "Modifica connessione",
     "engineMenuLabel": "Motore di esecuzione",
     "flowDeleted": "Flusso \"{name}\" eliminato",
-    "flowMoved": "Flusso \"{name}\" spostato",
+    "movedTo": "«{name}» ora è in {folder}",
     "folderButton": "Crea",
     "folderDeleted": "Cartella \"{name}\" eliminata",
     "fromDatabaseButton": "Datasource da un database",

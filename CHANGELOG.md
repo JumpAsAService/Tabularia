@@ -160,6 +160,11 @@ exposes at `/system/info` and in the app's settings menu.
   did; `MINIO_IMAGE` replaces it.
 - **The quickstart generates the Fernet key without extra packages**: with `openssl`
   or a Python one-liner that needs only the standard library, or with Docker alone.
+- **Everything in Explore moves to another folder**, not only flows: datasources,
+  saved views, connections and folders have the same "move to another folder"
+  button. The folder picker shows each folder's path and, for a folder, leaves out
+  the folder itself and everything inside it; the row leaves the list in place with
+  a message. The gateway checks the rights on both folders, as before.
 - **Fixed: the end of an import blanked the Datasources list**, which looked like a
   crash: the whole page reloaded behind a skeleton. The rows now update in place,
   the open row stays open, and a message says "import completed, N rows" or, when

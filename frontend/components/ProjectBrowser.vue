@@ -18,6 +18,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
+import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
   ChevronRight,
   Folder,
@@ -74,6 +75,7 @@ const { user } = useAuth()
 const toast = useToast()
 const { t } = useI18n()
 const fmtx = useFormat()
+const folderPaths = useFolderPaths()
 const route = useRoute()
 
 const projects = ref<Project[]>([])
@@ -363,16 +365,64 @@ async function refreshDatasource(ds: DatasourceInfo) {
 }
 
 // ── Eliminazioni e spostamento ──────────────────────────────────────────────
-const movingFlowId = ref<number | null>(null)
+// Every kind of row moves to another folder; the gateway checks the rights on both
+// folders. The row leaves this list in place, with no reload of the folder (a
+// blanked list reads as a crash).
+const moving = ref<string | null>(null) // `${kind}-${id}` of the row whose picker is open
+const rowKey = (r: Row) => `${r.kind}-${r.id}`
 
-async function moveFlow(flow: FlowSummary, target: number | null) {
-  if (!target || target === flow.project_id) { movingFlowId.value = null; return }
+function descendantsOf(id: number): Set<number> {
+  const out = new Set<number>([id])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const p of projects.value) {
+      if (p.parent_id != null && out.has(p.parent_id) && !out.has(p.id)) {
+        out.add(p.id)
+        grew = true
+      }
+    }
+  }
+  return out
+}
+
+// where a row can go: any folder but its own, and for a folder not itself nor
+// anything inside it; same-named folders are told apart by their path
+function moveTargets(row: Row) {
+  const from = row.kind === 'folder' ? row.raw.parent_id : row.raw.project_id
+  const banned = row.kind === 'folder' ? descendantsOf(row.id) : new Set<number>()
+  return projects.value
+    .filter((p) => p.id !== from && !banned.has(p.id))
+    .map((p) => ({ value: p.id, label: p.name, hint: folderPaths.pathOf(p.parent_id) }))
+}
+
+async function moveRow(row: Row, target: number | null) {
+  moving.value = null
+  const from = row.kind === 'folder' ? row.raw.parent_id : row.raw.project_id
+  if (!target || target === from) return
   try {
-    await flowsApi.update(flow.id, { project_id: target })
-    movingFlowId.value = null
-    flows.value = flows.value.filter((f) => f.id !== flow.id)
-    toast.success(t('projectBrowser.flowMoved', { name: flow.name }))
-  } catch (e) { toast.error(errMessage(e)) }
+    if (row.kind === 'flow') {
+      await flowsApi.update(row.id, { project_id: target })
+      flows.value = flows.value.filter((f) => f.id !== row.id)
+    } else if (row.kind === 'datasource') {
+      await dsApi.update(row.id, { project_id: target })
+      dsList.value = dsList.value.filter((d) => d.id !== row.id)
+    } else if (row.kind === 'view') {
+      await viewsApi.update(row.id, { project_id: target })
+      savedViews.value = savedViews.value.filter((v) => v.id !== row.id)
+    } else if (row.kind === 'connection') {
+      await connApi.update(row.id, { project_id: target })
+      connections.value = connections.value.filter((c) => c.id !== row.id)
+    } else {
+      await api.update(row.id, { parent_id: target })
+      projects.value = projects.value.map((p) => (p.id === row.id ? { ...p, parent_id: target } : p))
+      folderPaths.load(true) // the paths under this folder changed
+    }
+    const folder = projects.value.find((p) => p.id === target)?.name ?? `#${target}`
+    toast.success(t('projectBrowser.movedTo', { name: row.name, folder }))
+  } catch (e) {
+    toast.error(errMessage(e))
+  }
 }
 
 async function removeRow(row: Row) {
@@ -751,20 +801,21 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               ><History :size="13" /></button>
 
               <Select
-                v-if="r.kind === 'flow' && movingFlowId === r.id"
+                v-if="moving === rowKey(r)"
                 class="movesel"
                 :model-value="null"
-                :options="projects.filter((p) => p.id !== r.raw.project_id).map((p) => ({ value: p.id, label: p.name }))"
+                :options="moveTargets(r)"
+                searchable
                 :placeholder="$t('projectBrowser.moveToPlaceholder')"
-                @update:model-value="(v: any) => moveFlow(r.raw, v)"
-                @close="movingFlowId = null"
+                @update:model-value="(v: any) => moveRow(r, v)"
+                @close="moving = null"
               />
               <button
-                v-else-if="r.kind === 'flow'"
+                v-else
                 class="mini"
                 :title="$t('projectBrowser.moveToFolderTitle')"
                 :aria-label="$t('projectBrowser.moveToFolderTitle')"
-                @click="movingFlowId = r.id"
+                @click="moving = rowKey(r)"
               ><FolderInput :size="13" /></button>
 
               <button

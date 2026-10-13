@@ -945,7 +945,7 @@ export default {
     "editConnectionTitle": "Edit connection",
     "engineMenuLabel": "Execution engine",
     "flowDeleted": "Flow \"{name}\" deleted",
-    "flowMoved": "Flow \"{name}\" moved",
+    "movedTo": "“{name}” is now in {folder}",
     "folderButton": "Create",
     "folderDeleted": "Folder \"{name}\" deleted",
     "fromDatabaseButton": "Datasource from a database",

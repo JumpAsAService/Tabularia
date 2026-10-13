@@ -852,7 +852,7 @@ export default {
     "editConnectionTitle": "Modifier la connexion",
     "engineMenuLabel": "Moteur d'exécution",
     "flowDeleted": "Flux « {name} » supprimé",
-    "flowMoved": "Flux « {name} » déplacé",
+    "movedTo": "« {name} » est maintenant dans {folder}",
     "flowsLabel": "Flux",
     "folderButton": "Dossier",
     "folderDeleted": "Dossier « {name} » supprimé",

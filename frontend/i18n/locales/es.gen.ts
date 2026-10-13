@@ -852,7 +852,7 @@ export default {
     "editConnectionTitle": "Editar conexión",
     "engineMenuLabel": "Motor de ejecución",
     "flowDeleted": "Flujo \"{name}\" eliminado",
-    "flowMoved": "Flujo \"{name}\" movido",
+    "movedTo": "«{name}» ahora está en {folder}",
     "flowsLabel": "Flujos",
     "folderButton": "Carpeta",
     "folderDeleted": "Carpeta \"{name}\" eliminada",
