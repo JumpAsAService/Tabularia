@@ -361,6 +361,12 @@ async function saveView() {
     const esistente = savedViews.value.find(
       (v) => v.name === nome && v.project_id === saveProjectId.value,
     )
+    // ...but only when it is a view of this same datasource: updating another
+    // datasource's view would give it columns that are not there
+    if (esistente && esistente.datasource_id !== ds.id) {
+      toast.error(t('viewer.viewNameTakenOtherDs', { name: nome }))
+      return
+    }
     const salvata = esistente
       ? await viewsApi.update(esistente.id, { spec, name: nome })
       : await viewsApi.create(saveProjectId.value, { name: nome, datasource_id: ds.id, spec })

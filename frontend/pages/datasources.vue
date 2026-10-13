@@ -4,7 +4,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
-import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText } from 'lucide-vue-next'
+import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText, ListOrdered } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
@@ -55,6 +55,31 @@ const MAX_ABOUT = 4000
 const savingDescriptions = ref<number | null>(null)
 const describedCount = (d: DatasourceInfo) => Object.keys(d.column_descriptions ?? {}).length
 
+// Sort keys, saved with the same button. Database imports only: a flow sets them
+// on its Output node (every publish rewrites them), SharePoint keeps file order.
+// Picked from the known columns, in the order ticked, so a typo cannot break every
+// refresh; typed by hand only while no import has succeeded yet.
+const keyDrafts = reactive<Record<number, string[]>>({})
+const keyText = reactive<Record<number, string>>({})
+const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && d.source_type !== 'sharepoint'
+const draftKeys = (d: DatasourceInfo): string[] =>
+  d.columns.length
+    ? keyDrafts[d.id] ?? []
+    : [...new Set((keyText[d.id] ?? '').split(',').map((k) => k.trim()).filter(Boolean))]
+const keysDirty = (d: DatasourceInfo) =>
+  canEditKeys(d) && JSON.stringify(draftKeys(d)) !== JSON.stringify(d.sort_keys ?? [])
+// the columns, plus any key that is no longer one (renamed at the source): it has
+// to stay visible to be unticked, or a broken refresh could never be repaired
+function keyOptions(d: DatasourceInfo): { name: string; missing: boolean }[] {
+  const names = d.columns.map((c) => c.name)
+  const stale = [...new Set([...(d.sort_keys ?? []), ...(keyDrafts[d.id] ?? [])])].filter((k) => !names.includes(k))
+  return [...names.map((name) => ({ name, missing: false })), ...stale.map((name) => ({ name, missing: true }))]
+}
+function toggleKey(d: DatasourceInfo, name: string) {
+  const keys = keyDrafts[d.id] ?? []
+  keyDrafts[d.id] = keys.includes(name) ? keys.filter((k) => k !== name) : [...keys, name]
+}
+
 function toggle(d: DatasourceInfo) {
   if (expanded.value === d.id) {
     expanded.value = null
@@ -66,11 +91,14 @@ function toggle(d: DatasourceInfo) {
 function resetDraft(d: DatasourceInfo) {
   drafts[d.id] = Object.fromEntries(d.columns.map((c) => [c.name, d.column_descriptions?.[c.name] ?? '']))
   aboutDrafts[d.id] = d.description ?? ''
+  keyDrafts[d.id] = [...(d.sort_keys ?? [])]
+  keyText[d.id] = (d.sort_keys ?? []).join(', ')
 }
 const draftDescribed = (d: DatasourceInfo) => Object.values(drafts[d.id] ?? {}).filter((v) => v.trim()).length
 const aboutDirty = (d: DatasourceInfo) => (aboutDrafts[d.id] ?? '').trim() !== (d.description ?? '').trim()
 const isDirty = (d: DatasourceInfo) =>
   aboutDirty(d) ||
+  keysDirty(d) ||
   (!!drafts[d.id] && d.columns.some((c) => (drafts[d.id][c.name] ?? '').trim() !== (d.column_descriptions?.[c.name] ?? '')))
 
 async function saveDescriptions(d: DatasourceInfo) {
@@ -80,15 +108,18 @@ async function saveDescriptions(d: DatasourceInfo) {
   const stale = Object.fromEntries(
     Object.entries(d.column_descriptions ?? {}).filter(([k]) => !d.columns.some((c) => c.name === k)),
   )
+  const keysChanged = keysDirty(d)
   savingDescriptions.value = d.id
   try {
     const updated = await dsApi.update(d.id, {
       description: (aboutDrafts[d.id] ?? '').trim(),
       column_descriptions: { ...stale, ...draft },
+      ...(keysChanged ? { sort_keys: draftKeys(d) } : {}),
     })
     items.value = items.value.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
     resetDraft(updated)
     toast.success(t('datasources.docsSavedToast', { n: describedCount(updated) }))
+    if (keysChanged) toast.success(t('sortKeys.savedToast'))
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
@@ -329,6 +360,34 @@ async function saveSchedule(cron: string) {
               </div>
             </div>
           </template>
+          <template v-if="canEditKeys(d)">
+            <div class="section-title"><ListOrdered :size="12" /> {{ $t('sortKeys.heading') }}</div>
+            <p class="muted hint">{{ d.columns.length ? $t('sortKeys.intro') : $t('sortKeys.introNoColumns') }}</p>
+            <div v-if="d.columns.length" class="sk-checks">
+              <label v-for="o in keyOptions(d)" :key="o.name" class="sk-chk" :class="{ 'sk-missing': o.missing }">
+                <input type="checkbox" :checked="draftKeys(d).includes(o.name)" @change="toggleKey(d, o.name)" />
+                <code :title="o.name">{{ o.name }}</code>
+                <span v-if="draftKeys(d).includes(o.name)" class="sk-pos">{{ draftKeys(d).indexOf(o.name) + 1 }}</span>
+                <span v-if="o.missing" class="sk-miss">{{ $t('sortKeys.missing') }}</span>
+              </label>
+            </div>
+            <input
+              v-else
+              v-model="keyText[d.id]"
+              type="text"
+              class="sk-text"
+              :placeholder="$t('sortKeys.placeholder')"
+              :aria-label="$t('sortKeys.heading')"
+            />
+            <p class="muted hint sk-now">
+              {{ draftKeys(d).length ? $t('sortKeys.current', { keys: draftKeys(d).join(', ') }) : $t('sortKeys.none') }}
+            </p>
+          </template>
+          <template v-else-if="d.kind === 'flow' && d.sort_keys?.length">
+            <div class="section-title"><ListOrdered :size="12" /> {{ $t('sortKeys.heading') }}</div>
+            <p class="muted hint">{{ $t('sortKeys.fromFlow', { keys: d.sort_keys.join(', ') }) }}</p>
+          </template>
+
           <div class="cd-actions">
             <span v-if="d.columns.length" class="muted">{{ $t('columnDescriptions.counter', { n: draftDescribed(d), total: d.columns.length }) }}</span>
             <span class="spacer" />
@@ -402,6 +461,20 @@ async function saveSchedule(cron: string) {
   .cd-headrow { display: none; }
 }
 .sched { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.sk-checks {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; max-height: 180px; overflow-y: auto;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+}
+.sk-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; max-width: 100%; cursor: pointer; }
+.sk-chk code { font-family: ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-pos {
+  min-width: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; text-align: center;
+  font-variant-numeric: tabular-nums; background: var(--tint-accent); color: var(--accent-hi);
+}
+.sk-missing code { text-decoration: line-through; }
+.sk-miss { font-size: 11px; color: var(--danger); }
+.sk-text { width: 100%; font-family: ui-monospace, monospace; font-size: 12.5px; }
+.sk-now { font-variant-numeric: tabular-nums; }
 .sched code { font-family: ui-monospace, monospace; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
 </style>

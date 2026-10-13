@@ -45,7 +45,10 @@ logger = logging.getLogger(__name__)
 TABLE_PREFIX = "_mv_"
 INDEX_SET = "dataprep:matview"  # SET Valkey: source id materializzati
 ATIME_ZSET = "dataprep:matview:atime"  # ZSET: source id -> ultimo accesso (unix ts)
-SMALL_SET = "dataprep:matview:small"  # SET: source id sotto soglia (cache negativa)
+# ZSET: source id below the threshold -> when it was counted (negative cache). A
+# sorted set, so the TTL sweep can prune it: every refresh is a new source id.
+SMALL_ZSET = "dataprep:matview:small:z"
+SMALL_SET = "dataprep:matview:small"  # the unpruned SET of earlier releases: deleted by the sweep
 FAILED_ZSET = "dataprep:matview:failed"  # ZSET: source id -> istante dell'ultimo fallimento
 # Dopo un fallimento si aspetta prima di riprovare: senza, OGNI preview rilancia
 # la copia dell'intero dataset (grant mancante, disco pieno, worker ucciso dal
@@ -63,9 +66,10 @@ class MatViewStore:
     Tre insiemi, tenuti allineati fra loro e col server:
     - INDEX_SET   gli id sorgente con una tabella viva;
     - ATIME_ZSET  il loro ultimo accesso, per il drop a TTL;
-    - SMALL_SET   gli id già visti sotto soglia, per non ricontarli a ogni preview
+    - SMALL_ZSET  gli id già visti sotto soglia, per non ricontarli a ogni preview
                   (le chiavi dei dataset sono immutabili: sotto soglia oggi, sotto
-                  soglia domani → nessuna invalidazione).
+                  soglia domani → nessuna invalidazione). Pruned after the TTL with
+                  FAILED_ZSET: a source counted again after that costs one count.
     """
 
     def __init__(self, redis_client, cfg):
@@ -153,6 +157,11 @@ class MatViewStore:
             logger.warning("materializzazione non riuscita per %s, resto su s3(): %s", sid, e)
             return None
 
+    def discard(self, source, sort_keys=None) -> None:
+        """Forgets the copy of a source whose table went away under a query, so the
+        next preview reads the parquet or builds it again instead of failing."""
+        self._forget(self._sid(source, sort_keys))
+
     # ── drop periodico (chiamato dal task beat) ───────────────────────────────
     def evict(self, ctx, ttl_seconds: int) -> int:
         """Elimina le tabelle non accedute da più di `ttl_seconds` e le orfane
@@ -162,8 +171,13 @@ class MatViewStore:
         cutoff = time.time() - ttl_seconds
         removed = 0
         self._reconcile()
+        self._prune(cutoff)
 
         for sid in self._expired(cutoff):
+            # read again right before the drop: a preview may have used the copy
+            # since the list above was taken, and is reading it now
+            if self._accessed_since(sid, cutoff):
+                continue
             try:
                 ctx.matview_drop(db, self.table_name(sid))
             except Exception:
@@ -218,7 +232,7 @@ class MatViewStore:
         try:
             self.redis.sadd(INDEX_SET, sid)
             self.redis.zadd(ATIME_ZSET, {sid: time.time()})
-            self.redis.srem(SMALL_SET, sid)
+            self.redis.zrem(SMALL_ZSET, sid)
             self.redis.zrem(FAILED_ZSET, sid)
         except redis.RedisError:
             pass
@@ -254,10 +268,28 @@ class MatViewStore:
 
     def _failed_recently(self, sid: str) -> bool:
         try:
-            recent = self.redis.zrangebyscore(FAILED_ZSET, time.time() - FAILURE_BACKOFF_SECONDS, "+inf")
-            return sid in set(recent)
+            failed_at = self.redis.zscore(FAILED_ZSET, sid)
         except redis.RedisError:
             return False
+        return failed_at is not None and failed_at >= time.time() - FAILURE_BACKOFF_SECONDS
+
+    def _accessed_since(self, sid: str, cutoff: float) -> bool:
+        try:
+            atime = self.redis.zscore(ATIME_ZSET, sid)
+        except redis.RedisError:
+            return True  # unknown: keep the table, the next sweep decides
+        return atime is not None and atime > cutoff
+
+    def _prune(self, cutoff: float) -> None:
+        """Keeps the negative caches from growing forever: failures older than the
+        back-off decide nothing any more, and "below the threshold" is counted again
+        after the TTL."""
+        try:
+            self.redis.zremrangebyscore(FAILED_ZSET, "-inf", time.time() - FAILURE_BACKOFF_SECONDS)
+            self.redis.zremrangebyscore(SMALL_ZSET, "-inf", cutoff)
+            self.redis.delete(SMALL_SET)
+        except redis.RedisError:
+            pass
 
     def _mark_failed(self, sid: str) -> None:
         try:
@@ -267,13 +299,13 @@ class MatViewStore:
 
     def _is_small(self, sid: str) -> bool:
         try:
-            return bool(self.redis.sismember(SMALL_SET, sid))
+            return self.redis.zscore(SMALL_ZSET, sid) is not None
         except redis.RedisError:
             return False
 
     def _mark_small(self, sid: str) -> None:
         try:
-            self.redis.sadd(SMALL_SET, sid)
+            self.redis.zadd(SMALL_ZSET, {sid: time.time()})
         except redis.RedisError:
             pass
 

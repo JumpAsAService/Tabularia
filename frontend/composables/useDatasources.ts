@@ -88,7 +88,13 @@ export function useDatasources() {
 
     update: (
       id: number,
-      body: Partial<{ name: string; description: string; project_id: number; column_descriptions: Record<string, string> }>,
+      body: Partial<{
+        name: string
+        description: string
+        project_id: number
+        column_descriptions: Record<string, string>
+        sort_keys: string[] // database datasources only; applies from the next refresh
+      }>,
     ) => apiFetch<DatasourceInfo>(`/datasources/${id}`, { method: 'PATCH', body }),
 
     remove: (id: number) => apiFetch<void>(`/datasources/${id}`, { method: 'DELETE' }),

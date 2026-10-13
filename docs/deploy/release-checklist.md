@@ -95,7 +95,6 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
   at 1,048,575 rows.
 - The step cache in the editor materializes every intermediate step; on very
   large sources use the source node's development sample.
-- Sort keys cannot be edited after import; re-import to change them.
 - The external ClickHouse has a memory ceiling of its own (7 GiB on the current
   instance): two heavy sorts over a 25M-row, 50-column table at once can hit it
   and fail with a clear error.

@@ -160,6 +160,24 @@ exposes at `/system/info` and in the app's settings menu.
   did; `MINIO_IMAGE` replaces it.
 - **The quickstart generates the Fernet key without extra packages**: with `openssl`
   or a Python one-liner that needs only the standard library, or with Docker alone.
+- **Sort keys can be changed after the import.** A database datasource's sort keys
+  are edited in Datasources → open the row → Order, picked from its columns in the
+  order ticked, and apply from the next refresh. They used to be fixed at creation:
+  a mistyped key failed every refresh for good. A key that is no longer a column
+  (renamed at the source) is shown and can be removed; a flow's datasource keeps
+  taking them from its Output node.
+- **Fixed: an SMTP connection with malformed options broke every flow launch** with a
+  500. The options are checked when the connection is saved, and a malformed
+  allowed-domains list already saved stops the email instead of lifting the
+  restriction.
+- **Fixed: saving a view could overwrite another datasource's view** with the same
+  name in the same folder. It is refused, with a message.
+- **Fixed: a run that failed showed its email as pending forever** (in the API); it
+  now reads "not sent".
+- **Fixed, viewer copies on ClickHouse:** a preview no longer fails when its
+  materialized copy is dropped by the TTL sweep at the same moment (it reads the
+  parquet instead), and the caches of sources below the threshold or recently failed
+  no longer grow without end.
 - **Release images published by CI, for amd64 and arm64** (`docs/release-process.md`).
   A `v*` tag builds the three images from scratch, smoke-tests them, and pushes each
   one only after two secret scans pass: the maintainer's own secrets, matched by

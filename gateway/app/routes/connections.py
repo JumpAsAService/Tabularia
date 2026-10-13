@@ -83,7 +83,40 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
         raise HTTPException(status_code=422, detail="Le opzioni della connessione devono essere un oggetto JSON")
     if db_type == "sqlserver" and data.get("tls") not in (None, "", *_TLS_SQLSERVER):
         raise HTTPException(status_code=422, detail="SQL Server: the TLS option must be verify, trust or none")
+    if db_type == "smtp":
+        errors = _smtp_option_errors(data)
+        if errors:
+            raise HTTPException(status_code=422, detail="SMTP options: " + "; ".join(errors))
     return grezzo
+
+
+_TLS_SMTP = ("starttls", "ssl", "none")
+
+
+def _smtp_option_errors(data: dict) -> list[str]:
+    """What is wrong with the options of an SMTP connection, checked when it is
+    saved: a wrong type there used to surface as a 500 at every flow launch."""
+    errors = []
+    if data.get("tls") not in (None, "", *_TLS_SMTP):
+        errors.append("tls must be starttls, ssl or none")
+    for key in ("from_address", "from_name"):
+        if data.get(key) is not None and not isinstance(data[key], str):
+            errors.append(f"{key} must be text")
+    if _domain_list(data.get("allowed_domains")) is None:
+        errors.append("allowed_domains must be a list of domains or a comma-separated text")
+    return errors
+
+
+def _domain_list(raw) -> list[str] | None:
+    """The allowed domains as a list, or None when the value is not a list of text
+    nor a comma-separated text."""
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, str):
+        raw = raw.split(",")
+    if not isinstance(raw, list) or not all(isinstance(d, str) for d in raw):
+        return None
+    return [d.strip().lower().lstrip("@") for d in raw if d.strip()]
 
 
 def _db_options(db_type: str, extra: str | None) -> dict:
@@ -118,10 +151,14 @@ def allowed_email_domains(conn: Connection) -> list[str]:
     """Domini a cui questa connessione può spedire. Elenco VUOTO = nessun limite
     (chi non ne ha bisogno non se ne accorge); valorizzato = barriera vera contro
     l'uso del nodo email come canale di uscita verso indirizzi arbitrari."""
-    grezzi = smtp_options(conn).get("allowed_domains") or []
-    if isinstance(grezzi, str):
-        grezzi = grezzi.split(",")
-    return [d.strip().lower().lstrip("@") for d in grezzi if isinstance(d, str) and d.strip()]
+    domains = _domain_list(smtp_options(conn).get("allowed_domains"))
+    if domains is None:
+        # a malformed restriction must not read as "no restriction": no email leaves
+        raise HTTPException(
+            status_code=422,
+            detail=f"The allowed domains of the SMTP connection '{conn.name}' are malformed: fix the connection",
+        )
+    return domains
 
 
 def _smtp_payload(conn: Connection) -> dict:

@@ -648,6 +648,23 @@ async def _revoke_task(run: Run) -> None:
         logger.warning("run %s: revoca del task %s non riuscita: %s", run.id, run.task_id, e)
 
 
+def _email_not_sent(summary: str | None) -> str | None:
+    """The email summary of a run that did not succeed, still marked pending: the
+    worker reports the outcome only when the task returns, so a run that fails
+    (the email itself, with stop on failure, or anything before it) would show
+    the email as pending forever. It was not sent; the run's error says why."""
+    if not summary:
+        return None
+    try:
+        data = json.loads(summary)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or data.get("ok") is not None:
+        return None
+    data.update(ok=False, error="not sent: the run did not succeed")
+    return json.dumps(data)[:2000]
+
+
 def _contract_target_id(session: Session, run: Run) -> int | None:
     """La datasource su cui i dati di questo run andrebbero a finire: quella che
     un refresh aggiorna, o quella che un flusso sta per sovrascrivere."""
@@ -833,6 +850,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
             "rows_written": result.get("rows_written"),
             "error": contract_service.broken_rules_message(contract_report)[:2000],
         }
+        not_sent = _email_not_sent(run.email)
+        if not_sent:
+            values["email"] = not_sent
     elif new_status == "SUCCESS":
         values["rows_written"] = result.get("rows_written")
         # esito della copia best-effort: il run resta SUCCESS anche se è fallita,
@@ -845,6 +865,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
     else:
         values["error"] = (_friendly_error(error, error_detail) or "")[:2000]
         values["error_detail"] = error_detail[:20000] if error_detail else None
+        not_sent = _email_not_sent(run.email)
+        if not_sent:
+            values["email"] = not_sent
     # con qualche tentativo IMMEDIATO: un errore transitorio (lock, hiccup del DB)
     # si risolve nello stesso giro invece di aspettare la prossima lettura; se
     # persiste, dopo i tentativi il run resta non terminale e si ritenta più tardi.

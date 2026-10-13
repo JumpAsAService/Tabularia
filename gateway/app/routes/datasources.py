@@ -50,6 +50,42 @@ MAX_COLUMN_DESCRIPTION = 2000
 # descrizione della DATASOURCE: cosa contiene, una riga = cosa, periodo,
 # avvertenze. La leggono le persone e l'assistente AI per scegliere la tabella.
 MAX_DATASOURCE_DESCRIPTION = 4000
+MAX_SORT_KEY = 255
+
+
+def clean_sort_keys(keys: list[str]) -> list[str]:
+    """Trimmed, without blanks or repeats, in the order given: the order is the ORDER BY."""
+    cleaned: list[str] = []
+    for key in keys:
+        key = (key or "").strip()
+        if key and key not in cleaned:
+            if len(key) > MAX_SORT_KEY:
+                raise HTTPException(status_code=422, detail=f"Sort key longer than {MAX_SORT_KEY} characters")
+            cleaned.append(key)
+    return cleaned
+
+
+def _checked_sort_keys(ds: Datasource, keys: list[str]) -> list[str]:
+    """Sort keys a datasource may take. Against the columns of its last import when
+    there is one: a key that is not a column would fail every refresh from then on.
+    Without columns (the first import never succeeded, often because of a mistyped
+    key) they are taken as given, which is how such a datasource gets repaired."""
+    if ds.kind == "flow":
+        raise HTTPException(
+            status_code=422,
+            detail="This datasource is published by a flow: set its sort keys on the flow's Output node",
+        )
+    if ds.source_type == "sharepoint":
+        raise HTTPException(status_code=422, detail="SharePoint imports keep the rows in file order: no sort keys")
+    keys = clean_sort_keys(keys)
+    try:
+        known = [c.get("name") for c in json.loads(ds.columns or "[]") if isinstance(c, dict)]
+    except json.JSONDecodeError:
+        known = []
+    unknown = [k for k in keys if known and k not in known]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Not columns of this datasource: {', '.join(unknown)}")
+    return keys
 
 
 def _load_column_descriptions(ds: Datasource) -> dict[str, str]:
@@ -254,7 +290,7 @@ async def create_db_datasource(
         connection_id=conn.id,
         source_type=body.source_type,
         source_ref=body.source_ref,
-        sort_keys=json.dumps([k.strip() for k in body.sort_keys if k and k.strip()]),
+        sort_keys=json.dumps(clean_sort_keys(body.sort_keys)),
     )
     session.add(ds)
     session.commit()
@@ -483,6 +519,9 @@ def update_datasource(
         ds.description = text
     if body.column_descriptions is not None:
         ds.column_descriptions = json.dumps(clean_column_descriptions(body.column_descriptions), ensure_ascii=False)
+    if body.sort_keys is not None:
+        # takes effect at the next import or refresh, which reads them from here
+        ds.sort_keys = json.dumps(_checked_sort_keys(ds, body.sort_keys))
     ds.updated_at = datetime.now(timezone.utc)
     session.add(ds)
     session.commit()

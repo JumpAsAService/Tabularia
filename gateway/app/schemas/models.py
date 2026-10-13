@@ -573,6 +573,9 @@ class DatasourceUpdate(BaseModel):
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
     # valorizzato = SOSTITUISCE la mappa {colonna: descrizione}; voci vuote scartate
     column_descriptions: Optional[dict[str, str]] = None
+    # set = replaces the ORDER BY of the next imports ([] removes it). Database
+    # datasources only: a flow sets them on its Output node, at every publish.
+    sort_keys: Optional[list[str]] = Field(default=None, max_length=32)
 
 
 class ScheduleUpdate(BaseModel):

@@ -2,6 +2,24 @@
 
 **Commit della review:** `64dad1d` · Working tree pulito. **Nessuna correzione applicata**: per decisione dell'utente questa passata produce solo il referto. Tutti i rilievi qui sotto sono **aperti**.
 
+## Stato al 2026-10-13
+
+Riverificati uno per uno sul codice di oggi; i sei ancora aperti sono stati corretti, ciascuno con un test che fallisce sul codice di prima.
+
+| Rilievo | Stato | Dove |
+|---|---|---|
+| R1 kwarg nuovi durante il rolling update | chiuso prima (tutte le chiamate inviano i kwarg opzionali solo se valorizzati) | `tests/test_task_kwargs_rolling_update.py` |
+| R2 `stopOnFailure` | chiuso prima (`StopSequence`, in e6cb0c9) | `tests/test_orchestrate_stop_on_failure.py` |
+| R3 sort keys irreparabili | **corretto**: modificabili da PATCH e dalla pagina Datasources, scelte fra le colonne note; una chiave che non è più una colonna resta visibile e si toglie | `gateway/tests/test_datasource_sort_keys_edit.py` |
+| R4 tetto di 60 s | smentito | — |
+| R5 ordine nel viewer | **non è un difetto**: nessun testo promette quell'ordine (l'interfaccia dice «più veloce», il README parla del layout dei file); la copia materializzata è spenta di default | — |
+| R6 `ORDER BY` nudo nell'export dbt | chiuso prima (`ignore_missing` gestito) | — |
+| R7 `allowed_domains` | **corretto**: opzioni SMTP controllate al salvataggio; un valore malformato già salvato blocca l'invio (422) invece di togliere la restrizione | `gateway/tests/test_smtp_options.py` |
+| R8 vista sovrascritta | **corretto**: il confronto include la datasource; lo stesso nome su un'altra datasource è rifiutato con un messaggio | prova nel browser |
+| R9 email «in attesa» per sempre | **corretto**: un run non riuscito segna l'email «non inviata» | `gateway/tests/test_run_email_outcome.py` |
+| R10 finestra fra scadenza e drop | **corretto**: lo sweep rilegge l'ultimo accesso prima del drop; una preview la cui copia sparisce rilegge il parquet | `backend/tests/test_matview_robustness.py` |
+| R11 strutture Redis senza potatura | **corretto**: «sotto soglia» e «fallite» potate dallo sweep, `ZSCORE` invece della scansione | `backend/tests/test_matview_robustness.py` |
+
 ## Metodo e perimetro
 
 Perimetro: `e37de86..HEAD`, le feature costruite negli ultimi giorni — materializzazione per il viewer, chiavi di ordinamento sulle datasource, tuning della lettura parquet da ClickHouse, nodo email + connessione SMTP, viste salvate.
@@ -25,7 +43,7 @@ Stack locale sano, backend **531** test verdi, gateway **257**, typecheck fronte
 
 Dieci confermati, uno smentito.
 
-**Tre rilievi mordono prima degli altri:** R1 rompe *ogni* run durante un aggiornamento progressivo, R2 fa proseguire un flusso dopo una notifica mai partita, R7 rende una datasource irreparabile per un refuso.
+**Tre rilievi mordono prima degli altri:** R1 rompe *ogni* run durante un aggiornamento progressivo, R2 fa proseguire un flusso dopo una notifica mai partita, R3 rende una datasource irreparabile per un refuso.
 
 ---
 

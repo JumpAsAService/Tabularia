@@ -183,6 +183,18 @@ def _staging_ddl(schema: pa.Schema) -> str:
     return ", ".join(f"{_qi(f.name)} Nullable({_ch_type(f.type)})" for f in schema)
 
 
+
+def _is_unknown_table(e: BaseException) -> bool:
+    """True when ClickHouse answered that a table does not exist (code 60). The
+    engine wraps the driver's error, so the cause chain is read too."""
+    seen: BaseException | None = e
+    while seen is not None:
+        text = str(seen)
+        if "UNKNOWN_TABLE" in text or "Code: 60." in text:
+            return True
+        seen = seen.__cause__
+    return False
+
 class ClickHouseContext:
     """Stato di esecuzione di una catena sul server: client, storage, trasporto,
     tabelle di staging e file temporanei da ripulire. Espone la stessa interfaccia
@@ -749,7 +761,18 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             # e' alto, la copia si sta CREANDO adesso (prima volta o dopo un drop)
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             _t = _fase("sql", _t)
-            raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
+            try:
+                raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
+            except EngineError as e:
+                if ctx.fonte_radice != "matview" or not _is_unknown_table(e):
+                    raise
+                # the copy went away under the query (dropped by its TTL, or by
+                # hand): read the parquet as if it had never been made
+                logger.warning("preview: the materialized copy of %s vanished, reading the parquet", source.key)
+                self.matviews.discard(source, sort_keys)
+                ctx.allow_matview = False
+                sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
+                raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
             _t = _fase("query", _t)
             # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
             df = naive_utc(pl.read_parquet(io.BytesIO(raw))) if raw else pl.DataFrame()

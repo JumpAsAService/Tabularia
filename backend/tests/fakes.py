@@ -75,6 +75,17 @@ class FakeRedis:
     def zrem(self, key, member):
         self.zsets[key].pop(member, None)
 
+    def zscore(self, key, member):
+        return self.zsets[key].get(member)
+
+    def zremrangebyscore(self, key, lo, hi):
+        lo = float("-inf") if lo == "-inf" else float(lo)
+        hi = float("inf") if hi == "+inf" else float(hi)
+        doomed = [m for m, s in self.zsets[key].items() if lo <= s <= hi]
+        for m in doomed:
+            del self.zsets[key][m]
+        return len(doomed)
+
     # ── stringhe (lucchetto SET NX, passi «troppo grandi») ───────────────
     def set(self, key, value, nx=False, ex=None):
         if not hasattr(self, "strings"):
