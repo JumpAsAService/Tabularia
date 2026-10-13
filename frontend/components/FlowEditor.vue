@@ -1359,9 +1359,8 @@ async function exportSelected(format: 'csv' | 'xlsx') {
 // ── Run (async via Celery) ──────────────────────────────────────────────
 // Il click su Esegui apre il dialog; il lancio vero passa dal GATEWAY quando
 // il flusso è salvato → cronologia dei run. Se il canvas ha nodi Output, ogni
-// output diventa un run (la destinazione è configurata sul nodo, alla Tableau
-// Prep); senza nodi Output resta il percorso classico (pubblicazione opzionale
-// dal dialog).
+// output diventa un run (la destinazione è configurata sul nodo); senza nodi
+// Output resta il percorso classico (pubblicazione opzionale dal dialog).
 const runDialogOpen = ref(false)
 const runDialogError = ref('')
 

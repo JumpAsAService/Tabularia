@@ -1,4 +1,4 @@
-"""Progetti/cartelle stile Tableau, con permessi ereditati lungo l'albero.
+"""Progetti/cartelle, con permessi ereditati lungo l'albero.
 
 - lista: solo i progetti visibili all'utente (frontend costruisce l'albero);
 - creazione: MANAGE sul parent (root → solo superuser);

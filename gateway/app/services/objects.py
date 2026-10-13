@@ -11,7 +11,7 @@ nel payload deve risultare leggibile dall'utente secondo queste regole:
   flusso (la cronologia condivisa include i suoi output);
 - chiavi referenziate dalla `definition` di un flusso salvato: VIEW sul progetto
   del flusso — condividere un flusso significa condividere i dati che
-  referenzia, come i flussi impacchettati di Tableau.
+  referenzia.
 
 Fail-closed: una chiave managed che non rientra in nessuna regola → 403 (vale
 anche per `cache/`, che è interna all'engine e non deve mai arrivare dai client).

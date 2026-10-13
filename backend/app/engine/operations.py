@@ -89,7 +89,7 @@ def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
     # - testo → numero/data: spazi attorno tagliati (" 4 " → 4);
     # - testo → intero: SOLO interi letterali ("2.7" → NULL, non 3 né 2);
     # - numero (float/decimal) → intero: TRONCAMENTO verso zero (100.9 → 100,
-    #   -2.7 → -2), come INT() di Tableau; fuori range → NULL.
+    #   -2.7 → -2); fuori range → NULL.
     columns: dict[str, str] = _require(params, "columns")
     schema = lf.collect_schema()
     exprs: list[pl.Expr] = []
@@ -488,7 +488,7 @@ def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Union: accoda le righe di un altro ramo (stile Tableau Prep)
+# Union: accoda le righe di un altro ramo
 # ─────────────────────────────────────────────────────────────────────────────
 @register("union")
 def op_union(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:

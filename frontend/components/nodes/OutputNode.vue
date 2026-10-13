@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Nodo Output (terminale, stile Tableau Prep): dove finisce il risultato della
+// Nodo Output (terminale): dove finisce il risultato della
 // catena — datasource del catalogo, tabella di database, o file/dataset su S3.
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'

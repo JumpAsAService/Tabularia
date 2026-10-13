@@ -12,7 +12,7 @@ Analysts and data teams who prepare data for reports and scheduled pipelines, wo
 
 ## Product Purpose
 
-Tabularia is a self-hosted data-preparation tool in the spirit of Tableau Prep: connect a source, build a flow of transformation nodes on a canvas, preview every step, publish the result as a datasource or write it to a database, S3 or email, and schedule it. Success is a flow that turns messy input into a table someone can trust, without writing a pipeline by hand.
+Tabularia is a self-hosted data-preparation tool: connect a source, build a flow of transformation nodes on a canvas, preview every step, publish the result as a datasource or write it to a database, S3 or email, and schedule it. Success is a flow that turns messy input into a table someone can trust, without writing a pipeline by hand.
 
 ## Positioning
 

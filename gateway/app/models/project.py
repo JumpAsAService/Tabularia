@@ -9,7 +9,7 @@ def _now() -> datetime:
 
 class Project(SQLModel, table=True):
     """
-    Cartella stile Tableau. Albero via `parent_id` (self-reference); `parent_id`
+    Cartella. Albero via `parent_id` (self-reference); `parent_id`
     None = progetto root. I permessi si applicano al progetto e vengono ereditati
     dai discendenti (vedi services/permissions.py).
     """
