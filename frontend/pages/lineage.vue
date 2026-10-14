@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Tab Lineage: grafo di provenienza/impatto tra flussi, datasource, connessioni
 // e destinazioni esterne. Si sceglie un oggetto su cui centrare (o si vede tutto);
+// nothing loads until the user searches an object and applies it, or asks for the
+// whole graph: with many objects the whole graph is the heavy case, not the start.
 // il grafo mostra a monte (da dove vengono i dati) e a valle (chi si rompe se lo
 // tocco). Il grafo è renderizzato con Vue Flow (client-only), layout a livelli.
 import { ref, computed, watch, nextTick } from 'vue'
@@ -13,10 +15,14 @@ import {
   AlertTriangle, Clock, ExternalLink, X, Crosshair,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
+import { useSearch, type SearchHit } from '~/composables/useSearch'
+import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 
 const api = useApi()
+const searchApi = useSearch()
+const folderPaths = useFolderPaths()
 const { fitView } = useVueFlow()
 const { t } = useI18n()
 const fmtx = useFormat()
@@ -26,7 +32,8 @@ const loading = ref(false)
 const error = ref('')
 
 // selezione: oggetto centrale + parametri di traversata
-const centerType = ref<'flow' | 'datasource' | null>(null)
+type CenterType = 'flow' | 'datasource' | 'connection'
+const centerType = ref<CenterType | null>(null)
 const centerId = ref<number | null>(null)
 const direction = ref<'both' | 'upstream' | 'downstream'>('both')
 const depth = ref(3)
@@ -59,19 +66,54 @@ const EDGE_META = computed<Record<string, { label: string; color: string; dashed
   orchestrate: { label: t('lineage.edgeOrchestrate'), color: '#c084fc', dashed: true },
 }))
 
-// ── picker: flussi e datasource presenti nel grafo completo ──────────────────
-const fullGraph = ref<LineageGraph>({ nodes: [], edges: [] })
-const pickable = computed(() =>
-  fullGraph.value.nodes
-    .filter((n) => (n.type === 'flow' || n.type === 'datasource') && !n.restricted)
-    .filter((n) => !q.value || n.label.toLowerCase().includes(q.value.toLowerCase()))
-    .sort((a, b) => a.label.localeCompare(b.label)),
-)
+// ── picker: search the catalog, choose, then Apply ───────────────────────────
+const CENTER_OF_KIND: Record<string, CenterType> = { flow: 'flow', datasource: 'datasource', connection: 'connection' }
+const NODE_PREFIX: Record<CenterType, string> = { flow: 'flow', datasource: 'ds', connection: 'conn' }
+const hits = ref<SearchHit[]>([])
+const searching = ref(false)
+const chosen = ref<{ type: CenterType; id: number } | null>(null)
+const showingAll = ref(false)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchSeq = 0
+
+watch(q, (text) => {
+  if (searchTimer) clearTimeout(searchTimer)
+  if (!text.trim()) {
+    searchSeq++
+    hits.value = []
+    searching.value = false
+    return
+  }
+  searchTimer = setTimeout(runSearch, 250)
+})
+async function runSearch() {
+  const seq = ++searchSeq
+  searching.value = true
+  try {
+    const res = await searchApi.query(q.value.trim(), { limit: 100 })
+    if (seq === searchSeq) hits.value = res.items.filter((h) => h.kind in CENTER_OF_KIND)
+  } catch {
+    if (seq === searchSeq) hits.value = []
+  } finally {
+    if (seq === searchSeq) searching.value = false
+  }
+}
+function choose(h: SearchHit) {
+  chosen.value = { type: CENTER_OF_KIND[h.kind]!, id: h.id }
+}
+const isChosen = (h: SearchHit) => chosen.value?.type === CENTER_OF_KIND[h.kind] && chosen.value?.id === h.id
+function apply() {
+  if (!chosen.value) return
+  showingAll.value = false
+  selected.value = null
+  centerType.value = chosen.value.type
+  centerId.value = chosen.value.id
+}
+const hitType = (h: SearchHit) =>
+  h.kind === 'flow' ? t('lineage.typeFlow') : h.kind === 'datasource' ? t('lineage.typeDatasource') : t('lineage.typeConnection')
 
 const centerNodeId = computed(() =>
-  centerType.value && centerId.value != null
-    ? `${centerType.value === 'flow' ? 'flow' : 'ds'}:${centerId.value}`
-    : null,
+  centerType.value && centerId.value != null ? `${NODE_PREFIX[centerType.value]}:${centerId.value}` : null,
 )
 
 // ── liste "a monte / a valle" relative al centro (dal grafo mostrato) ─────────
@@ -177,6 +219,10 @@ const rfEdges = computed<Edge[]>(() =>
 
 // ── caricamento ──────────────────────────────────────────────────────────────
 async function load() {
+  if (!centerNodeId.value && !showingAll.value) {
+    graph.value = { nodes: [], edges: [] }  // nothing asked for yet
+    return
+  }
   loading.value = true
   error.value = ''
   try {
@@ -198,13 +244,19 @@ async function load() {
 }
 
 function pick(n: LineageNode) {
-  centerType.value = n.type === 'flow' ? 'flow' : 'datasource'
+  const prefix = n.id.split(':')[0]
+  const type = (Object.keys(NODE_PREFIX) as CenterType[]).find((k) => NODE_PREFIX[k] === prefix)
+  if (!type) return
+  showingAll.value = false
+  centerType.value = type
   centerId.value = Number(n.id.split(':')[1])
 }
 function showAll() {
   centerType.value = null
   centerId.value = null
   selected.value = null
+  showingAll.value = true
+  load()
 }
 
 // click su un nodo → apre il pannello di dettaglio (il ricentro è un'azione lì)
@@ -215,7 +267,7 @@ function onNodeClick(ev: any) {
 
 // azioni del pannello: ricentra sul nodo, oppure aprilo nel suo strumento
 function recenterOn(n: LineageNode) {
-  if (n.type === 'flow' || n.type === 'datasource') pick(n)
+  pick(n)
 }
 function openNode(n: LineageNode) {
   const id = Number(n.id.split(':')[1])
@@ -223,7 +275,7 @@ function openNode(n: LineageNode) {
   else if (n.type === 'datasource') navigateTo('/datasources')
 }
 const canRecenter = (n: LineageNode | null) =>
-  !!n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted
+  !!n && (n.type === 'flow' || n.type === 'datasource' || n.type === 'connection') && !n.restricted
 const canOpen = (n: LineageNode | null) =>
   !!n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted
 
@@ -237,11 +289,23 @@ function restrictedLabel(n: LineageNode) {
 }
 
 // blast radius: tutto ciò che sta a VALLE del nodo lungo il flusso dei dati
-// (read/publish/write), calcolato sul grafo COMPLETO (non sulla vista corrente)
+// (read/publish/write), not limited to the current view: the node's downstream graph
+// (8 hops, the most the gateway gives) is asked for when its panel opens
 const DATA_KINDS = new Set(['read', 'publish', 'write'])
-function impactOf(n: LineageNode) {
+const impactGraph = ref<LineageGraph | null>(null)
+watch(selected, async (n) => {
+  impactGraph.value = null
+  const prefix = n?.id.split(':')[0]
+  const type = (Object.keys(NODE_PREFIX) as CenterType[]).find((k) => NODE_PREFIX[k] === prefix)
+  if (!n || n.restricted || !type) return
+  try {
+    const g = await api.lineage({ type, id: Number(n.id.split(':')[1]), direction: 'downstream', depth: 8 })
+    if (selected.value?.id === n.id) impactGraph.value = g
+  } catch { /* the panel shows no impact */ }
+})
+function impactOf(n: LineageNode, full: LineageGraph) {
   const down = new Map<string, string[]>()
-  for (const e of fullGraph.value.edges) {
+  for (const e of full.edges) {
     if (DATA_KINDS.has(e.kind)) down.set(e.source, [...(down.get(e.source) ?? []), e.target])
   }
   const seen = new Set<string>()
@@ -253,7 +317,7 @@ function impactOf(n: LineageNode) {
     for (const nx of down.get(id) ?? []) if (!seen.has(nx)) queue.push(nx)
   }
   const byType = (t: string) =>
-    fullGraph.value.nodes.filter((x) => seen.has(x.id) && x.type === t).length
+    full.nodes.filter((x) => seen.has(x.id) && x.type === t).length
   return {
     flows: byType('flow'),
     datasources: byType('datasource'),
@@ -261,18 +325,10 @@ function impactOf(n: LineageNode) {
     total: seen.size,
   }
 }
-const impact = computed(() => (selected.value ? impactOf(selected.value) : null))
+const impact = computed(() => (selected.value && impactGraph.value ? impactOf(selected.value, impactGraph.value) : null))
 
 watch([centerType, centerId, direction, depth], load)
 
-onMounted(async () => {
-  try {
-    fullGraph.value = await api.lineage() // per il picker
-  } catch (e) {
-    error.value = errMessage(e)
-  }
-  await load()
-})
 
 const centerLabel = computed(() =>
   graph.value.nodes.find((n) => n.id === centerNodeId.value)?.label ?? null,
@@ -295,21 +351,30 @@ function nodeIcon(t: string) {
         <aside class="ln-side">
           <div class="ln-block">
             <label class="ln-label">{{ $t('lineage.centerOn') }}</label>
-            <div class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('lineage.searchPlaceholder')" /></div>
-            <button class="ln-all" :class="{ on: !centerNodeId }" @click="showAll">{{ $t('lineage.wholeGraph') }}</button>
-            <div class="ln-picklist">
+            <div class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('lineage.searchPlaceholder')" :aria-label="$t('lineage.searchPlaceholder')" /></div>
+            <div v-if="q.trim()" class="ln-picklist" role="listbox" :aria-label="$t('lineage.centerOn')">
               <button
-                v-for="n in pickable"
-                :key="n.id"
+                v-for="h in hits"
+                :key="`${h.kind}-${h.id}`"
                 class="ln-pick"
-                :class="{ on: n.id === centerNodeId }"
-                @click="pick(n)"
+                :class="{ on: isChosen(h) }"
+                role="option"
+                :aria-selected="isChosen(h)"
+                @click="choose(h)"
+                @dblclick="choose(h); apply()"
               >
-                <component :is="nodeIcon(n.type)" :size="13" />
-                <span class="ln-pick-label">{{ n.label }}</span>
-                <span class="ln-pick-type">{{ n.type === 'flow' ? $t('lineage.typeFlow') : $t('lineage.typeDatasource') }}</span>
+                <component :is="nodeIcon(h.kind)" :size="13" />
+                <span class="ln-pick-text">
+                  <span class="ln-pick-label">{{ h.name }}</span>
+                  <span v-if="folderPaths.pathOf(h.project_id) || h.project_name" class="ln-pick-path">{{ folderPaths.pathOf(h.project_id) || h.project_name }}</span>
+                </span>
+                <span class="ln-pick-type">{{ hitType(h) }}</span>
               </button>
-              <p v-if="!pickable.length" class="muted empty">{{ $t('lineage.noObjects') }}</p>
+              <p v-if="!hits.length && !searching" class="muted empty">{{ $t('lineage.noObjects') }}</p>
+            </div>
+            <div class="ln-apply-row">
+              <button class="primary" :disabled="!chosen" @click="apply">{{ $t('lineage.apply') }}</button>
+              <button class="ln-all" :class="{ on: showingAll }" @click="showAll">{{ $t('lineage.wholeGraph') }}</button>
             </div>
           </div>
 
@@ -381,6 +446,7 @@ function nodeIcon(t: string) {
         <div class="ln-canvas">
           <div v-if="error" class="ln-msg err">{{ error }}</div>
           <div v-else-if="loading" class="ln-msg muted">{{ $t('lineage.computingGraph') }}</div>
+          <div v-else-if="!centerNodeId && !showingAll" class="ln-msg muted">{{ $t('lineage.pickHint') }}</div>
           <div v-else-if="!graph.nodes.length" class="ln-msg muted">{{ $t('lineage.noElements') }}</div>
           <ClientOnly>
             <VueFlow
@@ -516,7 +582,12 @@ function nodeIcon(t: string) {
 }
 .ln-pick:hover { background: var(--panel-2); border-color: var(--border); }
 .ln-pick.on { border-color: var(--accent); background: var(--tint-accent); }
-.ln-pick-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln-pick-text { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+/* the name is never cut short: two objects may differ only at its end */
+.ln-pick-label { overflow-wrap: anywhere; }
+.ln-pick-path { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln-apply-row { display: flex; gap: 6px; margin-top: 6px; }
+.ln-apply-row .ln-all { flex: 1; }
 .ln-pick-type { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
 
 .ln-seg { display: flex; gap: 4px; }

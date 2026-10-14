@@ -56,6 +56,9 @@ class Run(SQLModel, table=True):
             postgresql_where=text("kind = 'orchestration' AND status = 'PENDING'"),
             sqlite_where=text("kind = 'orchestration' AND status = 'PENDING'"),
         ),
+        # the latest run of each flow (lineage health, flow lists): read from the
+        # index instead of scanning the whole history
+        Index("ix_runs_flow_id_started_at", "flow_id", "started_at"),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
     # kind="flow": esecuzione di un flusso (flow_id valorizzato).

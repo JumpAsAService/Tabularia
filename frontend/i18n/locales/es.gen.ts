@@ -627,7 +627,7 @@ export default {
     "relationships": "Relaciones",
     "rows": "Filas",
     "scheduled": "Programado",
-    "searchPlaceholder": "Buscar flujo o fuente de datos…",
+    "searchPlaceholder": "Buscar flujo, fuente de datos o conexión…",
     "show": "Mostrar",
     "staleDataNewer": "Obsoleto: datos más recientes que la última ejecución",
     "staleDetail": "Obsoleto: lee datos actualizados después de la última ejecución correcta — volver a ejecutar",
@@ -644,7 +644,10 @@ export default {
     "unresolvedRefs": "{n} referencia(s) no resuelta(s)",
     "upstream": "Aguas arriba",
     "wholeGraph": "Todo el grafo",
-    "yes": "sí"
+    "yes": "sí",
+    "apply": "Aplicar",
+    "pickHint": "Busca un flujo, una fuente de datos o una conexión, elígelo y pulsa Aplicar — o muestra todo el grafo.",
+    "typeConnection": "conexión",
   },
   "monitoring": {
     "dashboardTitle": "Grafana — Resumen de Data Prep",

@@ -627,7 +627,7 @@ export default {
     "relationships": "Relations",
     "rows": "Lignes",
     "scheduled": "Planifié",
-    "searchPlaceholder": "Rechercher un flux ou une source de données…",
+    "searchPlaceholder": "Rechercher un flux, une source ou une connexion…",
     "show": "Afficher",
     "staleDataNewer": "Obsolète : données plus récentes que la dernière exécution",
     "staleDetail": "Obsolète : lit des données actualisées après la dernière exécution réussie — relancer",
@@ -644,7 +644,10 @@ export default {
     "unresolvedRefs": "{n} référence(s) non résolue(s)",
     "upstream": "En amont",
     "wholeGraph": "Tout le graphe",
-    "yes": "oui"
+    "yes": "oui",
+    "apply": "Appliquer",
+    "pickHint": "Recherchez un flux, une source de données ou une connexion, choisissez-le et cliquez sur Appliquer — ou affichez tout le graphe.",
+    "typeConnection": "connexion",
   },
   "monitoring": {
     "dashboardTitle": "Grafana — Aperçu Data Prep",

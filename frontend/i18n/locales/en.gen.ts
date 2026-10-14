@@ -706,7 +706,7 @@ export default {
     "relationships": "Relationships",
     "rows": "Rows",
     "scheduled": "Scheduled",
-    "searchPlaceholder": "Search flow or datasource…",
+    "searchPlaceholder": "Search flow, datasource or connection…",
     "show": "Show",
     "staleDataNewer": "Stale: data newer than the last run",
     "staleDetail": "Stale: reads data refreshed after the last successful run — rerun",
@@ -723,7 +723,10 @@ export default {
     "unresolvedRefs": "{n} unresolved reference(s)",
     "upstream": "Upstream",
     "wholeGraph": "Whole graph",
-    "yes": "yes"
+    "yes": "yes",
+    "apply": "Apply",
+    "pickHint": "Search for a flow, a datasource or a connection, choose it and press Apply — or show the whole graph.",
+    "typeConnection": "connection",
   },
   "monitoring": {
     "dashboardTitle": "Grafana — Data Prep Overview",

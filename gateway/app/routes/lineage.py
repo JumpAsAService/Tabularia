@@ -84,7 +84,7 @@ def emit_flow_openlineage(flow_id: int, user: User = Depends(get_current_user), 
 
 @router.get("/lineage", response_model=LineageGraph)
 def get_lineage(
-    type: Optional[Literal["flow", "datasource"]] = Query(None, description="tipo dell'oggetto centrale"),
+    type: Optional[Literal["flow", "datasource", "connection"]] = Query(None, description="tipo dell'oggetto centrale"),
     id: Optional[int] = Query(None, description="id dell'oggetto centrale"),
     direction: Literal["both", "upstream", "downstream"] = "both",
     depth: int = Query(3, ge=1, le=8),
@@ -99,7 +99,7 @@ def get_lineage(
     if type is None or id is None:
         return _serialize(full, None)
 
-    center = f"flow:{id}" if type == "flow" else f"ds:{id}"
+    center = {"flow": "flow", "datasource": "ds", "connection": "conn"}[type] + f":{id}"
     if center not in full.nodes:
         # l'oggetto non è leggibile o non esiste: 404 (non riveliamo l'esistenza
         # di oggetti fuori dai progetti dell'utente)

@@ -627,7 +627,7 @@ export default {
     "relationships": "Beziehungen",
     "rows": "Zeilen",
     "scheduled": "Geplant",
-    "searchPlaceholder": "Flow oder Datenquelle suchen…",
+    "searchPlaceholder": "Flow, Datenquelle oder Verbindung suchen…",
     "show": "Anzeigen",
     "staleDataNewer": "Veraltet: Daten neuer als der letzte Lauf",
     "staleDetail": "Veraltet: liest Daten, die nach dem letzten erfolgreichen Lauf aktualisiert wurden — erneut ausführen",
@@ -644,7 +644,10 @@ export default {
     "unresolvedRefs": "{n} nicht aufgelöste Referenz(en)",
     "upstream": "Vorgelagert",
     "wholeGraph": "Gesamter Graph",
-    "yes": "ja"
+    "yes": "ja",
+    "apply": "Anwenden",
+    "pickHint": "Suche einen Flow, eine Datenquelle oder eine Verbindung, wähle sie aus und klicke auf Anwenden — oder zeige den gesamten Graph.",
+    "typeConnection": "Verbindung",
   },
   "monitoring": {
     "dashboardTitle": "Grafana — Data Prep Übersicht",

@@ -189,7 +189,7 @@ export function useApi() {
     // grafo di lineage: senza center → grafo completo leggibile; con center →
     // sottografo a monte/valle entro `depth` salti
     async lineage(p?: {
-      type?: 'flow' | 'datasource'
+      type?: 'flow' | 'datasource' | 'connection'
       id?: number
       direction?: 'both' | 'upstream' | 'downstream'
       depth?: number

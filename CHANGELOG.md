@@ -26,6 +26,12 @@ exposes at `/system/info` and in the app's settings menu.
   written yet and the flow could be started again while the output was writing. The
   wait is now bounded only by the run's own lifetime (`ENGINE__RUN_STALE_TIMEOUT_SECONDS`);
   `ORCHESTRATOR__OUTPUT_WAIT_SECONDS` is gone (an existing value is ignored).
+- **Lineage starts from an object.** The page loads nothing until a flow, a datasource
+  or a connection is searched and applied (the whole graph stays one click away), and a
+  node's downstream impact is asked for when its panel opens. Each flow's latest run is
+  read with two aggregate queries on a new index (`runs(flow_id, started_at)`, schema
+  revision 0007) instead of loading every run: with a year of history the page took
+  seconds and hundreds of megabytes per call.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

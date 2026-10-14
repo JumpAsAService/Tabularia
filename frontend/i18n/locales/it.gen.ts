@@ -706,7 +706,7 @@ export default {
     "relationships": "Relazioni",
     "rows": "Righe",
     "scheduled": "Schedulato",
-    "searchPlaceholder": "Cerca flusso o datasource…",
+    "searchPlaceholder": "Cerca flusso, datasource o connessione…",
     "show": "Mostra",
     "staleDataNewer": "Stale: dati più recenti dell'ultimo run",
     "staleDetail": "Stale: legge dati rinfrescati dopo l'ultimo run riuscito — rieseguire",
@@ -723,7 +723,10 @@ export default {
     "unresolvedRefs": "{n} riferimento/i non risolto/i",
     "upstream": "A monte",
     "wholeGraph": "Tutto il grafo",
-    "yes": "sì"
+    "yes": "sì",
+    "apply": "Applica",
+    "pickHint": "Cerca un flusso, una datasource o una connessione, sceglilo e premi Applica — oppure mostra tutto il grafo.",
+    "typeConnection": "connessione",
   },
   "monitoring": {
     "dashboardTitle": "Grafana — Panoramica Data Prep",
