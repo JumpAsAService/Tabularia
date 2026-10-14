@@ -77,6 +77,12 @@ exposes at `/system/info` and in the app's settings menu.
   flow-runs and datasource-refresh polls waited up to 30 s for the engine with their
   transaction open; with enough of them the next request froze the replica. They now
   give the connection back before waiting and check permissions in a worker thread.
+- **Fixed: editing a connection could blank its database and schema.** The Connections
+  page and the Explore folder reuse one dialog; opening a connection after a SharePoint
+  one (or the reverse) fired the "type changed" reset, the form showed database and
+  schema (or tenant and library) empty, and Save stored them so. The reset now
+  happens only when the user changes the type, and an edit sends only the fields it
+  changed.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

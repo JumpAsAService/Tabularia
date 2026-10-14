@@ -11,6 +11,7 @@ import {
   type ConnectionInfo,
   type ConnectionDraft,
 } from '~/composables/useConnections'
+import { connectionChanges } from '~/composables/connectionChanges'
 import { useProjects } from '~/composables/useProjects'
 import { usePagedList } from '~/composables/usePagedList'
 
@@ -63,9 +64,8 @@ async function saveEdit(draft: ConnectionDraft) {
   dialogBusy.value = true
   dialogError.value = ''
   try {
-    const body: any = { ...draft }
-    if (!body.password) delete body.password // vuota = invariata
-    await connApi.update(editing.value.id, body)
+    // only what the edit changed (an empty password keeps the stored one)
+    await connApi.update(editing.value.id, connectionChanges(editing.value, draft))
     editing.value = null
     toast.success(t('connections.updatedToast', { name: draft.name }))
     await load()

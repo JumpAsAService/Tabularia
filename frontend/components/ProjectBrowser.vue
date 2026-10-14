@@ -52,6 +52,7 @@ import { usePopover } from '~/composables/usePopover'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
+import { connectionChanges } from '~/composables/connectionChanges'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
 import { useFlowGroups, type FlowGroup } from '~/composables/useFlowGroups'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
@@ -615,9 +616,8 @@ async function saveConnection(draft: ConnectionDraft) {
   connDialogError.value = ''
   try {
     if (editingConn.value) {
-      const body: any = { ...draft }
-      if (!body.password) delete body.password // vuota = invariata
-      await connApi.update(editingConn.value.id, body)
+      // only what the edit changed (an empty password keeps the stored one)
+      await connApi.update(editingConn.value.id, connectionChanges(editingConn.value, draft))
       toast.success(t('projectBrowser.connectionUpdated', { name: draft.name }))
     } else {
       await connApi.create(currentId.value, draft)

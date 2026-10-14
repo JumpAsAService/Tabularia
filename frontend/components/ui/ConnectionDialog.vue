@@ -146,16 +146,19 @@ const incomplete = computed(
 
 // cambiando tipo, i campi che l'altro tipo non mostra non devono viaggiare nel
 // draft (porta e schema di un Postgres dentro una SharePoint, il tenant come
-// database di un Postgres)
-watch(dbType, (nuovo, vecchio) => {
-  if (!vecchio || nuovo === vecchio) return
-  if (nuovo === 'sharepoint' || vecchio === 'sharepoint') {
+// database di un Postgres). Only when the USER changes the type: as a watcher it
+// also fired when the dialog opened another connection, and blanked its database
+// and schema, which Save then stored.
+function changeType(nuovo: string) {
+  const vecchio = dbType.value
+  dbType.value = nuovo
+  if (nuovo !== vecchio && (nuovo === 'sharepoint' || vecchio === 'sharepoint')) {
     port.value = ''
     dbSchema.value = ''
     database.value = ''
     library.value = ''
   }
-})
+}
 
 // ── Test connection ──────────────────────────────────────────────────────────
 const testing = ref(false)
@@ -209,7 +212,7 @@ function confirm() {
           </div>
           <div class="cd-field" :class="{ 'cd-wide': isS3 || isSp }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
-            <Select v-model="dbType" :options="DB_TYPES" />
+            <Select :model-value="dbType" :options="DB_TYPES" @update:model-value="changeType" />
           </div>
           <div v-if="!isS3 && !isSp" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
