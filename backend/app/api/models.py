@@ -108,3 +108,9 @@ class ExportRequest(BaseModel):
     limit: Optional[int] = Field(default=None, ge=1, description="Righe massime (opzionale)")
     filename: Optional[str] = Field(default=None, description="Nome file suggerito al browser")
     engine: Optional[str] = Field(default=None, description="Motore che calcola lo snapshot (dialetto compute); il file è poi scritto da Polars")
+
+
+class ExportStart(ExportRequest):
+    """An export the requester follows and then downloads: the gateway names who
+    asked, and only that name may see its state and take its file."""
+    owner: str = Field(..., min_length=1, description="Who asked for the export, as the gateway names them")

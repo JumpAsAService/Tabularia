@@ -64,7 +64,7 @@ NIENTE_SIEM_DA_TOKEN = {
 }
 # le POST che leggono soltanto: un token di sola lettura le può usare (un export o
 # un'anteprima calcolano e restituiscono dati, non cambiano niente)
-POST_DI_LETTURA = {"/tasks/export", "/tasks/preview"}
+POST_DI_LETTURA = {"/tasks/export", "/tasks/exports", "/tasks/preview"}
 
 
 def messaggio(tabella: dict[str, str], request: Optional[Request]) -> str:

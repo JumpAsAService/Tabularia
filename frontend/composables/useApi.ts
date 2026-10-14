@@ -43,6 +43,15 @@ export interface TaskStatus {
   message?: string
 }
 
+/** The state of an export a worker is writing (see `exportData`). */
+export interface ExportStatus {
+  status: 'running' | 'ready' | 'failed'
+  filename?: string
+  size?: number
+  code?: number
+  detail?: string
+}
+
 export interface Operation {
   type: string
   params: Record<string, any>
@@ -94,6 +103,7 @@ export interface DbtExportOptions {
 
 export function useApi() {
   const { apiFetch } = useApiClient()
+  const base = useRuntimeConfig().public.apiBase as string
 
   return {
     async operations(): Promise<string[]> {
@@ -209,7 +219,10 @@ export function useApi() {
       return await apiFetch<TaskStatus>(`/tasks/${id}`)
     },
 
-    // download diretto del risultato (anche da un nodo intermedio) come csv/xlsx
+    // The result of a chain (even up to an intermediate node) as a csv/xlsx file.
+    // A worker writes it; this follows it and, once it is ready, hands its address
+    // to the browser, which saves the file as it arrives instead of holding it all
+    // in memory. The file can be taken once: it is deleted as soon as it is sent.
     async exportData(body: {
       bucket: string
       input_key: string
@@ -218,24 +231,30 @@ export function useApi() {
       limit?: number
       filename?: string
       engine?: string // motore che calcola lo snapshot; il file lo scrive Polars
-    }): Promise<Blob> {
-      try {
-        return await apiFetch<Blob>('/tasks/export', { method: 'POST', body, responseType: 'blob' })
-      } catch (e: any) {
-        // con responseType 'blob' anche il corpo dell'errore arriva come Blob: senza
-        // leggerlo il motivo (troppe righe per Excel o per il CSV, sorgente sparita)
-        // resterebbe dietro un «400 Bad Request»
-        if (e?.data instanceof Blob) {
-          let data: unknown = null
-          try {
-            data = JSON.parse(await e.data.text())
-          } catch {
-            /* non è JSON: resta il messaggio generico */
-          }
-          if (data) throw Object.assign(new Error(e.message), { data, status: e.status, statusCode: e.statusCode })
+    }): Promise<void> {
+      const { task_id } = await apiFetch<{ task_id: string }>('/tasks/exports', { method: 'POST', body })
+      let failures = 0
+      for (let wait = 400; ; wait = Math.min(wait * 2, 2000)) {
+        await new Promise((resolve) => setTimeout(resolve, wait))
+        let state: ExportStatus
+        try {
+          state = await apiFetch<ExportStatus>(`/tasks/exports/${task_id}`)
+          failures = 0
+        } catch (e: any) {
+          // a network blip does not lose an export that is still being written
+          const code = e?.response?.status ?? e?.statusCode
+          if ((code && code < 500) || ++failures >= 5) throw e
+          continue
         }
-        throw e
+        if (state.status === 'failed') {
+          throw Object.assign(new Error(state.detail ?? 'Export failed'), { data: { detail: state.detail }, statusCode: state.code })
+        }
+        if (state.status === 'ready') break
       }
+      const a = document.createElement('a')
+      a.href = `${base}/tasks/exports/${task_id}/file`
+      a.download = body.filename ?? ''
+      a.click()
     },
 
     // esporta un flusso come progetto dbt (zip). target: 'duckdb' (federato) |

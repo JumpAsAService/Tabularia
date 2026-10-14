@@ -115,14 +115,15 @@ async def _libera(session: Session | None, user: User | None = None) -> None:
 
 async def _forward(
     request: Request, method: str, path: str, content: Any = None,
-    session: Session | None = None, user: User | None = None,
+    session: Session | None = None, user: User | None = None, params: Any = None,
 ) -> StreamingResponse:
     """Inoltra la richiesta all'engine in streaming in ENTRAMBE le direzioni:
     il body della richiesta (upload GB-scale) e quello della risposta (download
     csv/xlsx). Il gateway non bufferizza mai un file intero in RAM.
     `content` valorizzato = body già letto (per le rotte che lo ispezionano).
     `session` (e `user`): la sessione della richiesta, da rilasciare prima
-    dell'attesa (vedi `_release_db`) — ogni rotta la passa."""
+    dell'attesa (vedi `_release_db`) — ogni rotta la passa. `params`: the query
+    string to send instead of the browser's."""
     await _libera(session, user)
     client = get_engine_client()
     if content is None and method in ("POST", "PUT", "PATCH"):
@@ -130,7 +131,7 @@ async def _forward(
     engine_req = client.build_request(
         method,
         path,
-        params=request.query_params,
+        params=request.query_params if params is None else params,
         headers=_request_headers(request),
         content=content,
     )
@@ -326,19 +327,13 @@ async def transform(
     )
 
 
-@router.post("/tasks/export")
-async def export(
-    request: Request,
-    user: User = Depends(_utente),
-    session: Session = Depends(get_session),
-):
-    raw, payload = await _read_json(request)
-
-    def controlli() -> None:
+def _authorize_export(request: Request, session: Session, user: User, payload: Any) -> None:
+    """Who exports must be able to read every source; the download is audited
+    (who takes what: format, file, source, engine)."""
+    try:
         ensure_reads_pinned(session, user, payload, get_settings().engine.bucket)
         keys = collect_storage_keys(payload)
         ensure_can_read_keys(session, user, keys)
-        # audit del download: chi scarica cosa (formato, file, sorgente, motore)
         audit.record_audit(
             session, actor=user, action=audit.EXPORT_DOWNLOAD,
             target_type="export", target_label=payload.get("filename") or payload.get("input_key"),
@@ -350,10 +345,59 @@ async def export(
             },
             request=request,
         )
+    finally:
         _release_db(session, user)
 
-    await run_in_threadpool(controlli)
+
+@router.post("/tasks/export")
+async def export(
+    request: Request,
+    user: User = Depends(_utente),
+    session: Session = Depends(get_session),
+):
+    """The export for API callers: the file comes back in the response."""
+    raw, payload = await _read_json(request)
+    await run_in_threadpool(_authorize_export, request, session, user, payload)
     return await _forward(request, "POST", "/tasks/export", content=raw, session=session, user=user)
+
+
+# ── The browser's export: started, followed, its file taken once ────────────
+# Nothing waits on an open request while a worker writes a large file, and the
+# browser saves the file as it arrives instead of holding it all in memory. The
+# engine lets only the user who started an export see it: the gateway names them.
+_TASK_ID = re.compile(r"^[0-9a-f-]{36}$")
+
+
+def _export_owner(user: User) -> str:
+    return f"user:{user.id}"
+
+
+@router.post("/tasks/exports")
+async def start_export(
+    request: Request,
+    user: User = Depends(_utente),
+    session: Session = Depends(get_session),
+):
+    raw, payload = await _read_json(request)
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="Il body dev'essere un oggetto JSON")
+    await run_in_threadpool(_authorize_export, request, session, user, payload)
+    payload["owner"] = _export_owner(user)  # never the browser's word for it
+    return await _forward(request, "POST", "/tasks/exports", content=json.dumps(payload).encode(), session=session, user=user)
+
+
+@router.get("/tasks/exports/{task_id}")
+async def export_status(request: Request, task_id: str, user: User = Depends(_utente)):
+    if not _TASK_ID.match(task_id):
+        raise HTTPException(status_code=404, detail="Export not found")
+    return await _forward(request, "GET", f"/tasks/exports/{task_id}", params={"owner": _export_owner(user)})
+
+
+@router.get("/tasks/exports/{task_id}/file")
+async def export_file(request: Request, task_id: str, user: User = Depends(_utente)):
+    if not _TASK_ID.match(task_id):
+        raise HTTPException(status_code=404, detail="Export not found")
+    return await _forward(request, "GET", f"/tasks/exports/{task_id}/file", params={"owner": _export_owner(user)})
 
 
 @router.get("/tasks/{task_id}")

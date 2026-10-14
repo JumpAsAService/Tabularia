@@ -35,7 +35,8 @@ Every token has:
 
 - **An access level.** *Read only* refuses every request that changes something
   (any method other than GET/HEAD/OPTIONS) with `403`; the two POSTs that only
-  read, `POST /tasks/export` and `POST /tasks/preview`, are allowed. *Read and
+  read, `POST /tasks/export` (with `POST /tasks/exports`) and `POST /tasks/preview`,
+  are allowed. *Read and
   write* can do whatever its account can do. A token never adds permissions: it
   is at most as powerful as its account.
 - **An expiry** of at most `AUTH__API_TOKEN_MAX_DAYS` days, one year by default.
@@ -126,6 +127,14 @@ with requests.post(f"{API}/tasks/export", headers=H, json=body, stream=True) as 
 
 CSV exports stop at `EXPORT__MAX_ROWS` (5,000,000 rows by default) and Excel
 exports at 1,048,575 rows; the response says so instead of cutting silently.
+
+A worker writes the file, and `POST /tasks/export` keeps the request open until it
+has. For a long export, start it and come back for it instead, as the web app does:
+`POST /tasks/exports` with the same body answers `{"task_id": …}`;
+`GET /tasks/exports/{task_id}` says `running`, `ready` or `failed` (with `detail`);
+once ready, `GET /tasks/exports/{task_id}/file` sends the file, once: it is deleted
+as soon as it has been sent, and one never taken is deleted after an hour. Only the
+account that started an export can see it.
 
 ### Errors
 

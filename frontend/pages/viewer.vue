@@ -220,8 +220,8 @@ const colFormat = computed(() => {
 const cell = (col: string, v: any) =>
   v === null || v === undefined ? '' : colFormat.value[col] ? colFormat.value[col](v) : typeof v === 'object' ? JSON.stringify(v) : String(v)
 
-// export della vista corrente (csv/xlsx). Riusa /tasks/export → gira su Polars,
-// a prescindere dal motore scelto per la visualizzazione.
+// export della vista corrente (csv/xlsx), scritto da un worker: il file lo scrive
+// Polars, a prescindere dal motore scelto per la visualizzazione.
 const exporting = ref('')
 async function exportView(format: 'csv' | 'xlsx') {
   const ds = selectedDs.value
@@ -230,13 +230,7 @@ async function exportView(format: 'csv' | 'xlsx') {
   error.value = ''
   try {
     const filename = `${ds.name}_viewer.${format}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
-    const blob = await api.exportData({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), format, filename, engine: engine.value })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
+    await api.exportData({ bucket: ds.bucket, input_key: ds.key, operations: buildTableOps(), format, filename, engine: engine.value })
   } catch (e) {
     error.value = errMessage(e)
   } finally {

@@ -1334,20 +1334,13 @@ async function exportSelected(format: 'csv' | 'xlsx') {
   busy.value = true
   setStatus(t('flowEditor.exporting', { format: format.toUpperCase() }), 'busy')
   try {
-    const blob = await api.exportData({
+    await api.exportData({
       bucket: sourceNode.data.bucket ?? bucket,
       input_key: sourceNode.data.parquetKey,
       operations: ops,
       format,
       filename,
     })
-    // scarica il blob come file (link temporaneo)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
     setStatus(t('flowEditor.downloaded', { filename }), 'ok')
   } catch (e) {
     setStatus(t('flowEditor.exportFailed', { error: errMessage(e) }), 'error')

@@ -1,25 +1,19 @@
 import os
-import tempfile
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
-from starlette.background import BackgroundTask
 from celery.result import AsyncResult
 from celery.exceptions import TaskRevokedError, TimeoutError as CeleryTimeoutError
 from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
-from app.api import preview_slots
+from app.api import exports, preview_slots
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
-    PreviewRequest, ExportRequest,
+    PreviewRequest, ExportRequest, ExportStart,
 )
-from app.engine import (
-    DataSource, PreviewResult, get_engine, available_operations,
-    EngineError, OperationError, SourceNotFoundError, UnknownOperationError,
-)
+from app.engine import PreviewResult, available_operations
 import logging
 from app.core.config import get_settings
 from app.core.redaction import redact_secrets
@@ -91,6 +85,9 @@ _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 
 # ogni quanto l'attesa controlla di non essere stata superata
 _PREVIEW_POLL_SECONDS = 0.25
 _SUPERSEDED = "Anteprima superata da una richiesta piu' recente"
+# how long the synchronous export waits for a worker to pick it up, on top of the
+# workers' time limit for the export itself
+EXPORT_QUEUE_WAIT_SECONDS = 600
 
 
 @router.post("/preview", response_model=PreviewResult)
@@ -166,69 +163,94 @@ def preview_flow(request: PreviewRequest):
     return PreviewResult(**payload["result"])
 
 
-_EXPORT_MEDIA = {
-    "csv": "text/csv",
-    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-}
+# tag of an export task's expected error → HTTP status
+_EXPORT_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "timeout": 504}
+
+
+def _send_export(request: ExportRequest, task_id: str):
+    """Hands the export to a worker (the queue of the runs: an export is as heavy as
+    one). The optional kwargs travel only when set, for the reason given in
+    `submit_transform_data_task`."""
+    kwargs = {
+        "bucket": request.bucket,
+        "input_key": request.input_key,
+        "operations": [op.model_dump() for op in request.operations],
+        "format": request.format,
+    }
+    kwargs.update({k: v for k, v in (("limit", request.limit), ("filename", request.filename),
+                                      ("engine", request.engine)) if v is not None})
+    return celery_app.send_task("app.tasks.jobs.export_task", kwargs=kwargs, task_id=task_id)
+
+
+def _failed(payload: dict) -> HTTPException:
+    return HTTPException(status_code=_EXPORT_ERROR_STATUS.get(payload.get("error"), 400),
+                         detail=payload.get("detail") or "Export failed")
 
 
 @router.post("/export")
 def export_flow(request: ExportRequest):
     """
     Esegue il flow (anche parziale, fino a un nodo intermedio) e restituisce il
-    risultato come file scaricabile. Sincrono: csv in streaming, xlsx col tetto
-    righe del formato (~1M). Il file temporaneo viene rimosso a risposta inviata.
+    risultato come file scaricabile: csv, o xlsx col tetto righe del formato (~1M).
 
-    Se `engine` è un motore diverso da Polars, le operazioni (che possono usare un
-    dialetto SQL specifico, es. `compute` in ClickHouse) vengono prima calcolate da
-    QUEL motore in uno SNAPSHOT parquet temporaneo; poi Polars riempie il file dai
-    dati già calcolati (nessuna ri-esecuzione, nessun problema di dialetto). Lo
-    snapshot viene cancellato subito dopo.
+    The file is written by a worker (see `export_task`) and this call waits for it,
+    then streams it and deletes it: same contract as ever for API callers. The
+    browser uses the three routes below instead, so that no request stays open
+    while a large file is being written.
     """
-    operations = [op.model_dump() for op in request.operations]
-    src = DataSource(bucket=request.bucket, key=request.input_key)
-    suffix = f".{request.format}"
-    fd, path = tempfile.mkstemp(suffix=suffix)
-    os.close(fd)
-
-    engine_name = (request.engine or "polars").lower()
-    max_rows = get_settings().export.max_rows or None
-    snapshot: DataSource | None = None
+    task_id = str(uuid.uuid4())
+    async_result = _send_export(request, task_id)
+    wait = get_settings().celery.task_time_limit + EXPORT_QUEUE_WAIT_SECONDS
     try:
-        if engine_name != "polars" and operations:
-            import uuid
-
-            snapshot = DataSource(bucket=request.bucket, key=f"tmp/export_{uuid.uuid4().hex}.parquet")
-            # calcola col motore scelto (dialetto corretto); niente step-cache
-            get_engine(engine_name).run(source=src, operations=operations, destination=snapshot, use_cache=False)
-            # Polars scrive il file dai dati già calcolati (operations vuote)
-            get_engine("polars").export(source=snapshot, operations=[], fmt=request.format, out_path=path, limit=request.limit, max_rows=max_rows)
-        else:
-            get_engine("polars").export(source=src, operations=operations, fmt=request.format, out_path=path, limit=request.limit, max_rows=max_rows)
-    except SourceNotFoundError as e:
-        os.unlink(path)
-        raise HTTPException(status_code=404, detail=str(e))
-    except (UnknownOperationError, OperationError) as e:
-        os.unlink(path)
-        raise HTTPException(status_code=422, detail=str(e))
-    except EngineError as e:
-        os.unlink(path)
-        raise HTTPException(status_code=400, detail=str(e))
+        payload = async_result.get(timeout=wait)
+    except CeleryTimeoutError:
+        async_result.revoke(terminate=True)
+        async_result.forget()
+        raise HTTPException(status_code=504, detail="Export timed out: no worker finished it in time")
     except Exception:
-        os.unlink(path)
+        async_result.forget()
         raise
-    finally:
-        if snapshot is not None:  # lo snapshot ha già alimentato il file (o è fallito): via
-            from app.utils import get_storage_service
+    if not payload.get("ok"):
+        async_result.forget()
+        raise _failed(payload)
+    return exports.send_file(task_id, payload)
 
-            get_storage_service().delete_object(snapshot.bucket, snapshot.key)
 
-    return FileResponse(
-        path,
-        media_type=_EXPORT_MEDIA[request.format],
-        filename=request.filename or f"export{suffix}",
-        background=BackgroundTask(os.unlink, path),  # cleanup dopo l'invio
-    )
+@router.post("/exports", response_model=TaskResponse)
+def start_export(request: ExportStart):
+    """Starts an export that the requester follows (`GET /tasks/exports/{id}`) and
+    then downloads, once (`GET /tasks/exports/{id}/file`)."""
+    task_id = str(uuid.uuid4())
+    exports.remember_owner(task_id, request.owner)
+    _send_export(request, task_id)
+    return TaskResponse(task_id=task_id, status="submitted", message=f"Exporting {request.input_key} as {request.format}")
+
+
+@router.get("/exports/{task_id}")
+def export_status(task_id: str, owner: str | None = None):
+    """`running`, `ready` (with the file name and size) or `failed` (with the
+    reason and the HTTP status it stands for)."""
+    exports.ensure_owner(task_id, owner)
+    result = AsyncResult(task_id, app=celery_app)
+    if result.state == "SUCCESS":
+        payload = result.result
+        if payload.get("ok"):
+            return {"status": "ready", "filename": payload["filename"], "size": payload["size"]}
+        error = _failed(payload)
+        return {"status": "failed", "code": error.status_code, "detail": error.detail}
+    if result.state in ("FAILURE", "REVOKED"):
+        return {"status": "failed", "code": 500, "detail": redact_secrets(str(result.info))}
+    return {"status": "running"}
+
+
+@router.get("/exports/{task_id}/file")
+def export_file(task_id: str, owner: str | None = None):
+    """The file of a finished export, sent once and then deleted."""
+    exports.ensure_owner(task_id, owner)
+    result = AsyncResult(task_id, app=celery_app)
+    if result.state != "SUCCESS" or not result.result.get("ok"):
+        raise HTTPException(status_code=409, detail="The export has no file: it is still running, or it failed")
+    return exports.send_file(task_id, result.result)
 
 
 def _inspect_together(*commands: str) -> list[dict]:

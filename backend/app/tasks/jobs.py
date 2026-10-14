@@ -517,3 +517,91 @@ def evict_matview_task() -> dict:
         return {"removed": 0, "skipped": True}
     removed = get_engine("clickhouse").evict_matviews()
     return {"removed": removed, "ttl_seconds": settings.clickhouse_external.materialize_ttl_seconds}
+
+# Where a worker leaves an export file until the API sends it (and deletes it).
+EXPORT_PREFIX = "exports/"
+# A file nobody came to take (the tab was closed while it was being written) is
+# swept away after this long; one that is downloaded goes as soon as it is sent.
+EXPORT_KEEP_SECONDS = 3600
+
+
+@celery_app.task(name="app.tasks.jobs.export_task", bind=True)
+def export_task(
+    self,
+    bucket: str,
+    input_key: str,
+    operations: list[dict],
+    format: str = "csv",
+    limit: int | None = None,
+    filename: str | None = None,
+    engine: str | None = None,
+) -> dict:
+    """Writes the result of a chain (even up to an intermediate node) as a csv or
+    xlsx file and leaves it on the storage, under `exports/`, for the API to hand
+    to whoever asked. On a worker, not in the API: an Excel file is built whole in
+    memory, a million rows of it, and in the API process that put every other
+    request at risk.
+
+    With an engine other than Polars the chain (which may use that engine's SQL
+    dialect) is computed by THAT engine into a temporary parquet snapshot, and
+    Polars writes the file from it.
+
+    Returns a tagged dict like `preview_task`: the expected errors (missing source,
+    bad operation, over the row cap) are answers, not exceptions."""
+    import os
+    import tempfile
+    import uuid
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError, UnknownOperationError
+
+    storage = get_storage_service()
+    src = DataSource(bucket=bucket, key=input_key)
+    fd, path = tempfile.mkstemp(suffix=f".{format}")
+    os.close(fd)
+    max_rows = get_settings().export.max_rows or None
+    snapshot: DataSource | None = None
+    try:
+        if (engine or "polars").lower() != "polars" and operations:
+            snapshot = DataSource(bucket=bucket, key=f"tmp/export_{uuid.uuid4().hex}.parquet")
+            get_engine(engine.lower()).run(source=src, operations=operations, destination=snapshot, use_cache=False)
+            get_engine("polars").export(source=snapshot, operations=[], fmt=format, out_path=path, limit=limit, max_rows=max_rows)
+        else:
+            get_engine("polars").export(source=src, operations=operations, fmt=format, out_path=path, limit=limit, max_rows=max_rows)
+        out_bucket = get_settings().storage.bucket
+        key = f"{EXPORT_PREFIX}{self.request.id or uuid.uuid4().hex}.{format}"
+        storage.upload_file(path, out_bucket, key)
+        return {"ok": True, "bucket": out_bucket, "key": key, "format": format,
+                "filename": filename or f"export.{format}", "size": os.path.getsize(path)}
+    except SourceNotFoundError as e:
+        return {"ok": False, "error": "not_found", "detail": str(e)}
+    except (UnknownOperationError, OperationError) as e:
+        return {"ok": False, "error": "unprocessable", "detail": str(e)}
+    except EngineError as e:
+        return {"ok": False, "error": "bad_request", "detail": str(e)}
+    except SoftTimeLimitExceeded:
+        return {"ok": False, "error": "timeout", "detail": "The export took longer than the time limit of the workers"}
+    finally:
+        os.unlink(path)
+        if snapshot is not None:  # it has fed the file (or failed): either way it goes
+            try:
+                storage.delete_object(snapshot.bucket, snapshot.key)
+            except Exception as e:  # noqa: BLE001 — a leftover snapshot must not fail the export
+                logger.warning("export snapshot %s not deleted: %s", snapshot.key, e)
+
+
+@celery_app.task(name="app.tasks.jobs.sweep_exports_task", ignore_result=True)
+def sweep_exports_task() -> dict:
+    """Deletes the export files nobody came to take. Each file goes as soon as it
+    has been sent; this only catches the ones left behind, an hour after they were
+    written. Scheduled by Celery beat (see celery_app.py)."""
+    from datetime import datetime, timedelta, timezone
+
+    storage = get_storage_service()
+    bucket = get_settings().storage.bucket
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=EXPORT_KEEP_SECONDS)
+    stale = [o["Key"] for o in storage.list_objects(bucket, EXPORT_PREFIX) if o["LastModified"] < cutoff]
+    if stale:
+        storage.delete_objects(bucket, stale)
+    return {"removed": len(stale)}

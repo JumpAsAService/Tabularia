@@ -106,6 +106,11 @@ celery_app.conf.beat_schedule = {
         # 30 min, si passava ogni 15 e una copia da 1 minuto restava 15)
         "schedule": 300.0,
     },
+    # export files nobody came to take (each one goes as soon as it is sent)
+    "sweep-exports": {
+        "task": "app.tasks.jobs.sweep_exports_task",
+        "schedule": 900.0,
+    },
 }
 
 

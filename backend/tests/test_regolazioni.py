@@ -143,8 +143,7 @@ def test_il_row_group_dell_import_segue_il_pannello(monkeypatch):
 
 
 def test_il_tetto_dell_export_segue_il_pannello(monkeypatch):
-    from app.api.models import ExportRequest
-    from app.api.routes import tasks
+    from app.tasks import jobs
 
     visto = {}
 
@@ -153,10 +152,10 @@ def test_il_tetto_dell_export_segue_il_pannello(monkeypatch):
             visto.update(kw)
             with open(kw["out_path"], "w") as f:
                 f.write("a\n")
-    monkeypatch.setattr(tasks, "get_engine", lambda nome: Finto())
+    monkeypatch.setattr(jobs, "get_engine", lambda nome: Finto())
+    monkeypatch.setattr(jobs, "get_storage_service", lambda: FakeStorage())
     regolazioni.scrivi({"export.max_rows": 1234})
-    risposta = tasks.export_flow(ExportRequest(bucket="b", input_key="k", format="csv"))
-    os.unlink(risposta.path)
+    jobs.export_task.apply(kwargs={"bucket": "b", "input_key": "k", "operations": []}).get()
     assert visto["max_rows"] == 1234
 
 

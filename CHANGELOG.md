@@ -41,6 +41,15 @@ exposes at `/system/info` and in the app's settings menu.
   EDIT on a folder, a user could make an admin's nightly run copy a datasource they
   cannot read. Whoever saves a flow must now be able to read every datasource it
   names (a datasource deleted since does not block the save).
+- **Exports are written by a worker.** The file used to be built inside the API
+  process, a whole Excel file in memory (up to a million rows), next to every other
+  request. A worker now writes it and leaves it on the storage; the browser follows
+  the export and then saves the file as it arrives, instead of holding it in memory,
+  and the file is deleted as soon as it has been sent (one never taken is swept
+  after an hour). Only the user who started an export sees its state and its file.
+  Exports now share the workers' queue with runs. `POST /tasks/export` keeps its
+  contract for API callers (the file in the response); the browser uses the new
+  `POST /tasks/exports`, `GET /tasks/exports/{id}` and `GET /tasks/exports/{id}/file`.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,
