@@ -120,3 +120,21 @@ def test_no_staging_table_is_left_behind(ch, table, storage):
         _write(storage, table, "append", {"customer": ["a"], "nope": [1]})
     left = ch.query(f"SELECT name FROM system.tables WHERE database = currentDatabase() AND name LIKE '{table}__tab_stg_%'")
     assert left.result_rows == []
+
+
+@pytest.mark.parametrize("mode, advice", [("append", "Do not run the flow again"), ("replace", "safe once the post-SQL is fixed")])
+def test_a_failing_post_sql_says_the_data_is_already_written(ch, table, storage, mode, advice):
+    """ClickHouse cannot undo the load when the post-SQL fails after it: the run said
+    only "failed", and running it again appended every row a second time."""
+    ch.command(f"CREATE TABLE {table} (customer String) ENGINE = MergeTree ORDER BY customer")
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    pq.write_table(pa.table({"customer": ["alice", "bob"]}), path)
+    storage.upload_file(path, "b", "k.parquet")
+    os.remove(path)
+    dest = DbDestinationSpec(table=table, mode=mode, post_sql="SELECT throwIf(1, 'post-SQL broken')")
+    with pytest.raises(DbDestinationError) as e:
+        write_parquet_to_db(_conn(), dest, "b", "k.parquet", storage=storage)
+    message = str(e.value)
+    assert message.startswith("The data was written: 2 rows are in") and "post-SQL broken" in message and advice in message
+    assert _rows(ch, table) == [("alice",), ("bob",)]

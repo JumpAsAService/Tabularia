@@ -210,7 +210,13 @@ def _write_clickhouse(
             # append: one server-side INSERT, by column name
             client.command(f"INSERT INTO {qualified} ({columns}) SELECT {columns} FROM {stg_qualified}")
         for stmt in _post_statements(dest.post_sql):
-            client.command(stmt)
+            try:
+                client.command(stmt)
+            except Exception as e:
+                # ClickHouse has no transaction: the rows are in the table already, and
+                # a plain "failed" made people run the flow again, appending them twice
+                raise DbDestinationError(_post_sql_failed(rows, qualified, dest.mode, describe_db_error(
+                    e, conn.db_type, conn.host, conn.port_or_default))) from e
     finally:
         try:
             client.command(f"DROP TABLE IF EXISTS {stg_qualified}")  # staging (dati vecchi o già copiati)
@@ -218,6 +224,14 @@ def _write_clickhouse(
             pass
         client.close()
     return rows
+
+
+def _post_sql_failed(rows: int, qualified: str, mode: str, error: str) -> str:
+    again = ("Do not run the flow again as it is: it would add the same rows a second time. "
+             "Fix the post-SQL and run it on the database yourself."
+             if mode == "append" else
+             "Running the flow again replaces the data again, so it is safe once the post-SQL is fixed.")
+    return f"The data was written: {rows} rows are in {qualified}. Only the post-SQL failed ({error}). {again}"
 
 
 def _clickhouse_columns(client, parts: list[str]) -> list[str]:

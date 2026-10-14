@@ -86,6 +86,10 @@ exposes at `/system/info` and in the app's settings menu.
 - **Fixed: the parameter form after Undo, Redo or a change of operation type.** It was
   rebuilt only for another node, so it kept showing values the node no longer had,
   and the next edit wrote them back. It now follows the node's parameters.
+- **A ClickHouse post-SQL that fails says the data is already written.** ClickHouse
+  cannot undo the load, and a run that said only "failed" was run again, appending
+  every row a second time. The message now gives the rows written and whether running
+  the flow again is safe (replace) or would duplicate them (append).
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,
