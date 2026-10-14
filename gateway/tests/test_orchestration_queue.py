@@ -77,7 +77,7 @@ async def test_esegui_ora_rifiuta_un_flusso_gia_in_coda_o_in_corso(session, coda
     flusso = _flusso(session, utente, cartella)
 
     async def esegui_ora(request=None):
-        return await run_flow_now(flusso.id, request=request, mode="development", user=utente, session=session)
+        return run_flow_now(flusso.id, request=request, mode="development", user=utente, session=session)
 
     primo = await esegui_ora()
     with pytest.raises(HTTPException) as e:                       # in coda

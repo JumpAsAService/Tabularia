@@ -56,7 +56,7 @@ async def test_a_datasource_with_saved_views_says_which(world):
     s.add(SavedView(name="Monthly sales", project_id=p.id, datasource_id=ds.id))
     s.commit()
     with pytest.raises(HTTPException) as e:
-        await delete_datasource(ds.id, request=None, user=admin, session=s)
+        delete_datasource(ds.id, request=None, user=admin, session=s)
     assert e.value.status_code == 409 and "'Monthly sales'" in e.value.detail
     assert s.get(Datasource, ds.id) is not None
 

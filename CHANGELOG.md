@@ -73,6 +73,10 @@ exposes at `/system/info` and in the app's settings menu.
   `runs` instead of the whole table; the Flows page's calendar is counted by the
   database instead of loading every run of 180 days, and each flow's latest run is a
   per-flow lookup.
+- **Polls no longer hold a database connection while the engine answers.** The run,
+  flow-runs and datasource-refresh polls waited up to 30 s for the engine with their
+  transaction open; with enough of them the next request froze the replica. They now
+  give the connection back before waiting and check permissions in a worker thread.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

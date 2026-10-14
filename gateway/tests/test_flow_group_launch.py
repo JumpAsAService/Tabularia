@@ -64,14 +64,14 @@ def _actions(session):
 # ── run now ──────────────────────────────────────────────────────────────────
 async def test_run_now_queues_once_and_says_so_in_the_readers_language(session, world):
     group = _group(session, world)
-    out = await run_flow_group_now(group.id, _request(), user=world["admin"], session=session)
+    out = run_flow_group_now(group.id, _request(), user=world["admin"], session=session)
     (run,) = _group_runs(session, group.id)
     assert out["run_id"] == run.id and out["status"] == "started"
     assert (run.kind, run.status, run.trigger_type, run.engine_mode, run.flow_id) == (
         "orchestration", "PENDING", "manual", "production", None)
     assert "flow_group.run" in _actions(session)
     with pytest.raises(HTTPException) as e:
-        await run_flow_group_now(group.id, _request("it-IT,it;q=0.9"), user=world["admin"], session=session)
+        run_flow_group_now(group.id, _request("it-IT,it;q=0.9"), user=world["admin"], session=session)
     assert e.value.status_code == 409 and "già in coda o in esecuzione" in e.value.detail
     assert len(_group_runs(session, group.id)) == 1
 
@@ -81,10 +81,10 @@ async def test_run_now_needs_run_and_something_to_run(session, world):
     reader = make_user(session, email="reader@x.local")
     make_permission(session, user_id=reader.id, project_id=world["p"].id, capability=Capability.VIEW)
     with pytest.raises(HTTPException) as e:
-        await run_flow_group_now(group.id, _request(), user=reader, session=session)
+        run_flow_group_now(group.id, _request(), user=reader, session=session)
     assert e.value.status_code == 403
     with pytest.raises(HTTPException) as e:
-        await run_flow_group_now(_group(session, world, "empty", empty=True).id, _request(),
+        run_flow_group_now(_group(session, world, "empty", empty=True).id, _request(),
                                  user=world["admin"], session=session)
     assert e.value.status_code == 422
     assert _group_runs(session, group.id) == []

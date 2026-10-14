@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import case, func, literal_column, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -755,6 +756,26 @@ async def close_if_queued_too_long(session: Session, run: Run) -> Run:
     return run
 
 
+def _let_go(session: Session) -> None:
+    """Gives a request's database connection back before waiting for the engine, as
+    the proxy does (routes/proxy.py, `_release_db`). A poll waited up to 30 s for a
+    slow engine with its transaction open, holding a pooled connection that did
+    nothing; with enough of them at once the next checkout froze the whole replica.
+
+    Only a request's session with nothing pending: a background loop's transaction
+    may hold locks it still needs. The loaded rows stay as they are (no expiry), so
+    nothing is read again after the wait unless the run changes."""
+    if not session.info.get(perm_service.REQUEST_SESSION) or not session.in_transaction():
+        return
+    if session.new or session.dirty or session.deleted:
+        return
+    expire, session.expire_on_commit = session.expire_on_commit, False
+    try:
+        session.commit()
+    finally:
+        session.expire_on_commit = expire
+
+
 async def _reconcile(session: Session, run: Run) -> Run:
     """Allinea un run non terminale allo stato del task sull'engine.
 
@@ -772,9 +793,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
         if run.status == "PENDING":
             return await close_if_queued_too_long(session, run)
         return run
+    task_id = run.task_id
+    _let_go(session)
     client = get_engine_client()
     try:
-        resp = await client.get(f"/tasks/{run.task_id}", timeout=CONTROLLO)
+        resp = await client.get(f"/tasks/{task_id}", timeout=CONTROLLO)
         data = resp.json()
     except Exception as e:  # engine irraggiungibile → riconcilieremo dopo
         logger.warning("riconciliazione run %s rimandata: %s", run.id, e)
@@ -1068,11 +1091,14 @@ async def list_runs(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    flow = _get_flow(session, flow_id)
-    ensure_can(session, user, flow.project_id, Capability.VIEW)
-    runs = session.exec(
-        select(Run).where(Run.flow_id == flow_id).order_by(Run.started_at.desc()).limit(50)
-    ).all()
+    def read() -> list[Run]:  # in a worker thread: the event loop never waits for the database
+        flow = _get_flow(session, flow_id)
+        ensure_can(session, user, flow.project_id, Capability.VIEW)
+        return list(session.exec(
+            select(Run).where(Run.flow_id == flow_id).order_by(Run.started_at.desc()).limit(50)
+        ).all())
+
+    runs = await run_in_threadpool(read)
     return [run_out(session, await _reconcile(session, r)) for r in runs]
 
 
@@ -1159,25 +1185,29 @@ async def get_run(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    run = session.get(Run, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Run non trovato")
-    if run.kind == "ingest":
-        ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
-        if ds is not None:
-            ensure_can(session, user, ds.project_id, Capability.VIEW)
-        elif not (perm_service.is_admin(session, user) or run.launched_by == user.id):
-            # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
+    def read() -> Run:  # in a worker thread: the event loop never waits for the database
+        run = session.get(Run, run_id)
+        if run is None:
             raise HTTPException(status_code=404, detail="Run non trovato")
-    elif run.flow_group_id is not None:
-        # a flow group's run: read with VIEW on the group's folder
-        group = session.get(FlowGroup, run.flow_group_id)
-        if group is None:
-            raise HTTPException(status_code=404, detail="Run non trovato")
-        ensure_can(session, user, group.project_id, Capability.VIEW)
-    else:
-        flow = _get_flow(session, run.flow_id)
-        ensure_can(session, user, flow.project_id, Capability.VIEW)
+        if run.kind == "ingest":
+            ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
+            if ds is not None:
+                ensure_can(session, user, ds.project_id, Capability.VIEW)
+            elif not (perm_service.is_admin(session, user) or run.launched_by == user.id):
+                # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
+                raise HTTPException(status_code=404, detail="Run non trovato")
+        elif run.flow_group_id is not None:
+            # a flow group's run: read with VIEW on the group's folder
+            group = session.get(FlowGroup, run.flow_group_id)
+            if group is None:
+                raise HTTPException(status_code=404, detail="Run non trovato")
+            ensure_can(session, user, group.project_id, Capability.VIEW)
+        else:
+            flow = _get_flow(session, run.flow_id)
+            ensure_can(session, user, flow.project_id, Capability.VIEW)
+        return run
+
+    run = await run_in_threadpool(read)
     return run_out(session, await _reconcile(session, run))
 
 

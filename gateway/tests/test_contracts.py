@@ -247,6 +247,6 @@ async def test_togliere_il_contratto_lascia_lo_storico_togliere_la_datasource_no
     assert len(session.exec(select(DataContractResult)).all()) == 1 and len(session.exec(select(DataContractVersion)).all()) == 1
     # ricreato: la numerazione prosegue, non ricomincia
     assert (await _salva(session, scena.autore, scena.ds)).version == 2
-    await delete_datasource(scena.ds.id, RICHIESTA, scena.autore, session)
+    delete_datasource(scena.ds.id, RICHIESTA, scena.autore, session)
     for modello in (DataContract, DataContractVersion, DataContractResult):
         assert session.exec(select(modello)).all() == []

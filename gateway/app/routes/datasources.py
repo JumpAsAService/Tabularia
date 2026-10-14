@@ -12,6 +12,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import or_, text
 from sqlmodel import Session, select
 
@@ -459,14 +460,17 @@ async def list_datasource_runs(
     session: Session = Depends(get_session),
 ):
     """Cronologia degli ingest (refresh) della datasource, riconciliata alla lettura."""
-    ds = _get_ds(session, ds_id)
-    ensure_can(session, user, ds.project_id, Capability.VIEW)
-    runs = session.exec(
-        select(Run)
-        .where(Run.datasource_id == ds.id, Run.kind == "ingest")
-        .order_by(Run.started_at.desc())
-        .limit(50)
-    ).all()
+    def read() -> list[Run]:  # in a worker thread: the event loop never waits for the database
+        ds = _get_ds(session, ds_id)
+        ensure_can(session, user, ds.project_id, Capability.VIEW)
+        return list(session.exec(
+            select(Run)
+            .where(Run.datasource_id == ds.id, Run.kind == "ingest")
+            .order_by(Run.started_at.desc())
+            .limit(50)
+        ).all())
+
+    runs = await run_in_threadpool(read)
     return [run_out(session, await _reconcile(session, r)) for r in runs]
 
 
@@ -527,7 +531,7 @@ def update_datasource(
 
 
 @router.delete("/datasources/{ds_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_datasource(
+def delete_datasource(
     ds_id: int,
     request: Request,
     user: User = Depends(get_current_user),

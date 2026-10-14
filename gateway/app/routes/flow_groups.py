@@ -285,8 +285,8 @@ def _has_cells(group: FlowGroup) -> bool:
 
 
 @router.post("/flow-groups/{group_id}/run-now", status_code=status.HTTP_202_ACCEPTED)
-async def run_flow_group_now(group_id: int, request: Request,
-                             user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def run_flow_group_now(group_id: int, request: Request,
+                       user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Queues a run of the group, with the caller's authority; every cell checks
     its own rights again when it runs."""
     group = _get_group(session, group_id)

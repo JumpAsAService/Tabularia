@@ -660,7 +660,7 @@ _GIA_IN_CORSO = {
 
 
 @router.post("/flows/{flow_id}/run-now", status_code=status.HTTP_202_ACCEPTED)
-async def run_flow_now(
+def run_flow_now(
     flow_id: int,
     request: Request,
     mode: str = Query("development", pattern="^(development|production)$"),
