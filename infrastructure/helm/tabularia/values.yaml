@@ -321,12 +321,12 @@ openlineage:
   file: ""
   timeoutSeconds: 10
 
-# How long a flow waits for its refresh and output steps before giving up.
-# These mirror the application defaults; raise them for very long refreshes.
+# How long a flow waits for its refresh steps before giving up (an output step
+# has no cap of its own: the flow waits until it ends). This mirrors the
+# application default; raise it for very long refreshes.
 # (The orchestrator PODS are configured under gateway.orchestrator below.)
 orchestrator:
   refreshWaitSeconds: 600
-  outputWaitSeconds: 600
   pollIntervalSeconds: 3
   # Flow executions one orchestrator pod carries at once; the rest wait in the
   # queue. Each uses a database connection while it asks the engine for a

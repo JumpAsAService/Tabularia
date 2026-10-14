@@ -76,7 +76,6 @@ _orc = get_settings().orchestrator
 REFRESH_WAIT_INTERVAL_S = _orc.poll_interval_seconds
 OUTPUT_WAIT_INTERVAL_S = _orc.poll_interval_seconds
 REFRESH_WAIT_TICKS = max(1, ceil(_orc.refresh_wait_seconds / _orc.poll_interval_seconds))
-OUTPUT_WAIT_TICKS = max(1, ceil(_orc.output_wait_seconds / _orc.poll_interval_seconds))
 
 # ── Coda ─────────────────────────────────────────────────────────────────────
 QUEUE_POLL_S = _orc.queue_poll_seconds
@@ -163,18 +162,25 @@ async def _refresh_and_wait(
 
 
 async def _wait_run(session: Session, run: Run) -> Run:
-    """Attende (bounded) che un run di output raggiunga uno stato terminale, così
-    che i passi successivi dell'ordine vedano davvero il risultato già scritto
-    (senza attesa, l'ordinamento sarebbe solo cosmetico: i passi corrono in
-    parallelo e un output 'a valle' leggerebbe dati non ancora prodotti)."""
-    for _ in range(OUTPUT_WAIT_TICKS):
+    """Attende che un run di output raggiunga uno stato terminale, così che i
+    passi successivi dell'ordine vedano davvero il risultato già scritto (senza
+    attesa, l'ordinamento sarebbe solo cosmetico: i passi corrono in parallelo e
+    un output 'a valle' leggerebbe dati non ancora prodotti).
+
+    No cap of its own: the run's life is already bounded, by the worker's hard time
+    limit and by _reconcile, which revokes and fails a run older than
+    ENGINE__RUN_STALE_TIMEOUT_SECONDS (counted from its real start, or from launch if
+    it never started). A ten-minute cap here counted the time in the worker queue
+    too, and on expiry let the flow move on and close while the output kept
+    writing: steps downstream read old data, and the next slot could start the
+    same flow again on top of it."""
+    while True:
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES:
-            break
+            return run
         # vedi _refresh_and_wait: libera la connessione del pool durante lo sleep
         session.commit()
         await asyncio.sleep(OUTPUT_WAIT_INTERVAL_S)
-    return run
 
 
 async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None, engine_mode: str = "development", custodita: bool = False) -> list[str]:

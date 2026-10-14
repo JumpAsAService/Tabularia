@@ -21,6 +21,11 @@ exposes at `/system/info` and in the app's settings menu.
   sums. The Execute-SQL node's sandbox now lives on disk under the same budget.
 - **Request bodies are capped at 8 MB before they are read** (uploads excepted): one
   user saving a flow of a hundred megabytes could take a gateway replica down.
+- **A flow waits for each Output to really end.** The ten-minute cap counted the time
+  in the worker queue too; on expiry the flow moved on, so later steps read data not
+  written yet and the flow could be started again while the output was writing. The
+  wait is now bounded only by the run's own lifetime (`ENGINE__RUN_STALE_TIMEOUT_SECONDS`);
+  `ORCHESTRATOR__OUTPUT_WAIT_SECONDS` is gone (an existing value is ignored).
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

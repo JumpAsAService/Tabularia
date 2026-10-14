@@ -449,8 +449,8 @@ class OrchestratorSettings(BaseModel):
     lunghi (tabelle enormi o rete lenta)."""
     # env: ORCHESTRATOR__REFRESH_WAIT_SECONDS — tetto d'attesa di un nodo Refresh
     refresh_wait_seconds: int = 600
-    # env: ORCHESTRATOR__OUTPUT_WAIT_SECONDS — tetto d'attesa di un nodo Output
-    output_wait_seconds: int = 600
+    # An Output node has no wait cap of its own: the flow waits until it ends, and
+    # its life is bounded by ENGINE__RUN_STALE_TIMEOUT_SECONDS (see orchestrator._wait_run).
     # env: ORCHESTRATOR__POLL_INTERVAL_SECONDS — cadenza di polling durante l'attesa
     poll_interval_seconds: float = 3.0
     # ── Coda delle orchestrazioni ────────────────────────────────────────────

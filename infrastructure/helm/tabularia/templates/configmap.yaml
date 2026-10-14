@@ -72,7 +72,6 @@ CACHE__TTL_SECONDS: {{ include "tabularia.env" (.Values.cache.ttlSeconds) }}
 CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIntervalSeconds) }}
 
 ORCHESTRATOR__REFRESH_WAIT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.refreshWaitSeconds) }}
-ORCHESTRATOR__OUTPUT_WAIT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.outputWaitSeconds) }}
 ORCHESTRATOR__POLL_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.pollIntervalSeconds) }}
 ORCHESTRATOR__MAX_CONCURRENT: {{ include "tabularia.env" (.Values.orchestrator.maxConcurrent) }}
 ORCHESTRATOR__DEAD_AFTER_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.deadAfterSeconds) }}
