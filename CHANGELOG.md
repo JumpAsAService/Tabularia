@@ -13,6 +13,12 @@ exposes at `/system/info` and in the app's settings menu.
   table lacks stops the write with a message naming it, columns the flow lacks take
   their DEFAULT, and "replace" loads a copy of the table's own definition before the
   atomic swap. Tested against a real ClickHouse.
+- **DuckDB works within its share of the worker.** Each connection gets the memory of
+  one worker task (the container limit × 0.75 / concurrency, minus room for Python)
+  and the CPUs divided the same way, and spills to disk past it instead of growing
+  until the kernel kills the task. Each connection has its own spill directory:
+  sharing one, two tasks spilling at once read each other's files and returned wrong
+  sums. The Execute-SQL node's sandbox now lives on disk under the same budget.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

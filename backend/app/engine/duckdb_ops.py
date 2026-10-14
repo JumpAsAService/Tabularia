@@ -15,12 +15,16 @@ sottoquery e funzioni di lettura file → niente accesso al filesystem. `sql`
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import tempfile
 from typing import Any, Callable
 
 import duckdb
 import pyarrow.parquet as _pq
 
+from app.engine import duckdb_budget
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
@@ -469,8 +473,14 @@ def op_sql(rel, params, a, ctx):
     in_tmp = ctx.tempfile()
     rel.write_parquet(in_tmp)  # materializza l'input (streaming su disco)
 
-    sbx = duckdb.connect(":memory:")
+    # A database on disk, not in memory, with this process's budget and its own
+    # spill directory: `self` holds the whole upstream, and in memory it took about
+    # eight times the parquet even for a 100-row preview. Set before the lock.
+    work_dir = tempfile.mkdtemp(prefix="duckdb-sql-")
+    sbx = duckdb.connect(os.path.join(work_dir, "sandbox.duckdb"))
     try:
+        sbx.execute(f"SET temp_directory = '{os.path.join(work_dir, 'spill')}'")
+        duckdb_budget.apply(sbx)
         sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
         sbx.execute("CREATE VIEW input AS SELECT * FROM self")
         sbx.execute("SET enable_external_access=false")  # niente file/rete/attach/install
@@ -493,6 +503,7 @@ def op_sql(rel, params, a, ctx):
             raise EngineError(f"sql: query non valida o non consentita: {e}") from e
     finally:
         sbx.close()
+        shutil.rmtree(work_dir, ignore_errors=True)
     return ctx.con.read_parquet(out_tmp)
 
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import tempfile
 from typing import Any
 
@@ -24,6 +25,7 @@ import duckdb
 import polars as pl
 from botocore.exceptions import ClientError
 
+from app.engine import duckdb_budget
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.duckdb_ops import _qi, get_duck_operation
@@ -127,14 +129,20 @@ class DuckDBEngine(DeferredStepCache, Engine):
         self.storage = storage
         self.cache = cache or StepCache(storage)
 
-    def _connection(self) -> duckdb.DuckDBPyConnection:
+    def _connection(self, tmp: list[str]) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
         # Riversamenti su disco nella directory temporanea di SISTEMA (TMPDIR, di
         # default /tmp). Il default di DuckDB per i DB in memoria è `.tmp` nella
         # directory di lavoro: con l'immagine di produzione a filesystem in sola
         # lettura fallirebbe, e in sviluppo scriverebbe dentro i sorgenti montati.
-        spill_dir = os.path.join(tempfile.gettempdir(), "duckdb")
+        # One directory per connection: DuckDB names its spill files the same way in
+        # every instance, so two connections spilling into a shared directory read
+        # each other's blocks (wrong sums, IO errors). It goes with the request's
+        # temporary files.
+        spill_dir = tempfile.mkdtemp(prefix="duckdb-")
+        tmp.append(spill_dir)
         con.execute(f"SET temp_directory = '{spill_dir}'")
+        duckdb_budget.apply(con)  # this child's share of memory and CPUs, not the container's
         try:
             con.execute("SET TimeZone = 'UTC'")  # i TIMESTAMPTZ letti diventano naive UTC
         except Exception:  # senza estensione ICU DuckDB è comunque in UTC
@@ -187,6 +195,9 @@ class DuckDBEngine(DeferredStepCache, Engine):
     @staticmethod
     def _cleanup(tmp: list[str]) -> None:
         for p in tmp:
+            if os.path.isdir(p):
+                shutil.rmtree(p, ignore_errors=True)
+                continue
             try:
                 os.remove(p)
             except OSError:
@@ -194,8 +205,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
 
     @contextmanager
     def _materialize_session(self, source: DataSource):
-        con = self._connection()
         tmp: list[str] = []
+        con = self._connection(tmp)
         try:
             yield DuckContext(con, self.storage, tmp)
         finally:
@@ -215,8 +226,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
         sort_keys: list[str] | None = None,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
-        con = self._connection()
         tmp: list[str] = []
+        con = self._connection(tmp)
         try:
             ctx = DuckContext(con, self.storage, tmp, preview_limit=limit + 1)
             # materializza il PARENT: iterando sui parametri dell'ultimo nodo, le
@@ -255,8 +266,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
         use_cache: bool = True,
     ) -> RunResult:
         ops = _coerce_ops(operations)
-        con = self._connection()
         tmp: list[str] = []
+        con = self._connection(tmp)
         try:
             ctx = DuckContext(con, self.storage, tmp)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
