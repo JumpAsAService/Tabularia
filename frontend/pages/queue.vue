@@ -30,16 +30,24 @@ const data = ref<QueueOverview | null>(null)
 const error = ref('')
 const loading = ref(true)
 const stopping = ref<Record<string, boolean>>({})
-let timer: ReturnType<typeof setInterval> | null = null
+let timer: ReturnType<typeof setTimeout> | null = null
+let mounted = false
 
+// the next refresh is asked once this one has answered, and not while the tab is
+// hidden: with a fixed interval, answers slower than it piled up on the server
 async function tick() {
+  if (timer) clearTimeout(timer)
+  timer = null
   try {
-    data.value = await queueApi.overview()
-    error.value = ''
+    if (document.visibilityState !== 'hidden') {
+      data.value = await queueApi.overview()
+      error.value = ''
+    }
   } catch (e) {
     error.value = errMessage(e)
   } finally {
     loading.value = false
+    if (mounted) timer = setTimeout(tick, POLL_MS)
   }
 }
 
@@ -58,11 +66,12 @@ async function stop(taskId: string) {
 }
 
 onMounted(() => {
+  mounted = true
   tick()
-  timer = setInterval(tick, POLL_MS)
 })
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  mounted = false
+  if (timer) clearTimeout(timer)
 })
 
 // nomi task tecnici → chiavi i18n per le etichette leggibili

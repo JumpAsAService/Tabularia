@@ -105,7 +105,9 @@ services:
     # DISABILITA lo swap del container (lo swap-thrashing è ciò che blocca il PC).
     mem_limit: ${BACKEND_MEM_LIMIT:-4g}
     memswap_limit: ${BACKEND_MEM_LIMIT:-4g}
-    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    # --reload-dir: only the code. Without it the reloader polls every file under
+    # /app four times a second, a local .venv included, and takes half a core.
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
 
   # Gateway (control plane): UNICO ingresso pubblico (:8000). Auth + RBAC + Postgres,
   # poi inoltra all'engine interno. Qui è UN processo che fa tutto (APP__ROLE=all,
@@ -158,7 +160,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # --reload-dir: only the code (see the backend above)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
 
   worker:
     # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB

@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -230,6 +231,17 @@ def export_flow(request: ExportRequest):
     )
 
 
+def _inspect_together(*commands: str) -> list[dict]:
+    """Asks the workers several things at the same time. Each question is a broadcast
+    that waits its whole timeout for the replies: asked one after the other, four of
+    them kept the queue page's every refresh at four seconds."""
+    def ask(command: str) -> dict:
+        return getattr(celery_app.control.inspect(timeout=1.0), command)() or {}
+
+    with ThreadPoolExecutor(max_workers=len(commands)) as pool:
+        return list(pool.map(ask, commands))
+
+
 # NB: definita PRIMA di /{task_id} per non essere catturata dalla route dinamica
 @router.get("/queue")
 def queue_overview():
@@ -238,11 +250,7 @@ def queue_overview():
     ESECUZIONE su ciascun worker, e job IN ATTESA (prefetchati dai worker +
     backlog reale nel broker che l'inspect non vede).
     """
-    inspect = celery_app.control.inspect(timeout=1.0)
-    active = inspect.active() or {}
-    reserved = inspect.reserved() or {}
-    stats = inspect.stats() or {}
-    active_queues = inspect.active_queues() or {}
+    active, reserved, stats, active_queues = _inspect_together("active", "reserved", "stats", "active_queues")
     now = time.time()
 
     def _job(worker: str, t: dict, state: str) -> dict:
