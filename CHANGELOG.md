@@ -32,6 +32,10 @@ exposes at `/system/info` and in the app's settings menu.
   read with two aggregate queries on a new index (`runs(flow_id, started_at)`, schema
   revision 0007) instead of loading every run: with a year of history the page took
   seconds and hundreds of megabytes per call.
+- **Fixed: deletes that answered 500 on Postgres.** A flow whose runs had started
+  imports or sub-flow runs can be deleted (those runs stay, detached); deleting a
+  datasource used by saved views, or a connection that sends the failure notices of
+  flows, now says which ones block it.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

@@ -19,7 +19,7 @@ from app.core.config import get_settings
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Connection, Datasource, Project, Run, User
+from app.models import Connection, Datasource, Project, Run, SavedView, User
 from app.services import audit
 from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
@@ -548,6 +548,10 @@ async def delete_datasource(
     """
     ds = _get_ds(session, ds_id)
     ensure_can(session, user, ds.project_id, Capability.EDIT)
+    views = session.exec(select(SavedView.name).where(SavedView.datasource_id == ds.id).order_by(SavedView.name).limit(6)).all()
+    if views:
+        names = ", ".join(f"'{n}'" for n in views[:5]) + (", …" if len(views) > 5 else "")
+        raise HTTPException(status_code=409, detail=f"The datasource is used by saved views ({names}): delete them first")
 
     ds_name, ds_kind = ds.name, ds.kind  # snapshot per l'audit
     bucket, key = ds.bucket, ds.key

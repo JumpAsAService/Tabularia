@@ -606,6 +606,11 @@ def delete_flow(flow_id: int, request: Request, user: User = Depends(get_current
     from app.models import Datasource
 
     session.exec(sa_update(Datasource).where(Datasource.flow_id == flow_id).values(flow_id=None))
+    # runs this flow's runs started for other objects (the imports of its Refresh
+    # nodes, the outputs of its Run-flow nodes) belong to those objects' history:
+    # they stay, no longer attached, or their link would refuse the delete
+    own_runs = select(Run.id).where(Run.flow_id == flow_id)
+    session.exec(sa_update(Run).where(Run.parent_run_id.in_(own_runs)).values(parent_run_id=None))
     session.exec(sa_delete(Run).where(Run.flow_id == flow_id))
     session.exec(sa_delete(FlowVersion).where(FlowVersion.flow_id == flow_id))
     from app.models import DbtAiText

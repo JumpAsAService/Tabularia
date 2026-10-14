@@ -28,7 +28,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Connection, Datasource, Project, User
+from app.models import Connection, Datasource, Flow, Project, User
 from app.services import audit
 from app.models.permission import Capability
 from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
@@ -412,6 +412,13 @@ def delete_connection(
         raise HTTPException(
             status_code=409,
             detail="La connessione è usata da una o più datasource: eliminale o spostale prima",
+        )
+    notifying = session.exec(select(Flow.name).where(Flow.notify_connection_id == conn_id).order_by(Flow.name).limit(6)).all()
+    if notifying:
+        names = ", ".join(f"'{n}'" for n in notifying[:5]) + (", …" if len(notifying) > 5 else "")
+        raise HTTPException(
+            status_code=409,
+            detail=f"The connection sends the failure notices of flows ({names}): change their schedule first",
         )
     conn_name, conn_type = conn.name, conn.db_type
     session.delete(conn)
