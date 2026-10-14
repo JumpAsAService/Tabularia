@@ -56,6 +56,9 @@ exposes at `/system/info` and in the app's settings menu.
   with "144"), and an empty box became null and kept zero rows without a word. Values
   are now read as their column stores them (`""` means the empty string), and every
   engine refuses a filter left without a value, saying which.
+- **Fixed: `EXTRACT(YEAR FROM d)` on DuckDB and BigQuery.** Their computed columns
+  still refused any expression with the word FROM, so 4 of the 11 Sample flows could
+  not run on duckdb; they now use the same parsing check as ClickHouse.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

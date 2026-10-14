@@ -33,3 +33,22 @@ def test_cio_che_legge_fuori_dalla_riga_e_rifiutato(expr):
 def test_cio_che_non_si_legge_resta_alla_regola_prudente():
     assert espressione_vietata("select ((( from", "clickhouse")
     assert not espressione_vietata("a +", "clickhouse") or True   # sintassi rotta: la rifiuterà comunque il motore
+
+
+# DuckDB (and BigQuery, whose expressions are written in the same dialect) use the
+# same check since 2026-10-14: before, a word search refused EXTRACT(YEAR FROM d),
+# and 4 of the 11 Sample flows could not run on duckdb.
+DUCKDB_BAD = [
+    "(SELECT 1)", "x IN (SELECT a FROM t)", "read_csv('/etc/passwd')", "read_parquet('s3://b/x.parquet')",
+    "parquet_scan('x.parquet')", "query('SELECT 1')", "getenv('HOME')", "1; ATTACH 'x.db'",
+]
+
+
+@pytest.mark.parametrize("expr", [e for e in BUONE if not e.startswith(("toYear", "toStartOf", "if("))])
+def test_scalar_expressions_pass_on_duckdb(expr):
+    assert not espressione_vietata(expr, "duckdb"), expr
+
+
+@pytest.mark.parametrize("expr", DUCKDB_BAD)
+def test_what_reads_outside_the_row_is_refused_on_duckdb(expr):
+    assert espressione_vietata(expr, "duckdb"), expr

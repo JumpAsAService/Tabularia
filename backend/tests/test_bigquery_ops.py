@@ -111,9 +111,13 @@ def test_group_by_plain_and_with_exact_median():
 def test_compute_and_sql_guards():
     sql = op("compute", {"columns": [{"name": "doppio", "expr": "prezzo * 2"}, {"name": "nome", "expr": "UPPER(nome)"}]})
     assert "(prezzo * 2) AS `doppio`" in sql and "* REPLACE ((UPPER(nome)) AS `nome`)" in sql
-    for bad in ("(SELECT 1)", "EXTERNAL_QUERY('c', 'x')", "ML.PREDICT(x)"):
+    for bad in ("(SELECT 1)", "EXTERNAL_QUERY('c', 'x')", "ML.PREDICT(x)", "AI.GENERATE_BOOL(nome)", "SESSION_USER()",
+                "x IN (SELECT a FROM t)", "read_parquet('gs://b/x.parquet')"):
         with pytest.raises(EngineError):
             op("compute", {"columns": [{"name": "x", "expr": bad}]})
+    # FROM inside a scalar function is not a subquery (4 of the 11 Sample flows use it)
+    for good in ("EXTRACT(YEAR FROM data) * 100 + EXTRACT(MONTH FROM data)", "TRIM(BOTH ' ' FROM nome)"):
+        assert "AS `x`" in op("compute", {"columns": [{"name": "x", "expr": good}]})
     ok = op("sql", {"query": "SELECT nome, COUNT(*) AS n FROM self GROUP BY nome"})
     assert ok.startswith("WITH input AS (SELECT * FROM `_src1`), self AS (SELECT * FROM input) SELECT nome")
     for bad in ("SELECT * FROM `proj.ds.tab`", "SELECT * FROM self; DROP TABLE x", "SELECT * FROM self -- c",

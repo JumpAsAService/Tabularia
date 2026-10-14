@@ -33,7 +33,7 @@ _PAROLE_VIETATE = re.compile(
 _FUNZIONI_VIETATE = re.compile(
     r"^(?:dictget\w*|dicthas|dictisin|dictgethierarchy|dictgetchildren|dictgetdescendants|"
     r"joinget\w*|catboostevaluate|evalmlmethod|modelevaluate|hascolumnintable|"
-    r"getsetting|getmacro|getserverport|filesystem\w*|"
+    r"getsetting|getmacro|getserverport|getenv|filesystem\w*|"
     r"file|url|s3|s3cluster|hdfs|remote|remotesecure|mysql|postgresql|jdbc|odbc|sqlite|mongodb|redis|"
     r"azureblobstorage|gcs|iceberg\w*|deltalake|hudi|input|executable|"
     r"clusterallreplicas|cluster|dictionary|merge|numbers|zeros|generaterandom|view|"

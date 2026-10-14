@@ -693,6 +693,22 @@ def test_compute_strings_and_decimal(storage, ordini, name):
     assert [c.name for c in res.columns] == COLS + ["etichetta", "mai", "lung", "valore"]
 
 
+@pytest.mark.parametrize("name", ENGINES)
+def test_compute_with_from_inside_scalar_functions(storage, ordini, name):
+    """EXTRACT(… FROM …) and TRIM(… FROM …) are scalar: every engine accepts them
+    (duckdb and BigQuery refused the word FROM until 2026-10-14)."""
+    ops = [{"type": "compute", "params": {"columns": [
+        {"name": "anno_mese", "expr": "EXTRACT(YEAR FROM data) * 100 + EXTRACT(MONTH FROM data)"},
+        {"name": "pulito", "expr": "TRIM(BOTH ' ' FROM note)"},
+    ]}}]
+    check(name, storage, ordini, ops, [
+        {"id": 1, "anno_mese": 202401, "pulito": ""}, {"id": 2, "anno_mese": 202401, "pulito": None},
+        {"id": 3, "anno_mese": 202402, "pulito": "x"}, {"id": 4, "anno_mese": 202402, "pulito": "spazi"},
+        {"id": 5, "anno_mese": 202403, "pulito": ""}, {"id": 6, "anno_mese": None, "pulito": "y"},
+        {"id": 7, "anno_mese": 202412, "pulito": "z"}, {"id": 8, "anno_mese": 202501, "pulito": "w"},
+    ])
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Cast
 # ══════════════════════════════════════════════════════════════════════════════

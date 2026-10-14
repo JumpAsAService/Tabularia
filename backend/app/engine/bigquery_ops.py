@@ -30,6 +30,7 @@ import re
 from typing import Any, Callable
 
 from app.engine.context import MAX_CROSS_JOIN_ROWS
+from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
 from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, pivot_label, sample_threshold
 from app.engine.sql_guard import ensure_reads_only_input
@@ -320,11 +321,12 @@ def op_group_by(sql, params, ctx):
 
 
 # ── compute (espressioni scalari, SENZA subquery né accesso esterno) ──────────
-_FORBIDDEN_IN_EXPR = re.compile(
-    r"\b(?:select|from|with|insert|create|external_query|execute|call|declare|"
-    r"ml\.|ai\.|session_user|export)\b",
-    re.IGNORECASE,
-)
+# The expression is written in the other engines' dialect (DuckDB/Polars SQL, then
+# translated below): it is parsed in that dialect, so EXTRACT(YEAR FROM d) passes
+# and a subquery or a table function does not (see app/engine/espressioni.py).
+# These names reach outside the row only on BigQuery: models, Vertex AI, the
+# service account's identity.
+_BIGQUERY_ONLY = re.compile(r"\b(?:external_query|ml\.|ai\.|session_user)", re.IGNORECASE)
 
 
 def to_bigquery_expr(expr: str) -> str:
@@ -351,7 +353,7 @@ def op_compute(sql, params, ctx):
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
             raise EngineError("compute: nome ed espressione sono obbligatori")
-        if _FORBIDDEN_IN_EXPR.search(expr):
+        if espressione_vietata(expr, "duckdb") or _BIGQUERY_ONLY.search(expr):
             raise EngineError(
                 f"compute: espressione di '{name}' non consentita (niente subquery, "
                 "FROM o funzioni esterne — solo espressioni scalari)."

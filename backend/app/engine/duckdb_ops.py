@@ -16,7 +16,6 @@ sottoquery e funzioni di lettura file → niente accesso al filesystem. `sql`
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import tempfile
 from typing import Any, Callable
@@ -26,6 +25,7 @@ import pyarrow.parquet as _pq
 
 from app.engine import duckdb_budget
 from app.engine.context import MAX_CROSS_JOIN_ROWS
+from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
     MAX_FOREACH_ITERATIONS,
@@ -280,13 +280,8 @@ def _recast_hugeint(ctx, rel):
 
 
 # ── compute (espressioni SQL scalari, SENZA sottoquery né lettura file) ────────
-_FORBIDDEN_IN_EXPR = re.compile(
-    r"\b(?:select|from|attach|copy|install|load|pragma|"
-    r"(?:read|scan)_(?:csv|parquet|ipc|ndjson|json)|read_(?:csv|json)_auto|parquet_scan)\b",
-    re.IGNORECASE,
-)
-
-
+# the expression is parsed, not searched for words: EXTRACT(YEAR FROM d) is scalar
+# (see app/engine/espressioni.py, whose blacklist covers read_*, parquet_scan, scan_*)
 @_register("compute")
 def op_compute(rel, params, a, ctx):
     columns = _require(params, "columns")  # [{name, expr}]
@@ -297,7 +292,7 @@ def op_compute(rel, params, a, ctx):
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
             raise EngineError("compute: nome ed espressione sono obbligatori")
-        if _FORBIDDEN_IN_EXPR.search(expr):
+        if espressione_vietata(expr, "duckdb"):
             raise EngineError(
                 f"compute: espressione di '{name}' non consentita (niente sottoquery, "
                 "FROM o funzioni di lettura file — solo espressioni scalari)."
