@@ -25,7 +25,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.services import permissions as perm_service
-from app.models import Connection, Datasource, Flow, Project, Run, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.routes.connections import allowed_email_domains, engine_connection_payload
@@ -1115,6 +1115,7 @@ def runs_activity(
             or_(
                 Flow.project_id.in_(readable),
                 Datasource.project_id.in_(readable),
+                FlowGroup.project_id.in_(readable),
                 Run.launched_by == user.id,
             )
         )
@@ -1122,6 +1123,7 @@ def runs_activity(
         select(Run.started_at, Run.status, Run.trigger_type)
         .join(Flow, Run.flow_id == Flow.id, isouter=True)
         .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
+        .join(FlowGroup, Run.flow_group_id == FlowGroup.id, isouter=True)
     )
     for c in conds:
         stmt = stmt.where(c)
@@ -1170,6 +1172,12 @@ async def get_run(
         elif not (perm_service.is_admin(session, user) or run.launched_by == user.id):
             # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
             raise HTTPException(status_code=404, detail="Run non trovato")
+    elif run.flow_group_id is not None:
+        # a flow group's run: read with VIEW on the group's folder
+        group = session.get(FlowGroup, run.flow_group_id)
+        if group is None:
+            raise HTTPException(status_code=404, detail="Run non trovato")
+        ensure_can(session, user, group.project_id, Capability.VIEW)
     else:
         flow = _get_flow(session, run.flow_id)
         ensure_can(session, user, flow.project_id, Capability.VIEW)
@@ -1196,6 +1204,7 @@ def search_runs(
             or_(
                 Flow.project_id.in_(readable),
                 Datasource.project_id.in_(readable),
+                FlowGroup.project_id.in_(readable),
                 Run.launched_by == user.id,
             )
         )
@@ -1212,6 +1221,7 @@ def search_runs(
                 Run.error_detail.ilike(like),
                 Flow.name.ilike(like),
                 Datasource.name.ilike(like),
+                FlowGroup.name.ilike(like),
                 User.full_name.ilike(like),
                 User.email.ilike(like),
             )
@@ -1221,10 +1231,11 @@ def search_runs(
         return (
             stmt.join(Flow, Run.flow_id == Flow.id, isouter=True)
             .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
+            .join(FlowGroup, Run.flow_group_id == FlowGroup.id, isouter=True)
             .join(User, Run.launched_by == User.id, isouter=True)
         )
 
-    items_stmt = _with_joins(select(Run, Flow, Datasource, User))
+    items_stmt = _with_joins(select(Run, Flow, Datasource, FlowGroup, User))
     count_stmt = _with_joins(select(func.count()).select_from(Run))
     for c in conds:
         items_stmt = items_stmt.where(c)
@@ -1235,10 +1246,11 @@ def search_runs(
     ).all()
 
     out: list[RunSearchOut] = []
-    for run, flow, ds, launcher in rows:
+    for run, flow, ds, group, launcher in rows:
         item = RunSearchOut.model_validate(run, from_attributes=True)
         item.flow_name = flow.name if flow else None
         item.source_name = ds.name if ds else None
+        item.group_name = group.name if group else None
         # chi l'ha avviato: per gli schedulati mostreremo "schedule" lato client
         item.launched_by_name = (launcher.full_name or launcher.email) if launcher else None
         out.append(item)

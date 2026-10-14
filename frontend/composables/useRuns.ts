@@ -16,7 +16,8 @@ export interface RunProgress {
 export interface RunInfo {
   id: number
   kind?: string
-  flow_id: number
+  flow_id: number | null // null for the run of a flow group
+  flow_group_id?: number | null
   status: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | string
   launched_by: number | null
   trigger_type?: string // "manual" | "schedule"
@@ -33,6 +34,7 @@ export interface RunInfo {
   // presenti solo nella ricerca globale /runs
   flow_name?: string | null
   source_name?: string | null
+  group_name?: string | null
   launched_by_name?: string | null // nome di chi l'ha avviato (null se schedulato)
 }
 

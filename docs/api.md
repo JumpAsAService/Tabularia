@@ -149,7 +149,7 @@ something finishes (**Administration → Webhooks**).
 
 | Event | When |
 |---|---|
-| `flow.run.succeeded` / `flow.run.failed` | a flow execution finished: from a schedule, from **Run** in the interface, or from `run-now`. A run closed because its process died, because the gateway shut down, or because it waited in the queue too long is a `flow.run.failed` too |
+| `flow.run.succeeded` / `flow.run.failed` | a flow execution finished: from a schedule, from **Run** in the interface, from `run-now`, or inside a flow group (the group itself sends no event). A run closed because its process died, because the gateway shut down, or because it waited in the queue too long is a `flow.run.failed` too |
 | `datasource.refresh.succeeded` / `datasource.refresh.failed` | the refresh of a database datasource finished |
 | `ping` | the **Send a test call** button |
 

@@ -41,6 +41,14 @@ class Run(SQLModel, table=True):
             postgresql_where=text(LIVE_ORCHESTRATION),
             sqlite_where=text(LIVE_ORCHESTRATION),
         ),
+        # one live run per flow group, for the same reason
+        Index(
+            "uq_runs_one_live_group",
+            "flow_group_id",
+            unique=True,
+            postgresql_where=text(LIVE_ORCHESTRATION),
+            sqlite_where=text(LIVE_ORCHESTRATION),
+        ),
         # la coda delle orchestrazioni da rivendicare: solo le righe in attesa
         Index(
             "ix_runs_orchestration_queue",
@@ -54,6 +62,13 @@ class Run(SQLModel, table=True):
     # kind="ingest": refresh di una datasource database (datasource_id valorizzato).
     kind: str = Field(default="flow", index=True)
     flow_id: Optional[int] = Field(default=None, foreign_key="flows.id", index=True)
+    # set on a flow group's own run (kind="orchestration", flow_id None); the runs
+    # of its cells point at that run through parent_run_id
+    flow_group_id: Optional[int] = Field(default=None, foreign_key="flow_groups.id", index=True)
+    # a group run only: the state of every cell, parallel to the group's grid
+    # ([[{"state", "run_id", "error"}, ...], ...]); written by the process running
+    # the group, read by the editor
+    group_cells: Optional[str] = Field(default=None, sa_column=Column("group_cells", Text))
     task_id: str = Field(index=True)  # id del task Celery sull'engine
     status: str = "PENDING"  # PENDING | STARTED | SUCCESS | FAILURE
     launched_by: Optional[int] = Field(default=None, foreign_key="users.id")

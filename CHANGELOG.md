@@ -5,6 +5,28 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Flow groups**: several flows and database refreshes run as one, in order and in
+  parallel. A group is a grid: each row is a step, the cells of a row start together,
+  and the next step starts when every cell of the previous one has succeeded; the first
+  failed step stops the group and the steps after it are skipped. Cells are filled by
+  dragging flows and database datasources from a panel (searchable by name or folder)
+  or by choosing them in an empty cell, which also works from the keyboard; the same
+  object twice in one step is refused. A group lives in a folder like a flow (Explore,
+  global search, move, delete, audit), is run by hand or on a cron schedule, and its
+  page shows the state of every cell in the latest run and in the earlier ones. Its
+  flows run on their production engines, as a scheduled run does. A flow already
+  running when its cell starts is never started a second time: the cell waits for
+  it, and its outcome counts when it runs in production and started after the
+  previous step ended; otherwise (a development run, or one that may have read data
+  older than the earlier steps) the cell lets it end and then runs the flow. While
+  the group runs a flow, the flow's own schedule cannot start it again. Cells count
+  in the orchestrator's `ORCHESTRATOR__MAX_CONCURRENT` like flow runs. Rights: VIEW
+  reads a group, EDIT changes it, RUN runs and schedules it; every cell checks again,
+  with the rights of whoever runs the group, when it runs, and a schedule turns
+  itself off when its author is deactivated or loses RUN. A cell whose flow or
+  datasource the reader cannot read shows its state but not its error. Endpoints
+  under `/flow-groups`; the flows inside send their own `flow.run.*` webhooks.
+  Schema revision 0006.
 - **Audit log to Splunk** (Administration → SIEM, described in `docs/siem-splunk.md`):
   every audit entry goes to Splunk through the HTTP Event Collector within about
   fifteen seconds, one event per entry with CIM-friendly `user` and `src`. The audit

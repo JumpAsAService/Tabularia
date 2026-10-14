@@ -18,6 +18,7 @@ from app.models.engine_policy import DisabledEngine
 from app.models.engine_setting import EngineSetting
 from app.models.siem import SiemDestination
 from app.models.saved_view import SavedView
+from app.models.flow_group import FlowGroup
 from app.models.ai_model import AiModel
 from app.models.ai_chat import AiChat, AiChatTurn, AiSpend
 from app.models.privacy import PrivacyNotice
@@ -28,7 +29,7 @@ from app.models.dbt_ai_text import DbtAiText
 __all__ = [
     "User", "Group", "UserGroupLink", "UserSession", "ApiToken", "Webhook", "WebhookDelivery", "Project", "Permission", "Capability",
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
-    "AuditLog", "Banner", "DisabledEngine", "EngineSetting", "SiemDestination", "SavedView", "AiModel", "AiChat", "AiChatTurn", "AiSpend", "PrivacyNotice",
+    "AuditLog", "Banner", "DisabledEngine", "EngineSetting", "SiemDestination", "SavedView", "FlowGroup", "AiModel", "AiChat", "AiChatTurn", "AiSpend", "PrivacyNotice",
     "FlowPresence", "LoginAttempt",
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
 ]

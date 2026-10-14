@@ -11,7 +11,7 @@ UNION SQL:
    filtro per tipo: sono i numeri del selettore;
 3. si cerca solo nel NOME, e i metacaratteri di LIKE restano letterali.
 """
-from app.models import Connection, SavedView
+from app.models import Connection, FlowGroup, SavedView
 from app.models.permission import Capability
 from app.routes.search import search_everything
 from tests.conftest import (
@@ -54,7 +54,7 @@ def test_an_empty_query_returns_nothing(session):
         assert res.total == 0 and res.items == [] and res.counts == {}
 
 
-# ── trova tutti e cinque i tipi ─────────────────────────────────────────────
+# ── trova tutti e sei i tipi ────────────────────────────────────────────────
 def test_it_finds_every_kind_of_resource(session):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="margine")
@@ -62,10 +62,12 @@ def test_it_finds_every_kind_of_resource(session):
     make_flow(session, name="margine per area", project_id=p.id)
     _vista(session, "margine 2025", p.id, ds.id)
     _connessione(session, "margine db", p.id)
+    session.add(FlowGroup(name="margine notturno", project_id=p.id))
+    session.commit()
 
     res = _cerca(session, admin, "margine")
-    assert res.total == 5
-    assert res.counts == {"folder": 1, "flow": 1, "datasource": 1, "view": 1, "connection": 1}
+    assert res.total == 6
+    assert res.counts == {"folder": 1, "flow": 1, "group": 1, "datasource": 1, "view": 1, "connection": 1}
 
 
 def test_each_hit_says_where_it_lives(session):

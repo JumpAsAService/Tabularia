@@ -462,6 +462,7 @@ class OrchestratorSettings(BaseModel):
     # da UN processo; le altre restano in coda. Ognuna usa una connessione a
     # Postgres mentre interroga l'engine: va tenuto sotto la misura del pool
     # (DB__POOL_SIZE), o un engine lento le esaurisce.
+    # The cells of flow groups count in the same bound: past it, they wait.
     max_concurrent: int = Field(default=20, ge=1)
     # env: ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS — un'esecuzione rimasta in coda
     # più di così (nessun orchestratore acceso, o tutti pieni) non viene più

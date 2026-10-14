@@ -206,6 +206,10 @@ def evento_del_run(run: Run) -> Optional[str]:
     esito = {"SUCCESS": "succeeded", "FAILURE": "failed"}.get(run.status)
     if esito is None:
         return None
+    if getattr(run, "flow_group_id", None) is not None:
+        # a flow group's own run has no event of its own yet: the flows and the
+        # refreshes inside it send theirs
+        return None
     if run.kind == "orchestration" or (run.kind == "flow" and run.parent_run_id is None):
         return f"flow.run.{esito}"
     if run.kind == "ingest":

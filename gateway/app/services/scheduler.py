@@ -29,7 +29,7 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.db.session import engine
-from app.models import Connection, Datasource, Flow, Run, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Run, User
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run
 from app.services.blobgc import sweep_blob_deletions
@@ -181,6 +181,63 @@ async def _fire_flow(session: Session, flow: Flow, now: datetime, visto: datetim
     logger.info("scheduler: esecuzione del flusso %s (%s) messa in coda", flow_id, nome)
 
 
+# ── flow groups: scheduled runs ─────────────────────────────────────────────
+def _advance_group(session: Session, group: FlowGroup, now: datetime) -> None:
+    try:
+        group.next_run_at = next_fire(group.run_schedule, now).replace(tzinfo=None)
+    except Exception:
+        group.run_schedule = None
+        group.next_run_at = None
+    session.add(group)
+    session.commit()
+
+
+def _disable_group(session: Session, group: FlowGroup, reason: str) -> None:
+    logger.warning("scheduler: schedule of flow group %s turned off (%s)", group.id, reason)
+    group.run_schedule = None
+    group.run_scheduled_by = None
+    group.next_run_at = None
+    session.add(group)
+    session.commit()
+
+
+async def _fire_group(session: Session, group: FlowGroup, now: datetime, visto: datetime | None = None) -> None:
+    """As `_fire_flow`: take the slot, then queue the run in the same transaction.
+    The author's rights are checked again here, as for datasources: a schedule must
+    not outlive its author's RUN on the group's folder."""
+    visto = group.next_run_at if visto is None else visto
+    user = session.get(User, group.run_scheduled_by) if group.run_scheduled_by else None
+    if user is None or not user.is_active:
+        _disable_group(session, group, "the schedule's author is gone or deactivated")
+        return
+    if not perm_service.has_capability(session, user, group.project_id, Capability.RUN):
+        _disable_group(session, group, f"RUN missing for {user.email} on the group's folder")
+        return
+    group_id, name = group.id, group.name
+    values: dict = {}
+    try:
+        values["next_run_at"] = next_fire(group.run_schedule, now).replace(tzinfo=None)
+    except Exception:
+        values.update(run_schedule=None, next_run_at=None)
+    taken = session.exec(
+        update(FlowGroup)
+        .where(FlowGroup.id == group_id, FlowGroup.next_run_at == visto, FlowGroup.next_run_at <= now.replace(tzinfo=None))
+        .values(**values)
+    )
+    if taken.rowcount != 1:
+        session.rollback()  # another process took the slot
+        return
+    orchestrator.in_line_for_the_group(session, group_id)  # in line with "run now"
+    if orchestrator.group_running(session, group_id):
+        session.commit()
+        logger.info("scheduler: flow group %s (%s) still running, slot skipped", group_id, name)
+        return
+    orchestrator.create_group_run(session, user, group, "schedule", commit=False)
+    session.commit()
+    orchestrator.sveglia()
+    logger.info("scheduler: run of flow group %s (%s) queued", group_id, name)
+
+
 # ── loop ────────────────────────────────────────────────────────────────────
 async def _tick() -> None:
     now = datetime.now(timezone.utc)
@@ -238,6 +295,20 @@ async def _tick() -> None:
             except Exception:
                 logger.exception("scheduler: esecuzione flusso %s fallita", flow.id)
                 _advance_flow(session, flow, now)
+
+        due_groups = session.exec(
+            select(FlowGroup).where(
+                FlowGroup.run_schedule.is_not(None),  # type: ignore[union-attr]
+                FlowGroup.next_run_at.is_not(None),  # type: ignore[union-attr]
+                FlowGroup.next_run_at <= now_naive,
+            )
+        ).all()
+        for group, visto in [(g, g.next_run_at) for g in due_groups]:
+            try:
+                await _fire_group(session, group, now, visto)
+            except Exception:
+                logger.exception("scheduler: run of flow group %s failed", group.id)
+                _advance_group(session, group, now)
 
         # data contracts: la freschezza è l'unica regola che si rompe da sola,
         # col passare del tempo — qui la si ricontrolla

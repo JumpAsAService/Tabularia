@@ -95,6 +95,11 @@ EMAIL_SEND = "email.send"
 SAVED_VIEW_CREATE = "saved_view.create"
 SAVED_VIEW_UPDATE = "saved_view.update"
 SAVED_VIEW_DELETE = "saved_view.delete"
+FLOW_GROUP_CREATE = "flow_group.create"
+FLOW_GROUP_UPDATE = "flow_group.update"
+FLOW_GROUP_DELETE = "flow_group.delete"
+FLOW_GROUP_RUN = "flow_group.run"
+FLOW_GROUP_SCHEDULE = "flow_group.schedule"
 
 
 def client_ip(request: Optional[Request]) -> Optional[str]:

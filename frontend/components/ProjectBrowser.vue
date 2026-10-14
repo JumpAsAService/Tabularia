@@ -42,6 +42,7 @@ import {
   Settings2,
   Home,
   ScrollText,
+  Rows3,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -52,6 +53,7 @@ import { useDialogA11y } from '~/composables/useDialogA11y'
 import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
+import { useFlowGroups, type FlowGroup } from '~/composables/useFlowGroups'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import {
@@ -71,6 +73,7 @@ const runsApi = useRuns()
 const dsApi = useDatasources()
 const connApi = useConnections()
 const viewsApi = useSavedViews()
+const groupsApi = useFlowGroups()
 const { user } = useAuth()
 const toast = useToast()
 const { t } = useI18n()
@@ -83,6 +86,7 @@ const currentId = ref<number | null>(null)
 const error = ref('')
 
 const flows = ref<FlowSummary[]>([])
+const flowGroups = ref<FlowGroup[]>([])
 const dsList = ref<DatasourceInfo[]>([])
 const contractFor = ref<DatasourceInfo | null>(null) // la datasource di cui è aperto il data contract
 const savedViews = ref<SavedView[]>([])
@@ -129,8 +133,8 @@ function openFolder(id: number | null) {
   loadFolder(id)
 }
 
-// ── Riga unificata: un solo tipo di riga per cinque tipi di risorsa ─────────
-type Kind = 'folder' | 'flow' | 'datasource' | 'view' | 'connection'
+// ── Riga unificata: un solo tipo di riga per sei tipi di risorsa ────────────
+type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'connection'
 interface Row {
   kind: Kind
   id: number
@@ -146,6 +150,7 @@ interface Row {
 const KIND_ICON: Record<Kind, any> = {
   folder: Folder,
   flow: Workflow,
+  group: Rows3,
   datasource: Database,
   view: Bookmark,
   connection: Plug,
@@ -162,6 +167,11 @@ const rows = computed<Row[]>(() => {
   }
   for (const f of flows.value) {
     out.push({ kind: 'flow', id: f.id, name: f.name, meta: fmtDate(f.updated_at), to: `/editor?flow=${f.id}`, raw: f })
+  }
+  for (const g of flowGroups.value) {
+    const steps = g.definition.steps.length
+    const meta = [t('projectBrowser.groupSteps', { n: steps }, steps), fmtDate(g.updated_at)].join(' · ')
+    out.push({ kind: 'group', id: g.id, name: g.name, meta, to: `/flow-group?id=${g.id}`, raw: g })
   }
   for (const d of dsList.value) {
     const stato = ingestRuns.value[d.id]
@@ -206,7 +216,7 @@ const visibleRows = computed(() =>
   kindFilter.value ? matching.value.filter((r) => r.kind === kindFilter.value) : matching.value,
 )
 const segments = computed(() =>
-  (['folder', 'flow', 'datasource', 'view', 'connection'] as Kind[])
+  (['folder', 'flow', 'group', 'datasource', 'view', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
@@ -223,6 +233,7 @@ async function loadProjects() {
 
 async function loadFolder(id: number | null) {
   flows.value = []
+  flowGroups.value = []
   dsList.value = []
   savedViews.value = []
   connections.value = []
@@ -249,6 +260,7 @@ async function loadFolder(id: number | null) {
         if (d.kind === 'database' && (d.rows == null || d.refreshing)) pollIngest(d.id, ingestToken)
       }
     } catch { dsList.value = [] }
+    try { flowGroups.value = await groupsApi.listByProject(id) } catch { flowGroups.value = [] }
     try { savedViews.value = await viewsApi.listByProject(id) } catch { savedViews.value = [] }
     // le connessioni richiedono CONNECT: il rifiuto è informazione, non errore
     try {
@@ -404,6 +416,9 @@ async function moveRow(row: Row, target: number | null) {
     if (row.kind === 'flow') {
       await flowsApi.update(row.id, { project_id: target })
       flows.value = flows.value.filter((f) => f.id !== row.id)
+    } else if (row.kind === 'group') {
+      await groupsApi.update(row.id, { project_id: target })
+      flowGroups.value = flowGroups.value.filter((g) => g.id !== row.id)
     } else if (row.kind === 'datasource') {
       await dsApi.update(row.id, { project_id: target })
       dsList.value = dsList.value.filter((d) => d.id !== row.id)
@@ -433,6 +448,11 @@ async function removeRow(row: Row) {
       await flowsApi.remove(row.id)
       flows.value = flows.value.filter((f) => f.id !== row.id)
       toast.success(t('projectBrowser.flowDeleted', { name: row.name }))
+    } else if (row.kind === 'group') {
+      if (!chiedi('projectBrowser.confirmDeleteFlowGroup')) return
+      await groupsApi.remove(row.id)
+      flowGroups.value = flowGroups.value.filter((g) => g.id !== row.id)
+      toast.success(t('projectBrowser.flowGroupDeleted', { name: row.name }))
     } else if (row.kind === 'datasource') {
       if (!chiedi('projectBrowser.confirmDeleteDatasource')) return
       await dsApi.remove(row.id)
@@ -472,6 +492,11 @@ function createFlowWith(engineId: string) {
   closeNew()
   const dove = currentId.value != null ? `&project=${currentId.value}` : ''
   navigateTo(`/editor?engine=${engineId}${dove}`)
+}
+
+function createFlowGroup() {
+  closeNew()
+  if (currentId.value != null) navigateTo(`/flow-group?project=${currentId.value}`)
 }
 
 async function createFolder() {
@@ -699,6 +724,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <div class="menu-sep" />
               <button class="menu-item" @click="engineStep = true">
                 <span class="mi-top"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</span>
+              </button>
+              <button class="menu-item" @click="createFlowGroup">
+                <span class="mi-top"><Rows3 :size="14" /> {{ $t('projectBrowser.newFlowGroupButton') }}</span>
               </button>
               <button class="menu-item" @click="openDbDsDialog">
                 <span class="mi-top"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</span>

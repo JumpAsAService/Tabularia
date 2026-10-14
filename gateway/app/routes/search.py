@@ -24,7 +24,7 @@ from sqlmodel import Session, select
 
 from app.db.session import get_session
 from app.deps.auth import get_current_user
-from app.models import Connection, Datasource, Flow, Project, SavedView, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Project, SavedView, User
 from app.schemas.models import SearchHit, SearchOut
 from app.services import permissions as perm_service
 from app.core.routing import RottaCheRilascia
@@ -33,7 +33,7 @@ router = APIRouter(route_class=RottaCheRilascia, tags=["search"])
 
 # ordine di presentazione a parità di rilevanza: prima i contenitori, poi ciò che
 # si apre più spesso. Serve anche a rendere deterministico l'ordinamento.
-_KIND_ORDER = {"folder": 0, "flow": 1, "datasource": 2, "view": 3, "connection": 4}
+_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "connection": 5}
 
 
 def _like(q: str) -> str:
@@ -52,7 +52,7 @@ def _like(q: str) -> str:
 @router.get("/search", response_model=SearchOut)
 def search_everything(
     q: str = Query("", description="cerca per nome su tutte le risorse"),
-    kind: str | None = Query(None, description="limita a un tipo: folder|flow|datasource|view|connection"),
+    kind: str | None = Query(None, description="limita a un tipo: folder|flow|group|datasource|view|connection"),
     limit: int = Query(30, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -91,6 +91,14 @@ def search_everything(
                 kind="flow", id=f.id, name=f.name,
                 project_id=f.project_id, project_name=nomi_cartella.get(f.project_id),
                 detail=f.engine,
+            ))
+
+        for g in session.exec(
+            select(FlowGroup).where(FlowGroup.project_id.in_(leggibili), FlowGroup.name.ilike(pattern, escape="\\"))
+        ).all():
+            hits.append(SearchHit(
+                kind="group", id=g.id, name=g.name,
+                project_id=g.project_id, project_name=nomi_cartella.get(g.project_id),
             ))
 
         for d in session.exec(

@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3 } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -164,6 +164,11 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'flow.run': { icon: Workflow, color: u.violet, label: t('audit.flowRunAction') },
     'flow.schedule': { icon: Workflow, color: u.accent, label: t('audit.flowScheduleAction') },
     'flow.promote': { icon: Workflow, color: u.accent, label: t('audit.flowPromoteAction') },
+    'flow_group.create': { icon: Rows3, color: u.accent, label: t('audit.flowGroupCreateAction') },
+    'flow_group.update': { icon: Rows3, color: u.accent, label: t('audit.flowGroupUpdateAction') },
+    'flow_group.delete': { icon: Rows3, color: u.danger, label: t('audit.flowGroupDeleteAction') },
+    'flow_group.run': { icon: Rows3, color: u.violet, label: t('audit.flowGroupRunAction') },
+    'flow_group.schedule': { icon: Rows3, color: u.accent, label: t('audit.flowGroupScheduleAction') },
     'datasource.create': { icon: Database, color: u.success, label: t('audit.datasourceCreateAction') },
     'datasource.refresh': { icon: Database, color: u.violet, label: t('audit.datasourceRefreshAction') },
     'datasource.delete': { icon: Database, color: u.danger, label: t('audit.datasourceDeleteAction') },

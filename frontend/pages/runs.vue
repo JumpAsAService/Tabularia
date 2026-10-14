@@ -5,7 +5,7 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3 } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
 
@@ -82,8 +82,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
           <span class="stpill" :class="r.status.toLowerCase()">{{ r.status }}</span>
           <span class="who">
-            <component :is="r.kind === 'ingest' ? Database : Workflow" :size="13" />
-            {{ r.flow_name || r.source_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
+            <component :is="r.kind === 'ingest' ? Database : r.flow_group_id ? Rows3 : Workflow" :size="13" />
+            {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
           </span>
           <span class="msg muted">{{ r.error || (r.status === 'SUCCESS' ? '—' : '') }}</span>
           <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? $t('runs.triggeredByScheduler') : $t('runs.triggeredByName', { name: triggeredBy(r) })">

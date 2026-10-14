@@ -192,8 +192,87 @@ class SavedViewUpdate(BaseModel):
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
 
 
+# ── Flow groups (steps in order, cells of a step in parallel) ──────────────────
+MAX_GROUP_STEPS = 50
+MAX_GROUP_COLUMNS = 20
+
+
+class FlowGroupCell(BaseModel):
+    kind: Literal["flow", "refresh"]  # run a flow, or refresh a database datasource
+    id: int
+
+
+class FlowGroupDefinition(BaseModel):
+    """Rows are steps, run one after another; the cells of a row run in parallel.
+    None keeps an empty cell in its column, so the grid comes back as drawn."""
+    steps: list[Annotated[list[Optional[FlowGroupCell]], Field(max_length=MAX_GROUP_COLUMNS)]] = Field(
+        default_factory=list, max_length=MAX_GROUP_STEPS,
+    )
+
+
+class FlowGroupCreate(BaseModel):
+    name: str = Field(max_length=200)
+    description: str = Field(default="", max_length=4000)
+    definition: FlowGroupDefinition = Field(default_factory=FlowGroupDefinition)
+
+
+class FlowGroupUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=4000)
+    definition: Optional[FlowGroupDefinition] = None
+    project_id: Optional[int] = None  # set = moves the group to another folder
+
+
+class FlowGroupCellLabel(BaseModel):
+    """What the reader may know about a cell: its name and folder, or that the
+    object is gone, or that it sits in a folder the reader cannot see."""
+    name: Optional[str] = None
+    project_id: Optional[int] = None
+    missing: bool = False
+    hidden: bool = False
+
+
+class FlowGroupOut(BaseModel):
+    id: int
+    name: str
+    description: str = ""
+    project_id: int
+    owner_id: Optional[int] = None
+    definition: FlowGroupDefinition
+    run_schedule: Optional[str] = None
+    run_scheduled_by: Optional[int] = None
+    next_run_at: Optional[UtcDateTime] = None
+    created_at: Optional[UtcDateTime] = None
+    updated_at: Optional[UtcDateTime] = None
+
+
+class FlowGroupScheduleUpdate(BaseModel):
+    cron: Optional[str] = None  # 5-field cron; empty = not scheduled
+
+
+class FlowGroupRunOut(BaseModel):
+    """A group run, with the state of every cell parallel to the group's grid:
+    {"state": waiting|running|succeeded|failed|skipped, "run_id", "error", "waited"}."""
+    id: int
+    status: str
+    trigger_type: str = "manual"
+    launched_by: Optional[int] = None
+    error: Optional[str] = None
+    started_at: Optional[UtcDateTime] = None
+    finished_at: Optional[UtcDateTime] = None
+    cells: list[list[Optional[dict]]] = Field(default_factory=list)
+
+
+class FlowGroupDetail(FlowGroupOut):
+    # parallel to definition.steps: the label of every cell, resolved for the reader
+    cells: list[list[Optional[FlowGroupCellLabel]]] = Field(default_factory=list)
+    # what the reader may do with it, so the page offers only what will work
+    can_edit: bool = False
+    can_run: bool = False
+
+
 # ── Ricerca unificata (per nome, su tutti i tipi di risorsa) ──────────────────
-SearchKind = Literal["folder", "flow", "datasource", "view", "connection"]
+SearchKind = Literal["folder", "flow", "group", "datasource", "view", "connection"]
 
 
 class SearchHit(BaseModel):
@@ -465,6 +544,7 @@ class RunOut(BaseModel):
     id: int
     kind: str = "flow"
     flow_id: Optional[int] = None
+    flow_group_id: Optional[int] = None  # the run of a flow group (no flow, no datasource)
     status: str
     launched_by: Optional[int]
     trigger_type: str = "manual"  # "manual" | "schedule"
@@ -491,6 +571,7 @@ class RunSearchOut(RunOut):
     risolverli lato client."""
     flow_name: Optional[str] = None
     source_name: Optional[str] = None
+    group_name: Optional[str] = None
     launched_by_name: Optional[str] = None  # None se schedulato o utente rimosso
 
 

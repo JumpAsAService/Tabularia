@@ -127,6 +127,14 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
     has_conn = session.exec(select(Connection).where(Connection.project_id == project_id)).first()
     if has_conn:
         raise HTTPException(status_code=409, detail="Il progetto contiene connessioni: spostale o eliminale prima")
+    # saved views and flow groups hold a foreign key to their folder: without this
+    # check the delete ends in a 500 instead of saying what is in the way
+    from app.models import FlowGroup, SavedView
+
+    if session.exec(select(SavedView).where(SavedView.project_id == project_id)).first():
+        raise HTTPException(status_code=409, detail="The folder contains saved views: move or delete them first")
+    if session.exec(select(FlowGroup).where(FlowGroup.project_id == project_id)).first():
+        raise HTTPException(status_code=409, detail="The folder contains flow groups: move or delete them first")
     # un webhook limitato a questa cartella: toglierla in silenzio lo allargherebbe
     # a tutte, e la chiave esterna lo impedirebbe comunque con un 500
     from app.models import Webhook

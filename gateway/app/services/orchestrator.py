@@ -295,6 +295,42 @@ def create_orchestration_run(
 
 # spazio di nomi dei lucchetti consultivi «coda del flusso» (il secondo numero è l'id)
 _LUCCHETTO_CODA = 74610001
+# the same for flow groups, in a namespace of their own (a group and a flow can share an id)
+_GROUP_QUEUE_LOCK = 74610002
+
+
+def create_group_run(session: Session, user: User, group, trigger_type: str = "manual", commit: bool = True) -> Run:
+    """Queues a flow group's run: the same PENDING orchestration row a flow gets,
+    with `flow_group_id` instead of `flow_id`. An orchestrator claims it and hands it
+    to services/flow_group_runner.py. Its flows always run in production mode."""
+    run = Run(
+        kind="orchestration", flow_group_id=group.id, task_id="", status="PENDING",
+        launched_by=user.id, trigger_type=trigger_type, engine_mode="production",
+        input_key="", output_bucket="", output_key="",
+    )
+    session.add(run)
+    if commit:
+        session.commit()
+        session.refresh(run)
+    return run
+
+
+def in_line_for_the_group(session: Session, group_id: int) -> None:
+    """As `in_fila_per_il_flusso`, for a flow group: two replicas, or a replica and
+    the scheduler, cannot both see no run and both queue one."""
+    if session.get_bind().dialect.name == "postgresql":
+        session.connection().execute(
+            text("SELECT pg_advisory_xact_lock(:space, :group)"), {"space": _GROUP_QUEUE_LOCK, "group": group_id}
+        )
+
+
+def group_running(session: Session, group_id: int) -> bool:
+    """The group has a run queued or in progress."""
+    return session.exec(
+        select(Run.id)
+        .where(Run.kind == "orchestration", Run.flow_group_id == group_id, Run.status.in_(("PENDING", "STARTED")))  # type: ignore[union-attr]
+        .limit(1)
+    ).first() is not None
 
 
 def in_fila_per_il_flusso(session: Session, flow_id: int) -> None:
@@ -411,6 +447,14 @@ async def esegui(run_id: int) -> None:
     """Porta in fondo un'orchestrazione che questo processo ha rivendicato, e ne
     registra l'esito sul run."""
     try:
+        with Session(engine) as session:
+            group_id = session.exec(select(Run.flow_group_id).where(Run.id == run_id)).first()
+        if group_id is not None:
+            # a flow group's run: same queue, claim and heartbeat, its own runner
+            from app.services.flow_group_runner import run_group  # imports this module
+
+            await run_group(run_id)
+            return
         with Session(engine) as session:
             run = session.get(Run, run_id)
             if run is None:
@@ -574,6 +618,9 @@ _in_corso: set[asyncio.Task] = set()
 # Lo legge il thread del battito, lo scrive il ciclo degli eventi.
 _vive: set[int] = set()
 _vive_lock = threading.Lock()
+# the cells of flow groups running in this process: each holds a connection like an
+# orchestration, so they count in the same budget (see services/flow_group_runner.py)
+celle_in_corso = 0
 _sveglia: asyncio.Event | None = None
 
 
@@ -626,7 +673,7 @@ async def coda_loop(stop: asyncio.Event) -> None:
         while not stop.is_set():
             _sveglia.clear()
             try:
-                liberi = MAX_CONCURRENT - len(_in_corso)
+                liberi = MAX_CONCURRENT - len(_in_corso) - celle_in_corso
                 if liberi > 0:
                     prese, respinte = await asyncio.to_thread(rivendica, liberi)
                     for run_id in prese:

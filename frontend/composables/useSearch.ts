@@ -1,5 +1,5 @@
-// Ricerca unificata per nome su tutte le risorse: cartelle, flussi, datasource,
-// viste salvate, connessioni.
+// Ricerca unificata per nome su tutte le risorse: cartelle, flussi, gruppi di
+// flussi, datasource, viste salvate, connessioni.
 //
 // Il gateway applica i permessi per TIPO (le cartelle si vedono se navigabili, i
 // contenuti se leggibili, le connessioni solo con CONNECT), quindi qui non serve
@@ -9,7 +9,7 @@
 // filtrato: sono i numeri da mettere nel selettore per tipo, che altrimenti
 // cambierebbero a ogni clic.
 
-export type SearchKind = 'folder' | 'flow' | 'datasource' | 'view' | 'connection'
+export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'connection'
 
 export interface SearchHit {
   kind: SearchKind
@@ -31,6 +31,7 @@ export interface SearchResults {
 export function searchHitTarget(hit: SearchHit): string {
   switch (hit.kind) {
     case 'flow': return `/editor?flow=${hit.id}`
+    case 'group': return `/flow-group?id=${hit.id}`
     case 'view': return `/viewer?view=${hit.id}`
     // col nome come ricerca: la lista è paginata, e la voce può stare oltre la prima pagina
     case 'datasource': return `/datasources?q=${encodeURIComponent(hit.name)}&ds=${hit.id}`

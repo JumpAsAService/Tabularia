@@ -104,6 +104,10 @@ engines, from an in-process library to a serverless warehouse.
 - **Schedule and forget.** Put flows on a schedule (timezone-aware, DST-safe) and let
   them refresh on their own; a load heatmap shows busy time-bands and collisions
   before they bite.
+- **Chain the work.** A **flow group** runs flows and database refreshes in steps,
+  drawn as a grid: the cells of a step run in parallel, the steps one after the other,
+  and a failed step stops the chain. Build it by drag and drop, run it by hand or on a
+  schedule, and watch every cell's state as it runs.
 - **Full history & governance.** Every run is recorded with downloadable results; an
   **audit log** captures logins, flow runs, data exports and permission changes —
   "who entered, who ran what, which data was downloaded" — with a 24-hour access chart,
@@ -551,6 +555,13 @@ worker capacity. Schedules fire from the **orchestrator** role: a due slot is ta
 a compare-and-swap on the time the process saw, so with several orchestrators exactly
 one fires it; a flow whose last run failed on schedule sends an email, once, to the
 addresses set next to the schedule.
+
+A **flow group** is queued and claimed like a flow's run. Its cells start together,
+each flow under its own run row, so the flow's schedule cannot start it twice while
+the group runs it. A flow already running is never duplicated: its run counts for the
+cell when it runs in production and started after the previous step, otherwise the
+cell runs the flow once it ends. Cells count in `ORCHESTRATOR__MAX_CONCURRENT` like
+flow runs; within that, how many really run at once is up to the workers and the queue.
 
 ## Export to dbt
 
