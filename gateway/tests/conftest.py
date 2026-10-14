@@ -51,6 +51,25 @@ def db_engine():
 
 
 @pytest.fixture
+def fk_session():
+    """A session on a database that enforces foreign keys, as Postgres does. The
+    other tests run with them off (the factories rely on it), so a delete that
+    leaves a reference behind passed here and answered 500 in production."""
+    from sqlalchemy import event
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+
+    @event.listens_for(engine, "connect")
+    def _foreign_keys_on(dbapi_connection, _record):
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as s:
+        yield s
+    engine.dispose()
+
+
+@pytest.fixture
 def session(db_engine):
     with Session(db_engine) as s:
         yield s

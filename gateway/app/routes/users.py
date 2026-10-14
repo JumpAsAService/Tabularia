@@ -248,8 +248,8 @@ def elimina_utente(session: Session, user_id: int) -> None:
     from sqlalchemy import delete as sa_delete, update as sa_update
 
     from app.models import (
-        AiChat, AiChatTurn, ApiToken, AuditLog, Connection, Datasource, Flow, Permission, Project, Run, Upload,
-        UserSession, Webhook,
+        AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
+        FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedView, Upload, UserSession, Webhook,
     )
 
     # le conversazioni con l'assistente sono personali: se ne vanno con l'account
@@ -277,6 +277,20 @@ def elimina_utente(session: Session, user_id: int) -> None:
         # chi ha creato un token o un webhook: il token o il webhook restano
         (ApiToken, ApiToken.created_by),
         (Webhook, Webhook.created_by),
+        # every other reference to the account, each a foreign key that would refuse
+        # the delete: who saved a flow version, a view or a flow group, who changed
+        # an administration setting. A schedule left without its author turns itself
+        # off the next time it is due (services/scheduler.py).
+        (FlowVersion, FlowVersion.created_by),
+        (SavedView, SavedView.owner_id),
+        (FlowGroup, FlowGroup.owner_id),
+        (Flow, Flow.run_scheduled_by),
+        (Datasource, Datasource.refresh_scheduled_by),
+        (FlowGroup, FlowGroup.run_scheduled_by),
+        (AiModel, AiModel.updated_by),
+        (Banner, Banner.created_by),
+        (DisabledEngine, DisabledEngine.disabled_by),
+        (PrivacyNotice, PrivacyNotice.updated_by),
     ):
         session.exec(sa_update(model).where(col == user_id).values({col.key: None}))
     session.delete(user)

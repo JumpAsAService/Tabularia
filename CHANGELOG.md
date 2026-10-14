@@ -27,6 +27,11 @@ exposes at `/system/info` and in the app's settings menu.
   datasource the reader cannot read shows its state but not its error. Endpoints
   under `/flow-groups`; the flows inside send their own `flow.run.*` webhooks.
   Schema revision 0006.
+- **Fixed: deleting an account answered 500 on Postgres** when the account had saved
+  a flow version, a saved view or a banner, changed an AI model, the engine policy or
+  the privacy notice, or set a flow's or a datasource's schedule: those references
+  are now cleared first, as the others already were. A schedule left without its
+  author turns itself off the next time it is due.
 - **Audit log to Splunk** (Administration → SIEM, described in `docs/siem-splunk.md`):
   every audit entry goes to Splunk through the HTTP Event Collector within about
   fifteen seconds, one event per entry with CIM-friendly `user` and `src`. The audit
