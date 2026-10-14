@@ -49,6 +49,7 @@ from app.routes.system import router as system_router
 from app.routes.ai import router as ai_router
 from app.routes.queue import router as queue_router
 from app.routes.proxy import router as proxy_router
+from app.core.body_limit import BodyLimitMiddleware
 
 logging.basicConfig(level=logging.INFO)
 
@@ -153,6 +154,7 @@ app = FastAPI(
     redirect_slashes=settings.app.redirect_slashes,
 )
 
+app.add_middleware(BodyLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.app.cors_origins,

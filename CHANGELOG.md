@@ -19,6 +19,8 @@ exposes at `/system/info` and in the app's settings menu.
   until the kernel kills the task. Each connection has its own spill directory:
   sharing one, two tasks spilling at once read each other's files and returned wrong
   sums. The Execute-SQL node's sandbox now lives on disk under the same budget.
+- **Request bodies are capped at 8 MB before they are read** (uploads excepted): one
+  user saving a flow of a hundred megabytes could take a gateway replica down.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,
