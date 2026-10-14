@@ -29,6 +29,9 @@
   --accent-hi: #7aa8ff;
   --accent-2: #6ee7b7;
   --violet: #a78bfa;
+  /* the ring of a node whose result is in the step cache: the positive green of
+     each theme (resolved per theme), Imperium keeps its gold (see its block) */
+  --cache-ring: var(--accent-2);
   --danger: #ff6b6b;
   --warning: #f5b53d;
   --on-warning: #1a1205; /* testo sul riempimento --warning */
@@ -204,6 +207,7 @@
   --accent-2: #4a6a26;    /* alloro: 5,1:1 su panel-2, bianco sopra 6,2 */
   --on-accent-2: #ffffff;
   --violet: #7a5a0e;      /* oro scurito per il chiaro: 5,2:1 su panel-2 */
+  --cache-ring: var(--violet);
   --danger: #b5321e;      /* rosso pompeiano: 5,0:1 su panel-2 */
   --warning: #a64a08;     /* ocra bruciata, lontana dall'oro: 4,75:1 su panel-2 */
   --on-warning: #ffffff;  /* 5,8:1 */
@@ -542,6 +546,16 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 .node-stats .dot { opacity: 0.6; }
 .node-stats .nocache { display: inline-flex; margin-left: auto; color: var(--op-rows, #f59e0b); }
+/* the node's result is in the step cache: a faint ring set off the border and a soft
+   glow, so it reads apart from the selection glow; never colour alone, the footer
+   carries the icon and its words */
+.node.node-cached {
+  outline: 1px solid color-mix(in srgb, var(--cache-ring) 40%, transparent);
+  outline-offset: 3px;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--cache-ring) 45%, transparent));
+}
+.node-stats .incache { display: inline-flex; margin-left: auto; color: var(--cache-ring); }
+.node-stats .nocache + .incache { margin-left: 4px; }
 .node-source { --node-accent: var(--accent-2); }
 
 /* handle più visibili e reattivi, CENTRATI sul bordo del nodo (il tema di

@@ -1148,6 +1148,7 @@ export default {
     "valuesLabel": "Werte"
   },
   "nodeStats": {
+    "cached": "Ergebnis im Cache: die folgenden Knoten setzen hier an",
     "noCache": "Vorgelagerter Schritt über der Cache-Grenze ({n} Zeilen): bei jeder Vorschau neu berechnet",
     "rows": "{n} Zeilen",
     "rowsMore": "{n}+ Zeilen",

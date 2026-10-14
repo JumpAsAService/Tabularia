@@ -1148,6 +1148,7 @@ export default {
     "valuesLabel": "Valores"
   },
   "nodeStats": {
+    "cached": "Resultado en caché: los nodos siguientes parten de aquí",
     "noCache": "Paso anterior por encima del límite de la caché ({n} filas): recalculado en cada vista previa",
     "rows": "{n} filas",
     "rowsMore": "{n}+ filas",

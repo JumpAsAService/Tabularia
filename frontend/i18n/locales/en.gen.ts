@@ -1233,6 +1233,7 @@ export default {
     "valuesLabel": "Values"
   },
   "nodeStats": {
+    "cached": "Result in cache: the nodes after this one start from here",
     "noCache": "Upstream step above the cache cap ({n} rows): recomputed at every preview",
     "rows": "{n} rows",
     "rowsMore": "{n}+ rows",

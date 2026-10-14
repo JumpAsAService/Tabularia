@@ -1233,6 +1233,7 @@ export default {
     "valuesLabel": "Valori"
   },
   "nodeStats": {
+    "cached": "Risultato in cache: i nodi successivi ripartono da qui",
     "noCache": "Passo a monte oltre il tetto della cache ({n} righe): ricalcolato a ogni anteprima",
     "rows": "{n} righe",
     "rowsMore": "{n}+ righe",

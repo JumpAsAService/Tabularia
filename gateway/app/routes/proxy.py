@@ -266,6 +266,28 @@ async def preview(
     return await _forward(request, "POST", "/tasks/preview", content=raw, session=session, user=user)
 
 
+@router.post("/tasks/cache-status")
+async def cache_status(
+    request: Request,
+    user: User = Depends(_utente),
+    session: Session = Depends(get_session),
+):
+    """Which nodes of a flow have their result in the step cache (the editor's
+    halo). The chains are the ones previews send, so they are checked like a
+    preview's: sources pinned to the engine's bucket and readable by the user."""
+    raw, payload = await _read_json(request)
+
+    def controlli() -> None:
+        try:
+            ensure_reads_pinned(session, user, payload, get_settings().engine.bucket)
+            ensure_can_read_keys(session, user, collect_storage_keys(payload))
+        finally:
+            _release_db(session, user)
+
+    await run_in_threadpool(controlli)
+    return await _forward(request, "POST", "/tasks/cache-status", content=raw, session=session, user=user)
+
+
 @router.post("/tasks/transform-data")
 async def transform(
     request: Request,

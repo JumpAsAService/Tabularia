@@ -1148,6 +1148,7 @@ export default {
     "valuesLabel": "Valeurs"
   },
   "nodeStats": {
+    "cached": "Résultat en cache : les nœuds suivants repartent d'ici",
     "noCache": "Étape amont au-dessus du plafond du cache ({n} lignes) : recalculée à chaque aperçu",
     "rows": "{n} lignes",
     "rowsMore": "{n}+ lignes",

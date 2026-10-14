@@ -215,6 +215,15 @@ export function useApi() {
       return await apiFetch<LineageGraph>(`/lineage${qs ? `?${qs}` : ''}`)
     },
 
+    /** Which nodes of a flow have their result in the step cache, for the engine: the
+     *  chains are the ones a preview of each node would send. */
+    async cacheStatus(body: {
+      engine?: string
+      chains: { node_id: string; bucket: string; input_key: string; operations: Operation[] }[]
+    }): Promise<{ cached: string[]; too_big: string[] }> {
+      return await apiFetch('/tasks/cache-status', { method: 'POST', body })
+    },
+
     async taskStatus(id: string): Promise<TaskStatus> {
       return await apiFetch<TaskStatus>(`/tasks/${id}`)
     },

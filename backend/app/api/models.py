@@ -114,3 +114,16 @@ class ExportStart(ExportRequest):
     """An export the requester follows and then downloads: the gateway names who
     asked, and only that name may see its state and take its file."""
     owner: str = Field(..., min_length=1, description="Who asked for the export, as the gateway names them")
+
+class CacheChain(BaseModel):
+    """One node of an editor's flow: the chain a preview of it would send."""
+    node_id: str = Field(..., max_length=200)
+    bucket: str
+    input_key: str
+    operations: list[TransformOperation] = Field(default_factory=list)
+
+
+class CacheStatusRequest(BaseModel):
+    """The nodes whose result the editor asks about, for its engine."""
+    engine: Optional[str] = None
+    chains: list[CacheChain] = Field(default_factory=list, max_length=2000)

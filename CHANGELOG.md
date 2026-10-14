@@ -5,6 +5,14 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The flow editor shows which nodes are in the step cache.** An operation whose
+  result is cached gets a soft ring set off its border, in each theme's positive
+  green (Imperium: its gold), and an icon in its footer that says so in words: the
+  nodes after it start from there. The editor asks the
+  server (`POST /tasks/cache-status`, checked like a preview), which looks up the
+  same fingerprints previews use, for the flow's engine, so the ring is right also
+  for copies made by other users, gone once the cache expires, and gone as soon as a
+  node upstream changes.
 - **Cache copies give way to previews.** After a preview, the copy of its upstream
   step into the cache ran on the preview worker's slots in arrival order: during the
   review it took 39% of that worker's time, and clicks queued behind it. Copies now go

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue'
-import { RefreshCw } from 'lucide-vue-next'
+import { DatabaseZap, RefreshCw } from 'lucide-vue-next'
 import { Handle, Position } from '@vue-flow/core'
 import { useI18n } from 'vue-i18n'
 import { opMeta } from '~/composables/useOpIcons'
@@ -10,6 +10,9 @@ import { useNodeStats } from '~/composables/useNodeStats'
 const props = defineProps<{ id: string; data: any }>()
 const { t } = useI18n()
 const stats = useNodeStats(() => props.id, inject, t)
+// the result of this node is in the step cache: the nodes after it start from here
+const cachedNodes = inject<Set<string>>('nodeCached', new Set())
+const cached = computed(() => cachedNodes.has(props.id))
 
 const isJoin = computed(() => props.data?.opType === 'join')
 const isUnion = computed(() => props.data?.opType === 'union')
@@ -26,7 +29,7 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
 <template>
   <div
     class="node node-op"
-    :class="{ 'node-join': needsRight }"
+    :class="{ 'node-join': needsRight, 'node-cached': cached }"
     :style="{ '--node-accent': meta.color }"
   >
     <!-- input principale (catena): a sinistra (in alto se c'è un secondo input) -->
@@ -52,11 +55,14 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
       </template>
     </div>
 
-    <div v-if="stats" class="node-stats" :title="stats.title">
-      <span v-if="stats.rows">{{ stats.rows }}</span>
-      <span v-if="stats.rows" class="dot" aria-hidden="true">·</span>
-      <span>{{ stats.cols }}</span>
-      <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
+    <div v-if="stats || cached" class="node-stats" :title="stats?.title">
+      <template v-if="stats">
+        <span v-if="stats.rows">{{ stats.rows }}</span>
+        <span v-if="stats.rows" class="dot" aria-hidden="true">·</span>
+        <span>{{ stats.cols }}</span>
+        <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
+      </template>
+      <span v-if="cached" class="incache" :title="$t('nodeStats.cached')" role="img" :aria-label="$t('nodeStats.cached')"><DatabaseZap :size="11" /></span>
     </div>
 
     <Handle id="out" type="source" :position="Position.Right" />

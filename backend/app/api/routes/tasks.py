@@ -11,9 +11,13 @@ from app.tasks.celery_app import celery_app
 from app.api import exports, preview_slots
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
-    PreviewRequest, ExportRequest, ExportStart,
+    PreviewRequest, ExportRequest, ExportStart, CacheStatusRequest,
 )
-from app.engine import PreviewResult, available_operations
+from functools import lru_cache
+
+from app.engine import DEFAULT_ENGINE, PreviewResult, available_operations
+from app.engine.base import Operation
+from app.engine.cache import StepCache, plan_hashes
 import logging
 from app.core.config import get_settings
 from app.core.redaction import redact_secrets
@@ -161,6 +165,34 @@ def preview_flow(request: PreviewRequest):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
         raise HTTPException(status_code=status, detail=payload.get("detail", "Errore anteprima"))
     return PreviewResult(**payload["result"])
+
+
+@lru_cache(maxsize=8)
+def _step_cache(engine_name: str) -> StepCache:
+    """The index of an engine's step cache (BigQuery keeps its own)."""
+    return StepCache(storage=None, namespace="bigquery" if engine_name == "bigquery" else "")
+
+
+@router.post("/cache-status")
+def cache_status(request: CacheStatusRequest) -> dict:
+    """Which nodes of a flow have their result in the step cache: the editor draws
+    a halo on them (the nodes after one start from there). The fingerprints are the
+    ones a preview computes, engine and source and chain (`plan_hashes` over the
+    same operations); only the cache index is read, no data, a lookup per node."""
+    name = (request.engine or DEFAULT_ENGINE).lower()
+    cache = _step_cache(name)
+    cached: list[str] = []
+    too_big: list[str] = []
+    for chain in request.chains:
+        if not chain.operations:
+            continue
+        ops = [Operation(**op.model_dump()).model_dump() for op in chain.operations]
+        final = plan_hashes(f"{name}:{chain.bucket}/{chain.input_key}", ops)[-1]  # each engine's `_source_id`
+        if cache.has(final):
+            cached.append(chain.node_id)
+        elif cache.is_skipped(final):
+            too_big.append(chain.node_id)
+    return {"cached": cached, "too_big": too_big}
 
 
 # tag of an export task's expected error → HTTP status

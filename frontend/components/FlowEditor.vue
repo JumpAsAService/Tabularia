@@ -221,6 +221,65 @@ const nodeStats = reactive<Record<string, NodeStats>>({})
 // stato mostrato in questa sessione: il toast una volta, poi parla il nodo
 const cacheWarned = new Set<string>()
 provide('nodeStats', nodeStats)
+
+// ── Which nodes have their result in the step cache (a halo on the node) ────────
+// Asked of the server, which computes the fingerprints previews use, for the
+// editor's engine. Guessing from previews would show haloes that are not true: a
+// copy can give way to previews, expire after a day, or come from another user.
+const cachedNodes = reactive(new Set<string>())
+provide('nodeCached', cachedNodes)
+let cacheAsked = ''
+let cacheTimer: number | undefined
+let cacheLateTimer: number | undefined
+
+function cacheChains() {
+  const nodes = getNodes.value
+  const edges = getEdges.value
+  const chains: { node_id: string; bucket: string; input_key: string; operations: Operation[] }[] = []
+  for (const n of nodes) {
+    if (n.type !== 'operation' || n.parentNode) continue // a foreach body runs per iteration
+    const { sourceNode, operations } = resolveChain(nodes, edges, n.id)
+    if (!sourceNode?.data?.parquetKey || !operations.length) continue
+    chains.push({ node_id: n.id, bucket: sourceNode.data.bucket ?? bucket, input_key: sourceNode.data.parquetKey, operations })
+  }
+  return chains
+}
+
+async function refreshCacheStatus(force = false) {
+  const chains = cacheChains()
+  const asked = JSON.stringify([flowEngine.value, chains])
+  if (!force && asked === cacheAsked) return
+  cacheAsked = asked
+  if (!chains.length) {
+    cachedNodes.clear()
+    return
+  }
+  try {
+    const res = await api.cacheStatus({ engine: flowEngine.value, chains })
+    if (asked !== cacheAsked) return // the flow changed meanwhile: a newer answer is coming
+    cachedNodes.clear()
+    for (const id of res.cached) cachedNodes.add(id)
+  } catch {
+    /* the halo is a hint: without an answer the nodes simply have none */
+  }
+}
+
+function scheduleCacheStatus(delay = 600, force = false) {
+  window.clearTimeout(cacheTimer)
+  cacheTimer = window.setTimeout(() => refreshCacheStatus(force), delay)
+}
+
+// a preview's copy runs after its answer, at the lowest priority: ask again a little
+// later, and once more after a while for a busy worker
+function cacheCheckAfterPreview() {
+  scheduleCacheStatus(1500, true)
+  window.clearTimeout(cacheLateTimer)
+  cacheLateTimer = window.setTimeout(() => refreshCacheStatus(true), 8000)
+}
+onUnmounted(() => {
+  window.clearTimeout(cacheTimer)
+  window.clearTimeout(cacheLateTimer)
+})
 // arco sotto il puntatore: il suo componente mostra la «×» di rimozione
 const hoveredEdgeId = ref<string | null>(null)
 provide('flowEdgeHovered', hoveredEdgeId)
@@ -414,6 +473,8 @@ const history = createFlowHistory({
   },
 })
 watch(serializeCanvas, () => history.touch())
+// a settled change of the flow (or of its engine) may change which nodes are cached
+watch([currentSnap, flowEngine], () => scheduleCacheStatus())
 onUnmounted(() => history.dispose())
 
 function restoreSnapshot(snapshot: string) {
@@ -1253,6 +1314,7 @@ async function runPreview(nodeId: string) {
       rows: res.row_count, truncated: res.truncated, cols: res.columns.length,
       cacheState: res.cache_state ?? null, cacheCap: res.cache_cap_rows ?? null,
     }
+    cacheCheckAfterPreview()
     if (res.cache_state === 'skipped' && !cacheWarned.has(nodeId)) {
       cacheWarned.add(nodeId)
       toast.warning(t('flowEditor.cacheSkippedToast', { n: (res.cache_cap_rows ?? 0).toLocaleString() }))
