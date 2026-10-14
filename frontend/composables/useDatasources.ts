@@ -98,5 +98,8 @@ export function useDatasources() {
     ) => apiFetch<DatasourceInfo>(`/datasources/${id}`, { method: 'PATCH', body }),
 
     remove: (id: number) => apiFetch<void>(`/datasources/${id}`, { method: 'DELETE' }),
+
+    // definition and data: the engine copies the data file on the storage
+    duplicate: (id: number) => apiFetch<DatasourceInfo>(`/datasources/${id}/duplicate`, { method: 'POST' }),
   }
 }

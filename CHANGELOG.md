@@ -5,6 +5,16 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Duplicate from the Explore.** Flows, flow groups, saved views, connections and
+  datasources get a Duplicate button: the copy lands in the same folder as «name (1)»,
+  then «(2)», and a copy of «name (1)» takes the next free number, as a file manager
+  does. It takes the rights creating one takes (CONNECT for connections, which keep
+  their encrypted password, and for database datasources) and its author owns it.
+  A flow's Output nodes are copied as they are, and the message says so: rename them
+  before running the copy. A datasource's copy has its own data file, copied on the
+  storage without downloading it, so refreshing or deleting either never touches the
+  other; its data contract comes along, to be checked again. Schedules, failure and
+  contract alerts stay with the original.
 - **A minimap in the flow editor.** A small overview in the corner of the canvas,
   one shape per node in the colour of its kind and the visible part outlined, themed
   like the zoom controls: drag it to move the view, scroll on it to zoom. It comes from

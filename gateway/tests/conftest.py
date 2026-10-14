@@ -90,6 +90,8 @@ class FakeEngine:
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
+        self.copies: list[tuple[str, str, str]] = []  # (bucket, source, target) copied on the storage
+        self.copy_status = 204  # a different answer to test a copy that fails
         # preview (assistente AI): corpi ricevuti e risposta da servire
         # data contracts: richieste ricevute su /contracts/* e risposte da servire
         self.contract_calls: list[tuple[str, dict]] = []
@@ -164,6 +166,11 @@ class FakeEngine:
             elif self.dbt_export_response is not None:
                 return httpx.Response(self.dbt_export_response[0], json=self.dbt_export_response[1])
             return httpx.Response(200, content=b"PK\x05\x06" + b"\x00" * 18, headers={"content-type": "application/zip"})
+        if path == "/files/copy" and request.method == "POST":
+            p = request.url.params
+            if self.copy_status < 400:
+                self.copies.append((p.get("bucket"), p.get("source_key"), p.get("target_key")))
+            return httpx.Response(self.copy_status)
         if path == "/files/object" and request.method == "DELETE":
             if self.delete_status < 400:  # cancellazione effettiva riuscita
                 self.deleted.append(

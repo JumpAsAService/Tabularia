@@ -16,7 +16,10 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy import or_, text
 from sqlmodel import Session, select
 
+import httpx
+
 from app.core.config import get_settings
+from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -26,7 +29,7 @@ from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import LIVE_INGEST, TERMINAL_STATES
-from app.routes.runs import _reconcile, launch_ingest_run, run_out
+from app.routes.runs import _reconcile, launch_ingest_run, run_out, snapshot_key
 from app.schemas.models import (
     DatasourceOut,
     DatasourceUpdate,
@@ -38,6 +41,7 @@ from app.schemas.models import (
 )
 from app.services import permissions as perm_service
 from app.services.blobgc import schedule_blob_deletion
+from app.services.copy_names import commit_copy, free_copy_name
 from app.services.pagination import paginate
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 from app.core.routing import RottaCheRilascia
@@ -367,6 +371,87 @@ async def create_sharepoint_datasource(
         request=request,
     )
     return _to_out(ds)
+
+
+# a copy on the storage is one request however big the file: give it the time a few GB take
+_COPY_TIMEOUT = httpx.Timeout(900.0, connect=5.0)
+
+
+@router.post("/datasources/{ds_id}/duplicate", response_model=DatasourceOut, status_code=status.HTTP_201_CREATED)
+async def duplicate_datasource(
+    ds_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A copy of the datasource in its folder, as «name (i)»: its definition and its
+    data. The data file is copied on the storage to one of its own, since two
+    datasources sharing a file would lose it when either is refreshed or deleted.
+
+    A copy of a database datasource refreshes like the original, so it asks for
+    CONNECT on the connection's folder, as creating one does. The data contract
+    comes along, to be checked again; the refresh schedule, the contract's alerts
+    and the flow that published the original stay with the original."""
+    src = _get_ds(session, ds_id)
+    ensure_can(session, user, src.project_id, Capability.EDIT)
+    conn = session.get(Connection, src.connection_id) if src.connection_id is not None else None
+    if conn is not None:
+        ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    contract = contract_service.get(session, src.id)
+    contract_doc = (json.loads(contract.document), contract.enabled) if contract is not None else None
+    src_id, bucket, src_key = src.id, src.bucket, src.key
+    ds = Datasource(
+        name=free_copy_name(session, Datasource, src.project_id, src.name),
+        description=src.description,
+        project_id=src.project_id,
+        owner_id=user.id,
+        bucket=bucket,
+        key="",  # set once the file is copied
+        rows=src.rows,
+        columns=src.columns,
+        sort_keys=src.sort_keys,
+        column_descriptions=src.column_descriptions,
+        kind=src.kind,
+        connection_id=src.connection_id,
+        source_type=src.source_type,
+        source_ref=src.source_ref,
+        refreshed_at=src.refreshed_at,
+    )
+    session.add(ds)
+    commit_copy(session)  # the commit also gives the connection back while the engine copies
+
+    if src_key:
+        key = snapshot_key(ds.id)
+        failure = None
+        try:
+            resp = await get_engine_client().post(
+                "/files/copy", params={"bucket": bucket, "source_key": src_key, "target_key": key}, timeout=_COPY_TIMEOUT,
+            )
+            if resp.status_code >= 400:
+                failure = "the data file is missing" if resp.status_code == 404 else f"engine status {resp.status_code}"
+        except httpx.HTTPError as e:
+            failure = f"engine unreachable ({type(e).__name__})"
+        if failure is not None:
+            # nothing half made: no datasource without its data
+            session.delete(ds)
+            session.commit()
+            logger.warning("duplicate of datasource %s: copy of %s failed: %s", src_id, src_key, failure)
+            raise HTTPException(status_code=502, detail=f"The data could not be copied, nothing was created: {failure}")
+        ds.key = key
+    contract_summary = None
+    if contract_doc is not None:
+        contract_summary = contract_service.summary(
+            contract_service.save(session, ds, contract_doc[0], contract_doc[1], user.id))
+        if not contract_doc[1]:
+            contract_summary = None  # lists show only contracts that are on
+    session.add(ds)
+    session.commit()
+    audit.record_audit(
+        session, actor=user, action=audit.DS_CREATE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"project_id": ds.project_id, "kind": ds.kind, "duplicate_of": src_id}, request=request,
+    )
+    return _to_out(ds, contract=contract_summary)
 
 
 @router.post("/datasources/{ds_id}/refresh", response_model=RunOut, status_code=status.HTTP_202_ACCEPTED)

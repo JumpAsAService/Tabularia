@@ -90,6 +90,8 @@ export function useFlowGroups() {
 
     remove: (id: number) => apiFetch<void>(`/flow-groups/${id}`, { method: 'DELETE' }),
 
+    duplicate: (id: number) => apiFetch<FlowGroupDetail>(`/flow-groups/${id}/duplicate`, { method: 'POST' }),
+
     runNow: (id: number) =>
       apiFetch<{ status: string; flow_group_id: number; run_id: number }>(`/flow-groups/${id}/run-now`, { method: 'POST' }),
 

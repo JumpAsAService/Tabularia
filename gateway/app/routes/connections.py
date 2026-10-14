@@ -34,6 +34,7 @@ from app.models.permission import Capability
 from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
+from app.services.copy_names import commit_copy, free_copy_name
 from app.core.routing import RottaCheRilascia
 
 logger = logging.getLogger(__name__)
@@ -348,6 +349,44 @@ def create_connection(
         session, actor=user, action=audit.CONN_CREATE, target_type="connection",
         target_id=conn.id, target_label=conn.name,
         detail={"project_id": project_id, "db_type": conn.db_type, "host": conn.host}, request=request,
+    )
+    return _to_out(conn)
+
+
+@router.post("/connections/{conn_id}/duplicate", response_model=ConnectionOut, status_code=status.HTTP_201_CREATED)
+def duplicate_connection(
+    conn_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A copy of the connection in its folder, as «name (i)», password included: it
+    stays encrypted as it is, and CONNECT on the folder is what lets anyone use it
+    in the first place."""
+    src = _get_connection(session, conn_id)
+    ensure_can(session, user, src.project_id, Capability.CONNECT)
+    conn = Connection(
+        name=free_copy_name(session, Connection, src.project_id, src.name),
+        description=src.description,
+        project_id=src.project_id,
+        owner_id=user.id,
+        db_type=src.db_type,
+        host=src.host,
+        port=src.port,
+        username=src.username,
+        password_encrypted=src.password_encrypted,
+        database=src.database,
+        db_schema=src.db_schema,
+        extra=src.extra,
+    )
+    session.add(conn)
+    commit_copy(session)
+    session.refresh(conn)
+    audit.record_audit(
+        session, actor=user, action=audit.CONN_CREATE, target_type="connection",
+        target_id=conn.id, target_label=conn.name,
+        detail={"project_id": conn.project_id, "db_type": conn.db_type, "host": conn.host, "duplicate_of": src.id},
+        request=request,
     )
     return _to_out(conn)
 

@@ -39,6 +39,7 @@ from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
+from app.services.copy_names import free_copy_name
 from app.core.routing import RottaCheRilascia
 
 router = APIRouter(route_class=RottaCheRilascia, tags=["flows"])
@@ -250,6 +251,41 @@ def create_flow(
         session, actor=user, action=audit.FLOW_CREATE, target_type="flow",
         target_id=flow.id, target_label=flow.name,
         detail={"project_id": project_id, "engine": flow.engine}, request=request,
+    )
+    return flow
+
+
+@router.post("/flows/{flow_id}/duplicate", response_model=FlowDetail, status_code=status.HTTP_201_CREATED)
+def duplicate_flow(
+    flow_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A copy of the flow in its folder, as «name (i)», under the same rules as a new
+    flow. The definition is copied as it is, Output nodes included: whoever made the
+    copy renames its outputs before running it. Schedule and failure alerts stay
+    with the original."""
+    src = _get_flow(session, flow_id)
+    ensure_can(session, user, src.project_id, Capability.EDIT)
+    _authorize_definition_keys(session, user, src.definition)
+    flow = Flow(
+        name=free_copy_name(session, Flow, src.project_id, src.name),
+        description=src.description,
+        definition=src.definition,
+        project_id=src.project_id,
+        owner_id=user.id,
+        engine=_validate_engine(src.engine, session),
+        production_engine=_validate_production_engine(src.production_engine, session),
+    )
+    session.add(flow)
+    session.commit()
+    session.refresh(flow)
+    _snapshot_version(session, flow, user, note=f"copy of '{src.name}'")
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_CREATE, target_type="flow",
+        target_id=flow.id, target_label=flow.name,
+        detail={"project_id": flow.project_id, "engine": flow.engine, "duplicate_of": src.id}, request=request,
     )
     return flow
 

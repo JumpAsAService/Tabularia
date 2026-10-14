@@ -43,6 +43,7 @@ import {
   Home,
   ScrollText,
   Rows3,
+  Copy,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -438,6 +439,57 @@ async function moveRow(row: Row, target: number | null) {
     toast.success(t('projectBrowser.movedTo', { name: row.name, folder }))
   } catch (e) {
     toast.error(errMessage(e))
+  }
+}
+
+// a copy in the same folder, «name (i)», as a file manager makes one; a datasource's
+// data is copied on the storage, which takes a moment for a big one
+const duplicating = ref<string | null>(null)
+const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name)
+
+function writesOutputs(definition: string): boolean {
+  try {
+    return (JSON.parse(definition)?.nodes ?? []).some((n: { type?: string }) => n.type === 'output')
+  } catch {
+    return false
+  }
+}
+
+async function duplicateRow(row: Row) {
+  if (duplicating.value) return
+  duplicating.value = rowKey(row)
+  try {
+    let name = ''
+    let outputs = false
+    if (row.kind === 'flow') {
+      const copy = await flowsApi.duplicate(row.id)
+      flows.value = [...flows.value, copy].sort(byName)
+      name = copy.name
+      outputs = writesOutputs(copy.definition)
+    } else if (row.kind === 'group') {
+      const copy = await groupsApi.duplicate(row.id)
+      flowGroups.value = [...flowGroups.value, copy].sort(byName)
+      name = copy.name
+    } else if (row.kind === 'datasource') {
+      const copy = await dsApi.duplicate(row.id)
+      dsList.value = [...dsList.value, copy].sort(byName)
+      name = copy.name
+    } else if (row.kind === 'view') {
+      const copy = await viewsApi.duplicate(row.id)
+      savedViews.value = [...savedViews.value, copy].sort(byName)
+      name = copy.name
+    } else if (row.kind === 'connection') {
+      const copy = await connApi.duplicate(row.id)
+      connections.value = [...connections.value, copy].sort(byName)
+      name = copy.name
+    } else {
+      return
+    }
+    toast.success(t(outputs ? 'projectBrowser.duplicatedFlow' : 'projectBrowser.duplicated', { name }))
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    duplicating.value = null
   }
 }
 
@@ -845,6 +897,19 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 :aria-label="$t('projectBrowser.moveToFolderTitle')"
                 @click="moving = rowKey(r)"
               ><FolderInput :size="13" /></button>
+
+              <button
+                v-if="r.kind !== 'folder'"
+                class="mini"
+                :title="$t('projectBrowser.duplicateTitle')"
+                :aria-label="$t('projectBrowser.duplicateTitle')"
+                :disabled="!!duplicating"
+                :aria-busy="duplicating === rowKey(r)"
+                @click="duplicateRow(r)"
+              >
+                <LoaderCircle v-if="duplicating === rowKey(r)" :size="13" class="spin" />
+                <Copy v-else :size="13" />
+              </button>
 
               <button
                 v-if="r.kind === 'datasource' && r.raw.kind === 'database'"

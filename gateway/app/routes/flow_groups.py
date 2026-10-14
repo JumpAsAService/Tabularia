@@ -40,6 +40,7 @@ from app.schemas.models import (
 )
 from app.services import audit, orchestrator
 from app.services import permissions as perm_service
+from app.services.copy_names import commit_copy, free_copy_name
 from app.services.flow_groups import definition_of
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
@@ -192,6 +193,30 @@ def create_flow_group(project_id: int, body: FlowGroupCreate, request: Request,
         session, actor=user, action=audit.FLOW_GROUP_CREATE, target_type="flow_group",
         target_id=group.id, target_label=group.name,
         detail={"project_id": project_id, "steps": len(definition.steps), "cells": _cell_count(definition)},
+        request=request,
+    )
+    return _detail(session, user, group)
+
+
+@router.post("/flow-groups/{group_id}/duplicate", response_model=FlowGroupDetail, status_code=status.HTTP_201_CREATED)
+def duplicate_flow_group(group_id: int, request: Request,
+                         user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """A copy of the group in its folder, as «name (i)». Its cells are checked as for
+    a new group, with the rights of whoever makes the copy; the schedule stays with
+    the original."""
+    src = _get_group(session, group_id)
+    ensure_can(session, user, src.project_id, Capability.EDIT)
+    definition = _checked(session, user, definition_of(src))
+    group = FlowGroup(name=free_copy_name(session, FlowGroup, src.project_id, src.name), description=src.description,
+                      project_id=src.project_id, owner_id=user.id, definition=definition.model_dump_json())
+    session.add(group)
+    commit_copy(session)
+    session.refresh(group)
+    audit.record_audit(
+        session, actor=user, action=audit.FLOW_GROUP_CREATE, target_type="flow_group",
+        target_id=group.id, target_label=group.name,
+        detail={"project_id": group.project_id, "steps": len(definition.steps), "cells": _cell_count(definition),
+                "duplicate_of": src.id},
         request=request,
     )
     return _detail(session, user, group)

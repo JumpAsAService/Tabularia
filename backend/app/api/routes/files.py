@@ -80,6 +80,26 @@ def upload_file(
             pass
 
 
+@router.post("/copy", status_code=204)
+def copy_object(bucket: str, source_key: str, target_key: str):
+    """Copies a data file to a new key, on the storage itself (a duplicated
+    datasource gets its own file: two datasources sharing one would lose it when
+    either is refreshed or deleted). INTERNAL, for the gateway; limited to the
+    managed data prefixes, and the copy always goes under datasets/."""
+    if not source_key.startswith(("datasets/", "out/")) or not target_key.startswith("datasets/"):
+        raise HTTPException(422, "keys outside the managed data prefixes")
+    from botocore.exceptions import ClientError
+
+    from app.utils import get_storage_service
+
+    try:
+        get_storage_service().copy_object(bucket, source_key, target_key)
+    except ClientError as e:
+        if str(e.response.get("Error", {}).get("Code", "")) in ("404", "NoSuchKey"):
+            raise HTTPException(404, f"no data file at {source_key}") from e
+        raise
+
+
 @router.delete("/object", status_code=204)
 def delete_object(bucket: str, key: str):
     """Elimina un oggetto dallo storage (idempotente, come S3).

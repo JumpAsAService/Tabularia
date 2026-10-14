@@ -26,6 +26,7 @@ from app.models.permission import Capability
 from app.schemas.models import SavedViewCreate, SavedViewOut, SavedViewUpdate
 from app.services import audit
 from app.services import permissions as perm_service
+from app.services.copy_names import commit_copy, free_copy_name
 from app.core.routing import RottaCheRilascia
 
 router = APIRouter(route_class=RottaCheRilascia, tags=["saved-views"])
@@ -161,6 +162,39 @@ def create_saved_view(
         session, actor=user, action=audit.SAVED_VIEW_CREATE, target_type="saved_view",
         target_id=view.id, target_label=view.name,
         detail={"project_id": project_id, "datasource_id": ds.id}, request=request,
+    )
+    return _to_out(session, view)
+
+
+@router.post("/saved-views/{view_id}/duplicate", response_model=SavedViewOut, status_code=status.HTTP_201_CREATED)
+def duplicate_saved_view(
+    view_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A copy of the view in its folder, as «name (i)», on the same datasource."""
+    src = _get_view(session, view_id)
+    ensure_can(session, user, src.project_id, Capability.EDIT)
+    ds = session.get(Datasource, src.datasource_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="Datasource non trovata")
+    ensure_can(session, user, ds.project_id, Capability.VIEW)
+    view = SavedView(
+        name=free_copy_name(session, SavedView, src.project_id, src.name),
+        description=src.description,
+        project_id=src.project_id,
+        owner_id=user.id,
+        datasource_id=ds.id,
+        spec=src.spec,
+    )
+    session.add(view)
+    commit_copy(session)
+    session.refresh(view)
+    audit.record_audit(
+        session, actor=user, action=audit.SAVED_VIEW_CREATE, target_type="saved_view",
+        target_id=view.id, target_label=view.name,
+        detail={"project_id": view.project_id, "datasource_id": ds.id, "duplicate_of": src.id}, request=request,
     )
     return _to_out(session, view)
 

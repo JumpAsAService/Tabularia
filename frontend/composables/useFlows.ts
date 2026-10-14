@@ -72,6 +72,9 @@ export function useFlows() {
 
     remove: (id: number) => apiFetch<void>(`/flows/${id}`, { method: 'DELETE' }),
 
+    // a copy in the same folder, named «name (i)»
+    duplicate: (id: number) => apiFetch<FlowDetail>(`/flows/${id}/duplicate`, { method: 'POST' }),
+
     // statistiche d'esecuzione (n° run, successi/falliti, ultima, tempo medio)
     stats: (id: number) => apiFetch<FlowStats>(`/flows/${id}/stats`),
 

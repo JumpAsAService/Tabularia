@@ -243,6 +243,15 @@ class StorageService:
                 raise
         return {"bucket": bucket, "key": object_key, "status": "deleted"}
 
+    def copy_object(self, bucket: str, source_key: str, target_key: str) -> None:
+        """Copies an object within the bucket on the storage itself: nothing is
+        downloaded. One CopyObject up to 5 GB (boto3's default would switch to a
+        multipart copy above 8 MB, which not every S3-compatible storage serves)."""
+        from boto3.s3.transfer import TransferConfig
+
+        self.client.copy({"Bucket": bucket, "Key": source_key}, bucket, target_key,
+                         Config=TransferConfig(multipart_threshold=5 * 1024**3))
+
     def delete_objects(self, bucket: str, object_keys: list[str]) -> dict:
         """
         Elimina multiple oggetti in una volta.

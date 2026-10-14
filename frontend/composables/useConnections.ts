@@ -77,6 +77,9 @@ export function useConnections() {
 
     remove: (id: number) => apiFetch<void>(`/connections/${id}`, { method: 'DELETE' }),
 
+    // the password comes along, still encrypted, for whoever has CONNECT
+    duplicate: (id: number) => apiFetch<ConnectionInfo>(`/connections/${id}/duplicate`, { method: 'POST' }),
+
     // test di una connessione GIÀ salvata
     test: (id: number) => apiFetch<{ ok: boolean }>(`/connections/${id}/test`, { method: 'POST' }),
 

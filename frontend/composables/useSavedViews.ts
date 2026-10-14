@@ -47,5 +47,7 @@ export function useSavedViews() {
       apiFetch<SavedView>(`/saved-views/${id}`, { method: 'PATCH', body }),
 
     remove: (id: number) => apiFetch<void>(`/saved-views/${id}`, { method: 'DELETE' }),
+
+    duplicate: (id: number) => apiFetch<SavedView>(`/saved-views/${id}/duplicate`, { method: 'POST' }),
   }
 }
