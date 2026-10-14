@@ -446,6 +446,7 @@ export default {
     "loadingEditor": "Editor wird geladen…"
   },
   "flowEditor": {
+    "miniMapLabel": "Flussübersicht: ziehen, um die Ansicht zu verschieben, scrollen zum Zoomen",
     "leaveTitle": "Nicht gespeicherte Änderungen",
     "leaveBody": "Die Änderungen an „{name}“ sind noch nicht gespeichert. Wenn Sie jetzt gehen, gehen sie verloren.",
     "leaveStay": "Bleiben",

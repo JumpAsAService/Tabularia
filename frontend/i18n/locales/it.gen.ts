@@ -509,6 +509,7 @@ export default {
     "loadingEditor": "Caricamento editor…"
   },
   "flowEditor": {
+    "miniMapLabel": "Panoramica del flusso: trascina per spostare la vista, scorri per lo zoom",
     "leaveTitle": "Modifiche non salvate",
     "leaveBody": "Le modifiche a «{name}» non sono ancora salvate. Se esci ora le perdi.",
     "leaveStay": "Resta",

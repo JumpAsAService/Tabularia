@@ -509,6 +509,7 @@ export default {
     "loadingEditor": "Loading editor…"
   },
   "flowEditor": {
+    "miniMapLabel": "Flow overview: drag to move the view, scroll to zoom",
     "leaveTitle": "Unsaved changes",
     "leaveBody": "The changes to “{name}” are not saved yet. If you leave now they are lost.",
     "leaveStay": "Stay",

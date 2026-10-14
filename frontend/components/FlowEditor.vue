@@ -4,6 +4,8 @@ import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Node, Connection } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls, ControlButton } from '@vue-flow/controls'
+import { MiniMap } from '@vue-flow/minimap'
+import { opMeta } from '~/composables/useOpIcons'
 
 import { Table2, BarChart3, Wand2, Users, Undo2, Redo2 } from 'lucide-vue-next'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -866,6 +868,20 @@ function addOperation() {
   addEdges({ id: `e-${parentId}-left-${id}`, source: parentId, target: id, targetHandle: 'left' })
   selectedId.value = id
   refreshForNode(id)
+}
+
+// ── Minimap: each node in the colour of its edge on the canvas ────────────
+const NODE_TYPE_COLOR: Record<string, string> = {
+  source: 'var(--accent-2)',
+  output: '#fbbf24',
+  refresh: '#38bdf8',
+  runflow: '#c084fc',
+  foreach: '#f472b6',
+  comment: 'var(--border)',
+}
+function miniMapColor(node: { type?: string; data?: any }): string {
+  if (node.type === 'operation') return opMeta(node.data?.opType ?? '').color
+  return NODE_TYPE_COLOR[node.type ?? ''] ?? 'var(--muted)'
 }
 
 // ── Auto-layout ("Ordina il flusso", bottone nei Controls del canvas) ────
@@ -1886,6 +1902,19 @@ async function pollTask(id: string) {
             <Redo2 :size="13" />
           </ControlButton>
         </Controls>
+        <MiniMap
+          pannable
+          zoomable
+          position="bottom-right"
+          :width="180"
+          :height="110"
+          :node-color="miniMapColor"
+          :node-border-radius="3"
+          mask-color="color-mix(in srgb, var(--bg) 72%, transparent)"
+          mask-stroke-color="var(--accent)"
+          :mask-stroke-width="1"
+          :aria-label="$t('flowEditor.miniMapLabel')"
+        />
       </VueFlow>
     </div>
 

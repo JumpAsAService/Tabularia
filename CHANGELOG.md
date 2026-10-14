@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A minimap in the flow editor.** A small overview in the corner of the canvas,
+  one shape per node in the colour of its kind and the visible part outlined, themed
+  like the zoom controls: drag it to move the view, scroll on it to zoom. It comes from
+  Vue Flow's own minimap package (MIT).
 - **The flow editor shows which nodes are in the step cache.** An operation whose
   result is cached gets a soft ring set off its border, in each theme's positive
   green (Imperium: its gold), and an icon in its footer that says so in words: the

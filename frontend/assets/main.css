@@ -634,6 +634,14 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__controls-button:disabled { cursor: default; }
 .vue-flow__controls-button:disabled:hover { background: var(--panel-2); }
 .vue-flow__controls-button:disabled svg { opacity: 0.35; }
+/* minimap in theme: a panel like the controls, the visible part outlined */
+.vue-flow__minimap {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
 
 /* ── Vista dati (tab Tabella | Grafico) ──────────────────────────────── */
 .grid {

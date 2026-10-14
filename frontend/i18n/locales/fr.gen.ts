@@ -446,6 +446,7 @@ export default {
     "loadingEditor": "Chargement de l'éditeur…"
   },
   "flowEditor": {
+    "miniMapLabel": "Vue d'ensemble du flux : faites glisser pour déplacer la vue, faites défiler pour zoomer",
     "leaveTitle": "Modifications non enregistrées",
     "leaveBody": "Les modifications de « {name} » ne sont pas encore enregistrées. Si vous quittez maintenant, elles seront perdues.",
     "leaveStay": "Rester",

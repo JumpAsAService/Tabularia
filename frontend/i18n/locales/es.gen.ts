@@ -446,6 +446,7 @@ export default {
     "loadingEditor": "Cargando editor…"
   },
   "flowEditor": {
+    "miniMapLabel": "Vista general del flujo: arrastra para mover la vista, desplaza para hacer zoom",
     "leaveTitle": "Cambios sin guardar",
     "leaveBody": "Los cambios en «{name}» aún no se han guardado. Si sales ahora, se perderán.",
     "leaveStay": "Quedarse",
