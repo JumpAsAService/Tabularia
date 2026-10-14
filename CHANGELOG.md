@@ -83,6 +83,9 @@ exposes at `/system/info` and in the app's settings menu.
   schema (or tenant and library) empty, and Save stored them so. The reset now
   happens only when the user changes the type, and an edit sends only the fields it
   changed.
+- **Fixed: the parameter form after Undo, Redo or a change of operation type.** It was
+  rebuilt only for another node, so it kept showing values the node no longer had,
+  and the next edit wrote them back. It now follows the node's parameters.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

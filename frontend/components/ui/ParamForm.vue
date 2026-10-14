@@ -96,8 +96,13 @@ function dtypeOf(column: string | undefined): string {
   return props.inputColumns.find((c) => c.name === column)?.dtype ?? ''
 }
 
+// what the form last sent, or last showed (see the watchers below rebuild)
+let lastEmitted = ''
+const paramsKey = (p: Record<string, any> | null | undefined) => JSON.stringify({ ...(p ?? {}), id: undefined })
+
 // ricostruisce lo stato locale dai params quando cambia il nodo/operazione
 function rebuild() {
+  lastEmitted = paramsKey(props.params) // the form now shows these: Redo after Undo differs again
   for (const k of Object.keys(state)) delete state[k]
   castRows.length = renameRows.length = fillRows.length = aggRows.length = exprRows.length = joinRows.length = 0
   reorderCols.length = 0
@@ -157,7 +162,19 @@ function rebuild() {
     }
   }
 }
-watch(() => props.nodeId, rebuild, { immediate: true })
+// Rebuilt for another node, another operation type, and whenever the node's params
+// change from outside the form: Undo and Redo restore an older version of the same
+// node. Rebuilt only for a new node id, the form kept showing values the node no
+// longer had, and the next edit wrote them back. A source filter's `id` is the
+// panel's, not a parameter: it does not count.
+watch(() => [props.nodeId, props.opType], rebuild, { immediate: true })
+watch(
+  () => props.params,
+  (p) => {
+    if (paramsKey(p) !== lastEmitted) rebuild()
+  },
+  { deep: true },
+)
 
 // reorder: preserva l'ordine corrente per le colonne esistenti e appende le nuove.
 // Le colonne a monte arrivano async → risincronizza quando cambiano.
@@ -306,7 +323,9 @@ function build(): Record<string, any> {
   return out
 }
 function emitUpdate() {
-  emit('update', build())
+  const out = build()
+  lastEmitted = paramsKey(out)
+  emit('update', out)
 }
 // nodo SQL: l'anteprima si lancia SOLO a comando (bottone / Cmd-Ctrl+Enter),
 // mai a ogni tasto. Prima salva il testo corrente nei params, poi chiede il run.
