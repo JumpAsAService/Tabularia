@@ -6,9 +6,9 @@ molto grandi non fanno esplodere la RAM.
 A differenza di DuckDB (relation lazy) chDB è puro SQL: la catena di operazioni è
 composta come una singola SELECT annidata (`chdb_ops`), che ClickHouse ottimizza
 ed esegue in streaming. Materializzano solo `preview` (LIMIT n via ArrowStream) e
-`run` (`INTO OUTFILE … FORMAT Parquet`, streaming su disco). La sorgente è
-scaricata su file temporaneo e letta con la table function `file()` (out-of-core,
-niente dipendenza da S3/httpfs interni).
+`run` (`INTO OUTFILE … FORMAT Parquet`, streaming su disco). Sources and cached
+steps are read in place with `s3()`, only the parts a query needs (see
+storage_direct); without that, the file is downloaded and read with `file()`.
 
 Out-of-core: la sessione abilita gli spill (external group-by/sort, grace-hash
 join) sotto un tetto `max_memory_usage`, così un'operazione gigante spilla invece
@@ -28,6 +28,7 @@ import pyarrow as pa
 from botocore.exceptions import ClientError
 from chdb import session as chdb_session
 
+from app.engine import storage_direct
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.chdb_ops import get_chdb_operation, temporal_safe_sql
@@ -52,10 +53,12 @@ class ChdbContext:
     le operazioni multi-input (join/union) usano `build_right` per il lato destro,
     e l'introspezione (`columns_of`) per costruire le SELECT."""
 
-    def __init__(self, session, storage, tmp: list[str], preview_limit: int | None = None):
+    def __init__(self, session, storage, tmp: list[str], preview_limit: int | None = None, direct: bool = False):
         self.session = session
         self.storage = storage
         self.tmp = tmp
+        # sources read in place on the object storage (see storage_direct)
+        self.direct = direct
         self._n = 0
         self.preview_limit = preview_limit
 
@@ -106,8 +109,14 @@ class ChdbContext:
 
     # ── sorgenti e catena ────────────────────────────────────────────────
     def scan(self, source: DataSource) -> str:
-        path = self.tempfile()
+        url = storage_direct.chdb_url(source.bucket, source.key) if self.direct else None
         try:
+            if url is not None:
+                # read in place by ranges: here only asked whether it is there, so that a
+                # missing source says so instead of failing inside the query
+                self.storage.head_object(source.bucket, source.key)
+                return storage_direct.chdb_source_sql(url)
+            path = self.tempfile()
             self.storage.download_file(source.bucket, source.key, path)
         except ClientError as e:
             code = str(e.response.get("Error", {}).get("Code", ""))
@@ -154,6 +163,10 @@ class ChdbEngine(DeferredStepCache, Engine):
             storage = get_storage_service()
         self.storage = storage
         self.cache = cache or StepCache(storage)
+        from app.utils import StorageService
+
+        # only the real object storage can be read in place (tests use an in-memory one)
+        self.direct = isinstance(storage, StorageService) and storage_direct.chdb_available()
 
     def _new_session(self) -> tuple[Any, str]:
         """Crea una sessione chDB out-of-core in una dir temporanea (spill su disco).
@@ -208,7 +221,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         sess, state_dir = self._new_session()
         tmp: list[str] = []
         try:
-            yield ChdbContext(sess, self.storage, tmp)
+            yield ChdbContext(sess, self.storage, tmp, direct=self.direct)
         finally:
             sess.close()
             self._cleanup(tmp, state_dir)
@@ -255,7 +268,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         sess, state_dir = self._new_session()
         tmp: list[str] = []
         try:
-            ctx = ChdbContext(sess, self.storage, tmp, preview_limit=limit + 1)
+            ctx = ChdbContext(sess, self.storage, tmp, preview_limit=limit + 1, direct=self.direct)
             if use_cache:
                 self._defer_materialization(source, ops[:-1])
             cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # DOPO la risposta, in un task a parte
@@ -299,7 +312,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         sess, state_dir = self._new_session()
         tmp: list[str] = []
         try:
-            ctx = ChdbContext(sess, self.storage, tmp)
+            ctx = ChdbContext(sess, self.storage, tmp, direct=self.direct)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             out_path = self._write_outfile(ctx, sql)

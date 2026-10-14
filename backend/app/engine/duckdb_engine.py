@@ -4,14 +4,14 @@ Engine basato su DuckDB — alternativa OUT-OF-CORE a Polars (stessa IR).
 DuckDB spilla su disco: aggregazioni/join molto grandi non fanno esplodere la
 RAM. La catena è LAZY come in Polars — una relazione DuckDB è un piano, non dati.
 Solo `preview` (LIMIT n) e `run` (`write_parquet`, streaming su disco)
-materializzano. La sorgente è scaricata su file temporaneo e letta con
-`read_parquet` (out-of-core, niente dipendenza da httpfs); l'output è scritto in
-streaming e caricato sullo storage.
+materializzano. Sources and cached steps are read straight from the object
+storage, only the parts a query needs (see storage_direct); without that, the
+file is downloaded first. L'output è scritto in streaming e caricato sullo storage.
 
 Operazioni in `duckdb_ops`: strutturali single-input + join/union (leggono il
-lato destro via il context) + pivot/unpivot + compute. `sql` (query intera) e
-`foreach` non sono ancora supportate → errore chiaro (usa Polars). Nessuna
-step-cache incrementale (ricostruisce dalla sorgente): arriverà dopo.
+lato destro via il context) + pivot/unpivot + compute + `sql` (in a sandbox
+without network) + `foreach`. Step-cache incrementale come Polars: si riparte dal
+passo in cache più vicino, e la copia del passo a monte si fa dopo la risposta.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import duckdb
 import polars as pl
 from botocore.exceptions import ClientError
 
-from app.engine import duckdb_budget
+from app.engine import duckdb_budget, storage_direct
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.duckdb_ops import _qi, get_duck_operation
@@ -43,10 +43,12 @@ class DuckContext:
     registrate). Le operazioni multi-input (join/union) lo usano per costruire
     il lato destro dalla sorgente annidata."""
 
-    def __init__(self, con, storage, tmp: list[str], preview_limit: int | None = None):
+    def __init__(self, con, storage, tmp: list[str], preview_limit: int | None = None, direct: bool = False):
         self.con = con
         self.storage = storage
         self.tmp = tmp
+        # sources read in place on the object storage (see storage_direct)
+        self.direct = direct
         self._n = 0
         # in preview il nodo `sql` limita il risultato del sandbox a queste righe
         # (altrimenti calcolerebbe l'intero risultato solo per mostrarne N), but
@@ -66,15 +68,25 @@ class DuckContext:
         return path
 
     def scan(self, source: DataSource):
-        path = self.tempfile()
-        try:
-            self.storage.download_file(source.bucket, source.key, path)
-        except ClientError as e:
-            code = str(e.response.get("Error", {}).get("Code", ""))
-            if code in _NOT_FOUND_CODES:
-                raise SourceNotFoundError(source.bucket, source.key) from e
-            raise
-        rel = self.con.read_parquet(path)
+        address = storage_direct.duckdb_url(source.bucket, source.key) if self.direct else None
+        if address is not None:
+            # by ranges: the footer, then only the columns and row groups the query needs
+            try:
+                rel = self.con.read_parquet(address)
+            except duckdb.HTTPException as e:
+                if getattr(e, "status_code", None) == 404:
+                    raise SourceNotFoundError(source.bucket, source.key) from e
+                raise EngineError(f"Could not read {source.key} from the storage: {e}") from e
+        else:
+            path = self.tempfile()
+            try:
+                self.storage.download_file(source.bucket, source.key, path)
+            except ClientError as e:
+                code = str(e.response.get("Error", {}).get("Code", ""))
+                if code in _NOT_FOUND_CODES:
+                    raise SourceNotFoundError(source.bucket, source.key) from e
+                raise
+            rel = self.con.read_parquet(path)
         # parquet scritti con fuso (es. run di ClickHouse esterno in modalità s3)
         # → TIMESTAMP naive UTC, lo standard di tutti gli engine (sessione in UTC)
         tz_cols = {c for c, t in zip(rel.columns, rel.types) if "WITH TIME ZONE" in str(t).upper()}
@@ -135,6 +147,10 @@ class DuckDBEngine(DeferredStepCache, Engine):
             storage = get_storage_service()
         self.storage = storage
         self.cache = cache or StepCache(storage)
+        from app.utils import StorageService
+
+        # only the real object storage can be read in place (tests use an in-memory one)
+        self.direct = isinstance(storage, StorageService) and storage_direct.duckdb_available()
 
     def _connection(self, tmp: list[str]) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
@@ -150,6 +166,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
         tmp.append(spill_dir)
         con.execute(f"SET temp_directory = '{spill_dir}'")
         duckdb_budget.apply(con)  # this child's share of memory and CPUs, not the container's
+        if self.direct:
+            storage_direct.duckdb_enable(con)
         try:
             con.execute("SET TimeZone = 'UTC'")  # i TIMESTAMPTZ letti diventano naive UTC
         except Exception:  # senza estensione ICU DuckDB è comunque in UTC
@@ -215,7 +233,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         tmp: list[str] = []
         con = self._connection(tmp)
         try:
-            yield DuckContext(con, self.storage, tmp)
+            yield DuckContext(con, self.storage, tmp, direct=self.direct)
         finally:
             con.close()
             self._cleanup(tmp)
@@ -236,7 +254,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         tmp: list[str] = []
         con = self._connection(tmp)
         try:
-            ctx = DuckContext(con, self.storage, tmp, preview_limit=limit + 1)
+            ctx = DuckContext(con, self.storage, tmp, preview_limit=limit + 1, direct=self.direct)
             # materializza il PARENT: iterando sui parametri dell'ultimo nodo, le
             # anteprime successive ripartono dalla sua cache (Viewer: use_cache=False)
             if use_cache:
@@ -276,7 +294,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         tmp: list[str] = []
         con = self._connection(tmp)
         try:
-            ctx = DuckContext(con, self.storage, tmp)
+            ctx = DuckContext(con, self.storage, tmp, direct=self.direct)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             rel = self._rel_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             out_path = ctx.tempfile()

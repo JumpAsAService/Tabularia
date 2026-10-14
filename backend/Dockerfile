@@ -59,6 +59,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project $opts; \
     find /opt/venv -type d -name tests -prune -exec rm -rf {} +
 
+# DuckDB reads the object storage in place through its httpfs extension: installed
+# here, at build time and for this platform, so that a worker never downloads code
+# (see app/engine/duckdb_storage.py)
+RUN /opt/venv/bin/python -c "import duckdb; c = duckdb.connect(); c.execute(\"SET extension_directory = '/opt/duckdb-extensions'\"); c.execute('INSTALL httpfs')"
+
 ########################
 #   Stage 2: runtime   #
 ########################
@@ -89,6 +94,9 @@ WORKDIR /app
 
 # Dal builder arriva solo il virtualenv: niente uv, niente toolchain, niente cache.
 COPY --from=builder /opt/venv /opt/venv
+# and DuckDB's httpfs extension (see the builder)
+COPY --from=builder /opt/duckdb-extensions /opt/duckdb-extensions
+ENV DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb-extensions
 
 # Solo il codice dell'applicazione: niente test, niente file di sviluppo.
 # I segreti locali restano fuori grazie al .dockerignore.

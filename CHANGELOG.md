@@ -5,6 +5,16 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **DuckDB and chDB read their sources in place.** Both engines downloaded every
+  source and every cached step whole before reading it, even for a preview of 100
+  rows of a few columns. They now read the object storage by ranges, only the columns
+  and row groups a query needs: on a 541 MB parquet a filtered DuckDB preview went
+  from 1.3 s to 0.13 s with the storage on the same machine, and the gap grows with a
+  remote one. DuckDB uses its httpfs extension, shipped in the image (installed at
+  build time; workers never download code), with the credentials as a per-connection
+  temporary secret; chDB's `s3()` takes them from the process environment, so no
+  query carries them. Execute-SQL and computed columns still cannot reach the
+  storage. `STORAGE__DIRECT_READ=false` goes back to downloading.
 - **Fixed: ClickHouse destinations wrote by position.** An Output appending to a
   ClickHouse table whose columns were in another order put values in the wrong
   columns without any error, and "replace" swapped in a plain MergeTree built from

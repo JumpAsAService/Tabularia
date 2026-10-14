@@ -40,6 +40,10 @@ class StorageSettings(BaseModel):
     secret_key: SecretStr = Field(default=SecretStr("minioadmin"), description="Secret key")
     bucket: str = "data-prep"
     region: str = "us-east-1"
+    # env: STORAGE__DIRECT_READ — the duckdb and chdb engines read sources and cached
+    # steps in place, only the parts a query needs (app/engine/storage_direct.py).
+    # false = download each file first, as before.
+    direct_read: bool = True
 
     @field_validator("secret_key", mode="before")
     @classmethod
