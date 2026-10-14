@@ -36,6 +36,11 @@ exposes at `/system/info` and in the app's settings menu.
   imports or sub-flow runs can be deleted (those runs stay, detached); deleting a
   datasource used by saved views, or a connection that sends the failure notices of
   flows, now says which ones block it.
+- **Saving a flow checks the datasources it names by id.** A flow can read a
+  datasource by its id alone, and a schedule runs with its author's rights: with
+  EDIT on a folder, a user could make an admin's nightly run copy a datasource they
+  cannot read. Whoever saves a flow must now be able to read every datasource it
+  names (a datasource deleted since does not block the save).
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

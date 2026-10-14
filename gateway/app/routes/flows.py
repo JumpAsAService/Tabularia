@@ -17,7 +17,7 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Connection, Flow, FlowVersion, Project, Run, User
+from app.models import Connection, Datasource, Flow, FlowVersion, Project, Run, User
 from app.services.dbt_export import OpzioniDbt
 from app.core.lingua import lingua_della_richiesta
 from app.models.permission import Capability
@@ -108,6 +108,38 @@ def _authorize_definition_keys(session: Session, user: User, definition: str | N
     except json.JSONDecodeError:
         raise HTTPException(status_code=422, detail="La definizione del flusso non è JSON valido")
     ensure_can_read_keys(session, user, collect_storage_keys(parsed))
+    # A node can name a datasource by id alone: the run resolves the id to its file
+    # with the authority of whoever runs it, which for a schedule is its author.
+    # Without this check, anyone with EDIT on a folder could add a datasource they
+    # cannot read to someone else's scheduled flow, and the next scheduled run would
+    # copy it into a folder they can read.
+    ids = _datasource_ids(parsed)
+    if ids:
+        readable = perm_service.readable_project_ids(session, user)
+        hidden = [ds_id for ds_id, project_id in session.exec(
+            select(Datasource.id, Datasource.project_id).where(Datasource.id.in_(ids))
+        ).all() if project_id not in readable]
+        if hidden:
+            raise HTTPException(status_code=403, detail="The flow reads a datasource you cannot read")
+
+
+def _datasource_ids(payload) -> set[int]:
+    """Every `datasourceId` in a flow definition, however deep (nested operations too)."""
+    found: set[int] = set()
+
+    def walk(node) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "datasourceId" and isinstance(value, (int, str)) and str(value).isdigit():
+                    found.add(int(value))
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload)
+    return found
 
 
 @router.get("/flows", response_model=list[FlowOut])
