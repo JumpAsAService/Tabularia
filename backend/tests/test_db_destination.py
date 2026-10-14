@@ -79,7 +79,7 @@ def test_create_sql_clickhouse_nullable_mergetree():
     sql = _create_table_sql(_conn(db_type="clickhouse"), "`t`", SCHEMA)
     assert sql.endswith("ENGINE = MergeTree ORDER BY tuple()")
     assert "`nome` Nullable(String)" in sql
-    assert "`quando` Nullable(DateTime64(6))" in sql
+    assert "`quando` Nullable(DateTime64(6, 'UTC'))" in sql  # naive timestamps are UTC
     assert "`ok` Nullable(Bool)" in sql
 
 
@@ -162,6 +162,25 @@ def test_mysql_replace_usa_delete_non_truncate(monkeypatch):
     assert "TRUNCATE" not in joined, "TRUNCATE (DDL, auto-commit) non deve più essere usato"
     # lo svuotamento precede gli INSERT e tutto committa una sola volta in fondo
     assert log[-1] == "COMMIT"
+
+
+def test_mysql_writes_in_utc(monkeypatch):
+    """A customer TIMESTAMP column reads naive values in the session's zone: in the
+    server's local zone it stored an instant one or two hours off."""
+    import pymysql
+    seen: dict = {}
+
+    def connect(**kw):
+        seen.update(kw)
+        return _RecordingConn([])
+
+    monkeypatch.setattr(pymysql, "connect", connect)
+    conn = _mysql_conn()
+    schema = pa.schema([pa.field("a", pa.int64())])
+    qualified, parts = _qualified_table(conn, "vendite")
+    _write_mysql(conn, DbDestinationSpec(table="vendite", mode="append"), qualified, parts, schema,
+                 iter([pa.record_batch([pa.array([1])], schema=schema)]))
+    assert seen["init_command"] == "SET time_zone = '+00:00'"
 
 
 def test_mysql_append_non_svuota(monkeypatch):

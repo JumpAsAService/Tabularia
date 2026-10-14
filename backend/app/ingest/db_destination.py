@@ -90,7 +90,9 @@ def _sql_type(db_type: str, t: pa.DataType) -> str:
             "postgresql": "TIMESTAMP",
             "mysql": "DATETIME(6)",
             "mariadb": "DATETIME(6)",
-            "clickhouse": "DateTime64(6)",
+            # naive timestamps are UTC (the project's standard): said so, or the
+            # column shows and parses them in the server's own time zone
+            "clickhouse": "DateTime64(6, 'UTC')",
             "trino": "TIMESTAMP(6)",
         }[db_type]
     elif pa.types.is_date(t):
@@ -261,6 +263,9 @@ def _write_mysql(
         database=conn.database or None,
         connect_timeout=10,
         charset="utf8mb4",
+        # naive timestamps are UTC: a TIMESTAMP column would otherwise read them in
+        # the server's zone and store an instant one or two hours off
+        init_command="SET time_zone = '+00:00'",
     )
     placeholders = ", ".join(["%s"] * len(schema))
     insert = f"INSERT INTO {qualified} ({_quoted_columns(conn, schema)}) VALUES ({placeholders})"

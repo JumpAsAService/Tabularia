@@ -90,6 +90,10 @@ exposes at `/system/info` and in the app's settings menu.
   cannot undo the load, and a run that said only "failed" was run again, appending
   every row a second time. The message now gives the rows written and whether running
   the flow again is safe (replace) or would duplicate them (append).
+- **Timestamps written in UTC.** ClickHouse columns created by an Output are
+  `DateTime64(6, 'UTC')`, so a server in another time zone shows and filters the
+  values Tabularia shows; MySQL writes with the session in UTC, so a `TIMESTAMP`
+  column stores the right instant (it was one or two hours off).
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

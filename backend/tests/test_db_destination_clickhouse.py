@@ -122,6 +122,19 @@ def test_no_staging_table_is_left_behind(ch, table, storage):
     assert left.result_rows == []
 
 
+def test_a_new_table_keeps_timestamps_in_utc(ch, table, storage):
+    """Naive timestamps are UTC: a column created without a zone showed and parsed
+    them in the server's own zone, so a filter with the value Tabularia shows found
+    nothing on a server set to Europe/Rome."""
+    import datetime as dt
+
+    _write(storage, table, "replace", {"customer": ["acme"], "at": [dt.datetime(2024, 7, 1, 0, 0)]})
+    assert ch.query(f"SELECT toTypeName(at) FROM {table}").result_rows[0][0] == "Nullable(DateTime64(6, 'UTC'))"
+    rome = {"session_timezone": "Europe/Rome"}  # a server in another zone
+    assert ch.query(f"SELECT toString(at) FROM {table}", settings=rome).result_rows[0][0] == "2024-07-01 00:00:00.000000"
+    assert ch.query(f"SELECT count() FROM {table} WHERE at = '2024-07-01 00:00:00'", settings=rome).result_rows[0][0] == 1
+
+
 @pytest.mark.parametrize("mode, advice", [("append", "Do not run the flow again"), ("replace", "safe once the post-SQL is fixed")])
 def test_a_failing_post_sql_says_the_data_is_already_written(ch, table, storage, mode, advice):
     """ClickHouse cannot undo the load when the post-SQL fails after it: the run said
