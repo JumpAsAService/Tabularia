@@ -21,7 +21,7 @@ from app.models import Connection, Datasource, Flow, FlowVersion, Project, Run, 
 from app.services.dbt_export import OpzioniDbt
 from app.core.lingua import lingua_della_richiesta
 from app.models.permission import Capability
-from app.services import audit, flow_presence
+from app.services import audit, flow_presence, run_history
 from pydantic import BaseModel, Field
 from app.schemas.models import UtcDateTime
 from app.schemas.models import (
@@ -191,16 +191,9 @@ def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
         ).all():
             names[uid] = full_name or email
 
-    # ultimo run per flusso: colonne minime, ordinate crescenti → l'ultimo vince
-    flow_ids = [f.id for f in flows if f.id is not None]
-    last_run: dict[int, tuple[str, "datetime"]] = {}
-    if flow_ids:
-        for fid, status, started in session.exec(
-            select(Run.flow_id, Run.status, Run.started_at)
-            .where(Run.flow_id.in_(flow_ids), Run.kind == "flow")
-            .order_by(Run.started_at)
-        ).all():
-            last_run[fid] = (status, started)
+    # the latest run of each flow on the page, from the index: reading all their runs
+    # sorted the whole history of the page's flows on every page open
+    last_run = run_history.latest_flow_runs(session, (f.id for f in flows if f.id is not None))
 
     out: list[FlowOut] = []
     for f in flows:

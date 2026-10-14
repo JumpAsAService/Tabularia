@@ -19,10 +19,11 @@ from collections import deque
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import and_, func
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.models import Connection, Datasource, Flow, Run, User
+from app.services import run_history
 from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
@@ -114,20 +115,10 @@ def build_full_graph(session: Session, user: User) -> _Graph:
     # ultimo SUCCESS (base per la staleness). Two aggregate queries on the index
     # (flow_id, started_at): loading every run as a row took seconds and hundreds
     # of megabytes once a year of history had piled up.
-    last_run: dict[int, tuple[str, datetime]] = {}
+    last_run = run_history.latest_flow_runs(session, flow_ids)
     last_success_at: dict[int, datetime] = {}
     if flow_ids:
         flow_runs = (Run.flow_id.in_(flow_ids), Run.kind == "flow")
-        latest = (
-            select(Run.flow_id, func.max(Run.started_at).label("at"))
-            .where(*flow_runs).group_by(Run.flow_id).subquery()
-        )
-        for flow_id, status, started_at in session.exec(
-            select(Run.flow_id, Run.status, Run.started_at)
-            .join(latest, and_(Run.flow_id == latest.c.flow_id, Run.started_at == latest.c.at))
-            .where(*flow_runs)
-        ).all():
-            last_run[flow_id] = (status, started_at)
         for flow_id, at in session.exec(
             select(Run.flow_id, func.max(func.coalesce(Run.finished_at, Run.started_at)))
             .where(*flow_runs, Run.status == "SUCCESS").group_by(Run.flow_id)

@@ -10,6 +10,9 @@ def _now() -> datetime:
 
 # la condizione dell'indice unico parziale (anche nelle migrazioni di db/session.py)
 LIVE_ORCHESTRATION = "kind = 'orchestration' AND status = 'STARTED'"
+# a refresh still running: the condition of a partial index, so a query that writes it
+# the same way reads only the live rows (the "importing…" flag of every datasource list)
+LIVE_INGEST = "kind = 'ingest' AND status NOT IN ('SUCCESS', 'FAILURE')"
 
 # cosa si scrive su un'orchestrazione che nessuno finirà (niente apici: entra
 # anche in un'istruzione SQL delle migrazioni)
@@ -59,6 +62,16 @@ class Run(SQLModel, table=True):
         # the latest run of each flow (lineage health, flow lists): read from the
         # index instead of scanning the whole history
         Index("ix_runs_flow_id_started_at", "flow_id", "started_at"),
+        # a datasource's refreshes, newest first (polled while it imports)
+        Index("ix_runs_datasource_id_started_at", "datasource_id", "started_at"),
+        # the run history, the performance window and the activity calendar
+        Index("ix_runs_started_at", "started_at"),
+        Index(
+            "ix_runs_live_ingest",
+            "datasource_id",
+            postgresql_where=text(LIVE_INGEST),
+            sqlite_where=text(LIVE_INGEST),
+        ),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
     # kind="flow": esecuzione di un flusso (flow_id valorizzato).

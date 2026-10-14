@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -24,7 +24,7 @@ from app.services import audit
 from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
-from app.models.run import TERMINAL_STATES
+from app.models.run import LIVE_INGEST, TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run, run_out
 from app.schemas.models import (
     DatasourceOut,
@@ -123,11 +123,8 @@ def _refreshing_ids(session: Session, rows: list[Datasource]) -> set[int]:
     ids = [d.id for d in rows if d.id is not None]
     if not ids:
         return set()
-    found = session.exec(
-        select(Run.datasource_id).where(
-            Run.kind == "ingest", Run.datasource_id.in_(ids), Run.status.notin_(list(TERMINAL_STATES))
-        )
-    ).all()
+    # LIVE_INGEST written as the partial index's condition: only live rows are read
+    found = session.exec(select(Run.datasource_id).where(Run.datasource_id.in_(ids), text(LIVE_INGEST))).all()
     return {i for i in found if i is not None}
 
 

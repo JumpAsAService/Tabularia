@@ -68,6 +68,11 @@ exposes at `/system/info` and in the app's settings menu.
   a non-admin cost 0.25 s at 2,000 folders). The tree is read as (id, parent) pairs,
   grants only for the user and their groups, and the answers are reused within the
   request until something is written.
+- **Run history from indexes** (schema revision 0008): a datasource's refreshes, the
+  "importing…" flag of the datasource lists and the history page read indexes on
+  `runs` instead of the whole table; the Flows page's calendar is counted by the
+  database instead of loading every run of 180 days, and each flow's latest run is a
+  per-flow lookup.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,
