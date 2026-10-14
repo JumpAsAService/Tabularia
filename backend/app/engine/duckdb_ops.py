@@ -32,6 +32,7 @@ from app.engine.operations import (
     MAX_FOREACH_TOTAL,
     MAX_PIVOT_COLUMNS,
     _reject_dynamic_source_keys,
+    check_filter_value,
     _substitute,
     PIVOT_LABEL_SEP,
     SAMPLE_BUCKETS,
@@ -180,6 +181,7 @@ def _predicate(column: str, operator: str, value: Any) -> str:
 def op_filter(rel, params, a, ctx):
     column = _require(params, "column")
     operator = params.get("operator", "eq")
+    check_filter_value(operator, params.get("value"))
     return rel.query(a, f"SELECT * FROM {a} WHERE {_predicate(column, operator, params.get('value'))}")
 
 

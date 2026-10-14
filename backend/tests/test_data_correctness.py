@@ -33,6 +33,7 @@ import polars as pl
 import pytest
 
 from app.engine.cache import StepCache
+from app.engine.exceptions import EngineError
 from app.engine.polars_engine import PolarsEngine
 from tests.conftest import BUCKET, upload_df
 from tests.fakes import FakeRedis
@@ -301,6 +302,9 @@ FILTER_CASES = {
     "bigint_exact": (filt("big", "eq", BIG), [1]),
     "bigint_exact_neighbour_no_match": (filt("big", "eq", BIG - 1), []),
     "text_on_id_column_with_space": (filt("Ragione Sociale", "starts_with", "Rossi"), [1, 5]),
+    # digits on a text column are a code, compared as text (the form sent a number until 2026-10-14)
+    "eq_digits_on_text_column": (filt("num_txt", "eq", "2"), [2]),
+    "in_digits_on_text_column": (filt("num_txt", "in", ["1", "-5"]), [1, 7]),
 }
 
 
@@ -311,6 +315,20 @@ def test_filter(storage, ordini, name, case):
     res = run(name, storage, ordini, [op])
     assert ids(res) == want, f"[{name}] {case}"
     assert [c.name for c in res.columns] == COLS  # il filtro non tocca lo schema
+
+
+@pytest.mark.parametrize("op", [
+    {"type": "filter", "params": {"column": "cliente", "operator": "eq"}},
+    {"type": "filter", "params": {"column": "cliente", "operator": "eq", "value": None}},
+    {"type": "filter", "params": {"column": "canale", "operator": "in", "value": []}},
+    {"type": "filter", "params": {"column": "importo", "operator": "between", "value": [1]}},
+], ids=["eq_without_value", "eq_null", "in_empty", "between_one_bound"])
+@pytest.mark.parametrize("name", ENGINES)
+def test_a_filter_left_without_a_value_is_refused(storage, ordini, name, op):
+    """Compared with NULL it kept zero rows without a word, and a run published an
+    empty datasource: now every engine says what is missing."""
+    with pytest.raises(EngineError, match="filter: "):
+        run(name, storage, ordini, [op])
 
 
 @pytest.mark.parametrize("name", ENGINES)

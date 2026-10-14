@@ -22,7 +22,7 @@ from typing import Any, Callable
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
-from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, pivot_label, sample_threshold
+from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, pivot_label, sample_threshold
 from app.engine.sql_guard import ensure_reads_only_input
 
 ChdbOpFn = Callable[..., str]
@@ -200,6 +200,7 @@ def _predicate(column: str, operator: str, value: Any) -> str:
 def op_filter(sql, params, ctx):
     column = _require(params, "column")
     operator = params.get("operator", "eq")
+    check_filter_value(operator, params.get("value"))
     pred = _predicate(column, operator, params.get("value"))
     return f"SELECT * FROM {_sub(sql)} WHERE {pred}"
 

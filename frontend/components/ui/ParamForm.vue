@@ -4,6 +4,7 @@ import { reactive, computed, watch, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info, X, Calendar, Play, GripVertical, Search } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
+import { typedValue, typedValueText } from '~/composables/typedValue'
 import {
   OP_SPECS,
   FILTER_OPERATORS,
@@ -90,18 +91,9 @@ const joinRows = reactive<{ left: string; right: string }[]>([])
 const reorderCols = reactive<string[]>([])
 const dragIndex = ref<number | null>(null)
 
-function parseValue(raw: string): any {
-  const t = (raw ?? '').trim()
-  if (t === '') return null
-  try {
-    return JSON.parse(t)
-  } catch {
-    return raw
-  }
-}
-function showValue(v: any): string {
-  if (v === null || v === undefined) return ''
-  return typeof v === 'string' ? v : JSON.stringify(v)
+// the stored type of a column, as the engine reports it ('' while unknown)
+function dtypeOf(column: string | undefined): string {
+  return props.inputColumns.find((c) => c.name === column)?.dtype ?? ''
 }
 
 // ricostruisce lo stato locale dai params quando cambia il nodo/operazione
@@ -119,7 +111,7 @@ function rebuild() {
         state[f.key] = Array.isArray(p[f.key]) ? [...p[f.key]] : (typeof p[f.key] === 'string' && p[f.key] ? [p[f.key]] : [])
         break
       case 'value':
-        state.__value = showValue(p.value)
+        state.__value = typedValueText(p.value)
         // estremi del between temporale (se il valore salvato è una coppia)
         state.__lo = Array.isArray(p.value) ? String(p.value[0] ?? '') : ''
         state.__hi = Array.isArray(p.value) ? String(p.value[1] ?? '') : ''
@@ -138,7 +130,7 @@ function rebuild() {
         for (const [from, to] of Object.entries(p.mapping ?? {})) renameRows.push({ from, to: String(to) })
         break
       case 'filllist':
-        for (const [c, v] of Object.entries(p.columns ?? {})) fillRows.push({ column: c, value: showValue(v) })
+        for (const [c, v] of Object.entries(p.columns ?? {})) fillRows.push({ column: c, value: typedValueText(v) })
         break
       case 'agglist':
         for (const a of p.aggregations ?? []) aggRows.push({ column: a.column, func: a.func, alias: a.alias ?? '' })
@@ -247,7 +239,9 @@ function build(): Record<string, any> {
         } else if (temporalInputType.value && !state.__phmode && SINGLE_DATE_OPERATORS.has(state.operator)) {
           if (state.__value) out.value = state.__value // stringa ISO dal calendario
         } else {
-          out.value = parseValue(state.__value)
+          // read as the column stores values; an empty box sends nothing
+          const value = typedValue(state.__value, dtypeOf(state.column))
+          if (value !== undefined) out.value = value
         }
         break
       case 'number':
@@ -274,7 +268,11 @@ function build(): Record<string, any> {
         out.mapping = Object.fromEntries(renameRows.filter((r) => r.from && r.to).map((r) => [r.from, r.to]))
         break
       case 'filllist':
-        out.columns = Object.fromEntries(fillRows.filter((r) => r.column).map((r) => [r.column, parseValue(r.value)]))
+        out.columns = Object.fromEntries(
+          fillRows
+            .map((r) => [r.column, typedValue(r.value, dtypeOf(r.column))] as const)
+            .filter(([column, value]) => column && value !== undefined),
+        )
         break
       case 'agglist':
         out.aggregations = aggRows
@@ -475,6 +473,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           :model-value="state.__inValues ?? []"
           :options="distinctValues"
           :loading="distinctLoading"
+          :dtype="dtypeOf(state.column)"
           @update:model-value="onInValues"
         />
 

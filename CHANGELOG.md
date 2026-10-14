@@ -50,6 +50,12 @@ exposes at `/system/info` and in the app's settings menu.
   Exports now share the workers' queue with runs. `POST /tasks/export` keeps its
   contract for API callers (the file in the response); the browser uses the new
   `POST /tasks/exports`, `GET /tasks/exports/{id}` and `GET /tasks/exports/{id}/file`.
+- **Fixed: filter and fill values lost their column's type.** The form read every
+  typed value as JSON: on a text column of codes "20121" became the number 20121
+  (Polars refused the comparison, DuckDB cast the whole column and matched "0144"
+  with "144"), and an empty box became null and kept zero rows without a word. Values
+  are now read as their column stores them (`""` means the empty string), and every
+  engine refuses a filter left without a value, saying which.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

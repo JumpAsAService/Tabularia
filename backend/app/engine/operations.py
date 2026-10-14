@@ -180,6 +180,20 @@ def _predicate(column: str, operator: str, value: Any, dtype: pl.DataType | None
             raise EngineError(f"operatore di filtro non supportato: '{operator}'")
 
 
+def check_filter_value(operator: str, value: Any) -> None:
+    """Shared by every engine: a filter whose operator needs a value but has none is
+    refused. Compared with NULL it kept zero rows without a word, and a run then
+    published an empty datasource."""
+    if operator in ("is_null", "is_not_null"):
+        return
+    if value is None:
+        raise EngineError(f"filter: choose a value for the operator '{operator}'")
+    if operator in ("in", "not_in") and value == []:
+        raise EngineError(f"filter: choose at least one value for '{operator}'")
+    if operator == "between" and (not isinstance(value, list) or len(value) != 2):
+        raise EngineError("filter: 'between' needs two values, from and to")
+
+
 @register("filter")
 def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     # params: {"column": "eta", "operator": "gt", "value": 18}
@@ -187,6 +201,7 @@ def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
     column = _require(params, "column")
     operator = _require(params, "operator")
     value = params.get("value")
+    check_filter_value(operator, value)
     # il dtype serve a convertire le stringhe ISO in date/datetime (solo schema, zero dati)
     dtype = lf.collect_schema().get(column)
     return lf.filter(_predicate(column, operator, value, dtype))

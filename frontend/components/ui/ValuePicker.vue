@@ -4,11 +4,13 @@
 // the user search, pick, or add free values (e.g. {{placeholders}}).
 import { ref, computed } from 'vue'
 import { X, Plus, LoaderCircle } from 'lucide-vue-next'
+import { typedValue } from '~/composables/typedValue'
 
 const props = defineProps<{
   modelValue: any[]
   options: any[] | null // null = still loading
   loading?: boolean
+  dtype?: string // the column's type: a free value is read as that type stores it
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', values: any[]): void }>()
 
@@ -48,9 +50,10 @@ function toggle(v: any) {
 function addFree() {
   const raw = query.value.trim()
   if (!raw) return
-  // numbers stay numbers (the engine compares typed values)
-  const parsed = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw
-  emit('update:modelValue', [...props.modelValue, parsed])
+  // read as the column stores values: "00144" stays text on a text column
+  const parsed = typedValue(raw, props.dtype)
+  if (parsed === undefined) return
+  emit('update:modelValue', [...props.modelValue, ...(Array.isArray(parsed) ? parsed : [parsed])])
   query.value = ''
 }
 </script>
