@@ -49,8 +49,10 @@ class DuckContext:
         self.tmp = tmp
         self._n = 0
         # in preview il nodo `sql` limita il risultato del sandbox a queste righe
-        # (altrimenti calcolerebbe l'intero risultato solo per mostrarne N)
+        # (altrimenti calcolerebbe l'intero risultato solo per mostrarne N), but
+        # only when it is the chain's last operation: see `apply`
         self.preview_limit = preview_limit
+        self.limit_output: int | None = None
         # budget cumulativo delle iterazioni foreach (anti-esplosione annidata)
         self.foreach_iterations = 0
 
@@ -81,14 +83,19 @@ class DuckContext:
             rel = rel.project(proj)
         return rel
 
-    def apply(self, rel, ops, index_offset: int = 0):
+    def apply(self, rel, ops, index_offset: int = 0, top: bool = False):
         """Applica una catena di operazioni (Operation o dict) a una relazione.
         `index_offset` allinea l'indice riportato negli errori a quello assoluto
-        nella catena (le op iniziali possono venire dalla cache)."""
+        nella catena (le op iniziali possono venire dalla cache). `top`: the
+        preview's own chain, not the right side of a join or a foreach body."""
         for i, op in enumerate(ops):
             op_type = op.type if isinstance(op, Operation) else op["type"]
             params = op.params if isinstance(op, Operation) else (op.get("params") or {})
             fn = get_duck_operation(op_type)
+            # A preview may stop at the first rows only of what nobody else reads: the
+            # last operation of its chain. An sql node cut short in the middle handed a
+            # sample to the group_by after it, and the preview showed wrong totals.
+            self.limit_output = self.preview_limit if top and i == len(ops) - 1 else None
             try:
                 rel = fn(rel, params, self.uid("q"), self)
             except EngineError:
@@ -167,7 +174,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
             cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
             rel = ctx.scan(cached)
             logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
-        return ctx.apply(rel, operations[start:], index_offset=start)
+        return ctx.apply(rel, operations[start:], index_offset=start, top=True)
 
     def _materialize(self, ctx: "DuckContext", source, operations) -> None:
         """Materializza in cache l'output di `operations` (se non già presente),

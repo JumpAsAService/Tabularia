@@ -332,6 +332,20 @@ def test_a_filter_left_without_a_value_is_refused(storage, ordini, name, op):
 
 
 @pytest.mark.parametrize("name", ENGINES)
+def test_a_preview_cuts_only_what_nobody_reads_after_it(storage, ordini, name):
+    """An sql node may stop at the preview's first rows only as the last operation:
+    duckdb cut it anywhere, so what followed (a filter, a group_by) worked on a sample
+    and the preview showed wrong totals (found on the Sample RFM flow, 2026-10-14)."""
+    sql = {"type": "sql", "params": {"query": "SELECT * FROM self"}}
+    assert ids(run(name, storage, ordini, [sql, filt("id", "eq", 8)], limit=1)) == [8]
+    counted = run(name, storage, ordini, [sql, {"type": "group_by", "params": {
+        "by": ["attivo"], "aggregations": [{"column": "id", "func": "count", "alias": "n"}]}}], limit=5)
+    assert sum(r["n"] for r in counted.rows) == 8
+    last = run(name, storage, ordini, [filt("id", "gt", 0), sql], limit=2)
+    assert last.row_count == 2 and last.truncated
+
+
+@pytest.mark.parametrize("name", ENGINES)
 def test_filter_chain_is_and(storage, ordini, name):
     res = run(name, storage, ordini, [filt("canale", "eq", "GDO"), filt("importo", "is_not_null"), filt("qta", "gt", 1)])
     assert ids(res) == [1, 8]

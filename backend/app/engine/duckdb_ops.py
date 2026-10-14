@@ -484,8 +484,8 @@ def op_sql(rel, params, a, ctx):
         sbx.execute("SET lock_configuration=true")  # e non riabilitabile dalla query
         try:
             result = sbx.sql(query)
-            if ctx.preview_limit:  # in anteprima non calcolare l'intero risultato
-                result = result.limit(ctx.preview_limit)
+            if ctx.limit_output:  # in anteprima, ultimo nodo: non calcolare l'intero risultato
+                result = result.limit(ctx.limit_output)
             reader = result.to_arrow_reader(1_000_000)  # streaming Arrow
             out_tmp = ctx.tempfile()
             writer = _pq.ParquetWriter(out_tmp, reader.schema)  # scrive PYTHON, non DuckDB

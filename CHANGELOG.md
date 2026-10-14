@@ -59,6 +59,10 @@ exposes at `/system/info` and in the app's settings menu.
 - **Fixed: `EXTRACT(YEAR FROM d)` on DuckDB and BigQuery.** Their computed columns
   still refused any expression with the word FROM, so 4 of the 11 Sample flows could
   not run on duckdb; they now use the same parsing check as ClickHouse.
+- **Fixed: wrong totals in DuckDB previews after an SQL node.** To spare work, the
+  preview cut the SQL node's result to the rows it shows, even when other operations
+  followed: a group_by after it counted a sample (the Sample RFM flow showed 37
+  groups instead of 58). It now cuts only when the SQL node is the last operation.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,
