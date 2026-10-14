@@ -5,6 +5,12 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Cache copies give way to previews.** After a preview, the copy of its upstream
+  step into the cache ran on the preview worker's slots in arrival order: during the
+  review it took 39% of that worker's time, and clicks queued behind it. Copies now go
+  to the preview queue at the lowest priority, only one runs at a time, and a copy
+  that finds previews waiting gives up (the next preview of that node asks for it
+  again). The queue page counts every priority list, so waiting copies show there.
 - **DuckDB and chDB read their sources in place.** Both engines downloaded every
   source and every cached step whole before reading it, even for a preview of 100
   rows of a few columns. They now read the object storage by ranges, only the columns

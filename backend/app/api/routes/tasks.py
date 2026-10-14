@@ -311,9 +311,11 @@ def queue_overview():
     try:
         import redis
         rc = redis.from_url(celery_app.conf.broker_url)
+        from app.tasks.celery_app import broker_lists
+
         for q in queue_names:
-            try:
-                broker[q] = int(rc.llen(q))
+            try:  # every priority list of the queue (the cache copies wait in the lowest)
+                broker[q] = sum(int(rc.llen(lst)) for lst in broker_lists(q))
             except Exception:
                 pass
     except Exception:

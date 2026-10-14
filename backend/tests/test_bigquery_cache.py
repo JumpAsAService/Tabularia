@@ -256,9 +256,11 @@ def test_preview_task_hands_pending_steps_to_the_deferred_task(monkeypatch):
     eng = _engine()
     sent: list[dict] = []
     monkeypatch.setattr(jobs, "get_engine", lambda name=None: eng)
-    monkeypatch.setattr(jobs.materialize_step_task, "apply_async", lambda args, queue: sent.append({"args": args, "queue": queue}))
+    monkeypatch.setattr(jobs.materialize_step_task, "apply_async",
+                        lambda args, queue, priority: sent.append({"args": args, "queue": queue, "priority": priority}))
     out = jobs.preview_task.run(bucket="data-prep", input_key="datasets/x.parquet", operations=[FILTER, SORT], limit=10, engine="bigquery")
-    assert out["ok"] and sent == [{"args": ["bigquery", "data-prep", "datasets/x.parquet", [FILTER]], "queue": "preview"}]
+    assert out["ok"] and sent == [{"args": ["bigquery", "data-prep", "datasets/x.parquet", [FILTER]], "queue": "preview",
+                                   "priority": jobs.CACHE_COPY_PRIORITY}]
     # e il task differito esegue davvero la materializzazione
     res = jobs.materialize_step_task.run("bigquery", "data-prep", "datasets/x.parquet", [FILTER])
     assert res == {"ok": True, "written": True} and len(_ctas(eng._client)) == 1

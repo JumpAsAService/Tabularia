@@ -114,6 +114,15 @@ celery_app.conf.beat_schedule = {
 }
 
 
+def broker_lists(queue: str) -> list[str]:
+    """The Redis lists of a queue, highest priority first. kombu keeps one per
+    priority step (`queue`, then `queue<sep>3`, … `queue<sep>9`) and a worker empties
+    them in this order: a task sent with priority 9 waits behind every other one."""
+    from kombu.transport.redis import PRIORITY_STEPS, Channel
+
+    return [queue if step == 0 else f"{queue}{Channel.sep}{step}" for step in PRIORITY_STEPS]
+
+
 @before_task_publish.connect
 def _limiti_di_tempo_in_vigore(headers=None, **_):
     """La durata massima di un task viaggia nel suo messaggio: quella in vigore

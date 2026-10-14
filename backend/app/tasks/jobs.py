@@ -107,7 +107,8 @@ def preview_task(
         # task separato, cosi' QUESTA risposta non aspetta i CTAS
         for src, pending_ops in getattr(engine_impl, "take_pending", lambda: [])():
             try:
-                materialize_step_task.apply_async(args=[engine, src.bucket, src.key, pending_ops], queue="preview")
+                materialize_step_task.apply_async(args=[engine, src.bucket, src.key, pending_ops], queue="preview",
+                                                  priority=CACHE_COPY_PRIORITY)
             except Exception as e:  # noqa: BLE001 — senza broker si perde solo la cache
                 logger.warning("materializzazione differita non accodata: %s", e)
         # Il tempo DENTRO il worker, per ogni engine. Confrontalo con quello che
@@ -147,12 +148,53 @@ def preview_task(
         raise
 
 
-@celery_app.task(name="app.tasks.jobs.materialize_step_task", ignore_result=True)
-def materialize_step_task(engine: str, bucket: str, key: str, operations: list[dict]) -> dict:
+# A copy of a step into the cache is an optimisation nobody waits for, but it ran on
+# the preview worker's slots in arrival order: during the review of 2026-10-14 copies
+# took 39% of that worker's time, and clicks queued behind them. Now a copy goes to
+# the preview queue at the lowest priority (9 on Redis), only one runs at a time in
+# the whole installation, and a copy that finds interactive previews waiting gives up
+# (the next preview of that node asks for it again).
+CACHE_COPY_PRIORITY = 9
+_COPY_LOCK = "dataprep:stepcache:copying"
+_COPY_LOCK_SECONDS = 600  # a copy killed halfway does not hold the turn for ever
+# compare-and-delete: the turn is given back only by the copy that holds it
+_RELEASE = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+
+
+def _broker():
+    import redis
+
+    return redis.Redis.from_url(celery_app.conf.broker_url, socket_timeout=2, socket_connect_timeout=2)
+
+
+def _copy_turn(broker, token: str) -> str | None:
+    """None when the copy may run now; otherwise why it gives up. Without the broker
+    (tests, Valkey down) it runs, as it did before."""
+    from app.tasks.celery_app import broker_lists
+
+    try:
+        if broker.llen(broker_lists("preview")[0]):
+            return "previews are waiting"
+        if not broker.set(_COPY_LOCK, token, nx=True, ex=_COPY_LOCK_SECONDS):
+            return "another copy is running"
+    except Exception:  # noqa: BLE001 — the copy is best-effort, its scheduling too
+        return None
+    return None
+
+
+@celery_app.task(name="app.tasks.jobs.materialize_step_task", ignore_result=True, bind=True)
+def materialize_step_task(self, engine: str, bucket: str, key: str, operations: list[dict]) -> dict:
     """Materializza in cache (BigQuery: tabella nativa) l'output di una catena
     di operazioni, FUORI dalla preview che l'ha chiesta. Best-effort: un errore
     qui costa solo la cache, mai la preview."""
+    import uuid
+
     t0 = _time_mod.perf_counter()
+    broker, token = _broker(), self.request.id or uuid.uuid4().hex
+    reason = _copy_turn(broker, token)
+    if reason:
+        logger.info("materialize_step_task %s skipped: %s", engine, reason)
+        return {"ok": False, "skipped": reason}
     try:
         impl = get_engine(engine)
         fn = getattr(impl, "materialize", None)
@@ -165,6 +207,11 @@ def materialize_step_task(engine: str, bucket: str, key: str, operations: list[d
     except Exception as e:  # noqa: BLE001
         logger.warning("materialize_step_task %s fallito: %s", engine, e)
         return {"ok": False, "error": str(e)[:300]}
+    finally:
+        try:
+            broker.eval(_RELEASE, 1, _COPY_LOCK, token)
+        except Exception:  # noqa: BLE001 — the lock expires on its own
+            pass
 
 
 @celery_app.task(name="app.tasks.jobs.transform_data_task")
