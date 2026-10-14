@@ -5,6 +5,15 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Fixed: ClickHouse destinations wrote by position.** An Output appending to a
+  ClickHouse table whose columns were in another order put values in the wrong
+  columns without any error, and "replace" swapped in a plain MergeTree built from
+  the flow, losing the customer's engine, ORDER BY, partitions, TTL and DEFAULT
+  columns. Columns are now matched by name, as on the other databases; a column the
+  table lacks stops the write with a message naming it, columns the flow lacks take
+  their DEFAULT, and "replace" loads a copy of the table's own definition before the
+  atomic swap. Tested against a real ClickHouse.
+
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,
   and the next step starts when every cell of the previous one has succeeded; the first

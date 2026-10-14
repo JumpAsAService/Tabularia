@@ -8,6 +8,12 @@ Semantica UNIFORME su tutti i dialetti (è il contratto del nodo Output):
 3. insert in streaming a batch;
 4. eventuali statement post-insert (separati da `;`), sulla stessa connessione.
 
+Columns are matched by NAME on every database: a column the existing table lacks
+stops the write, columns the flow lacks take their DEFAULT. On ClickHouse "replace"
+loads a staging copy of the target's own definition and swaps it in atomically, so
+engine, ORDER BY, partitions, TTL and defaults stay the customer's (materialized
+views on the target see inserts, not swaps: they do not see replaced data).
+
 Driver per dialetto (gli stessi delle sorgenti):
 - postgresql        → ADBC (adbc_ingest: bulk COPY, Arrow nativo)
 - clickhouse        → clickhouse-connect (insert_arrow)
@@ -170,18 +176,39 @@ def _write_clickhouse(
     stg_parts = parts[:-1] + [f"{parts[-1]}__tab_stg_{uuid.uuid4().hex[:8]}"]
     stg_qualified = ".".join(f"{q}{p}{q}" for p in stg_parts)
     stg_name = stg_parts[-1] if len(stg_parts) == 1 else ".".join(stg_parts)
+    columns = _quoted_columns(conn, schema)
     rows = 0
     try:
-        client.command(_create_table_sql(conn, qualified, schema))  # target deve esistere per EXCHANGE
-        client.command(_create_table_sql(conn, stg_qualified, schema))
+        existing = _clickhouse_columns(client, parts)
+        if not existing:
+            # the first write: the table takes the flow's shape
+            client.command(_create_table_sql(conn, qualified, schema))
+        else:
+            # the customer's table: columns are matched by name, as on every other
+            # database, so one the table lacks would land nowhere (or, by position, in
+            # the wrong column). Columns the flow lacks take their DEFAULT.
+            missing = [f.name for f in schema if f.name not in existing]
+            if missing:
+                raise DbDestinationError(
+                    f"Column(s) {', '.join(missing)} of the output are not in the table {qualified}: "
+                    "add them to the table or rename them in the flow"
+                )
+        if dest.mode == "replace":
+            # the staging copies the target's own definition (engine, ORDER BY,
+            # partitions, TTL, defaults, comment): the swap changes the data only
+            client.command(f"CREATE TABLE {stg_qualified} AS {qualified}")
+        else:
+            client.command(_create_table_sql(conn, stg_qualified, schema))
         for batch in batches:
+            # insert_arrow names the columns: they land by name in the staging
             client.insert_arrow(stg_name, pa.Table.from_batches([batch], schema=schema))
             rows += batch.num_rows
         if dest.mode == "replace":
             # swap ATOMICO: la destinazione passa dai vecchi ai nuovi dati in un colpo
             client.command(f"EXCHANGE TABLES {qualified} AND {stg_qualified}")
         else:
-            client.command(f"INSERT INTO {qualified} SELECT * FROM {stg_qualified}")  # append: un solo INSERT server-side
+            # append: one server-side INSERT, by column name
+            client.command(f"INSERT INTO {qualified} ({columns}) SELECT {columns} FROM {stg_qualified}")
         for stmt in _post_statements(dest.post_sql):
             client.command(stmt)
     finally:
@@ -191,6 +218,19 @@ def _write_clickhouse(
             pass
         client.close()
     return rows
+
+
+def _clickhouse_columns(client, parts: list[str]) -> list[str]:
+    """The target's column names, or [] when the table does not exist yet."""
+    if len(parts) > 1:
+        where, params = "database = {db:String}", {"db": parts[-2], "t": parts[-1]}
+    else:
+        where, params = "database = currentDatabase()", {"t": parts[-1]}
+    result = client.query(
+        f"SELECT name FROM system.columns WHERE {where} AND table = {{t:String}} ORDER BY position",
+        parameters=params,
+    )
+    return [row[0] for row in result.result_rows]
 
 
 def _write_mysql(
