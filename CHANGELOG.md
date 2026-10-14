@@ -63,6 +63,11 @@ exposes at `/system/info` and in the app's settings menu.
   preview cut the SQL node's result to the rows it shows, even when other operations
   followed: a group_by after it counted a sample (the Sample RFM flow showed 37
   groups instead of 58). It now cuts only when the SQL node is the last operation.
+- **Gateway: permissions computed once per request.** Each check reloaded the whole
+  folder tree and every grant of every user, several times per request (a preview by
+  a non-admin cost 0.25 s at 2,000 folders). The tree is read as (id, parent) pairs,
+  grants only for the user and their groups, and the answers are reused within the
+  request until something is written.
 
 - **Flow groups**: several flows and database refreshes run as one, in order and in
   parallel. A group is a grid: each row is a step, the cells of a row start together,

@@ -68,9 +68,7 @@ def search_everything(
     connettibili = perm_service.connectable_project_ids(session, user)
 
     # nomi delle cartelle: servono a dire DOVE si trova ogni risultato
-    nomi_cartella = {
-        p.id: p.name for p in session.exec(select(Project)).all()
-    }
+    nomi_cartella = dict(session.exec(select(Project.id, Project.name)).all())
 
     hits: list[SearchHit] = []
 

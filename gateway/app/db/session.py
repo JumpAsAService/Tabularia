@@ -170,7 +170,10 @@ async def get_session():
     connessione (vedi `deps/auth._fine_passo`). Chiudere non aspetta mai il
     pool: rende, non prende.
     """
+    from app.services.permissions import REQUEST_SESSION
+
     session = Session(engine)
+    session.info[REQUEST_SESSION] = True  # its permission answers are reused (services/permissions.py)
     try:
         yield session
     finally:

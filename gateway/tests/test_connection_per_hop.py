@@ -361,7 +361,11 @@ def test_l_elenco_delle_cartelle_legge_l_albero_una_volta_sola(db_engine, sessio
 
     attese = permissions.visible_project_ids(session, u)
     assert attese == {radice.id, figlia.id}  # la figlia, e la radice per arrivarci
+    session.commit()
+    session.info[permissions.REQUEST_SESSION] = True  # as get_session marks every request's session
     spia = _spia(db_engine)
     viste = permissions.visible_projects(session, u)
     assert {p.id for p in viste} == attese
-    assert sum("FROM projects" in c for c in spia.comandi) == 1
+    # the tree once as (id, parent) pairs, then whole rows of the visible folders only
+    letture = [c for c in spia.comandi if "FROM projects" in c]
+    assert len(letture) == 2 and "projects.name" not in letture[0] and "WHERE projects.id IN" in letture[1]

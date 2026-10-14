@@ -13,7 +13,7 @@ from app.deps.permissions import ensure_can
 from app.models import Project, User
 from app.models.permission import Capability
 from app.services import permissions as perm_service
-from app.services.permissions import _all_projects, descendant_ids
+from app.services.permissions import descendant_ids, folder_parents
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
 from app.core.routing import RottaCheRilascia
 
@@ -93,8 +93,7 @@ def update_project(
         # Niente cicli: non dentro sé stesso e nemmeno dentro un proprio
         # DISCENDENTE, che staccherebbe il sottoalbero da ogni radice e
         # toglierebbe l'accesso a chi l'aveva per eredità (A6/M6).
-        progetti = _all_projects(session)
-        if body.parent_id == project_id or body.parent_id in descendant_ids(progetti, {project_id}):
+        if body.parent_id == project_id or body.parent_id in descendant_ids(folder_parents(session), {project_id}):
             raise HTTPException(
                 status_code=422,
                 detail="Un progetto non può essere spostato dentro sé stesso o una sua sottocartella",

@@ -168,7 +168,7 @@ def _project_path(session: Session, project_id: int | None) -> str:
     if project_id is None:
         return ""
     progetti = perm_service._all_projects(session)
-    ids = perm_service.ancestor_ids(progetti, project_id)
+    ids = perm_service.ancestor_ids({i: p.parent_id for i, p in progetti.items()}, project_id)
     return "/".join(progetti[i].name for i in reversed(ids) if i in progetti) if ids else ""
 
 

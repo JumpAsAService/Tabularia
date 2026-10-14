@@ -258,9 +258,9 @@ def _nella_cartella(lettura: Session, w: Webhook, cartella: Optional[int]) -> bo
         return True
     if cartella is None:
         return False
-    from app.services.permissions import _all_projects, ancestor_ids
+    from app.services.permissions import ancestor_ids, folder_parents
 
-    return w.project_id == cartella or w.project_id in ancestor_ids(_all_projects(lettura), cartella)
+    return w.project_id == cartella or w.project_id in ancestor_ids(folder_parents(lettura), cartella)
 
 
 def accoda_per_run(session: Session, run: Run) -> int:
