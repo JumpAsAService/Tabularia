@@ -5,6 +5,14 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The assistants say, on every message, that they are an AI.** In the data assistant's
+  page and in the flow editor's panel each answer is labelled «AI assistant» with the
+  model that wrote it and each question as the user's (screen readers hear it too), and
+  a notice that stays under the input says it is an AI that can make mistakes and that
+  the results must be checked. A downloaded conversation opens with the same notice and
+  labels who wrote what. The disclosure dialog before the first question was already
+  there; a page read later, or by someone who never saw it, now says it as well
+  (EU AI Act, article 50).
 - **An assistant in the flow editor.** The right panel gets a second tab, Assistant,
   that builds the flow on the canvas with you: it reads the catalogue as the data
   assistant does, puts datasources on the canvas, adds and changes steps with the

@@ -8,6 +8,12 @@ export default {
     "dismiss": "Read it, dismiss",
     "close": "Close",
   },
+  "aiCompliance": {
+    "assistantLabel": "AI assistant",
+    "youLabel": "You",
+    "disclaimer": "This is an AI: it can make mistakes. Always check the results.",
+    "exportNotice": "Conversation with an AI assistant. The answers were generated automatically by a language model and can contain mistakes: check the results before relying on them.",
+  },
   "flowAssistant": {
     "title": "Flow assistant",
     "panelTabs": "Right panel",
@@ -1338,7 +1344,6 @@ export default {
     "model": "Model",
     "engine": "engine: {engine}",
     "focusCount": "{n} datasources in focus",
-    "disclaimer": "Always check the numbers in the table.",
     "stepList": "Searching the catalog",
     "stepListDone": "Catalog: {n} datasources",
     "stepDescribe": "Reading the fields of {name}",

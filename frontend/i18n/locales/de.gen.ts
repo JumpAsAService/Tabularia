@@ -8,6 +8,12 @@ export default {
     "dismiss": "Gelesen, schließen",
     "close": "Schließen",
   },
+  "aiCompliance": {
+    "assistantLabel": "KI-Assistent",
+    "youLabel": "Du",
+    "disclaimer": "Das ist eine künstliche Intelligenz: Sie kann Fehler machen. Prüfe die Ergebnisse immer.",
+    "exportNotice": "Unterhaltung mit einem KI-Assistenten. Die Antworten wurden automatisch von einem Sprachmodell erzeugt und können Fehler enthalten: Prüfe die Ergebnisse, bevor du dich darauf verlässt.",
+  },
   "flowAssistant": {
     "title": "Flow-Assistent",
     "panelTabs": "Rechtes Panel",
@@ -1253,7 +1259,6 @@ export default {
     "model": "Modell",
     "engine": "Engine: {engine}",
     "focusCount": "{n} Datenquellen im Fokus",
-    "disclaimer": "Prüfen Sie die Zahlen immer in der Tabelle.",
     "stepList": "Katalog wird durchsucht",
     "stepListDone": "Katalog: {n} Datenquellen",
     "stepDescribe": "Felder von {name} werden gelesen",

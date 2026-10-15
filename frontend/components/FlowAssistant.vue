@@ -17,6 +17,7 @@ import AiDisclosure from '~/components/ui/AiDisclosure.vue'
 import DataGrid from '~/components/ui/DataGrid.vue'
 import MarkdownLite from '~/components/ui/MarkdownLite.vue'
 import Select from '~/components/ui/Select.vue'
+import AiSpeaker from '~/components/ui/AiSpeaker.vue'
 
 const props = defineProps<{
   /** The tab is open: the disclosure and the conversation wait for it. */
@@ -49,6 +50,7 @@ interface Step {
 }
 interface Turn {
   question: string
+  model?: string
   text: string
   steps: Step[]
   streaming: boolean
@@ -116,6 +118,7 @@ async function loadLatest() {
     chatId.value = d.id
     turns.value = d.messages.map((m) => ({
       question: m.question,
+      model: m.model_id,
       text: m.answer,
       streaming: false,
       usage: m.usage,
@@ -151,7 +154,7 @@ async function send(text?: string) {
   if (!message || busy.value || !ready.value) return
   const sent = props.snapshot()
   settlePending()
-  const turn = reactive<Turn>({ question: message, text: '', steps: [], streaming: true })
+  const turn = reactive<Turn>({ question: message, model: model.value, text: '', steps: [], streaming: true })
   let paragraphBreak = false
   turns.value.push(turn)
   draft.value = ''
@@ -306,9 +309,15 @@ function stepLabel(s: Step): string {
     <header class="fa-head">
       <h3><Sparkles :size="15" /> {{ $t('flowAssistant.title') }}</h3>
       <span class="fa-head-actions">
-        <button v-if="turns.length" class="fa-mini" type="button" :disabled="busy" @click="reset">
-          <Plus :size="13" /> {{ $t('flowAssistant.newConversation') }}
-        </button>
+        <button
+          v-if="turns.length"
+          class="fa-mini"
+          type="button"
+          :disabled="busy"
+          :title="$t('flowAssistant.newConversation')"
+          :aria-label="$t('flowAssistant.newConversation')"
+          @click="reset"
+        ><Plus :size="13" /></button>
         <button
           v-if="chatId != null"
           class="fa-mini danger"
@@ -335,8 +344,12 @@ function stepLabel(s: Step): string {
       </div>
 
       <template v-for="(turn, ti) in turns" :key="ti">
-        <p class="fa-q">{{ turn.question }}</p>
-        <div class="fa-a">
+        <div class="fa-you">
+          <AiSpeaker who="you" />
+          <p class="fa-q">{{ turn.question }}</p>
+        </div>
+        <div class="fa-a" role="group" :aria-label="$t('aiCompliance.assistantLabel')">
+          <AiSpeaker who="ai" :model="turn.model" />
           <ol v-if="turn.steps.length" class="fa-steps">
             <li v-for="s in turn.steps" :key="s.id" class="fa-step" :class="s.state">
               <span class="fa-step-line">
@@ -402,6 +415,7 @@ function stepLabel(s: Step): string {
           :aria-label="$t('flowAssistant.send')"
         ><Send :size="13" /></button>
       </div>
+      <p class="fa-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('aiCompliance.disclaimer') }}</p>
       <div class="fa-under">
         <Select
           v-if="modelOptions.length > 1"
@@ -420,7 +434,7 @@ function stepLabel(s: Step): string {
 <style scoped>
 .fa { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .fa-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 6px; }
-.fa-head h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; }
+.fa-head h3 { display: inline-flex; align-items: center; gap: 6px; min-width: 0; margin: 0; font-size: 13px; white-space: nowrap; }
 .fa-head-actions { display: inline-flex; gap: 4px; }
 .fa-stream { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 12px; }
 .fa-empty p { margin: 4px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
@@ -428,8 +442,12 @@ function stepLabel(s: Step): string {
   display: block; width: 100%; margin-bottom: 6px; padding: 7px 10px; font-size: 12.5px; text-align: left;
   line-height: 1.4; border-radius: 8px;
 }
+.fa-you { display: flex; flex-direction: column; align-items: flex-end; margin-top: 14px; }
+.fa-a { margin-top: 8px; }
+.fa-notice { display: flex; align-items: flex-start; gap: 5px; margin: 6px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.fa-notice svg { flex: none; margin-top: 2px; color: var(--accent-hi); }
 .fa-q {
-  margin: 14px 0 6px auto; width: fit-content; max-width: 92%; padding: 7px 10px;
+  margin: 0 0 6px; width: fit-content; max-width: 92%; padding: 7px 10px;
   border-radius: 10px 10px 3px 10px; background: var(--panel-2); border: 1px solid var(--border-soft);
   font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
 }

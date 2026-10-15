@@ -23,6 +23,7 @@ import { useLocale } from '~/composables/useLocale'
 import AppShell from '~/components/AppShell.vue'
 import DataGrid from '~/components/ui/DataGrid.vue'
 import MarkdownLite from '~/components/ui/MarkdownLite.vue'
+import AiSpeaker from '~/components/ui/AiSpeaker.vue'
 import Select from '~/components/ui/Select.vue'
 
 const { t } = useI18n()
@@ -46,7 +47,7 @@ const { locale } = useLocale()
 type Step = { id: string; name: string; args: Record<string, any>; state: 'running' | 'ok' | 'error'; error?: string; count?: number; table?: AiTable; chart?: AiChartSpec }
 type Turn =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; open: Record<string, boolean>; usage?: AiUsage; phase?: Phase; phaseOn?: string; seq?: number }
+  | { role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; open: Record<string, boolean>; usage?: AiUsage; phase?: Phase; phaseOn?: string; seq?: number; model?: string }
 
 // Cosa sta facendo l'assistente in questo istante. NON e' decorazione: ogni
 // fase corrisponde a un evento vero dello stream, cosi' l'indicatore dice il
@@ -173,7 +174,7 @@ async function send(text?: string) {
   if (!message || busy.value || !ready.value) return
   draft.value = ''
   turns.value.push({ role: 'user', text: message })
-  const reply: Turn = { role: 'assistant', text: '', steps: [], streaming: true, open: {}, phase: 'thinking' }
+  const reply: Turn = { role: 'assistant', text: '', steps: [], streaming: true, open: {}, phase: 'thinking', model: model.value }
   turns.value.push(reply)
   const live = turns.value[turns.value.length - 1] as Extract<Turn, { role: 'assistant' }>
   busy.value = true
@@ -259,7 +260,7 @@ async function openChat(id: number) {
     turns.value = d.messages.flatMap((t) => ([
       { role: 'user', text: t.question } as Turn,
       {
-        role: 'assistant', text: t.answer, streaming: false, open: {}, usage: t.usage, seq: t.seq,
+        role: 'assistant', text: t.answer, streaming: false, open: {}, usage: t.usage, seq: t.seq, model: t.model_id,
         steps: t.steps.map((p, i) => ({
           id: p.id ?? `${t.seq}-${i}`, name: p.name, args: p.args ?? {}, state: 'ok' as const,
           table: p.table, chart: p.chart,
@@ -315,9 +316,13 @@ async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt:
  *  che l'ha prodotto. È il formato che si rilegge fra sei mesi e si incolla in
  *  un ticket, non uno screenshot. */
 function downloadChat() {
-  const righe: string[] = [`# ${chats.value.find((c) => c.id === chatId.value)?.title || t('chat.pageTitle')}`, '']
+  const righe: string[] = [
+    `# ${chats.value.find((c) => c.id === chatId.value)?.title || t('chat.pageTitle')}`, '',
+    `> ${t('aiCompliance.exportNotice')}`, '',
+  ]
   for (const turn of turns.value) {
-    if (turn.role === 'user') { righe.push(`## ${turn.text}`, ''); continue }
+    if (turn.role === 'user') { righe.push(`## ${t('aiCompliance.youLabel')}: ${turn.text}`, ''); continue }
+    righe.push(`**${t('aiCompliance.assistantLabel')}${turn.model ? ` · ${turn.model}` : ''}**`, '')
     for (const s of turn.steps) {
       const sql = (s.args as any)?.sql
       if (sql) righe.push('```sql', String(sql), '```', '')
@@ -497,8 +502,12 @@ watch(draft, async () => {
           </div>
 
           <template v-for="(turn, ti) in turns" :key="ti">
-            <div v-if="turn.role === 'user'" class="msg user"><p>{{ turn.text }}</p></div>
-            <article v-else class="msg bot">
+            <div v-if="turn.role === 'user'" class="msg user">
+              <AiSpeaker who="you" />
+              <p>{{ turn.text }}</p>
+            </div>
+            <article v-else class="msg bot" :aria-label="$t('aiCompliance.assistantLabel')">
+              <AiSpeaker who="ai" :model="turn.model" />
               <ol v-if="turn.steps.length" class="steps">
                 <li v-for="s in turn.steps" :key="s.id" class="step" :class="s.state">
                   <div class="step-line">
@@ -575,8 +584,8 @@ watch(draft, async () => {
               <Select v-model="engine" :options="engineOptions" :aria-label="$t('chat.engineLabel')" :disabled="!ready || busy" class="pick-engine" />
             </label>
             <span v-if="focus.length" class="muted">{{ $t('chat.focusCount', { n: focus.length }) }}</span>
-            <span class="muted hint">{{ $t('chat.disclaimer') }}</span>
           </div>
+          <p class="ai-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('aiCompliance.disclaimer') }}</p>
         </form>
       </section>
     </div>
@@ -622,7 +631,7 @@ watch(draft, async () => {
 .example { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; font-size: 13px; text-align: left; }
 
 .msg { margin-top: 16px; }
-.msg.user { display: flex; justify-content: flex-end; }
+.msg.user { display: flex; flex-direction: column; align-items: flex-end; }
 .msg.user p { margin: 0; max-width: 78%; padding: 8px 12px; border-radius: 12px 12px 3px 12px; background: var(--panel-2); border: 1px solid var(--border-soft); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .steps { margin: 0 0 10px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .step-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -660,6 +669,9 @@ watch(draft, async () => {
 .pick :deep(.select) { min-width: 210px; }
 .pick .pick-engine:deep(.select), .pick-engine { min-width: 150px; }
 .hint { margin-left: auto; }
+/* the AI Act notice: always on screen under the box where the user writes */
+.ai-notice { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+.ai-notice svg { flex: none; color: var(--accent-hi); }
 
 @media (max-width: 900px) {
   .chat { grid-template-columns: 1fr; height: auto; min-height: calc(100dvh - 52px); }

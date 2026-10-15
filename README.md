@@ -541,6 +541,13 @@ Models are an administrator's decision (Admin → AI models): the provider's cat
 listed, nothing is enabled by default, and embedding or audio models cannot be enabled
 for chat.
 
+**People always know they are talking to an AI** (EU AI Act, article 50). Before the
+first question a dialog says so, and it cannot be skipped. In both assistants every
+answer is labelled *AI assistant* with the model that wrote it, every question as the
+user's, also for screen readers. A notice that stays under the input reads "This is an
+AI: it can make mistakes. Always check the results". A downloaded conversation opens
+with the same notice and labels who wrote what.
+
 On the external ClickHouse engine the assistant's queries can run as a **dedicated
 read-only account** (`CLICKHOUSE_EXTERNAL__AI_USERNAME`): a second barrier behind the
 SQL node's allow-list, with no access to `system`, to any table, or to `url()` and

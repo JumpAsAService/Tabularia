@@ -8,6 +8,12 @@ export default {
     "dismiss": "Ho letto, chiudi",
     "close": "Chiudi",
   },
+  "aiCompliance": {
+    "assistantLabel": "Assistente AI",
+    "youLabel": "Tu",
+    "disclaimer": "È un'intelligenza artificiale: può commettere errori. Verifica sempre i risultati.",
+    "exportNotice": "Conversazione con un assistente AI. Le risposte sono state generate automaticamente da un modello linguistico e possono contenere errori: verifica i risultati prima di usarli.",
+  },
   "flowAssistant": {
     "title": "Assistente del flusso",
     "panelTabs": "Pannello destro",
@@ -1338,7 +1344,6 @@ export default {
     "model": "Modello",
     "engine": "motore: {engine}",
     "focusCount": "{n} datasource a fuoco",
-    "disclaimer": "Controlla sempre i numeri nella tabella.",
     "stepList": "Cerco nel catalogo",
     "stepListDone": "Catalogo: {n} datasource",
     "stepDescribe": "Leggo i campi di {name}",
