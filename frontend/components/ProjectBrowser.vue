@@ -15,7 +15,7 @@
 //
 // La ricerca qui è LOCALE (filtra ciò che è già caricato): istantanea e senza
 // rete. Quella che attraversa le cartelle è `/search` (vedi useSearch.ts).
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
@@ -44,6 +44,7 @@ import {
   ScrollText,
   Rows3,
   Copy,
+  PencilLine,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -439,6 +440,67 @@ async function moveRow(row: Row, target: number | null) {
     toast.success(t('projectBrowser.movedTo', { name: row.name, folder }))
   } catch (e) {
     toast.error(errMessage(e))
+  }
+}
+
+// rename in place, as a file manager does: Enter or leaving the field keeps the
+// name, Escape gives up; a refused name (taken, empty) keeps the field open
+const renaming = ref<string | null>(null)
+const renameDraft = ref('')
+const renameBusy = ref(false)
+const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view'])
+
+function startRename(row: Row) {
+  renaming.value = rowKey(row)
+  renameDraft.value = row.name
+  nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('input.rename-input')
+    input?.focus()
+    input?.select()
+  })
+}
+
+function cancelRename() {
+  if (!renameBusy.value) renaming.value = null
+}
+
+async function commitRename(row: Row) {
+  if (renameBusy.value || renaming.value !== rowKey(row)) return
+  const name = renameDraft.value.trim()
+  if (!name || name === row.name) {
+    renaming.value = null
+    return
+  }
+  renameBusy.value = true
+  const rename = <T extends { id: number; name: string }>(list: T[]) =>
+    list.map((x) => (x.id === row.id ? { ...x, name } : x)).sort(byName)
+  try {
+    if (row.kind === 'flow') {
+      await flowsApi.update(row.id, { name })
+      flows.value = rename(flows.value)
+    } else if (row.kind === 'group') {
+      await groupsApi.update(row.id, { name })
+      flowGroups.value = rename(flowGroups.value)
+    } else if (row.kind === 'datasource') {
+      await dsApi.update(row.id, { name })
+      dsList.value = rename(dsList.value)
+      // the views beside it name it in their row
+      savedViews.value = savedViews.value.map((v) => (v.datasource_id === row.id ? { ...v, datasource_name: name } : v))
+    } else if (row.kind === 'view') {
+      await viewsApi.update(row.id, { name })
+      savedViews.value = rename(savedViews.value)
+    } else if (row.kind === 'folder') {
+      await api.update(row.id, { name })
+      projects.value = projects.value.map((p) => (p.id === row.id ? { ...p, name } : p))
+      folderPaths.load(true) // the paths under this folder changed
+    }
+    renaming.value = null
+    toast.success(t('projectBrowser.renamed', { name }))
+  } catch (e) {
+    toast.error(errMessage(e))
+    nextTick(() => document.querySelector<HTMLInputElement>('input.rename-input')?.focus())
+  } finally {
+    renameBusy.value = false
   }
 }
 
@@ -849,7 +911,20 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             @auxclick="clicRiga($event, r)"
           >
             <td class="rname">
-              <button v-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id)">
+              <span v-if="renaming === rowKey(r)" class="asname renaming">
+                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" />
+                <input
+                  v-model="renameDraft"
+                  class="rename-input"
+                  maxlength="200"
+                  :aria-label="$t('projectBrowser.renameLabel', { name: r.name })"
+                  :disabled="renameBusy"
+                  @keydown.enter.prevent="commitRename(r)"
+                  @keydown.esc.prevent="cancelRename"
+                  @blur="commitRename(r)"
+                />
+              </span>
+              <button v-else-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id)">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </button>
               <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
@@ -897,6 +972,15 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 :aria-label="$t('projectBrowser.moveToFolderTitle')"
                 @click="moving = rowKey(r)"
               ><FolderInput :size="13" /></button>
+
+              <button
+                v-if="RENAMABLE.has(r.kind)"
+                class="mini"
+                :title="$t('projectBrowser.renameTitle')"
+                :aria-label="$t('projectBrowser.renameTitle')"
+                :disabled="renaming === rowKey(r)"
+                @click="startRename(r)"
+              ><PencilLine :size="13" /></button>
 
               <button
                 v-if="r.kind !== 'folder'"
@@ -1179,6 +1263,20 @@ tr.folderrow .kicon { color: var(--accent-2); }
 }
 .asname:hover:not(.plain) { color: var(--accent); box-shadow: none; }
 .asname.plain { cursor: default; }
+.asname.renaming { width: min(100%, 440px); }
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--tint-accent);
+}
 .rmeta { font-size: 12px; white-space: nowrap; }
 /* una descrizione lunga non deve allargare la tabella fino a spingere le azioni
    fuori dallo schermo (fra 721 e ~1170px succedeva): si taglia, intera nel tooltip */

@@ -24,6 +24,11 @@ Le datasource di Tabularia invece si chiamano come nel catalogo di Tabularia
 guarda il catalogo riconosce; il percorso fisico del parquet sta nel facet
 `symlinks` (e in `dataSource.uri`), l'id e la cartella nel facet `tabularia`.
 
+Renaming or moving a flow, a datasource or a folder changes these names: the
+catalog gets the objects under the new name (datasources with the standard
+`lifecycleStateChange` RENAME facet, naming the one they were) and, when the
+collector is Marquez, the old name is deleted through its API.
+
 Gli eventi partono DOPO il commit che chiude il run, da un thread di servizio
 con una coda LIMITATA: un collector giù o lento non ferma mai un'esecuzione, non
 tiene aperta la transazione e non riempie la memoria (a coda piena l'evento si
@@ -42,7 +47,8 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from types import SimpleNamespace
+from typing import Any, Callable, Iterable
 
 from sqlmodel import Session, select
 
@@ -123,18 +129,25 @@ def _lavoro(coda: "queue.Queue") -> None:
         if voce is None:
             coda.task_done()
             return
-        run_id, eventi = voce
+        run_id, lavoro = voce
         try:
+            # a rename's events are built here, with a session of their own
+            eventi, vecchi = lavoro() if callable(lavoro) else (lavoro, [])
             _emit(eventi)
-            logger.info("openlineage: %d eventi per il run %s", len(eventi), run_id)
+            if isinstance(run_id, int):
+                logger.info("openlineage: %d eventi per il run %s", len(eventi), run_id)
+            else:
+                logger.info("openlineage: %d events for a %s, %d old names removed", len(eventi), run_id, _remove_old_names(vecchi))
         except Exception as e:  # noqa: BLE001 — il run è già chiuso: il lineage non deve pesare su niente
             logger.warning("openlineage: eventi del run %s non inviati: %s", run_id, str(e)[:300])
         finally:
             coda.task_done()
 
 
-def _accoda(run_id: int, eventi: list) -> bool:
-    """Mette gli eventi in coda senza mai aspettare. A coda piena li scarta."""
+def _accoda(run_id: int | str, eventi: "list | Callable[[], tuple[list, list]]") -> bool:
+    """Mette gli eventi in coda senza mai aspettare. A coda piena li scarta.
+    `eventi` can also be a function the service thread calls to build them, which
+    returns the events and the old names to remove."""
     global _coda, _worker, _scartati, _ultimo_avviso
     with _LOCK:
         if _coda is None:
@@ -723,6 +736,187 @@ def wait_idle(timeout: float = 10.0) -> None:
         pass                                                        # resta daemon: muore col processo
     if worker is not None:
         worker.join(timeout=1.0)
+
+
+# ── renames and moves: the new name in the catalog, the old one removed ──────
+def catalog_names(session: Session, flows: Iterable[Flow] = (), datasources: Iterable[Datasource] = ()) -> dict:
+    """The names flows and datasources have in the catalog NOW. Taken before a
+    rename or a move (the folder path is part of every name), and handed to
+    `renamed` after the commit. Empty when OpenLineage is off."""
+    if not enabled():
+        return {}
+    names: dict[tuple[str, int], str] = {}
+    for flow in flows:
+        names[("flow", flow.id)] = job_name_for_flow(session, flow)
+    for ds in datasources:
+        names[("datasource", ds.id)] = datasource_name(session, ds)
+    return names
+
+
+def folder_names(session: Session, project_id: int) -> dict:
+    """`catalog_names` of everything in a folder and its subfolders: renaming or
+    moving the folder renames all of it."""
+    if not enabled():
+        return {}
+    ids = perm_service.descendant_ids(perm_service.folder_parents(session), {project_id})
+    flows = session.exec(select(Flow).where(Flow.project_id.in_(ids))).all()
+    datasources = session.exec(select(Datasource).where(Datasource.project_id.in_(ids))).all()
+    return catalog_names(session, flows, datasources)
+
+
+def renamed(session: Session, before: dict) -> None:
+    """Call after the commit of a rename or a move, with `catalog_names` taken
+    before it. For whatever changed name, the catalog gets the object under the
+    new name and loses the old one. The events are built and sent by the service
+    thread, with a session of its own: a folder can hold many flows. Never raises."""
+    if not before or not enabled():
+        return
+    try:
+        flows = {f.id: f for f in session.exec(select(Flow).where(Flow.id.in_([i for k, i in before if k == "flow"]))).all()}
+        dss = {d.id: d for d in session.exec(select(Datasource).where(Datasource.id.in_([i for k, i in before if k == "datasource"]))).all()}
+        changed = {}
+        for (kind, oid), old_name in before.items():
+            obj = (flows if kind == "flow" else dss).get(oid)
+            if obj is not None and (job_name_for_flow(session, obj) if kind == "flow" else datasource_name(session, obj)) != old_name:
+                changed[(kind, oid)] = old_name
+        if changed:
+            _accoda("rename", functools.partial(_rename_events, session.get_bind(), changed))
+    except Exception:  # noqa: BLE001 — the rename is done: the lineage must not weigh on it
+        logger.exception("openlineage: rename events not built")
+
+
+def _rename_events(bind: Any, changed: dict) -> tuple[list, list[tuple[str, str, str]]]:
+    """The events that tell the catalog the new names, and the old names to remove
+    as (jobs | datasets, namespace, name). A flow comes back as its static job and
+    loses its old job and its Output jobs (they return with its next run); a
+    datasource comes back as a dataset that names the one it was, with its refresh
+    job; the flows that read or write a renamed datasource come back pointing at
+    the new name."""
+    from openlineage.client.event_v2 import DatasetEvent, StaticDataset
+    from openlineage.client.facet_v2 import lifecycle_state_change_dataset as lifecycle
+
+    events: list = []
+    old: list[tuple[str, str, str]] = []
+    ds_namespace = f"tabularia://{namespace()}"
+    sent_flows: set[int] = set()
+    renamed_ds: list[Datasource] = []
+    with Session(bind) as s:
+        for (kind, oid), old_name in changed.items():
+            if kind == "flow":
+                flow = s.get(Flow, oid)
+                if flow is None:
+                    continue
+                events += job_events_for_flow(s, flow)
+                sent_flows.add(flow.id)
+                old.append(("jobs", namespace(), old_name))
+                old += [("jobs", namespace(), f"{old_name}.{label}") for label in _output_labels(s, flow.id)]
+                continue
+            ds = s.get(Datasource, oid)
+            if ds is None:
+                continue
+            dataset = datasource_dataset(s, ds)
+            facets = dict(dataset.facets or {})
+            facets["lifecycleStateChange"] = lifecycle.LifecycleStateChangeDatasetFacet(
+                lifecycleStateChange=lifecycle.LifecycleStateChange.RENAME,
+                previousIdentifier=lifecycle.PreviousIdentifier(name=old_name, namespace=ds_namespace),
+            )
+            events.append(DatasetEvent(eventTime=_now(), producer=PRODUCER,
+                                       dataset=StaticDataset(namespace=ds_namespace, name=dataset.name, facets=facets)))
+            old.append(("datasets", ds_namespace, old_name))
+            if ds.kind == "database":
+                events.append(_refresh_job_event(s, ds))
+                old.append(("jobs", namespace(), f"{old_name[1:]} (refresh)"))  # «/a/b» was the job «a/b (refresh)»
+            renamed_ds.append(ds)
+        for flow in _flows_touching(s, renamed_ds):
+            if flow.id not in sent_flows:
+                events += job_events_for_flow(s, flow)
+    return events, old
+
+
+def _output_labels(session: Session, flow_id: int) -> list[str]:
+    """The names of a flow's Output jobs in the catalog, one per destination its
+    runs wrote to (see `_output_label`)."""
+    rows = session.exec(
+        select(Run.publish_name, Run.destination, Run.email).where(Run.flow_id == flow_id, Run.kind == "flow").distinct().limit(200)
+    ).all()
+    labels: list[str] = []
+    for publish_name, destination, email in rows:
+        if publish_name or destination or email:
+            label = _output_label(SimpleNamespace(publish_name=publish_name, destination=destination, email=email, id=None))
+            if label not in labels:
+                labels.append(label)
+    return labels
+
+
+def _refresh_job_event(session: Session, ds: Datasource):
+    """The refresh of a database datasource as a static job, as its runs describe it."""
+    from openlineage.client.event_v2 import Job, JobEvent
+    from openlineage.client.facet_v2 import job_type_job
+
+    inputs, job_facets = origin_inputs(session, ds)
+    job_facets["jobType"] = job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType="REFRESH")
+    return JobEvent(eventTime=_now(), producer=PRODUCER, job=Job(namespace=namespace(), name=job_name_for_refresh(session, ds), facets=job_facets),
+                    inputs=inputs, outputs=[datasource_dataset(session, ds, output=True)])
+
+
+def _flows_touching(session: Session, datasources: list[Datasource]) -> list[Flow]:
+    """The flows whose sources read one of these datasources (by id) or whose
+    Output nodes write one of them (by folder and current name)."""
+    if not datasources:
+        return []
+    ids = {d.id for d in datasources}
+    written = {(d.project_id, d.name) for d in datasources}
+    out = []
+    for flow in session.exec(select(Flow)).all():
+        for n in _definition(flow).get("nodes") or []:
+            d = n.get("data") or {}
+            if n.get("type") == "source" and d.get("datasourceId") in ids:
+                out.append(flow)
+                break
+            if (n.get("type") == "output" and (d.get("destType") or "datasource") == "datasource"
+                    and (d.get("projectId"), (d.get("name") or "").strip()) in written):
+                out.append(flow)
+                break
+    return out
+
+
+_http_transport: Any = None  # for the tests: an httpx transport standing in for Marquez
+
+
+def _marquez_api() -> str | None:
+    """Marquez's REST API, when the collector is Marquez (its lineage endpoint under
+    OPENLINEAGE__URL): the place where old names can be deleted. Other collectors
+    get the standard RENAME facet and drop the old name their own way."""
+    s = get_settings().openlineage
+    if not s.url or s.endpoint.strip("/") != "api/v1/lineage":
+        return None
+    return f"{s.url.rstrip('/')}/api/v1"
+
+
+def _remove_old_names(old: list[tuple[str, str, str]]) -> int:
+    """Deletes old jobs and datasets from Marquez (a soft delete: an event for the
+    same name brings it back). A name already gone counts as removed."""
+    api = _marquez_api()
+    if not old or api is None:
+        return 0
+    import httpx
+    from urllib.parse import quote
+
+    s = get_settings().openlineage
+    headers = {"Authorization": f"Bearer {s.api_key}"} if s.api_key else {}
+    removed = 0
+    with httpx.Client(timeout=s.timeout_seconds, headers=headers, transport=_http_transport) as client:
+        for kind, ns, name in old:
+            try:
+                r = client.delete(f"{api}/namespaces/{quote(ns, safe='')}/{kind}/{quote(name, safe='')}")
+            except httpx.HTTPError as e:
+                logger.warning("openlineage: old %s «%s» not removed: %s", kind[:-1], name, e)
+                continue
+            if r.status_code < 300 or r.status_code == 404:
+                removed += 1
+            else:
+                logger.warning("openlineage: old %s «%s» not removed: HTTP %s", kind[:-1], name, r.status_code)
+    return removed
 
 
 def pending() -> int:

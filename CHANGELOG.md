@@ -5,6 +5,19 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Rename from the Explore.** Flows, flow groups, saved views, datasources and folders
+  get a Rename button: the name becomes a field in its row, Enter or leaving the field
+  keeps it, Escape gives up, and a name already taken in the folder is refused with
+  the field still open. Renaming a datasource does not change the Output nodes that
+  write it by name: update them, or their next run creates one with the old name.
+- **OpenLineage follows renames and moves.** The folder path is part of the names
+  flows and datasources have in a lineage catalog, so renaming or moving a flow, a
+  datasource or a folder renamed them there only at their next run, and the old names
+  stayed. Now the catalog gets them under their new names at once (datasources with
+  the standard `lifecycleStateChange` RENAME facet naming the old one), together with
+  the flows that read or write a renamed datasource, and on Marquez the old jobs and
+  datasets are deleted through its API. Saving a flow or a folder without changing a
+  name sends nothing. Folder and flow names can no longer be blank.
 - **Duplicate from the Explore.** Flows, flow groups, saved views, connections and
   datasources get a Duplicate button: the copy lands in the same folder as «name (1)»,
   then «(2)», and a copy of «name (1)» takes the next free number, as a file manager

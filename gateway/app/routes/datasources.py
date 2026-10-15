@@ -24,7 +24,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, Run, SavedView, User
-from app.services import audit
+from app.services import audit, openlineage
 from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
@@ -568,6 +568,8 @@ def update_datasource(
 ):
     ds = _get_ds(session, ds_id)
     ensure_can(session, user, ds.project_id, Capability.EDIT)
+    # the folder path is part of the datasource's name in an external lineage catalog
+    lineage_names = openlineage.catalog_names(session, datasources=[ds]) if body.name is not None or body.project_id is not None else {}
 
     target_project = ds.project_id
     if body.project_id is not None and body.project_id != ds.project_id:
@@ -612,6 +614,7 @@ def update_datasource(
     session.add(ds)
     session.commit()
     session.refresh(ds)
+    openlineage.renamed(session, lineage_names)
     return _to_out(ds)
 
 

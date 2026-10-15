@@ -21,7 +21,7 @@ from app.models import Connection, Datasource, Flow, FlowVersion, Project, Run, 
 from app.services.dbt_export import OpzioniDbt
 from app.core.lingua import lingua_della_richiesta
 from app.models.permission import Capability
-from app.services import audit, flow_presence, run_history
+from app.services import audit, flow_presence, openlineage, run_history
 from pydantic import BaseModel, Field
 from app.schemas.models import UtcDateTime
 from app.schemas.models import (
@@ -518,8 +518,14 @@ def update_flow(
     ensure_can(session, user, flow.project_id, Capability.EDIT)
     if body.definition is not None:
         _authorize_definition_keys(session, user, body.definition)
+    if body.name is not None:
+        body.name = body.name.strip()
+        if not body.name:
+            raise HTTPException(status_code=422, detail="The flow needs a name")
     changed = [k for k in ("name", "description", "definition", "project_id", "engine", "production_engine")
                if getattr(body, k, None) is not None]
+    # the folder path is part of the flow's name in an external lineage catalog
+    lineage_names = openlineage.catalog_names(session, flows=[flow]) if body.name is not None or body.project_id is not None else {}
 
     if body.project_id is not None and body.project_id != flow.project_id:
         # spostamento: serve EDIT anche sulla cartella di destinazione
@@ -545,6 +551,7 @@ def update_flow(
     session.refresh(flow)
     if body.definition is not None:  # solo i cambi di DAG creano una versione
         _snapshot_version(session, flow, user, note="modifica")
+    openlineage.renamed(session, lineage_names)
     audit.record_audit(
         session, actor=user, action=audit.FLOW_UPDATE, target_type="flow",
         target_id=flow.id, target_label=flow.name, detail={"changed": changed}, request=request,

@@ -12,6 +12,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Project, User
 from app.models.permission import Capability
+from app.services import openlineage
 from app.services import permissions as perm_service
 from app.services.permissions import descendant_ids, folder_parents
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
@@ -75,8 +76,15 @@ def update_project(
 ):
     project = _get_project(session, project_id)
     ensure_can(session, user, project_id, Capability.EDIT)
+    # the folder path is part of the names its flows and datasources have in an
+    # external lineage catalog: renaming or moving it renames them all there
+    moved = body.parent_id is not None and body.parent_id != project.parent_id
+    lineage_names = openlineage.folder_names(session, project_id) if body.name is not None or moved else {}
     if body.name is not None:
-        project.name = body.name
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="The folder needs a name")
+        project.name = name
     if body.description is not None:
         project.description = body.description
     if body.parent_id is not None and body.parent_id != project.parent_id:
@@ -103,6 +111,7 @@ def update_project(
     session.add(project)
     session.commit()
     session.refresh(project)
+    openlineage.renamed(session, lineage_names)
     return project
 
 

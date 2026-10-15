@@ -79,8 +79,30 @@ Every run carries a `tabularia` run facet
 Tables and objects follow the
 [OpenLineage naming conventions](https://openlineage.io/docs/spec/naming), so a
 catalog that also receives lineage from dbt, Airflow or Spark matches the same
-nodes. Renaming or moving a datasource in Tabularia creates a new dataset in the
-catalog; the id in the `tabularia` facet ties the two.
+nodes.
+
+### Renames and moves
+
+The folder path is part of the names of flows and datasources, so renaming or moving
+a flow, a datasource or a folder renames them in the catalog too. Right after the
+change Tabularia sends:
+
+- for a datasource, a `DatasetEvent` under the new name carrying the standard
+  `lifecycleStateChange` facet `RENAME`, whose `previousIdentifier` is the old name,
+  and the static job of its refresh (database datasources);
+- for a flow, its static `JobEvent` under the new name; its Output jobs come back with
+  its next run;
+- for every flow that reads or writes a renamed datasource, its `JobEvent` again, so
+  the graph points at the new name.
+
+On **Marquez** (the collector's endpoint is `api/v1/lineage`) the old names are then
+deleted through its API (`DELETE /api/v1/namespaces/{namespace}/jobs|datasets/{name}`,
+a soft delete): the old dataset, the old job, the old Output and refresh jobs. Other
+collectors receive the `RENAME` facet and drop the old name their own way. The id in
+the `tabularia` facet ties the old and the new dataset in any case.
+
+An Output node finds its datasource by name: after renaming a datasource, update the
+Output nodes that write it, or their next run creates a datasource with the old name.
 
 The `tabularia` facet on datasources — schema in
 [`docs/openlineage/TabulariaDatasetFacet.json`](openlineage/TabulariaDatasetFacet.json)
