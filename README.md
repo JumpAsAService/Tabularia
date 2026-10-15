@@ -546,6 +546,20 @@ read-only account** (`CLICKHOUSE_EXTERNAL__AI_USERNAME`): a second barrier behin
 SQL node's allow-list, with no access to `system`, to any table, or to `url()` and
 `file()`. See [docs/engines/clickhouse-ai-user.md](docs/engines/clickhouse-ai-user.md).
 
+### In the flow editor
+
+The editor's right panel has a second tab, **Assistant**, that builds the flow on the
+canvas with you: ask for "the orders of last year, total per country" and it puts the
+datasource on the canvas, adds a filter and a group-by, and checks every step on a
+preview of the data — a step that fails or returns the wrong columns is fixed before it
+goes on. It places the same operations you would, with the same parameters the node
+panel shows; it reads only the datasources you may read, and previews pass the checks
+the editor's do. What it built comes back as a whole and is applied as **one Undo
+step**; it never saves, runs or schedules the flow. If you change the canvas while it
+works, its version is not applied over yours without asking. The conversation is kept
+with the flow and reopens with it; spending caps and the audit log count it like the
+data assistant's.
+
 ## Scheduling & timezone
 
 Cron-style schedules are evaluated in a **deployment-wide timezone** (`APP__TIMEZONE`,

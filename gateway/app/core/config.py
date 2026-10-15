@@ -371,6 +371,9 @@ class AiSettings(BaseModel):
     max_result_rows: int = Field(default=200, ge=1, le=2000)
     # giri del modello per messaggio: il tetto al ciclo di chiamate agli strumenti
     max_requests: int = Field(default=12, ge=1, le=50)
+    # the same for the flow editor's assistant, whose turns take a model round-trip per
+    # step it builds and checks (env: AI__MAX_FLOW_REQUESTS)
+    max_flow_requests: int = Field(default=30, ge=1, le=80)
     # messaggi di storia che il client puo' rimandare a ogni turno
     max_history_messages: int = Field(default=60, ge=0, le=400)
     # Tetti per TURNO, applicati da pydantic-ai stesso (`UsageLimits`). Senza,

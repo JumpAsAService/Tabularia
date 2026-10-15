@@ -16,6 +16,7 @@ turni in ordine di `seq`.
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
 
@@ -25,6 +26,8 @@ def _now() -> datetime:
 
 class AiChat(SQLModel, table=True):
     __tablename__ = "ai_chats"
+    # the editor reopens a user's latest conversation about a flow
+    __table_args__ = (Index("ix_ai_chats_user_id_flow_id", "user_id", "flow_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     # niente FK verso users: una chat sopravvive alla cancellazione dell'account
@@ -36,6 +39,10 @@ class AiChat(SQLModel, table=True):
     # ultimi usati, per riaprire la chat com'era
     model_id: str = ""
     engine: Optional[str] = None
+    # «assistant» (the data assistant's page) or «flow» (the flow editor's helper,
+    # about the flow `flow_id`; None for a flow not saved yet)
+    kind: str = Field(default="assistant", sa_column_kwargs={"server_default": "assistant"})
+    flow_id: Optional[int] = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now, index=True)
 

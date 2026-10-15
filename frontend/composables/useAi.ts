@@ -43,6 +43,9 @@ export interface AiToolResult {
   chart?: AiChartSpec
   count?: number
   error?: string
+  // the flow editor's tools: the node made or changed, and a step whose preview failed
+  node?: string
+  warning?: string
 }
 
 export interface AiChatHandlers {
@@ -50,7 +53,8 @@ export interface AiChatHandlers {
   onToolCall: (call: AiToolCall) => void
   onToolResult: (result: AiToolResult) => void
   onDone: (done: AiDone) => void
-  onError: (message: string, code?: string) => void
+  // `extra`: what came with the error (the flow editor's assistant sends what it built before the stop)
+  onError: (message: string, code?: string, extra?: Partial<AiDone>) => void
 }
 
 export interface AiUsage {
@@ -74,13 +78,30 @@ export interface AiDone {
   seq: number | null
   usage: AiUsage
   chat_total: AiChatTotal | null
+  // the flow editor's assistant: the new canvas (null when nothing changed) and the nodes it touched
+  definition?: string | null
+  touched?: string[]
+}
+
+export interface FlowAssistBody {
+  message: string
+  model: string
+  chat_id?: number | null
+  flow_id: number | null
+  // the canvas as the editor saves it
+  definition: string
+  engine?: string | null
+  locale: string
+  selected?: string | null
+  // the editor's id counters, so a new node never takes back a deleted node's id
+  counters?: Record<string, number>
 }
 
 export interface AiTurn {
   seq: number
   question: string
   answer: string
-  steps: { id?: string; name: string; args: any; table?: AiTable; chart?: AiChartSpec }[]
+  steps: { id?: string; name: string; args: any; table?: AiTable; chart?: AiChartSpec; node?: string }[]
   model_id: string
   usage: AiUsage
   created_at: string
@@ -113,9 +134,9 @@ export function useAi() {
   const { apiFetch } = useApiClient()
   const base = useRuntimeConfig().public.apiBase as string
 
-  async function chat(body: AiChatBody, handlers: AiChatHandlers, signal?: AbortSignal): Promise<void> {
+  async function stream(path: string, body: object, handlers: AiChatHandlers, signal?: AbortSignal): Promise<void> {
     const headers: Record<string, string> = { ...CSRF_HEADERS, 'Content-Type': 'application/json', Accept: 'text/event-stream' }
-    const resp = await fetch(`${base}/ai/chat`, {
+    const resp = await fetch(`${base}${path}`, {
       method: 'POST', headers, body: JSON.stringify(body), signal, credentials: 'include',
     })
     if (resp.status === 401) {
@@ -146,6 +167,11 @@ export function useAi() {
     }
   }
 
+  const chat = (body: AiChatBody, handlers: AiChatHandlers, signal?: AbortSignal) => stream('/ai/chat', body, handlers, signal)
+  /** One turn of the flow editor's assistant: it changes the canvas sent and returns it in `done`. */
+  const flowAssist = (body: FlowAssistBody, handlers: AiChatHandlers, signal?: AbortSignal) =>
+    stream('/ai/flow-assist', body, handlers, signal)
+
   function dispatch(block: string, h: AiChatHandlers) {
     let event = 'message'
     let data = ''
@@ -160,7 +186,7 @@ export function useAi() {
     else if (event === 'tool_call') h.onToolCall(payload)
     else if (event === 'tool_result') h.onToolResult(payload)
     else if (event === 'done') h.onDone(payload as AiDone)
-    else if (event === 'error') h.onError(String(payload.message ?? ''), payload.code)
+    else if (event === 'error') h.onError(String(payload.message ?? ''), payload.code, payload)
   }
 
   // le conversazioni salvate: sempre e solo quelle di chi chiede (il server non
@@ -183,6 +209,9 @@ export function useAi() {
     setModel: (modelId: string, enabled: boolean) =>
       apiFetch<AiModel>(`/ai/models/${encodeURIComponent(modelId)}`, { method: 'PUT', body: { enabled } }),
     chat,
+    flowAssist,
+    /** The user's latest conversation with the flow editor's assistant about a flow, or null. */
+    latestFlowChat: (flowId: number) => apiFetch<AiChatDetail | null>(`/ai/flow-chats/latest?flow_id=${flowId}`),
     chats,
     openChat,
     removeChat,

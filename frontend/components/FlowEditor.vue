@@ -7,7 +7,9 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2 } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal } from 'lucide-vue-next'
+import FlowAssistant from '~/components/FlowAssistant.vue'
+import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
 import { useAuth } from '~/composables/useAuth'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
@@ -589,6 +591,72 @@ onNodesInitialized(() => {
   adattaVista = false
   fitView({ padding: 0.15, maxZoom: 1 })
 })
+
+// ── The assistant beside the node panel ───────────────────────────────────
+// A second tab of the right panel, when the installation has an AI model and the
+// user may change flows. What it builds comes back as a whole canvas, applied here
+// as one Undo step; the nodes it touched glow for a moment.
+const aiStatus = ref<AiStatus | null>(null)
+const aiReady = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !soloOsservatore.value)
+const rightTab = ref<'node' | 'assistant'>('node')
+// the node the user is pointing the assistant at: not the empty source a new flow starts with
+const assistantSelection = computed(() => {
+  const n = selectedNode.value
+  if (!n) return null
+  if (n.type === 'source' && n.data?.datasourceId == null && !n.data?.parquetKey) return null
+  return n.id
+})
+onMounted(async () => {
+  try {
+    aiStatus.value = await useAi().status()
+  } catch {
+    aiStatus.value = null // no assistant: the panel stays as it was
+  }
+})
+
+// the ids this editor has handed out: the assistant numbers its nodes after them
+const assistantCounters = () => ({ 'op-': opCounter, 'src-': sourceCounter, 'out-': outputCounter })
+
+function applyAssistant(change: { definition: string; touched: string[] }) {
+  let def: any
+  try {
+    def = JSON.parse(change.definition)
+  } catch {
+    return
+  }
+  history.flush() // what the user was doing stays a step of its own
+  const existing = new Set(getNodes.value.map((n) => n.id))
+  applyDefinition(def, true)
+  invalidateColumns()
+  invalidateStats()
+  const touched = change.touched.filter((id) => findNode(id))
+  for (const id of touched) {
+    const n = findNode(id)
+    if (n) n.class = 'ai-touched'
+  }
+  setTimeout(() => {
+    for (const id of touched) {
+      const n = findNode(id)
+      if (n && n.class === 'ai-touched') n.class = undefined
+    }
+  }, 2600)
+  const last = touched[touched.length - 1]
+  if (last) {
+    // as a click on it would: its settings in the panel, its rows in the grid
+    selectedId.value = last
+    refreshForNode(last)
+  }
+  // new nodes are placed beside the ones they read, possibly out of view: show the flow
+  // whole once they are measured (fitView leaves out a node it cannot measure yet)
+  const added = touched.filter((id) => !existing.has(id))
+  if (added.length) fitWhenMeasured(added)
+}
+
+function fitWhenMeasured(ids: string[], frames = 30) {
+  const measured = ids.every((id) => (findNode(id)?.dimensions?.width ?? 0) > 0)
+  if (measured || frames <= 0) fitView({ padding: 0.15, duration: 300, maxZoom: 1 })
+  else requestAnimationFrame(() => fitWhenMeasured(ids, frames - 1))
+}
 
 onMounted(async () => {
   if (!chiEntra.value) await fetchMe()
@@ -1918,7 +1986,7 @@ async function pollTask(id: string) {
       </VueFlow>
     </div>
 
-    <div class="panel">
+    <div class="panel" :class="{ tabbed: aiReady }">
       <div
         class="panel-resizer"
         role="separator"
@@ -1929,7 +1997,36 @@ async function pollTask(id: string) {
         @mousedown="startPanelResize"
         @keydown="tastiPannello"
       />
+      <div v-if="aiReady" class="panel-tabs" role="tablist" :aria-label="$t('flowAssistant.panelTabs')">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="rightTab === 'node'"
+          :class="{ on: rightTab === 'node' }"
+          @click="rightTab = 'node'"
+        ><SlidersHorizontal :size="13" /> {{ $t('flowAssistant.tabNode') }}</button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="rightTab === 'assistant'"
+          :class="{ on: rightTab === 'assistant' }"
+          @click="rightTab = 'assistant'"
+        ><Sparkles :size="13" /> {{ $t('flowAssistant.tabAssistant') }}</button>
+      </div>
+      <FlowAssistant
+        v-if="aiReady && aiStatus"
+        v-show="rightTab === 'assistant'"
+        :active="rightTab === 'assistant'"
+        :status="aiStatus"
+        :flow-id="flowId"
+        :engine="flowEngine"
+        :selected-id="assistantSelection"
+        :snapshot="serializeCanvas"
+        :counters="assistantCounters"
+        @apply="applyAssistant"
+      />
       <NodePanel
+        v-show="!aiReady || rightTab === 'node'"
         :node="selectedNode"
         :operations="operations"
         :input-columns="inputColumns"
@@ -1998,6 +2095,18 @@ async function pollTask(id: string) {
 </template>
 
 <style scoped>
+/* the right panel with the assistant beside the node settings */
+.panel.tabbed { display: flex; flex-direction: column; min-height: 0; }
+.panel.tabbed > .nodepanel, .panel.tabbed > .fa { flex: 1; min-height: 0; height: auto; }
+.panel-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--border-soft); }
+.panel-tabs button {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: 12.5px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent;
+  color: var(--muted); box-shadow: none;
+}
+.panel-tabs button:hover { color: var(--text); box-shadow: none; }
+.panel-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+
 /* il testo del dialogo «modifiche non salvate» */
 .leave-body { margin: 0; line-height: 1.5; }
 </style>

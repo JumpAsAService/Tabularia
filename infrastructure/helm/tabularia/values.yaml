@@ -133,6 +133,8 @@ ai:
   defaultModel: ""
   maxResultRows: 200
   maxRequests: 12
+  # the flow editor's assistant: one round-trip per step it builds and checks
+  maxFlowRequests: 30
   # Spending caps, in dollars. Per turn it is always on; per user per day and for
   # the whole installation per day are off at 0. Without them anyone who can
   # chat can spend on the key's owner: set both where strangers can sign in.

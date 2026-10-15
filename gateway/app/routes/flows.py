@@ -21,7 +21,7 @@ from app.models import Connection, Datasource, Flow, FlowVersion, Project, Run, 
 from app.services.dbt_export import OpzioniDbt
 from app.core.lingua import lingua_della_richiesta
 from app.models.permission import Capability
-from app.services import audit, flow_presence, openlineage, run_history
+from app.services import ai_chats, audit, flow_presence, openlineage, run_history
 from pydantic import BaseModel, Field
 from app.schemas.models import UtcDateTime
 from app.schemas.models import (
@@ -684,6 +684,7 @@ def delete_flow(flow_id: int, request: Request, user: User = Depends(get_current
     from app.models import DbtAiText
 
     session.exec(sa_delete(DbtAiText).where(DbtAiText.flow_id == flow_id))   # i testi AI dei suoi export dbt
+    ai_chats.forget_flow(session, flow.id)  # the editor's assistant talked about this flow only
     session.delete(flow)
     session.commit()
     audit.record_audit(

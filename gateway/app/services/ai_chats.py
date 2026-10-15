@@ -41,9 +41,13 @@ def _chat_di(session: Session, user: User, chat_id: int) -> AiChat:
     return chat
 
 
-def apri(session: Session, user: User, chat_id: int, model_id: str, engine: Optional[str]) -> AiChat:
-    """Riapre una conversazione esistente, ricordandone modello e motore."""
+def apri(session: Session, user: User, chat_id: int, model_id: str, engine: Optional[str],
+         kind: str = "assistant") -> AiChat:
+    """Riapre una conversazione esistente, ricordandone modello e motore. A
+    conversation of the other assistant is not found: each continues its own."""
     chat = _chat_di(session, user, chat_id)
+    if (chat.kind or "assistant") != kind:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata")
     chat.model_id, chat.engine = model_id, engine
     session.add(chat)
     session.commit()
@@ -51,13 +55,14 @@ def apri(session: Session, user: User, chat_id: int, model_id: str, engine: Opti
     return chat
 
 
-def crea(session: Session, user: User, domanda: str, model_id: str, engine: Optional[str]) -> AiChat:
+def crea(session: Session, user: User, domanda: str, model_id: str, engine: Optional[str],
+         kind: str = "assistant", flow_id: Optional[int] = None) -> AiChat:
     """Apre una conversazione nuova.
 
     Si chiama quando il primo turno è FINITO, non quando arriva la domanda: una
     richiesta interrotta a metà lascerebbe altrimenti una conversazione vuota
     nell'elenco (visto dal vivo il 2026-09-19)."""
-    chat = AiChat(user_id=user.id, title=_titolo(domanda), model_id=model_id, engine=engine)
+    chat = AiChat(user_id=user.id, title=_titolo(domanda), model_id=model_id, engine=engine, kind=kind, flow_id=flow_id)
     session.add(chat)
     session.commit()
     session.refresh(chat)
@@ -158,7 +163,9 @@ def riepilogo(session: Session, chat: AiChat) -> dict[str, Any]:
 
 def elenco(session: Session, user: User, limite: int) -> list[dict[str, Any]]:
     chats = session.exec(
-        select(AiChat).where(AiChat.user_id == user.id).order_by(AiChat.updated_at.desc()).limit(limite)
+        # the flow editor's conversations live in the editor, not in this list
+        select(AiChat).where(AiChat.user_id == user.id, AiChat.kind == "assistant")
+        .order_by(AiChat.updated_at.desc()).limit(limite)
     ).all()
     righe = [{"id": c.id, "title": c.title, "model_id": c.model_id, "engine": c.engine,
               "created_at": c.created_at, "updated_at": c.updated_at, **riepilogo(session, c)} for c in chats]
@@ -180,6 +187,37 @@ def dettaglio(session: Session, user: User, chat_id: int) -> dict[str, Any]:
         **riepilogo(session, chat),
         "messages": [_turno_per_ui(t) for t in turni],
     }
+
+
+def follow_flow(session: Session, chat: AiChat, flow_id: Optional[int]) -> None:
+    """A conversation started on a flow not saved yet takes the flow's id once it
+    has one; a conversation about another flow is not continued here."""
+    if chat.flow_id == flow_id:
+        return
+    if chat.flow_id is not None:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata")
+    chat.flow_id = flow_id
+    session.add(chat)
+    session.commit()
+
+
+def forget_flow(session: Session, flow_id: int) -> None:
+    """The flow editor's conversations about a flow that is deleted go with it (the
+    spending ledger stays: it is the bill, not the conversation). Does not commit."""
+    from sqlalchemy import delete as sa_delete
+
+    ids = list(session.exec(select(AiChat.id).where(AiChat.kind == "flow", AiChat.flow_id == flow_id)).all())
+    if ids:
+        session.exec(sa_delete(AiChatTurn).where(AiChatTurn.chat_id.in_(ids)))
+        session.exec(sa_delete(AiChat).where(AiChat.id.in_(ids)))
+
+
+def latest_flow_chat(session: Session, user: User, flow_id: int) -> Optional[AiChat]:
+    """This user's latest conversation with the flow editor's assistant about a flow."""
+    return session.exec(
+        select(AiChat).where(AiChat.user_id == user.id, AiChat.kind == "flow", AiChat.flow_id == flow_id)
+        .order_by(AiChat.updated_at.desc()).limit(1)
+    ).first()
 
 
 def _turno_per_ui(turno: AiChatTurn) -> dict[str, Any]:
@@ -223,10 +261,14 @@ def _turno_per_ui(turno: AiChatTurn) -> dict[str, Any]:
                     }
                 if isinstance(contenuto.get("chart"), dict):
                     passo["chart"] = contenuto["chart"]
+                if contenuto.get("node"):  # the flow editor's tools: the node made or changed
+                    passo["node"] = str(contenuto["node"])
     return {
         "seq": turno.seq,
         "question": turno.question,
-        "answer": "".join(testo),
+        # each text part is a paragraph of its own: the model writes some before a
+        # tool call and some after, and glued together they ran into one sentence
+        "answer": "\n\n".join(testo),
         "steps": passi,
         "model_id": turno.model_id,
         "usage": {

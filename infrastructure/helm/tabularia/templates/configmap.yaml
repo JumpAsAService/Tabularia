@@ -135,6 +135,7 @@ AI__ACCESS_KEY: {{ include "tabularia.env" (.Values.ai.accessKey) }}
 AI__DEFAULT_MODEL: {{ include "tabularia.env" (.Values.ai.defaultModel) }}
 AI__MAX_RESULT_ROWS: {{ include "tabularia.env" (.Values.ai.maxResultRows) }}
 AI__MAX_REQUESTS: {{ include "tabularia.env" (.Values.ai.maxRequests) }}
+AI__MAX_FLOW_REQUESTS: {{ include "tabularia.env" (.Values.ai.maxFlowRequests) }}
 # Spending caps (dollars): per turn, per user per day, whole installation per day
 AI__MAX_COST_PER_TURN_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerTurnUsd) }}
 AI__MAX_COST_PER_DAY_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerDayUsd) }}

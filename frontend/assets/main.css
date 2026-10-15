@@ -634,6 +634,15 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__controls-button:disabled { cursor: default; }
 .vue-flow__controls-button:disabled:hover { background: var(--panel-2); }
 .vue-flow__controls-button:disabled svg { opacity: 0.35; }
+/* nodes the flow assistant just added or changed glow for a moment */
+.vue-flow__node.ai-touched { animation: ai-touched 2.4s ease-out; border-radius: 10px; }
+@keyframes ai-touched {
+  0%, 35% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vue-flow__node.ai-touched { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+}
 /* minimap in theme: a panel like the controls, the visible part outlined */
 .vue-flow__minimap {
   background-color: var(--panel);

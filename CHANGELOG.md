@@ -5,6 +5,17 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **An assistant in the flow editor.** The right panel gets a second tab, Assistant,
+  that builds the flow on the canvas with you: it reads the catalogue as the data
+  assistant does, puts datasources on the canvas, adds and changes steps with the
+  parameters the node panel shows, and checks each step on a preview of the data (with
+  your rights, checked as the editor's previews are), fixing a step that fails before
+  going on. What it built comes back as a whole and is applied as one Undo step; it
+  never saves, runs or schedules the flow, and if you change the canvas while it works
+  its version waits for your go-ahead. The conversation is kept with the flow and
+  reopens with it; spending caps and the audit log (`ai.query`, via flow editor) count
+  it like the data assistant's. Its disclosure shows only when the tab is first opened.
+  Migration 0009 marks the conversations of each assistant.
 - **Rename from the Explore.** Flows, flow groups, saved views, datasources and folders
   get a Rename button: the name becomes a field in its row, Enter or leaving the field
   keeps it, Escape gives up, and a name already taken in the folder is refused with
