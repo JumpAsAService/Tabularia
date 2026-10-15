@@ -65,7 +65,7 @@ def test_foreach_e_pivot_nativo_sono_rifiutati_con_un_messaggio_chiaro():
     piv = [{"type": "pivot", "params": {"index": ["id"], "on": ["canale"], "values": "importo"}}]
     sql, cols, _ = d.compile_model_sql({"key": "k"}, piv, _resolve)            # in DuckDB si può
     assert "PIVOT" in sql and cols == []
-    with pytest.raises(d.DbtExportError, match="federato"):
+    with pytest.raises(d.DbtExportError, match="federated"):
         d.compile_model_sql({"key": "k"}, piv, _resolve, native=True)
 
 
@@ -363,7 +363,7 @@ def test_ogni_schema_di_postgres_o_mysql_e_un_database_federato():
 def test_un_altro_clickhouse_o_un_tipo_che_clickhouse_non_legge_sono_rifiutati():
     ch = d.TargetClickHouse([{"id": 3, "name": "crm", "db_type": "clickhouse", "host": "altro.local", "database": "a"},
                              {"id": 4, "name": "lago", "db_type": "trino", "host": "t.local"}], "ch.local")
-    with pytest.raises(d.DbtExportError, match="ALTRO ClickHouse"):
+    with pytest.raises(d.DbtExportError, match="ANOTHER ClickHouse"):
         ch.database_per(3, "a")
     with pytest.raises(d.DbtExportError, match="trino"):
         ch.database_per(4, "x")
@@ -375,7 +375,7 @@ def test_la_query_di_una_datasource_si_traduce_sulle_tabelle_federate():
     assert "tab_src_1_crm.clienti" in sql and "tab_src_1_public.ordini" in sql      # senza schema: public, come in Postgres
     assert "FROM a" in sql and "tab_src_1_public.a" not in sql                       # la CTE resta una CTE
     assert set(ch.federati) == {"tab_src_1_crm", "tab_src_1_public"}
-    with pytest.raises(d.DbtExportError, match="non si traduce"):
+    with pytest.raises(d.DbtExportError, match="cannot be translated"):
         ch.traduci_query("SELECT FROM WHERE (", 1, "rotta")
 
 

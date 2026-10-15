@@ -45,7 +45,7 @@ class ContractInvalid(ValueError):
     con dei CODICI: la frase la scrive l'interfaccia, nella lingua di chi legge."""
 
     def __init__(self, errors: list[dict]):
-        super().__init__(f"{len(errors)} errori nel contratto")
+        super().__init__(f"{len(errors)} errors in the contract")
         self.errors = errors
 
 
@@ -310,14 +310,14 @@ def broken_rules_message(report: dict) -> str:
         if x.get("passed") or x.get("severity") == "warning":
             continue
         dove = x.get("column") or ", ".join(x.get("columns") or []) or x.get("name") or ""
-        quante = f" ({x['violations']} righe)" if x.get("violations") else ""
-        parts.append(f"{x.get('kind')}{' su ' + dove if dove else ''}{quante}")
+        quante = f" ({x['violations']} rows)" if x.get("violations") else ""
+        parts.append(f"{x.get('kind')}{' on ' + dove if dove else ''}{quante}")
     if not parts and report.get("error"):
-        parts.append(f"contratto non valutabile: {report['error']}")
-    elenco = "; ".join(parts[:6]) + (f"; e altre {len(parts) - 6}" if len(parts) > 6 else "")
+        parts.append(f"contract could not be evaluated: {report['error']}")
+    elenco = "; ".join(parts[:6]) + (f"; and {len(parts) - 6} more" if len(parts) > 6 else "")
     return (
-        f"Data contract violato: {elenco}. I dati nuovi NON sono stati pubblicati: "
-        "la datasource serve ancora lo snapshot precedente."
+        f"Data contract violated: {elenco}. The new data was NOT published: "
+        "the datasource still serves the previous snapshot."
     )
 
 

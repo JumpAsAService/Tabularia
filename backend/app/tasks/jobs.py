@@ -138,7 +138,7 @@ def preview_task(
         _stats("superseded" if was_interrupted(e) else "error")
         if was_interrupted(e):
             logger.info("preview_task superata da una piu' recente (%.0f ms)", (_time.perf_counter() - _t0) * 1000)
-            return {"ok": False, "error": "superseded", "detail": "Anteprima superata da una richiesta piu' recente"}
+            return {"ok": False, "error": "superseded", "detail": "Preview superseded by a more recent request"}
         if isinstance(e, SourceNotFoundError):
             return {"ok": False, "error": "not_found", "detail": str(e)}
         if isinstance(e, (UnknownOperationError, OperationError)):

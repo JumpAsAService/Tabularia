@@ -48,8 +48,8 @@ def detect_format(filename: str) -> FileFormat:
     fmt = _EXT_MAP.get(ext)
     if fmt is None:
         raise UnsupportedFormatError(
-            f"Formato non riconosciuto per '{filename}'. Estensioni supportate: "
-            f"{', '.join(sorted(_EXT_MAP))}. Passa 'format' esplicitamente."
+            f"Unrecognized format for '{filename}'. Supported extensions: "
+            f"{', '.join(sorted(_EXT_MAP))}. Pass 'format' explicitly."
         )
     return fmt
 

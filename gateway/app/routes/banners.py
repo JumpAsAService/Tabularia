@@ -33,7 +33,7 @@ def create_banner(
 ):
     message = body.message.strip()
     if not message:
-        raise HTTPException(status_code=422, detail="Il messaggio del banner è vuoto")
+        raise HTTPException(status_code=422, detail="The banner message is empty")
     banner = Banner(message=message, level=body.level, created_by=user.id)
     session.add(banner)
     session.commit()
@@ -55,7 +55,7 @@ def delete_banner(
 ):
     banner = session.get(Banner, banner_id)
     if banner is None:
-        raise HTTPException(status_code=404, detail="Banner non trovato")
+        raise HTTPException(status_code=404, detail="Banner not found")
     etichetta = banner.message[:80]
     session.delete(banner)
     session.commit()

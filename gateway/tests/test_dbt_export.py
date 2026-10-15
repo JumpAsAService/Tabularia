@@ -166,7 +166,7 @@ def test_un_ciclo_fra_flussi_e_rifiutato(session, scena):
     b_out.flow_id = b.id; session.add(b_out)
     a.definition = json.dumps({"nodes": [_nodo_src("s", b_out.id), {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "A out", "projectId": scena.cartella.id}}], "edges": [_edge("s", "o")]})
     session.add(a); session.commit()
-    with pytest.raises(d.DbtExportError, match="ciclo"):
+    with pytest.raises(d.DbtExportError, match="cycle"):
         d.build_export_payload(session, a, "data-prep", "duckdb")
 
 
@@ -187,7 +187,7 @@ def test_un_file_caricato_o_una_datasource_senza_origine_diventano_seed(session,
     assert p["models"][0]["source"] == {"seed": "seed_price_list"} and p["attachments"] == []
     destra = p["models"][0]["operations"][0]["params"]["right"]
     assert destra["source"] == {"seed": "seed_listino_2026"}            # anche nel ramo destro del join il file è il seed
-    with pytest.raises(d.DbtExportError, match="solo file"):
+    with pytest.raises(d.DbtExportError, match="only files"):
         d.build_export_payload(session, flow, "data-prep", "native")
 
 
@@ -198,14 +198,14 @@ def test_i_rifiuti_sono_chiari(session, scena):
                              {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "All", "projectId": scena.cartella.id}}],
                    "edges": [_edge("s1", "u"), _edge("s2", "u", "right"), _edge("u", "o")]}
     flow = make_flow(session, name="Mixed", project_id=scena.cartella.id, definition=json.dumps(definizione))
-    with pytest.raises(d.DbtExportError, match="non federabile"):
+    with pytest.raises(d.DbtExportError, match="cannot federate"):
         d.build_export_payload(session, flow, "data-prep", "duckdb")
-    with pytest.raises(d.DbtExportError, match="STESSA connessione"):
+    with pytest.raises(d.DbtExportError, match="SAME connection"):
         d.build_export_payload(session, flow, "data-prep", "native")
     solo_email = make_flow(session, name="Mail", project_id=scena.cartella.id, definition=json.dumps({"nodes": [_nodo_src("s", scena.ordini.id), {"id": "o", "type": "output", "data": {"destType": "email", "connectionId": 1}}], "edges": [_edge("s", "o")]}))
-    with pytest.raises(d.DbtExportError, match="solo email"):
+    with pytest.raises(d.DbtExportError, match="only email"):
         d.build_export_payload(session, solo_email, "data-prep", "duckdb")
-    with pytest.raises(d.DbtExportError, match="target sconosciuto"):
+    with pytest.raises(d.DbtExportError, match="unknown target"):
         d.build_export_payload(session, flow, "data-prep", "bigquery")
 
 
@@ -233,7 +233,7 @@ async def test_l_export_dbt_e_solo_per_gli_amministratori(session, scena, fake_e
     for u in (lettore, editore, osservatore):
         with pytest.raises(HTTPException) as e:
             await flows_routes.export_flow_dbt(flow.id, _richiesta(), "duckdb", u, session)
-        assert e.value.status_code == 403 and "amministratori" in e.value.detail, u.email
+        assert e.value.status_code == 403 and "administrators" in e.value.detail, u.email
 
     # admin personale e admin per gruppo (il team data): passano
     risposta = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "duckdb", scena.capo, session)
@@ -326,7 +326,7 @@ def test_il_target_clickhouse_accetta_piu_connessioni_e_porta_quello_che_serve_a
         _op("u", "union", {"strategy": "by_name"}),
         {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Mix out", "projectId": scena.cartella.id, "overwrite": True}},
     ], "edges": [_edge("a", "j"), _edge("b", "j", "right"), _edge("j", "u"), _edge("c", "u", "right"), _edge("u", "o")]}))
-    with pytest.raises(d.DbtExportError, match="STESSA connessione"):
+    with pytest.raises(d.DbtExportError, match="SAME connection"):
         d.build_export_payload(session, flow, "data-prep", "native")
     p = d.build_export_payload(session, flow, "data-prep", "clickhouse")
     assert p["mode"] == "clickhouse" and p["clickhouse"]["target_schema"] == "dbt_tabularia"

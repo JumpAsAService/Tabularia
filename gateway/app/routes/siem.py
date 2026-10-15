@@ -135,7 +135,7 @@ def scrivi(
     if body.enabled is not None:
         d.enabled = body.enabled
     if d.enabled and not (d.url and d.token_enc):
-        raise HTTPException(status_code=422, detail="Per accendere l'inoltro servono l'indirizzo e il token di Splunk")
+        raise HTTPException(status_code=422, detail="Turning forwarding on needs the Splunk address and token")
     if d.enabled and not prima["enabled"]:
         if not d.cursor_id:
             d.cursor_id = siem.ultimo_id(session)  # da adesso: lo storico resta nel pannello Audit
@@ -166,7 +166,7 @@ async def prova(request: Request, session: Session = Depends(get_session), admin
     ha risposto: token, indice, certificato e rete si verificano qui."""
     d = _destinazione(session)
     if not d.url or not d.token_enc:
-        raise HTTPException(status_code=422, detail="Servono l'indirizzo e il token di Splunk")
+        raise HTTPException(status_code=422, detail="The Splunk address and token are needed")
     ora = siem.adesso()
     ok, codice, messaggio = await siem.spedisci(d, [{
         "time": round(siem._utc(ora).timestamp(), 3), "host": d.host or siem.HOST, "source": d.source or siem.SOURCE,

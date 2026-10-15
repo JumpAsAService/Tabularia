@@ -166,9 +166,9 @@ def test_resolve_output_chains_da_gli_stessi_corpi_dei_run_di_produzione():
 
 
 def test_resolve_output_chains_rifiuta_come_prima():
-    with pytest.raises(FlowResolveError, match="nessuna sorgente"):
+    with pytest.raises(FlowResolveError, match="no source with data upstream"):
         resolve_output_chains(SENZA_SORGENTE, _resolve_ds, BUCKET)
-    with pytest.raises(FlowResolveError, match="nessuna sorgente"):
+    with pytest.raises(FlowResolveError, match="no source with data upstream"):
         build_output_run_requests(SENZA_SORGENTE, _resolve_ds, BUCKET)
-    with pytest.raises(FlowResolveError, match="non ha nodi Output"):
+    with pytest.raises(FlowResolveError, match="has no Output nodes"):
         resolve_output_chains({"nodes": [_src("s", "k")], "edges": []}, _resolve_ds, BUCKET)

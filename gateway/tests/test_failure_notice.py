@@ -178,6 +178,6 @@ def test_a_rejected_launch_does_not_count_as_a_previous_failure(session, scenari
     flow, _, inviati = scenario
     ora = datetime.now(timezone.utc).replace(tzinfo=None)
     _run(session, flow, status="SUCCESS", quando=ora - timedelta(hours=2), error=None)
-    _run(session, flow, trigger="manual", quando=ora - timedelta(hours=1), error="flusso già in esecuzione")
+    _run(session, flow, trigger="manual", quando=ora - timedelta(hours=1), error="flow already running")
     _avvisa(session, _run(session, flow, quando=ora))
     assert len(inviati) == 1

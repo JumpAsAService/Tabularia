@@ -57,7 +57,7 @@ def _to_out(conn: Connection) -> ConnectionOut:
 def _get_connection(session: Session, conn_id: int) -> Connection:
     conn = session.get(Connection, conn_id)
     if conn is None:
-        raise HTTPException(status_code=404, detail="Connessione non trovata")
+        raise HTTPException(status_code=404, detail="Connection not found")
     return conn
 
 
@@ -79,9 +79,9 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
     try:
         data = _json.loads(grezzo)
     except _json.JSONDecodeError:
-        raise HTTPException(status_code=422, detail="Le opzioni della connessione non sono JSON valido")
+        raise HTTPException(status_code=422, detail="The connection options are not valid JSON")
     if not isinstance(data, dict):
-        raise HTTPException(status_code=422, detail="Le opzioni della connessione devono essere un oggetto JSON")
+        raise HTTPException(status_code=422, detail="The connection options must be a JSON object")
     if db_type == "sqlserver" and data.get("tls") not in (None, "", *_TLS_SQLSERVER):
         raise HTTPException(status_code=422, detail="SQL Server: the TLS option must be verify, trust or none")
     if db_type == "smtp":
@@ -220,9 +220,9 @@ def _sharepoint_payload(host: str, username: str, secret_encrypted: str, databas
 
 def _check_sharepoint(host: str, username: str, database: str) -> None:
     if not (host or "").strip().lower().startswith("https://"):
-        raise HTTPException(status_code=422, detail="URL del sito SharePoint non valido: atteso https://<azienda>.sharepoint.com/sites/<nome>")
+        raise HTTPException(status_code=422, detail="Invalid SharePoint site URL: expected https://<company>.sharepoint.com/sites/<name>")
     if not (username or "").strip() or not (database or "").strip():
-        raise HTTPException(status_code=422, detail="Servono tenant id e client id dell'app registrata su Entra ID")
+        raise HTTPException(status_code=422, detail="The tenant id and the client id of the app registered in Entra ID are required")
 
 
 def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, db_schema: str) -> dict:
@@ -295,7 +295,7 @@ def list_project_connections(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.CONNECT)
     rows = session.exec(
         select(Connection).where(Connection.project_id == project_id).order_by(Connection.name)
@@ -316,17 +316,17 @@ def create_connection(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.CONNECT)
     if body.db_type not in SUPPORTED_DB_TYPES:
-        raise HTTPException(status_code=422, detail=f"db_type non supportato: {sorted(SUPPORTED_DB_TYPES)}")
+        raise HTTPException(status_code=422, detail=f"Unsupported db_type: use one of {sorted(SUPPORTED_DB_TYPES)}")
     if body.db_type == "sharepoint":
         _check_sharepoint(body.host, body.username, body.database)
     name = body.name.strip()
     if not name:
-        raise HTTPException(status_code=422, detail="Il nome della connessione è vuoto")
+        raise HTTPException(status_code=422, detail="The connection needs a name")
     if _name_taken(session, project_id, name):
-        raise HTTPException(status_code=409, detail=f"Esiste già una connessione '{name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a connection '{name}' in this folder")
 
     conn = Connection(
         name=name,
@@ -405,15 +405,15 @@ def update_connection(
     target_project = conn.project_id
     if body.project_id is not None and body.project_id != conn.project_id:
         if session.get(Project, body.project_id) is None:
-            raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
+            raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.project_id, Capability.CONNECT)
         target_project = body.project_id
 
     new_name = body.name.strip() if body.name is not None else conn.name
     if not new_name:
-        raise HTTPException(status_code=422, detail="Il nome non può essere vuoto")
+        raise HTTPException(status_code=422, detail="The connection needs a name")
     if _name_taken(session, target_project, new_name, exclude_id=conn.id):
-        raise HTTPException(status_code=409, detail=f"Esiste già una connessione '{new_name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a connection '{new_name}' in this folder")
 
     conn.name = new_name
     conn.project_id = target_project
@@ -450,7 +450,7 @@ def delete_connection(
     if used_by:
         raise HTTPException(
             status_code=409,
-            detail="La connessione è usata da una o più datasource: eliminale o spostale prima",
+            detail="The connection is used by one or more datasources: delete or move them first",
         )
     notifying = session.exec(select(Flow.name).where(Flow.notify_connection_id == conn_id).order_by(Flow.name).limit(6)).all()
     if notifying:
@@ -478,10 +478,10 @@ async def test_draft_connection(
 ):
     """Prova una connessione PRIMA di salvarla (il form della UI)."""
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.CONNECT)
     if body.db_type not in SUPPORTED_DB_TYPES:
-        raise HTTPException(status_code=422, detail=f"db_type non supportato: {sorted(SUPPORTED_DB_TYPES)}")
+        raise HTTPException(status_code=422, detail=f"Unsupported db_type: use one of {sorted(SUPPORTED_DB_TYPES)}")
     secret = encrypt_secret(body.password) if body.password else ""
     if body.db_type == "sharepoint":
         _check_sharepoint(body.host, body.username, body.database)
@@ -529,7 +529,7 @@ async def list_sharepoint_files(
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type != "sharepoint":
-        raise HTTPException(status_code=422, detail="Non è una connessione SharePoint")
+        raise HTTPException(status_code=422, detail="This is not a SharePoint connection")
     return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path)
 
 

@@ -59,9 +59,9 @@ def _qualified_table(conn: DbConnectionSpec, table_ref: str) -> tuple[str, list[
     q = _IDENT_QUOTE[conn.db_type]
     parts = [p.strip() for p in table_ref.split(".") if p.strip()]
     if not parts:
-        raise DbDestinationError("Il nome della tabella di destinazione è vuoto")
+        raise DbDestinationError("The destination table name is empty")
     if any(q in p for p in parts):
-        raise DbDestinationError(f"Nome tabella non valido: contiene {q!r}")
+        raise DbDestinationError(f"Invalid table name: it contains {q!r}")
     if len(parts) == 1 and conn.db_schema:
         parts = [conn.db_schema, parts[0]]
     return ".".join(f"{q}{p}{q}" for p in parts), parts
@@ -107,7 +107,7 @@ def _create_table_sql(conn: DbConnectionSpec, qualified: str, schema: pa.Schema)
     q = _IDENT_QUOTE[conn.db_type]
     for f in schema:
         if q in f.name:
-            raise DbDestinationError(f"Nome colonna non valido per {conn.db_type}: {f.name!r}")
+            raise DbDestinationError(f"Invalid column name for {conn.db_type}: {f.name!r}")
     cols = ", ".join(f"{q}{f.name}{q} {_sql_type(conn.db_type, f.type)}" for f in schema)
     if conn.db_type == "clickhouse":
         return f"CREATE TABLE IF NOT EXISTS {qualified} ({cols}) ENGINE = MergeTree ORDER BY tuple()"

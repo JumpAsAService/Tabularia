@@ -64,7 +64,7 @@ def test_disabling_refuses_the_choice_everywhere(session):
         with pytest.raises(HTTPException) as e:
             scelta()
         assert e.value.status_code == 422
-        assert "amministratore" in str(e.value.detail)
+        assert "administrator" in str(e.value.detail)
 
     # gli altri restano scegliibili
     assert _validate_engine("clickhouse", session) == "clickhouse"

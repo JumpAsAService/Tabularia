@@ -34,7 +34,7 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Troppi tentativi di accesso. Riprova fra {int(attesa) + 1} secondi.",
+            detail=f"Too many sign-in attempts. Try again in {int(attesa) + 1} seconds.",
             headers={"Retry-After": str(int(attesa) + 1)},
         )
     user = session.exec(select(User).where(User.email == body.email)).first()
@@ -50,13 +50,13 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
             outcome="failure", detail={"reason": "credenziali errate"}, request=request,
         )
         login_throttle.registra_errore(session, ip, body.email)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email o password errati")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     if not user.is_active:
         audit.record_audit(
             session, actor=user, action=audit.LOGIN_FAILED, outcome="failure",
             detail={"reason": "utente disattivato"}, request=request,
         )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Utente disattivato")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This user has been deactivated")
     login_throttle.registra_successo(session, ip, body.email)
     sessions.chiudi_quella_del_cookie(session, request)
     try:
@@ -67,7 +67,7 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
             outcome="failure", detail={"reason": "password cambiata durante l'accesso"}, request=request,
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email o password errati")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
     sessions.scrivi_cookie(response, request, token, riga)
     # All'interfaccia (che manda l'intestazione anti-CSRF) il token nel corpo non
@@ -141,9 +141,9 @@ def close_my_session(
     """Chiude una delle proprie sessioni. Quelle degli altri non si vedono: 404.
     L'osservatore chiude solo quella da cui chiede, cioè esce."""
     if sid != sessions.sid_corrente(request) and _condiviso(session, user):
-        raise HTTPException(status_code=403, detail="Un osservatore chiude solo la propria sessione")
+        raise HTTPException(status_code=403, detail="Observers can only close their own session")
     if not sessions.chiudi(session, sid, user.id):
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
+        raise HTTPException(status_code=404, detail="Session not found")
     audit.record_audit(
         session, actor=user, action=audit.SESSION_REVOKE, request=request,
         target_type="user", target_id=user.id, target_label=user.email,
@@ -160,7 +160,7 @@ def close_other_sessions(request: Request, user: User = Depends(get_current_user
     """«Esci dagli altri dispositivi»: resta aperta solo questa. Non per
     l'osservatore (vedi `_condiviso`)."""
     if _condiviso(session, user):
-        raise HTTPException(status_code=403, detail="Un osservatore chiude solo la propria sessione")
+        raise HTTPException(status_code=403, detail="Observers can only close their own session")
     n = sessions.chiudi_tutte(session, user.id, tranne=sessions.sid_corrente(request))
     if n:
         audit.record_audit(

@@ -41,7 +41,7 @@ def ping_solo_se_ferma(eng, ferma_da_s: float = PING_SE_FERMA_DA_S) -> None:
         try:
             eng.dialect.do_ping(dbapi_conn)
         except Exception as e:
-            raise InvalidatePoolError("connessione morta mentre era ferma nel pool") from e
+            raise InvalidatePoolError("connection died while idle in the pool") from e
 
 
 def _crea_engine(**opzioni):
@@ -109,7 +109,7 @@ def wait_for_db(max_attempts: int = 30, delay: float = 2.0) -> None:
             logger.warning("DB non pronto (tentativo %d/%d), riprovo tra %.0fs…",
                            attempt, max_attempts, delay)
             time.sleep(delay)
-    raise RuntimeError(f"DB non raggiungibile dopo {max_attempts} tentativi") from last_err
+    raise RuntimeError(f"DB unreachable after {max_attempts} attempts") from last_err
 
 
 # Più processi possono partire insieme (repliche): creare le tabelle, applicare

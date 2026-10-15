@@ -265,7 +265,7 @@ def test_l_osservatore_vede_lo_stato_ma_non_indirizzo_ed_errori(app, session, sp
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     capo.put("/admin/siem", json={"url": "https://splunk.interno:8088/services/collector", "token": TOKEN, "enabled": True}, headers=CSRF)
     d = _dest(session)
-    d.last_error = "risposta 403: Invalid token"
+    d.last_error = "response 403: Invalid token"
     session.add(d)
     session.commit()
     occhio = _entra(app, session, "occhio@x.local", is_observer=True)

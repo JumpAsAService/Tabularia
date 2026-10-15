@@ -141,10 +141,10 @@ def _oracle_ident(parte: str) -> str:
     if len(parte) >= 2 and parte.startswith('"') and parte.endswith('"'):
         interno = parte[1:-1]
         if not interno or '"' in interno:
-            raise DbSourceError(f"Nome non valido: {parte}")
+            raise DbSourceError(f"Invalid name: {parte}")
         return f'"{interno}"'
     if '"' in parte:
-        raise DbSourceError(f"Nome non valido: {parte}")
+        raise DbSourceError(f"Invalid name: {parte}")
     return f'"{parte.upper()}"'
 
 
@@ -161,7 +161,7 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
     if source.mode == "sql":
         sql = source.ref.strip().rstrip(";").strip()
         if not sql:
-            raise DbSourceError("La query SQL è vuota")
+            raise DbSourceError("The SQL query is empty")
         if conn.db_type == "sqlserver":
             return _tsql_query(sql, conn, source)
         # Oracle non vuole AS davanti all'alias di una tabella, né un alias con «_»
@@ -171,7 +171,7 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
     if conn.db_type == "oracle":
         parts = [p.strip() for p in source.ref.split(".") if p.strip()]
         if not parts:
-            raise DbSourceError("Il nome della tabella è vuoto")
+            raise DbSourceError("The table name is empty")
         if len(parts) == 1 and conn.db_schema:
             parts = [conn.db_schema, parts[0]]
         return _with_order_by("SELECT * FROM " + ".".join(_oracle_ident(p) for p in parts), conn, source)
@@ -179,7 +179,7 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
     if conn.db_type == "sqlserver":
         parts = [p.strip() for p in source.ref.split(".") if p.strip()]
         if not parts:
-            raise DbSourceError("Il nome della tabella è vuoto")
+            raise DbSourceError("The table name is empty")
         if len(parts) == 1 and conn.db_schema:
             parts = [conn.db_schema, parts[0]]
         return _with_order_by("SELECT * FROM " + ".".join(_tsql_ident(p) for p in parts), conn, source)
@@ -187,9 +187,9 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
     q = _IDENT_QUOTE[conn.db_type]
     parts = [p.strip() for p in source.ref.split(".") if p.strip()]
     if not parts:
-        raise DbSourceError("Il nome della tabella è vuoto")
+        raise DbSourceError("The table name is empty")
     if any(q in p for p in parts):
-        raise DbSourceError(f"Nome tabella non valido: contiene {q!r}")
+        raise DbSourceError(f"Invalid table name: it contains {q!r}")
     if len(parts) == 1 and conn.db_schema:
         parts = [conn.db_schema, parts[0]]
     qualified = ".".join(f"{q}{p}{q}" for p in parts)
@@ -210,7 +210,7 @@ def _with_order_by(base: str, conn: DbConnectionSpec, source: DbSourceSpec) -> s
     q = _IDENT_QUOTE[conn.db_type]
     for k in keys:
         if q in k:
-            raise DbSourceError(f"Chiave di ordinamento non valida: contiene {q!r}")
+            raise DbSourceError(f"Invalid sort key: it contains {q!r}")
     cols = ", ".join(f"{q}{k}{q}" for k in keys)
     return f"{base} ORDER BY {cols}"
 
@@ -618,7 +618,7 @@ def _dbapi_batches(cursor, batch_rows: int = BATCH_ROWS) -> Iterator[Any]:
     names = [d[0] for d in (cursor.description or [])]
     if len(set(names)) != len(names):
         raise DbSourceError(
-            "La query restituisce colonne con lo stesso nome: usa alias distinti (es. a.id AS a_id)"
+            "The query returns columns with the same name: give them distinct aliases (e.g. a.id AS a_id)"
         )
 
     rows = cursor.fetchmany(batch_rows)
@@ -645,8 +645,8 @@ def _rows_to_table(rows, names: list[str], schema: pa.Schema | None) -> pa.Table
         return pa.Table.from_pylist(pylist, schema=schema)
     except (pa.ArrowInvalid, pa.ArrowTypeError) as e:
         raise DbSourceError(
-            f"Tipi non uniformi nel risultato: {e}. "
-            "Suggerimento: forza il tipo con un CAST esplicito nella query."
+            f"Inconsistent types in the result: {e}. "
+            "Tip: force the type with an explicit CAST in the query."
         ) from e
 
 
@@ -707,7 +707,7 @@ def ingest_db_to_parquet(
     try:
         schema = next(gen)
     except StopIteration:  # nessun driver arriva qui, ma il contratto va difeso
-        raise DbSourceError("Il driver non ha restituito uno schema")
+        raise DbSourceError("The driver returned no schema")
 
     fd, tmp = tempfile.mkstemp(suffix=".parquet", prefix="db_ingest_")
     os.close(fd)

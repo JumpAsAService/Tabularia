@@ -1,9 +1,9 @@
-"""Gli errori dell'export dbt nella lingua di chi li legge.
+"""The dbt export's errors in the language of whoever reads them.
 
-Gateway ed engine sollevano `DbtExportError` con un CODICE e i suoi parametri (e un
-testo italiano, che resta nei log); qui il codice diventa una frase nella lingua
-della richiesta. Un codice sconosciuto, o un parametro che manca, non rompe la
-risposta: si torna al testo originale."""
+Gateway and engine raise `DbtExportError` with a CODE and its parameters (and an
+English text, which stays in the logs); here the code becomes a sentence in the
+request's language. An unknown code, or a missing parameter, does not break the
+answer: it falls back to the original text."""
 from __future__ import annotations
 
 from app.core.lingua import DEFAULT

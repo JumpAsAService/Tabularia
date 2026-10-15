@@ -181,7 +181,7 @@ async def test_il_respinto_viene_chiuso_come_gia_in_esecuzione(session, coda):
     for run_id in respinte:
         await orch._finalize_orch_run(run_id, "FAILURE", orch.ALREADY_RUNNING)
     chiuso = _stato(session, secondo.id)
-    assert (chiuso.status, chiuso.error) == ("FAILURE", "flusso già in esecuzione")
+    assert (chiuso.status, chiuso.error) == ("FAILURE", "flow already running")
     assert _stato(session, primo.id).status == "STARTED"  # quello vero non è toccato
 
 
@@ -270,7 +270,7 @@ async def test_un_utente_disattivato_non_fa_girare_niente(session, coda):
     orch.rivendica(5)
     await orch.esegui(run.id)
     chiuso = _stato(session, run.id)
-    assert (chiuso.status, chiuso.error) == ("FAILURE", "flusso o utente non validi")
+    assert (chiuso.status, chiuso.error) == ("FAILURE", "invalid flow or user")
 
 
 async def test_chi_e_stato_dato_per_morto_si_ferma_prima_del_passo_successivo(session, coda, monkeypatch):

@@ -29,7 +29,7 @@ class _TaskCheNonUccideIlWorker(Task):
         except PanicException as e:
             from app.engine.exceptions import EngineError
 
-            raise EngineError(f"Errore interno del motore di calcolo (Polars): {str(e)[:400]}") from None
+            raise EngineError(f"Internal error in the compute engine (Polars): {str(e)[:400]}") from None
 
 
 celery_app = Celery(

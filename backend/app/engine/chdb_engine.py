@@ -240,7 +240,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         except EngineError:
             raise
         except Exception as e:
-            raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+            raise EngineError(f"Error while running the flow: {e}") from e
         # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
         rewrite_parquet_naive_utc(path)
         return path
@@ -277,7 +277,7 @@ class ChdbEngine(DeferredStepCache, Engine):
             try:
                 raw = sess.query(f"SELECT * FROM ({temporal_safe_sql(ctx, sql)}) LIMIT {limit + 1}", "ArrowStream").bytes()
             except Exception as e:
-                raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+                raise EngineError(f"Error while running the flow: {e}") from e
             if raw:
                 tbl = pa.ipc.open_stream(bytes(raw)).read_all()
                 df = pl.from_arrow(tbl)

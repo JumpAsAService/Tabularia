@@ -166,7 +166,7 @@ class PolarsEngine(DeferredStepCache, Engine):
         except EngineError:
             raise
         except _ERRORI_POLARS as e:
-            raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+            raise EngineError(f"Error while running the flow: {e}") from e
 
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
         self.cache.mark(final)
@@ -206,7 +206,7 @@ class PolarsEngine(DeferredStepCache, Engine):
             except EngineError:
                 raise
             except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
-                raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+                raise EngineError(f"Error while running the flow: {e}") from e
 
             truncated = df.height > limit
             if truncated:
@@ -270,23 +270,23 @@ class PolarsEngine(DeferredStepCache, Engine):
                         n = pl.scan_csv(out_path, infer_schema=False).select(pl.len()).collect().item()
                         if n > tetto:
                             raise EngineError(
-                                f"il risultato ha più di {tetto:,} righe: oltre il tetto dell'export CSV. "
-                                f"Scrivilo con un nodo Output (datasource, tabella o bucket), o riduci con filter/limit."
+                                f"the result has more than {tetto:,} rows: over the cap of the CSV export. "
+                                f"Write it with an Output node (datasource, table or bucket), or reduce it with filter/limit."
                             )
                 elif fmt == "xlsx":
                     n = lf.select(pl.len()).collect(engine="streaming").item()
                     if n > self.XLSX_MAX_ROWS:
                         raise EngineError(
-                            f"il risultato ha {n:,} righe: oltre il limite del formato "
-                            f"Excel (~1.048.575). Scarica in CSV, o riduci con filter/limit."
+                            f"the result has {n:,} rows: over the limit of the Excel "
+                            f"format (~1,048,575). Download it as CSV, or reduce it with filter/limit."
                         )
                     lf.collect(engine="streaming").write_excel(out_path)
                 else:
-                    raise EngineError(f"formato di export non supportato: '{fmt}' (usa csv o xlsx)")
+                    raise EngineError(f"unsupported export format: '{fmt}' (use csv or xlsx)")
             except EngineError:
                 raise
             except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
-                raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+                raise EngineError(f"Error while running the flow: {e}") from e
 
     # ── Run (materializza l'output completo) ──────────────────────────────
     def run(
@@ -307,7 +307,7 @@ class PolarsEngine(DeferredStepCache, Engine):
             except EngineError:
                 raise
             except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
-                raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+                raise EngineError(f"Error while running the flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
 

@@ -35,7 +35,7 @@ router = APIRouter(route_class=RottaCheRilascia, tags=["saved-views"])
 def _get_view(session: Session, view_id: int) -> SavedView:
     view = session.get(SavedView, view_id)
     if view is None:
-        raise HTTPException(status_code=404, detail="Vista non trovata")
+        raise HTTPException(status_code=404, detail="Saved view not found")
     return view
 
 
@@ -53,7 +53,7 @@ def _valid_spec(spec: str) -> str:
     try:
         json.loads(spec or "{}")
     except json.JSONDecodeError:
-        raise HTTPException(status_code=422, detail="La configurazione della vista non è JSON valido")
+        raise HTTPException(status_code=422, detail="The view configuration is not valid JSON")
     return spec or "{}"
 
 
@@ -100,7 +100,7 @@ def list_project_saved_views(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.VIEW)
     views = session.exec(
         select(SavedView).where(SavedView.project_id == project_id).order_by(SavedView.name)
@@ -132,20 +132,20 @@ def create_saved_view(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
 
     ds = session.get(Datasource, body.datasource_id)
     if ds is None:
-        raise HTTPException(status_code=404, detail="Datasource non trovata")
+        raise HTTPException(status_code=404, detail="Datasource not found")
     # fallire QUI, con un messaggio chiaro, invece che davanti a chi apre la vista
     ensure_can(session, user, ds.project_id, Capability.VIEW)
 
     name = body.name.strip()
     if not name:
-        raise HTTPException(status_code=422, detail="Il nome della vista è vuoto")
+        raise HTTPException(status_code=422, detail="The saved view needs a name")
     if _name_taken(session, project_id, name):
-        raise HTTPException(status_code=409, detail=f"Esiste già una vista '{name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a saved view '{name}' in this folder")
 
     view = SavedView(
         name=name,
@@ -178,7 +178,7 @@ def duplicate_saved_view(
     ensure_can(session, user, src.project_id, Capability.EDIT)
     ds = session.get(Datasource, src.datasource_id)
     if ds is None:
-        raise HTTPException(status_code=404, detail="Datasource non trovata")
+        raise HTTPException(status_code=404, detail="Datasource not found")
     ensure_can(session, user, ds.project_id, Capability.VIEW)
     view = SavedView(
         name=free_copy_name(session, SavedView, src.project_id, src.name),
@@ -213,15 +213,15 @@ def update_saved_view(
     target_project = view.project_id
     if body.project_id is not None and body.project_id != view.project_id:
         if session.get(Project, body.project_id) is None:
-            raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
+            raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.project_id, Capability.EDIT)
         target_project = body.project_id
 
     new_name = body.name.strip() if body.name is not None else view.name
     if not new_name:
-        raise HTTPException(status_code=422, detail="Il nome non può essere vuoto")
+        raise HTTPException(status_code=422, detail="The name cannot be empty")
     if _name_taken(session, target_project, new_name, exclude_id=view.id):
-        raise HTTPException(status_code=409, detail=f"Esiste già una vista '{new_name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a saved view '{new_name}' in this folder")
 
     view.name = new_name
     view.project_id = target_project

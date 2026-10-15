@@ -174,8 +174,8 @@ def _ch_type(t: pa.DataType) -> str:
     if pa.types.is_null(t):
         return "String"
     raise EngineError(
-        f"tipo di colonna non supportato dall'engine ClickHouse esterno: {t}. "
-        "Converti la colonna (cast) o usa Polars/DuckDB per questo flusso."
+        f"column type not supported by the external ClickHouse engine: {t}. "
+        "Convert the column (cast) or use Polars/DuckDB for this flow."
     )
 
 
@@ -392,7 +392,7 @@ class ClickHouseContext:
         s3 = self.s3_fn(source)
         cols = self.schema_of(f"SELECT * FROM {s3}")
         if not cols:
-            raise EngineError("materializzazione: schema della sorgente vuoto")
+            raise EngineError("materialization: the source schema is empty")
         ddl = ", ".join(f"{_qi(name)} {typ}" for name, typ in cols)
         # ORDER BY solo sulle chiavi che esistono davvero nello schema (una chiave
         # sbagliata non deve far fallire la copia); nessuna → tuple() come prima
@@ -466,7 +466,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         self.cfg = cfg or get_settings().clickhouse_external
         if not self.cfg.enabled:
             raise EngineError(
-                "engine ClickHouse esterno non configurato: imposta CLICKHOUSE_EXTERNAL__HOST (e credenziali)."
+                "external ClickHouse engine not configured: set CLICKHOUSE_EXTERNAL__HOST (and the credentials)."
             )
         self.matviews = MatViewStore(self.cache.redis, self._cfg)
         self._server_threads: int | None = None  # core del server (letto una volta)

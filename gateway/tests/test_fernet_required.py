@@ -12,12 +12,12 @@ def _settings(key: str) -> Settings:
 
 
 def test_missing_key_blocks_startup():
-    with pytest.raises(RuntimeError, match="SECURITY__FERNET_KEY non impostata"):
+    with pytest.raises(RuntimeError, match="SECURITY__FERNET_KEY is not set"):
         _settings("").check_required_secrets()
 
 
 def test_invalid_key_blocks_startup():
-    with pytest.raises(RuntimeError, match="SECURITY__FERNET_KEY non valida"):
+    with pytest.raises(RuntimeError, match="SECURITY__FERNET_KEY is not valid"):
         _settings("non-e-una-chiave").check_required_secrets()
 
 

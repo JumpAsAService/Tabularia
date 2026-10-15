@@ -68,7 +68,7 @@ def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -
 
 # un motore di prima di queste impostazioni (aggiornamento a metà, o fatto prima del
 # gateway): risponde 404, e «non risponde» sarebbe la diagnosi sbagliata
-MOTORE_VECCHIO = "Il motore è di una versione precedente e non ha le impostazioni dal pannello: aggiornalo"
+MOTORE_VECCHIO = "The engine is an older version that does not support the settings panel: update it"
 
 
 async def _stato(session: Session, chi: User, request: Request) -> SettingsOut:
@@ -77,9 +77,9 @@ async def _stato(session: Session, chi: User, request: Request) -> SettingsOut:
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=503, detail=MOTORE_VECCHIO)
-        raise HTTPException(status_code=503, detail="Il motore non risponde: le impostazioni non si possono leggere adesso")
+        raise HTTPException(status_code=503, detail="The engine is not responding: the settings cannot be read right now")
     except (httpx.HTTPError, ValueError):
-        raise HTTPException(status_code=503, detail="Il motore non risponde: le impostazioni non si possono leggere adesso")
+        raise HTTPException(status_code=503, detail="The engine is not responding: the settings cannot be read right now")
     righe = rm.salvate(session)
     pieno = is_admin(session, chi)
     voci = []
@@ -116,19 +116,19 @@ async def scrivi(
     si salvano: quello che si legge qui è sempre quello che il motore applica."""
     _niente_token(request)  # la dipendenza l'ha già fatto: qui resta se un giorno la si toglie
     if not rm.dal_pannello():
-        raise HTTPException(status_code=403, detail="Qui le impostazioni del motore si cambiano solo nell'ambiente (ENGINE__SETTINGS_PANEL=false)")
+        raise HTTPException(status_code=403, detail="On this installation the engine settings can only be changed in the environment (ENGINE__SETTINGS_PANEL=false)")
     # in fila con gli altri salvataggi e col giro periodico: si legge, si spedisce
     # e si salva tenendo il lucchetto, così il motore riceve sempre l'insieme intero
     if not await rm.blocca(session):
-        raise HTTPException(status_code=409, detail="Un'altra modifica delle impostazioni è in corso: riprova fra un attimo")
+        raise HTTPException(status_code=409, detail="Another change to the settings is in progress: try again in a moment")
     try:
         note = {v["key"] for v in (await rm.catalogo())["items"]}
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            raise HTTPException(status_code=503, detail=MOTORE_VECCHIO + ": niente è stato cambiato")
-        raise HTTPException(status_code=503, detail="Il motore non risponde: niente è stato cambiato")
+            raise HTTPException(status_code=503, detail=MOTORE_VECCHIO + ": nothing was changed")
+        raise HTTPException(status_code=503, detail="The engine is not responding: nothing was changed")
     except (httpx.HTTPError, ValueError):
-        raise HTTPException(status_code=503, detail="Il motore non risponde: niente è stato cambiato")
+        raise HTTPException(status_code=503, detail="The engine is not responding: nothing was changed")
     sconosciute = [k for k in body.values if k not in note]
     if sconosciute:
         return JSONResponse(status_code=422, content={"detail": {"errors": [{"key": k, "code": "unknown"} for k in sconosciute]}})
@@ -151,13 +151,13 @@ async def scrivi(
                  **{k: v for k, v in body.values.items() if v is not None}}
         r = await rm.spingi(invio, cambiate=list(cambi))
     except (httpx.HTTPError, RuntimeError):
-        raise HTTPException(status_code=503, detail="Il motore non risponde: niente è stato cambiato")
+        raise HTTPException(status_code=503, detail="The engine is not responding: nothing was changed")
     if r.status_code == 422:
         return JSONResponse(status_code=422, content=r.json())
     if r.status_code == 404:
-        raise HTTPException(status_code=503, detail=MOTORE_VECCHIO + ": niente è stato cambiato")
+        raise HTTPException(status_code=503, detail=MOTORE_VECCHIO + ": nothing was changed")
     if r.status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"Il motore ha risposto {r.status_code}: niente è stato cambiato")
+        raise HTTPException(status_code=502, detail=f"The engine answered {r.status_code}: nothing was changed")
     ora = datetime.now(timezone.utc).replace(tzinfo=None)
     for k in cambi:
         if k in dopo:

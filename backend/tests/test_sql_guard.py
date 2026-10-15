@@ -66,13 +66,13 @@ def test_analytical_sql_on_the_input_passes(sql):
 def test_anything_that_names_another_table_is_refused(sql):
     with pytest.raises(EngineError) as e:
         ensure_reads_only_input(sql, "clickhouse")
-    assert "solo l'input" in str(e.value)
+    assert "only the input" in str(e.value)
 
 
 def test_unparseable_sql_is_refused_not_waved_through():
     with pytest.raises(EngineError) as e:
         ensure_reads_only_input("SELECT * FROM self WHERE ((( ", "clickhouse")
-    assert "non analizzabile" in str(e.value)
+    assert "could not be parsed" in str(e.value)
 
 
 @pytest.mark.parametrize("sql", [

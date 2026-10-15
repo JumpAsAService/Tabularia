@@ -71,7 +71,7 @@ async def test_destinazioni_rifiutate_dal_proxy(campo):
         # session=None basta: la guardia solleva PRIMA di toccare il database
         await transform(_richiesta(body), user=_UTENTE, session=None)
     assert e.value.status_code == 422
-    assert "Destinazione non consentita" in str(e.value.detail)
+    assert "Destinations are not allowed" in str(e.value.detail)
 
 
 async def test_corpo_non_oggetto_rifiutato():

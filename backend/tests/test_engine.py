@@ -134,7 +134,7 @@ def test_export_csv_oltre_il_tetto_righe_si_ferma_e_suggerisce_un_output(engine,
     # 6 righe: con un tetto di 5 si rifiuta (il browser raccoglierebbe tutto in memoria)
     path = _tmp(".csv")
     try:
-        with pytest.raises(EngineError, match="nodo Output"):
+        with pytest.raises(EngineError, match="Output node"):
             engine.export(vendite, [], fmt="csv", out_path=path, max_rows=5)
     finally:
         os.unlink(path)
@@ -169,7 +169,7 @@ def test_export_csv_conta_le_righe_vere_anche_con_a_capo_nei_valori(engine, stor
 def test_export_formato_sconosciuto_da_errore_chiaro(engine, vendite):
     path = _tmp(".bin")
     try:
-        with pytest.raises(EngineError, match="non supportato"):
+        with pytest.raises(EngineError, match="unsupported export format"):
             engine.export(vendite, [], fmt="pdf", out_path=path)
     finally:
         os.unlink(path)

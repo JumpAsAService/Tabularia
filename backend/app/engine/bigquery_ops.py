@@ -52,8 +52,8 @@ def get_bigquery_operation(name: str) -> BqOpFn:
     fn = _REGISTRY.get(name)
     if fn is None:
         raise EngineError(
-            f"operazione '{name}' non supportata dall'engine BigQuery. "
-            "Usa il motore Polars o DuckDB per questo flusso (o questo nodo)."
+            f"operation '{name}' is not supported by the BigQuery engine. "
+            "Use the Polars or DuckDB engine for this flow (or this node)."
         )
     return fn
 
@@ -78,7 +78,7 @@ def _lit(v: Any) -> str:
 
 def _require(params: dict, key: str) -> Any:
     if key not in params or params[key] in (None, "", []):
-        raise EngineError(f"parametro mancante: '{key}'")
+        raise EngineError(f"required parameter missing: '{key}'")
     return params[key]
 
 
@@ -169,7 +169,7 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
         if base in _BQ_INTS or is_float:
             return f"SAFE_CAST(SAFE_CAST({c} AS INT64) AS BOOL)"
         return f"SAFE_CAST({c} AS BOOL)"
-    raise EngineError(f"cast: tipo non supportato '{dt}'")
+    raise EngineError(f"cast: unsupported type '{dt}'")
 
 
 @_register("cast")
@@ -179,7 +179,7 @@ def op_cast(sql, params, ctx):
     repls = []
     for col, dt in cols.items():
         if str(dt) not in _CAST_TYPES:
-            raise EngineError(f"cast: tipo non supportato '{dt}'")
+            raise EngineError(f"cast: unsupported type '{dt}'")
         base = str(schema.get(col, "")).upper()
         repls.append(f"{_cast_expr(ctx.qi(col), base, str(dt))} AS {ctx.qi(col)}")
     return f"SELECT * REPLACE ({', '.join(repls)}) FROM {_sub(sql)}"
@@ -206,7 +206,7 @@ def _predicate(ctx, column: str, operator: str, value: Any) -> str:
         return f"ENDS_WITH(CAST({c} AS STRING), {_lit(value)})"
     ops = {"eq": "=", "ne": "!=", "gt": ">", "ge": ">=", "lt": "<", "le": "<="}
     if operator not in ops:
-        raise EngineError(f"filter: operatore non supportato '{operator}'")
+        raise EngineError(f"filter: unsupported operator '{operator}'")
     return f"{c} {ops[operator]} {_lit(value)}"
 
 
@@ -301,7 +301,7 @@ def op_group_by(sql, params, ctx):
     for agg in aggs:
         col, func = agg["column"], agg.get("func", "sum")
         if func not in _AGG:
-            raise EngineError(f"group_by: funzione non supportata '{func}'")
+            raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
         if func == "median":
             medians.append((col, alias))
@@ -346,17 +346,17 @@ def to_bigquery_expr(expr: str) -> str:
 def op_compute(sql, params, ctx):
     columns = _require(params, "columns")  # [{name, expr}]
     if not isinstance(columns, list):
-        raise EngineError("compute: definisci almeno una colonna calcolata")
+        raise EngineError("compute: define at least one calculated column")
     existing = set(ctx.columns_of(sql))
     for c in columns:
         name = str(c.get("name") or "").strip()
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
-            raise EngineError("compute: nome ed espressione sono obbligatori")
+            raise EngineError("compute: name and expression are required")
         if espressione_vietata(expr, "duckdb") or _BIGQUERY_ONLY.search(expr):
             raise EngineError(
-                f"compute: espressione di '{name}' non consentita (niente subquery, "
-                "FROM o funzioni esterne — solo espressioni scalari)."
+                f"compute: the expression of '{name}' is not allowed (no subqueries, "
+                "FROM or external functions — scalar expressions only)."
             )
         expr = ctx.map_quoted(to_bigquery_expr(expr))
         if name in existing:
@@ -382,17 +382,17 @@ def op_sql(sql, params, ctx):
     stessa convenzione degli altri motori. Composabile come ogni altra op."""
     query = str(_require(params, "query")).strip().rstrip(";").strip()
     if not query:
-        raise EngineError("sql: la query è vuota")
+        raise EngineError("sql: the query is empty")
     if not re.search(r"\bfrom\s+(?:self|input)\b", query, re.IGNORECASE):
-        raise EngineError("sql: la query deve leggere dall'input del nodo — usa `FROM self` (o `FROM input`).")
+        raise EngineError("sql: the query must read from the node's input — use `FROM self` (or `FROM input`).")
     if "--" in query or "/*" in query:
-        raise EngineError("sql: i commenti (-- e /* */) non sono ammessi nel nodo SQL.")
+        raise EngineError("sql: comments (-- and /* */) are not allowed in the SQL node.")
     if ";" in query:
-        raise EngineError("sql: è ammessa una sola istruzione SELECT (niente ';').")
+        raise EngineError("sql: only one SELECT statement is allowed (no ';').")
     if _SQL_FORBIDDEN.search(query) or re.search(r"`[^`]*\.[^`]*`", query):
         raise EngineError(
-            "sql: consentito solo interrogare l'input del nodo. Vietati DDL/DML, "
-            "script, EXTERNAL_QUERY, ML/AI e i riferimenti a tabelle del progetto."
+            "sql: the query may only read the node's input. DDL/DML, scripts, "
+            "EXTERNAL_QUERY, ML/AI and references to the project's tables are not allowed."
         )
     # lista BIANCA: `dataset.tabella` si scrive anche SENZA backtick, e la
     # step-cache degli altri utenti vive in un dataset dello stesso progetto
@@ -409,7 +409,7 @@ def _join_condition(ctx, params: dict) -> tuple[str, str, list[tuple[str, str]]]
     lo = _as_list(_require(params, "left_on"))
     ro = _as_list(_require(params, "right_on"))
     if len(lo) != len(ro):
-        raise EngineError("join: left_on e right_on devono avere lo stesso numero di colonne")
+        raise EngineError("join: left_on and right_on must have the same number of columns")
     cond = " AND ".join(f"l.{ctx.qi(l)} = r.{ctx.qi(r)}" for l, r in zip(lo, ro))
     return f"ON {cond}", "on", list(zip(lo, ro))
 
@@ -442,9 +442,9 @@ def op_join(sql, params, ctx):
         rn = ctx.scalar(f"SELECT COUNT(*) FROM {R}")
         if MAX_CROSS_JOIN_ROWS and ln * rn > MAX_CROSS_JOIN_ROWS:
             raise EngineError(
-                f"Il cross join produrrebbe {ln * rn:,} righe ({ln:,} × {rn:,}), "
-                f"oltre il limite di {MAX_CROSS_JOIN_ROWS:,}. Aggiungi una condizione di join "
-                "o riduci le sorgenti."
+                f"The cross join would produce {ln * rn:,} rows ({ln:,} × {rn:,}), "
+                f"over the limit of {MAX_CROSS_JOIN_ROWS:,}. Add a join condition "
+                "or reduce the sources."
             )
         sel = _join_select(ctx, lcols, rcols, set())
         return f"SELECT {sel} FROM {L} AS l CROSS JOIN {R} AS r"
@@ -456,7 +456,7 @@ def op_join(sql, params, ctx):
         kw = "EXISTS" if how == "semi" else "NOT EXISTS"
         return f"SELECT l.* FROM {L} AS l WHERE {kw} (SELECT 1 FROM {R} AS r WHERE {cond})"
     if how not in _JOIN_KW:
-        raise EngineError(f"join: tipo non supportato '{how}'")
+        raise EngineError(f"join: unsupported join type '{how}'")
     skip_right = {k for k, _ in pairs} if kind == "using" else set()
     sel = _join_select(ctx, lcols, rcols, skip_right, skip_right if how in ("full", "right") else set())
     return f"SELECT {sel} FROM {L} AS l {_JOIN_KW[how]} {R} AS r {clause}"
@@ -483,16 +483,16 @@ def op_pivot(sql, params, ctx):
     values = _require(params, "values")
     func = params.get("func", "sum")
     if func not in _AGG:
-        raise EngineError(f"pivot: funzione non supportata '{func}'")
+        raise EngineError(f"pivot: unsupported aggregation function '{func}'")
     if func == "median":
-        raise EngineError("pivot: la mediana non e' disponibile nel pivot su BigQuery (usa un altro motore).")
+        raise EngineError("pivot: the median is not available in a pivot on BigQuery (use another engine).")
     base = _sub(sql)
     on_sql = ", ".join(ctx.qi(c) for c in on)
     n_cols = ctx.scalar(f"SELECT COUNT(*) FROM (SELECT DISTINCT {on_sql} FROM {base})")
     if n_cols > MAX_PIVOT_COLUMNS:
         raise EngineError(
-            f"pivot: le colonne scelte hanno {n_cols} combinazioni distinte ({n_cols} colonne "
-            f"nuove, massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
+            f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
+            f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
     combos = ctx.distinct_rows(base, on)
     combos = sorted(combos, key=lambda combo: tuple(pivot_label(v) for v in combo))
@@ -535,10 +535,10 @@ def op_unpivot(sql, params, ctx):
     allcols = list(schema)
     melt = on if on else [c for c in allcols if c not in set(index)]
     if not melt:
-        raise EngineError("unpivot: nessuna colonna da sciogliere")
+        raise EngineError("unpivot: no columns to unpivot")
     missing = [c for c in melt if c not in schema]
     if missing:
-        raise EngineError(f"unpivot: colonne inesistenti: {', '.join(missing)}")
+        raise EngineError(f"unpivot: columns not found: {', '.join(missing)}")
     keep = [c for c in allcols if c in set(index)]
     vtype = unpivot_value_type([schema[c] for c in melt])
 

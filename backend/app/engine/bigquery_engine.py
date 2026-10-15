@@ -375,7 +375,7 @@ class BigQueryContext:
                 job = self.query(sql, dry_run=True)
                 exposed = [f.name for f in (job.schema or [])]
                 if len(exposed) != len(names):
-                    raise EngineError(f"BigQuery espone {len(exposed)} colonne per {source.key}, il parquet ne ha {len(names)}")
+                    raise EngineError(f"BigQuery exposes {len(exposed)} columns for {source.key}, but the parquet file has {len(names)}")
                 for n, e in zip(names, exposed):
                     self.register(n, e)
         return sql
@@ -464,11 +464,11 @@ class BigQueryEngine(Engine):
             try:
                 from google.cloud import bigquery
             except ImportError as e:  # pragma: no cover
-                raise EngineError("BigQuery engine: pacchetto google-cloud-bigquery non installato") from e
+                raise EngineError("BigQuery engine: the google-cloud-bigquery package is not installed") from e
             try:
                 self._client = bigquery.Client(project=self.cfg.project, credentials=self._creds())
             except Exception as e:
-                raise EngineError(f"BigQuery: credenziali non valide ({_clean_error(e)})") from e
+                raise EngineError(f"BigQuery: invalid credentials ({_clean_error(e)})") from e
         return self._client
 
     def _bucket_location(self, bucket: str) -> str | None:

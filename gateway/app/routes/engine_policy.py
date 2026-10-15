@@ -75,7 +75,7 @@ def set_engine_policy(
 ):
     eid = engine_id.strip().lower()
     if eid not in KNOWN_ENGINES:
-        raise HTTPException(status_code=404, detail=f"Motore sconosciuto: '{engine_id}'")
+        raise HTTPException(status_code=404, detail=f"Unknown engine: '{engine_id}'")
 
     vietati = disabled_engines(session)
     riga = session.get(DisabledEngine, eid)
@@ -90,7 +90,7 @@ def set_engine_policy(
         if len(vietati | {eid}) >= len(KNOWN_ENGINES):
             raise HTTPException(
                 status_code=422,
-                detail="Deve restare almeno un motore consentito: senza, non si potrebbe più creare un flusso.",
+                detail="At least one engine must stay allowed: without one, no flow could be created.",
             )
         if riga is None:
             session.add(DisabledEngine(engine_id=eid, disabled_by=user.id))

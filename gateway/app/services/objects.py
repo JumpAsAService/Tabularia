@@ -67,10 +67,10 @@ def ensure_reads_pinned(session: Session, user: User, payload: Any, engine_bucke
     buckets, keys = collect_read_refs(payload)
     for b in buckets:
         if b and b != engine_bucket:
-            raise HTTPException(status_code=403, detail=f"bucket non consentito: '{b}'")
+            raise HTTPException(status_code=403, detail=f"bucket not allowed: '{b}'")
     for k in keys:
         if k and not k.startswith(MANAGED_PREFIXES):
-            raise HTTPException(status_code=403, detail=f"sorgente fuori dalle aree gestite: '{k}'")
+            raise HTTPException(status_code=403, detail=f"source outside the managed areas: '{k}'")
 
 
 def collect_storage_keys(payload: Any) -> set[str]:
@@ -145,7 +145,7 @@ def ensure_can_run_keys(session: Session, user: User, keys: Iterable[str]) -> No
         if not _can_read_key(session, user, key, runnable):
             raise HTTPException(
                 status_code=403,
-                detail=f"Permesso 'run' mancante per eseguire su '{key}': serve RUN sul progetto",
+                detail=f"Missing 'run' permission to run on '{key}': RUN on the folder is required",
             )
 
 
@@ -157,4 +157,4 @@ def ensure_can_read_keys(session: Session, user: User, keys: Iterable[str]) -> N
     readable = perm_service.readable_project_ids(session, user)
     for key in sorted(keys):
         if not _can_read_key(session, user, key, readable):
-            raise HTTPException(status_code=403, detail=f"Non hai accesso all'oggetto '{key}'")
+            raise HTTPException(status_code=403, detail=f"You do not have access to the object '{key}'")

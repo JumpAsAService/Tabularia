@@ -53,7 +53,7 @@ router = APIRouter(route_class=RottaCheRilascia, tags=["runs"])
 def _get_flow(session: Session, flow_id: int) -> Flow:
     flow = session.get(Flow, flow_id)
     if flow is None:
-        raise HTTPException(status_code=404, detail="Flusso non trovato")
+        raise HTTPException(status_code=404, detail="Flow not found")
     return flow
 
 
@@ -120,9 +120,9 @@ async def launch_email_test(
     """
     flow = _get_flow(session, flow_id)
     if not body.email:
-        raise HTTPException(status_code=422, detail="Questa prova richiede un nodo Output di tipo email")
+        raise HTTPException(status_code=422, detail="This test needs an Output node of type email")
     if not (user.email or "").strip():
-        raise HTTPException(status_code=422, detail="Il tuo account non ha un indirizzo email")
+        raise HTTPException(status_code=422, detail="Your account has no email address")
     solo_email = body.model_copy(update={"publish": None, "destination": None, "mirror": None})
     return await _launch_flow_run(session, user, flow, solo_email, dry_run_to=user.email.strip())
 
@@ -207,25 +207,25 @@ async def _launch_flow_run(
     if body.publish:
         # pubblicare scrive contenuto nella cartella di destinazione → EDIT
         if session.get(Project, body.publish.project_id) is None:
-            raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
+            raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.publish.project_id, Capability.EDIT)
         pub_name = body.publish.name.strip()
         if not pub_name:
-            raise HTTPException(status_code=422, detail="Il nome della datasource è vuoto")
+            raise HTTPException(status_code=422, detail="The datasource needs a name")
         existing = _find_datasource(session, body.publish.project_id, pub_name)
         if existing is not None:
             if not body.publish.overwrite:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Esiste già una datasource '{body.publish.name}' in questa cartella",
+                    detail=f"There is already a datasource '{body.publish.name}' in this folder",
                 )
             # sovrascrivere una snapshot di database (con schedule/connessione) la
             # snaturerebbe: consentito solo su datasource prodotte da un flusso
             if existing.kind != "flow":
                 raise HTTPException(
                     status_code=409,
-                    detail=f"'{body.publish.name}' è una datasource di tipo «{existing.kind}»: "
-                    "non è sovrascrivibile da un flusso, scegli un altro nome",
+                    detail=f"'{body.publish.name}' is a datasource of kind «{existing.kind}»: "
+                    "a flow cannot overwrite it, choose another name",
                 )
             publish_target_id = existing.id  # la sovrascrittura riusa la sua cartella
 
@@ -236,22 +236,22 @@ async def _launch_flow_run(
     if body.destination:
         conn = session.get(Connection, body.destination.connection_id)
         if conn is None:
-            raise HTTPException(status_code=404, detail="Connessione non trovata")
+            raise HTTPException(status_code=404, detail="Connection not found")
         ensure_can(session, user, conn.project_id, Capability.CONNECT)
 
         if body.destination.type == "s3":
             if conn.db_type != "s3":
                 raise HTTPException(
-                    status_code=422, detail="La connessione scelta non è S3/object storage"
+                    status_code=422, detail="The chosen connection is not S3/object storage"
                 )
             key = body.destination.key.strip().strip("/")
             if not key:
-                raise HTTPException(status_code=422, detail="La chiave/percorso S3 è vuota")
+                raise HTTPException(status_code=422, detail="The S3 key/path is empty")
             bucket_override = body.destination.bucket.strip()
             if not bucket_override and not (conn.database or "").strip():
                 raise HTTPException(
                     status_code=422,
-                    detail="Nessun bucket: indicalo sull'output o come default della connessione",
+                    detail="No bucket: set one on the output or as the connection's default",
                 )
             destination_payload = {
                 "type": "s3",
@@ -278,17 +278,17 @@ async def _launch_flow_run(
         else:
             if conn.db_type == "s3":
                 raise HTTPException(
-                    status_code=422, detail="La connessione scelta è S3: usa una destinazione S3"
+                    status_code=422, detail="The chosen connection is S3: use an S3 destination"
                 )
             if conn.db_type in ("smtp", "sharepoint"):
                 # non sono database: senza questo controllo l'errore arriverebbe
                 # dal driver, a run già partito, e parlerebbe d'altro
                 raise HTTPException(
-                    status_code=422, detail=f"Una connessione {conn.db_type} non può ricevere una tabella: serve un database"
+                    status_code=422, detail=f"A {conn.db_type} connection cannot receive a table: a database connection is needed"
                 )
             table = body.destination.table.strip()
             if not table:
-                raise HTTPException(status_code=422, detail="Il nome della tabella di destinazione è vuoto")
+                raise HTTPException(status_code=422, detail="The destination table name is empty")
             destination_payload = {
                 "type": "database",
                 "connection": engine_connection_payload(conn),
@@ -318,20 +318,20 @@ async def _launch_flow_run(
     if body.mirror:
         mconn = session.get(Connection, body.mirror.connection_id)
         if mconn is None:
-            raise HTTPException(status_code=404, detail="Connessione della copia S3 non trovata")
+            raise HTTPException(status_code=404, detail="S3 copy connection not found")
         ensure_can(session, user, mconn.project_id, Capability.CONNECT)
         if mconn.db_type != "s3":
             raise HTTPException(
-                status_code=422, detail="La connessione della copia non è S3/object storage"
+                status_code=422, detail="The copy's connection is not S3/object storage"
             )
         mkey = body.mirror.key.strip().strip("/")
         if not mkey:
-            raise HTTPException(status_code=422, detail="Il percorso S3 della copia è vuoto")
+            raise HTTPException(status_code=422, detail="The copy's S3 path is empty")
         mbucket = body.mirror.bucket.strip()
         if not mbucket and not (mconn.database or "").strip():
             raise HTTPException(
                 status_code=422,
-                detail="Nessun bucket per la copia: indicalo sull'output o come default della connessione",
+                detail="No bucket for the copy: set one on the output or as the connection's default",
             )
         mirror_payload = {
             "connection": engine_connection_payload(mconn),
@@ -368,10 +368,10 @@ async def _launch_flow_run(
     if body.email:
         econn = session.get(Connection, body.email.connection_id)
         if econn is None:
-            raise HTTPException(status_code=404, detail="Connessione SMTP non trovata")
+            raise HTTPException(status_code=404, detail="SMTP connection not found")
         ensure_can(session, user, econn.project_id, Capability.CONNECT)
         if econn.db_type != "smtp":
-            raise HTTPException(status_code=422, detail="La connessione scelta non è SMTP")
+            raise HTTPException(status_code=422, detail="The chosen connection is not SMTP")
 
         if dry_run_to:
             # PROVA A VUOTO: il destinatario è l'identità autenticata, imposta dal
@@ -386,7 +386,7 @@ async def _launch_flow_run(
             cc_finale = [a.strip() for a in body.email.cc if a.strip()]
             destinatari = [*to_finale, *cc_finale]
             if not destinatari:
-                raise HTTPException(status_code=422, detail="Nessun destinatario per l'email")
+                raise HTTPException(status_code=422, detail="The email has no recipients")
 
             ammessi = allowed_email_domains(econn)
             if ammessi:
@@ -395,7 +395,7 @@ async def _launch_flow_run(
                     raise HTTPException(
                         status_code=422,
                         detail=(
-                            f"Destinatari fuori dai domini ammessi da questa connessione "
+                            f"Recipients outside the domains this connection allows "
                             f"({', '.join(ammessi)}): {', '.join(fuori)}"
                         ),
                     )
@@ -468,7 +468,7 @@ async def _launch_flow_run(
         raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
     task_id = resp.json().get("task_id")
     if not task_id:
-        raise HTTPException(status_code=502, detail="L'engine non ha restituito un task_id")
+        raise HTTPException(status_code=502, detail="The engine did not return a task_id")
 
     run = Run(
         flow_id=flow.id,
@@ -543,7 +543,7 @@ async def launch_ingest_run(
         raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
     task_id = resp.json().get("task_id")
     if not task_id:
-        raise HTTPException(status_code=502, detail="L'engine non ha restituito un task_id")
+        raise HTTPException(status_code=502, detail="The engine did not return a task_id")
 
     run = Run(
         kind="ingest",
@@ -575,9 +575,9 @@ SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di
 # (WorkerLostError / SIGKILL) è criptico → lo traduciamo in qualcosa di chiaro.
 _OOM_SIGNS = ("signal 9", "sigkill", "workerlosterror", "memoryerror", "out of memory")
 _OOM_MESSAGE = (
-    "Il run ha esaurito la memoria disponibile ed è stato interrotto. "
-    "Riduci i dati (filter/limit) o semplifica il flusso; se serve più memoria, "
-    "aumenta il limite del worker (WORKER_MEM_LIMIT)."
+    "The run ran out of available memory and was stopped. "
+    "Reduce the data (filter/limit) or simplify the flow; if it needs more memory, "
+    "raise the worker's limit (WORKER_MEM_LIMIT)."
 )
 
 
@@ -722,8 +722,8 @@ def _is_stale_swap(ds: Datasource, run: Run) -> bool:
 
 QUEUE_TIMEOUT_SECONDS = get_settings().orchestrator.queue_timeout_seconds
 QUEUE_TIMED_OUT = (
-    "Rimasta in coda troppo a lungo senza che un orchestratore la prendesse in carico: "
-    "non è stata eseguita. Rilancia il flusso."
+    "The run stayed in the queue too long without an orchestrator picking it up: "
+    "it did not run. Launch the flow again."
 )
 
 
@@ -814,7 +814,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
     # è un fallimento terminale, non uno stato da ri-pollare fino allo stale-timeout
     if new_status == "REVOKED":
         new_status = "FAILURE"
-        error = error or "job interrotto (revocato dall'amministratore)"
+        error = error or "Job stopped (revoked by an administrator)"
         error_detail = None
 
     # il cronometro parte dall'esecuzione REALE, non dalla nascita della riga:
@@ -829,9 +829,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
         new_status = "FAILURE"
         _mins = STALE_AFTER_SECONDS // 60
         error = (
-            f"Timeout: il run ha superato il tempo massimo ({_mins} min) senza completare ed è "
-            "stato interrotto. Se il flusso è solo lento, aumenta il limite "
-            "(ENGINE__RUN_STALE_TIMEOUT_SECONDS) o riduci i dati."
+            f"Timeout: the run exceeded the maximum time ({_mins} min) without completing and "
+            "was stopped. If the flow is just slow, raise the limit "
+            "(ENGINE__RUN_STALE_TIMEOUT_SECONDS) or reduce the data."
         )
         error_detail = None
 
@@ -1123,7 +1123,7 @@ def runs_activity(
         try:
             d0 = datetime.strptime(day, "%Y-%m-%d")
         except ValueError:
-            raise HTTPException(status_code=422, detail="Data non valida (atteso YYYY-MM-DD)")
+            raise HTTPException(status_code=422, detail="Invalid date (expected YYYY-MM-DD)")
         start_local, end_local, granularity = d0, d0 + timedelta(days=1), "hour"
     else:
         today0 = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1188,19 +1188,19 @@ async def get_run(
     def read() -> Run:  # in a worker thread: the event loop never waits for the database
         run = session.get(Run, run_id)
         if run is None:
-            raise HTTPException(status_code=404, detail="Run non trovato")
+            raise HTTPException(status_code=404, detail="Run not found")
         if run.kind == "ingest":
             ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
             if ds is not None:
                 ensure_can(session, user, ds.project_id, Capability.VIEW)
             elif not (perm_service.is_admin(session, user) or run.launched_by == user.id):
                 # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
-                raise HTTPException(status_code=404, detail="Run non trovato")
+                raise HTTPException(status_code=404, detail="Run not found")
         elif run.flow_group_id is not None:
             # a flow group's run: read with VIEW on the group's folder
             group = session.get(FlowGroup, run.flow_group_id)
             if group is None:
-                raise HTTPException(status_code=404, detail="Run non trovato")
+                raise HTTPException(status_code=404, detail="Run not found")
             ensure_can(session, user, group.project_id, Capability.VIEW)
         else:
             flow = _get_flow(session, run.flow_id)

@@ -60,7 +60,7 @@ def flow_openlineage(flow_id: int, user: User = Depends(get_current_user), sessi
     come file o da dare a un collector."""
     flow = session.get(Flow, flow_id)
     if flow is None:
-        raise HTTPException(status_code=404, detail="Flusso non trovato")
+        raise HTTPException(status_code=404, detail="Flow not found")
     ensure_can(session, user, flow.project_id, Capability.VIEW)
     return openlineage.to_json(openlineage.job_events_for_flow(session, flow))
 
@@ -71,14 +71,14 @@ def emit_flow_openlineage(flow_id: int, user: User = Depends(get_current_user), 
     un catalogo con i flussi che esistono già, senza aspettare che girino)."""
     flow = session.get(Flow, flow_id)
     if flow is None:
-        raise HTTPException(status_code=404, detail="Flusso non trovato")
+        raise HTTPException(status_code=404, detail="Flow not found")
     ensure_can(session, user, flow.project_id, Capability.VIEW)
     if not openlineage.enabled():
-        raise HTTPException(status_code=409, detail="OpenLineage non è configurato (OPENLINEAGE__URL o OPENLINEAGE__FILE)")
+        raise HTTPException(status_code=409, detail="OpenLineage is not configured (OPENLINEAGE__URL or OPENLINEAGE__FILE)")
     try:
         inviati = openlineage.emit_flow(session, flow)
     except Exception as e:  # noqa: BLE001 — chi lo chiede a mano vuole sapere perché non è andata
-        raise HTTPException(status_code=502, detail=f"Il collector OpenLineage ha rifiutato l'invio: {str(e)[:300]}")
+        raise HTTPException(status_code=502, detail=f"The OpenLineage collector rejected the events: {str(e)[:300]}")
     return {"events": inviati}
 
 
@@ -103,5 +103,5 @@ def get_lineage(
     if center not in full.nodes:
         # l'oggetto non è leggibile o non esiste: 404 (non riveliamo l'esistenza
         # di oggetti fuori dai progetti dell'utente)
-        raise HTTPException(status_code=404, detail="Oggetto non trovato o non accessibile")
+        raise HTTPException(status_code=404, detail="Object not found or not accessible")
     return _serialize(lineage_service.subgraph(full, center, direction, depth), center)

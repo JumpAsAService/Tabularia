@@ -153,12 +153,12 @@ def test_the_attachment_is_there_with_its_name(smtp, allegato):
 
 # ── guardie ─────────────────────────────────────────────────────────────────
 def test_no_recipients_is_refused(smtp, allegato):
-    with pytest.raises(EmailDestinationError, match="destinatario"):
+    with pytest.raises(EmailDestinationError, match="recipients"):
         send_output_email(_conn(), EmailSpec(to=[], cc=[]), "b", "k")
 
 
 def test_no_sender_is_refused(smtp, allegato):
-    with pytest.raises(EmailDestinationError, match="mittente"):
+    with pytest.raises(EmailDestinationError, match="sender"):
         send_output_email(_conn(from_address=""), EmailSpec(to=["a@b.it"]), "b", "k")
 
 

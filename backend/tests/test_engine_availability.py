@@ -25,6 +25,6 @@ def test_engine_noto_ma_assente_ha_un_messaggio_chiaro(senza_chdb):
 
 def test_engine_davvero_sconosciuto_resta_tale():
     engines.get_engine.cache_clear()
-    with pytest.raises(EngineError, match="engine sconosciuto: 'spark'"):
+    with pytest.raises(EngineError, match="unknown engine: 'spark'"):
         engines.get_engine("spark")
     engines.get_engine.cache_clear()

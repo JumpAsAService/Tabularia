@@ -54,8 +54,8 @@ SEED_MAX_ROWS = 50_000          # un seed dbt è un CSV nel repository: oltre, n
 
 
 class DbtExportError(EngineError):
-    """Un rifiuto dell'export. Il testo (italiano) resta nei log; `code` e `params`
-    vanno al gateway, che lo dice nella lingua di chi lo legge."""
+    """The export refused. The English text stays in the logs; `code` and `params`
+    go to the gateway, which says it in the reader's language."""
 
     def __init__(self, messaggio: str, code: str = "internal", **params):
         super().__init__(messaggio)
@@ -241,7 +241,7 @@ def _riscrivi_query(query: str, ref: str) -> str:
     try:
         albero = sqlglot.parse_one(query, read="duckdb")
     except Exception as e:  # noqa: BLE001
-        raise DbtExportError(f"sql: la query non si legge ({e})", "sql_unreadable", detail=str(e)[:200])
+        raise DbtExportError(f"sql: the query cannot be parsed ({e})", "sql_unreadable", detail=str(e)[:200])
     cte = {c.alias_or_name.lower() for c in albero.find_all(exp.CTE)}
     for t in albero.find_all(exp.Table):
         nome = t.name.lower()
@@ -269,8 +269,8 @@ def _serve_lista(model: "_Model", s: "_S", cosa: str) -> bool:
         return False
     if not s.cols:
         raise DbtExportError(
-            f"{cosa}: le colonne non sono note a questo punto del flusso (dopo un nodo sql): "
-            "nell'export nativo servono. Usa l'export «federato», oppure fai elencare le colonne al nodo sql.",
+            f"{cosa}: the columns are not known at this point of the flow (after a sql node): "
+            "the native export needs them. Use the «federated» export, or have the sql node list its columns.",
             "columns_unknown_after_sql", step=cosa,
         )
     return True
@@ -349,7 +349,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         for col, dt in casts.items():
             duck_t = _DUCK_DTYPES.get(str(dt))
             if not duck_t:
-                raise DbtExportError(f"cast: tipo non supportato '{dt}'", "cast_unsupported_type", type=dt)
+                raise DbtExportError(f"cast: unsupported type '{dt}'", "cast_unsupported_type", type=dt)
             src = types.get(col)
             espr = _cast_portabile(q(col), src, duck_t) if nat else _cast_expr(q(col), src or "", duck_t)
             repls.append((col, espr))
@@ -394,7 +394,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
     if op_type == "drop_nulls":
         subset = params.get("subset") or cols
         if not subset:
-            raise DbtExportError("drop_nulls: colonne non note a questo punto del flusso (dopo un nodo sql o un pivot): indicale nel nodo", "drop_nulls_columns_unknown")
+            raise DbtExportError("drop_nulls: the columns are not known at this point of the flow (after a sql node or a pivot): list them in the node", "drop_nulls_columns_unknown")
         cond = " AND ".join(f"{q(c)} IS NOT NULL" for c in subset)
         return model.add(f"SELECT {tutte} FROM {ref} WHERE {cond}"), s
 
@@ -405,7 +405,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         for agg in aggs:
             col, func = agg["column"], agg.get("func", "sum")
             if func not in _AGG:
-                raise DbtExportError(f"group_by: funzione non supportata '{func}'", "groupby_unsupported_func", func=func)
+                raise DbtExportError(f"group_by: unsupported function '{func}'", "groupby_unsupported_func", func=func)
             alias = agg.get("alias") or f"{col}_{func}"
             expr = f"count(DISTINCT {q(col)})" if func == "n_unique" else f"{_AGG[func]}({q(col)})"
             if func in ("std", "var") and model.dialetto == "clickhouse":
@@ -433,7 +433,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         for c in columns:
             name, expr = str(c.get("name") or "").strip(), str(c.get("expr") or "").strip()
             if not name or not expr:
-                raise DbtExportError("compute: nome ed espressione sono obbligatori", "compute_missing")
+                raise DbtExportError("compute: the name and the expression are required", "compute_missing")
             # niente controllo «solo espressioni scalari» qui: nel motore protegge il
             # NOSTRO processo (l'espressione gira dentro Tabularia); il progetto dbt
             # gira nell'ambiente di chi lo esporta, e deve riprodurre il flusso com'è
@@ -474,7 +474,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
             if not nat:
                 return model.add(f"SELECT * FROM {ref} UNION ALL BY NAME SELECT * FROM {r_ref}"), _S(merged, mt)
             if not cols or not rs.cols:
-                raise DbtExportError("union per nome: le colonne di uno dei due rami non sono note (dopo un nodo sql o un pivot): nell'export nativo serve saperle",
+                raise DbtExportError("union by name: the columns of one of the two branches are not known (after a sql node or a pivot): the native export needs them",
                                      "union_columns_unknown")
             lato = lambda have: ", ".join(q(c) if c in set(have) else f"NULL AS {q(c)}" for c in merged)
             return model.add(f"SELECT {lato(cols)} FROM {ref} UNION ALL SELECT {lato(rs.cols)} FROM {r_ref}"), _S(merged, mt)
@@ -499,7 +499,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
                 return model.add(f"SELECT {sel} FROM {ref} WHERE {neg}EXISTS (SELECT 1 FROM {r_ref} WHERE {cond})"), s
             return model.add(f"SELECT {sel} FROM {ref} {how.upper()} JOIN {r_ref} {clause}"), s
         if how not in _JOIN_KW:
-            raise DbtExportError(f"join: tipo non supportato '{how}'", "join_unsupported", how=how)
+            raise DbtExportError(f"join: unsupported type '{how}'", "join_unsupported", how=how)
         skip_right = set(_as_list(params["on"])) if kind == "using" else set()
         # nei right/full join le chiavi USING sono COALESCE(sinistra, destra), come nel motore
         sel = _join_select(ref, cols, r_ref, rs.cols, skip_right, skip_right if how in ("full", "right") else set())
@@ -511,16 +511,16 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
     if op_type == "pivot":
         if nat:
             raise DbtExportError(
-                "Il nodo «pivot» produce colonne decise dai dati a runtime: in dbt si rende "
-                "solo con il PIVOT di DuckDB. Usa l'export «federato» (dbt-duckdb), oppure "
-                "sostituisci il pivot con un nodo sql che elenchi le colonne.", "pivot_not_portable"
+                "The «pivot» node produces columns decided by the data at runtime: in dbt it can only be written "
+                "with DuckDB's PIVOT. Use the «federated» export (dbt-duckdb), or "
+                "replace the pivot with a sql node that lists the columns.", "pivot_not_portable"
             )
         index = _as_list(_require(params, "index"))
         on = _as_list(_require(params, "on"))
         values = _require(params, "values")
         func = params.get("func", "sum")
         if func not in _AGG:
-            raise DbtExportError(f"pivot: funzione non supportata '{func}'", "pivot_unsupported_func", func=func)
+            raise DbtExportError(f"pivot: unsupported function '{func}'", "pivot_unsupported_func", func=func)
         # etichetta standard cross-engine, come il motore: valore come testo, NULL → 'null',
         # più colonne unite dal separatore
         on_sql = f" || '{PIVOT_LABEL_SEP}' || ".join(f"coalesce(CAST({q(c)} AS VARCHAR), 'null')" for c in on)
@@ -534,7 +534,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         val = params.get("value_name") or "value"
         melt = on if on else [c for c in cols if c not in set(index)]
         if not melt:
-            raise DbtExportError("unpivot: nessuna colonna da sciogliere", "unpivot_nothing")
+            raise DbtExportError("unpivot: no columns to turn into rows", "unpivot_nothing")
         tipi = [types.get(c) for c in melt]
         vtype = unpivot_value_type([t for t in tipi]) if all(tipi) else "VARCHAR"
         keep = [c for c in cols if c in set(index)] if cols else list(index)
@@ -549,11 +549,11 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
 
     if op_type == "foreach":
         raise DbtExportError(
-            "Il nodo «foreach» itera a runtime su una tabella driver e non ha un "
-            "equivalente dbt: escludilo dal flusso o esporta i rami separatamente.", "foreach_not_exportable"
+            "The «foreach» node iterates at runtime over a driver table and has no "
+            "dbt equivalent: leave it out of the flow or export the branches separately.", "foreach_not_exportable"
         )
 
-    raise DbtExportError(f"operazione '{op_type}' non esportabile in dbt", "op_not_exportable", op=op_type)
+    raise DbtExportError(f"operation '{op_type}' cannot be exported to dbt", "op_not_exportable", op=op_type)
 
 
 def _risolvi(resolve: SourceResolver, spec: dict) -> tuple[str, list[str], dict, str]:
@@ -762,11 +762,11 @@ def singular_test_sql(test: dict) -> str:
         if test.get("max") is not None:
             conds.append(f"{q(col)} > {_lit(test['max'])}")
         if not col or not conds:
-            raise DbtExportError("range: colonna e almeno un limite", "contract_rule_invalid", rule="range")
+            raise DbtExportError("range: a column and at least one bound are required", "contract_rule_invalid", rule="range")
         return f"SELECT * FROM {t} WHERE {q(col)} IS NOT NULL AND ({' OR '.join(conds)})"
     if kind == "pattern":
         if not col or not test.get("regex"):
-            raise DbtExportError("pattern: colonna e regex", "contract_rule_invalid", rule="pattern")
+            raise DbtExportError("pattern: a column and a regex are required", "contract_rule_invalid", rule="pattern")
         return f"SELECT * FROM {t} WHERE {q(col)} IS NOT NULL AND NOT regexp_matches({q(col)}, {_lit(str(test['regex']))})"
     if kind == "row_count":
         conds = []
@@ -775,21 +775,21 @@ def singular_test_sql(test: dict) -> str:
         if test.get("max") is not None:
             conds.append(f"COUNT(*) > {int(test['max'])}")
         if not conds:
-            raise DbtExportError("row_count: almeno un limite", "contract_rule_invalid", rule="row_count")
+            raise DbtExportError("row_count: at least one bound is required", "contract_rule_invalid", rule="row_count")
         return f"SELECT COUNT(*) AS n FROM {t} HAVING {' OR '.join(conds)}"
     if kind == "unique_combination":
         cols = [c for c in (test.get("columns") or []) if c]
         if len(cols) < 2:
-            raise DbtExportError("unique_combination: almeno due colonne", "contract_rule_invalid", rule="unique")
+            raise DbtExportError("unique_combination: at least two columns are required", "contract_rule_invalid", rule="unique")
         lista = ", ".join(q(c) for c in cols)
         return f"SELECT {lista}, COUNT(*) AS n FROM {t} GROUP BY {lista} HAVING COUNT(*) > 1"
     if kind == "expression":
         sql = str(test.get("sql") or "").strip()
         if not sql:
-            raise DbtExportError("expression: espressione vuota", "contract_rule_invalid", rule="expression")
+            raise DbtExportError("expression: the expression is empty", "contract_rule_invalid", rule="expression")
         # un esito «non lo so» (null) non è un sì: la riga viola — come il valutatore
         return f"SELECT * FROM {t} WHERE NOT COALESCE(({sql}), FALSE)"
-    raise DbtExportError(f"regola '{kind}' senza equivalente dbt", "rule_no_equivalent", kind=kind)
+    raise DbtExportError(f"rule '{kind}' has no dbt equivalent", "rule_no_equivalent", kind=kind)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -845,8 +845,8 @@ def transpile_model(sql: str, dialect: str, schema: dict[str, list[str]]) -> str
         raise
     except Exception as e:
         raise DbtExportError(
-            f"traduzione nel dialetto '{dialect}' non riuscita ({e}). "
-            "Il flusso è troppo complesso per l'export nativo — usa l'export «federato» (dbt-duckdb).",
+            f"translation to the '{dialect}' dialect failed ({e}). "
+            "The flow is too complex for the native export — use the «federated» export (dbt-duckdb).",
             "translation_failed", dialect=dialect, detail=str(e)[:200],
         )
 
@@ -902,21 +902,21 @@ class TargetClickHouse:
     def database_per(self, conn_id: int, schema: str) -> str:
         conn = self.conns.get(int(conn_id))
         if conn is None:
-            raise DbtExportError(f"connessione {conn_id} sconosciuta all'export")
+            raise DbtExportError(f"connection {conn_id} is unknown to the export")
         if conn["db_type"] == "clickhouse":
             # un database del ClickHouse dove gira dbt: si legge così com'è
             if (conn.get("host") or "").strip().lower() != self.host_motore:
                 raise DbtExportError(
-                    f"la connessione «{conn.get('name')}» è un ALTRO ClickHouse ({conn.get('host')}): il target ClickHouse "
-                    "legge le sorgenti Postgres/MySQL e le tabelle del suo stesso server. Usa l'export «nativo» su quel ClickHouse.",
+                    f"the connection «{conn.get('name')}» is ANOTHER ClickHouse ({conn.get('host')}): the ClickHouse target "
+                    "reads the Postgres/MySQL sources and the tables of its own server. Use the «native» export on that ClickHouse.",
                     "other_clickhouse", connection=conn.get("name"), host=conn.get("host"),
                 )
             return schema or conn.get("database") or "default"
         motore = _CH_MOTORE_FEDERATO.get(conn["db_type"])
         if motore is None:
             raise DbtExportError(
-                f"la connessione «{conn.get('name')}» è {conn['db_type']}: ClickHouse la legge solo se è "
-                "PostgreSQL, MySQL o MariaDB. Usa un altro target per questo flusso.",
+                f"the connection «{conn.get('name')}» is {conn['db_type']}: ClickHouse can read it only if it is "
+                "PostgreSQL, MySQL or MariaDB. Use another target for this flow.",
                 "clickhouse_cannot_read", connection=conn.get("name"), db_type=conn["db_type"],
             )
         nome = nome_db_federato(conn["id"], schema)
@@ -944,7 +944,7 @@ class TargetClickHouse:
 
         conn = self.conns.get(int(conn_id))
         if conn is None:
-            raise DbtExportError(f"connessione {conn_id} sconosciuta all'export")
+            raise DbtExportError(f"connection {conn_id} is unknown to the export")
         if conn["db_type"] == "clickhouse":
             self.database_per(conn_id, conn.get("database") or "")   # stesso server, o rifiuto
             return sql
@@ -956,10 +956,10 @@ class TargetClickHouse:
         try:
             alberi = alberi if proposta is not None else sqlglot.parse(sql, read=dialetto)
         except Exception as e:  # noqa: BLE001
-            raise DbtExportError(f"la query della datasource «{etichetta}» non si traduce in ClickHouse ({str(e)[:200]}): usa il target federato",
+            raise DbtExportError(f"the query of the datasource «{etichetta}» cannot be translated to ClickHouse ({str(e)[:200]}): use the federated target",
                                  "query_not_translatable", datasource=etichetta, detail=str(e)[:200])
         if len(alberi) != 1 or alberi[0] is None:
-            raise DbtExportError(f"la query della datasource «{etichetta}» non è una sola SELECT: non si traduce in ClickHouse",
+            raise DbtExportError(f"the query of the datasource «{etichetta}» is not a single SELECT: it cannot be translated to ClickHouse",
                                  "query_not_single_select", datasource=etichetta)
         albero = alberi[0]
         cte = {c.alias_or_name for c in albero.find_all(exp.CTE)}
@@ -971,7 +971,7 @@ class TargetClickHouse:
         try:
             return albero.sql(dialect="clickhouse", pretty=True)
         except Exception as e:  # noqa: BLE001
-            raise DbtExportError(f"la query della datasource «{etichetta}» non si traduce in ClickHouse ({str(e)[:200]}): usa il target federato",
+            raise DbtExportError(f"the query of the datasource «{etichetta}» cannot be translated to ClickHouse ({str(e)[:200]}): use the federated target",
                                  "query_not_translatable", datasource=etichetta, detail=str(e)[:200])
 
 
@@ -1052,30 +1052,30 @@ def verifica_proposta(sql: str, dialetto: str, consentite: set[str] | None, colo
 
     def no(motivo: str, testo: str, **dettagli):
         # il motivo è un CODICE (il gateway lo dice nella lingua di chi legge), il testo resta nei log
-        raise DbtExportError(f"la proposta dell'AI per «{modello}» non passa i controlli: {testo}",
+        raise DbtExportError(f"the AI's proposal for «{modello}» does not pass the checks: {testo}",
                              "ai_translation_invalid", model=modello, reason=motivo, **dettagli)
 
     try:
         alberi = [a for a in sqlglot.parse(sql or "", read=dialetto) if a is not None]
     except Exception as e:  # noqa: BLE001
-        no("unparsable", f"non si legge ({str(e)[:120]})")
+        no("unparsable", f"it cannot be parsed ({str(e)[:120]})")
     if len(alberi) != 1 or not isinstance(alberi[0], exp.Query):
-        no("not_select", "non è una sola SELECT")
+        no("not_select", "it is not a single SELECT")
     albero = alberi[0]
     if any(isinstance(n, (exp.Insert, exp.Create, exp.Drop, exp.Delete, exp.Update, exp.Alter, exp.Command, exp.Merge)) for n in albero.walk()):
-        no("writes", "contiene istruzioni che non sono una SELECT")
+        no("writes", "it contains statements that are not a SELECT")
     cte = {c.alias_or_name for c in albero.find_all(exp.CTE)}
     for t in albero.find_all(exp.Table):
         if not isinstance(t.this, exp.Identifier):
-            no("table_function", "legge una table function")
+            no("table_function", "it reads a table function")
         if consentite is not None and t.name not in cte and t.name not in consentite:
-            no("unknown_table", f"legge una tabella che il modello non legge ({t.name})", table=t.name)
+            no("unknown_table", f"it reads a table the model does not read ({t.name})", table=t.name)
     if colonne is not None:
         if any(isinstance(x, exp.Star) or (isinstance(x, exp.Column) and isinstance(x.this, exp.Star)) for x in albero.selects):
-            no("star", "usa * invece di elencare le colonne")
+            no("star", "it uses * instead of listing the columns")
         uscita = [x.alias_or_name for x in albero.selects]
         if uscita != list(colonne):
-            no("columns", f"dà le colonne {uscita} invece di {list(colonne)}", got=", ".join(uscita), expected=", ".join(colonne))
+            no("columns", f"it returns the columns {uscita} instead of {list(colonne)}", got=", ".join(uscita), expected=", ".join(colonne))
     return albero
 
 
@@ -1095,7 +1095,7 @@ def usa_proposta(sql: str, dialetto: str, ident_to_macro: dict[str, str], colonn
     testo = albero.sql(dialect=dialetto, pretty=True)
     errore = controllo.errore(testo) if controllo else None   # prima delle macro: ClickHouse non legge il Jinja
     if errore:
-        raise DbtExportError(f"la proposta dell'AI per «{modello}» non passa i controlli: ClickHouse non la legge ({errore})",
+        raise DbtExportError(f"the AI's proposal for «{modello}» does not pass the checks: ClickHouse cannot parse it ({errore})",
                              "ai_translation_invalid", model=modello, reason="syntax", detail=errore)
     for ident, macro in ident_to_macro.items():
         testo = re.sub(r'[`"]?__TABULARIA_' + re.escape(ident) + r'__[`"]?', lambda _m, macro=macro: macro, testo)
@@ -1106,7 +1106,7 @@ def _letterale_ch(v: Any) -> str:
     """Un letterale stringa ClickHouse scritto in un file Jinja: niente delimitatori Jinja."""
     t = str(v if v is not None else "")
     if re.search(r"[{}%#]", t):
-        raise DbtExportError(f"il valore «{t}» contiene caratteri che il progetto dbt non può scrivere in una macro", "macro_value_invalid", value=t)
+        raise DbtExportError(f"the value «{t}» contains characters the dbt project cannot write in a macro", "macro_value_invalid", value=t)
     return "'" + t.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
@@ -1170,7 +1170,7 @@ def _attach_dsn(db_type: str, conn: dict, pw_env: str) -> str:
         return f"dbname={db} host={host} port={port} user={user} password={pw}"
     if db_type in ("mysql", "mariadb"):
         return f"host={host} port={port} database={db} user={user} password={pw}"
-    raise DbtExportError(f"federazione DuckDB non disponibile per '{db_type}'", "duckdb_federation_unavailable", db_type=db_type)
+    raise DbtExportError(f"DuckDB federation is not available for '{db_type}'", "duckdb_federation_unavailable", db_type=db_type)
 
 
 def _native_profile(project: str, native: dict) -> str:
@@ -1179,7 +1179,7 @@ def _native_profile(project: str, native: dict) -> str:
     db_type = native["db_type"]
     adapter = _NATIVE_ADAPTER.get(db_type)
     if adapter is None:
-        raise DbtExportError(f"nessun adapter dbt nativo per '{db_type}'", "no_native_adapter", db_type=db_type)
+        raise DbtExportError(f"no native dbt adapter for '{db_type}'", "no_native_adapter", db_type=db_type)
     c = native["conn"]
     pw = "{{ env_var('%s') }}" % native["pw_env"]
     schema = native.get("target_schema") or "dbt_tabularia"
@@ -1494,7 +1494,7 @@ class _Disposizione:
         layout = layout or {}
         cartella = layout.get("folder") or ""
         if not re.fullmatch(r"[a-z0-9_]{0,40}", cartella):
-            raise DbtExportError(f"nome di cartella non valido: «{cartella}»", "folder_invalid", folder=cartella)
+            raise DbtExportError(f"invalid folder name: «{cartella}»", "folder_invalid", folder=cartella)
         self.pacchetto = layout.get("package") or "project"
         self.cartella = self.pacchetto == "folder"
         self.sotto = f"/{cartella}" if cartella else ""

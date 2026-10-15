@@ -75,14 +75,14 @@ class DeliveryOut(BaseModel):
 def _uno(session: Session, wid: int) -> Webhook:
     w = session.get(Webhook, wid)
     if w is None:
-        raise HTTPException(status_code=404, detail="Webhook non trovato")
+        raise HTTPException(status_code=404, detail="Webhook not found")
     return w
 
 
 def _eventi(lista: list[str]) -> str:
     validi = [e for e in dict.fromkeys(lista) if e in svc.EVENTI]
     if not validi or len(validi) != len(set(lista)):
-        raise HTTPException(status_code=422, detail=f"Eventi ammessi: {', '.join(svc.EVENTI)} (almeno uno)")
+        raise HTTPException(status_code=422, detail=f"Allowed events: {', '.join(svc.EVENTI)} (at least one)")
     return json.dumps(validi)
 
 
@@ -95,7 +95,7 @@ def _url(url: str) -> str:
 
 def _cartella(session: Session, project_id: Optional[int]) -> Optional[int]:
     if project_id is not None and session.get(Project, project_id) is None:
-        raise HTTPException(status_code=422, detail="Cartella inesistente")
+        raise HTTPException(status_code=422, detail="The folder does not exist")
     return project_id
 
 
@@ -132,7 +132,7 @@ def create_webhook(
 ):
     nome = body.name.strip()
     if not nome or len(nome) > 120:
-        raise HTTPException(status_code=422, detail="Il nome è obbligatorio (al più 120 caratteri)")
+        raise HTTPException(status_code=422, detail="A name is required (at most 120 characters)")
     segreto = svc.nuovo_segreto()
     w = Webhook(
         name=nome, url=_url(body.url), secret_enc=svc.cifra(segreto), events=_eventi(body.events),
@@ -160,7 +160,7 @@ def update_webhook(
     if body.name is not None:
         nome = body.name.strip()
         if not nome or len(nome) > 120:
-            raise HTTPException(status_code=422, detail="Il nome è obbligatorio (al più 120 caratteri)")
+            raise HTTPException(status_code=422, detail="A name is required (at most 120 characters)")
         w.name, cambi["name"] = nome, nome
     if body.url is not None:
         w.url = _url(body.url)
@@ -252,5 +252,5 @@ def list_deliveries(
 def redeliver(did: int, session: Session = Depends(get_session), _: User = Depends(require_superuser)):
     d = session.get(WebhookDelivery, did)
     if d is None:
-        raise HTTPException(status_code=404, detail="Consegna non trovata")
+        raise HTTPException(status_code=404, detail="Delivery not found")
     return _delivery_out(svc.rispedisci(session, d), True)

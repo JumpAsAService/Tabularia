@@ -36,7 +36,7 @@ def list_groups(session: Session = Depends(get_session)):
              dependencies=[Depends(require_superuser)])
 def create_group(body: GroupCreate, session: Session = Depends(get_session)):
     if session.exec(select(Group).where(Group.name == body.name)).first():
-        raise HTTPException(status_code=409, detail="Nome gruppo già esistente")
+        raise HTTPException(status_code=409, detail="There is already a group with this name")
     group = Group(name=body.name, description=body.description)
     session.add(group)
     session.commit()
@@ -63,7 +63,7 @@ def update_group(
     gruppo admin non ha bisogno del secondo, perché chi amministra legge già."""
     group = session.get(Group, group_id)
     if group is None:
-        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+        raise HTTPException(status_code=404, detail="Group not found")
     era_admin = group.is_admin
     era_osservatore = group.is_observer
     if (body.is_admin and not era_admin) or (body.is_observer and not era_osservatore):
@@ -123,7 +123,7 @@ def delete_group(
 ):
     group = session.get(Group, group_id)
     if group is None:
-        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+        raise HTTPException(status_code=404, detail="Group not found")
     era_admin, nome = group.is_admin, group.name
     for link in session.exec(select(UserGroupLink).where(UserGroupLink.group_id == group_id)).all():
         session.delete(link)

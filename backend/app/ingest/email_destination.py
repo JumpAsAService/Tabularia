@@ -124,9 +124,9 @@ def build_attachment(bucket: str, key: str, spec: EmailSpec) -> tuple[bytes, str
         size = os.path.getsize(path)
         if size > MAX_ATTACHMENT_BYTES:
             raise EmailDestinationError(
-                f"L'allegato pesa {size / 1024 / 1024:.1f} MB, oltre il limite di "
-                f"{MAX_ATTACHMENT_BYTES // 1024 // 1024} MB: quasi ogni server di posta lo "
-                "rifiuterebbe. Riduci i dati a monte (filter/limit) o scegli il formato CSV."
+                f"The attachment is {size / 1024 / 1024:.1f} MB, over the "
+                f"{MAX_ATTACHMENT_BYTES // 1024 // 1024} MB limit: almost every mail server would "
+                "reject it. Reduce the data upstream (filter/limit) or choose the CSV format."
             )
         with open(path, "rb") as f:
             return f.read(), _filename(spec)
@@ -153,11 +153,11 @@ def _spedisci(conn: SmtpConnectionSpec, msg: EmailMessage, destinatari: list[str
                 server.login(conn.username, conn.resolve_secret())
             server.send_message(msg, to_addrs=destinatari)
     except smtplib.SMTPAuthenticationError as e:
-        raise EmailDestinationError(f"Autenticazione SMTP rifiutata da {conn.host}: {e}") from e
+        raise EmailDestinationError(f"SMTP authentication rejected by {conn.host}: {e}") from e
     except smtplib.SMTPException as e:
-        raise EmailDestinationError(f"Invio rifiutato da {conn.host}: {type(e).__name__}: {e}") from e
+        raise EmailDestinationError(f"Sending was rejected by {conn.host}: {type(e).__name__}: {e}") from e
     except OSError as e:  # DNS, rete, porta chiusa, TLS
-        raise EmailDestinationError(f"Impossibile raggiungere {conn.host}:{conn.port}: {e}") from e
+        raise EmailDestinationError(f"Cannot reach {conn.host}:{conn.port}: {e}") from e
 
 
 def send_notice(conn: SmtpConnectionSpec, to: list[str], subject: str, body: str) -> dict:
@@ -165,9 +165,9 @@ def send_notice(conn: SmtpConnectionSpec, to: list[str], subject: str, body: str
     fallito, e deve arrivare anche quando è proprio il dato a mancare."""
     destinatari = [a.strip() for a in to if a and a.strip()]
     if not destinatari:
-        raise EmailDestinationError("Nessun destinatario: indica almeno un indirizzo.")
+        raise EmailDestinationError("No recipients: enter at least one address.")
     if not conn.from_address.strip():
-        raise EmailDestinationError("La connessione SMTP non ha un indirizzo mittente.")
+        raise EmailDestinationError("The SMTP connection has no sender address.")
 
     msg = EmailMessage()
     msg["From"] = conn.sender()
@@ -189,9 +189,9 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
     messaggio leggibile; il chiamante decide se il run debba fallire."""
     destinatari = [a for a in (*spec.to, *spec.cc) if a.strip()]
     if not destinatari:
-        raise EmailDestinationError("Nessun destinatario: indica almeno un indirizzo.")
+        raise EmailDestinationError("No recipients: enter at least one address.")
     if not conn.from_address.strip():
-        raise EmailDestinationError("La connessione SMTP non ha un indirizzo mittente.")
+        raise EmailDestinationError("The SMTP connection has no sender address.")
 
     dati, nome_file = build_attachment(bucket, key, spec)
 
@@ -226,7 +226,7 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
 def test_connection(conn: SmtpConnectionSpec) -> None:
     """Prova la connessione senza spedire nulla: apre, cifra e autentica."""
     if not conn.host.strip():
-        raise EmailDestinationError("Nessun server SMTP indicato.")
+        raise EmailDestinationError("No SMTP server specified.")
     try:
         if conn.tls == "ssl":
             server = smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds)
@@ -238,8 +238,8 @@ def test_connection(conn: SmtpConnectionSpec) -> None:
             if conn.username:
                 server.login(conn.username, conn.resolve_secret())
     except smtplib.SMTPAuthenticationError as e:
-        raise EmailDestinationError(f"Autenticazione rifiutata da {conn.host}: {e}") from e
+        raise EmailDestinationError(f"Authentication rejected by {conn.host}: {e}") from e
     except smtplib.SMTPException as e:
-        raise EmailDestinationError(f"{conn.host} ha rifiutato la connessione: {type(e).__name__}: {e}") from e
+        raise EmailDestinationError(f"{conn.host} refused the connection: {type(e).__name__}: {e}") from e
     except OSError as e:
-        raise EmailDestinationError(f"Impossibile raggiungere {conn.host}:{conn.port}: {e}") from e
+        raise EmailDestinationError(f"Cannot reach {conn.host}:{conn.port}: {e}") from e

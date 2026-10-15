@@ -26,7 +26,7 @@ _METODI_SICURI = {"GET", "HEAD", "OPTIONS"}
 
 _credentials_error = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Credenziali non valide",
+    detail="Invalid credentials",
     headers={"WWW-Authenticate": "Bearer"},
 )
 
@@ -51,7 +51,7 @@ class _TokenDellaRichiesta(OAuth2PasswordBearer):
         if request.method not in _METODI_SICURI and not request.headers.get(sessions.CSRF_HEADER):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Richiesta senza l'intestazione X-Tabularia-Csrf",
+                detail="The request is missing the X-Tabularia-Csrf header",
             )
         request.state.token_dal_cookie = True  # se non vale, il 401 cancella il cookie
         return dal_cookie
@@ -274,7 +274,7 @@ def require_superuser(
     from app.services.permissions import is_admin
 
     if not is_admin(session, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi admin")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
     _fine_passo(session)
     return user
 
@@ -291,6 +291,6 @@ def require_observer(
     from app.services.permissions import is_observer
 
     if not is_observer(session, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Richiesti privilegi di lettura amministrativa")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrative read access required")
     _fine_passo(session)
     return user

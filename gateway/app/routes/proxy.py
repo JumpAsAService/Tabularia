@@ -155,7 +155,7 @@ async def _read_json(request: Request) -> tuple[bytes, Any]:
     if declared is not None:
         try:
             if int(declared) > MAX_JSON_BODY_BYTES:
-                raise HTTPException(status_code=413, detail="Body troppo grande (limite 8 MB)")
+                raise HTTPException(status_code=413, detail="The request body is too large (limit 8 MB)")
         except ValueError:
             pass
     # …e comunque leggo a chunk con un tetto reale (il Content-Length può mentire
@@ -165,7 +165,7 @@ async def _read_json(request: Request) -> tuple[bytes, Any]:
     async for chunk in request.stream():
         size += len(chunk)
         if size > MAX_JSON_BODY_BYTES:
-            raise HTTPException(status_code=413, detail="Body troppo grande (limite 8 MB)")
+            raise HTTPException(status_code=413, detail="The request body is too large (limit 8 MB)")
         chunks.append(chunk)
     raw = b"".join(chunks)
     try:
@@ -173,7 +173,7 @@ async def _read_json(request: Request) -> tuple[bytes, Any]:
         # riscrivere e rispondeva 500. Non sono JSON: si fermano qui
         return raw, (json.loads(raw, parse_constant=_non_json) if raw else {})
     except ValueError:  # JSONDecodeError compreso
-        raise HTTPException(status_code=422, detail="Il body non è JSON valido")
+        raise HTTPException(status_code=422, detail="The request body is not valid JSON")
 
 
 def _non_json(costante: str):
@@ -296,7 +296,7 @@ async def transform(
 ):
     raw, payload = await _read_json(request)
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=422, detail="Il body dev'essere un oggetto JSON")
+        raise HTTPException(status_code=422, detail="The request body must be a JSON object")
     # le destinazioni (database o S3) passano SOLO da /flows/{id}/runs: è il
     # gateway a costruire il payload di connessione (RBAC CONNECT, secret mai
     # dal client). "db_destination" è il nome storico: rifiutato anche quello.
@@ -314,7 +314,7 @@ async def transform(
     if any(payload.get(k) for k in ("destination", "db_destination", "mirror", "email")):
         raise HTTPException(
             status_code=422,
-            detail="Destinazione non consentita qui: salva il flusso e usa un nodo Output",
+            detail="Destinations are not allowed here: save the flow and use an Output node",
         )
     engine_bucket = get_settings().engine.bucket
     # la chiave di OUTPUT la sceglie il SERVER (out/<uuid> write-once), mai il
@@ -402,7 +402,7 @@ async def start_export(
 ):
     raw, payload = await _read_json(request)
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=422, detail="Il body dev'essere un oggetto JSON")
+        raise HTTPException(status_code=422, detail="The request body must be a JSON object")
     await run_in_threadpool(_authorize_export, request, session, user, payload)
     payload["owner"] = _export_owner(user)  # never the browser's word for it
     return await _forward(request, "POST", "/tasks/exports", content=json.dumps(payload).encode(), session=session, user=user)
@@ -448,7 +448,7 @@ async def upload(
         if not can_upload(session, user):
             raise HTTPException(
                 status_code=403,
-                detail="Per caricare un file serve il permesso di modifica su almeno una cartella",
+                detail="Uploading a file needs edit permission on at least one folder",
             )
         proprietario = user.id
         _release_db(session, user)  # l'upload può durare minuti: senza connessione in mano

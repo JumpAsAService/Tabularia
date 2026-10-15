@@ -37,9 +37,9 @@ def _parse_dtype_overrides(raw: Optional[str]) -> dict[str, str]:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise HTTPException(422, f"dtype_overrides non è JSON valido: {e}")
+        raise HTTPException(422, f"dtype_overrides is not valid JSON: {e}")
     if not isinstance(parsed, dict):
-        raise HTTPException(422, "dtype_overrides deve essere un oggetto JSON {colonna: dtype}")
+        raise HTTPException(422, "dtype_overrides must be a JSON object {column: dtype}")
     return parsed
 
 
@@ -111,7 +111,7 @@ def delete_object(bucket: str, key: str):
     """
     allowed = ("datasets/", "out/", "raw/")
     if not key.startswith(allowed):
-        raise HTTPException(422, f"chiave fuori dai prefissi gestiti {allowed}")
+        raise HTTPException(422, f"key outside the managed prefixes {allowed}")
     from app.utils import get_storage_service
 
     get_storage_service().delete_object(bucket, key)

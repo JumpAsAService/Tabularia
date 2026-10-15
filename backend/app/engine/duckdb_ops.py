@@ -56,8 +56,8 @@ def get_duck_operation(name: str) -> DuckOpFn:
     fn = _REGISTRY.get(name)
     if fn is None:
         raise EngineError(
-            f"operazione '{name}' non ancora supportata dall'engine DuckDB. "
-            "Usa il motore Polars per questo flusso (o questo nodo)."
+            f"operation '{name}' is not supported by the DuckDB engine yet. "
+            "Use the Polars engine for this flow (or this node)."
         )
     return fn
 
@@ -81,7 +81,7 @@ def _lit(v: Any) -> str:
 
 def _require(params: dict, key: str) -> Any:
     if key not in params or params[key] in (None, "", []):
-        raise EngineError(f"parametro mancante: '{key}'")
+        raise EngineError(f"required parameter missing: '{key}'")
     return params[key]
 
 
@@ -147,7 +147,7 @@ def op_cast(rel, params, a, ctx):
     for col, dt in cols.items():
         duck_t = _DUCK_DTYPES.get(str(dt))
         if not duck_t:
-            raise EngineError(f"cast: tipo non supportato '{dt}'")
+            raise EngineError(f"cast: unsupported type '{dt}'")
         repls.append(f"{_cast_expr(_qi(col), types.get(col, ''), duck_t)} AS {_qi(col)}")
     return rel.query(a, f"SELECT * REPLACE ({', '.join(repls)}) FROM {a}")
 
@@ -173,7 +173,7 @@ def _predicate(column: str, operator: str, value: Any) -> str:
         return f"ends_with(CAST({c} AS VARCHAR), {_lit(value)})"
     ops = {"eq": "=", "ne": "<>", "gt": ">", "ge": ">=", "lt": "<", "le": "<="}
     if operator not in ops:
-        raise EngineError(f"filter: operatore non supportato '{operator}'")
+        raise EngineError(f"filter: unsupported operator '{operator}'")
     return f"{c} {ops[operator]} {_lit(value)}"
 
 
@@ -258,7 +258,7 @@ def op_group_by(rel, params, a, ctx):
     for agg in aggs:
         col, func = agg["column"], agg.get("func", "sum")
         if func not in _AGG:
-            raise EngineError(f"group_by: funzione non supportata '{func}'")
+            raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
         expr = f"count(DISTINCT {_qi(col)})" if func == "n_unique" else f"{_AGG[func]}({_qi(col)})"
         parts.append(f"{expr} AS {_qi(alias)}")
@@ -286,16 +286,16 @@ def _recast_hugeint(ctx, rel):
 def op_compute(rel, params, a, ctx):
     columns = _require(params, "columns")  # [{name, expr}]
     if not isinstance(columns, list):
-        raise EngineError("compute: definisci almeno una colonna calcolata")
+        raise EngineError("compute: define at least one calculated column")
     for i, c in enumerate(columns):
         name = str(c.get("name") or "").strip()
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
-            raise EngineError("compute: nome ed espressione sono obbligatori")
+            raise EngineError("compute: name and expression are required")
         if espressione_vietata(expr, "duckdb"):
             raise EngineError(
-                f"compute: espressione di '{name}' non consentita (niente sottoquery, "
-                "FROM o funzioni di lettura file — solo espressioni scalari)."
+                f"compute: the expression of '{name}' is not allowed (no subqueries, "
+                "FROM or file reading functions — scalar expressions only)."
             )
         step = f"{a}_{i}"
         if name in rel.columns:
@@ -315,7 +315,7 @@ def _join_condition(ln: str, rn: str, params: dict) -> tuple[str, str]:
     lo = _as_list(_require(params, "left_on"))
     ro = _as_list(_require(params, "right_on"))
     if len(lo) != len(ro):
-        raise EngineError("join: left_on e right_on devono avere lo stesso numero di colonne")
+        raise EngineError("join: left_on and right_on must have the same number of columns")
     cond = " AND ".join(f"{ln}.{_qi(l)} = {rn}.{_qi(r)}" for l, r in zip(lo, ro))
     return f"ON {cond}", "on"
 
@@ -352,9 +352,9 @@ def op_join(rel, params, a, ctx):
         rn_n = ctx.con.sql(f"SELECT count(*) FROM {rn}").fetchone()[0]
         if MAX_CROSS_JOIN_ROWS and ln_n * rn_n > MAX_CROSS_JOIN_ROWS:
             raise EngineError(
-                f"Il cross join produrrebbe {ln_n * rn_n:,} righe ({ln_n:,} × {rn_n:,}), "
-                f"oltre il limite di {MAX_CROSS_JOIN_ROWS:,}. Aggiungi una condizione di join "
-                "o riduci le sorgenti."
+                f"The cross join would produce {ln_n * rn_n:,} rows ({ln_n:,} × {rn_n:,}), "
+                f"over the limit of {MAX_CROSS_JOIN_ROWS:,}. Add a join condition "
+                "or reduce the sources."
             )
         sel = _join_select(ln, lcols, rn, rcols, set())
         return ctx.con.sql(f"SELECT {sel} FROM {ln} CROSS JOIN {rn}")
@@ -363,7 +363,7 @@ def op_join(rel, params, a, ctx):
     if how in ("semi", "anti"):
         return ctx.con.sql(f"SELECT {ln}.* FROM {ln} {how.upper()} JOIN {rn} {clause}")
     if how not in _JOIN_KW:
-        raise EngineError(f"join: tipo non supportato '{how}'")
+        raise EngineError(f"join: unsupported join type '{how}'")
     # con USING le chiavi (stesse su entrambi) restano una sola volta
     skip_right = set(_as_list(params["on"])) if kind == "using" else set()
     sel = _join_select(ln, lcols, rn, rcols, skip_right, skip_right if how in ("full", "right") else set())
@@ -387,7 +387,7 @@ def op_pivot(rel, params, a, ctx):
     values = _require(params, "values")
     func = params.get("func", "sum")
     if func not in _AGG:
-        raise EngineError(f"pivot: funzione non supportata '{func}'")
+        raise EngineError(f"pivot: unsupported aggregation function '{func}'")
     name = ctx.register(rel)
     # etichetta standard cross-engine (vedi operations.pivot_label): valore come
     # testo, NULL → 'null', più colonne unite da "_" (solo combinazioni presenti)
@@ -397,8 +397,8 @@ def op_pivot(rel, params, a, ctx):
     ).fetchone()[0]
     if n_cols > MAX_PIVOT_COLUMNS:
         raise EngineError(
-            f"pivot: le colonne scelte hanno {n_cols} combinazioni distinte ({n_cols} colonne "
-            f"nuove, massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
+            f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
+            f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
     idx_sql = ", ".join(_qi(c) for c in index)
     piv = ctx.con.sql(
@@ -432,11 +432,11 @@ def op_unpivot(rel, params, a, ctx):
     val = params.get("value_name") or "value"
     melt = on if on else [c for c in rel.columns if c not in set(index)]
     if not melt:
-        raise EngineError("unpivot: nessuna colonna da sciogliere")
+        raise EngineError("unpivot: no columns to unpivot")
     types = dict(zip(rel.columns, (str(t) for t in rel.types)))
     missing = [c for c in melt if c not in types]
     if missing:
-        raise EngineError(f"unpivot: colonne inesistenti: {', '.join(missing)}")
+        raise EngineError(f"unpivot: columns not found: {', '.join(missing)}")
     # come Polars: restano SOLO le colonne indice; le sciolte vanno al supertipo
     # comune (UNPIVOT vuole tipi unificabili)
     vtype = unpivot_value_type([types[c] for c in melt])
@@ -465,7 +465,7 @@ def op_sql(rel, params, a, ctx):
     sandbox) ma da Python (pyarrow) in STREAMING → resta out-of-core."""
     query = str(_require(params, "query")).strip()
     if not query:
-        raise EngineError("sql: la query è vuota")
+        raise EngineError("sql: the query is empty")
 
     in_tmp = ctx.tempfile()
     rel.write_parquet(in_tmp)  # materializza l'input (streaming su disco)
@@ -497,7 +497,7 @@ def op_sql(rel, params, a, ctx):
         except EngineError:
             raise
         except Exception as e:
-            raise EngineError(f"sql: query non valida o non consentita: {e}") from e
+            raise EngineError(f"sql: the query is not valid or not allowed: {e}") from e
     finally:
         sbx.close()
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -517,23 +517,23 @@ def op_foreach(rel, params, a, ctx):
         drv = ctx.build_right(params["driver"]).limit(MAX_FOREACH_ITERATIONS + 1).pl()
         if drv.height > MAX_FOREACH_ITERATIONS:
             raise EngineError(
-                f"il driver ha oltre {MAX_FOREACH_ITERATIONS} righe: riduci il driver (unique/filter)."
+                f"the driver has more than {MAX_FOREACH_ITERATIONS} rows: reduce the driver (unique/filter)."
             )
         items = drv.to_dicts()
     if not items:
         raise EngineError(
-            "foreach senza iterazioni: collega un driver (input in alto) o definisci 'items'"
+            "foreach has no iterations: connect a driver (the top input) or define 'items'"
         )
     if len(items) > MAX_FOREACH_ITERATIONS:
-        raise EngineError(f"foreach: {len(items)} iterazioni oltre il limite di {MAX_FOREACH_ITERATIONS}")
+        raise EngineError(f"foreach: {len(items)} iterations, over the limit of {MAX_FOREACH_ITERATIONS}")
     if not body:
-        raise EngineError("foreach con corpo vuoto: trascina delle operazioni dentro il container")
+        raise EngineError("foreach has an empty body: drag some operations into the container")
     _reject_dynamic_source_keys(body)  # una sorgente non può avere il percorso dai dati
 
     ctx.foreach_iterations += len(items)
     if ctx.foreach_iterations > MAX_FOREACH_TOTAL:
         raise EngineError(
-            f"foreach: troppe iterazioni totali ({ctx.foreach_iterations}) — annidamento eccessivo"
+            f"foreach: too many iterations in total ({ctx.foreach_iterations}) — the nesting is too deep"
         )
 
     add_keys = params.get("add_keys_as_columns", False)
@@ -542,7 +542,7 @@ def op_foreach(rel, params, a, ctx):
         try:
             sub = ctx.apply(rel, _substitute(body, item))
         except EngineError as e:
-            raise EngineError(f"iterazione {idx + 1}/{len(items)}: {e}") from e
+            raise EngineError(f"iteration {idx + 1}/{len(items)}: {e}") from e
         if add_keys:
             lits = ", ".join(f"{_lit(v)} AS {_qi(str(k))}" for k, v in item.items())
             alias = ctx.uid("fk")

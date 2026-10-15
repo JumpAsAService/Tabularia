@@ -95,11 +95,11 @@ def create_my_token(
     """Un token per i propri script: vale con i propri permessi, mai di più."""
     nega_se_da_token(request)
     if not get_settings().auth.personal_tokens and not user.is_service:
-        raise HTTPException(status_code=403, detail="I token personali sono spenti su questa installazione")
+        raise HTTPException(status_code=403, detail="Personal tokens are turned off on this installation")
     if is_observer_only(session, user):
         # l'osservatore è l'ospite condiviso di una demo: una credenziale personale
         # sopravviverebbe al cambio della sua password, e la vedrebbero tutti
-        raise HTTPException(status_code=403, detail="Un osservatore non ha token personali")
+        raise HTTPException(status_code=403, detail="Observers do not have personal tokens")
     return crea_e_registra(session, request, user, body, user)
 
 
@@ -114,7 +114,7 @@ def revoke_my_token(
     altri: 404."""
     riga = api_tokens.revoca(session, token_id, user.id)
     if riga is None:
-        raise HTTPException(status_code=404, detail="Token non trovato")
+        raise HTTPException(status_code=404, detail="Token not found")
     audit.record_audit(
         session, actor=user, action=audit.TOKEN_REVOKE, request=request,
         target_type="user", target_id=user.id, target_label=user.email,
@@ -160,7 +160,7 @@ def revoke_any_token(
 ):
     riga = api_tokens.revoca(session, token_id)
     if riga is None:
-        raise HTTPException(status_code=404, detail="Token non trovato")
+        raise HTTPException(status_code=404, detail="Token not found")
     proprietario = session.get(User, riga.user_id)
     audit.record_audit(
         session, actor=admin, action=audit.TOKEN_REVOKE, request=request,

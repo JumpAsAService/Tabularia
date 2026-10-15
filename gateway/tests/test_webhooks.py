@@ -254,7 +254,7 @@ async def test_un_indirizzo_vietato_non_si_chiama_e_non_si_ritenta(db_engine, se
     ricevute: list[httpx.Request] = []
     await svc.consegna_dovute(db_engine, _client([200], ricevute))
     d = _consegne(session)[0]
-    assert ricevute == [] and d.status == "failed" and "non ammesso" in d.last_error
+    assert ricevute == [] and d.status == "failed" and "not allowed" in d.last_error
 
 
 @pytest.mark.parametrize("ip,vietato", [
@@ -397,13 +397,13 @@ async def test_i_nomi_internazionali_si_controllano_come_li_codifica_httpx(monke
 @pytest.mark.anyio
 async def test_un_nome_che_non_si_risolve_si_ritenta(db_engine, session, monkeypatch):
     async def guasto(url):
-        raise svc._NonRisolto("nome non risolto: Temporary failure in name resolution")
+        raise svc._NonRisolto("name not resolved: Temporary failure in name resolution")
     monkeypatch.setattr(svc, "_risolvi", guasto)
     w, _ = _webhook(session)
     svc.accoda_ping(session, w)
     await svc.consegna_dovute(db_engine, _client([200], []))
     d = _consegne(session)[0]
-    assert d.status == "pending" and d.attempts == 1 and "non risolto" in d.last_error
+    assert d.status == "pending" and d.attempts == 1 and "not resolved" in d.last_error
 
 
 @pytest.mark.anyio
@@ -422,7 +422,7 @@ async def test_un_ricevente_che_non_finisce_di_rispondere_non_tiene_la_consegna(
     svc.accoda_ping(session, w)
     await svc.consegna_dovute(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(lento)))
     d = _consegne(session)[0]
-    assert d.status == "pending" and "in tempo" in d.last_error
+    assert d.status == "pending" and "in time" in d.last_error
 
 
 @pytest.mark.anyio
@@ -502,12 +502,12 @@ def test_all_osservatore_il_registro_non_dice_l_errore_del_ricevente(app, sessio
     wid = capo.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
     did = capo.post(f"/webhooks/{wid}/test", headers=CSRF).json()["id"]
     d = session.get(WebhookDelivery, did)
-    d.last_error = "risposta 500: segreti del ricevente 10.1.2.3"
+    d.last_error = "response 500: segreti del ricevente 10.1.2.3"
     session.add(d)
     session.commit()
     occhio = _entra(app, session, "occhio@x.local", is_observer=True)
     assert occhio.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"] is None
-    assert capo.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"].startswith("risposta 500")
+    assert capo.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"].startswith("response 500")
 
 
 def test_una_cartella_di_un_webhook_non_si_toglie_in_silenzio(app, session):
@@ -682,7 +682,7 @@ async def test_un_indirizzo_che_httpx_non_legge_chiude_la_consegna_e_non_ferma_l
     svc.accoda_ping(session, buono)
     await svc.consegna_dovute(db_engine, _client([200], []))
     stati = {d.webhook_id: (d.status, d.last_error) for d in _consegne(session)}
-    assert stati[cattivo.id][0] == "failed" and "non valido" in stati[cattivo.id][1]
+    assert stati[cattivo.id][0] == "failed" and "invalid" in stati[cattivo.id][1]
     assert stati[buono.id] == ("delivered", None)
 
 

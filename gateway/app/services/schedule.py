@@ -26,12 +26,12 @@ class ScheduleError(ValueError):
 def validate_schedule(spec: str) -> str:
     """Valida e normalizza l'espressione cron. Solleva ScheduleError."""
     if not spec or not isinstance(spec, str) or not spec.strip():
-        raise ScheduleError("Espressione cron vuota")
+        raise ScheduleError("Empty cron expression")
     spec = spec.strip()
     if not croniter.is_valid(spec):
         raise ScheduleError(
-            f"Espressione cron non valida: '{spec}' "
-            "(formato: 'minuto ora giorno mese giorno-settimana', es. '0 3 * * *')"
+            f"Invalid cron expression: '{spec}' "
+            "(format: 'minute hour day month day-of-week', e.g. '0 3 * * *')"
         )
     return spec
 

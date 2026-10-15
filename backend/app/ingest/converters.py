@@ -80,8 +80,8 @@ def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptio
             df = pl.read_excel(src, sheet_name=options.sheet)
         except (ModuleNotFoundError, ImportError) as e:
             raise IngestError(
-                "La lettura di Excel richiede il pacchetto 'fastexcel'. "
-                "Aggiungilo alle dipendenze (es. `uv add fastexcel`)."
+                "Reading Excel files requires the 'fastexcel' package. "
+                "Add it to the dependencies (e.g. `uv add fastexcel`)."
             ) from e
         df = _cast(df.lazy(), overrides).collect(engine='streaming')
         df.write_parquet(dst)
@@ -92,4 +92,4 @@ def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptio
         _sink(lf, dst)
 
     else:  # pragma: no cover
-        raise IngestError(f"Formato non gestito: {fmt}")
+        raise IngestError(f"Unsupported format: {fmt}")

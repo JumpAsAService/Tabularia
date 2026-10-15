@@ -56,9 +56,9 @@ def modello_ai(session: Session) -> Optional[str]:
 def _controlla_tetti(session: Session, user: User) -> None:
     cfg = get_settings().ai
     if cfg.max_cost_per_day_total_usd and ai_chats.speso_oggi_tutti(session) >= Decimal(str(cfg.max_cost_per_day_total_usd)):
-        raise DbtExportError("l'AI ha raggiunto il tetto di spesa di oggi dell'installazione", "ai_cap_reached")
+        raise DbtExportError("the AI has reached the installation's spending cap for today", "ai_cap_reached")
     if cfg.max_cost_per_day_usd and ai_chats.speso_oggi(session, user) >= Decimal(str(cfg.max_cost_per_day_usd)):
-        raise DbtExportError("hai raggiunto il tetto di spesa di oggi per l'AI", "ai_cap_reached")
+        raise DbtExportError("you have reached your AI spending cap for today", "ai_cap_reached")
 
 
 def _pulisci(testo: Any) -> str:
@@ -196,7 +196,7 @@ async def descrivi(session: Session, user: User, flow: Flow, flussi: list[int], 
     """Riempie le descrizioni che mancano nel payload (modifica il payload)."""
     model_id = modello_ai(session)
     if model_id is None:
-        raise DbtExportError("l'AI non è disponibile: assistente non configurato o nessun modello abilitato", "ai_unavailable")
+        raise DbtExportError("the AI is not available: the assistant is not configured, or no model is enabled", "ai_unavailable")
     versione = _versione(session, flow)
     ricordati = _ricordati(session, flow.id, versione, "describe")
 
@@ -253,7 +253,7 @@ async def _chiedi(model_id: str, voci: list[dict], session: Session, user: User)
         esito = await agente.run(json.dumps({"items": voci}, ensure_ascii=False), usage_limits=UsageLimits(request_limit=3))
     except Exception as e:  # noqa: BLE001 — il provider non risponde, o risponde male
         logger.warning("export dbt: descrizioni AI non riuscite (%s): %s", model_id, e)
-        raise DbtExportError(f"l'AI non ha risposto ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
+        raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
     _registra_spesa(session, user, model_id, esito)
     attese = {v["key"] for v in voci}
     return {v.key: _pulisci(v.description) for v in (esito.output.items or []) if v.key in attese and _pulisci(v.description)}
@@ -291,7 +291,7 @@ async def traduci(session: Session, user: User, flow: Flow, params: dict,
     con l'errore davanti — un modello a volte rimanda la query com'era."""
     model_id = modello_ai(session)
     if model_id is None:
-        raise DbtExportError("l'AI non è disponibile: assistente non configurato o nessun modello abilitato", "ai_unavailable")
+        raise DbtExportError("the AI is not available: the assistant is not configured, or no model is enabled", "ai_unavailable")
     sql, da, a = str(params.get("sql") or ""), str(params.get("source_dialect") or ""), str(params.get("target_dialect") or "")
     colonne = [str(c) for c in params.get("columns") or []]
     versione = _versione(session, flow)
@@ -315,7 +315,7 @@ async def traduci(session: Session, user: User, flow: Flow, params: dict,
         esito = await agente.run(domanda, usage_limits=UsageLimits(request_limit=3))
     except Exception as e:  # noqa: BLE001
         logger.warning("export dbt: traduzione AI non riuscita (%s): %s", model_id, e)
-        raise DbtExportError(f"l'AI non ha risposto ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
+        raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
     _registra_spesa(session, user, model_id, esito)
     proposta = str(esito.output.sql or "").strip().rstrip(";").strip()
     _ricorda(session, flow.id, versione, "translate", {chiave: proposta}, model_id)

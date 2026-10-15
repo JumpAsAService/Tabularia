@@ -139,7 +139,7 @@ def test_nessun_bucket_errore_parlante(storage, sorgente, recorder):
 
 
 def test_colonna_partizione_inesistente(storage, sorgente, recorder):
-    with pytest.raises(S3DestinationError, match="inesistenti"):
+    with pytest.raises(S3DestinationError, match="not in the output"):
         write_output_to_s3(
             _conn(), S3DestinationSpec(bucket="c", key="p", partition_by=["boh"]),
             BUCKET, sorgente.key, storage=storage,
@@ -148,7 +148,7 @@ def test_colonna_partizione_inesistente(storage, sorgente, recorder):
 
 def test_troppe_partizioni_rifiutate(storage, sorgente, recorder, monkeypatch):
     monkeypatch.setattr(s3d, "MAX_PARTITIONS", 2)
-    with pytest.raises(S3DestinationError, match="partizioni"):
+    with pytest.raises(S3DestinationError, match="partitions"):
         write_output_to_s3(
             _conn(), S3DestinationSpec(bucket="c", key="p", partition_by=["paese"]),
             BUCKET, sorgente.key, storage=storage,

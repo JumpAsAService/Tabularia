@@ -60,7 +60,7 @@ def test_un_panic_di_polars_diventa_un_errore_del_task_e_non_uccide_il_worker():
 
     t = Rotto()
     t.bind(celery_app)
-    with pytest.raises(EngineError, match="Errore interno del motore di calcolo"):
+    with pytest.raises(EngineError, match="Internal error in the compute engine"):
         t()
 
 

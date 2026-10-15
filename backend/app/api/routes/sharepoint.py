@@ -57,7 +57,7 @@ def inspect(request: SharePointInspectRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:  # rete, DNS, TLS: messaggio breve, niente traceback all'utente
         logger.exception("sharepoint inspect")
-        raise HTTPException(status_code=502, detail=f"Microsoft Graph non raggiungibile: {type(e).__name__}")
+        raise HTTPException(status_code=502, detail=f"Microsoft Graph is not reachable: {type(e).__name__}")
 
 
 @router.post("/ingest", response_model=TaskResponse)

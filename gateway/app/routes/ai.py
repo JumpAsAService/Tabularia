@@ -101,11 +101,11 @@ async def set_ai_model(
     offered = await provider_models()
     row = session.get(AiModel, model_id)
     if model_id not in offered and row is None:
-        raise HTTPException(status_code=404, detail=f"Modello sconosciuto al provider: {model_id}")
+        raise HTTPException(status_code=404, detail=f"Model unknown to the provider: {model_id}")
     if body.enabled and not is_chat_model(model_id):
-        raise HTTPException(status_code=422, detail="Questo modello non e' un modello di chat (embedding, audio o reranker)")
+        raise HTTPException(status_code=422, detail="This model is not a chat model (embedding, audio or reranker)")
     if body.enabled and model_id not in offered:
-        raise HTTPException(status_code=422, detail="Il provider non offre piu' questo modello")
+        raise HTTPException(status_code=422, detail="The provider no longer offers this model")
     if row is None:
         row = AiModel(model_id=model_id)
     row.enabled = body.enabled
@@ -148,10 +148,10 @@ async def pick_engine(session: Session, requested: Optional[str]) -> Optional[st
         usable = sorted(allowed)
     if requested:
         if requested not in usable:
-            raise HTTPException(status_code=422, detail=f"Motore non utilizzabile: {requested}. Disponibili: {', '.join(usable) or 'nessuno'}")
+            raise HTTPException(status_code=422, detail=f"This engine cannot be used: {requested}. Available: {', '.join(usable) or 'none'}")
         return requested
     if not usable:
-        raise HTTPException(status_code=422, detail="Nessun motore disponibile per l'assistente")
+        raise HTTPException(status_code=422, detail="No engine is available for the assistant")
     return "polars" if "polars" in usable else usable[0]
 
 
@@ -227,13 +227,13 @@ async def export_step(
     normale — streaming, tetto di formato, audit. La SQL si rilegge dal turno
     salvato: il client manda solo l'id del passo, mai una query."""
     if fmt not in ("csv", "xlsx"):
-        raise HTTPException(status_code=422, detail="Formato non supportato: usa csv o xlsx")
+        raise HTTPException(status_code=422, detail="Unsupported format: use csv or xlsx")
     datasource_id, sql = ai_chats.query_del_passo(session, user, chat_id, seq, step_id)
     # i permessi si ricontrollano ADESSO: la conversazione puo' essere vecchia
     # e chi l'ha scritta puo' aver perso l'accesso nel frattempo
     ds = session.get(Datasource, datasource_id)
     if ds is None or ds.project_id not in readable_project_ids(session, user):
-        raise HTTPException(status_code=404, detail="Datasource non disponibile")
+        raise HTTPException(status_code=404, detail="Datasource not available")
     nome = re.sub(r"[^A-Za-z0-9._-]+", "_", ds.name)[:60] or "risultato"
     payload = {
         "bucket": ds.bucket, "input_key": ds.key,
@@ -254,7 +254,7 @@ async def export_step(
     if resp.status_code >= 400:
         testo = (await resp.aread()).decode(errors="replace")[:500]
         await resp.aclose()
-        raise HTTPException(status_code=resp.status_code, detail=f"Export non riuscito: {testo}")
+        raise HTTPException(status_code=resp.status_code, detail=f"Export failed: {testo}")
     return StreamingResponse(
         resp.aiter_bytes(),
         status_code=resp.status_code,
@@ -277,9 +277,9 @@ def _check_spending(session: Session, user: User) -> None:
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    "L'assistente non è disponibile per il resto della giornata: "
-                    "questa installazione ha raggiunto il suo tetto di spesa. "
-                    "Riprova domani."
+                    "The assistant is not available for the rest of the day: "
+                    "this installation has reached its spending cap. "
+                    "Try again tomorrow."
                 ),
             )
     if cfg.max_cost_per_day_usd:
@@ -288,8 +288,8 @@ def _check_spending(session: Session, user: User) -> None:
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    f"Hai raggiunto il tetto di spesa di oggi per l'assistente "
-                    f"({speso:.4f} $ su {cfg.max_cost_per_day_usd} $). Riprova domani."
+                    f"You have reached today's spending cap for the assistant "
+                    f"({speso:.4f} $ of {cfg.max_cost_per_day_usd} $). Try again tomorrow."
                 ),
             )
 
@@ -424,13 +424,13 @@ async def _turn_stream(
         # stesso evento per passi, token e costo: all'utente serve sapere che
         # la domanda era troppo grande, non quale contatore l'ha fermata
         logger.info("assistente: tetto d'uso raggiunto (chat %s): %s", chat_id, e)
-        yield _sse("error", {"code": "too_many_steps", "message": "La domanda ha superato i limiti previsti per un singolo turno. Prova a restringerla.", **unfinished()})
+        yield _sse("error", {"code": "too_many_steps", "message": "The question went beyond the limits set for a single turn. Try narrowing it down.", **unfinished()})
     except ModelHTTPError as e:
         logger.warning("assistente: il provider ha risposto %s per %s", e.status_code, model_id)
-        yield _sse("error", {"code": "provider", "message": f"Il provider AI ha rifiutato la richiesta ({e.status_code}).", **unfinished()})
+        yield _sse("error", {"code": "provider", "message": f"The AI provider refused the request ({e.status_code}).", **unfinished()})
     except Exception:  # noqa: BLE001 — lo stream e' gia' partito: l'errore va DENTRO lo stream
         logger.exception("assistente: errore durante la conversazione")
-        yield _sse("error", {"code": "internal", "message": "Errore inatteso dell'assistente.", **unfinished()})
+        yield _sse("error", {"code": "internal", "message": "Unexpected error in the assistant.", **unfinished()})
 
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -446,7 +446,7 @@ async def chat(
     ensure_configured()
     cfg = get_settings().ai
     if body.model not in enabled_model_ids(session):
-        raise HTTPException(status_code=403, detail="Modello non abilitato dall'amministratore")
+        raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
     engine = await pick_engine(session, body.engine)
     # Conversazione NUOVA: la riga si crea quando il turno è finito (vedi
     # ai_chats.crea), così una richiesta interrotta non lascia una chat vuota.
@@ -510,12 +510,12 @@ async def flow_assist(
     ensure_configured()
     cfg = get_settings().ai
     if body.model not in enabled_model_ids(session):
-        raise HTTPException(status_code=403, detail="Modello non abilitato dall'amministratore")
+        raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
     if is_observer_only(session, user):
         raise HTTPException(status_code=403, detail="Observers do not change flows")
     flow = ai_flow_agent.flow_of(session, body.flow_id)
     if body.flow_id is not None and flow is None:
-        raise HTTPException(status_code=404, detail="Flusso non trovato")
+        raise HTTPException(status_code=404, detail="Flow not found")
     if flow is not None:
         ensure_can(session, user, flow.project_id, Capability.EDIT)
     # an existing flow keeps the engine it has even if the administrator no longer

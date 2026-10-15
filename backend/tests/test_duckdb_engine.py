@@ -115,7 +115,7 @@ def test_run_writes_output(storage, src):
 
 
 def test_unknown_op_raises(storage, src):
-    with pytest.raises(EngineError, match="non ancora supportata"):
+    with pytest.raises(EngineError, match="not supported by the DuckDB engine yet"):
         _engine(storage).preview(src, [{"type": "does_not_exist", "params": {}}], limit=5)
 
 
@@ -248,7 +248,7 @@ def test_compute(storage, src):
 def test_compute_blocks_subquery_and_file(storage, src):
     e = _engine(storage)
     for bad_expr in ("(SELECT 1)", "(SELECT * FROM read_csv('/etc/passwd'))"):
-        with pytest.raises(EngineError, match="non consentita"):
+        with pytest.raises(EngineError, match="not allowed"):
             e.preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": bad_expr}]}}], limit=5)
 
 

@@ -105,7 +105,7 @@ def _out(c: DataContract, check_error: str | None = None) -> ContractOut:
 def _datasource(session: Session, user: User, ds_id: int, capability: Capability) -> Datasource:
     ds = session.get(Datasource, ds_id)
     if ds is None:
-        raise HTTPException(status_code=404, detail="Datasource non trovata")
+        raise HTTPException(status_code=404, detail="Datasource not found")
     ensure_can(session, user, ds.project_id, capability)
     return ds
 
@@ -113,7 +113,7 @@ def _datasource(session: Session, user: User, ds_id: int, capability: Capability
 def _contract(session: Session, ds_id: int) -> DataContract:
     c = contracts.get(session, ds_id)
     if c is None:
-        raise HTTPException(status_code=404, detail="Questa datasource non ha un data contract")
+        raise HTTPException(status_code=404, detail="This datasource has no data contract")
     return c
 
 
@@ -131,7 +131,7 @@ async def _ask_engine(path: str, body: dict) -> tuple[dict | None, str | None]:
         resp = await get_engine_client().post(path, json=body, timeout=ENGINE_WAIT_SECONDS)
     except Exception as e:  # engine irraggiungibile
         logger.warning("engine %s non raggiungibile: %s", path, e)
-        return None, "Engine non raggiungibile"
+        return None, "The engine cannot be reached"
     if resp.status_code >= 400:
         try:
             return None, str(resp.json().get("detail") or resp.text)[:300]
@@ -234,7 +234,7 @@ async def put_contract(
     try:
         document = contracts.validate_document(body.document)
     except contracts.ContractInvalid as e:
-        raise HTTPException(status_code=422, detail={"message": "Contratto non valido", "errors": e.errors})
+        raise HTTPException(status_code=422, detail={"message": "The contract is not valid", "errors": e.errors})
 
     def salva() -> tuple[dict, bool]:
         ds = _datasource(session, user, ds_id, Capability.EDIT)
@@ -324,5 +324,5 @@ async def propose_contract(ds_id: int, user: User = Depends(_utente), session: S
     snap = await run_in_threadpool(prima)
     risposta, errore = await _ask_engine("/contracts/profile", {"bucket": snap["bucket"], "key": snap["key"]})
     if risposta is None:
-        raise HTTPException(status_code=502, detail=errore or "Profilo dei dati non disponibile")
+        raise HTTPException(status_code=502, detail=errore or "Data profile not available")
     return {"document": risposta.get("proposal") or {"rules": []}, "profile": risposta.get("profile")}

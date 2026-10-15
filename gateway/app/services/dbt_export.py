@@ -41,8 +41,8 @@ _MODEL_TESTS = {"range", "pattern", "row_count", "expression"}
 
 
 class DbtExportError(ValueError):
-    """Un rifiuto dell'export. Il testo (italiano) resta nei log; `code` e `params`
-    lo fanno dire nella lingua di chi lo legge (services/messaggi_dbt.py)."""
+    """The export refused. The English text stays in the logs; `code` and `params`
+    say it in the reader's language (services/messaggi_dbt.py)."""
 
     def __init__(self, messaggio: str, code: str = "internal", **params):
         super().__init__(messaggio)
@@ -207,7 +207,7 @@ class _Progetto:
         elif ds is not None and ds.kind == "database":
             conn = self.session.get(Connection, ds.connection_id) if ds.connection_id else None
             if conn is None:
-                raise DbtExportError(f"la sorgente «{ds.name}» non ha una connessione valida", "source_no_connection", source=ds.name)
+                raise DbtExportError(f"the source «{ds.name}» has no valid connection", "source_no_connection", source=ds.name)
             if ds.source_type == "sql":
                 rif = {"model": self._modello_query(ds, conn)}
             else:
@@ -230,8 +230,8 @@ class _Progetto:
         if self.target == "duckdb":
             if conn.db_type not in _FEDERABLE:
                 raise DbtExportError(
-                    f"la connessione «{conn.name}» è {conn.db_type}: non federabile da DuckDB "
-                    "(federazione: postgresql/mysql/mariadb). Prova l'export «nativo».",
+                    f"the connection «{conn.name}» is {conn.db_type}: DuckDB cannot federate it "
+                    "(federation: postgresql/mysql/mariadb). Try the «native» export.",
                     "not_federable", connection=conn.name, db_type=conn.db_type,
                 )
             self.tables.setdefault(f"__conn_{conn.id}", (ds, conn, "", ""))   # serve l'ATTACH anche senza tabelle
@@ -258,21 +258,21 @@ class _Progetto:
         quello che pubblica questa datasource."""
         flow = self.session.get(Flow, ds.flow_id)
         if flow is None:
-            raise DbtExportError(f"la sorgente «{ds.name}» è l'uscita di un flusso che non esiste più", "upstream_missing", source=ds.name)
+            raise DbtExportError(f"the source «{ds.name}» is the output of a flow that no longer exists", "upstream_missing", source=ds.name)
         if profondita >= MAX_UPSTREAM_DEPTH:
-            raise DbtExportError(f"troppi flussi a monte in catena (oltre {MAX_UPSTREAM_DEPTH}): la sorgente «{ds.name}» non si può includere",
+            raise DbtExportError(f"too many upstream flows in a chain (more than {MAX_UPSTREAM_DEPTH}): the source «{ds.name}» cannot be included",
                                  "upstream_too_deep", max=MAX_UPSTREAM_DEPTH, source=ds.name)
         if flow.id in self.flussi_visti:
             # già incluso (o ciclo): si cerca il suo modello
             for m in self.models:
                 if m.get("publishes") == (ds.name, ds.project_id):
                     return m["name"]
-            raise DbtExportError(f"ciclo fra flussi: «{flow.name}» dipende da sé stesso attraverso «{ds.name}»", "flow_cycle", flow=flow.name, source=ds.name)
+            raise DbtExportError(f"cycle between flows: «{flow.name}» depends on itself through «{ds.name}»", "flow_cycle", flow=flow.name, source=ds.name)
         self.includi_flusso(flow, profondita + 1)
         for m in self.models:
             if m.get("publishes") == (ds.name, ds.project_id):
                 return m["name"]
-        raise DbtExportError(f"il flusso «{flow.name}» non ha un'uscita che pubblica «{ds.name}»: la datasource va rigenerata da lì",
+        raise DbtExportError(f"the flow «{flow.name}» has no output that publishes «{ds.name}»: the datasource must be regenerated from there",
                              "upstream_no_output", flow=flow.name, source=ds.name)
 
     def _seed(self, ds: Datasource | None, key: str) -> str:
@@ -329,7 +329,7 @@ class _Progetto:
                 ids.append(None)
             uscite.append({"req": req, "node": node, "rif": rif, "key": key, "ops": ops, "ids": ids})
         if not uscite:
-            raise DbtExportError(f"il flusso «{flow.name}» non ha uscite esportabili (solo email?)", "no_outputs", flow=flow.name)
+            raise DbtExportError(f"the flow «{flow.name}» has no exportable outputs (only email?)", "no_outputs", flow=flow.name)
 
         tagli = self._tagli(uscite)   # prefissi condivisi → modelli intermedi
         intermedi: dict[tuple, str] = {}
@@ -362,7 +362,7 @@ class _Progetto:
         if scelta is None:
             return
         if scelta not in ammesse:
-            raise DbtExportError(f"l'uscita «{modello['name']}» non può essere «{scelta}»: si può scegliere fra {', '.join(ammesse)}",
+            raise DbtExportError(f"the output «{modello['name']}» cannot be «{scelta}»: choose among {', '.join(ammesse)}",
                                  "materialization_not_allowed", model=modello["name"], choice=scelta, allowed=", ".join(ammesse))
         modello["materialized"] = scelta
 
@@ -508,7 +508,7 @@ def _costruisci(session: Session, flow: Flow, default_bucket: str, target: str =
     if opzioni is not None:
         target = opzioni.target
     if target not in ("duckdb", "native", "clickhouse"):
-        raise DbtExportError(f"target sconosciuto: '{target}'", "unknown_target", target=target)
+        raise DbtExportError(f"unknown target: '{target}'", "unknown_target", target=target)
     p = _Progetto(session, default_bucket, target, esportato_da=esportato_da, opzioni=opzioni)
     p.includi_flusso(flow)
 
@@ -540,10 +540,10 @@ def _rifiuto_noto(models: list[dict], target: str) -> DbtExportError | None:
     accanto al target invece di scoprirlo al download."""
     tipi = {op.get("type") for m in models for op in _operazioni(m.get("operations") or []) if isinstance(op, dict)}
     if "foreach" in tipi:
-        return DbtExportError("il nodo «foreach» non si esporta: dbt non ha un ciclo a runtime", "foreach_not_exportable")
+        return DbtExportError("the «foreach» node cannot be exported: dbt has no loop at runtime", "foreach_not_exportable")
     if "pivot" in tipi and target in ("native", "clickhouse"):
-        return DbtExportError("il nodo «pivot» produce colonne decise dai dati: si esporta solo col target federato (dbt-duckdb), "
-                              "oppure al suo posto un nodo sql che elenchi le colonne", "pivot_not_portable")
+        return DbtExportError("the «pivot» node produces columns decided by the data: it exports only with the federated target (dbt-duckdb), "
+                              "or use in its place an sql node that lists the columns", "pivot_not_portable")
     return None
 
 
@@ -594,8 +594,8 @@ def _duckdb_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> d
     for conn in conns.values():
         if conn.db_type not in _FEDERABLE:
             raise DbtExportError(
-                f"la connessione «{conn.name}» è {conn.db_type}: non federabile da DuckDB "
-                "(federazione: postgresql/mysql/mariadb). Prova l'export «nativo» per ClickHouse.",
+                f"the connection «{conn.name}» is {conn.db_type}: DuckDB cannot federate it "
+                "(federation: postgresql/mysql/mariadb). Try the «native» export for ClickHouse.",
                 "not_federable", connection=conn.name, db_type=conn.db_type,
             )
         attachments[conn.id] = {
@@ -619,15 +619,15 @@ def _duckdb_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> d
 def _native_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> dict:
     if len(conns) > 1:
         raise DbtExportError(
-            "l'export nativo richiede che tutte le sorgenti siano sulla STESSA connessione "
-            "(un solo warehouse). Questo flusso ne usa più di una — usa l'export «federato».",
+            "the native export requires all sources to be on the SAME connection "
+            "(a single warehouse). This flow uses more than one — use the «federated» export.",
             "native_one_connection",
         )
     if not conns:
-        raise DbtExportError("l'export nativo vuole almeno una sorgente da database: questo flusso legge solo file", "native_needs_database")
+        raise DbtExportError("the native export needs at least one database source: this flow reads only files", "native_needs_database")
     conn = next(iter(conns.values()))
     if conn.db_type not in _NATIVE_PORT:
-        raise DbtExportError(f"nessun adapter dbt nativo per '{conn.db_type}'", "no_native_adapter", db_type=conn.db_type)
+        raise DbtExportError(f"no native dbt adapter for '{conn.db_type}'", "no_native_adapter", db_type=conn.db_type)
     nome = lambda c, schema: p.nome_sorgente(c, schema, _slug(f"src_{schema}"))
     sources = _sources_yaml(p, nome, lambda c: c.database)
     source_map = {}

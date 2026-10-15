@@ -35,10 +35,10 @@ def create_project(
     if body.parent_id is None:
         # progetti root: solo il superuser può crearli (sono il livello di ingresso)
         if not perm_service.is_admin(session, user):
-            raise HTTPException(status_code=403, detail="Solo un admin può creare progetti root")
+            raise HTTPException(status_code=403, detail="Only an admin can create top-level folders")
     else:
         if session.get(Project, body.parent_id) is None:
-            raise HTTPException(status_code=404, detail="Progetto parent non trovato")
+            raise HTTPException(status_code=404, detail="Parent folder not found")
         ensure_can(session, user, body.parent_id, Capability.MANAGE)
 
     project = Project(
@@ -56,7 +56,7 @@ def create_project(
 def _get_project(session: Session, project_id: int) -> Project:
     project = session.get(Project, project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     return project
 
 
@@ -97,14 +97,14 @@ def update_project(
         # Audit 2026-09-19, A1: riprodotto, da 403 a 201.
         ensure_can(session, user, project_id, Capability.MANAGE)
         if session.get(Project, body.parent_id) is None:
-            raise HTTPException(status_code=404, detail="Nuovo parent non trovato")
+            raise HTTPException(status_code=404, detail="New parent folder not found")
         # Niente cicli: non dentro sé stesso e nemmeno dentro un proprio
         # DISCENDENTE, che staccherebbe il sottoalbero da ogni radice e
         # toglierebbe l'accesso a chi l'aveva per eredità (A6/M6).
         if body.parent_id == project_id or body.parent_id in descendant_ids(folder_parents(session), {project_id}):
             raise HTTPException(
                 status_code=422,
-                detail="Un progetto non può essere spostato dentro sé stesso o una sua sottocartella",
+                detail="A folder cannot be moved into itself or into one of its subfolders",
             )
         ensure_can(session, user, body.parent_id, Capability.MANAGE)
         project.parent_id = body.parent_id
@@ -121,20 +121,20 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
     ensure_can(session, user, project_id, Capability.MANAGE)
     has_children = session.exec(select(Project).where(Project.parent_id == project_id)).first()
     if has_children:
-        raise HTTPException(status_code=409, detail="Il progetto contiene sotto-cartelle: svuotalo prima")
+        raise HTTPException(status_code=409, detail="The folder contains subfolders: empty it first")
     from app.models import Permission, Flow, Datasource
 
     has_flows = session.exec(select(Flow).where(Flow.project_id == project_id)).first()
     if has_flows:
-        raise HTTPException(status_code=409, detail="Il progetto contiene flussi: spostali o eliminali prima")
+        raise HTTPException(status_code=409, detail="The folder contains flows: move or delete them first")
     has_ds = session.exec(select(Datasource).where(Datasource.project_id == project_id)).first()
     if has_ds:
-        raise HTTPException(status_code=409, detail="Il progetto contiene datasource: spostale o eliminale prima")
+        raise HTTPException(status_code=409, detail="The folder contains datasources: move or delete them first")
     from app.models import Connection
 
     has_conn = session.exec(select(Connection).where(Connection.project_id == project_id)).first()
     if has_conn:
-        raise HTTPException(status_code=409, detail="Il progetto contiene connessioni: spostale o eliminale prima")
+        raise HTTPException(status_code=409, detail="The folder contains connections: move or delete them first")
     # saved views and flow groups hold a foreign key to their folder: without this
     # check the delete ends in a 500 instead of saying what is in the way
     from app.models import FlowGroup, SavedView
@@ -151,7 +151,7 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
     if osservata:
         raise HTTPException(
             status_code=409,
-            detail=f"La cartella è quella del webhook «{osservata.name}»: cambiane la cartella o toglilo prima",
+            detail=f"The webhook «{osservata.name}» is limited to this folder: change its folder or delete it first",
         )
 
     # run storici che avevano questo progetto come DESTINAZIONE di publish

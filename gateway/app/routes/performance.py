@@ -91,7 +91,7 @@ def runs_performance(days: int = Query(7, ge=1, le=90), session: Session = Depen
 async def _engine(path: str, params: dict) -> dict:
     resp = await get_engine_client().get(path, params=params)
     if resp.status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"L'engine non risponde su {path} ({resp.status_code})")
+        raise HTTPException(status_code=502, detail=f"The engine is not responding on {path} ({resp.status_code})")
     return resp.json()
 
 

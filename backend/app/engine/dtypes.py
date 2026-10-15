@@ -19,4 +19,4 @@ def resolve_dtype(name: str) -> Any:
     try:
         return DTYPES[name.lower()]
     except KeyError:
-        raise EngineError(f"dtype non supportato: '{name}'") from None
+        raise EngineError(f"unsupported dtype: '{name}'") from None

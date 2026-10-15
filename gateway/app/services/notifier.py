@@ -52,7 +52,8 @@ def _gia_falliva(session: Session, flow_id: int, run_id: int) -> bool:
             Run.flow_id == flow_id, Run.kind == "orchestration", Run.id != run_id,
             Run.status.in_(TERMINAL_STATES),  # type: ignore[union-attr]
             # un lancio respinto perché il flusso girava già non è un'esecuzione
-            (Run.error.is_(None)) | (Run.error != "flusso già in esecuzione"),  # type: ignore[union-attr]
+            # (the Italian text is the one recorded on runs before the English one)
+            (Run.error.is_(None)) | (Run.error.not_in(("flow already running", "flusso già in esecuzione"))),  # type: ignore[union-attr]
         )
         .order_by(Run.started_at.desc(), Run.id.desc())
     ).first()

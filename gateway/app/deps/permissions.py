@@ -12,5 +12,5 @@ def ensure_can(session: Session, user: User, project_id: int, capability: Capabi
     if not perm_service.has_capability(session, user, project_id, capability):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permesso '{capability.value}' mancante sul progetto {project_id}",
+            detail=f"Missing '{capability.value}' permission on folder {project_id}",
         )

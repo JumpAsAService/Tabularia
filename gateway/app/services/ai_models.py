@@ -34,7 +34,7 @@ def is_chat_model(model_id: str) -> bool:
 
 def ensure_configured() -> None:
     if not get_settings().ai.enabled:
-        raise HTTPException(status_code=503, detail="Assistente AI non configurato (AI__BASE_URL e AI__SECRET_KEY)")
+        raise HTTPException(status_code=503, detail="AI assistant not configured (AI__BASE_URL and AI__SECRET_KEY)")
 
 
 async def provider_models(force: bool = False) -> list[str]:
@@ -54,7 +54,7 @@ async def provider_models(force: bool = False) -> list[str]:
             ids = sorted({str(m.get("id")) for m in resp.json().get("data", []) if m.get("id")})
     except Exception as e:  # noqa: BLE001 — rete, chiave scaduta, endpoint sbagliato
         logger.warning("catalogo dei modelli AI non leggibile: %s", e)
-        raise HTTPException(status_code=502, detail="Il provider AI non risponde all'elenco dei modelli") from e
+        raise HTTPException(status_code=502, detail="The AI provider does not answer the list of models") from e
     _cache = (time.monotonic(), ids)
     return ids
 

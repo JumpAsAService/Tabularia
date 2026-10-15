@@ -64,8 +64,8 @@ async def test_un_refresh_che_viola_una_regola_bloccante_non_tocca_la_datasource
     assert (ds.key, ds.rows, ds.snapshot_run_id) == ("datasets/1/buono.parquet", 100, None)
     # il run fallisce e dice quale regola
     assert run.status == "FAILURE" and run.finished_at is not None
-    assert "Data contract violato" in run.error and "not_null su id (4 righe)" in run.error
-    assert "NON sono stati pubblicati" in run.error
+    assert "Data contract violated" in run.error and "not_null on id (4 rows)" in run.error
+    assert "was NOT published" in run.error
     # i dati rifiutati se ne vanno, quelli buoni restano
     assert _in_cancellazione(session) == {"datasets/1/nuovo.parquet"}
     # lo stato: rifiutato, con il run che lo ha causato
@@ -189,7 +189,7 @@ async def test_un_flusso_che_viola_una_regola_bloccante_non_sovrascrive(session,
     fake_engine.set_task(run.task_id, "SUCCESS", result=_risultato(ROTTO))
     run = await _reconcile(session, run)
     session.refresh(d)
-    assert run.status == "FAILURE" and "Data contract violato" in run.error and run.datasource_id is None
+    assert run.status == "FAILURE" and "Data contract violated" in run.error and run.datasource_id is None
     assert (d.key, d.rows) == ("datasets/5/buono.parquet", 50)
     assert run.output_key in _in_cancellazione(session) and "datasets/5/buono.parquet" not in _in_cancellazione(session)
     c = contracts.get(session, d.id)
@@ -212,8 +212,8 @@ def test_il_messaggio_nomina_solo_le_regole_bloccanti_e_resta_breve():
     referto = {"rules": [{"id": f"r{i}", "kind": "not_null", "severity": "error", "column": f"c{i}", "passed": False, "violations": i + 1} for i in range(9)]
                + [{"id": "w", "kind": "pattern", "severity": "warning", "column": "avviso", "passed": False, "violations": 3}]}
     m = contracts.broken_rules_message(referto)
-    assert "not_null su c0 (1 righe)" in m and "e altre 3" in m and "avviso" not in m
-    assert "non valutabile: storage giù" in contracts.broken_rules_message({"rules": [], "error": "storage giù"})
+    assert "not_null on c0 (1 rows)" in m and "and 3 more" in m and "avviso" not in m
+    assert "could not be evaluated: storage giù" in contracts.broken_rules_message({"rules": [], "error": "storage giù"})
 
 
 # ── freschezza: si rompe senza che arrivi niente ─────────────────────────────

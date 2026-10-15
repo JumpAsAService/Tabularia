@@ -263,12 +263,12 @@ def test_over_the_cap_the_worker_answers_with_the_reason_and_no_file(monkeypatch
     class Engine:
         def export(self, **kw):
             seen.update(kw)
-            raise EngineError("il risultato ha più di 7 righe: oltre il tetto dell'export CSV.")
+            raise EngineError("the result has more than 7 rows: over the cap of the CSV export.")
 
     monkeypatch.setattr(jobs, "get_engine", lambda name: Engine())
     monkeypatch.setattr(jobs, "get_storage_service", lambda: storage)
     payload = jobs.export_task.apply(kwargs={"bucket": "b", "input_key": "k", "operations": []}).get()
-    assert payload == {"ok": False, "error": "bad_request", "detail": "il risultato ha più di 7 righe: oltre il tetto dell'export CSV."}
+    assert payload == {"ok": False, "error": "bad_request", "detail": "the result has more than 7 rows: over the cap of the CSV export."}
     assert not os.path.exists(seen["out_path"]) and storage.keys("exports/") == []
 
 

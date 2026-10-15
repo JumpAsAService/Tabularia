@@ -103,4 +103,4 @@ class Engine(ABC):
         max_rows: int | None = None,
     ) -> None:
         # non abstract: un engine può non supportare l'export diretto
-        raise NotImplementedError(f"{type(self).__name__} non supporta l'export")
+        raise NotImplementedError(f"{type(self).__name__} does not support export")

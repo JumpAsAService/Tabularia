@@ -74,10 +74,10 @@ def discovery(cfg: Optional[OidcSettings] = None, *, force: bool = False) -> dic
         res.raise_for_status()
         doc = res.json()
     except Exception as e:
-        raise SsoError(f"discovery OIDC fallita su {cfg.discovery_url}: {e}", "idp_unreachable") from e
+        raise SsoError(f"OIDC discovery failed on {cfg.discovery_url}: {e}", "idp_unreachable") from e
     for field in ("authorization_endpoint", "token_endpoint", "jwks_uri", "issuer"):
         if not doc.get(field):
-            raise SsoError(f"documento di discovery senza '{field}'", "idp_invalid")
+            raise SsoError(f"discovery document without '{field}'", "idp_invalid")
     _discovery_cache[cfg.discovery_url] = (time.time(), doc)
     return doc
 
@@ -133,12 +133,12 @@ def read_tx_token(token: str, state_from_idp: str) -> dict:
     try:
         payload = jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm])
     except jwt.PyJWTError as e:
-        raise SsoError(f"cookie di transazione non valido o scaduto: {e}", "tx_expired") from e
+        raise SsoError(f"transaction cookie invalid or expired: {e}", "tx_expired") from e
     if payload.get("typ") != TX_TOKEN_TYPE:
-        raise SsoError("cookie di transazione di tipo errato", "tx_invalid")
+        raise SsoError("transaction cookie of the wrong type", "tx_invalid")
     # confronto a tempo costante: lo state è un segreto anti-CSRF
     if not secrets.compare_digest(str(payload.get("state", "")), str(state_from_idp or "")):
-        raise SsoError("state non corrispondente (possibile CSRF sul callback)", "state_mismatch")
+        raise SsoError("state does not match (possible CSRF on the callback)", "state_mismatch")
     return payload
 
 
@@ -176,13 +176,13 @@ def exchange_code(cfg: OidcSettings, code: str, verifier: str) -> dict:
     try:
         res = httpx.post(doc["token_endpoint"], data=data, timeout=cfg.timeout_seconds)
     except Exception as e:
-        raise SsoError(f"token endpoint irraggiungibile: {e}", "idp_unreachable") from e
+        raise SsoError(f"token endpoint unreachable: {e}", "idp_unreachable") from e
     if res.status_code != 200:
         # il corpo può contenere dettagli della configurazione: resta nei log
-        raise SsoError(f"token exchange rifiutato ({res.status_code}): {res.text[:300]}", "code_rejected")
+        raise SsoError(f"token exchange refused ({res.status_code}): {res.text[:300]}", "code_rejected")
     payload = res.json()
     if not payload.get("id_token"):
-        raise SsoError("risposta del token endpoint senza id_token", "idp_invalid")
+        raise SsoError("token endpoint response without id_token", "idp_invalid")
     return payload
 
 
@@ -194,7 +194,7 @@ def validate_id_token(cfg: OidcSettings, id_token: str, nonce: str) -> dict:
     try:
         key = _jwks_client(doc["jwks_uri"], cfg.timeout_seconds).get_signing_key_from_jwt(id_token)
     except Exception as e:
-        raise SsoError(f"chiave di firma non recuperabile dal JWKS: {e}", "jwks_error") from e
+        raise SsoError(f"signing key not retrievable from the JWKS: {e}", "jwks_error") from e
     try:
         claims = jwt.decode(
             id_token,
@@ -205,10 +205,10 @@ def validate_id_token(cfg: OidcSettings, id_token: str, nonce: str) -> dict:
             options={"require": ["exp", "iat", "iss", "aud", "sub"]},
         )
     except jwt.PyJWTError as e:
-        raise SsoError(f"id_token non valido: {e}", "token_invalid") from e
+        raise SsoError(f"invalid id_token: {e}", "token_invalid") from e
     # il nonce lega il token a QUESTA richiesta di login (replay protection)
     if not secrets.compare_digest(str(claims.get("nonce", "")), str(nonce or "")):
-        raise SsoError("nonce non corrispondente nell'id_token", "nonce_mismatch")
+        raise SsoError("nonce does not match in the id_token", "nonce_mismatch")
     return claims
 
 
@@ -222,7 +222,7 @@ def email_from_claims(claims: dict) -> str:
         value = str(claims.get(field) or "").strip()
         if "@" in value:
             return value.lower()
-    raise SsoError("l'id_token non contiene un'email (né UPN): impossibile identificare l'utente", "no_email")
+    raise SsoError("the id_token contains no email (nor UPN): the user cannot be identified", "no_email")
 
 
 def identity_from_claims(claims: dict) -> tuple[str, str]:
@@ -240,7 +240,7 @@ def identity_from_claims(claims: dict) -> tuple[str, str]:
     subject = str(claims.get("sub") or "").strip()
     if not issuer or not subject:
         raise SsoError(
-            "l'id_token non contiene iss/sub: non identifica stabilmente nessuno", "no_identity"
+            "the id_token contains no iss/sub: it does not identify anyone stably", "no_identity"
         )
     return issuer, subject
 
@@ -269,7 +269,7 @@ def ensure_admitted(cfg: OidcSettings, email: str, idp_groups: set[str]) -> None
     if cfg.allowed_domains:
         dominio = email.rsplit("@", 1)[-1].lower()
         if dominio not in cfg.allowed_domains:
-            raise SsoError(f"dominio {dominio} non ammesso all'accesso", "not_allowed")
+            raise SsoError(f"domain {dominio} is not allowed to sign in", "not_allowed")
 
     if cfg.require_allowlisted_group:
         ammessi = set(cfg.allowlist)
@@ -279,11 +279,11 @@ def ensure_admitted(cfg: OidcSettings, email: str, idp_groups: set[str]) -> None
             # configurazione contraddittoria: si richiede un gruppo ammesso ma
             # non ne è elencato nessuno → nessuno entrerebbe mai, in silenzio
             raise SsoError(
-                "OIDC__REQUIRE_ALLOWLISTED_GROUP è attivo ma OIDC__GROUP_ALLOWLIST è vuoto",
+                "OIDC__REQUIRE_ALLOWLISTED_GROUP is on but OIDC__GROUP_ALLOWLIST is empty",
                 "config_error",
             )
         if not (idp_groups & ammessi):
-            raise SsoError(f"{email} non appartiene a nessun gruppo ammesso", "not_allowed")
+            raise SsoError(f"{email} does not belong to any allowed group", "not_allowed")
 
 
 def normalize_groups(claims: dict, cfg: OidcSettings) -> set[str]:
@@ -356,23 +356,23 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
             session.flush()
             created = True
         elif not omonimo.is_active:
-            raise SsoError(f"utente {email} disattivato in Tabularia", "user_disabled")
+            raise SsoError(f"user {email} is deactivated in Tabularia", "user_disabled")
         elif omonimo.is_service:
             # un account di servizio entra solo con un token, mai da un IdP
-            raise SsoError(f"{email} è un account di servizio", "identity_conflict")
+            raise SsoError(f"{email} is a service account", "identity_conflict")
         elif omonimo.oidc_subject:
             # quell'account appartiene già a un'ALTRA identità dell'IdP: due
             # persone non possono rivendicare lo stesso utente
             raise SsoError(
-                f"l'account {email} è già collegato a un'altra identità dell'IdP", "identity_conflict"
+                f"the account {email} is already linked to another IdP identity", "identity_conflict"
             )
         elif not claim_is_true(claims.get("email_verified")):
             # QUI stava il takeover: un account esistente veniva rivendicato solo
             # perché il token portava la sua email. Il collegamento avviene una
             # volta sola e richiede che l'IdP dichiari l'email VERIFICATA.
             raise SsoError(
-                f"l'IdP non dichiara verificata l'email {email}: collegamento all'account "
-                "esistente rifiutato",
+                f"the IdP does not declare the email {email} verified: linking to the "
+                "existing account refused",
                 "email_unverified",
             )
         else:
@@ -383,7 +383,7 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
             linked = True
 
     if not user.is_active:
-        raise SsoError(f"utente {user.email} disattivato in Tabularia", "user_disabled")
+        raise SsoError(f"user {user.email} is deactivated in Tabularia", "user_disabled")
 
     # L'email presso l'IdP può cambiare: si aggiorna, l'identità resta la stessa.
     # Non si tocca se l'indirizzo è già di qualcun altro (vincolo UNIQUE).
@@ -455,7 +455,7 @@ def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings
     if claims.get("email_verified") is False:
         # se l'IdP dichiara l'email NON verificata non ci si fida: sarebbe una
         # via di takeover. Se la claim manca (tipico di Entra) si procede.
-        raise SsoError("email non verificata presso l'IdP", "email_unverified")
+        raise SsoError("email not verified by the IdP", "email_unverified")
     return provision_and_sync(session, claims, cfg)
 
 

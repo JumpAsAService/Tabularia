@@ -173,7 +173,7 @@ def test_compute_con_extract_e_colonna_url(storage, src):
 
 def test_compute_rifiuta_table_function_e_dizionari(storage, src):
     for cattiva in ("(SELECT 1 FROM s3('http://minio:9000/x.parquet'))", "dictGet('d', 'v', toUInt64(1))"):
-        with pytest.raises(EngineError, match="non consentita"):
+        with pytest.raises(EngineError, match="not allowed"):
             _engine(storage).preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": cattiva}]}}], limit=5)
 
 

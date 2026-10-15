@@ -95,7 +95,7 @@ def ensure_still_admin(session: Session, current: User) -> None:
         session.rollback()
         raise HTTPException(
             status_code=409,
-            detail="Così perderesti i tuoi privilegi di admin: fallo fare a un altro amministratore",
+            detail="This would remove your own admin privileges: ask another administrator to do it",
         )
 
 

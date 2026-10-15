@@ -24,9 +24,9 @@ def _fernet() -> Fernet:
     key = get_settings().security.fernet_key
     if not key:
         raise RuntimeError(
-            "SECURITY__FERNET_KEY non impostata: impossibile cifrare/decifrare le "
-            "credenziali delle connessioni. Impostala (identica in gateway ed engine) — "
-            'genera con: python -c "from cryptography.fernet import Fernet; '
+            "SECURITY__FERNET_KEY is not set: connection credentials cannot be "
+            "encrypted or decrypted. Set it (the same in gateway and engine) — "
+            'generate it with: python -c "from cryptography.fernet import Fernet; '
             'print(Fernet.generate_key().decode())"'
         )
     return Fernet(key)
@@ -56,5 +56,5 @@ _ETICHETTA_INTERNA = b"tabularia: gateway -> engine API"
 def token_interno() -> str:
     chiave = get_settings().security.fernet_key
     if not chiave:
-        raise RuntimeError("SECURITY__FERNET_KEY non impostata: serve anche al token fra gateway ed engine")
+        raise RuntimeError("SECURITY__FERNET_KEY is not set: it is also needed for the token between gateway and engine")
     return hmac.new(chiave.encode(), _ETICHETTA_INTERNA, hashlib.sha256).hexdigest()

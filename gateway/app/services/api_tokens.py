@@ -95,12 +95,12 @@ def crea(
     Solleva 422 se nome, livello o scadenza non vanno."""
     name = (name or "").strip()
     if not name or len(name) > 80:
-        raise HTTPException(status_code=422, detail="Il nome del token è obbligatorio (al più 80 caratteri)")
+        raise HTTPException(status_code=422, detail="The token name is required (at most 80 characters)")
     if scope not in SCOPES:
-        raise HTTPException(status_code=422, detail="Livello del token: 'read' o 'write'")
+        raise HTTPException(status_code=422, detail="Token scope: 'read' or 'write'")
     massimo = get_settings().auth.api_token_max_days
     if not 1 <= giorni <= massimo:
-        raise HTTPException(status_code=422, detail=f"La scadenza va da 1 a {massimo} giorni")
+        raise HTTPException(status_code=422, detail=f"The expiry must be from 1 to {massimo} days")
     segreto = PREFISSO + secrets.token_urlsafe(30)
     ora = adesso()
     riga = ApiToken(

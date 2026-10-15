@@ -37,7 +37,7 @@ def _chat_di(session: Session, user: User, chat_id: int) -> AiChat:
     esiste, e non si distingue da una inesistente."""
     chat = session.get(AiChat, chat_id)
     if chat is None or chat.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata")
+        raise HTTPException(status_code=404, detail="Conversation not found")
     return chat
 
 
@@ -47,7 +47,7 @@ def apri(session: Session, user: User, chat_id: int, model_id: str, engine: Opti
     conversation of the other assistant is not found: each continues its own."""
     chat = _chat_di(session, user, chat_id)
     if (chat.kind or "assistant") != kind:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata")
+        raise HTTPException(status_code=404, detail="Conversation not found")
     chat.model_id, chat.engine = model_id, engine
     session.add(chat)
     session.commit()
@@ -195,7 +195,7 @@ def follow_flow(session: Session, chat: AiChat, flow_id: Optional[int]) -> None:
     if chat.flow_id == flow_id:
         return
     if chat.flow_id is not None:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata")
+        raise HTTPException(status_code=404, detail="Conversation not found")
     chat.flow_id = flow_id
     session.add(chat)
     session.commit()
@@ -335,7 +335,7 @@ def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_i
         select(AiChatTurn).where(AiChatTurn.chat_id == chat_id, AiChatTurn.seq == seq)
     ).first()
     if turno is None:
-        raise HTTPException(status_code=404, detail="Passo non trovato")
+        raise HTTPException(status_code=404, detail="Step not found")
     try:
         messaggi = json.loads(turno.messages)
     except ValueError:
@@ -345,7 +345,7 @@ def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_i
             if parte.get("part_kind") != "tool-call" or str(parte.get("tool_call_id")) != str(step_id):
                 continue
             if parte.get("tool_name") != "query_datasource":
-                raise HTTPException(status_code=422, detail="Questo passo non è una query")
+                raise HTTPException(status_code=422, detail="This step is not a query")
             args = parte.get("args")
             if isinstance(args, str):
                 try:
@@ -353,9 +353,9 @@ def query_del_passo(session: Session, user: User, chat_id: int, seq: int, step_i
                 except ValueError:
                     args = {}
             if not isinstance(args, dict) or not args.get("sql"):
-                raise HTTPException(status_code=422, detail="Il passo non ha una query da rieseguire")
+                raise HTTPException(status_code=422, detail="The step has no query to run again")
             return int(args.get("datasource_id") or 0), str(args["sql"])
-    raise HTTPException(status_code=404, detail="Passo non trovato")
+    raise HTTPException(status_code=404, detail="Step not found")
 
 
 def registra_spesa(

@@ -315,7 +315,7 @@ def _output_label(node: dict) -> str:
     d = node.get("data") or {}
     dt = d.get("destType") or "datasource"
     if dt == "database":
-        return f"tabella {d.get('table') or '…'}"
+        return f"table {d.get('table') or '…'}"
     if dt == "s3":
         return f"S3 {d.get('s3Key') or '…'}"
     return f"datasource “{d.get('name') or '…'}”"
@@ -397,8 +397,8 @@ def resolve_output_request(
     source, operations = resolver.chain(node["id"])
     if source is None:
         raise FlowResolveError(
-            f"output {_output_label(node)}: nessuna sorgente con dati a monte "
-            "(o la datasource sorgente non ha uno snapshot)"
+            f"output {_output_label(node)}: no source with data upstream "
+            "(or the source datasource has no snapshot)"
         )
     return _output_body(node, source, operations, default_bucket)
 
@@ -411,15 +411,15 @@ def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_buck
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
-        raise FlowResolveError("il flusso non ha nodi Output: non c'è nulla da esportare")
+        raise FlowResolveError("the flow has no Output nodes: there is nothing to export")
     resolver = _Resolver(nodes, definition.get("edges") or [], resolve_ds, "production")
     out = []
     for node in outputs:
         source, operations, ids = resolver.chain_with_ids(node["id"])
         if source is None:
             raise FlowResolveError(
-                f"output {_output_label(node)}: nessuna sorgente con dati a monte "
-                "(o la datasource sorgente non ha uno snapshot)"
+                f"output {_output_label(node)}: no source with data upstream "
+                "(or the source datasource has no snapshot)"
             )
         out.append({"node": node, "body": _output_body(node, source, operations, default_bucket), "op_ids": ids})
     return out
@@ -432,7 +432,7 @@ def build_output_run_requests(
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
-        raise FlowResolveError("il flusso non ha nodi Output: non c'è nulla da eseguire")
+        raise FlowResolveError("the flow has no Output nodes: there is nothing to run")
     return [resolve_output_request(definition, n, resolve_ds, default_bucket, engine_mode) for n in outputs]
 
 

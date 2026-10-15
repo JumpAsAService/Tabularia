@@ -44,8 +44,8 @@ _FORBIDDEN_SCALARS = (
 )
 
 _REFUSAL = (
-    "sql: la query può leggere solo l'input del nodo (`self` o `input`). "
-    "{what} non è ammesso: per unire altri dati usa un nodo Join o Union."
+    "sql: the query can read only the input of the node (`self` or `input`). "
+    "{what} is not allowed: to combine other data use a Join or Union node."
 )
 
 
@@ -63,11 +63,11 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
         tree = sqlglot.parse_one(query, read=dialect)
     except SqlglotError as e:
         raise EngineError(
-            "sql: query non analizzabile, quindi non eseguita (il nodo SQL verifica che si legga "
-            f"solo l'input). Semplificala o usa i nodi dedicati. Dettaglio: {str(e)[:200]}"
+            "sql: the query could not be parsed, so it was not run (the SQL node checks that the query "
+            f"reads only the input). Simplify it or use the dedicated nodes. Detail: {str(e)[:200]}"
         ) from e
     if tree is None:
-        raise EngineError("sql: la query è vuota")
+        raise EngineError("sql: the query is empty")
 
     # 1) le sorgenti VERE di ogni scope: una CTE o una sottoquery sono uno Scope,
     #    una tabella del server è una exp.Table. Guardare lo scope (e non solo i
@@ -81,7 +81,7 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
                     real.add(id(source))
                     _check_table(source)
     except SqlglotError as e:
-        raise EngineError(f"sql: query non analizzabile, quindi non eseguita. Dettaglio: {str(e)[:200]}") from e
+        raise EngineError(f"sql: the query could not be parsed, so it was not run. Detail: {str(e)[:200]}") from e
 
     # nomi delle CTE: sono sorgenti legittime ovunque nella query
     cte_names = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
@@ -117,7 +117,7 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
     for func in tree.find_all(exp.Func):
         name = _function_name(func)
         if name.startswith(_FORBIDDEN_SCALARS):
-            raise EngineError(_REFUSAL.format(what=f"la funzione `{name}`"))
+            raise EngineError(_REFUSAL.format(what=f"The function `{name}`"))
 
 
 def _check_source(nodo: exp.Expression | None, cte_names: set[str]) -> None:
@@ -143,9 +143,9 @@ def _check_source(nodo: exp.Expression | None, cte_names: set[str]) -> None:
         # (`db.tabella`) in posizione di sorgente è una tabella estranea
         if not nodo.table and nodo.name.lower() in (INPUT_NAMES | cte_names):
             return
-        raise EngineError(_REFUSAL.format(what=f"la tabella `{nodo.sql()[:80]}`"))
+        raise EngineError(_REFUSAL.format(what=f"The table `{nodo.sql()[:80]}`"))
     if isinstance(nodo, exp.Dot):
-        raise EngineError(_REFUSAL.format(what=f"il riferimento `{nodo.sql()[:80]}`"))
+        raise EngineError(_REFUSAL.format(what=f"The reference `{nodo.sql()[:80]}`"))
 
 
 def _check_table(table: exp.Table) -> None:
@@ -153,6 +153,6 @@ def _check_table(table: exp.Table) -> None:
         name = _function_name(table.this)
         if name in HARMLESS_TABLE_FUNCTIONS:
             return
-        raise EngineError(_REFUSAL.format(what=f"la table function `{name or table.this.sql()[:40]}`"))
+        raise EngineError(_REFUSAL.format(what=f"The table function `{name or table.this.sql()[:40]}`"))
     if table.db or table.catalog or table.name.lower() not in INPUT_NAMES:
-        raise EngineError(_REFUSAL.format(what=f"la tabella `{table.sql()[:80]}`"))
+        raise EngineError(_REFUSAL.format(what=f"The table `{table.sql()[:80]}`"))

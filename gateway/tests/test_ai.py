@@ -274,7 +274,7 @@ async def test_chat_refuses_disabled_models_disallowed_engines_and_bad_history(s
     session.add(DisabledEngine(engine_id="duckdb")); session.commit()
     with pytest.raises(HTTPException) as e:
         await ai_routes.chat(ai_routes.ChatRequest(message="ciao", model="gpt-oss-120b", engine="duckdb"), request=None, user=user, session=session)
-    assert e.value.status_code == 422 and "Disponibili: " in e.value.detail and "duckdb" not in e.value.detail.split("Disponibili: ")[1]
+    assert e.value.status_code == 422 and "Available: " in e.value.detail and "duckdb" not in e.value.detail.split("Available: ")[1]
     # la chat di un altro (o inesistente) e' 404: nessun oracolo di esistenza
     altrui = AiChat(user_id=admin.id, title="roba dell'admin")
     session.add(altrui); session.commit(); session.refresh(altrui)

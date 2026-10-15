@@ -53,7 +53,7 @@ def inspect(request: DbInspectRequest):
             from app.ingest.email_destination import test_connection as smtp_test
 
             if request.action == "tables":
-                raise DbSourceError("Le connessioni SMTP non hanno tabelle da elencare")
+                raise DbSourceError("SMTP connections have no tables to list")
             # apre, cifra e autentica senza spedire nulla
             smtp_test(SmtpConnectionSpec(**request.connection))
             return {"ok": True}
@@ -63,7 +63,7 @@ def inspect(request: DbInspectRequest):
             from app.ingest.s3_destination import test_connection as s3_test
 
             if request.action == "tables":
-                raise DbSourceError("Le connessioni S3 non hanno tabelle da elencare")
+                raise DbSourceError("S3 connections have no tables to list")
             s3_test(S3ConnectionSpec(**request.connection))
             return {"ok": True}
 
@@ -95,7 +95,7 @@ def notify(request: NotifyRequest):
     from app.ingest.email_destination import EmailDestinationError, SmtpConnectionSpec, send_notice
 
     if request.connection.get("db_type") != "smtp":
-        raise HTTPException(status_code=422, detail="Serve una connessione SMTP")
+        raise HTTPException(status_code=422, detail="An SMTP connection is required")
     try:
         return send_notice(SmtpConnectionSpec(**request.connection), request.to, request.subject, request.body)
     except EmailDestinationError as e:

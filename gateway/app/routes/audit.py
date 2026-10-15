@@ -269,7 +269,7 @@ def revoke_session(
     valere alla richiesta dopo. Solo amministratori: l'osservatore guarda."""
     riga = session.get(UserSession, sid)
     if riga is None:
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
+        raise HTTPException(status_code=404, detail="Session not found")
     proprietario = session.get(User, riga.user_id)
     sessions_svc.chiudi(session, sid)
     audit_svc.record_audit(

@@ -130,13 +130,13 @@ def valida_url(url: str) -> str:
     url = (url or "").strip()
     parti = urlsplit(url)
     if parti.scheme not in ("http", "https") or not parti.hostname:
-        raise ValueError("L'indirizzo deve essere http:// o https:// con un host")
+        raise ValueError("The address must be http:// or https:// with a host")
     if len(url) > 2000:
-        raise ValueError("Indirizzo troppo lungo (al più 2000 caratteri)")
+        raise ValueError("Address too long (at most 2000 characters)")
     try:
         _leggi_host(httpx.URL(url))
     except (httpx.InvalidURL, ValueError) as e:  # UnicodeError è un ValueError
-        raise ValueError(f"Indirizzo non valido: {e}") from None
+        raise ValueError(f"Invalid address: {e}") from None
     return url
 
 
@@ -149,7 +149,7 @@ def _leggi_host(u: httpx.URL) -> str:
     except ValueError:
         host.encode("idna")
     if u.port is not None and not 0 < u.port < 65536:
-        raise ValueError(f"porta fuori intervallo: {u.port}")
+        raise ValueError(f"port out of range: {u.port}")
     return host
 
 
@@ -178,7 +178,7 @@ async def _risolvi(url: str) -> tuple[httpx.URL, str, str]:
         u = httpx.URL(url)
         host = _leggi_host(u)  # IDNA come lo codifica httpx per connettersi
     except (httpx.InvalidURL, ValueError) as e:  # salvato prima del controllo, o cambiato httpx
-        raise _Vietato(f"indirizzo non valido: {e}") from None
+        raise _Vietato(f"invalid address: {e}") from None
     try:
         indirizzi = [ipaddress.ip_address(host.strip("[]"))]
     except ValueError:
@@ -186,15 +186,15 @@ async def _risolvi(url: str) -> tuple[httpx.URL, str, str]:
             info = await asyncio.get_running_loop().getaddrinfo(host, u.port or (443 if u.scheme == "https" else 80),
                                                                 type=socket.SOCK_STREAM)
         except UnicodeError as e:  # il nome non si codifica: non cambierà ritentando
-            raise _Vietato(f"indirizzo non valido: {e}") from None
+            raise _Vietato(f"invalid address: {e}") from None
         except OSError as e:
-            raise _NonRisolto(f"nome non risolto: {e}") from None
+            raise _NonRisolto(f"name not resolved: {e}") from None
         indirizzi = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in info]
     if not indirizzi:
-        raise _NonRisolto("nome senza indirizzi")
+        raise _NonRisolto("name without addresses")
     for ip in indirizzi:
         if _ip_vietato(ip):
-            raise _Vietato(f"indirizzo non ammesso per un webhook: {ip}")
+            raise _Vietato(f"address not allowed for a webhook: {ip}")
     return u, host, str(indirizzi[0])
 
 
@@ -397,7 +397,7 @@ async def _spedisci(lavoro: _Lavoro, client: httpx.AsyncClient) -> tuple[bool, O
         return False, None, f"{type(e).__name__}: {e}"[:500]
     if 200 <= r.status_code < 300:
         return True, r.status_code, None
-    return False, r.status_code, f"risposta {r.status_code}: {letti[:300].decode('utf-8', 'replace')}"
+    return False, r.status_code, f"response {r.status_code}: {letti[:300].decode('utf-8', 'replace')}"
 
 
 def _prendi_dovute(bind: Engine, limite: int, occupati: Optional[Counter] = None) -> list[_Lavoro]:
@@ -454,7 +454,7 @@ def _prendi_dovute(bind: Engine, limite: int, occupati: Optional[Counter] = None
             d = session.get(WebhookDelivery, did)
             w = session.get(Webhook, d.webhook_id)
             if w is None or not w.active:
-                _chiudi_consegna(session, did, presa, status="failed", last_error="webhook spento o tolto")
+                _chiudi_consegna(session, did, presa, status="failed", last_error="webhook turned off or removed")
                 continue
             lavori.append(_Lavoro(did, w.id, w.url, decrypt_secret(w.secret_enc), d.event, d.payload, d.attempts, presa))
             occupati[wid] += 1
@@ -500,12 +500,12 @@ async def _una(bind: Engine, lavoro: _Lavoro, client: Optional[httpx.AsyncClient
     except asyncio.TimeoutError:
         # il tempo massimo è per la chiamata intera: un ricevente che risponde a
         # gocce non tiene la consegna oltre RIPRESA (e non la fa spedire due volte)
-        errore = "nessuna risposta completa in tempo"
+        errore = "no complete response in time"
     except asyncio.CancelledError:
         raise  # spegnimento: la consegna resta presa e torna in coda dopo RIPRESA
     except Exception as e:  # noqa: BLE001
         logger.exception("webhook: consegna %s non spedita", lavoro.id)
-        errore = f"errore interno: {type(e).__name__}"
+        errore = f"internal error: {type(e).__name__}"
     finally:
         if client is None:
             await c.aclose()

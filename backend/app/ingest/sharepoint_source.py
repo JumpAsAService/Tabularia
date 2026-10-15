@@ -127,7 +127,7 @@ class GraphClient:
         )
         if r.status_code != 200:
             raise SharePointError(
-                "Accesso a Microsoft rifiutato: controlla tenant, client id e secret dell'app "
+                "Microsoft refused access: check the app's tenant, client id and secret "
                 f"({_graph_message(r)})"
             )
         body = r.json()
@@ -157,14 +157,14 @@ class GraphClient:
     def _json(self, url: str, what: str) -> dict:
         r = self._get(url)
         if r.status_code == 404:
-            raise _NotFound(f"{what}: non trovato")
+            raise _NotFound(f"{what}: not found")
         if r.status_code in (401, 403):
             raise SharePointError(
-                f"{what}: accesso negato. L'app deve avere il permesso Sites.Selected "
-                f"E l'accesso concesso a questo sito ({_graph_message(r)})"
+                f"{what}: access denied. The app needs the Sites.Selected permission "
+                f"AND access granted to this site ({_graph_message(r)})"
             )
         if r.status_code != 200:
-            raise SharePointError(f"{what}: errore {r.status_code} da Microsoft Graph ({_graph_message(r)})")
+            raise SharePointError(f"{what}: error {r.status_code} from Microsoft Graph ({_graph_message(r)})")
         return r.json()
 
     # -- sito e raccolta --
@@ -173,21 +173,21 @@ class GraphClient:
             return self._drive_id
         u = urlparse(self.conn.site_url.strip())
         if not u.hostname:
-            raise SharePointError("URL del sito non valido: atteso https://<azienda>.sharepoint.com/sites/<nome>")
+            raise SharePointError("Invalid site URL: expected https://<company>.sharepoint.com/sites/<name>")
         rel = u.path.rstrip("/")
         base = self.conn.graph_base.rstrip("/")
-        site = self._json(f"{base}/sites/{u.hostname}:{quote(rel)}" if rel else f"{base}/sites/{u.hostname}", "Sito SharePoint")
+        site = self._json(f"{base}/sites/{u.hostname}:{quote(rel)}" if rel else f"{base}/sites/{u.hostname}", "SharePoint site")
         if not self.conn.library.strip():
-            self._drive_id = self._json(f"{base}/sites/{site['id']}/drive", "Raccolta documenti predefinita")["id"]
+            self._drive_id = self._json(f"{base}/sites/{site['id']}/drive", "Default document library")["id"]
             return self._drive_id
         wanted = self.conn.library.strip().casefold()
-        drives = self._json(f"{base}/sites/{site['id']}/drives", "Raccolte documenti del sito").get("value", [])
+        drives = self._json(f"{base}/sites/{site['id']}/drives", "Document libraries of the site").get("value", [])
         for d in drives:
             if str(d.get("name", "")).casefold() == wanted:
                 self._drive_id = d["id"]
                 return self._drive_id
-        names = ", ".join(sorted(str(d.get("name")) for d in drives)) or "nessuna"
-        raise SharePointError(f"Raccolta '{self.conn.library}' non trovata nel sito. Disponibili: {names}")
+        names = ", ".join(sorted(str(d.get("name")) for d in drives)) or "none"
+        raise SharePointError(f"Document library '{self.conn.library}' not found in the site. Available: {names}")
 
     def children(self, folder: str) -> list[dict]:
         base = self.conn.graph_base.rstrip("/")
@@ -197,7 +197,7 @@ class GraphClient:
         out: list[dict] = []
         while url:
             try:
-                page = self._json(url, f"Cartella '{folder or '/'}'")
+                page = self._json(url, f"Folder '{folder or '/'}'")
             except _NotFound:
                 # una cartella che non c'è, per chi scrive un glob, è "nessun file
                 # corrisponde" — non un errore diverso da spiegare a parte
@@ -213,7 +213,7 @@ class GraphClient:
                 r.close()
             except Exception:
                 pass
-            raise SharePointError(f"Download non riuscito ({r.status_code}): {_graph_message(r)}")
+            raise SharePointError(f"Download failed ({r.status_code}): {_graph_message(r)}")
         try:
             with open(dest, "wb") as f:
                 for chunk in r.iter_content(1024 * 1024):
@@ -249,7 +249,7 @@ def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
     un `*.xlsx` prenderebbe mentre qualcuno ha il file aperto."""
     parts = [p for p in pattern.replace("\\", "/").strip("/").split("/") if p]
     if not parts:
-        raise SharePointError("Percorso vuoto: indica un file o un glob, es. Budget/2026/*.xlsx")
+        raise SharePointError("Empty path: enter a file or a glob, e.g. Budget/2026/*.xlsx")
     listed = 0
     found: dict[str, RemoteFile] = {}
 
@@ -257,7 +257,7 @@ def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
         nonlocal listed
         listed += 1
         if listed > MAX_FOLDERS:
-            raise SharePointError(f"Il percorso attraversa più di {MAX_FOLDERS} cartelle: restringi il glob")
+            raise SharePointError(f"The path goes through more than {MAX_FOLDERS} folders: narrow the glob")
         return client.children(folder)
 
     def walk(folder: str, rest: list[str]) -> None:
@@ -293,7 +293,7 @@ def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
                     modified_at=str(it.get("lastModifiedDateTime") or ""), etag=str(it.get("eTag") or ""),
                 )
                 if len(found) > MAX_FILES:
-                    raise SharePointError(f"Il percorso corrisponde a più di {MAX_FILES} file: restringi il glob")
+                    raise SharePointError(f"The path matches more than {MAX_FILES} files: narrow the glob")
 
     walk("", parts)
     return [found[k] for k in sorted(found, key=str.casefold)]
@@ -306,27 +306,27 @@ def read_sheet(local_path: str, sheet: str, shown_as: str) -> pl.DataFrame:
         header = pl.read_excel(local_path, sheet_name=sheet, has_header=False, read_options={"n_rows": 1}, raise_if_empty=False)
     except ValueError as e:
         if "no matching sheet" in str(e):
-            raise SharePointError(f"{shown_as}: il foglio '{sheet}' non esiste") from e
-        raise SharePointError(f"{shown_as}: file Excel illeggibile ({e})") from e
+            raise SharePointError(f"{shown_as}: sheet '{sheet}' does not exist") from e
+        raise SharePointError(f"{shown_as}: unreadable Excel file ({e})") from e
     except Exception as e:
-        raise SharePointError(f"{shown_as}: file Excel illeggibile ({e})") from e
+        raise SharePointError(f"{shown_as}: unreadable Excel file ({e})") from e
     if header.height == 0 or header.width == 0:
-        raise SharePointError(f"{shown_as}: il foglio '{sheet}' è vuoto")
+        raise SharePointError(f"{shown_as}: sheet '{sheet}' is empty")
     names = [None if v is None or str(v).strip() == "" else str(v).strip() for v in header.row(0)]
     empty = [i + 1 for i, n in enumerate(names) if n is None]
     if empty:
         raise SharePointError(
-            f"{shown_as}: intestazione incompleta nel foglio '{sheet}' (colonne senza nome: "
-            f"{', '.join(map(str, empty[:8]))}). La PRIMA riga deve contenere un nome per ogni colonna: "
-            "titoli o righe vuote sopra la tabella vanno tolti dal file."
+            f"{shown_as}: incomplete header in sheet '{sheet}' (columns without a name: "
+            f"{', '.join(map(str, empty[:8]))}). The FIRST row must contain a name for every column: "
+            "remove any titles or empty rows above the table from the file."
         )
     seen: set[str] = set()
     dup = sorted({n for n in names if n.casefold() in seen or seen.add(n.casefold())})  # type: ignore[func-returns-value]
     if dup:
-        raise SharePointError(f"{shown_as}: nomi di colonna ripetuti nel foglio '{sheet}': {', '.join(dup[:8])}")
+        raise SharePointError(f"{shown_as}: repeated column names in sheet '{sheet}': {', '.join(dup[:8])}")
     reserved = [n for n in names if n in (FILE_COLUMN, MODIFIED_COLUMN)]
     if reserved:
-        raise SharePointError(f"{shown_as}: '{reserved[0]}' è un nome riservato alla provenienza del file")
+        raise SharePointError(f"{shown_as}: '{reserved[0]}' is a name reserved for the source file's provenance")
     df = pl.read_excel(local_path, sheet_name=sheet, raise_if_empty=False)
     # i nomi validati sono quelli RIPULITI dagli spazi: le colonne devono chiamarsi
     # cosi', o "Importo " in un file e "Importo" in un altro farebbero due colonne
@@ -348,10 +348,10 @@ def ingest_sharepoint_to_parquet(
     client = client or GraphClient(conn)
     files = find_files(client, source.path)
     if not files:
-        raise SharePointError(f"Nessun file Excel corrisponde a '{source.path}'")
+        raise SharePointError(f"No Excel file matches '{source.path}'")
     total = sum(f.size for f in files)
     if total > MAX_TOTAL_BYTES:
-        raise SharePointError(f"I {len(files)} file pesano {total / 1024**3:.1f} GB: oltre il tetto di {MAX_TOTAL_BYTES // 1024**3} GB")
+        raise SharePointError(f"The {len(files)} files total {total / 1024**3:.1f} GB: over the {MAX_TOTAL_BYTES // 1024**3} GB limit")
 
     frames: list[pl.DataFrame] = []
     columns_by_file: dict[str, list[str]] = {}
@@ -379,11 +379,11 @@ def ingest_sharepoint_to_parquet(
         # errore — un mese ha una colonna in più — ma va detto, perché un refuso
         # in un'intestazione produce due colonne mezze vuote invece di una.
         if not frames:
-            raise SharePointError("Tutti i file corrispondenti sono vuoti (solo intestazione)")
+            raise SharePointError("All the matching files are empty (header only)")
         try:
             table = pl.concat(frames, how="diagonal_relaxed")
         except Exception as e:
-            raise SharePointError(f"I file hanno colonne con lo stesso nome ma tipi inconciliabili: {e}") from e
+            raise SharePointError(f"The files have columns with the same name but incompatible types: {e}") from e
         # la provenienza sta in FONDO: con l'unione per nome una colonna che compare
         # solo in un file successivo finirebbe dopo `_file`, in mezzo ai dati
         prov = [FILE_COLUMN, MODIFIED_COLUMN]

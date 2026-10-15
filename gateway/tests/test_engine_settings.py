@@ -226,9 +226,9 @@ def test_un_motore_di_prima_lo_dice_invece_di_non_risponde(app, session, motore,
                         httpx.AsyncClient(transport=httpx.MockTransport(lambda req: motore.gestisci(req)), base_url="http://engine"))
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     r = capo.get("/admin/engine-settings")
-    assert r.status_code == 503 and "versione precedente" in r.json()["detail"]
+    assert r.status_code == 503 and "older version" in r.json()["detail"]
     r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
-    assert r.status_code == 503 and "niente" in r.json()["detail"]
+    assert r.status_code == 503 and "nothing was changed" in r.json()["detail"]
     assert session.exec(select(EngineSetting)).all() == []
 
 

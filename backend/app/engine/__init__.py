@@ -203,6 +203,6 @@ def get_engine(name: str | None = None) -> Engine:
                 "Choose another engine for this flow, or ask the administrator to enable it."
             )
         raise EngineError(
-            f"engine sconosciuto: '{name}'. Disponibili: {', '.join(sorted(_ENGINES))}."
+            f"unknown engine: '{name}'. Available: {', '.join(sorted(_ENGINES))}."
         )
     return factory()

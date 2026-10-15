@@ -61,7 +61,7 @@ async def test_stale_run_is_revoked_not_just_marked_failed(session, fake_engine,
     session.refresh(run)
     assert run.status == "FAILURE"
     assert fake_engine.revoked == ["t-stale"]  # fermato sull'engine, non solo in cronologia
-    assert "interrotto" in (run.error or "")
+    assert "stopped" in (run.error or "")
 
 
 async def test_queue_wait_is_not_counted_as_execution_time(session, fake_engine, monkeypatch):

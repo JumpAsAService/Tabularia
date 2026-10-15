@@ -51,7 +51,7 @@ async def test_reconcile_oom_translated_to_friendly_message(session, fake_engine
     await _reconcile(session, run)
     session.refresh(run)
     assert run.status == "FAILURE"
-    assert "memoria" in run.error.lower()  # messaggio chiaro, non il SIGKILL grezzo
+    assert "memory" in run.error.lower()  # messaggio chiaro, non il SIGKILL grezzo
     assert "SIGKILL" in (run.error_detail or "")  # dettaglio tecnico preservato
 
 

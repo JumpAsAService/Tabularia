@@ -119,7 +119,7 @@ async def spedisci(d: SiemDestination, eventi: list[dict],
                    client: Optional[httpx.AsyncClient] = None) -> tuple[bool, Optional[int], str]:
     """(riuscita, codice HTTP, messaggio di Splunk o dell'errore). Non solleva."""
     if not d.token_enc:
-        return False, None, "nessun token configurato"
+        return False, None, "no token configured"
     corpo = b"\n".join(_riga(e) for e in eventi)
     try:
         u, host, ip = await webhooks._risolvi(endpoint(d.url))
@@ -158,7 +158,7 @@ async def spedisci(d: SiemDestination, eventi: list[dict],
         return True, r.status_code, (risposta or {}).get("text", "Success") if isinstance(risposta, dict) else "Success"
     if isinstance(risposta, dict) and risposta.get("text"):
         testo = f"{risposta['text']} (code {risposta.get('code')})"
-    return False, r.status_code, f"risposta {r.status_code}: {testo}"[:500]
+    return False, r.status_code, f"response {r.status_code}: {testo}"[:500]
 
 
 def _lotto(session: Session, dopo: int) -> list[AuditLog]:

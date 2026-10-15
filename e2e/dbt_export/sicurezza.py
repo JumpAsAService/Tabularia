@@ -101,7 +101,7 @@ try:
         ok("export dbt: NESSUN dato della cartella privata nei seed", not seed, f"{len(dati.splitlines()) - 1} righe di dati privati nel seed {seed}: {dati[:160]!r}")
         ok("export dbt: NESSUN testo di query privata nei modelli", "TESTO_SEGRETO_DELLA_QUERY" not in modelli, "la query privata è nel progetto")
     else:
-        ok("export dbt rifiutato al lettore: è solo per gli amministratori (403)", st == 403 and b"amministratori" in (z if isinstance(z, bytes) else str(z).encode()), (st, z[:200] if isinstance(z, (bytes, str)) else z))
+        ok("export dbt rifiutato al lettore: è solo per gli amministratori (403)", st == 403 and b"administrators" in (z if isinstance(z, bytes) else str(z).encode()), (st, z[:200] if isinstance(z, (bytes, str)) else z))
 
     # OpenLineage statico dal lettore
     st, ev = come(tok, "GET", f"/flows/{fc['id']}/openlineage")

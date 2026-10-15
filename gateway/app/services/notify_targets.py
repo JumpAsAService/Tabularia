@@ -22,14 +22,14 @@ def parse_recipients(text: str | None) -> list[str]:
     indirizzi = [a.strip() for a in (text or "").replace(";", ",").split(",") if a.strip()]
     for a in indirizzi:
         if "@" not in a or a.startswith("@") or a.endswith("@"):
-            raise HTTPException(status_code=422, detail=f"Indirizzo non valido: {a}")
+            raise HTTPException(status_code=422, detail=f"Invalid address: {a}")
     return indirizzi
 
 
 def smtp_connection(session: Session, user: User, connection_id: int) -> Connection:
     conn = session.get(Connection, connection_id)
     if conn is None or conn.db_type != "smtp":
-        raise HTTPException(status_code=422, detail="Serve una connessione SMTP")
+        raise HTTPException(status_code=422, detail="An SMTP connection is required")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     return conn
 
@@ -42,5 +42,5 @@ def ensure_deliverable(conn: Connection | None, recipients: list[str]) -> None:
     if fuori:
         raise HTTPException(
             status_code=422,
-            detail=f"Questa connessione può spedire solo a {', '.join(ammessi)}: {', '.join(fuori)} non è ammesso",
+            detail=f"This connection can only send to {', '.join(ammessi)}: {', '.join(fuori)} is not allowed",
         )

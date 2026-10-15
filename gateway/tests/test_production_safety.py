@@ -23,9 +23,9 @@ def test_segreti_veri_passano():
 
 
 @pytest.mark.parametrize("segreto, motivo", [
-    ("change-me-in-production", "default di sviluppo"),
-    ("a", "troppo corto (1 caratteri"),
-    ("x" * (JWT_SECRET_MIN - 1), f"troppo corto ({JWT_SECRET_MIN - 1} caratteri"),
+    ("change-me-in-production", "development default"),
+    ("a", "too short (1 characters"),
+    ("x" * (JWT_SECRET_MIN - 1), f"too short ({JWT_SECRET_MIN - 1} characters"),
 ])
 def test_un_segreto_jwt_debole_ferma_la_partenza(segreto, motivo):
     with pytest.raises(RuntimeError, match="JWT__SECRET") as e:

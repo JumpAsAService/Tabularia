@@ -212,7 +212,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         except EngineError:
             raise
         except Exception as e:
-            raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+            raise EngineError(f"Error while running the flow: {e}") from e
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
         self.cache.mark(final)
         logger.info("materializzato step %d in cache", len(operations))
@@ -267,7 +267,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
             except EngineError:
                 raise
             except Exception as e:
-                raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+                raise EngineError(f"Error while running the flow: {e}") from e
             truncated = df.height > limit
             if truncated:
                 df = df.head(limit)
@@ -303,7 +303,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
             except EngineError:
                 raise
             except Exception as e:
-                raise EngineError(f"Errore durante l'esecuzione del flow: {e}") from e
+                raise EngineError(f"Error while running the flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
             written = pl.scan_parquet(out_path)

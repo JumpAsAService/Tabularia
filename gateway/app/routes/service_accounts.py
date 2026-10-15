@@ -47,7 +47,7 @@ class ServiceAccountOut(BaseModel):
 def _uno(session: Session, account_id: int) -> User:
     u = session.get(User, account_id)
     if u is None or not u.is_service:
-        raise HTTPException(status_code=404, detail="Account di servizio non trovato")
+        raise HTTPException(status_code=404, detail="Service account not found")
     return u
 
 
@@ -78,7 +78,7 @@ def create_service_account(
     nega_se_da_token(request)
     nome = body.name.strip()
     if not nome or len(nome) > 80:
-        raise HTTPException(status_code=422, detail="Il nome è obbligatorio (al più 80 caratteri)")
+        raise HTTPException(status_code=422, detail="A name is required (at most 80 characters)")
     radice = re.sub(r"[^a-z0-9]+", "-", nome.lower()).strip("-")[:40] or "servizio"
     email = f"{radice}@{DOMINIO}"
     if session.exec(select(User).where(User.email == email)).first() is not None:
@@ -143,7 +143,7 @@ def revoke_account_token(
     u = _uno(session, account_id)
     riga = api_tokens.revoca(session, token_id, account_id)
     if riga is None:
-        raise HTTPException(status_code=404, detail="Token non trovato")
+        raise HTTPException(status_code=404, detail="Token not found")
     audit.record_audit(
         session, actor=admin, action=audit.TOKEN_REVOKE, request=request,
         target_type="user", target_id=u.id, target_label=u.email,

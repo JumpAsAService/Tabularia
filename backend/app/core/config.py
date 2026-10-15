@@ -261,7 +261,7 @@ class ClickHouseExternalSettings(BaseModel):
     def _check_transport(cls, v: str) -> str:
         v = (v or "s3").strip().lower()
         if v not in ("s3", "push"):
-            raise ValueError("clickhouse_external.transport deve essere 's3' o 'push'")
+            raise ValueError("clickhouse_external.transport must be 's3' or 'push'")
         return v
 
     @property
@@ -349,7 +349,7 @@ class BigQuerySettings(BaseModel):
             try:
                 return json.loads(base64.b64decode(raw))
             except Exception as e:
-                raise ValueError(f"BIGQUERY__CREDENTIALS_B64 non e' una chiave JSON in base64: {e}") from e
+                raise ValueError(f"BIGQUERY__CREDENTIALS_B64 is not a base64-encoded JSON key: {e}") from e
         with open(self.credentials_file, encoding="utf-8") as f:
             return json.load(f)
 
@@ -475,17 +475,17 @@ class Settings(BaseSettings):
         from cryptography.fernet import Fernet
 
         hint = (
-            'genera con: python -c "from cryptography.fernet import Fernet; '
-            'print(Fernet.generate_key().decode())" e impostala in infrastructure/.env '
-            "(identica in gateway ed engine)"
+            'generate one with: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())" and set it in infrastructure/.env '
+            "(identical in gateway and engine)"
         )
         key = self.security.fernet_key
         if not key:
-            raise RuntimeError(f"SECURITY__FERNET_KEY non impostata: {hint}")
+            raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")
         try:
             Fernet(key)
         except Exception as e:  # base64 malformato, lunghezza sbagliata…
-            raise RuntimeError(f"SECURITY__FERNET_KEY non valida ({e}): {hint}") from e
+            raise RuntimeError(f"SECURITY__FERNET_KEY is not valid ({e}): {hint}") from e
 
 
 # ─────────────────────────────────────────────────────────────────────────────

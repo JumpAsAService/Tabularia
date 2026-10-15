@@ -104,7 +104,7 @@ def _celery_hard_limit_seconds() -> int:
         return int(raw)
     except ValueError:
         raise RuntimeError(
-            f"CELERY__TASK_TIME_LIMIT non è un numero intero di secondi: '{raw}'"
+            f"CELERY__TASK_TIME_LIMIT is not a whole number of seconds: '{raw}'"
         ) from None
 
 
@@ -284,8 +284,8 @@ class AppSettings(BaseModel):
         for origine in v:
             if origine.strip() in ("*", "null"):
                 raise ValueError(
-                    f"APP__CORS_ORIGINS non può contenere '{origine.strip()}': elenca gli indirizzi "
-                    "dell'interfaccia (es. [\"https://app.example.com\"]), o lascialo vuoto con un host solo"
+                    f"APP__CORS_ORIGINS cannot contain '{origine.strip()}': list the addresses "
+                    "of the interface (e.g. [\"https://app.example.com\"]), or leave it empty with a single host"
                 )
         return v
 
@@ -298,7 +298,7 @@ class AppSettings(BaseModel):
         v = "/" + v
         if not re.fullmatch(r"(/[A-Za-z0-9._~-]+)+", v):
             raise ValueError(
-                f"APP__ROOT_PATH non valido: '{v}' — è un percorso (es. '/api'), non un URL"
+                f"Invalid APP__ROOT_PATH: '{v}' — it is a path (e.g. '/api'), not a URL"
             )
         return v
 
@@ -330,7 +330,7 @@ class AppSettings(BaseModel):
             ZoneInfo(v)
         except (ZoneInfoNotFoundError, ValueError):
             raise ValueError(
-                f"APP__TIMEZONE non valido: '{v}' — usa un nome IANA (es. 'Europe/Rome', 'UTC')"
+                f"Invalid APP__TIMEZONE: '{v}' — use an IANA name (e.g. 'Europe/Rome', 'UTC')"
             )
         return v
 
@@ -526,17 +526,17 @@ class Settings(BaseSettings):
         from cryptography.fernet import Fernet
 
         hint = (
-            'genera con: python -c "from cryptography.fernet import Fernet; '
-            'print(Fernet.generate_key().decode())" e impostala in infrastructure/.env '
-            "(identica in gateway ed engine)"
+            'generate it with: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())" and set it in infrastructure/.env '
+            "(the same in gateway and engine)"
         )
         key = self.security.fernet_key
         if not key:
-            raise RuntimeError(f"SECURITY__FERNET_KEY non impostata: {hint}")
+            raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")
         try:
             Fernet(key)
         except Exception as e:  # base64 malformato, lunghezza sbagliata…
-            raise RuntimeError(f"SECURITY__FERNET_KEY non valida ({e}): {hint}") from e
+            raise RuntimeError(f"SECURITY__FERNET_KEY is not valid ({e}): {hint}") from e
 
     def check_sso_config(self) -> None:
         """Se l'SSO è acceso deve essere COMPLETO: una configurazione a metà
@@ -554,11 +554,11 @@ class Settings(BaseSettings):
         ]
         if missing:
             raise RuntimeError(
-                "SSO OIDC attivo ma incompleto, manca: " + ", ".join(missing)
-                + ". Completa la configurazione o togli OIDC__ISSUER per disattivarlo."
+                "OIDC SSO is on but incomplete, missing: " + ", ".join(missing)
+                + ". Complete the configuration or remove OIDC__ISSUER to turn it off."
             )
         if "openid" not in cfg.scope_list:
-            raise RuntimeError("OIDC__SCOPES deve includere 'openid' (è un requisito OIDC)")
+            raise RuntimeError("OIDC__SCOPES must include 'openid' (OIDC requires it)")
 
     def check_production_safety(self) -> None:
         """Rifiuta di partire in produzione con i default di sviluppo.
@@ -572,21 +572,21 @@ class Settings(BaseSettings):
         problems = []
         segreto = self.jwt.secret.get_secret_value()
         if segreto == "change-me-in-production":
-            problems.append("JWT__SECRET è il default di sviluppo (genera: openssl rand -hex 32)")
+            problems.append("JWT__SECRET is the development default (generate one: openssl rand -hex 32)")
         elif len(segreto) < JWT_SECRET_MIN:
             # firma ogni sessione (HS256): uno corto si indovina offline da un
             # solo token, e chi lo indovina si firma da sé un token da admin
             problems.append(
-                f"JWT__SECRET è troppo corto ({len(segreto)} caratteri, ne servono almeno "
-                f"{JWT_SECRET_MIN}; genera: openssl rand -hex 32)"
+                f"JWT__SECRET is too short ({len(segreto)} characters, at least "
+                f"{JWT_SECRET_MIN} are needed; generate one: openssl rand -hex 32)"
             )
         if self.auth.admin_password.get_secret_value() == "admin":
-            problems.append("AUTH__ADMIN_PASSWORD è il default 'admin'")
+            problems.append("AUTH__ADMIN_PASSWORD is the default 'admin'")
         if self.db.password.get_secret_value() == "tabularia" and not self.db.url:
-            problems.append("DB__PASSWORD è il default di sviluppo")
+            problems.append("DB__PASSWORD is the development default")
         if problems:
             raise RuntimeError(
-                "Configurazione NON sicura per la produzione:\n  - " + "\n  - ".join(problems)
+                "Configuration NOT safe for production:\n  - " + "\n  - ".join(problems)
             )
 
 

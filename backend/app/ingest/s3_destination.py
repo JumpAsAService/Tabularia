@@ -85,9 +85,9 @@ class S3DestinationSpec(BaseModel):
 def _clean_key(key: str) -> str:
     k = (key or "").strip().strip("/")
     if not k:
-        raise S3DestinationError("La chiave/percorso S3 di destinazione è vuota")
+        raise S3DestinationError("The destination S3 key/path is empty")
     if any(part in ("", ".", "..") for part in k.split("/")):
-        raise S3DestinationError(f"Chiave S3 non valida: {key!r}")
+        raise S3DestinationError(f"Invalid S3 key: {key!r}")
     return k
 
 
@@ -122,12 +122,12 @@ def _delete_stale_objects(client, bucket: str, prefix: str, keep: set[str]) -> N
 
         _, errors = delete_keys(client, bucket, [o["Key"] for o in stale])
         if errors:
-            raise RuntimeError(f"{len(errors)} oggetti non cancellati, il primo: {errors[0]}")
+            raise RuntimeError(f"{len(errors)} objects not deleted, the first: {errors[0]}")
     except Exception as e:
         raise S3DestinationError(
-            f"pulizia dei file obsoleti sotto s3://{bucket}/{p} fallita ({type(e).__name__}): "
-            "l'output potrebbe contenere righe duplicate da run precedenti. Le credenziali S3 "
-            "devono avere anche i permessi di list/delete sul prefisso di destinazione."
+            f"Cleanup of obsolete files under s3://{bucket}/{p} failed ({type(e).__name__}): "
+            "the output may contain duplicate rows from previous runs. The S3 credentials "
+            "also need list/delete permissions on the destination prefix."
         ) from e
 
 
@@ -153,7 +153,7 @@ def write_output_to_s3(
     target_bucket = (dest.bucket or "").strip() or (conn.bucket or "").strip()
     if not target_bucket:
         raise S3DestinationError(
-            "Nessun bucket di destinazione: indicalo sul nodo Output o nella connessione"
+            "No destination bucket: set it on the Output node or in the connection"
         )
     target_key = _clean_key(dest.key)
 
@@ -171,15 +171,15 @@ def write_output_to_s3(
             missing = [c for c in dest.partition_by if c not in schema]
             if missing:
                 raise S3DestinationError(
-                    f"colonne di partizione inesistenti nell'output: {missing}"
+                    f"Partition columns not in the output: {missing}"
                 )
             n_partitions = int(
                 lf.select(pl.struct(dest.partition_by).n_unique()).collect(engine="streaming").item()
             )
             if n_partitions > MAX_PARTITIONS:
                 raise S3DestinationError(
-                    f"partizionare per {dest.partition_by} produrrebbe {n_partitions} "
-                    f"partizioni (limite {MAX_PARTITIONS}): sono le colonne giuste?"
+                    f"Partitioning by {dest.partition_by} would produce {n_partitions} "
+                    f"partitions (limit {MAX_PARTITIONS}): are these the right columns?"
                 )
             # sink partizionato hive-style, in streaming
             sink_to = pl.PartitionBy(workdir, key=dest.partition_by, include_key=True)
@@ -189,7 +189,7 @@ def write_output_to_s3(
                 lf.sink_csv(sink_to, mkdir=True)
             uploads = [(local, f"{target_key}/{rel}") for local, rel in _local_files(workdir)]
             if not uploads:  # risultato vuoto: nessuna partizione, nessun file
-                raise S3DestinationError("l'output è vuoto: nessuna partizione da scrivere")
+                raise S3DestinationError("The output is empty: no partitions to write")
         elif dest.format == "parquet":
             uploads = [(tmp, target_key)]  # già parquet: nessuna conversione
         else:
@@ -203,7 +203,7 @@ def write_output_to_s3(
                 client.upload_file(local, target_bucket, k)
         except Exception as e:  # credenziali, bucket inesistente, rete…
             raise S3DestinationError(
-                f"upload su s3://{target_bucket}/{target_key} fallito: {type(e).__name__}: {e}"
+                f"Upload to s3://{target_bucket}/{target_key} failed: {type(e).__name__}: {e}"
             ) from e
         # dataset partizionato: rendi il prefisso IDEMPOTENTE togliendo i file dei
         # run precedenti (l'output a file singolo sovrascrive già la stessa chiave)
@@ -240,4 +240,4 @@ def test_connection(conn: S3ConnectionSpec) -> None:
         else:
             client.list_buckets()
     except Exception as e:
-        raise S3DestinationError(f"connessione S3 fallita: {type(e).__name__}: {e}") from e
+        raise S3DestinationError(f"S3 connection failed: {type(e).__name__}: {e}") from e

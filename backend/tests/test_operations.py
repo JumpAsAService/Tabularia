@@ -91,7 +91,7 @@ def test_filter_between_su_colonna_stringa_non_scambia_i_valori_per_colonne():
 
 
 def test_filter_data_formato_sbagliato_da_errore_chiaro():
-    with pytest.raises(EngineError, match="formato ISO"):
+    with pytest.raises(EngineError, match="ISO format"):
         apply("filter", {"column": "data", "operator": "gt", "value": "15/01/2024"})
 
 
@@ -177,9 +177,9 @@ def test_sql_from_input_alias():
 
 def test_sql_blocca_lettura_file():
     # una query non deve poter leggere il filesystem del worker
-    with pytest.raises(EngineError, match="non sono permesse"):
+    with pytest.raises(EngineError, match="are not allowed"):
         apply("sql", {"query": "SELECT * FROM read_csv('/app/app/core/config.py')"})
-    with pytest.raises(EngineError, match="non sono permesse"):
+    with pytest.raises(EngineError, match="are not allowed"):
         apply("sql", {"query": "select * from READ_PARQUET ('/tmp/x.parquet')"})
 
 
@@ -358,7 +358,7 @@ def test_foreach_driver_da_storage(storage, anagrafica):
 
 
 def test_foreach_placeholder_mancante_da_errore_con_le_chiavi_disponibili():
-    with pytest.raises(EngineError, match="non trovato.*disponibili"):
+    with pytest.raises(EngineError, match="not found.*available"):
         apply(
             "foreach",
             {
@@ -369,18 +369,18 @@ def test_foreach_placeholder_mancante_da_errore_con_le_chiavi_disponibili():
 
 
 def test_foreach_senza_iterazioni_da_errore_chiaro():
-    with pytest.raises(EngineError, match="senza iterazioni"):
+    with pytest.raises(EngineError, match="no iterations"):
         apply("foreach", {"body": [{"type": "limit", "params": {"n": 1}}]})
 
 
 def test_foreach_corpo_vuoto_da_errore_chiaro():
-    with pytest.raises(EngineError, match="corpo vuoto"):
+    with pytest.raises(EngineError, match="empty body"):
         apply("foreach", {"items": [{"p": 1}], "body": []})
 
 
 def test_foreach_errore_nel_corpo_indica_quale_iterazione():
     # il 2° item non ha la chiave usata dal corpo → l'errore dice "iterazione 2/2"
-    with pytest.raises(EngineError, match=r"iterazione 2/2"):
+    with pytest.raises(EngineError, match=r"iteration 2/2"):
         apply(
             "foreach",
             {
@@ -429,17 +429,17 @@ def test_pivot_rifiuta_troppe_colonne(monkeypatch):
 
     monkeypatch.setattr(ops, "MAX_PIVOT_COLUMNS", 2)
     df = pl.DataFrame({"k": ["a", "a", "a"], "on": ["x", "y", "z"], "v": [1, 2, 3]})
-    with pytest.raises(EngineError, match="combinazioni distinte"):
+    with pytest.raises(EngineError, match="distinct combinations"):
         apply("pivot", {"index": ["k"], "on": "on", "values": "v"}, df)
 
 
 def test_pivot_senza_indice_da_errore_chiaro():
-    with pytest.raises(EngineError, match="indice"):
+    with pytest.raises(EngineError, match="index"):
         apply("pivot", {"index": [], "on": "anno", "values": "vendite"}, _df_vendite_per_anno())
 
 
 def test_pivot_funzione_sconosciuta_da_errore_chiaro():
-    with pytest.raises(EngineError, match="aggregazione"):
+    with pytest.raises(EngineError, match="aggregation"):
         apply(
             "pivot",
             {"index": ["paese"], "on": "anno", "values": "vendite", "func": "boh"},
@@ -536,17 +536,17 @@ def test_compute_sovrascrive_una_colonna_esistente():
 
 
 def test_compute_espressione_malformata_da_errore_parlante():
-    with pytest.raises(EngineError, match="non valida"):
+    with pytest.raises(EngineError, match="not valid"):
         apply("compute", {"columns": [{"name": "x", "expr": "SUM(("}]})
 
 
 def test_compute_nome_vuoto_rifiutato():
-    with pytest.raises(EngineError, match="nome"):
+    with pytest.raises(EngineError, match="name"):
         apply("compute", {"columns": [{"name": " ", "expr": "1 + 1"}]})
 
 
 def test_compute_lista_vuota_rifiutata():
-    with pytest.raises(EngineError, match="almeno una"):
+    with pytest.raises(EngineError, match="at least one"):
         apply("compute", {"columns": []})
 
 
@@ -600,7 +600,7 @@ def test_union_con_sotto_flow_sul_lato_destro(storage, anagrafica):
 def test_union_strategia_sconosciuta_rifiutata(storage, anagrafica):
     ctx = OperationContext(storage)
     try:
-        with pytest.raises(EngineError, match="strategia"):
+        with pytest.raises(EngineError, match="strategy"):
             apply("union", {"right": {"bucket": anagrafica.bucket, "key": anagrafica.key}, "strategy": "boh"}, ctx=ctx)
     finally:
         ctx.cleanup()
@@ -610,7 +610,7 @@ def test_union_strategia_sconosciuta_rifiutata(storage, anagrafica):
 def test_foreach_items_statici_oltre_il_cap_rifiutati(monkeypatch):
     from app.engine import operations as ops
     monkeypatch.setattr(ops, "MAX_FOREACH_ITERATIONS", 5)
-    with pytest.raises(EngineError, match="oltre il limite"):
+    with pytest.raises(EngineError, match="over the limit"):
         apply(
             "foreach",
             {
@@ -626,7 +626,7 @@ def test_foreach_annidato_supera_il_budget_totale(monkeypatch, storage):
     monkeypatch.setattr(ops, "MAX_FOREACH_TOTAL", 5)
     ctx = OperationContext(storage)
     try:
-        with pytest.raises(EngineError, match="iterazioni totali"):
+        with pytest.raises(EngineError, match="iterations in total"):
             apply(
                 "foreach",
                 {
@@ -677,7 +677,7 @@ def test_foreach_vieta_placeholder_nel_percorso_sorgente(storage, anagrafica):
     # all'autorizzazione statica del gateway (bypass RBAC data-plane, #1 audit)
     ctx = OperationContext(storage)
     try:
-        with pytest.raises(EngineError, match="percorsi sorgente"):
+        with pytest.raises(EngineError, match="source paths"):
             apply(
                 "foreach",
                 {

@@ -17,7 +17,7 @@ router = APIRouter(route_class=RottaCheRilascia, tags=["permissions"])
 @router.get("/projects/{project_id}/permissions", response_model=list[PermissionOut])
 def list_permissions(project_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.MANAGE)
     return session.exec(select(Permission).where(Permission.project_id == project_id)).all()
 
@@ -31,15 +31,15 @@ def grant_permission(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.MANAGE)
 
     if (body.user_id is None) == (body.group_id is None):
-        raise HTTPException(status_code=422, detail="Specifica esattamente uno tra user_id e group_id")
+        raise HTTPException(status_code=422, detail="Specify exactly one of user_id and group_id")
     if body.user_id is not None and session.get(User, body.user_id) is None:
-        raise HTTPException(status_code=404, detail="Utente non trovato")
+        raise HTTPException(status_code=404, detail="User not found")
     if body.group_id is not None and session.get(Group, body.group_id) is None:
-        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+        raise HTTPException(status_code=404, detail="Group not found")
 
     # niente duplicati esatti (stesso soggetto + stessa capability sullo stesso progetto)
     dup = session.exec(
@@ -76,7 +76,7 @@ def grant_permission(
 def revoke_permission(permission_id: int, request: Request, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     perm = session.get(Permission, permission_id)
     if perm is None:
-        raise HTTPException(status_code=404, detail="Permesso non trovato")
+        raise HTTPException(status_code=404, detail="Permission not found")
     ensure_can(session, user, perm.project_id, Capability.MANAGE)
     detail = {"project_id": perm.project_id, "user_id": perm.user_id, "group_id": perm.group_id,
               "capability": perm.capability}

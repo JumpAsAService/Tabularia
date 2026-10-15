@@ -50,7 +50,7 @@ def available_operations() -> list[str]:
 
 def _require(params: dict[str, Any], key: str) -> Any:
     if key not in params:
-        raise EngineError(f"parametro obbligatorio mancante: '{key}'")
+        raise EngineError(f"required parameter missing: '{key}'")
     return params[key]
 
 
@@ -136,8 +136,8 @@ def _coerce_value(value: Any, dtype: pl.DataType | None) -> Any:
             return time.fromisoformat(value)
     except ValueError:
         raise EngineError(
-            f"valore '{value}' non valido per la colonna temporale: "
-            f"usa il formato ISO (es. 2024-01-15 o 2024-01-15T10:30:00)"
+            f"value '{value}' is not valid for a date or time column: "
+            f"use the ISO format (e.g. 2024-01-15 or 2024-01-15T10:30:00)"
         )
     return value
 
@@ -177,7 +177,7 @@ def _predicate(column: str, operator: str, value: Any, dtype: pl.DataType | None
         case "is_not_null":
             return col.is_not_null()
         case _:
-            raise EngineError(f"operatore di filtro non supportato: '{operator}'")
+            raise EngineError(f"unsupported filter operator: '{operator}'")
 
 
 def check_filter_value(operator: str, value: Any) -> None:
@@ -243,9 +243,9 @@ def sample_threshold(params: dict[str, Any]) -> tuple[int, int]:
     try:
         fraction = float(_require(params, "fraction"))
     except (TypeError, ValueError):
-        raise EngineError("sample: 'fraction' deve essere un numero tra 0 e 1")
+        raise EngineError("sample: 'fraction' must be a number between 0 and 1")
     if not 0 < fraction <= 1:
-        raise EngineError("sample: 'fraction' deve essere un numero tra 0 e 1")
+        raise EngineError("sample: 'fraction' must be a number between 0 and 1")
     seed = int(params.get("seed") or 42)
     return max(1, int(round(fraction * SAMPLE_BUCKETS))), seed
 
@@ -313,7 +313,7 @@ def op_group_by(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext)
         col = _require(a, "column")
         func = _require(a, "func")
         if func not in _AGG:
-            raise EngineError(f"funzione di aggregazione non supportata: '{func}'")
+            raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = a.get("alias") or f"{col}_{func}"
         exprs.append(_AGG[func](col).alias(alias))
     return lf.group_by(by).agg(exprs)
@@ -366,11 +366,11 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
         index = [index]
     on = on if isinstance(on, list) else [on]  # più colonne = combinazioni dei valori
     if not index:
-        raise EngineError("pivot: serve almeno una colonna indice (le chiavi di riga)")
+        raise EngineError("pivot: choose at least one index column (the row keys)")
     if not on:
-        raise EngineError("pivot: serve almeno una colonna da spandere sulle colonne")
+        raise EngineError("pivot: choose at least one column to spread into new columns")
     if func not in _AGG:
-        raise EngineError(f"funzione di aggregazione non supportata: '{func}'")
+        raise EngineError(f"pivot: unsupported aggregation function '{func}'")
 
     # 1) il grosso del lavoro resta lazy/STREAMING: l'aggregazione riduce il
     #    dataset a (gruppi indice × combinazioni di `on`) righe — piccolo
@@ -388,8 +388,8 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     n_cols = aggregated.select(on).unique().height  # combinazioni distinte = colonne nuove
     if n_cols > MAX_PIVOT_COLUMNS:
         raise EngineError(
-            f"pivot: le colonne scelte hanno {n_cols} combinazioni distinte, cioè {n_cols} "
-            f"colonne nuove (massimo {MAX_PIVOT_COLUMNS}). Sono le colonne giuste?"
+            f"pivot: the chosen columns have {n_cols} distinct combinations, that is {n_cols} "
+            f"new columns (maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
 
     # 2) il reshape vero è eager (pivot non esiste in lazy) ma lavora sul
@@ -458,10 +458,10 @@ def _cross_join(lf: pl.LazyFrame, right_lf: pl.LazyFrame, ctx: OperationContext)
         right_n = right_lf.select(pl.len()).collect(engine="streaming").item()
         if left_n * right_n > cap:
             raise EngineError(
-                f"Il cross join produrrebbe {left_n * right_n:,} righe "
-                f"({left_n:,} × {right_n:,}), oltre il limite di {cap:,}. "
-                "Aggiungi una condizione di join (chiave) o riduci le sorgenti "
-                "(filter/limit) prima di incrociarle."
+                f"The cross join would produce {left_n * right_n:,} rows "
+                f"({left_n:,} × {right_n:,}), over the limit of {cap:,}. "
+                "Add a join condition (key) or reduce the sources "
+                "(filter/limit) before joining them."
             )
     return lf.join(right_lf, how="cross")
 
@@ -519,7 +519,7 @@ def op_union(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     right_lf = _build_right(right_ref, ctx)
     strategy = params.get("strategy") or "relaxed"
     if strategy not in ("relaxed", "strict"):
-        raise EngineError(f"union: strategia non supportata: '{strategy}' (usa relaxed o strict)")
+        raise EngineError(f"union: unsupported strategy: '{strategy}' (use relaxed or strict)")
     how = "diagonal_relaxed" if strategy == "relaxed" else "vertical"
     return pl.concat([lf, right_lf], how=how)
 
@@ -541,19 +541,19 @@ def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
     """
     columns = _require(params, "columns")
     if not isinstance(columns, list) or not columns:
-        raise EngineError("compute: definisci almeno una colonna calcolata")
+        raise EngineError("compute: define at least one calculated column")
     for c in columns:
         name = str(c.get("name") or "").strip()
         expr_s = str(c.get("expr") or "").strip()
         if not name:
-            raise EngineError("compute: ogni colonna calcolata deve avere un nome")
+            raise EngineError("compute: every calculated column needs a name")
         if not expr_s:
-            raise EngineError(f"compute: l'espressione di '{name}' è vuota")
+            raise EngineError(f"compute: the expression of '{name}' is empty")
         try:
             expr = pl.sql_expr(expr_s)
         except Exception as e:
             raise EngineError(
-                f"compute: espressione di '{name}' non valida: {e}"
+                f"compute: the expression of '{name}' is not valid: {e}"
             ) from e
         lf = lf.with_columns(expr.alias(name))
     return lf
@@ -582,11 +582,11 @@ def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> p
     """
     query = str(_require(params, "query") or "").strip()
     if not query:
-        raise EngineError("sql: la query è vuota")
+        raise EngineError("sql: the query is empty")
     if _SQL_FILE_FUNCS.search(query):
         raise EngineError(
-            "sql: le funzioni di lettura file (read_csv/read_parquet/…) non sono "
-            "permesse. L'unica tabella disponibile è l'input del nodo (`self`)."
+            "sql: file reading functions (read_csv/read_parquet/…) are not "
+            "allowed. The only table available is the node's input (`self`)."
         )
     try:
         result = pl.SQLContext(frames={"self": lf, "input": lf}).execute(query)
@@ -595,7 +595,7 @@ def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> p
     except EngineError:
         raise
     except Exception as e:
-        raise EngineError(f"sql: query non valida: {e}") from e
+        raise EngineError(f"sql: the query is not valid: {e}") from e
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -625,8 +625,8 @@ def _reject_dynamic_source_keys(obj: Any) -> None:
         for k, v in obj.items():
             if k in ("key", "bucket") and isinstance(v, str) and _PLACEHOLDER.search(v):
                 raise EngineError(
-                    "placeholder non ammessi nei percorsi sorgente (key/bucket): "
-                    "una sorgente non può essere scelta dai dati dell'iterazione"
+                    "placeholders are not allowed in source paths (key/bucket): "
+                    "a source cannot be chosen by the data of the iteration"
                 )
             _reject_dynamic_source_keys(v)
     elif isinstance(obj, (list, tuple)):
@@ -648,14 +648,14 @@ def _substitute(obj: Any, item: dict[str, Any]) -> Any:
             key = m.group(1)
             if key not in item:
                 raise EngineError(
-                    f"placeholder '{{{{{key}}}}}' non trovato: disponibili {sorted(item)}"
+                    f"placeholder '{{{{{key}}}}}' not found: available {sorted(item)}"
                 )
             return item[key]
         def _repl(mm):
             key = mm.group(1)
             if key not in item:
                 raise EngineError(
-                    f"placeholder '{{{{{key}}}}}' non trovato: disponibili {sorted(item)}"
+                    f"placeholder '{{{{{key}}}}}' not found: available {sorted(item)}"
                 )
             return str(item[key])
         return _PLACEHOLDER.sub(_repl, obj)
@@ -696,22 +696,22 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
         driver_df = _build_right(params["driver"], ctx).collect(engine="streaming")
         if driver_df.height > MAX_FOREACH_ITERATIONS:
             raise EngineError(
-                f"il driver ha {driver_df.height} righe: oltre il limite di "
-                f"{MAX_FOREACH_ITERATIONS} iterazioni. Riduci il driver (unique/filter)."
+                f"the driver has {driver_df.height} rows: over the limit of "
+                f"{MAX_FOREACH_ITERATIONS} iterations. Reduce the driver (unique/filter)."
             )
         items = driver_df.to_dicts()
     if not items:
         raise EngineError(
-            "foreach senza iterazioni: collega un driver (input in alto) "
-            "o definisci 'items' nei parametri"
+            "foreach has no iterations: connect a driver (the top input) "
+            "or define 'items' in the parameters"
         )
     # cap per-livello anche sugli items STATICI (il ramo driver è già limitato sopra)
     if len(items) > MAX_FOREACH_ITERATIONS:
         raise EngineError(
-            f"foreach: {len(items)} iterazioni oltre il limite di {MAX_FOREACH_ITERATIONS}"
+            f"foreach: {len(items)} iterations, over the limit of {MAX_FOREACH_ITERATIONS}"
         )
     if not body:
-        raise EngineError("foreach con corpo vuoto: trascina delle operazioni dentro il container")
+        raise EngineError("foreach has an empty body: drag some operations into the container")
     # una sorgente nel corpo non può avere il percorso deciso dai dati (bypass RBAC)
     _reject_dynamic_source_keys(body)
 
@@ -722,8 +722,8 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
         ctx.foreach_iterations += len(items)
         if ctx.foreach_iterations > MAX_FOREACH_TOTAL:
             raise EngineError(
-                f"foreach: troppe iterazioni totali ({ctx.foreach_iterations}) — "
-                f"annidamento eccessivo (limite {MAX_FOREACH_TOTAL})"
+                f"foreach: too many iterations in total ({ctx.foreach_iterations}) — "
+                f"the nesting is too deep (limit {MAX_FOREACH_TOTAL})"
             )
 
     add_keys = params.get("add_keys_as_columns", False)
@@ -735,7 +735,7 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
                 fn = get_operation(op["type"])
                 sub = fn(sub, op.get("params", {}), ctx)
         except EngineError as e:
-            raise EngineError(f"iterazione {idx + 1}/{len(items)}: {e}") from e
+            raise EngineError(f"iteration {idx + 1}/{len(items)}: {e}") from e
         if add_keys:
             sub = sub.with_columns([pl.lit(v).alias(str(k)) for k, v in item.items()])
         parts.append(sub)

@@ -89,7 +89,7 @@ ORPHAN_SWEEP_S = 15.0  # ogni quanto si cercano le orchestrazioni di processi mo
 # avvio: un processo che riparte non eredita quelle del precedente.
 ISTANZA = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
 
-ALREADY_RUNNING = "flusso già in esecuzione"
+ALREADY_RUNNING = "flow already running"
 
 
 def _adesso() -> datetime:
@@ -110,7 +110,7 @@ class Spodestata(OrchestrationError):
 def _ancora_mia(session: Session, run_id: int) -> None:
     riga = session.exec(select(Run.status, Run.claimed_by).where(Run.id == run_id)).first()
     if riga is None or riga[0] != "STARTED" or riga[1] != ISTANZA:
-        raise Spodestata(f"orchestrazione {run_id} non più di questo processo")
+        raise Spodestata(f"orchestration {run_id} no longer belongs to this process")
 
 
 class StopSequence(OrchestrationError):
@@ -129,12 +129,12 @@ async def _refresh_and_wait(
     if ds is None or ds.kind != "database":
         return  # non è una datasource DB (nulla da refreshare)
     if not perm_service.has_capability(session, user, ds.project_id, Capability.RUN):
-        raise OrchestrationError(f"RUN mancante per il refresh della datasource {ds_id}")
+        raise OrchestrationError(f"RUN missing for the refresh of datasource {ds_id}")
     conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
     if conn is None:
-        raise OrchestrationError(f"datasource {ds_id}: connessione inesistente")
+        raise OrchestrationError(f"datasource {ds_id}: the connection does not exist")
     if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
-        raise OrchestrationError(f"CONNECT mancante per il refresh della datasource {ds_id}")
+        raise OrchestrationError(f"CONNECT missing for the refresh of datasource {ds_id}")
 
     # se c'è già un refresh in corso lo si attende, altrimenti se ne lancia uno
     last = session.exec(
@@ -157,7 +157,7 @@ async def _refresh_and_wait(
         session.commit()
         await asyncio.sleep(REFRESH_WAIT_INTERVAL_S)
     if run.status != "SUCCESS":
-        raise OrchestrationError(f"refresh datasource {ds_id} non riuscito ({run.status})")
+        raise OrchestrationError(f"refresh of datasource {ds_id} failed ({run.status})")
     logger.info("orchestrate: datasource %s aggiornata (refresh completato)", ds_id)
 
 
@@ -202,7 +202,7 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
     seen = seen or set()
     if flow.id in seen or depth > MAX_FLOW_DEPTH:
         logger.warning("orchestrate: ciclo o profondità eccessiva su flusso %s (depth %d)", flow.id, depth)
-        return [f"flusso {flow.id}: ciclo o profondità eccessiva"]
+        return [f"flow {flow.id}: cycle or excessive depth"]
     seen = seen | {flow.id}
 
     definition = json.loads(flow.definition or "{}")
@@ -238,8 +238,8 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                     # peggio che fermarsi). L'opzione è sul nodo, non implicita.
                     if d.get("destType") == "email" and d.get("stopOnFailure") is not False:
                         raise StopSequence(
-                            f"invio email non riuscito (run {run.id}): {run.error or run.status}. "
-                            "I passi successivi del flusso non sono stati eseguiti."
+                            f"email sending failed (run {run.id}): {run.error or run.status}. "
+                            "The next steps of the flow were not run."
                         )
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
             except (StopSequence, Spodestata):
@@ -258,7 +258,7 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
             sub = session.get(Flow, sub_id)
             if sub is None:
                 logger.warning("orchestrate: flusso %s riferisce un runflow inesistente %s", flow.id, sub_id)
-                errors.append(f"runflow: flusso {sub_id} inesistente")
+                errors.append(f"runflow: flow {sub_id} does not exist")
                 continue
             # i figli dei sotto-flussi riferiscono lo stesso run di orchestrazione
             # di testa (non c'è un tracciante separato per i sotto-flussi)
@@ -469,7 +469,7 @@ async def esegui(run_id: int) -> None:
             user = session.get(User, run.launched_by) if run.launched_by else None
             if flow is None or user is None or not user.is_active:
                 logger.warning("orchestrate: run %s, flusso %s o utente %s non validi", run_id, run.flow_id, run.launched_by)
-                await _finalize_orch_run(run_id, "FAILURE", "flusso o utente non validi")
+                await _finalize_orch_run(run_id, "FAILURE", "invalid flow or user")
                 return
             flow_id = flow.id
             try:
@@ -496,7 +496,7 @@ async def esegui(run_id: int) -> None:
         raise
     except Exception:
         logger.exception("orchestrate: run %s fallito", run_id)
-        await _finalize_orch_run(run_id, "FAILURE", "errore interno durante l'orchestrazione")
+        await _finalize_orch_run(run_id, "FAILURE", "internal error during the orchestration")
 
 
 # ── Battito, e chi non batte più ─────────────────────────────────────────────

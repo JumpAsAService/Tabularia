@@ -64,14 +64,14 @@ def _validate_engine(engine: str | None, session: Session | None = None) -> str:
     if e not in _AVAILABLE_ENGINES:
         raise HTTPException(
             status_code=422,
-            detail=f"engine non disponibile: '{engine}'. Scegli tra: {', '.join(sorted(_AVAILABLE_ENGINES))}.",
+            detail=f"Engine not available: '{engine}'. Choose from: {', '.join(sorted(_AVAILABLE_ENGINES))}.",
         )
     vietati = disabled_engines(session) if session is not None else set()
     if e in vietati:
         raise HTTPException(
             status_code=422,
-            detail=f"Il motore '{e}' è stato disabilitato dall'amministratore. "
-            f"Scegli tra: {', '.join(sorted(_AVAILABLE_ENGINES - vietati))}.",
+            detail=f"The engine '{e}' has been disabled by the administrator. "
+            f"Choose from: {', '.join(sorted(_AVAILABLE_ENGINES - vietati))}.",
         )
     return e
 
@@ -107,7 +107,7 @@ def _authorize_definition_keys(session: Session, user: User, definition: str | N
     try:
         parsed = json.loads(definition)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=422, detail="La definizione del flusso non è JSON valido")
+        raise HTTPException(status_code=422, detail="The flow definition is not valid JSON")
     ensure_can_read_keys(session, user, collect_storage_keys(parsed))
     # A node can name a datasource by id alone: the run resolves the id to its file
     # with the authority of whoever runs it, which for a schedule is its author.
@@ -210,14 +210,14 @@ def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
 def _get_flow(session: Session, flow_id: int) -> Flow:
     flow = session.get(Flow, flow_id)
     if flow is None:
-        raise HTTPException(status_code=404, detail="Flusso non trovato")
+        raise HTTPException(status_code=404, detail="Flow not found")
     return flow
 
 
 @router.get("/projects/{project_id}/flows", response_model=list[FlowOut])
 def list_flows(project_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.VIEW)
     return session.exec(select(Flow).where(Flow.project_id == project_id).order_by(Flow.name)).all()
 
@@ -231,7 +231,7 @@ def create_flow(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
     _authorize_definition_keys(session, user, body.definition)
     flow = Flow(
@@ -324,7 +324,7 @@ def _flusso_per_dbt(session: Session, user: User, flow_id: int) -> Flow:
     if not perm_service.is_admin(session, user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="L'export dbt è riservato agli amministratori: il progetto porta con sé dati e definizioni anche di altre cartelle",
+            detail="The dbt export is for administrators only: the project carries data and definitions from other folders too",
         )
     return flow
 
@@ -530,7 +530,7 @@ def update_flow(
     if body.project_id is not None and body.project_id != flow.project_id:
         # spostamento: serve EDIT anche sulla cartella di destinazione
         if session.get(Project, body.project_id) is None:
-            raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
+            raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.project_id, Capability.EDIT)
         flow.project_id = body.project_id
 
@@ -607,7 +607,7 @@ def promote_flow_version(
         select(FlowVersion).where(FlowVersion.flow_id == flow_id, FlowVersion.version == version)
     ).first()
     if target is None:
-        raise HTTPException(status_code=404, detail="Versione non trovata")
+        raise HTTPException(status_code=404, detail="Version not found")
     _authorize_definition_keys(session, user, target.definition)  # RBAC come su salvataggio
     flow.definition = target.definition
     flow.updated_at = datetime.now(timezone.utc)
@@ -794,8 +794,8 @@ def set_flow_schedule(
         if not _has_runnable_nodes(flow.definition):
             raise HTTPException(
                 status_code=422,
-                detail="Il flusso non ha nulla da eseguire (Output, refresh o esegui-flusso): "
-                "aggiungi almeno un nodo prima di schedularlo",
+                detail="The flow has nothing to run (Output, refresh or run flow): "
+                "add at least one of these nodes before scheduling it",
             )
         try:
             cron = validate_schedule(cron)

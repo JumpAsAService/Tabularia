@@ -96,7 +96,7 @@ def create_user(
 
     nega_se_da_token(request)
     if session.exec(select(User).where(User.email == body.email)).first():
-        raise HTTPException(status_code=409, detail="Email già registrata")
+        raise HTTPException(status_code=409, detail="This email is already registered")
     user = User(
         email=body.email,
         full_name=body.full_name,
@@ -125,7 +125,7 @@ def create_user(
 def _get_user(session: Session, user_id: int) -> User:
     user = session.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="Utente non trovato")
+        raise HTTPException(status_code=404, detail="User not found")
     return user
 
 
@@ -144,7 +144,7 @@ def update_user(
 
         nega_se_da_token(request)
         if user.is_service:
-            raise HTTPException(status_code=422, detail="Un account di servizio entra solo con un token: niente password")
+            raise HTTPException(status_code=422, detail="A service account signs in only with a token: no password")
     era_admin = user.is_superuser
     era_osservatore = user.is_observer
     if ((body.is_superuser and not era_admin) or (body.is_observer and not era_osservatore)
@@ -234,7 +234,7 @@ def delete_user(
     quel campo esiste (vedi models/audit.py).
     """
     if user_id == current.id:
-        raise HTTPException(status_code=409, detail="Non puoi eliminare il tuo stesso account")
+        raise HTTPException(status_code=409, detail="You cannot delete your own account")
     _get_user(session, user_id)
     elimina_utente(session, user_id)
 
@@ -308,7 +308,7 @@ def add_to_group(
     user = _get_user(session, user_id)
     group = session.get(Group, group_id)
     if group is None:
-        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+        raise HTTPException(status_code=404, detail="Group not found")
     exists = session.get(UserGroupLink, (user_id, group_id))
     if exists is None and (group.is_admin or group.is_observer):
         # entrare in un gruppo admin od osservatore È ricevere quel ruolo

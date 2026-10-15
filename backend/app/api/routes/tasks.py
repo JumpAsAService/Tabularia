@@ -88,7 +88,7 @@ PREVIEW_TIMEOUT_SECONDS = float(os.getenv("PREVIEW_TIMEOUT_SECONDS", "120"))
 _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "superseded": 409}
 # ogni quanto l'attesa controlla di non essere stata superata
 _PREVIEW_POLL_SECONDS = 0.25
-_SUPERSEDED = "Anteprima superata da una richiesta piu' recente"
+_SUPERSEDED = "Preview superseded by a more recent request"
 # how long the synchronous export waits for a worker to pick it up, on top of the
 # workers' time limit for the export itself
 EXPORT_QUEUE_WAIT_SECONDS = 600
@@ -152,7 +152,7 @@ def preview_flow(request: PreviewRequest):
                 if time.monotonic() >= deadline:
                     async_result.revoke(terminate=True)  # ferma la preview in corso
                     raise HTTPException(
-                        status_code=504, detail="Anteprima scaduta: il worker non ha risposto in tempo"
+                        status_code=504, detail="Preview timed out: the worker did not answer in time"
                     )
             except TaskRevokedError:
                 raise HTTPException(status_code=409, detail=_SUPERSEDED)
@@ -163,7 +163,7 @@ def preview_flow(request: PreviewRequest):
 
     if not payload.get("ok"):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
-        raise HTTPException(status_code=status, detail=payload.get("detail", "Errore anteprima"))
+        raise HTTPException(status_code=status, detail=payload.get("detail", "Preview failed"))
     return PreviewResult(**payload["result"])
 
 

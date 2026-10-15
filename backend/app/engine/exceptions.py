@@ -9,7 +9,7 @@ class EngineError(Exception):
 class UnknownOperationError(EngineError):
     def __init__(self, op_type: str):
         self.op_type = op_type
-        super().__init__(f"Operazione sconosciuta: '{op_type}'")
+        super().__init__(f"Unknown operation: '{op_type}'")
 
 
 class SourceNotFoundError(EngineError):
@@ -20,8 +20,8 @@ class SourceNotFoundError(EngineError):
         self.bucket = bucket
         self.key = key
         super().__init__(
-            f"Sorgente non trovata: {bucket}/{key} non esiste (i dati potrebbero "
-            f"essere stati rimossi). Ricarica il file o aggiorna la sorgente."
+            f"Source not found: {bucket}/{key} does not exist (the data may "
+            f"have been removed). Upload the file again or refresh the source."
         )
 
 
@@ -31,4 +31,4 @@ class OperationError(EngineError):
     def __init__(self, op_type: str, index: int, message: str):
         self.op_type = op_type
         self.index = index
-        super().__init__(f"Errore nell'operazione #{index} '{op_type}': {message}")
+        super().__init__(f"Error in operation #{index} '{op_type}': {message}")

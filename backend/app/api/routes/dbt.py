@@ -173,8 +173,8 @@ def _read_seeds(seeds: list[SeedSpec], dialect: str | None = None) -> list[dict]
             n = lf.select(pl.len()).collect().item()
             if n > SEED_MAX_ROWS:
                 raise DbtExportError(
-                    f"la sorgente «{s.name}» ha {n:,} righe: troppe per un seed dbt (al più {SEED_MAX_ROWS:,}). "
-                    "Importala in un database e usa quella come sorgente.",
+                    f"the source «{s.name}» has {n:,} rows: too many for a dbt seed (at most {SEED_MAX_ROWS:,}). "
+                    "Import it into a database and use that as the source.",
                     "seed_too_large", source=s.name, rows=f"{n:,}", max=f"{SEED_MAX_ROWS:,}",
                 )
             df = lf.collect()
@@ -182,7 +182,7 @@ def _read_seeds(seeds: list[SeedSpec], dialect: str | None = None) -> list[dict]
         except DbtExportError:
             raise
         except Exception as e:  # noqa: BLE001
-            raise DbtExportError(f"seed «{s.name}»: impossibile leggere il file ({e})", "seed_unreadable", seed=s.name, detail=str(e)[:200])
+            raise DbtExportError(f"seed «{s.name}»: the file cannot be read ({e})", "seed_unreadable", seed=s.name, detail=str(e)[:200])
         finally:
             try:
                 os.remove(path)
@@ -198,7 +198,7 @@ def _read_seeds(seeds: list[SeedSpec], dialect: str | None = None) -> list[dict]
 def _target_clickhouse(req: ExportRequest) -> TargetClickHouse:
 
     if not req.clickhouse:
-        raise DbtExportError("modalità clickhouse senza le connessioni delle sorgenti")
+        raise DbtExportError("clickhouse mode without the source connections")
     return TargetClickHouse(req.clickhouse.get("connections") or [], get_settings().clickhouse_external.host)
 
 
@@ -211,12 +211,12 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
     dialect = "clickhouse" if ch else None
     if req.mode == "native":
         if not req.native:
-            raise DbtExportError("modalità native senza configurazione del warehouse")
+            raise DbtExportError("native mode without the warehouse configuration")
         dialect = _SQLGLOT_DIALECT.get(req.native.get("db_type"))
         if dialect is None:
-            raise DbtExportError(f"nessun dialetto sqlglot per '{req.native.get('db_type')}'")
+            raise DbtExportError(f"no sqlglot dialect for '{req.native.get('db_type')}'")
     elif req.mode == "clickhouse" and ch is None:
-        raise DbtExportError("modalità clickhouse senza le connessioni delle sorgenti")
+        raise DbtExportError("clickhouse mode without the source connections")
 
     registro: dict[str, tuple[list[str], dict]] = {}   # modello → (colonne di uscita, tipi)
     seed_cols = {s["name"]: (s["_cols"], s["_types"]) for s in seeds}
@@ -236,18 +236,18 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
         if src.get("model") is not None:
             nome = src["model"]
             if nome not in registro:
-                raise DbtExportError(f"modello referenziato prima di essere compilato: {nome}")
+                raise DbtExportError(f"model referenced before it was compiled: {nome}")
             cols, tipi = registro[nome]
             return (ident_per(nome, cols) if native else "{{ ref('%s') }}" % nome), cols, tipi, nome
         if src.get("seed") is not None:
             nome = src["seed"]
             if nome not in seed_cols:
-                raise DbtExportError(f"seed non letto: {nome}")
+                raise DbtExportError(f"seed not read: {nome}")
             cols, tipi = seed_cols[nome]
             return (ident_per(nome, cols) if native else "{{ ref('%s') }}" % nome), cols, tipi, nome
         e = req.source_map.get(src.get("key"))
         if e is None:
-            raise DbtExportError(f"sorgente non mappata: {src.get('key')}")
+            raise DbtExportError(f"unmapped source: {src.get('key')}")
         return (e["ident"] if native else e["ref"]), e.get("columns") or [], tipi_di(e), e.get("label")
 
     models, tests = [], []
@@ -270,11 +270,11 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                                            proposta=proposta, colonne=cols if proposta is not None else None)
                     errore = controllo.errore(sql) if controllo else None
                     if errore and proposta is not None:
-                        raise DbtExportError(f"la proposta dell'AI per «{m.name}» non passa i controlli: ClickHouse non la legge ({errore})",
+                        raise DbtExportError(f"the AI's proposal for «{m.name}» does not pass the checks: ClickHouse cannot parse it ({errore})",
                                              "ai_translation_invalid", model=m.name, reason="syntax", detail=errore)
                     if errore:
                         etichetta = m.translate.get("label") or m.name
-                        raise DbtExportError(f"la query della datasource «{etichetta}» tradotta non si legge in ClickHouse ({errore})",
+                        raise DbtExportError(f"the translated query of the datasource «{etichetta}» cannot be parsed by ClickHouse ({errore})",
                                              "query_not_translatable", datasource=etichetta, detail=errore)
                 except DbtExportError as e:
                     if e.code in ("query_not_translatable", "query_not_single_select") and proposta is None:
@@ -290,7 +290,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
             sql = _tipizza_raw(sql, cols, dtypes, dialect)
         else:
             if not m.source:
-                raise DbtExportError(f"il modello «{m.name}» non ha una sorgente")
+                raise DbtExportError(f"the model «{m.name}» has no source")
             raw, cols, tipi = compile_model_sql(m.source, m.operations, resolve, native=native, dialetto=dialect)
             if native and m.name in req.overrides:
                 sql = usa_proposta(req.overrides[m.name], dialect, ident_to_macro, cols, m.name, controllo)
@@ -300,7 +300,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                     tradotto = transpile_model(raw, dialect, schema)
                     errore = controllo.errore(tradotto) if controllo else None   # prima delle macro: niente Jinja
                     if errore:
-                        raise DbtExportError(f"traduzione nel dialetto '{dialect}' non riuscita: ClickHouse non la legge ({errore})",
+                        raise DbtExportError(f"translation to the '{dialect}' dialect failed: ClickHouse cannot parse it ({errore})",
                                              "translation_failed", dialect=dialect, detail=errore)
                     sql = substitute_source_idents(tradotto, ident_to_macro)
                 except DbtExportError as e:

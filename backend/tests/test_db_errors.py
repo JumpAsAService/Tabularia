@@ -198,8 +198,8 @@ def test_trino():
 
 # ── Regole generali ───────────────────────────────────────────────────────────
 def test_errori_gia_parlanti_passano_invariati():
-    assert describe_db_error(DbSourceError("Il nome della tabella è vuoto"), "clickhouse") == \
-        "Il nome della tabella è vuoto"
+    assert describe_db_error(DbSourceError("The table name is empty"), "clickhouse") == \
+        "The table name is empty"
 
 
 def test_messaggio_mai_piu_lungo_del_limite_e_mai_un_crash():

@@ -113,7 +113,7 @@ def clean_column_descriptions(value: dict[str, str]) -> dict[str, str]:
         if len(text) > MAX_COLUMN_DESCRIPTION:
             raise HTTPException(
                 status_code=422,
-                detail=f"La descrizione del campo '{col}' supera {MAX_COLUMN_DESCRIPTION} caratteri",
+                detail=f"The description of field '{col}' is longer than {MAX_COLUMN_DESCRIPTION} characters",
             )
         out[col] = text
     return out
@@ -180,7 +180,7 @@ def _to_out_many(session: Session, rows: list[Datasource]) -> list[DatasourceOut
 def _get_ds(session: Session, ds_id: int) -> Datasource:
     ds = session.get(Datasource, ds_id)
     if ds is None:
-        raise HTTPException(status_code=404, detail="Datasource non trovata")
+        raise HTTPException(status_code=404, detail="Datasource not found")
     return ds
 
 
@@ -228,7 +228,7 @@ def list_project_datasources(
     session: Session = Depends(get_session),
 ):
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.VIEW)
     rows = session.exec(
         select(Datasource).where(Datasource.project_id == project_id).order_by(Datasource.name)
@@ -253,33 +253,33 @@ async def create_db_datasource(
     ingest parte subito; il parquet è uno snapshot, il refresh lo sostituisce.
     """
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
 
     conn = session.get(Connection, body.connection_id)
     if conn is None:
-        raise HTTPException(status_code=404, detail="Connessione non trovata")
+        raise HTTPException(status_code=404, detail="Connection not found")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type == "s3":
         raise HTTPException(
             status_code=422,
-            detail="Una connessione S3 non può essere una sorgente database (serve per i nodi Output)",
+            detail="An S3 connection cannot be a database source (it is for Output nodes)",
         )
     if conn.db_type in ("smtp", "sharepoint"):
-        raise HTTPException(status_code=422, detail=f"Una connessione {conn.db_type} non è un database")
+        raise HTTPException(status_code=422, detail=f"A {conn.db_type} connection is not a database")
 
     if body.source_type not in ("table", "sql"):
-        raise HTTPException(status_code=422, detail="source_type deve essere 'table' o 'sql'")
+        raise HTTPException(status_code=422, detail="source_type must be 'table' or 'sql'")
     if not body.source_ref.strip():
-        raise HTTPException(status_code=422, detail="La sorgente (tabella o SQL) è vuota")
+        raise HTTPException(status_code=422, detail="The source (table or SQL) is empty")
     name = body.name.strip()
     if not name:
-        raise HTTPException(status_code=422, detail="Il nome della datasource è vuoto")
+        raise HTTPException(status_code=422, detail="The datasource needs a name")
     conflict = session.exec(
         select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)
     ).first()
     if conflict:
-        raise HTTPException(status_code=409, detail=f"Esiste già una datasource '{name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
 
     ds = Datasource(
         name=name,
@@ -335,19 +335,19 @@ async def create_sharepoint_datasource(
     `source_type="sharepoint"` e `source_ref` = JSON {path, sheet}: cambia solo
     CHI porta i dati (vedi launch_ingest_run)."""
     if session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
     conn = session.get(Connection, body.connection_id)
     if conn is None:
-        raise HTTPException(status_code=404, detail="Connessione non trovata")
+        raise HTTPException(status_code=404, detail="Connection not found")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type != "sharepoint":
-        raise HTTPException(status_code=422, detail="Serve una connessione di tipo SharePoint")
+        raise HTTPException(status_code=422, detail="A SharePoint connection is required")
     name, path, sheet = body.name.strip(), body.path.strip(), body.sheet.strip()
     if not name or not path or not sheet:
-        raise HTTPException(status_code=422, detail="Nome, percorso e foglio sono obbligatori")
+        raise HTTPException(status_code=422, detail="Name, path and sheet are required")
     if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
-        raise HTTPException(status_code=409, detail=f"Esiste già una datasource '{name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
 
     ds = Datasource(
         name=name, description=body.description, project_id=project_id, owner_id=user.id,
@@ -465,11 +465,11 @@ async def refresh_datasource(
     datasource + CONNECT su quella della connessione. Un refresh alla volta."""
     ds = _get_ds(session, ds_id)
     if ds.kind != "database":
-        raise HTTPException(status_code=422, detail="Solo le datasource database si possono aggiornare")
+        raise HTTPException(status_code=422, detail="Only database datasources can be refreshed")
     ensure_can(session, user, ds.project_id, Capability.RUN)
     conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
     if conn is None:
-        raise HTTPException(status_code=409, detail="La connessione di questa datasource non esiste più")
+        raise HTTPException(status_code=409, detail="The connection of this datasource no longer exists")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
 
     last = session.exec(
@@ -480,7 +480,7 @@ async def refresh_datasource(
     if last is not None:
         last = await _reconcile(session, last)
         if last.status not in TERMINAL_STATES:
-            raise HTTPException(status_code=409, detail="C'è già un refresh in corso per questa datasource")
+            raise HTTPException(status_code=409, detail="A refresh is already running for this datasource")
 
     run = await launch_ingest_run(session, user, ds, conn)
     audit.record_audit(
@@ -506,11 +506,11 @@ def set_schedule(
     schedule (catturata qui in `refresh_scheduled_by`)."""
     ds = _get_ds(session, ds_id)
     if ds.kind != "database":
-        raise HTTPException(status_code=422, detail="Solo le datasource database si possono schedulare")
+        raise HTTPException(status_code=422, detail="Only database datasources can be scheduled")
     ensure_can(session, user, ds.project_id, Capability.RUN)
     conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
     if conn is None:
-        raise HTTPException(status_code=409, detail="La connessione di questa datasource non esiste più")
+        raise HTTPException(status_code=409, detail="The connection of this datasource no longer exists")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
 
     cron = (body.cron or "").strip()
@@ -574,7 +574,7 @@ def update_datasource(
     target_project = ds.project_id
     if body.project_id is not None and body.project_id != ds.project_id:
         if session.get(Project, body.project_id) is None:
-            raise HTTPException(status_code=404, detail="Progetto di destinazione non trovato")
+            raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.project_id, Capability.EDIT)
         target_project = body.project_id
         # Lo schedule porta con sé l'AUTORITÀ di chi l'ha creato: se la
@@ -587,7 +587,7 @@ def update_datasource(
 
     new_name = body.name.strip() if body.name is not None else ds.name
     if not new_name:
-        raise HTTPException(status_code=422, detail="Il nome non può essere vuoto")
+        raise HTTPException(status_code=422, detail="The datasource needs a name")
     conflict = session.exec(
         select(Datasource).where(
             Datasource.project_id == target_project,
@@ -596,14 +596,14 @@ def update_datasource(
         )
     ).first()
     if conflict:
-        raise HTTPException(status_code=409, detail=f"Esiste già una datasource '{new_name}' nella cartella")
+        raise HTTPException(status_code=409, detail=f"There is already a datasource '{new_name}' in this folder")
 
     ds.name = new_name
     ds.project_id = target_project
     if body.description is not None:
         text = body.description.strip()
         if len(text) > MAX_DATASOURCE_DESCRIPTION:
-            raise HTTPException(status_code=422, detail=f"La descrizione supera {MAX_DATASOURCE_DESCRIPTION} caratteri")
+            raise HTTPException(status_code=422, detail=f"The description is longer than {MAX_DATASOURCE_DESCRIPTION} characters")
         ds.description = text
     if body.column_descriptions is not None:
         ds.column_descriptions = json.dumps(clean_column_descriptions(body.column_descriptions), ensure_ascii=False)

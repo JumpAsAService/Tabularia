@@ -5,6 +5,13 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Error messages in English.** The engine's and the gateway's error messages — under a
+  preview, in the run and import history, in toasts, in failure emails, at startup —
+  were still in Italian in an otherwise English product: about 550 of them now read in
+  English, with the same information and the same placeholders, and the five engines
+  word the same error the same way. The dbt export's errors keep their codes, translated
+  into the reader's language as before. A run stored earlier with the Italian «flusso già
+  in esecuzione» is still recognised as a launch refused, not as a failure.
 - **The assistants say, on every message, that they are an AI.** In the data assistant's
   page and in the flow editor's panel each answer is labelled «AI assistant» with the
   model that wrote it and each question as the user's (screen readers hear it too), and
