@@ -17,8 +17,8 @@ LIVE_INGEST = "kind = 'ingest' AND status NOT IN ('SUCCESS', 'FAILURE')"
 # cosa si scrive su un'orchestrazione che nessuno finirà (niente apici: entra
 # anche in un'istruzione SQL delle migrazioni)
 ORCHESTRATION_INTERRUPTED = (
-    "Orchestrazione interrotta: il processo che la eseguiva si è fermato e i passi rimanenti "
-    "non sono stati eseguiti. Controlla cosa è già stato prodotto e rilancia il flusso."
+    "Orchestration interrupted: the process running it stopped and the remaining steps "
+    "were not run. Check what has already been produced and run the flow again."
 )
 
 
