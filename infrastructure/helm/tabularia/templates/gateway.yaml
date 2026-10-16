@@ -53,8 +53,14 @@ spec:
         app.kubernetes.io/component: {{ .component }}
     spec:
       {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
+      {{- if $.Values.adminScaling.enabled }}
+      # Admin → Workers changes the workers' autoscaling bounds: see scaling-rbac.yaml
+      serviceAccountName: {{ include "tabularia.fullname" $ }}-scaler
+      automountServiceAccountToken: true
+      {{- else }}
       serviceAccountName: {{ include "tabularia.serviceAccountName" $ }}
       automountServiceAccountToken: {{ $.Values.serviceAccount.automountToken }}
+      {{- end }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       {{- if $.Values.migrations.enabled }}
@@ -113,6 +119,9 @@ spec:
               value: {{ .role | quote }}
             - name: APP__GATEWAY_THREADS
               value: {{ $.Values.gateway.threads | quote }}
+            {{- if $.Values.adminScaling.enabled }}
+            {{- include "tabularia.scalingEnv" $ | nindent 12 }}
+            {{- end }}
             {{- include "tabularia.withoutEngineSecrets" $ | nindent 12 }}
           envFrom:
             {{- include "tabularia.envFrom" $ | nindent 12 }}

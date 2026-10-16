@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3 } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -156,6 +156,8 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'engine_settings.update': { icon: SlidersHorizontal, color: u.accent, label: t('audit.engineSettingsUpdateAction') },
     'siem.update': { icon: Radar, color: u.accent, label: t('audit.siemUpdateAction') },
     'siem.test': { icon: Radar, color: u.muted, label: t('audit.siemTestAction') },
+    'workers.scaling_update': { icon: Server, color: u.accent, label: t('audit.workersScalingUpdateAction') },
+    'workers.scaling_reset': { icon: Server, color: u.muted, label: t('audit.workersScalingResetAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'flow.create': { icon: Workflow, color: u.accent, label: t('audit.flowCreateAction') },

@@ -9,15 +9,17 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar,
+  SlidersHorizontal, Radar, Server,
 } from 'lucide-vue-next'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
 import WebhooksSection from '~/components/admin/WebhooksSection.vue'
 import EngineSettingsSection from '~/components/admin/EngineSettingsSection.vue'
 import SiemSection from '~/components/admin/SiemSection.vue'
+import WorkersSection from '~/components/admin/WorkersSection.vue'
 import { useSiem } from '~/composables/useSiem'
-import { useEngineSettings } from '~/composables/useEngineSettings'
+import { isSettingsCategory, useEngineSettings } from '~/composables/useEngineSettings'
+import { useWorkers } from '~/composables/useWorkers'
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type GroupOut, type Project, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
@@ -33,6 +35,7 @@ const aiApi = useAi()
 const integr = useIntegrations()
 const impostazioniApi = useEngineSettings()
 const siemApi = useSiem()
+const workersApi = useWorkers()
 // modelli AI: catalogo del provider + scelta dell'amministratore. `null` =
 // assistente non configurato o provider irraggiungibile (la sezione lo dice)
 const modelli = ref<AiModel[] | null>(null)
@@ -47,7 +50,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'siem' | 'ai'
+type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'siem' | 'ai'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
@@ -83,6 +86,7 @@ const nServizio = ref(0)
 const nWebhook = ref(0)
 // quante impostazioni del motore sono cambiate dal pannello (le altre valgono dall'ambiente)
 const nImpostazioni = ref(0)
+const nWorker = ref(0)
 // l'inoltro dell'audit al SIEM: acceso o no
 const siemAcceso = ref(false)
 // le cartelle, per il filtro dei webhook
@@ -102,6 +106,8 @@ const sezioni = computed(() => [
   // stato dell'installazione, non quanti ne esistono
   { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
   { id: 'settings' as Sezione, label: t('engineSettings.navTitle'), icon: SlidersHorizontal, badge: nImpostazioni.value },
+  // the workers alive now
+  { id: 'workers' as Sezione, label: t('workers.navTitle'), icon: Server, badge: nWorker.value },
   { id: 'siem' as Sezione, label: t('siem.navTitle'), icon: Radar, badge: siemAcceso.value ? 1 : 0 },
   // quanti modelli sono ABILITATI: zero = l'assistente non e' usabile da nessuno
   { id: 'ai' as Sezione, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (modelli.value ?? []).filter((m) => m.enabled).length },
@@ -137,11 +143,16 @@ async function loadAll() {
     ;[nServizio.value, nWebhook.value] = (await Promise.all([integr.serviceAccounts(), integr.webhooks()])).map((x) => x.length)
   } catch { /* le sezioni lo diranno quando si aprono */ }
   try {
-    nImpostazioni.value = (await impostazioniApi.get()).items.filter((v) => v.value !== null).length
+    // the processes per worker are engine settings too, but they have their own section
+    nImpostazioni.value = (await impostazioniApi.get()).items
+      .filter((v) => v.value !== null && isSettingsCategory(v.category)).length
   } catch { /* motore giù: la sezione lo dirà quando si apre */ }
   try {
     siemAcceso.value = (await siemApi.get()).enabled
   } catch { /* la sezione lo dirà quando si apre */ }
+  try {
+    nWorker.value = (await workersApi.get()).groups.reduce((n, g) => n + g.workers.length, 0)
+  } catch { /* the section says why when it opens */ }
   // a parte: l'assistente puo' non essere configurato, e non e' un errore del pannello
   try {
     modelli.value = await aiApi.models()
@@ -708,6 +719,10 @@ async function toggleMotore(m: EnginePolicy) {
 
         <template v-else-if="sezione === 'settings'">
           <EngineSettingsSection @count="nImpostazioni = $event" />
+        </template>
+
+        <template v-else-if="sezione === 'workers'">
+          <WorkersSection @count="nWorker = $event" />
         </template>
 
         <template v-else-if="sezione === 'service'">

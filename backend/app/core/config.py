@@ -123,6 +123,31 @@ def cgroup_mem_limit_bytes() -> Optional[int]:
     return None
 
 
+def cgroup_mem_used_bytes() -> Optional[int]:
+    """Memory the container uses now, as the kernel counts it against the limit above
+    (page cache included). None outside a container."""
+    for path in ("/sys/fs/cgroup/memory.current",                # cgroup v2
+                 "/sys/fs/cgroup/memory/memory.usage_in_bytes"):  # cgroup v1
+        try:
+            return int(Path(path).read_text().strip())
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Workers: processes per worker container
+# ─────────────────────────────────────────────────────────────────────────────
+class WorkersSettings(BaseModel):
+    # env: WORKERS__RUN_CONCURRENCY / WORKERS__PREVIEW_CONCURRENCY — processes per
+    # worker container, for the run queue (`celery`) and for the preview queue.
+    # Usually set from Admin → Workers: every worker resizes its pool within seconds,
+    # without stopping the tasks it is running (app/tasks/worker_pool.py).
+    # 0 = keep the size the container started with (CELERY__WORKER_CONCURRENCY).
+    run_concurrency: int = 0
+    preview_concurrency: int = 0
+
+
 def resolve_max_memory_per_child_kb(celery: CelerySettings) -> int:
     """Tetto RSS per figlio worker (KB). Se non forzato via env, lo deriva dal
     limite cgroup e dalla concurrency: `limite * frac / concurrency`. Così due (o
@@ -443,6 +468,7 @@ class Settings(BaseSettings):
     redis: RedisSettings = Field(default_factory=RedisSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     celery: CelerySettings = Field(default_factory=CelerySettings)
+    workers: WorkersSettings = Field(default_factory=WorkersSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)

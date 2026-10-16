@@ -209,3 +209,24 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- end -}}
+
+{{/*
+Admin → Workers on Kubernetes (adminScaling.enabled): where the gateway finds the two
+worker Deployments, their autoscalers (none, a CPU HPA or a KEDA ScaledObject, by
+the same name) and the highest maxReplicas the panel may set for each.
+*/}}
+{{- define "tabularia.scalingEnv" -}}
+{{- $full := include "tabularia.fullname" . -}}
+- name: KUBERNETES__SCALING
+  value: "true"
+{{- range $kind, $v := dict "run" (dict "role" "worker" "cfg" .Values.worker) "preview" (dict "role" "preview-worker" "cfg" .Values.previewWorker) }}
+{{- $name := printf "%s-%s" $full $v.role }}
+{{- $a := $v.cfg.autoscaling }}
+- name: KUBERNETES__{{ upper $kind }}_WORKER_DEPLOYMENT
+  value: {{ $name | quote }}
+- name: KUBERNETES__{{ upper $kind }}_WORKER_AUTOSCALER
+  value: {{ ternary (printf "%s/%s" (ternary "scaledobject" "hpa" (dig "keda" "enabled" false $a)) $name) "" (and $a.enabled true) | quote }}
+- name: KUBERNETES__{{ upper $kind }}_WORKER_MAX_REPLICAS
+  value: {{ $a.panelMaxReplicas | default $a.maxReplicas | quote }}
+{{- end }}
+{{- end -}}

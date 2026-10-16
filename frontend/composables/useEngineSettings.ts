@@ -2,12 +2,12 @@
 // motore legge quando servono, cambiati dal pannello senza riavvii. Quali sono e
 // con che limiti lo dice il motore; il gateway li conserva e li fa applicare.
 
-export type SettingUnit = 'rows' | 'seconds' | 'bytes' | 'threads'
+export type SettingUnit = 'rows' | 'seconds' | 'bytes' | 'threads' | 'processes'
 export type SettingCategory = 'import' | 'export' | 'execution' | 'cache' | 'clickhouse' | 'bigquery'
 
 export interface EngineSetting {
   key: string // "<sezione>.<campo>", es. "ingest.parquet_row_group_rows"
-  category: SettingCategory
+  category: SettingCategory | 'workers' // workers: shown in Admin → Workers
   unit: SettingUnit
   min: number
   max: number
@@ -36,6 +36,8 @@ export interface SettingError {
 }
 
 export const SETTING_CATEGORIES: SettingCategory[] = ['import', 'export', 'execution', 'cache', 'clickhouse', 'bigquery']
+// the processes per worker are engine settings with a section of their own (Admin → Workers)
+export const isSettingsCategory = (c: string): c is SettingCategory => (SETTING_CATEGORIES as string[]).includes(c)
 
 // la chiave nelle traduzioni: vue-i18n legge i punti come un percorso
 export const settingI18nKey = (key: string) => key.replace(/\./g, '_')

@@ -16,6 +16,7 @@ from app.models.audit import AuditLog
 from app.models.banner import Banner
 from app.models.engine_policy import DisabledEngine
 from app.models.engine_setting import EngineSetting
+from app.models.worker_scaling import WorkerScaling
 from app.models.siem import SiemDestination
 from app.models.saved_view import SavedView
 from app.models.flow_group import FlowGroup
@@ -29,7 +30,7 @@ from app.models.dbt_ai_text import DbtAiText
 __all__ = [
     "User", "Group", "UserGroupLink", "UserSession", "ApiToken", "Webhook", "WebhookDelivery", "Project", "Permission", "Capability",
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
-    "AuditLog", "Banner", "DisabledEngine", "EngineSetting", "SiemDestination", "SavedView", "FlowGroup", "AiModel", "AiChat", "AiChatTurn", "AiSpend", "PrivacyNotice",
+    "AuditLog", "Banner", "DisabledEngine", "EngineSetting", "WorkerScaling", "SiemDestination", "SavedView", "FlowGroup", "AiModel", "AiChat", "AiChatTurn", "AiSpend", "PrivacyNotice",
     "FlowPresence", "LoginAttempt",
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
 ]

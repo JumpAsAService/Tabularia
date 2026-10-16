@@ -229,7 +229,7 @@ def test_il_catalogo_dice_ambiente_valore_e_intervallo():
     assert voci["export.max_rows"]["env_var"] == "EXPORT__MAX_ROWS"
     assert voci["ingest.parquet_row_group_rows"]["value"] is None
     assert voci["celery.task_time_limit"]["max"] == 3000
-    assert {v["category"] for v in c["items"]} == {"import", "export", "execution", "cache", "clickhouse", "bigquery"}
+    assert {v["category"] for v in c["items"]} == {"import", "export", "execution", "cache", "clickhouse", "bigquery", "workers"}
 
 
 def test_la_scrittura_e_tutto_o_niente():

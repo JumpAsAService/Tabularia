@@ -55,6 +55,13 @@ NIENTE_IMPOSTAZIONI_DA_TOKEN = {
     "de": "Ein API-Token kann die Engine-Einstellungen nicht ändern: Das geht über die Oberfläche",
     "es": "Un token de API no puede cambiar los ajustes del motor: hazlo desde la interfaz",
 }
+NIENTE_WORKER_DA_TOKEN = {
+    "en": "An API token cannot change the workers or their scaling: do it from the interface",
+    "it": "Un token API non cambia i worker né la loro scala: si fa dall'interfaccia",
+    "fr": "Un jeton d'API ne peut pas modifier les workers ni leur mise à l'échelle : faites-le depuis l'interface",
+    "de": "Ein API-Token kann die Worker und ihre Skalierung nicht ändern: Das geht über die Oberfläche",
+    "es": "Un token de API no puede cambiar los workers ni su escalado: hazlo desde la interfaz",
+}
 NIENTE_SIEM_DA_TOKEN = {
     "en": "An API token cannot change where the audit log is sent: do it from the interface",
     "it": "Un token API non cambia dove va il registro di audit: si fa dall'interfaccia",

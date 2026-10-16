@@ -80,6 +80,10 @@ ENGINE_ALLOW = "engine.allow"
 ENGINE_SETTINGS_UPDATE = "engine_settings.update"
 SIEM_UPDATE = "siem.update"
 SIEM_TEST = "siem.test"
+# workers (Admin → Workers): the autoscaling bounds of their pods on Kubernetes; the
+# processes per worker are engine settings and go as ENGINE_SETTINGS_UPDATE
+WORKERS_SCALING_UPDATE = "workers.scaling_update"
+WORKERS_SCALING_RESET = "workers.scaling_reset"
 ENGINE_DISALLOW = "engine.disallow"
 # assistente AI: quali modelli si possono usare, e ogni query che l'assistente
 # esegue sui dati per conto di un utente (e' un accesso ai dati come un export)

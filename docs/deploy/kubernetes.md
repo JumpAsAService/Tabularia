@@ -5,6 +5,9 @@ Operational notes for whoever moves Tabularia from `infrastructure/docker-compos
 services exist and how they talk to each other; it is **not** a production manifest:
 it runs dev servers with hot reload and bind-mounts the sources.
 
+For a single machine there is a production compose file too:
+[docker-compose.md](docker-compose.md).
+
 Everything below marked *verified* was exercised on 2026-09-12 against the real
 stack (Scaleway object storage, managed ClickHouse).
 

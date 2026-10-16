@@ -13,7 +13,7 @@ import {
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import {
-  GIB, SETTING_CATEGORIES, settingI18nKey, useEngineSettings,
+  GIB, SETTING_CATEGORIES, isSettingsCategory, settingI18nKey, useEngineSettings,
   type EngineSetting, type EngineSettings, type SettingCategory, type SettingError,
 } from '~/composables/useEngineSettings'
 
@@ -44,7 +44,7 @@ async function carica() {
   errore.value = ''
   try {
     stato.value = await api.get()
-    emit('count', stato.value.items.filter((v) => v.value !== null).length)
+    emit('count', contate(stato.value))
   } catch (e) {
     errore.value = errMessage(e)
   } finally {
@@ -53,11 +53,15 @@ async function carica() {
 }
 onMounted(carica)
 
+// the ones set from the panel among those shown here (the processes per worker are
+// engine settings too, with a section of their own: Admin → Workers)
+const contate = (s: EngineSettings) => s.items.filter((v) => v.value !== null && isSettingsCategory(v.category)).length
+
 const categorie = computed(() =>
   SETTING_CATEGORIES.filter((c) => stato.value?.items.some((v) => v.category === c)),
 )
 const perCategoria = (c: SettingCategory) => (stato.value?.items ?? []).filter((v) => v.category === c)
-const spenta = (c: SettingCategory) => !!stato.value?.unavailable.includes(c)
+const spenta = (c: SettingCategory | 'workers') => !!stato.value?.unavailable.includes(c as SettingCategory)
 const modificabile = (v: EngineSetting) => !!stato.value?.editable && !spenta(v.category)
 
 // ── unità e formati ─────────────────────────────────────────────────────────
@@ -193,7 +197,7 @@ async function salva() {
   try {
     stato.value = await api.save(cambi.value)
     annulla()
-    emit('count', stato.value.items.filter((v) => v.value !== null).length)
+    emit('count', contate(stato.value))
     toast.success(t('engineSettings.saved', { seconds: stato.value.refresh_seconds }))
   } catch (e: any) {
     const errori: SettingError[] | undefined = e?.data?.detail?.errors

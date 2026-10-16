@@ -1,0 +1,55 @@
+{{/*
+Queue-length autoscaling for the workers with KEDA (worker/previewWorker.autoscaling
+.keda.enabled), in place of the CPU HPA. KEDA must be installed in the cluster. It
+reads the length of each queue's Redis list — `celery` for runs, `preview` for
+previews — and adds a pod for every `listLength` tasks waiting, between minReplicas
+and maxReplicas. Tasks sent with a lower priority (the step-cache copies) wait in a
+list of their own that is not counted: they are the least urgent work.
+*/}}
+{{- $auth := and .Values.externalServices.redis.kedaAuth (or .Values.secrets.redisPassword .Values.existingSecret) }}
+{{- $any := false }}
+{{- range $role, $cfg := dict "worker" .Values.worker "preview-worker" .Values.previewWorker }}
+{{- if and $cfg.autoscaling.enabled (dig "keda" "enabled" false $cfg.autoscaling) }}
+{{- $any = true }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "tabularia.fullname" $ }}-{{ $role }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  scaleTargetRef:
+    name: {{ include "tabularia.fullname" $ }}-{{ $role }}
+  minReplicaCount: {{ $cfg.autoscaling.minReplicas }}
+  maxReplicaCount: {{ $cfg.autoscaling.maxReplicas }}
+  pollingInterval: {{ $cfg.autoscaling.keda.pollingInterval }}
+  cooldownPeriod: {{ $cfg.autoscaling.keda.cooldownPeriod }}
+  triggers:
+    - type: redis
+      metadata:
+        address: {{ printf "%s:%v" (required "externalServices.redis.host is required" $.Values.externalServices.redis.host) $.Values.externalServices.redis.port | quote }}
+        listName: {{ ternary "celery" "preview" (eq $role "worker") }}
+        listLength: {{ $cfg.autoscaling.keda.listLength | quote }}
+        databaseIndex: {{ $.Values.externalServices.redis.db | quote }}
+      {{- if $auth }}
+      authenticationRef:
+        name: {{ include "tabularia.fullname" $ }}-redis
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- if and $any $auth }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "tabularia.fullname" . }}-redis
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: {{ include "tabularia.secretName" . }}
+      key: REDIS__PASSWORD
+{{- end }}

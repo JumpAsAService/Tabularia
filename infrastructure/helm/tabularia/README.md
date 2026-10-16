@@ -167,12 +167,54 @@ itself, so one small pod is enough.
 The HPAs in this chart scale on CPU because that is what works everywhere, but
 CPU is a poor signal here: a worker waiting on a slow database uses almost no CPU
 while being entirely busy. The signal that matches the work is **queue length** —
-the Redis lists `celery` and `preview`. Use KEDA if you can; `templates/hpa.yaml`
-carries a ready trigger. The gateway is the exception: it is busy exactly when it
-burns CPU, so `gateway.autoscaling` on CPU is the right signal for it.
+the Redis lists `celery` and `preview`. Use KEDA if you can: with KEDA installed in
+the cluster, `worker.autoscaling.keda.enabled` (and the same for `previewWorker`)
+replaces the CPU HPA with a ScaledObject that adds a pod for every `listLength`
+tasks waiting. The gateway is the exception: it is busy exactly when it burns CPU,
+so `gateway.autoscaling` on CPU is the right signal for it.
 
 Scaling in can also interrupt a run, which is why workers get a long termination
 grace period. Prefer letting the queue drain over aggressive scale-in.
+
+### Scaling from the admin panel
+
+Admin → Workers shows every worker, its busy processes, its memory and the tasks
+waiting, and lets an administrator change two things:
+
+- **Processes per worker**, for the run and the preview workers. Every worker
+  resizes its own pool within seconds, on any installation: it grows at once and
+  shrinks only by idle processes, so no task is interrupted. The pod's memory
+  limit stays the chart's: give the pods room for the most processes you allow.
+- **Minimum and maximum pods**, on Kubernetes only, with `adminScaling.enabled`
+  and an autoscaler on the workers (`autoscaling.enabled`, CPU HPA or KEDA).
+
+`adminScaling.enabled` gives the gateway and the orchestrator a service account
+of their own (`<release>-scaler`) that may `get` the two worker Deployments and
+`get`/`patch` their two autoscalers, named one by one — nothing else, in this
+namespace only. The panel cannot set a maximum above `autoscaling.panelMaxReplicas`:
+that is your budget per Deployment. An HPA keeps at least one pod; KEDA may go to
+zero.
+
+The bounds set from the panel are kept: the orchestrator puts them back within a
+minute when the cluster has others, so a `helm upgrade` does not silently undo an
+administrator's choice. Removing them from the panel hands them back to the chart
+at the next upgrade. With GitOps, tell the controller to ignore those two fields,
+or it and the gateway will keep undoing each other. For Argo CD:
+
+```yaml
+ignoreDifferences:
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+    jsonPointers: [/spec/minReplicas, /spec/maxReplicas]
+  - group: keda.sh
+    kind: ScaledObject
+    jsonPointers: [/spec/minReplicaCount, /spec/maxReplicaCount]
+```
+
+On docker compose the panel shows the containers and changes the processes per
+worker; the number of containers stays yours (`docker compose up -d --scale
+worker=N`): scaling a service from the app would need the Docker socket, which is
+root on the host.
 
 ## Storage and `/tmp`
 

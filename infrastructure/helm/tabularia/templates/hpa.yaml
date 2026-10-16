@@ -8,14 +8,9 @@ holding a long shutdown grace period. Scaling on CPU therefore reacts late and
 scales in at the wrong moment.
 
 The signal that actually matches the work is QUEUE LENGTH: the Redis lists
-`celery` (runs) and `preview` (previews). With KEDA:
-
-  triggers:
-    - type: redis
-      metadata:
-        address: <redis host>:6379
-        listName: celery
-        listLength: "5"
+`celery` (runs) and `preview` (previews). With KEDA installed in the cluster, set
+worker/previewWorker.autoscaling.keda.enabled and templates/keda.yaml scales them
+on the queue instead of the CPU.
 
 Note also that scaling IN can interrupt a run: workers get a long termination
 grace period precisely so a task finishes, so set a generous
@@ -28,7 +23,7 @@ There is no autoscaler for the orchestrator (one or two are plenty, and scaling
 one in interrupts the flows it is executing) nor for beat (a singleton).
 */}}
 {{- range $name, $cfg := dict "engine" $.Values.engineApi "worker" $.Values.worker "preview-worker" $.Values.previewWorker "frontend" $.Values.frontend "gateway" $.Values.gateway }}
-{{- if $cfg.autoscaling.enabled }}
+{{- if and $cfg.autoscaling.enabled (not (dig "keda" "enabled" false $cfg.autoscaling)) }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

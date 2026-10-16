@@ -59,6 +59,10 @@ externalServices:
     db: 0
     # password → secrets.redisPassword. Managed Redis almost always requires it;
     # leave the secret empty for an unauthenticated in-cluster instance.
+    # KEDA (worker autoscaling on the queues) signs in to Redis with the
+    # REDIS__PASSWORD of the Secret: the chart's when secrets.redisPassword is set,
+    # or existingSecret. Set false when existingSecret holds no Redis password.
+    kedaAuth: true
 
   # S3-compatible object storage: every dataset, cache blob and run output.
   # This one IS durable data — back it up.
@@ -474,6 +478,18 @@ worker:
     maxReplicas: 10
     # CPU is a poor signal for queue workers — see README → Autoscaling.
     targetCPUUtilizationPercentage: 70
+    # Scale on the queue instead, with KEDA (installed in the cluster): one more
+    # pod for every `listLength` tasks waiting in `celery`. Replaces the CPU HPA.
+    keda:
+      enabled: false
+      listLength: 5
+      pollingInterval: 15
+      # seconds without work before a pod is taken away: a long one, so a quiet
+      # minute between two runs does not stop a pod that is about to be needed
+      cooldownPeriod: 600
+    # The highest maxReplicas Admin → Workers may set (adminScaling): your budget
+    # for this Deployment.
+    panelMaxReplicas: 10
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -494,6 +510,13 @@ previewWorker:
     minReplicas: 2
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
+    # Queue-length scaling with KEDA on the `preview` list (see worker.autoscaling.keda).
+    keda:
+      enabled: false
+      listLength: 4
+      pollingInterval: 10
+      cooldownPeriod: 300
+    panelMaxReplicas: 8
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -583,6 +606,17 @@ networkPolicy:
   enabled: true
   # Extra CIDRs the workers must reach: your databases, object storage, IdP.
   egressCIDRs: []
+
+# Admin → Workers may change the minimum and maximum pods of the two worker
+# Deployments on this cluster. Off by default: it gives the gateway and the
+# orchestrator a service account of their own, allowed to read the two worker
+# Deployments and patch their two autoscalers — those objects, by name, and nothing
+# else. The bounds only exist with worker/previewWorker.autoscaling enabled (CPU
+# HPA or KEDA); without, the panel shows the pods read-only. What the panel sets is
+# kept applied: with GitOps, ignore those fields there (README → Scaling from the
+# admin panel).
+adminScaling:
+  enabled: false
 
 serviceAccount:
   create: true

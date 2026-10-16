@@ -139,6 +139,16 @@ class EngineSettings(BaseModel):
     # vedi services/regolazioni_motore.py). false = solo l'ambiente: il pannello li
     # mostra senza poterli cambiare, e quelli salvati prima smettono di valere.
     settings_panel: bool = True
+    # env: ENGINE__DBT_EXPORT_TIMEOUT_SECONDS — seconds the gateway waits for the engine to
+    # build ONE dbt export (each call: the first, and the one after every AI translation it
+    # checks). The engine compiles it in the request (seeds read from the storage, the
+    # ClickHouse syntax check): past this bound the download stops with `engine_timeout`
+    # (504, in the reader's language) instead of hanging until the ingress cuts it with a
+    # bare 504. The ingress cuts the request at 300 s (Helm values: proxy-read-timeout), and
+    # an export with AI spends up to AI__DBT_EXPORT_TIMEOUT_SECONDS (180 s) before its last
+    # engine call: keep the two together under the ingress' timeout. The engine is not
+    # stopped: it finishes the compile and its answer is dropped.
+    dbt_export_timeout_seconds: float = Field(default=100, gt=0, le=3600)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -396,6 +406,11 @@ class AiSettings(BaseModel):
     # env: AI__MAX_COST_PER_DAY_TOTAL_USD
     max_cost_per_day_total_usd: float = Field(default=0, ge=0)
     max_input_tokens_per_turn: int = Field(default=400_000, ge=1000)
+    # Seconds for every AI call of ONE dbt export (descriptions, translations and their
+    # sample reads together). The export is one request and the ingress cuts it at 300 s
+    # (Helm values: proxy-read-timeout): the AI gives up first, with the reason, and leaves
+    # the engine time to build the zip. env: AI__DBT_EXPORT_TIMEOUT_SECONDS
+    dbt_export_timeout_seconds: float = Field(default=180, gt=0, le=3600)
     # quante chat tenere per utente (le piu' vecchie non vengono cancellate da
     # sole: e' solo il tetto dell'elenco)
     max_chats_listed: int = Field(default=100, ge=1, le=500)
@@ -492,6 +507,28 @@ class OpenLineageSettings(BaseModel):
     timeout_seconds: float = Field(default=10.0, gt=0)
 
 
+class KubernetesSettings(BaseModel):
+    """Worker autoscaling bounds set from Admin → Workers, on Kubernetes only
+    (services/kube_scaling.py). Off unless `scaling` is true; the Helm chart sets all
+    of it with `adminScaling.enabled`, together with a service account that may read
+    the two worker Deployments and change their autoscalers, and nothing else."""
+    scaling: bool = False
+    api_url: str = "https://kubernetes.default.svc"
+    namespace: str = ""  # empty = the pod's own, from its service account
+    token_file: str = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    ca_file: str = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    namespace_file: str = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+    # per kind of worker: its Deployment, its autoscaler ("hpa/<name>" or
+    # "scaledobject/<name>", empty = none) and the highest maxReplicas the panel may set
+    run_worker_deployment: str = ""
+    run_worker_autoscaler: str = ""
+    run_worker_max_replicas: int = Field(default=10, ge=1)
+    preview_worker_deployment: str = ""
+    preview_worker_autoscaler: str = ""
+    preview_worker_max_replicas: int = Field(default=8, ge=1)
+    timeout_seconds: float = Field(default=10.0, gt=0)
+
+
 class Settings(BaseSettings):
     """
     Configurazione del gateway. Priorità: init > env > default.
@@ -514,6 +551,7 @@ class Settings(BaseSettings):
     audit: AuditSettings = Field(default_factory=AuditSettings)
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)
     openlineage: OpenLineageSettings = Field(default_factory=OpenLineageSettings)
+    kubernetes: KubernetesSettings = Field(default_factory=KubernetesSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

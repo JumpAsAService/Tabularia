@@ -5,7 +5,8 @@ Solo quelli che il motore legge al momento dell'uso (`VOCI`): dimensione dei row
 group, timeout di lettura degli import, tetto dell'export, durata dei task, cache
 dei passi, ClickHouse, BigQuery. Restano fuori, e si cambiano solo nell'ambiente,
 le credenziali, gli indirizzi, e quello che un processo legge una volta all'avvio
-(concorrenza e memoria dei worker, thread dell'API).
+(memoria dei worker, thread dell'API). Worker concurrency is the exception: every
+worker resizes its own pool from `workers.*` while it runs (tasks/worker_pool.py).
 
 Come arrivano: il gateway le conserva nel suo database (la fonte vera, con l'audit)
 e le scrive qui con `PUT /settings`; il motore le tiene in Valkey (`CHIAVE`), che
@@ -38,7 +39,7 @@ SETTE_GIORNI = 7 * 24 * 3600
 class Voce:
     chiave: str  # "<sezione>.<campo>" delle impostazioni del motore
     categoria: str  # raggruppa le voci nel pannello (le etichette le traduce il frontend)
-    unita: str  # rows | seconds | bytes | threads
+    unita: str  # rows | seconds | bytes | threads | processes
     minimo: int
     massimo: int
 
@@ -73,6 +74,9 @@ VOCI: tuple[Voce, ...] = (
     Voce("clickhouse_external.materialize_min_rows", "clickhouse", "rows", 0, 1_000_000_000),
     Voce("clickhouse_external.materialize_ttl_seconds", "clickhouse", "seconds", 60, SETTE_GIORNI),
     Voce("bigquery.maximum_bytes_billed", "bigquery", "bytes", 0, 100 * 1024**4),
+    # processes per worker container: shown in Admin → Workers, not among the settings
+    Voce("workers.run_concurrency", "workers", "processes", 1, 32),
+    Voce("workers.preview_concurrency", "workers", "processes", 1, 32),
 )
 PER_CHIAVE = {v.chiave: v for v in VOCI}
 

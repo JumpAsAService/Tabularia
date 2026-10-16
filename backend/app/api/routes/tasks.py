@@ -330,7 +330,9 @@ def queue_overview():
         pool = (stats.get(name) or {}).get("pool") or {}
         workers.append({
             "name": name,
-            "concurrency": pool.get("max-concurrency"),
+            # the processes it has now: `max-concurrency` stays the starting size after
+            # the pool is resized from Admin → Workers
+            "concurrency": len(pool.get("processes") or []) or pool.get("max-concurrency"),
             "running": len(active.get(name) or []),
             "reserved": len(reserved.get(name) or []),
         })

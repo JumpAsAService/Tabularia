@@ -39,3 +39,16 @@ def test_the_workers_are_asked_together(monkeypatch):
     assert took < 3 * ANSWER_S  # one after the other it is 4 × ANSWER_S
     assert out["workers"] == [{"name": "w1", "concurrency": 4, "running": 1, "reserved": 0}]
     assert [j["task_id"] for j in out["running"]] == ["t1"] and out["reserved"] == []
+
+
+class ResizedInspect(SlowInspect):
+    def stats(self):  # resized from Admin → Workers: max-concurrency is the starting size
+        return {"w1": {"pool": {"max-concurrency": 2, "processes": [11, 12, 13, 14, 15, 16]}}}
+
+    def _later(self, value):
+        return value
+
+
+def test_a_resized_pool_shows_the_processes_it_has_now(monkeypatch):
+    monkeypatch.setattr(tasks.celery_app.control, "inspect", lambda timeout: ResizedInspect(timeout))
+    assert tasks.queue_overview()["workers"][0]["concurrency"] == 6

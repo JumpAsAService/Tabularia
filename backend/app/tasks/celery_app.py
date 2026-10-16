@@ -3,6 +3,7 @@ import logging
 from celery import Celery, Task
 from celery.signals import before_task_publish, worker_ready
 from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_dall_ambiente
+from app.tasks.worker_pool import PoolFromPanel
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,9 @@ celery_app.conf.update(
         "app.tasks.contract_jobs.*": {"queue": "preview"},
     },
 )
+
+# every worker sizes its pool from Admin → Workers and reports its state there
+celery_app.steps["consumer"].add(PoolFromPanel)
 
 # Eviction periodica della step cache (Celery beat). Intervallo configurabile
 # via CACHE__SWEEP_INTERVAL_SECONDS.
