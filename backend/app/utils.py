@@ -1,4 +1,5 @@
 import logging
+import os
 
 import boto3
 from botocore.config import Config
@@ -61,6 +62,31 @@ def delete_keys(client, bucket: str, keys: list[str]) -> tuple[int, list[dict]]:
                 # insistere su centinaia di chiavi, l'errore e' lo stesso
                 raise
     return deleted, errors
+
+
+# Multipart uploads and copies: Scaleway's object storage takes at most 1,000 parts (AWS
+# 10,000), and with boto3's default 8 MiB parts anything above 8 GiB was refused there —
+# a one-billion-row import failed on its upload (load test of 2026-10-15). Parts grow
+# with the object instead, so any size fits in fewer than 1,000 of them.
+MAX_UPLOAD_PARTS = 900
+MIN_PART_BYTES = 8 * 1024**2
+# a stream whose size is unknown: parts large enough for 900 × 64 MiB ≈ 56 GiB
+STREAM_PART_BYTES = 64 * 1024**2
+
+
+def part_size(size_bytes: int | None) -> int:
+    """The multipart part size for an object of this size: at least 8 MiB, in whole
+    MiB, and never more than MAX_UPLOAD_PARTS parts."""
+    if not size_bytes:
+        return STREAM_PART_BYTES
+    per_part = max(MIN_PART_BYTES, -(-size_bytes // MAX_UPLOAD_PARTS))
+    return -(-per_part // 1024**2) * 1024**2
+
+
+def transfer_config(size_bytes: int | None, **kw):
+    from boto3.s3.transfer import TransferConfig
+
+    return TransferConfig(multipart_chunksize=part_size(size_bytes), **kw)
 
 
 class StorageService:
@@ -146,7 +172,7 @@ class StorageService:
         Returns:
             Dict con informazioni sull'upload
         """
-        self.client.upload_file(file_path, bucket, object_key)
+        self.client.upload_file(file_path, bucket, object_key, Config=transfer_config(os.path.getsize(file_path)))
         return {"bucket": bucket, "key": object_key, "status": "uploaded"}
 
     def upload_fileobj(self, file_obj, bucket: str, object_key: str) -> dict:
@@ -161,7 +187,14 @@ class StorageService:
         Returns:
             Dict con informazioni sull'upload
         """
-        self.client.upload_fileobj(file_obj, bucket, object_key)
+        size = None
+        try:  # a file or a buffer says its size; a stream does not
+            here = file_obj.tell()
+            size = file_obj.seek(0, os.SEEK_END) - here
+            file_obj.seek(here)
+        except (AttributeError, OSError, ValueError):
+            pass
+        self.client.upload_fileobj(file_obj, bucket, object_key, Config=transfer_config(size))
         return {"bucket": bucket, "key": object_key, "status": "uploaded"}
 
     def download_file(self, bucket: str, object_key: str, file_path: str) -> dict:
@@ -246,11 +279,11 @@ class StorageService:
     def copy_object(self, bucket: str, source_key: str, target_key: str) -> None:
         """Copies an object within the bucket on the storage itself: nothing is
         downloaded. One CopyObject up to 5 GB (boto3's default would switch to a
-        multipart copy above 8 MB, which not every S3-compatible storage serves)."""
-        from boto3.s3.transfer import TransferConfig
-
+        multipart copy above 8 MB, which not every S3-compatible storage serves);
+        above, parts sized to stay under the 1,000-part limit."""
+        size = self.client.head_object(Bucket=bucket, Key=source_key)["ContentLength"]
         self.client.copy({"Bucket": bucket, "Key": source_key}, bucket, target_key,
-                         Config=TransferConfig(multipart_threshold=5 * 1024**3))
+                         Config=transfer_config(size, multipart_threshold=5 * 1024**3))
 
     def delete_objects(self, bucket: str, object_keys: list[str]) -> dict:
         """

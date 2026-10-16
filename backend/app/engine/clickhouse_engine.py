@@ -61,7 +61,11 @@ _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 # impostazioni per le query che PRODUCONO parquet (preview e materializzazioni):
 # senza `string_as_string` ClickHouse scrive le stringhe come BYTE_ARRAY senza
 # tipo logico → Polars le leggerebbe come Binary.
-_PARQUET_OUT = {"output_format_parquet_string_as_string": 1}
+_PARQUET_OUT = {"output_format_parquet_string_as_string": 1,
+                # writing to the storage: parts double in size every 100 (ClickHouse's
+                # default is every 500, which stops at ~24 GB on a storage that takes at
+                # most 1,000 parts, as Scaleway's does)
+                "s3_upload_part_size_multiply_parts_count_threshold": 100}
 
 # operazioni che impongono una SCANSIONE piena (ClickHouse legge molte/tutte le
 # righe): lì l'oversubscription dei thread paga. Le altre (filtro/proiezione con

@@ -22,6 +22,7 @@ from typing import Literal
 import polars as pl
 from pydantic import BaseModel, Field
 
+from app.utils import transfer_config
 from app.ingest.converters import IngestError
 
 logger = logging.getLogger(__name__)
@@ -200,7 +201,8 @@ def write_output_to_s3(
         client = conn.client()
         try:
             for local, k in uploads:
-                client.upload_file(local, target_bucket, k)
+                # parts sized for storages that take at most 1,000 of them (see app.utils)
+                client.upload_file(local, target_bucket, k, Config=transfer_config(os.path.getsize(local)))
         except Exception as e:  # credenziali, bucket inesistente, rete…
             raise S3DestinationError(
                 f"Upload to s3://{target_bucket}/{target_key} failed: {type(e).__name__}: {e}"

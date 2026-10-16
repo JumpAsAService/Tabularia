@@ -22,10 +22,12 @@ class RecordingClient:
 
     def __init__(self):
         self.uploads: list[tuple[str, str]] = []  # cronologia (bucket, key)
+        self.configs: list = []  # the transfer settings of each upload
         self.objects: dict[tuple[str, str], bool] = {}  # stato corrente
 
-    def upload_file(self, local, bucket, key):
+    def upload_file(self, local, bucket, key, Config=None):
         self.uploads.append((bucket, key))
+        self.configs.append(Config)
         self.objects[(bucket, key)] = True
 
     def get_paginator(self, op):
@@ -77,6 +79,8 @@ def test_parquet_singolo_una_chiave_esatta(storage, sorgente, recorder):
     )
     assert recorder.uploads == [("cliente", "exports/vendite.parquet")]
     assert out["rows_written"] == 4 and out["files"] == 1 and out["format"] == "parquet"
+    # parts sized for storages that take at most 1,000 of them (see test_storage_parts.py)
+    assert recorder.configs[0] is not None and recorder.configs[0].multipart_chunksize >= 8 * 1024**2
 
 
 def test_csv_singolo_convertito(storage, sorgente, recorder):
