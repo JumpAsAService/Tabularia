@@ -78,11 +78,20 @@ export interface DbtExportPlan {
     id: DbtTarget
     available: boolean
     reason: string | null
-    sources: { key: string; connection: string; schema: string; default_name: string; tables: string[] }[]
+    /** default_name: the source's name with nothing typed; default_base: the default it was made
+     *  from before a collision moved it aside (`_2`, `_3`), which the gateway suffixes again from
+     *  when typed names change the collisions (absent from older gateways) */
+    sources: { key: string; connection: string; schema: string; default_name: string; default_base?: string; tables: string[] }[]
+    /** A target that is not available as such but takes the flow into the team's own project
+     *  (folder package) when these sources are already declared there: ClickHouse with an
+     *  Oracle source. `reason` still says why it is off in the complete project. */
+    requires?: { package: 'folder'; declared: string[] }
   }[]
   outputs: { key: string; model: string; flow: string; label: string | null; materialized: DbtMaterialization; materializations: DbtMaterialization[] }[]
-  /** l'assistente AI configurato e un modello abilitato: le opzioni AI si mostrano solo allora */
-  ai?: { available: boolean; model: string | null }
+  /** available: the AI assistant is configured and a model is enabled. stored: what the AI wrote
+   *  for the flow's CURRENT version (non-empty texts only) and the models that wrote it: a
+   *  re-export reuses it without any AI call, also with the AI off (absent from older gateways). */
+  ai?: { available: boolean; model: string | null; stored?: { descriptions: boolean; translations: boolean; models: string[] } }
 }
 
 /** Le opzioni del download, come le valida il gateway (`OpzioniDbt`). */
@@ -99,6 +108,20 @@ export interface DbtExportOptions {
   emails: boolean
   ai_descriptions?: boolean
   ai_translations?: boolean
+}
+
+/** The name of a downloaded file from its Content-Disposition: the RFC 5987 `filename*`
+ *  (UTF-8, so accented and non-Latin letters survive), or null without one. The plain
+ *  `filename` is the gateway's ASCII fallback, which drops those letters: not used. */
+export function fileNameFromDisposition(disposition: string | null | undefined): string | null {
+  const m = disposition?.match(/filename\*\s*=\s*UTF-8''([^;\s]+)/i)
+  if (!m) return null
+  try {
+    // only a name, never a path
+    return decodeURIComponent(m[1].replace(/^"|"$/g, '')).replace(/[\\/]/g, '_') || null
+  } catch {
+    return null
+  }
 }
 
 export function useApi() {
@@ -269,12 +292,18 @@ export function useApi() {
     // esporta un flusso come progetto dbt (zip). target: 'duckdb' (federato) |
     // 'native' (warehouse di origine, SQL tradotto via sqlglot)
     /** Cosa serve al dialogo dell'export dbt: target possibili, sorgenti, uscite (solo admin). */
-    async dbtExportPlan(flowId: number): Promise<DbtExportPlan> {
-      return await apiFetch<DbtExportPlan>(`/flows/${flowId}/export/dbt/plan`)
+    async dbtExportPlan(flowId: number, opts: { signal?: AbortSignal } = {}): Promise<DbtExportPlan> {
+      return await apiFetch<DbtExportPlan>(`/flows/${flowId}/export/dbt/plan`, { signal: opts.signal })
     },
-    /** Il progetto dbt (zip) con le scelte del dialogo. */
-    async exportFlowDbt(flowId: number, options: DbtExportOptions): Promise<Blob> {
-      return await apiFetch<Blob>(`/flows/${flowId}/export/dbt`, { method: 'POST', body: options, responseType: 'blob' })
+    /** Il progetto dbt (zip) con le scelte del dialogo. With it, the file name the gateway gives
+     *  it: null when the Content-Disposition cannot be read (cross-origin, not exposed). */
+    async exportFlowDbt(flowId: number, options: DbtExportOptions, opts: { signal?: AbortSignal } = {}): Promise<{ blob: Blob; filename: string | null }> {
+      let disposition: string | null = null
+      const blob = await apiFetch<Blob>(`/flows/${flowId}/export/dbt`, {
+        method: 'POST', body: options, responseType: 'blob', signal: opts.signal,
+        onResponse: ({ response }: { response: Response }) => { disposition = response.headers.get('content-disposition') },
+      })
+      return { blob, filename: fileNameFromDisposition(disposition) }
     },
     /** Le dipendenze del flusso come eventi OpenLineage (JSON), ricostruite dalla definizione. */
     async exportFlowOpenLineage(flowId: number): Promise<unknown[]> {

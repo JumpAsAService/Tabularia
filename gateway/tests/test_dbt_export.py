@@ -153,7 +153,12 @@ def test_l_uscita_di_un_altro_flusso_porta_dentro_i_suoi_modelli(session, scena)
     valle = make_flow(session, name="Downstream", project_id=scena.cartella.id, definition=json.dumps(definizione))
     p = d.build_export_payload(session, valle, "data-prep", "duckdb")
     nomi = [m["name"] for m in p["models"]]
-    assert nomi == ["int_c", "margin", "righe", "positive_margin"]   # prima il flusso a monte, poi il nostro
+    # only the branch read here, upstream first (decision of 2026-10-16, finding #37): the model publishing
+    # «Margin» with its own steps. The upstream flow's other output (the append into report.righe) stays
+    # out, so the shared steps are no longer an intermediate model: exporting a flow never writes into
+    # another flow's tables. This test asserted the old behaviour, all the upstream outputs.
+    assert nomi == ["margin", "positive_margin"]
+    assert [o["type"] for o in p["models"][0]["operations"]] == ["filter", "compute", "group_by"]
     assert p["models"][-1]["source"] == {"model": "margin"}
     assert p["source_map"] and scena.ordini.key in p["source_map"]
 
@@ -390,7 +395,8 @@ def test_prefisso_materializzazioni_test_email_schema_e_nomi_delle_sorgenti(sess
     assert "owner" not in margin["meta"] and p["exported_by"] is None and margin["meta"]["flow"] == "Margin flow"
     assert p["native"]["target_schema"] == "analisi" and p["layout"] == {"package": "project", "folder": "", "layers": False}
     src = p["sources"][0]
-    assert src["name"] == "erp" and src["declared"] is True and src["key"] == f"{scena.pg.id}:vendite"
+    # «already declared» exists only for the folder package (decision #70): the complete project drops it
+    assert src["name"] == "erp" and src["declared"] is False and src["key"] == f"{scena.pg.id}:vendite"
     assert p["source_map"][scena.ordini.key]["macro"] == "{{ source('erp', 'ordini') }}"
 
 
@@ -412,7 +418,8 @@ def test_il_piano_dice_al_dialogo_target_sorgenti_e_uscite(session, scena):
     per_id = {t["id"]: t for t in piano["targets"]}
     assert [t["id"] for t in piano["targets"]] == ["clickhouse", "duckdb", "native"] and all(t["available"] for t in piano["targets"])
     assert per_id["duckdb"]["sources"] == [{"key": f"{scena.pg.id}:vendite", "connection": "gestionale", "schema": "vendite",
-                                            "default_name": f"db_{scena.pg.id}_vendite", "tables": ["ordini"]}]
+                                            "default_name": f"db_{scena.pg.id}_vendite", "tables": ["ordini"],
+                                            "default_base": f"db_{scena.pg.id}_vendite"}]   # the base, for the dialog (#48)
     assert per_id["native"]["sources"][0]["default_name"] == "src_vendite"
     uscite = {u["key"]: u for u in piano["outputs"]}
     assert uscite[f"{flow.id}:o1"]["materializations"] == ["table", "view"] and uscite[f"{flow.id}:o1"]["materialized"] == "table"
@@ -673,17 +680,22 @@ def test_il_piano_dice_se_l_ai_c_e(session, scena, monkeypatch):
     from app.services import dbt_ai
 
     flow = _flusso_a_due_uscite(session, scena)
+    nulla = {"descriptions": False, "translations": False, "models": []}   # what is kept for the version (#55 #59)
     monkeypatch.setattr(dbt_ai, "modello_ai", lambda s: None)
-    assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": False, "model": None}
+    assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": False, "model": None, "stored": nulla}
     monkeypatch.setattr(dbt_ai, "modello_ai", lambda s: "m-1")
-    assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": True, "model": "m-1"}
+    assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": True, "model": "m-1", "stored": nulla}
 
 
 @pytest.mark.parametrize("db_type", ["oracle", "sqlserver"])
 def test_un_flusso_che_legge_da_oracle_o_sql_server_e_rifiutato_con_un_motivo(session, scena, db_type):
     """Oracle e SQL Server sono sorgenti per Tabularia, non per dbt: DuckDB non li
-    federa, non c'è un adapter nativo, ClickHouse non li legge (lo rifiuta l'engine).
-    Mai un 500."""
+    federa, non c'è un adapter nativo, ClickHouse non li legge. Mai un 500. The
+    gateway now refuses ClickHouse too (finding #49: the plan showed it available and
+    the engine refused it at the download); this test asserted the payload was built.
+    The federated and the native targets now say that no dbt target reads the database
+    (source_not_exportable), instead of pointing to targets that refuse it too (review
+    of the #49 fix): this test asserted not_federable and no_native_adapter."""
     ora = Connection(name="contabilita", db_type=db_type, project_id=scena.cartella.id, owner_id=scena.capo.id,
                      host="ora.x.it", port=None, database="ORCLPDB1", db_schema="", username="fin")
     session.add(ora); session.commit()
@@ -693,9 +705,7 @@ def test_un_flusso_che_legge_da_oracle_o_sql_server_e_rifiutato_con_un_motivo(se
         _nodo_src("a", righe.id),
         {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Ledger out", "projectId": scena.cartella.id, "overwrite": True}},
     ], "edges": [_edge("a", "o")]}))
-    for target, codice in (("duckdb", "not_federable"), ("native", "no_native_adapter")):
+    for target, codice in (("duckdb", "source_not_exportable"), ("native", "source_not_exportable"), ("clickhouse", "clickhouse_cannot_read")):
         with pytest.raises(d.DbtExportError) as e:
             d.build_export_payload(session, flow, "data-prep", target)
         assert e.value.code == codice
-    p = d.build_export_payload(session, flow, "data-prep", "clickhouse")
-    assert p["clickhouse"]["connections"][0]["db_type"] == db_type

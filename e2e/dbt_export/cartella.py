@@ -3,13 +3,15 @@ data: il team ha già un suo modello e un suo sources.yml che dichiara la sorgen
 delle vendite (su ClickHouse: con un suo database federato). Si scarica la cartella
 dal dialogo (POST con le opzioni: cartella, prefisso, livelli, sorgente «già
 dichiarata» col LORO nome), la si copia nel loro progetto e:
-  · `dbt build -s +tag:<flusso>` passa e il modello dà gli stessi dati di Tabularia;
-  · il loro modello resta al suo posto;
+  · their profile gets the blocks INTEGRATION.md gives (DuckDB secrets + attach and the UTC
+    session; ClickHouse custom_settings), and the command it gives,
+    `dbt build -s +tag:<flusso>,tag:tabularia`, passa e il modello dà gli stessi dati di Tabularia;
+  · il loro modello resta al suo posto, and tagged like the flow it is NOT selected;
   · controprova: senza «già dichiarata» dbt rifiuta la sorgente doppia.
 Target ClickHouse (il ClickHouse del motore) e DuckDB federato.
 uso: python3 cartella.py [clickhouse|duckdb]"""
-import io, json, os, re, shutil, subprocess, sys, zipfile
-from ambiente import CH_CONTENITORE, CH_PORTA, DOVE, IMMAGINE, env
+import io, os, re, subprocess, sys, zipfile
+from ambiente import CH_CONTENITORE, CH_PORTA, DOVE, IMMAGINE
 from comune import api, confronta, dbt, entra, esiti, ok, password_delle_connessioni
 
 FLUSSO = "Margin by Category and Month"
@@ -30,8 +32,20 @@ def scarica(flusso, opzioni):
         return {n: z.read(n) for n in z.namelist()}
 
 
-def progetto_del_team(cartella, target, pg, sorgente_loro):
-    """Un progetto dbt «di un team»: suo nome, suo profilo, un suo modello, un suo sources.yml."""
+def blocchi_del_profilo(integrazione):
+    """The YAML blocks of INTEGRATION.md's «Your profile» section: what the team adds to its output."""
+    sezione = integrazione.split("## 2. Your profile", 1)[1].split("\n## ", 1)[0]
+    return re.findall(r"```yaml\n(.*?)```", sezione, re.S)
+
+
+def selettore(integrazione):
+    """The selector of INTEGRATION.md's «Run»: `dbt build -s <it>`."""
+    return re.search(r"^dbt build -s (\S+)$", integrazione, re.M).group(1)
+
+
+def progetto_del_team(cartella, target, pg, sorgente_loro, blocchi, tag):
+    """Un progetto dbt «di un team»: suo nome, suo profilo (with the blocks INTEGRATION.md asks
+    for), un suo modello — tagged like the flow, as a team's own model may well be — un suo sources.yml."""
     if os.path.exists(cartella):
         subprocess.run(["docker", "run", "--rm", "-v", f"{DOVE}:/x", IMMAGINE, "sh", "-c", f"rm -rf /x/{os.path.basename(cartella)}"], capture_output=True)
     os.makedirs(f"{cartella}/models/staging")
@@ -43,17 +57,18 @@ def progetto_del_team(cartella, target, pg, sorgente_loro):
             "team:\n  target: dev\n  outputs:\n    dev:\n      type: clickhouse\n"
             f"      host: {CH}\n      port: {CH_PORTA}\n"
             "      user: \"{{ env_var('CLICKHOUSE_USER') }}\"\n      password: \"{{ env_var('CLICKHOUSE_PASSWORD') }}\"\n"
-            "      schema: team_analytics\n      custom_settings:\n        join_use_nulls: 1\n")
+            "      schema: team_analytics\n" + "".join(blocchi))
         sorgente = f"  - name: {sorgente_loro}\n    schema: team_erp\n"
     else:
-        dsn = f"host={pg['host']} port={pg.get('port') or 5432} dbname={pg['database']} user={pg['username']} password={{{{ env_var('TABULARIA_DB_{pg['id']}_PASSWORD') }}}}"
+        # the secrets + attach blocks (the password through a DuckDB secret, never in an ATTACH DSN, #32)
+        # and the UTC session (#1), as INTEGRATION.md prints them
         open(f"{cartella}/profiles.yml", "w").write(
             "team:\n  target: dev\n  outputs:\n    dev:\n      type: duckdb\n      path: team.duckdb\n      extensions: [postgres]\n"
-            f"      attach:\n        - path: \"{dsn}\"\n          type: postgres\n          alias: db_{pg['id']}\n")
+            + "".join(blocchi))
         sorgente = f"  - name: {sorgente_loro}\n    database: db_{pg['id']}\n    schema: vendite\n"
     open(f"{cartella}/models/staging/sources.yml", "w").write(
         "version: 2\n\nsources:\n" + sorgente + "    tables:\n      - name: ordini\n      - name: righe_ordine\n")
-    open(f"{cartella}/models/staging/stg_esistente.sql", "w").write("select 1 as gia_qui\n")
+    open(f"{cartella}/models/staging/stg_esistente.sql", "w").write("{{ config(tags=['%s']) }}\nselect 1 as gia_qui\n" % tag)
 
 
 def copia(files, cartella):
@@ -71,7 +86,6 @@ pg = next(c for c in api("GET", "/connections")[1] if c["db_type"] == "postgresq
 variabili = password_delle_connessioni()
 ds = {d["name"]: d for d in api("GET", "/datasources")[1]}
 uscita = piano["outputs"][0]
-tag = re.sub(r"[^a-z0-9_]", "_", FLUSSO.lower())
 try:
     if "clickhouse" in TARGETS:
         # il team ha già un SUO database federato verso le vendite
@@ -88,24 +102,36 @@ try:
         files = scarica(flusso, opzioni)
         if not ok(f"{target}: la cartella si scarica", files is not None):
             continue
+        integrazione = files["INTEGRATION.md"].decode()
+        scelta = selettore(integrazione)
+        tag = re.match(r"\+tag:([^,]+),tag:tabularia$", scelta)
+        if not ok(f"{target}: INTEGRATION.md selects only what came from Tabularia ({scelta})", tag, scelta):
+            continue
+        tag = tag.group(1)
+        blocchi = blocchi_del_profilo(integrazione)
+        attesi = ("secrets:", "secret: tabularia_db_", "TimeZone: UTC") if target == "duckdb" else ("join_use_nulls: 1", "max_query_size:")
+        ok(f"{target}: INTEGRATION.md gives the profile blocks", all(a in "".join(blocchi) for a in attesi), blocchi)
         cartella = f"{DOVE}/team_{target}"
-        progetto_del_team(cartella, target, pg, "erp_vendite")
+        progetto_del_team(cartella, target, pg, "erp_vendite", blocchi, tag)
         copia(files, cartella)
         if target == "clickhouse":
             ch_sql("DROP DATABASE IF EXISTS tab_src_%d_catalogo;" % pg["id"])
             rc, out = dbt(cartella, "run-operation", "create_tabularia_sources", "--log-level-file", "none", variabili=variabili)
             ok(f"{target}: la macro della cartella crea solo i database delle sorgenti NON dichiarate",
                rc == 0 and "tab_src_%d_catalogo" % pg["id"] in out and "vendite" not in out, out[-500:])
-        rc, out = dbt(cartella, "build", "-s", f"+tag:{tag}", variabili=variabili)
-        ok(f"{target}: dbt build -s +tag:{tag} nel progetto del team passa", rc == 0 and "Completed successfully" in out,
+        rc, out = dbt(cartella, "build", "-s", scelta, variabili=variabili)
+        ok(f"{target}: dbt build -s {scelta} nel progetto del team passa", rc == 0 and "Completed successfully" in out,
            "\n".join(l for l in out.splitlines() if "rror" in l or "ERROR" in l)[:1200] or out[-1200:])
         rc, out = dbt(cartella, "ls", "--resource-type", "model", "--quiet", variabili=variabili)
         ok(f"{target}: il modello del team resta, accanto ai nostri", rc == 0 and "team.staging.stg_esistente" in out and f"tab_{uscita['model']}" in out, out[-500:])
+        rc, out = dbt(cartella, "ls", "-s", scelta, "--resource-type", "model", "--quiet", variabili=variabili)
+        ok(f"{target}: the team's model tagged «{tag}» is not selected, the flow's model is (#41)",
+           rc == 0 and "stg_esistente" not in out and f"tab_{uscita['model']}" in out, out[-500:])
         confronta(cartella, f"tab_{uscita['model']}", ds[FLUSSO], variabili)
         # controprova: lo stesso nome SENZA «già dichiarata» → la sorgente è due volte e dbt la rifiuta
         doppia = scarica(flusso, {**opzioni, "sources": {vendite["key"]: {"name": "erp_vendite", "declared": False}}})
         controprova = f"{DOVE}/team_{target}_doppia"
-        progetto_del_team(controprova, target, pg, "erp_vendite")
+        progetto_del_team(controprova, target, pg, "erp_vendite", blocchi, tag)
         copia(doppia, controprova)
         rc, out = dbt(controprova, "parse", variabili=variabili)
         ok(f"{target}: controprova — senza «già dichiarata» dbt rifiuta la sorgente doppia", rc != 0 and re.search(r"(?i)duplicate|two sources|same name", out), out[-600:])

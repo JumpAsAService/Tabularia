@@ -13,14 +13,22 @@ dati correnti e segue le modifiche al flusso.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from contextlib import contextmanager
+from typing import Any, Callable, Iterable, Optional
 
 # (bucket, key) dello snapshot corrente di una datasource, o None se assente
 DsResolver = Callable[[int], Optional[tuple[str, str]]]
 
 
 class FlowResolveError(ValueError):
-    """La definizione non è eseguibile (output scollegato, sorgente mancante…)."""
+    """La definizione non è eseguibile (output scollegato, sorgente mancante…).
+    `code` and `params` (optional) let a caller say it in the reader's language:
+    "no_outputs", "output_no_source" {output}, "flow_loop" {node}."""
+
+    def __init__(self, message: str, code: str | None = None, **params):
+        super().__init__(message)
+        self.code = code
+        self.params = params
 
 
 # ── Filtri A MONTE sulle sorgenti ────────────────────────────────────────────
@@ -204,6 +212,23 @@ class _Resolver:
         self.dev_sampling = engine_mode == "development"
         # il campione automatico si legge solo se serve: in produzione e' irrilevante
         self.default_sample_rows = default_sample_rows() if self.dev_sampling else 0
+        # the calls in progress: the resolver is deterministic, so meeting the same call
+        # again inside itself means the edges close a loop (e.g. a join's right input fed
+        # by the join's own output) and the recursion would never end
+        self._in_progress: set[tuple] = set()
+
+    @contextmanager
+    def _once(self, call: tuple, node_id: str):
+        if call in self._in_progress:
+            node = self.by_id.get(node_id) or {}
+            label = str((node.get("data") or {}).get("label") or node_id)
+            raise FlowResolveError(f"the flow has a loop through the node «{label}»: remove the edge that closes it",
+                                   "flow_loop", node=label)
+        self._in_progress.add(call)
+        try:
+            yield
+        finally:
+            self._in_progress.discard(call)
 
     def chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
         """Catena che termina in target_id: (sorgente risolta, operazioni IR)."""
@@ -215,6 +240,10 @@ class _Resolver:
         deve riconoscere i passi condivisi fra più uscite (l'export dbt). Le
         operazioni iniettate dal nodo sorgente (filtri a monte, campione) portano
         l'id del nodo sorgente con il suffisso `#head`."""
+        with self._once(("chain", target_id), target_id):
+            return self._chain_with_ids(target_id)
+
+    def _chain_with_ids(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict], list[str]]:
         target = self.by_id.get(target_id)
         if target and target.get("parentNode"):
             upstream_id = self.inc.get(target["parentNode"], {}).get("left")
@@ -254,6 +283,10 @@ class _Resolver:
         return source, [*head_ops, *(self._operation_for(i) for i in op_ids)], [*head_ids, *op_ids]
 
     def _operation_for(self, node_id: str, until: Optional[str] = None) -> dict:
+        with self._once(("operation", node_id, until), node_id):
+            return self._build_operation(node_id, until)
+
+    def _build_operation(self, node_id: str, until: Optional[str]) -> dict:
         node = self.by_id[node_id]
         data = node.get("data") or {}
         params: dict[str, Any] = dict(data.get("params") or {})
@@ -319,6 +352,22 @@ def _output_label(node: dict) -> str:
     if dt == "s3":
         return f"S3 {d.get('s3Key') or '…'}"
     return f"datasource “{d.get('name') or '…'}”"
+
+
+def _output_name(node: dict) -> str:
+    """What the user calls an Output: the datasource, table or file it writes."""
+    d = node.get("data") or {}
+    dt = d.get("destType") or "datasource"
+    nome = d.get("table") if dt == "database" else d.get("s3Key") if dt == "s3" else d.get("name")
+    return str(nome or "").strip() or str(node.get("id") or "")
+
+
+def _no_source(node: dict) -> FlowResolveError:
+    return FlowResolveError(
+        f"output {_output_label(node)}: no source with data upstream "
+        "(or the source datasource has no snapshot)",
+        "output_no_source", output=_output_name(node),
+    )
 
 
 def _output_body(node: dict, source: tuple[str, str], operations: list[dict], default_bucket: str) -> dict:
@@ -396,31 +445,30 @@ def resolve_output_request(
     resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds, engine_mode)
     source, operations = resolver.chain(node["id"])
     if source is None:
-        raise FlowResolveError(
-            f"output {_output_label(node)}: no source with data upstream "
-            "(or the source datasource has no snapshot)"
-        )
+        raise _no_source(node)
     return _output_body(node, source, operations, default_bucket)
 
 
-def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_bucket: str) -> list[dict]:
+def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_bucket: str,
+                          node_ids: Optional[Iterable[str]] = None) -> list[dict]:
     """Per OGNI nodo Output (modalità produzione, senza campioni): il corpo-run, il
     nodo stesso e gli id dei nodi delle sue operazioni — ciò che serve all'export
     dbt per riconoscere i passi condivisi. Un Output senza sorgente risolvibile
-    solleva FlowResolveError, come `resolve_output_request`."""
+    solleva FlowResolveError, come `resolve_output_request`. With `node_ids`, only
+    those Outputs: a broken draft elsewhere in the flow does not matter."""
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
-        raise FlowResolveError("the flow has no Output nodes: there is nothing to export")
+        raise FlowResolveError("the flow has no Output nodes: there is nothing to export", "no_outputs")
+    if node_ids is not None:
+        wanted = set(node_ids)
+        outputs = [n for n in outputs if n.get("id") in wanted]
     resolver = _Resolver(nodes, definition.get("edges") or [], resolve_ds, "production")
     out = []
     for node in outputs:
         source, operations, ids = resolver.chain_with_ids(node["id"])
         if source is None:
-            raise FlowResolveError(
-                f"output {_output_label(node)}: no source with data upstream "
-                "(or the source datasource has no snapshot)"
-            )
+            raise _no_source(node)
         out.append({"node": node, "body": _output_body(node, source, operations, default_bucket), "op_ids": ids})
     return out
 
@@ -432,7 +480,7 @@ def build_output_run_requests(
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
-        raise FlowResolveError("the flow has no Output nodes: there is nothing to run")
+        raise FlowResolveError("the flow has no Output nodes: there is nothing to run", "no_outputs")
     return [resolve_output_request(definition, n, resolve_ds, default_bucket, engine_mode) for n in outputs]
 
 

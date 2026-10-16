@@ -23,8 +23,11 @@ class DbtAiText(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     flow_id: int = Field(index=True)
     flow_version: int = 0                  # 0 = flusso senza versioni salvate
-    kind: str                              # describe | translate
-    key: str = Field(max_length=500)       # cosa descrive: flow:<id>@v<n>, col:ds:<id>:<colonna>:<tipo>, sql:<hash>
+    # describe | translate | claim (an export asking the AI right now: services/dbt_ai._prenotazione)
+    kind: str
+    # cosa descrive: flow:<id>@v<n>, col:ds:<id>:<colonna>:<tipo>, sql:<hash>; a longer key
+    # than the column is stored as sha256:<digest> (services/dbt_ai._chiave)
+    key: str = Field(max_length=500)
     text: str = Field(sa_column=Column(Text, nullable=False))
     model_id: str = ""
     created_at: datetime = Field(default_factory=_now)

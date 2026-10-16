@@ -3,6 +3,8 @@ Export → dbt apre il dialogo con le opzioni; si sceglie target, cartella per u
 progetto esistente, prefisso, schema, livelli, nome di una sorgente, una
 materializzazione, niente test né email; lo zip scaricato ha esattamente quelle
 scelte; il dialogo le ricorda; un rifiuto dell'engine si legge nel dialogo; Esc chiude.
+The Schema field and «Already declared» exist only where they mean something (decisions 9
+and 10); an invalid field says so to assistive technology too (#72).
 Firefox headless via Marionette contro lo stack di scarto sulla 8088.
 Serve Firefox (headless, con Marionette) sulla macchina che lancia la prova.
 uso: python3 browser_dialogo.py"""
@@ -91,15 +93,25 @@ try:
     time.sleep(0.4)
     ff.foto(f"{FOTO}/dbt-dialogo.png")
 
-    # le scelte
-    ff.js("document.querySelector('.dx-card input[name=dx-package][value=folder]').click(); return 1")
-    scrivi(".dx-card .dx-row .dx-field:nth-child(1) input", "margini")
+    # le scelte. The complete project: a Schema field, no «Already declared»
+    campi = "document.querySelectorAll('.dx-card .dx-row .dx-field').length"
+    dichiarate = "document.querySelectorAll('.dx-card .dx-source .dx-check').length"
+    ok("complete project: the Schema field is there, «Already declared» is not",
+       ff.js(f"return {campi} === 3 && {dichiarate} === 0"), ff.js(f"return [{campi}, {dichiarate}]"))
     scrivi(".dx-card .dx-row .dx-field:nth-child(3) input", "analisi")
+    ff.js("document.querySelector('.dx-card input[name=dx-package][value=folder]').click(); return 1")
+    ok("folder package: no Schema field (the team's profile decides it), «Already declared» is there",
+       ff.aspetta(f"{campi} === 2 && {dichiarate} >= 1", 5), ff.js(f"return [{campi}, {dichiarate}]"))
+    scrivi(".dx-card .dx-row .dx-field:nth-child(1) input", "margini")
     ff.js("Array.from(document.querySelectorAll('.dx-card .dx-check')).find(l => l.innerText.includes('staging')).querySelector('input').click(); return 1")
     # un nome sbagliato si vede subito e il download resta spento
     scrivi(".dx-card .dx-row .dx-field:nth-child(2) input", "Tab-")
     ok("un prefisso non valido si segnala e spegne il download",
        ff.aspetta("!!document.querySelector('.dx-bad') && document.querySelector('.dx-actions .primary').disabled", 5))
+    ok("the invalid field is marked for assistive technology and points to its own message",
+       ff.js("""const i = document.querySelector('.dx-card .dx-row .dx-field:nth-child(2) input');
+                const m = document.getElementById(i.getAttribute('aria-describedby') || '');
+                return i.getAttribute('aria-invalid') === 'true' && !!m && m.classList.contains('dx-bad') && m.innerText.trim().length > 0"""))
     scrivi(".dx-card .dx-row .dx-field:nth-child(2) input", "tab_")
     scrivi(".dx-card .dx-source input[type=text]", "erp")
     ff.js("""
@@ -110,6 +122,11 @@ try:
       }
       return 1""")
     ok("con valori validi il download si riaccende", ff.aspetta("!document.querySelector('.dx-bad') && !document.querySelector('.dx-actions .primary').disabled", 5))
+    # back to the complete project the schema typed earlier is still there, then the folder again
+    ff.js("document.querySelector('.dx-card input[name=dx-package][value=project]').click(); return 1")
+    ok("back to the complete project, the Schema field keeps «analisi»",
+       ff.aspetta("document.querySelector('.dx-card .dx-row .dx-field:nth-child(3) input')?.value === 'analisi'", 5))
+    ff.js("document.querySelector('.dx-card input[name=dx-package][value=folder]').click(); return 1")
     ff.js("document.querySelector('.dx-actions .primary').click(); return 1")
     scaricato = ff.aspetta("window.__scaricati.length === 1 && window.__zip !== null && !document.querySelector('.dx-card')", 120)
     nome = ff.js("return window.__scaricati[0]")

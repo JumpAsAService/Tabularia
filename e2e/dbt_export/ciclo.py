@@ -5,12 +5,17 @@
      incremental — due run la raddoppiano (come due run di Tabularia), --full-refresh riparte;
   C. CLICKHOUSE nativo: un flusso sul CRM d'esempio, confrontato con Tabularia.
 Il target clickhouse in A e B (ClickHouse del motore che legge il Postgres d'esempio dal vivo).
+In A, the rules the export used to get wrong: a pattern matches the WHOLE value read as text
+(also on an integer and a date column), accepted values with an apostrophe or 3.0 on an integer
+column, a one-column unique with two NULLs, not_null on names with a space, capitals or a
+reserved word, two not_null rules on one column. In B, the federated target with a wrong
+password and with an unreachable source: the password is in no file and not on the console.
 uso: python3 ciclo.py"""
-import json, os, re, subprocess, sys, time
+import json, os, re, shutil, subprocess, sys, time
 
 from ambiente import CH_ESEMPIO_CONTENITORE
-from comune import api, entra, esiti, esporta, ok, password_delle_connessioni, postgres_esempio, righe_della_datasource
-from matrice import aspetta_run, confronta, dbt, leggi_dbt, norm
+from comune import api, database_clickhouse, entra, esiti, esporta, ok, password_delle_connessioni, postgres_esempio, righe_della_datasource
+from matrice import aspetta_run, confronta, dbt, leggi_dbt
 
 entra()
 conn = {c["db_type"]: c for c in api("GET", "/connections")[1]}
@@ -24,6 +29,48 @@ st, cart = api("POST", "/projects", {"name": "zzdbt ciclo"}); C = cart["id"]
 
 def psql(sql):
     return postgres_esempio(sql)
+
+
+def file_con(cartella, testo):
+    """The files under the project that hold the text (logs/, target/…)."""
+    return [os.path.join(r, f) for r, _, fs in os.walk(cartella) for f in fs if testo.encode() in open(os.path.join(r, f), "rb").read()]
+
+
+def slug(s):
+    """The engine's slug of a test name (backend/app/engine/dbt_export.py `_slug`)."""
+    s = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in str(s).lower()).strip("_") or "model"
+    return s if not s[0].isdigit() else f"m_{s}"
+
+
+def esiti_dei_test(cartella, modello, regole):
+    """{rule id: dbt status}, from what dbt ran: the generic tests (only not_null) by their column,
+    the singular ones by name — `<model>__<kind>_<rule id>`, or `<model>__<kind>_<column>` for a
+    column rule (one-column unique, accepted_values), `_2`, `_3` when two share a file name."""
+    risultati = json.load(open(f"{cartella}/target/run_results.json"))["results"]
+    nodi = json.load(open(f"{cartella}/target/manifest.json"))["nodes"]
+    esiti_dbt = {}
+    for r in risultati:
+        n = nodi.get(r["unique_id"]) or {}
+        if n.get("resource_type") != "test":
+            continue
+        meta = n.get("test_metadata")
+        if meta:
+            col = (n.get("column_name") or (meta.get("kwargs") or {}).get("column_name") or "").strip('"`')
+            for regola in regole:
+                if regola["kind"] == meta.get("name") and regola.get("column") == col:
+                    esiti_dbt[regola["id"]] = r["status"]
+            continue
+        m = re.fullmatch(rf"{modello}__(\w+?)_(r\d+)", n["name"])
+        if m:
+            esiti_dbt[m.group(2)] = r["status"]
+            continue
+        m = re.fullmatch(rf"{modello}__(not_null|unique|accepted_values)_(\w+?)(?:_(\d+))?", n["name"])
+        if m:
+            simili = [x for x in regole if x["kind"] == m.group(1) and slug(x.get("column") or (x.get("columns") or [""])[0]) == m.group(2)]
+            k = int(m.group(3) or 1) - 1
+            for x in (simili[k:k + 1] if len(simili) > 1 else simili):
+                esiti_dbt[x["id"]] = r["status"]
+    return esiti_dbt
 
 
 def flusso(nome, nodi, archi):
@@ -55,7 +102,8 @@ try:
     print("A. contratto violato: Tabularia e dbt devono dire le stesse cose", flush=True)
     fa = flusso("zzciclo contratto", [
         {"id": "s", "type": "source", "data": {"datasourceId": casi["id"]}},
-        {"id": "p", "type": "operation", "data": {"opType": "select", "params": {"columns": ["id", "categoria", "numero", "testo"]}}},
+        {"id": "p", "type": "operation", "data": {"opType": "select", "params": {"columns": [
+            "id", "categoria", "numero", "testo", "intero", "data", "città", "Nome Strano", "select"]}}},
         {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "zzciclo dati", "projectId": C, "overwrite": True}}],
         [E("s", "p"), E("p", "o")])
     ok("flusso del contratto eseguito", lancia(fa)["status"] == "SUCCESS")
@@ -71,6 +119,15 @@ try:
         {"id": "r8", "kind": "row_count", "max": 3, "severity": "warning"},                     # 8 righe
         {"id": "r9", "kind": "expression", "sql": "numero < 1000", "severity": "error"},        # 1e10
         {"id": "r10", "kind": "unique", "columns": ["id"], "severity": "error"},               # passa
+        {"id": "r11", "kind": "not_null", "column": "Nome Strano", "severity": "error"},       # a space and a capital: NULL at id 2
+        {"id": "r12", "kind": "not_null", "column": "select", "severity": "warning"},          # a reserved word: passa
+        {"id": "r13", "kind": "pattern", "column": "intero", "regex": "[0-9]+", "severity": "error"},   # '-4' does not match whole
+        {"id": "r14", "kind": "pattern", "column": "data", "regex": "[0-9]{4}-[0-9]{2}-[0-9]{2}", "severity": "warning"},  # a date as text
+        {"id": "r15", "kind": "accepted_values", "column": "città", "values": ["Milano", "Parma", "Città d'altri", "Torino", "Roma"], "severity": "error"},
+        {"id": "r16", "kind": "accepted_values", "column": "intero", "values": [10, 7, -4, 2, 3, 1000000.0], "severity": "error"},
+        {"id": "r17", "kind": "unique", "columns": ["intero"], "severity": "error"},           # two NULLs, nothing else twice
+        {"id": "r18", "kind": "not_null", "column": "testo", "severity": "warning"},           # two rules on one column: one
+        {"id": "r19", "kind": "not_null", "column": "testo", "severity": "error"},             # test, the stricter severity
     ]
     st, c = api("PUT", f"/datasources/{dati['id']}/contract", {"document": {"rules": regole}, "enabled": True})
     ok("contratto salvato", st == 200, (st, c))
@@ -90,26 +147,25 @@ try:
             ok(f"A · {target}: dbt run-operation create_tabularia_sources", rc == 0, out[-800:])
         rc, out = dbt(cartella, "dbt", "run", "--no-use-colors", variabili=variabili)
         ok(f"A · {target}: dbt run", rc == 0, out[-800:])
-        # il contratto porta accepted_values: la forma con `arguments:` non deve far avvisare dbt 1.12
-        ok(f"A · {target}: accepted_values nella forma con arguments", "arguments:" in open(f"{cartella}/models/schema.yml").read())
+        # only not_null is dbt's generic test, on a quoted column; unique and accepted_values are singular
+        # tests that count NULLs and compare values as Tabularia's check does
+        schema_yml = open(f"{cartella}/models/schema.yml").read()
+        ok(f"A · {target}: schema.yml has only not_null generic tests, each column quoted",
+           "- not_null:" in schema_yml and "quote: true" in schema_yml and "- unique:" not in schema_yml and "- accepted_values:" not in schema_yml,
+           schema_yml[:600])
         avvisi = [l for l in out.splitlines() if re.search(r"(?i)deprecat|\[WARNING\]", l)]
         ok(f"A · {target}: dbt run senza avvisi di deprecazione", not avvisi, "\n".join(avvisi)[:600])
         rc, out = dbt(cartella, "dbt", "test", "--no-use-colors", variabili=variabili)
-        risultati = json.load(open(f"{cartella}/target/run_results.json"))["results"]
-        esiti_dbt = {}
-        for r in risultati:
-            uid, stato = r["unique_id"], r["status"]
-            m = re.search(r"__(?:range|pattern|row_count|expression|unique_combination)_(r\d+)", uid)
-            if m:
-                esiti_dbt[m.group(1)] = stato
-                continue
-            for regola in regole:   # i test generici: per tipo e colonna
-                col = regola.get("column") or (regola.get("columns") or [None])[0]
-                if regola["kind"] in ("not_null", "unique", "accepted_values") and re.search(rf"\.{regola['kind']}_zzciclo_dati_{col}(\.|__)", uid):
-                    esiti_dbt[regola["id"]] = stato
+        esiti_dbt = esiti_dei_test(cartella, "zzciclo_dati", regole)
         for regola in regole:
+            atteso = esiti_tab.get(regola["id"])
+            if regola["kind"] == "not_null":
+                # two not_null rules on one column are ONE test with the stricter severity: it fails
+                # where the error rule fails (and the warning rule warns)
+                stessa = [x for x in regole if x["kind"] == "not_null" and x.get("column") == regola.get("column")]
+                atteso = next((esiti_tab.get(x["id"]) for x in stessa if x["severity"] == "error"), atteso)
             ok(f"A · {target} · {regola['id']} {regola['kind']} ({regola['severity']}): Tabularia {esiti_tab.get(regola['id'])}, dbt {esiti_dbt.get(regola['id'])}",
-               esiti_tab.get(regola["id"]) == esiti_dbt.get(regola["id"]))
+               atteso == esiti_dbt.get(regola["id"]))
 
     # ── B. ciclo di vita, tabella in append ──────────────────────────────────
     print("B. ciclo di vita: parse, compile, docs, append incrementale, full-refresh", flush=True)
@@ -129,16 +185,16 @@ try:
             continue
         if target == "clickhouse":
             matrice.pulisci_clickhouse()
-            ok(f"B · {target}: prima della macro i database federati non ci sono", not any(n.startswith("tab_src_") for n in matrice.database_clickhouse()))
+            ok(f"B · {target}: prima della macro i database federati non ci sono", not any(n.startswith("tab_src_") for n in database_clickhouse()))
             rc, out = matrice.prepara_clickhouse(cartella, variabili)
             ok(f"B · {target}: dbt run-operation create_tabularia_sources", rc == 0, out[-800:])
-            ok(f"B · {target}: la macro crea davvero il database federato", f"tab_src_{pg['id']}_zzdbt" in matrice.database_clickhouse(), sorted(matrice.database_clickhouse()))
+            ok(f"B · {target}: la macro crea davvero il database federato", f"tab_src_{pg['id']}_zzdbt" in database_clickhouse(), sorted(database_clickhouse()))
             # la password della sorgente non resta in nessun file che dbt scrive. Una password
-            # FINTA e riconoscibile (quella vera del campione è anche il nome del database):
-            # IF NOT EXISTS non tocca i database già creati, ma lo SQL con la password passa da dbt
+            # FINTA e riconoscibile (quella vera del campione è anche il nome del database): the macro
+            # runs CREATE OR REPLACE TABLE … PostgreSQL(…, password) every time, so that SQL goes through dbt
             finto = "zz-SEGRETO-4242"
             v2 = {**variabili, f"TABULARIA_DB_{pg['id']}_PASSWORD": finto}
-            cerca = lambda: [os.path.join(r, f) for r, _, fs in os.walk(cartella) for f in fs if finto.encode() in open(os.path.join(r, f), "rb").read()]
+            cerca = lambda: file_con(cartella, finto)
             rc, out = matrice.prepara_clickhouse(cartella, v2)
             ok(f"B · {target}: col comando del README la password non è in nessun file (logs/, target/) né a video", rc == 0 and not cerca() and finto not in out, (rc, cerca(), out[-300:]))
             rc, out = dbt(cartella, "dbt", "run-operation", "create_tabularia_sources", "--no-use-colors", variabili=v2)
@@ -175,6 +231,25 @@ try:
             conteggi.append((rc, n))
         ok(f"B · {target}: run, run, --full-refresh → 8, 16, 8 righe" + (" nella tabella di destinazione del flusso" if target == "native" else ""),
            [n for _, n in conteggi] == [8, 16, 8] and all(rc == 0 for rc, _ in conteggi), conteggi)
+        if target == "duckdb":
+            # the federated profile reads the password through a DuckDB secret, never in an ATTACH DSN:
+            # a wrong password, or a source that does not answer, fails without printing it (#32)
+            finto = "zz-SEGRETO 4242'x\\y"
+            # searched by a part with no quote and no backslash: a JSON file (run_results.json) or a
+            # Python repr in a traceback writes those escaped, and the whole password would not match
+            segno = "SEGRETO 4242"
+            v2 = {**variabili, f"TABULARIA_DB_{pg['id']}_PASSWORD": finto}
+            rc, out = dbt(cartella, "dbt", "run", "--no-use-colors", variabili=v2)
+            ok(f"B · {target}: a wrong password fails the run and is in no file (logs/, target/) nor on the console",
+               rc != 0 and segno not in out and not file_con(cartella, segno), (rc, file_con(cartella, segno), out[-300:]))
+            lontano = cartella + "_irraggiungibile"
+            shutil.rmtree(lontano, ignore_errors=True)
+            shutil.copytree(cartella, lontano, ignore=shutil.ignore_patterns("logs", "target", "*.duckdb", "*.wal"))
+            profilo = open(f"{lontano}/profiles.yml").read()
+            open(f"{lontano}/profiles.yml", "w").write(profilo.replace(pg["host"], "zz-nessuno.invalid"))
+            rc, out = dbt(lontano, "dbt", "run", "--no-use-colors", variabili=v2)
+            ok(f"B · {target}: a source that does not answer fails the run, and the password is nowhere",
+               rc != 0 and pg["host"] in profilo and segno not in out and not file_con(lontano, segno), (rc, file_con(lontano, segno), out[-300:]))
     psql("DROP TABLE IF EXISTS zzdbt.ciclo_append")
 
     # ── C. ClickHouse nativo ─────────────────────────────────────────────────

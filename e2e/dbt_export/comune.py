@@ -2,10 +2,15 @@
 contenitore usa-e-getta (immagine E2E_IMMAGINE_DBT) sulla rete dello stack, l'export
 di un flusso, il confronto di un modello dbt con la datasource che Tabularia pubblica
 (righe e, colonna per colonna, somma per i numeri e valori distinti per il resto).
+An empty text and NULL are two different values everywhere here (#85).
 La configurazione è in ambiente.py."""
-import csv, io, json, os, re, subprocess, sys, urllib.error, urllib.request, zipfile
+import io, json, os, re, subprocess, sys, urllib.error, urllib.request, zipfile
 
 from ambiente import BASE, DOVE, IMMAGINE, PASSWORD_DA, RETE, env
+
+# dbt runs in this time zone (TZ for dbt-duckdb, PGTZ for dbt-postgres): a project that is right only
+# in UTC is wrong for most teams. The models must not depend on it (E2E_TZ=UTC turns it off)
+FUSO = env("E2E_TZ", "Europe/Rome")
 
 esiti = []
 TOK = None
@@ -67,24 +72,27 @@ def password_delle_connessioni():
 
 
 def firma(righe):
-    """{colonna: somma arrotondata se tutti numeri, altrimenti numero di valori distinti} + righe."""
+    """{colonna: somma arrotondata se tutti numeri, altrimenti numero di valori distinti} + righe.
+    NULLs and empty texts are counted apart: '' is a value, and folding it into NULL hid a seed
+    that turned '' into NULL (#36, #85)."""
     if not righe:
         return {"righe": 0}
     out = {"righe": len(righe)}
     for col in righe[0]:
         vals = [{"true": 1, "false": 0}.get(str(r[col]).lower(), r[col]) for r in righe]   # booleani: dbt dà true/false, il CSV "true"/"false"
+        nulli = sum(1 for v in vals if v is None)
         try:
-            nums = [float(v) for v in vals if v not in (None, "")]
-            out[col] = ("somma", round(sum(nums), 2), len(vals) - len(nums))
+            nums = [float(v) for v in vals if v is not None]
+            out[col] = ("somma", round(sum(nums), 2), nulli)
         except (TypeError, ValueError):
-            out[col] = ("distinti", len({str(v) for v in vals}), sum(1 for v in vals if v in (None, "")))
+            out[col] = ("distinti", len({str(v) for v in vals if v is not None}), nulli, sum(1 for v in vals if v == ""))
     return out
 
 
 def dbt(cartella, *argomenti, variabili=None):
     # con il MIO utente, così i file che dbt scrive (target/, logs/) restano miei
     cmd = ["docker", "run", "--rm", "--network", RETE, "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp",
-           "-v", f"{cartella}:/progetto", "-w", "/progetto", "-e", "DBT_PROFILES_DIR=/progetto"]
+           "-v", f"{cartella}:/progetto", "-w", "/progetto", "-e", "DBT_PROFILES_DIR=/progetto", "-e", f"TZ={FUSO}", "-e", f"PGTZ={FUSO}"]
     for k, v in (variabili or {}).items():
         cmd += ["-e", f"{k}={v}"]
     r = subprocess.run(cmd + [IMMAGINE, "dbt", *argomenti, "--no-use-colors"], capture_output=True, text=True)
@@ -112,11 +120,35 @@ def righe_del_modello(cartella, modello, variabili):
     return dati.get("show") or dati.get("data") or []
 
 
+_CAMPO = re.compile(r'(?:"((?:[^"]|"")*)"|([^,"\r\n]*))(,|\r\n|\n|\r|$)')
+
+
+def leggi_csv(testo: str) -> list[list]:
+    """The rows of a CSV as Tabularia writes it (Polars): a quoted empty field `""` is the empty
+    text, an empty field is NULL. csv.reader gives '' for both, and Python 3.12's QUOTE_NOTNULL
+    does not tell them apart when reading either."""
+    righe, riga, pos = [], [], 0
+    while pos < len(testo):
+        m = _CAMPO.match(testo, pos)
+        citato, nudo, fine = m.group(1), m.group(2), m.group(3)
+        riga.append(citato.replace('""', '"') if citato is not None else (nudo or None))
+        pos = m.end()
+        if fine != ",":
+            righe.append(riga)
+            riga = []
+            if not fine:
+                break
+    if riga:
+        righe.append(riga)
+    return righe
+
+
 def righe_della_datasource(d):
     st, csv_bytes = api("POST", "/tasks/export", {"bucket": d["bucket"], "input_key": d["key"], "operations": [], "format": "csv", "filename": "x.csv"}, grezzo=True)
     if st != 200:
         raise RuntimeError(f"export CSV della datasource: {st} {csv_bytes}")
-    return list(csv.DictReader(io.StringIO(csv_bytes.decode())))
+    testa, *righe = leggi_csv(csv_bytes.decode())
+    return [dict(zip(testa, r)) for r in righe]
 
 
 def confronta(cartella, modello, datasource, variabili):

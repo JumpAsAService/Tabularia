@@ -20,21 +20,61 @@ connessione; SQL tradotto via sqlglot dall'engine).
 """
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
-from typing import Literal, Optional
+import logging
+import re
+import unicodedata
+from typing import Callable, Literal, Optional
 
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, func, select
 
+from app.core.config import get_settings
+from app.core.engine_client import get_engine_client
 from app.models import Connection, Datasource, Flow, FlowVersion, Project, User
 from app.services import contracts as contract_service
 from app.services.flow_resolver import FlowResolveError, resolve_output_chains
 
+logger = logging.getLogger(__name__)
+
 # db_type federabili da DuckDB (scanner ufficiali) + porta di default + funzione di query remota
 _FEDERABLE = {"postgresql": (5432, "postgres_query"), "mysql": (3306, "mysql_query"), "mariadb": (3306, "mysql_query")}
-# db_type con un adapter dbt NATIVO (via traduzione sqlglot) + porta default
-_NATIVE_PORT = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306, "clickhouse": 8123}
+# default port of each database dbt or ClickHouse connects to
+_PORTA = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306, "clickhouse": 8123}
+# db_type with a NATIVE dbt adapter (SQL translated by sqlglot). Not MySQL/MariaDB: the only dbt-mysql
+# release needs dbt-core 1.7, which silently drops the project's tests; the federated and the ClickHouse
+# targets read them live.
+_NATIVE = ("postgresql", "clickhouse")
+# what the ClickHouse target reads: Postgres/MySQL live through a table engine, and its own server's tables
+_CLICKHOUSE_LEGGE = ("postgresql", "mysql", "mariadb", "clickhouse")
+# what some dbt target reads live: the other types (Oracle, SQL Server, Trino…) are sources for Tabularia, not for dbt
+_LEGGIBILI = frozenset(_FEDERABLE) | frozenset(_NATIVE) | frozenset(_CLICKHOUSE_LEGGE)
+# the engine's cap on a seed (SEED_MAX_ROWS in backend/app/engine/dbt_export.py): the plan says it before
+# the download, instead of the engine refusing after fetching the whole file
+SEED_MAX_ROWS = 50_000
+# the flow's engine → the dialect of its free text (compute expressions, sql nodes): the engine translates from it
+_DIALETTO = {"polars": "polars", "duckdb": "duckdb", "chdb": "clickhouse", "clickhouse": "clickhouse", "bigquery": "bigquery"}
+# model names: Postgres cuts identifiers at 63 bytes and dbt-postgres refuses a longer relation name. The
+# dialog's prefix (at most 20 characters) goes in front of a name capped without it, so the dialog's
+# preview `prefix + name` is exact; an ephemeral model becomes a CTE named `__dbt__cte__<name>`.
+MAX_IDENTIFICATORE = 63
+_MAX_PREFISSO = 20
+_CTE = len("__dbt__cte__")
 MAX_UPSTREAM_DEPTH = 8          # flussi a monte inclusi, al più
+# what a dbt adapter cannot have in a name, by where the name is (the engine's _NON_QUOTABILI, same
+# roles): dbt writes `<quote>name<quote>` without escaping (BaseRelation.quoted), and ClickHouse reads
+# backslash escapes between backticks — every role. A model's OWN table (relation) and schema are also
+# written between `'`, unescaped, in the queries that list a schema's relations and a table's columns,
+# and dbt-postgres compares the schema with ILIKE, where a backslash escapes; a source is only read
+# through source(). The plan says it, instead of the download's 422 (or the team's `dbt run`).
+_NON_QUOTABILI = {
+    "dbt-postgres": {"source": '"', "relation": "\"'", "schema": "\"'\\"},
+    "dbt-duckdb": {"source": '"', "relation": '"', "schema": '"'},
+    "dbt-clickhouse": {"source": "`\\", "relation": "`\\'", "schema": "`\\'"},
+}
 # regole di contratto → test dbt
 _COLUMN_TESTS = {"not_null", "unique", "accepted_values"}
 _MODEL_TESTS = {"range", "pattern", "row_count", "expression"}
@@ -43,6 +83,9 @@ _MODEL_TESTS = {"range", "pattern", "row_count", "expression"}
 class DbtExportError(ValueError):
     """The export refused. The English text stays in the logs; `code` and `params`
     say it in the reader's language (services/messaggi_dbt.py)."""
+
+    # the sources a target needs declared by the team's own project (folder package) to work: the plan offers it there
+    da_dichiarare: tuple[str, ...] = ()
 
     def __init__(self, messaggio: str, code: str = "internal", **params):
         super().__init__(messaggio)
@@ -54,6 +97,58 @@ def _slug(s: str) -> str:
     out = "".join(c if (c.isalnum() or c == "_") else "_" for c in str(s).lower()).strip("_")
     out = out or "x"
     return out if not out[0].isdigit() else f"m_{out}"
+
+
+def _entro(nome: str, tetto: int) -> str:
+    """`nome` within `tetto` bytes: a longer one keeps its start and ends with a short
+    hash of the whole, so two long names stay two names."""
+    if len(nome.encode()) <= tetto:
+        return nome
+    impronta = hashlib.sha256(nome.encode()).hexdigest()[:8]
+    testa = nome.encode()[: tetto - len(impronta) - 1].decode("utf-8", "ignore").rstrip("_")
+    return f"{testa}_{impronta}"
+
+
+def _cartella_predefinita(nome: str) -> str:
+    """The folder of the existing-project package when the dialog leaves it empty: one
+    OpzioniDbt.folder accepts (ASCII a-z0-9_, at most 40), accents transliterated."""
+    ascii_ = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "_", ascii_).strip("_")[:40].rstrip("_") or "tabularia"
+
+
+def _schema_predefinito(conn: Connection) -> str:
+    """The schema of a one-part table name, as Tabularia reads and writes it
+    (ingest/db_source.build_query, ingest/db_destination._qualified_table): the
+    connection's schema, else the server's default."""
+    return conn.db_schema or (conn.database if conn.db_type in ("clickhouse", "mysql", "mariadb") else "public")
+
+
+def _come_postgres(nome: str) -> str:
+    """The identifier Postgres keeps of `nome`: its first 63 bytes, whole characters. A
+    longer table name is created that way when Tabularia writes it, and dbt-postgres
+    refuses a longer model relation."""
+    return nome.encode()[:MAX_IDENTIFICATORE].decode("utf-8", "ignore")
+
+
+def _ricostruibile(alias: str) -> bool:
+    """Whether dbt-postgres can rebuild a table named `alias` (a 63-byte name at most). It
+    builds `<alias>__dbt_tmp` and keeps `<alias>__dbt_backup`, cutting the alias to fit 63
+    CHARACTERS, and Postgres cuts names to 63 BYTES: with multibyte characters the suffix
+    is cut away and the temporary table is the table itself («already exists», seen with
+    real dbt-postgres 1.11)."""
+    return all(len((alias[: MAX_IDENTIFICATORE - len(s)] + s).encode()) <= MAX_IDENTIFICATORE for s in ("__dbt_tmp", "__dbt_backup"))
+
+
+def _quotabile(nome: str, adapter: str, dove: str) -> None:
+    """Refuses a name `adapter` would write into SQL its database rejects (seen with real
+    dbt: «Cannot parse escape sequence» on ClickHouse, «zero-length delimited identifier»
+    on DuckDB, an unclosed `'` in dbt's own queries): the plan says it, not the team's
+    `dbt run`. `dove` is source (a source's schema or table), relation (a model's own
+    table) or schema (a model's own schema), as in `_NON_QUOTABILI`."""
+    for car in _NON_QUOTABILI[adapter][dove]:
+        if car in nome:
+            raise DbtExportError(f"the name «{nome}» has the character {car}, which {adapter} cannot quote in a relation name",
+                                 "name_not_quotable", name=nome, character=car, adapter=adapter)
 
 
 def _parse_ref(source_ref: str, default_schema: str) -> tuple[str, str]:
@@ -124,23 +219,25 @@ def chiave_uscita(flow_id: int, node_id: str) -> str:
 
 class _Nomi:
     """Nomi di modello univoci nel progetto (dbt li vuole unici). Il prefisso del
-    dialogo (`tab_`) vale per modelli e seed: tiene i nomi lontani da quelli del team."""
+    dialogo (`tab_`) vale per modelli e seed: tiene i nomi lontani da quelli del team.
+    The name is made (slug, uniqueness, length cap) WITHOUT the prefix, which then goes
+    in front: a prefixed name is always the prefix plus the name the plan shows."""
 
     def __init__(self, prefisso: str = ""):
         self.usati: set[str] = set()
         self.prefisso = prefisso
 
-    def nuovo(self, base: str, suffisso: str = "") -> str:
-        base = f"{self.prefisso}{base}"
-        nome = _slug(base)
+    def nuovo(self, base: str, suffisso: str = "", effimero: bool = False) -> str:
+        tetto = MAX_IDENTIFICATORE - _MAX_PREFISSO - (_CTE if effimero else 0)
+        nome = _entro(_slug(base), tetto)
         if nome in self.usati and suffisso:
-            nome = _slug(f"{base}_{suffisso}")
+            nome = _entro(_slug(f"{base}_{suffisso}"), tetto)
         n, cand = 2, nome
         while cand in self.usati:
-            cand = f"{nome}_{n}"
+            cand = _entro(f"{nome}_{n}", tetto)
             n += 1
         self.usati.add(cand)
-        return cand
+        return f"{self.prefisso}{cand}"
 
 
 class _Progetto:
@@ -151,7 +248,7 @@ class _Progetto:
         self.session = session
         self.bucket = default_bucket
         self.target = target
-        self.opzioni = opzioni or OpzioniDbt(target=target)
+        self.opzioni = _secondo_il_pacchetto(opzioni or OpzioniDbt(target=target))
         self.uscite: list[dict] = []          # per il dialogo: ogni uscita, la sua chiave e le materializzazioni possibili
         # chi esporta: nel README (e non nei modelli, che restano uguali da un export all'altro)
         self.esportato_da = esportato_da if (opzioni is None or opzioni.emails) else None
@@ -164,10 +261,22 @@ class _Progetto:
         self.nomi_file: dict[str, str] = {}   # chiave parquet di un file caricato → nome del file (dal nodo)
         # key di una sorgente → come la si referenzia: {"key"} (tabella), {"model"} (query/flusso a monte), {"seed"}
         self.riferimenti: dict[str, dict] = {}
-
-    def nome_sorgente(self, conn: Connection, schema: str, predefinito: str) -> str:
-        scelta = self.opzioni.sources.get(chiave_sorgente(conn.id, schema))
-        return scelta.name if scelta and scelta.name else predefinito
+        self.radice: int | None = None        # the exported flow
+        # model → the database table an output of the exported flow writes: the native target decides
+        # where the model lands once it knows the warehouse dbt runs on (_native_payload)
+        self.destinazioni: dict[str, dict] = {}
+        # outputs, by (flow id, node id): an upstream flow brings in only the outputs read downstream,
+        # one at a time, so the cycle check is on outputs, not on flows
+        self._contesti: dict[int, dict] = {}
+        self._in_corso: set[tuple[int, str]] = set()    # their sources are being resolved
+        self._in_attesa: dict[tuple[int, str], dict] = {}   # sources resolved, model not written yet
+        self._fatte: dict[tuple[int, str], str] = {}    # → the model's name
+        # one-part table names on a Postgres connection without Schema, by connection: dbt names them in
+        # `public`, Tabularia resolves them through the role's search_path (_note_senza_schema)
+        self.senza_schema: dict[int, tuple[Connection, list[str]]] = {}
+        # (connection, schema) → the default source name before a collision moves it aside (`_2`): the
+        # dialog names untyped sources from it, as _nomi_sorgenti does
+        self.basi_sorgenti: dict[tuple[int, str], str] = {}
 
     def layout(self) -> dict:
         o = self.opzioni
@@ -211,8 +320,9 @@ class _Progetto:
             if ds.source_type == "sql":
                 rif = {"model": self._modello_query(ds, conn)}
             else:
-                default_schema = conn.database if conn.db_type in ("clickhouse", "mysql", "mariadb") else "public"
-                schema, table = _parse_ref(ds.source_ref, default_schema)
+                schema, table = _parse_ref(ds.source_ref, _schema_predefinito(conn))
+                if "." not in (ds.source_ref or ""):
+                    self.senza_schema_di(conn, table)
                 self.tables[key] = (ds, conn, schema, table)
                 rif = {"key": key}
         elif ds is not None and ds.kind == "flow" and ds.flow_id:
@@ -222,18 +332,31 @@ class _Progetto:
         self.riferimenti[key] = rif
         return rif
 
+    def senza_schema_di(self, conn: Connection, tabella: str) -> None:
+        """A one-part table name: on Postgres, with no Schema on the connection, it is
+        `public.<table>` for dbt but what the role's search_path finds for Tabularia."""
+        if conn.db_type == "postgresql" and not conn.db_schema:
+            tabelle = self.senza_schema.setdefault(conn.id, (conn, []))[1]
+            if tabella not in tabelle:
+                tabelle.append(tabella)
+
+    def note_senza_schema(self) -> None:
+        for conn, tabelle in self.senza_schema.values():
+            elenco = ", ".join(f"`{t}`" for t in tabelle)
+            self.note.append(
+                f"The connection «{conn.name}» has no Schema: Tabularia reads and writes {elenco} through the search_path of "
+                "the database role (by default a schema named like the role, when there is one, then `public`), while this "
+                "project names them in `public`. They are the same tables unless the role has a schema of its own or another "
+                "search_path: then set the Schema of the connection in Tabularia and export again.")
+
     def _modello_query(self, ds: Datasource, conn: Connection) -> str:
         """Una datasource da QUERY: un modello ephemeral con la query. In federazione
         la query gira nel DB di origine tramite la funzione di query remota di DuckDB;
         in nativo è già nel dialetto del warehouse."""
-        nome = self.nomi.nuovo(f"src_{ds.name}")
+        nome = self.nomi.nuovo(f"src_{ds.name}", effimero=True)
         if self.target == "duckdb":
             if conn.db_type not in _FEDERABLE:
-                raise DbtExportError(
-                    f"the connection «{conn.name}» is {conn.db_type}: DuckDB cannot federate it "
-                    "(federation: postgresql/mysql/mariadb). Try the «native» export.",
-                    "not_federable", connection=conn.name, db_type=conn.db_type,
-                )
+                raise _non_federabile(conn)
             self.tables.setdefault(f"__conn_{conn.id}", (ds, conn, "", ""))   # serve l'ATTACH anche senza tabelle
             funzione = _FEDERABLE[conn.db_type][1]
             query = (ds.source_ref or "").strip().rstrip(";").replace("'", "''")
@@ -254,28 +377,51 @@ class _Progetto:
         return nome
 
     def _flusso_a_monte(self, ds: Datasource, profondita: int) -> str:
-        """L'uscita di un altro flusso: si includono i suoi modelli e si referenzia
-        quello che pubblica questa datasource."""
+        """L'uscita di un altro flusso: entra nel progetto solo il ramo letto qui — il
+        modello dell'Output di QUEL flusso che pubblica questa datasource, con la sua
+        catena a monte. The flow's other outputs stay out: exporting a flow never writes
+        into another flow's tables (decision of 2026-10-16)."""
         flow = self.session.get(Flow, ds.flow_id)
         if flow is None:
             raise DbtExportError(f"the source «{ds.name}» is the output of a flow that no longer exists", "upstream_missing", source=ds.name)
         if profondita >= MAX_UPSTREAM_DEPTH:
             raise DbtExportError(f"too many upstream flows in a chain (more than {MAX_UPSTREAM_DEPTH}): the source «{ds.name}» cannot be included",
                                  "upstream_too_deep", max=MAX_UPSTREAM_DEPTH, source=ds.name)
-        if flow.id in self.flussi_visti:
-            # già incluso (o ciclo): si cerca il suo modello
-            for m in self.models:
-                if m.get("publishes") == (ds.name, ds.project_id):
-                    return m["name"]
+        ctx = self._contesto(flow)
+        pubblicate = ctx["pubblicate"]
+        nodo = pubblicate.get((ds.name, ds.project_id))
+        if nodo is None:
+            # renamed or moved after the flow published it (the Output still writes the old name), or the
+            # Output changed: running the flow again would not fix it
+            elenco = ", ".join(dict.fromkeys(f"«{nome}»" for nome, _ in pubblicate)) or "—"
+            raise DbtExportError(f"the flow «{flow.name}» has no output that publishes «{ds.name}» (it publishes {elenco}): the datasource "
+                                 "was renamed or moved after the flow published it, or the flow's Output changed",
+                                 "upstream_no_output", flow=flow.name, source=ds.name, published=elenco)
+        if (ds.name, ds.project_id) in ctx["doppie"]:
+            # which one wrote it last depends on the order they ran in: the project would carry one of the
+            # two branches, maybe not the one whose data the downstream flow read
+            raise DbtExportError(f"in the flow «{flow.name}» more than one Output publishes «{ds.name}»", "upstream_output_ambiguous",
+                                 flow=flow.name, source=ds.name)
+        chiave = (flow.id, nodo)
+        if chiave in self._fatte:
+            return self._fatte[chiave]
+        if chiave in self._in_corso:
             raise DbtExportError(f"cycle between flows: «{flow.name}» depends on itself through «{ds.name}»", "flow_cycle", flow=flow.name, source=ds.name)
-        self.includi_flusso(flow, profondita + 1)
-        for m in self.models:
-            if m.get("publishes") == (ds.name, ds.project_id):
-                return m["name"]
-        raise DbtExportError(f"the flow «{flow.name}» has no output that publishes «{ds.name}»: the datasource must be regenerated from there",
-                             "upstream_no_output", flow=flow.name, source=ds.name)
+        if chiave in self._in_attesa:
+            # its sources are resolved, its flow is still being included: its model is written now,
+            # before the model that reads it (B: X1 and Y → X2, C: X1 → Y is not a cycle)
+            self._scrivi_modelli(flow, [self._in_attesa[chiave]])
+        else:
+            self._includi(flow, profondita + 1, [nodo])
+        return self._fatte[chiave]
 
     def _seed(self, ds: Datasource | None, key: str) -> str:
+        if ds is not None and ds.rows is not None and ds.rows > SEED_MAX_ROWS:
+            raise DbtExportError(
+                f"the source «{ds.name}» has {ds.rows:,} rows: too many for a dbt seed (at most {SEED_MAX_ROWS:,}). "
+                "Import it into a database and use that as the source.",
+                "seed_too_large", source=ds.name, rows=f"{ds.rows:,}", max=f"{SEED_MAX_ROWS:,}",
+            )
         base = ds.name if ds is not None else (self.nomi_file.get(key) or key.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
         nome = self.nomi.nuovo(f"seed_{base}")
         self.seeds.append({
@@ -289,36 +435,73 @@ class _Progetto:
 
     # ── flussi ───────────────────────────────────────────────────────────────
     def includi_flusso(self, flow: Flow, profondita: int = 0) -> None:
-        """I modelli di un flusso: uno per Output, più gli intermedi condivisi."""
+        """Il flusso esportato: un modello per Output, più gli intermedi condivisi."""
+        if self.radice is None:
+            self.radice = flow.id
+        self._includi(flow, profondita, None)
+
+    def _contesto(self, flow: Flow) -> dict:
+        """What the export needs of a flow, read once: its definition and nodes, where
+        it comes from, the dialect of its free text, and which Output publishes each
+        (datasource name, folder)."""
+        if flow.id not in self._contesti:
+            try:
+                definition = json.loads(flow.definition or "{}")
+                by_id = {n["id"]: n for n in definition.get("nodes") or []}
+                pubblicate: dict[tuple, str] = {}
+                doppie: set[tuple] = set()      # published by two Outputs or more
+                for n in by_id.values():
+                    data = n.get("data") or {}
+                    if n.get("type") == "source" and data.get("parquetKey") and data.get("filename"):
+                        self.nomi_file[data["parquetKey"]] = str(data["filename"])
+                    if n.get("type") == "output" and (data.get("destType") or "datasource") == "datasource" and (data.get("name") or "").strip():
+                        chiave = ((data.get("name") or "").strip(), data.get("projectId"))
+                        if chiave in pubblicate:
+                            doppie.add(chiave)
+                        pubblicate.setdefault(chiave, n["id"])
+            except (KeyError, TypeError, ValueError, AttributeError) as e:
+                raise _definizione_non_valida(flow, e) from e
+            self._contesti[flow.id] = {"definition": definition, "by_id": by_id, "pubblicate": pubblicate, "doppie": doppie,
+                                       "suffisso": _slug(flow.name), "origine": self._origine(flow),
+                                       "dialetto": _DIALETTO.get(flow.production_engine or flow.engine)}
+        return self._contesti[flow.id]
+
+    def _includi(self, flow: Flow, profondita: int, nodi: list[str] | None) -> None:
+        """The models of the flow's Outputs (every one, or only `nodi`): first their
+        sources, then one model per Output plus the steps they share."""
         self.flussi_visti.add(flow.id)
-        definition = json.loads(flow.definition or "{}")
+        ctx = self._contesto(flow)
 
         def resolve_ds(ds_id: int) -> Optional[tuple[str, str]]:
-            ds = self.session.get(Datasource, ds_id)
+            try:
+                ds = self.session.get(Datasource, int(ds_id))
+            except (TypeError, ValueError):
+                return None
             return (ds.bucket, ds.key) if ds and ds.key else None
 
         try:
-            catene = resolve_output_chains(definition, resolve_ds, self.bucket)
+            catene = resolve_output_chains(ctx["definition"], resolve_ds, self.bucket, node_ids=nodi)
         except FlowResolveError as e:
-            raise DbtExportError(str(e), "flow_resolve", detail=str(e))
-        by_id = {n["id"]: n for n in definition.get("nodes") or []}
-        suffisso = _slug(flow.name)
-        origine = self._origine(flow)
-        for n in by_id.values():
-            data = n.get("data") or {}
-            if n.get("type") == "source" and data.get("parquetKey") and data.get("filename"):
-                self.nomi_file[data["parquetKey"]] = str(data["filename"])
+            raise _errore_di_lettura(flow, e)
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
+            raise _definizione_non_valida(flow, e) from e
 
-        uscite = []
+        uscite, esportabili = [], 0
         for c in catene:
             req, node = c["body"], c["node"]
             dest = req.get("destination") or {}
             if req.get("email") or dest.get("type") not in (None, "database", "s3"):
                 continue   # un'email non è un dataset: nessun modello
+            esportabili += 1
+            chiave = (flow.id, (node or {}).get("id"))
+            if chiave in self._fatte or chiave in self._in_attesa or chiave in self._in_corso:
+                continue   # already in the project, or on its way there
             key = req["input_key"]
+            self._in_corso.add(chiave)
             rif = self.sorgente(key, profondita)
             # le sorgenti dei rami destri (join/union) vanno risolte anche loro
             self._sorgenti_annidate(req.get("operations") or [], profondita)
+            self._in_corso.discard(chiave)
             ops = list(req.get("operations") or [])
             ids = list(c["op_ids"])
             pub_keys = [k.strip() for k in ((req.get("publish") or {}).get("sort_keys") or []) if k and k.strip()]
@@ -327,29 +510,46 @@ class _Progetto:
                 # dbt sarebbe fisicamente diversa da quella che l'app pubblica
                 ops.append({"type": "sort", "params": {"by": pub_keys, "ignore_missing": True}})
                 ids.append(None)
-            uscite.append({"req": req, "node": node, "rif": rif, "key": key, "ops": ops, "ids": ids})
-        if not uscite:
+            u = {"req": req, "node": node, "rif": rif, "key": key, "ops": ops, "ids": ids}
+            self._in_attesa[chiave] = u
+            uscite.append(u)
+        if nodi is None and not esportabili:
             raise DbtExportError(f"the flow «{flow.name}» has no exportable outputs (only email?)", "no_outputs", flow=flow.name)
+        # an output another flow needed meanwhile already has its model
+        self._scrivi_modelli(flow, [u for u in uscite if (flow.id, (u["node"] or {}).get("id")) in self._in_attesa])
 
+    def _scrivi_modelli(self, flow: Flow, uscite: list[dict]) -> None:
+        """The models of outputs whose sources are resolved: the steps two or more of
+        them share become one intermediate model, then one model per output. Each
+        carries the dialect of its flow's free text (compute, sql), for the engine."""
+        if not uscite:
+            return
+        ctx = self._contesto(flow)
+        by_id, suffisso, origine, dialetto = ctx["by_id"], ctx["suffisso"], ctx["origine"], ctx["dialetto"]
+        for u in uscite:
+            self._in_attesa.pop((flow.id, (u["node"] or {}).get("id")), None)
         tagli = self._tagli(uscite)   # prefissi condivisi → modelli intermedi
         intermedi: dict[tuple, str] = {}
         for prefisso in sorted(tagli, key=lambda t: (len(t[1]), t)):
             u = next(u for u in uscite if tuple(u["ids"][: len(prefisso[1])]) == prefisso[1] and u["key"] == prefisso[0])
             ultimo = by_id.get(prefisso[1][-1].split("#")[0], {})
             etichetta = (ultimo.get("data") or {}).get("label") or ultimo.get("id") or "step"
-            nome = self.nomi.nuovo(f"int_{etichetta}", suffisso)
+            nome = self.nomi.nuovo(f"int_{etichetta}", suffisso, effimero=True)
             base, ops_rest = self._base(u, prefisso[1], intermedi)
             intermedi[prefisso] = nome
             self.models.append(self._traccia({
                 "name": nome, "kind": "intermediate", "materialized": "ephemeral", "source": base, "operations": ops_rest,
                 "description": f"Shared steps of the flow «{flow.name}», up to the node «{etichetta}».", "columns": [], "tests": [],
+                "dialect": dialetto,
             }, origine, output=f"shared steps up to the node «{etichetta}»"))
 
         for u in uscite:
             modello = self._modello_uscita(flow, u, intermedi, suffisso)
+            modello["dialect"] = dialetto
             self._materializzazione(flow, u, modello)
             self.models.append(self._traccia(modello, origine, output=modello.pop("_uscita", None),
                                              node=(u["node"] or {}).get("id")))
+            self._fatte[(flow.id, (u["node"] or {}).get("id"))] = modello["name"]
 
     def _materializzazione(self, flow: Flow, u: dict, modello: dict) -> None:
         """La materializzazione scelta nel dialogo per questa uscita, se ammessa:
@@ -436,14 +636,14 @@ class _Progetto:
                 self._schema_e_contratto(modello, ds)
         elif dest.get("type") == "database":
             tabella = (dest.get("table") or "").strip()
-            schema, nome_t = _parse_ref(tabella, "")
+            _, nome_t = _parse_ref(tabella, "")
             modello["name"] = self.nomi.nuovo(nome_t or "model", suffisso)
             modello["materialized"] = "incremental" if (dest.get("mode") or "append") == "append" else "table"
-            if self.target == "native":
-                # nel warehouse di origine il modello PUÒ essere la tabella di destinazione
-                if schema:
-                    modello["schema"] = schema
-                modello["alias"] = nome_t
+            if flow.id == self.radice:
+                # on the native target the model MAY be the destination table itself, when it is on the
+                # warehouse dbt runs on: _native_payload decides, knowing that warehouse
+                self.destinazioni[modello["name"]] = {"connection_id": dest.get("connection_id"), "table": tabella,
+                                                      "mode": dest.get("mode") or "append"}
             modello["description"] = f"Output table `{tabella}` of the flow «{flow.name}» ({dest.get('mode') or 'append'})."
             modello["_uscita"] = f"output table `{tabella}` ({dest.get('mode') or 'append'})"
             if dest.get("post_sql"):
@@ -512,7 +712,7 @@ def _costruisci(session: Session, flow: Flow, default_bucket: str, target: str =
     p = _Progetto(session, default_bucket, target, esportato_da=esportato_da, opzioni=opzioni)
     p.includi_flusso(flow)
 
-    conns: dict[int, Connection] = {}
+    conns: dict[int, Connection] = {}   # the connections the SOURCES are on
     for key, (ds, conn, schema, table) in p.tables.items():
         conns[conn.id] = conn
     if target == "native":
@@ -521,6 +721,7 @@ def _costruisci(session: Session, flow: Flow, default_bucket: str, target: str =
         payload = _clickhouse_payload(flow, p, conns)
     else:
         payload = _duckdb_payload(flow, p, conns)
+    p.note_senza_schema()   # payload["notes"] is p.note: after the native outputs, which add their tables
     rifiuto = _rifiuto_noto(payload["models"], target)
     if rifiuto:
         raise rifiuto
@@ -544,7 +745,78 @@ def _rifiuto_noto(models: list[dict], target: str) -> DbtExportError | None:
     if "pivot" in tipi and target in ("native", "clickhouse"):
         return DbtExportError("the «pivot» node produces columns decided by the data: it exports only with the federated target (dbt-duckdb), "
                               "or use in its place an sql node that lists the columns", "pivot_not_portable")
+    for m in models:
+        for op in _operazioni(m.get("operations") or []):
+            errore = _passo_incompleto(op) if isinstance(op, dict) else None
+            if errore:
+                return errore
     return None
+
+
+# The parameters without which the exporter cannot write a step: the `_require` calls of
+# backend/app/engine/dbt_export.py `_compile_ops`, which refuses them with step_invalid
+_RICHIESTI = {
+    "select": ("columns",), "reorder": ("columns",), "drop": ("columns",), "rename": ("mapping",), "cast": ("columns",),
+    "filter": ("column",), "sort": ("by",), "limit": ("n",), "fill_null": ("columns",), "group_by": ("by", "aggregations"),
+    "compute": ("columns",), "sql": ("query",), "join": ("right",), "union": ("right",), "pivot": ("index", "on", "values"),
+}
+_VUOTO = (None, "", [])
+
+
+def _passo_incompleto(op: dict) -> DbtExportError | None:
+    """A step saved half done (a join without its right input or its keys, a filter
+    without a column or a value, an aggregation without a column…), refused as the
+    engine refuses it — step_invalid, filter_value_missing — so the plan shows it next
+    to every target instead of the download (#11)."""
+    tipo, params = str(op.get("type")), op.get("params") or {}
+
+    def no(dettaglio: str) -> DbtExportError:
+        return DbtExportError(f"{tipo}: the step is incomplete or not valid ({dettaglio})",
+                              "step_invalid", step=tipo, detail=dettaglio)
+
+    for k in _RICHIESTI.get(tipo, ()):
+        if params.get(k) in _VUOTO:
+            return no(f"required parameter missing: '{k}'")
+    if tipo == "join" and params.get("how", "inner") != "cross" and params.get("on") in _VUOTO:
+        sinistra, destra = params.get("left_on"), params.get("right_on")
+        if sinistra in _VUOTO or destra in _VUOTO:
+            return no("required parameter missing: 'on', or 'left_on' and 'right_on'")
+        if len(sinistra if isinstance(sinistra, list) else [sinistra]) != len(destra if isinstance(destra, list) else [destra]):
+            return no("join: left_on and right_on must have the same number of columns")
+    if tipo == "group_by" and isinstance(params["aggregations"], list):
+        if any(not isinstance(a, dict) or a.get("column") in _VUOTO for a in params["aggregations"]):
+            return no("an aggregation has no column")
+    if tipo == "filter":
+        # the engines' own check (operations.check_filter_value): compared with NULL a filter keeps no row
+        operatore, valore = params.get("operator", "eq"), params.get("value")
+        if operatore not in ("is_null", "is_not_null") and (
+                valore is None or (operatore in ("in", "not_in") and valore == [])
+                or (operatore == "between" and (not isinstance(valore, list) or len(valore) != 2))):
+            return DbtExportError(f"filter on «{params['column']}»: no value for the operator '{operatore}'",
+                                  "filter_value_missing", column=str(params["column"]), operator=str(operatore))
+    return None
+
+
+async def engine_export(payload: dict) -> httpx.Response:
+    """POST /dbt/export to the engine, bounded by ENGINE__DBT_EXPORT_TIMEOUT_SECONDS. The
+    engine compiles in the request, and the shared client has no timeout (uploads of
+    gigabytes go through it): an engine that hangs held the download until the ingress
+    cut it with a bare 504, and an engine that cannot be reached was a 500. Both are
+    refusals with a code now: `engine_timeout` (the route answers 504) and
+    `engine_unreachable` (502). Any HTTP answer, an error included, is returned as it is."""
+    limite = get_settings().engine.dbt_export_timeout_seconds
+    try:
+        # one bound for the whole call (connect, send, the compile, the zip): httpx's own
+        # timeouts are per operation
+        return await asyncio.wait_for(get_engine_client().post("/dbt/export", json=payload), timeout=limite)
+    except (TimeoutError, httpx.TimeoutException) as e:
+        logger.warning("dbt export: the engine did not answer within %g s (%s)", limite, type(e).__name__)
+        raise DbtExportError(f"the engine did not build the dbt project within {limite:g} s", "engine_timeout",
+                             seconds=f"{limite:g}") from e
+    except httpx.TransportError as e:
+        dettaglio = (str(e) or type(e).__name__)[:200]
+        logger.warning("dbt export: the engine cannot be reached: %s", dettaglio)
+        raise DbtExportError(f"the engine cannot be reached ({dettaglio})", "engine_unreachable", detail=dettaglio) from e
 
 
 def piano_export(session: Session, flow: Flow, default_bucket: str, lingua: str = "en") -> dict:
@@ -552,23 +824,163 @@ def piano_export(session: Session, flow: Flow, default_bucket: str, lingua: str 
     no), le sue sorgenti col nome di default; le uscite con le materializzazioni
     ammesse. Non chiama l'engine: quello che solo l'engine sa (un ClickHouse che non
     è il suo) lo dice il download."""
-    targets, uscite = [], None
+    from app.services.messaggi_dbt import messaggio_dell_errore
+
+    targets, uscite, uscite_se_dichiarate = [], None, None
     for target in ("clickhouse", "duckdb", "native"):
         try:
             payload, p = _costruisci(session, flow, default_bucket, target)
         except DbtExportError as e:
-            from app.services.messaggi_dbt import messaggio_dell_errore
-
-            targets.append({"id": target, "available": False, "reason": messaggio_dell_errore(e, lingua), "sources": []})
+            voce = {"id": target, "available": False, "reason": messaggio_dell_errore(e, lingua), "sources": []}
+            se_dichiarate = _se_dichiarate(session, flow, default_bucket, target, list(e.da_dichiarare)) if e.da_dichiarare else None
+            if se_dichiarate is not None:
+                voce.update(requires=se_dichiarate[0], sources=_sorgenti_del_piano(se_dichiarate[1], se_dichiarate[2]))
+                uscite_se_dichiarate = uscite_se_dichiarate or se_dichiarate[2].uscite
+            targets.append(voce)
             continue
-        targets.append({"id": target, "available": True, "reason": None, "sources": [
-            {"key": s["key"], "connection": s["connection"], "schema": s["schema"], "default_name": s["name"],
-             "tables": sorted(t["name"] for t in s["tables"])}
-            for s in payload["sources"]
-        ]})
+        targets.append({"id": target, "available": True, "reason": None, "sources": _sorgenti_del_piano(payload, p)})
         if uscite is None:
             uscite = p.uscite
-    return {"flow": flow.name, "default_folder": _slug(flow.name), "targets": targets, "outputs": uscite or []}
+    return {"flow": flow.name, "default_folder": _cartella_predefinita(flow.name), "targets": targets,
+            "outputs": uscite or uscite_se_dichiarate or []}
+
+
+def _sorgenti_del_piano(payload: dict, p: _Progetto) -> list[dict]:
+    """The sources of a target for the dialog: `default_name` is the name with nothing
+    typed, `default_base` the default it was made from before a collision moved it aside."""
+    return [{"key": s["key"], "connection": s["connection"], "schema": s["schema"], "default_name": s["name"],
+             "default_base": p.basi_sorgenti.get((s["connection_id"], s["schema"]), s["name"]),
+             "tables": sorted(t["name"] for t in s["tables"])} for s in payload["sources"]]
+
+
+def _se_dichiarate(session: Session, flow: Flow, default_bucket: str, target: str,
+                   chiavi: list[str]) -> tuple[dict, dict, _Progetto] | None:
+    """A target that works only in the folder package, with these sources declared by the
+    team's own project (ClickHouse with an Oracle source): what it requires, and the
+    payload and project it would have, so the dialog can offer it there (its sources, the
+    outputs' materializations). None when something else stops it too: the reason stands."""
+    opzioni = OpzioniDbt(target=target, package="folder", sources={k: OpzioneSorgente(declared=True) for k in chiavi})
+    try:
+        payload, p = _costruisci(session, flow, default_bucket, target, opzioni=opzioni)
+    except DbtExportError:
+        return None
+    return {"package": "folder", "declared": chiavi}, payload, p
+
+
+def _secondo_il_pacchetto(o: OpzioniDbt) -> OpzioniDbt:
+    """What the package makes meaningless is dropped: the folder package has no
+    profiles.yml, so no schema; «already declared» sources exist only in the team's own
+    project, so only in the folder package."""
+    if o.package == "folder" and o.schema_ is not None:
+        o = o.model_copy(update={"schema_": None})
+    if o.package == "project" and any(s.declared for s in o.sources.values()):
+        o = o.model_copy(update={"sources": {k: s.model_copy(update={"declared": False}) for k, s in o.sources.items()}})
+    return o
+
+
+def _errore_di_lettura(flow: Flow, e: FlowResolveError) -> DbtExportError:
+    """A flow the resolver cannot read, said with the flow's name (it may be an
+    upstream flow) and in the reader's language."""
+    if e.code == "no_outputs":
+        return DbtExportError(f"the flow «{flow.name}» has no exportable outputs: {e}", "no_outputs", flow=flow.name)
+    if e.code == "output_no_source":
+        return DbtExportError(f"the flow «{flow.name}»: {e}", "output_no_source", flow=flow.name, output=e.params.get("output", ""))
+    if e.code == "flow_loop":
+        return DbtExportError(f"the flow «{flow.name}»: {e}", "flow_loop", flow=flow.name, node=e.params.get("node", ""))
+    return DbtExportError(f"the flow «{flow.name}» cannot be read: {e}", "flow_resolve", flow=flow.name, detail=str(e))
+
+
+def _non_esportabile(conn: Connection) -> DbtExportError:
+    """A database no dbt target reads live (Oracle, SQL Server, Trino…)."""
+    return DbtExportError(f"the connection «{conn.name}» is {conn.db_type}, which no dbt target reads", "source_not_exportable",
+                          connection=conn.name, db_type=conn.db_type)
+
+
+def _non_federabile(conn: Connection) -> DbtExportError:
+    """Why the federated target cannot attach `conn`: a ClickHouse goes to the ClickHouse or
+    the native target; what no target reads is said as such, never «use another target»."""
+    if conn.db_type not in _LEGGIBILI:
+        return _non_esportabile(conn)
+    return DbtExportError(f"the connection «{conn.name}» is {conn.db_type}: DuckDB cannot federate it (federation: postgresql/mysql/mariadb)",
+                          "not_federable", connection=conn.name, db_type=conn.db_type)
+
+
+def _definizione_non_valida(flow: Flow, e: Exception) -> DbtExportError:
+    """A definition the editor would never save (written through the API: a node without
+    an id, a node or its data that is not an object, text that is not JSON): a reason in
+    the plan and a 422 at the download, not a 500."""
+    logger.warning("dbt export: the definition of the flow %s is not valid", flow.id, exc_info=True)
+    dettaglio = f"its definition is not valid ({type(e).__name__}: {str(e)[:120]})"
+    return DbtExportError(f"the flow «{flow.name}» cannot be read: {dettaglio}", "flow_resolve", flow=flow.name, detail=dettaglio)
+
+
+def _nomi_sorgenti(p: _Progetto, predefinito: Callable[[Connection, str], str]) -> Callable[[Connection, str], str]:
+    """The name of each source (connection, schema) in sources.yml: the one chosen in
+    the dialog, else the default — with a suffix when two defaults collide (`Sales`
+    and `sales` slug alike). Two sources may share a name only with no table in
+    common: otherwise dbt refuses the project, and `source()` could not tell them apart."""
+    coppie: dict[tuple[int, str], tuple[Connection, list[str]]] = {}
+    for ds, conn, schema, table in p.tables.values():
+        if table:
+            tabelle = coppie.setdefault((conn.id, schema), (conn, []))[1]
+            if table not in tabelle:
+                tabelle.append(table)
+    nomi: dict[tuple[int, str], str] = {}
+    for (conn_id, schema) in coppie:
+        scelta = p.opzioni.sources.get(chiave_sorgente(conn_id, schema))
+        if scelta and scelta.name:
+            nomi[(conn_id, schema)] = scelta.name
+    usati = set(nomi.values())
+    for (conn_id, schema), (conn, _) in coppie.items():
+        p.basi_sorgenti[(conn_id, schema)] = predefinito(conn, schema)
+        if (conn_id, schema) not in nomi:
+            base = cand = predefinito(conn, schema)
+            n = 2
+            while cand in usati:
+                cand, n = f"{base}_{n}", n + 1
+            nomi[(conn_id, schema)] = cand
+            usati.add(cand)
+    viste: dict[tuple[str, str], tuple[int, str]] = {}
+    for k, (conn, tabelle) in coppie.items():
+        for t in tabelle:
+            altra = viste.setdefault((nomi[k], t), k)
+            if altra != k:
+                prima = f"{coppie[altra][0].name}.{altra[1]}"
+                raise DbtExportError(f"two sources are both named «{nomi[k]}» and both have a table «{t}» ({prima}, {conn.name}.{k[1]})",
+                                     "source_name_duplicate", name=nomi[k], table=t, sources=f"{prima}, {conn.name}.{k[1]}")
+    return lambda conn, schema: nomi[(conn.id, schema)]
+
+
+def _macro_source(nome: str, tabella: str) -> str:
+    """`{{ source('<name>', '<table>') }}` that dbt reads with the exact names: a quote or
+    a backslash in a table name ended the Jinja string, and dbt could not parse the model."""
+    return "{{ source(%s, %s) }}" % (_stringa_jinja(nome), _stringa_jinja(tabella))
+
+
+def _stringa_jinja(s: str) -> str:
+    """`s` as a Jinja expression that dbt reads back exactly. A plain name keeps its
+    `'…'`; with a quote only, `"…"`. dbt's static parser takes a string literal as
+    written, escapes included, so a name that needs an escape (a backslash, or both
+    quotes) is written as pieces joined with `~`: the static parser leaves it to Jinja,
+    which reads `'\\\\'` as one backslash."""
+    if "\\" not in s and "'" not in s:
+        return f"'{s}'"
+    if "\\" not in s and '"' not in s:
+        return f'"{s}"'
+    pezzi = [{"'": '"\'"', "\\": "'\\\\'"}.get(x, f"'{x}'") for x in re.split(r"(['\\\\])", s) if x]
+    return " ~ ".join(pezzi + ([] if len(pezzi) > 1 else ["''"]))
+
+
+def _sorgenti_quotabili(p: _Progetto, adapter: Callable[[Connection], str], con_schema: Callable[[Connection], bool]) -> None:
+    """The schema (where the project uses it as it is) and the table of every source the
+    project declares must be names the adapter can quote. A source the team's own
+    project declares is theirs."""
+    for _, conn, schema, table in p.tables.values():
+        scelta = p.opzioni.sources.get(chiave_sorgente(conn.id, schema))
+        if not table or (scelta and scelta.declared):
+            continue
+        for nome in ([schema] if con_schema(conn) else []) + [table]:
+            _quotabile(nome, adapter(conn), "source")
 
 
 def _sources_yaml(p: _Progetto, nome_per: callable, database_per: callable) -> list[dict]:
@@ -593,21 +1005,18 @@ def _duckdb_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> d
     attachments = {}
     for conn in conns.values():
         if conn.db_type not in _FEDERABLE:
-            raise DbtExportError(
-                f"the connection «{conn.name}» is {conn.db_type}: DuckDB cannot federate it "
-                "(federation: postgresql/mysql/mariadb). Try the «native» export for ClickHouse.",
-                "not_federable", connection=conn.name, db_type=conn.db_type,
-            )
+            raise _non_federabile(conn)
         attachments[conn.id] = {
             "alias": f"db_{conn.id}", "db_type": conn.db_type, "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD",
             "conn": {"host": conn.host, "port": conn.port or _FEDERABLE[conn.db_type][0], "database": conn.database, "username": conn.username},
         }
-    nome = lambda conn, schema: p.nome_sorgente(conn, schema, _slug(f"db_{conn.id}_{schema}"))
+    _sorgenti_quotabili(p, lambda c: "dbt-duckdb", lambda c: True)
+    nome = _nomi_sorgenti(p, lambda conn, schema: _slug(f"db_{conn.id}_{schema}"))
     sources = _sources_yaml(p, nome, lambda conn: f"db_{conn.id}")
     source_map = {}
     for key, (ds, conn, schema, table) in p.tables.items():
         if table:
-            source_map[key] = {"ref": "{{ source('%s', '%s') }}" % (nome(conn, schema), table), "columns": _columns(ds), "types": _dtypes(ds), "label": table}
+            source_map[key] = {"ref": _macro_source(nome(conn, schema), table), "columns": _columns(ds), "types": _dtypes(ds), "label": table}
     return {
         "flow_name": flow.name, "flow_description": flow.description or "", "mode": "duckdb",
         "models": p.models, "seeds": p.seeds, "source_map": source_map,
@@ -616,7 +1025,61 @@ def _duckdb_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> d
     }
 
 
+def _destinazioni_native(p: _Progetto, conn: Connection) -> None:
+    """Where the database outputs of the exported flow land on the native target, whose
+    profile is the SOURCE connection `conn`. An output Tabularia writes on `conn` keeps
+    its real table (schema and alias; a one-part name in the schema Tabularia writes
+    to). One written on ANOTHER connection is an ordinary model in the project's
+    schema: dbt must never create or replace tables of the source warehouse that the
+    flow does not write, and loading it into the other database is the data team's job.
+    So is one materialized otherwise than Tabularia writes it (`table` or `view` over an
+    append, `view` over a replace): dbt would rebuild the accumulated table with the last
+    batch only, or drop it for a view."""
+    for m in p.models:
+        dest = p.destinazioni.get(m["name"])
+        if dest is None:
+            continue
+        try:
+            cid = int(dest.get("connection_id"))
+        except (TypeError, ValueError):
+            cid = None
+        parti = [x.strip() for x in (dest.get("table") or "").split(".") if x.strip()]
+        if cid == conn.id and parti:
+            propria = "incremental" if dest["mode"] == "append" else "table"
+            if m["materialized"] != propria:
+                p.note.append(f"The model `{m['name']}` is the output table `{dest.get('table')}` ({dest['mode']}) of the flow, materialized "
+                              f"as `{m['materialized']}`: dbt builds it in the project's schema, so that it never replaces the table "
+                              "Tabularia writes.")
+                continue
+            schema, alias = (parti[-2] if len(parti) >= 2 else _schema_predefinito(conn)), parti[-1]
+            if conn.db_type == "postgresql":
+                schema, alias = _come_postgres(schema), _come_postgres(alias)
+                if propria == "table" and not _ricostruibile(alias):
+                    p.note.append(f"The model `{m['name']}` is the output table `{dest.get('table')}` of the flow, a name dbt-postgres cannot "
+                                  "rebuild: it cuts the names of its temporary tables (`__dbt_tmp`, `__dbt_backup`) to 63 characters, "
+                                  "Postgres cuts names to 63 bytes, and with accented letters they collide. dbt builds it in the "
+                                  "project's schema.")
+                    continue
+            _quotabile(schema, _adapter_nativo(conn), "schema")
+            _quotabile(alias, _adapter_nativo(conn), "relation")
+            m["schema"], m["alias"] = schema, alias
+            if len(parti) == 1:
+                p.senza_schema_di(conn, parti[-1])
+        elif cid != conn.id:
+            altra = p.session.get(Connection, cid) if cid is not None else None
+            dove = f"«{altra.name}»" if altra else "another connection"
+            p.note.append(f"The model `{m['name']}` is the output table `{dest.get('table')}` that Tabularia writes on {dove}, not on the "
+                          f"warehouse dbt runs on: dbt builds it in the project's schema, and loading it into {dove} is the data team's job.")
+
+
+def _adapter_nativo(conn: Connection) -> str:
+    return "dbt-clickhouse" if conn.db_type == "clickhouse" else "dbt-postgres"
+
+
 def _native_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> dict:
+    for c in conns.values():
+        if c.db_type not in _LEGGIBILI:
+            raise _non_esportabile(c)   # before «one connection only»: that would be no way out either
     if len(conns) > 1:
         raise DbtExportError(
             "the native export requires all sources to be on the SAME connection "
@@ -626,17 +1089,19 @@ def _native_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) -> d
     if not conns:
         raise DbtExportError("the native export needs at least one database source: this flow reads only files", "native_needs_database")
     conn = next(iter(conns.values()))
-    if conn.db_type not in _NATIVE_PORT:
+    if conn.db_type not in _NATIVE:
         raise DbtExportError(f"no native dbt adapter for '{conn.db_type}'", "no_native_adapter", db_type=conn.db_type)
-    nome = lambda c, schema: p.nome_sorgente(c, schema, _slug(f"src_{schema}"))
+    _sorgenti_quotabili(p, _adapter_nativo, lambda c: True)
+    _destinazioni_native(p, conn)
+    nome = _nomi_sorgenti(p, lambda c, schema: _slug(f"src_{schema}"))
     sources = _sources_yaml(p, nome, lambda c: c.database)
     source_map = {}
     for i, (key, (ds, c, schema, table)) in enumerate(p.tables.items()):
         if table:
-            source_map[key] = {"ident": f"__s_{i}", "macro": "{{ source('%s', '%s') }}" % (nome(c, schema), table), "columns": _columns(ds), "types": _dtypes(ds), "label": table}
+            source_map[key] = {"ident": f"__s_{i}", "macro": _macro_source(nome(c, schema), table), "columns": _columns(ds), "types": _dtypes(ds), "label": table}
     native = {
         "db_type": conn.db_type, "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD", "target_schema": p.opzioni.schema_ or "dbt_tabularia",
-        "conn": {"host": conn.host, "port": conn.port or _NATIVE_PORT[conn.db_type], "database": conn.database, "username": conn.username},
+        "conn": {"host": conn.host, "port": conn.port or _PORTA[conn.db_type], "database": conn.database, "username": conn.username},
     }
     return {
         "flow_name": flow.name, "flow_description": flow.description or "", "mode": "native",
@@ -650,16 +1115,32 @@ def _clickhouse_payload(flow: Flow, p: _Progetto, conns: dict[int, Connection]) 
     connessioni: ClickHouse legge Postgres/MySQL dal vivo con un database federato per
     (connessione, schema). Nomi di quei database, rifiuti (un altro ClickHouse, un
     tipo che ClickHouse non legge) e traduzione delle query li decide l'engine, che
-    conosce il ClickHouse su cui gira."""
-    nome = lambda c, schema: p.nome_sorgente(c, schema, _slug(f"db_{c.id}_{schema}"))
+    conosce il ClickHouse su cui gira. What ClickHouse cannot read at all (Oracle, SQL
+    Server, Trino…) is refused here already, so the plan disables the target — and says
+    when declaring those sources in the team's own project would make it work."""
+    illeggibili = [(c, schema, table) for _, c, schema, table in p.tables.values() if c.db_type not in _CLICKHOUSE_LEGGE]
+    for c, _, table in illeggibili:
+        if not table:
+            raise _non_esportabile(c)   # a SQL query on it: nothing a project can declare
+    # a source the team's own project declares (folder package) is theirs to read: the engine skips it too
+    mancanti = [c for c, schema, _ in illeggibili if not (p.opzioni.sources.get(chiave_sorgente(c.id, schema)) or OpzioneSorgente()).declared]
+    if mancanti:
+        c = mancanti[0]
+        e = DbtExportError(f"the connection «{c.name}» is {c.db_type}: ClickHouse can read it only if it is PostgreSQL, MySQL or MariaDB",
+                           "clickhouse_cannot_read", connection=c.name, db_type=c.db_type)
+        e.da_dichiarare = tuple(dict.fromkeys(chiave_sorgente(c.id, schema) for c, schema, _ in illeggibili))
+        raise e
+    # the schema of a Postgres/MySQL source becomes a database the engine names; a ClickHouse one is used as it is
+    _sorgenti_quotabili(p, lambda c: "dbt-clickhouse", lambda c: c.db_type == "clickhouse")
+    nome = _nomi_sorgenti(p, lambda c, schema: _slug(f"db_{c.id}_{schema}"))
     sources = _sources_yaml(p, nome, lambda c: None)
     source_map = {}
     for i, (key, (ds, c, schema, table)) in enumerate(p.tables.items()):
         if table:
-            source_map[key] = {"ident": f"__s_{i}", "macro": "{{ source('%s', '%s') }}" % (nome(c, schema), table),
+            source_map[key] = {"ident": f"__s_{i}", "macro": _macro_source(nome(c, schema), table),
                                "columns": _columns(ds), "types": _dtypes(ds), "label": table}
     connections = [{
-        "id": c.id, "name": c.name, "db_type": c.db_type, "host": c.host, "port": c.port or _NATIVE_PORT.get(c.db_type),
+        "id": c.id, "name": c.name, "db_type": c.db_type, "host": c.host, "port": c.port or _PORTA.get(c.db_type),
         "database": c.database, "username": c.username, "pw_env": f"TABULARIA_DB_{c.id}_PASSWORD",
     } for c in conns.values()]
     return {

@@ -6,14 +6,15 @@ Permessi (ereditati dall'albero come sempre):
 - spostamento: EDIT sia sul progetto di origine sia su quello di destinazione.
 """
 import json
+import unicodedata
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -371,34 +372,49 @@ def export_flow_dbt_plan(
     materializzazioni ammesse."""
     from app.services.dbt_export import piano_export
 
-    from app.services.dbt_ai import modello_ai
+    from app.services.dbt_ai import modello_ai, testi_della_versione
 
-    piano = piano_export(session, _flusso_per_dbt(session, user, flow_id), get_settings().engine.bucket,
-                         lingua_della_richiesta(request))
+    flow = _flusso_per_dbt(session, user, flow_id)
+    piano = piano_export(session, flow, get_settings().engine.bucket, lingua_della_richiesta(request))
     modello = modello_ai(session)
-    piano["ai"] = {"available": modello is not None, "model": modello}
+    # `stored`: what the AI wrote for this version, which a re-export reuses without a call even with
+    # the AI switched off: the dialog can still offer it, and the same version gives the same zip
+    piano["ai"] = {"available": modello is not None, "model": modello, "stored": testi_della_versione(session, flow)}
     return piano
 
 
 async def _esporta_dbt(flow: Flow, request: Request, user: User, session: Session, target: str, opzioni: OpzioniDbt | None):
     from app.services import dbt_ai
-    from app.services.dbt_export import DbtExportError, _costruisci
+    from app.services.dbt_export import DbtExportError, _costruisci, engine_export
     from app.services.messaggi_dbt import messaggio_dell_engine, messaggio_dell_errore, traduci
 
     lingua = lingua_della_richiesta(request)
+    scadenza = dbt_ai.nuova_scadenza()   # one budget for every AI call of this export: the ingress cuts it at 300 s
     try:
         payload, progetto = _costruisci(session, flow, get_settings().engine.bucket, target, user.email, opzioni)
         if opzioni is not None and opzioni.ai_descriptions:
             # descrizioni dove mancano, scritte dall'AI e ricordate per versione (services/dbt_ai.py)
-            await dbt_ai.descrivi(session, user, flow, sorted(progetto.flussi_visti), payload)
+            await dbt_ai.descrivi(session, user, flow, sorted(progetto.flussi_visti), payload, scadenza)
     except DbtExportError as e:
         raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
 
     proposte: dict[str, str] = {}   # modello → chiave della traduzione proposta dall'AI
+    scrittori: dict[str, str] = {}  # model → the AI model that wrote its translation
     tentativi: dict[str, int] = {}  # modello → proposte chieste
     richieste: dict[str, dict] = {}  # modello → quello che l'engine ha detto servire alla traduzione
     while True:
-        resp = await get_engine_client().post("/dbt/export", json=payload)
+        if proposte:
+            # checking an AI proposal is one more engine call: past the budget, the ingress would cut the
+            # request with a bare 504 after the AI used most of its time
+            try:
+                dbt_ai.controlla_scadenza(scadenza)
+            except DbtExportError as e:
+                raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
+        try:
+            resp = await engine_export(payload)   # bounded: ENGINE__DBT_EXPORT_TIMEOUT_SECONDS
+        except DbtExportError as e:
+            # the engine, upstream of the gateway, did not answer in time (504) or cannot be reached (502)
+            raise HTTPException(status_code=504 if e.code == "engine_timeout" else 502, detail=messaggio_dell_errore(e, lingua))
         if resp.status_code == 200:
             break
         try:
@@ -411,7 +427,7 @@ async def _esporta_dbt(flow: Flow, request: Request, user: User, session: Sessio
                 and modello and modello not in proposte and len(proposte) < dbt_ai.MAX_TRADUZIONI):
             # l'engine non traduce questo modello: una proposta dell'AI, che l'engine poi verifica
             try:
-                proposta, proposte[modello] = await dbt_ai.traduci(session, user, flow, prm)
+                proposta, proposte[modello], scrittori[modello] = await dbt_ai.traduci(session, user, flow, prm, scadenza=scadenza)
             except DbtExportError as e:
                 raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
             tentativi[modello] = 1
@@ -420,13 +436,13 @@ async def _esporta_dbt(flow: Flow, request: Request, user: User, session: Sessio
             continue
         if isinstance(grezzo, dict) and grezzo.get("code") == "ai_translation_invalid" and prm.get("model") in proposte:
             modello = prm["model"]
-            dbt_ai.dimentica(session, flow, proposte[modello])   # scartata: non si riusa
+            dbt_ai.dimentica(session, flow, proposte[modello], payload["overrides"][modello])   # scartata: non si riusa
             if tentativi.get(modello, 0) < dbt_ai.TENTATIVI:
                 # un secondo tentativo, con davanti il motivo (nella lingua dell'AI: inglese)
                 try:
-                    proposta, proposte[modello] = await dbt_ai.traduci(
+                    proposta, proposte[modello], scrittori[modello] = await dbt_ai.traduci(
                         session, user, flow, richieste[modello],
-                        scartata=(payload["overrides"][modello], messaggio_dell_engine(grezzo, "en")))
+                        scartata=(payload["overrides"][modello], messaggio_dell_engine(grezzo, "en")), scadenza=scadenza)
                 except DbtExportError as e:
                     raise HTTPException(status_code=422, detail=messaggio_dell_errore(e, lingua))
                 tentativi[modello] += 1
@@ -435,18 +451,33 @@ async def _esporta_dbt(flow: Flow, request: Request, user: User, session: Sessio
         detail = messaggio_dell_engine(grezzo, lingua) if grezzo is not None else traduci("internal", {"detail": f"engine {resp.status_code}"}, lingua)
         raise HTTPException(status_code=resp.status_code if resp.status_code >= 400 else 502, detail=detail)
 
+    fname = "".join(c if (c.isalnum() or c in "-_") else "_" for c in flow.name).strip("_") or "flow"
+    # the dialog's own name when it cannot read this header: `_folder` for the folder package
+    coda = f"_dbt_{target}{'_folder' if opzioni is not None and opzioni.package == 'folder' else ''}.zip"
+    # the response first, the audit row after: a download is recorded only once it can be served
+    risposta = Response(
+        content=resp.content, media_type="application/zip",
+        headers={"Content-Disposition": _content_disposition(fname, coda)},
+    )
+    # the AI models that wrote what the zip carries, not the one configured now
+    scritto_da = {m for m in ((payload.get("ai") or {}).get("model") or "").split(", ") if m} | {m for m in scrittori.values() if m}
     audit.record_audit(
         session, actor=user, action=audit.EXPORT_DOWNLOAD,
         target_type="flow", target_id=flow.id, target_label=flow.name,
         detail={"format": "dbt", "target": target, **({"options": opzioni.model_dump(by_alias=True)} if opzioni else {}),
-                **({"ai": {"model": (payload.get("ai") or {}).get("model"), "translated": sorted(proposte)}} if (payload.get("ai") or proposte) else {})},
+                **({"ai": {"model": ", ".join(sorted(scritto_da)) or None, "translated": sorted(proposte)}} if (payload.get("ai") or proposte) else {})},
         request=request,
     )
-    fname = "".join(c if (c.isalnum() or c in "-_") else "_" for c in flow.name).strip("_") or "flow"
-    return Response(
-        content=resp.content, media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{fname}_dbt_{target}.zip"'},
-    )
+    return risposta
+
+
+def _content_disposition(base: str, coda: str) -> str:
+    """`attachment` with the file name twice: in ASCII for old clients (accents
+    transliterated, other letters `_`), and as RFC 5987 `filename*` in UTF-8 with every
+    letter. HTTP headers are Latin-1: a raw «Ł» or «销» there was a 500."""
+    ascii_ = "".join(c if c.isascii() else ("" if unicodedata.combining(c) else "_")
+                     for c in unicodedata.normalize("NFKD", base)).strip("_") or "flow"
+    return f"attachment; filename=\"{ascii_}{coda}\"; filename*=UTF-8''{quote(base + coda, safe='')}"
 
 
 # ── Presenza nell'editor ───────────────────────────────────────────────────────

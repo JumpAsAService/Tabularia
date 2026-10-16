@@ -8,9 +8,9 @@ sorgenti su più connessioni…) si salta e lo si dice; gli unici rifiuti che so
 l'engine scopre e che sono attesi sono il pivot e il ClickHouse del CRM d'esempio,
 che non è quello del motore.
 uso: python3 flussi_sample.py [clickhouse] [duckdb] [native] [--flusso NOME]"""
-import json, re, sys
+import json, sys
 
-from comune import (aspetta_run, api, confronta, dbt, entra, esiti, esporta, ok, password_delle_connessioni,
+from comune import (aspetta_run, api, confronta, dbt, entra, esporta, ok, password_delle_connessioni,
                     pulisci_clickhouse, riepilogo, slug_modello)
 
 TARGET = [a for a in sys.argv[1:] if a in ("clickhouse", "duckdb", "native")] or ["clickhouse", "duckdb", "native"]

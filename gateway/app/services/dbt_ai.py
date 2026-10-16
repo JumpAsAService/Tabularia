@@ -11,17 +11,29 @@ flusso (tabella dbt_ai_texts), così riesportare la stessa versione dà lo stess
 l'AI vede la struttura del flusso e POCHI valori per colonna (al più 3, corti),
 letti dalla datasource. La spesa passa dalla contabilità dell'assistente (ai_spend)
 e ne rispetta i tetti; un tetto raggiunto o un provider che non risponde fermano
-l'export con il motivo, invece di togliere l'AI di nascosto."""
+l'export con il motivo, invece di togliere l'AI di nascosto.
+
+What keeps that promise: every key asked is kept, «no description» included, so a
+version is asked once; one export at a time asks for a version, on any gateway (a
+claim row), and what is stored wins over what an export just got; the README names
+the models that wrote the stored texts. Every AI call of one export shares one budget
+(AI__DBT_EXPORT_TIMEOUT_SECONDS), under the ingress' timeout, and has the assistant's
+per-turn limits; what a call cost reaches ai_spend even when it fails."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import re
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 
 from pydantic import BaseModel
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -39,6 +51,12 @@ MAX_COLONNE = 400          # colonne descritte in un export (oltre: restano senz
 CAMPIONI = 3               # valori distinti per colonna mostrati all'AI
 LUNGHEZZA_CAMPIONE = 40
 RIGHE_CAMPIONE = 30        # righe lette dalla datasource per scegliere i valori
+MAX_CHIAVE = 500           # characters of dbt_ai_texts.key: a longer key is stored as its digest
+# characters of SQL the AI is asked to translate. Its answer is as long, and a query
+# sent cut short loses its last steps while keeping the right columns, which is all
+# the engine's checks compare: over this, no AI.
+MAX_SQL_TRADUZIONE = 20_000
+ATTESA = 0.5               # seconds between two looks at a claim another export holds
 
 
 def modello_ai(session: Session) -> Optional[str]:
@@ -53,6 +71,25 @@ def modello_ai(session: Session) -> Optional[str]:
     return cfg.default_model if cfg.default_model in abilitati else abilitati[0]
 
 
+def nuova_scadenza() -> float:
+    """When (time.monotonic) every AI call of ONE export must have answered. The export
+    is one request, and the ingress cuts it at 300 s: the AI gives up first and says
+    why, instead of a generic 504 while the gateway goes on paying."""
+    return time.monotonic() + get_settings().ai.dbt_export_timeout_seconds
+
+
+def _scaduta() -> DbtExportError:
+    budget = get_settings().ai.dbt_export_timeout_seconds
+    return DbtExportError(f"the AI did not answer within {budget:g} s", "ai_failed", detail=f"timed out after {budget:g} s")
+
+
+def controlla_scadenza(scadenza: float) -> None:
+    """Past the export's budget no further step starts: the engine calls between the AI's
+    proposals (seeds read again, the ClickHouse syntax check) are not bounded by it."""
+    if time.monotonic() > scadenza:
+        raise _scaduta()
+
+
 def _controlla_tetti(session: Session, user: User) -> None:
     cfg = get_settings().ai
     if cfg.max_cost_per_day_total_usd and ai_chats.speso_oggi_tutti(session) >= Decimal(str(cfg.max_cost_per_day_total_usd)):
@@ -61,10 +98,17 @@ def _controlla_tetti(session: Session, user: User) -> None:
         raise DbtExportError("you have reached your AI spending cap for today", "ai_cap_reached")
 
 
+# What a YAML file cannot carry, even quoted: C0 controls, DEL, C1 controls, surrogates,
+# U+FFFE/FFFF (whitespace aside, which `_pulisci` collapses). The AI echoes sample values,
+# and text decoded with the wrong code page is full of C1 controls: one of them in
+# schema.yml and `dbt parse` refuses the whole project.
+_NON_YAML = re.compile(r"[^\s\x20-\x7e\xa0-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
+
+
 def _pulisci(testo: Any) -> str:
-    """Una riga, senza i delimitatori di Jinja (dbt rende le descrizioni come Jinja),
-    tagliata a MAX_TESTO."""
-    t = re.sub(r"\s+", " ", str(testo or "")).strip().strip("\"'`")
+    """One line, without Jinja's delimiters (dbt renders descriptions as Jinja) and
+    without the characters YAML refuses, cut at MAX_TESTO."""
+    t = re.sub(r"\s+", " ", _NON_YAML.sub("", str(testo or ""))).strip().strip("\"'`")
     for a, b in (("{{", "{ {"), ("}}", "} }"), ("{%", "{ %"), ("%}", "% }"), ("{#", "{ #"), ("#}", "# }")):
         t = t.replace(a, b)
     if len(t) > MAX_TESTO:
@@ -78,28 +122,139 @@ def _versione(session: Session, flow: Flow) -> int:
     return int(ultima or 0)
 
 
-def _ricordati(session: Session, flow_id: int, versione: int, kind: str) -> dict[str, str]:
-    righe = session.exec(select(DbtAiText).where(DbtAiText.flow_id == flow_id, DbtAiText.flow_version == versione,
-                                                 DbtAiText.kind == kind)).all()
-    return {r.key: r.text for r in righe}
+def _chiave(chiave: str) -> str:
+    """The key as stored. A survey question as a column name, or the type of a nested
+    Struct, makes a key longer than its column: such a key is stored as its digest.
+    Reads and writes both go through here; a key cut short was never found again, and
+    its second insert broke the unique key."""
+    if len(chiave) <= MAX_CHIAVE:
+        return chiave
+    return "sha256:" + hashlib.sha256(chiave.encode()).hexdigest()
+
+
+def _ricordati(session: Session, flow_id: int, versione: int, kind: str) -> dict[str, tuple[str, str]]:
+    """What is stored for this flow version, by stored key (`_chiave`): (text, model)."""
+    righe = session.exec(select(DbtAiText.key, DbtAiText.text, DbtAiText.model_id).where(
+        DbtAiText.flow_id == flow_id, DbtAiText.flow_version == versione, DbtAiText.kind == kind)).all()
+    return {k: (t, m) for k, t, m in righe}
+
+
+def testi_della_versione(session: Session, flow: Flow) -> dict:
+    """What the AI wrote that is kept for the flow's current version, for the download
+    dialog: a re-export with the AI options gives it back without a call, with the AI
+    switched off too, so the dialog can offer it then and name the models that wrote it
+    (not the one configured now)."""
+    righe = session.exec(select(DbtAiText.kind, DbtAiText.model_id).where(
+        DbtAiText.flow_id == flow.id, DbtAiText.flow_version == _versione(session, flow),
+        DbtAiText.kind.in_(("describe", "translate")), DbtAiText.text != "")).all()
+    return {"descriptions": any(k == "describe" for k, _ in righe), "translations": any(k == "translate" for k, _ in righe),
+            "models": sorted({m for _, m in righe if m})}
+
+
+def _inserisci(session: Session, righe: list[dict]) -> int:
+    """INSERT … ON CONFLICT DO NOTHING (Postgres, and SQLite in the tests): a row that
+    another export stored first stays as it is. Returns the rows inserted."""
+    if not righe:
+        return 0
+    if session.get_bind().dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert
+    adesso = datetime.now(timezone.utc)
+    esito = session.exec(insert(DbtAiText).values([{"model_id": "", "created_at": adesso, **r} for r in righe])
+                         .on_conflict_do_nothing())
+    return esito.rowcount or 0
 
 
 def _ricorda(session: Session, flow_id: int, versione: int, kind: str, testi: dict[str, str], model_id: str) -> None:
-    gia = set(_ricordati(session, flow_id, versione, kind))
-    for chiave, testo in testi.items():
-        if chiave not in gia:
-            session.add(DbtAiText(flow_id=flow_id, flow_version=versione, kind=kind, key=chiave[:500], text=testo, model_id=model_id))
+    """Stores the texts. A key already stored keeps its text: another export, on this
+    gateway or another one, stored it first, and that is the text every later export
+    gives back."""
+    _inserisci(session, [{"flow_id": flow_id, "flow_version": versione, "kind": kind, "key": _chiave(chiave),
+                          "text": testo, "model_id": model_id} for chiave, testo in testi.items()])
     session.commit()
 
 
-def _registra_spesa(session: Session, user: User, model_id: str, esito: Any) -> None:
-    uso = esito.usage
-    uso = uso() if callable(uso) else uso
+@asynccontextmanager
+async def _prenotazione(session: Session, flow_id: int, versione: int, chiave: str, scadenza: float) -> AsyncIterator[None]:
+    """One export at a time asks the AI for the same texts of a flow version, on any
+    gateway: the claim is a row of dbt_ai_texts (kind «claim») that the unique key lets
+    one export insert. The others wait for it to go, and then find the texts stored, or
+    for it to expire: an export that died does not hold the version past its deadline."""
+    dove = (DbtAiText.flow_id == flow_id, DbtAiText.flow_version == versione,
+            DbtAiText.kind == "claim", DbtAiText.key == _chiave(chiave))
+    while True:
+        resto = scadenza - time.monotonic()
+        if resto <= 0:
+            raise _scaduta()
+        mia = f"{time.time() + resto:.3f}"   # when this claim expires, wall clock: other gateways read it
+        if _inserisci(session, [{"flow_id": flow_id, "flow_version": versione, "kind": "claim", "key": _chiave(chiave), "text": mia}]):
+            session.commit()
+            break
+        tenuta = session.exec(select(DbtAiText.text).where(*dove)).first()
+        session.commit()   # no transaction left open while waiting (SQLite would keep its lock)
+        if tenuta is None:
+            continue       # released in the meantime
+        try:
+            scaduta = float(tenuta) < time.time()
+        except ValueError:
+            scaduta = True
+        if scaduta:
+            session.exec(delete(DbtAiText).where(*dove, DbtAiText.text == tenuta))
+            session.commit()
+            continue
+        await asyncio.sleep(min(ATTESA, resto))
+    try:
+        yield
+    finally:
+        try:
+            session.exec(delete(DbtAiText).where(*dove, DbtAiText.text == mia))
+            session.commit()
+        except Exception:  # noqa: BLE001 — the claim expires on its own at its deadline
+            session.rollback()
+            logger.warning("dbt export: AI claim on flow %s v%s not released", flow_id, versione, exc_info=True)
+
+
+def _registra_spesa(session: Session, user: User, model_id: str, uso: Any) -> None:
     try:
         ai_chats.registra_spesa(session, user_id=user.id, model_id=model_id, input_tokens=uso.input_tokens,
                                 output_tokens=uso.output_tokens, cost=ai_pricing.cost_of(uso, model_id))
     except Exception:  # noqa: BLE001 — la contabilità non deve far perdere un export già pagato
         logger.exception("export dbt: spesa AI non registrata")
+
+
+async def _esegui(model_id: str, output_type: type, istruzioni: str, domanda: str,
+                  session: Session, user: User, scadenza: float) -> Any:
+    """One AI run under the export's limits: at most 3 requests, the assistant's
+    per-turn caps on cost and input tokens (audit A8), the export's deadline. What the
+    run cost goes to the spending ledger even when it fails halfway (an answer that
+    fails validation is retried, and billed): the daily caps read only the ledger."""
+    from pydantic_ai import Agent
+    from pydantic_ai.usage import RunUsage, UsageLimits
+
+    from app.services import ai_agent
+
+    cfg = get_settings().ai
+    uso = RunUsage()   # ours, passed in: pydantic-ai counts into it, so a run stopped halfway still says what it spent
+    try:
+        resto = scadenza - time.monotonic()
+        if resto <= 0:
+            raise TimeoutError
+        agente = Agent(ai_agent.build_model(model_id), output_type=output_type, instructions=istruzioni)
+        limiti = UsageLimits(request_limit=3,
+                             cost_limit=Decimal(str(cfg.max_cost_per_turn_usd)) if cfg.max_cost_per_turn_usd else None,
+                             input_tokens_limit=cfg.max_input_tokens_per_turn)
+        esito = await asyncio.wait_for(agente.run(domanda, usage=uso, usage_limits=limiti), timeout=resto)
+    except TimeoutError as e:
+        logger.warning("dbt export: the AI (%s) did not answer within the export's budget", model_id)
+        raise _scaduta() from e
+    except Exception as e:  # noqa: BLE001 — il provider non risponde, o risponde male
+        logger.warning("dbt export: AI call failed (%s): %s", model_id, e)
+        raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
+    finally:
+        if uso.requests:
+            _registra_spesa(session, user, model_id, uso)
+    return esito.output
 
 
 async def _campioni(bucket: str, key: str) -> dict[str, list[str]]:
@@ -192,13 +347,16 @@ def _voci_colonne(payload: dict) -> list[tuple[str, dict, dict]]:
     return out
 
 
-async def descrivi(session: Session, user: User, flow: Flow, flussi: list[int], payload: dict) -> None:
-    """Riempie le descrizioni che mancano nel payload (modifica il payload)."""
-    model_id = modello_ai(session)
-    if model_id is None:
-        raise DbtExportError("the AI is not available: the assistant is not configured, or no model is enabled", "ai_unavailable")
+async def descrivi(session: Session, user: User, flow: Flow, flussi: list[int], payload: dict,
+                   scadenza: float | None = None) -> None:
+    """Riempie le descrizioni che mancano nel payload (modifica il payload).
+
+    Each text is asked once per flow version and kept, «no description» included: a
+    re-export of the version asks nothing (the AI may be off by then) and gives the
+    same zip, whatever model is configured now. `scadenza` is the export's budget
+    (`nuova_scadenza`), shared with the translations."""
+    scadenza = scadenza if scadenza is not None else nuova_scadenza()
     versione = _versione(session, flow)
-    ricordati = _ricordati(session, flow.id, versione, "describe")
 
     voci_flussi: list[tuple[str, dict, Flow]] = []
     for fid in sorted(set(flussi)):
@@ -208,55 +366,81 @@ async def descrivi(session: Session, user: User, flow: Flow, flussi: list[int], 
         chiave = f"flow:{fid}@v{_versione(session, f)}"
         voci_flussi.append((chiave, {"key": chiave, "kind": "flow", "name": f.name, "description": f.description or "", **_passi(f)}, f))
     voci_colonne = _voci_colonne(payload)[:MAX_COLONNE]
+    voci = [(k, v) for k, v, _ in voci_flussi] + [(k, v) for k, v, _ in voci_colonne]
 
-    mancanti = [v for k, v, _ in voci_flussi if k not in ricordati] + [v for k, v, _ in voci_colonne if k not in ricordati]
-    if mancanti:
-        _controlla_tetti(session, user)
-        # i pochi valori d'esempio, per le colonne da descrivere (una lettura per datasource)
-        campioni: dict[int, dict[str, list[str]]] = {}
-        for v in mancanti:
-            m = re.match(r"col:ds:(\d+):", v["key"])
-            if not m:
-                continue
-            ds_id = int(m.group(1))
-            if ds_id not in campioni:
-                ds = session.get(Datasource, ds_id)
-                campioni[ds_id] = await _campioni(ds.bucket, ds.key) if ds is not None and ds.key else {}
-            v["samples"] = campioni[ds_id].get(v["column"], [])
-        testi = await _chiedi(model_id, mancanti, session, user)
-        _ricorda(session, flow.id, versione, "describe", testi, model_id)
-        ricordati = {**ricordati, **testi}
+    ricordati = _ricordati(session, flow.id, versione, "describe")
+    if any(_chiave(k) not in ricordati for k, _ in voci):
+        async with _prenotazione(session, flow.id, versione, "describe", scadenza):
+            ricordati = _ricordati(session, flow.id, versione, "describe")   # what the export that held the claim stored
+            mancanti = list({k: v for k, v in voci if _chiave(k) not in ricordati}.values())
+            if mancanti:
+                await _descrivi_mancanti(session, user, flow, versione, mancanti, scadenza)
+                ricordati = _ricordati(session, flow.id, versione, "describe")   # what is stored wins
 
+    modelli: set[str] = set()   # the models that wrote the texts used, not the one configured now
     for chiave, _, colonna in voci_colonne:
-        if ricordati.get(chiave):
-            colonna["description"] = MARCA + ricordati[chiave]
+        testo, modello = ricordati.get(_chiave(chiave), ("", ""))
+        if testo:
+            colonna["description"] = MARCA + testo
+            modelli.add(modello)
     riassunti = []
     for chiave, voce, f in voci_flussi:
-        testo = ricordati.get(chiave)
+        testo, modello = ricordati.get(_chiave(chiave), ("", ""))
         if not testo:
             continue
+        modelli.add(modello)
         riassunti.append({"flow": f.name, "text": MARCA + testo})
         for m in payload.get("models") or []:
             if (m.get("meta") or {}).get("flow_id") == f.id and m.get("kind") == "output":
                 m["description"] = (m.get("description") or "").rstrip() + " " + MARCA + testo
-    payload["ai"] = {"model": model_id, "summaries": riassunti}
+    payload["ai"] = {"model": ", ".join(sorted(m for m in modelli if m)) or None, "summaries": riassunti}
 
 
-async def _chiedi(model_id: str, voci: list[dict], session: Session, user: User) -> dict[str, str]:
-    from pydantic_ai import Agent
-    from pydantic_ai.usage import UsageLimits
+async def _descrivi_mancanti(session: Session, user: User, flow: Flow, versione: int, mancanti: list[dict], scadenza: float) -> None:
+    """Asks the AI for the missing texts and stores an outcome for every key asked."""
+    model_id = modello_ai(session)
+    if model_id is None:
+        raise DbtExportError("the AI is not available: the assistant is not configured, or no model is enabled", "ai_unavailable")
+    _controlla_tetti(session, user)
+    # i pochi valori d'esempio, per le colonne da descrivere (una lettura per datasource)
+    campioni: dict[int, dict[str, list[str]]] = {}
+    for v in mancanti:
+        m = re.match(r"col:ds:(\d+):", v["key"])
+        if not m:
+            continue
+        ds_id = int(m.group(1))
+        if ds_id not in campioni:
+            ds = session.get(Datasource, ds_id)
+            campioni[ds_id] = await _campioni_entro(ds, scadenza) if ds is not None and ds.key else {}
+        v["samples"] = campioni[ds_id].get(v["column"], [])
+    testi = await _chiedi(model_id, mancanti, session, user, scadenza)
+    restano = [v for v in mancanti if v["key"] not in testi]
+    if restano:
+        # models drop items from long lists, or answer some with nothing: those are asked
+        # once more, alone. The first answer is stored first: it is paid for, whatever
+        # the second call does.
+        _ricorda(session, flow.id, versione, "describe", testi, model_id)
+        testi.update(await _chiedi(model_id, restano, session, user, scadenza))
+    # every key asked gets an outcome, «no description» for what is still missing: a
+    # version is asked once, so its re-export gives the same zip without the provider
+    _ricorda(session, flow.id, versione, "describe", {v["key"]: testi.get(v["key"], "") for v in mancanti}, model_id)
 
-    from app.services import ai_agent
 
+async def _campioni_entro(ds: Datasource, scadenza: float) -> dict[str, list[str]]:
+    """The sample values, within the export's budget."""
     try:
-        agente = Agent(ai_agent.build_model(model_id), output_type=_Descrizioni, instructions=_ISTRUZIONI)
-        esito = await agente.run(json.dumps({"items": voci}, ensure_ascii=False), usage_limits=UsageLimits(request_limit=3))
-    except Exception as e:  # noqa: BLE001 — il provider non risponde, o risponde male
-        logger.warning("export dbt: descrizioni AI non riuscite (%s): %s", model_id, e)
-        raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
-    _registra_spesa(session, user, model_id, esito)
+        return await asyncio.wait_for(_campioni(ds.bucket, ds.key), timeout=max(scadenza - time.monotonic(), 0))
+    except TimeoutError as e:
+        raise _scaduta() from e
+
+
+async def _chiedi(model_id: str, voci: list[dict], session: Session, user: User, scadenza: float) -> dict[str, str]:
+    """The descriptions the AI writes for `voci`, by key: an item its answer leaves out,
+    or answers with nothing, is not there."""
+    esito = await _esegui(model_id, _Descrizioni, _ISTRUZIONI, json.dumps({"items": voci}, ensure_ascii=False),
+                          session, user, scadenza)
     attese = {v["key"] for v in voci}
-    return {v.key: _pulisci(v.description) for v in (esito.output.items or []) if v.key in attese and _pulisci(v.description)}
+    return {v.key: testo for v in (esito.items or []) if v.key in attese and (testo := _pulisci(v.description))}
 
 
 def chiave_traduzione(sql: str, da: str, a: str) -> str:
@@ -284,47 +468,58 @@ _ISTRUZIONI_TRADUZIONE = (
 
 
 async def traduci(session: Session, user: User, flow: Flow, params: dict,
-                  scartata: tuple[str, str] | None = None) -> tuple[str, str]:
+                  scartata: tuple[str, str] | None = None, scadenza: float | None = None) -> tuple[str, str, str]:
     """Una proposta di traduzione per il modello che l'engine non ha tradotto, ricordata
-    per versione. Torna (sql, chiave): la chiave serve a dimenticarla se l'engine la scarta.
+    per versione. Torna (sql, chiave, modello): la chiave serve a dimenticarla se l'engine
+    la scarta, il modello è quello che l'ha scritta (non quello configurato ora).
     `scartata` = (proposta di prima, perché l'engine l'ha scartata): un secondo tentativo,
-    con l'errore davanti — un modello a volte rimanda la query com'era."""
-    model_id = modello_ai(session)
-    if model_id is None:
-        raise DbtExportError("the AI is not available: the assistant is not configured, or no model is enabled", "ai_unavailable")
+    con l'errore davanti — un modello a volte rimanda la query com'era.
+
+    A query over MAX_SQL_TRADUZIONE characters is refused before any call: the AI would
+    get it cut. Over ClickHouse's max_query_size (the engine's refusal of a model too
+    large) it always is."""
     sql, da, a = str(params.get("sql") or ""), str(params.get("source_dialect") or ""), str(params.get("target_dialect") or "")
     colonne = [str(c) for c in params.get("columns") or []]
+    if len(sql) > MAX_SQL_TRADUZIONE:
+        modello = str(params.get("model") or "")
+        raise DbtExportError(
+            f"the model «{modello}» does not translate to {a} ({params.get('detail') or '-'}), and its SQL is too long "
+            f"to ask the AI for a translation: {len(sql):,} characters, at most {MAX_SQL_TRADUZIONE:,}",
+            "ai_query_too_long", model=modello, dialect=a, detail=str(params.get("detail") or "-"),
+            size=f"{len(sql):,}", max=f"{MAX_SQL_TRADUZIONE:,}")
+    scadenza = scadenza if scadenza is not None else nuova_scadenza()
     versione = _versione(session, flow)
     chiave = chiave_traduzione(sql, da, a)
-    gia = _ricordati(session, flow.id, versione, "translate").get(chiave)
-    if gia and scartata is None:
-        return gia, chiave
-    _controlla_tetti(session, user)
-    from pydantic_ai import Agent
-    from pydantic_ai.usage import UsageLimits
-
-    from app.services import ai_agent
-
-    try:
-        agente = Agent(ai_agent.build_model(model_id), output_type=_Traduzione,
-                       instructions=_ISTRUZIONI_TRADUZIONE.format(da=da, a=a, colonne=", ".join(colonne) or "(the same as the query)"))
-        domanda = sql[:20000]
+    gia = _ricordati(session, flow.id, versione, "translate").get(_chiave(chiave))
+    if gia and gia[0] and scartata is None:
+        return gia[0], chiave, gia[1]
+    async with _prenotazione(session, flow.id, versione, f"translate:{chiave}", scadenza):
+        gia = _ricordati(session, flow.id, versione, "translate").get(_chiave(chiave))
+        if gia and gia[0] and scartata is None:
+            return gia[0], chiave, gia[1]       # another export asked for it while this one waited
+        if gia and not gia[0]:
+            dimentica(session, flow, chiave, "")   # an empty proposal kept by an older gateway: the new one takes its place
+        model_id = modello_ai(session)
+        if model_id is None:
+            raise DbtExportError("the AI is not available: the assistant is not configured, or no model is enabled", "ai_unavailable")
+        _controlla_tetti(session, user)
+        domanda = sql
         if scartata is not None:
             domanda += (f"\n\n-- Your previous translation was rejected: {scartata[1]}\n-- Previous translation:\n"
                         + "\n".join("-- " + r for r in scartata[0][:5000].splitlines()))
-        esito = await agente.run(domanda, usage_limits=UsageLimits(request_limit=3))
-    except Exception as e:  # noqa: BLE001
-        logger.warning("export dbt: traduzione AI non riuscita (%s): %s", model_id, e)
-        raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
-    _registra_spesa(session, user, model_id, esito)
-    proposta = str(esito.output.sql or "").strip().rstrip(";").strip()
-    _ricorda(session, flow.id, versione, "translate", {chiave: proposta}, model_id)
-    return proposta, chiave
+        istruzioni = _ISTRUZIONI_TRADUZIONE.format(da=da, a=a, colonne=", ".join(colonne) or "(the same as the query)")
+        esito = await _esegui(model_id, _Traduzione, istruzioni, domanda, session, user, scadenza)
+        proposta = str(esito.sql or "").strip().rstrip(";").strip()
+        if proposta:   # an empty one is rejected by the engine: kept, it would be served again, and paid again
+            _ricorda(session, flow.id, versione, "translate", {chiave: proposta}, model_id)
+        # what is stored wins: another gateway may have stored its proposal first
+        tenuta = _ricordati(session, flow.id, versione, "translate").get(_chiave(chiave)) or (proposta, model_id)
+    return tenuta[0], chiave, tenuta[1]
 
 
-def dimentica(session: Session, flow: Flow, chiave: str) -> None:
-    """Una proposta che l'engine ha scartato: la prossima volta si richiede."""
-    from sqlalchemy import delete
-
-    session.exec(delete(DbtAiText).where(DbtAiText.flow_id == flow.id, DbtAiText.kind == "translate", DbtAiText.key == chiave))
+def dimentica(session: Session, flow: Flow, chiave: str, testo: str) -> None:
+    """Una proposta che l'engine ha scartato: la prossima volta si richiede. Only that
+    text: another export may have replaced it meanwhile with one of its own."""
+    session.exec(delete(DbtAiText).where(DbtAiText.flow_id == flow.id, DbtAiText.kind == "translate",
+                                         DbtAiText.key == _chiave(chiave), DbtAiText.text == testo))
     session.commit()

@@ -1,10 +1,10 @@
 """Gli oracoli dell'export dbt contro uno stack in esecuzione (vedi README.md).
 
 uso: python3 esegui.py [veloce|completo|browser|ai|tutto] [nome …]
-  veloce    codici d'errore, giro dbt, sicurezza dell'export            (~5 min)
+  veloce    codici d'errore, gateway and engine in step, giro dbt, sicurezza dell'export (~5 min)
   completo  veloce + matrice, ciclo di vita, cartella, flussi d'esempio,
             determinismo                                                 (~40 min, default)
-  browser   il dialogo dell'export in Firefox
+  browser   il dialogo dell'export in Firefox (also its state between openings, focus, names)
   ai        descrizioni e traduzione con l'AI vera (chiamate a pagamento)
   tutto     completo + browser + ai
   nome …    solo quegli oracoli (es. `python3 esegui.py matrice ciclo`)
@@ -20,9 +20,9 @@ from ambiente import CH_CONTENITORE, DOVE, IMMAGINE, PG_CONTENITORE, QUI, BASE
 import comune
 
 SUITE = {
-    "veloce": ["codici", "giro", "sicurezza"],
-    "completo": ["codici", "giro", "sicurezza", "matrice", "ciclo", "cartella", "flussi_sample", "deterministico"],
-    "browser": ["browser_dialogo"],
+    "veloce": ["codici", "deriva", "giro", "sicurezza"],
+    "completo": ["codici", "deriva", "giro", "sicurezza", "matrice", "ciclo", "cartella", "flussi_sample", "deterministico"],
+    "browser": ["browser_dialogo", "browser_dialogo_stato"],
     "ai": ["ai_descrizioni", "ai_traduzione"],
 }
 SUITE["tutto"] = SUITE["completo"] + SUITE["browser"] + SUITE["ai"]

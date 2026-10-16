@@ -123,7 +123,7 @@ engines, from an in-process library to a serverless warehouse.
   the data contract as dbt tests, seeds for the files it reads. Run it on your ClickHouse,
   which reads the source databases live, with dbt-duckdb, or natively in the source
   database — as a complete project or as a folder for the data team's own project.
-  Verified with a real `dbt run` and compared with what Tabularia publishes.
+  End-to-end oracles run it with a real dbt and compare it with what Tabularia publishes.
 - **Multi-user from day one.** Password or SSO sign-in (Keycloak, Entra ID, Auth0, Okta)
   with sessions you can see and close, users & groups, nested projects with inherited
   view / edit / manage / connect permissions. Everyone works in the same place, safely.
@@ -591,17 +591,20 @@ project (administrators only — an admin group is the way to give it to the dat
 tables written in append), the steps shared by several outputs as `ephemeral` models
 referenced with `ref()`, `sources.yml` with the tables, their descriptions and columns,
 `schema.yml` with every model's columns and descriptions and the **data contract as dbt
-tests** (`not_null`, `unique`, `accepted_values` on the columns; range, pattern, row
-count and expressions as singular tests, each with the contract's severity), a seed for
-every file the flow reads, a SQL-query datasource as an ephemeral model, and the
-models of the upstream flows whose outputs the flow reads. Three targets: **ClickHouse**
-(dbt-clickhouse on your ClickHouse, which reads Postgres and MySQL live through database
-engines), **dbt-duckdb**, which attaches the source databases and runs the very SQL
-Tabularia runs, and the **native warehouse** (dbt-postgres, dbt-mysql, dbt-clickhouse),
-with the SQL translated by sqlglot. A dialog shapes it for the data team: a complete
+tests** (`not_null` as a generic test on the column; a one-column `unique` — two NULLs are
+a duplicate, as in Tabularia — `accepted_values`, range, pattern, row count and expressions
+as singular tests, each with the contract's severity), a seed for every file the flow
+reads, a SQL-query datasource as an ephemeral model, and, from an upstream flow whose
+output the flow reads, only the branch that publishes it. Three targets: **ClickHouse**
+(dbt-clickhouse on your ClickHouse, which reads Postgres, MySQL and MariaDB live through
+its PostgreSQL and MySQL table engines), **dbt-duckdb**, which attaches the source
+databases and runs the very SQL Tabularia runs, and the **native warehouse**
+(dbt-postgres or dbt-clickhouse, with the SQL translated by sqlglot; MySQL and MariaDB
+sources are read by the other two targets). A dialog shapes it for the data team: a complete
 project or a folder to copy into theirs, names and prefix, layers, their source names,
-schema, materializations, tests and emails. Every Sample flow is exported, run with a
-real dbt and compared with the datasource Tabularia publishes. The details, the mapping and the limits are in
+schema, materializations, tests and emails. End-to-end oracles export every Sample flow,
+run it with a real dbt and compare it with the datasource Tabularia publishes
+([e2e/dbt_export](e2e/dbt_export/README.md)). The details, the mapping and the limits are in
 [docs/dbt-export.md](docs/dbt-export.md).
 
 ## OpenLineage (optional)

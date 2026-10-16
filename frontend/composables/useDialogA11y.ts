@@ -20,6 +20,11 @@ const FOCUSABILI = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ')
 
+// The dialogs open right now, each with where its focus goes back. A dialog opened from inside
+// another one that closes at the same moment (the Flows export menu → the dbt dialog) remembers
+// a button that is then removed: its focus goes back instead to whoever opened the outer one.
+const openDialogs = new Set<{ card: Ref<HTMLElement | null>; returnTo: () => HTMLElement | null }>()
+
 export function useDialogA11y(
   card: Ref<HTMLElement | null>,
   aperto: () => boolean,
@@ -27,6 +32,9 @@ export function useDialogA11y(
 ) {
   // chi aveva il fuoco prima dell'apertura: ci torna alla chiusura
   let origine: HTMLElement | null = null
+  // where the dialog that held `origine` sends its own focus back, if `origine` is gone by then
+  let fallback: HTMLElement | null = null
+  const self = { card, returnTo: () => (origine?.isConnected ? origine : fallback) }
 
   function elencoFocusabili(): HTMLElement[] {
     if (!card.value) return []
@@ -78,6 +86,9 @@ export function useDialogA11y(
 
     if (ora) {
       origine = document.activeElement as HTMLElement | null
+      const host = Array.from(openDialogs).find((d) => !!origine && !!d.card.value?.contains(origine))
+      fallback = host?.returnTo() ?? null
+      openDialogs.add(self)
       // in cattura: il dialogo vede Esc prima di qualunque handler sottostante
       document.addEventListener('keydown', suTasto, true)
       await nextTick()
@@ -85,14 +96,17 @@ export function useDialogA11y(
       // invece di scaraventare l'utente dentro un input
       card.value?.focus()
     } else {
+      openDialogs.delete(self)
       document.removeEventListener('keydown', suTasto, true)
-      origine?.focus?.()
+      self.returnTo()?.focus?.()
       origine = null
+      fallback = null
     }
   })
 
   onBeforeUnmount(() => {
     if (typeof document === 'undefined') return
+    openDialogs.delete(self)
     document.removeEventListener('keydown', suTasto, true)
   })
 }

@@ -4,6 +4,9 @@ event, cioè prima che il client abbia risolto la sessione: le pagine sembrano
 vuote anche quando non lo sono."""
 import base64, json, socket, time
 
+# WebDriver key codes, for `tasti`
+ESC, TAB, ENTER = "\ue00c", "\ue004", "\ue007"
+
 
 class Firefox:
     def __init__(self, porta=2828, attesa=40):
@@ -70,8 +73,17 @@ class Firefox:
                 return c["value"]
         return None
 
-    def js(self, script):
-        return self.invia("WebDriver:ExecuteScript", {"script": script, "args": []})["value"]
+    def js(self, script, *args):
+        """`script` runs as a function body: `arguments[0]`… are `args` (JSON values)."""
+        return self.invia("WebDriver:ExecuteScript", {"script": script, "args": list(args)})["value"]
+
+    def tasti(self, *keys):
+        """Real key presses, one after the other, on the element that has the focus."""
+        azioni = []
+        for k in keys:
+            azioni += [{"type": "keyDown", "value": k}, {"type": "keyUp", "value": k}]
+        self.invia("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "tastiera", "actions": azioni}]})
+        self.invia("WebDriver:ReleaseActions", {})
 
     def aspetta(self, script, secondi=25):
         """Aspetta che `script` torni vero. Torna False se scade."""

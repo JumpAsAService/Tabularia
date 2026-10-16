@@ -15,6 +15,8 @@ dello stack di prova descritto nel README (compose di produzione con il profilo
   E2E_LAVORO               dove scrivere i progetti esportati (default .lavoro/ qui accanto, ignorata da git)
   E2E_RIAVVIO              un comando che riavvia gateway ed engine (per l'oracolo del determinismo);
                            senza, quella parte si salta
+  E2E_TZ                   the time zone dbt runs in (TZ, PGTZ; default Europe/Rome): the models must not
+                           depend on it. UTC turns the check off
 """
 import os
 

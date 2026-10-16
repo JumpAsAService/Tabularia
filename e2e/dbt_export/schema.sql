@@ -16,3 +16,14 @@ INSERT INTO zzdbt.casi VALUES
 CREATE TABLE zzdbt.destra (id integer, categoria varchar, peso double precision, numero double precision, extra varchar);
 INSERT INTO zzdbt.destra VALUES
  (1, 'A', 1.5, 100, 'uno'), (2, 'B', 2.5, 200, 'due'), (9, 'D', 9.5, 900, 'nove'), (10, NULL, 0.5, NULL, 'dieci'), (3, 'A', 3.5, 300, NULL);
+-- types the main table does not have: a timestamptz (read in UTC whatever the session's zone), an
+-- unbounded numeric up to 1e20 (ClickHouse read it as Decimal(38, 19) and failed every model),
+-- '' / NULL / 'null' in one text column (an empty text is not NULL), dates before 1970 and after
+-- 2149 and timestamps with microseconds (ClickHouse's Date and DateTime lost them)
+CREATE TABLE zzdbt.tipi (id integer PRIMARY KEY, istante timestamptz, grande numeric, testo varchar, nato date, preciso timestamp);
+INSERT INTO zzdbt.tipi VALUES
+ (1, '2024-07-15 10:30:00+00', 1.5,                   '',     '1955-03-12', '2024-01-05 10:30:00.123456'),
+ (2, '2024-12-31 23:15:00+00', NULL,                  NULL,   '2150-06-01', '1965-06-01 08:00:00.5'),
+ (3, '2024-03-31 01:30:00+00', 0.1,                   'null', NULL,         NULL),
+ (4, NULL,                     -7,                    ' x ',  '1969-12-31', '1969-12-31 23:59:59.999999'),
+ (5, '1965-06-01 00:00:00+00', 100000000000000000000, 'ok',   '2024-02-29', '2024-02-29 12:00:00');
