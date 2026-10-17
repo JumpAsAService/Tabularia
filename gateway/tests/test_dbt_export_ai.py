@@ -476,14 +476,15 @@ def test_a_table_name_with_a_quote_or_a_backslash_is_read_by_dbt_as_written(sess
     answer either: dbt's static parser would read the escapes as part of the name.
     The adapter then quotes the name without escaping it: a double quote breaks
     dbt-duckdb and dbt-postgres, a backslash dbt-clickhouse, so those are refused
-    (review of the #2 fix: this test asserted their payload was built)."""
+    (review of the #2 fix: this test asserted their payload was built). A single quote
+    is refused on every target, as the engine does: nobody names a table that way."""
     for nome in ("src", "db_1_vendite"):
         m = re.fullmatch(r"\{\{ source\('(\w+)', (.+)\) \}\}", d._macro_source(nome, tabella))
         assert m and m.group(1) == nome and _come_legge_dbt(m.group(2))[0] == tabella
     scena.ordini.source_ref = f"vendite.{tabella}"
     session.add(scena.ordini)
     session.commit()
-    if ('"' in tabella and target != "clickhouse") or ("\\" in tabella and target == "clickhouse"):
+    if "'" in tabella or ('"' in tabella and target != "clickhouse") or ("\\" in tabella and target == "clickhouse"):
         with pytest.raises(d.DbtExportError) as e:
             d.build_export_payload(session, _flusso_a_due_uscite(session, scena), "data-prep", target)
         assert e.value.code == "name_not_quotable" and e.value.params["name"] == tabella

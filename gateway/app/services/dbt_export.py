@@ -68,12 +68,13 @@ MAX_UPSTREAM_DEPTH = 8          # flussi a monte inclusi, al più
 # roles): dbt writes `<quote>name<quote>` without escaping (BaseRelation.quoted), and ClickHouse reads
 # backslash escapes between backticks — every role. A model's OWN table (relation) and schema are also
 # written between `'`, unescaped, in the queries that list a schema's relations and a table's columns,
-# and dbt-postgres compares the schema with ILIKE, where a backslash escapes; a source is only read
-# through source(). The plan says it, instead of the download's 422 (or the team's `dbt run`).
+# and dbt-postgres compares the schema with ILIKE, where a backslash escapes; a source name with
+# a ' is refused too, as the engine does. The plan says it, instead of the download's 422 (or the
+# team's `dbt run`).
 _NON_QUOTABILI = {
-    "dbt-postgres": {"source": '"', "relation": "\"'", "schema": "\"'\\"},
-    "dbt-duckdb": {"source": '"', "relation": '"', "schema": '"'},
-    "dbt-clickhouse": {"source": "`\\", "relation": "`\\'", "schema": "`\\'"},
+    "dbt-postgres": {"source": "\"'", "relation": "\"'", "schema": "\"'\\"},
+    "dbt-duckdb": {"source": "\"'", "relation": '"', "schema": '"'},
+    "dbt-clickhouse": {"source": "`\\'", "relation": "`\\'", "schema": "`\\'"},
 }
 # regole di contratto → test dbt
 _COLUMN_TESTS = {"not_null", "unique", "accepted_values"}

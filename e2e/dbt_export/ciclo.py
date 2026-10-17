@@ -195,8 +195,10 @@ try:
             finto = "zz-SEGRETO-4242"
             v2 = {**variabili, f"TABULARIA_DB_{pg['id']}_PASSWORD": finto}
             cerca = lambda: file_con(cartella, finto)
+            # the typed proxy tables read the structure from Postgres when the macro creates them, so the
+            # wrong password fails the macro (loudly); what matters is that it is printed and kept nowhere
             rc, out = matrice.prepara_clickhouse(cartella, v2)
-            ok(f"B · {target}: col comando del README la password non è in nessun file (logs/, target/) né a video", rc == 0 and not cerca() and finto not in out, (rc, cerca(), out[-300:]))
+            ok(f"B · {target}: col comando del README una password sbagliata fallisce e non è in nessun file (logs/, target/) né a video", rc != 0 and not cerca() and finto not in out, (rc, cerca(), out[-300:]))
             rc, out = dbt(cartella, "dbt", "run-operation", "create_tabularia_sources", "--no-use-colors", variabili=v2)
             ok(f"B · {target}: controprova — senza --log-level-file none la password finisce in logs/dbt.log", any("dbt.log" in f for f in cerca()), cerca())
         if target == "native":

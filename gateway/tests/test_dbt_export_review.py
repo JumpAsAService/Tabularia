@@ -273,7 +273,7 @@ def test_a_table_name_the_adapter_cannot_quote_is_refused_in_the_plan(session, s
 
 
 @pytest.mark.parametrize("target, tabella", [
-    ("clickhouse", 'say "hi"'), ("clickhouse", "o'brien"), ("duckdb", "o'brien\\x"), ("duckdb", "a`b"), ("native", "o'brien\\x"),
+    ("clickhouse", 'say "hi"'), ("duckdb", "o\\x"), ("duckdb", "a`b"), ("native", "o\\x"),
 ])
 def test_names_the_adapter_quotes_stay_exportable(session, scena, target, tabella):
     scena.ordini.source_ref = f"vendite.{tabella}"

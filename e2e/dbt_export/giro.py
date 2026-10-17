@@ -148,7 +148,7 @@ try:
               {"kind": "accepted_values", "column": "canale", "values": canali, "severity": "warning"},
               {"kind": "range", "column": "ordini", "min": 1, "severity": "error"},
               {"kind": "row_count", "min": 1, "max": 1000, "severity": "warning"},
-              {"kind": "pattern", "column": "descrizione", "regex": "^Canale ", "severity": "error"},
+              {"kind": "pattern", "column": "descrizione", "regex": "Canale .*", "severity": "error"},  # the WHOLE value, as Tabularia matches it
               {"kind": "expression", "sql": "ordini >= 1", "severity": "warning"},
               {"kind": "freshness", "max_age_hours": 48, "severity": "warning"}]
     st, c = api("PUT", f"/datasources/{finale['id']}/contract", {"document": {"description": "channels we promise", "rules": regole}, "enabled": True})
