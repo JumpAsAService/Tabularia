@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none"><title>Tabularia</title>
+  <clipPath id="tml-after"><path d="M48 0V48H0V41C16 41 22 9.5 48 8Z"/></clipPath>
+  <mask id="tml-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48"><rect width="48" height="48" fill="#fff"/><path d="M5 39C19 39 24 10 43 9" fill="none" stroke="#000" stroke-width="9"/></mask>
+  <g mask="url(#tml-gap)"><g clip-path="url(#tml-after)" fill="none" stroke="#141926" stroke-width="3" stroke-linejoin="round"><rect x="6" y="6" width="36" height="36" rx="8"/><path d="M18 6v36M30 6v36M6 18h36M6 30h36"/></g></g>
+  <g fill="#6B7590"><rect x="9" y="9.5" width="7" height="3" rx="1.5"/><rect x="5.5" y="17" width="5" height="3" rx="1.5"/><rect x="11" y="24" width="5.5" height="3" rx="1.5"/></g>
+  <path d="M5 39C19 39 24 10 43 9" fill="none" stroke="#3B6FE0" stroke-width="4.6" stroke-linecap="round"/>
+</svg>

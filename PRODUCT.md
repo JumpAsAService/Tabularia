@@ -30,7 +30,7 @@ Runs behind a gateway (JWT auth, RBAC on users, groups and projects, optional OI
 
 ## Brand Commitments
 
-Name "Tabularia" and its mark — a table grid crossed by a flow. The mark is vector (`frontend/components/ui/BrandMark.vue` in the app, `frontend/public/logo.svg` outside it): grid in the text colour, flow in the accent, a reduced 2×2 variant below 24px. Redrawn on 2026-09-17 from the original raster, same idea and silhouette. Sober, technical voice; Italian-first team, English as the base locale.
+Name "Tabularia" and its mark, "order from noise": loose fragments (noise) before a blue flow, a clean 3×3 table grid (order) only after it, the flow cutting its own channel through the grid. Tagline "Messy in. Trusted out." The mark is vector (`frontend/components/ui/BrandMark.vue` in the app, `frontend/public/logo.svg` outside it, the standalone files in `brand/`): grid in the text colour, fragments in the muted colour, flow in the accent, a reduced variant (two fragments, a 2×2 grid) below 24px. Redrawn on 2026-10-18 from the approved brand board (`brand/board.html`, the visual reference; rules in `brand/BRAND.md`), replacing the 2026-09-17 grid-and-flow mark. Palette Flow `#4F8CFF`, Order `#E8EBF2`, Noise `#8B93A7`, Ink `#0B0E14`, Trusted `#6EE7B7`; IBM Plex Sans and Plex Mono. Sober, technical voice, never naming or comparing with competitors; Italian-first team, English as the base locale.
 
 ## Evidence on Hand
 

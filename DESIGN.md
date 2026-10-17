@@ -213,6 +213,9 @@ A cool, low-chroma neutral stack carrying one blue accent, one green for positiv
 - **Edge** (`edge`): data edges on the canvas at rest.
 - Derived, theme-dependent alphas: `--scrim` (behind modals), `--topbar-bg` (88 to 92% panel, under an 8px blur), `--row-even` and `--row-hover` (data-grid zebra and hover), `--sheen` (node title highlight), `--shimmer` (skeleton sweep).
 
+### Brand roles (the mark)
+The mark ("order from noise", `brand/BRAND.md`) adds no tokens; its three parts name existing roles. **Order**, the grid, is `text`; **Noise**, the loose fragments before the flow, is `muted`; **Flow**, the curve, is `accent`. In the default dark theme these are exactly the brand values (Order `#e8ebf2`, Noise `#8b93a7`, Flow `#4f8cff`, Ink `#0b0e14` = `bg`), and the brand's secondary **Trusted** mint `#6ee7b7` is `accent-2`, which keeps its role here (an outcome that passed), not a decorative one. Other themes re-value the roles and the mark follows them.
+
 ### Theme values
 
 | role | dark (default) | light | dracula | monokai | imperium |
@@ -311,7 +314,7 @@ Modals sit on `--scrim` with a 2px backdrop blur; the top bar and editor toolbar
 
 ## Shapes
 
-Softly rounded rectangles, stepped by the size of the thing: 4px for skeleton bars and scrollbar thumbs; 6px for options, tabs and small toolbar links; 8px for every control (buttons, inputs, Select triggers, search box, tags); 10px (`--radius`) for containers (list tables, nodes, menus, Select panels, toasts); 14px for the largest floating cards (dialogs, the sign-in card); 999px only for engine badges and similar pills. Borders are always 1px solid, with one exception: a flow node carries a 3px left edge in its category colour, which is the canvas's native way of saying what an operation is. Canvas handles are 11px accent dots with a 2px `bg` ring, centred on the node border, scaling to 1.35 on hover. The logo always sits on a white rounded tile (27px in the top bar, 20px in the editor toolbar, 40px on sign-in) so it survives every theme.
+Softly rounded rectangles, stepped by the size of the thing: 4px for skeleton bars and scrollbar thumbs; 6px for options, tabs and small toolbar links; 8px for every control (buttons, inputs, Select triggers, search box, tags); 10px (`--radius`) for containers (list tables, nodes, menus, Select panels, toasts); 14px for the largest floating cards (dialogs, the sign-in card); 999px only for engine badges and similar pills. Borders are always 1px solid, with one exception: a flow node carries a 3px left edge in its category colour, which is the canvas's native way of saying what an operation is. Canvas handles are 11px accent dots with a 2px `bg` ring, centred on the node border, scaling to 1.35 on hover. The mark (`components/ui/BrandMark.vue`, rules in `brand/BRAND.md`) sits directly on the surface with no tile: 26px in the top bar, 40px on sign-in (the full mark, a rounded 3×3 grid), 20px in the editor toolbar (the reduced mark, a 2×2 grid). The channel the flow cuts through the grid is a mask, so it survives every theme and every surface.
 
 ## Components
 

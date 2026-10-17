@@ -156,7 +156,7 @@ onMounted(async () => {
   <div v-label-fields class="shell">
     <header class="topbar">
       <NuxtLink to="/" class="brand">
-        <BrandMark :size="26" /> <span class="brand-name">Tabularia</span>
+        <BrandMark :size="28" /> <span class="brand-name">Tabularia</span>
       </NuxtLink>
 
       <nav class="mainnav" @wheel="navWheel">

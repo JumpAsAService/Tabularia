@@ -58,11 +58,10 @@ export default defineNuxtConfig({
         },
       ],
       link: [
-        // favicon ritagliata stretta sul simbolo — il logo.png a piena
-        // risoluzione ha margini enormi e in tab sparirebbe. PNG puri come
-        // primari (i più affidabili su Chrome), .ico BMP come fallback.
-        // vettoriale e con la griglia che segue il tema del BROWSER: chi lo supporta
-        // lo preferisce ai PNG qui sotto, che restano come ripiego
+        // favicon.svg: the reduced mark (brand/BRAND.md), colours following the
+        // BROWSER's colour scheme; browsers that support it prefer it to the PNGs.
+        // The PNG / .ico fallbacks are an Ink tile with the reduced mark (16, 32;
+        // the .ico's 48 carries the full mark), so they read on light and dark tab bars.
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png' },
         { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16.png' },
