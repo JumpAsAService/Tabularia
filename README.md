@@ -83,8 +83,9 @@ engines, from an in-process library to a serverless warehouse.
   back to a database table (Oracle and SQL Server are sources only, for now) or publish
   them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too, uploaded,
   on an **SFTP server** or in an **S3 bucket**: a folder and a glob become one table,
-  refreshed on schedule, and a flow can drop its result there as a file — the server's
-  host key checked at every connection ([SFTP](docs/sftp.md), [S3](docs/s3-datasource.md)).
+  refreshed on schedule, and a flow can drop its result there as a file (on SFTP the
+  server's host key is checked at every connection) ([SFTP](docs/sftp.md),
+  [S3](docs/s3-datasource.md)).
   And any **HTTP API** (REST/JSON): every kind of pagination and OAuth2 too — the
   credentials never leave the API's host ([HTTP APIs](docs/api-datasource.md)). Inputs
   and outputs share **one placeholder language**: dates that move by themselves
@@ -398,9 +399,12 @@ no run, no waiting for the whole pipeline.</em></p>
   unpivot keeps only the index columns with the value cast to the common supertype.
 - **`sql`** runs engine-native SQL against the node input (`FROM input`), with a
   guardrail floor that blocks filesystem / URL / executable access.
-- **Nodes**: `source` (file or DB datasource), `output` (write to a DB table or
-  publish a datasource; append/replace + post-SQL, and optionally a copy on an
-  external S3 bucket — see [Publishing to an external bucket](#publishing-to-an-external-bucket)),
+- **Nodes**: `source` (any datasource: an uploaded file, a database table or query, an
+  SFTP or S3 folder, a SharePoint path, an HTTP API call), `output` (write to a DB table,
+  publish a datasource — optionally with a copy on an external S3 bucket, see
+  [Publishing to an external bucket](#publishing-to-an-external-bucket) —, drop a file on
+  an SFTP server or an S3 bucket, or send it by email; append/replace + post-SQL for
+  tables; names built with [placeholders](#dynamic-inputs-and-outputs)),
   `refresh` (re-ingest a DB source), `runflow` (invoke another flow).
 
 Every node's output is **content-addressed and cached**: editing the last step of a
@@ -435,14 +439,18 @@ on a bucket Tabularia doesn't own — the one another team already reads from. I
 the integration path for the common case where nobody wants a data-prep tool writing
 into their database, and it needs no orchestrator: the consumer polls a path.
 
-The copy always lands at **the same key, always parquet, overwritten on every run**,
+By default the copy lands at **the same key, always parquet, overwritten on every run**,
 so whoever reads it agrees on one path once and never has to discover a new filename.
+The key may also carry [placeholders](#dynamic-inputs-and-outputs) — one object per
+day with `exports/sales/{today:yyyy/MM/dd}.parquet`, resolved in the node's time zone.
+Scheduled runs, «Run now» and runs started from the editor all write it.
 The overwrite is a single object and becomes visible only when the upload completes:
 a reader gets either the previous file or the new one in full, never a mixture.
 
 It is **best effort by design**. The datasource is the result; the copy is a delivery
-downstream of it. A copy that fails leaves the run successful and the datasource
-published, and the error is recorded on the run and returned by the API.
+downstream of it. A copy that fails — or cannot be made, like a key whose placeholder is
+wrong — leaves the run successful and the datasource published, and the error is
+recorded on the run and returned by the API.
 
 > **No screen shows that error yet.** Until that is wired up, treat a successful run
 > as saying nothing either way about the copy.
@@ -451,6 +459,51 @@ published, and the error is recorded on the run and returned by the API.
 > into that bucket is not checked against the objects already there: aim it at a key
 > another datasource is using and you overwrite that datasource's snapshot, outside the
 > permission model.
+
+## Dynamic inputs and outputs
+
+Every name Tabularia builds — the folder and files a datasource reads, the call an API
+datasource makes, the file, key or email an Output writes — speaks **one placeholder
+language**: dates that move by themselves, formatted the way the other side wants them,
+in a time zone of your choice. Nothing is evaluated as code; a wrong placeholder is
+refused when you save, and every form previews the resolved value as you type
+(«today: `sales_17102026.csv`»). The full reference is in
+[docs/placeholders.md](docs/placeholders.md).
+
+| Write | Get (on 18 October 2026) |
+|---|---|
+| `{today}` · `{yesterday}` · `{today-7}` · `{today-1m}` | `2026-10-18` · `2026-10-17` · `2026-10-11` · `2026-09-18` |
+| `{start_of_month}` · `{start_of_week}` · `{now-2h}` | `2026-10-01` · `2026-10-12` · two hours ago, a date-time |
+| `{yesterday:ddMMyyyy}` · `{today:yyyy/MM/dd}` · `{now:yyyy-MM-dd'T'HH:mm}` | `17102026` · `2026/10/18` · `2026-10-18T09:30` |
+| `{today:%Y%m%d}` · `{now:epoch}` · `{now:epoch_ms}` | strftime, and seconds or milliseconds since 1970 |
+| `{last_refresh}` | inputs: when the last successful refresh started (to fetch only what is new) |
+| `{run_id}` · `{flow}` | outputs: the run's number and the flow's name |
+
+**Inputs.** A daily file on SFTP: folder `/in/{today:yyyy}/{today:MM}`, files
+`sales_{yesterday:ddMMyyyy}.csv`. A **list variable** makes one read or call per value —
+`symbol = AAPL, MSFT, ENI.MI` with the path `/quotes/{symbol}` — and every row says which
+value it came from (`_param_symbol`). A **range variable** does the same over time:
+
+```text
+day = today-7 .. today step 1d          # the 7 days before today (today excluded)
+files: exports/{day:yyyy/MM/dd}/*.parquet
+```
+
+reads one folder per day, stacks them with `_file` and `_param_day`, skips and lists a
+day with no file, and fails only when the whole range has none. On an API the same range
+makes one call per window, with `{day}` and `{day_end}` for APIs that take a from/to and
+cap how many days one call may cover (`step 7d` over a year = 53 calls). Combined with
+**append by key** — rows whose key already exists are replaced, new keys added — it is
+the classic nightly incremental import: «every night re-read the last three days».
+
+**Outputs.** An SFTP folder `/out/{today:yyyy}/{today:MM}` and file
+`report_{today:yyyyMMdd}_{run_id}` write `report_20261018_381.csv`; an S3 key
+`exports/{flow}/{now:yyyy-MM-dd'T'HHmm}.parquet` in `Europe/Rome`; an email with subject
+`Daily sales {yesterday:dd/MM/yyyy}` and attachment `sales_{yesterday:yyyyMMdd}`. A
+resolved name can never leave its folder (`..`, a `/` coming from a value, control
+characters and over-long names are refused), and outputs written before this language
+existed keep their exact names: `{date}`, `{datetime}`, `{run_id}` and `{flow}` mean what
+they always meant, and literal braces stored earlier were escaped by a migration.
 
 ## Auth, RBAC & audit
 
