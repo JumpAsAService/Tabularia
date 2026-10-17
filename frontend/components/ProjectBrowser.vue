@@ -17,6 +17,7 @@
 // rete. Quella che attraversa le cartelle è `/search` (vedi useSearch.ts).
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
@@ -52,7 +53,7 @@ import { useRuns, type RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
 import { usePopover } from '~/composables/usePopover'
 import { useDialogA11y } from '~/composables/useDialogA11y'
-import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft } from '~/composables/useDatasources'
+import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { connectionChanges } from '~/composables/connectionChanges'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
@@ -793,6 +794,23 @@ async function createSharePointDatasource(draft: SharePointDatasourceDraft) {
   }
 }
 
+async function createSftpDatasource(draft: SftpDatasourceDraft) {
+  if (!currentId.value) return
+  dbDsBusy.value = true
+  dbDsError.value = ''
+  try {
+    const ds = await dsApi.createSftp(currentId.value, draft)
+    toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
+    showDbDsDialog.value = false
+    dsList.value = await dsApi.listByProject(currentId.value)
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    dbDsError.value = errMessage(e)
+  } finally {
+    dbDsBusy.value = false
+  }
+}
+
 // cambiando cartella si azzerano ricerca e filtro: sono domande sul contenuto
 // corrente, non preferenze durature
 watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.value = false })
@@ -1041,7 +1059,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                   <span class="muted">{{ fmtDuration(run) }}</span>
                   <span v-if="run.rows_written != null" class="muted">{{ $t('projectBrowser.rowsCount', { n: fmtx.count(run.rows_written) }) }}</span>
                   <span v-if="run.publish_name" class="rpub"><Database :size="12" /> {{ run.publish_name }}</span>
-                  <span v-if="run.error" class="rerr" :title="run.error">{{ run.error.slice(0, 80) }}</span>
+                  <span v-if="run.error" class="rerr" :title="knownError(run.error, t)">{{ knownError(run.error, t).slice(0, 80) }}</span>
                 </li>
               </ul>
             </td>
@@ -1121,6 +1139,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       :busy="dbDsBusy"
       @confirm="createDbDatasource"
       @confirm-sharepoint="createSharePointDatasource"
+      @confirm-sftp="createSftpDatasource"
       @cancel="showDbDsDialog = false"
     />
   </div>

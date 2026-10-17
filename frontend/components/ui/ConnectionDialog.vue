@@ -3,7 +3,7 @@
 // La password non viene mai mostrata: in modifica, campo vuoto = non cambiarla.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plug, X, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
+import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import {
@@ -11,6 +11,7 @@ import {
   DB_TYPES,
   type ConnectionDraft,
   type ConnectionInfo,
+  type HostKeyResult,
 } from '~/composables/useConnections'
 
 const props = defineProps<{
@@ -60,6 +61,29 @@ const isSmtp = computed(() => dbType.value === 'smtp')
 const isSp = computed(() => dbType.value === 'sharepoint')
 const library = ref('')
 
+// SFTP: password OR private key (`extra.auth`), and the server's host key, accepted
+// in two steps and never with a credential sent first: a test SHOWS a key that is
+// not accepted (the engine closes without authenticating); the user compares it
+// and presses «Accept this key», a second test naming the key, which only then
+// sends the credentials. In the form of a new or changed connection the accepted
+// key is kept and stored on save; on a saved connection it is stored at once.
+const isSftp = computed(() => dbType.value === 'sftp')
+const sftpAuth = ref<'password' | 'key'>('password')
+const privateKey = ref('')
+const passphrase = ref('')
+// the key accepted in the form's test (credentials checked against it), stored on save
+const seenKey = ref<{ type: string; fingerprint: string } | null>(null)
+// a key the server offers that is not accepted: shown, waiting for «Accept this key»
+const pendingKey = ref<{ type: string; fingerprint: string; changed: boolean; previous: string; saved: boolean } | null>(null)
+// the key accepted by a test of the saved connection, while the dialog is open
+const acceptedKey = ref<{ type: string; fingerprint: string } | null>(null)
+const currentKey = computed(() =>
+  acceptedKey.value ??
+  (props.existing?.host_key_fingerprint
+    ? { type: props.existing.host_key_type ?? '', fingerprint: props.existing.host_key_fingerprint }
+    : null),
+)
+
 watch(
   () => props.open,
   (open) => {
@@ -90,12 +114,22 @@ watch(
     allowedDomains.value = Array.isArray(opts.allowed_domains)
       ? opts.allowed_domains.join(', ')
       : (opts.allowed_domains ?? '')
+    sftpAuth.value = opts.auth === 'key' ? 'key' : 'password'
+    privateKey.value = '' // never shown, like the password
+    passphrase.value = ''
+    seenKey.value = null
+    acceptedKey.value = null
+    pendingKey.value = null
   },
 )
+
+// a key seen for one address says nothing about another
+watch([host, port, username], () => { seenKey.value = null; pendingKey.value = null })
 
 // la porta di default del tipo, come suggerimento (vuota = quella)
 const DEFAULT_PORTS: Record<string, string> = {
   postgresql: '5432', mysql: '3306', mariadb: '3306', clickhouse: '8123', trino: '8080', oracle: '1521', sqlserver: '1433', smtp: '587',
+  sftp: '22',
 }
 const portPlaceholder = computed(() => DEFAULT_PORTS[dbType.value] ?? '')
 
@@ -107,13 +141,19 @@ function draft(): ConnectionDraft {
     host: host.value.trim(),
     port: port.value.trim() ? Number(port.value) : null,
     username: username.value,
-    password: password.value,
+    // SFTP with the key method: the password field is hidden, nothing to send
+    password: isSftp.value && sftpAuth.value === 'key' ? '' : password.value,
     database: database.value.trim(),
     db_schema: dbSchema.value.trim(),
+    ...(isSftp.value && sftpAuth.value === 'key' && privateKey.value.trim() ? { private_key: privateKey.value } : {}),
+    ...(isSftp.value && sftpAuth.value === 'key' && passphrase.value ? { private_key_passphrase: passphrase.value } : {}),
+    ...(isSftp.value && seenKey.value ? { accept_host_key: seenKey.value.fingerprint, accept_host_key_type: seenKey.value.type } : {}),
     // inviato sempre: per gli altri tipi resta un oggetto vuoto, e ometterlo in
     // modifica vorrebbe dire «non toccarlo», che qui non è mai l'intenzione
     extra: JSON.stringify(
-      isSmtp.value
+      isSftp.value
+        ? { auth: sftpAuth.value }
+        : isSmtp.value
         ? {
             from_address: fromAddress.value.trim(),
             from_name: fromName.value.trim(),
@@ -132,6 +172,15 @@ function draft(): ConnectionDraft {
   }
 }
 
+// SFTP: a new host, port or user needs the secret typed again — a stored password
+// must not follow the connection to another server or account (the gateway refuses it too)
+const sftpMoved = computed(() => {
+  const c = props.existing
+  if (!isEdit.value || !isSftp.value || !c) return false
+  return host.value.trim() !== c.host || (port.value.trim() ? Number(port.value) : null) !== (c.port ?? null) || username.value !== c.username
+})
+const needsSecretAgain = computed(() => sftpMoved.value && !(sftpAuth.value === 'key' ? privateKey.value.trim() : password.value))
+
 // per S3 l'endpoint può essere vuoto (= AWS): basta il nome. Per SMTP serve
 // anche il mittente: senza, la connessione si salva e poi ogni invio fallisce.
 const incomplete = computed(
@@ -141,7 +190,12 @@ const incomplete = computed(
     (isSmtp.value && !fromAddress.value.trim()) ||
     (isSp.value && (!username.value.trim() || !database.value.trim())) ||
     // una SharePoint nuova senza secret si salverebbe e fallirebbe a ogni import
-    (isSp.value && !isEdit.value && !password.value),
+    (isSp.value && !isEdit.value && !password.value) ||
+    // SFTP: a user, and the secret of the chosen method (stored, or typed now)
+    (isSftp.value && !username.value.trim()) ||
+    (isSftp.value && sftpAuth.value === 'password' && !password.value && !(isEdit.value && props.existing?.has_password)) ||
+    (isSftp.value && sftpAuth.value === 'key' && !privateKey.value.trim() && !(isEdit.value && props.existing?.has_private_key)) ||
+    needsSecretAgain.value,
 )
 
 // cambiando tipo, i campi che l'altro tipo non mostra non devono viaggiare nel
@@ -152,7 +206,7 @@ const incomplete = computed(
 function changeType(nuovo: string) {
   const vecchio = dbType.value
   dbType.value = nuovo
-  if (nuovo !== vecchio && (nuovo === 'sharepoint' || vecchio === 'sharepoint')) {
+  if (nuovo !== vecchio && (['sharepoint', 'sftp'].includes(nuovo) || ['sharepoint', 'sftp'].includes(vecchio))) {
     port.value = ''
     dbSchema.value = ''
     database.value = ''
@@ -164,10 +218,87 @@ function changeType(nuovo: string) {
 const testing = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 
+// SFTP: has the form changed anything a saved test would not see?
+function sftpChanged(): boolean {
+  const c = props.existing
+  if (!c) return true
+  let auth = 'password'
+  try { auth = JSON.parse(c.extra || '{}').auth === 'key' ? 'key' : 'password' } catch { /* default */ }
+  return (
+    host.value.trim() !== c.host ||
+    (port.value.trim() ? Number(port.value) : null) !== (c.port ?? null) ||
+    username.value !== c.username ||
+    sftpAuth.value !== auth ||
+    !!password.value || !!privateKey.value.trim() || !!passphrase.value
+  )
+}
+
+function showKey(res: HostKeyResult, saved: boolean) {
+  const k = res.host_key!
+  pendingKey.value = { ...k, changed: !!res.changed, previous: res.previous ?? '', saved }
+  testResult.value = null
+}
+
+async function testSftp() {
+  pendingKey.value = null
+  if (isEdit.value && !sftpChanged()) {
+    // the saved connection as it is: its accepted key lets the credentials go;
+    // any other key is only shown
+    const res = await connApi.test(props.existing!.id)
+    if (res.needs_acceptance) return showKey(res, true)
+    testResult.value = { ok: true, message: t('sftp.hostKeyVerified', { type: res.host_key!.type, fingerprint: res.host_key!.fingerprint }) }
+    return
+  }
+  // not saved yet, or changed: the secret typed in the form, and the key accepted
+  // already when the address did not change
+  const c = props.existing
+  const known = c && !sftpMoved.value && c.host_key_fingerprint
+    ? { expected_fingerprint: c.host_key_fingerprint, expected_type: c.host_key_type }
+    : seenKey.value ? { expected_fingerprint: seenKey.value.fingerprint, expected_type: seenKey.value.type } : undefined
+  const res = await connApi.testDraft(props.projectId, draft(), known)
+  if (res.needs_acceptance) return showKey(res, false)
+  testResult.value = { ok: true, message: t('connectionDialog.testOk') }
+}
+
+// «Accept this key»: a second test naming the key; the credentials leave only if
+// the server still offers exactly that key
+async function acceptKey() {
+  const k = pendingKey.value
+  if (!k) return
+  testing.value = true
+  testResult.value = null
+  try {
+    const key = { expected_fingerprint: k.fingerprint, expected_type: k.type }
+    if (k.saved) {
+      await connApi.test(props.existing!.id, key)
+      acceptedKey.value = { type: k.type, fingerprint: k.fingerprint }
+      testResult.value = {
+        ok: true,
+        message: k.changed
+          ? t('sftp.hostKeyChangedAccepted', { previous: k.previous, type: k.type, fingerprint: k.fingerprint })
+          : t('sftp.hostKeyNowAccepted', { type: k.type, fingerprint: k.fingerprint }),
+      }
+    } else {
+      await connApi.testDraft(props.projectId, draft(), key)
+      seenKey.value = { type: k.type, fingerprint: k.fingerprint }
+      testResult.value = { ok: true, message: t('sftp.hostKeyAcceptedOnSave', { type: k.type, fingerprint: k.fingerprint }) }
+    }
+    pendingKey.value = null
+  } catch (e) {
+    testResult.value = { ok: false, message: errMessage(e) }
+  } finally {
+    testing.value = false
+  }
+}
+
 async function test() {
   testing.value = true
   testResult.value = null
   try {
+    if (isSftp.value) {
+      await testSftp()
+      return
+    }
     if (isEdit.value && !password.value) {
       // password invariata: si testa la connessione salvata
       await connApi.test(props.existing!.id)
@@ -219,18 +350,28 @@ function confirm() {
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
           </div>
           <div class="cd-field cd-wide">
-            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
+            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
               type="text"
-              :placeholder="isSp ? 'https://azienda.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : 'db.internal.example.com'"
+              :placeholder="isSp ? 'https://azienda.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : isSftp ? 'sftp.example.com' : 'db.internal.example.com'"
             />
           </div>
           <div class="cd-field">
             <label>{{ isSp ? $t('sharepoint.clientIdLabel') : isS3 ? $t('connectionDialog.accessKeyLabel') : $t('connectionDialog.usernameLabel') }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
-          <div class="cd-field">
+          <div v-if="isSftp" class="cd-field">
+            <label>{{ $t('sftp.authLabel') }}</label>
+            <Select
+              v-model="sftpAuth"
+              :options="[
+                { value: 'password', label: $t('sftp.authPassword') },
+                { value: 'key', label: $t('sftp.authKey') },
+              ]"
+            />
+          </div>
+          <div v-if="!isSftp || sftpAuth === 'password'" class="cd-field">
             <label>
               {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : $t('connectionDialog.passwordLabel') }}
               <span v-if="isEdit" class="cd-hint">{{ $t('connectionDialog.passwordHintUnchanged') }}</span>
@@ -262,6 +403,50 @@ function confirm() {
             <div class="cd-field">
               <label>{{ $t('connectionDialog.allowedDomainsLabel') }} <span class="cd-hint">{{ $t('connectionDialog.allowedDomainsHint') }}</span></label>
               <input v-model="allowedDomains" type="text" placeholder="azienda.it, clienti.it" />
+            </div>
+          </template>
+          <template v-else-if="isSftp">
+            <template v-if="sftpAuth === 'key'">
+              <div class="cd-field cd-wide">
+                <label>
+                  {{ $t('sftp.privateKeyLabel') }}
+                  <span class="cd-hint">{{ isEdit && existing?.has_private_key ? $t('sftp.privateKeyKept') : $t('sftp.privateKeyHint') }}</span>
+                </label>
+                <textarea
+                  v-model="privateKey"
+                  rows="4"
+                  spellcheck="false"
+                  autocomplete="off"
+                  class="cd-key"
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                />
+              </div>
+              <div class="cd-field cd-wide">
+                <label>{{ $t('sftp.passphraseLabel') }} <span class="cd-hint">{{ $t('sftp.passphraseHint') }}</span></label>
+                <input v-model="passphrase" type="password" autocomplete="new-password" />
+              </div>
+            </template>
+            <div class="cd-field cd-wide">
+              <label>{{ $t('sftp.hostKeyLabel') }}</label>
+              <p v-if="currentKey" class="cd-hostkey ok">
+                <ShieldCheck :size="13" />
+                <span>{{ $t('sftp.hostKeyAccepted') }} <code>{{ currentKey.type }} {{ currentKey.fingerprint }}</code></span>
+              </p>
+              <p v-else class="cd-hostkey none">
+                <ShieldAlert :size="13" />
+                <span>{{ $t('sftp.hostKeyNone') }}</span>
+              </p>
+              <p v-if="needsSecretAgain" class="cd-hostkey none">{{ $t('sftp.retypeSecret') }}</p>
+            </div>
+            <div v-if="pendingKey" class="cd-field cd-wide cd-pending" :class="{ changed: pendingKey.changed }" role="alert">
+              <p v-if="pendingKey.changed" class="cd-pending-title">
+                <ShieldAlert :size="14" /> {{ $t('sftp.hostKeyChangedWarning', { previous: pendingKey.previous }) }}
+              </p>
+              <p>{{ $t('sftp.hostKeyOffered') }} <code>{{ pendingKey.type }} {{ pendingKey.fingerprint }}</code></p>
+              <p class="muted">{{ $t('sftp.hostKeyCompare') }}</p>
+              <button type="button" class="cd-accept" :disabled="testing" @click="acceptKey">
+                <KeyRound :size="13" /> {{ $t('sftp.acceptKey') }}
+              </button>
             </div>
           </template>
           <template v-else-if="isSp">
@@ -318,15 +503,19 @@ function confirm() {
           <template v-else-if="isSp">
             {{ $t('sharepoint.note') }}
           </template>
+          <template v-else-if="isSftp">
+            {{ $t('sftp.note') }}
+          </template>
           <template v-else>
             {{ $t('connectionDialog.noteDb') }}
           </template>
         </p>
 
         <p v-if="testResult" class="cd-test" :class="testResult.ok ? 'ok' : 'ko'">
-          <CheckCircle2 v-if="testResult.ok" :size="14" />
+          <KeyRound v-if="testResult.ok && isSftp" :size="14" />
+          <CheckCircle2 v-else-if="testResult.ok" :size="14" />
           <XCircle v-else :size="14" />
-          {{ testResult.message }}
+          <span>{{ testResult.message }}</span>
         </p>
         <p v-if="error" class="cd-err">{{ error }}</p>
 
@@ -382,7 +571,21 @@ function confirm() {
 .cd-field label { font-size: 12px; color: var(--muted); }
 .cd-hint { opacity: 0.7; font-weight: 400; }
 .cd-note { font-size: 11.5px; margin: 0; }
-.cd-test { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 0; }
+.cd-test { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
+.cd-test svg { flex: none; margin-top: 1px; }
+.cd-key { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.cd-hostkey { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
+.cd-hostkey svg { flex: none; margin-top: 1px; }
+.cd-hostkey.ok { color: var(--accent-2); }
+.cd-hostkey.none { color: var(--muted); }
+.cd-hostkey code { font-size: 11.5px; }
+.cd-pending { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; gap: 6px; }
+.cd-pending.changed { border-color: var(--danger); }
+.cd-pending p { margin: 0; overflow-wrap: anywhere; }
+.cd-pending code { font-size: 11.5px; }
+.cd-pending-title { display: flex; align-items: flex-start; gap: 6px; color: var(--danger); font-weight: 600; }
+.cd-pending-title svg { flex: none; margin-top: 1px; }
+.cd-accept { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
 .cd-test.ok { color: var(--accent-2); }
 .cd-test.ko { color: var(--danger); }
 .cd-err { color: var(--danger); font-size: 12px; margin: 0; }

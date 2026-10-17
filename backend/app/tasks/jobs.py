@@ -246,7 +246,7 @@ def transform_data_task(
         input_key: Chiave del parquet di input
         operations: Lista di operazioni (IR: {"type": ..., "params": ...})
         output_key: Chiave del parquet di output
-        destination: Destinazione opzionale (nodo Output)
+        destination: Destinazione opzionale (nodo Output): type database | s3 | sftp
 
     Returns:
         Metadati del run (righe scritte, colonne di output, esito destinazione).
@@ -298,6 +298,15 @@ def transform_data_task(
             logger.info(f"📤 Writing output to s3 {conn.endpoint_url or 'aws'} key {dest.key}")
             out["destination"] = write_output_to_s3(
                 conn=conn, dest=dest, bucket=bucket, key=output_key
+            )
+        elif dest_type == "sftp":
+            from app.ingest import sftp as sftp_dest
+
+            s_conn = sftp_dest.SftpConnectionSpec(**destination["connection"])
+            s_dest = sftp_dest.SftpDestinationSpec(**destination["target"])
+            logger.info(f"📤 Writing output to sftp {s_conn.address} folder {s_dest.folder or '~'} name {s_dest.file_name}")
+            out["destination"] = sftp_dest.write_output_to_sftp(
+                conn=s_conn, dest=s_dest, bucket=bucket, key=output_key
             )
         else:
             from app.ingest.db_destination import (
@@ -418,6 +427,35 @@ def ingest_sharepoint_task(
 
         avanza("checking", rows=result["rows_written"])
 
+        result["contract"] = check_before_publish(bucket, output_key, contract)
+    return result
+
+
+@celery_app.task(name="app.tasks.jobs.ingest_sftp_task")
+def ingest_sftp_task(
+    connection: dict[str, Any],
+    source: dict[str, Any],
+    bucket: str,
+    output_key: str,
+    contract: dict[str, Any] | None = None,
+) -> dict:
+    """Reads the files of an SFTP folder that match the glob, stacks them and
+    writes the parquet: the same shape as the SharePoint and database ingests, so
+    the gateway treats it the same way (run, snapshot swap, refresh). The host key
+    is checked before any credential leaves; secrets arrive encrypted."""
+    from app.ingest.sftp import SftpConnectionSpec, SftpSourceSpec, ingest_sftp_to_parquet
+
+    conn = SftpConnectionSpec(**connection)
+    src = SftpSourceSpec(**source)
+    logger.info(f"🚀 Starting ingest_sftp_task: {conn.address} :: {src.folder or '~'}/{src.pattern} → {output_key}")
+    avanza = _Avanzamento()
+    result = ingest_sftp_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
+                                    progress=avanza)
+    logger.info(f"✅ Completed ingest_sftp_task: {output_key} ({result['rows_written']} rows from {len(result['files'])} files)")
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        avanza("checking", rows=result["rows_written"])
         result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
 

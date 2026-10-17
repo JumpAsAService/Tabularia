@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // Nodo Output (terminale): dove finisce il risultato della
-// catena — datasource del catalogo, tabella di database, o file/dataset su S3.
+// catena — datasource del catalogo, tabella di database, file/dataset su S3,
+// allegato email o file su un server SFTP.
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
 import { useNodeStats } from '~/composables/useNodeStats'
-import { Database, HardDriveDownload, CloudUpload, Mail, RefreshCw } from 'lucide-vue-next'
+import { Database, HardDriveDownload, CloudUpload, Mail, RefreshCw, Server } from 'lucide-vue-next'
 
 const props = defineProps<{ id: string; data: any }>()
 const { t } = useI18n()
@@ -19,7 +20,9 @@ const icon = computed(() =>
       ? CloudUpload
       : destType.value === 'email'
         ? Mail
-        : HardDriveDownload,
+        : destType.value === 'sftp'
+          ? Server
+          : HardDriveDownload,
 )
 const title = computed(() =>
   destType.value === 'database'
@@ -28,7 +31,9 @@ const title = computed(() =>
       ? t('outputNode.titleS3')
       : destType.value === 'email'
         ? t('outputNode.titleEmail')
-        : t('outputNode.titleDatasource'),
+        : destType.value === 'sftp'
+          ? t('sftp.outputTitle')
+          : t('outputNode.titleDatasource'),
 )
 const summary = computed(() => {
   const d = props.data ?? {}
@@ -43,6 +48,10 @@ const summary = computed(() => {
     if (!k) return t('outputNode.chooseKeyBucket')
     const parts = (d.partitionBy ?? []).length ? t('outputNode.partitionsSuffix', { n: d.partitionBy.length }) : ''
     return `${k} (${d.s3Format ?? 'parquet'})${parts}`
+  }
+  if (destType.value === 'sftp') {
+    const name = (d.sftpFileName ?? '').trim()
+    return name ? t('sftp.outputSummary', { name, format: d.sftpFormat ?? 'csv' }) : t('sftp.chooseFileName')
   }
   if (destType.value === 'email') {
     const to: string[] = d.emailTo ?? []

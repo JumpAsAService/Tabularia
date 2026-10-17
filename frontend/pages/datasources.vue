@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText, ListOrdered } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { knownError } from '~/composables/knownErrors'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useProjects } from '~/composables/useProjects'
 import { usePagedList } from '~/composables/usePagedList'
@@ -61,7 +62,7 @@ const describedCount = (d: DatasourceInfo) => Object.keys(d.column_descriptions 
 // refresh; typed by hand only while no import has succeeded yet.
 const keyDrafts = reactive<Record<number, string[]>>({})
 const keyText = reactive<Record<number, string>>({})
-const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && d.source_type !== 'sharepoint'
+const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && d.source_type !== 'sharepoint' && d.source_type !== 'sftp'
 const draftKeys = (d: DatasourceInfo): string[] =>
   d.columns.length
     ? keyDrafts[d.id] ?? []
@@ -145,13 +146,17 @@ function announceEnd(dsId: number, run: RunInfo) {
     : t('datasources.announceFailed', { name })
   // the same words on screen: the end of an import watched here gets a message
   if (run.status === 'SUCCESS') toast.success(announcement.value)
-  else toast.error(run.error ? `${announcement.value}: ${run.error}` : announcement.value)
+  else toast.error(run.error ? `${announcement.value}: ${knownError(run.error, t)}` : announcement.value)
 }
 let pollToken = 0
 onUnmounted(() => { pollToken++ })
 
-// il source_ref di SharePoint e' JSON {path, sheet}: in tooltip si mostra leggibile
+// il source_ref di SharePoint e' JSON {path, sheet}, quello SFTP {folder, pattern, …}:
+// in tooltip si mostra leggibile
 function sourceLabel(d: DatasourceInfo): string {
+  if (d.source_type === 'sftp') {
+    try { const r = JSON.parse(d.source_ref ?? '{}'); return [r.folder, r.pattern].filter(Boolean).join('/') } catch { return d.source_ref ?? '' }
+  }
   if (d.source_type !== 'sharepoint') return d.source_ref ?? ''
   try { const r = JSON.parse(d.source_ref ?? '{}'); return `${r.path} · ${r.sheet}` } catch { return d.source_ref ?? '' }
 }
@@ -297,7 +302,7 @@ async function saveSchedule(cron: string) {
                 <span class="okline" :title="$t('datasources.importingStatus')"><LoaderCircle :size="12" class="spin" /></span>
               </template>
               <template v-else-if="ingestRuns[d.id]?.status === 'FAILURE'">
-                <span class="koline" :title="ingestRuns[d.id].error ?? ''">{{ $t('datasources.importFailedStatus') }}</span>
+                <span class="koline" :title="knownError(ingestRuns[d.id].error, t)">{{ $t('datasources.importFailedStatus') }}</span>
               </template>
               <template v-else>{{ fmtx.count(d.rows) }}</template>
             </span>

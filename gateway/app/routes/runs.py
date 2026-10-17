@@ -29,7 +29,7 @@ from app.services import permissions as perm_service
 from app.models import Connection, Datasource, Flow, FlowGroup, Project, Run, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
-from app.routes.connections import allowed_email_domains, engine_connection_payload
+from app.routes.connections import NOT_DATABASES, allowed_email_domains, engine_connection_payload
 from app.services import audit
 from app.services import contracts as contract_service
 from app.services import openlineage, run_history, webhooks
@@ -239,7 +239,36 @@ async def _launch_flow_run(
             raise HTTPException(status_code=404, detail="Connection not found")
         ensure_can(session, user, conn.project_id, Capability.CONNECT)
 
-        if body.destination.type == "s3":
+        if body.destination.type == "sftp":
+            if conn.db_type != "sftp":
+                raise HTTPException(status_code=422, detail="The chosen connection is not SFTP")
+            file_name = body.destination.file_name.strip()
+            folder = body.destination.folder.strip()
+            _check_sftp_file_name(file_name)
+            if ".." in folder.replace("\\", "/").split("/"):
+                raise HTTPException(status_code=422, detail="SFTP: '..' is not allowed in the folder: write the folder you mean")
+            if body.destination.format not in ("csv", "parquet", "xlsx"):
+                raise HTTPException(status_code=422, detail="SFTP outputs are CSV, parquet or Excel")
+            destination_payload = {
+                "type": "sftp",
+                "connection": engine_connection_payload(conn),
+                # run_id is set once the run row exists (see below)
+                "target": {"folder": folder, "file_name": file_name, "format": body.destination.format,
+                           "run_id": None, "flow": flow.name},
+            }
+            destination_summary = json.dumps(
+                {
+                    "type": "sftp",
+                    "connection_id": conn.id,
+                    "host": f"{conn.host}:{conn.port or 22}",
+                    "folder": folder,
+                    "file_name": file_name,
+                    "format": body.destination.format,
+                }
+            )
+        elif body.destination.type == "s3":
+            if body.destination.format not in ("parquet", "csv"):
+                raise HTTPException(status_code=422, detail="S3 outputs are parquet or CSV")
             if conn.db_type != "s3":
                 raise HTTPException(
                     status_code=422, detail="The chosen connection is not S3/object storage"
@@ -280,7 +309,7 @@ async def _launch_flow_run(
                 raise HTTPException(
                     status_code=422, detail="The chosen connection is S3: use an S3 destination"
                 )
-            if conn.db_type in ("smtp", "sharepoint"):
+            if conn.db_type in NOT_DATABASES:
                 # non sono database: senza questo controllo l'errore arriverebbe
                 # dal driver, a run già partito, e parlerebbe d'altro
                 raise HTTPException(
@@ -446,6 +475,82 @@ async def _launch_flow_run(
         snapshot_key(publish_target_id) if body.publish else f"out/{uuid.uuid4().hex}.parquet"
     )
 
+    def new_run(task_id: str) -> Run:
+        return Run(
+            flow_id=flow.id,
+            task_id=task_id,
+            launched_by=user.id,
+            trigger_type=trigger_type,
+            parent_run_id=parent_run_id,
+            engine=engine_name,
+            input_key=body.input_key,
+            output_bucket=body.bucket,
+            output_key=output_key,
+            publish_name=body.publish.name.strip() if body.publish else None,
+            publish_project_id=body.publish.project_id if body.publish else None,
+            publish_description=body.publish.description if body.publish else "",
+            publish_overwrite=body.publish.overwrite if body.publish else False,
+            publish_sort_keys=json.dumps(publish_keys),
+            destination=destination_summary,
+            mirror=mirror_summary,
+            email=email_summary,
+        )
+
+    # SFTP: the file name may hold {run_id}, the run's number — so the run row is
+    # written BEFORE the task is queued, with a placeholder task id that the engine
+    # answers PENDING for, and goes away if the engine refuses the task
+    early_run: Run | None = None
+    if destination_payload is not None and destination_payload["type"] == "sftp":
+        early_run = new_run(f"{PLACEHOLDER_TASK}{uuid.uuid4().hex}")
+        session.add(early_run)
+        session.commit()
+        session.refresh(early_run)
+        destination_payload["target"]["run_id"] = early_run.id
+
+    try:
+        task_id = await _submit_transform(body, output_key, destination_payload, mirror_payload, email_payload,
+                                          engine_name, publish_target_id, session)
+    except BaseException:
+        if early_run is not None:
+            session.delete(early_run)
+            session.commit()
+        raise
+    if early_run is not None:
+        early_run.task_id = task_id
+        session.add(early_run)
+        session.commit()
+        session.refresh(early_run)
+        return early_run
+
+    run = new_run(task_id)
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+_SFTP_PLACEHOLDERS = ("date", "datetime", "run_id", "flow")
+
+
+def _check_sftp_file_name(file_name: str) -> None:
+    """What the gateway can tell before the run: the engine renders the name."""
+    import re as _re
+
+    if not file_name:
+        raise HTTPException(status_code=422, detail="SFTP: the file name is empty")
+    if "/" in file_name or "\\" in file_name:
+        raise HTTPException(status_code=422, detail="SFTP: the file name cannot contain a folder: put the folder in its own field")
+    unknown = [p for p in _re.findall(r"\{([^{}]*)\}", file_name) if p not in _SFTP_PLACEHOLDERS]
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=f"SFTP: unknown placeholder {{{unknown[0]}}} in the file name: use {{date}}, {{datetime}}, {{run_id}} or {{flow}}",
+        )
+
+
+async def _submit_transform(body: RunCreate, output_key: str, destination_payload, mirror_payload, email_payload,
+                            engine_name: str, publish_target_id, session: Session) -> str:
+    """Queues the run's task on the engine and returns its id."""
     client = get_engine_client()
     resp = await client.post(
         "/tasks/transform-data",
@@ -469,30 +574,7 @@ async def _launch_flow_run(
     task_id = resp.json().get("task_id")
     if not task_id:
         raise HTTPException(status_code=502, detail="The engine did not return a task_id")
-
-    run = Run(
-        flow_id=flow.id,
-        task_id=task_id,
-        launched_by=user.id,
-        trigger_type=trigger_type,
-        parent_run_id=parent_run_id,
-        engine=engine_name,
-        input_key=body.input_key,
-        output_bucket=body.bucket,
-        output_key=output_key,
-        publish_name=body.publish.name.strip() if body.publish else None,
-        publish_project_id=body.publish.project_id if body.publish else None,
-        publish_description=body.publish.description if body.publish else "",
-        publish_overwrite=body.publish.overwrite if body.publish else False,
-        publish_sort_keys=json.dumps(publish_keys),
-        destination=destination_summary,
-        mirror=mirror_summary,
-        email=email_summary,
-    )
-    session.add(run)
-    session.commit()
-    session.refresh(run)
-    return run
+    return task_id
 
 
 async def launch_ingest_run(
@@ -522,6 +604,20 @@ async def launch_ingest_run(
             json={
                 "connection": engine_connection_payload(conn),
                 "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", "")},
+                "bucket": bucket,
+                "output_key": output_key,
+                **contratto,
+            },
+        )
+    elif conn.db_type == "sftp":
+        # same road again: `source_ref` is the JSON {folder, pattern, format, sheet, csv}
+        ref = json.loads(ds.source_ref or "{}")
+        resp = await client.post(
+            "/sftp/ingest",
+            timeout=CONTROLLO,
+            json={
+                "connection": engine_connection_payload(conn),
+                "source": {k: ref[k] for k in ("folder", "pattern", "format", "sheet", "csv") if k in ref},
                 "bucket": bucket,
                 "output_key": output_key,
                 **contratto,
@@ -584,7 +680,22 @@ _OOM_MESSAGE = (
 # Messaggi già tradotti dal backend col testo del SERVER del database
 # (backend/app/ingest/db_errors.py, MESSAGE_PREFIXES): un «out of memory» lì è
 # del database, non del worker, e non va sostituito col messaggio da OOM.
-_DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:")
+_DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:", "SFTP:")
+
+
+def _sftp_written(summary: str | None, outcome) -> str | None:
+    """The SFTP destination's summary with what was written (the file's real
+    name, its size): the template alone does not say which file a run made."""
+    if not summary or not isinstance(outcome, dict):
+        return None
+    try:
+        d = json.loads(summary)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(d, dict) or d.get("type") != "sftp":
+        return None
+    d.update({k: outcome[k] for k in ("path", "bytes") if k in outcome})
+    return json.dumps(d)[:2000]
 
 
 def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
@@ -794,6 +905,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
             return await close_if_queued_too_long(session, run)
         return run
     task_id = run.task_id
+    if task_id.startswith(PLACEHOLDER_TASK):
+        # an SFTP Output's run, written before its task so that {run_id} exists: the
+        # engine has never heard of it. Still being launched, or the gateway stopped
+        # in between — then it is closed with that reason, nothing to revoke.
+        return _close_if_never_queued(session, run)
     _let_go(session)
     client = get_engine_client()
     try:
@@ -885,6 +1001,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
             values["mirror"] = json.dumps(result.get("mirror"))[:2000]
         if result.get("email") is not None:
             values["email"] = json.dumps(result.get("email"))[:2000]
+        written = _sftp_written(run.destination, result.get("destination"))
+        if written is not None:
+            values["destination"] = written
     else:
         values["error"] = (_friendly_error(error, error_detail) or "")[:2000]
         values["error_detail"] = error_detail[:20000] if error_detail else None
@@ -935,6 +1054,23 @@ async def _reconcile(session: Session, run: Run) -> Run:
         run.id,
         SIDE_EFFECT_ATTEMPTS,
     )
+    return run
+
+
+PLACEHOLDER_TASK = "pending-"
+# far more than the launch takes (one request to the engine), far less than a stale run
+NEVER_QUEUED_AFTER_SECONDS = 300
+
+
+def _close_if_never_queued(session: Session, run: Run) -> Run:
+    if _age_seconds(run.started_at) <= NEVER_QUEUED_AFTER_SECONDS:
+        return run
+    session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(
+        status="FAILURE", finished_at=datetime.now(timezone.utc),
+        error="The run was never queued on the engine: the gateway stopped while launching it. Launch it again.",
+    ))
+    session.commit()
+    session.refresh(run)
     return run
 
 

@@ -25,7 +25,7 @@ router = APIRouter(route_class=RottaCheRilascia, tags=["lineage"])
 
 class LineageNode(BaseModel):
     id: str
-    type: str                       # flow | datasource | connection | db_sink | s3_sink
+    type: str                       # flow | datasource | connection | db_sink | s3_sink | sftp_sink
     label: str
     project_id: Optional[int] = None
     kind: Optional[str] = None      # datasource: flow | database

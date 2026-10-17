@@ -5,6 +5,21 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **SFTP connections: files in, files out.** A connection of type SFTP (host, port,
+  user, password or private key, encrypted like every other secret) reaches any SSH
+  server. The datasource «SFTP folder» reads every file of a folder that matches a
+  glob (`vendite_*.csv`) — CSV, parquet, Excel, NDJSON — at each refresh, scheduled
+  too, and stacks them into one table where every row says its file in `_file`; files
+  that are not machine readable are refused, naming the file, and the files stay on the
+  server. An Output node can write the flow's result to the server as CSV, parquet or
+  Excel, under a name with `{date}`, `{datetime}`, `{run_id}` and `{flow}`, through a
+  temporary name renamed in one step. The server's host key is accepted at the first
+  «Test connection», which shows it without sending any credential, and «Accept this
+  key», which sends them only to that key; every connection after checks it before
+  any credential: a different key is refused until it is accepted again, and each
+  acceptance is in the audit log. Caps per file, per refresh and in total
+  (`SFTP__MAX_FILE_BYTES`, `SFTP__MAX_FILES`, `SFTP__MAX_TOTAL_BYTES`).
+  See `docs/sftp.md`.
 - **Error messages in English.** The engine's and the gateway's error messages — under a
   preview, in the run and import history, in toasts, in failure emails, at startup —
   were still in Italian in an otherwise English product: about 550 of them now read in

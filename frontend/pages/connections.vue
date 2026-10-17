@@ -47,8 +47,10 @@ const testState = ref<Record<number, 'busy' | 'ok' | string>>({})
 async function test(c: ConnectionInfo) {
   testState.value = { ...testState.value, [c.id]: 'busy' }
   try {
-    await connApi.test(c.id)
-    testState.value = { ...testState.value, [c.id]: 'ok' }
+    const res = await connApi.test(c.id)
+    // SFTP: a key that is not accepted is only shown, nothing was sent; accepting it
+    // (after comparing it) happens in the connection's dialog
+    testState.value = { ...testState.value, [c.id]: res.needs_acceptance ? t('sftp.needsAcceptanceRow') : 'ok' }
   } catch (e) {
     testState.value = { ...testState.value, [c.id]: errMessage(e) }
   }

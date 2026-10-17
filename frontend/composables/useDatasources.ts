@@ -24,7 +24,7 @@ export interface DatasourceInfo {
   kind: string
   flow_id: number | null
   connection_id: number | null
-  source_type: 'table' | 'sql' | 'sharepoint' | null
+  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | null
   source_ref: string | null
   refreshed_at: string | null
   refreshing?: boolean // un ingest è in corso ORA (lo dice il server)
@@ -42,6 +42,18 @@ export interface DbDatasourceDraft {
   source_type: 'table' | 'sql'
   source_ref: string
   sort_keys?: string[] // ORDER BY dell'import (vuoto = nessun ordine)
+}
+
+// files of a folder on an SFTP server: folder + glob, every match stacked
+export interface SftpDatasourceDraft {
+  name: string
+  description?: string
+  connection_id: number
+  folder: string
+  pattern: string
+  format: 'auto' | 'csv' | 'parquet' | 'excel' | 'ndjson'
+  sheet: string
+  csv: { separator: string; has_header: boolean; encoding: 'utf8' | 'utf8-lossy' | 'windows-1252' }
 }
 
 export interface SharePointDatasourceDraft {
@@ -70,6 +82,9 @@ export function useDatasources() {
     // datasource da Excel su SharePoint: più file del glob = una tabella sola
     createSharePoint: (projectId: number, body: SharePointDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sharepoint`, { method: 'POST', body }),
+    // datasource from an SFTP folder: the matching files stacked into one table
+    createSftp: (projectId: number, body: SftpDatasourceDraft) =>
+      apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sftp`, { method: 'POST', body }),
     createDb: (projectId: number, body: DbDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/database`, {
         method: 'POST',

@@ -311,8 +311,9 @@ class _Progetto:
         if key in self.riferimenti:
             return self.riferimenti[key]
         ds = self.session.exec(select(Datasource).where(Datasource.key == key)).first()
-        if ds is not None and ds.kind == "database" and ds.source_type == "sharepoint":
-            # un file Excel su SharePoint: per dbt non c'è un database da cui leggerlo → seed
+        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp"):
+            # files (Excel on SharePoint, a folder on an SFTP server): for dbt there is no
+            # database to read them from → seed
             rif = {"seed": self._seed(ds, key)}
         elif ds is not None and ds.kind == "database":
             conn = self.session.get(Connection, ds.connection_id) if ds.connection_id else None
@@ -491,7 +492,7 @@ class _Progetto:
         for c in catene:
             req, node = c["body"], c["node"]
             dest = req.get("destination") or {}
-            if req.get("email") or dest.get("type") not in (None, "database", "s3"):
+            if req.get("email") or dest.get("type") not in (None, "database", "s3", "sftp"):
                 continue   # un'email non è un dataset: nessun modello
             esportabili += 1
             chiave = (flow.id, (node or {}).get("id"))
@@ -649,6 +650,13 @@ class _Progetto:
             modello["_uscita"] = f"output table `{tabella}` ({dest.get('mode') or 'append'})"
             if dest.get("post_sql"):
                 self.note.append(f"The output `{tabella}` runs a post-SQL after each write in Tabularia; dbt does not: add it as a `post-hook` on the model `{modello['name']}` if you need it.")
+        elif dest.get("type") == "sftp":
+            nome_f = re.sub(r"\{[^{}]*\}", "", dest.get("file_name") or "model").split(".")[0].strip("_- ") or "model"
+            modello["name"] = self.nomi.nuovo(nome_f, suffisso)
+            modello["materialized"] = "table"
+            modello["description"] = (f"Output file `{dest.get('file_name')}` written to an SFTP server by the flow «{flow.name}»: "
+                                      "in dbt it is a table (export it from the warehouse).")
+            modello["_uscita"] = f"output file `{dest.get('file_name')}` (SFTP)"
         else:   # s3
             nome_f = (dest.get("key") or "model").rsplit("/", 1)[-1].split(".")[0]
             modello["name"] = self.nomi.nuovo(nome_f, suffisso)

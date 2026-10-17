@@ -27,7 +27,7 @@ export interface RunInfo {
   error_detail?: string | null // traceback completo (dettaglio del fallimento)
   publish_name: string | null
   datasource_id: number | null
-  destination: string | null // JSON: {db_type, host, database, table, mode}
+  destination: string | null // JSON: {db_type, host, database, table, mode} | s3 | sftp {host, folder, file_name, path}
   started_at: string | null
   finished_at: string | null
   progress?: RunProgress | null
@@ -63,7 +63,7 @@ export interface PublishSpec {
 }
 
 export interface DestinationSpec {
-  type: 'database' | 's3'
+  type: 'database' | 's3' | 'sftp'
   connection_id: number
   // type="database"
   table?: string
@@ -72,8 +72,11 @@ export interface DestinationSpec {
   // type="s3"
   bucket?: string
   key?: string
-  format?: 'parquet' | 'csv'
+  format?: 'parquet' | 'csv' | 'xlsx' // xlsx: sftp only
   partition_by?: string[]
+  // type="sftp": folder on the server and file-name template ({date}, {datetime}, {run_id}, {flow})
+  folder?: string
+  file_name?: string
 }
 
 // Invio dell'output come allegato. I destinatari sono limitati dai domini

@@ -20,7 +20,7 @@ const props = defineProps<{
   fetchDistinct?: (column: string) => Promise<any[]>
   datasources?: DatasourceInfo[]
   projects?: { id: number; name: string }[]
-  connections?: { id: number; name: string; db_type: string; database?: string; project_id?: number }[]
+  connections?: { id: number; name: string; db_type: string; database?: string; host?: string; project_id?: number }[]
   flows?: { id: number; name: string; project_id?: number }[]
   currentFlowId?: number | null
 }>()
@@ -304,6 +304,7 @@ function pickDatasource(id: number | null) {
           { value: 'database', label: $t('nodePanel.destTypeDatabaseTable') },
           { value: 's3', label: $t('nodePanel.destTypeS3') },
           { value: 'email', label: $t('nodePanel.destTypeEmail') },
+          { value: 'sftp', label: $t('sftp.destType') },
         ]"
         @update:model-value="(v: any) => emit('update', { destType: v })"
       />
@@ -538,11 +539,57 @@ function pickDatasource(id: number | null) {
         <p class="muted outhint">{{ $t('nodePanel.emailDryRunHint') }}</p>
       </template>
 
+      <!-- destinazione SFTP: un file in una cartella del server. Il nome è un
+           modello: {run_id} e {flow} li aggiunge il gateway al lancio -->
+      <template v-else-if="(node.data.destType ?? 'datasource') === 'sftp'">
+        <label>{{ $t('sftp.connectionLabel') }}</label>
+        <Select
+          :model-value="node.data.connectionId ?? null"
+          :options="(connections ?? []).filter((c) => c.db_type === 'sftp').map((c) => ({
+            value: c.id,
+            label: c.host ? `${c.name} (${c.host})` : c.name,
+            hint: pathOf(c.project_id),
+          }))"
+          :placeholder="$t('nodePanel.connectionPlaceholder')"
+          @update:model-value="(v: any) => emit('update', { connectionId: v })"
+        />
+        <label>{{ $t('sftp.outFolderLabel') }}</label>
+        <input
+          :value="node.data.sftpFolder ?? ''"
+          type="text"
+          spellcheck="false"
+          :placeholder="$t('sftp.folderPlaceholder')"
+          @input="emit('update', { sftpFolder: ($event.target as HTMLInputElement).value })"
+        />
+        <label>{{ $t('sftp.fileNameLabel') }}</label>
+        <input
+          :value="node.data.sftpFileName ?? ''"
+          type="text"
+          spellcheck="false"
+          placeholder="vendite_{date}"
+          @input="emit('update', { sftpFileName: ($event.target as HTMLInputElement).value })"
+        />
+        <p class="muted outhint">
+          {{ $t('sftp.fileNameHint', { date: '{date}', datetime: '{datetime}', run_id: '{run_id}', flow: '{flow}' }) }}
+        </p>
+        <label>{{ $t('nodePanel.formatLabel') }}</label>
+        <Select
+          :model-value="node.data.sftpFormat ?? 'csv'"
+          :options="[
+            { value: 'csv', label: 'CSV' },
+            { value: 'parquet', label: 'Parquet' },
+            { value: 'xlsx', label: 'Excel (.xlsx)' },
+          ]"
+          @update:model-value="(v: any) => emit('update', { sftpFormat: v })"
+        />
+        <p class="muted outhint">{{ $t('sftp.outHint') }}</p>
+      </template>
+
       <template v-else>
         <label>{{ $t('nodePanel.connectionLabel') }}</label>
         <Select
           :model-value="node.data.connectionId ?? null"
-          :options="(connections ?? []).filter((c) => !['s3', 'smtp', 'sharepoint'].includes(c.db_type)).map((c) => ({
+          :options="(connections ?? []).filter((c) => !['s3', 'smtp', 'sharepoint', 'sftp'].includes(c.db_type)).map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
             hint: pathOf(c.project_id),

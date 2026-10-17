@@ -4,6 +4,7 @@
 // su tutto il dataset) + paginazione; click su una riga per il traceback completo.
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
 import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3 } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
@@ -85,7 +86,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
             <component :is="r.kind === 'ingest' ? Database : r.flow_group_id ? Rows3 : Workflow" :size="13" />
             {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
           </span>
-          <span class="msg muted">{{ r.error || (r.status === 'SUCCESS' ? '—' : '') }}</span>
+          <span class="msg muted">{{ knownError(r.error, t) || (r.status === 'SUCCESS' ? '—' : '') }}</span>
           <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? $t('runs.triggeredByScheduler') : $t('runs.triggeredByName', { name: triggeredBy(r) })">
             <component :is="isScheduled(r) ? CalendarClock : User" :size="12" />
             {{ triggeredBy(r) }}
@@ -93,7 +94,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <span class="when muted">{{ fmtDate(r.started_at) }}</span>
         </button>
         <div v-if="expanded === r.id" class="detail">
-          <div v-if="r.error" class="detail-summary">{{ r.error }}</div>
+          <div v-if="r.error" class="detail-summary">{{ knownError(r.error, t) }}</div>
           <pre v-if="r.error_detail" class="trace">{{ r.error_detail }}</pre>
           <p v-else class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>

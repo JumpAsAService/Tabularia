@@ -14,6 +14,12 @@ leggono — consigliata un'utenza DB read-only.
 
 La password/secret è cifrata a riposo (Fernet) e non esce mai dalle API: verso
 l'engine viaggia ancora cifrata (`password_encrypted`, stessa chiave).
+
+SFTP (db_type="sftp"): host, port (22), username, and the password OR a private
+key with its passphrase (`private_key_encrypted`), chosen by `extra.auth`. The
+server's host key is accepted by trust on first use: ONLY a test the engine made
+writes it (`test_connection`), with an audit line, and a change of host or port
+forgets it. Any host is allowed, as for databases: CONNECT is the barrier.
 """
 import logging
 from datetime import datetime, timezone
@@ -23,7 +29,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
-from app.core.crypto import encrypt_secret
+from app.core.crypto import decrypt_secret, encrypt_secret
+from app.core.lingua import lingua_della_richiesta
 from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
@@ -31,7 +38,7 @@ from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Flow, Project, User
 from app.services import audit
 from app.models.permission import Capability
-from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionUpdate, Page
+from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, SftpFilesQuery
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
@@ -41,7 +48,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(route_class=RottaCheRilascia, tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp"}
+# connection types that are not databases: no table to read, none to write
+NOT_DATABASES = ("smtp", "sharepoint", "sftp")
 # SQL Server: come trattare il TLS (`extra.tls`); vuoto = verify
 _TLS_SQLSERVER = ("verify", "trust", "none")
 
@@ -50,8 +59,9 @@ def _to_out(conn: Connection) -> ConnectionOut:
     # NON model_dump(): dopo un commit (es. record_audit) l'istanza è "expired" e
     # model_dump torna {} → 500 con "11 validation errors". L'accesso per
     # attributo ricarica i valori dal DB (sessione ancora aperta).
-    fields = {f: getattr(conn, f) for f in ConnectionOut.model_fields if f != "has_password"}
-    return ConnectionOut(**fields, has_password=bool(conn.password_encrypted))
+    fields = {f: getattr(conn, f) for f in ConnectionOut.model_fields if f not in ("has_password", "has_private_key")}
+    return ConnectionOut(**fields, has_password=bool(conn.password_encrypted),
+                         has_private_key=bool(conn.private_key_encrypted))
 
 
 def _get_connection(session: Session, conn_id: int) -> Connection:
@@ -88,6 +98,8 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
         errors = _smtp_option_errors(data)
         if errors:
             raise HTTPException(status_code=422, detail="SMTP options: " + "; ".join(errors))
+    if db_type == "sftp" and data.get("auth") not in (None, "", *SFTP_AUTH):
+        raise HTTPException(status_code=422, detail="SFTP: auth must be password or key")
     return grezzo
 
 
@@ -182,6 +194,9 @@ def engine_connection_payload(conn: Connection) -> dict:
         return _sharepoint_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.extra)
     if conn.db_type == "smtp":
         return _smtp_payload(conn)
+    if conn.db_type == "sftp":
+        return _sftp_payload(conn.host, conn.port, conn.username, conn.password_encrypted, conn.private_key_encrypted,
+                             conn.extra, conn.host_key_type, conn.host_key_fingerprint)
     if conn.db_type == "s3":
         return _s3_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.db_schema)
     return {
@@ -225,6 +240,108 @@ def _check_sharepoint(host: str, username: str, database: str) -> None:
         raise HTTPException(status_code=422, detail="The tenant id and the client id of the app registered in Entra ID are required")
 
 
+SFTP_AUTH = ("password", "key")
+
+
+def sftp_auth(extra: str | None) -> str:
+    """Which secret authenticates an SFTP connection (`extra.auth`; default password)."""
+    import json as _json
+
+    try:
+        data = _json.loads(extra or "{}")
+    except _json.JSONDecodeError:
+        data = {}
+    auth = data.get("auth") if isinstance(data, dict) else None
+    return auth if auth in SFTP_AUTH else "password"
+
+
+def _check_private_key(text: str) -> None:
+    t = (text or "").strip()
+    if not (t.startswith("-----BEGIN") and "PRIVATE KEY-----" in t):
+        raise HTTPException(
+            status_code=422,
+            detail="This is not a private key: paste the whole PEM or OpenSSH private key, from -----BEGIN to -----END",
+        )
+
+
+def _key_blob(private_key: str, passphrase: str) -> str:
+    """The private key and its passphrase, encrypted TOGETHER (one secret)."""
+    import json as _json
+
+    return encrypt_secret(_json.dumps({"private_key": private_key.strip() + "\n", "passphrase": passphrase or ""}))
+
+
+def _check_sftp(host: str, port: int | None, username: str, auth: str, has_password: bool, has_key: bool) -> None:
+    h = (host or "").strip()
+    if not h or "://" in h or "/" in h or " " in h:
+        raise HTTPException(status_code=422, detail="SFTP: enter the host name or IP address only (no sftp://, no path)")
+    if port is not None and not 0 < port < 65536:
+        raise HTTPException(status_code=422, detail="SFTP: the port must be between 1 and 65535")
+    if not (username or "").strip():
+        raise HTTPException(status_code=422, detail="SFTP: the user name is required")
+    if auth == "password" and not has_password:
+        raise HTTPException(status_code=422, detail="SFTP: enter the password, or choose the private key method")
+    if auth == "key" and not has_key:
+        raise HTTPException(status_code=422, detail="SFTP: paste the private key, or choose the password method")
+
+
+def _sftp_payload(host: str, port: int | None, username: str, password_encrypted: str, private_key_encrypted: str,
+                  extra: str | None, host_key_type: str = "", host_key_fingerprint: str = "") -> dict:
+    """Only the secret of the chosen method travels: a password left from an
+    earlier setup is not offered to the server when the key is the method."""
+    auth = sftp_auth(extra)
+    return {
+        "db_type": "sftp",
+        "host": (host or "").strip(),
+        "port": port or 22,
+        "username": (username or "").strip(),
+        "auth": auth,
+        "password_encrypted": password_encrypted if auth == "password" else "",
+        "private_key_encrypted": private_key_encrypted if auth == "key" else "",
+        "host_key_type": host_key_type or "",
+        "host_key_fingerprint": host_key_fingerprint or "",
+    }
+
+
+# Host key messages for a person, in the language of the request: the engine
+# refuses with a code (409) and the gateway explains it.
+_HOST_KEY_CHANGED = {
+    "en": "The host key of {host} has changed: accepted {expected}, offered now {offered}. Nothing was sent to the server. "
+          "If the change is expected (server reinstalled, key renewed), run «Test connection» again to accept the new key; "
+          "otherwise ask the server's administrator.",
+    "it": "La chiave dell'host {host} è cambiata: accettata {expected}, offerta ora {offered}. Al server non è stato mandato nulla. "
+          "Se il cambio è atteso (server reinstallato, chiave rinnovata), rifai «Prova connessione» per accettare la nuova chiave; "
+          "altrimenti chiedi all'amministratore del server.",
+    "de": "Der Host-Schlüssel von {host} hat sich geändert: akzeptiert {expected}, jetzt angeboten {offered}. An den Server wurde nichts gesendet. "
+          "Ist die Änderung erwartet (Server neu installiert, Schlüssel erneuert), führen Sie «Verbindung testen» erneut aus, um den neuen Schlüssel "
+          "zu akzeptieren; andernfalls fragen Sie den Administrator des Servers.",
+    "fr": "La clé d'hôte de {host} a changé : acceptée {expected}, proposée maintenant {offered}. Rien n'a été envoyé au serveur. "
+          "Si le changement est attendu (serveur réinstallé, clé renouvelée), relancez « Tester la connexion » pour accepter la nouvelle clé ; "
+          "sinon, demandez à l'administrateur du serveur.",
+    "es": "La clave de host de {host} ha cambiado: aceptada {expected}, ofrecida ahora {offered}. No se ha enviado nada al servidor. "
+          "Si el cambio es esperado (servidor reinstalado, clave renovada), vuelva a ejecutar «Probar conexión» para aceptar la nueva clave; "
+          "si no, pregunte al administrador del servidor.",
+}
+_HOST_KEY_UNKNOWN = {
+    "en": "The host key of {host} has not been accepted yet: run «Test connection» on the connection to see it and accept it.",
+    "it": "La chiave dell'host {host} non è ancora stata accettata: fai «Prova connessione» sulla connessione per vederla e accettarla.",
+    "de": "Der Host-Schlüssel von {host} wurde noch nicht akzeptiert: Führen Sie «Verbindung testen» für die Verbindung aus, um ihn zu sehen und zu akzeptieren.",
+    "fr": "La clé d'hôte de {host} n'a pas encore été acceptée : lancez « Tester la connexion » sur la connexion pour la voir et l'accepter.",
+    "es": "La clave de host de {host} aún no ha sido aceptada: ejecute «Probar conexión» en la conexión para verla y aceptarla.",
+}
+_HOST_KEY_NOT_THE_TESTED_ONE = {
+    "en": "{host} now offers the key {offered}, not the one your test showed ({expected}): it was not accepted. Run the test again.",
+    "it": "{host} ora offre la chiave {offered}, non quella mostrata dalla tua prova ({expected}): non è stata accettata. Rifai la prova.",
+    "de": "{host} bietet jetzt den Schlüssel {offered} an, nicht den von Ihrem Test gezeigten ({expected}): Er wurde nicht akzeptiert. Testen Sie erneut.",
+    "fr": "{host} propose maintenant la clé {offered}, pas celle montrée par votre test ({expected}) : elle n'a pas été acceptée. Relancez le test.",
+    "es": "{host} ofrece ahora la clave {offered}, no la que mostró su prueba ({expected}): no ha sido aceptada. Vuelva a probar.",
+}
+
+
+def _translated(table: dict, lingua: str, **values) -> str:
+    return table.get(lingua, table["en"]).format(**values)
+
+
 def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, db_schema: str) -> dict:
     """Mapping colonne→campi S3 (vedi docstring del modulo)."""
     return {
@@ -237,10 +354,12 @@ def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, 
     }
 
 
-async def _engine_inspect(payload: dict, action: str, path: str = "") -> dict:
+async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: str = "en", **extra) -> dict:
     client = get_engine_client()
     if "tenant_id" in payload:  # SharePoint ha le sue rotte sull'engine
         resp = await client.post("/sharepoint/inspect", json={"connection": payload, "action": action, "path": path})
+    elif payload.get("db_type") == "sftp":
+        resp = await client.post("/sftp/inspect", json={"connection": payload, "action": action, **extra})
     else:
         resp = await client.post("/db/inspect", json={"connection": payload, "action": action})
     if resp.status_code >= 400:
@@ -248,6 +367,11 @@ async def _engine_inspect(payload: dict, action: str, path: str = "") -> dict:
             detail = resp.json().get("detail", resp.text)
         except Exception:
             detail = resp.text
+        if isinstance(detail, dict) and detail.get("code") in ("host_key_changed", "host_key_unknown"):
+            table = _HOST_KEY_CHANGED if detail["code"] == "host_key_changed" else _HOST_KEY_UNKNOWN
+            detail = _translated(table, lingua, host=detail.get("host") or payload.get("host", ""),
+                                 expected=detail.get("expected") or "—", offered=detail.get("offered") or "—")
+            raise HTTPException(status_code=409, detail=detail)
         raise HTTPException(status_code=resp.status_code, detail=str(detail)[:500])
     return resp.json()
 
@@ -322,6 +446,13 @@ def create_connection(
         raise HTTPException(status_code=422, detail=f"Unsupported db_type: use one of {sorted(SUPPORTED_DB_TYPES)}")
     if body.db_type == "sharepoint":
         _check_sharepoint(body.host, body.username, body.database)
+    _valid_extra(body.extra, body.db_type)
+    if body.private_key and body.db_type != "sftp":
+        raise HTTPException(status_code=422, detail="Only SFTP connections take a private key")
+    if body.db_type == "sftp":
+        if body.private_key:
+            _check_private_key(body.private_key)
+        _check_sftp(body.host, body.port, body.username, sftp_auth(body.extra), bool(body.password), bool(body.private_key))
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="The connection needs a name")
@@ -341,6 +472,7 @@ def create_connection(
         database=body.database,
         db_schema=body.db_schema,
         extra=_valid_extra(body.extra, body.db_type),
+        private_key_encrypted=_key_blob(body.private_key, body.private_key_passphrase) if body.private_key else "",
     )
     session.add(conn)
     session.commit()
@@ -378,6 +510,10 @@ def duplicate_connection(
         database=src.database,
         db_schema=src.db_schema,
         extra=src.extra,
+        # same server, same credentials: the accepted host key comes along
+        private_key_encrypted=src.private_key_encrypted,
+        host_key_type=src.host_key_type,
+        host_key_fingerprint=src.host_key_fingerprint,
     )
     session.add(conn)
     commit_copy(session)
@@ -415,6 +551,21 @@ def update_connection(
     if _name_taken(session, target_project, new_name, exclude_id=conn.id):
         raise HTTPException(status_code=409, detail=f"There is already a connection '{new_name}' in this folder")
 
+    if (body.private_key or body.private_key_passphrase) and conn.db_type != "sftp":
+        raise HTTPException(status_code=422, detail="Only SFTP connections take a private key")
+    if body.private_key:
+        _check_private_key(body.private_key)
+    address_before = (conn.host, conn.port)
+    moved = False
+    if conn.db_type == "sftp":
+        moved = any(getattr(body, f) is not None and getattr(body, f) != getattr(conn, f) for f in ("host", "port", "username"))
+        if moved and not (body.password or body.private_key):
+            # the stored secret must not follow the connection to another server or account
+            raise HTTPException(
+                status_code=422,
+                detail="SFTP: a new host, port or user needs the password (or the private key) typed again",
+            )
+
     conn.name = new_name
     conn.project_id = target_project
     for field in ("description", "host", "port", "username", "database", "db_schema"):
@@ -426,6 +577,31 @@ def update_connection(
     if body.password is not None:
         # stringa vuota = rimuovi la password; valorizzata = sostituisci
         conn.password_encrypted = encrypt_secret(body.password) if body.password else ""
+    if body.private_key is not None:
+        conn.private_key_encrypted = _key_blob(body.private_key, body.private_key_passphrase or "") if body.private_key else ""
+    elif body.private_key_passphrase is not None and conn.private_key_encrypted:
+        # a passphrase alone: the stored key stays, with the new passphrase
+        import json as _json
+
+        stored = _json.loads(decrypt_secret(conn.private_key_encrypted))
+        conn.private_key_encrypted = _key_blob(stored.get("private_key", ""), body.private_key_passphrase)
+    if moved:
+        # every secret not typed again in this edit stays behind: a key sent with the move must not
+        # carry the stored password of the other method to the new server (nor the other way round)
+        if not body.password:
+            conn.password_encrypted = ""
+        if not body.private_key:
+            conn.private_key_encrypted = ""
+    if conn.db_type == "sftp":
+        try:
+            _check_sftp(conn.host, conn.port, conn.username, sftp_auth(conn.extra),
+                        bool(conn.password_encrypted), bool(conn.private_key_encrypted))
+        except HTTPException:
+            session.rollback()  # nothing of this edit stays in the session
+            raise
+        if (conn.host, conn.port) != address_before:
+            # another address is another server until a test says which key it has
+            conn.host_key_type = conn.host_key_fingerprint = ""
     conn.updated_at = datetime.now(timezone.utc)
     session.add(conn)
     session.commit()
@@ -472,17 +648,32 @@ def delete_connection(
 @router.post("/projects/{project_id}/connections/test")
 async def test_draft_connection(
     project_id: int,
-    body: ConnectionCreate,
+    body: ConnectionTest,
+    request: Request = None,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Prova una connessione PRIMA di salvarla (il form della UI)."""
+    """Prova una connessione PRIMA di salvarla (il form della UI), col solo segreto
+    scritto nel form. For SFTP in two steps (see `test_connection`): it shows the
+    server's host key without sending credentials; with `expected_fingerprint` it
+    tests the credentials against exactly that key. It stores nothing."""
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.CONNECT)
     if body.db_type not in SUPPORTED_DB_TYPES:
         raise HTTPException(status_code=422, detail=f"Unsupported db_type: use one of {sorted(SUPPORTED_DB_TYPES)}")
     secret = encrypt_secret(body.password) if body.password else ""
+    if body.db_type == "sftp":
+        if body.private_key:
+            _check_private_key(body.private_key)
+        _check_sftp(body.host, body.port, body.username, sftp_auth(body.extra), bool(body.password), bool(body.private_key))
+        key_blob = _key_blob(body.private_key, body.private_key_passphrase) if body.private_key else ""
+        payload = _sftp_payload(body.host, body.port, body.username, secret, key_blob, body.extra)
+        lingua = lingua_della_richiesta(request)
+        result = await _engine_inspect(payload, "test", lingua=lingua, expected_fingerprint=body.expected_fingerprint.strip(),
+                                       expected_type=body.expected_type.strip())
+        _refuse_unoffered_key(result, body.expected_fingerprint.strip(), f"{body.host.strip()}:{body.port or 22}", lingua)
+        return result
     if body.db_type == "sharepoint":
         _check_sharepoint(body.host, body.username, body.database)
         payload = _sharepoint_payload(body.host, body.username, secret, body.database, body.extra)
@@ -502,15 +693,88 @@ async def test_draft_connection(
     return await _engine_inspect(payload, "test")
 
 
+class HostKeyAcceptance(BaseModel):
+    """SFTP: the key the user accepts — the one a previous test showed."""
+    expected_fingerprint: str = ""
+    expected_type: str = ""
+
+
+def _refuse_unoffered_key(result: dict, expected: str, address: str, lingua: str) -> None:
+    """The user accepted a key the server does not offer (any more): nothing was
+    sent to it, and nothing is accepted."""
+    if expected and result.get("needs_acceptance"):
+        offered = str((result.get("host_key") or {}).get("fingerprint") or "—")
+        raise HTTPException(status_code=409, detail=_translated(
+            _HOST_KEY_NOT_THE_TESTED_ONE, lingua, host=address, offered=offered, expected=expected))
+
+
 @router.post("/connections/{conn_id}/test")
 async def test_connection(
     conn_id: int,
+    body: HostKeyAcceptance | None = None,
+    request: Request = None,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    """Tests a saved connection. For SFTP this is trust on first use, in two steps,
+    and no credential ever goes to a key that is not accepted:
+
+    1. without `expected_fingerprint`: the engine reads the server's key; if it is
+       not the accepted one (never accepted, or changed) it closes WITHOUT
+       authenticating and the answer says `needs_acceptance`, with the key and the
+       previous one. Nothing is stored. With the accepted key it tests the
+       credentials as for any connection;
+    2. with `expected_fingerprint` (the key shown in step 1, which the user
+       compared and accepts): the engine sends the credentials only if the server
+       offers exactly that key. After a success the key is stored, with an audit
+       line naming the previous one."""
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
-    return await _engine_inspect(engine_connection_payload(conn), "test")
+    lingua = lingua_della_richiesta(request)
+    if conn.db_type != "sftp":
+        return await _engine_inspect(engine_connection_payload(conn), "test", lingua=lingua)
+    expected = (body.expected_fingerprint if body else "").strip()
+    address = f"{conn.host}:{conn.port or 22}"
+    result = await _engine_inspect(engine_connection_payload(conn), "test", lingua=lingua, expected_fingerprint=expected,
+                                   expected_type=(body.expected_type if body else "").strip())
+    _refuse_unoffered_key(result, expected, address, lingua)
+    if result.get("needs_acceptance") or not result.get("ok"):
+        return result  # shown, not accepted: no credential was sent
+    seen = result.get("host_key") or {}
+    offered, key_type = str(seen.get("fingerprint") or ""), str(seen.get("type") or "")
+    if not offered:
+        raise HTTPException(status_code=502, detail="SFTP: the engine did not report the server's host key")
+    previous = conn.host_key_fingerprint
+    if (conn.host_key_type, previous) != (key_type, offered):
+        conn.host_key_type, conn.host_key_fingerprint = key_type, offered
+        conn.updated_at = datetime.now(timezone.utc)
+        session.add(conn)
+        session.commit()
+        audit.record_audit(
+            session, actor=user, action=audit.CONN_HOST_KEY_ACCEPT, target_type="connection",
+            target_id=conn.id, target_label=conn.name,
+            detail={"type": key_type, "fingerprint": offered, "previous": previous, "host": address},
+            request=request,
+        )
+    return {**result, "changed": bool(previous) and previous != offered, "previous": previous, "accepted": True}
+
+
+@router.post("/connections/{conn_id}/sftp/files")
+async def list_sftp_files(
+    conn_id: int,
+    body: SftpFilesQuery,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """The files a folder + glob takes on this server: the feedback while the
+    datasource is being set up, BEFORE importing."""
+    conn = _get_connection(session, conn_id)
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "sftp":
+        raise HTTPException(status_code=422, detail="This is not an SFTP connection")
+    return await _engine_inspect(engine_connection_payload(conn), "files", lingua=lingua_della_richiesta(request),
+                                 folder=body.folder, pattern=body.pattern)
 
 
 class SharePointFilesQuery(BaseModel):

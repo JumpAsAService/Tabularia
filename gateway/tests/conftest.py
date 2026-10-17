@@ -75,6 +75,10 @@ def session(db_engine):
         yield s
 
 
+def _json_body(request: httpx.Request) -> dict:
+    return json.loads(request.content or b"{}")
+
+
 class FakeEngine:
     """Engine finto: registra le DELETE dei blob e serve stati di task su misura."""
 
@@ -84,6 +88,15 @@ class FakeEngine:
         self.transforms: list[dict] = []  # corpi ricevuti su POST /tasks/transform-data
         self.ingests: list[tuple[str, dict]] = []  # (rotta, corpo) degli ingest accodati
         self.inspects: list[dict] = []  # corpi ricevuti su POST /sharepoint/inspect
+        # SFTP: bodies received on POST /sftp/inspect, and the answers to serve per action
+        self.sftp_inspects: list[dict] = []
+        # the key the fake SFTP server offers; a «test» answers as the engine does:
+        # credentials only if it is the key being accepted, or else the accepted one
+        self.sftp_server_key = {"type": "ssh-ed25519", "fingerprint": "SHA256:server-key"}
+        self.sftp_responses: dict[str, tuple[int, dict]] = {
+            "files": (200, {"files": [], "total": 0}),
+        }
+        self.transform_status = 200  # a different answer to test an engine that refuses the run
         self.dbt_exports: list[dict] = []  # corpi ricevuti su POST /dbt/export
         self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
         self.dbt_export_script: list[tuple[int, dict] | None] = []  # risposte in fila, una per chiamata (None = lo zip)
@@ -124,7 +137,21 @@ class FakeEngine:
         # che con un id. Il payload viene registrato: è l'unico modo di
         # verificare COSA il gateway manda all'engine — che le secret partano
         # cifrate, e che i destinatari siano quelli già validati.
-        if path in ("/db/ingest", "/sharepoint/ingest") and request.method == "POST":
+        if path == "/sftp/inspect" and request.method == "POST":
+            body = _json_body(request)
+            body.setdefault("expected_fingerprint", "")
+            self.sftp_inspects.append(body)
+            action = body.get("action", "test")
+            if action == "test" and "test" not in self.sftp_responses:
+                pinned = body["connection"].get("host_key_fingerprint", "")
+                offered = self.sftp_server_key["fingerprint"]
+                ok = offered == (body["expected_fingerprint"] or pinned)
+                return httpx.Response(200, json={
+                    "ok": ok, "needs_acceptance": not ok, "host_key": dict(self.sftp_server_key),
+                    "changed": bool(pinned) and pinned != offered, "previous": pinned, **({"home": "/home/tab"} if ok else {})})
+            status, payload = self.sftp_responses[action]
+            return httpx.Response(status, json=payload)
+        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest") and request.method == "POST":
             import json as _json
 
             self.ingests.append((path, _json.loads(request.content or b"{}")))
@@ -150,6 +177,8 @@ class FakeEngine:
             import json as _json
 
             self.transforms.append(_json.loads(request.content or b"{}"))
+            if self.transform_status >= 400:
+                return httpx.Response(self.transform_status, json={"detail": "engine refused"})
             return httpx.Response(200, json={"task_id": f"t-transform-{len(self.transforms)}"})
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]

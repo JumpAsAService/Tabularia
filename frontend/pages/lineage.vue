@@ -12,7 +12,7 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import {
   Share2, Workflow, Database, Plug, CloudUpload, HardDriveDownload, Search,
-  AlertTriangle, Clock, ExternalLink, X, Crosshair,
+  AlertTriangle, Clock, ExternalLink, X, Crosshair, Server,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
 import { useSearch, type SearchHit } from '~/composables/useSearch'
@@ -41,7 +41,7 @@ const q = ref('') // ricerca nel picker
 const selected = ref<LineageNode | null>(null) // nodo aperto nel pannello dettaglio
 
 // filtri per tipo di nodo (tutti attivi di default)
-const ALL_TYPES = ['flow', 'datasource', 'connection', 'db_sink', 's3_sink'] as const
+const ALL_TYPES = ['flow', 'datasource', 'connection', 'db_sink', 's3_sink', 'sftp_sink'] as const
 const enabledTypes = ref<Set<string>>(new Set(ALL_TYPES))
 function toggleType(t: string) {
   const s = new Set(enabledTypes.value)
@@ -56,6 +56,7 @@ const NODE_META = computed<Record<string, { label: string; icon: any; color: str
   connection: { label: t('lineage.nodeConnection'), icon: Plug, color: '#a78bfa' },
   db_sink: { label: t('lineage.nodeDbSink'), icon: HardDriveDownload, color: '#fbbf24' },
   s3_sink: { label: t('lineage.nodeS3Sink'), icon: CloudUpload, color: '#38bdf8' },
+  sftp_sink: { label: t('sftp.lineageNode'), icon: Server, color: '#f472b6' },
 }))
 const EDGE_META = computed<Record<string, { label: string; color: string; dashed?: boolean }>>(() => ({
   read: { label: t('lineage.edgeRead'), color: '#4f8cff' },
@@ -321,7 +322,7 @@ function impactOf(n: LineageNode, full: LineageGraph) {
   return {
     flows: byType('flow'),
     datasources: byType('datasource'),
-    sinks: byType('db_sink') + byType('s3_sink'),
+    sinks: byType('db_sink') + byType('s3_sink') + byType('sftp_sink'),
     total: seen.size,
   }
 }
@@ -519,6 +520,11 @@ function nodeIcon(t: string) {
                 <dt>{{ $t('lineage.bucket') }}</dt><dd>{{ selected.meta?.bucket || '—' }}</dd>
                 <dt>{{ $t('lineage.format') }}</dt><dd>{{ selected.meta?.format ?? '—' }}</dd>
               </template>
+              <template v-else-if="selected.type === 'sftp_sink'">
+                <dt>{{ $t('lineage.nodeConnection') }}</dt><dd>{{ selected.meta?.connection_name ?? '—' }}</dd>
+                <dt>{{ $t('sftp.outFolderLabel') }}</dt><dd>{{ selected.meta?.folder || '—' }}</dd>
+                <dt>{{ $t('lineage.format') }}</dt><dd>{{ selected.meta?.format ?? '—' }}</dd>
+              </template>
             </dl>
 
             <!-- blast radius: cosa si tocca a valle se cambio questo nodo -->
@@ -606,6 +612,7 @@ function nodeIcon(t: string) {
 .ln-chip.c-connection { border-color: rgba(167, 139, 250, 0.4); }
 .ln-chip.c-db_sink { border-color: rgba(251, 191, 36, 0.4); }
 .ln-chip.c-s3_sink { border-color: rgba(56, 189, 248, 0.4); }
+.ln-chip.c-sftp_sink { border-color: rgba(244, 114, 182, 0.4); }
 .empty { font-size: 12px; }
 
 .ln-legend { display: flex; flex-direction: column; gap: 5px; }
@@ -699,6 +706,7 @@ function nodeIcon(t: string) {
 :deep(.ln-connection) { border-left-color: #a78bfa; }
 :deep(.ln-db_sink) { border-left-color: #fbbf24; }
 :deep(.ln-s3_sink) { border-left-color: #38bdf8; }
+:deep(.ln-sftp_sink) { border-left-color: #f472b6; }
 .ln-inner { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
 .ln-ic { flex-shrink: 0; color: var(--muted); }
 .ln-txt { display: flex; flex-direction: column; min-width: 0; }

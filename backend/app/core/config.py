@@ -326,6 +326,25 @@ class SharePointSettings(BaseModel):
     login_base: str = "https://login.microsoftonline.com"
 
 
+class SftpSettings(BaseModel):
+    """Caps of the SFTP datasource («SFTP folder»): a glob gone wrong (`**/*`) must
+    not download a whole server, nor a single huge file fill the worker's disk.
+    The import is refused, naming the file, before anything is downloaded.
+
+    env: SFTP__MAX_FILE_BYTES, SFTP__MAX_FILES, SFTP__MAX_TOTAL_BYTES, SFTP__TIMEOUT_SECONDS"""
+
+    # bytes of ONE file; every matching file is downloaded to the worker's /tmp
+    # and read in memory to be stacked, so this is also a memory bound
+    max_file_bytes: int = Field(default=512 * 1024**2, ge=1)
+    # files read by one refresh
+    max_files: int = Field(default=500, ge=1)
+    # bytes of all the matching files together, checked on their listed sizes
+    # before anything is downloaded (as SharePoint's 2 GB)
+    max_total_bytes: int = Field(default=2 * 1024**3, ge=1)
+    # connection and SSH handshake; a silent server fails within this time
+    timeout_seconds: float = Field(default=30.0, gt=0)
+
+
 class BigQuerySettings(BaseModel):
     """Engine `bigquery`: le trasformazioni girano su Google BigQuery, che legge i
     parquet DIRETTAMENTE dal bucket come tabelle esterne temporanee (gs://…) e
@@ -477,6 +496,7 @@ class Settings(BaseSettings):
     ingest: IngestSettings = Field(default_factory=IngestSettings)
     export: ExportSettings = Field(default_factory=ExportSettings)
     sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
+    sftp: SftpSettings = Field(default_factory=SftpSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

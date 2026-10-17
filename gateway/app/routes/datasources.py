@@ -30,11 +30,13 @@ from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import LIVE_INGEST, TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run, run_out, snapshot_key
+from app.routes.connections import NOT_DATABASES
 from app.schemas.models import (
     DatasourceOut,
     DatasourceUpdate,
     DbDatasourceCreate,
     SharePointDatasourceCreate,
+    SftpDatasourceCreate,
     Page,
     RunOut,
     ScheduleUpdate,
@@ -82,6 +84,8 @@ def _checked_sort_keys(ds: Datasource, keys: list[str]) -> list[str]:
         )
     if ds.source_type == "sharepoint":
         raise HTTPException(status_code=422, detail="SharePoint imports keep the rows in file order: no sort keys")
+    if ds.source_type == "sftp":
+        raise HTTPException(status_code=422, detail="SFTP imports keep the rows in file order: no sort keys")
     keys = clean_sort_keys(keys)
     try:
         known = [c.get("name") for c in json.loads(ds.columns or "[]") if isinstance(c, dict)]
@@ -265,7 +269,7 @@ async def create_db_datasource(
             status_code=422,
             detail="An S3 connection cannot be a database source (it is for Output nodes)",
         )
-    if conn.db_type in ("smtp", "sharepoint"):
+    if conn.db_type in NOT_DATABASES:
         raise HTTPException(status_code=422, detail=f"A {conn.db_type} connection is not a database")
 
     if body.source_type not in ("table", "sql"):
@@ -368,6 +372,65 @@ async def create_sharepoint_datasource(
         session, actor=user, action=audit.DS_CREATE, target_type="datasource",
         target_id=ds.id, target_label=ds.name,
         detail={"project_id": project_id, "connection_id": conn.id, "source_type": "sharepoint", "path": path, "sheet": sheet},
+        request=request,
+    )
+    return _to_out(ds)
+
+
+@router.post(
+    "/projects/{project_id}/datasources/sftp",
+    response_model=DatasourceOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_sftp_datasource(
+    project_id: int,
+    body: SftpDatasourceCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Datasource from the files of a folder on an SFTP server (folder + glob).
+
+    A `kind="database"` datasource like the SharePoint one — manual and scheduled
+    refresh, import history, snapshot swap — with `source_type="sftp"` and
+    `source_ref` = JSON {folder, pattern, format, sheet, csv}: only WHO brings the
+    data changes (see launch_ingest_run). EDIT on the folder + CONNECT on the
+    connection's folder, as for every database datasource."""
+    if session.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    ensure_can(session, user, project_id, Capability.EDIT)
+    conn = session.get(Connection, body.connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "sftp":
+        raise HTTPException(status_code=422, detail="An SFTP connection is required")
+    name, pattern = body.name.strip(), body.pattern.strip()
+    if not name or not pattern:
+        raise HTTPException(status_code=422, detail="Name and file pattern are required")
+    if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
+        raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
+    ref = {"folder": body.folder.strip(), "pattern": pattern, "format": body.format, "sheet": body.sheet.strip(),
+           "csv": body.csv.model_dump()}
+    ds = Datasource(
+        name=name, description=body.description, project_id=project_id, owner_id=user.id,
+        bucket=get_settings().engine.bucket, key="",  # no snapshot until the first import succeeds
+        kind="database", connection_id=conn.id, source_type="sftp", source_ref=json.dumps(ref),
+    )
+    session.add(ds)
+    session.commit()
+    session.refresh(ds)
+    try:
+        await launch_ingest_run(session, user, ds, conn)
+    except Exception:
+        session.delete(ds)  # engine down (a ConnectError too) or refused: no half datasource
+        session.commit()
+        raise
+    audit.record_audit(
+        session, actor=user, action=audit.DS_CREATE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"project_id": project_id, "connection_id": conn.id, "source_type": "sftp",
+                "folder": ref["folder"], "pattern": pattern},
         request=request,
     )
     return _to_out(ds)

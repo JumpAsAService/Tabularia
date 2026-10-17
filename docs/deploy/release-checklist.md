@@ -43,6 +43,11 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    (default `true`), `AUTH__API_TOKEN_MAX_DAYS` (365), `WEBHOOKS__RETENTION_DAYS`
    (30), `WEBHOOKS__TIMEOUT_SECONDS` (10). Webhook calls leave from the
    orchestrators: if your network limits their egress, open it to the receivers.
+   SFTP connections (revision 0011: three columns on `connections`, empty for the
+   existing ones): `SFTP__MAX_FILE_BYTES` (512 MB per file), `SFTP__MAX_FILES` (500),
+   `SFTP__MAX_TOTAL_BYTES` (2 GB per refresh), `SFTP__TIMEOUT_SECONDS` (30) on the
+   backend and the workers, whose image now carries paramiko. Workers reach the SFTP servers: open their egress to them — see
+   [sftp.md](../sftp.md).
    Engine settings from the panel (revision 0004): `ENGINE__SETTINGS_PANEL` (default
    `true`; `false` keeps the environment the only source, see
    `docs/engine-settings.md`). Audit log to Splunk (revision 0005): no variable, off

@@ -313,7 +313,7 @@ export function useApi() {
 }
 
 // ── Lineage cross-flow ───────────────────────────────────────────────────────
-export type LineageNodeType = 'flow' | 'datasource' | 'connection' | 'db_sink' | 's3_sink'
+export type LineageNodeType = 'flow' | 'datasource' | 'connection' | 'db_sink' | 's3_sink' | 'sftp_sink'
 export type LineageEdgeKind = 'read' | 'publish' | 'ingest' | 'write' | 'refresh' | 'orchestrate'
 export interface LineageNode {
   id: string

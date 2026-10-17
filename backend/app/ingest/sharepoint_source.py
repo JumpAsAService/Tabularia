@@ -300,34 +300,44 @@ def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
 
 
 # ── Lettura e validazione ───────────────────────────────────────────────────────
-def read_sheet(local_path: str, sheet: str, shown_as: str) -> pl.DataFrame:
-    """Legge il foglio e RIFIUTA ciò che non è machine readable."""
-    try:
-        header = pl.read_excel(local_path, sheet_name=sheet, has_header=False, read_options={"n_rows": 1}, raise_if_empty=False)
-    except ValueError as e:
-        if "no matching sheet" in str(e):
-            raise SharePointError(f"{shown_as}: sheet '{sheet}' does not exist") from e
-        raise SharePointError(f"{shown_as}: unreadable Excel file ({e})") from e
-    except Exception as e:
-        raise SharePointError(f"{shown_as}: unreadable Excel file ({e})") from e
-    if header.height == 0 or header.width == 0:
-        raise SharePointError(f"{shown_as}: sheet '{sheet}' is empty")
-    names = [None if v is None or str(v).strip() == "" else str(v).strip() for v in header.row(0)]
+def check_header(names: list, shown_as: str, where: str, error: type[IngestError] = SharePointError) -> None:
+    """Refuses a header that is not machine readable: a column without a name, the
+    same name twice (case-insensitive), a provenance column name. Shared by every
+    file source (SharePoint, SFTP): `where` says which part of the file it is."""
+    names = [None if v is None or str(v).strip() == "" else str(v).strip() for v in names]
     empty = [i + 1 for i, n in enumerate(names) if n is None]
     if empty:
-        raise SharePointError(
-            f"{shown_as}: incomplete header in sheet '{sheet}' (columns without a name: "
+        raise error(
+            f"{shown_as}: incomplete header in {where} (columns without a name: "
             f"{', '.join(map(str, empty[:8]))}). The FIRST row must contain a name for every column: "
             "remove any titles or empty rows above the table from the file."
         )
     seen: set[str] = set()
     dup = sorted({n for n in names if n.casefold() in seen or seen.add(n.casefold())})  # type: ignore[func-returns-value]
     if dup:
-        raise SharePointError(f"{shown_as}: repeated column names in sheet '{sheet}': {', '.join(dup[:8])}")
+        raise error(f"{shown_as}: repeated column names in {where}: {', '.join(dup[:8])}")
     reserved = [n for n in names if n in (FILE_COLUMN, MODIFIED_COLUMN)]
     if reserved:
-        raise SharePointError(f"{shown_as}: '{reserved[0]}' is a name reserved for the source file's provenance")
-    df = pl.read_excel(local_path, sheet_name=sheet, raise_if_empty=False)
+        raise error(f"{shown_as}: '{reserved[0]}' is a name reserved for the source file's provenance")
+
+
+def read_sheet(local_path: str, sheet: str | None, shown_as: str, error: type[IngestError] = SharePointError) -> pl.DataFrame:
+    """Legge il foglio e RIFIUTA ciò che non è machine readable. `sheet=None` = the
+    first sheet of the workbook."""
+    where = f"sheet '{sheet}'" if sheet else "the first sheet"
+    which = {"sheet_name": sheet} if sheet else {"sheet_id": 1}
+    try:
+        header = pl.read_excel(local_path, **which, has_header=False, read_options={"n_rows": 1}, raise_if_empty=False)
+    except ValueError as e:
+        if "no matching sheet" in str(e):
+            raise error(f"{shown_as}: sheet '{sheet}' does not exist") from e
+        raise error(f"{shown_as}: unreadable Excel file ({e})") from e
+    except Exception as e:
+        raise error(f"{shown_as}: unreadable Excel file ({e})") from e
+    if header.height == 0 or header.width == 0:
+        raise error(f"{shown_as}: {where} is empty")
+    check_header(list(header.row(0)), shown_as, where, error)
+    df = pl.read_excel(local_path, **which, raise_if_empty=False)
     # i nomi validati sono quelli RIPULITI dagli spazi: le colonne devono chiamarsi
     # cosi', o "Importo " in un file e "Importo" in un altro farebbero due colonne
     return df.rename({c: c.strip() for c in df.columns if c != c.strip()})

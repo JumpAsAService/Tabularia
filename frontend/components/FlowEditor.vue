@@ -11,6 +11,7 @@ import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizon
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
+import { knownError } from '~/composables/knownErrors'
 import { useAuth } from '~/composables/useAuth'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useFlowPresence } from '~/composables/useFlowPresence'
@@ -1551,6 +1552,22 @@ function describeOutput(n: Node): OutputSummary {
       error,
     }
   }
+  if ((d.destType ?? 'datasource') === 'sftp') {
+    const conn = connectionsList.value.find((c) => c.id === d.connectionId)
+    const name = (d.sftpFileName ?? '').trim()
+    let error: string | null = null
+    if (d.connectionId == null) error = t('sftp.chooseConnection')
+    else if (!conn) error = t('flowEditor.connectionUnavailable')
+    else if (conn.db_type !== 'sftp') error = t('sftp.connectionNotSftp')
+    else if (!name) error = t('sftp.enterFileName')
+    const folder = (d.sftpFolder ?? '').trim()
+    return {
+      id: n.id,
+      label: `SFTP ${folder ? `${folder.replace(/\/$/, '')}/` : ''}${name || '…'}`,
+      detail: conn ? `${conn.name} · ${d.sftpFormat ?? 'csv'}` : '',
+      error,
+    }
+  }
   if ((d.destType ?? 'datasource') === 'email') {
     const conn = connectionsList.value.find((c) => c.id === d.connectionId)
     const to: string[] = d.emailTo ?? []
@@ -1703,7 +1720,7 @@ async function pollOrchestration(runId: number) {
       return
     }
     if (run.status === 'FAILURE') {
-      setStatus(t('flowEditor.orchestrationError', { error: run.error ?? t('flowEditor.unknownError') }), 'error')
+      setStatus(t('flowEditor.orchestrationError', { error: run.error ? knownError(run.error, t) : t('flowEditor.unknownError') }), 'error')
       return
     }
   }
@@ -1788,6 +1805,15 @@ async function executeOutputRuns() {
           mode: d.mode ?? 'append',
           post_sql: d.postSql ?? '',
         }
+      } else if (destType === 'sftp') {
+        // the gateway adds the run's number and the flow's name for the template
+        destination = {
+          type: 'sftp' as const,
+          connection_id: d.connectionId,
+          folder: (d.sftpFolder ?? '').trim(),
+          file_name: (d.sftpFileName ?? '').trim(),
+          format: d.sftpFormat ?? 'csv',
+        }
       } else if (destType === 's3') {
         destination = {
           type: 's3' as const,
@@ -1858,7 +1884,9 @@ async function pollRun(runId: number, label = '') {
           const d = JSON.parse(run.destination)
           target = d.type === 's3'
             ? ` → s3://${d.bucket}/${d.key}`
-            : ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
+            : d.type === 'sftp'
+              ? ` → sftp://${d.host}${d.path ?? ''}`
+              : ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
         } catch { /* riassunto illeggibile: resta il messaggio base */ }
       }
       setStatus(`${prefix}${t('flowEditor.completedRows', { rows: run.rows_written })}${target}`, 'ok')
@@ -1866,7 +1894,7 @@ async function pollRun(runId: number, label = '') {
       return
     }
     if (run.status === 'FAILURE') {
-      setStatus(`${prefix}${t('flowEditor.errorInline', { error: run.error })}`, 'error')
+      setStatus(`${prefix}${t('flowEditor.errorInline', { error: knownError(run.error, t) })}`, 'error')
       return
     }
   }

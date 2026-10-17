@@ -351,6 +351,8 @@ def _output_label(node: dict) -> str:
         return f"table {d.get('table') or '…'}"
     if dt == "s3":
         return f"S3 {d.get('s3Key') or '…'}"
+    if dt == "sftp":
+        return f"SFTP {d.get('sftpFileName') or '…'}"
     return f"datasource “{d.get('name') or '…'}”"
 
 
@@ -358,7 +360,8 @@ def _output_name(node: dict) -> str:
     """What the user calls an Output: the datasource, table or file it writes."""
     d = node.get("data") or {}
     dt = d.get("destType") or "datasource"
-    nome = d.get("table") if dt == "database" else d.get("s3Key") if dt == "s3" else d.get("name")
+    nome = (d.get("table") if dt == "database" else d.get("s3Key") if dt == "s3"
+            else d.get("sftpFileName") if dt == "sftp" else d.get("name"))
     return str(nome or "").strip() or str(node.get("id") or "")
 
 
@@ -404,6 +407,16 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
             "table": (d.get("table") or "").strip(),
             "mode": d.get("mode") or "append",
             "post_sql": d.get("postSql") or "",
+        }
+    elif dest_type == "sftp":
+        # the run's number and the flow's name for the file-name template are
+        # added by the gateway at launch (routes/runs.py): not part of the flow
+        body["destination"] = {
+            "type": "sftp",
+            "connection_id": d.get("connectionId"),
+            "folder": (d.get("sftpFolder") or "").strip(),
+            "file_name": (d.get("sftpFileName") or "").strip(),
+            "format": d.get("sftpFormat") or "csv",
         }
     elif dest_type == "s3":
         body["destination"] = {

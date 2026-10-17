@@ -24,7 +24,7 @@ class Connection(SQLModel, table=True):
     project_id: int = Field(foreign_key="projects.id", index=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
 
-    db_type: str  # postgresql | mysql | mariadb | clickhouse | trino | oracle | sqlserver | s3 | smtp | sharepoint
+    db_type: str  # postgresql | mysql | mariadb | clickhouse | trino | oracle | sqlserver | s3 | smtp | sharepoint | sftp
     host: str
     port: Optional[int] = None  # None = porta di default del db_type
     username: str = ""
@@ -39,6 +39,17 @@ class Connection(SQLModel, table=True):
     # avrebbe lasciata fuori una comunque. Meglio un posto dichiarato che un
     # terzo trucco. Vuoto ("{}") per tutti gli altri tipi.
     extra: str = Field(default="{}", sa_column=Column(Text, nullable=False))
+
+    # SFTP. The private key (PEM or OpenSSH) and its passphrase, encrypted TOGETHER
+    # with Fernet as {"private_key", "passphrase"}: a secret like the password, never
+    # in the API's answers. Which of the two authenticates is `extra.auth`.
+    private_key_encrypted: str = Field(default="", sa_column=Column(Text, nullable=False, server_default=""))
+    # The server's host key accepted at the first test (trust on first use): its type
+    # (ssh-ed25519, ecdsa-sha2-nistp256, ssh-rsa…) and SHA256 fingerprint. Written ONLY
+    # by a test the engine made (routes/connections.test_connection), with an audit
+    # line; emptied when host or port change. Empty = never accepted: refused.
+    host_key_type: str = Field(default="", sa_column_kwargs={"server_default": ""})
+    host_key_fingerprint: str = Field(default="", sa_column_kwargs={"server_default": ""})
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

@@ -81,7 +81,10 @@ engines, from an in-process library to a serverless warehouse.
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
   ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint Excel; write results
   back to a database table (Oracle and SQL Server are sources only, for now) or publish
-  them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too.
+  them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too, uploaded or
+  on an **SFTP server**: a folder and a glob become one table, refreshed on schedule,
+  and a flow can drop its result there as a file — the server's host key checked at
+  every connection ([SFTP](docs/sftp.md)).
 - **Ask your data.** An optional AI assistant answers questions in plain language over
   the datasources you are allowed to read: it finds the table, reads the curated field
   descriptions, writes and runs the query on your engine, and shows the result table the

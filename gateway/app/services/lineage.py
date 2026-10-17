@@ -196,6 +196,19 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                                      "format": d.get("s3Format") or "parquet",
                                      "partitions": len(d.get("partitionBy") or [])})
                     g.add_edge(_fid(f.id), sink, EDGE_WRITE)
+                elif dest == "sftp":
+                    conn_id = d.get("connectionId")
+                    folder = (d.get("sftpFolder") or "").strip()
+                    name = (d.get("sftpFileName") or "").strip() or "(file?)"
+                    sink = f"sftpsink:{conn_id}|{folder}|{name}"
+                    conn = conn_by_id.get(conn_id)
+                    g.add_node(sink, type="sftp_sink", label=name, restricted=conn is None,
+                               meta={"connection_id": conn_id,
+                                     "connection_name": conn.name if conn else None,
+                                     "host": conn.host if conn else None,
+                                     "folder": folder,
+                                     "format": d.get("sftpFormat") or "csv"})
+                    g.add_edge(_fid(f.id), sink, EDGE_WRITE)
                 # dest == "datasource": la produzione è già coperta dall'arco
                 # PUBLISH persistito (datasources.flow_id) quando il flusso è girato
 

@@ -35,6 +35,9 @@ dependencies = [
     "trino>=0.330.0",
     "uvicorn>=0.49.0",
     "xlsxwriter>=3.2.9",
+    # SFTP connections (datasource «SFTP folder» and the SFTP Output): pure Python
+    # SSH (LGPL-2.1), with bcrypt and PyNaCl for OpenSSH and ed25519 keys
+    "paramiko>=5.0",
 ]
 
 [dependency-groups]

@@ -2,7 +2,7 @@
 esporre mai `hashed_password` e per validare gli input."""
 from datetime import datetime, timezone
 from typing import Annotated, Generic, Literal, Optional, TypeVar
-from pydantic import BaseModel, PlainSerializer, Field
+from pydantic import BaseModel, PlainSerializer, Field, field_validator
 
 # ── Datetime in uscita: sempre con l'offset ───────────────────────────────────
 # Le colonne TIMESTAMP del DB sono naive e per convenzione in UTC (vedi
@@ -411,6 +411,11 @@ class ConnectionOut(BaseModel):
     # serve a ripopolare il form quando si modifica la connessione.
     extra: str = "{}"
     has_password: bool = False
+    # SFTP: whether a private key is stored (never the key), and the host key
+    # accepted at the first test — empty until a test accepts one
+    has_private_key: bool = False
+    host_key_type: str = ""
+    host_key_fingerprint: str = ""
     updated_at: Optional[UtcDateTime] = None
 
 
@@ -424,7 +429,20 @@ class ConnectionCreate(BaseModel):
     password: str = ""  # in chiaro solo nel body della richiesta; cifrata a riposo
     database: str = ""
     db_schema: str = ""
-    extra: str = "{}"  # opzioni del tipo (SMTP: from_address, tls, allowed_domains)
+    extra: str = "{}"  # opzioni del tipo (SMTP: from_address, tls, allowed_domains; SFTP: auth)
+    # SFTP with the key method: the private key (PEM or OpenSSH) and its passphrase,
+    # in clear only in the request's body; stored encrypted, together
+    private_key: str = Field(default="", max_length=32_000)
+    private_key_passphrase: str = Field(default="", max_length=1_000)
+
+
+class ConnectionTest(ConnectionCreate):
+    """A connection tested BEFORE it is saved (the form). It only uses the secret
+    typed in the form, never a stored one. SFTP: without `expected_fingerprint` the
+    test shows the server's host key and sends no credential; with it (the key the
+    user accepts), the credentials go only if the server offers exactly that key."""
+    expected_fingerprint: str = Field(default="", max_length=200)
+    expected_type: str = Field(default="", max_length=100)
 
 
 class ConnectionUpdate(BaseModel):
@@ -438,6 +456,10 @@ class ConnectionUpdate(BaseModel):
     db_schema: Optional[str] = None
     extra: Optional[str] = None
     project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+    # SFTP: set = replaces the stored key ("" removes it); a passphrase alone
+    # keeps the stored key and replaces its passphrase
+    private_key: Optional[str] = Field(default=None, max_length=32_000)
+    private_key_passphrase: Optional[str] = Field(default=None, max_length=1_000)
 
 
 # ── Runs (esecuzioni dei flussi) ──────────────────────────────────────────────
@@ -455,10 +477,10 @@ class PublishSpec(BaseModel):
 
 
 class RunDestinationSpec(BaseModel):
-    """Destinazione dell'output (nodo Output del flusso): tabella di database
-    o oggetto/dataset su S3. La connessione è referenziata per id, le
-    credenziali non passano MAI dal client."""
-    type: Literal["database", "s3"] = "database"
+    """Destinazione dell'output (nodo Output del flusso): tabella di database,
+    oggetto/dataset su S3 o file su un server SFTP. La connessione è referenziata
+    per id, le credenziali non passano MAI dal client."""
+    type: Literal["database", "s3", "sftp"] = "database"
     connection_id: int
     # type="database"
     table: str = ""
@@ -467,8 +489,13 @@ class RunDestinationSpec(BaseModel):
     # type="s3"
     bucket: str = ""  # vuoto = bucket di default della connessione
     key: str = ""  # chiave del file, o prefisso se partizionato
-    format: Literal["parquet", "csv"] = "parquet"
+    # s3: parquet | csv; sftp: csv | parquet | xlsx
+    format: Literal["parquet", "csv", "xlsx"] = "parquet"
     partition_by: list[str] = Field(default_factory=list)  # hive: colonna=valore/…
+    # type="sftp": the folder on the server (empty = the login directory) and the
+    # file-name template ({date}, {datetime}, {run_id}, {flow})
+    folder: str = Field(default="", max_length=1000)
+    file_name: str = Field(default="", max_length=255)
 
 
 class RunMirrorSpec(BaseModel):
@@ -683,6 +710,51 @@ class SharePointDatasourceCreate(BaseModel):
     connection_id: int
     path: str = Field(min_length=1, max_length=1000)
     sheet: str = Field(min_length=1, max_length=255)
+
+
+def no_dot_dot(path: str) -> str:
+    """SFTP folders and patterns say where they are: going up with '..' is refused."""
+    if ".." in (path or "").replace("\\", "/").split("/"):
+        raise ValueError("'..' is not allowed: write the folder you mean")
+    return path
+
+
+class SftpCsvOptions(BaseModel):
+    """How the CSV files of an SFTP folder are read (the options of the file sources)."""
+    separator: str = Field(default=",", min_length=1, max_length=1)
+    has_header: bool = True
+    # utf8-lossy replaces invalid bytes; windows-1252 is the usual Excel export
+    encoding: Literal["utf8", "utf8-lossy", "windows-1252"] = "utf8"
+    null_values: list[str] = Field(default_factory=list, max_length=20)
+
+
+class SftpDatasourceCreate(BaseModel):
+    """Datasource from the files of a folder on an SFTP server: a folder and a glob.
+    All matching files are read at each refresh and stacked into one table."""
+    name: str
+    description: str = ""
+    connection_id: int
+    folder: str = Field(default="", max_length=1000)  # empty = the login directory
+    pattern: str = Field(min_length=1, max_length=500)
+    # auto = from each file's extension
+    format: Literal["auto", "csv", "parquet", "excel", "ndjson"] = "auto"
+    sheet: str = Field(default="", max_length=255)  # Excel: empty = the first sheet
+    csv: SftpCsvOptions = Field(default_factory=SftpCsvOptions)
+
+    @field_validator("folder", "pattern")
+    @classmethod
+    def _no_dot_dot(cls, v: str) -> str:
+        return no_dot_dot(v)
+
+
+class SftpFilesQuery(BaseModel):
+    folder: str = Field(default="", max_length=1000)
+    pattern: str = Field(min_length=1, max_length=500)
+
+    @field_validator("folder", "pattern")
+    @classmethod
+    def _no_dot_dot(cls, v: str) -> str:
+        return no_dot_dot(v)
 
 
 # ── Permissions ───────────────────────────────────────────────────────────────

@@ -178,6 +178,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'connection.create': { icon: Plug, color: u.success, label: t('audit.connectionCreateAction') },
     'connection.update': { icon: Plug, color: u.accent, label: t('audit.connectionUpdateAction') },
     'connection.delete': { icon: Plug, color: u.danger, label: t('audit.connectionDeleteAction') },
+    'connection.host_key_accept': { icon: Plug, color: u.accent, label: t('sftp.auditHostKeyAccept') },
     // ambra: è l'unico che non corrisponde ad alcun token, resta fisso
     'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
     'permission.grant': { icon: Shield, color: u.success, label: t('audit.permissionGrantAction') },

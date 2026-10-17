@@ -267,6 +267,35 @@ def test_un_refresh_da_sharepoint_e_un_file_del_sito(session, scena):
     assert (i["namespace"], i["name"]) == ("sharepoint://acme.sharepoint.com/sites/vendite", "/Documenti/budget 2026.xlsx#Q1")
 
 
+def test_an_sftp_refresh_reads_files_of_the_server_and_an_sftp_output_writes_one(session, scena):
+    ftp = Connection(name="drop", db_type="sftp", project_id=scena.cartella.id, owner_id=scena.capo.id, host="sftp.example.com", port=2222)
+    session.add(ftp)
+    session.commit()
+    ds = make_datasource(session, name="vendite", project_id=scena.cartella.id, key="datasets/19/v1.parquet", rows=10, kind="database",
+                         connection_id=ftp.id, source_type="sftp", source_ref=json.dumps({"folder": "/in", "pattern": "vendite_*.csv"}))
+    run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t17", rows_written=10)
+    _, fine = ol.to_json(ol.run_events(session, run))
+    (i,) = fine["inputs"]
+    assert (i["namespace"], i["name"]) == ("sftp://sftp.example.com:2222", "/in/vendite_*.csv")
+
+    out = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t18", rows_written=5,
+                   destination=json.dumps({"type": "sftp", "connection_id": ftp.id, "host": "sftp.example.com:2222", "folder": "/out",
+                                           "file_name": "v_{date}", "format": "csv", "path": "/out/v_2026-10-17.csv"}))
+    _, fine = ol.to_json(ol.run_events(session, out))
+    assert fine["job"]["name"].endswith(".file /out/v_{date}")
+    # ONE dataset per Output, whatever file each run writes: the name is the template,
+    # the file this run wrote is its version
+    (o,) = fine["outputs"]
+    assert (o["namespace"], o["name"]) == ("sftp://sftp.example.com:2222", "/out/v_{date}")
+    assert o["facets"]["datasetVersion"]["datasetVersion"] == "/out/v_2026-10-17.csv"
+    assert o["outputFacets"]["outputStatistics"]["rowCount"] == 5
+    # the flow's declared outputs name the same dataset
+    flow = make_flow(session, name="Sftp out", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+        {"id": "o", "type": "output", "data": {"destType": "sftp", "connectionId": ftp.id, "sftpFolder": "/out",
+                                                "sftpFileName": "v_{date}", "sftpFormat": "csv"}}], "edges": []}))
+    assert [(d.namespace, d.name) for d in ol.flow_outputs(session, flow)] == [("sftp://sftp.example.com:2222", "/out/v_{date}")]
+
+
 def test_output_su_s3_copia_specchio_ed_email(session, scena):
     s3 = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t8", rows_written=5,
                   destination=json.dumps({"type": "s3", "connection_id": 77, "db_type": "s3", "endpoint": "https://storage.googleapis.com", "bucket": "lake", "key": "exports/margini.parquet", "format": "parquet"}))

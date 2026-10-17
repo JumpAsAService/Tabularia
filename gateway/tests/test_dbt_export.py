@@ -272,6 +272,25 @@ def test_una_datasource_sharepoint_diventa_un_seed_e_le_sorgenti_portano_i_tipi(
     assert p["source_map"][scena.ordini.key]["types"] == {"id": "Int64", "canale": "String", "importo": "Float64"}
 
 
+def test_an_sftp_folder_becomes_a_seed_and_an_sftp_output_a_table(session, scena):
+    """Files on a server, like SharePoint's: no database to read them from in dbt, so a
+    seed. A file written to a server: in dbt a table, to export from the warehouse."""
+    ftp = Connection(name="drop", db_type="sftp", project_id=scena.cartella.id, owner_id=scena.capo.id, host="sftp.example.com", database="", db_schema="")
+    session.add(ftp); session.commit()
+    files = make_datasource(session, name="vendite sftp", project_id=scena.cartella.id, key="datasets/81/v1.parquet", kind="database", connection_id=ftp.id,
+                            source_type="sftp", source_ref=json.dumps({"folder": "/in", "pattern": "vendite_*.csv"}),
+                            columns=json.dumps([{"name": "id", "dtype": "Int64"}]))
+    definizione = {"nodes": [_nodo_src("s1", files.id),
+                             {"id": "o", "type": "output", "data": {"destType": "sftp", "connectionId": ftp.id, "sftpFolder": "/out",
+                                                                     "sftpFileName": "export_{date}", "sftpFormat": "csv"}}],
+                   "edges": [_edge("s1", "o")]}
+    flow = make_flow(session, name="Sftp", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    p = d.build_export_payload(session, flow, "data-prep", "duckdb")
+    assert [s["name"] for s in p["seeds"]] == ["seed_vendite_sftp"]
+    (m,) = p["models"]
+    assert m["materialized"] == "table" and m["name"] == "export" and "export_{date}" in m["description"]
+
+
 def test_ogni_modello_porta_da_dove_viene(session, scena):
     """Tracciabilità: flusso, versione (e quando è stata salvata), cartella, autore,
     uscita e nodo; i tag per selezionarli in dbt (`tag:tabularia`). Chi esporta va nel

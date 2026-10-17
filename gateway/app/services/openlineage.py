@@ -387,6 +387,37 @@ def object_dataset(endpoint: str, bucket: str, key: str, fmt: str | None = None,
     return InputDataset(namespace=ns, name=nome, facets=facets)
 
 
+def sftp_dataset(address: str, path: str, fmt: str | None = None, output: bool = False, rows: int | None = None,
+                 written: str | None = None):
+    """Files on an SFTP server: namespace sftp://host:port. An Output is ONE dataset
+    named after its folder and file-name template, whatever file each run writes:
+    the file this run wrote is the dataset's version (`written`)."""
+    from openlineage.client.event_v2 import InputDataset, OutputDataset
+    from openlineage.client.facet_v2 import dataset_version_dataset, output_statistics_output_dataset, storage_dataset
+
+    ns = f"sftp://{address}"
+    nome = "/" + (path or "").strip("/")
+    facets: dict[str, Any] = {}
+    if fmt:
+        facets["storage"] = storage_dataset.StorageDatasetFacet(storageLayer="file", fileFormat=fmt)
+    if written:
+        facets["datasetVersion"] = dataset_version_dataset.DatasetVersionDatasetFacet(datasetVersion=written)
+    if output:
+        out_facets = {}
+        if rows is not None:
+            out_facets["outputStatistics"] = output_statistics_output_dataset.OutputStatisticsOutputDatasetFacet(rowCount=rows)
+        return OutputDataset(namespace=ns, name=nome, facets=facets, outputFacets=out_facets)
+    return InputDataset(namespace=ns, name=nome, facets=facets)
+
+
+def _sftp_address(conn: Connection) -> str:
+    return f"{conn.host}:{conn.port or 22}"
+
+
+def _sftp_path(folder: str, name: str) -> str:
+    return "/".join(p for p in ((folder or "").strip("/"), (name or "").strip("/")) if p)
+
+
 def sharepoint_dataset(conn: Connection, ref: dict):
     from openlineage.client.event_v2 import InputDataset
     from openlineage.client.facet_v2 import datasource_dataset
@@ -411,6 +442,12 @@ def origin_inputs(session: Session, ds: Datasource) -> tuple[list, dict]:
         except json.JSONDecodeError:
             ref = {}
         return [sharepoint_dataset(conn, ref)], {}
+    if conn.db_type == "sftp":
+        try:
+            ref = json.loads(ds.source_ref or "{}")
+        except json.JSONDecodeError:
+            ref = {}
+        return [sftp_dataset(_sftp_address(conn), _sftp_path(ref.get("folder", ""), ref.get("pattern", "")))], {}
     if ds.source_type == "sql":
         from openlineage.client.facet_v2 import sql_job
 
@@ -489,6 +526,11 @@ def flow_outputs(session: Session, flow: Flow) -> list:
             conn = session.get(Connection, d.get("connectionId")) if d.get("connectionId") else None
             if conn is not None and (d.get("s3Key") or "").strip():
                 outputs.append(object_dataset(conn.host, (d.get("s3Bucket") or conn.database or "").strip(), d["s3Key"].strip(), d.get("s3Format") or "parquet", output=True))
+        elif tipo == "sftp":
+            conn = session.get(Connection, d.get("connectionId")) if d.get("connectionId") else None
+            if conn is not None and (d.get("sftpFileName") or "").strip():
+                outputs.append(sftp_dataset(_sftp_address(conn), _sftp_path(d.get("sftpFolder") or "", d["sftpFileName"].strip()),
+                                            d.get("sftpFormat") or "csv", output=True))
         # email: non è un dataset
     return outputs
 
@@ -544,6 +586,9 @@ def _run_outputs(session: Session, run: Run) -> list:
             outputs.append(table_dataset(conn, dest["table"], output=True, rows=run.rows_written, mode=dest.get("mode")))
         elif dest.get("type") == "s3" and dest.get("bucket") and dest.get("key"):
             outputs.append(object_dataset(dest.get("endpoint") or "", dest["bucket"], dest["key"], dest.get("format"), output=True, rows=run.rows_written))
+        elif dest.get("type") == "sftp" and dest.get("host") and (dest.get("path") or dest.get("file_name")):
+            outputs.append(sftp_dataset(dest["host"], _sftp_path(dest.get("folder") or "", dest.get("file_name") or ""),
+                                        dest.get("format"), output=True, rows=run.rows_written, written=dest.get("path")))
     if run.mirror:
         try:
             m = json.loads(run.mirror)
@@ -560,6 +605,9 @@ def _output_label(run: Run) -> str:
     if run.destination:
         try:
             d = json.loads(run.destination)
+            if d.get("type") == "sftp":
+                # the template, not the rendered name: the job stays the same from run to run
+                return f"file /{_sftp_path(d.get('folder') or '', d.get('file_name') or '')}"
             return f"table {d.get('table')}" if d.get("type") == "database" else f"file {d.get('key')}"
         except json.JSONDecodeError:
             pass

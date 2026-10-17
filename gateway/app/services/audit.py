@@ -50,6 +50,9 @@ CONTRACT_DELETE = "contract.delete"
 CONN_CREATE = "connection.create"
 CONN_UPDATE = "connection.update"
 CONN_DELETE = "connection.delete"
+# SFTP: a server's host key accepted by a test (trust on first use), or a new key
+# accepted in place of the previous one — what proves the server is the right one
+CONN_HOST_KEY_ACCEPT = "connection.host_key_accept"
 EXPORT_DOWNLOAD = "export.download"
 # esecuzione DIRETTA dal piano dati (editor, senza flusso salvato): è un run
 # come gli altri e lascia la stessa traccia

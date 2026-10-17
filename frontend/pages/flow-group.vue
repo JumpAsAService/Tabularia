@@ -17,6 +17,7 @@ import {
   CircleCheck, CircleX, LoaderCircle, Hourglass, SkipForward, CircleSlash, EyeOff, Ban, Check,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -508,7 +509,7 @@ async function saveSchedule(cron: string) {
                 <template v-if="duration(shownRun)"> · {{ duration(shownRun) }}</template>
                 · {{ $t(`flowGroups.trigger_${shownRun.trigger_type}`) }}
               </span>
-              <span v-if="shownRun.error" class="rerr" :title="shownRun.error">{{ shownRun.error }}</span>
+              <span v-if="shownRun.error" class="rerr" :title="knownError(shownRun.error, t)">{{ knownError(shownRun.error, t) }}</span>
             </template>
             <span v-else class="muted">{{ $t('flowGroups.neverRun') }}</span>
             <span v-if="detail?.next_run_at && detail.run_schedule" class="muted next">
@@ -534,7 +535,7 @@ async function saveSchedule(cron: string) {
                 <span class="hwhen">{{ when(run.started_at) || $t('flowGroups.status_PENDING') }}</span>
                 <span class="muted">{{ duration(run) }}</span>
                 <span class="muted">{{ $t(`flowGroups.trigger_${run.trigger_type}`) }}</span>
-                <span v-if="run.error" class="rerr" :title="run.error">{{ run.error }}</span>
+                <span v-if="run.error" class="rerr" :title="knownError(run.error, t)">{{ knownError(run.error, t) }}</span>
               </button>
             </li>
           </ul>
