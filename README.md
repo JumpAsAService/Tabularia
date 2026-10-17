@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 <p align="center">
   <img src="frontend/public/logo.svg" width="96" height="96" alt="Tabularia logo">
 </p>
@@ -744,3 +745,4 @@ The default docker-compose deployment includes **MinIO** (AGPL-3.0) and **Grafan
 (AGPL-3.0) as separate, unmodified services accessed over standard APIs (S3, HTTP).
 They are deployment choices, swappable via environment variables. All libraries used
 by Tabularia itself are under permissive licenses (MIT/BSD/Apache-2.0/ISC).
+<!-- {% endraw %} -->

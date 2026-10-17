@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Export a flow as a dbt project
 
 A flow designed in Tabularia can leave as a **dbt project**: a zip with one model per
@@ -323,3 +324,4 @@ are green. Run them after any change to the exporter or to the engines it mirror
   day until you run `dbt seed` with a new one.
 - The native target writes with the user of the connection, in `dbt_tabularia` or in
   the destination schemas: that user needs `CREATE` there.
+<!-- {% endraw %} -->
