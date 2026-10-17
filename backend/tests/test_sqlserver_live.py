@@ -7,6 +7,7 @@ ufficiale (edizione Developer):
     -e MSSQL_SA_PASSWORD=… mcr.microsoft.com/mssql/server:2022-latest
 
 L'utente deve poter creare tabelle: il test crea le sue (zzt_*) e le toglie."""
+import importlib.util
 import os
 import tempfile
 import uuid
@@ -19,7 +20,11 @@ from app.ingest.db_source import DbConnectionSpec, DbSourceError, DbSourceSpec, 
 from app.ingest.db_source import test_connection as prova_connessione  # non «test_»: pytest la raccoglierebbe
 
 HOST = os.environ.get("SQLSERVER_TEST_HOST")
-pytestmark = pytest.mark.skipif(not HOST, reason="serve un SQL Server (SQLSERVER_TEST_HOST)")
+pytestmark = [
+    pytest.mark.skipif(not HOST, reason="serve un SQL Server (SQLSERVER_TEST_HOST)"),
+    # the driver is optional (the `sqlserver` extra, build arg WITH_MSSQL=true)
+    pytest.mark.skipif(importlib.util.find_spec("mssql_python") is None, reason="SQL Server driver not installed"),
+]
 P = f"zzt_{uuid.uuid4().hex[:6]}"
 
 

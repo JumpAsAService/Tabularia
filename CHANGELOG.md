@@ -3,6 +3,28 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## 1.1.1 «Appio» — 2026-10-18
+
+**The SQL Server driver is no longer in the images; how to add it.** `mssql-python`
+(MIT) depends on `mssql-python-odbc`, Microsoft's ODBC Driver 18 for SQL Server:
+proprietary, under a licence that allows redistributing it only on terms an AGPL-3.0
+project cannot meet. The 1.1.0 images carried it; the 1.1.1 images do not. Nothing
+else changes from 1.1.0.
+
+- **Adding the driver.** Whoever reads from SQL Server adds it to their own backend
+  image and accepts Microsoft's licence directly: build from the release tag with
+  `--build-arg WITH_MSSQL=true` (the new `sqlserver` extra of the backend, at the
+  versions in `uv.lock`), or extend the published image with
+  `pip --python /opt/venv/bin/python install "mssql-python==1.15.0"`, then point the
+  engine API, the workers and beat at that image (Compose `image:`, Helm
+  `image.backend`). The system libraries the driver needs stay in every image. See
+  `docs/sqlserver.md`.
+- **Without the driver** a SQL Server connection can still be saved; testing it,
+  listing its tables or importing from it says that the driver is not installed, with
+  the guide, instead of failing on an import error. No other database is affected.
+- The development stack builds without the driver too, like the published images
+  (`WITH_MSSQL=true docker compose build` to add it). Helm chart 2.0.1 installs 1.1.1.
+
 ## 1.1.0 «Appio» — 2026-10-11
 
 Second release, still «Appio». Since 1.0.0 Tabularia is ready for production on one

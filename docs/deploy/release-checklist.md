@@ -34,6 +34,13 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `INGEST__DB_READ_TIMEOUT_SECONDS` (default 3000): how long an import from
    ClickHouse waits for the first rows; keep it below
    `CELERY__TASK_SOFT_TIME_LIMIT`.
+   **New in 1.1.1: SQL Server.** The published backend images no longer contain the
+   SQL Server driver: it is Microsoft's, under Microsoft's licence, and an AGPL image
+   cannot carry it. If you have SQL Server connections, build or extend the backend
+   image with the driver **before** upgrading, and run that image for the engine API,
+   both workers and beat — see [sqlserver.md](../sqlserver.md). Without it, those
+   connections and their datasources fail with «the SQL Server driver is not
+   installed», and nothing else is affected. Nothing else changes from 1.1.0.
 
 ## Rollout order
 

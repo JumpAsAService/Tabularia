@@ -55,6 +55,21 @@ class DbSourceError(IngestError):
     """Errore parlante da mostrare all'utente (connessione, query, tipi)."""
 
 
+class DriverNotInstalledError(DbSourceError):
+    """The driver of this database type is not installed in this image: the SQL
+    Server one depends on Microsoft's ODBC driver, under Microsoft's licence, which an
+    AGPL image cannot carry, so whoever needs it installs it (docs/sqlserver.md). The
+    message is its only argument, so that the exception rebuilt from its args
+    (pickle, Celery's result backend) says the same."""
+
+
+def driver_not_installed(label: str) -> DriverNotInstalledError:
+    return DriverNotInstalledError(
+        f"The {label} driver is not installed in this installation: the published images "
+        "do not include it. See docs/sqlserver.md to add it."
+    )
+
+
 class DbConnectionSpec(BaseModel):
     db_type: DbType
     host: str
@@ -545,7 +560,14 @@ def _odbc_valore(v: str) -> str:
 
 
 def _sqlserver_connect(conn: DbConnectionSpec):
-    import mssql_python
+    try:
+        import mssql_python
+    except ModuleNotFoundError as e:
+        # only the driver itself missing means «not installed»; a module IT needs
+        # missing is a broken installation, and says so with its own name
+        if (e.name or "").split(".")[0] != "mssql_python":
+            raise
+        raise driver_not_installed("SQL Server") from e
 
     tls = (conn.extra or {}).get("tls") or "verify"
     if tls not in _TLS_SQLSERVER:
