@@ -28,17 +28,17 @@ image:
   # Server, run your own build of it, see docs/sqlserver.md.
   backend:
     repository: tabularia-backend
-    tag: "1.1.0"
+    tag: "1.1.1"
 
   gateway:
     repository: tabularia-gateway
-    tag: "1.1.0"
+    tag: "1.1.1"
 
   # If you build it yourself: from frontend/Dockerfile.prod, not
   # frontend/Dockerfile (that one is the hot-reload development server).
   frontend:
     repository: tabularia-frontend
-    tag: "1.1.0"
+    tag: "1.1.1"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # External services — not deployed by this chart
