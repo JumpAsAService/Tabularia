@@ -104,6 +104,13 @@ export interface EmailSpec {
   timezone?: string // of the dates in the subject and the attachment name; empty = UTC
 }
 
+export interface MirrorSpec {
+  connection_id: number
+  bucket: string
+  key: string
+  timezone?: string
+}
+
 interface RunBody {
   bucket: string
   input_key: string
@@ -111,6 +118,8 @@ interface RunBody {
   publish?: PublishSpec | null
   destination?: DestinationSpec | null
   email?: EmailSpec | null
+  // the S3 copy of a published datasource (the Output node's «copy» option)
+  mirror?: MirrorSpec | null
 }
 
 export function useRuns() {

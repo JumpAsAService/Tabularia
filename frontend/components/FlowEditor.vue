@@ -28,7 +28,7 @@ import Modal from '~/components/ui/Modal.vue'
 import { buildClip, instantiateClip, readClip, writeClip, type ClipNode, type FlowClip } from '~/composables/useFlowClipboard'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
-import { useRuns, type PublishSpec, type DestinationSpec } from '~/composables/useRuns'
+import { useRuns, type PublishSpec, type DestinationSpec, type MirrorSpec } from '~/composables/useRuns'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import { skeletonPad } from '~/composables/useSkeleton'
@@ -1796,6 +1796,7 @@ async function executeOutputRuns() {
       let publish = null
       let destination = null
       let email = null
+      let mirror: MirrorSpec | null = null
       if (destType === 'email') {
         email = emailSpecOf(d)
       } else if (destType === 'database') {
@@ -1834,6 +1835,16 @@ async function executeOutputRuns() {
           overwrite: !!d.overwrite,
           sort_keys: d.sortKeys ?? [],
         }
+        // the S3 copy IN ADDITION to the datasource, as a scheduled run sends it
+        // (gateway flow_resolver): best effort, it never fails the publish
+        if (d.mirrorEnabled && d.mirrorConnectionId && String(d.mirrorKey ?? '').trim()) {
+          mirror = {
+            connection_id: d.mirrorConnectionId,
+            bucket: String(d.mirrorBucket ?? '').trim(),
+            key: String(d.mirrorKey ?? '').trim(),
+            timezone: String(d.timezone ?? '').trim(),
+          }
+        }
       }
       try {
         const launched = await runsApi.launch(flowId.value!, {
@@ -1843,6 +1854,7 @@ async function executeOutputRuns() {
           publish,
           destination,
           email,
+          mirror,
         })
         setStatus(`${label}: ${t('flowEditor.outputRunStarted', { id: launched.id })}`, 'busy')
         pollRun(launched.id, label)
