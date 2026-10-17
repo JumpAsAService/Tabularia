@@ -785,7 +785,7 @@ export default {
     "mirrorBucketLabel": "Bucket (facultatif)",
     "mirrorBucketPlaceholder": "vide = bucket par défaut de la connexion",
     "mirrorEnable": "Copier aussi le fichier sur un S3 externe",
-    "mirrorHint": "Écrasé à chaque exécution, toujours au même chemin : les pipelines en aval trouvent toujours la dernière donnée. Si la copie échoue, le run reste réussi et l'erreur est consignée dans l'historique.",
+    "mirrorHint": "Écrite à chaque exécution au chemin de sa clé : toujours le même, ou un par jour ou par exécution si la clé contient des espaces réservés. Si la copie échoue, ou si sa clé ne peut pas être résolue, le run reste réussi et l'erreur est consignée dans l'historique.",
     "mirrorKeyLabel": "Chemin dans le bucket",
     "mirrorKeyPlaceholder": "ex. published/ventes/latest.parquet",
     "modeAppend": "Ajouter (INSERT)",

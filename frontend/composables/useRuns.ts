@@ -30,7 +30,11 @@ export interface RunInfo {
   error_detail?: string | null // traceback completo (dettaglio del fallimento)
   publish_name: string | null
   datasource_id: number | null
-  destination: string | null // JSON: {db_type, host, database, table, mode} | s3 | sftp {host, folder, file_name, path}
+  // JSON: {db_type, host, database, table, mode} | s3 {bucket, key, written_key?} | sftp {host, folder, file_name, path}
+  destination: string | null
+  // JSON of a successful refresh that skipped values: {missing: [{params, pattern}],
+  // missing_count, expansions} — read it with runNotes() (usePlaceholders)
+  notes?: string | null
   started_at: string | null
   finished_at: string | null
   progress?: RunProgress | null
@@ -80,6 +84,8 @@ export interface DestinationSpec {
   // type="sftp": folder on the server and file-name template ({date}, {datetime}, {run_id}, {flow})
   folder?: string
   file_name?: string
+  // the zone of the dates in the templates (sftp folder and file name, s3 key); empty = UTC
+  timezone?: string
 }
 
 // Invio dell'output come allegato. I destinatari sono limitati dai domini
@@ -95,6 +101,7 @@ export interface EmailSpec {
   attachment_name?: string
   attachment_format?: 'csv' | 'xlsx'
   stop_on_failure?: boolean
+  timezone?: string // of the dates in the subject and the attachment name; empty = UTC
 }
 
 interface RunBody {

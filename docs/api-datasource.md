@@ -58,13 +58,14 @@ OpenLineage events all show `***` in its place, also when the API echoes it back
 | Query parameters | One `name=value` per line. A repeated name is sent twice. |
 | Headers | One `Name: value` per line; they override the connection's defaults with the same name. |
 | JSON body | `POST` only. Placeholders go **inside JSON strings**: `{"since": "{last_refresh}"}`. A string made only of `{…:epoch}` or `{…:epoch_ms}` is sent as a number. |
-| Variables | One `name = value1, value2` per line (up to 10 variables, 1000 values each). |
+| Variables | One per line (up to 10): a list `name = value1, value2` (1000 values each), or a range `day = today-7 .. today step 1d` — see [placeholders.md](placeholders.md#variables). |
 | Time zone | An IANA name (`Europe/Rome`); it defines «today». Default UTC. |
 | Initial last refresh | The value of `{last_refresh}` on the first refresh (`today-365`, `2024-01-01`). |
 
 ### Dynamic values
 
-A tiny grammar of our own, parsed and never evaluated:
+A tiny grammar of our own, parsed and never evaluated — the same language as the file
+datasources and the Outputs ([placeholders.md](placeholders.md)):
 
 | Placeholder | Value (in the datasource's time zone) |
 |---|---|
@@ -77,20 +78,29 @@ A tiny grammar of our own, parsed and never evaluated:
 | `{today:yyyy-MM-dd}` `{today:ddMMyyyy}` `{today-1:dd/MM/yy}` `{now:yyyy-MM-dd'T'HH:mm:ss}` | a readable format: `yyyy` `yy` `MM` `dd` `HH` `mm` `ss`, text in `'quotes'` (`''` is an apostrophe). `mm` is the minutes right after the hours or right before the seconds, the month otherwise (Excel's rule), so `ddmmyyyy` is a date. `HH` is 00-23 and `hh` is refused («use HH»); any other letter is refused («put letters in quotes: 'T'»), and so are a token written twice in a row (`MMMM`) and a format with no date or time part |
 | `{today:%Y%m%d}` `{now:%Y-%m-%dT%H:%M:%SZ}` | a strftime format (a `%` outside quotes makes it one). `%s` is refused: use `:epoch`; `%z` and `%Z` only on `{now}` and `{last_refresh}` (on a date they are empty) |
 | `{now:epoch}` `{now:epoch_ms}` | seconds or milliseconds since 1970 (a date is its midnight in the time zone) |
-| `{symbol}` | a variable of the datasource (no offset, no format) |
+| `{symbol}` | a list variable of the datasource (no offset, no format) |
+| `{day}` `{day_end}` `{day:yyyyMMdd}` | a range variable and the end of its window (offsets and formats allowed) |
 | `{{` `}}` | a literal brace |
 
 An unknown name, a bad offset or format, a variable that is defined but not used, or
 `{last_refresh}` without an initial value is refused **when the datasource is saved**,
 with the reason.
 
-### List variables
+### Variables: lists and ranges
 
 `symbol = AAPL, MSFT, ENI.MI` makes **one call per value** (each with its own
-pagination); several lists make every combination. Every row keeps the values in
+pagination); several variables make every combination. Every row keeps the values in
 `_param_<name>` columns (`_param_symbol`), the last columns of the table. The number of
 calls is checked before the first one: over the limit (see below), the datasource is
 refused.
+
+A **range** `day = today-7 .. today step 1d` makes one call per value too — here the
+seven days before today (the end is excluded) — and `{day_end}` is the end of each
+window, so an API that takes a period gets consecutive windows that never overlap:
+`from={day}&to={day_end}`. With append mode keyed on `_param_day` (and the record's own
+key) this is the incremental import that re-reads the last days every night. Steps
+`1d`, `7d`, `1w`, `1m`, `1y`, `1h`, `30min`; at most `PLACEHOLDERS__MAX_VALUES` (1000)
+values. See [placeholders.md](placeholders.md#variables).
 
 ### The response
 

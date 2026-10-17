@@ -139,7 +139,7 @@ try:
     ok("the call fields appear and the dialog widens", ff.aspetta("!!document.querySelector('.dd-card.wide .ac')", 5), card_text(".dd-card"))
     ok("no table, SQL or sort keys for an API", not ff.js("return document.querySelector('.dd-card').innerText.includes('Sort keys') || !!document.querySelector('.dd-mode')"))
     write(".ac input[placeholder='/v1/rates/{today-30}..']", "/quote/{symbol}")
-    write(".ac textarea[placeholder='symbol = AAPL, MSFT, ENI.MI']", "symbol = AAPL, MSFT")
+    write(".ac textarea.dyn-variables", "symbol = AAPL, MSFT")
     write(".ac input[placeholder='data.items']", "prices")
     ff.js("document.querySelector('.ac-check input').click(); return 1")
     ff.js("document.querySelector('.ac-try button').click(); return 1")

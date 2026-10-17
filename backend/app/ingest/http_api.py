@@ -50,7 +50,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
-import itertools
 import json
 import logging
 import math
@@ -72,7 +71,8 @@ import urllib3.connectionpool
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
-from app.ingest import api_placeholders as ph
+from app.core import placeholders as ph
+from app.core.placeholders import Variable
 from app.ingest.converters import IngestError
 
 logger = logging.getLogger(__name__)
@@ -149,11 +149,6 @@ class ApiConnectionSpec(BaseModel):
 class Pair(BaseModel):
     name: str = Field(max_length=200)
     value: str = Field(default="", max_length=4000)
-
-
-class Variable(BaseModel):
-    name: str = Field(max_length=64)
-    values: list[str] = Field(min_length=1, max_length=1000)
 
 
 class ResponseSpec(BaseModel):
@@ -1023,11 +1018,32 @@ def _render_body(node: Any, ctx: ph.Context) -> Any:
     return node
 
 
-def _combinations(source: ApiSourceSpec) -> list[dict[str, str]]:
-    if not source.variables:
-        return [{}]
-    names = [v.name for v in source.variables]
-    return [dict(zip(names, combo)) for combo in itertools.product(*(v.values for v in source.variables))]
+def _count_combinations(source: ApiSourceSpec) -> int | None:
+    """The number of calls when every variable is a list (None with a range: it
+    depends on the moment)."""
+    if any(v.type == "range" for v in source.variables):
+        return None
+    total = 1
+    for v in source.variables:
+        total *= len(v.values)
+    return total
+
+
+def _context_and_combinations(source: ApiSourceSpec, now: datetime, last_refresh: str | None,
+                              caps: "_Caps") -> tuple[ph.Context, list[dict[str, Any]]]:
+    """The moment's context and every combination of the variables' values (a
+    range expanded now): one call each."""
+    n = _count_combinations(source)
+    if n is not None and n > caps.max_calls:
+        raise ApiError(f"the variables make {n} calls, over the limit of {caps.max_calls} per refresh "
+                       "(the datasource's limit or API__MAX_CALLS): fewer values")
+    base = _ph(ph.make_context, now, source.timezone, last_refresh, source.last_refresh_initial, {})
+    combos = _ph(ph.combinations, source.variables, base, get_settings().placeholders.max_values,
+                 max(caps.max_calls, get_settings().placeholders.max_values))
+    if len(combos) > caps.max_calls:
+        raise ApiError(f"the variables make {len(combos)} calls, over the limit of {caps.max_calls} per refresh "
+                       "(the datasource's limit or API__MAX_CALLS): fewer values")
+    return base, combos
 
 
 def _ph(fn: Callable, *a, **kw):
@@ -1048,12 +1064,9 @@ def validate_source(conn: ApiConnectionSpec, source: ApiSourceSpec, now: datetim
         raise ApiError("the path must be relative to the connection's base URL (e.g. /v1/items), not a whole address")
     if "?" in path or "#" in path:
         raise ApiError("put the query parameters in the Query section of the call, not in the path")
-    names: list[str] = []
-    for v in source.variables:
-        _ph(ph.check_variable_name, v.name)
-        if v.name in names:
-            raise ApiError(f"the variable '{v.name}' is defined twice")
-        names.append(v.name)
+    _ph(ph.check_variables, source.variables)
+    lists, ranges = ph.variable_names(source.variables)
+    names = [v.name for v in source.variables]
     has_initial = bool(source.last_refresh_initial.strip())
     if has_initial:
         _ph(ph.resolve_initial, source.last_refresh_initial, now or datetime.now(timezone.utc), ph.zone(source.timezone))
@@ -1079,7 +1092,7 @@ def validate_source(conn: ApiConnectionSpec, source: ApiSourceSpec, now: datetim
         templates += _body_strings(body_doc)
     used: set[str] = set()
     for t in templates:
-        used |= _ph(ph.check, t, set(names), has_initial)
+        used |= _ph(ph.check, t, lists, has_initial, ranges=ranges)
     unused = [n for n in names if n not in used]
     if unused:
         raise ApiError(f"the variable '{unused[0]}' is not used in the path, the query, the headers or the body")
@@ -1110,14 +1123,8 @@ def validate_source(conn: ApiConnectionSpec, source: ApiSourceSpec, now: datetim
             raise ApiError("the append mode needs the key columns that identify a row (e.g. date, _param_symbol)")
         if len(set(keys)) != len(keys):
             raise ApiError("a key column is named twice")
-    combos = _combinations(source)
-    caps = _caps(source)
-    if len(combos) > caps.max_calls:
-        raise ApiError(f"the variables make {len(combos)} calls, over the limit of {caps.max_calls} per refresh "
-                       "(the datasource's limit or API__MAX_CALLS): fewer values")
-    ctx = _ph(ph.make_context, now or datetime.now(timezone.utc), source.timezone, last_refresh,
-              source.last_refresh_initial, combos[0])
-    req = _resolve(conn, source, ctx, body_doc)
+    base, combos = _context_and_combinations(source, now or datetime.now(timezone.utc), last_refresh, _caps(source))
+    req = _resolve(conn, source, ph.with_values(base, combos[0]), body_doc)
     return {"ok": True, "calls": len(combos), "request": _display_request(conn, req, Redactor(conn))}
 
 
@@ -1244,16 +1251,17 @@ def _advance(source: ApiSourceSpec, state: dict, nxt: str) -> None:
         state["url"] = nxt
 
 
-def _rows_of_page(source: ApiSourceSpec, records: list[dict], combo: dict[str, str]) -> list[dict]:
+def _rows_of_page(source: ApiSourceSpec, records: list[dict], combo: dict[str, Any]) -> list[dict]:
     explode = source.response.explode.strip()
-    reserved = {PARAM_PREFIX + n for n in combo}
+    params = ph.params_of(source.variables, combo)
+    reserved = {PARAM_PREFIX + n for n in params}
     rows = []
     for rec in records:
         for row in flatten(rec, explode):
             clash = reserved.intersection(row)
             if clash:
                 raise ApiError(f"the response has a field '{sorted(clash)[0]}', the name of the column of a variable: rename the variable")
-            for n, v in combo.items():
+            for n, v in params.items():
                 row[PARAM_PREFIX + n] = v
             rows.append(row)
     return rows
@@ -1288,9 +1296,9 @@ def try_call(conn: ApiConnectionSpec, source: ApiSourceSpec, last_refresh: str |
     turned into rows is still shown, with what is wrong."""
     checked = validate_source(conn, source, now=now, last_refresh=last_refresh)
     now = now or datetime.now(timezone.utc)
-    combo = _combinations(source)[0]
-    ctx = _ph(ph.make_context, now, source.timezone, last_refresh, source.last_refresh_initial, combo)
-    req = _resolve(conn, source, ctx)
+    base, combos = _context_and_combinations(source, now, last_refresh, _caps(source))
+    combo = combos[0]
+    req = _resolve(conn, source, ph.with_values(base, combo))
     client = ApiClient(conn, max_retries=0)
     try:
         state = _start_state(source)
@@ -1378,7 +1386,7 @@ def ingest_api_to_parquet(
     now = now or datetime.now(timezone.utc)
     validate_source(conn, source, now=now, last_refresh=last_refresh)
     caps = _caps(source)
-    combos = _combinations(source)
+    base, combos = _context_and_combinations(source, now, last_refresh, caps)
     client = ApiClient(conn, min_interval=caps.min_interval)
     frames: list[pl.DataFrame] = []
     conflicts: set[str] = set()
@@ -1386,8 +1394,7 @@ def ingest_api_to_parquet(
     try:
         for i, combo in enumerate(combos, 1):
             report("calls", call=i, calls=len(combos), pages=pages, rows=rows_fetched)
-            ctx = _ph(ph.make_context, now, source.timezone, last_refresh, source.last_refresh_initial, combo)
-            req = _resolve(conn, source, ctx)
+            req = _resolve(conn, source, ph.with_values(base, combo))
             state = _start_state(source)
             page_no = 0
             while True:

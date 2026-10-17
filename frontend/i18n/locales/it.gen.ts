@@ -861,7 +861,7 @@ export default {
     "mirrorBucketLabel": "Bucket (facoltativo)",
     "mirrorBucketPlaceholder": "vuoto = bucket predefinito della connessione",
     "mirrorEnable": "Copia il file anche su S3 esterno",
-    "mirrorHint": "Sovrascritto a ogni esecuzione, sempre allo stesso percorso: chi legge a valle trova sempre l'ultimo dato. Se la copia fallisce il run resta riuscito e l'errore è registrato in cronologia.",
+    "mirrorHint": "Scritta a ogni esecuzione al percorso della sua chiave: sempre lo stesso, oppure uno al giorno o per esecuzione se la chiave contiene segnaposto. Se la copia fallisce, o la sua chiave non si risolve, il run resta riuscito e l'errore è registrato in cronologia.",
     "mirrorKeyLabel": "Percorso nel bucket",
     "mirrorKeyPlaceholder": "es. published/vendite/latest.parquet",
     "modeAppend": "Accoda (INSERT)",

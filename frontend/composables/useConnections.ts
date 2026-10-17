@@ -1,6 +1,7 @@
 // Connessioni a database esterni. Tutte le operazioni richiedono la capability
 // CONNECT sulla cartella della connessione; la password non esce mai dalle API.
 import type { ApiCallDraft } from '~/composables/useDatasources'
+import type { FileTemplatesDraft, FilesCheck } from '~/composables/usePlaceholders'
 import { pagedQuery, type Page } from '~/composables/useApi'
 
 export interface ConnectionInfo {
@@ -162,15 +163,19 @@ export function useConnections() {
     tryApi: (id: number, call: ApiCallDraft) =>
       apiFetch<ApiTryResult>(`/connections/${id}/api/try`, { method: 'POST', body: call }),
 
-    // the files a folder + glob takes on an SFTP connection
-    sftpFiles: (id: number, folder: string, pattern: string) =>
-      apiFetch<{ files: { path: string; size: number; modified_at: string }[]; total: number }>(
-        `/connections/${id}/sftp/files`, { method: 'POST', body: { folder, pattern } }),
+    // the files a folder + glob takes on an SFTP connection; with placeholders or
+    // variables every expansion, and the values without a file
+    sftpFiles: (id: number, body: { folder: string; pattern: string } & Partial<FileTemplatesDraft>) =>
+      apiFetch<FilesCheck>(`/connections/${id}/sftp/files`, { method: 'POST', body }),
 
     // i file Excel che un percorso/glob prende su una connessione SharePoint
-    sharepointFiles: (id: number, path: string) =>
-      apiFetch<{ files: { path: string; size: number; modified_at: string }[]; total: number }>(
-        `/connections/${id}/sharepoint/files`, { method: 'POST', body: { path } }),
+    sharepointFiles: (id: number, body: { path: string } & Partial<FileTemplatesDraft>) =>
+      apiFetch<FilesCheck>(`/connections/${id}/sharepoint/files`, { method: 'POST', body }),
+
+    // the objects a folder + glob takes in a bucket of an S3 connection (empty bucket =
+    // the connection's default)
+    s3Files: (id: number, body: { bucket: string; folder: string; pattern: string } & Partial<FileTemplatesDraft>) =>
+      apiFetch<FilesCheck>(`/connections/${id}/s3/files`, { method: 'POST', body }),
     tables: (id: number) => apiFetch<{ tables: string[] }>(`/connections/${id}/tables`),
   }
 }

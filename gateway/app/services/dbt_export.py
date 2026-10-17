@@ -311,9 +311,9 @@ class _Progetto:
         if key in self.riferimenti:
             return self.riferimenti[key]
         ds = self.session.exec(select(Datasource).where(Datasource.key == key)).first()
-        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp", "api"):
-            # files (Excel on SharePoint, a folder on an SFTP server) or an HTTP API: for
-            # dbt there is no database to read them from → seed
+        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp", "api", "s3"):
+            # files (Excel on SharePoint, a folder on an SFTP server or in a bucket) or an
+            # HTTP API: for dbt there is no database to read them from → seed
             rif = {"seed": self._seed(ds, key)}
         elif ds is not None and ds.kind == "database":
             conn = self.session.get(Connection, ds.connection_id) if ds.connection_id else None
@@ -658,7 +658,10 @@ class _Progetto:
                                       "in dbt it is a table (export it from the warehouse).")
             modello["_uscita"] = f"output file `{dest.get('file_name')}` (SFTP)"
         else:   # s3
+            # a key with placeholders: the model is named after its fixed text
             nome_f = (dest.get("key") or "model").rsplit("/", 1)[-1].split(".")[0]
+            if "{" in (dest.get("key") or ""):
+                nome_f = re.sub(r"\{[^{}]*\}", "", (dest.get("key") or "").rsplit("/", 1)[-1]).split(".")[0].strip("_- ") or "model"
             modello["name"] = self.nomi.nuovo(nome_f, suffisso)
             modello["materialized"] = "table"
             modello["description"] = f"Output file `{dest.get('key')}` of the flow «{flow.name}»: in dbt it is a table (export it from the warehouse)."

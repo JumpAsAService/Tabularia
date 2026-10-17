@@ -176,3 +176,42 @@ def test_clean_key_vuota_o_traversal_rifiutata():
 def test_secret_in_chiaro_solo_sviluppo():
     conn = S3ConnectionSpec(access_key="k", secret_key="chiaro")
     assert conn.resolve_secret() == "chiaro"
+
+
+# ── placeholders in the key ───────────────────────────────────────────────────
+def test_the_key_resolves_its_placeholders_in_the_time_zone(storage, sorgente, recorder):
+    from datetime import datetime, timezone
+
+    out = write_output_to_s3(
+        _conn(), S3DestinationSpec(bucket="c", key="exports/{today:yyyy/MM}/{flow}_{date}_{run_id}.parquet",
+                                   timezone="Asia/Tokyo", run_id=9, flow="Vendite mese"),
+        BUCKET, sorgente.key, storage=storage, now=datetime(2026, 10, 17, 22, 30, tzinfo=timezone.utc),
+    )
+    assert recorder.uploads == [("c", "exports/2026/10/Vendite_mese_2026-10-18_9.parquet")]
+    assert out["key"] == "exports/2026/10/Vendite_mese_2026-10-18_9.parquet"
+
+
+def test_a_key_without_placeholders_is_written_as_before(storage, sorgente, recorder):
+    write_output_to_s3(_conn(), S3DestinationSpec(bucket="c", key="a/b.parquet"), BUCKET, sorgente.key, storage=storage)
+    assert recorder.uploads == [("c", "a/b.parquet")]
+
+
+@pytest.mark.parametrize("key", ["x/{flow}/../y.csv", "x/{week}.csv", "x/{today"])
+def test_a_bad_key_template_is_refused_before_writing(storage, sorgente, recorder, key):
+    with pytest.raises(S3DestinationError):
+        write_output_to_s3(_conn(), S3DestinationSpec(bucket="c", key=key, format="csv", flow="f"), BUCKET,
+                           sorgente.key, storage=storage)
+    assert recorder.uploads == []
+
+
+def test_a_templated_key_over_1024_bytes_is_refused(storage, sorgente, recorder):
+    with pytest.raises(S3DestinationError, match="1024"):
+        write_output_to_s3(_conn(), S3DestinationSpec(bucket="c", key="/".join(["d" * 200] * 6) + "/{date}.parquet"),
+                           BUCKET, sorgente.key, storage=storage)
+    assert recorder.uploads == []
+
+
+def test_a_long_key_without_placeholders_is_sent_as_before(storage, sorgente, recorder):
+    key = "/".join(["d" * 200] * 6) + "/v.parquet"
+    write_output_to_s3(_conn(), S3DestinationSpec(bucket="c", key=key), BUCKET, sorgente.key, storage=storage)
+    assert recorder.uploads == [("c", key)]

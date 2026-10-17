@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The call of an «API call» datasource, inside the datasource dialog: what it asks
-// (method, path, query, headers, JSON body, list variables), how the answer becomes
+// (method, path, query, headers, JSON body, list and range variables), how the answer becomes
 // rows (records path, keyed records, JMESPath, a list exploded), how it pages, how
 // a refresh lands (snapshot or append with keys) and its limits. «Try the call»
 // makes the first page of the first call with the connection's credentials and
@@ -15,16 +15,15 @@ import { FlaskConical, LoaderCircle, CheckCircle2, XCircle } from 'lucide-vue-ne
 import { errMessage } from '~/composables/useApi'
 import { useConnections, type ApiTryResult } from '~/composables/useConnections'
 import { cleanApiCall, type ApiCallDraft, type ApiPair } from '~/composables/useDatasources'
+import { splitKeys, usePlaceholderPreview } from '~/composables/usePlaceholders'
+import DynamicSourceFields from '~/components/ui/DynamicSourceFields.vue'
+import TemplatePreview from '~/components/ui/TemplatePreview.vue'
 
 const props = defineProps<{ connectionId: number | null }>()
 const call = defineModel<ApiCallDraft>({ required: true })
 
 const { t } = useI18n()
 const connApi = useConnections()
-
-// the placeholders, shown as a cheat sheet (not in the messages: vue-i18n reads braces)
-const PLACEHOLDERS = ['{today}', '{yesterday}', '{now}', '{today-7d}', '{today-1m}', '{now-2h}', '{start_of_month}',
-  '{start_of_week}', '{last_refresh}', '{today:yyyy-MM-dd}', '{today:ddMMyyyy}', '{now:yyyyMMdd HH:mm}', '{now:epoch}', '{{ }}']
 
 function pairsToText(pairs: ApiPair[], sep: string): string {
   return pairs.map((p) => `${p.name}${sep}${p.value}`).join('\n')
@@ -42,18 +41,20 @@ function textToPairs(text: string, sep: string): ApiPair[] {
 
 const queryText = ref(pairsToText(call.value.query, '='))
 const headersText = ref(pairsToText(call.value.headers, ': '))
-const variablesText = ref(call.value.variables.map((v) => `${v.name} = ${v.values.join(', ')}`).join('\n'))
 const keysText = ref(call.value.keys.join(', '))
 
 watch(queryText, (v) => { call.value.query = textToPairs(v, '=') })
 watch(headersText, (v) => { call.value.headers = textToPairs(v, ': ') })
-watch(variablesText, (v) => {
-  call.value.variables = textToPairs(v, '=').map((p) => ({
-    name: p.name,
-    values: p.value.split(',').map((x) => x.trim()).filter(Boolean),
-  }))
-})
-watch(keysText, (v) => { call.value.keys = v.split(/[,;\s]+/).map((k) => k.trim()).filter(Boolean) })
+watch(keysText, (v) => { call.value.keys = splitKeys(v) })
+
+// what the path and each query value give now, with the call's zone and variables
+const preview = usePlaceholderPreview(() => ({
+  kind: 'input',
+  templates: { path: call.value.path, ...Object.fromEntries(call.value.query.map((p, i) => [`query_${i}`, p.value])) },
+  timezone: call.value.timezone,
+  variables: call.value.variables,
+  last_refresh_initial: call.value.last_refresh_initial,
+}))
 
 const pg = computed(() => call.value.pagination)
 
@@ -93,12 +94,14 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
       </div>
       <div class="ac-grow">
         <label>{{ $t('apiSource.pathLabel') }} <span class="ac-soft">{{ $t('apiSource.pathHint') }}</span></label>
-        <input v-model="call.path" type="text" spellcheck="false" class="ac-mono" placeholder="/v1/rates/{today-30}.." />
+        <input v-model="call.path" type="text" spellcheck="false" class="ac-mono ac-path" aria-describedby="tp-api-path" placeholder="/v1/rates/{today-30}.." />
       </div>
     </div>
+    <TemplatePreview id="tp-api-path" :preview="preview" name="path" />
 
     <label>{{ $t('apiSource.queryLabel') }} <span class="ac-soft">{{ $t('apiSource.queryHint') }}</span></label>
-    <textarea v-model="queryText" rows="2" spellcheck="false" class="ac-mono" placeholder="base=EUR&#10;from={today-7d}" />
+    <textarea v-model="queryText" rows="2" spellcheck="false" class="ac-mono ac-query" placeholder="base=EUR&#10;from={today-7d}" />
+    <TemplatePreview v-for="(p, i) in call.query" :key="i" :preview="preview" :name="`query_${i}`" :label="p.name" />
 
     <label>{{ $t('apiSource.headersLabel') }} <span class="ac-soft">{{ $t('apiSource.headersHint') }}</span></label>
     <textarea v-model="headersText" rows="1" spellcheck="false" class="ac-mono" placeholder="Accept: application/json" />
@@ -108,24 +111,7 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
       <textarea v-model="call.body" rows="3" spellcheck="false" class="ac-mono" placeholder='{"since": "{last_refresh}"}' />
     </template>
 
-    <label>{{ $t('apiSource.variablesLabel') }} <span class="ac-soft">{{ $t('apiSource.variablesHint') }}</span></label>
-    <textarea v-model="variablesText" rows="1" spellcheck="false" class="ac-mono" placeholder="symbol = AAPL, MSFT, ENI.MI" />
-
-    <div class="ac-cheat" role="note">
-      <span class="ac-soft">{{ $t('apiSource.placeholdersTitle') }}:</span>
-      <code v-for="p in PLACEHOLDERS" :key="p">{{ p }}</code>
-      <span class="ac-soft">{{ $t('apiSource.placeholdersHint') }}</span>
-    </div>
-    <div class="ac-two">
-      <div>
-        <label>{{ $t('apiSource.timezoneLabel') }} <span class="ac-soft">{{ $t('apiSource.timezoneHint') }}</span></label>
-        <input v-model="call.timezone" type="text" spellcheck="false" placeholder="Europe/Rome" />
-      </div>
-      <div>
-        <label>{{ $t('apiSource.lastRefreshLabel') }} <span class="ac-soft">{{ $t('apiSource.lastRefreshHint') }}</span></label>
-        <input v-model="call.last_refresh_initial" type="text" spellcheck="false" class="ac-mono" placeholder="today-30" />
-      </div>
-    </div>
+    <DynamicSourceFields v-model="call" :preview="preview" :with-mode="false" />
 
     <fieldset class="ac-box">
       <legend>{{ $t('apiSource.responseTitle') }}</legend>
@@ -198,7 +184,7 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
       />
       <template v-if="call.mode === 'append'">
         <label>{{ $t('apiSource.keysLabel') }} <span class="ac-soft">{{ $t('apiSource.keysHint') }}</span></label>
-        <input v-model="keysText" type="text" spellcheck="false" class="ac-mono" placeholder="_key, _param_symbol" />
+        <input v-model="keysText" type="text" spellcheck="false" class="ac-mono ac-keys" placeholder="_key, _param_symbol" />
       </template>
       <details class="ac-more">
         <summary>{{ $t('apiSource.limitsTitle') }}</summary>
@@ -270,8 +256,6 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
 .ac-two > div, .ac-three > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 @media (max-width: 520px) { .ac-two, .ac-three { grid-template-columns: 1fr; } }
 .ac-sep { width: 4.5em; text-align: center; }
-.ac-cheat { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-size: 11.5px; }
-.ac-cheat code { font-size: 11px; padding: 0 4px; border: 1px solid var(--border-soft); border-radius: 4px; background: var(--bg-soft); }
 .ac-box { border: 1px solid var(--border-soft); border-radius: 8px; padding: 6px 10px 8px; margin: 2px 0 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .ac-box legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .ac-check { display: inline-flex; align-items: flex-start; gap: 6px; }

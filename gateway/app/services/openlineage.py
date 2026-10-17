@@ -369,16 +369,22 @@ def table_dataset(conn: Connection, table: str, output: bool = False, rows: int 
     return InputDataset(namespace=ns, name=nome, facets=facets)
 
 
-def object_dataset(endpoint: str, bucket: str, key: str, fmt: str | None = None, output: bool = False, rows: int | None = None):
-    """Un oggetto su S3 o GCS (copia-specchio, destinazione file, file caricato)."""
+def object_dataset(endpoint: str, bucket: str, key: str, fmt: str | None = None, output: bool = False, rows: int | None = None,
+                   written: str | None = None):
+    """Un oggetto su S3 o GCS (copia-specchio, destinazione file, file caricato), or
+    the files of an «S3 folder» datasource (`key` = folder/glob). A key with
+    placeholders stays ONE dataset named after its template: the key this run
+    wrote is the dataset's version (`written`)."""
     from openlineage.client.event_v2 import InputDataset, OutputDataset
-    from openlineage.client.facet_v2 import output_statistics_output_dataset, storage_dataset
+    from openlineage.client.facet_v2 import dataset_version_dataset, output_statistics_output_dataset, storage_dataset
 
     ns = f"{'gs' if 'googleapis' in (endpoint or '').lower() else 's3'}://{bucket}"
     nome = "/" + key.strip("/")
     facets: dict[str, Any] = {}
     if fmt:
         facets["storage"] = storage_dataset.StorageDatasetFacet(storageLayer="object-storage", fileFormat=fmt)
+    if written:
+        facets["datasetVersion"] = dataset_version_dataset.DatasetVersionDatasetFacet(datasetVersion=written)
     if output:
         out_facets = {}
         if rows is not None:
@@ -471,6 +477,14 @@ def origin_inputs(session: Session, ds: Datasource) -> tuple[list, dict]:
         except json.JSONDecodeError:
             ref = {}
         return [sftp_dataset(_sftp_address(conn), _sftp_path(ref.get("folder", ""), ref.get("pattern", "")))], {}
+    if conn.db_type == "s3":
+        # the «S3 folder» datasource: s3://bucket/folder/glob (the templates as written)
+        try:
+            ref = json.loads(ds.source_ref or "{}")
+        except json.JSONDecodeError:
+            ref = {}
+        bucket = (str(ref.get("bucket") or "").strip() or (conn.database or "").strip())
+        return [object_dataset(conn.host or "", bucket, _sftp_path(ref.get("folder", ""), ref.get("pattern", "")))], {}
     if ds.source_type == "sql":
         from openlineage.client.facet_v2 import sql_job
 
@@ -608,7 +622,8 @@ def _run_outputs(session: Session, run: Run) -> list:
         if dest.get("type") == "database" and conn is not None and dest.get("table"):
             outputs.append(table_dataset(conn, dest["table"], output=True, rows=run.rows_written, mode=dest.get("mode")))
         elif dest.get("type") == "s3" and dest.get("bucket") and dest.get("key"):
-            outputs.append(object_dataset(dest.get("endpoint") or "", dest["bucket"], dest["key"], dest.get("format"), output=True, rows=run.rows_written))
+            outputs.append(object_dataset(dest.get("endpoint") or "", dest["bucket"], dest["key"], dest.get("format"), output=True,
+                                          rows=run.rows_written, written=dest.get("written_key")))
         elif dest.get("type") == "sftp" and dest.get("host") and (dest.get("path") or dest.get("file_name")):
             outputs.append(sftp_dataset(dest["host"], _sftp_path(dest.get("folder") or "", dest.get("file_name") or ""),
                                         dest.get("format"), output=True, rows=run.rows_written, written=dest.get("path")))

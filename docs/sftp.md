@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # SFTP: files on a server, in and out
 
 An **SFTP connection** reaches any SSH server that offers SFTP (OpenSSH, a NAS, a
@@ -75,6 +76,8 @@ From a folder: **New → From database**, choose the SFTP connection, then:
 | Format | *From each file's extension* (`.csv` `.txt` `.tsv`, `.parquet` `.pq`, `.xlsx` `.xlsm` `.xls`, `.ndjson` `.jsonl`: a glob may mix them; any other extension refuses the import), or CSV, Parquet, Excel, NDJSON for every file. |
 | CSV separator, encoding, header | The reading options of the file sources: one-character separator; UTF-8, UTF-8 with invalid bytes replaced, or Windows-1252; whether the first row is the header. |
 | Excel sheet | Empty = the first sheet. |
+| Time zone, variables, initial last refresh | Folder and files may hold [placeholders](placeholders.md) — `sales_{yesterday:yyyyMMdd}.csv`, `in/{day}` — and the datasource's list and range variables (`day = today-7 .. today step 1d`). |
+| Refresh | **Snapshot** (the table is rebuilt), or **append by key**: the rows whose key columns (`_param_day, id`, `_file`…) come again replace the old ones. |
 
 Every file that matches is read at **every refresh** and the rows are stacked into one
 table, united by column name (a column missing in a file is empty there, and the
@@ -85,6 +88,14 @@ file's modification time (UTC). They are the last two columns, as on the SharePo
 datasource. Hidden files (`.name`) and Office lock files (`~$name`) are skipped.
 
 The files are **left on the server**: the datasource only reads.
+
+With placeholders or variables the folder and the files are expanded once per value
+(see [placeholders.md](placeholders.md#files-one-expansion-per-value)): every file is
+read once, `_param_<name>` says the values on every row, a value without its file is
+skipped and listed in the run, and no file at all across the values fails the refresh.
+With a dated folder (`in/{day}`), `_file` is the path below the fixed part (`in`), and
+a day whose folder does not exist is a value without a file; a fixed folder must
+exist, as before.
 
 The files must be **machine readable**, the same contract as SharePoint: the header in
 the first row, one name per column, no name twice (case-insensitive), no `_file` or
@@ -112,21 +123,30 @@ A glob also stops after walking 2000 folders.
 ## Output to an SFTP server
 
 On an Output node choose the destination **SFTP server (file)**, then the connection,
-the folder (it must exist, no `..`; empty = the login folder), the file name and the format:
-**CSV**, **Parquet** or **Excel**.
+the folder (no `..`; empty = the login folder), the file name, the format —
+**CSV**, **Parquet** or **Excel** — and the node's time zone (empty = UTC).
 
-The file name is a template:
+Folder and file name are templates in the [placeholder language](placeholders.md),
+with four names of the Outputs:
 
 | Placeholder | Becomes |
 |---|---|
-| `{date}` | `2026-10-17` (UTC, when the file is written) |
-| `{datetime}` | `2026-10-17_143005` (UTC) |
+| `{date}` | `2026-10-17` (in the node's zone, UTC by default, when the file is written) |
+| `{datetime}` | `2026-10-17_143005` |
 | `{run_id}` | the run's number, the one in the run history |
 | `{flow}` | the flow's name, with anything but letters, digits, `.`, `-` and `_` turned into `_` |
 
-The format's extension is added when missing; a name that ends in another data
-format's extension (`report.parquet` with format CSV) is refused, as is a name with a
-folder in it.
+and the whole grammar on top: `export_{yesterday:yyyyMMdd}.csv`,
+`{flow}_{now:yyyy-MM-dd_HHmm}`, `/outbox/{today:yyyy}/{today:MM}`. A name written
+with the four names above before the language existed is written with the same bytes.
+The form shows the resolved name while you type, and the run is refused before it
+starts if a template cannot be resolved.
+
+A folder **without** placeholders must exist; a **dated** folder is created the first
+time (its missing levels). The format's extension is added when missing; a name that
+ends in another data format's extension (`report.parquet` with format CSV) is refused,
+as is a name with a folder in it — written in the name or put there by a value
+(`{today:yyyy/MM}` belongs in the folder).
 
 **The write is atomic for readers.** The file is uploaded under a hidden temporary name
 in the same folder (`.name.<random>.tmp`) and then renamed onto the final name with
@@ -144,7 +164,7 @@ rows. Scheduled runs and orchestrations use the same Output: nothing else to set
 
 ## Lineage, dbt
 
-OpenLineage: an SFTP refresh reads `sftp://host:port` + `/folder/glob`; an SFTP Output
+OpenLineage: an SFTP refresh reads `sftp://host:port` + `/folder/glob` (the templates as written); an SFTP Output
 is one dataset, `sftp://host:port` + `/folder/<file-name template>`, whatever file each
 run writes — the file a run wrote is the dataset's version (`datasetVersion` facet). The dbt export turns an SFTP datasource
 into a seed (like SharePoint) and an SFTP Output into a table model. The Lineage page
@@ -158,3 +178,4 @@ shows the file an Output writes.
 `lscr.io/linuxserver/openssh-server` container on the stack's network):
 `e2e/sftp/engine_proofs.py` (engine), `e2e/sftp/api_proofs.py` (the API end to end,
 including a key change) and `e2e/sftp/browser_forms.py` (the three forms in Firefox).
+<!-- {% endraw %} -->

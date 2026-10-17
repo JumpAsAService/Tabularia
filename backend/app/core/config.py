@@ -345,6 +345,28 @@ class SftpSettings(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
 
 
+class S3SourceSettings(BaseModel):
+    """Caps of the «S3 folder» datasource, as the SFTP ones: checked on the sizes of
+    the object listing BEFORE anything is downloaded; the import is refused naming
+    the file.
+
+    env: S3_SOURCE__MAX_FILE_BYTES, S3_SOURCE__MAX_FILES, S3_SOURCE__MAX_TOTAL_BYTES,
+    S3_SOURCE__MAX_LISTED, S3_SOURCE__MAX_REQUEST_SECONDS"""
+
+    # bytes of ONE object: downloaded to the worker's /tmp and read in memory
+    max_file_bytes: int = Field(default=512 * 1024**2, ge=1)
+    # files read by one refresh
+    max_files: int = Field(default=500, ge=1)
+    # bytes of all the matching objects together
+    max_total_bytes: int = Field(default=2 * 1024**3, ge=1)
+    # keys the globs of one refresh may scan under their fixed folders, all the
+    # expansions together: `**` on a huge bucket must stop
+    max_listed: int = Field(default=100_000, ge=1)
+    # wall-clock time of ONE object's download (each wait on the network is bounded
+    # by botocore's own read timeout, 60 s): a server that drips the bytes stops here
+    max_request_seconds: float = Field(default=600.0, gt=0)
+
+
 class ApiSettings(BaseModel):
     """Caps and manners of the «API call» datasource (HTTP APIs read at each refresh).
 
@@ -381,6 +403,18 @@ class ApiSettings(BaseModel):
     max_request_seconds: float = Field(default=300.0, gt=0)
     # the minimum pause between two requests of one refresh; a datasource can ask for more
     min_interval_seconds: float = Field(default=0.0, ge=0)
+
+
+class PlaceholderSettings(BaseModel):
+    """The placeholders of the inputs and outputs (app.core.placeholders).
+
+    env: PLACEHOLDERS__MAX_VALUES"""
+
+    # values of ONE range variable (`day = today-400 .. today step 1d` is 400), and
+    # combinations of all the variables of a file datasource (each one a listing of
+    # the folder): checked when the datasource is saved and at every refresh. An API
+    # call is bounded by API__MAX_CALLS as well.
+    max_values: int = Field(default=1000, ge=1)
 
 
 class BigQuerySettings(BaseModel):
@@ -535,7 +569,9 @@ class Settings(BaseSettings):
     export: ExportSettings = Field(default_factory=ExportSettings)
     sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
     sftp: SftpSettings = Field(default_factory=SftpSettings)
+    s3_source: S3SourceSettings = Field(default_factory=S3SourceSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
+    placeholders: PlaceholderSettings = Field(default_factory=PlaceholderSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

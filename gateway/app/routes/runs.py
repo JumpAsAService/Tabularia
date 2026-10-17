@@ -249,12 +249,14 @@ async def _launch_flow_run(
                 raise HTTPException(status_code=422, detail="SFTP: '..' is not allowed in the folder: write the folder you mean")
             if body.destination.format not in ("csv", "parquet", "xlsx"):
                 raise HTTPException(status_code=422, detail="SFTP outputs are CSV, parquet or Excel")
+            await _check_output_templates({"file name": (file_name, "file"), "folder": (folder, "path")},
+                                          body.destination.timezone, flow.name, "SFTP: ")
             destination_payload = {
                 "type": "sftp",
                 "connection": engine_connection_payload(conn),
                 # run_id is set once the run row exists (see below)
                 "target": {"folder": folder, "file_name": file_name, "format": body.destination.format,
-                           "run_id": None, "flow": flow.name},
+                           "run_id": None, "flow": flow.name, **_zone(body.destination.timezone)},
             }
             destination_summary = json.dumps(
                 {
@@ -264,6 +266,7 @@ async def _launch_flow_run(
                     "folder": folder,
                     "file_name": file_name,
                     "format": body.destination.format,
+                    **_zone(body.destination.timezone),
                 }
             )
         elif body.destination.type == "s3":
@@ -282,6 +285,7 @@ async def _launch_flow_run(
                     status_code=422,
                     detail="No bucket: set one on the output or as the connection's default",
                 )
+            await _check_output_templates({"S3 key": (key, "path")}, body.destination.timezone, flow.name, "S3: ")
             destination_payload = {
                 "type": "s3",
                 "connection": engine_connection_payload(conn),
@@ -290,6 +294,8 @@ async def _launch_flow_run(
                     "key": key,
                     "format": body.destination.format,
                     "partition_by": body.destination.partition_by,
+                    # only for a key with placeholders: the target of a plain key is as it was
+                    **(_template_context(flow, body.destination.timezone) if _templated(key) else {}),
                 },
             }
             destination_summary = json.dumps(
@@ -302,6 +308,7 @@ async def _launch_flow_run(
                     "key": key,
                     "format": body.destination.format,
                     "partition_by": body.destination.partition_by,
+                    **_zone(body.destination.timezone),
                 }
             )
         else:
@@ -354,17 +361,29 @@ async def _launch_flow_run(
                 status_code=422, detail="The copy's connection is not S3/object storage"
             )
         mkey = body.mirror.key.strip().strip("/")
-        if not mkey:
-            raise HTTPException(status_code=422, detail="The copy's S3 path is empty")
         mbucket = body.mirror.bucket.strip()
-        if not mbucket and not (mconn.database or "").strip():
-            raise HTTPException(
-                status_code=422,
-                detail="No bucket for the copy: set one on the output or as the connection's default",
-            )
+        # the copy never fails the publish (it is best effort by design): a copy that
+        # cannot be made — no key, no bucket, a key that cannot be resolved — is
+        # skipped and said on the run. (No connection, or no CONNECT, stays a refusal.)
+        copy_refused = None
+        if not mkey:
+            copy_refused = "the copy's S3 path is empty: set it on the Output node"
+        elif not mbucket and not (mconn.database or "").strip():
+            copy_refused = "no bucket for the copy: set one on the output or as the connection's default"
+        else:
+            try:
+                await _check_output_templates({"copy's S3 key": (mkey, "path")}, body.mirror.timezone, flow.name, "S3: ")
+            except HTTPException as e:
+                copy_refused = str(e.detail)
+    if body.mirror and copy_refused is not None:
+        mirror_summary = json.dumps({"connection_id": mconn.id, "endpoint": mconn.host or "aws",
+                                     "bucket": mbucket or mconn.database, "key": mkey, "format": "parquet",
+                                     "ok": False, "error": copy_refused[:500]})
+    elif body.mirror:
         mirror_payload = {
             "connection": engine_connection_payload(mconn),
             "target": {
+                **(_template_context(flow, body.mirror.timezone) if _templated(mkey) else {}),
                 "bucket": mbucket,
                 "key": mkey,
                 # sempre parquet (copia byte a byte dello snapshot interno) e mai
@@ -429,6 +448,10 @@ async def _launch_flow_run(
                         ),
                     )
 
+        await _check_output_templates(
+            {"subject": (body.email.subject, "text"), "attachment name": (body.email.attachment_name or "report", "file")},
+            body.email.timezone, flow.name, "")
+        email_templated = _templated(body.email.subject) or _templated(body.email.attachment_name)
         email_payload = {
             "connection": engine_connection_payload(econn),
             # una prova non deve mai far fallire nulla: è un controllo, non un passo
@@ -441,6 +464,7 @@ async def _launch_flow_run(
                 "body_is_html": body.email.body_is_html,
                 "attachment_name": body.email.attachment_name or "report",
                 "attachment_format": body.email.attachment_format,
+                **(_template_context(flow, body.email.timezone) if email_templated else {}),
             },
         }
         email_summary = json.dumps(
@@ -500,12 +524,20 @@ async def _launch_flow_run(
     # written BEFORE the task is queued, with a placeholder task id that the engine
     # answers PENDING for, and goes away if the engine refuses the task
     early_run: Run | None = None
-    if destination_payload is not None and destination_payload["type"] == "sftp":
+    # the targets that name the run: the SFTP Output always (its file name has had
+    # {run_id} from the start), the others when a template asks for it
+    numbered = []
+    if destination_payload is not None and (destination_payload["type"] == "sftp"
+                                            or "run_id" in destination_payload["target"]):
+        numbered.append(destination_payload["target"])
+    numbered += [p["target"] for p in (mirror_payload, email_payload) if p is not None and "run_id" in p["target"]]
+    if numbered:
         early_run = new_run(f"{PLACEHOLDER_TASK}{uuid.uuid4().hex}")
         session.add(early_run)
         session.commit()
         session.refresh(early_run)
-        destination_payload["target"]["run_id"] = early_run.id
+        for target in numbered:
+            target["run_id"] = early_run.id
 
     try:
         task_id = await _submit_transform(body, output_key, destination_payload, mirror_payload, email_payload,
@@ -529,23 +561,63 @@ async def _launch_flow_run(
     return run
 
 
-_SFTP_PLACEHOLDERS = ("date", "datetime", "run_id", "flow")
-
-
 def _check_sftp_file_name(file_name: str) -> None:
-    """What the gateway can tell before the run: the engine renders the name."""
+    """What the gateway can tell by itself before the run; the placeholders are
+    checked by the engine's checker (_check_output_templates)."""
     import re as _re
 
     if not file_name:
         raise HTTPException(status_code=422, detail="SFTP: the file name is empty")
-    if "/" in file_name or "\\" in file_name:
+    outside = _re.sub(r"\{\{|\}\}|\{[^{}]*\}", "", file_name)  # the text around the placeholders
+    if "/" in outside or "\\" in outside:
         raise HTTPException(status_code=422, detail="SFTP: the file name cannot contain a folder: put the folder in its own field")
-    unknown = [p for p in _re.findall(r"\{([^{}]*)\}", file_name) if p not in _SFTP_PLACEHOLDERS]
-    if unknown:
-        raise HTTPException(
-            status_code=422,
-            detail=f"SFTP: unknown placeholder {{{unknown[0]}}} in the file name: use {{date}}, {{datetime}}, {{run_id}} or {{flow}}",
-        )
+
+
+def _templated(template: str | None) -> bool:
+    return any(c in (template or "") for c in "{}")
+
+
+def _zone(tz: str | None) -> dict:
+    """The Output's time zone in a target, only when it is not the default UTC:
+    the target of an Output without one stays as it was."""
+    tz = (tz or "").strip()
+    return {"timezone": tz} if tz and tz != "UTC" else {}
+
+
+def _template_context(flow: Flow, tz: str | None) -> dict:
+    """What an Output's templates need besides the date: the flow's name ({flow}),
+    the run's number ({run_id}, set once the run row exists) and the zone."""
+    return {"flow": flow.name, "run_id": None, **_zone(tz)}
+
+
+async def _check_output_templates(templates: dict[str, tuple[str, str]], tz: str | None, flow_name: str,
+                                  prefix: str) -> None:
+    """The placeholders of an Output (file name, folder, key, subject, attachment
+    name) checked by the ENGINE's checker before anything is queued: a template
+    that cannot be resolved is refused here with the message the run would give.
+    Templates without braces need no call. An engine that cannot answer (the
+    previous version, not reachable) checks them at run time instead."""
+    wanted = {name: t for name, (t, _) in templates.items() if _templated(t)}
+    zoned = bool(_zone(tz))
+    if not wanted and not zoned:  # nothing to resolve, and the default zone
+        return
+    payload = {"kind": "output", "templates": wanted, "timezone": (tz or "").strip() or "UTC",
+               "targets": {name: templates[name][1] for name in wanted}, "flow": flow_name}
+    try:
+        resp = await get_engine_client().post("/placeholders/preview", json=payload, timeout=CONTROLLO)
+    except Exception as e:  # noqa: BLE001 — the run will check them
+        logger.warning("output templates not checked before the run: %s", type(e).__name__)
+        return
+    if resp.status_code >= 400:
+        logger.warning("output templates not checked before the run: engine answered %s", resp.status_code)
+        return
+    answer = resp.json()
+    if answer.get("error"):  # the Output's time zone, before anything else
+        raise HTTPException(status_code=422, detail=f"{prefix}{answer['error']}")
+    for name in wanted:
+        err = ((answer.get("fields") or {}).get(name) or {}).get("error")
+        if err:
+            raise HTTPException(status_code=422, detail=f"{prefix}{name}: {err}")
 
 
 async def _submit_transform(body: RunCreate, output_key: str, destination_payload, mirror_payload, email_payload,
@@ -596,16 +668,18 @@ async def launch_ingest_run(
     contratto = {"contract": documento} if documento else {}
     if conn.db_type == "sharepoint":
         # stesso giro dei database (run, snapshot swap, refresh, scheduler): cambia
-        # solo CHI porta i dati. `source_ref` è il JSON {path, sheet}.
+        # solo CHI porta i dati. `source_ref` è il JSON {path, sheet} (+ the
+        # placeholders' zone, variables, refresh mode when the datasource has them).
         ref = json.loads(ds.source_ref or "{}")
         resp = await client.post(
             "/sharepoint/ingest",
             timeout=CONTROLLO,
             json={
                 "connection": engine_connection_payload(conn),
-                "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", "")},
+                "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", ""), **_template_part(ref)},
                 "bucket": bucket,
                 "output_key": output_key,
+                **_refresh_context(session, ds, ref, ("path",)),
                 **contratto,
             },
         )
@@ -636,9 +710,28 @@ async def launch_ingest_run(
             timeout=CONTROLLO,
             json={
                 "connection": engine_connection_payload(conn),
-                "source": {k: ref[k] for k in ("folder", "pattern", "format", "sheet", "csv") if k in ref},
+                "source": {**{k: ref[k] for k in ("folder", "pattern", "format", "sheet", "csv") if k in ref},
+                           **_template_part(ref)},
                 "bucket": bucket,
                 "output_key": output_key,
+                **_refresh_context(session, ds, ref, ("folder", "pattern")),
+                **contratto,
+            },
+        )
+    elif conn.db_type == "s3":
+        # the «S3 folder» datasource: `source_ref` is the JSON {bucket, folder, pattern,
+        # format, sheet, csv} (+ the placeholders' zone, variables, refresh mode)
+        ref = json.loads(ds.source_ref or "{}")
+        resp = await client.post(
+            "/s3/ingest",
+            timeout=CONTROLLO,
+            json={
+                "connection": engine_connection_payload(conn),
+                "source": {**{k: ref[k] for k in ("bucket", "folder", "pattern", "format", "sheet", "csv") if k in ref},
+                           **_template_part(ref)},
+                "bucket": bucket,
+                "output_key": output_key,
+                **_refresh_context(session, ds, ref, ("folder", "pattern")),
                 **contratto,
             },
         )
@@ -704,18 +797,38 @@ _DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Tri
 
 
 def _sftp_written(summary: str | None, outcome) -> str | None:
-    """The SFTP destination's summary with what was written (the file's real
-    name, its size): the template alone does not say which file a run made."""
+    """The destination's summary with what was written: for SFTP the file's real
+    name and size, for S3 the key its placeholders resolved to — the template
+    alone does not say which file a run made."""
     if not summary or not isinstance(outcome, dict):
         return None
     try:
         d = json.loads(summary)
     except json.JSONDecodeError:
         return None
-    if not isinstance(d, dict) or d.get("type") != "sftp":
+    if not isinstance(d, dict):
         return None
-    d.update({k: outcome[k] for k in ("path", "bytes") if k in outcome})
+    if d.get("type") == "sftp":
+        d.update({k: outcome[k] for k in ("path", "bytes") if k in outcome})
+    elif d.get("type") == "s3" and outcome.get("key") and outcome.get("key") != d.get("key"):
+        d["written_key"] = outcome["key"]
+    else:
+        return None
     return json.dumps(d)[:2000]
+
+
+def _notes_of(result: dict) -> str | None:
+    """A refresh's notes: the values of a range whose file was not there, and the
+    keys of an append found on more than one new row (kept, but worth a look)."""
+    missing = result.get("missing") if isinstance(result.get("missing"), list) else []
+    repeated = result.get("duplicate_keys") if isinstance(result.get("duplicate_keys"), int) else 0
+    if not missing and not repeated:
+        return None
+    notes: dict = {"missing": missing[:50], "missing_count": result.get("missing_count") or len(missing),
+                   "expansions": result.get("expansions")}
+    if repeated:
+        notes["duplicate_keys"] = repeated
+    return json.dumps(notes)[:20000]
 
 
 def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
@@ -1024,6 +1137,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
         written = _sftp_written(run.destination, result.get("destination"))
         if written is not None:
             values["destination"] = written
+        notes = _notes_of(result)
+        if notes is not None:
+            values["notes"] = notes
     else:
         values["error"] = (_friendly_error(error, error_detail) or "")[:2000]
         values["error_detail"] = error_detail[:20000] if error_detail else None
@@ -1092,6 +1208,33 @@ def _last_successful_refresh(session: Session, ds_id: int) -> str | None:
     if started.tzinfo is None:
         started = started.replace(tzinfo=timezone.utc)  # stored naive, UTC by construction
     return started.astimezone(timezone.utc).isoformat()
+
+
+_TEMPLATE_KEYS = ("timezone", "variables", "last_refresh_initial", "mode", "keys")
+
+
+def _template_part(ref: dict) -> dict:
+    """The placeholders' zone, the variables and the refresh mode of a file
+    datasource, as stored (only when it has them: a datasource without them is
+    sent exactly as before)."""
+    return {k: ref[k] for k in _TEMPLATE_KEYS if k in ref}
+
+
+def _refresh_context(session: Session, ds: Datasource, ref: dict, fields: tuple[str, ...]) -> dict:
+    """What a file datasource's refresh needs besides its definition: the start of
+    the last successful refresh for {last_refresh} (only when its templates or
+    variables could use it) and, in append mode, the current snapshot the new
+    rows are merged into. Nothing for a datasource without placeholders — the
+    worker of the previous version takes the same task."""
+    out: dict = {}
+    templated = any("{" in str(ref.get(f) or "") for f in fields) or bool(ref.get("variables"))
+    if templated:
+        last = _last_successful_refresh(session, ds.id)
+        if last:
+            out["last_refresh"] = last
+    if ref.get("mode") == "append" and ds.key:
+        out["previous"] = {"bucket": ds.bucket, "key": ds.key}
+    return out
 
 
 PLACEHOLDER_TASK = "pending-"

@@ -284,6 +284,12 @@ def transform_data_task(
             logger.warning("contratto violato su %s: output non consegnato", output_key)
             return out
 
+    # one moment for every template of the run's outputs (file name, key, subject):
+    # the SFTP file and the email of the same run say the same date
+    from datetime import datetime as _dt, timezone as _tz
+
+    moment = _dt.now(_tz.utc)
+
     if destination:
         dest_type = destination.get("type", "database")
         if dest_type == "s3":
@@ -297,7 +303,7 @@ def transform_data_task(
             dest = S3DestinationSpec(**destination["target"])
             logger.info(f"📤 Writing output to s3 {conn.endpoint_url or 'aws'} key {dest.key}")
             out["destination"] = write_output_to_s3(
-                conn=conn, dest=dest, bucket=bucket, key=output_key
+                conn=conn, dest=dest, bucket=bucket, key=output_key, now=moment
             )
         elif dest_type == "sftp":
             from app.ingest import sftp as sftp_dest
@@ -306,7 +312,7 @@ def transform_data_task(
             s_dest = sftp_dest.SftpDestinationSpec(**destination["target"])
             logger.info(f"📤 Writing output to sftp {s_conn.address} folder {s_dest.folder or '~'} name {s_dest.file_name}")
             out["destination"] = sftp_dest.write_output_to_sftp(
-                conn=s_conn, dest=s_dest, bucket=bucket, key=output_key
+                conn=s_conn, dest=s_dest, bucket=bucket, key=output_key, now=moment
             )
         else:
             from app.ingest.db_destination import (
@@ -342,7 +348,7 @@ def transform_data_task(
             logger.info(f"📎 Copia su s3 {m_conn.endpoint_url or 'aws'} key {m_dest.key}")
             out["mirror"] = {
                 "ok": True,
-                **write_output_to_s3(conn=m_conn, dest=m_dest, bucket=bucket, key=output_key),
+                **write_output_to_s3(conn=m_conn, dest=m_dest, bucket=bucket, key=output_key, now=moment),
             }
         except Exception as e:
             logger.warning(f"⚠️ copia su S3 fallita (il run resta valido): {type(e).__name__}: {e}")
@@ -374,7 +380,7 @@ def transform_data_task(
             e_conn = SmtpConnectionSpec(**email["connection"])
             e_spec = EmailSpec(**spec_raw)
             logger.info("📧 Invio email via %s a %d destinatari", e_conn.host, len(e_spec.to))
-            out["email"] = send_output_email(conn=e_conn, spec=e_spec, bucket=bucket, key=output_key)
+            out["email"] = send_output_email(conn=e_conn, spec=e_spec, bucket=bucket, key=output_key, now=moment)
         except Exception as e:
             out["email"] = {
                 "ok": False,
@@ -401,6 +407,8 @@ def ingest_sharepoint_task(
     bucket: str,
     output_key: str,
     contract: dict[str, Any] | None = None,
+    last_refresh: str | None = None,
+    previous: dict[str, Any] | None = None,
 ) -> dict:
     """Scarica da SharePoint i file Excel che corrispondono al percorso (anche con
     glob), li impila e scrive il parquet. Stessa forma di `ingest_database_task`:
@@ -417,7 +425,7 @@ def ingest_sharepoint_task(
     logger.info(f"🚀 Starting ingest_sharepoint_task: {conn.site_url} :: {src.path} [{src.sheet}] → {output_key}")
     avanza = _Avanzamento()
     result = ingest_sharepoint_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
-                                          progress=avanza)
+                                          progress=avanza, last_refresh=last_refresh, previous=previous)
     logger.info(
         f"✅ Completed ingest_sharepoint_task: {output_key} "
         f"({result['rows_written']} righe da {len(result['files'])} file)"
@@ -438,6 +446,8 @@ def ingest_sftp_task(
     bucket: str,
     output_key: str,
     contract: dict[str, Any] | None = None,
+    last_refresh: str | None = None,
+    previous: dict[str, Any] | None = None,
 ) -> dict:
     """Reads the files of an SFTP folder that match the glob, stacks them and
     writes the parquet: the same shape as the SharePoint and database ingests, so
@@ -450,8 +460,39 @@ def ingest_sftp_task(
     logger.info(f"🚀 Starting ingest_sftp_task: {conn.address} :: {src.folder or '~'}/{src.pattern} → {output_key}")
     avanza = _Avanzamento()
     result = ingest_sftp_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
-                                    progress=avanza)
+                                    progress=avanza, last_refresh=last_refresh, previous=previous)
     logger.info(f"✅ Completed ingest_sftp_task: {output_key} ({result['rows_written']} rows from {len(result['files'])} files)")
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        avanza("checking", rows=result["rows_written"])
+        result["contract"] = check_before_publish(bucket, output_key, contract)
+    return result
+
+
+@celery_app.task(name="app.tasks.jobs.ingest_s3_task")
+def ingest_s3_task(
+    connection: dict[str, Any],
+    source: dict[str, Any],
+    bucket: str,
+    output_key: str,
+    contract: dict[str, Any] | None = None,
+    last_refresh: str | None = None,
+    previous: dict[str, Any] | None = None,
+) -> dict:
+    """Reads the objects of a bucket's folder that match the glob, stacks them and
+    writes the parquet: the same shape as the SFTP ingest. The secret arrives
+    encrypted."""
+    from app.ingest.s3_destination import S3ConnectionSpec
+    from app.ingest.s3_source import S3SourceSpec, ingest_s3_to_parquet
+
+    conn = S3ConnectionSpec(**connection)
+    src = S3SourceSpec(**source)
+    logger.info(f"🚀 Starting ingest_s3_task: {conn.endpoint_url or 'aws'} {src.bucket or conn.bucket}/{src.folder}/{src.pattern} → {output_key}")
+    avanza = _Avanzamento()
+    result = ingest_s3_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
+                                  progress=avanza, last_refresh=last_refresh, previous=previous)
+    logger.info(f"✅ Completed ingest_s3_task: {output_key} ({result['rows_written']} rows from {len(result['files'])} files)")
     if contract:
         from app.contracts.service import check_before_publish
 

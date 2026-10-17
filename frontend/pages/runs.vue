@@ -6,8 +6,10 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3 } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3, TriangleAlert } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
+import { runNotes, notesText } from '~/composables/usePlaceholders'
+import MissingValues from '~/components/ui/MissingValues.vue'
 import { usePagedList } from '~/composables/usePagedList'
 
 const { t } = useI18n()
@@ -86,7 +88,10 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
             <component :is="r.kind === 'ingest' ? Database : r.flow_group_id ? Rows3 : Workflow" :size="13" />
             {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
           </span>
-          <span class="msg muted">{{ knownError(r.error, t) || (r.status === 'SUCCESS' ? '—' : '') }}</span>
+          <span v-if="r.status === 'SUCCESS' && runNotes(r.notes)" class="msg run-note">
+            <TriangleAlert :size="12" /> {{ notesText(runNotes(r.notes)!, t) }}
+          </span>
+          <span v-else class="msg muted">{{ knownError(r.error, t) || (r.status === 'SUCCESS' ? '—' : '') }}</span>
           <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? $t('runs.triggeredByScheduler') : $t('runs.triggeredByName', { name: triggeredBy(r) })">
             <component :is="isScheduled(r) ? CalendarClock : User" :size="12" />
             {{ triggeredBy(r) }}
@@ -95,8 +100,19 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
         </button>
         <div v-if="expanded === r.id" class="detail">
           <div v-if="r.error" class="detail-summary">{{ knownError(r.error, t) }}</div>
+          <p v-if="r.status === 'SUCCESS' && runNotes(r.notes)?.duplicate_keys" class="run-note small">
+            {{ $t('placeholders.repeatedKeys', { n: runNotes(r.notes)!.duplicate_keys }) }}
+          </p>
+          <MissingValues
+            v-if="r.status === 'SUCCESS' && runNotes(r.notes)?.missing_count"
+            class="run-notes"
+            :missing="runNotes(r.notes)!.missing"
+            :count="runNotes(r.notes)!.missing_count"
+            :expansions="runNotes(r.notes)!.expansions"
+            :max="50"
+          />
           <pre v-if="r.error_detail" class="trace">{{ r.error_detail }}</pre>
-          <p v-else class="muted small">{{ $t('runs.noDetail') }}</p>
+          <p v-else-if="!(r.status === 'SUCCESS' && runNotes(r.notes))" class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>
       </div>
     </div>
@@ -134,6 +150,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .stpill.pending, .stpill.started { background: rgba(148, 163, 184, 0.15); color: var(--muted); }
 .who { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.run-note { color: var(--warning); display: inline-flex; align-items: center; gap: 5px; }
+.run-note svg { flex: none; }
 .by { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .by.sched { color: var(--accent-2); }
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }

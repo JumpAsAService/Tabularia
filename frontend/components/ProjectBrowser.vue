@@ -53,7 +53,8 @@ import { useRuns, type RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
 import { usePopover } from '~/composables/usePopover'
 import { useDialogA11y } from '~/composables/useDialogA11y'
-import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import { runNotes, notesText } from '~/composables/usePlaceholders'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { connectionChanges } from '~/composables/connectionChanges'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
@@ -184,7 +185,8 @@ const rows = computed<Row[]>(() => {
       ? t('projectBrowser.importingLabel')
       : stato?.status === 'FAILURE'
         ? t('projectBrowser.importFailedLabel')
-        : [d.rows != null ? t('projectBrowser.rowsCount', { n: fmtx.count(d.rows) }) : '', fmtDate(d.refreshed_at ?? d.updated_at)]
+        : [d.rows != null ? t('projectBrowser.rowsCount', { n: fmtx.count(d.rows) }) : '', fmtDate(d.refreshed_at ?? d.updated_at),
+            stato?.status === 'SUCCESS' && runNotes(stato.notes) ? notesText(runNotes(stato.notes)!, t) : '']
             .filter(Boolean)
             .join(' · ')
     out.push({ kind: 'datasource', id: d.id, name: d.name, meta, raw: d, progressRun: inCorso && stato?.progress ? stato : undefined })
@@ -361,8 +363,12 @@ async function pollIngest(dsId: number, token: number) {
     }
     if (watchedIngest.delete(dsId)) {
       const name = dsList.value.find((d) => d.id === dsId)?.name ?? `#${dsId}`
-      if (last.status === 'SUCCESS') toast.success(t('datasources.announceDone', { name, n: fmtx.count(last.rows_written ?? 0) }))
-      else toast.error(last.error ? `${t('datasources.announceFailed', { name })}: ${last.error}` : t('datasources.announceFailed', { name }))
+      if (last.status === 'SUCCESS') {
+        toast.success(t('datasources.announceDone', { name, n: fmtx.count(last.rows_written ?? 0) }))
+        // a range whose files were not all there, keys on several rows: imported, but said
+        const notes = runNotes(last.notes)
+        if (notes) toast.warning(t('placeholders.notesToast', { name, notes: notesText(notes, t) }))
+      } else toast.error(last.error ? `${t('datasources.announceFailed', { name })}: ${last.error}` : t('datasources.announceFailed', { name }))
     }
     if (last.status === 'SUCCESS' && currentId.value) {
       dsList.value = await dsApi.listByProject(currentId.value)
@@ -751,11 +757,9 @@ async function openDbDsDialog() {
   closeNew()
   dbDsError.value = ''
   try {
-    // le S3 sono solo destinazioni, non sorgenti
-    // sorgenti dati: solo database interrogabili — né object storage né posta
-    usableConnections.value = (await connApi.list()).filter(
-      (c) => c.db_type !== 's3' && c.db_type !== 'smtp',
-    )
+    // every source but mail: databases, SharePoint, SFTP, HTTP APIs, and S3 (a
+    // folder of a bucket, «S3 folder»)
+    usableConnections.value = (await connApi.list()).filter((c) => c.db_type !== 'smtp')
   } catch { usableConnections.value = [] }
   showDbDsDialog.value = true
 }
@@ -800,6 +804,23 @@ async function createApiDatasource(draft: ApiDatasourceDraft) {
   dbDsError.value = ''
   try {
     const ds = await dsApi.createApi(currentId.value, draft)
+    toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
+    showDbDsDialog.value = false
+    dsList.value = await dsApi.listByProject(currentId.value)
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    dbDsError.value = errMessage(e)
+  } finally {
+    dbDsBusy.value = false
+  }
+}
+
+async function createS3Datasource(draft: S3DatasourceDraft) {
+  if (!currentId.value) return
+  dbDsBusy.value = true
+  dbDsError.value = ''
+  try {
+    const ds = await dsApi.createS3(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
     dsList.value = await dsApi.listByProject(currentId.value)
@@ -1157,6 +1178,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       @confirm="createDbDatasource"
       @confirm-sharepoint="createSharePointDatasource"
       @confirm-sftp="createSftpDatasource"
+      @confirm-s3="createS3Datasource"
       @confirm-api="createApiDatasource"
       @cancel="showDbDsDialog = false"
     />

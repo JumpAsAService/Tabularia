@@ -443,6 +443,13 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
                 "bucket": (d.get("mirrorBucket") or "").strip(),
                 "key": (d.get("mirrorKey") or "").strip(),
             }
+    # the zone of the dates in the node's templates (file name, folder, key, subject):
+    # only when set, so a node without one resolves exactly as before (UTC)
+    tz = str(d.get("timezone") or "").strip()
+    if tz:
+        for part in ("destination", "email", "mirror"):
+            if part in body:
+                body[part]["timezone"] = tz
     return body
 
 

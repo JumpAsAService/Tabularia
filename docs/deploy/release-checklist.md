@@ -55,6 +55,27 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    (120), `API__MAX_REDIRECTS` (5), `API__MAX_REQUEST_SECONDS` (300), `API__MIN_INTERVAL_SECONDS` (0) on the backend and
    the workers. Workers call the APIs: open their egress to them — see
    [api-datasource.md](../api-datasource.md).
+   Placeholders, ranges and the «S3 folder» datasource (revision 0012: a nullable
+   `notes` column on `runs`): `PLACEHOLDERS__MAX_VALUES` (1000 values per range and
+   combinations per file datasource), `S3_SOURCE__MAX_FILE_BYTES` (512 MB),
+   `S3_SOURCE__MAX_FILES` (500), `S3_SOURCE__MAX_TOTAL_BYTES` (2 GB),
+   `S3_SOURCE__MAX_LISTED` (100 000) on the backend and the workers. Workers read the
+   buckets of the S3 connections: open their egress to the endpoints — see
+   [s3-datasource.md](../s3-datasource.md) and [placeholders.md](../placeholders.md).
+   Revision 0013 is a DATA migration: it writes the literal braces of the stored
+   definitions (email subject and attachment name, S3 key and copy key, SFTP Output
+   folder, SFTP datasource folder and pattern, SharePoint path) as doubled braces, so
+   they keep their meaning under the placeholder language; its downgrade is a no-op —
+   roll the code back only together with a database backup.
+   **Update the workers (and the engine API) before the gateway** this time. A worker
+   of the previous version, under the new gateway, gets these wrong:
+   - an S3 key or copy key with placeholders is written literally (`exports/{today}/x.csv`);
+   - an email subject or attachment name with placeholders is sent literally;
+   - the Output node's time zone is ignored (the SFTP file name is resolved in UTC);
+   - a templated SFTP Output folder fails («not found»);
+   - `mode: append` of a file datasource is ignored: the refresh keeps only the window
+     just read (a snapshot of the last days), and `{last_refresh}`/the variables of a
+     file datasource are not understood (the refresh fails on the braces).
    Engine settings from the panel (revision 0004): `ENGINE__SETTINGS_PANEL` (default
    `true`; `false` keeps the environment the only source, see
    `docs/engine-settings.md`). Audit log to Splunk (revision 0005): no variable, off

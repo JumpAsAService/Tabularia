@@ -140,6 +140,10 @@ class Run(SQLModel, table=True):
     # risultato che non c'è. Il dettaglio sta qui perché l'audit registra COSA è
     # uscito e verso chi, mentre questa colonna dice se è arrivato.
     email: Optional[str] = Field(default=None, sa_column=Column("email", Text))
+    # what a successful refresh has to say, as JSON: the values of a range whose
+    # file was not there ({"missing": [{params, pattern}], "missing_count",
+    # "expansions"}). Skipped and listed, not failed: the run page shows them.
+    notes: Optional[str] = Field(default=None, sa_column=Column("notes", Text))
 
     # ── solo per kind="orchestration" ───────────────────────────────────────
     # Nasce PENDING = in coda; chi la esegue la porta a STARTED firmandola.

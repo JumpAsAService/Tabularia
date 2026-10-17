@@ -37,6 +37,7 @@ from app.schemas.models import (
     DbDatasourceCreate,
     SharePointDatasourceCreate,
     SftpDatasourceCreate,
+    S3DatasourceCreate,
     ApiDatasourceCreate,
     Page,
     RunOut,
@@ -89,6 +90,8 @@ def _checked_sort_keys(ds: Datasource, keys: list[str]) -> list[str]:
         raise HTTPException(status_code=422, detail="SFTP imports keep the rows in file order: no sort keys")
     if ds.source_type == "api":
         raise HTTPException(status_code=422, detail="API imports keep the rows in the order of the responses: no sort keys")
+    if ds.source_type == "s3":
+        raise HTTPException(status_code=422, detail="S3 imports keep the rows in file order: no sort keys")
     keys = clean_sort_keys(keys)
     try:
         known = [c.get("name") for c in json.loads(ds.columns or "[]") if isinstance(c, dict)]
@@ -270,7 +273,7 @@ async def create_db_datasource(
     if conn.db_type == "s3":
         raise HTTPException(
             status_code=422,
-            detail="An S3 connection cannot be a database source (it is for Output nodes)",
+            detail="An S3 connection is not a database: read its files with an «S3 folder» datasource",
         )
     if conn.db_type in NOT_DATABASES:
         raise HTTPException(status_code=422, detail=f"A {conn.db_type} connection is not a database")
@@ -356,11 +359,13 @@ async def create_sharepoint_datasource(
     if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
         raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
 
+    ref = {"path": path, "sheet": sheet, **body.template_fields()}
+    await validate_file_templates(conn, ref, ("path",))
     ds = Datasource(
         name=name, description=body.description, project_id=project_id, owner_id=user.id,
         bucket=get_settings().engine.bucket, key="",  # nessuno snapshot finché il primo import non riesce
         kind="database", connection_id=conn.id,
-        source_type="sharepoint", source_ref=json.dumps({"path": path, "sheet": sheet}),
+        source_type="sharepoint", source_ref=json.dumps(ref),
     )
     session.add(ds)
     session.commit()
@@ -414,7 +419,8 @@ async def create_sftp_datasource(
     if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
         raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
     ref = {"folder": body.folder.strip(), "pattern": pattern, "format": body.format, "sheet": body.sheet.strip(),
-           "csv": body.csv.model_dump()}
+           "csv": body.csv.model_dump(), **body.template_fields()}
+    await validate_file_templates(conn, ref, ("folder", "pattern"))
     ds = Datasource(
         name=name, description=body.description, project_id=project_id, owner_id=user.id,
         bucket=get_settings().engine.bucket, key="",  # no snapshot until the first import succeeds
@@ -434,6 +440,93 @@ async def create_sftp_datasource(
         target_id=ds.id, target_label=ds.name,
         detail={"project_id": project_id, "connection_id": conn.id, "source_type": "sftp",
                 "folder": ref["folder"], "pattern": pattern},
+        request=request,
+    )
+    return _to_out(ds)
+
+
+FILE_TEMPLATE_KEYS = ("timezone", "variables", "last_refresh_initial", "mode", "keys")
+
+
+def is_dynamic_ref(ref: dict, fields: tuple[str, ...]) -> bool:
+    """A file datasource with placeholders, variables or the append mode: what
+    only the engine can check (the grammar of app.core.placeholders)."""
+    return (any("{" in str(ref.get(f) or "") or "}" in str(ref.get(f) or "") for f in fields)
+            or any(k in ref for k in FILE_TEMPLATE_KEYS))
+
+
+async def validate_file_templates(conn: Connection, ref: dict, fields: tuple[str, ...]) -> None:
+    """Before saving: the engine checks the placeholders, the variables (a range
+    within its cap and not empty), the keys of the append — the messages the
+    refresh would give, at save time. A datasource without any of them is saved
+    as before, with no call."""
+    if not is_dynamic_ref(ref, fields):
+        return
+    try:
+        await _engine_inspect(engine_connection_payload(conn), "validate", source=ref)
+    except HTTPException as e:
+        if e.status_code == 400:  # the engine's message for the person who wrote the datasource
+            raise HTTPException(status_code=422, detail=e.detail) from None
+        raise
+
+
+@router.post(
+    "/projects/{project_id}/datasources/s3",
+    response_model=DatasourceOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_s3_datasource(
+    project_id: int,
+    body: S3DatasourceCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Datasource from the files of a folder of a bucket («S3 folder»): the bucket
+    (empty = the connection's default), a folder and a glob, with placeholders,
+    variables and the append mode as the SFTP datasource.
+
+    A `kind="database"` datasource — refresh, schedule, history, snapshot swap —
+    with `source_type="s3"` and the JSON of the folder in `source_ref`. EDIT on
+    the folder + CONNECT on the connection's folder, as for every database
+    datasource; the connection is the S3 one of the Output nodes."""
+    if session.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    ensure_can(session, user, project_id, Capability.EDIT)
+    conn = session.get(Connection, body.connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "s3":
+        raise HTTPException(status_code=422, detail="An S3 connection is required")
+    name = body.name.strip()
+    if not name or not body.pattern.strip():
+        raise HTTPException(status_code=422, detail="Name and file pattern are required")
+    if not body.bucket.strip() and not (conn.database or "").strip():
+        raise HTTPException(status_code=422, detail="No bucket: set one on the datasource or as the connection's default")
+    if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
+        raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
+    ref = body.source_ref()
+    await validate_file_templates(conn, ref, ("folder", "pattern"))
+    ds = Datasource(
+        name=name, description=body.description, project_id=project_id, owner_id=user.id,
+        bucket=get_settings().engine.bucket, key="",  # no snapshot until the first import succeeds
+        kind="database", connection_id=conn.id, source_type="s3", source_ref=json.dumps(ref),
+    )
+    session.add(ds)
+    session.commit()
+    session.refresh(ds)
+    try:
+        await launch_ingest_run(session, user, ds, conn)
+    except Exception:
+        session.delete(ds)  # engine down (a ConnectError too) or refused: no half datasource
+        session.commit()
+        raise
+    audit.record_audit(
+        session, actor=user, action=audit.DS_CREATE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"project_id": project_id, "connection_id": conn.id, "source_type": "s3",
+                "bucket": ref["bucket"] or conn.database, "folder": ref["folder"], "pattern": ref["pattern"]},
         request=request,
     )
     return _to_out(ds)

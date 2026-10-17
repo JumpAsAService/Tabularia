@@ -4,7 +4,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
-import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText, ListOrdered } from 'lucide-vue-next'
+import { Database, Search, Trash2, Folder, RefreshCw, LoaderCircle, CalendarClock, BookText, ChevronRight, Save, Sparkles, ScrollText, ListOrdered, TriangleAlert } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { knownError } from '~/composables/knownErrors'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -12,6 +12,8 @@ import { useProjects } from '~/composables/useProjects'
 import { usePagedList } from '~/composables/usePagedList'
 import type { RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
+import MissingValues from '~/components/ui/MissingValues.vue'
+import { runNotes, notesText, type RunNotes } from '~/composables/usePlaceholders'
 
 const dsApi = useDatasources()
 const projectsApi = useProjects()
@@ -62,7 +64,7 @@ const describedCount = (d: DatasourceInfo) => Object.keys(d.column_descriptions 
 // refresh; typed by hand only while no import has succeeded yet.
 const keyDrafts = reactive<Record<number, string[]>>({})
 const keyText = reactive<Record<number, string>>({})
-const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && !['sharepoint', 'sftp', 'api'].includes(d.source_type ?? '')
+const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && !['sharepoint', 'sftp', 's3', 'api'].includes(d.source_type ?? '')
 const draftKeys = (d: DatasourceInfo): string[] =>
   d.columns.length
     ? keyDrafts[d.id] ?? []
@@ -88,6 +90,22 @@ function toggle(d: DatasourceInfo) {
   }
   expanded.value = d.id
   if (!drafts[d.id]) resetDraft(d)
+  if (d.kind === 'database') loadLastImport(d.id)
+}
+
+// The last finished import of an open datasource: a refresh that skipped values of
+// a range (their file was not there) says which, here, until the next one.
+const lastImport = ref<Record<number, RunInfo | null>>({})
+async function loadLastImport(dsId: number) {
+  try {
+    const runs = await dsApi.listRuns(dsId)
+    lastImport.value = { ...lastImport.value, [dsId]: runs.find(isTerminal) ?? null }
+  } catch { /* accessory: the row works without it */ }
+}
+function notesOf(d: DatasourceInfo): RunNotes | null {
+  const live = ingestRuns.value[d.id]
+  const run = live && isTerminal(live) ? live : lastImport.value[d.id]
+  return run?.status === 'SUCCESS' ? runNotes(run.notes) : null
 }
 function resetDraft(d: DatasourceInfo) {
   drafts[d.id] = Object.fromEntries(d.columns.map((c) => [c.name, d.column_descriptions?.[c.name] ?? '']))
@@ -145,8 +163,11 @@ function announceEnd(dsId: number, run: RunInfo) {
     ? t('datasources.announceDone', { name, n: fmtx.count(run.rows_written ?? 0) })
     : t('datasources.announceFailed', { name })
   // the same words on screen: the end of an import watched here gets a message
-  if (run.status === 'SUCCESS') toast.success(announcement.value)
-  else toast.error(run.error ? `${announcement.value}: ${knownError(run.error, t)}` : announcement.value)
+  if (run.status === 'SUCCESS') {
+    toast.success(announcement.value)
+    const notes = runNotes(run.notes)
+    if (notes) toast.warning(t('placeholders.notesToast', { name, notes: notesText(notes, t) }))
+  } else toast.error(run.error ? `${announcement.value}: ${knownError(run.error, t)}` : announcement.value)
 }
 let pollToken = 0
 onUnmounted(() => { pollToken++ })
@@ -159,6 +180,9 @@ function sourceLabel(d: DatasourceInfo): string {
   }
   if (d.source_type === 'sftp') {
     try { const r = JSON.parse(d.source_ref ?? '{}'); return [r.folder, r.pattern].filter(Boolean).join('/') } catch { return d.source_ref ?? '' }
+  }
+  if (d.source_type === 's3') {
+    try { const r = JSON.parse(d.source_ref ?? '{}'); return `s3://${[r.bucket || '…', r.folder, r.pattern].filter(Boolean).join('/')}` } catch { return d.source_ref ?? '' }
   }
   if (d.source_type !== 'sharepoint') return d.source_ref ?? ''
   try { const r = JSON.parse(d.source_ref ?? '{}'); return `${r.path} · ${r.sheet}` } catch { return d.source_ref ?? '' }
@@ -307,7 +331,15 @@ async function saveSchedule(cron: string) {
               <template v-else-if="ingestRuns[d.id]?.status === 'FAILURE'">
                 <span class="koline" :title="knownError(ingestRuns[d.id].error, t)">{{ $t('datasources.importFailedStatus') }}</span>
               </template>
-              <template v-else>{{ fmtx.count(d.rows) }}</template>
+              <template v-else>
+                <span
+                  v-if="notesOf(d)"
+                  class="noteline"
+                  :title="notesText(notesOf(d)!, t)"
+                  :aria-label="notesText(notesOf(d)!, t)"
+                ><TriangleAlert :size="12" /></span>
+                {{ fmtx.count(d.rows) }}
+              </template>
             </span>
             <span class="when muted">{{ fmtDate(d.refreshed_at ?? d.updated_at) }}</span>
           </button>
@@ -335,6 +367,12 @@ async function saveSchedule(cron: string) {
           <div v-if="d.refresh_schedule" class="muted sched">
             <CalendarClock :size="11" /> <code>{{ d.refresh_schedule }}</code>
             <span v-if="d.next_refresh_at"> {{ $t('datasources.nextRefresh', { date: fmtDate(d.next_refresh_at) }) }}</span>
+          </div>
+
+          <div v-if="notesOf(d)" class="ds-notes" role="note">
+            <p class="muted hint">{{ $t('placeholders.lastImportNotes') }}</p>
+            <p v-if="notesOf(d)!.duplicate_keys" class="hint">{{ $t('placeholders.repeatedKeys', { n: notesOf(d)!.duplicate_keys }) }}</p>
+            <MissingValues v-if="notesOf(d)!.missing_count" :missing="notesOf(d)!.missing" :count="notesOf(d)!.missing_count" :expansions="notesOf(d)!.expansions" />
           </div>
 
           <div class="section-title"><BookText :size="12" /> {{ $t('datasourceAbout.heading') }}</div>
@@ -449,6 +487,8 @@ async function saveSchedule(cron: string) {
 .desc { font-size: 12.5px; }
 .section-title { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 8px 0 0; }
 .hint { font-size: 12px; margin: 0; }
+.noteline { color: var(--warning); display: inline-flex; align-items: center; vertical-align: -2px; margin-right: 3px; }
+.ds-notes { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); border-radius: 8px; }
 .cd-table { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); max-height: 420px; overflow-y: auto; }
 .cd-row { display: grid; grid-template-columns: minmax(140px, 220px) 100px 1fr; gap: 10px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--border-soft); }
 .cd-row:first-child { border-top: 0; }

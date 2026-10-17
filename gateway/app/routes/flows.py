@@ -223,6 +223,13 @@ def list_flows(project_id: int, user: User = Depends(get_current_user), session:
     return session.exec(select(Flow).where(Flow.project_id == project_id).order_by(Flow.name)).all()
 
 
+def _check_flow_name(name: str) -> None:
+    """A flow's name ends up in the Outputs' templates ({flow}: a subject, a file
+    name): no control character (a line break, a tab) in a new or renamed one."""
+    if any(ord(c) < 32 or ord(c) == 127 for c in name or ""):
+        raise HTTPException(status_code=422, detail="The flow's name cannot hold a line break, a tab or another control character")
+
+
 @router.post("/projects/{project_id}/flows", response_model=FlowDetail, status_code=status.HTTP_201_CREATED)
 def create_flow(
     project_id: int,
@@ -234,6 +241,7 @@ def create_flow(
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
+    _check_flow_name(body.name)
     _authorize_definition_keys(session, user, body.definition)
     flow = Flow(
         name=body.name,
@@ -553,6 +561,8 @@ def update_flow(
         body.name = body.name.strip()
         if not body.name:
             raise HTTPException(status_code=422, detail="The flow needs a name")
+        if body.name != flow.name:  # a name saved before is left as it is
+            _check_flow_name(body.name)
     changed = [k for k in ("name", "description", "definition", "project_id", "engine", "production_engine")
                if getattr(body, k, None) is not None]
     # the folder path is part of the flow's name in an external lineage catalog

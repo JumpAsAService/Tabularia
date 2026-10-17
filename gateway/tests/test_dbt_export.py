@@ -291,6 +291,25 @@ def test_an_sftp_folder_becomes_a_seed_and_an_sftp_output_a_table(session, scena
     assert m["materialized"] == "table" and m["name"] == "export" and "export_{date}" in m["description"]
 
 
+def test_an_s3_folder_becomes_a_seed_and_a_dated_s3_key_a_model_named_by_its_text(session, scena):
+    lake = Connection(name="lake", db_type="s3", project_id=scena.cartella.id, owner_id=scena.capo.id,
+                      host="http://minio:9000", database="lake", db_schema="")
+    session.add(lake); session.commit()
+    files = make_datasource(session, name="vendite s3", project_id=scena.cartella.id, key="datasets/83/v1.parquet",
+                            kind="database", connection_id=lake.id, source_type="s3",
+                            source_ref=json.dumps({"bucket": "", "folder": "in", "pattern": "*.csv"}),
+                            columns=json.dumps([{"name": "id", "dtype": "Int64"}]))
+    definizione = {"nodes": [_nodo_src("s1", files.id),
+                             {"id": "o", "type": "output", "data": {"destType": "s3", "connectionId": lake.id,
+                                                                     "s3Key": "exp/vendite_{date}.parquet"}}],
+                   "edges": [_edge("s1", "o")]}
+    flow = make_flow(session, name="S3", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    p = d.build_export_payload(session, flow, "data-prep", "duckdb")
+    assert [s["name"] for s in p["seeds"]] == ["seed_vendite_s3"]
+    (m,) = p["models"]
+    assert m["name"] == "vendite" and "vendite_{date}" in m["description"]
+
+
 def test_an_api_datasource_becomes_a_seed(session, scena):
     """An API has no database to read from in dbt: the snapshot is a seed, as for files."""
     broker = Connection(name="broker", db_type="api", project_id=scena.cartella.id, owner_id=scena.capo.id,

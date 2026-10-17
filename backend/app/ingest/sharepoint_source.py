@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.crypto import decrypt_secret
+from app.ingest import file_templates as ft
 from app.ingest.converters import IngestError
 
 logger = logging.getLogger(__name__)
@@ -78,8 +79,9 @@ class SharePointConnectionSpec(BaseModel):
         self.login_base = (self.login_base or cfg.login_base).rstrip("/")
 
 
-class SharePointSourceSpec(BaseModel):
-    # percorso nella raccolta, con glob: `Budget/2026/*.xlsx`, `**/chiusura_*.xlsx`
+class SharePointSourceSpec(ft.FileTemplates):
+    # percorso nella raccolta, con glob: `Budget/2026/*.xlsx`, `**/chiusura_*.xlsx`;
+    # with placeholders and the datasource's variables: `Chiusure/{month:yyyy-MM}.xlsx`
     path: str
     sheet: str = Field(min_length=1)
 
@@ -343,6 +345,26 @@ def read_sheet(local_path: str, sheet: str | None, shown_as: str, error: type[In
     return df.rename({c: c.strip() for c in df.columns if c != c.strip()})
 
 
+def _expansions(source: SharePointSourceSpec, now, last_refresh) -> list[ft.Expansion]:
+    return ft.expand({"path": source.path}, source, SharePointError, now, last_refresh)
+
+
+def validate_source(source: SharePointSourceSpec, now=None, last_refresh: str | None = None) -> dict[str, Any]:
+    """The placeholders, the variables, the keys of the append, without Graph:
+    how many expansions, the first and last resolved."""
+    exps = _expansions(source, now, last_refresh)
+    return {"ok": True, "expansions": len(exps), "first": exps[0].values, "last": exps[-1].values}
+
+
+def gather_files(client: GraphClient, source: SharePointSourceSpec, now=None,
+                 last_refresh: str | None = None) -> tuple[ft.Gathered, list[ft.Expansion]]:
+    """The files of every expansion of the path, each once, and the values without one."""
+    exps = _expansions(source, now, last_refresh)
+    g = ft.gather(exps, lambda e: find_files(client, e.values["path"]), lambda f: f.path,
+                  lambda e: e.values["path"], MAX_FILES, SharePointError)
+    return g, exps
+
+
 def ingest_sharepoint_to_parquet(
     conn: SharePointConnectionSpec,
     source: SharePointSourceSpec,
@@ -351,14 +373,22 @@ def ingest_sharepoint_to_parquet(
     storage,
     client: GraphClient | None = None,
     progress: Callable[..., None] | None = None,
+    last_refresh: str | None = None,
+    previous: dict | None = None,
+    now=None,
 ) -> dict[str, Any]:
     """`progress(fase, …)` per chi guarda l'import: «files» a ogni file (file, files,
-    rows letti finora), «saving» mentre il parquet va sullo storage."""
+    rows letti finora), «saving» mentre il parquet va sullo storage. The path is
+    expanded once per value of the variables (see file_templates); in append mode
+    the rows are merged into the previous snapshot (`previous` = {bucket, key})."""
     avanza = progress or (lambda *a, **k: None)
     client = client or GraphClient(conn)
-    files = find_files(client, source.path)
+    g, exps = gather_files(client, source, now, last_refresh)
+    files = g.files
     if not files:
-        raise SharePointError(f"No Excel file matches '{source.path}'")
+        if len(exps) > 1:
+            raise ft.nothing_found(SharePointError, g, f"'{source.path}'")
+        raise SharePointError(f"No Excel file matches '{exps[0].values['path']}'")
     total = sum(f.size for f in files)
     if total > MAX_TOTAL_BYTES:
         raise SharePointError(f"The {len(files)} files total {total / 1024**3:.1f} GB: over the {MAX_TOTAL_BYTES // 1024**3} GB limit")
@@ -380,6 +410,7 @@ def ingest_sharepoint_to_parquet(
                 # tutta String, e nell'unione "rilassata" trascinerebbe a testo ogni
                 # colonna numerica degli altri file. Contato, non concatenato.
                 continue
+            df = ft.with_params(df, g.params.get(f.path) or {}, f.path, SharePointError)
             frames.append(df.with_columns(
                 pl.lit(f.path).alias(FILE_COLUMN),
                 pl.lit(f.modified_at).str.to_datetime(strict=False, time_zone="UTC").dt.replace_time_zone(None).alias(MODIFIED_COLUMN),
@@ -397,11 +428,12 @@ def ingest_sharepoint_to_parquet(
         # la provenienza sta in FONDO: con l'unione per nome una colonna che compare
         # solo in un file successivo finirebbe dopo `_file`, in mezzo ai dati
         prov = [FILE_COLUMN, MODIFIED_COLUMN]
-        table = table.select([c for c in table.columns if c not in prov] + prov)
+        table = ft.provenance_last(table, prov)
         every = set.intersection(*(set(c) for c in columns_by_file.values()))
         drift = sorted({c for cols in columns_by_file.values() for c in cols} - every)
         if drift:
             logger.warning("sharepoint %s: colonne non presenti in tutti i file: %s", source.path, drift)
+        table, replaced, repeated = ft.finish(table, source, storage, previous, tmp, SharePointError, prov)
 
         avanza("saving", rows=table.height)
         out = os.path.join(tmp, "out.parquet")
@@ -416,4 +448,10 @@ def ingest_sharepoint_to_parquet(
         "columns": [{"name": n, "dtype": str(t)} for n, t in table.schema.items()],
         "files": [{"path": f.path, "modified_at": f.modified_at, "size": f.size} for f in files],
         "schema_drift": drift,
+        "missing": ft.missing_report(g),
+        "missing_count": len(g.missing),
+        "expansions": g.expansions,
+        "mode": source.mode,
+        "rows_replaced": replaced,
+        "duplicate_keys": repeated,
     }

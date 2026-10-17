@@ -81,14 +81,17 @@ engines, from an in-process library to a serverless warehouse.
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
   ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint Excel; write results
   back to a database table (Oracle and SQL Server are sources only, for now) or publish
-  them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too, uploaded or
-  on an **SFTP server**: a folder and a glob become one table, refreshed on schedule,
-  and a flow can drop its result there as a file — the server's host key checked at
-  every connection ([SFTP](docs/sftp.md)). And any **HTTP API** (REST/JSON): a call
-  with dates that move by themselves (`{today-30}`, `{last_refresh}`), one call per
-  value of a list (`symbol = AAPL, MSFT`), every kind of pagination and OAuth2 too,
-  refreshed as a snapshot or appended by key — the credentials never leave the API's
-  host ([HTTP APIs](docs/api-datasource.md)).
+  them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too, uploaded,
+  on an **SFTP server** or in an **S3 bucket**: a folder and a glob become one table,
+  refreshed on schedule, and a flow can drop its result there as a file — the server's
+  host key checked at every connection ([SFTP](docs/sftp.md), [S3](docs/s3-datasource.md)).
+  And any **HTTP API** (REST/JSON): every kind of pagination and OAuth2 too — the
+  credentials never leave the API's host ([HTTP APIs](docs/api-datasource.md)). Inputs
+  and outputs share **one placeholder language**: dates that move by themselves
+  (`sales_{yesterday:yyyyMMdd}.csv`, `{last_refresh}`, `{run_id}`) in their own time
+  zone, list variables and **ranges** (`day = today-7 .. today step 1d`: one file or one
+  call per day, a missing day skipped and listed), refreshed as a snapshot or appended
+  by key ([placeholders](docs/placeholders.md)).
 - **Ask your data.** An optional AI assistant answers questions in plain language over
   the datasources you are allowed to read: it finds the table, reads the curated field
   descriptions, writes and runs the query on your engine, and shows the result table the

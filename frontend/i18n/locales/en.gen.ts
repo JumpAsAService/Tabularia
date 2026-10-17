@@ -861,7 +861,7 @@ export default {
     "mirrorBucketLabel": "Bucket (optional)",
     "mirrorBucketPlaceholder": "empty = the connection's default bucket",
     "mirrorEnable": "Also copy the file to external S3",
-    "mirrorHint": "Overwritten at every run, always at the same path: whoever reads downstream always finds the latest data. If the copy fails the run still succeeds and the error is recorded in the history.",
+    "mirrorHint": "Written at every run at the path of its key: always the same one, or one per day or per run when the key holds placeholders. If the copy fails, or its key cannot be resolved, the run still succeeds and the error is recorded in the history.",
     "mirrorKeyLabel": "Path in the bucket",
     "mirrorKeyPlaceholder": "e.g. published/sales/latest.parquet",
     "modeAppend": "Append (INSERT)",

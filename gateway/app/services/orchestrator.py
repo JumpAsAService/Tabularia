@@ -250,6 +250,14 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 raise
             except Exception as e:
                 logger.warning("orchestrate: flusso %s, output non eseguito: %s", flow.id, e)
+                if d.get("destType") == "email" and d.get("stopOnFailure") is not False:
+                    # refused before its run existed (a template the engine rejects, a
+                    # recipient outside the allowed domains): the email did not leave
+                    # either, so the steps after it must not run
+                    reason = getattr(e, "detail", None) or str(e)
+                    raise StopSequence(
+                        f"email not sent, refused at launch: {reason}. The next steps of the flow were not run."
+                    ) from e
                 errors.append(f"output: {e}")
         elif t == "runflow":
             sub_id = d.get("flowId")

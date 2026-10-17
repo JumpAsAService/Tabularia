@@ -5,6 +5,36 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **One placeholder language for inputs and outputs, ranges, and S3 folders as
+  datasources.** The placeholders of the API call — `{today}`, `{yesterday}`, `{now}`,
+  offsets (`{today-7d}`, `{today-1m}` clamped, `{now-2h}`), `{start_of_month}`,
+  `{last_refresh}`, readable (`yyyyMMdd`, `HH:mm`, `'T'`) or strftime formats, `epoch`,
+  a time zone, escaped braces — now hold in the folder and glob of the SFTP, SharePoint and new
+  S3 datasources, and in the SFTP Output (folder and file name, a dated folder created
+  when missing), the S3 Output's key (and the copy's) and the email's subject and
+  attachment name, with `{run_id}`, `{flow}` and a time zone on the Output node. The
+  SFTP Output's `{date}`, `{datetime}`, `{run_id}`, `{flow}` write the same bytes as
+  before; a resolved value never takes a name out of its folder. **Range variables**
+  (`day = today-7 .. today step 1d`, the end excluded, `{day_end}` the end of each
+  window) make one call or one expansion per value with `_param_<name>` on every row;
+  a file missing for a value is skipped and listed on the run, none at all fails the
+  refresh; at most `PLACEHOLDERS__MAX_VALUES` (1000) values. The file datasources can
+  refresh **appended by key** like the API one. Templates are checked by the engine
+  when a datasource is saved and before a run, and every form previews the resolved
+  value while typing. The datasource **«S3 folder»** reads the objects of a bucket's
+  folder through the S3 connection of the Outputs — CSV, parquet, Excel, NDJSON,
+  `_file` and `_file_modified_at`, caps checked on the listing before downloading
+  (`S3_SOURCE__MAX_FILE_BYTES`, `__MAX_FILES`, `__MAX_TOTAL_BYTES`, `__MAX_LISTED`),
+  nothing outside the bucket and folder — with «Check the files», scheduled refresh,
+  OpenLineage (`s3://bucket/folder/glob`) and the dbt export (a seed). Runs keep their
+  notes (revision 0012). Braces now always mean a placeholder in those fields; the
+  definitions stored before keep their meaning — revision 0013 writes their literal
+  braces doubled, as escapes (email subject and attachment name, S3 key and copy key, SFTP
+  Output folder, SFTP datasource folder and pattern, SharePoint path; the SFTP file
+  name keeps its four old placeholders). An email Output refused at launch stops the
+  flow's sequence like a failed send; an S3 copy whose key cannot be resolved is
+  skipped and said on the run, never refusing the publish. See `docs/placeholders.md`,
+  `docs/s3-datasource.md`.
 - **HTTP APIs as datasources.** A connection of type HTTP API (base URL, default
   headers, and an API key in a header or in the query, a bearer token, basic, or
   OAuth2 client credentials with the token kept until it expires and asked again once

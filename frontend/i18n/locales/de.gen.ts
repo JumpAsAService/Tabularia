@@ -785,7 +785,7 @@ export default {
     "mirrorBucketLabel": "Bucket (optional)",
     "mirrorBucketPlaceholder": "leer = Standard-Bucket der Verbindung",
     "mirrorEnable": "Datei zusätzlich auf externes S3 kopieren",
-    "mirrorHint": "Bei jeder Ausführung überschrieben, immer am selben Pfad: nachgelagerte Pipelines finden stets die aktuellen Daten. Schlägt die Kopie fehl, bleibt der Run erfolgreich und der Fehler wird im Verlauf festgehalten.",
+    "mirrorHint": "Bei jeder Ausführung unter dem Pfad ihres Schlüssels geschrieben: immer derselbe, oder einer pro Tag oder Ausführung, wenn der Schlüssel Platzhalter enthält. Schlägt die Kopie fehl oder lässt sich ihr Schlüssel nicht auflösen, bleibt der Run erfolgreich und der Fehler wird im Verlauf festgehalten.",
     "mirrorKeyLabel": "Pfad im Bucket",
     "mirrorKeyPlaceholder": "z. B. published/verkauf/latest.parquet",
     "modeAppend": "Anhängen (INSERT)",

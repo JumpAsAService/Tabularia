@@ -1741,6 +1741,7 @@ function emailSpecOf(d: any) {
     attachment_name: (d.attachmentName ?? '').trim(),
     attachment_format: d.attachmentFormat ?? 'xlsx',
     stop_on_failure: d.stopOnFailure !== false,
+    timezone: String(d.timezone ?? '').trim(), // of the dates in subject and attachment name
   }
 }
 
@@ -1813,6 +1814,7 @@ async function executeOutputRuns() {
           folder: (d.sftpFolder ?? '').trim(),
           file_name: (d.sftpFileName ?? '').trim(),
           format: d.sftpFormat ?? 'csv',
+          timezone: String(d.timezone ?? '').trim(),
         }
       } else if (destType === 's3') {
         destination = {
@@ -1822,6 +1824,7 @@ async function executeOutputRuns() {
           key: d.s3Key.trim(),
           format: d.s3Format ?? 'parquet',
           partition_by: d.partitionBy ?? [],
+          timezone: String(d.timezone ?? '').trim(),
         }
       } else {
         publish = {
@@ -1883,7 +1886,7 @@ async function pollRun(runId: number, label = '') {
         try {
           const d = JSON.parse(run.destination)
           target = d.type === 's3'
-            ? ` → s3://${d.bucket}/${d.key}`
+            ? ` → s3://${d.bucket}/${d.written_key ?? d.key}` // the key its placeholders gave
             : d.type === 'sftp'
               ? ` → sftp://${d.host}${d.path ?? ''}`
               : ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
@@ -2067,6 +2070,7 @@ async function pollTask(id: string) {
         :connections="connectionsList"
         :flows="flowsList"
         :current-flow-id="flowId"
+        :flow-name="flowName"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"

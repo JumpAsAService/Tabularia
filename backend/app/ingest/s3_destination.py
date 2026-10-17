@@ -17,6 +17,7 @@ import logging
 import os
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from typing import Literal
 
 import polars as pl
@@ -78,9 +79,38 @@ class S3ConnectionSpec(BaseModel):
 
 class S3DestinationSpec(BaseModel):
     bucket: str = ""  # vuoto = bucket di default della connessione
-    key: str  # chiave del file (senza partizioni) o prefisso (con partizioni)
+    # chiave del file (senza partizioni) o prefisso (con partizioni); a template with
+    # the Outputs' placeholders (app.core.placeholders): exports/{today:yyyy/MM}/v_{date}.csv
+    key: str
     format: Literal["parquet", "csv"] = "parquet"
     partition_by: list[str] = Field(default_factory=list)
+    # the zone of the dates in the key (UTC unless set); run_id and flow set by the gateway
+    timezone: str = Field(default="UTC", max_length=64)
+    run_id: int | None = None
+    flow: str = ""
+
+
+def render_key(dest: S3DestinationSpec, now: datetime | None = None) -> str:
+    """The object key (or prefix) with its placeholders resolved: values may add
+    levels (`{today:yyyy/MM}`), never `..` or `.`; {flow} made safe. Without
+    braces the key is used as written, as before."""
+    if "{" not in (dest.key or "") and "}" not in (dest.key or ""):
+        return _clean_key(dest.key)
+    from app.core import placeholders as ph
+
+    try:
+        ctx = ph.output_context(now or datetime.now(timezone.utc), dest.timezone, dest.run_id, dest.flow)
+        k = _clean_key(ph.render_output(dest.key.strip(), ctx, "path", "S3 key"))
+    except ph.PlaceholderError as e:
+        raise S3DestinationError(f"S3: {e}") from e
+    # a key resolved from placeholders, checked here; a key written as it is goes as before
+    if len(k.encode()) > MAX_KEY_BYTES:
+        raise S3DestinationError(f"S3: the key is {len(k.encode())} bytes, over the {MAX_KEY_BYTES} an object key may have")
+    return k
+
+
+# the longest object key S3 accepts (in UTF-8 bytes)
+MAX_KEY_BYTES = 1024
 
 
 def _clean_key(key: str) -> str:
@@ -138,6 +168,7 @@ def write_output_to_s3(
     bucket: str,
     key: str,
     storage=None,
+    now: datetime | None = None,
 ) -> dict:
     """Riversa `bucket/key` (parquet interno) sulla destinazione S3 esterna.
 
@@ -156,7 +187,7 @@ def write_output_to_s3(
         raise S3DestinationError(
             "No destination bucket: set it on the Output node or in the connection"
         )
-    target_key = _clean_key(dest.key)
+    target_key = render_key(dest, now)
 
     fd, tmp = tempfile.mkstemp(suffix=".parquet", prefix="s3_dest_")
     os.close(fd)

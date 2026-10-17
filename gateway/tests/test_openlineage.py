@@ -296,6 +296,28 @@ def test_an_sftp_refresh_reads_files_of_the_server_and_an_sftp_output_writes_one
     assert [(d.namespace, d.name) for d in ol.flow_outputs(session, flow)] == [("sftp://sftp.example.com:2222", "/out/v_{date}")]
 
 
+def test_an_s3_folder_refresh_reads_the_bucket_folder_and_glob_and_a_dated_key_is_one_dataset(session, scena):
+    lake = Connection(name="lake", db_type="s3", project_id=scena.cartella.id, owner_id=scena.capo.id,
+                      host="http://minio:9000", database="lake")
+    session.add(lake)
+    session.commit()
+    ds = make_datasource(session, name="vendite s3", project_id=scena.cartella.id, key="datasets/21/v1.parquet", rows=10,
+                         kind="database", connection_id=lake.id, source_type="s3",
+                         source_ref=json.dumps({"bucket": "", "folder": "in/{day}", "pattern": "*.csv"}))
+    run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t21", rows_written=10)
+    _, fine = ol.to_json(ol.run_events(session, run))
+    (i,) = fine["inputs"]
+    assert (i["namespace"], i["name"]) == ("s3://lake", "/in/{day}/*.csv")
+    out = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t22", rows_written=5,
+                   destination=json.dumps({"type": "s3", "connection_id": lake.id, "endpoint": "http://minio:9000",
+                                           "bucket": "lake", "key": "exp/{date}.csv", "format": "csv",
+                                           "written_key": "exp/2026-10-18.csv"}))
+    _, fine = ol.to_json(ol.run_events(session, out))
+    (o,) = fine["outputs"]
+    assert (o["namespace"], o["name"]) == ("s3://lake", "/exp/{date}.csv")
+    assert o["facets"]["datasetVersion"]["datasetVersion"] == "exp/2026-10-18.csv"
+
+
 def test_an_api_refresh_reads_the_api_path_without_query_nor_secrets(session, scena):
     api = Connection(name="broker", db_type="api", project_id=scena.cartella.id, owner_id=scena.capo.id,
                      host="https://api.frankfurter.dev/v1", password_encrypted="enc",

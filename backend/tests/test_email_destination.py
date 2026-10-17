@@ -193,3 +193,53 @@ def test_without_a_username_no_login_is_attempted(smtp, allegato):
     """I relay interni spesso non autenticano: tentare il login fallirebbe."""
     send_output_email(_conn(username=""), EmailSpec(to=["a@b.it"]), "b", "k")
     assert smtp.ultimo.login_con is None
+
+
+# ── placeholders in the subject and the attachment name ─────────────────────
+def test_subject_and_attachment_name_resolve_their_placeholders(smtp, allegato):
+    from datetime import datetime, timezone
+
+    spec = EmailSpec(to=["a@b.it"], subject="Report {flow} {today:dd/MM/yyyy} #{run_id}", attachment_name="sales_{date}",
+                     attachment_format="csv", timezone="Asia/Tokyo", run_id=7, flow="Vendite/Italia")
+    send_output_email(_conn(), spec, "b", "k", now=datetime(2026, 10, 17, 22, 30, tzinfo=timezone.utc))
+    msg = smtp.ultimo.messaggio
+    assert msg["Subject"] == "Report Vendite/Italia 18/10/2026 #7"
+    assert [p.get_filename() for p in msg.walk() if p.get_filename()] == ["sales_2026-10-18.csv"]
+
+
+def test_a_name_without_placeholders_is_sent_as_before(smtp, allegato):
+    spec = EmailSpec(to=["a@b.it"], subject="Vendite: settimana", attachment_name="vendite", attachment_format="csv")
+    send_output_email(_conn(), spec, "b", "k")
+    assert smtp.ultimo.messaggio["Subject"] == "Vendite: settimana"
+
+
+def test_a_value_with_a_slash_cannot_make_the_attachment_a_path(smtp, allegato):
+    _FintoServer.ultimo = None
+    spec = EmailSpec(to=["a@b.it"], attachment_name="sales_{today:dd/MM}", attachment_format="csv")
+    with pytest.raises(EmailDestinationError, match="'/'"):
+        send_output_email(_conn(), spec, "b", "k")
+    assert _FintoServer.ultimo is None
+
+
+def test_a_bad_placeholder_in_the_subject_is_refused_before_sending(smtp, allegato):
+    _FintoServer.ultimo = None
+    with pytest.raises(EmailDestinationError, match="unknown placeholder"):
+        send_output_email(_conn(), EmailSpec(to=["a@b.it"], subject="R {week}"), "b", "k")
+    assert _FintoServer.ultimo is None
+
+
+def test_a_templated_attachment_name_over_255_bytes_is_refused(smtp, allegato):
+    with pytest.raises(EmailDestinationError, match="255"):
+        send_output_email(_conn(), EmailSpec(to=["a@b.it"], attachment_name="x" * 250 + "{date}", attachment_format="csv"),
+                          "b", "k")
+
+
+def test_a_long_attachment_name_without_braces_is_sent_as_before(smtp, allegato):
+    send_output_email(_conn(), EmailSpec(to=["a@b.it"], attachment_name="x" * 260, attachment_format="csv"), "b", "k")
+    assert [p.get_filename() for p in smtp.ultimo.messaggio.walk() if p.get_filename()] == ["x" * 260 + ".csv"]
+
+
+def test_a_templated_subject_leaves_a_plain_long_attachment_name_alone(smtp, allegato):
+    send_output_email(_conn(), EmailSpec(to=["a@b.it"], subject="R {today}", attachment_name="x" * 260,
+                                         attachment_format="csv"), "b", "k")
+    assert [p.get_filename() for p in smtp.ultimo.messaggio.walk() if p.get_filename()] == ["x" * 260 + ".csv"]

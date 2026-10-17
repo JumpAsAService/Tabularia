@@ -4,6 +4,7 @@
 import type { RunInfo } from '~/composables/useRuns'
 import { pagedQuery, type Page } from '~/composables/useApi'
 import type { ContractSummary } from '~/composables/useContracts'
+import { cleanVariables, type FileTemplatesDraft, type TemplateVariable } from '~/composables/usePlaceholders'
 
 export interface DatasourceInfo {
   id: number
@@ -24,7 +25,7 @@ export interface DatasourceInfo {
   kind: string
   flow_id: number | null
   connection_id: number | null
-  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | 'api' | null
+  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | 's3' | 'api' | null
   source_ref: string | null
   refreshed_at: string | null
   refreshing?: boolean // un ingest è in corso ORA (lo dice il server)
@@ -44,8 +45,9 @@ export interface DbDatasourceDraft {
   sort_keys?: string[] // ORDER BY dell'import (vuoto = nessun ordine)
 }
 
-// files of a folder on an SFTP server: folder + glob, every match stacked
-export interface SftpDatasourceDraft {
+// files of a folder on an SFTP server: folder + glob, every match stacked; folder and
+// glob may hold placeholders and variables (FileTemplatesDraft)
+export interface SftpDatasourceDraft extends Partial<FileTemplatesDraft> {
   name: string
   description?: string
   connection_id: number
@@ -56,8 +58,23 @@ export interface SftpDatasourceDraft {
   csv: { separator: string; has_header: boolean; encoding: 'utf8' | 'utf8-lossy' | 'windows-1252' }
 }
 
+// the objects of a folder of a bucket («S3 folder»), through an S3 connection: the
+// bucket (empty = the connection's default), folder + glob, the SFTP reading options
+export interface S3DatasourceDraft extends Partial<FileTemplatesDraft> {
+  name: string
+  description?: string
+  connection_id: number
+  bucket: string
+  folder: string
+  pattern: string
+  format: 'auto' | 'csv' | 'parquet' | 'excel' | 'ndjson'
+  sheet: string
+  csv: { separator: string; has_header: boolean; encoding: 'utf8' | 'utf8-lossy' | 'windows-1252' }
+}
+
 // the call of an «API call» datasource (see gateway ApiCallSpec): placeholders such
-// as {today-7d} in path, query, headers and body; list variables make one call per value
+// as {today-7d} in path, query, headers and body; variables (lists and ranges) make
+// one call per value
 export interface ApiPair { name: string; value: string }
 export interface ApiCallDraft {
   method: 'GET' | 'POST'
@@ -65,7 +82,7 @@ export interface ApiCallDraft {
   query: ApiPair[]
   headers: ApiPair[]
   body: string
-  variables: { name: string; values: string[] }[]
+  variables: TemplateVariable[]
   timezone: string
   last_refresh_initial: string
   response: {
@@ -116,7 +133,7 @@ export function cleanApiCall(c: ApiCallDraft): ApiCallDraft {
     body: c.method === 'POST' ? c.body : '',
     query: c.query.filter((p) => p.name),
     headers: c.headers.filter((p) => p.name),
-    variables: c.variables.filter((v) => v.name),
+    variables: cleanVariables(c.variables),
     response: { ...c.response, records_path: c.response.records_path.trim(), jmespath: c.response.jmespath.trim(), explode: c.response.explode.trim() },
     pagination: { ...c.pagination, start: num(c.pagination.start, null), limit: num(c.pagination.limit, 100) ?? 100 },
     limits: {
@@ -129,7 +146,7 @@ export function cleanApiCall(c: ApiCallDraft): ApiCallDraft {
   }
 }
 
-export interface SharePointDatasourceDraft {
+export interface SharePointDatasourceDraft extends Partial<FileTemplatesDraft> {
   name: string
   description?: string
   connection_id: number
@@ -161,6 +178,9 @@ export function useDatasources() {
     // datasource from an SFTP folder: the matching files stacked into one table
     createSftp: (projectId: number, body: SftpDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sftp`, { method: 'POST', body }),
+    // datasource from a folder of a bucket: the matching objects stacked into one table
+    createS3: (projectId: number, body: S3DatasourceDraft) =>
+      apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/s3`, { method: 'POST', body }),
     createDb: (projectId: number, body: DbDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/database`, {
         method: 'POST',

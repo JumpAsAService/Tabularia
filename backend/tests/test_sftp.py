@@ -580,3 +580,53 @@ def test_the_inspect_route_answers_409_with_a_code_for_host_key_problems(srv):
                                    expected_fingerprint=fp))
     assert e.value.status_code == 400 and "authentication rejected" in e.value.detail
     assert srv.auth_attempts == 2  # only the two accepted tests
+
+
+# ── the Output's placeholders (the shared language) ────────────────────────────
+def test_the_old_placeholders_write_the_same_bytes():
+    """{date}, {datetime}, {run_id}, {flow} as the SFTP Output wrote them before the
+    shared language (UTC when the node has no time zone)."""
+    assert sftp.render_file_name("v_{date}_{datetime}_{run_id}_{flow}", "csv", now=NOW, run_id=3, flow="A b/c") == \
+        "v_2026-10-17_2026-10-17_143005_3_A_b_c.csv"
+
+
+def test_the_output_resolves_in_its_time_zone(srv, root, storage, output):
+    os.makedirs(os.path.join(root, "out"))
+    res = sftp.write_output_to_sftp(_conn(srv), _dest(file_name="v_{date}_{now:HHmm}", timezone="Asia/Tokyo"),
+                                    BUCKET, output.key, storage=storage, now=NOW)
+    assert res["path"] == "/out/v_2026-10-17_2330.csv"
+
+
+def test_a_dated_folder_is_created_when_missing(srv, root, storage, output):
+    os.makedirs(os.path.join(root, "out"))
+    res = sftp.write_output_to_sftp(_conn(srv), _dest(folder="/out/{today:yyyy}/{today:MM}", file_name="x.csv"),
+                                    BUCKET, output.key, storage=storage, now=NOW)
+    assert res["path"] == "/out/2026/10/x.csv" and os.path.exists(os.path.join(root, "out/2026/10/x.csv"))
+
+
+def test_a_value_with_a_slash_cannot_put_a_folder_in_the_file_name():
+    with pytest.raises(sftp.SftpError, match="'/'"):
+        sftp.render_file_name("{today:yyyy/MM}.csv", "csv", now=NOW, run_id=1, flow="f")
+
+
+def test_a_folder_value_cannot_go_up(srv, root, storage, output):
+    with pytest.raises(sftp.SftpError, match=r"'\.\.'"):
+        sftp.write_output_to_sftp(_conn(srv), _dest(folder="/out/{flow}/..", file_name="x.csv"), BUCKET, output.key,
+                                  storage=storage, now=NOW)
+
+
+def test_a_dated_folder_needs_its_fixed_part_to_exist(srv, root, storage, output):
+    """`/outbx/{today:yyyy}` with a typo in the fixed part is an error, not a new folder."""
+    with pytest.raises(sftp.SftpError, match="not found"):
+        sftp.write_output_to_sftp(_conn(srv), _dest(folder="/outbx/{today:yyyy}", file_name="x.csv"), BUCKET, output.key,
+                                  storage=storage, now=NOW)
+    assert not os.path.exists(os.path.join(root, "outbx"))
+
+
+def test_a_file_name_over_255_bytes_is_refused():
+    with pytest.raises(sftp.SftpError, match="255"):
+        sftp.render_file_name("é" * 126 + "{date}", "csv", now=NOW, run_id=1, flow="f")
+
+
+def test_a_long_file_name_without_placeholders_is_left_to_the_server_as_before():
+    assert sftp.render_file_name("x" * 300, "csv", now=NOW, run_id=1, flow="f") == "x" * 300 + ".csv"

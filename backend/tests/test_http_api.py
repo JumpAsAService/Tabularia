@@ -257,6 +257,55 @@ def test_too_many_combinations_are_refused_before_any_call(srv, monkeypatch):
     assert srv.log == []
 
 
+# ── range variables ────────────────────────────────────────────────────────────
+def test_a_range_makes_one_call_per_window_with_day_and_day_end(srv):
+    srv.route("GET", "/v1/sales", lambda req: (200, {}, [{"n": 1}]))
+    res, df = ingest(conn(srv), source(path="/sales", query=[{"name": "from", "value": "{day}"},
+                                                             {"name": "to", "value": "{day_end:yyyyMMdd}"}],
+                                       variables=[{"name": "day", "type": "range", "start": "today-3", "end": "today",
+                                                   "step": "1d"}], timezone="Europe/Rome"))
+    # NOW is 00:30 on the 18th in Rome: the three days before it, each its own window
+    assert [(r.q("from"), r.q("to")) for r in srv.log] == [
+        ("2026-10-15", "20261016"), ("2026-10-16", "20261017"), ("2026-10-17", "20261018")]
+    assert df["_param_day"].to_list() == ["2026-10-15", "2026-10-16", "2026-10-17"]
+    assert "_param_day_end" not in df.columns and res["calls"] == 3
+
+
+def test_a_range_and_a_list_make_every_combination(srv):
+    srv.route("GET", "/v1/x", lambda req: (200, {}, [{"n": 1}]))
+    _, df = ingest(conn(srv), source(path="/x", query=[{"name": "s", "value": "{s}"}, {"name": "h", "value": "{hour:HH}"}],
+                                     variables=[{"name": "s", "values": ["a", "b"]},
+                                                {"name": "hour", "type": "range", "start": "now-2h", "end": "now",
+                                                 "step": "1h"}]))
+    assert [(r.q("s"), r.q("h")) for r in srv.log] == [("a", "20"), ("a", "21"), ("b", "20"), ("b", "21")]
+    assert df["_param_hour"].to_list()[0] == "2026-10-17T20:30:05+00:00"
+
+
+def test_a_range_over_the_call_cap_is_refused_before_any_call(srv, monkeypatch):
+    monkeypatch.setattr(get_settings().api, "max_calls", 5)
+    s = source(path="/x/{day}", variables=[{"name": "day", "type": "range", "start": "today-6", "end": "today",
+                                            "step": "1d"}])
+    with pytest.raises(api.ApiError, match="6 calls"):
+        ingest(conn(srv), s)
+    assert srv.log == []
+
+
+def test_a_range_over_the_values_cap_is_refused(srv, monkeypatch):
+    monkeypatch.setattr(get_settings().placeholders, "max_values", 3)
+    s = source(path="/x/{day}", variables=[{"name": "day", "type": "range", "start": "today-6", "end": "today",
+                                            "step": "1d"}])
+    with pytest.raises(api.ApiError, match="more than 3 values"):
+        api.validate_source(api.ApiConnectionSpec(base_url="https://api.example.com"), s, now=NOW)
+
+
+def test_a_range_from_the_last_refresh(srv):
+    srv.route("GET", "/v1/x", lambda req: (200, {}, [{"n": 1}]))
+    ingest(conn(srv), source(path="/x", query=[{"name": "d", "value": "{day}"}], last_refresh_initial="today-2",
+                             variables=[{"name": "day", "type": "range", "start": "last_refresh", "end": "today",
+                                         "step": "1d"}]), last_refresh="2026-10-16T05:00:00Z")
+    assert [r.q("d") for r in srv.log] == ["2026-10-16T05:00:00+00:00"]
+
+
 # ── pagination ─────────────────────────────────────────────────────────────────
 def test_page_number_until_an_empty_page(srv):
     data = {"1": [{"id": 1}, {"id": 2}], "2": [{"id": 3}]}
@@ -602,6 +651,13 @@ def test_test_connection_calls_the_base_url_or_the_test_path(srv):
     (dict(path="/q", variables=[{"name": "s", "values": ["a"]}]), "not used"),
     (dict(path="/q/{s}", variables=[{"name": "s", "values": ["a"]}, {"name": "s", "values": ["b"]}]), "twice"),
     (dict(path="/q/{today}", variables=[{"name": "today", "values": ["a"]}]), "reserved"),
+    (dict(path="/q", variables=[{"name": "d", "type": "range", "start": "today-1", "end": "today", "step": "1d"}]),
+     "not used"),
+    (dict(path="/q/{d}", variables=[{"name": "d", "type": "range", "start": "today", "end": "today-1", "step": "1d"}]),
+     "empty"),
+    (dict(path="/q/{d}", variables=[{"name": "d", "type": "range", "start": "today-1", "end": "today", "step": "1q"}]),
+     "step"),
+    (dict(path="/q/{s:%Y}", variables=[{"name": "s", "values": ["a"]}]), "no offset or format"),
     (dict(path="/q", query=[{"name": "since", "value": "{last_refresh}"}]), "initial"),
     (dict(path="/q", response={"jmespath": "a[?"}), "JMESPath"),
     (dict(path="/q", response={"records_path": "a..b"}), "records path"),

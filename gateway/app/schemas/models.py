@@ -2,7 +2,7 @@
 esporre mai `hashed_password` e per validare gli input."""
 from datetime import datetime, timezone
 from typing import Annotated, Generic, Literal, Optional, TypeVar
-from pydantic import BaseModel, PlainSerializer, Field, field_validator
+from pydantic import BaseModel, PlainSerializer, Field, field_validator, model_validator
 
 # ── Datetime in uscita: sempre con l'offset ───────────────────────────────────
 # Le colonne TIMESTAMP del DB sono naive e per convenzione in UTC (vedi
@@ -496,6 +496,8 @@ class RunDestinationSpec(BaseModel):
     # file-name template ({date}, {datetime}, {run_id}, {flow})
     folder: str = Field(default="", max_length=1000)
     file_name: str = Field(default="", max_length=255)
+    # the zone of the dates in the templates (file name, folder, key); empty = UTC
+    timezone: str = Field(default="", max_length=64)
 
 
 class RunMirrorSpec(BaseModel):
@@ -503,9 +505,11 @@ class RunMirrorSpec(BaseModel):
     pubblicazione come datasource (non al posto suo: per quella c'è
     `RunDestinationSpec` con type="s3", dove la scrittura È il risultato).
 
-    Sempre in SOVRASCRITTURA: stessa chiave a ogni esecuzione, nessuna
-    cronologia sul bucket esterno — chi legge trova sempre l'ultimo dato al
-    percorso concordato. Niente partizioni, per lo stesso motivo.
+    Written at the path of its key at every run: the same object overwritten, or —
+    when the key holds placeholders (`copia/{date}.parquet`) — one per day or per
+    run. Niente partizioni. Best effort: a failed copy, or a key whose placeholders
+    cannot be resolved (then the copy is skipped), never fails the run nor the
+    publish; the outcome is recorded on the run.
     La connessione è referenziata per id: le credenziali non passano dal client.
 
     SOLO parquet, e non è una svista: il formato non è scelto perché nome del
@@ -515,6 +519,7 @@ class RunMirrorSpec(BaseModel):
     connection_id: int
     bucket: str = ""  # vuoto = bucket di default della connessione
     key: str  # percorso completo dell'oggetto (sottocartella + nome file)
+    timezone: str = Field(default="", max_length=64)  # of the placeholders in the key; empty = UTC
 
 
 class RunEmailSpec(BaseModel):
@@ -539,6 +544,8 @@ class RunEmailSpec(BaseModel):
     attachment_name: str = ""
     attachment_format: Literal["csv", "xlsx"] = "xlsx"
     stop_on_failure: bool = True
+    # the zone of the dates in the subject and the attachment name; empty = UTC
+    timezone: str = Field(default="", max_length=64)
 
 
 class RunCreate(BaseModel):
@@ -591,6 +598,9 @@ class RunOut(BaseModel):
     mirror: Optional[str] = None
     # JSON: {connection_id, host, to, subject, attachment, ok, error?} — invio email
     email: Optional[str] = None
+    # JSON: what a successful refresh has to say — {"missing": [{params, pattern}],
+    # "missing_count", "expansions"}: the values of a range whose file was not there
+    notes: Optional[str] = None
     started_at: Optional[UtcDateTime]
     finished_at: Optional[UtcDateTime]
     progress: Optional[RunProgress] = None  # solo per i run in corso (vedi runs.run_out)
@@ -706,9 +716,60 @@ class DbDatasourceCreate(BaseModel):
     sort_keys: list[str] = Field(default_factory=list)
 
 
-class SharePointDatasourceCreate(BaseModel):
+class ApiVariable(BaseModel):
+    """A variable of a datasource (API call, SFTP, SharePoint, S3): a LIST —
+    `symbol = AAPL, MSFT`, one call or one expansion per value (every combination
+    of several) — or a RANGE — `day = today-7 .. today step 1d`, the values from
+    the start (included) to the end (excluded), with {day_end} the end of each
+    window. Checked by the engine (app.core.placeholders) before saving."""
+    name: str = Field(min_length=1, max_length=64)
+    type: Literal["list", "range"] = "list"
+    values: list[str] = Field(default_factory=list, max_length=1000)
+    start: str = Field(default="", max_length=100)
+    end: str = Field(default="", max_length=100)
+    step: str = Field(default="", max_length=20)
+
+    @model_validator(mode="after")
+    def _complete(self) -> "ApiVariable":
+        if self.type == "list" and not self.values:
+            raise ValueError(f"the variable '{self.name}' has no values")
+        if self.type == "range" and not (self.start.strip() and self.end.strip() and self.step.strip()):
+            raise ValueError(f"the range '{self.name}' needs a start, an end and a step")
+        return self
+
+
+class FileTemplatesSpec(BaseModel):
+    """The moving part of a file datasource (SFTP, SharePoint, S3): the zone of the
+    placeholders in its folder and glob, its variables, the first value of
+    {last_refresh}, and the refresh mode (snapshot, or append by key columns)."""
+    timezone: str = Field(default="UTC", max_length=64)
+    variables: list[ApiVariable] = Field(default_factory=list, max_length=10)
+    last_refresh_initial: str = Field(default="", max_length=100)
+    mode: Literal["snapshot", "append"] = "snapshot"
+    keys: list[str] = Field(default_factory=list, max_length=20)
+
+    def template_fields(self) -> dict:
+        """The fields that differ from a plain datasource: only those are stored, so a
+        datasource without placeholders keeps exactly the shape it always had."""
+        out: dict = {}
+        if (self.timezone or "UTC").strip() not in ("", "UTC"):
+            out["timezone"] = self.timezone.strip()
+        if self.variables:
+            out["variables"] = [v.model_dump() for v in self.variables]
+        if self.last_refresh_initial.strip():
+            out["last_refresh_initial"] = self.last_refresh_initial.strip()
+        if self.mode != "snapshot":
+            out["mode"] = self.mode
+        keys = [k.strip() for k in self.keys if k.strip()]
+        if keys:
+            out["keys"] = keys
+        return out
+
+
+class SharePointDatasourceCreate(FileTemplatesSpec):
     """Datasource da file Excel su SharePoint: un percorso (anche con glob) e un
-    foglio. Più file corrispondenti vengono impilati in una tabella sola."""
+    foglio. Più file corrispondenti vengono impilati in una tabella sola. The path
+    may hold placeholders and variables (FileTemplatesSpec)."""
     name: str
     description: str = ""
     connection_id: int
@@ -732,9 +793,10 @@ class SftpCsvOptions(BaseModel):
     null_values: list[str] = Field(default_factory=list, max_length=20)
 
 
-class SftpDatasourceCreate(BaseModel):
+class SftpDatasourceCreate(FileTemplatesSpec):
     """Datasource from the files of a folder on an SFTP server: a folder and a glob.
-    All matching files are read at each refresh and stacked into one table."""
+    All matching files are read at each refresh and stacked into one table. Folder
+    and glob may hold placeholders and variables (FileTemplatesSpec)."""
     name: str
     description: str = ""
     connection_id: int
@@ -751,7 +813,7 @@ class SftpDatasourceCreate(BaseModel):
         return no_dot_dot(v)
 
 
-class SftpFilesQuery(BaseModel):
+class SftpFilesQuery(FileTemplatesSpec):
     folder: str = Field(default="", max_length=1000)
     pattern: str = Field(min_length=1, max_length=500)
 
@@ -761,15 +823,71 @@ class SftpFilesQuery(BaseModel):
         return no_dot_dot(v)
 
 
+class S3DatasourceCreate(FileTemplatesSpec):
+    """Datasource from the files of a folder of a bucket («S3 folder»), through an
+    S3 connection: the bucket (empty = the connection's default), a folder (key
+    prefix) and a glob; the reading options of the SFTP datasource. All matching
+    objects are read at each refresh and stacked into one table."""
+    name: str
+    description: str = ""
+    connection_id: int
+    bucket: str = Field(default="", max_length=255)
+    folder: str = Field(default="", max_length=1000)
+    pattern: str = Field(min_length=1, max_length=500)
+    format: Literal["auto", "csv", "parquet", "excel", "ndjson"] = "auto"
+    sheet: str = Field(default="", max_length=255)
+    csv: SftpCsvOptions = Field(default_factory=SftpCsvOptions)
+
+    @field_validator("folder", "pattern")
+    @classmethod
+    def _no_dot_dot(cls, v: str) -> str:
+        return no_dot_dot(v)
+
+    def source_ref(self) -> dict:
+        return {"bucket": self.bucket.strip(), "folder": self.folder.strip().strip("/"), "pattern": self.pattern.strip(),
+                "format": self.format, "sheet": self.sheet.strip(), "csv": self.csv.model_dump(),
+                **self.template_fields()}
+
+
+class S3FilesQuery(FileTemplatesSpec):
+    bucket: str = Field(default="", max_length=255)
+    folder: str = Field(default="", max_length=1000)
+    pattern: str = Field(min_length=1, max_length=500)
+
+    @field_validator("folder", "pattern")
+    @classmethod
+    def _no_dot_dot(cls, v: str) -> str:
+        return no_dot_dot(v)
+
+
+class SharePointFilesQuery(FileTemplatesSpec):
+    path: str = Field(min_length=1, max_length=1000)
+
+
+class PlaceholderPreviewQuery(BaseModel):
+    """The live preview of templates in a form: each one's value now («today:
+    export_20261018.csv»), or what is wrong with it. `kind` input (a datasource's
+    folder/glob, with its variables) or output (an Output's file name, folder,
+    key or subject: `targets` says which)."""
+    templates: dict[str, str] = Field(max_length=20)
+    kind: Literal["input", "output"] = "input"
+    timezone: str = Field(default="UTC", max_length=64)
+    variables: list[ApiVariable] = Field(default_factory=list, max_length=10)
+    last_refresh_initial: str = Field(default="", max_length=100)
+    targets: dict[str, Literal["file", "path", "text"]] = Field(default_factory=dict)
+    flow: str = Field(default="", max_length=500)  # an Output: the flow's name, for {flow}
+
+    @field_validator("templates")
+    @classmethod
+    def _short(cls, v: dict[str, str]) -> dict[str, str]:
+        if any(len(t) > 4000 or len(k) > 64 for k, t in v.items()):
+            raise ValueError("template too long")
+        return v
+
+
 class ApiPair(BaseModel):
     name: str = Field(max_length=200)
     value: str = Field(default="", max_length=4000)
-
-
-class ApiVariable(BaseModel):
-    """`symbol = AAPL, MSFT`: one call per value (every combination of several lists)."""
-    name: str = Field(min_length=1, max_length=64)
-    values: list[str] = Field(min_length=1, max_length=1000)
 
 
 class ApiResponseSpec(BaseModel):

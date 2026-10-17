@@ -95,3 +95,45 @@ async def test_without_the_option_the_sequence_goes_on(session, monkeypatch):
 
     assert lanciati == ["email", "datasource"], lanciati
     assert any("email" in x or "FAILED" in x for x in errori), errori
+
+
+async def test_an_email_refused_at_launch_stops_the_sequence_too(session, monkeypatch):
+    """Refused BEFORE its run exists (a subject whose placeholder the engine rejects,
+    a recipient outside the allowed domains): the same as a failed send — the steps
+    after it must not run."""
+    from fastapi import HTTPException
+
+    lanciati: list[str] = []
+    _sostituisci(monkeypatch, lanciati)
+
+    async def rifiuta(session, user, flow, body, **kw):
+        if lanciati[-1] == "email":
+            raise HTTPException(status_code=422, detail="subject: unknown placeholder {week}")
+        run = Run(flow_id=flow.id, status="SUCCESS", kind="flow")
+        run.id = 99
+        return run
+
+    monkeypatch.setattr(orch, "_launch_flow_run", rifiuta)
+    utente = make_user(session, email="d@x.local", is_superuser=True)
+    with pytest.raises(orch.StopSequence) as e:
+        await orch.orchestrate(session, utente, _flusso(session))
+    assert lanciati == ["email"] and "{week}" in str(e.value)
+
+
+async def test_an_email_refused_at_launch_without_the_option_is_collected(session, monkeypatch):
+    from fastapi import HTTPException
+
+    lanciati: list[str] = []
+    _sostituisci(monkeypatch, lanciati)
+
+    async def rifiuta(session, user, flow, body, **kw):
+        if lanciati[-1] == "email":
+            raise HTTPException(status_code=422, detail="bad subject")
+        run = Run(flow_id=flow.id, status="SUCCESS", kind="flow")
+        run.id = 99
+        return run
+
+    monkeypatch.setattr(orch, "_launch_flow_run", rifiuta)
+    utente = make_user(session, email="e@x.local", is_superuser=True)
+    errori = await orch.orchestrate(session, utente, _flusso(session, stop_on_failure=False))
+    assert lanciati == ["email", "datasource"] and any("bad subject" in x for x in errori), errori

@@ -9,6 +9,9 @@ import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type Sourc
 import { opMeta } from '~/composables/useOpIcons'
 import { useNodeStats } from '~/composables/useNodeStats'
 import { useFolderPaths } from '~/composables/useFolderPaths'
+import { usePlaceholderPreview, type PreviewRequest, type TemplateTarget } from '~/composables/usePlaceholders'
+import TemplatePreview from '~/components/ui/TemplatePreview.vue'
+import PlaceholderCheat from '~/components/ui/PlaceholderCheat.vue'
 
 const props = defineProps<{
   node: Node | null
@@ -23,6 +26,7 @@ const props = defineProps<{
   connections?: { id: number; name: string; db_type: string; database?: string; host?: string; project_id?: number }[]
   flows?: { id: number; name: string; project_id?: number }[]
   currentFlowId?: number | null
+  flowName?: string // {flow} in the Output's templates
 }>()
 const { t } = useI18n()
 // names repeat across folders: every catalog picker shows where each option lives
@@ -37,6 +41,31 @@ const emit = defineEmits<{
 }>()
 
 const isSource = () => props.node?.type === 'source'
+
+// ── Output templates: placeholders in the names, in the node's time zone ─────
+// The fields of each destination that are templates, and what each one is (a file
+// name, a folder or key, a text): the email body and a table name are not.
+function outputTemplates(d: Record<string, any>): Record<string, [string, TemplateTarget]> | null {
+  const dest = d.destType ?? 'datasource'
+  if (dest === 'sftp') return { folder: [(d.sftpFolder ?? '').trim(), 'path'], file_name: [(d.sftpFileName ?? '').trim(), 'file'] }
+  if (dest === 's3') return { key: [(d.s3Key ?? '').trim(), 'path'] }
+  if (dest === 'email') return { subject: [d.emailSubject ?? '', 'text'], attachment_name: [(d.attachmentName ?? '').trim(), 'file'] }
+  if (dest === 'datasource' && d.mirrorEnabled) return { key: [(d.mirrorKey ?? '').trim(), 'path'] }
+  return null
+}
+const outputTemplated = computed(() => props.node?.type === 'output' && !!outputTemplates(props.node.data ?? {}))
+const outPreview = usePlaceholderPreview((): PreviewRequest | null => {
+  if (props.node?.type !== 'output') return null
+  const fields = outputTemplates(props.node.data ?? {})
+  if (!fields) return null
+  return {
+    kind: 'output',
+    templates: Object.fromEntries(Object.entries(fields).map(([k, [v]]) => [k, v])),
+    targets: Object.fromEntries(Object.entries(fields).map(([k, [, target]]) => [k, target])),
+    timezone: String(props.node.data?.timezone ?? ''),
+    flow: props.flowName ?? '',
+  }
+})
 
 function changeType(opType: string) {
   // cambiando operazione, riparte da parametri di default puliti
@@ -389,9 +418,12 @@ function pickDatasource(id: number | null) {
           <input
             :value="node.data.mirrorKey ?? ''"
             type="text"
+            class="out-mirror-key"
+            aria-describedby="tp-out-mirror-key"
             :placeholder="$t('nodePanel.mirrorKeyPlaceholder')"
             @input="emit('update', { mirrorKey: ($event.target as HTMLInputElement).value })"
           />
+          <TemplatePreview id="tp-out-mirror-key" :preview="outPreview" name="key" />
           <!-- nessuna scelta del formato: sempre parquet. Nome e formato
                sarebbero indipendenti, e un CSV chiamato .parquet romperebbe
                chi lo legge a valle -->
@@ -423,9 +455,12 @@ function pickDatasource(id: number | null) {
         <input
           :value="node.data.s3Key ?? ''"
           type="text"
+          class="out-s3-key"
+          aria-describedby="tp-out-s3-key"
           :placeholder="$t('nodePanel.s3KeyPlaceholder')"
           @input="emit('update', { s3Key: ($event.target as HTMLInputElement).value })"
         />
+        <TemplatePreview id="tp-out-s3-key" :preview="outPreview" name="key" />
         <label>{{ $t('nodePanel.formatLabel') }}</label>
         <Select
           :model-value="node.data.s3Format ?? 'parquet'"
@@ -486,9 +521,12 @@ function pickDatasource(id: number | null) {
         <input
           :value="node.data.emailSubject ?? ''"
           type="text"
+          class="out-email-subject"
+          aria-describedby="tp-out-email-subject"
           :placeholder="$t('nodePanel.emailSubjectPlaceholder')"
           @input="emit('update', { emailSubject: ($event.target as HTMLInputElement).value })"
         />
+        <TemplatePreview id="tp-out-email-subject" :preview="outPreview" name="subject" />
         <label>{{ $t('nodePanel.emailBodyLabel') }}</label>
         <textarea
           :value="node.data.emailBody ?? ''"
@@ -508,9 +546,12 @@ function pickDatasource(id: number | null) {
         <input
           :value="node.data.attachmentName ?? ''"
           type="text"
+          class="out-attachment-name"
+          aria-describedby="tp-out-attachment-name"
           :placeholder="$t('nodePanel.attachmentNamePlaceholder')"
           @input="emit('update', { attachmentName: ($event.target as HTMLInputElement).value })"
         />
+        <TemplatePreview id="tp-out-attachment-name" :preview="outPreview" name="attachment_name" />
         <label>{{ $t('nodePanel.formatLabel') }}</label>
         <Select
           :model-value="node.data.attachmentFormat ?? 'xlsx'"
@@ -558,17 +599,23 @@ function pickDatasource(id: number | null) {
           :value="node.data.sftpFolder ?? ''"
           type="text"
           spellcheck="false"
+          class="out-sftp-folder"
+          aria-describedby="tp-out-sftp-folder"
           :placeholder="$t('sftp.folderPlaceholder')"
           @input="emit('update', { sftpFolder: ($event.target as HTMLInputElement).value })"
         />
+        <TemplatePreview id="tp-out-sftp-folder" :preview="outPreview" name="folder" />
         <label>{{ $t('sftp.fileNameLabel') }}</label>
         <input
           :value="node.data.sftpFileName ?? ''"
           type="text"
           spellcheck="false"
+          class="out-sftp-file-name"
+          aria-describedby="tp-out-sftp-file-name"
           placeholder="vendite_{date}"
           @input="emit('update', { sftpFileName: ($event.target as HTMLInputElement).value })"
         />
+        <TemplatePreview id="tp-out-sftp-file-name" :preview="outPreview" name="file_name" />
         <p class="muted outhint">
           {{ $t('sftp.fileNameHint', { date: '{date}', datetime: '{datetime}', run_id: '{run_id}', flow: '{flow}' }) }}
         </p>
@@ -623,6 +670,22 @@ function pickDatasource(id: number | null) {
         <p class="muted outhint">
           {{ $t('nodePanel.tableAutoCreateHint') }}
         </p>
+      </template>
+
+      <!-- the zone of the dates in the names above ({today}, {now:HH:mm}…): one per
+           node, `timezone` in its data, empty = UTC -->
+      <template v-if="outputTemplated">
+        <label>{{ $t('placeholders.outTimezoneLabel') }} <span class="muted">{{ $t('placeholders.outTimezoneHint') }}</span></label>
+        <input
+          :value="node.data.timezone ?? ''"
+          type="text"
+          spellcheck="false"
+          class="out-timezone"
+          placeholder="Europe/Rome"
+          @input="emit('update', { timezone: ($event.target as HTMLInputElement).value })"
+        />
+        <TemplatePreview :preview="outPreview" global />
+        <PlaceholderCheat kind="output" />
       </template>
     </template>
 

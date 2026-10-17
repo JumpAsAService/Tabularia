@@ -48,7 +48,8 @@ from app.models import Connection, Datasource, Flow, Project, User
 from app.services import audit
 from app.models.permission import Capability
 from app.schemas.models import (
-    ApiCallSpec, ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, SftpFilesQuery,
+    ApiCallSpec, ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, PlaceholderPreviewQuery,
+    S3FilesQuery, SftpFilesQuery, SharePointFilesQuery,
 )
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
@@ -482,7 +483,10 @@ def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, 
 async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: str = "en", **extra) -> dict:
     client = get_engine_client()
     if "tenant_id" in payload:  # SharePoint ha le sue rotte sull'engine
-        resp = await client.post("/sharepoint/inspect", json={"connection": payload, "action": action, "path": path})
+        resp = await client.post("/sharepoint/inspect", json={"connection": payload, "action": action, "path": path, **extra})
+    elif payload.get("db_type") == "s3" and action in ("files", "validate"):
+        # the «S3 folder» datasource; the connection test stays on /db/inspect
+        resp = await client.post("/s3/inspect", json={"connection": payload, "action": action, **extra})
     elif payload.get("db_type") == "sftp":
         resp = await client.post("/sftp/inspect", json={"connection": payload, "action": action, **extra})
     elif payload.get("db_type") == "api":
@@ -931,8 +935,13 @@ async def list_sftp_files(
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type != "sftp":
         raise HTTPException(status_code=422, detail="This is not an SFTP connection")
+    extra: dict = {"folder": body.folder, "pattern": body.pattern}
+    fields = body.template_fields()
+    if fields or any(c in body.folder + body.pattern for c in "{}"):
+        # placeholders or variables: the engine expands them and lists the values without a file
+        extra["source"] = {"folder": body.folder, "pattern": body.pattern, **fields}
     return await _engine_inspect(engine_connection_payload(conn), "files", lingua=lingua_della_richiesta(request),
-                                 folder=body.folder, pattern=body.pattern)
+                                 **extra)
 
 
 @router.post("/connections/{conn_id}/api/try")
@@ -954,10 +963,6 @@ async def try_api_call(
     return await _engine_inspect(engine_connection_payload(conn), "try", source=body.model_dump())
 
 
-class SharePointFilesQuery(BaseModel):
-    path: str
-
-
 @router.post("/connections/{conn_id}/sharepoint/files")
 async def list_sharepoint_files(
     conn_id: int,
@@ -971,7 +976,49 @@ async def list_sharepoint_files(
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type != "sharepoint":
         raise HTTPException(status_code=422, detail="This is not a SharePoint connection")
+    fields = body.template_fields()
+    if fields or any(c in body.path for c in "{}"):
+        return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path,
+                                     source={"path": body.path, "sheet": "-", **fields})
     return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path)
+
+
+@router.post("/connections/{conn_id}/s3/files")
+async def list_s3_files(
+    conn_id: int,
+    body: S3FilesQuery,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """The objects a folder + glob takes in the bucket (every expansion of its
+    placeholders, and the values without a file): «Check the files» of the «S3
+    folder» datasource, BEFORE importing. CONNECT on the connection's folder."""
+    conn = _get_connection(session, conn_id)
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "s3":
+        raise HTTPException(status_code=422, detail="This is not an S3 connection")
+    if not body.bucket.strip() and not (conn.database or "").strip():
+        raise HTTPException(status_code=422, detail="No bucket: set one on the datasource or as the connection's default")
+    source = {"bucket": body.bucket.strip(), "folder": body.folder.strip().strip("/"), "pattern": body.pattern.strip(),
+              **body.template_fields()}
+    return await _engine_inspect(engine_connection_payload(conn), "files", source=source)
+
+
+@router.post("/placeholders/preview")
+async def preview_placeholders(
+    body: PlaceholderPreviewQuery,
+    user: User = Depends(get_current_user),
+):
+    """The live preview of the placeholders of a form (a datasource's folder and
+    glob, an Output's file name, folder, key or subject): each template's value
+    now, in its time zone, or the message of what is wrong — the engine's
+    checker, the same that validates at save time and before a run. Any signed-in
+    user: nothing is read, it is arithmetic on dates."""
+    payload = body.model_dump()
+    resp = await get_engine_client().post("/placeholders/preview", json=payload)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502 if resp.status_code >= 500 else 422, detail=resp.text[:500])
+    return resp.json()
 
 
 @router.get("/connections/{conn_id}/tables")

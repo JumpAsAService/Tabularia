@@ -50,7 +50,7 @@ Every run that reaches a terminal state sends a `START` and a `COMPLETE` (or `FA
 | A flow run (manual, scheduled, or from the editor) | `<folder path>/<flow name>` | every datasource the flow's source nodes read; a file uploaded in the editor | the union of what its output nodes wrote |
 | An output node of that run | `<folder path>/<flow name>.<output>`, child of the flow run (`ParentRunFacet`) — `datasource <name>`, `table <name>`, `file <key>` (for SFTP `file /<folder>/<name template>`), `email` | the flow's inputs | the datasource published, the table written, the S3/GCS object, the SFTP file, the mirror copy |
 | A nested flow (`Run flow` node) | its outputs stay under the nested flow's own job name | | |
-| A datasource refresh (database, SharePoint, SFTP or HTTP API), by hand, on schedule or inside a flow | `<folder path>/<datasource> (refresh)` | the table; the tables a SQL query reads; the SharePoint file; the SFTP folder and glob; the API's path | the datasource |
+| A datasource refresh (database, SharePoint, SFTP, S3 folder or HTTP API), by hand, on schedule or inside a flow | `<folder path>/<datasource> (refresh)` | the table; the tables a SQL query reads; the SharePoint file; the SFTP or S3 folder and glob; the API's path | the datasource |
 
 An email output is not a dataset: its job has no outputs.
 
@@ -72,7 +72,7 @@ Every run carries a `tabularia` run facet
 |---|---|---|---|
 | A Tabularia datasource | `tabularia://<namespace>` | `/<folder path>/<name>` — the name you see in Tabularia | `schema`, `documentation`, `datasetVersion` (the snapshot key), `symlinks` → its folder in the bucket (`s3://bucket` + `/datasets/<id>`, stable across snapshots), `dataSource` (uri of the parquet it serves now), `tabularia` (see below) |
 | A database table | `postgres://host:5432`, `mysql://host:3306`, `clickhouse://host:8443`, `trino://host:8080`, `oracle://host:1521`, `mssql://host:1433` | `db.schema.table` (Postgres, Trino, SQL Server; `dbo` when no schema is given) · `db.table` (MySQL, ClickHouse) · `service.SCHEMA.TABLE` (Oracle, with Oracle's upper case for unquoted names) | `dataSource`; on outputs `lifecycleStateChange` (`OVERWRITE` for replace, `ALTER` for append) and `outputStatistics` |
-| An object in a bucket | `s3://bucket` or `gs://bucket` | `/path/key` | `storage`, `outputStatistics` |
+| An object in a bucket | `s3://bucket` or `gs://bucket` | `/path/key` — for an «S3 folder» datasource `/folder/glob`, for an Output key with placeholders the template (one dataset per Output) | `storage`, `datasetVersion` (the key a run wrote, when the key has placeholders), `outputStatistics` |
 | A SharePoint file | `sharepoint://site host/sites/…` | `/path/file.xlsx#Sheet` | `dataSource` |
 | An HTTP API call | `https://host[:port]` (the base URL's origin) | the base path + the call's path as written, placeholders included, never the query string: `/v1/{today-30}..` | — |
 | Files on an SFTP server | `sftp://host:port` | input: `/folder/glob`; output: `/folder/<file-name template>`, one dataset per Output | `storage`, `datasetVersion` (the file the run wrote), `outputStatistics` |

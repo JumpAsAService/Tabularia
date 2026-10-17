@@ -95,6 +95,7 @@ class FakeEngine:
         self.sftp_server_key = {"type": "ssh-ed25519", "fingerprint": "SHA256:server-key"}
         self.sftp_responses: dict[str, tuple[int, dict]] = {
             "files": (200, {"files": [], "total": 0}),
+            "validate": (200, {"ok": True, "expansions": 1, "first": {}, "last": {}}),
         }
         self.transform_status = 200  # a different answer to test an engine that refuses the run
         # HTTP API connections: bodies received on POST /http-api/inspect, and the answer per action
@@ -103,6 +104,16 @@ class FakeEngine:
             "test": (200, {"ok": True, "status": 200, "url": "https://api.example.com/v1"}),
             "validate": (200, {"ok": True, "calls": 1, "request": {}}),
             "try": (200, {"ok": True, "status": 200, "columns": ["id"], "rows": [{"id": 1}], "records": 1}),
+        }
+        # placeholders: bodies received on POST /placeholders/preview, and per-template errors to
+        # serve ({template name: message}; a "*" key = a general error) — the grammar is the engine's
+        self.placeholder_previews: list[dict] = []
+        self.placeholder_errors: dict[str, str] = {}
+        # «S3 folder» datasource: bodies on POST /s3/inspect and the answer per action
+        self.s3_inspects: list[dict] = []
+        self.s3_responses: dict[str, tuple[int, dict]] = {
+            "files": (200, {"files": [], "total": 0, "missing": [], "missing_total": 0, "expansions": 1}),
+            "validate": (200, {"ok": True, "expansions": 1, "first": {}, "last": {}}),
         }
         self.dbt_exports: list[dict] = []  # corpi ricevuti su POST /dbt/export
         self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
@@ -158,12 +169,24 @@ class FakeEngine:
                     "changed": bool(pinned) and pinned != offered, "previous": pinned, **({"home": "/home/tab"} if ok else {})})
             status, payload = self.sftp_responses[action]
             return httpx.Response(status, json=payload)
+        if path == "/placeholders/preview" and request.method == "POST":
+            body = _json_body(request)
+            self.placeholder_previews.append(body)
+            fields = {k: ({"error": self.placeholder_errors[k]} if k in self.placeholder_errors else {"value": v})
+                      for k, v in (body.get("templates") or {}).items()}
+            return httpx.Response(200, json={"fields": fields, "expansions": 1, "now": "2026-10-18T00:00:00+00:00",
+                                             "error": self.placeholder_errors.get("*")})
+        if path == "/s3/inspect" and request.method == "POST":
+            body = _json_body(request)
+            self.s3_inspects.append(body)
+            status, payload = self.s3_responses[body.get("action", "files")]
+            return httpx.Response(status, json=payload)
         if path == "/http-api/inspect" and request.method == "POST":
             body = _json_body(request)
             self.api_inspects.append(body)
             status, payload = self.api_responses[body.get("action", "test")]
             return httpx.Response(status, json=payload)
-        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest", "/http-api/ingest") and request.method == "POST":
+        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest", "/http-api/ingest", "/s3/ingest") and request.method == "POST":
             import json as _json
 
             self.ingests.append((path, _json.loads(request.content or b"{}")))

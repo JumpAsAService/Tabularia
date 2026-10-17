@@ -22,9 +22,10 @@ import smtplib
 import tempfile
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
+from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.ingest.converters import IngestError
 
@@ -76,6 +77,36 @@ class EmailSpec(BaseModel):
     body_is_html: bool = False
     attachment_name: str = "report"
     attachment_format: Literal["csv", "xlsx"] = "xlsx"
+    # the subject and the attachment name are templates with the Outputs'
+    # placeholders (app.core.placeholders), in this zone; run_id and flow set by
+    # the gateway. The body is not a template: it is sent as written.
+    timezone: str = Field(default="UTC", max_length=64)
+    run_id: int | None = None
+    flow: str = ""
+
+
+def resolve_names(spec: EmailSpec, now: datetime | None = None) -> EmailSpec:
+    """The spec with its subject and attachment name resolved. A placeholder value
+    cannot put a folder in the attachment name; the subject keeps {flow} as it is."""
+    subject, name = spec.subject or "", spec.attachment_name or ""
+    if not any(c in subject + name for c in "{}"):
+        return spec
+    from app.core import placeholders as ph
+
+    try:
+        ctx = ph.output_context(now or datetime.now(timezone.utc), spec.timezone, spec.run_id, spec.flow)
+        subject = ph.render_output(subject, ctx, "text", "subject") if any(c in subject for c in "{}") else subject
+        name = ph.render_output(name, ctx, "file", "attachment name") if any(c in name for c in "{}") else name
+    except ph.PlaceholderError as e:
+        raise EmailDestinationError(str(e)) from e
+    if "\r" in subject or "\n" in subject:
+        raise EmailDestinationError("the subject cannot hold a line break")
+    resolved = spec.model_copy(update={"subject": subject, "attachment_name": name})
+    if any(c in (spec.attachment_name or "") for c in "{}"):  # resolved from placeholders: its final length is checked
+        final = _filename(resolved)
+        if len(final.encode()) > 255:
+            raise EmailDestinationError(f"the attachment name is longer than 255 bytes ({len(final.encode())}): shorten it")
+    return resolved
 
 
 _MIME = {
@@ -184,9 +215,12 @@ def send_notice(conn: SmtpConnectionSpec, to: list[str], subject: str, body: str
     return {"ok": True, "recipients": len(destinatari)}
 
 
-def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, key: str) -> dict:
+def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, key: str,
+                      now: datetime | None = None) -> dict:
     """Genera l'allegato e lo spedisce. Solleva `EmailDestinationError` con un
-    messaggio leggibile; il chiamante decide se il run debba fallire."""
+    messaggio leggibile; il chiamante decide se il run debba fallire. The subject
+    and the attachment name are resolved first (a bad placeholder sends nothing)."""
+    spec = resolve_names(spec, now)
     destinatari = [a for a in (*spec.to, *spec.cc) if a.strip()]
     if not destinatari:
         raise EmailDestinationError("No recipients: enter at least one address.")
@@ -219,6 +253,7 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
         "ok": True,
         "recipients": len(destinatari),
         "attachment": nome_file,
+        "subject": str(msg["Subject"]),
         "bytes": len(dati),
     }
 

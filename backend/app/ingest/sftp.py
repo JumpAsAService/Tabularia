@@ -45,7 +45,6 @@ import json
 import logging
 import os
 import posixpath
-import re
 import shutil
 import socket
 import stat
@@ -60,9 +59,12 @@ import polars as pl
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
+from app.core.placeholders import has_placeholders
+from app.ingest import file_readers
+from app.ingest import file_templates as ft
 from app.ingest.converters import IngestError
 from app.ingest.models import CsvOptions
-from app.ingest.sharepoint_source import FILE_COLUMN, MODIFIED_COLUMN, check_header, read_sheet
+from app.ingest.sharepoint_source import FILE_COLUMN, MODIFIED_COLUMN
 
 logger = logging.getLogger(__name__)
 
@@ -388,13 +390,27 @@ def _hidden(name: str) -> bool:
     return name.startswith(".") or name.startswith("~$")
 
 
-def find_files(client, folder: str, pattern: str) -> list[RemoteFile]:
+def find_files(client, folder: str, pattern: str, rel_to: str | None = None, missing_ok: bool = False) -> list[RemoteFile]:
     """The files under `folder` that match `pattern`, segment by segment: `*` and
     `?` within a name, `**` for any depth (zero included). Case-sensitive, as
-    file systems on servers are. Hidden files are left out."""
+    file systems on servers are. Hidden files are left out. `rel` is the path
+    below `rel_to` (default: the folder); `missing_ok`: a folder that does not
+    exist matches nothing instead of being an error (a dated folder)."""
     max_files = get_settings().sftp.max_files
     _no_dot_dot(pattern, "file pattern")
+    if missing_ok:
+        _no_dot_dot(folder, "folder")
+        try:
+            home = client.normalize(".")
+            path = posixpath.normpath(posixpath.join(home, (folder or "").strip().replace("\\", "/")))
+            if not stat.S_ISDIR(client.stat(path).st_mode or 0):
+                return []
+        except OSError as e:
+            if e.errno in (errno.ENOENT, errno.ENOTDIR):
+                return []
+            raise _io_error(e, f"folder '{folder}'") from e
     base = resolve_folder(client, folder)
+    rel_base = base if rel_to is None else rel_to
     parts = [p for p in (pattern or "").replace("\\", "/").strip("/").split("/") if p]
     if not parts:
         raise SftpError("empty file pattern: enter a name or a glob, e.g. vendite_*.csv")
@@ -450,7 +466,7 @@ def find_files(client, folder: str, pattern: str) -> list[RemoteFile]:
                     walk(child, tail)
             elif is_file:
                 found[child] = RemoteFile(path=child, size=int(attr.st_size or 0), mtime=float(attr.st_mtime or 0),
-                                          rel=posixpath.relpath(child, base))
+                                          rel=posixpath.relpath(child, rel_base))
                 if len(found) > max_files:
                     raise SftpError(f"the pattern matches more than {max_files} files: narrow it")
 
@@ -465,15 +481,12 @@ def list_files(conn: SftpConnectionSpec, folder: str, pattern: str) -> list[Remo
 
 # ── reading ────────────────────────────────────────────────────────────────────
 SftpFormat = Literal["auto", "csv", "parquet", "excel", "ndjson"]
-_FORMAT_BY_EXTENSION = {
-    ".csv": "csv", ".txt": "csv", ".tsv": "tsv",
-    ".parquet": "parquet", ".pq": "parquet",
-    ".xlsx": "excel", ".xlsm": "excel", ".xls": "excel",
-    ".ndjson": "ndjson", ".jsonl": "ndjson",
-}
 
 
-class SftpSourceSpec(BaseModel):
+class SftpSourceSpec(ft.FileTemplates):
+    """Folder and pattern may hold placeholders and the datasource's variables
+    (see file_templates): the timezone, variables, last_refresh_initial, mode and
+    keys come from there."""
     folder: str = ""  # empty = the login directory
     pattern: str = Field(min_length=1)
     # auto = from each file's extension (a glob may mix formats)
@@ -483,73 +496,56 @@ class SftpSourceSpec(BaseModel):
 
 
 def _format_of(path: str, chosen: str) -> str:
-    if chosen != "auto":
-        return chosen
-    fmt = _FORMAT_BY_EXTENSION.get(posixpath.splitext(path)[1].lower())
-    if fmt is None:
-        raise SftpError(
-            f"{path}: the extension does not say the format. Narrow the pattern to the data files, or choose "
-            f"the format on the datasource (recognised: {', '.join(sorted(_FORMAT_BY_EXTENSION))})"
-        )
-    return fmt
-
-
-def _strip_names(df: pl.DataFrame) -> pl.DataFrame:
-    return df.rename({c: c.strip() for c in df.columns if c != c.strip()})
-
-
-def _read_csv(local: str, shown_as: str, opts: CsvOptions, separator: str) -> pl.DataFrame:
-    common = dict(separator=separator, encoding=opts.encoding)
-    if opts.has_header:
-        try:
-            head = pl.read_csv(local, has_header=False, n_rows=1, infer_schema_length=0, **common)
-        except pl.exceptions.NoDataError as e:
-            raise SftpError(f"{shown_as}: the file is empty") from e
-        except Exception as e:
-            raise SftpError(f"{shown_as}: unreadable CSV file ({e})") from e
-        if head.height == 0:
-            raise SftpError(f"{shown_as}: the file is empty")
-        check_header(list(head.row(0)), shown_as, "the first row", SftpError)
-    try:
-        df = pl.read_csv(
-            local, has_header=opts.has_header, infer_schema_length=opts.infer_schema_length,
-            null_values=opts.null_values, try_parse_dates=opts.try_parse_dates, **common,
-        )
-    except Exception as e:
-        raise SftpError(f"{shown_as}: unreadable CSV file ({e})") from e
-    return _strip_names(df)
-
-
-def _read_parquet(local: str, shown_as: str) -> pl.DataFrame:
-    import pyarrow.parquet as pq
-
-    try:
-        names = pq.read_schema(local).names
-    except Exception as e:
-        raise SftpError(f"{shown_as}: unreadable parquet file ({e})") from e
-    check_header(names, shown_as, "the schema", SftpError)
-    return pl.read_parquet(local)
-
-
-def _read_ndjson(local: str, shown_as: str, opts: CsvOptions) -> pl.DataFrame:
-    try:
-        df = pl.read_ndjson(local, infer_schema_length=opts.infer_schema_length or None)
-    except Exception as e:
-        raise SftpError(f"{shown_as}: unreadable NDJSON file ({e})") from e
-    check_header(df.columns, shown_as, "the keys", SftpError)
-    return df
+    return file_readers.format_of(path, chosen, SftpError)
 
 
 def read_file(local: str, shown_as: str, fmt: str, source: SftpSourceSpec) -> pl.DataFrame:
-    if fmt in ("csv", "tsv"):
-        return _read_csv(local, shown_as, source.csv, "\t" if fmt == "tsv" else source.csv.separator)
-    if fmt == "parquet":
-        return _read_parquet(local, shown_as)
-    if fmt == "excel":
-        return read_sheet(local, source.sheet.strip() or None, shown_as, SftpError)
-    if fmt == "ndjson":
-        return _read_ndjson(local, shown_as, source.csv)
-    raise SftpError(f"unsupported format '{fmt}'")  # pragma: no cover
+    return file_readers.read_file(local, shown_as, fmt, source.csv, source.sheet, SftpError)
+
+
+def _expansions(source: SftpSourceSpec, now: datetime | None, last_refresh: str | None) -> list[ft.Expansion]:
+    _no_dot_dot(source.folder, "folder")
+    _no_dot_dot(source.pattern, "file pattern")
+    exps = ft.expand({"folder": source.folder, "pattern": source.pattern}, source, SftpError, now, last_refresh)
+    for e in exps:  # a value cannot take the pattern out of its folder either
+        _no_dot_dot(e.values["folder"], "folder")
+        _no_dot_dot(e.values["pattern"], "file pattern")
+    return exps
+
+
+def validate_source(source: SftpSourceSpec, now: datetime | None = None, last_refresh: str | None = None) -> dict[str, Any]:
+    """Everything that can be said without the server: the placeholders, the
+    variables, the keys of the append, how many expansions; the first and last
+    one resolved."""
+    exps = _expansions(source, now, last_refresh)
+    return {"ok": True, "expansions": len(exps), "first": exps[0].values, "last": exps[-1].values}
+
+
+def _gather(client, source: SftpSourceSpec, now: datetime | None, last_refresh: str | None) -> tuple[ft.Gathered, list[ft.Expansion]]:
+    exps = _expansions(source, now, last_refresh)
+    dated_folder = has_placeholders(source.folder)
+    rel_to = None
+    if dated_folder:
+        # `_file` below the folder's fixed part: with `in/{day}` it keeps the day
+        home = client.normalize(".")
+        rel_to = posixpath.normpath(posixpath.join(home, ft.static_prefix(source.folder.strip().replace("\\", "/"))))
+
+    def find(e: ft.Expansion) -> list[RemoteFile]:
+        return find_files(client, e.values["folder"], e.values["pattern"], rel_to=rel_to, missing_ok=dated_folder)
+
+    g = ft.gather(exps, find, lambda f: f.path, lambda e: posixpath.join(e.values["folder"], e.values["pattern"]),
+                  get_settings().sftp.max_files, SftpError)
+    return g, exps
+
+
+def check_files(conn: SftpConnectionSpec, source: SftpSourceSpec, now: datetime | None = None,
+                last_refresh: str | None = None) -> ft.Gathered:
+    """«Check the files»: every file the expansions take, and the values without one."""
+    with open_sftp(conn) as client:
+        g, exps = _gather(client, source, now, last_refresh)
+        if len(exps) == 1 and not g.files:
+            resolve_folder(client, exps[0].values["folder"])  # a folder that is not there says so
+        return g
 
 
 def ingest_sftp_to_parquet(
@@ -559,15 +555,25 @@ def ingest_sftp_to_parquet(
     key: str,
     storage,
     progress: Callable[..., None] | None = None,
+    last_refresh: str | None = None,
+    previous: dict | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Reads every matching file, stacks them and writes the parquet. `progress`
-    as for SharePoint: «files» at each file, «saving» while the parquet goes up."""
+    """Reads every matching file (of every expansion of the folder and pattern),
+    stacks them and writes the parquet; in append mode merged with the previous
+    snapshot (`previous` = {bucket, key}). `last_refresh` = the start of the last
+    successful refresh (ISO, UTC). `progress` as for SharePoint: «files» at each
+    file, «saving» while the parquet goes up."""
     report = progress or (lambda *a, **k: None)
     cap = get_settings().sftp.max_file_bytes
     with open_sftp(conn) as client:
-        files = find_files(client, source.folder, source.pattern)
+        g, exps = _gather(client, source, now, last_refresh)
+        files = g.files
         if not files:
-            raise SftpError(f"No file matches '{source.pattern}' in '{resolve_folder(client, source.folder)}'")
+            if len(exps) > 1:
+                raise ft.nothing_found(SftpError, g, f"'{posixpath.join(source.folder, source.pattern)}'")
+            only = exps[0].values
+            raise SftpError(f"No file matches '{only['pattern']}' in '{resolve_folder(client, only['folder'])}'")
         # every size is checked BEFORE downloading anything: a refresh that would
         # fail on the tenth file should not have downloaded nine first
         formats = [_format_of(f.path, source.format) for f in files]
@@ -584,53 +590,31 @@ def ingest_sftp_to_parquet(
                 f"{f.path} is {f.size / 1024**2:.1f} MB, over the limit of {cap / 1024**2:.0f} MB per file "
                 "(SFTP__MAX_FILE_BYTES): narrow the pattern, or split the file at the source"
             )
+        fmt_of = {f.path: fmt for f, fmt in zip(files, formats)}
 
-        frames: list[pl.DataFrame] = []
-        columns_by_file: dict[str, list[str]] = {}
-        rows_read = 0
-        with tempfile.TemporaryDirectory(prefix="sftp_in_") as tmp:
-            for i, (f, fmt) in enumerate(zip(files, formats)):
-                report("files", file=i + 1, files=len(files), rows=rows_read)
-                local = os.path.join(tmp, f"{i}{posixpath.splitext(f.path)[1]}")
+        def fetch(f: RemoteFile, local: str) -> None:
+            def guard(done: int, _total: int) -> None:
+                if done > cap:  # the file grew after it was listed
+                    raise SftpError(f"{f.path} grew over the limit of {cap / 1024**2:.0f} MB per file while being read")
 
-                def guard(done: int, _total: int, path=f.path) -> None:
-                    if done > cap:  # the file grew after it was listed
-                        raise SftpError(f"{path} grew over the limit of {cap / 1024**2:.0f} MB per file while being read")
-
-                try:
-                    client.get(f.path, local, callback=guard)
-                except SftpError:
-                    raise
-                except OSError as e:
-                    raise _io_error(e, f"file '{f.path}'") from e
-                df = read_file(local, f.path, fmt, source)
-                os.remove(local)
-                columns_by_file[f.path] = df.columns
-                rows_read += df.height
-                if df.height == 0:
-                    # header only: typed all as text, it would drag every numeric
-                    # column of the other files to text in the relaxed union
-                    continue
-                modified = datetime.fromtimestamp(f.mtime, timezone.utc).replace(tzinfo=None) if f.mtime else None
-                frames.append(df.with_columns(
-                    # ALWAYS, one file or many: which file a number comes from, and
-                    # often the month or the branch live only in its name
-                    pl.lit(f.rel or f.path).alias(FILE_COLUMN),
-                    pl.lit(modified, dtype=pl.Datetime("us")).alias(MODIFIED_COLUMN),
-                ))
-            if not frames:
-                raise SftpError("All the matching files are empty (header only)")
             try:
-                table = pl.concat(frames, how="diagonal_relaxed")
-            except Exception as e:
-                raise SftpError(f"The files have columns with the same name but incompatible types: {e}") from e
-            prov = [FILE_COLUMN, MODIFIED_COLUMN]
-            table = table.select([c for c in table.columns if c not in prov] + prov)
-            every = set.intersection(*(set(c) for c in columns_by_file.values()))
-            drift = sorted({c for cols in columns_by_file.values() for c in cols} - every)
+                client.get(f.path, local, callback=guard)
+            except SftpError:
+                raise
+            except OSError as e:
+                raise _io_error(e, f"file '{f.path}'") from e
+
+        with tempfile.TemporaryDirectory(prefix="sftp_in_") as tmp:
+            table, drift = ft.stack_files(
+                files, fetch=fetch, read=lambda local, f: read_file(local, f.path, fmt_of[f.path], source),
+                meta=lambda f: (f.rel or f.path,
+                                datetime.fromtimestamp(f.mtime, timezone.utc).replace(tzinfo=None) if f.mtime else None),
+                params=g.params, key_of=lambda f: f.path, shown_as=lambda f: f.path, report=report, tmp=tmp,
+                error=SftpError,
+            )
             if drift:
                 logger.warning("sftp %s/%s: columns not in every file: %s", source.folder, source.pattern, drift)
-
+            table, replaced, repeated = ft.finish(table, source, storage, previous, tmp, SftpError, [FILE_COLUMN, MODIFIED_COLUMN])
             report("saving", rows=table.height)
             out = os.path.join(tmp, "out.parquet")
             table.write_parquet(out, compression="zstd", row_group_size=get_settings().ingest.parquet_row_group_rows)
@@ -644,6 +628,12 @@ def ingest_sftp_to_parquet(
         "columns": [{"name": n, "dtype": str(t)} for n, t in table.schema.items()],
         "files": [{"path": f.rel or f.path, "modified_at": f.modified_at, "size": f.size} for f in files],
         "schema_drift": drift,
+        "missing": ft.missing_report(g),
+        "missing_count": len(g.missing),
+        "expansions": g.expansions,
+        "mode": source.mode,
+        "rows_replaced": replaced,
+        "duplicate_keys": repeated,
     }
 
 
@@ -651,55 +641,112 @@ def ingest_sftp_to_parquet(
 OutputFormat = Literal["csv", "parquet", "xlsx"]
 _EXTENSION = {"csv": ".csv", "parquet": ".parquet", "xlsx": ".xlsx"}
 _DATA_EXTENSIONS = (".csv", ".tsv", ".txt", ".parquet", ".pq", ".xlsx", ".xlsm", ".xls", ".json", ".ndjson", ".jsonl")
-_PLACEHOLDER = re.compile(r"\{([^{}]*)\}")
 
 
 class SftpDestinationSpec(BaseModel):
-    folder: str = ""  # empty = the login directory; it must exist
-    file_name: str  # template: {date}, {datetime}, {run_id}, {flow}
+    folder: str = ""  # empty = the login directory; a template (see render_folder)
+    file_name: str  # template: the placeholders of app.core.placeholders for Outputs
     format: OutputFormat = "csv"
+    # the zone of the dates in the templates (UTC unless set)
+    timezone: str = Field(default="UTC", max_length=64)
     # filled in by the gateway: the run's number and the flow's name
     run_id: int | None = None
     flow: str = ""
 
 
-def render_file_name(template: str, fmt: str, now: datetime, run_id: int | None, flow: str) -> str:
-    """The final file name. Placeholders in UTC: {date} = 2026-10-17,
-    {datetime} = 2026-10-17_143005; {run_id} = the run's number; {flow} = the
-    flow's name made safe for a file name. The format's extension is added when
-    missing; a name ending in ANOTHER data format's extension is refused (a CSV
-    called report.parquet would break whoever reads it)."""
+def _output_context(now: datetime, tz: str, run_id: int | None, flow: str):
+    from app.core import placeholders as ph
+
+    try:
+        return ph.output_context(now, tz, run_id, flow)
+    except ph.PlaceholderError as e:
+        raise SftpError(str(e)) from e
+
+
+def render_file_name(template: str, fmt: str, now: datetime, run_id: int | None, flow: str, tz: str = "UTC") -> str:
+    """The final file name: the template with the Outputs' placeholders resolved
+    in the Output's zone (app.core.placeholders) — {date} = 2026-10-17,
+    {datetime} = 2026-10-17_143005, {run_id}, {flow} made safe for a file name,
+    {today:yyyyMMdd}, {yesterday}… A value cannot put a folder in the name. The
+    format's extension is added when missing; a name ending in ANOTHER data
+    format's extension is refused (a CSV called report.parquet would break
+    whoever reads it)."""
+    from app.core import placeholders as ph
+
     raw = (template or "").strip()
     if not raw:
         raise SftpError("the file name is empty")
-    if "/" in raw or "\\" in raw:
+    try:
+        text = [p for p in ph.parse(raw) if isinstance(p, str)]
+    except ph.PlaceholderError as e:
+        raise SftpError(str(e)) from e
+    if any("/" in t or "\\" in t for t in text):
         raise SftpError("the file name cannot contain a folder: put the folder in its own field")
-
-    def value(m: re.Match) -> str:
-        name = m.group(1)
-        if name == "date":
-            return now.strftime("%Y-%m-%d")
-        if name == "datetime":
-            return now.strftime("%Y-%m-%d_%H%M%S")
-        if name == "run_id":
-            if run_id is None:
-                raise SftpError("{run_id} is only known when the flow runs")
-            return str(run_id)
-        if name == "flow":
-            return re.sub(r"[^\w.-]+", "_", flow or "").strip("._") or "flow"
-        raise SftpError(f"unknown placeholder {{{name}}} in the file name: use {{date}}, {{datetime}}, {{run_id}} or {{flow}}")
-
-    name = _PLACEHOLDER.sub(value, raw)
+    templated = "{" in raw or "}" in raw
+    try:
+        name = ph.render_output(raw, _output_context(now, tz, run_id, flow), "file", "file name") if templated else raw
+    except ph.PlaceholderError as e:
+        raise SftpError(str(e)) from e
     if name in (".", "..") or not name.strip(". "):
         raise SftpError(f"invalid file name '{name}'")
     ext = _EXTENSION[fmt]
     lower = name.lower()
-    if lower.endswith(ext):
-        return name
-    other = next((e for e in _DATA_EXTENSIONS if lower.endswith(e)), None)
-    if other:
-        raise SftpError(f"the file name ends in {other} but the format is {fmt}: change one of the two")
-    return name + ext
+    if not lower.endswith(ext):
+        other = next((e for e in _DATA_EXTENSIONS if lower.endswith(e)), None)
+        if other:
+            raise SftpError(f"the file name ends in {other} but the format is {fmt}: change one of the two")
+        name += ext
+    if templated and len(name.encode()) > 255:  # a name written as it is goes as before
+        raise SftpError(f"the file name is longer than 255 bytes ({len(name.encode())}): shorten it")
+    return name
+
+
+def render_folder(template: str, now: datetime, run_id: int | None, flow: str, tz: str = "UTC") -> str:
+    """The destination folder: a template too (`/outbox/{today:yyyy}/{today:MM}`);
+    its values may add levels, never go up. Without braces it is used as written."""
+    from app.core import placeholders as ph
+
+    folder = (template or "").strip()
+    _no_dot_dot(folder, "folder")
+    if "{" not in folder and "}" not in folder:
+        return folder
+    try:
+        return ph.render_output(folder, _output_context(now, tz, run_id, flow), "path", "folder")
+    except ph.PlaceholderError as e:
+        raise SftpError(str(e)) from e
+
+
+def _ensure_folder(client, folder: str, fixed: str) -> str:
+    """The folder as an absolute path, the levels its placeholders add created when
+    missing (a dated folder exists only from its first day). `fixed`, the part
+    before the first placeholder, must exist: a typo there is an error."""
+    base = resolve_folder(client, fixed)
+    home = client.normalize(".")
+    path = posixpath.normpath(posixpath.join(home, folder.replace("\\", "/"))) if folder else home
+    if path != base and not path.startswith(base.rstrip("/") + "/"):
+        raise SftpError(f"the folder '{path}' is not below '{base}'")
+    current = base
+    for seg in [p for p in path[len(base):].split("/") if p]:
+        current = posixpath.join(current, seg)
+        try:
+            attr = client.stat(current)
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise _io_error(e, f"folder '{current}'") from e
+            try:
+                client.mkdir(current)
+            except OSError as e2:
+                # another run may have created it in the meantime: fine if it is a folder now
+                try:
+                    if stat.S_ISDIR(client.stat(current).st_mode or 0):
+                        continue
+                except OSError:
+                    pass
+                raise _io_error(e2, f"creating the folder '{current}'") from e2
+            continue
+        if not stat.S_ISDIR(attr.st_mode or 0):
+            raise SftpError(f"'{current}' is not a folder")
+    return path
 
 
 def _render_local(src: str, fmt: str, workdir: str) -> str:
@@ -758,8 +805,10 @@ def write_output_to_sftp(
         from app.utils import get_storage_service
 
         storage = get_storage_service()
-    name = render_file_name(dest.file_name, dest.format, now or datetime.now(timezone.utc), dest.run_id, dest.flow)
-    _no_dot_dot(dest.folder, "folder")
+    moment = now or datetime.now(timezone.utc)
+    name = render_file_name(dest.file_name, dest.format, moment, dest.run_id, dest.flow, dest.timezone)
+    folder_name = render_folder(dest.folder, moment, dest.run_id, dest.flow, dest.timezone)
+    dated = has_placeholders(dest.folder)
     workdir = tempfile.mkdtemp(prefix="sftp_out_")
     try:
         src = os.path.join(workdir, "in.parquet")
@@ -768,7 +817,10 @@ def write_output_to_sftp(
         local = _render_local(src, dest.format, workdir)
         size = os.path.getsize(local)
         with open_sftp(conn) as client:
-            folder = resolve_folder(client, dest.folder)
+            # a dated folder is created the first time; a fixed one must exist (a typo
+            # in it is an error, not a new folder)
+            folder = (_ensure_folder(client, folder_name, ft.static_prefix(dest.folder.strip())) if dated
+                      else resolve_folder(client, folder_name))
             final = posixpath.join(folder, name)
             # hidden, in the SAME folder (a rename across folders may not be atomic)
             tmp = posixpath.join(folder, f".{name}.{uuid4().hex[:12]}.tmp")
