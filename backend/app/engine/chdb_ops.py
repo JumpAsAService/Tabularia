@@ -86,7 +86,7 @@ _CH_CAST = {
     "float": "toFloat64OrNull(toString({c}))",
     "str": "CAST({c} AS Nullable(String))",
     "bool": "toUInt8OrNull(toString({c}))",
-    "date": "toDateOrNull(toString({c}))",
+    "date": "toDate32OrNull(toString({c}))",
     "datetime": "parseDateTimeBestEffortOrNull(toString({c}))",
 }
 
@@ -149,8 +149,8 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
         if is_text:
             # ClickHouse è permissivo ("2024-02-30" → 1° marzo): valido solo se
             # la data riletta coincide col testo, come Polars/DuckDB
-            return f"if(toString(toDateOrNull(trimBoth({c}))) = trimBoth({c}), toDateOrNull(trimBoth({c})), NULL)"
-        return f"toDateOrNull(toString({c}))"
+            return f"if(toString(toDate32OrNull(trimBoth({c}))) = trimBoth({c}), toDate32OrNull(trimBoth({c})), NULL)"
+        return f"toDate32OrNull(toString({c}))"
     if dt == "datetime":
         return f"parseDateTimeBestEffortOrNull(trimBoth(toString({c})))"
     if dt == "bool":

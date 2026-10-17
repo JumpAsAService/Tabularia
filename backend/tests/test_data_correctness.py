@@ -878,3 +878,22 @@ def test_run_output_matches_preview_and_keeps_types(storage, ordini, clienti, na
     assert sorted(got, key=_key) == sorted(prev, key=_key)
     by = {r["id"]: r for r in got}
     assert by[1]["big"] == BIG and by[1]["regione"] == "Lazio" and by[8]["regione"] is None and by[4]["note"] == "  spazi  "
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_join_left_missing_side_of_a_column_computed_on_the_right_is_null(storage, ordini, clienti, name):
+    # a column born on the right (a constant) is not Nullable on ClickHouse: without
+    # join_use_nulls the unmatched rows got '' instead of NULL
+    destra = {"source": clienti, "operations": [{"type": "compute", "params": {"columns": [{"name": "etichetta", "expr": "'fissa'"}]}}]}
+    res = run(name, storage, ordini, [{"type": "join", "params": {"right": destra, "how": "left", "on": ["cliente"]}}])
+    by = {r["id"]: r for r in _rows(res)}
+    assert by[1]["etichetta"] == "fissa"
+    assert by[4]["etichetta"] is None and by[6]["etichetta"] is None and by[8]["etichetta"] is None
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_cast_of_an_instant_before_1970_to_date_keeps_the_day(storage, name):
+    src = upload_df(storage, pl.DataFrame({"id": [1, 2], "istante": [dt.datetime(1965, 6, 1, 10, 30), dt.datetime(2024, 2, 29, 12)]}),
+                    "datasets/istanti_corr.parquet")
+    res = run(name, storage, src, [{"type": "cast", "params": {"columns": {"istante": "date"}}}])
+    assert [_norm(r["istante"]) for r in sorted(_rows(res), key=lambda r: r["id"])] == [_norm(D(1965, 6, 1)), _norm(D(2024, 2, 29))]

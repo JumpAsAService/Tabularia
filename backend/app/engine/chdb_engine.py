@@ -178,6 +178,9 @@ class ChdbEngine(DeferredStepCache, Engine):
             f"SET max_bytes_before_external_group_by = {_EXT_GROUP_BY}",
             f"SET max_bytes_before_external_sort = {_EXT_SORT}",
             "SET join_algorithm = 'grace_hash'",
+            # the missing side of an outer join is NULL, as in every engine (a column
+            # that is not Nullable, e.g. computed on the right, would otherwise be 0 / '')
+            "SET join_use_nulls = 1",
             f"SET max_bytes_in_join = {_MAX_BYTES_IN_JOIN}",
         ):
             sess.query(stmt)

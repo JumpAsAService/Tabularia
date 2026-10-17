@@ -226,7 +226,9 @@ class ClickHouseContext:
         # `query=5000ms` nei log non si sa se e' una scansione del parquet o
         # una lettura dalla copia: diagnosi opposte.
         self.fonte_radice = "?"
-        self.settings: dict[str, Any] = {}
+        # the missing side of an outer join is NULL, as in every engine (a column that is
+        # not Nullable, e.g. computed on the right, would otherwise be 0 / '')
+        self.settings: dict[str, Any] = {"join_use_nulls": 1}
         # etichetta del lavoro in corso (vedi query_tag.py): permette di uccidere
         # sul server le query di una preview interrotta
         _tag = current_query_tag()
