@@ -167,6 +167,78 @@ trial makes no retries and no wait.
 The call of a saved datasource cannot be edited yet: create a new datasource (and
 delete the old one) to change it.
 
+## Examples: three free APIs, field by field
+
+Three public APIs that need no key, each showing one part of the datasource. The field
+names are the ones the forms show.
+
+### ECB exchange rates (Frankfurter): moving dates, records keyed by date, append
+
+**Connection** (type HTTP API)
+
+| Field | Value |
+|---|---|
+| Base URL | `https://api.frankfurter.dev/v1` |
+| Authentication | None |
+| Default headers | — |
+| Test path | `/latest` |
+
+**Datasource «API call»**
+
+| Field | Value |
+|---|---|
+| Method | `GET` |
+| Path | `/{today-30}..` |
+| Query parameters | `base=EUR` and `symbols=USD,CHF`, one per line |
+| Time zone | `Europe/Rome` (it decides what «today» is) |
+| Format | JSON |
+| Records path | `rates` |
+| The records are an object keyed by row | **on**: one row per date, the date in `_key` |
+| Pagination | None: one request |
+| Each refresh | adds the new rows, replacing those with the same key |
+| Key columns | `_key` |
+
+«Try the call» shows `GET https://api.frankfurter.dev/v1/2026-09-17..?base=EUR&symbols=USD,CHF`,
+`HTTP 200` and rows with the columns `_key`, `CHF`, `USD`. The first refresh writes about
+22 rows (business days only); a second one replaces the same dates, so each date stays
+once.
+
+To ask only for what is new, write the path `/{last_refresh:yyyy-MM-dd}..` and set
+**Initial last refresh** to `today-30`: the first refresh reads 30 days, each later one
+starts where the previous successful refresh started.
+
+### JSONPlaceholder posts: pagination
+
+**Connection**: Base URL `https://jsonplaceholder.typicode.com`, Authentication None,
+Test path `/posts/1`.
+
+| Field | Value |
+|---|---|
+| Path | `/posts` |
+| Query parameters | `_limit=10` |
+| Records path | empty (the answer is already a list) |
+| The records are an object keyed by row | off |
+| Pagination | Page number, until an empty page — Page parameter `_page`, First page `1` |
+| Each refresh | rebuilds the whole table |
+
+100 rows (`userId`, `id`, `title`, `body`) in 10 pages, plus the empty one that ends
+it. The same API also sends a `Link` header when the first page is asked for
+explicitly: add `_page=1` to the query parameters and choose **Next link (Link header or
+the response)** with an empty *Next URL* — the same 100 rows in 10 requests, without the
+extra empty one.
+
+### JSONPlaceholder users: nested objects
+
+The same connection, Path `/users`, Pagination None: 10 rows, with the nested objects
+flattened into columns such as `address.city`, `address.geo.lat` and `company.name`.
+
+### A list variable
+
+To read one call per value, add a variable and use it in the call: with
+`symbol = USD, CHF, GBP` in **Variables** and the query parameter `symbols={symbol}`,
+Frankfurter is called three times and every row says which call it came from in
+`_param_symbol` (with the key columns `_key, _param_symbol` in append mode).
+
 ## Limits and manners
 
 Engine settings (backend and workers). A datasource can **lower** the pages, calls
