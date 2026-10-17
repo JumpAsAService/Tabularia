@@ -84,6 +84,40 @@ const currentKey = computed(() =>
     : null),
 )
 
+// HTTP API: host = the base URL; the secret of the chosen authentication goes in the
+// password field (API key, token, password or client secret); the user in `username`
+// (basic user, OAuth2 client id); the rest in `extra`. Default headers are edited as
+// text, one «Name: value» per line. The secret and the headers are sent only to the
+// base URL's host (the engine enforces it), so a new host needs the secret again.
+type ApiAuth = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2'
+const API_AUTHS: ApiAuth[] = ['none', 'api_key', 'bearer', 'basic', 'oauth2']
+const isApi = computed(() => dbType.value === 'api')
+const apiAuth = ref<ApiAuth>('api_key')
+const keyName = ref('')
+const keyIn = ref<'header' | 'query'>('header')
+const tokenUrl = ref('')
+const scope = ref('')
+const clientAuth = ref<'body' | 'basic'>('body')
+const apiHeaders = ref('')
+const testPath = ref('')
+const apiUsesUser = computed(() => apiAuth.value === 'basic' || apiAuth.value === 'oauth2')
+
+function headersToText(h: unknown): string {
+  if (!h || typeof h !== 'object' || Array.isArray(h)) return ''
+  return Object.entries(h as Record<string, string>).map(([k, v]) => `${k}: ${v}`).join('\n')
+}
+function textToHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const line of text.split('\n')) {
+    const i = line.indexOf(':')
+    if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1).trim()
+  }
+  return out
+}
+function originOf(url: string): string {
+  try { const u = new URL(url.trim()); return `${u.protocol}//${u.host}` } catch { return url.trim() }
+}
+
 watch(
   () => props.open,
   (open) => {
@@ -115,6 +149,14 @@ watch(
       ? opts.allowed_domains.join(', ')
       : (opts.allowed_domains ?? '')
     sftpAuth.value = opts.auth === 'key' ? 'key' : 'password'
+    apiAuth.value = c?.db_type === 'api' && API_AUTHS.includes(opts.auth) ? opts.auth : 'api_key'
+    keyName.value = opts.key_name ?? ''
+    keyIn.value = opts.key_in === 'query' ? 'query' : 'header'
+    tokenUrl.value = opts.token_url ?? ''
+    scope.value = opts.scope ?? ''
+    clientAuth.value = opts.client_auth === 'basic' ? 'basic' : 'body'
+    apiHeaders.value = headersToText(opts.headers)
+    testPath.value = opts.test_path ?? ''
     privateKey.value = '' // never shown, like the password
     passphrase.value = ''
     seenKey.value = null
@@ -139,10 +181,11 @@ function draft(): ConnectionDraft {
     description: description.value,
     db_type: dbType.value,
     host: host.value.trim(),
-    port: port.value.trim() ? Number(port.value) : null,
-    username: username.value,
-    // SFTP with the key method: the password field is hidden, nothing to send
-    password: isSftp.value && sftpAuth.value === 'key' ? '' : password.value,
+    port: port.value.trim() && !isApi.value ? Number(port.value) : null,
+    username: isApi.value && !apiUsesUser.value ? '' : username.value,
+    // SFTP with the key method, or an API without authentication: the password field
+    // is hidden, nothing to send
+    password: (isSftp.value && sftpAuth.value === 'key') || (isApi.value && apiAuth.value === 'none') ? '' : password.value,
     database: database.value.trim(),
     db_schema: dbSchema.value.trim(),
     ...(isSftp.value && sftpAuth.value === 'key' && privateKey.value.trim() ? { private_key: privateKey.value } : {}),
@@ -151,7 +194,17 @@ function draft(): ConnectionDraft {
     // inviato sempre: per gli altri tipi resta un oggetto vuoto, e ometterlo in
     // modifica vorrebbe dire «non toccarlo», che qui non è mai l'intenzione
     extra: JSON.stringify(
-      isSftp.value
+      isApi.value
+        ? {
+            auth: apiAuth.value,
+            ...(apiAuth.value === 'api_key' ? { key_name: keyName.value.trim(), key_in: keyIn.value } : {}),
+            ...(apiAuth.value === 'oauth2'
+              ? { token_url: tokenUrl.value.trim(), scope: scope.value.trim(), client_auth: clientAuth.value }
+              : {}),
+            headers: textToHeaders(apiHeaders.value),
+            test_path: testPath.value.trim(),
+          }
+        : isSftp.value
         ? { auth: sftpAuth.value }
         : isSmtp.value
         ? {
@@ -181,6 +234,18 @@ const sftpMoved = computed(() => {
 })
 const needsSecretAgain = computed(() => sftpMoved.value && !(sftpAuth.value === 'key' ? privateKey.value.trim() : password.value))
 
+// API: the stored secret does not follow the connection to another host (nor the
+// OAuth2 client secret to another token URL): the gateway refuses it too
+const apiMoved = computed(() => {
+  const c = props.existing
+  if (!isEdit.value || !isApi.value || !c || !c.has_password) return false
+  let before: Record<string, any> = {}
+  try { before = JSON.parse(c.extra || '{}') } catch { /* defaults */ }
+  return originOf(host.value) !== originOf(c.host) ||
+    (apiAuth.value === 'oauth2' && !!tokenUrl.value.trim() && tokenUrl.value.trim() !== (before.token_url ?? '').trim())
+})
+const apiNeedsSecretAgain = computed(() => apiMoved.value && !password.value)
+
 // per S3 l'endpoint può essere vuoto (= AWS): basta il nome. Per SMTP serve
 // anche il mittente: senza, la connessione si salva e poi ogni invio fallisce.
 const incomplete = computed(
@@ -195,7 +260,13 @@ const incomplete = computed(
     (isSftp.value && !username.value.trim()) ||
     (isSftp.value && sftpAuth.value === 'password' && !password.value && !(isEdit.value && props.existing?.has_password)) ||
     (isSftp.value && sftpAuth.value === 'key' && !privateKey.value.trim() && !(isEdit.value && props.existing?.has_private_key)) ||
-    needsSecretAgain.value,
+    needsSecretAgain.value ||
+    // API: what the chosen authentication needs, and its secret (stored, or typed now)
+    (isApi.value && apiAuth.value === 'api_key' && !keyName.value.trim()) ||
+    (isApi.value && apiUsesUser.value && !username.value.trim()) ||
+    (isApi.value && apiAuth.value === 'oauth2' && !tokenUrl.value.trim()) ||
+    (isApi.value && apiAuth.value !== 'none' && !password.value && !(isEdit.value && props.existing?.has_password)) ||
+    apiNeedsSecretAgain.value,
 )
 
 // cambiando tipo, i campi che l'altro tipo non mostra non devono viaggiare nel
@@ -206,7 +277,7 @@ const incomplete = computed(
 function changeType(nuovo: string) {
   const vecchio = dbType.value
   dbType.value = nuovo
-  if (nuovo !== vecchio && (['sharepoint', 'sftp'].includes(nuovo) || ['sharepoint', 'sftp'].includes(vecchio))) {
+  if (nuovo !== vecchio && (['sharepoint', 'sftp', 'api'].includes(nuovo) || ['sharepoint', 'sftp', 'api'].includes(vecchio))) {
     port.value = ''
     dbSchema.value = ''
     database.value = ''
@@ -341,24 +412,37 @@ function confirm() {
             <label>{{ $t('connectionDialog.nameLabel') }}</label>
             <input v-model="name" type="text" :placeholder="$t('connectionDialog.namePlaceholder')" />
           </div>
-          <div class="cd-field" :class="{ 'cd-wide': isS3 || isSp }">
+          <div class="cd-field" :class="{ 'cd-wide': isS3 || isSp || isApi }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
             <Select :model-value="dbType" :options="DB_TYPES" @update:model-value="changeType" />
           </div>
-          <div v-if="!isS3 && !isSp" class="cd-field">
+          <div v-if="!isS3 && !isSp && !isApi" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
           </div>
           <div class="cd-field cd-wide">
-            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
+            <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : isApi ? $t('apiSource.baseUrlLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
               type="text"
-              :placeholder="isSp ? 'https://azienda.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : isSftp ? 'sftp.example.com' : 'db.internal.example.com'"
+              :placeholder="isSp ? 'https://azienda.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : isSftp ? 'sftp.example.com' : isApi ? 'https://api.example.com/v1' : 'db.internal.example.com'"
             />
           </div>
-          <div class="cd-field">
-            <label>{{ isSp ? $t('sharepoint.clientIdLabel') : isS3 ? $t('connectionDialog.accessKeyLabel') : $t('connectionDialog.usernameLabel') }}</label>
+          <div v-if="isApi" class="cd-field">
+            <label>{{ $t('apiSource.authLabel') }}</label>
+            <Select
+              v-model="apiAuth"
+              :options="[
+                { value: 'none', label: $t('apiSource.authNone') },
+                { value: 'api_key', label: $t('apiSource.authApiKey') },
+                { value: 'bearer', label: $t('apiSource.authBearer') },
+                { value: 'basic', label: $t('apiSource.authBasic') },
+                { value: 'oauth2', label: $t('apiSource.authOauth2') },
+              ]"
+            />
+          </div>
+          <div v-if="!isApi || apiUsesUser" class="cd-field">
+            <label>{{ isSp ? $t('sharepoint.clientIdLabel') : isS3 ? $t('connectionDialog.accessKeyLabel') : isApi && apiAuth === 'oauth2' ? $t('apiSource.clientIdLabel') : $t('connectionDialog.usernameLabel') }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
           <div v-if="isSftp" class="cd-field">
@@ -371,9 +455,9 @@ function confirm() {
               ]"
             />
           </div>
-          <div v-if="!isSftp || sftpAuth === 'password'" class="cd-field">
+          <div v-if="(!isSftp || sftpAuth === 'password') && !(isApi && apiAuth === 'none')" class="cd-field">
             <label>
-              {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : $t('connectionDialog.passwordLabel') }}
+              {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : isApi ? $t(`apiSource.secret_${apiAuth}`) : $t('connectionDialog.passwordLabel') }}
               <span v-if="isEdit" class="cd-hint">{{ $t('connectionDialog.passwordHintUnchanged') }}</span>
             </label>
             <input v-model="password" type="password" autocomplete="new-password" />
@@ -404,6 +488,53 @@ function confirm() {
               <label>{{ $t('connectionDialog.allowedDomainsLabel') }} <span class="cd-hint">{{ $t('connectionDialog.allowedDomainsHint') }}</span></label>
               <input v-model="allowedDomains" type="text" placeholder="azienda.it, clienti.it" />
             </div>
+          </template>
+          <template v-else-if="isApi">
+            <template v-if="apiAuth === 'api_key'">
+              <div class="cd-field">
+                <label>{{ $t('apiSource.keyNameLabel') }}</label>
+                <input v-model="keyName" type="text" spellcheck="false" autocomplete="off" :placeholder="keyIn === 'query' ? 'apikey' : 'X-API-Key'" />
+              </div>
+              <div class="cd-field">
+                <label>{{ $t('apiSource.keyInLabel') }}</label>
+                <Select
+                  v-model="keyIn"
+                  :options="[
+                    { value: 'header', label: $t('apiSource.keyInHeader') },
+                    { value: 'query', label: $t('apiSource.keyInQuery') },
+                  ]"
+                />
+              </div>
+            </template>
+            <template v-if="apiAuth === 'oauth2'">
+              <div class="cd-field cd-wide">
+                <label>{{ $t('apiSource.tokenUrlLabel') }}</label>
+                <input v-model="tokenUrl" type="text" spellcheck="false" placeholder="https://login.example.com/oauth2/token" />
+              </div>
+              <div class="cd-field">
+                <label>{{ $t('apiSource.scopeLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
+                <input v-model="scope" type="text" spellcheck="false" />
+              </div>
+              <div class="cd-field">
+                <label>{{ $t('apiSource.clientAuthLabel') }}</label>
+                <Select
+                  v-model="clientAuth"
+                  :options="[
+                    { value: 'body', label: $t('apiSource.clientAuthBody') },
+                    { value: 'basic', label: $t('apiSource.clientAuthBasic') },
+                  ]"
+                />
+              </div>
+            </template>
+            <div class="cd-field cd-wide">
+              <label>{{ $t('apiSource.defaultHeadersLabel') }} <span class="cd-hint">{{ $t('apiSource.defaultHeadersHint') }}</span></label>
+              <textarea v-model="apiHeaders" rows="2" spellcheck="false" class="cd-key" placeholder="Accept: application/json" />
+            </div>
+            <div class="cd-field cd-wide">
+              <label>{{ $t('apiSource.testPathLabel') }} <span class="cd-hint">{{ $t('apiSource.testPathHint') }}</span></label>
+              <input v-model="testPath" type="text" spellcheck="false" placeholder="/status" />
+            </div>
+            <p v-if="apiNeedsSecretAgain" class="cd-hostkey none cd-wide">{{ $t('apiSource.retypeSecret') }}</p>
           </template>
           <template v-else-if="isSftp">
             <template v-if="sftpAuth === 'key'">
@@ -505,6 +636,9 @@ function confirm() {
           </template>
           <template v-else-if="isSftp">
             {{ $t('sftp.note') }}
+          </template>
+          <template v-else-if="isApi">
+            {{ $t('apiSource.note') }}
           </template>
           <template v-else>
             {{ $t('connectionDialog.noteDb') }}

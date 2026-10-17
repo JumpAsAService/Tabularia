@@ -5,6 +5,27 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **HTTP APIs as datasources.** A connection of type HTTP API (base URL, default
+  headers, and an API key in a header or in the query, a bearer token, basic, or
+  OAuth2 client credentials with the token kept until it expires and asked again once
+  on a 401; the secret encrypted like every other) reaches any REST/JSON API. The
+  datasource «API call» makes a GET or POST at each refresh, scheduled too, with
+  placeholders resolved in its own time zone — `{today-7d}`, `{today-1m}`, `{now-2h}`,
+  `{start_of_month}`, `{last_refresh}`, formats such as `{today:%Y%m%d}` and
+  `{now:epoch}` — and list variables that make one call per value, kept in
+  `_param_<name>`. The answer (JSON, NDJSON, CSV) becomes a table: a records path, an
+  optional JMESPath expression, nested objects as `a.b.c` columns, a list exploded into
+  rows, an object keyed by date as one row per key (`_key`); a column with mixed types
+  becomes text. Pagination by page, offset, cursor or next link; retries on 429 and
+  5xx honouring `Retry-After`; a minimum interval between requests; every limit fails
+  the refresh instead of cutting the data (`API__MAX_PAGES`, `API__MAX_CALLS`,
+  `API__MAX_ROWS`, `API__MAX_RESPONSE_BYTES`, `API__MAX_TOTAL_BYTES`…). Each refresh
+  rebuilds the table, or appends to it by key columns, replacing rows whose key comes
+  again. «Try the call» shows the resolved request, the answer and the first rows
+  before saving. Credentials and headers go only to the base URL's host — never to
+  another host a redirect or a next link points to — and the secret is masked in every
+  message, run and trial. In OpenLineage and in the dbt export (a seed). See
+  `docs/api-datasource.md`.
 - **SFTP connections: files in, files out.** A connection of type SFTP (host, port,
   user, password or private key, encrypted like every other secret) reaches any SSH
   server. The datasource «SFTP folder» reads every file of a folder that matches a

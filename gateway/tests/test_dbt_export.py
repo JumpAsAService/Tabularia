@@ -291,6 +291,21 @@ def test_an_sftp_folder_becomes_a_seed_and_an_sftp_output_a_table(session, scena
     assert m["materialized"] == "table" and m["name"] == "export" and "export_{date}" in m["description"]
 
 
+def test_an_api_datasource_becomes_a_seed(session, scena):
+    """An API has no database to read from in dbt: the snapshot is a seed, as for files."""
+    broker = Connection(name="broker", db_type="api", project_id=scena.cartella.id, owner_id=scena.capo.id,
+                        host="https://api.example.com/v1", database="", db_schema="")
+    session.add(broker); session.commit()
+    fx = make_datasource(session, name="cambi bce", project_id=scena.cartella.id, key="datasets/82/v1.parquet", kind="database",
+                         connection_id=broker.id, source_type="api", source_ref=json.dumps({"method": "GET", "path": "/rates"}),
+                         columns=json.dumps([{"name": "_key", "dtype": "String"}, {"name": "USD", "dtype": "Float64"}]))
+    definizione = {"nodes": [_nodo_src("s1", fx.id), {"id": "o", "type": "output", "data": {"name": "out"}}],
+                   "edges": [_edge("s1", "o")]}
+    flow = make_flow(session, name="Fx", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    p = d.build_export_payload(session, flow, "data-prep", "duckdb")
+    assert [s["name"] for s in p["seeds"]] == ["seed_cambi_bce"]
+
+
 def test_ogni_modello_porta_da_dove_viene(session, scena):
     """Tracciabilità: flusso, versione (e quando è stata salvata), cartella, autore,
     uscita e nodo; i tag per selezionarli in dbt (`tag:tabularia`). Chi esporta va nel

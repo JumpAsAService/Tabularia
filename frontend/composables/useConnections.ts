@@ -1,5 +1,6 @@
 // Connessioni a database esterni. Tutte le operazioni richiedono la capability
 // CONNECT sulla cartella della connessione; la password non esce mai dalle API.
+import type { ApiCallDraft } from '~/composables/useDatasources'
 import { pagedQuery, type Page } from '~/composables/useApi'
 
 export interface ConnectionInfo {
@@ -37,6 +38,24 @@ export interface HostKeyResult {
   changed?: boolean
   previous?: string
   accepted?: boolean
+}
+
+// what «Try the call» answers: the request as sent (secrets masked as ***), the
+// status, an excerpt of the raw answer and the first rows of the table it makes
+export interface ApiTryResult {
+  ok: boolean
+  calls: number
+  request: { method: string; url: string; headers: Record<string, string>; body: string }
+  status?: number
+  content_type?: string
+  bytes?: number
+  excerpt?: string
+  final_url?: string
+  error?: string
+  records?: number
+  columns?: string[]
+  rows?: Record<string, unknown>[]
+  next?: string | null
 }
 
 export interface KeyAcceptance {
@@ -86,6 +105,9 @@ export const DB_TYPES = [
   // files on an SSH server: host, port 22, user, password OR private key
   // (extra.auth); the server's host key is accepted by the first test
   { value: 'sftp', label: 'SFTP (files)' },
+  // an HTTP API: host = base URL, password = the secret of the auth, extra = {auth,
+  // key_name, key_in, token_url, scope, client_auth, headers, test_path}
+  { value: 'api', label: 'HTTP API (REST/JSON)' },
 ]
 
 export function useConnections() {
@@ -135,6 +157,10 @@ export function useConnections() {
       const { accept_host_key: _a, accept_host_key_type: _b, ...rest } = body
       return apiFetch<HostKeyResult>(`/projects/${projectId}/connections/test`, { method: 'POST', body: { ...rest, ...(key ?? {}) } })
     },
+
+    // «Try the call»: the first page of the first call, before saving
+    tryApi: (id: number, call: ApiCallDraft) =>
+      apiFetch<ApiTryResult>(`/connections/${id}/api/try`, { method: 'POST', body: call }),
 
     // the files a folder + glob takes on an SFTP connection
     sftpFiles: (id: number, folder: string, pattern: string) =>

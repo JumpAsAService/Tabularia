@@ -48,6 +48,13 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `SFTP__MAX_TOTAL_BYTES` (2 GB per refresh), `SFTP__TIMEOUT_SECONDS` (30) on the
    backend and the workers, whose image now carries paramiko. Workers reach the SFTP servers: open their egress to them — see
    [sftp.md](../sftp.md).
+   HTTP API datasources (no schema change: the connection uses the existing columns):
+   `API__TIMEOUT_SECONDS` (30), `API__MAX_PAGES` (1000), `API__MAX_CALLS` (500),
+   `API__MAX_ROWS` (2 000 000), `API__MAX_RESPONSE_BYTES` (100 MB),
+   `API__MAX_TOTAL_BYTES` (1 GB), `API__MAX_RETRIES` (4), `API__MAX_RETRY_WAIT_SECONDS`
+   (120), `API__MAX_REDIRECTS` (5), `API__MAX_REQUEST_SECONDS` (300), `API__MIN_INTERVAL_SECONDS` (0) on the backend and
+   the workers. Workers call the APIs: open their egress to them — see
+   [api-datasource.md](../api-datasource.md).
    Engine settings from the panel (revision 0004): `ENGINE__SETTINGS_PANEL` (default
    `true`; `false` keeps the environment the only source, see
    `docs/engine-settings.md`). Audit log to Splunk (revision 0005): no variable, off

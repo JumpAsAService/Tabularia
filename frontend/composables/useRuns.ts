@@ -11,6 +11,9 @@ export interface RunProgress {
   rows?: number | null
   file?: number | null
   files?: number | null
+  call?: number | null // API: call `call` of `calls`, `pages` so far
+  calls?: number | null
+  pages?: number | null
 }
 
 export interface RunInfo {

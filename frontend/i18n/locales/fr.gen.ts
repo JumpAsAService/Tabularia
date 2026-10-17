@@ -437,6 +437,7 @@ export default {
     "waiting": "la base de données prépare les données · {time}",
     "reading": "{n} lignes reçues · {time}",
     "files": "fichier {file} sur {files} · {time}",
+    "calls": "appel {call} sur {calls} · {pages} pages · {n} lignes · {time}",
     "saving": "enregistrement · {time}",
     "checking": "vérification du contrat · {time}"
   },

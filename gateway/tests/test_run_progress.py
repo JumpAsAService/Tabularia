@@ -58,4 +58,15 @@ async def test_la_cronologia_della_datasource_lo_restituisce(session, fake_engin
     make_run(session, kind="ingest", status="STARTED", task_id="t-ds", datasource_id=ds.id, engine_started_at=_fa(3))
     fake_engine.task_states["t-ds"] = {"status": "STARTED", "progress": {"phase": "files", "file": 2, "files": 5, "rows": 900}}
     [r] = await list_datasource_runs(ds.id, user=admin, session=session)
-    assert r.progress.model_dump(exclude={"seconds"}) == {"phase": "files", "rows": 900, "file": 2, "files": 5}
+    assert r.progress.model_dump(exclude={"seconds"}) == {"phase": "files", "rows": 900, "file": 2, "files": 5,
+                                                          "call": None, "calls": None, "pages": None}
+
+
+async def test_an_api_import_says_its_calls_and_pages(session, fake_engine):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    ds = make_datasource(session, name="fx", kind="database")
+    make_run(session, kind="ingest", status="STARTED", task_id="t-api", datasource_id=ds.id, engine_started_at=_fa(3))
+    fake_engine.task_states["t-api"] = {"status": "STARTED",
+                                        "progress": {"phase": "calls", "call": 2, "calls": 3, "pages": 7, "rows": 700}}
+    [r] = await list_datasource_runs(ds.id, user=admin, session=session)
+    assert r.progress.model_dump(exclude={"seconds", "file", "files"}) == {"phase": "calls", "rows": 700, "call": 2, "calls": 3, "pages": 7}

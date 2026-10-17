@@ -53,7 +53,7 @@ import { useRuns, type RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
 import { usePopover } from '~/composables/usePopover'
 import { useDialogA11y } from '~/composables/useDialogA11y'
-import { useDatasources, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { connectionChanges } from '~/composables/connectionChanges'
 import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
@@ -794,6 +794,23 @@ async function createSharePointDatasource(draft: SharePointDatasourceDraft) {
   }
 }
 
+async function createApiDatasource(draft: ApiDatasourceDraft) {
+  if (!currentId.value) return
+  dbDsBusy.value = true
+  dbDsError.value = ''
+  try {
+    const ds = await dsApi.createApi(currentId.value, draft)
+    toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
+    showDbDsDialog.value = false
+    dsList.value = await dsApi.listByProject(currentId.value)
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    dbDsError.value = errMessage(e)
+  } finally {
+    dbDsBusy.value = false
+  }
+}
+
 async function createSftpDatasource(draft: SftpDatasourceDraft) {
   if (!currentId.value) return
   dbDsBusy.value = true
@@ -1140,6 +1157,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       @confirm="createDbDatasource"
       @confirm-sharepoint="createSharePointDatasource"
       @confirm-sftp="createSftpDatasource"
+      @confirm-api="createApiDatasource"
       @cancel="showDbDsDialog = false"
     />
   </div>

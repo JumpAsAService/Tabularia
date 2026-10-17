@@ -556,8 +556,9 @@ class RunProgress(BaseModel):
     """A che punto è un run non ancora terminato, per chi lo guarda."""
     # queued (in coda) · running (in esecuzione, l'engine non dice di più) ·
     # waiting (il database non ha ancora mandato righe) · reading (righe in
-    # arrivo) · files (SharePoint, file `file` di `files`) · saving (il parquet
-    # va sullo storage) · checking (il data contract)
+    # arrivo) · files (SharePoint, file `file` di `files`) · calls (API: call `call`
+    # of `calls`, `pages` and `rows` so far) · saving (il parquet va sullo storage) ·
+    # checking (il data contract)
     phase: str
     # secondi dall'inizio dell'esecuzione (in coda: dal lancio), contati dal
     # gateway: l'orologio del browser può essere sbagliato
@@ -565,6 +566,9 @@ class RunProgress(BaseModel):
     rows: Optional[int] = None
     file: Optional[int] = None
     files: Optional[int] = None
+    call: Optional[int] = None
+    calls: Optional[int] = None
+    pages: Optional[int] = None
 
 
 class RunOut(BaseModel):
@@ -755,6 +759,71 @@ class SftpFilesQuery(BaseModel):
     @classmethod
     def _no_dot_dot(cls, v: str) -> str:
         return no_dot_dot(v)
+
+
+class ApiPair(BaseModel):
+    name: str = Field(max_length=200)
+    value: str = Field(default="", max_length=4000)
+
+
+class ApiVariable(BaseModel):
+    """`symbol = AAPL, MSFT`: one call per value (every combination of several lists)."""
+    name: str = Field(min_length=1, max_length=64)
+    values: list[str] = Field(min_length=1, max_length=1000)
+
+
+class ApiResponseSpec(BaseModel):
+    format: Literal["json", "ndjson", "csv"] = "json"
+    records_path: str = Field(default="", max_length=500)  # dot path to the records; empty = the root
+    jmespath: str = Field(default="", max_length=2000)  # applied first, for odd shapes
+    keyed: bool = False  # an object whose keys are rows: the key in `_key`
+    explode: str = Field(default="", max_length=500)  # a list field exploded into rows
+    csv_separator: str = Field(default=",", min_length=1, max_length=1)
+
+
+class ApiPagination(BaseModel):
+    type: Literal["none", "page", "offset", "cursor", "next_link"] = "none"
+    param: str = Field(default="", max_length=200)
+    start: Optional[int] = Field(default=None, ge=0)
+    limit_param: str = Field(default="", max_length=200)
+    limit: int = Field(default=100, ge=1, le=100_000)
+    cursor_path: str = Field(default="", max_length=500)
+    next_path: str = Field(default="", max_length=500)
+
+
+class ApiLimits(BaseModel):
+    """0 = the deployment's limit (API__… on the engine); a value can only lower it."""
+    max_pages: int = Field(default=0, ge=0, le=1_000_000)
+    max_calls: int = Field(default=0, ge=0, le=1_000_000)
+    max_rows: int = Field(default=0, ge=0, le=1_000_000_000)
+    min_interval_seconds: float = Field(default=0, ge=0, le=3600)
+
+
+class ApiCallSpec(BaseModel):
+    """The call of an «API call» datasource: what it asks, how the answer becomes
+    rows, how it pages, and how a refresh lands (snapshot or append with keys).
+    The shape is checked here; the placeholders, the variables, the JMESPath and
+    the rest by the engine (`validate`) before anything is saved."""
+    method: Literal["GET", "POST"] = "GET"
+    path: str = Field(default="", max_length=2000)  # relative to the connection's base URL
+    query: list[ApiPair] = Field(default_factory=list, max_length=100)
+    headers: list[ApiPair] = Field(default_factory=list, max_length=50)
+    body: str = Field(default="", max_length=100_000)  # JSON (POST)
+    variables: list[ApiVariable] = Field(default_factory=list, max_length=10)
+    timezone: str = Field(default="UTC", max_length=64)  # defines «today»
+    last_refresh_initial: str = Field(default="", max_length=100)  # {last_refresh} on the first refresh
+    response: ApiResponseSpec = Field(default_factory=ApiResponseSpec)
+    pagination: ApiPagination = Field(default_factory=ApiPagination)
+    limits: ApiLimits = Field(default_factory=ApiLimits)
+    mode: Literal["snapshot", "append"] = "snapshot"
+    keys: list[str] = Field(default_factory=list, max_length=20)  # append: the columns identifying a row
+
+
+class ApiDatasourceCreate(ApiCallSpec):
+    """Datasource from an HTTP API: the call is made at each refresh."""
+    name: str = Field(min_length=1, max_length=255)
+    description: str = ""
+    connection_id: int
 
 
 # ── Permissions ───────────────────────────────────────────────────────────────

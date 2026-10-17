@@ -500,6 +500,7 @@ export default {
     "waiting": "il database prepara i dati · {time}",
     "reading": "{n} righe ricevute · {time}",
     "files": "file {file} di {files} · {time}",
+    "calls": "chiamata {call} di {calls} · {pages} pagine · {n} righe · {time}",
     "saving": "salvataggio · {time}",
     "checking": "controllo del contratto · {time}"
   },

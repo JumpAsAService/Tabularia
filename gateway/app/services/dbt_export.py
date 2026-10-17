@@ -311,9 +311,9 @@ class _Progetto:
         if key in self.riferimenti:
             return self.riferimenti[key]
         ds = self.session.exec(select(Datasource).where(Datasource.key == key)).first()
-        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp"):
-            # files (Excel on SharePoint, a folder on an SFTP server): for dbt there is no
-            # database to read them from → seed
+        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp", "api"):
+            # files (Excel on SharePoint, a folder on an SFTP server) or an HTTP API: for
+            # dbt there is no database to read them from → seed
             rif = {"seed": self._seed(ds, key)}
         elif ds is not None and ds.kind == "database":
             conn = self.session.get(Connection, ds.connection_id) if ds.connection_id else None

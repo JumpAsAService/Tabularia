@@ -62,7 +62,7 @@ const describedCount = (d: DatasourceInfo) => Object.keys(d.column_descriptions 
 // refresh; typed by hand only while no import has succeeded yet.
 const keyDrafts = reactive<Record<number, string[]>>({})
 const keyText = reactive<Record<number, string>>({})
-const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && d.source_type !== 'sharepoint' && d.source_type !== 'sftp'
+const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && !['sharepoint', 'sftp', 'api'].includes(d.source_type ?? '')
 const draftKeys = (d: DatasourceInfo): string[] =>
   d.columns.length
     ? keyDrafts[d.id] ?? []
@@ -154,6 +154,9 @@ onUnmounted(() => { pollToken++ })
 // il source_ref di SharePoint e' JSON {path, sheet}, quello SFTP {folder, pattern, …}:
 // in tooltip si mostra leggibile
 function sourceLabel(d: DatasourceInfo): string {
+  if (d.source_type === 'api') {
+    try { const r = JSON.parse(d.source_ref ?? '{}'); return `${r.method ?? 'GET'} ${r.path ?? ''}${r.mode === 'append' ? ' · append' : ''}` } catch { return d.source_ref ?? '' }
+  }
   if (d.source_type === 'sftp') {
     try { const r = JSON.parse(d.source_ref ?? '{}'); return [r.folder, r.pattern].filter(Boolean).join('/') } catch { return d.source_ref ?? '' }
   }

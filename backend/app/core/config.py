@@ -345,6 +345,44 @@ class SftpSettings(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
 
 
+class ApiSettings(BaseModel):
+    """Caps and manners of the «API call» datasource (HTTP APIs read at each refresh).
+
+    A datasource can LOWER the per-call, per-refresh and row limits for itself, never
+    raise them above these. Going over a limit fails the refresh with a message that
+    names it: the data is never cut silently.
+
+    env: API__TIMEOUT_SECONDS, API__MAX_PAGES, API__MAX_CALLS, API__MAX_ROWS,
+    API__MAX_RESPONSE_BYTES, API__MAX_TOTAL_BYTES, API__MAX_RETRIES,
+    API__MAX_RETRY_WAIT_SECONDS, API__MAX_REDIRECTS, API__MAX_REQUEST_SECONDS, API__MIN_INTERVAL_SECONDS"""
+
+    # connection and read timeout of ONE request (the token request too)
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    # pages of ONE call (one combination of the variables): a pagination that never
+    # ends stops here
+    max_pages: int = Field(default=1000, ge=1)
+    # calls of one refresh: the combinations of the list variables
+    max_calls: int = Field(default=500, ge=1)
+    # rows received by one refresh (before an append merges them with the table)
+    max_rows: int = Field(default=2_000_000, ge=1)
+    # bytes of ONE response, decompressed: it is held in memory to be parsed
+    max_response_bytes: int = Field(default=100 * 1024**2, ge=1)
+    # bytes of all the responses of one refresh
+    max_total_bytes: int = Field(default=1024**3, ge=1)
+    # retries of a request that failed with 429, 500, 502, 503, 504 or a network error,
+    # with an exponential backoff (1, 2, 4, 8… s) or the server's Retry-After
+    max_retries: int = Field(default=4, ge=0)
+    # a Retry-After longer than this fails the refresh instead of holding a worker
+    max_retry_wait_seconds: float = Field(default=120.0, ge=0)
+    max_redirects: int = Field(default=5, ge=0)
+    # wall-clock time of ONE request, from sending it to the last byte of its answer:
+    # the timeout above bounds each wait on the network, this one the whole request
+    # (a server that drips its answer a byte at a time)
+    max_request_seconds: float = Field(default=300.0, gt=0)
+    # the minimum pause between two requests of one refresh; a datasource can ask for more
+    min_interval_seconds: float = Field(default=0.0, ge=0)
+
+
 class BigQuerySettings(BaseModel):
     """Engine `bigquery`: le trasformazioni girano su Google BigQuery, che legge i
     parquet DIRETTAMENTE dal bucket come tabelle esterne temporanee (gs://…) e
@@ -497,6 +535,7 @@ class Settings(BaseSettings):
     export: ExportSettings = Field(default_factory=ExportSettings)
     sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
     sftp: SftpSettings = Field(default_factory=SftpSettings)
+    api: ApiSettings = Field(default_factory=ApiSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

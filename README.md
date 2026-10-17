@@ -84,7 +84,11 @@ engines, from an in-process library to a serverless warehouse.
   them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too, uploaded or
   on an **SFTP server**: a folder and a glob become one table, refreshed on schedule,
   and a flow can drop its result there as a file — the server's host key checked at
-  every connection ([SFTP](docs/sftp.md)).
+  every connection ([SFTP](docs/sftp.md)). And any **HTTP API** (REST/JSON): a call
+  with dates that move by themselves (`{today-30}`, `{last_refresh}`), one call per
+  value of a list (`symbol = AAPL, MSFT`), every kind of pagination and OAuth2 too,
+  refreshed as a snapshot or appended by key — the credentials never leave the API's
+  host ([HTTP APIs](docs/api-datasource.md)).
 - **Ask your data.** An optional AI assistant answers questions in plain language over
   the datasources you are allowed to read: it finds the table, reads the curated field
   descriptions, writes and runs the query on your engine, and shows the result table the

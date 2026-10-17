@@ -11,6 +11,7 @@ from app.api.routes.files import router as files_router
 from app.api.routes.db import router as db_router
 from app.api.routes.sharepoint import router as sharepoint_router
 from app.api.routes.sftp import router as sftp_router
+from app.api.routes.http_api import router as http_api_router
 from app.api.routes.observability import router as observability_router
 from app.api.routes.dbt import router as dbt_router
 from app.api.routes.contracts import router as contracts_router
@@ -72,6 +73,7 @@ app.include_router(files_router)
 app.include_router(db_router)
 app.include_router(sharepoint_router)
 app.include_router(sftp_router)
+app.include_router(http_api_router)
 app.include_router(observability_router)
 app.include_router(dbt_router)
 app.include_router(contracts_router)

@@ -24,7 +24,7 @@ class Connection(SQLModel, table=True):
     project_id: int = Field(foreign_key="projects.id", index=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
 
-    db_type: str  # postgresql | mysql | mariadb | clickhouse | trino | oracle | sqlserver | s3 | smtp | sharepoint | sftp
+    db_type: str  # postgresql | mysql | mariadb | clickhouse | trino | oracle | sqlserver | s3 | smtp | sharepoint | sftp | api
     host: str
     port: Optional[int] = None  # None = porta di default del db_type
     username: str = ""

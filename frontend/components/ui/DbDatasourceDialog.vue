@@ -6,7 +6,8 @@ import { computed, ref, watch } from 'vue'
 import { Database, X, Table2, Code2, LoaderCircle, FileSpreadsheet, FolderSearch, FileText } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
-import type { DbDatasourceDraft, SharePointDatasourceDraft, SftpDatasourceDraft } from '~/composables/useDatasources'
+import { cleanApiCall, emptyApiCall, type ApiCallDraft, type ApiDatasourceDraft, type DbDatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import ApiCallForm from '~/components/ui/ApiCallForm.vue'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   (e: 'confirm', draft: DbDatasourceDraft): void
   (e: 'confirm-sharepoint', draft: SharePointDatasourceDraft): void
   (e: 'confirm-sftp', draft: SftpDatasourceDraft): void
+  (e: 'confirm-api', draft: ApiDatasourceDraft): void
   (e: 'cancel'): void
 }>()
 
@@ -78,7 +80,11 @@ watch(spPath, () => { spFiles.value = null; spError.value = '' })
 // The same machine-readable contract as SharePoint, plus the reading options of
 // the file sources (format, CSV separator, header, encoding; Excel sheet).
 const isSftp = computed(() => props.connections.find((c) => c.id === connectionId.value)?.db_type === 'sftp')
-const isFileSource = computed(() => isSp.value || isSftp.value)
+// HTTP API connection: the call is made at each refresh (ApiCallForm)
+const isApi = computed(() => props.connections.find((c) => c.id === connectionId.value)?.db_type === 'api')
+const apiCall = ref<ApiCallDraft>(emptyApiCall())
+// not a database: no table, no SQL, no sort keys
+const isFileSource = computed(() => isSp.value || isSftp.value || isApi.value)
 const ftFolder = ref('')
 const ftPattern = ref('')
 const ftFormat = ref<'auto' | 'csv' | 'parquet' | 'excel' | 'ndjson'>('auto')
@@ -147,6 +153,7 @@ watch(
     ftError.value = ''
     ftChecking.value = false
     ftSeq++
+    apiCall.value = emptyApiCall()
     tables.value = []
     tablesError.value = ''
     if (connectionId.value != null && !isFileSource.value) loadTables(connectionId.value)
@@ -182,7 +189,9 @@ const incomplete = () =>
     ? !spPath.value.trim() || !spSheet.value.trim()
     : isSftp.value
       ? !ftPattern.value.trim() || ftSeparator.value.length !== 1
-      : sourceType.value === 'table' ? !tableName.value.trim() : !sql.value.trim())
+      : isApi.value
+        ? apiCall.value.mode === 'append' && !apiCall.value.keys.length
+        : sourceType.value === 'table' ? !tableName.value.trim() : !sql.value.trim())
 
 function confirm() {
   if (incomplete()) return
@@ -193,6 +202,15 @@ function confirm() {
       connection_id: connectionId.value!,
       path: spPath.value.trim(),
       sheet: spSheet.value.trim(),
+    })
+    return
+  }
+  if (isApi.value) {
+    emit('confirm-api', {
+      ...cleanApiCall(apiCall.value),
+      name: name.value.trim(),
+      description: description.value,
+      connection_id: connectionId.value!,
     })
     return
   }
@@ -227,6 +245,7 @@ function confirm() {
         ref="card"
         v-label-fields
         class="dd-card"
+        :class="{ wide: isApi }"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dd-title"
@@ -331,6 +350,8 @@ function confirm() {
           <p class="muted dd-hint">{{ $t('sftp.machineReadable') }}</p>
         </template>
 
+        <ApiCallForm v-if="isApi" v-model="apiCall" :connection-id="connectionId" />
+
         <div v-if="!isFileSource" class="dd-mode">
           <button :class="{ on: sourceType === 'table' }" @click="sourceType = 'table'">
             <Table2 :size="13" /> {{ $t('dbDatasourceDialog.modeTable') }}
@@ -432,6 +453,7 @@ function confirm() {
   flex-direction: column;
   gap: 7px;
 }
+.dd-card.wide { width: min(680px, calc(100vw - 32px)); }
 .dd-head { display: flex; align-items: center; justify-content: space-between; }
 .dd-head h3 { margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 16px; }
 .dd-x { padding: 3px 7px; }

@@ -609,6 +609,25 @@ async def launch_ingest_run(
                 **contratto,
             },
         )
+    elif conn.db_type == "api":
+        # same road again: `source_ref` is the call as JSON. {last_refresh} is the start
+        # of the last successful refresh; in append mode the new rows are merged into
+        # the current snapshot, which the engine reads
+        ref = json.loads(ds.source_ref or "{}")
+        last = _last_successful_refresh(session, ds.id)
+        resp = await client.post(
+            "/http-api/ingest",
+            timeout=CONTROLLO,
+            json={
+                "connection": engine_connection_payload(conn),
+                "source": ref,
+                "bucket": bucket,
+                "output_key": output_key,
+                **({"last_refresh": last} if last else {}),
+                **({"previous": {"bucket": ds.bucket, "key": ds.key}} if ref.get("mode") == "append" and ds.key else {}),
+                **contratto,
+            },
+        )
     elif conn.db_type == "sftp":
         # same road again: `source_ref` is the JSON {folder, pattern, format, sheet, csv}
         ref = json.loads(ds.source_ref or "{}")
@@ -680,7 +699,8 @@ _OOM_MESSAGE = (
 # Messaggi già tradotti dal backend col testo del SERVER del database
 # (backend/app/ingest/db_errors.py, MESSAGE_PREFIXES): un «out of memory» lì è
 # del database, non del worker, e non va sostituito col messaggio da OOM.
-_DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:", "SFTP:")
+_DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:", "SFTP:",
+                        "API:")
 
 
 def _sftp_written(summary: str | None, outcome) -> str | None:
@@ -726,7 +746,7 @@ def run_out(session: Session, run: Run) -> RunOut:
         fase: dict = {"phase": "queued", "seconds": int(_age_seconds(run.started_at))}
     else:
         dall_engine = session.info.get(_AVANZAMENTO, {}).get(run.id) or {}
-        fase = {k: dall_engine[k] for k in ("phase", "rows", "file", "files") if k in dall_engine}
+        fase = {k: dall_engine[k] for k in ("phase", "rows", "file", "files", "call", "calls", "pages") if k in dall_engine}
         fase.setdefault("phase", "running")
         fase["seconds"] = int(_age_seconds(run.engine_started_at or run.started_at))
     try:
@@ -1055,6 +1075,23 @@ async def _reconcile(session: Session, run: Run) -> Run:
         SIDE_EFFECT_ATTEMPTS,
     )
     return run
+
+
+def _last_successful_refresh(session: Session, ds_id: int) -> str | None:
+    """When the last successful refresh of a datasource STARTED (ISO, UTC): the
+    value of {last_refresh} in an API call. The start, not the end: what changed
+    while it ran is asked again next time rather than lost."""
+    started = session.exec(
+        select(Run.started_at)
+        .where(Run.datasource_id == ds_id, Run.kind == "ingest", Run.status == "SUCCESS")
+        .order_by(Run.started_at.desc())
+        .limit(1)
+    ).first()
+    if started is None:
+        return None
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)  # stored naive, UTC by construction
+    return started.astimezone(timezone.utc).isoformat()
 
 
 PLACEHOLDER_TASK = "pending-"

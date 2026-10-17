@@ -38,6 +38,11 @@ dependencies = [
     # SFTP connections (datasource «SFTP folder» and the SFTP Output): pure Python
     # SSH (LGPL-2.1), with bcrypt and PyNaCl for OpenSSH and ed25519 keys
     "paramiko>=5.0",
+    # «API call» datasource: HTTP with redirects followed by hand (credentials never to
+    # another host), and JMESPath for odd response shapes. Both were already in the
+    # image through boto3 and the Google client; named here because the code uses them.
+    "requests>=2.32",
+    "jmespath>=1.0",
 ]
 
 [dependency-groups]

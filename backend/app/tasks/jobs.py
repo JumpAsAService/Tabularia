@@ -460,6 +460,38 @@ def ingest_sftp_task(
     return result
 
 
+@celery_app.task(name="app.tasks.jobs.ingest_api_task")
+def ingest_api_task(
+    connection: dict[str, Any],
+    source: dict[str, Any],
+    bucket: str,
+    output_key: str,
+    last_refresh: str | None = None,
+    previous: dict[str, Any] | None = None,
+    contract: dict[str, Any] | None = None,
+) -> dict:
+    """Calls an HTTP API (every combination of the variables, every page) and
+    writes the parquet — in append mode merged with the previous snapshot: the
+    same shape as the other ingests, so the gateway treats it the same way (run,
+    snapshot swap, refresh). The secret arrives encrypted."""
+    from app.ingest.http_api import ApiConnectionSpec, ApiSourceSpec, ingest_api_to_parquet
+
+    conn = ApiConnectionSpec(**connection)
+    src = ApiSourceSpec(**source)
+    logger.info(f"🚀 Starting ingest_api_task: {src.method} {conn.base_url} {src.path} ({src.mode}) → {output_key}")
+    avanza = _Avanzamento()
+    result = ingest_api_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
+                                   progress=avanza, last_refresh=last_refresh, previous=previous)
+    logger.info(f"✅ Completed ingest_api_task: {output_key} ({result['rows_written']} rows, {result['calls']} calls, "
+                f"{result['pages']} pages)")
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        avanza("checking", rows=result["rows_written"])
+        result["contract"] = check_before_publish(bucket, output_key, contract)
+    return result
+
+
 @celery_app.task(name="app.tasks.jobs.ingest_database_task")
 def ingest_database_task(
     connection: dict[str, Any],

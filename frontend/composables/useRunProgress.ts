@@ -24,6 +24,7 @@ export function progressText(t: Translate, locale: string, p: RunProgress | null
     case 'waiting': return t('runProgress.waiting', { time })
     case 'reading': return t('runProgress.reading', { n: n(p.rows), time })
     case 'files': return t('runProgress.files', { file: p.file ?? 0, files: p.files ?? 0, time })
+    case 'calls': return t('runProgress.calls', { call: p.call ?? 0, calls: p.calls ?? 0, pages: n(p.pages), n: n(p.rows), time })
     case 'saving': return t('runProgress.saving', { time })
     case 'checking': return t('runProgress.checking', { time })
     default: return t('runProgress.running', { time })

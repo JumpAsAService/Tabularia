@@ -296,6 +296,22 @@ def test_an_sftp_refresh_reads_files_of_the_server_and_an_sftp_output_writes_one
     assert [(d.namespace, d.name) for d in ol.flow_outputs(session, flow)] == [("sftp://sftp.example.com:2222", "/out/v_{date}")]
 
 
+def test_an_api_refresh_reads_the_api_path_without_query_nor_secrets(session, scena):
+    api = Connection(name="broker", db_type="api", project_id=scena.cartella.id, owner_id=scena.capo.id,
+                     host="https://api.frankfurter.dev/v1", password_encrypted="enc",
+                     extra=json.dumps({"auth": "api_key", "key_name": "apikey", "key_in": "query"}))
+    session.add(api)
+    session.commit()
+    ref = {"method": "GET", "path": "/{today-30}..", "query": [{"name": "base", "value": "EUR"}]}
+    ds = make_datasource(session, name="fx", project_id=scena.cartella.id, key="datasets/20/v1.parquet", rows=10, kind="database",
+                         connection_id=api.id, source_type="api", source_ref=json.dumps(ref))
+    run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t20", rows_written=10)
+    _, fine = ol.to_json(ol.run_events(session, run))
+    (i,) = fine["inputs"]
+    assert (i["namespace"], i["name"]) == ("https://api.frankfurter.dev", "/v1/{today-30}..")
+    assert "apikey" not in json.dumps(fine) and "EUR" not in json.dumps(fine["inputs"])
+
+
 def test_output_su_s3_copia_specchio_ed_email(session, scena):
     s3 = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t8", rows_written=5,
                   destination=json.dumps({"type": "s3", "connection_id": 77, "db_type": "s3", "endpoint": "https://storage.googleapis.com", "bucket": "lake", "key": "exports/margini.parquet", "format": "parquet"}))

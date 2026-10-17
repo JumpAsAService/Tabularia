@@ -97,6 +97,13 @@ class FakeEngine:
             "files": (200, {"files": [], "total": 0}),
         }
         self.transform_status = 200  # a different answer to test an engine that refuses the run
+        # HTTP API connections: bodies received on POST /http-api/inspect, and the answer per action
+        self.api_inspects: list[dict] = []
+        self.api_responses: dict[str, tuple[int, dict]] = {
+            "test": (200, {"ok": True, "status": 200, "url": "https://api.example.com/v1"}),
+            "validate": (200, {"ok": True, "calls": 1, "request": {}}),
+            "try": (200, {"ok": True, "status": 200, "columns": ["id"], "rows": [{"id": 1}], "records": 1}),
+        }
         self.dbt_exports: list[dict] = []  # corpi ricevuti su POST /dbt/export
         self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
         self.dbt_export_script: list[tuple[int, dict] | None] = []  # risposte in fila, una per chiamata (None = lo zip)
@@ -151,7 +158,12 @@ class FakeEngine:
                     "changed": bool(pinned) and pinned != offered, "previous": pinned, **({"home": "/home/tab"} if ok else {})})
             status, payload = self.sftp_responses[action]
             return httpx.Response(status, json=payload)
-        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest") and request.method == "POST":
+        if path == "/http-api/inspect" and request.method == "POST":
+            body = _json_body(request)
+            self.api_inspects.append(body)
+            status, payload = self.api_responses[body.get("action", "test")]
+            return httpx.Response(status, json=payload)
+        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest", "/http-api/ingest") and request.method == "POST":
             import json as _json
 
             self.ingests.append((path, _json.loads(request.content or b"{}")))

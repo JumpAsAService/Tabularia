@@ -24,7 +24,7 @@ export interface DatasourceInfo {
   kind: string
   flow_id: number | null
   connection_id: number | null
-  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | null
+  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | 'api' | null
   source_ref: string | null
   refreshed_at: string | null
   refreshing?: boolean // un ingest è in corso ORA (lo dice il server)
@@ -56,6 +56,79 @@ export interface SftpDatasourceDraft {
   csv: { separator: string; has_header: boolean; encoding: 'utf8' | 'utf8-lossy' | 'windows-1252' }
 }
 
+// the call of an «API call» datasource (see gateway ApiCallSpec): placeholders such
+// as {today-7d} in path, query, headers and body; list variables make one call per value
+export interface ApiPair { name: string; value: string }
+export interface ApiCallDraft {
+  method: 'GET' | 'POST'
+  path: string
+  query: ApiPair[]
+  headers: ApiPair[]
+  body: string
+  variables: { name: string; values: string[] }[]
+  timezone: string
+  last_refresh_initial: string
+  response: {
+    format: 'json' | 'ndjson' | 'csv'
+    records_path: string
+    jmespath: string
+    keyed: boolean
+    explode: string
+    csv_separator: string
+  }
+  pagination: {
+    type: 'none' | 'page' | 'offset' | 'cursor' | 'next_link'
+    param: string
+    start: number | null
+    limit_param: string
+    limit: number
+    cursor_path: string
+    next_path: string
+  }
+  limits: { max_pages: number; max_calls: number; max_rows: number; min_interval_seconds: number }
+  mode: 'snapshot' | 'append'
+  keys: string[]
+}
+export interface ApiDatasourceDraft extends ApiCallDraft {
+  name: string
+  description?: string
+  connection_id: number
+}
+
+export function emptyApiCall(): ApiCallDraft {
+  return {
+    method: 'GET', path: '', query: [], headers: [], body: '', variables: [], timezone: 'UTC', last_refresh_initial: '',
+    response: { format: 'json', records_path: '', jmespath: '', keyed: false, explode: '', csv_separator: ',' },
+    pagination: { type: 'none', param: '', start: null, limit_param: '', limit: 100, cursor_path: '', next_path: '' },
+    limits: { max_pages: 0, max_calls: 0, max_rows: 0, min_interval_seconds: 0 },
+    mode: 'snapshot', keys: [],
+  }
+}
+
+// numbers typed in the form may be empty strings: the server wants numbers or null
+export function cleanApiCall(c: ApiCallDraft): ApiCallDraft {
+  const num = (v: unknown, empty: number | null) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? empty : Number(v))
+  return {
+    ...c,
+    path: c.path.trim(),
+    timezone: c.timezone.trim() || 'UTC',
+    last_refresh_initial: c.last_refresh_initial.trim(),
+    body: c.method === 'POST' ? c.body : '',
+    query: c.query.filter((p) => p.name),
+    headers: c.headers.filter((p) => p.name),
+    variables: c.variables.filter((v) => v.name),
+    response: { ...c.response, records_path: c.response.records_path.trim(), jmespath: c.response.jmespath.trim(), explode: c.response.explode.trim() },
+    pagination: { ...c.pagination, start: num(c.pagination.start, null), limit: num(c.pagination.limit, 100) ?? 100 },
+    limits: {
+      max_pages: num(c.limits.max_pages, 0) ?? 0,
+      max_calls: num(c.limits.max_calls, 0) ?? 0,
+      max_rows: num(c.limits.max_rows, 0) ?? 0,
+      min_interval_seconds: num(c.limits.min_interval_seconds, 0) ?? 0,
+    },
+    keys: c.mode === 'append' ? c.keys : [],
+  }
+}
+
 export interface SharePointDatasourceDraft {
   name: string
   description?: string
@@ -82,6 +155,9 @@ export function useDatasources() {
     // datasource da Excel su SharePoint: più file del glob = una tabella sola
     createSharePoint: (projectId: number, body: SharePointDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sharepoint`, { method: 'POST', body }),
+    // datasource from an HTTP API: the call is made at each refresh
+    createApi: (projectId: number, body: ApiDatasourceDraft) =>
+      apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/api`, { method: 'POST', body }),
     // datasource from an SFTP folder: the matching files stacked into one table
     createSftp: (projectId: number, body: SftpDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sftp`, { method: 'POST', body }),

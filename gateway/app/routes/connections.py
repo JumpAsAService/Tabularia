@@ -20,9 +20,18 @@ key with its passphrase (`private_key_encrypted`), chosen by `extra.auth`. The
 server's host key is accepted by trust on first use: ONLY a test the engine made
 writes it (`test_connection`), with an audit line, and a change of host or port
 forgets it. Any host is allowed, as for databases: CONNECT is the barrier.
+
+HTTP API (db_type="api"): `host` = the base URL, `username` = the basic user or the
+OAuth2 client id, the encrypted secret = the API key / token / password / client
+secret, `extra` = {auth, key_name, key_in, token_url, scope, client_auth, headers,
+test_path}. A new host (or OAuth2 token URL) needs the secret typed again: it must
+not follow the connection to another server. Any address is allowed: CONNECT is
+the barrier, as for databases and SFTP.
 """
 import logging
+import re
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
@@ -38,7 +47,9 @@ from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Flow, Project, User
 from app.services import audit
 from app.models.permission import Capability
-from app.schemas.models import ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, SftpFilesQuery
+from app.schemas.models import (
+    ApiCallSpec, ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, SftpFilesQuery,
+)
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
@@ -48,9 +59,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(route_class=RottaCheRilascia, tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp", "api"}
 # connection types that are not databases: no table to read, none to write
-NOT_DATABASES = ("smtp", "sharepoint", "sftp")
+NOT_DATABASES = ("smtp", "sharepoint", "sftp", "api")
 # SQL Server: come trattare il TLS (`extra.tls`); vuoto = verify
 _TLS_SQLSERVER = ("verify", "trust", "none")
 
@@ -100,6 +111,10 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
             raise HTTPException(status_code=422, detail="SMTP options: " + "; ".join(errors))
     if db_type == "sftp" and data.get("auth") not in (None, "", *SFTP_AUTH):
         raise HTTPException(status_code=422, detail="SFTP: auth must be password or key")
+    if db_type == "api":
+        error = _api_option_error(data)
+        if error:
+            raise HTTPException(status_code=422, detail=f"API: {error}")
     return grezzo
 
 
@@ -199,6 +214,8 @@ def engine_connection_payload(conn: Connection) -> dict:
                              conn.extra, conn.host_key_type, conn.host_key_fingerprint)
     if conn.db_type == "s3":
         return _s3_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.db_schema)
+    if conn.db_type == "api":
+        return _api_payload(conn.host, conn.username, conn.password_encrypted, conn.extra)
     return {
         "db_type": conn.db_type,
         "host": conn.host,
@@ -238,6 +255,114 @@ def _check_sharepoint(host: str, username: str, database: str) -> None:
         raise HTTPException(status_code=422, detail="Invalid SharePoint site URL: expected https://<company>.sharepoint.com/sites/<name>")
     if not (username or "").strip() or not (database or "").strip():
         raise HTTPException(status_code=422, detail="The tenant id and the client id of the app registered in Entra ID are required")
+
+
+# ── HTTP API ───────────────────────────────────────────────────────────────────
+API_AUTH = ("none", "api_key", "bearer", "basic", "oauth2")
+_HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+
+
+def api_options(extra: str | None) -> dict:
+    """The options of an API connection (`extra`), tolerant of a broken JSON."""
+    import json as _json
+
+    try:
+        data = _json.loads(extra or "{}")
+    except _json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _url_error(url: str, what: str) -> str | None:
+    p = urlsplit((url or "").strip())
+    if p.scheme not in ("http", "https") or not p.hostname:
+        return f"invalid {what} '{url}': expected http(s)://host[:port][/path]"
+    if p.username or p.password:
+        return f"the {what} cannot hold a user or a password: use the authentication"
+    if p.query or p.fragment:
+        return (f"the {what} cannot hold a query (?…) or a fragment (#…): put the parameters in the datasource "
+                "and the key in the authentication")
+    return None
+
+
+def _api_option_error(data: dict) -> str | None:
+    """What is wrong with the options of an API connection (None = nothing)."""
+    auth = data.get("auth") or "none"
+    if auth not in API_AUTH:
+        return "auth must be none, api_key, bearer, basic or oauth2"
+    if auth == "api_key":
+        name = str(data.get("key_name") or "").strip()
+        if not name:
+            return "the API key needs the name of its header or query parameter"
+        if data.get("key_in", "header") not in ("header", "query"):
+            return "the API key goes in a header or query parameter"
+        if data.get("key_in", "header") == "header" and not _HEADER_NAME.match(name):
+            return f"invalid name for the API key header '{name}'"
+    if auth == "oauth2":
+        if not str(data.get("token_url") or "").strip():
+            return "OAuth2 needs the token URL"
+        error = _url_error(str(data["token_url"]), "token URL")
+        if error:
+            return error
+        if data.get("client_auth", "body") not in ("body", "basic"):
+            return "the OAuth2 client authentication is body or basic"
+    headers = data.get("headers") or {}
+    if not isinstance(headers, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
+        return "the default headers must be an object of names and values (text)"
+    for k, v in headers.items():
+        if not _HEADER_NAME.match(k.strip() or "-"):
+            return f"invalid header name '{k}'"
+        if "\r" in v or "\n" in v:
+            return f"the header '{k}' cannot hold a line break"
+    test_path = str(data.get("test_path") or "")
+    if "://" in test_path or test_path.startswith("//"):
+        return "the test path must be relative to the base URL (e.g. /status)"
+    return None
+
+
+def _check_api(host: str, username: str, extra: str | None, has_secret: bool) -> None:
+    error = _url_error(host, "base URL")
+    opts = api_options(extra)
+    auth = opts.get("auth") or "none"
+    if error is None:
+        error = _api_option_error(opts)
+    if error is None and auth in ("basic", "oauth2") and not (username or "").strip():
+        error = "OAuth2 needs the client id" if auth == "oauth2" else "basic authentication needs the user"
+    if error is None and auth != "none" and not has_secret:
+        error = "enter the secret of the authentication (the API key, the token, the password or the client secret)"
+    if error:
+        raise HTTPException(status_code=422, detail=f"API: {error}")
+
+
+def _api_origin(url: str) -> tuple[str, str, int | None]:
+    p = urlsplit((url or "").strip())
+    try:
+        port = p.port
+    except ValueError:
+        port = None
+    scheme = (p.scheme or "").lower()
+    return scheme, (p.hostname or "").lower(), port or (443 if scheme == "https" else 80)
+
+
+def _api_payload(host: str, username: str, secret_encrypted: str, extra: str | None) -> dict:
+    """Only what the chosen authentication uses travels; the secret still encrypted."""
+    opts = api_options(extra)
+    auth = opts.get("auth") if opts.get("auth") in API_AUTH else "none"
+    headers = opts.get("headers") if isinstance(opts.get("headers"), dict) else {}
+    return {
+        "db_type": "api",
+        "base_url": (host or "").strip(),
+        "auth": auth,
+        "username": (username or "").strip() if auth in ("basic", "oauth2") else "",
+        "secret_encrypted": secret_encrypted if auth != "none" else "",
+        "key_name": str(opts.get("key_name") or "").strip(),
+        "key_in": opts.get("key_in") if opts.get("key_in") in ("header", "query") else "header",
+        "token_url": str(opts.get("token_url") or "").strip(),
+        "scope": str(opts.get("scope") or "").strip(),
+        "client_auth": opts.get("client_auth") if opts.get("client_auth") in ("body", "basic") else "body",
+        "headers": {str(k).strip(): str(v) for k, v in headers.items()},
+        "test_path": str(opts.get("test_path") or "").strip(),
+    }
 
 
 SFTP_AUTH = ("password", "key")
@@ -360,6 +485,8 @@ async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: st
         resp = await client.post("/sharepoint/inspect", json={"connection": payload, "action": action, "path": path})
     elif payload.get("db_type") == "sftp":
         resp = await client.post("/sftp/inspect", json={"connection": payload, "action": action, **extra})
+    elif payload.get("db_type") == "api":
+        resp = await client.post("/http-api/inspect", json={"connection": payload, "action": action, **extra})
     else:
         resp = await client.post("/db/inspect", json={"connection": payload, "action": action})
     if resp.status_code >= 400:
@@ -453,6 +580,8 @@ def create_connection(
         if body.private_key:
             _check_private_key(body.private_key)
         _check_sftp(body.host, body.port, body.username, sftp_auth(body.extra), bool(body.password), bool(body.private_key))
+    if body.db_type == "api":
+        _check_api(body.host, body.username, body.extra, bool(body.password))
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="The connection needs a name")
@@ -566,6 +695,25 @@ def update_connection(
                 detail="SFTP: a new host, port or user needs the password (or the private key) typed again",
             )
 
+    api_before = (conn.host, api_options(conn.extra).get("token_url") or "") if conn.db_type == "api" else None
+    if api_before is not None:
+        new_host = body.host if body.host is not None else conn.host
+        new_opts = api_options(body.extra) if body.extra is not None else api_options(conn.extra)
+        new_token_url = str(new_opts.get("token_url") or "")
+        api_moved = _api_origin(new_host) != _api_origin(api_before[0]) or (
+            bool(new_token_url) and new_token_url.strip() != str(api_before[1]).strip())
+        if api_moved and (new_opts.get("auth") or "none") == "none":
+            # no authentication any more: the stored secret is dropped, not carried along
+            api_moved = False
+            if body.password is None:
+                body.password = ""
+        if api_moved and not body.password and conn.password_encrypted:
+            # the stored secret must not follow the connection to another server
+            raise HTTPException(
+                status_code=422,
+                detail="API: a new host (or OAuth2 token URL) needs the secret typed again",
+            )
+
     conn.name = new_name
     conn.project_id = target_project
     for field in ("description", "host", "port", "username", "database", "db_schema"):
@@ -592,6 +740,12 @@ def update_connection(
             conn.password_encrypted = ""
         if not body.private_key:
             conn.private_key_encrypted = ""
+    if conn.db_type == "api":
+        try:
+            _check_api(conn.host, conn.username, conn.extra, bool(conn.password_encrypted))
+        except HTTPException:
+            session.rollback()  # nothing of this edit stays in the session
+            raise
     if conn.db_type == "sftp":
         try:
             _check_sftp(conn.host, conn.port, conn.username, sftp_auth(conn.extra),
@@ -674,6 +828,10 @@ async def test_draft_connection(
                                        expected_type=body.expected_type.strip())
         _refuse_unoffered_key(result, body.expected_fingerprint.strip(), f"{body.host.strip()}:{body.port or 22}", lingua)
         return result
+    if body.db_type == "api":
+        _valid_extra(body.extra, "api")
+        _check_api(body.host, body.username, body.extra, bool(body.password))
+        return await _engine_inspect(_api_payload(body.host, body.username, secret, body.extra), "test")
     if body.db_type == "sharepoint":
         _check_sharepoint(body.host, body.username, body.database)
         payload = _sharepoint_payload(body.host, body.username, secret, body.database, body.extra)
@@ -775,6 +933,25 @@ async def list_sftp_files(
         raise HTTPException(status_code=422, detail="This is not an SFTP connection")
     return await _engine_inspect(engine_connection_payload(conn), "files", lingua=lingua_della_richiesta(request),
                                  folder=body.folder, pattern=body.pattern)
+
+
+@router.post("/connections/{conn_id}/api/try")
+async def try_api_call(
+    conn_id: int,
+    body: ApiCallSpec,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """«Try the call» of the datasource dialog, BEFORE saving: the first page of the
+    first call with the connection's credentials — the request as sent (secrets
+    masked), the status, an excerpt of the answer and the first rows. CONNECT on
+    the connection's folder: it is a call made with its credentials."""
+    conn = _get_connection(session, conn_id)
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "api":
+        raise HTTPException(status_code=422, detail="This is not an API connection")
+    return await _engine_inspect(engine_connection_payload(conn), "try", source=body.model_dump())
 
 
 class SharePointFilesQuery(BaseModel):

@@ -418,6 +418,23 @@ def _sftp_path(folder: str, name: str) -> str:
     return "/".join(p for p in ((folder or "").strip("/"), (name or "").strip("/")) if p)
 
 
+def api_dataset(conn: Connection, ref: dict):
+    """An HTTP API: namespace = the origin of the base URL (https://host[:port]), name =
+    the base path + the call's path AS WRITTEN (placeholders included, so the dataset
+    is the same at every refresh). Never the query string: it can hold a key."""
+    from urllib.parse import urlsplit
+
+    from openlineage.client.event_v2 import InputDataset
+
+    base = urlsplit((conn.host or "").strip())
+    host = (base.hostname or "").lower()
+    default = 443 if base.scheme == "https" else 80
+    port = base.port if base.port and base.port != default else None
+    namespace = f"{base.scheme or 'https'}://{host}" + (f":{port}" if port else "")
+    path = "/".join(p.strip("/") for p in (base.path, str(ref.get("path") or "").split("?")[0]) if p.strip("/"))
+    return InputDataset(namespace=namespace, name="/" + path, facets={})
+
+
 def sharepoint_dataset(conn: Connection, ref: dict):
     from openlineage.client.event_v2 import InputDataset
     from openlineage.client.facet_v2 import datasource_dataset
@@ -442,6 +459,12 @@ def origin_inputs(session: Session, ds: Datasource) -> tuple[list, dict]:
         except json.JSONDecodeError:
             ref = {}
         return [sharepoint_dataset(conn, ref)], {}
+    if conn.db_type == "api":
+        try:
+            ref = json.loads(ds.source_ref or "{}")
+        except json.JSONDecodeError:
+            ref = {}
+        return [api_dataset(conn, ref if isinstance(ref, dict) else {})], {}
     if conn.db_type == "sftp":
         try:
             ref = json.loads(ds.source_ref or "{}")
