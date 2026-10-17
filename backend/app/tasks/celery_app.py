@@ -1,7 +1,7 @@
 import logging
 
 from celery import Celery, Task
-from celery.signals import before_task_publish, worker_ready
+from celery.signals import before_task_publish, worker_init, worker_process_init, worker_ready
 from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_dall_ambiente
 from app.tasks.worker_pool import PoolFromPanel
 
@@ -139,6 +139,31 @@ def _limiti_di_tempo_in_vigore(headers=None, **_):
         return
     c = get_settings().celery
     headers["timelimit"] = (c.task_time_limit, c.task_soft_time_limit)
+
+
+@worker_init.connect
+def _sweep_temporary_files(sender=None, **_):
+    """The worker's main process, before any child exists: what earlier lives of this
+    worker left in /tmp (dead children's directories, files of the old loose layout)."""
+    from app.core import tempdirs
+
+    try:
+        tempdirs.sweep_dead()
+        tempdirs.sweep_loose()
+    except Exception:  # never stops the worker from starting
+        logger.warning("temporary files: sweep at start failed", exc_info=True)
+
+
+@worker_process_init.connect
+def _own_temporary_directory(**_):
+    """Each child writes its temporary files in a directory of its own; a child killed
+    with SIGKILL leaves it behind, and the child Celery starts in its place removes it."""
+    from app.core import tempdirs
+
+    try:
+        tempdirs.use_process_dir()
+    except Exception:
+        logger.warning("temporary files: no per-process directory, using the system one", exc_info=True)
 
 
 @worker_ready.connect

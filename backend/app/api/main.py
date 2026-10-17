@@ -36,6 +36,9 @@ def allarga_i_thread() -> int:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     allarga_i_thread()
+    from app.core import tempdirs
+
+    tempdirs.use_process_dir()  # dbt seeds, uploads: a killed API process leaves nothing for good
     yield
 
 
