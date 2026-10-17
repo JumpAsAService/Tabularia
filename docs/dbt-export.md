@@ -634,8 +634,6 @@ before a release.
 - A Postgres `char(n)` keeps its trailing blanks in Tabularia (`'ab   '`); the federated
   and native Postgres targets read it without them (the ClickHouse target keeps them),
   so group keys, equality filters and lengths can differ on such columns.
-- Tabularia takes the precision of a MySQL `DECIMAL` from the values it imported: when
-  a value grows past it, the federated model fails with "out of range" (loudly).
 - Casts on the native and ClickHouse targets, rare cases: on the ClickHouse target a
   year outside 1900–2299 is NULL (`Date32` and `DateTime64` hold no other; ClickHouse
   moved it to 1900 or 2299, a made-up value); ClickHouse's own float parsing (the

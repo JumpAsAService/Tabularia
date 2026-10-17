@@ -628,7 +628,7 @@ def _dbapi_batches(cursor, batch_rows: int = BATCH_ROWS) -> Iterator[Any]:
         return
 
     first = _rows_to_table(rows, names, schema=None)
-    schema = _null_types_to_string(first.schema)
+    schema = _with_declared_decimals(_null_types_to_string(first.schema), _declared_decimals(cursor))
     yield schema
     yield from first.cast(schema).to_batches()
 
@@ -637,6 +637,42 @@ def _dbapi_batches(cursor, batch_rows: int = BATCH_ROWS) -> Iterator[Any]:
         if not rows:
             break
         yield from _rows_to_table(rows, names, schema=schema).to_batches()
+
+
+_MYSQL_DECIMAL = (0, 246)  # FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL
+_MYSQL_UNSIGNED = 32
+
+
+def _declared_decimals(cursor) -> dict[str, tuple[int, int]]:
+    """{column: (precision, scale)} of the DECIMAL columns as the database declares
+    them. Inferring them from the first batch's values gives a type too narrow for
+    larger values later on, and the writer cannot widen it mid-stream."""
+    fields = getattr(getattr(cursor, "_result", None), "fields", None)
+    if fields:
+        # pymysql (MySQL/MariaDB): `length` is the display width = digits, plus the
+        # decimal point when there is a scale, plus the sign unless UNSIGNED
+        return {
+            f.name: (f.length - (1 if f.scale else 0) - (0 if f.flags & _MYSQL_UNSIGNED else 1), f.scale)
+            for f in fields if f.type_code in _MYSQL_DECIMAL and f.length
+        }
+    out = {}
+    for d in cursor.description or []:
+        precision, scale = (d[4], d[5]) if len(d) >= 6 else (None, None)
+        if isinstance(precision, int) and isinstance(scale, int) and 0 < precision and 0 <= scale <= precision:
+            out[d[0]] = (precision, scale)
+    return out
+
+
+def _with_declared_decimals(schema: pa.Schema, declared: dict[str, tuple[int, int]]) -> pa.Schema:
+    """A declared DECIMAL column gets its declared precision, also when the first batch
+    held only NULLs (typed as string by _null_types_to_string)."""
+    fields = []
+    for f in schema:
+        if f.name in declared and (pa.types.is_decimal(f.type) or f.type == pa.string()):
+            p, s = declared[f.name]
+            f = pa.field(f.name, pa.decimal128(p, s) if p <= 38 else pa.decimal256(p, s), f.nullable)
+        fields.append(f)
+    return pa.schema(fields)
 
 
 def _rows_to_table(rows, names: list[str], schema: pa.Schema | None) -> pa.Table:

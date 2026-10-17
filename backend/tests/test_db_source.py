@@ -179,3 +179,63 @@ def test_resolve_password_preferisce_quella_cifrata():
 
 def test_resolve_password_usa_il_chiaro_solo_se_non_ce_cifrata():
     assert _pg(password="chiara").resolve_password() == "chiara"
+
+
+# ── DECIMAL precision comes from the column, not from the first batch ──────────
+class _Field:
+    """What pymysql keeps for a result column (cursor._result.fields)."""
+    def __init__(self, name, type_code, length, scale, flags=0):
+        self.name, self.type_code, self.length, self.scale, self.flags = name, type_code, length, scale, flags
+
+
+class _Result:
+    def __init__(self, fields):
+        self.fields = fields
+
+
+class _DecimalCursor:
+    """A DB-API cursor whose first batch holds small decimals and a later one large ones."""
+    def __init__(self, batches, description, fields=None):
+        self._batches = list(batches)
+        self.description = description
+        if fields is not None:
+            self._result = _Result(fields)
+
+    def fetchmany(self, n):
+        return self._batches.pop(0) if self._batches else []
+
+
+def _decimal_batches():
+    from decimal import Decimal
+    return [[(1, Decimal("1.50"))], [(2, Decimal("12345678.99"))]]
+
+
+def test_a_mysql_decimal_keeps_the_declared_precision_after_the_first_batch():
+    # DECIMAL(10,2) signed: MySQL reports length 12 (10 digits + point + sign); UNSIGNED adds flag 32
+    fields = [_Field("id", 3, 11, 0), _Field("amount", 246, 12, 2)]
+    desc = [("id", 3, None, 11, 11, 0, True), ("amount", 246, None, 12, 12, 2, True)]
+    gen = _dbapi_batches(_DecimalCursor(_decimal_batches(), desc, fields), batch_rows=1)
+    schema = next(gen)
+    assert schema.field("amount").type == pa.decimal128(10, 2)
+    rows = pa.Table.from_batches(list(gen), schema=schema).column("amount").to_pylist()
+    assert [str(v) for v in rows] == ["1.50", "12345678.99"]
+
+
+def test_an_unsigned_mysql_decimal_has_no_sign_position():
+    fields = [_Field("id", 3, 11, 0), _Field("amount", 246, 11, 2, flags=32)]
+    desc = [("id", 3, None, 11, 11, 0, True), ("amount", 246, None, 11, 11, 2, True)]
+    schema = next(_dbapi_batches(_DecimalCursor(_decimal_batches(), desc, fields), batch_rows=1))
+    assert schema.field("amount").type == pa.decimal128(10, 2)
+
+
+def test_a_driver_that_reports_precision_and_scale_gives_the_declared_decimal():
+    # Trino's description carries the declared precision and scale
+    desc = [("id", "integer", None, None, None, None, None), ("amount", "decimal(10,2)", None, None, 10, 2, None)]
+    schema = next(_dbapi_batches(_DecimalCursor(_decimal_batches(), desc), batch_rows=1))
+    assert schema.field("amount").type == pa.decimal128(10, 2)
+
+
+def test_a_decimal_wider_than_38_digits_uses_decimal256():
+    desc = [("id", "integer", None, None, None, None, None), ("amount", "decimal(50,2)", None, None, 50, 2, None)]
+    schema = next(_dbapi_batches(_DecimalCursor(_decimal_batches(), desc), batch_rows=1))
+    assert schema.field("amount").type == pa.decimal256(50, 2)
