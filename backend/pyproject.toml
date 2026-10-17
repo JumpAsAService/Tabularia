@@ -26,9 +26,6 @@ dependencies = [
     # Oracle in modalità Thin (puro Python, niente Instant Client): fetch_df_batches
     # dà i risultati in streaming come batch Arrow
     "oracledb>=3.4",
-    # SQL Server: il driver ufficiale di Microsoft, autonomo (DDBC, niente ODBC da
-    # installare); arrow_reader dà i risultati in streaming come batch Arrow
-    "mssql-python>=1.15",
     "python-multipart>=0.0.32",
     "redis>=8.0.0",
     "sqlglot>=25.0.0",
@@ -43,6 +40,16 @@ dependencies = [
     # image through boto3 and the Google client; named here because the code uses them.
     "requests>=2.32",
     "jmespath>=1.0",
+]
+
+[project.optional-dependencies]
+# SQL Server: Microsoft's official driver (arrow_reader streams the results as Arrow
+# batches). It is NOT in the published images: it depends on mssql-python-odbc,
+# Microsoft's ODBC driver under Microsoft's licence, which an AGPL-3.0 image cannot
+# redistribute. Whoever needs it installs it and accepts that licence:
+# `docker build --build-arg WITH_MSSQL=true`, see docs/sqlserver.md.
+sqlserver = [
+    "mssql-python>=1.15",
 ]
 
 [dependency-groups]

@@ -196,7 +196,7 @@ async def test_sqlserver_la_prova_del_form_porta_il_tls(session, scena, monkeypa
     admin, p = scena
     visto = {}
 
-    async def finto(payload, action, path=""):
+    async def finto(payload, action, path="", **kw):  # kw: the language of the messages
         visto.update(payload)
         return {"ok": True}
 

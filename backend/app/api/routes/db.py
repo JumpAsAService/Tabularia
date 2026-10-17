@@ -22,6 +22,8 @@ from app.ingest.db_source import (
     DbConnectionSpec,
     DbSourceError,
     DbSourceSpec,
+    DriverNotInstalledError,
+    installed_drivers,
     list_tables,
     test_connection,
 )
@@ -43,6 +45,13 @@ class DbInspectRequest(BaseModel):
     # (endpoint/access_key/…) e vengono smistate su `db_type`
     connection: dict
     action: Literal["test", "tables"] = "test"
+
+
+@router.get("/drivers")
+def drivers():
+    """The optional database drivers and whether this image has them: the UI marks a
+    type whose driver is missing before anyone tries it."""
+    return installed_drivers()
 
 
 @router.post("/inspect")
@@ -72,6 +81,9 @@ def inspect(request: DbInspectRequest):
             test_connection(conn)
             return {"ok": True}
         return {"tables": list_tables(conn)}
+    except DriverNotInstalledError as e:
+        # a code, so that the gateway says it in the user's language
+        raise HTTPException(status_code=422, detail={"code": e.code, "db_type": e.db_type, "message": str(e)})
     except IngestError as e:  # DbSourceError, S3DestinationError: già parlanti
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:  # errori driver: connessione rifiutata, auth, DNS…

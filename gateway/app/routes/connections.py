@@ -464,6 +464,25 @@ _HOST_KEY_NOT_THE_TESTED_ONE = {
 }
 
 
+# Microsoft's SQL Server driver is not in the published images (it is under Microsoft's
+# licence): the guide to adding it, linked from the message and from the form
+SQLSERVER_DOCS_URL = "https://github.com/JumpAsAService/Tabularia/blob/main/docs/sqlserver.md"
+_DRIVER_DOCS = {"sqlserver": SQLSERVER_DOCS_URL}
+_DRIVER_LABELS = {"sqlserver": "SQL Server"}
+_DRIVER_NOT_INSTALLED = {
+    "en": "The {label} driver is not installed in this installation: the published images do not include it, "
+          "because it is Microsoft's, under Microsoft's licence. Whoever runs Tabularia can add it: {docs}",
+    "it": "Il driver {label} non è installato in questa installazione: le immagini pubblicate non lo includono, "
+          "perché è di Microsoft, sotto la licenza di Microsoft. Chi gestisce Tabularia può aggiungerlo: {docs}",
+    "de": "Der {label}-Treiber ist in dieser Installation nicht installiert: Die veröffentlichten Images enthalten ihn nicht, "
+          "weil er von Microsoft stammt und unter Microsofts Lizenz steht. Wer Tabularia betreibt, kann ihn hinzufügen: {docs}",
+    "fr": "Le pilote {label} n'est pas installé dans cette installation : les images publiées ne l'incluent pas, "
+          "car il est de Microsoft, sous la licence de Microsoft. Qui gère Tabularia peut l'ajouter : {docs}",
+    "es": "El controlador de {label} no está instalado en esta instalación: las imágenes publicadas no lo incluyen, "
+          "porque es de Microsoft, bajo la licencia de Microsoft. Quien gestiona Tabularia puede añadirlo: {docs}",
+}
+
+
 def _translated(table: dict, lingua: str, **values) -> str:
     return table.get(lingua, table["en"]).format(**values)
 
@@ -498,6 +517,11 @@ async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: st
             detail = resp.json().get("detail", resp.text)
         except Exception:
             detail = resp.text
+        if isinstance(detail, dict) and detail.get("code") == "driver_not_installed":
+            db_type = str(detail.get("db_type") or payload.get("db_type") or "")
+            raise HTTPException(status_code=422, detail=_translated(
+                _DRIVER_NOT_INSTALLED, lingua, label=_DRIVER_LABELS.get(db_type, db_type),
+                docs=_DRIVER_DOCS.get(db_type, SQLSERVER_DOCS_URL)))
         if isinstance(detail, dict) and detail.get("code") in ("host_key_changed", "host_key_unknown"):
             table = _HOST_KEY_CHANGED if detail["code"] == "host_key_changed" else _HOST_KEY_UNKNOWN
             detail = _translated(table, lingua, host=detail.get("host") or payload.get("host", ""),
@@ -541,6 +565,24 @@ def search_connections(
         )
     rows, total = paginate(session, base, Connection.name, limit, offset)
     return Page(items=[_to_out(c) for c in rows], total=total)
+
+
+@router.get("/connections/drivers")
+async def connection_drivers(user: User = Depends(get_current_user)):
+    """The optional database drivers and whether the engine has them, with the guide
+    to adding one: the form marks a type whose driver is missing. An engine that does
+    not say (older, or not answering) marks nothing — no warning rather than a false
+    one; a test would still say it."""
+    try:
+        resp = await get_engine_client().get("/db/drivers", timeout=10)
+        drivers = resp.json() if resp.status_code == 200 else {}
+    except Exception:  # noqa: BLE001 — the engine down: the form works without the hint
+        logger.warning("the engine did not report its database drivers", exc_info=True)
+        drivers = {}
+    if not isinstance(drivers, dict):
+        return {}
+    return {db_type: {"installed": bool((info or {}).get("installed")), "docs": _DRIVER_DOCS.get(db_type, "")}
+            for db_type, info in drivers.items() if isinstance(info, dict)}
 
 
 @router.get("/projects/{project_id}/connections", response_model=list[ConnectionOut])
@@ -852,7 +894,7 @@ async def test_draft_connection(
             "db_schema": body.db_schema,
             "extra": _db_options(body.db_type, body.extra),
         }
-    return await _engine_inspect(payload, "test")
+    return await _engine_inspect(payload, "test", lingua=lingua_della_richiesta(request))
 
 
 class HostKeyAcceptance(BaseModel):
@@ -1024,9 +1066,10 @@ async def preview_placeholders(
 @router.get("/connections/{conn_id}/tables")
 async def list_connection_tables(
     conn_id: int,
+    request: Request = None,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
-    return await _engine_inspect(engine_connection_payload(conn), "tables")
+    return await _engine_inspect(engine_connection_payload(conn), "tables", lingua=lingua_della_richiesta(request))

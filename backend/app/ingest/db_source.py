@@ -16,6 +16,7 @@ che produce PRIMA lo schema Arrow, POI i RecordBatch):
 """
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import re
@@ -53,6 +54,47 @@ DbType = Literal["postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracl
 
 class DbSourceError(IngestError):
     """Errore parlante da mostrare all'utente (connessione, query, tipi)."""
+
+
+# Database drivers that are not in the published images: the module each needs. The
+# SQL Server one depends on Microsoft's ODBC driver, under Microsoft's licence, which
+# an AGPL image cannot carry: whoever needs it installs it (docs/sqlserver.md).
+OPTIONAL_DRIVERS = {"sqlserver": "mssql_python"}
+_DRIVER_LABELS = {"sqlserver": "SQL Server"}
+DRIVER_DOCS = {"sqlserver": "docs/sqlserver.md"}
+
+
+class DriverNotInstalledError(DbSourceError):
+    """The driver of this database type is not installed in this image. It carries a
+    code, so that the gateway can say it in the user's language. Built with
+    `driver_not_installed(db_type)`; the message is its only argument, so that the
+    exception rebuilt from its args (pickle, Celery's result backend) says the same."""
+
+    code = "driver_not_installed"
+
+    def __init__(self, message: str, db_type: str = ""):
+        super().__init__(message)
+        self.db_type = db_type
+
+
+def driver_not_installed(db_type: str) -> DriverNotInstalledError:
+    return DriverNotInstalledError(
+        f"The {_DRIVER_LABELS.get(db_type, db_type)} driver is not installed in this installation: "
+        f"the published images do not include it. See {DRIVER_DOCS.get(db_type, 'the documentation')} to add it.",
+        db_type,
+    )
+
+
+def _module_installed(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def installed_drivers() -> dict[str, dict]:
+    """Which optional drivers this image has (without importing them)."""
+    return {db_type: {"installed": _module_installed(module)} for db_type, module in OPTIONAL_DRIVERS.items()}
 
 
 class DbConnectionSpec(BaseModel):
@@ -526,7 +568,8 @@ def _batches_oracle(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
 
 # ── SQL Server ──────────────────────────────────────────────────────────────
 # mssql-python, il driver ufficiale di Microsoft: porta con sé lo strato ODBC (DDBC),
-# niente driver da installare. `arrow_reader` converte il risultato in Arrow nel suo
+# niente driver da installare. It is OPTIONAL (the `sqlserver` extra): the published
+# images do not have it, see OPTIONAL_DRIVERS. `arrow_reader` converte il risultato in Arrow nel suo
 # C++ e lo consegna un blocco alla volta. I tipi si allineano agli altri driver:
 # decimali interi fino a 18 cifre → Int64, gli altri decimali e money → Float64
 # (come NUMBER di Oracle e numeric di Postgres); datetimeoffset arriva già in UTC e
@@ -545,7 +588,14 @@ def _odbc_valore(v: str) -> str:
 
 
 def _sqlserver_connect(conn: DbConnectionSpec):
-    import mssql_python
+    try:
+        import mssql_python
+    except ModuleNotFoundError as e:
+        # only the driver itself missing means «not installed»; a module IT needs
+        # missing is a broken installation, and says so with its own name
+        if (e.name or "").split(".")[0] != "mssql_python":
+            raise
+        raise driver_not_installed("sqlserver") from e
 
     tls = (conn.extra or {}).get("tls") or "verify"
     if tls not in _TLS_SQLSERVER:

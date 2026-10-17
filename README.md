@@ -81,7 +81,9 @@ engines, from an in-process library to a serverless warehouse.
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
   ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint Excel; write results
   back to a database table (Oracle and SQL Server are sources only, for now) or publish
-  them as a reusable datasource. Files (CSV/Excel/JSON/parquet) work too, uploaded,
+  them as a reusable datasource. SQL Server's driver is Microsoft's, under Microsoft's
+  licence, so it is not in the published images: you add it to yours
+  ([SQL Server](docs/sqlserver.md)). Files (CSV/Excel/JSON/parquet) work too, uploaded,
   on an **SFTP server** or in an **S3 bucket**: a folder and a glob become one table,
   refreshed on schedule, and a flow can drop its result there as a file (on SFTP the
   server's host key is checked at every connection) ([SFTP](docs/sftp.md),
@@ -267,7 +269,7 @@ pinned in the spec.
 | Celery beat | cache eviction and storage statistics |
 | Object storage | one bucket, all parquet: `datasets/` snapshots, `cache/` steps, `out/` results. MinIO locally; any S3 (Scaleway, AWS…) or Google Cloud Storage through its S3 API in the cloud |
 | External engines *(optional)* | a managed ClickHouse reading and writing the parquet through `s3()`; Google BigQuery reading it as temporary external tables over GCS |
-| External databases | sources streamed in Arrow batches into parquet snapshots (Postgres through ADBC, Oracle through python-oracledb in Thin mode, SQL Server through Microsoft's mssql-python; no vendor client in the image), whole row groups whatever the driver's batch; Output nodes can write tables back |
+| External databases | sources streamed in Arrow batches into parquet snapshots (Postgres through ADBC, Oracle through python-oracledb in Thin mode, SQL Server through Microsoft's mssql-python, which [you add to your image](docs/sqlserver.md); no other vendor client), whole row groups whatever the driver's batch; Output nodes can write tables back |
 | VictoriaMetrics + Grafana | scrape the engine `/metrics`, celery-exporter, cAdvisor and node-exporter |
 
 The **gateway** (control plane) is the only public ingress: it owns the metadata

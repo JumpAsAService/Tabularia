@@ -16,12 +16,20 @@
 # intermedi, riversamenti di DuckDB/Polars e lo stato di chDB. A runtime va
 # montata come volume (emptyDir) dimensionato sul dataset più pesante.
 #
-# Due opzioni di build, entrambe spente di default, cioè l'immagine di produzione:
+# Tre opzioni di build, tutte spente di default, cioè l'immagine di produzione:
 #   WITH_CHDB=true  include chDB, l'engine ClickHouse embedded, con pandas e
 #                   numpy che servono solo a lui: quasi 600 MB. In produzione il
 #                   dialetto ClickHouse lo copre l'engine ClickHouse esterno.
 #   WITH_DEV=true   include le dipendenze di sviluppo (pytest).
-# Il docker-compose di sviluppo le accende entrambe:
+#   WITH_MSSQL=true includes the SQL Server driver (the `sqlserver` extra:
+#                   mssql-python and Microsoft's ODBC driver, mssql-python-odbc).
+#                   That driver is under MICROSOFT'S licence, not an open-source one:
+#                   the images Tabularia publishes never contain it, and whoever
+#                   builds with this option accepts Microsoft's terms
+#                   (docs/sqlserver.md). Without it a SQL Server connection says
+#                   that the driver is not installed.
+# Il docker-compose di sviluppo accende le prime due (WITH_MSSQL from the
+# environment, off by default, so that development runs what is published):
 #   docker build --build-arg WITH_CHDB=true --build-arg WITH_DEV=true .
 
 ########################
@@ -42,6 +50,7 @@ WORKDIR /build
 # su /app non lo nasconde.
 ARG WITH_CHDB=false
 ARG WITH_DEV=false
+ARG WITH_MSSQL=false
 
 # Senza chDB si saltano anche pandas e numpy: il codice dell'applicazione non li
 # usa, li richiede solo chDB. Le suite di test incluse nei pacchetti di terzi
@@ -53,6 +62,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     set -e; \
     opts="--no-dev"; \
     if [ "$WITH_DEV" = "true" ]; then opts=""; fi; \
+    if [ "$WITH_MSSQL" = "true" ]; then opts="$opts --extra sqlserver"; fi; \
     if [ "$WITH_CHDB" != "true" ]; then \
         opts="$opts --no-install-package chdb --no-install-package chdb-core --no-install-package pandas --no-install-package numpy"; \
     fi; \
@@ -72,8 +82,10 @@ FROM python:3.12-slim-bookworm AS runtime
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
 
-# SQL Server (mssql-python): il driver porta con sé il suo strato ODBC, niente driver
-# Microsoft da installare, ma su Linux vuole il caricatore dinamico e Kerberos.
+# SQL Server (mssql-python, only with WITH_MSSQL=true): the driver brings its own ODBC
+# layer, but on Linux it wants the dynamic loader and Kerberos. These libraries are
+# open source (LGPL, MIT) and small: they stay in every image, so that adding the
+# driver to a published image is a pip install and nothing else (docs/sqlserver.md).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libltdl7 libkrb5-3 libgssapi-krb5-2 \
  && rm -rf /var/lib/apt/lists/*

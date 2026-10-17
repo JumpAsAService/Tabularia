@@ -3,13 +3,14 @@
 // La password non viene mai mostrata: in modifica, campo vuoto = non cambiarla.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert } from 'lucide-vue-next'
+import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert, TriangleAlert } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import {
   useConnections,
   DB_TYPES,
   type ConnectionDraft,
+  type DriverInfo,
   type ConnectionInfo,
   type HostKeyResult,
 } from '~/composables/useConnections'
@@ -163,6 +164,26 @@ watch(
     acceptedKey.value = null
     pendingKey.value = null
   },
+)
+
+// Optional drivers this installation lacks (SQL Server's is Microsoft's, not in the
+// published images): the type stays selectable — a connection can be prepared before
+// the driver is added — but the list and the form say it, with the guide. Asked once
+// per page; an engine that does not answer marks nothing.
+const drivers = ref<Record<string, DriverInfo>>({})
+let driversAsked = false
+watch(
+  () => props.open,
+  (open) => {
+    if (!open || driversAsked) return
+    driversAsked = true
+    connApi.drivers().then((d) => { drivers.value = d ?? {} }).catch(() => { driversAsked = false })
+  },
+  { immediate: true },
+)
+const missingDriver = computed(() => (drivers.value[dbType.value]?.installed === false ? drivers.value[dbType.value] : null))
+const typeOptions = computed(() =>
+  DB_TYPES.map((o) => (drivers.value[o.value]?.installed === false ? { ...o, hint: t('connectionDialog.driverNotInstalledHint') } : o)),
 )
 
 // a key seen for one address says nothing about another
@@ -414,11 +435,18 @@ function confirm() {
           </div>
           <div class="cd-field" :class="{ 'cd-wide': isS3 || isSp || isApi }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
-            <Select :model-value="dbType" :options="DB_TYPES" @update:model-value="changeType" />
+            <Select :model-value="dbType" :options="typeOptions" @update:model-value="changeType" />
           </div>
           <div v-if="!isS3 && !isSp && !isApi" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
+          </div>
+          <div v-if="missingDriver" class="cd-field cd-wide cd-pending" role="status">
+            <p class="cd-pending-title"><TriangleAlert :size="14" /> {{ $t('connectionDialog.driverNotInstalledTitle') }}</p>
+            <p>{{ $t('connectionDialog.driverNotInstalledBody') }}</p>
+            <p v-if="missingDriver.docs">
+              <a :href="missingDriver.docs" target="_blank" rel="noopener noreferrer">{{ $t('connectionDialog.driverNotInstalledLink') }}</a>
+            </p>
           </div>
           <div class="cd-field cd-wide">
             <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : isApi ? $t('apiSource.baseUrlLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>

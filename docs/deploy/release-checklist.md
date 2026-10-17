@@ -81,6 +81,13 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `docs/engine-settings.md`). Audit log to Splunk (revision 0005): no variable, off
    until an administrator turns it on; the calls to Splunk leave from the
    orchestrators like webhooks (`docs/siem-splunk.md`).
+4. **SQL Server.** The published backend images no longer contain the SQL Server
+   driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
+   image cannot carry it. If you have SQL Server connections, build or extend the
+   backend image with the driver **before** upgrading, and run that image for the
+   engine API, both workers and beat — see [sqlserver.md](../sqlserver.md). Without
+   it, those connections and their datasources fail with «the SQL Server driver is
+   not installed», and nothing else is affected.
 
 ## Rollout order
 

@@ -125,6 +125,7 @@ jobs:
           /tmp/scan/bin/pip install --quiet --require-hashes -r ci/.github/scripts/requirements.txt
           /tmp/scan/bin/python ci/.github/scripts/test_image_secret_scan.py
           /tmp/scan/bin/python ci/.github/scripts/test_push_guard.py
+          /tmp/scan/bin/python ci/.github/scripts/test_image_licence_check.py
 
   image:
     name: ${{ matrix.component }} ${{ matrix.arch }}
@@ -191,9 +192,10 @@ jobs:
           check "version label" "$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$IMAGE")" "$VERSION"
           case "$COMPONENT" in
             backend)
-              # the published engine is built without chDB
+              # the published engine is built without chDB, and without Microsoft's SQL
+              # Server driver (Microsoft's licence: see docs/sqlserver.md)
               docker run --rm --read-only "$IMAGE" python -c \
-                'import importlib.util as u, polars, duckdb; assert u.find_spec("chdb") is None' ;;
+                'import importlib.util as u, polars, duckdb; assert u.find_spec("chdb") is None; assert u.find_spec("mssql_python") is None' ;;
             gateway)
               docker run --rm --read-only "$IMAGE" python -c 'import app.db.migra, alembic' ;;
             frontend)
@@ -203,6 +205,14 @@ jobs:
               docker rm -f "$cid" > /dev/null
               check "/login" "$status" "200" ;;
           esac
+
+      - name: Licences of the packages
+        run: |
+          # nothing proprietary or AGPL-incompatible in what is published (e.g. Microsoft's
+          # ODBC driver, which comes with the SQL Server driver): docs/release-process.md
+          kind=python
+          if [[ "$COMPONENT" == frontend ]]; then kind=npm; fi
+          python3 ci/.github/scripts/image_licence_check.py check --kind "$kind" "$IMAGE"
 
       - name: Save the image for the scans
         run: docker save "$IMAGE" -o image.tar

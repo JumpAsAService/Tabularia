@@ -49,6 +49,9 @@ to your registry, and set `image.registry` and the tags:
 docker build -t <registry>/tabularia-backend:1.1.0 backend/
 #   Add --build-arg WITH_CHDB=true only if your flows use the embedded chDB
 #   engine: it takes the image from about 800 MB to about 1.4 GB.
+#   Add --build-arg WITH_MSSQL=true only if you read from SQL Server: the driver
+#   is Microsoft's, under Microsoft's licence, and not in the published images
+#   (docs/sqlserver.md).
 
 docker build -t <registry>/tabularia-gateway:1.1.0 gateway/
 

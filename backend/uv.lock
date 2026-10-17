@@ -152,7 +152,6 @@ dependencies = [
     { name = "google-cloud-bigquery" },
     { name = "google-cloud-bigquery-storage" },
     { name = "jmespath" },
-    { name = "mssql-python" },
     { name = "oracledb" },
     { name = "paramiko" },
     { name = "polars" },
@@ -168,6 +167,11 @@ dependencies = [
     { name = "trino" },
     { name = "uvicorn" },
     { name = "xlsxwriter" },
+]
+
+[package.optional-dependencies]
+sqlserver = [
+    { name = "mssql-python" },
 ]
 
 [package.dev-dependencies]
@@ -190,7 +194,7 @@ requires-dist = [
     { name = "google-cloud-bigquery", specifier = ">=3.30.0" },
     { name = "google-cloud-bigquery-storage", specifier = ">=2.30.0" },
     { name = "jmespath", specifier = ">=1.0" },
-    { name = "mssql-python", specifier = ">=1.15" },
+    { name = "mssql-python", marker = "extra == 'sqlserver'", specifier = ">=1.15" },
     { name = "oracledb", specifier = ">=3.4" },
     { name = "paramiko", specifier = ">=5.0" },
     { name = "polars", specifier = ">=1.41.2" },
@@ -207,6 +211,7 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.49.0" },
     { name = "xlsxwriter", specifier = ">=3.2.9" },
 ]
+provides-extras = ["sqlserver"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]

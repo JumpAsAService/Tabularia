@@ -107,6 +107,7 @@ Production variants:
 |---|---|---|---|
 | Lightweight, the default | `docker build backend/` | 727 MB | Polars, DuckDB, ClickHouse external |
 | With chDB | add `--build-arg WITH_CHDB=true` | 1.36 GB | the above plus embedded chDB |
+| With the SQL Server driver | add `--build-arg WITH_MSSQL=true` | +35 MB | Microsoft's driver, under Microsoft's licence: never published, see [sqlserver.md](../sqlserver.md) |
 
 chDB alone accounts for almost 600 MB, pandas and numpy included, which nothing else in
 the application needs. In production the ClickHouse dialect is covered by the external

@@ -84,6 +84,10 @@ export interface ConnectionDraft {
   accept_host_key_type?: string
 }
 
+// optional database drivers and whether this installation has them (GET
+// /connections/drivers): SQL Server's is Microsoft's and not in the published images
+export type DriverInfo = { installed: boolean; docs: string }
+
 export const DB_TYPES = [
   { value: 'postgresql', label: 'PostgreSQL' },
   { value: 'mysql', label: 'MySQL' },
@@ -151,6 +155,9 @@ export function useConnections() {
 
     // test di una connessione GIÀ salvata. SFTP: without `key` it shows a key that
     // is not accepted (needs_acceptance); with `key` it accepts exactly that one
+    // {sqlserver: {installed, docs}}; {} when the engine does not say
+    drivers: () => apiFetch<Record<string, DriverInfo>>('/connections/drivers'),
+
     test: (id: number, key?: KeyAcceptance) => (key ? accept(id, key) : apiFetch<HostKeyResult>(`/connections/${id}/test`, { method: 'POST' })),
 
     // test del form PRIMA di salvare, col solo segreto scritto nel form; stores nothing

@@ -5,6 +5,21 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The SQL Server driver is no longer in the images** (as in 1.1.1). `mssql-python`
+  depends on Microsoft's ODBC driver (`mssql-python-odbc`), proprietary and under a
+  licence an AGPL-3.0 image cannot meet, so the published backend images are built
+  without it and whoever reads from SQL Server adds it, accepting Microsoft's terms:
+  `--build-arg WITH_MSSQL=true` (the new `sqlserver` extra), or a four-line Dockerfile
+  on top of the published image, then the Compose or Helm image pointed at that build.
+  Without the driver the type stays available, marked «not installed here» in the
+  connection form with a link to the guide; a connection can be saved, and testing it,
+  listing its tables or importing from it says, in the user's language, that the driver
+  is not installed — no other database is affected. The engine reports its optional
+  drivers (`GET /db/drivers`, relayed by the gateway at `GET /connections/drivers`).
+  The release workflow now checks the licences of every package in the images and
+  stops on a proprietary or AGPL-incompatible one; the development stack builds without
+  the driver too (`WITH_MSSQL=true docker compose build` to add it). See
+  `docs/sqlserver.md`.
 - **One placeholder language for inputs and outputs, ranges, and S3 folders as
   datasources.** The placeholders of the API call — `{today}`, `{yesterday}`, `{now}`,
   offsets (`{today-7d}`, `{today-1m}` clamped, `{now-2h}`), `{start_of_month}`,

@@ -51,7 +51,8 @@ def test_select_into_rifiutata(sql):
 
 
 def test_stringa_di_connessione(monkeypatch):
-    import mssql_python
+    # the driver is optional (the `sqlserver` extra): without it, nothing to test here
+    mssql_python = pytest.importorskip("mssql_python")
 
     viste = []
     monkeypatch.setattr(mssql_python, "connect", lambda s, **kw: viste.append(s))

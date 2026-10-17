@@ -23,13 +23,15 @@ The tag starts [`.github/workflows/release-images.yml`](../.github/workflows/rel
 ## What the workflow does
 
 1. **Version and tags.** Checks the tag against the version in the code, works out
-   which tags to publish, and runs the tests of the secret scanner.
+   which tags to publish, and runs the tests of the secret scanner and of the
+   licence check.
 2. **One job per image and architecture** (backend, gateway, frontend × amd64,
    arm64; arm64 runs on GitHub's native ARM runners, no emulation). Each job:
    - builds the image from scratch on fresh base images;
    - smoke-tests it: runs as uid 10001, has the right architecture and version
-     label; the engine has no chDB, the gateway imports its migrations, the
+     label; the engine has no chDB and no SQL Server driver, the gateway imports its migrations, the
      interface answers `/login` with a read-only filesystem;
+   - **checks the licences** of the packages inside it (below);
    - saves it with `docker save` and **scans it for secrets**, twice (below);
    - only then logs in to Docker Hub and pushes `1.2.0-amd64` or `1.2.0-arm64`. The
      Docker Hub token never enters a job whose scans have not passed.
@@ -40,6 +42,30 @@ The tag starts [`.github/workflows/release-images.yml`](../.github/workflows/rel
 
 **Dry run:** Actions → *Release images* → *Run workflow*, give an existing tag and
 leave *publish* off: everything runs except the pushes.
+
+## The licence check
+
+Tabularia is AGPL-3.0: an image can carry only packages whose licence allows it.
+`.github/scripts/image_licence_check.py` runs the built image, lists the Python
+distributions inside it (backend, gateway) or the npm packages next to the server
+bundle (frontend), reads the licence each declares, and stops the release on one that
+is proprietary or incompatible: Proprietary, SSPL, BUSL, Commons Clause, Elastic
+License, non-commercial, GPL-2.0-only without an alternative, npm's `UNLICENSED` or
+`SEE LICENSE IN`. An SPDX expression with an acceptable alternative passes
+(`BSD-3-Clause OR GPL-2.0`); a package that declares nothing is listed as a notice.
+Packages reviewed by hand go in its `REVIEWED` list with the exact licence they
+declare, so that a change of licence is checked again.
+
+It exists because of Microsoft's SQL Server driver: `mssql-python` depends on
+`mssql-python-odbc`, Microsoft's proprietary ODBC driver, so the backend is built
+without it and whoever needs it adds it ([sqlserver.md](sqlserver.md)). An image
+built with `WITH_MSSQL=true` fails this check, by design.
+
+```bash
+python3 .github/scripts/test_image_licence_check.py
+python3 .github/scripts/image_licence_check.py check --kind python <backend or gateway image>
+python3 .github/scripts/image_licence_check.py check --kind npm <frontend image>
+```
 
 ## The two secret scans
 

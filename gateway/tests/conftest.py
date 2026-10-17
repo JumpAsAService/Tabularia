@@ -115,6 +115,11 @@ class FakeEngine:
             "files": (200, {"files": [], "total": 0, "missing": [], "missing_total": 0, "expansions": 1}),
             "validate": (200, {"ok": True, "expansions": 1, "first": {}, "last": {}}),
         }
+        # database connections: bodies on POST /db/inspect, the answer per action, and the
+        # optional drivers GET /db/drivers reports (None = an engine without that route)
+        self.db_inspects: list[dict] = []
+        self.db_responses: dict[str, tuple[int, dict]] = {"test": (200, {"ok": True}), "tables": (200, {"tables": []})}
+        self.drivers: dict | None = {"sqlserver": {"installed": True}}
         self.dbt_exports: list[dict] = []  # corpi ricevuti su POST /dbt/export
         self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
         self.dbt_export_script: list[tuple[int, dict] | None] = []  # risposte in fila, una per chiamata (None = lo zip)
@@ -176,6 +181,15 @@ class FakeEngine:
                       for k, v in (body.get("templates") or {}).items()}
             return httpx.Response(200, json={"fields": fields, "expansions": 1, "now": "2026-10-18T00:00:00+00:00",
                                              "error": self.placeholder_errors.get("*")})
+        if path == "/db/inspect" and request.method == "POST":
+            body = _json_body(request)
+            self.db_inspects.append(body)
+            status, payload = self.db_responses[body.get("action", "test")]
+            return httpx.Response(status, json=payload)
+        if path == "/db/drivers" and request.method == "GET":
+            if self.drivers is None:
+                return httpx.Response(404, json={"detail": "Not Found"})
+            return httpx.Response(200, json=self.drivers)
         if path == "/s3/inspect" and request.method == "POST":
             body = _json_body(request)
             self.s3_inspects.append(body)

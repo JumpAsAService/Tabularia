@@ -79,6 +79,9 @@ services:
       args:
         WITH_CHDB: "true"
         WITH_DEV: "true"
+        # the SQL Server driver is Microsoft's, under Microsoft's licence: off, as in the
+        # published images; WITH_MSSQL=true docker compose build turns it on
+        WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
     container_name: dataprep-backend
     # riparte da solo se il container muore (es. OOM-kill del processo principale):
@@ -172,6 +175,7 @@ services:
       args:
         WITH_CHDB: "true"
         WITH_DEV: "true"
+        WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
     # NB: niente container_name → così `docker compose up -d --scale worker=N`
     # può avviare più repliche (un nome fisso collide e blocca lo scaling).
@@ -219,6 +223,7 @@ services:
       args:
         WITH_CHDB: "true"
         WITH_DEV: "true"
+        WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
     container_name: dataprep-beat
     restart: unless-stopped
@@ -247,6 +252,7 @@ services:
       args:
         WITH_CHDB: "true"
         WITH_DEV: "true"
+        WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
     # niente container_name → scalabile con --scale preview-worker=N
     restart: unless-stopped
