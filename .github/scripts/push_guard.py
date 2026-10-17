@@ -10,6 +10,9 @@ Runs on the commits the remote does not have yet, before they leave the machine:
      so short ones (from MIN_LOCAL characters) are checked too.
   2. TruffleHog on the same commits, with the release workflow's rules: any credential
      it verifies as live, or a cloud credential it cannot verify.
+  3. GitHub Pages: it renders every Markdown file through Liquid, so a page with `{{` or
+     `{%` (a dbt or Jinja example) breaks the site's build unless the page is wrapped in
+     `<!-- {% raw %} -->` … `<!-- {% endraw %} -->` (hidden HTML comments on GitHub).
 
 Install it as the pre-push hook of this clone:
 
@@ -161,6 +164,28 @@ def check_trufflehog(pushes: list[tuple[str, str | None, list[str]]]) -> tuple[i
     return stopped, True
 
 
+RAW_OPEN = "<!-- {% raw %}"
+
+
+def check_pages_liquid(pushes: list[tuple[str, str | None, list[str]]]) -> int:
+    """Markdown pages of the pushed tips with Liquid markup and no raw wrapper."""
+    stopped = 0
+    for _ref, _base, commits in pushes:
+        tip = commits[0]
+        found = git("grep", "-l", "-E", r"\{\{|\{%", tip, "--", "*.md", check=False)
+        for line in found.splitlines():
+            path = line.split(":", 1)[1]
+            text = git("show", f"{tip}:{path}")
+            if text.startswith("---\n") and "\n---\n" in text[4:]:
+                text = text[text.index("\n---\n", 4) + 5:]
+            if not text.startswith(RAW_OPEN):
+                print(f"push guard: LIQUID {path}: GitHub Pages would read its {{{{ or {{% as Liquid and fail. "
+                      f"Wrap the page in '{RAW_OPEN} -->' (first line) and '<!-- {{% endraw %}} -->' (last line).",
+                      file=sys.stderr)
+                stopped += 1
+    return stopped
+
+
 def main(argv: list[str]) -> int:
     remote = argv[1] if len(argv) > 1 else "origin"
     pushes = []
@@ -180,10 +205,15 @@ def main(argv: list[str]) -> int:
     if not pushes:
         return 0
     stopped = check_your_secrets(pushes)
+    liquid = check_pages_liquid(pushes)
     scanned = True
     if os.environ.get("PUSH_GUARD_TRUFFLEHOG", "1") != "0":
         found, scanned = check_trufflehog(pushes)
         stopped += found
+    if liquid and not stopped:
+        print(f"push guard: push stopped, {liquid} Markdown page(s) would break the GitHub Pages build.", file=sys.stderr)
+        return 1
+    stopped += liquid
     if stopped:
         print(f"push guard: push stopped, {stopped} finding(s). Remove the secret from the commits "
               "(and rotate it if it was ever pushed); `git push --no-verify` skips the guard.", file=sys.stderr)

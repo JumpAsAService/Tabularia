@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # dbt export — end-to-end oracles
 
 These scripts check that a flow exported as a dbt project gives **the data Tabularia
@@ -66,3 +67,4 @@ difference prints the rows only Tabularia has and the rows only dbt has. A case 
 Tabularia itself refuses must fail in dbt too — that is parity, not a defect. Known
 differences between the engines are listed in
 [docs/engines/engine-differences.md](../../docs/engines/engine-differences.md).
+<!-- {% endraw %} -->

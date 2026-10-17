@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Example — Keycloak → Tabularia group mapping
 
 A runnable Keycloak realm whose **groups** land in the OIDC token as a `groups` claim,
@@ -167,3 +168,4 @@ is in the gateway log (never in the browser, to avoid leaking IdP or config deta
 | `email_unverified` | an account with this email already exists and the IdP does not assert the address as **verified**, so it will not be claimed. Linking an existing account happens once and requires proof; a brand-new account does not |
 | `identity_conflict` | that account is already linked to a different identity of the IdP. Two people cannot claim the same user |
 | `user_disabled` | the user exists in Tabularia but is deactivated |
+<!-- {% endraw %} -->

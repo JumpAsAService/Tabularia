@@ -61,6 +61,18 @@ class PushGuard(unittest.TestCase):
         self.commit("app.py", b"print('ok')\n", "clean")
         self.assertEqual(self.guard()[0], 0)
 
+    def test_liquid_in_a_markdown_page_stops_the_push(self):
+        # GitHub Pages reads every Markdown file through Liquid: a dbt example breaks the site's build
+        self.commit("docs/dbt.md", b"Use `{{ source('a', 'b') }}` in a model.\n", "dbt doc")
+        code, log = self.guard()
+        self.assertEqual(code, 1)
+        self.assertIn("docs/dbt.md", log)
+
+    def test_liquid_in_a_protected_markdown_page_is_fine(self):
+        body = b"<!-- {% raw %} GitHub Pages: no Liquid in this page -->\nUse `{% do x %}`.\n<!-- {% endraw %} -->\n"
+        self.commit("docs/dbt.md", body, "dbt doc")
+        self.assertEqual(self.guard()[0], 0)
+
     def test_secret_in_a_new_file(self):
         self.commit("config/settings.py", f"KEY = '{self.secret}'\n".encode(), "settings")
         code, log = self.guard()

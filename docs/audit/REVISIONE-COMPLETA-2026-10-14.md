@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Revisione completa — 14 ottobre 2026
 
 Revisione dell'intera applicazione (non solo delle modifiche recenti), con la performance per **decine di utenti** come priorità, poi correttezza, qualità e sicurezza. Referto per il proprietario del progetto; non committato.
@@ -2237,4 +2238,4 @@ Backend dbt_export.py: split into dbt/compile.py, dbt/dialects.py (transpile, Ta
 schemas/models.py: one module per domain (runs, flows, catalog, admin).
 
 *Verification:* confirmed (bassa); refuted (bassa); confirmed (bassa, tie-break).
-
+<!-- {% endraw %} -->

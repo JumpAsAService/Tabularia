@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Spec: dbt export, piece 4 — AI, optional, in the export dialog
 
 Status: approved, 2026-10-10. Decisions marked **(owner)**; the rest are assumptions.
@@ -89,3 +90,4 @@ in its header, `ai_translated` in its meta, and a line in the README.
   settings outside the model (`function_not_allowed`), `IN db.table`, a qualified placeholder and a table
   hidden behind a CTE that is not visible where it is read; on the native and ClickHouse targets a
   model's proposal may read only that model's own sources.
+<!-- {% endraw %} -->

@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Pronti per la produzione? Regressione e sicurezza — 2026-10-08
 
 **Verdetto: non ancora.** La regressione è verde ovunque e l'aggiornamento da `v1.0.0` è sicuro, ma ci sono **quattro rilievi ALTA**:
@@ -99,7 +100,7 @@ dbt rende come Jinja il SQL dei modelli, le `config()` e le descrizioni. Senza a
 
 **Chi paga.** Chi lancia `dbt run` (tipicamente la CI, con le credenziali del warehouse) esegue codice scritto da chiunque abbia EDIT sul flusso: legge i segreti con `env_var`, lancia SQL arbitrario con `run_query`. Così si aggira anche la lista bianca del nodo SQL.
 
-**Correzione:** rifiutare `{{`, `{%`, `{#` nei testi dell'utente che entrano nel progetto, o racchiuderli in `{% raw %}…{% endraw %}`. Validare i nomi di tabella e schema con un'espressione da identificatore. Nel README del progetto avvisare di rileggerlo prima di lanciarlo.
+**Correzione:** rifiutare `{{`, `{%`, `{#` nei testi dell'utente che entrano nel progetto, o racchiuderli in un blocco `raw` di Jinja. Validare i nomi di tabella e schema con un'espressione da identificatore. Nel README del progetto avvisare di rileggerlo prima di lanciarlo.
 
 ### A3 — Helm: l'ingress manda al gateway pagine del frontend; ricaricarle e l'accesso SSO si rompono · `CODICE`
 
@@ -248,3 +249,4 @@ Tutte e tre hanno già una prova dal vivo che oggi fallisce: `sicurezza_export.p
 12. **B4, B6:** PodDisruptionBudget, repliche, aggiornamento dalla 1.0.x guidato dalla chart.
 
 Il resto delle BASSA si può fare dopo.
+<!-- {% endraw %} -->
