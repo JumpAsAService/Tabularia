@@ -110,9 +110,8 @@ AUTH__ADMIN_PASSWORD=Change-me-2026
 APP__TIMEZONE=Europe/Rome
 ```
 
-- **The administrator** is created once, at the first start, from these two values.
-  Pick the password now: changing it in `.env` later does nothing (see
-  [step 5](#5-sign-in)).
+- **The administrator** comes from these two environment variables: it is created at the
+  first start, and you sign in with them.
 - **The time zone** is the one the schedules use (an IANA name; the default is UTC).
   Dates on screen follow your browser.
 
@@ -186,23 +185,6 @@ Español). The choice is kept by your browser. The same menu has *Your sessions*
 *API tokens* and *Sign out*.
 
 ![The settings menu](media/getting-started/02-settings.png)
-
-**Changing the administrator's password.** The app has no page for it yet. The
-password set in `.env` is the one to use; to change it after the first start, call the
-API (here from the machine running the stack):
-
-```bash
-TOKEN=$(curl -s http://localhost:8000/auth/login -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"Change-me-2026"}' \
-  | sed 's/.*"access_token":"\([^"]*\)".*/\1/')
-curl -s http://localhost:8000/auth/me -H "Authorization: Bearer $TOKEN"     # your "id"
-curl -s -X PATCH http://localhost:8000/users/1 -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" -d '{"password":"A-longer-passphrase-2026"}'
-```
-
-The new password takes effect at once and closes your other sessions (sign in again in
-the browser). Write it in `AUTH__ADMIN_PASSWORD` in `.env` too: the sample data
-container of the next step signs in with that value.
 
 ## 6. Load some data
 
@@ -524,21 +506,13 @@ is still compiling its pages. Wait for the gateway to be `(healthy)` in
 `docker compose ps`; `docker compose logs --tail 5 frontend` ends with
 `Nuxt Nitro server built` when the app is ready.
 
-**Sign-in fails: *Incorrect email or password*.** The administrator is created only at
-the first start: a password changed in `.env` afterwards is not applied, and the gateway
-log says so (`Admin 'admin@example.com' già presente, nessun seed.`, *already there, not
-created*). Sign in with the password of the first start, or change it through the API
-([step 5](#5-sign-in)). After repeated failures the sign-in is paused:
+**Sign-in fails: *Incorrect email or password*.** Sign in with `AUTH__ADMIN_EMAIL` and
+`AUTH__ADMIN_PASSWORD` from `.env`. After repeated failures the sign-in is paused:
 *Too many sign-in attempts. Try again in 60 seconds.*
 
 **The `Sample` folder does not appear.**
 
 - `.env` was edited but the stack not started again: run `docker compose up -d`.
-- `docker compose logs sampledb-init` ends with
-  `login dell'amministratore fallito: 401 {"detail":"Incorrect email or password"}`
-  (*administrator sign-in failed*): the administrator's password is no longer the one in
-  `.env`. Write the current password in `AUTH__ADMIN_PASSWORD` and run
-  `docker compose up -d`; the container picks up where it stopped.
 - You are signed in as a user other than an administrator: the folder is shared with
   nobody until an administrator grants it.
 <!-- {% endraw %} -->
