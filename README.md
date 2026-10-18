@@ -28,15 +28,13 @@ AI assistant over your own catalog and an audit trail come in the box.
 </p>
 
 <p align="center"><em>A source, a filter, a group by and a sort — the preview refreshes at every step.
-12 million rows on an external ClickHouse; in the editor the optional development sample
-keeps it instant, production runs never sample.</em></p>
+Here the 30,000 orders of the sample data on Polars; the same flow runs unchanged on DuckDB,
+chDB, ClickHouse or BigQuery.</em></p>
 
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.1.1 «Appio»** — see [CHANGELOG.md](CHANGELOG.md). Some features described here
-(SFTP, HTTP API and S3-folder sources, dynamic placeholders, flow groups and more) are on `main` and ship
-with **1.2.0**.
+Current release: **1.2.0 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

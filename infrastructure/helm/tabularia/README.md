@@ -36,7 +36,7 @@ depend on them, and both degrade quietly rather than breaking:
 
 The release images are public on Docker Hub and the chart pulls them by default:
 `jumpasaservice/tabularia-backend`, `jumpasaservice/tabularia-gateway` and
-`jumpasaservice/tabularia-frontend`, tagged with the release (`1.1.1`). The backend
+`jumpasaservice/tabularia-frontend`, tagged with the release (`1.2.0`). The backend
 one is built without chDB. Releases are built by the release workflow for amd64 and
 arm64, and each image is scanned for secrets before it is pushed
 ([docs/release-process.md](../../../docs/release-process.md)).
@@ -46,17 +46,17 @@ to your registry, and set `image.registry` and the tags:
 
 ```bash
 # Engine, workers and beat all run this one image.
-docker build -t <registry>/tabularia-backend:1.1.1 backend/
+docker build -t <registry>/tabularia-backend:1.2.0 backend/
 #   Add --build-arg WITH_CHDB=true only if your flows use the embedded chDB
 #   engine: it takes the image from about 800 MB to about 1.4 GB.
 #   Add --build-arg WITH_MSSQL=true only if you read from SQL Server: the driver
 #   is Microsoft's, under Microsoft's licence, and not in the published images
 #   (docs/sqlserver.md).
 
-docker build -t <registry>/tabularia-gateway:1.1.1 gateway/
+docker build -t <registry>/tabularia-gateway:1.2.0 gateway/
 
 # NOTE the -f: frontend/Dockerfile is the hot-reload DEVELOPMENT server.
-docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.1.1 frontend/
+docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.2.0 frontend/
 ```
 
 All three run as uid 10001 with a read-only root filesystem.

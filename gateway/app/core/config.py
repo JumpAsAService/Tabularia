@@ -286,7 +286,7 @@ class MonitoringSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
     name: str = "Tabularia"
-    version: str = "1.1.0"  # la release: esposta da /system/info e nel menu dell'app
+    version: str = "1.2.0"  # la release: esposta da /system/info e nel menu dell'app
     # il nome della release. Appio Claudio Cieco, censore del 312 a.C.: riscrisse
     # le liste dei cittadini e costrui' il primo acquedotto — chi conta, classifica
     # e ripulisce i registri, e la prima pipeline. Un data-prep ante litteram.

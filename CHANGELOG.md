@@ -3,7 +3,20 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## Unreleased
+## 1.2.0 «Appio» — 2026-10-18
+
+Third release, still «Appio». New sources: SFTP folders (in and out), HTTP APIs and S3
+folders, all with one placeholder language for dates, ranges and file names, in
+inputs and outputs alike. Flows run together in flow groups; API tokens, service
+accounts and signed webhooks open Tabularia to other systems; the audit log can
+stream to Splunk; engine settings and worker processes are set from the
+administration panel. The editor gains an assistant, a minimap and a mark on the
+steps already in the cache, and DuckDB and chDB read their sources in place. A
+closing security round makes the administrator's password required (at least 12
+characters, published ones refused), caps uploads, keeps client addresses for a
+limited time and sends notices in the recipient's language. Before upgrading read
+`docs/deploy/release-checklist.md`: this time the workers go before the gateway, and
+`AUTH__ADMIN_PASSWORD` has no default any more.
 
 - **Security closing round for 1.2.0.** **Upgrade note:** `AUTH__ADMIN_PASSWORD` has no
   default any more; the gateway refuses to create the administrator with an empty,
@@ -511,6 +524,28 @@ exposes at `/system/info` and in the app's settings menu.
   fingerprint layer by layer (deleted files and nested archives included) without CI
   ever holding them, and TruffleHog for anybody's live cloud credentials. The tag
   must agree with the version in the code and in the Helm chart.
+
+## 1.1.1 «Appio» — 2026-10-18
+
+**The SQL Server driver is no longer in the images; how to add it.** `mssql-python`
+(MIT) depends on `mssql-python-odbc`, Microsoft's ODBC Driver 18 for SQL Server:
+proprietary, under a licence that allows redistributing it only on terms an AGPL-3.0
+project cannot meet. The 1.1.0 images carried it; the 1.1.1 images do not. Nothing
+else changes from 1.1.0.
+
+- **Adding the driver.** Whoever reads from SQL Server adds it to their own backend
+  image and accepts Microsoft's licence directly: build from the release tag with
+  `--build-arg WITH_MSSQL=true` (the new `sqlserver` extra of the backend, at the
+  versions in `uv.lock`), or extend the published image with
+  `pip --python /opt/venv/bin/python install "mssql-python==1.15.0"`, then point the
+  engine API, the workers and beat at that image (Compose `image:`, Helm
+  `image.backend`). The system libraries the driver needs stay in every image. See
+  `docs/sqlserver.md`.
+- **Without the driver** a SQL Server connection can still be saved; testing it,
+  listing its tables or importing from it says that the driver is not installed, with
+  the guide, instead of failing on an import error. No other database is affected.
+- The development stack builds without the driver too, like the published images
+  (`WITH_MSSQL=true docker compose build` to add it). Helm chart 2.0.1 installs 1.1.1.
 
 ## 1.1.0 «Appio» — 2026-10-11
 

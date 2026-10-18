@@ -35,7 +35,7 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `INGEST__DB_READ_TIMEOUT_SECONDS` (default 3000): how long an import from
    ClickHouse waits for the first rows; keep it below
    `CELERY__TASK_SOFT_TIME_LIMIT`.
-   **New after 1.1.0:** `AUTH__SESSION_IDLE_MINUTES` (default 0 = off): minutes
+   **New in 1.2.0:** `AUTH__SESSION_IDLE_MINUTES` (default 0 = off): minutes
    without activity after which a session closes. Sessions are now rows in the
    metadata database (revision 0002 of the migration step): the upgrade **signs
    everyone out once**, and the interface must keep reaching the gateway on the same
@@ -82,6 +82,21 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `docs/engine-settings.md`). Audit log to Splunk (revision 0005): no variable, off
    until an administrator turns it on; the calls to Splunk leave from the
    orchestrators like webhooks (`docs/siem-splunk.md`).
+   **The administrator's password has no default any more.** `AUTH__ADMIN_PASSWORD`
+   must be set, at least 12 characters and not a published one (`admin`, the guides'
+   examples): the gateway refuses to start otherwise, in every environment. An
+   administrator still holding `admin` gets the configured password at the next start
+   and its sessions close. `AUTH__ALLOW_KNOWN_ADMIN_PASSWORD=true` is for a local
+   development stack only and is ignored with `APP__ENV_NAME=production`. New
+   passwords follow the same rule (12 characters, published ones refused); existing
+   ones keep working. Also new: `UPLOAD__MAX_BYTES` (1 GiB, 0 = none, on the gateway
+   and the engine), `AUDIT__IP_RETENTION_DAYS` (90: client addresses are then emptied
+   from audit entries, tokens and sessions), `SMTP__VERIFY_TLS` (`true`; `false` only
+   for a relay with a self-signed certificate). The client address is the one uvicorn
+   resolves: behind a reverse proxy set `FORWARDED_ALLOW_IPS` to the proxy's address
+   (the chart's `gateway.trustedProxies`), or every request shows the proxy's.
+   Revision 0014 adds a nullable `locale` to `users`: email notices go out in the
+   recipient's interface language, English for addresses that are not users.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
@@ -91,6 +106,13 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    not installed», and nothing else is affected.
 
 ## Rollout order
+
+**From 1.1.x to 1.2.0:** the migration step, then **the workers, beat and the engine
+API**, then the gateways and orchestrators, the interface last (revision 0013 above:
+an old worker under a new gateway writes placeholders literally). With the compose of
+`infrastructure/`: `docker compose up -d backend worker preview-worker beat`, then
+`docker compose up -d` (its gateway applies the migrations when it starts). The rule
+below, gateway first, is for an upgrade from 1.0.x.
 
 1. **The gateway first (and the orchestrators), then the workers, then the
    engine API.** From this release the engine API answers only requests that

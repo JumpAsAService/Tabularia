@@ -14,7 +14,7 @@ version: 2.1.0
 
 # Version of Tabularia this chart was written against. Overridden per component
 # by image.tag values when you pin your own builds.
-appVersion: "1.1.1"  # release «Appio»
+appVersion: "1.2.0"  # release «Appio»
 
 keywords:
   - data-preparation
