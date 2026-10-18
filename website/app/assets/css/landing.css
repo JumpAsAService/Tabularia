@@ -1,0 +1,20 @@
+/* Shared landing pieces: filled surfaces (one radius, no outlines), section rhythm, type helpers. */
+.tile { background: var(--tile); border-radius: var(--radius); overflow: hidden; position: relative; }
+.tile--ink { background: var(--ground); }
+.tile--two { background: var(--tile-2); }
+.tile--paper { background: var(--paper); color: var(--on-paper); }
+.tile--accent { background: var(--accent); color: var(--on-accent); }
+.tile--ok { background: var(--ok); color: var(--on-ok); }
+
+.board { padding-inline: var(--gutter); }
+.section { margin-top: var(--section); }
+.section-title {
+  font-size: var(--fs-h2); line-height: .98; letter-spacing: -0.04em; font-weight: 600; text-wrap: balance;
+}
+.statement { font-size: var(--fs-statement); line-height: 1.25; letter-spacing: -0.01em; }
+.small { font-size: var(--fs-small); line-height: 1.45; }
+.soft { color: var(--soft); }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* real product pictures */
+.shot { display: block; width: 100%; height: 100%; object-fit: cover; }

@@ -1,0 +1,103 @@
+# Builds the presentation site and the documentation (website/, a static Nuxt site that reads
+# docs/ and brand/ at build time) and publishes it on GitHub Pages:
+#   https://jumpasaservice.github.io/Tabularia/
+#
+# Pull requests: build and check only (tests, generate, link check), nothing is deployed.
+# Pushes to main and manual runs: the same, then the deploy.
+#
+# One-time setup by a repository admin: Settings → Pages → Build and deployment → Source:
+# "GitHub Actions". Until then the old branch-based Pages build keeps publishing.
+# See website/README.md and docs/release-process.md.
+
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/**"
+      - "brand/**"
+      - "README.md"
+      - "frontend/public/logo.svg"
+      - ".github/workflows/website.yml"
+  pull_request:
+    paths:
+      - "website/**"
+      - "docs/**"
+      - "brand/**"
+      - "README.md"
+      - "frontend/public/logo.svg"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Generate and check the site
+    runs-on: ubuntu-24.04
+    env:
+      # the one value that says where the site lives; the base path is derived from it
+      SITE_URL: https://jumpasaservice.github.io/Tabularia/
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install the pinned npm and the dependencies
+        working-directory: website
+        run: |
+          npm install --global "$(node -p "require('./package.json').packageManager")"
+          npm ci
+
+      - name: Unit tests (the placeholder resolver of the landing page)
+        working-directory: website
+        run: npm test
+
+      - name: Generate
+        working-directory: website
+        run: npm run generate
+
+      - name: Check the links (site pages, anchors, and every GitHub link against the repository)
+        working-directory: website
+        run: npm run check-links
+
+      - name: Upload the site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/.output/public
+
+  deploy:
+    name: Publish on GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

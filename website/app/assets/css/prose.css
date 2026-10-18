@@ -1,0 +1,52 @@
+/* The documentation's reading surface: long text, tables, code. Both themes. */
+
+.prose { font-size: 17px; line-height: 1.65; color: var(--text); max-width: 76ch; overflow-wrap: break-word; }
+.prose > * + * { margin-top: 1.1em; }
+.prose h1 { font-size: clamp(32px, 3.6vw, 48px); line-height: 1.08; letter-spacing: -0.025em; font-weight: 600; margin-bottom: .6em; }
+.prose h2 { font-size: 28px; line-height: 1.2; letter-spacing: -0.015em; font-weight: 600; margin-top: 2.2em; }
+.prose h3 { font-size: 21px; line-height: 1.3; font-weight: 600; margin-top: 1.8em; }
+.prose h4 { font-size: 17px; line-height: 1.4; font-weight: 600; margin-top: 1.6em; }
+.prose h2 a, .prose h3 a, .prose h4 a { color: inherit; text-decoration: none; }
+.prose h2 a:hover::after, .prose h3 a:hover::after, .prose h4 a:hover::after,
+.prose h2 a:focus-visible::after, .prose h3 a:focus-visible::after, .prose h4 a:focus-visible::after {
+  content: ' #'; color: var(--accent-ink); font-weight: 500;
+}
+.prose p, .prose li { color: var(--text); }
+.prose a { color: var(--accent-ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.prose a:hover { text-decoration-thickness: 2px; }
+.prose strong { font-weight: 600; }
+.prose ul, .prose ol { padding-left: 1.4em; }
+.prose li + li { margin-top: .35em; }
+.prose li > ul, .prose li > ol { margin-top: .35em; }
+.prose blockquote {
+  padding: 14px 20px; background: var(--tile); border-radius: var(--radius); color: var(--soft);
+  border-left: 4px solid var(--accent);
+}
+.prose blockquote > * + * { margin-top: .6em; }
+.prose hr { border: 0; height: 8px; background: var(--tile); border-radius: var(--radius); margin: 2.4em 0; }
+.prose img { height: auto; border-radius: var(--radius); background: var(--tile); }
+.prose p[align="center"] { text-align: center; }
+.prose p[align="center"] img { margin: 0 auto; }
+
+.prose :not(pre) > code {
+  font-size: .86em; padding: .12em .38em; border-radius: 5px;
+  background: var(--tile-2); color: var(--text); white-space: break-spaces;
+}
+.prose pre {
+  font-size: 14px; line-height: 1.6; padding: 18px 20px; border-radius: var(--radius);
+  background: var(--code-bg); overflow-x: auto; tab-size: 2;
+}
+.prose pre code { font-size: inherit; background: none; padding: 0; white-space: pre; }
+
+/* Shiki dual theme: the classes carry the dark theme, --shiki-light the light one */
+.prose pre.shiki { color: var(--text); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .prose pre.shiki span { color: var(--shiki-light) !important; }
+}
+:root[data-theme="light"] .prose pre.shiki span { color: var(--shiki-light) !important; }
+
+.prose .table-wrap { overflow-x: auto; max-width: 100%; }
+.prose table { border-collapse: collapse; font-size: 15px; line-height: 1.5; min-width: 100%; }
+.prose th, .prose td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--tile-3); }
+.prose th { font-weight: 600; background: var(--tile); }
+.prose td code, .prose th code { white-space: normal; }

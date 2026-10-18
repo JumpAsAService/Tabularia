@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- The Open Graph image (public/og.png), drawn from the brand: open in a browser at 1200x630 and screenshot, or see README.md. -->
+<html><head><meta charset="utf-8"><style>
+@font-face{font-family:Plex;src:url(../../../frontend/assets/fonts/ibm-plex-sans-latin-var.woff2) format("woff2");font-weight:100 700}
+html,body{margin:0;width:1200px;height:630px;background:#0B0E14;font-family:Plex,sans-serif;color:#E8EBF2;overflow:hidden}
+.wrap{position:absolute;inset:0;display:grid;grid-template-columns:640px 1fr;gap:12px;padding:12px}
+.l{background:#E8EBF2;color:#0B0E14;border-radius:10px;padding:44px;display:flex;flex-direction:column;justify-content:space-between}
+.lock{display:flex;align-items:center;gap:16px;font-weight:600;font-size:34px;letter-spacing:-.02em}
+h1{margin:0;font-size:92px;line-height:.92;letter-spacing:-.045em;font-weight:600}
+.sub{font-size:22px;color:#3d4560;margin-top:18px}
+.r{background:#141926;border-radius:10px;overflow:hidden}
+</style></head><body><div class="wrap">
+<div class="l">
+ <div class="lock"><img src="../../../brand/lockup-light.svg" height="60" alt=""></div>
+ <div><h1>Messy in.<br><span style="color:#3B6FE0">Trusted</span> out.</h1><div class="sub">Open-source data preparation, on your own servers.</div></div>
+</div>
+<div class="r"><svg width="100%" height="100%" viewBox="0 0 480 606" preserveAspectRatio="xMidYMid slice"><g id="dots"></g></svg></div>
+</div>
+<script>
+const g=document.getElementById('dots'); let s=7; const r=()=>(s=(s*16807)%2147483647)/2147483647;
+const rows=20, cols=56;
+for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
+  const t=j/(cols-1), x=8+j*8.4, yRow=40+i*28, jitter=(1-Math.min(1,t*1.6))*(r()-0.5)*48;
+  const y=yRow+jitter, w=t>0.62?7:2+r()*5, op=0.25+0.6*t;
+  const el=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  el.setAttribute('x',x);el.setAttribute('y',y);el.setAttribute('width',w);el.setAttribute('height',2.6);el.setAttribute('rx',1.3);
+  el.setAttribute('fill', t>0.62?'#e8ebf2':'#8b93a7'); el.setAttribute('opacity',op.toFixed(2)); g.appendChild(el);}
+const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+p.setAttribute('d','M-10 560 C150 560 230 60 490 46');p.setAttribute('stroke','#4f8cff');p.setAttribute('stroke-width','6');p.setAttribute('fill','none');p.setAttribute('stroke-linecap','round');g.appendChild(p);
+</script></body></html>
