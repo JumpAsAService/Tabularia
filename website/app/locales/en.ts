@@ -183,8 +183,6 @@ export default {
     commandLabel: 'Commands to start the try-it stack',
     primary: 'Get started',
     secondary: 'Releases on GitHub',
-    release: 'The images on Docker Hub are release 1.1.1. Some features on this site (SFTP, HTTP API and S3-folder sources, dynamic placeholders, flow groups and more) are on the main branch and ship with release 1.2.0:',
-    releaseLink: 'what changed',
     config: 'Most settings are environment variables:',
     configLink: 'the configuration reference',
   },

@@ -12,10 +12,6 @@ Valkey for the queues and MinIO as object storage. The images are published on
 
 ## Try it on one machine
 
-> The images on Docker Hub are release 1.1.1. Some features described on this site (SFTP,
-> HTTP API and S3-folder sources, dynamic placeholders, flow groups and more) are on the
-> `main` branch and ship with release 1.2.0: see the [changelog](../CHANGELOG.md).
-
 Step by step, from an empty machine to a first scheduled flow, with every command and
 click checked on a clean install: [Getting started with Docker Compose](getting-started-docker-compose.md).
 The short version follows.
