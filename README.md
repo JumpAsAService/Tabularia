@@ -5,8 +5,6 @@
 
 # Tabularia
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/JumpAsAService)
-
 **Self-hosted, open-source visual data-preparation platform.** A visual flow editor
 on pluggable engines: build a pipeline once, preview it on the whole dataset, and
 decide *later* where the compute runs.
@@ -36,7 +34,9 @@ keeps it instant, production runs never sample.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.1.0 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.1.1 «Appio»** — see [CHANGELOG.md](CHANGELOG.md). Some features described here
+(SFTP, HTTP API and S3-folder sources, dynamic placeholders, flow groups and more) are on `main` and ship
+with **1.2.0**.
 
 ---
 
@@ -88,7 +88,7 @@ engines, from an in-process library to a serverless warehouse.
   refreshed on schedule, and a flow can drop its result there as a file (on SFTP the
   server's host key is checked at every connection) ([SFTP](docs/sftp.md),
   [S3](docs/s3-datasource.md)).
-  And any **HTTP API** (REST/JSON): every kind of pagination and OAuth2 too — the
+  And any **HTTP API** (REST/JSON): page-number, offset, cursor and next-link pagination, OAuth2 client credentials too — the
   credentials never leave the API's host ([HTTP APIs](docs/api-datasource.md)). Inputs
   and outputs share **one placeholder language**: dates that move by themselves
   (`sales_{yesterday:yyyyMMdd}.csv`, `{last_refresh}`, `{run_id}`) in their own time
@@ -138,7 +138,7 @@ engines, from an in-process library to a serverless warehouse.
   which reads the source databases live, with dbt-duckdb, or natively in the source
   database — as a complete project or as a folder for the data team's own project.
   End-to-end oracles run it with a real dbt and compare it with what Tabularia publishes.
-- **Multi-user from day one.** Password or SSO sign-in (Keycloak, Entra ID, Auth0, Okta)
+- **Multi-user from day one.** Password or SSO sign-in with any OIDC provider (Keycloak, Entra ID, Auth0, Okta…; verified against Keycloak)
   with sessions you can see and close, users & groups, nested projects with inherited
   view / edit / manage / connect permissions. Everyone works in the same place, safely.
 - **Connects to the rest of your stack.** API tokens and **service accounts** let
@@ -383,8 +383,9 @@ no run, no waiting for the whole pipeline.</em></p>
   NULL (never an error), text is trimmed before parsing, text→int accepts integer literals
   only, number→int truncates; joins never match NULL keys, `on` keys are one coalesced
   column, `left_on`/`right_on` keep both key columns, a non-key homonym from the right
-  gets `_right`; `compute` overwrites an existing column in place; integer sums stay
-  exact int64; datetimes are **naive UTC instants** everywhere.
+  gets `_right`; `compute` overwrites an existing column in place; integer sums are
+  int64; datetimes are **naive UTC instants** everywhere. The differences that remain
+  between engines are listed in [engine-differences](docs/engines/engine-differences.md).
 - **Development sampling** per source node: "first N rows" or "random p%" set in the
   editor and saved with the flow. It only affects previews and editor runs: the gateway
   resolver injects it solely in development, never for scheduled runs or "Run in
@@ -783,7 +784,7 @@ PREVIEW__DEFAULT_SAMPLE_ROWS=100000                             # keep the edito
 ```
 
 Recreate the workers (`docker compose up -d`) and the engine shows up in the picker;
-`.env.example` documents every variable.
+[`docs/configuration.md`](docs/configuration.md) lists every variable, with its default.
 
 **Secrets:** `SECURITY__FERNET_KEY` is mandatory everywhere — gateway, engine and
 workers refuse to start without a valid key, in development too. With
@@ -857,6 +858,10 @@ Copyright © 2025–2026 Leonardo Trivelli.
 
 Licensed under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
 For commercial licensing options, contact the author.
+
+Tabularia is provided **"as is", without warranty of any kind**; the authors are not liable
+for any damage, including loss of data (AGPL-3.0, sections 15–16). Keep backups — and take one
+before every upgrade: database migrations only go forward.
 
 "BigQuery" and "Google Cloud" are trademarks of Google LLC; "ClickHouse" is a
 trademark of ClickHouse, Inc. Other product and company names mentioned here are

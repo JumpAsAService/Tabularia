@@ -5,9 +5,6 @@ Operational notes for whoever moves Tabularia from `infrastructure/docker-compos
 services exist and how they talk to each other; it is **not** a production manifest:
 it runs dev servers with hot reload and bind-mounts the sources.
 
-For a single machine there is a production compose file too:
-[docker-compose.md](docker-compose.md).
-
 Everything below marked *verified* was exercised on 2026-09-12 against the real
 stack (Scaleway object storage, managed ClickHouse).
 
@@ -194,9 +191,11 @@ Workers and beat expose no HTTP port; rely on the restart policy.
 
 ## Configuration
 
-Settings are environment variables with `__` as the nesting delimiter; the full list
-with comments is in [`infrastructure/.env.example`](../../infrastructure/.env.example).
-Values marked *secret* belong in Kubernetes Secrets.
+Settings are environment variables with `__` as the nesting delimiter. Every one of
+them, with its default, its bounds and the `values.yaml` key the chart sets it from, is
+in the [configuration reference](../configuration.md); the commented starting point is
+[`infrastructure/.env.example`](../../infrastructure/.env.example). Values marked
+*secret* belong in Kubernetes Secrets.
 
 **Comments in env files.** Not every tool strips a trailing `# comment` from a value:
 `docker run --env-file` keeps it as part of the value, and the gateway then refuses to
@@ -237,8 +236,9 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `OIDC__*` | ✓ | | optional SSO, off when the issuer is empty |
 | `NUXT_PUBLIC_API_BASE`, `NUXT_PUBLIC_BUCKET` | | | frontend, read at startup: public gateway URL and default bucket |
 
-The Helm chart sets the variables above from named values; any other one from
-`infrastructure/.env.example` goes through `extraEnv`, by its variable name.
+The Helm chart sets the variables above from named values; any other one goes through
+`extraEnv`, by its variable name (secrets through `existingSecret`). The **Helm value**
+column of the [configuration reference](../configuration.md) says which is which.
 
 **SSO behind real hostnames.** `OIDC__REDIRECT_URI` is
 `https://<host>/api/auth/sso/callback` and must be registered, identical, on the

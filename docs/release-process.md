@@ -146,6 +146,26 @@ Paste the file into the secret (Settings → Secrets and variables → Actions �
   anyone recover them by brute force. They are still checked against the repository,
   which is the one way a secret reaches an image built in CI.
 
+## The website (GitHub Pages)
+
+The presentation site and these docs are built from `website/` by
+`.github/workflows/website.yml` and published at
+<https://jumpasaservice.github.io/Tabularia/>. It runs on every push to `main` that
+touches `website/`, `docs/`, `brand/` or the README, and by hand from Actions → Website.
+A pull request gets the same build and checks (unit tests, `nuxi generate`, the link
+check, which also verifies that every GitHub link names a file in the repository) and no
+deploy. How to run it locally is in [website/README.md](../website/README.md).
+
+**Once, before the first deploy**, a repository admin sets Settings → Pages → Build and
+deployment → **Source** to **GitHub Actions**. Until then the old branch build keeps
+publishing (Jekyll over the repository), and the workflow's deploy job fails. After the
+switch Jekyll no longer runs: the `raw` / `endraw` comments at the top and bottom of some
+Markdown pages, and the push guard's Liquid check, are no longer needed for Pages; they
+are harmless and can stay.
+
+The site describes the current `main` without naming a version: publish a release first
+when the product changed since the last one.
+
 ## Limits
 
 - Archives nested deeper than three levels, or compressed with something other than
