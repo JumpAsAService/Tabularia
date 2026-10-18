@@ -89,7 +89,7 @@ export default {
   engines: {
     title: 'One flow, five engines',
     lead: 'A flow carries two engines: one for the editor, one for production. The flow does not change by a single node.',
-    detail: 'Design on Polars with a development sample, schedule on ClickHouse or BigQuery; every run records the engine it ran on.',
+    detail: 'Design on Polars, schedule on ClickHouse or BigQuery — on the whole table, with an optional development sample where reads are billed; every run records the engine it ran on.',
     rules:
       'The engines follow one data standard (nulls, casts, joins, aggregates, sort order, pivots), checked by an oracle test suite that runs the same expectations on all five. The differences that remain are documented, not discovered in production.',
     rulesLink: 'The documented engine differences',
@@ -145,9 +145,9 @@ export default {
       rbac: { name: 'Inherited permissions', line: 'Users, groups and nested projects with view, edit, manage and connect.' },
       audit: { name: 'An audit log that answers', line: 'Who signed in, who ran what, which data was downloaded. Append-only, and it can be forwarded to Splunk.' },
       sql: { name: 'Free-form SQL, contained', line: 'A SQL node reads its own input. On ClickHouse, chDB and BigQuery the query is parsed and any other table is refused; DuckDB and Polars run it in a sandbox that sees only the input.' },
-      sample: { name: 'A sample in the editor only', line: 'Previews can read a sample where reads are billed. Scheduled runs never do.' },
+      sample: { name: 'The whole table, every time', line: 'Previews and runs work on the full data. A development sample is optional — switch it on where every read is billed; scheduled runs always read everything.' },
     },
-    sampleAlt: 'The Development sample setting of a source node, set to “automatic (first 100.000 rows)”, with the note that scheduled runs and Run in production always read the whole table.',
+    sampleAlt: 'The optional Development sample setting of a source node, here switched to “automatic (first 100.000 rows)”, with the note that scheduled runs and Run in production always read the whole table.',
   },
 
   connect: {
