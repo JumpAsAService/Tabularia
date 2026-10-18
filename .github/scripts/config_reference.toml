@@ -1,0 +1,955 @@
+# The hand-written half of docs/configuration.md; config_reference.py writes the rest
+# (names, types, defaults, bounds, Helm keys) from the code. After a change here or in the
+# settings, run:  python3 .github/scripts/config_reference.py
+#
+# [var.NAME] keys:
+#   text        the explanation (required); one or two sentences, no defaults (they come from the code)
+#   production  a «change it before production» note, also listed at the top of the page
+#   required    true: the process refuses to start without it (shown instead of the default)
+#   secret      true: never show the default (SecretStr fields and the chart's Secret keys are already)
+#   default     what to show instead of the default worked out from the code
+#   type        what to show instead of the type worked out from the code
+#   values      appended to the type: what the code accepts beyond what the annotation says
+#   helm        what to show instead of the Helm key read from the chart
+#   section     for a variable without a `SECTION__` prefix: the id of its [[section]]
+#   where       deployment-only variables: where they apply
+
+[page]
+title = "Configuration reference"
+intro = """
+Every setting of Tabularia is an environment variable. This page lists all of them: the
+ones the gateway and the engine read, the frontend's, and the few that only the Docker
+Compose files and the Helm chart use. It is generated from the code by
+[`.github/scripts/config_reference.py`](../.github/scripts/config_reference.py), and a
+check fails when a variable is added, removed or changed without the page following:
+edit the code or [`config_reference.toml`](../.github/scripts/config_reference.toml),
+never this page.
+
+**Nested names.** The settings are grouped in sections, and a variable names the section
+and the field with a double underscore: `STORAGE__BUCKET` is the `bucket` field of the
+`storage` section, `CLICKHOUSE_EXTERNAL__S3_ENDPOINT` the `s3_endpoint` field of
+`clickhouse_external`. Write them in capitals. Booleans are `true` or `false`, lists are
+JSON (`APP__CORS_ORIGINS=["https://app.example.com"]`), and a variable left out keeps the
+default shown below. Keep comments on their own line: not every tool strips a trailing
+`# comment` from a value.
+
+**Where to set them.**
+
+- *Docker Compose*: in `infrastructure/.env`, a copy of
+  [`infrastructure/.env.example`](../infrastructure/.env.example). The gateway and
+  engine containers read the whole file, so one value reaches every service that needs
+  it. Compose is the way to try Tabularia; production runs on Kubernetes with the Helm
+  chart ([Kubernetes guide](deploy/kubernetes.md)).
+- *Helm*: the **Helm value** column gives the key of `values.yaml` the chart renders the
+  variable from. A variable without one goes in `extraEnv`, by its name (it lands in the
+  shared ConfigMap; the chart refuses a name it already sets), or, for a secret, in the
+  Secret you name in `existingSecret`. See [Deploying on Kubernetes](deploy/kubernetes.md).
+
+**Who reads what.** The *gateway* is the control plane (API, sign-in, permissions,
+schedules, flow orchestration), in one process or split into `api` and `orchestrator`
+copies (`APP__ROLE`). The *engine* is one image with several roles: the internal engine
+API, the run and preview workers, and the beat scheduler; they all read the same
+settings. The *frontend* reads three public values at startup. A variable only matters to
+the service it is listed under; giving it to the others is harmless.
+
+**Secrets** are never printed here. *required* means the process refuses to start
+without the variable; *development value (hidden)* means a placeholder that works on a
+laptop and must be replaced before anyone else can reach the installation (the gateway
+refuses some of them when `APP__ENV_NAME=production`).
+
+**Not in the environment.** Some things are set in the administration panel instead: the
+engine parameters marked *Also adjustable in Administration → Settings* (the variable is
+the starting value, see [engine settings](engine-settings.md)), the processes per worker
+(Administration → Workers), the AI models people may use, the engines allowed, the
+forwarding of the audit log to a SIEM ([Splunk](siem-splunk.md)), webhook receivers and
+service accounts ([API](api.md)), and the banners. Connection credentials (databases,
+SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
+`SECURITY__FERNET_KEY`.
+"""
+production_title = "Before production"
+production_intro = """
+The defaults are made for a laptop. Before an installation is reachable by anyone else,
+set at least these (the [release checklist](deploy/release-checklist.md) lists what
+changed between versions):
+"""
+shared_intro = """
+Read by the gateway and by the engine. Give both the same value: the Compose file and the
+chart do, since every container reads the same `.env` or ConfigMap.
+"""
+gateway_intro = """
+The control plane: in Compose the `gateway` service; on Kubernetes the `gateway` (`api`)
+and `orchestrator` workloads.
+"""
+engine_intro = """
+The data plane: in Compose the `backend`, `worker`, `preview-worker` and `beat`
+services; on Kubernetes the engine, the two worker Deployments and beat. Same image, same
+settings: a variable that concerns only one role says so.
+"""
+frontend_intro = """
+The Nuxt server reads these at startup (`NUXT_PUBLIC_…` is Nuxt's own runtime
+configuration), so one image serves every environment without a rebuild. The browser
+calls the gateway directly; the frontend server never does. The development Compose file
+sets them in the `frontend` service itself, not from `.env`.
+"""
+deployment_intro = """
+Not read by Tabularia's code: the Compose files and the Helm chart use them to configure
+containers.
+"""
+components = { shared = "Shared by the gateway and the engine", gateway = "Gateway", engine = "Engine and workers", frontend = "Frontend", deployment = "Compose and Helm only" }
+outro_title = "Changing this page"
+outro = """
+The page is generated. Names, types, defaults, bounds and Helm keys come from the code:
+the settings classes of [`gateway/app/core/config.py`](../gateway/app/core/config.py) and
+[`backend/app/core/config.py`](../backend/app/core/config.py), the direct reads of the
+environment in both apps, `frontend/nuxt.config.ts`, the development Compose file,
+`infrastructure/.env.example` and the chart's templates. The explanations come from
+[`.github/scripts/config_reference.toml`](../.github/scripts/config_reference.toml).
+After changing either, run `python3 .github/scripts/config_reference.py`;
+`--check` (run by the *Configuration reference* workflow, and by
+`python3 .github/scripts/test_config_reference.py`) fails while the page and the code
+disagree.
+"""
+
+# ── Sections ─────────────────────────────────────────────────────────────────
+# Order here = order on the page. A variable lands in the section of its component whose
+# `prefixes` hold the part of its name before `__` (or the one its `section` names).
+
+[[section]]
+id = "gateway-process"
+component = "gateway"
+title = "Process and HTTP"
+prefixes = ["APP"]
+
+[[section]]
+id = "gateway-db"
+component = "gateway"
+title = "Metadata database (Postgres)"
+prefixes = ["DB"]
+intro = "Users, groups, permissions, flows, connections, runs, schedules and the audit log. The schema is migrated with Alembic: see [database migrations](database-migrations.md)."
+
+[[section]]
+id = "gateway-auth"
+component = "gateway"
+title = "Sign-in, sessions and API tokens"
+prefixes = ["JWT", "AUTH"]
+intro = "Local sign-in and the session cookie, the first administrator, and the API tokens of scripts and service accounts ([API](api.md))."
+
+[[section]]
+id = "gateway-sso"
+component = "gateway"
+title = "Single sign-on (OIDC)"
+prefixes = ["OIDC"]
+intro = "Optional: Keycloak, Microsoft Entra ID, Auth0, Okta… Off while `OIDC__ISSUER` is empty; when it is set, the gateway configures itself from the issuer's discovery document and refuses to start if the client secret, redirect URI or post-login URL is missing. Runnable example: [`docs/examples/keycloak/`](examples/keycloak/); how groups are mapped: [SSO group mapping](design/sso-group-mapping.md)."
+
+[[section]]
+id = "gateway-engine"
+component = "gateway"
+title = "Link to the engine"
+prefixes = ["ENGINE"]
+
+[[section]]
+id = "gateway-ai"
+component = "gateway"
+title = "AI assistant"
+prefixes = ["AI"]
+intro = "Optional: a chat over the catalog and an assistant in the flow editor, against any OpenAI-compatible endpoint. Off until `AI__BASE_URL` and `AI__SECRET_KEY` are set, and no model is usable until an administrator enables it. On the external ClickHouse the assistant can run as a read-only user: see [the AI user](engines/clickhouse-ai-user.md). The dbt export uses it too ([dbt export](dbt-export.md))."
+
+[[section]]
+id = "gateway-preview"
+component = "gateway"
+title = "Development sample"
+prefixes = ["PREVIEW"]
+
+[[section]]
+id = "gateway-orchestration"
+component = "gateway"
+title = "Orchestration and scheduling"
+prefixes = ["ORCHESTRATOR", "SCHEDULING"]
+intro = "How flows are executed: queued in the database, picked up by an orchestrator process (`APP__ROLE` `all` or `orchestrator`), which waits for each step to complete before the next."
+
+[[section]]
+id = "gateway-openlineage"
+component = "gateway"
+title = "OpenLineage"
+prefixes = ["OPENLINEAGE"]
+intro = "Optional: what every run read and wrote, sent to a catalog in the OpenLineage standard (Marquez, DataHub, Astro…). Off when neither `OPENLINEAGE__URL` nor `OPENLINEAGE__FILE` is set. See [OpenLineage](openlineage.md)."
+
+[[section]]
+id = "gateway-webhooks-audit"
+component = "gateway"
+title = "Webhooks and audit log"
+prefixes = ["WEBHOOKS", "AUDIT"]
+intro = "Webhook receivers are added in Administration → Webhooks ([API](api.md)); forwarding the audit log to a SIEM is set up in Administration → SIEM ([Splunk](siem-splunk.md)). Neither has an environment variable beyond these."
+
+[[section]]
+id = "gateway-monitoring"
+component = "gateway"
+title = "Monitoring"
+prefixes = ["MONITORING"]
+
+[[section]]
+id = "gateway-kubernetes"
+component = "gateway"
+title = "Worker autoscaling from the panel (Kubernetes)"
+prefixes = ["KUBERNETES"]
+intro = "Lets an administrator change the minimum and maximum number of worker pods from Administration → Workers. Off unless `KUBERNETES__SCALING` is true; the chart sets the whole block, and a service account allowed to read the two worker Deployments and change their autoscalers, with `adminScaling.enabled` ([Deploying on Kubernetes](deploy/kubernetes.md))."
+
+[[section]]
+id = "engine-api"
+component = "engine"
+title = "Engine API and previews"
+prefixes = ["APP"]
+intro = "The internal API the gateway calls (never exposed publicly). It hands previews to the `preview` queue and waits for the answer."
+
+[[section]]
+id = "engine-redis"
+component = "engine"
+title = "Broker and cache index (Valkey or Redis)"
+prefixes = ["REDIS"]
+
+[[section]]
+id = "engine-storage"
+component = "engine"
+title = "Object storage"
+prefixes = ["STORAGE"]
+intro = "Any S3-compatible service: MinIO, AWS S3, Cloudflare R2, Backblaze B2, Scaleway, Google Cloud Storage through its S3 API (needed by the BigQuery engine). Every datasource snapshot, cached step and run output lives here."
+
+[[section]]
+id = "engine-workers"
+component = "engine"
+title = "Workers and task limits (Celery)"
+prefixes = ["CELERY", "WORKERS"]
+intro = "How long a run may take is decided by three coupled values: `CELERY__TASK_TIME_LIMIT` (the worker kills the task), `CELERY__TASK_SOFT_TIME_LIMIT` (the task is told to stop shortly before) and the gateway's `ENGINE__RUN_STALE_TIMEOUT_SECONDS` (the gateway declares a silent run lost), which must stay above the hard limit. To allow longer runs, raise the hard limit and the stale timeout together."
+
+[[section]]
+id = "engine-cache"
+component = "engine"
+title = "Step cache and metrics"
+prefixes = ["CACHE", "METRICS"]
+intro = "The editor keeps the output of intermediate steps, so the next preview starts from there instead of from the source."
+
+[[section]]
+id = "engine-embedded"
+component = "engine"
+title = "Embedded engines (chDB, DuckDB, Polars)"
+prefixes = []
+intro = "The engines that run inside the worker process. See [engine differences](engines/engine-differences.md)."
+
+[[section]]
+id = "engine-clickhouse"
+component = "engine"
+title = "External ClickHouse engine"
+prefixes = ["CLICKHOUSE_EXTERNAL"]
+intro = "Optional: flows run on a remote ClickHouse server (managed or self-hosted) instead of in the worker. Off while `CLICKHOUSE_EXTERNAL__HOST` is empty. Use the HTTP(S) port (8123 / 8443), not the native one."
+
+[[section]]
+id = "engine-bigquery"
+component = "engine"
+title = "BigQuery engine"
+prefixes = ["BIGQUERY"]
+intro = "Optional: flows run on Google BigQuery, which reads the parquet files from the bucket as temporary external tables, so `STORAGE__ENDPOINT` must be Google Cloud Storage (`https://storage.googleapis.com`, HMAC keys). The service account needs *BigQuery Job User* on the project and read access to the bucket. Off while the project or the credentials are empty."
+
+[[section]]
+id = "engine-ingest"
+component = "engine"
+title = "Imports and downloads"
+prefixes = ["INGEST", "EXPORT"]
+intro = "Database imports stream Arrow batches into parquet snapshots; a CSV or Excel download goes through the browser."
+
+[[section]]
+id = "engine-sharepoint"
+component = "engine"
+title = "SharePoint datasources"
+prefixes = ["SHAREPOINT"]
+intro = "Excel files on SharePoint are read through Microsoft Graph with an app registered on Entra ID; tenant, client and site belong to the connection. These two endpoints are deployment settings on purpose: whoever creates a connection cannot point the backend at another host."
+
+[[section]]
+id = "engine-sftp"
+component = "engine"
+title = "SFTP datasources"
+prefixes = ["SFTP"]
+intro = "Caps of the «SFTP folder» datasource, checked on the listed sizes before anything is downloaded: going over one fails the import, naming the file. See [SFTP](sftp.md)."
+
+[[section]]
+id = "engine-s3"
+component = "engine"
+title = "S3 folder datasources"
+prefixes = ["S3_SOURCE"]
+intro = "Caps of the «S3 folder» datasource, checked on the object listing before anything is downloaded. See [S3 datasources](s3-datasource.md)."
+
+[[section]]
+id = "engine-api-datasources"
+component = "engine"
+title = "API datasources"
+prefixes = ["API"]
+intro = "Caps and manners of the «API call» datasource. A datasource may lower the per-call, per-refresh and row limits for itself, never raise them above these; going over one fails the refresh with a message that names it, the data is never cut silently. See [API datasources](api-datasource.md)."
+
+[[section]]
+id = "engine-placeholders"
+component = "engine"
+title = "Placeholders"
+prefixes = ["PLACEHOLDERS"]
+intro = "Dates and lists that move by themselves in the names of inputs and outputs. See [placeholders](placeholders.md)."
+
+# ── Shared ───────────────────────────────────────────────────────────────────
+
+[var.APP__ENV_NAME]
+text = "`production` turns on the gateway's production guard: it refuses to start with the development secrets (`JWT__SECRET`, `AUTH__ADMIN_PASSWORD`, `DB__PASSWORD`) or a `JWT__SECRET` shorter than 32 characters. The engine accepts it and nothing there depends on it."
+production = "set it to `production`, so the gateway refuses the development secrets."
+
+[var.APP__CORS_ORIGINS]
+text = "Origins allowed to call the API from a browser, with the session cookie. Needed only when the interface is served from another host than the gateway (then set `AUTH__COOKIE_DOMAIN` too). The engine API applies the same list to its own CORS."
+values = "`*` and `null` refused"
+
+[var.SECURITY__FERNET_KEY]
+text = "Encrypts the credentials of database and file connections, at rest in the gateway and on their way to the engine, which decrypts them only inside the worker. The same value everywhere; never change it once a connection is saved. Generate one with `openssl rand -base64 32 | tr '+/' '-_'`."
+required = true
+production = "generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted."
+
+[var.CELERY__TASK_TIME_LIMIT]
+text = "Seconds after which the worker kills a task: the real ceiling on a run, an import or a preview. The gateway reads it too, to derive `ENGINE__RUN_STALE_TIMEOUT_SECONDS`."
+
+[var.STORAGE__ENDPOINT]
+text = "URL of the S3-compatible object storage, as the workers reach it (`http://minio:9000` in Compose). The gateway reads it only to name the storage in OpenLineage events (`gs://` for Google Cloud Storage)."
+
+# ── Gateway ──────────────────────────────────────────────────────────────────
+
+[var.APP__NAME]
+text = "Product name shown by the API. Product identity, not a deployment setting: leave it."
+
+[var.APP__VERSION]
+text = "The release, shown by `/system/info` and in the interface's menu. Set by the code; leave it."
+
+[var.APP__CODENAME]
+text = "The release's name. Set by the code; leave it."
+
+[var.APP__ROLE]
+text = "What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database."
+helm = "set per workload: `api` for the gateway, `orchestrator` for the orchestrator"
+
+[var.APP__ROOT_PATH]
+text = "Path prefix a reverse proxy publishes the gateway under, stripping it before forwarding (`/api` when one host serves interface and API). It fixes the paths the gateway writes for the browser: the SSO cookie, `/docs`, redirects. Empty = published at the root."
+values = "a path such as `/api`"
+
+[var.APP__GATEWAY_THREADS]
+text = "Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values."
+
+[var.APP__TIMEZONE]
+text = "Time zone in which cron schedules are read (wall-clock time, daylight saving included); they are stored in UTC. Timestamps are still shown in each viewer's own time zone."
+values = "an IANA name, e.g. `Europe/Rome`"
+
+[var.PREVIEW__DEFAULT_SAMPLE_ROWS]
+text = "Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and trial runs. People switch it off per node; scheduled runs and «Run in production» always read everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample."
+
+[var.AI__BASE_URL]
+text = "OpenAI-compatible endpoint, e.g. `https://api.scaleway.ai/v1`. Empty = assistant off."
+
+[var.AI__ACCESS_KEY]
+text = "Identifier of the key (Scaleway calls it access key); the protocol authenticates with the secret alone, this only tells which key is in use."
+
+[var.AI__SECRET_KEY]
+text = "The API key. Empty = assistant off."
+
+[var.AI__DEFAULT_MODEL]
+text = "Model proposed first in the picker, if an administrator enabled it."
+
+[var.AI__MAX_RESULT_ROWS]
+text = "Rows a query of the assistant may return, to the model and to the chat."
+
+[var.AI__MAX_REQUESTS]
+text = "Model round-trips per message of the data chat: the cap on its tool-calling loop."
+
+[var.AI__MAX_FLOW_REQUESTS]
+text = "The same for the flow editor's assistant, which takes a round-trip for every step it builds and checks."
+
+[var.AI__MAX_HISTORY_MESSAGES]
+text = "Past messages of a conversation replayed to the model: higher remembers more and costs more per turn."
+
+[var.AI__MAX_COST_PER_TURN_USD]
+text = "Spending ceiling of one turn, in dollars, enforced by pydantic-ai. The round-trip cap does not limit tokens."
+
+[var.AI__MAX_COST_PER_DAY_USD]
+text = "Daily ceiling per user, in dollars. 0 = none."
+production = "set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key)."
+
+[var.AI__MAX_COST_PER_DAY_TOTAL_USD]
+text = "Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 0 = none."
+
+[var.AI__MAX_INPUT_TOKENS_PER_TURN]
+text = "Input tokens one turn may send to the model."
+
+[var.AI__DBT_EXPORT_TIMEOUT_SECONDS]
+text = "Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart)."
+
+[var.AI__MAX_CHATS_LISTED]
+text = "Conversations listed per person; older ones are not deleted, only left out of the list."
+
+[var.SCHEDULING__WORKER_CAPACITY]
+text = "Flow runs one worker is assumed to carry at once: used only to highlight the crowded minutes in the schedule load heatmap. Match it to the run workers' `CELERY__WORKER_CONCURRENCY`."
+
+[var.ORCHESTRATOR__REFRESH_WAIT_SECONDS]
+text = "Longest a flow waits for a Refresh node to complete before aborting rather than reading stale data. Raise it for very long refreshes. An Output node has no cap of its own: it is bounded by `ENGINE__RUN_STALE_TIMEOUT_SECONDS`."
+
+[var.ORCHESTRATOR__POLL_INTERVAL_SECONDS]
+text = "Seconds between two checks of a step the flow is waiting for."
+
+[var.ORCHESTRATOR__QUEUE_POLL_SECONDS]
+text = "Seconds between two looks at the queue of flow executions."
+
+[var.ORCHESTRATOR__MAX_CONCURRENT]
+text = "Flow executions (and cells of flow groups) one orchestrator process carries at once; the others wait in the queue. Each uses a database connection while it asks the engine about a step: keep it below the pool (`DB__POOL_SIZE`)."
+
+[var.ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS]
+text = "An execution still queued after this long (no orchestrator running, or all of them full) is not started any more: it is closed as failed."
+
+[var.ORCHESTRATOR__HEARTBEAT_SECONDS]
+text = "How often the process executing a flow says it is still there."
+
+[var.ORCHESTRATOR__DEAD_AFTER_SECONDS]
+text = "An execution silent for longer belongs to a process that died: another orchestrator closes it as interrupted. The machines' clocks must agree within this margin."
+
+[var.DB__HOST]
+text = "Postgres host."
+
+[var.DB__PORT]
+text = "Postgres port."
+
+[var.DB__USER]
+text = "Postgres user. The development Compose file also creates the database with it."
+
+[var.DB__PASSWORD]
+text = "Postgres password."
+production = "replace the development password (the gateway refuses it in production unless `DB__URL` is set)."
+
+[var.DB__NAME]
+text = "Postgres database."
+
+[var.DB__URL]
+text = "A full DSN (`postgresql://user:password@host:5432/dbname`) for a managed Postgres that does not fit the pieces above; when set it wins over them. It holds the password: treat it as a secret."
+secret = true
+
+[var.DB__POOL_SIZE]
+text = "Connections kept open to Postgres. Empty = one per thread (`APP__GATEWAY_THREADS`), which is what the gateway needs. Pool plus overflow, summed over every gateway process, must stay under Postgres' `max_connections`."
+
+[var.DB__MAX_OVERFLOW]
+text = "Extra connections opened at a peak and closed when returned."
+
+[var.DB__AUTO_MIGRATE]
+text = "`true`: the gateway migrates the schema itself at startup (the development Compose file sets it). `false`: migrations are a step of their own (`python -m app.db.migra`, the chart's init container) and the gateway only refuses a database behind its code."
+
+[var.JWT__SECRET]
+text = "Signs every session and API token (HS256). Generate one with `openssl rand -hex 32`; changing it signs everybody out."
+production = "generate a secret of at least 32 characters (the gateway refuses the default and shorter ones in production)."
+
+[var.JWT__ALGORITHM]
+text = "Signature algorithm of the session tokens. Leave it."
+
+[var.JWT__ACCESS_TTL_MINUTES]
+text = "The longest a session lasts, active or not. Sessions also end at sign-out, from «Your sessions», by an administrator, at a password change or when the account is disabled."
+
+[var.AUTH__ADMIN_EMAIL]
+text = "E-mail of the administrator created at the first start. Existing users are never touched."
+
+[var.AUTH__ADMIN_PASSWORD]
+text = "Password of that administrator, used only when it is created."
+production = "set a password of your own before the first start (the gateway refuses `admin` in production)."
+
+[var.AUTH__ADMIN_NAME]
+text = "Display name of that administrator."
+
+[var.AUTH__SESSION_IDLE_MINUTES]
+text = "Minutes without activity after which a session closes: the gateway refuses it and the open page signs out by itself after a one-minute warning. 0 = never."
+
+[var.AUTH__COOKIE_DOMAIN]
+text = "Domain of the session cookie. Empty = the gateway's host, right when interface and API share a host. With the interface on another host of the same domain (`app.example.com` and `api.example.com`) set the common domain, `example.com`; two unrelated domains do not work."
+
+[var.AUTH__PERSONAL_TOKENS]
+text = "Whether people may create API tokens for their own scripts, with their own permissions. `false`: only service accounts, created by an administrator, have tokens."
+
+[var.AUTH__API_TOKEN_MAX_DAYS]
+text = "The furthest expiry of an API token: every token has one."
+
+[var.ENGINE__BASE_URL]
+text = "Internal URL of the engine API (`http://backend:8000` in Compose). The gateway is its only client."
+helm = "set by the chart (the engine Service)"
+
+[var.ENGINE__BUCKET]
+text = "The gateway's copy of the bucket name, compared with the bucket of every request (a mismatch is refused with 403). It must equal `STORAGE__BUCKET`: the Compose file and the chart derive it from that value, so set it by hand only if you know why."
+
+[var.ENGINE__RUN_STALE_TIMEOUT_SECONDS]
+text = "A run that has not reached a final state after this long is declared lost and marked failed. It must stay above `CELERY__TASK_TIME_LIMIT`, so the gateway gives up only after the worker has killed the task."
+default = "`CELERY__TASK_TIME_LIMIT` + 300"
+
+[var.ENGINE__SETTINGS_PANEL]
+text = "Whether Administration → Settings may change some engine parameters at runtime ([engine settings](engine-settings.md)). `false`: the environment is the only source, the panel shows the values without changing them, and values saved before stop applying."
+
+[var.ENGINE__DBT_EXPORT_TIMEOUT_SECONDS]
+text = "Seconds the gateway waits for the engine to build one dbt export; past it the download stops with a clear 504 instead of hanging until the ingress cuts it. Keep it, plus `AI__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout."
+
+[var.OIDC__ISSUER]
+text = "Issuer URL, e.g. `https://keycloak.example.com/realms/tabularia` or, for Entra ID, `https://login.microsoftonline.com/<tenant-id>/v2.0`. Empty = SSO off."
+
+[var.OIDC__CLIENT_ID]
+text = "Client id registered on the identity provider."
+
+[var.OIDC__CLIENT_SECRET]
+text = "Secret of that (confidential) client. Required when SSO is on."
+
+[var.OIDC__REDIRECT_URI]
+text = "The gateway's callback, e.g. `https://tabularia.example.com/api/auth/sso/callback`; it must match the one registered on the identity provider exactly. Required when SSO is on."
+
+[var.OIDC__SCOPES]
+text = "Scopes asked for, separated by spaces; must include `openid`."
+
+[var.OIDC__GROUPS_CLAIM]
+text = "Claim that carries the groups: `groups` for Keycloak, `roles` for Entra ID app roles."
+
+[var.OIDC__GROUP_ALLOWLIST]
+text = "Identity-provider groups mapped onto Tabularia groups, separated by commas. Empty = all of them."
+
+[var.OIDC__AUTO_CREATE_GROUPS]
+text = "`true`: create the Tabularia groups missing at sign-in. `false`: map only onto groups an administrator already made."
+
+[var.OIDC__AUTHORITATIVE]
+text = "`true`: the identity provider owns group membership (groups absent from the claim are removed). `false`: SSO only adds."
+
+[var.OIDC__SUPERUSER_GROUP]
+text = "Members of this group are administrators. Empty = nobody becomes one through SSO."
+
+[var.OIDC__ALLOWED_EMAIL_DOMAINS]
+text = "Only people with an e-mail in these domains may sign in, separated by commas. Empty = anyone the identity provider authenticates, which may be a whole company directory."
+
+[var.OIDC__REQUIRE_ALLOWLISTED_GROUP]
+text = "`true`: signing in requires one of the groups of `OIDC__GROUP_ALLOWLIST` (or the administrators' group)."
+
+[var.OIDC__POST_LOGIN_URL]
+text = "The interface page that receives the session after SSO, e.g. `https://tabularia.example.com/auth/callback`."
+
+[var.OIDC__BUTTON_LABEL]
+text = "Label of the SSO button on the sign-in page."
+
+[var.OIDC__DISCOVERY_TTL_SECONDS]
+text = "How long the identity provider's discovery document is trusted before it is fetched again."
+
+[var.OIDC__TIMEOUT_SECONDS]
+text = "Timeout of the calls to the identity provider."
+
+[var.OIDC__LOGIN_TX_TTL_SECONDS]
+text = "How long a sign-in may stay on the identity provider's page (the state, nonce and PKCE cookie)."
+
+[var.MONITORING__NODE_EXPORTER_URL]
+text = "node-exporter the RAM badge and the Monitoring panel read the host's memory from, live. Empty = badge off (the chart deploys no node-exporter)."
+
+[var.MONITORING__TIMEOUT_SECONDS]
+text = "Timeout of that read."
+
+[var.MONITORING__CACHE_SECONDS]
+text = "Seconds one read is shared by every open page."
+
+[var.AUDIT__RETENTION_MINUTES]
+text = "Audit entries older than this many minutes are deleted, once a minute. 0 = kept forever. Minutes because on a public demo the useful window is an hour (43200 = thirty days). The privacy notice can quote it."
+
+[var.WEBHOOKS__RETENTION_DAYS]
+text = "Days the history of webhook calls is kept."
+
+[var.WEBHOOKS__TIMEOUT_SECONDS]
+text = "How long a webhook receiver may take to answer."
+
+[var.OPENLINEAGE__URL]
+text = "HTTP endpoint of the collector, e.g. `http://marquez:5000`."
+
+[var.OPENLINEAGE__ENDPOINT]
+text = "Path of the lineage endpoint on the collector: `api/v1/lineage` for Marquez and Astro, `openapi/openlineage/api/v1/lineage` for DataHub."
+
+[var.OPENLINEAGE__API_KEY]
+text = "Bearer token, if the collector asks for one."
+
+[var.OPENLINEAGE__FILE]
+text = "Also, or instead, write the events as JSON Lines to this file."
+
+[var.OPENLINEAGE__NAMESPACE]
+text = "Namespace of this installation's jobs."
+
+[var.OPENLINEAGE__TIMEOUT_SECONDS]
+text = "How long the collector may take to answer. Events are sent after the run is closed, from a background thread: a collector that is down never fails a run."
+
+[var.OPENLINEAGE_URL]
+text = "The OpenLineage library's own variable: switches lineage on like `OPENLINEAGE__URL`, configured the library's way."
+section = "gateway-openlineage"
+
+[var.OPENLINEAGE_CONFIG]
+text = "The OpenLineage library's own configuration file (`openlineage.yml`), as an alternative to the variables above."
+section = "gateway-openlineage"
+
+[var.KUBERNETES__SCALING]
+text = "Turns the panel's autoscaling bounds on."
+helm = "`adminScaling.enabled`"
+
+[var.KUBERNETES__API_URL]
+text = "Kubernetes API server, from inside the cluster."
+
+[var.KUBERNETES__NAMESPACE]
+text = "Namespace of the worker Deployments. Empty = the pod's own, read from its service account."
+
+[var.KUBERNETES__TOKEN_FILE]
+text = "Service-account token the gateway authenticates with."
+
+[var.KUBERNETES__CA_FILE]
+text = "Certificate authority of the API server."
+
+[var.KUBERNETES__NAMESPACE_FILE]
+text = "Where the pod's namespace is read when `KUBERNETES__NAMESPACE` is empty."
+
+[var.KUBERNETES__RUN_WORKER_DEPLOYMENT]
+text = "Deployment of the run workers."
+helm = "set by the chart with `adminScaling.enabled`"
+
+[var.KUBERNETES__RUN_WORKER_AUTOSCALER]
+text = "Their autoscaler, `hpa/<name>` or `scaledobject/<name>` (KEDA). Empty = none."
+helm = "set by the chart with `adminScaling.enabled`"
+
+[var.KUBERNETES__RUN_WORKER_MAX_REPLICAS]
+text = "The highest maximum of run-worker pods the panel may set."
+helm = "`worker.autoscaling.panelMaxReplicas` (or `maxReplicas`)"
+
+[var.KUBERNETES__PREVIEW_WORKER_DEPLOYMENT]
+text = "Deployment of the preview workers."
+helm = "set by the chart with `adminScaling.enabled`"
+
+[var.KUBERNETES__PREVIEW_WORKER_AUTOSCALER]
+text = "Their autoscaler, as for the run workers."
+helm = "set by the chart with `adminScaling.enabled`"
+
+[var.KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS]
+text = "The highest maximum of preview-worker pods the panel may set."
+helm = "`previewWorker.autoscaling.panelMaxReplicas` (or `maxReplicas`)"
+
+[var.KUBERNETES__TIMEOUT_SECONDS]
+text = "Timeout of the calls to the Kubernetes API."
+
+# ── Engine ───────────────────────────────────────────────────────────────────
+
+[var.APP__ENGINE_API_THREADS]
+text = "Synchronous requests the engine API serves at once. Every open preview holds a thread while it waits for a worker, so this is how many previews can be in flight; they sleep and cost little."
+
+[var.PREVIEW_TIMEOUT_SECONDS]
+text = "Longest the engine API waits for a preview worker; then it revokes the job and answers 504. Keep any reverse proxy's read timeout above it."
+section = "engine-api"
+
+[var.REDIS__HOST]
+text = "Host of the Celery broker and of the step-cache index."
+
+[var.REDIS__PORT]
+text = "Its port."
+
+[var.REDIS__DB]
+text = "Database number."
+
+[var.REDIS__PASSWORD]
+text = "Password, when the broker requires one (managed services usually do)."
+
+[var.STORAGE__ACCESS_KEY]
+text = "Access key of the storage."
+production = "use credentials of your own (`minioadmin` is the development MinIO's)."
+
+[var.STORAGE__SECRET_KEY]
+text = "Secret key of the storage."
+production = "use credentials of your own."
+
+[var.STORAGE__BUCKET]
+text = "Bucket of every snapshot, cached step and output. The gateway (`ENGINE__BUCKET`) and the frontend (`NUXT_PUBLIC_BUCKET`) need the same name; the Compose file and the chart derive them from this one."
+
+[var.STORAGE__REGION]
+text = "Region of the storage (`auto` for Google Cloud Storage)."
+
+[var.STORAGE__DIRECT_READ]
+text = "The DuckDB and chDB engines read sources and cached steps in place, only the columns and row groups a query needs. `false`: download each file first, for a service that does not serve range reads."
+
+[var.DUCKDB_EXTENSION_DIRECTORY]
+text = "Where DuckDB finds its extensions (`httpfs`, for reading the storage in place). The image sets it to the extensions it ships, so nothing is downloaded at runtime."
+section = "engine-storage"
+default = "empty (the image sets `/opt/duckdb-extensions`)"
+
+[var.CELERY__BROKER_URL]
+text = "Broker URL, to put the queue somewhere else entirely. Empty = built from `REDIS__*`."
+
+[var.CELERY__RESULT_BACKEND]
+text = "Result store, likewise. Empty = built from `REDIS__*`."
+
+[var.CELERY__WORKER_CONCURRENCY]
+text = "Processes per worker container (each runs one task at a time). The preview workers have their own value (`PREVIEW_WORKER_CONCURRENCY` in Compose)."
+helm = "`worker.concurrency`, `previewWorker.concurrency`"
+
+[var.CELERY__TASK_SOFT_TIME_LIMIT]
+text = "Seconds after which a task is told to stop, so it can close files and connections and report the failure before the hard limit. Keep it below `CELERY__TASK_TIME_LIMIT`."
+
+[var.CELERY__TASK_SERIALIZER]
+text = "Format of the task messages. JSON is a security property (no pickled objects): leave it."
+
+[var.CELERY__RESULT_SERIALIZER]
+text = "Format of the results. Leave it."
+
+[var.CELERY__TIMEZONE]
+text = "Clock of beat's periodic tasks. Leave it on UTC: the gateway converts schedules to UTC before queuing them."
+
+[var.CELERY__ENABLE_UTC]
+text = "Celery's own UTC switch. Leave it."
+
+[var.CELERY__MAX_TASKS_PER_CHILD]
+text = "A worker process is replaced after this many tasks, so memory the allocator keeps does not pile up."
+
+[var.CELERY__MAX_MEMORY_PER_CHILD_KB]
+text = "Resident memory (KB) past which a worker process is replaced at the end of its task. Empty = worked out from the container's memory limit × `CELERY__MAX_MEMORY_HEADROOM_FRAC` ÷ concurrency, never below the floor: set it only to force a fixed value."
+
+[var.CELERY__MAX_MEMORY_HEADROOM_FRAC]
+text = "Share of the container's memory limit given to the worker processes; the rest is margin for the main process and the page cache."
+
+[var.CELERY__MAX_MEMORY_PER_CHILD_FALLBACK_KB]
+text = "The cap used when the container has no readable memory limit."
+
+[var.CELERY__MAX_MEMORY_PER_CHILD_FLOOR_KB]
+text = "The cap is never below this, so processes are not replaced too often."
+
+[var.WORKERS__RUN_CONCURRENCY]
+text = "Processes per run-worker container, resized within seconds without stopping running tasks. 0 = keep `CELERY__WORKER_CONCURRENCY`."
+
+[var.WORKERS__PREVIEW_CONCURRENCY]
+text = "The same for the preview workers."
+
+[var.CACHE__TTL_SECONDS]
+text = "A cached step unused for this long is deleted (its parquet and its index entry)."
+
+[var.CACHE__SWEEP_INTERVAL_SECONDS]
+text = "How often the cache is swept."
+
+[var.CACHE__MAX_STEP_ROWS]
+text = "Steps with more rows are not cached: a copy as large as the source saves nothing over re-reading it and costs gigabytes of writes. 0 = no cap."
+
+[var.METRICS__STORAGE_STATS_INTERVAL_SECONDS]
+text = "How often the size of the storage prefixes is measured and published as a metric."
+
+[var.CHDB_MAX_MEMORY_USAGE]
+text = "Memory budget of the embedded chDB engine, in bytes; keep it under the worker's per-process cap."
+section = "engine-embedded"
+
+[var.CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY]
+text = "Past this, a chDB GROUP BY spills to disk."
+section = "engine-embedded"
+
+[var.CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT]
+text = "Past this, a chDB ORDER BY spills to disk."
+section = "engine-embedded"
+
+[var.CHDB_MAX_BYTES_IN_JOIN]
+text = "Past this, a chDB join fails instead of growing."
+section = "engine-embedded"
+
+[var.ENGINE_MAX_CROSS_JOIN_ROWS]
+text = "Rows a cross join may produce in a run before it is refused with a clear error instead of exhausting memory. 0 = no cap."
+section = "engine-embedded"
+
+[var.CLICKHOUSE_EXTERNAL__HOST]
+text = "Server host. Empty = engine off."
+
+[var.CLICKHOUSE_EXTERNAL__PORT]
+text = "HTTP(S) port: 8123 plain, 8443 TLS."
+
+[var.CLICKHOUSE_EXTERNAL__USERNAME]
+text = "User the engine works as."
+
+[var.CLICKHOUSE_EXTERNAL__PASSWORD]
+text = "Its password."
+
+[var.CLICKHOUSE_EXTERNAL__AI_USERNAME]
+text = "A dedicated read-only user for the AI assistant's queries, a second barrier behind the SQL allow-list. Used only when both it and its password are set; otherwise the assistant runs as the user above. Grants: [the AI user](engines/clickhouse-ai-user.md)."
+
+[var.CLICKHOUSE_EXTERNAL__AI_PASSWORD]
+text = "Its password."
+
+[var.CLICKHOUSE_EXTERNAL__DATABASE]
+text = "Working database; it must exist. In `push` mode it holds the staging tables (the user needs CREATE, INSERT and DROP on it)."
+
+[var.CLICKHOUSE_EXTERNAL__SECURE]
+text = "TLS; managed services require it (port 8443)."
+
+[var.CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT]
+text = "Seconds to wait for the handshake."
+
+[var.CLICKHOUSE_EXTERNAL__TRANSPORT]
+text = "How the server reaches the data. `s3`: ClickHouse reads and writes the parquet files directly on the storage, nothing passes through the worker (the storage must be reachable from the server). `push`: the worker uploads the source into a staging table and streams the result back; works with any server."
+values = "`s3` or `push`"
+
+[var.CLICKHOUSE_EXTERNAL__S3_ENDPOINT]
+text = "The storage endpoint as the server sees it (`s3` mode), e.g. `https://s3.fr-par.scw.cloud`. Empty = `STORAGE__ENDPOINT`, right only when the server is on the same network."
+
+[var.CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION]
+text = "A named collection created on the server with the storage credentials, so the keys never travel in queries nor reach the `query_log`."
+
+[var.CLICKHOUSE_EXTERNAL__MAX_EXECUTION_TIME]
+text = "Per-query execution cap in seconds. 0 = none (previews are still bounded by `PREVIEW_TIMEOUT_SECONDS`)."
+
+[var.CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS]
+text = "`s3` mode: a dataset the viewer reads with more rows than this is copied once into a MergeTree table on the server, 2–6× faster on full scans. 0 = off: the copy is built inside the request and, with large row groups, direct reads are already fast."
+
+[var.CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE]
+text = "Database of those copies. Empty = the working database."
+
+[var.CLICKHOUSE_EXTERNAL__MATERIALIZE_TTL_SECONDS]
+text = "A copy unused for this long is dropped."
+
+[var.CLICKHOUSE_EXTERNAL__PARQUET_SCAN_MAX_THREADS]
+text = "On scans (aggregations, pivots, sorts, joins) the engine asks for at least this many threads, to hide the latency of reading from S3; never on LIMIT queries, never below the server's cores. 0 = leave `max_threads` alone."
+
+[var.BIGQUERY__PROJECT]
+text = "Google Cloud project the jobs run in. Empty = engine off."
+
+[var.BIGQUERY__CREDENTIALS_FILE]
+text = "Path, inside the container, of the service account's JSON key. Either this or `BIGQUERY__CREDENTIALS_B64`."
+
+[var.BIGQUERY__CREDENTIALS_B64]
+text = "The same key in base64 on one line (`base64 -w0 key.json`)."
+
+[var.BIGQUERY__LOCATION]
+text = "Region of the jobs: the bucket's, or the multi-region containing it (e.g. `EU`). Empty = read from the bucket."
+
+[var.BIGQUERY__MAXIMUM_BYTES_BILLED]
+text = "Bytes billed one query may reach: BigQuery refuses a query that would go over before running it (20 GiB ≈ 0.12 $). 0 = no cap."
+
+[var.BIGQUERY__CACHE_DATASET]
+text = "Dataset the step cache writes expiring native tables into (created if missing, which needs *BigQuery Data Editor*). Empty = no cache."
+
+[var.INGEST__PARQUET_ROW_GROUP_ROWS]
+text = "Rows per parquet row group written by imports. Large groups let the engines read only the columns a query needs; the group is held in memory before it is written (about 570 MB per million rows of a 50-column table), so raise the worker memory with it."
+
+[var.INGEST__DB_READ_TIMEOUT_SECONDS]
+text = "How long an import from ClickHouse, or a write into it, waits while the server sends nothing (it may sort a whole table before the first row). Keep it below `CELERY__TASK_SOFT_TIME_LIMIT`, so people read this error and not a killed task."
+
+[var.EXPORT__MAX_ROWS]
+text = "Rows of a CSV download from the editor, the viewer or the chat: the browser holds the whole file in memory. Larger results go through an Output node. 0 = no cap."
+
+[var.SHAREPOINT__GRAPH_BASE]
+text = "Microsoft Graph endpoint; change it only on a sovereign cloud (US Gov: `https://graph.microsoft.us/v1.0`)."
+
+[var.SHAREPOINT__LOGIN_BASE]
+text = "Microsoft sign-in endpoint; likewise (US Gov: `https://login.microsoftonline.us`)."
+
+[var.SFTP__MAX_FILE_BYTES]
+text = "Bytes of one file: each one is downloaded to the worker's disk and read in memory to be stacked."
+
+[var.SFTP__MAX_FILES]
+text = "Files one refresh may read."
+
+[var.SFTP__MAX_TOTAL_BYTES]
+text = "Bytes of all the matching files together."
+
+[var.SFTP__TIMEOUT_SECONDS]
+text = "Connection and SSH handshake: a silent server fails within this time."
+
+[var.S3_SOURCE__MAX_FILE_BYTES]
+text = "Bytes of one object: downloaded to the worker's disk and read in memory."
+
+[var.S3_SOURCE__MAX_FILES]
+text = "Files one refresh may read."
+
+[var.S3_SOURCE__MAX_TOTAL_BYTES]
+text = "Bytes of all the matching objects together."
+
+[var.S3_SOURCE__MAX_LISTED]
+text = "Keys the globs of one refresh may scan, all their expansions together: `**` on a huge bucket stops here."
+
+[var.S3_SOURCE__MAX_REQUEST_SECONDS]
+text = "Wall-clock time of one object's download: a server that drips the bytes stops here."
+
+[var.API__TIMEOUT_SECONDS]
+text = "Connection and read timeout of one request, the token request included."
+
+[var.API__MAX_PAGES]
+text = "Pages of one call: a pagination that never ends stops here."
+
+[var.API__MAX_CALLS]
+text = "Calls of one refresh (the combinations of the list variables)."
+
+[var.API__MAX_ROWS]
+text = "Rows one refresh may receive."
+
+[var.API__MAX_RESPONSE_BYTES]
+text = "Bytes of one response, decompressed: it is held in memory to be parsed."
+
+[var.API__MAX_TOTAL_BYTES]
+text = "Bytes of all the responses of one refresh."
+
+[var.API__MAX_RETRIES]
+text = "Retries of a request that failed with 429, 500, 502, 503, 504 or a network error, with exponential backoff or the server's `Retry-After`."
+
+[var.API__MAX_RETRY_WAIT_SECONDS]
+text = "A `Retry-After` longer than this fails the refresh instead of holding a worker."
+
+[var.API__MAX_REDIRECTS]
+text = "Redirects followed per request."
+
+[var.API__MAX_REQUEST_SECONDS]
+text = "Wall-clock time of one request, from sending it to the last byte of the answer."
+
+[var.API__MIN_INTERVAL_SECONDS]
+text = "Minimum pause between two requests of one refresh; a datasource can ask for more."
+
+[var.PLACEHOLDERS__MAX_VALUES]
+text = "Values of one range variable, and combinations of all the variables of a file datasource; checked when the datasource is saved and at every refresh. An API call is also bounded by `API__MAX_CALLS`."
+
+# ── Frontend ─────────────────────────────────────────────────────────────────
+
+[var.NUXT_PUBLIC_API_BASE]
+text = "The gateway's URL as the browser calls it: `/api` when one host serves interface and API, or a full URL on another host."
+
+[var.NUXT_PUBLIC_BUCKET]
+text = "Default bucket; must match `STORAGE__BUCKET`."
+
+[var.NUXT_PUBLIC_GRAFANA_URL]
+text = "Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional."
+
+# ── Compose and Helm only ────────────────────────────────────────────────────
+
+[var.COMPOSE_PROFILES]
+text = "Compose's own variable: `samples` adds two fake external databases and the init container that builds the «Sample» folder."
+where = "Compose (`infrastructure/.env`)"
+
+[var.SAMPLES_SCALE]
+text = "Size of the sample data: `small` (seconds, fits a laptop), `medium`, `robusta` (42M order lines, minutes and a few GB). Generated once."
+
+[var.SAMPLES_ENGINE]
+text = "Engine of the sample flows. Empty = the first one the policy allows."
+
+[var.SAMPLES_RUN_FLOWS]
+text = "Run the sample flows once at initialisation, so their outputs and views exist."
+
+[var.MINIO_IMAGE]
+text = "Image of the development MinIO (the official one was withdrawn from the registries)."
+
+[var.WITH_MSSQL]
+text = "Build argument: `true` adds Microsoft's SQL Server driver to the backend image you build. Not in the published images, for licensing reasons: see [SQL Server](sqlserver.md)."
+where = "Compose (build argument)"
+
+[var.BACKEND_MEM_LIMIT]
+text = "Memory ceiling of the engine API container."
+
+[var.WORKER_MEM_LIMIT]
+text = "Memory ceiling of the run worker. Keep the sum of the ceilings below the machine's RAM; the per-process cap is derived from it."
+
+[var.PREVIEW_WORKER_MEM_LIMIT]
+text = "Memory ceiling of the preview worker."
+
+[var.PREVIEW_WORKER_CONCURRENCY]
+text = "Processes of the preview worker (its `CELERY__WORKER_CONCURRENCY`). The per-process memory cap is the ceiling divided by this."
+
+[var.GRAFANA_ADMIN_USER]
+text = "Grafana administrator of the development stack."
+
+[var.GRAFANA_ADMIN_PASSWORD]
+text = "Its password."
+production = "change it wherever Grafana is reachable by others."
+default = "development value (hidden)"
+
+[var.MALLOC_ARENA_MAX]
+text = "glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools."
+where = "Compose and Helm (set on the engine containers)"
+default = "`2`"

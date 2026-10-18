@@ -1,0 +1,55 @@
+# docs/configuration.md lists every environment variable of Tabularia and is generated from
+# the code by .github/scripts/config_reference.py. This fails when the two disagree: a
+# variable added, removed or changed in the code (settings classes, direct reads of the
+# environment, Compose, .env.example, the Helm chart, the frontend) without regenerating
+# the page, or without an explanation in .github/scripts/config_reference.toml.
+#
+# Fix locally with:  python3 .github/scripts/config_reference.py
+# Standard library only: no dependency is installed.
+
+name: Configuration reference
+
+on:
+  push:
+    paths:
+      - "backend/app/**"
+      - "gateway/app/**"
+      - "frontend/nuxt.config.ts"
+      - "infrastructure/docker-compose.yml"
+      - "infrastructure/.env.example"
+      - "infrastructure/helm/tabularia/templates/**"
+      - "docs/configuration.md"
+      - ".github/scripts/config_reference.py"
+      - ".github/scripts/config_reference.toml"
+      - ".github/scripts/test_config_reference.py"
+      - ".github/workflows/config-reference.yml"
+  pull_request:
+    paths:
+      - "backend/app/**"
+      - "gateway/app/**"
+      - "frontend/nuxt.config.ts"
+      - "infrastructure/docker-compose.yml"
+      - "infrastructure/.env.example"
+      - "infrastructure/helm/tabularia/templates/**"
+      - "docs/configuration.md"
+      - ".github/scripts/config_reference.py"
+      - ".github/scripts/config_reference.toml"
+      - ".github/scripts/test_config_reference.py"
+      - ".github/workflows/config-reference.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: docs/configuration.md matches the code
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The generator's tests and the check of the committed page
+        run: python3 .github/scripts/test_config_reference.py -v

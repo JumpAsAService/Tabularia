@@ -22,7 +22,8 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    is append-only by design (every refresh writes a new snapshot), but the
    metadata is not.
 3. **Configuration.** Compare `infrastructure/.env.example` with the deployed
-   values. New in 1.0.0: `INGEST__PARQUET_ROW_GROUP_ROWS` (default 1,000,000 —
+   values; the [configuration reference](../configuration.md) has every variable of the
+   release, its default and what must change before production. New in 1.0.0: `INGEST__PARQUET_ROW_GROUP_ROWS` (default 1,000,000 —
    raise the worker memory ceilings with it, they are documented next to it),
    `CLICKHOUSE_EXTERNAL__MATERIALIZE_MIN_ROWS` (now `0` = off),
    `PREVIEW_WORKER_CONCURRENCY` (4), `SHAREPOINT__GRAPH_BASE` /
