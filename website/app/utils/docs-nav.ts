@@ -10,6 +10,7 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
   {
     title: 'Getting started',
     items: [
+      ['/docs/getting-started-docker-compose', 'Walkthrough with Docker Compose'],
       ['/docs/getting-started', 'Getting started'],
       ['/docs/overview', 'Overview (README)'],
     ],

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { site } from './site.config.mjs'
 import GithubSlugger from 'github-slugger'
-import { githubHeadingIds, rewriteMarkdownLinks } from './lib/doc-links.mjs'
+import { githubHeadingIds, PUBLIC_DOC_ASSET_DIRS, rewriteMarkdownLinks } from './lib/doc-links.mjs'
 import { isPublished } from './lib/repo-files.mjs'
 
 const repoRoot = resolve(__dirname, '..')
@@ -106,9 +106,8 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'static',
-    publicAssets: [
-      { dir: resolve(repoRoot, 'docs/architecture'), baseURL: 'architecture', maxAge: 0 },
-    ],
+    // the folders of docs/ served as files (diagrams, the walkthrough's screenshots)
+    publicAssets: PUBLIC_DOC_ASSET_DIRS.map(d => ({ dir: resolve(repoRoot, 'docs', d), baseURL: d, maxAge: 0 })),
     prerender: {
       crawlLinks: true,
       failOnError: true,

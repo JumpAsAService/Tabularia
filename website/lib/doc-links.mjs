@@ -19,8 +19,9 @@ import { isPublished } from './repo-files.mjs'
 export const PRIVATE_DOC_DIRS = ['audit', 'specs']
 export const PRIVATE_DOC_FILES = ['deploy/docker-compose.md']
 
-// Folders of docs/ published as plain files next to the pages.
-export const PUBLIC_DOC_ASSET_DIRS = ['architecture']
+// Folders of docs/ published as plain files next to the pages (the walkthrough's
+// screenshots too; the other files of docs/media are not published).
+export const PUBLIC_DOC_ASSET_DIRS = ['architecture', 'media/getting-started']
 // Only these kinds are served from the site; other files (JSON schemas) read better on GitHub.
 const PUBLIC_ASSET_EXT = /\.(png|jpe?g|svg|webp|html)$/i
 // Repository images the site serves itself (copied into website/public).
@@ -76,10 +77,10 @@ export function rewriteTarget (target, fromRepoPath, { repoRoot, site }) {
   if (exists && !isDir && (isPublishedDoc(repoPath) || repoPath === 'README.md')) return docRoute(repoPath) + hash
   const readme = posix.join(repoPath, 'README.md')
   if (isDir && existsSync(join(repoRoot, readme)) && isPublishedDoc(readme)) return docRoute(readme) + hash
-  const top = repoPath.split('/')
-  if (exists && !isDir && top[0] === 'docs' && PUBLIC_DOC_ASSET_DIRS.includes(top[1]) && PUBLIC_ASSET_EXT.test(repoPath) &&
-      isPublished(repoRoot, repoPath)) {
-    return '/' + top.slice(1).join('/') + hash
+  const docRel = repoPath.startsWith('docs/') ? repoPath.slice('docs/'.length) : null
+  if (exists && !isDir && docRel && PUBLIC_DOC_ASSET_DIRS.some(d => docRel.startsWith(d + '/')) &&
+      PUBLIC_ASSET_EXT.test(repoPath) && isPublished(repoRoot, repoPath)) {
+    return '/' + docRel + hash
   }
   if (!exists || !isPublished(repoRoot, repoPath)) return UNLINK
   return githubUrl(site, repoPath, isDir) + hash
