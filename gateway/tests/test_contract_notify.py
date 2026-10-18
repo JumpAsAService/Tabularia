@@ -83,9 +83,10 @@ def test_un_aggiornamento_rifiutato_avvisa_e_dice_quale_regola(session, scena):
     assert _consegna(session) == 1
     (m,) = scena.inviati
     assert m["url"] == "/db/notify" and m["to"] == ["alice@x.it", "bruno@x.it"]
-    assert m["subject"] == "[Tabularia] Data contract di «ordini»: aggiornamento rifiutato"
-    assert "NON è stato pubblicato" in m["body"] and "esecuzione #41" in m["body"]
-    assert "[bloccante] row_count: osservato 50" in m["body"]
+    # alice and bruno are not users: English (see test_email_language.py for the others)
+    assert m["subject"] == "[Tabularia] Data contract of «ordini»: update refused"
+    assert "was NOT published" in m["body"] and "run #41" in m["body"]
+    assert "[blocking] row_count: observed 50" in m["body"]
     assert _stati(session) == [None, "sent"]
     (voce,) = session.exec(select(AuditLog).where(AuditLog.action == "email.send")).all()
     assert voce.target_type == "datasource" and '"contract_state"' in voce.detail and '"refused"' in voce.detail
@@ -105,8 +106,8 @@ def test_avvisa_quando_torna_a_posto_e_quando_si_guasta_di_nuovo(session, scena)
     _referto(session, scena, AVVISO)
     _referto(session, scena, AVVISO)
     assert _consegna(session) == 3
-    assert [m["subject"].rsplit(": ", 1)[1] for m in scena.inviati] == ["aggiornamento rifiutato", "di nuovo rispettato", "regole non rispettate (avviso)"]
-    assert "[avviso] not_null su id: 2 righe" in scena.inviati[2]["body"]
+    assert [m["subject"].rsplit(": ", 1)[1] for m in scena.inviati] == ["update refused", "met again", "rules not met (warning)"]
+    assert "[warning] not_null on id: 2 rows" in scena.inviati[2]["body"]
 
 
 def test_chi_salva_o_verifica_a_mano_non_riceve_niente(session, scena):
@@ -127,8 +128,8 @@ def test_la_prima_verifica_andata_bene_non_e_una_notizia(session, scena):
 def test_la_freschezza_che_scade_avvisa_senza_che_arrivi_niente(session, scena):
     _referto(session, scena, {**ROTTO, "rules": [{"id": "r9", "kind": "freshness", "severity": "error", "passed": False, "observed": 30.5, "expected": 24}]}, trigger="freshness")
     assert _consegna(session) == 1
-    assert "contratto violato" in scena.inviati[0]["subject"] and "freschezza" in scena.inviati[0]["body"]
-    assert "[bloccante] freshness: osservato 30.5" in scena.inviati[0]["body"]
+    assert "contract broken" in scena.inviati[0]["subject"] and "freshness (the time" in scena.inviati[0]["body"]
+    assert "[blocking] freshness: observed 30.5" in scena.inviati[0]["body"]
 
 
 def test_senza_destinatari_o_senza_connessione_non_si_segna_niente(session, scena):

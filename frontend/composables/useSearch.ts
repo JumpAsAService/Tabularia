@@ -19,6 +19,8 @@ export interface SearchHit {
   project_id: number | null
   project_name: string | null
   detail: string
+  /** datasource: its row count */
+  rows?: number | null
 }
 
 export interface SearchResults {

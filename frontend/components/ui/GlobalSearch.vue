@@ -13,10 +13,12 @@ import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
+import { useFormat } from '~/composables/useFormat'
 import { useSearch, searchHitTarget, type SearchHit, type SearchKind } from '~/composables/useSearch'
 
 const { t } = useI18n()
 const api = useSearch()
+const fmt = useFormat()
 
 const MIN = 2        // sotto i 2 caratteri ogni ricerca torna mezzo catalogo
 const DEBOUNCE = 250 // digitando non si interroga a ogni tasto
@@ -157,7 +159,8 @@ const mostrati = computed(() => flat.value.length)
               <span class="hname">{{ h.name }}</span>
               <!-- dove si trova: due risultati omonimi si distinguono solo così -->
               <span v-if="h.project_name" class="hwhere"><Folder :size="11" /> {{ h.project_name }}</span>
-              <span v-if="h.detail" class="hdetail">{{ h.detail }}</span>
+              <span v-if="h.rows != null" class="hdetail">{{ $t('globalSearch.rows', { n: fmt.count(h.rows) }, h.rows) }}</span>
+              <span v-else-if="h.detail" class="hdetail">{{ h.detail }}</span>
             </button>
           </div>
           <p v-if="total > mostrati" class="note more">{{ $t('globalSearch.andMore', { n: total - mostrati }) }}</p>

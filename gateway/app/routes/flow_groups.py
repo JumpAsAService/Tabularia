@@ -6,8 +6,10 @@ Permissions, as for flows:
 - create, change, delete: EDIT; moving needs EDIT on both folders;
 - run now and set the schedule: RUN; read the runs: VIEW.
 
-The cells a definition names must exist and be visible to whoever adds them, so a
-group never points at something its author could not see. A cell already in the
+The cells a definition names must exist, be visible to whoever adds them and be
+runnable by them (RUN on their folder), so a group never runs something its editor
+could not. Cells added by someone other than the schedule's author switch the
+schedule off (services/schedule_authority.py). A cell already in the
 group stays accepted when someone with less sight edits it: their save must not
 drop what others put there. Every cell is checked again, with the rights of whoever
 runs the group, when it runs.
@@ -102,6 +104,10 @@ def _checked(session: Session, user: User, definition: FlowGroupDefinition,
                 errors.append(f"step {n}: {'flow' if cell.kind == 'flow' else 'datasource'} {cell.id} not found")
             elif cell.kind == "refresh" and obj.kind != "database":
                 errors.append(f"step {n}: '{obj.name}' is published by a flow, it cannot be refreshed")
+            elif not perm_service.has_capability(session, user, obj.project_id, Capability.RUN):
+                # a cell is something the group RUNS: seeing it is not enough to put it
+                # in a group that someone's schedule will run
+                errors.append(f"step {n}: adding '{obj.name}' needs RUN on its folder")
     if errors:
         raise HTTPException(status_code=422, detail="; ".join(errors[:10]))
     return definition
@@ -228,6 +234,7 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
     group = _get_group(session, group_id)
     ensure_can(session, user, group.project_id, Capability.EDIT)
     detail: dict = {}
+    schedule_off: dict | None = None
 
     target = group.project_id
     if body.project_id is not None and body.project_id != group.project_id:
@@ -239,6 +246,8 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
         # a schedule carries the authority of whoever set it, valid in the old folder
         # only: it is switched off, and someone with rights in the new one sets it again
         if group.run_schedule and group.run_scheduled_by != user.id:
+            schedule_off = {"turned_off": True, "reason": "the flow group was moved to another folder",
+                            "author": group.run_scheduled_by}
             group.run_schedule = None
             group.run_scheduled_by = None
             group.next_run_at = None
@@ -251,7 +260,17 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
         raise HTTPException(status_code=409, detail=f"There is already a flow group '{name}' in this folder")
 
     if body.definition is not None:
-        definition = _checked(session, user, body.definition, before=definition_of(group))
+        before = definition_of(group)
+        definition = _checked(session, user, body.definition, before=before)
+        new_cells = {(c.kind, c.id) for c in _cells(definition)} - {(c.kind, c.id) for c in _cells(before)}
+        if new_cells and group.run_schedule and group.run_scheduled_by != user.id:
+            # the schedule would run cells its author never chose, with the author's rights
+            schedule_off = {"turned_off": True, "author": group.run_scheduled_by,
+                            "reason": f"someone else added {len(new_cells)} cells"}
+            group.run_schedule = None
+            group.run_scheduled_by = None
+            group.next_run_at = None
+            detail["schedule_cleared"] = True
         group.definition = definition.model_dump_json()
         detail.update(steps=len(definition.steps), cells=_cell_count(definition))
     group.name = name
@@ -266,6 +285,12 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
         session, actor=user, action=audit.FLOW_GROUP_UPDATE, target_type="flow_group",
         target_id=group.id, target_label=group.name, detail=detail or None, request=request,
     )
+    if schedule_off:
+        audit.record_audit(
+            session, actor=user, action=audit.FLOW_GROUP_SCHEDULE, target_type="flow_group",
+            target_id=group.id, target_label=group.name, detail=schedule_off, request=request,
+        )
+    session.refresh(group)
     return _detail(session, user, group)
 
 

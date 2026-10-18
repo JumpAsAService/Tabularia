@@ -5,6 +5,42 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Security closing round for 1.2.0.** **Upgrade note:** `AUTH__ADMIN_PASSWORD` has no
+  default any more; the gateway refuses to create the administrator with an empty,
+  published (`admin`, the guides' examples) or shorter-than-12-characters password, in
+  every environment, and the development Compose refuses to start without one. An
+  administrator still holding `admin` from an older release gets the configured password
+  at the next start (its sessions close), or the gateway stops and says why;
+  `AUTH__ALLOW_KNOWN_ADMIN_PASSWORD=true` keeps a fixed password on a local development
+  stack only. **Uploads** have a ceiling, `UPLOAD__MAX_BYTES` (1 GiB, 0 = none): a 413
+  before the engine is called, a chunked body cut at the ceiling, and the engine API as
+  a second barrier. **Client addresses** are kept `AUDIT__IP_RETENTION_DAYS` (90) and
+  then emptied from audit entries, tokens and sessions (the entries stay); deleting an
+  account empties its addresses at once. **The client's address** is the one the server
+  resolved (uvicorn's `FORWARDED_ALLOW_IPS` / the chart's `gateway.trustedProxies`): a
+  forged `X-Forwarded-For` no longer lands in the audit log, sessions or tokens. **Sign-in**
+  spends the bcrypt time on unknown emails too (the timing told which accounts exist),
+  and one address failing on many accounts is slowed after 30 failures. **SMTP**
+  verifies the server's certificate (`SMTP__VERIFY_TLS=false` to opt out for a
+  self-signed relay). **API docs** load pinned Swagger UI / ReDoc versions checked by
+  hash, under a CSP. Observers no longer read hosts, endpoints, IdP groups or emails in
+  audit details, nor colleagues' emails in the editor's presence. SSO never grants or
+  removes administrator or observer groups by name (administration only through
+  `OIDC__SUPERUSER_GROUP`). Folders, user deletion, datasource moves, group creation
+  and job stops are audited. The Helm egress policy accepts `{cidr, except}` and always
+  excludes the cloud metadata address; the committed `.gitignore` covers every `.env`.
+  **Schedules** keep to their author's rights: a scheduled flow or flow group checks,
+  before it starts, everything it will need from its author (RUN on every flow it runs,
+  read access to every source, RUN and CONNECT for every refresh, CONNECT on every
+  connection it writes to, EDIT where it publishes); a gap fails the run with the
+  reason and sends the failure notice. An edit, a version promotion or a move by
+  someone else that widens what a flow or group reaches switches its schedule off,
+  audited with the reason; adding a cell to a flow group needs RUN on the cell's
+  folder. **One refresh per datasource at a time**: the manual refresh, the scheduler
+  and a flow's Refresh node queue on a per-datasource lock (a second manual refresh
+  gets 409, a scheduled slot is skipped, a flow waits for the running import), and the
+  snapshot swap reads the datasource `FOR UPDATE`, so the newer snapshot always wins.
+
 - **The SQL Server driver is no longer in the images** (as in 1.1.1). `mssql-python`
   depends on Microsoft's ODBC driver (`mssql-python-odbc`), proprietary and under a
   licence an AGPL-3.0 image cannot meet, so the published backend images are built

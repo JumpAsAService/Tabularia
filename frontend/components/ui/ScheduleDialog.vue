@@ -1,14 +1,17 @@
 <script setup lang="ts">
 // Dialog di schedulazione (cron) riusabile: refresh datasource ed esecuzione
 // flussi. Mostra la descrizione testuale live del cron (stile crontab.guru) via
-// cronstrue in italiano.
+// cronstrue, in the language of the interface.
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CalendarClock, X } from 'lucide-vue-next'
 import cronstrue from 'cronstrue/i18n'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+// cronstrue's locale for each language of the interface (same codes today; the
+// map says so, and keeps English for a language cronstrue would not know)
+const CRON_LOCALES: Record<string, string> = { en: 'en', it: 'it', fr: 'fr', de: 'de', es: 'es' }
 
 const props = defineProps<{
   open: boolean
@@ -79,7 +82,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
   const expr = cronInput.value.trim()
   if (!expr) return { text: '', ok: true }
   try {
-    return { text: cronstrue.toString(expr, { locale: 'it', verbose: false }), ok: true }
+    return { text: cronstrue.toString(expr, { locale: CRON_LOCALES[locale.value] ?? 'en', verbose: false, use24HourTimeFormat: true }), ok: true }
   } catch {
     return { text: t('scheduleDialog.invalidCron'), ok: false }
   }

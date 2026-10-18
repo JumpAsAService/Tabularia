@@ -126,3 +126,29 @@ def test_someone_who_cannot_see_the_flow_learns_nothing(session):
 def test_an_odd_instance_id_is_rejected(bad):
     with pytest.raises(Exception):
         PresenceBeat(instance=bad)
+
+
+def test_an_observer_sees_masked_colleagues(session):
+    """An observer (the shared guest of a demo) reads emails masked everywhere else:
+    the editor's «also open by» must not hand them out in clear."""
+    from app.models import Group, UserGroupLink
+    from app.routes.flows import flow_presence_beat, PresenceBeat
+    from tests.conftest import make_flow, make_permission, make_project, make_user
+
+    p = make_project(session, name="p")
+    flow = make_flow(session, name="f", project_id=p.id)
+    anna = make_user(session, email="anna.rossi@azienda.it", full_name="Anna Rossi", is_superuser=True)
+    guest = make_user(session, email="guest@x.it")
+    observers = Group(name="observers", is_observer=True)
+    session.add(observers)
+    session.commit()
+    session.add(UserGroupLink(user_id=guest.id, group_id=observers.id))
+    make_permission(session, user_id=guest.id, project_id=p.id)
+    session.commit()
+    flow_presence_beat(flow.id, PresenceBeat(instance="tab-anna"), user=anna, session=session)
+    (other,) = flow_presence_beat(flow.id, PresenceBeat(instance="tab-guest"), user=guest, session=session).others
+    assert other.email != "anna.rossi@azienda.it" and other.email.endswith("@azienda.it")
+    assert other.full_name == ""
+    # the administrator still sees who is there
+    (seen,) = flow_presence_beat(flow.id, PresenceBeat(instance="tab-anna"), user=anna, session=session).others
+    assert seen.email == "guest@x.it"

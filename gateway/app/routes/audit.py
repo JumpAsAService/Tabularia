@@ -83,9 +83,33 @@ def _to_out(e: AuditLog, pieno: bool = True) -> AuditEntryOut:
             out.target_label = mask_email(out.target_label)
         out.ip = None
         out.user_agent = None
-        if isinstance(out.detail, dict) and out.detail.get("prefix"):
-            out.detail = {**out.detail, "prefix": "tab_…"}  # come in /admin/api-tokens
+        out.detail = _detail_per_osservatore(out.detail)
     return out
+
+
+# keys of `detail` that say WHERE (hosts, endpoints, paths, SQL) or WHO (IdP groups
+# and identities): an observer sees "…" in their place, at any depth
+_NASCOSTI = frozenset({
+    "host", "url", "endpoint", "server", "fingerprint", "path", "source_keys", "sql", "secret",
+    "groups", "groups_added", "groups_removed", "group_names", "sub", "subject", "issuer",
+    "to", "cc", "bcc",
+})
+
+
+def _detail_per_osservatore(valore, chiave: str | None = None):
+    """`detail` as an observer reads it: what was done stays (counts, formats,
+    engines, ids), where and who goes; emails are masked like the actor's."""
+    if chiave in _NASCOSTI and not isinstance(valore, (int, float, bool)) and valore is not None:
+        return "…"
+    if chiave == "prefix" and valore:
+        return "tab_…"  # come in /admin/api-tokens
+    if isinstance(valore, dict):
+        return {k: _detail_per_osservatore(v, k) for k, v in valore.items()}
+    if isinstance(valore, list):
+        return [_detail_per_osservatore(v) for v in valore]
+    if isinstance(valore, str) and "@" in valore:
+        return mask_email(valore)
+    return valore
 
 
 @router.get("/audit", response_model=Page[AuditEntryOut])

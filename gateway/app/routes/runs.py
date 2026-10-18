@@ -12,11 +12,12 @@ lanciato e dimenticato si aggiorna alla prima visita della cronologia.
 import json
 import logging
 import uuid
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import case, func, literal_column, or_, update
+from sqlalchemy import case, func, literal_column, or_, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -28,7 +29,7 @@ from app.deps.permissions import ensure_can
 from app.services import permissions as perm_service
 from app.models import Connection, Datasource, Flow, FlowGroup, Project, Run, User
 from app.models.permission import Capability
-from app.models.run import TERMINAL_STATES
+from app.models.run import LIVE_INGEST, TERMINAL_STATES
 from app.routes.connections import NOT_DATABASES, allowed_email_domains, engine_connection_payload
 from app.services import audit
 from app.services import contracts as contract_service
@@ -649,6 +650,58 @@ async def _submit_transform(body: RunCreate, output_key: str, destination_payloa
     return task_id
 
 
+# advisory-lock namespace of «one refresh per datasource» (the flow queue uses 74610001)
+_REFRESH_LOCK = 74610002
+
+
+def in_line_for_the_datasource(session: Session, ds_id: int) -> None:
+    """Queues, until the end of the transaction, whoever is about to check whether a
+    datasource has a refresh running and to start one: the manual refresh from any
+    replica, the scheduler, a flow's Refresh node. Without it two of them at once
+    both saw nothing running and both launched (review 2026-10-14,
+    correctness-core-6). Released by the commit that records the import. On SQLite
+    (the tests) there is one process and nothing to queue on."""
+    if session.get_bind().dialect.name == "postgresql":
+        session.connection().execute(
+            text("SELECT pg_advisory_xact_lock(:space, :ds)"), {"space": _REFRESH_LOCK, "ds": ds_id}
+        )
+
+
+def live_refresh(session: Session, ds_id: int) -> Optional[int]:
+    """The id of the datasource's import still running or queued, if any."""
+    return session.exec(
+        select(Run.id).where(Run.datasource_id == ds_id, text(LIVE_INGEST)).order_by(Run.id.desc()).limit(1)
+    ).first()
+
+
+async def start_refresh_if_free(
+    session: Session, user: User, ds: Datasource, conn: Connection,
+    trigger_type: str = "manual", parent_run_id: int | None = None, launch=None,
+) -> Optional[Run]:
+    """Starts a refresh unless one is running: returns the new run, or None.
+
+    The last import is reconciled first (outside the lock: it may talk to the engine
+    and commit), then the check and the launch happen in line with every other
+    starter, the lock held until the new run is committed. `launch`: the function
+    that starts the import (the caller's own reference, so tests can replace it)."""
+    last = session.exec(
+        select(Run).where(Run.datasource_id == ds.id, Run.kind == "ingest").order_by(Run.started_at.desc())
+    ).first()
+    if last is not None and last.status not in TERMINAL_STATES:
+        await _reconcile(session, last)
+    session.commit()  # a fresh transaction: the lock is held from here to the launch's commit
+    in_line_for_the_datasource(session, ds.id)
+    if live_refresh(session, ds.id) is not None:
+        session.rollback()  # releases the lock
+        return None
+    try:
+        extra = {"parent_run_id": parent_run_id} if parent_run_id is not None else {}
+        return await (launch or launch_ingest_run)(session, user, ds, conn, trigger_type=trigger_type, **extra)
+    except BaseException:
+        session.rollback()
+        raise
+
+
 async def launch_ingest_run(
     session: Session, user: User, ds: Datasource, conn: Connection,
     trigger_type: str = "manual", parent_run_id: int | None = None,
@@ -1258,8 +1311,15 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     """Il refresh è riuscito: swap dello snapshot (solo il vincitore del claim
     arriva qui). NON committa — lo fa `_reconcile`, così lo swap e il claim del
     run sono nella stessa transazione (o entrambi, o nessuno). Lo snapshot
-    precedente è marcato per la cancellazione DIFFERITA."""
-    ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
+    precedente è marcato per la cancellazione DIFFERITA.
+
+    The datasource is read FOR UPDATE: two reconciles closing two imports of it at
+    once would otherwise both read the snapshot of before, and the older one, if it
+    committed last, put its data back over the newer one."""
+    ds = session.exec(
+        select(Datasource).where(Datasource.id == run.datasource_id)
+        .with_for_update().execution_options(populate_existing=True)
+    ).first() if run.datasource_id else None
     if ds is None:
         # datasource sparita durante il refresh: il nuovo blob è orfano (nessun
         # lettore lo referenzia) → cancellazione differita, uniforme.

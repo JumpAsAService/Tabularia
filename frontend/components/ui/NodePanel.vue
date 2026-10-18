@@ -508,7 +508,7 @@ function pickDatasource(id: number | null) {
         <input
           :value="(node.data.emailTo ?? []).join(', ')"
           type="text"
-          placeholder="report@azienda.it, capo@azienda.it"
+          placeholder="reports@example.com, manager@example.com"
           @change="emit('update', { emailTo: splitAddresses(($event.target as HTMLInputElement).value) })"
         />
         <label>{{ $t('nodePanel.emailCcLabel') }} <span class="muted">{{ $t('nodePanel.emailListHint') }}</span></label>
@@ -612,7 +612,7 @@ function pickDatasource(id: number | null) {
           spellcheck="false"
           class="out-sftp-file-name"
           aria-describedby="tp-out-sftp-file-name"
-          placeholder="vendite_{date}"
+          placeholder="sales_{date}"
           @input="emit('update', { sftpFileName: ($event.target as HTMLInputElement).value })"
         />
         <TemplatePreview id="tp-out-sftp-file-name" :preview="outPreview" name="file_name" />

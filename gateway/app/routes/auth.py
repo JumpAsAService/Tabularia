@@ -1,3 +1,4 @@
+import secrets
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -5,7 +6,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.security import verify_password
+from app.core.security import hash_password, verify_password
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer
 from app.models import User, UserSession
@@ -16,6 +17,10 @@ from app.core.routing import RottaCheRilascia
 
 router = APIRouter(route_class=RottaCheRilascia, prefix="/auth", tags=["auth"])
 
+# The hash of a password nobody knows, checked when the account has none of its
+# own, so that every refused sign-in costs the same bcrypt time.
+_NESSUNO = hash_password(secrets.token_urlsafe(24))
+
 
 @router.post("/login", response_model=Token)
 def login(body: LoginRequest, request: Request, response: Response, session: Session = Depends(get_session)):
@@ -25,7 +30,7 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
     # Freno sui tentativi ripetuti, prima di tutto il resto: a chi è frenato si
     # risponde con una lettura per chiave, senza arrivare a bcrypt (vedi
     # services/login_throttle.py).
-    ip = request.client.host if request.client else None
+    ip = audit.client_ip(request)  # as the server resolved it, never a header taken at its word
     attesa = login_throttle.attesa_richiesta(session, ip, body.email)
     if attesa > 0:
         audit.record_audit(
@@ -42,8 +47,13 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
     # ancora quello (vedi sessions.apri)
     verificata = user.hashed_password if user is not None else None
     # utente solo-SSO (nessuna password locale): entra solo dall'IdP; un account di
-    # servizio entra solo con un token
-    if user is None or user.is_service or not verificata or not verify_password(body.password, verificata):
+    # servizio entra solo con un token. bcrypt runs in every case, against a hash
+    # nobody knows when there is no password to check: answering an unknown email
+    # after one SELECT (~35 ms) and a real one after bcrypt (~300 ms) told which
+    # emails have a password account.
+    utilizzabile = user is not None and not user.is_service and bool(verificata)
+    giusta = verify_password(body.password, verificata if utilizzabile else _NESSUNO)
+    if not (utilizzabile and giusta):
         # login fallito: si registra chi ci ha provato e da dove (email tentata)
         audit.record_audit(
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
@@ -186,6 +196,10 @@ def me(user: User = Depends(get_current_user), session: Session = Depends(get_se
         is_superuser=is_admin(session, user),
         is_observer=is_observer(session, user),
         groups=list(names),
+        # no local password: the settings menu says the identity provider manages it
+        sso_only=user.hashed_password is None,
+        # the language the emails to this user speak (PUT /users/me/locale)
+        locale=user.locale,
         # la pagina esce da sé dopo questi minuti senza che nessuno la tocchi
         session_idle_minutes=get_settings().auth.session_idle_minutes,
         # niente token personali per l'osservatore (vedi routes/api_tokens.py)

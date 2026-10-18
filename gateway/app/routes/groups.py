@@ -32,14 +32,21 @@ def list_groups(session: Session = Depends(get_session)):
     ]
 
 
-@router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(require_superuser)])
-def create_group(body: GroupCreate, session: Session = Depends(get_session)):
+@router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
+def create_group(
+    body: GroupCreate,
+    session: Session = Depends(get_session),
+    current: User = Depends(require_superuser),
+    request: Request = None,  # type: ignore[assignment]
+):
     if session.exec(select(Group).where(Group.name == body.name)).first():
         raise HTTPException(status_code=409, detail="There is already a group with this name")
     group = Group(name=body.name, description=body.description)
     session.add(group)
     session.commit()
+    session.refresh(group)
+    audit.record_audit(session, actor=current, action=audit.GROUP_CREATE, request=request,
+                       target_type="group", target_id=group.id, target_label=group.name)
     session.refresh(group)
     # esplicito come in list_groups: così la rotta dice la verità anche a chi la
     # chiama direttamente, senza passare dalla serializzazione di FastAPI

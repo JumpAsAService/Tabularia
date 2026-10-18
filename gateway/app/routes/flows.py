@@ -38,6 +38,7 @@ from app.schemas.models import (
 from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
+from app.services import schedule_authority
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 from app.services.copy_names import free_copy_name
@@ -255,7 +256,7 @@ def create_flow(
     session.add(flow)
     session.commit()
     session.refresh(flow)
-    _snapshot_version(session, flow, user, note="creazione")
+    _snapshot_version(session, flow, user, note="created")
     audit.record_audit(
         session, actor=user, action=audit.FLOW_CREATE, target_type="flow",
         target_id=flow.id, target_label=flow.name,
@@ -520,6 +521,11 @@ def flow_presence_beat(
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.VIEW)
     others = flow_presence.beat(session, flow_id, body.instance, user.id, user.email, user.full_name or "")
+    if perm_service.is_observer_only(session, user):
+        # an observer reads people masked everywhere else (audit, users): here too
+        from app.services.masking import mask_email
+
+        others = [{**o, "email": mask_email(o["email"]), "full_name": ""} for o in others]
     return PresenceOut(
         others=[PresenceOther(**{**o, "since": datetime.fromtimestamp(o["since"], timezone.utc)}) for o in others],
         heartbeat_seconds=flow_presence.HEARTBEAT_SECONDS,
@@ -545,6 +551,37 @@ def get_flow(flow_id: int, user: User = Depends(get_current_user), session: Sess
     return flow
 
 
+def _guard_someone_elses_schedule(flow: Flow, user: User, new_definition: str | None,
+                                   moved: bool) -> dict | None:
+    """A schedule carries its author's authority. An edit by someone else that makes
+    the flow reach more (datasources, files, flows it runs, connections, publish
+    folders), or a move to another folder, would spend that authority on something
+    the author never chose: the schedule is switched off. Returns the audit detail
+    for the caller to record once the change is committed (`_record_schedule_off`)."""
+    if not flow.run_schedule or flow.run_scheduled_by in (None, user.id):
+        return None
+    reason = None
+    if moved:
+        reason = "the flow was moved to another folder"
+    elif new_definition is not None:
+        nuove = schedule_authority.widens(flow.definition, new_definition)
+        if nuove:
+            reason = f"the definition now reads or writes more ({len(nuove)} new reference(s))"
+    if reason is None:
+        return None
+    author = flow.run_scheduled_by
+    flow.run_schedule = None
+    flow.run_scheduled_by = None
+    flow.next_run_at = None
+    return {"turned_off": True, "reason": reason, "author": author}
+
+
+def _record_schedule_off(session: Session, user: User, flow: Flow, detail: dict | None, request) -> None:
+    if detail:
+        audit.record_audit(session, actor=user, action=audit.FLOW_SCHEDULE, target_type="flow",
+                           target_id=flow.id, target_label=flow.name, detail=detail, request=request)
+
+
 @router.patch("/flows/{flow_id}", response_model=FlowDetail)
 def update_flow(
     flow_id: int,
@@ -568,11 +605,14 @@ def update_flow(
     # the folder path is part of the flow's name in an external lineage catalog
     lineage_names = openlineage.catalog_names(session, flows=[flow]) if body.name is not None or body.project_id is not None else {}
 
-    if body.project_id is not None and body.project_id != flow.project_id:
+    moved = body.project_id is not None and body.project_id != flow.project_id
+    if moved:
         # spostamento: serve EDIT anche sulla cartella di destinazione
         if session.get(Project, body.project_id) is None:
             raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.project_id, Capability.EDIT)
+    schedule_off = _guard_someone_elses_schedule(flow, user, body.definition, moved)
+    if moved:
         flow.project_id = body.project_id
 
     if body.name is not None:
@@ -591,12 +631,14 @@ def update_flow(
     session.commit()
     session.refresh(flow)
     if body.definition is not None:  # solo i cambi di DAG creano una versione
-        _snapshot_version(session, flow, user, note="modifica")
+        _snapshot_version(session, flow, user, note="edited")
     openlineage.renamed(session, lineage_names)
     audit.record_audit(
         session, actor=user, action=audit.FLOW_UPDATE, target_type="flow",
         target_id=flow.id, target_label=flow.name, detail={"changed": changed}, request=request,
     )
+    _record_schedule_off(session, user, flow, schedule_off, request)
+    session.refresh(flow)
     return flow
 
 
@@ -650,17 +692,20 @@ def promote_flow_version(
     if target is None:
         raise HTTPException(status_code=404, detail="Version not found")
     _authorize_definition_keys(session, user, target.definition)  # RBAC come su salvataggio
+    schedule_off = _guard_someone_elses_schedule(flow, user, target.definition, False)
     flow.definition = target.definition
     flow.updated_at = datetime.now(timezone.utc)
     session.add(flow)
     session.commit()
     session.refresh(flow)
-    _snapshot_version(session, flow, user, note=f"promossa dalla v{version}")
+    _snapshot_version(session, flow, user, note=f"promoted from v{version}")
     session.refresh(flow)
     audit.record_audit(
         session, actor=user, action=audit.FLOW_PROMOTE, target_type="flow",
         target_id=flow.id, target_label=flow.name, detail={"from_version": version}, request=request,
     )
+    _record_schedule_off(session, user, flow, schedule_off, request)
+    session.refresh(flow)
     return flow
 
 

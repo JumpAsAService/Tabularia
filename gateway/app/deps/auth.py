@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 from app.core.security import decode_access_token
 from app.db.session import engine_di_lettura, get_session
 from app.models import ApiToken, Group, User, UserGroupLink, UserSession
-from app.services import api_tokens, sessions
+from app.services import api_tokens, audit, sessions
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +107,7 @@ def _touch_last_seen(session: Session, user: User, aperta: UserSession, request:
             aperta.ip = None
             aperta.user_agent = None
         else:
-            fwd = request.headers.get("x-forwarded-for")
-            aperta.ip = (fwd.split(",")[0].strip() if fwd
-                         else (request.client.host if request.client else None))
+            aperta.ip = audit.client_ip(request)
         user.last_seen_at = now
         aperta.last_seen_at = now.replace(tzinfo=None)
         session.add(user)
@@ -222,9 +220,7 @@ def _touch_token(session: Session, user: User, riga: ApiToken, request: Request)
         if is_observer_only(session, user):
             riga.last_used_ip = None
         else:
-            fwd = request.headers.get("x-forwarded-for")
-            riga.last_used_ip = ((fwd.split(",")[0].strip() if fwd
-                                  else (request.client.host if request.client else None)) or "")[:64] or None
+            riga.last_used_ip = (audit.client_ip(request) or "")[:64] or None
         riga.last_used_at = now.replace(tzinfo=None)
         user.last_seen_at = now
         session.add(riga)

@@ -31,6 +31,9 @@ def _no_deployment_defaults(monkeypatch):
     monkeypatch.delenv("PREVIEW__DEFAULT_SAMPLE_ROWS", raising=False)
     for name in ("AI__BASE_URL", "AI__ACCESS_KEY", "AI__SECRET_KEY", "AI__DEFAULT_MODEL"):
         monkeypatch.delenv(name, raising=False)  # l'assistente AI e' spento salvo che il test lo accenda
+    # the dev stack's own allowances (a fixed admin password, no address purge)
+    for name in ("AUTH__ALLOW_KNOWN_ADMIN_PASSWORD", "AUDIT__IP_RETENTION_DAYS"):
+        monkeypatch.delenv(name, raising=False)
     from app.core.config import get_settings
 
     get_settings.cache_clear()

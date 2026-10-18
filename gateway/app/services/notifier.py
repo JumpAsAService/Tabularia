@@ -28,7 +28,7 @@ from sqlmodel import Session, select
 from app.core.engine_client import get_engine_client
 from app.models import Connection, Flow, Run
 from app.models.run import TERMINAL_STATES
-from app.services import audit
+from app.services import audit, email_texts
 from app.routes.connections import engine_connection_payload
 
 logger = logging.getLogger(__name__)
@@ -60,19 +60,16 @@ def _gia_falliva(session: Session, flow_id: int, run_id: int) -> bool:
     return precedente is not None and precedente.status == "FAILURE"
 
 
-def _corpo(flow: Flow, run: Run) -> str:
+def _corpo(flow: Flow, run: Run, lang: str = email_texts.DEFAULT) -> str:
+    """The body of the notice, in `lang` (see services/email_texts.py)."""
     quando = (run.finished_at or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M UTC")
-    righe = [
-        f"Il flusso «{flow.name}» non è andato a buon fine.",
-        "",
-        f"Quando:    {quando}",
-        f"Esecuzione: #{run.id}",
-    ]
+    campi = [("when", quando), ("run", f"#{run.id}")]
     if run.engine:
-        righe.append(f"Motore:    {run.engine}")
+        campi.append(("engine", run.engine))
+    righe = [email_texts.text(lang, "flow_intro", flow=flow.name), ""] + email_texts.labelled(lang, campi)
     if run.error:
-        righe += ["", "Errore:", run.error[:MAX_ERROR_CHARS]]
-    righe += ["", "—", "Messaggio automatico di Tabularia. Per non riceverlo più, togli gli indirizzi dalle notifiche del flusso."]
+        righe += ["", email_texts.text(lang, "error"), run.error[:MAX_ERROR_CHARS]]
+    righe += ["", "—", email_texts.text(lang, "flow_footer")]
     return "\n".join(righe)
 
 
@@ -99,16 +96,20 @@ async def notify_failure(session: Session, run: Run) -> None:
             logger.info("avviso per il flusso %s saltato: falliva già", flow.id)
             return
 
-        payload = {
-            "connection": engine_connection_payload(conn),
-            "to": a,
-            "subject": f"[Tabularia] Flusso «{flow.name}» fallito",
-            "body": _corpo(flow, run),
-        }
-        resp = await get_engine_client().post("/db/notify", json=payload, timeout=60)
-        ok = resp.status_code < 400
-        if not ok:
-            logger.warning("avviso per il flusso %s rifiutato dall'engine: %s", flow.id, resp.text[:300])
+        # one message per language: each recipient reads it in the language chosen
+        # in the interface, English for an address that is not a user
+        ok = True
+        for lang, gruppo in email_texts.by_language(session, a):
+            payload = {
+                "connection": engine_connection_payload(conn),
+                "to": gruppo,
+                "subject": email_texts.text(lang, "flow_subject", flow=flow.name),
+                "body": _corpo(flow, run, lang),
+            }
+            resp = await get_engine_client().post("/db/notify", json=payload, timeout=60)
+            if resp.status_code >= 400:
+                ok = False
+                logger.warning("avviso per il flusso %s rifiutato dall'engine: %s", flow.id, resp.text[:300])
         audit.record_audit(
             session, actor=None, actor_label="scheduler", action=audit.EMAIL_SEND,
             outcome="success" if ok else "failure",

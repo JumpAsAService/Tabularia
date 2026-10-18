@@ -118,7 +118,7 @@ function downloadPng() {
   const url = inst.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: ui.value.panel })
   const a = document.createElement('a')
   a.href = url
-  a.download = `${(props.name || 'grafico').replace(/[^a-z0-9._-]+/gi, '_')}.png`.toLowerCase()
+  a.download = `${(props.name || 'chart').replace(/[^a-z0-9._-]+/gi, '_')}.png`.toLowerCase()
   a.click()
 }
 

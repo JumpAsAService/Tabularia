@@ -2,6 +2,7 @@
 import BrandMark from '~/components/ui/BrandMark.vue'
 import SessionsDialog from '~/components/ui/SessionsDialog.vue'
 import ApiTokensDialog from '~/components/ui/ApiTokensDialog.vue'
+import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { useAppInfo } from '~/composables/useAppInfo'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
@@ -26,6 +27,7 @@ import {
   ChevronDown,
   MonitorSmartphone,
   KeyRound,
+  LockKeyhole,
 } from 'lucide-vue-next'
 
 // fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
@@ -77,6 +79,10 @@ usePopover(menuOpen, settingsPanel, closeMenu)
 const sessionsOpen = ref(false)
 // «Token API»: le credenziali dei propri script (se l'installazione le permette)
 const tokensOpen = ref(false)
+// «Change password»: one's own. Not for an observer only: the guest of a public
+// demo is one account many people share (the gateway refuses it too)
+const passwordOpen = ref(false)
+const canChangePassword = computed(() => !!user.value && !(user.value.is_observer && !user.value.is_superuser))
 
 const links = computed(() => [
   { to: '/', label: t('nav.explore'), icon: FolderTree },
@@ -153,7 +159,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-label-fields class="shell">
+  <div v-label-fields class="app-shell">
     <header class="topbar">
       <NuxtLink to="/" class="brand">
         <BrandMark :size="28" /> <span class="brand-name">Tabularia</span>
@@ -268,6 +274,9 @@ onMounted(async () => {
             <button class="menu-item" @click="closeMenu(); sessionsOpen = true">
               <MonitorSmartphone :size="14" /> {{ t('settings.sessions') }}
             </button>
+            <button v-if="canChangePassword" class="menu-item" @click="closeMenu(); passwordOpen = true">
+              <LockKeyhole :size="14" /> {{ t('settings.changePassword') }}
+            </button>
             <button v-if="user?.personal_tokens" class="menu-item" @click="closeMenu(); tokensOpen = true">
               <KeyRound :size="14" /> {{ t('settings.apiTokens') }}
             </button>
@@ -285,11 +294,17 @@ onMounted(async () => {
     </main>
     <SessionsDialog :open="sessionsOpen" @close="sessionsOpen = false" />
     <ApiTokensDialog :open="tokensOpen" @close="tokensOpen = false" />
+    <PasswordDialog :open="passwordOpen" @close="passwordOpen = false" />
   </div>
 </template>
 
 <style scoped>
-.shell { min-height: 100vh; display: flex; flex-direction: column; }
+/* `app-shell`, not a generic name: the ROOT element of a child component carries
+   this component's scope attribute too, so a scoped rule here also styles any
+   child whose root has the same class. The memory gauge's root had `shell` and
+   became a 100vh-tall column — an invisible strip over the page that swallowed
+   the clicks (folder «Create» button, 1.2.0 getting-started run). */
+.app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 .topbar {
   position: sticky;
   top: 0;

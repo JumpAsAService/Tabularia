@@ -29,7 +29,7 @@ from app.services import contracts as contract_service
 from app.services.documented import conta_descritte, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import LIVE_INGEST, TERMINAL_STATES
-from app.routes.runs import _reconcile, launch_ingest_run, run_out, snapshot_key
+from app.routes.runs import _reconcile, launch_ingest_run, run_out, snapshot_key, start_refresh_if_free
 from app.routes.connections import NOT_DATABASES, _engine_inspect, engine_connection_payload
 from app.schemas.models import (
     DatasourceOut,
@@ -699,17 +699,10 @@ async def refresh_datasource(
         raise HTTPException(status_code=409, detail="The connection of this datasource no longer exists")
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
 
-    last = session.exec(
-        select(Run)
-        .where(Run.datasource_id == ds.id, Run.kind == "ingest")
-        .order_by(Run.started_at.desc())
-    ).first()
-    if last is not None:
-        last = await _reconcile(session, last)
-        if last.status not in TERMINAL_STATES:
-            raise HTTPException(status_code=409, detail="A refresh is already running for this datasource")
-
-    run = await launch_ingest_run(session, user, ds, conn)
+    # in line with every other starter (replicas, scheduler, flows): one at a time
+    run = await start_refresh_if_free(session, user, ds, conn, launch=launch_ingest_run)
+    if run is None:
+        raise HTTPException(status_code=409, detail="A refresh is already running for this datasource")
     audit.record_audit(
         session, actor=user, action=audit.DS_REFRESH, target_type="datasource",
         target_id=ds.id, target_label=ds.name, detail={"run_id": getattr(run, "id", None)},
@@ -792,9 +785,11 @@ def update_datasource(
     body: DatasourceUpdate,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    request: Request = None,  # type: ignore[assignment]
 ):
     ds = _get_ds(session, ds_id)
     ensure_can(session, user, ds.project_id, Capability.EDIT)
+    da_cartella, da_nome, schedule_prima = ds.project_id, ds.name, ds.refresh_schedule
     # the folder path is part of the datasource's name in an external lineage catalog
     lineage_names = openlineage.catalog_names(session, datasources=[ds]) if body.name is not None or body.project_id is not None else {}
 
@@ -842,6 +837,16 @@ def update_datasource(
     session.commit()
     session.refresh(ds)
     openlineage.renamed(session, lineage_names)
+    dettaglio = {}
+    if ds.project_id != da_cartella:
+        dettaglio.update(moved_to=ds.project_id, from_project=da_cartella,
+                         schedule_cleared=bool(schedule_prima) and not ds.refresh_schedule)
+    if ds.name != da_nome:
+        dettaglio["name"] = {"from": da_nome, "to": ds.name}
+    if dettaglio:
+        audit.record_audit(session, actor=user, action=audit.DS_UPDATE, request=request, target_type="datasource",
+                           target_id=ds.id, target_label=ds.name, detail=dettaglio)
+        session.refresh(ds)
     return _to_out(ds)
 
 

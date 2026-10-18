@@ -37,7 +37,7 @@ const summary = computed(() =>
   <span
     v-if="memory && level && !unavailable"
     class="memgauge"
-    :class="{ shell: !compact }"
+    :class="{ 'in-topbar': !compact }"
     role="img"
     :title="summary"
     :aria-label="summary"
@@ -84,10 +84,13 @@ const summary = computed(() =>
 /* Nella barra in alto la navigazione ha la precedenza: sotto i 1800px restano icona e
    tacche (i numeri nel tooltip), sul telefono l'indicatore sparisce — è un dato
    accessorio. Nella toolbar dell'editor (compact) non cambia niente. */
+/* `in-topbar`, not `shell`: the root of this component also carries the scope of
+   the component that uses it, and AppShell's `.shell` rule (min-height: 100vh)
+   turned the gauge into an invisible full-height strip that swallowed clicks. */
 @media (max-width: 1800px) {
-  .memgauge.shell .txt, .memgauge.shell .free { display: none; }
+  .memgauge.in-topbar .txt, .memgauge.in-topbar .free { display: none; }
 }
 @media (max-width: 760px) {
-  .memgauge.shell { display: none; }
+  .memgauge.in-topbar { display: none; }
 }
 </style>

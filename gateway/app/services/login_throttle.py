@@ -15,6 +15,15 @@ Si conta per **(indirizzo IP, email)** insieme: per solo IP, un ufficio dietro
 un NAT si bloccherebbe a vicenda; per sola email, basta cambiare account per
 ricominciare. L'accesso riuscito azzera, così chi sbaglia due volte e poi entra
 non si porta dietro niente.
+
+A second, looser count is kept per address alone (any email): one address trying
+one password on many accounts (spraying), or probing which emails exist, never
+reached five errors on any single (address, email) key. Its threshold is high
+enough for an office behind one NAT, and a successful sign-in does not clear it —
+otherwise one valid account would be enough to keep spraying the others.
+
+The address is the one the server resolved (see `audit.client_ip`): a client
+writing its own X-Forwarded-For does not get a fresh key per request.
 """
 from __future__ import annotations
 
@@ -34,10 +43,26 @@ SOGLIA = 5
 FINESTRA_SECONDI = 300.0
 BLOCCO_SECONDI = 60.0
 BLOCCO_MASSIMO = 900.0
+# failures from one address, whatever the email, before that address slows down
+SOGLIA_INDIRIZZO = 30
+# the email of the per-address row: emails are stripped, so no login can produce it
+TUTTE = " *"
 
 
 def _chiave(ip: str | None, email: str) -> tuple[str, str]:
     return (ip or "?", (email or "").strip().lower())
+
+
+def _attesa(session: Session, chiave: tuple[str, str], soglia: int) -> float:
+    riga = session.get(LoginAttempt, chiave)
+    if riga is None:
+        return 0.0
+    falliti, da = riga.failures, (_adesso() - riga.last_at).total_seconds()
+    if falliti < soglia or da > FINESTRA_SECONDI:
+        return 0.0
+    # raddoppia a ogni errore oltre la soglia, con un tetto
+    blocco = min(BLOCCO_SECONDI * (2 ** (falliti - soglia)), BLOCCO_MASSIMO)
+    return max(0.0, blocco - da)
 
 
 def _adesso() -> datetime:
@@ -46,22 +71,23 @@ def _adesso() -> datetime:
 
 def attesa_richiesta(session: Session, ip: str | None, email: str) -> float:
     """Secondi da aspettare prima di poter riprovare. `0` = si può procedere."""
-    riga = session.get(LoginAttempt, _chiave(ip, email))
-    if riga is None:
-        return 0.0
-    falliti, da = riga.failures, (_adesso() - riga.last_at).total_seconds()
-    session.rollback()  # solo una lettura: non si tiene aperta la transazione
-    if falliti < SOGLIA or da > FINESTRA_SECONDI:
-        return 0.0
-    # raddoppia a ogni errore oltre la soglia, con un tetto
-    blocco = min(BLOCCO_SECONDI * (2 ** (falliti - SOGLIA)), BLOCCO_MASSIMO)
-    return max(0.0, blocco - da)
+    chiave = _chiave(ip, email)
+    try:
+        return max(_attesa(session, chiave, SOGLIA), _attesa(session, (chiave[0], TUTTE), SOGLIA_INDIRIZZO))
+    finally:
+        session.rollback()  # solo una lettura: non si tiene aperta la transazione
 
 
 def registra_errore(session: Session, ip: str | None, email: str) -> None:
-    """Un errore in più. L'incremento lo fa il database (`failures + 1`), così due
-    repliche che registrano insieme non se ne perdono uno."""
+    """Un errore in più, per (indirizzo, email) e per l'indirizzo intero."""
     chiave_ip, chiave_email = _chiave(ip, email)
+    _conta(session, chiave_ip, chiave_email)
+    _conta(session, chiave_ip, TUTTE)
+
+
+def _conta(session: Session, chiave_ip: str, chiave_email: str) -> None:
+    """L'incremento lo fa il database (`failures + 1`), così due repliche che
+    registrano insieme non se ne perdono uno."""
     adesso = _adesso()
     scaduta = adesso - timedelta(seconds=FINESTRA_SECONDI)
 

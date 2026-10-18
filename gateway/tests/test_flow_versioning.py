@@ -32,7 +32,7 @@ async def test_create_flow_snapshots_v1(session):
     user, p = _admin_and_project(session)
     flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), None, user, session)
     vers = _versions(session, flow.id)
-    assert len(vers) == 1 and vers[0].version == 1 and vers[0].note == "creazione"
+    assert len(vers) == 1 and vers[0].version == 1 and vers[0].note == "created"
 
 
 async def test_update_definition_creates_version_and_dedupes(session):
@@ -58,7 +58,7 @@ async def test_promote_old_version_becomes_current(session):
     assert promoted.definition == '{"v":1}'
     vers = _versions(session, flow.id)
     assert [v.version for v in vers] == [1, 2, 3]
-    assert vers[-1].definition == '{"v":1}' and "promossa dalla v1" in vers[-1].note
+    assert vers[-1].definition == '{"v":1}' and "promoted from v1" in vers[-1].note
 
 
 async def test_list_versions_marks_current(session):

@@ -4,7 +4,7 @@
 - creazione: MANAGE sul parent (root → solo superuser);
 - lettura: VIEW; modifica: EDIT; cancellazione: MANAGE (rifiutata se ha figli).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
 
 from app.db.session import get_session
@@ -12,7 +12,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Project, User
 from app.models.permission import Capability
-from app.services import openlineage
+from app.services import audit, openlineage
 from app.services import permissions as perm_service
 from app.services.permissions import descendant_ids, folder_parents
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
@@ -31,6 +31,7 @@ def create_project(
     body: ProjectCreate,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    request: Request = None,  # type: ignore[assignment]
 ):
     if body.parent_id is None:
         # progetti root: solo il superuser può crearli (sono il livello di ingresso)
@@ -49,6 +50,9 @@ def create_project(
     )
     session.add(project)
     session.commit()
+    session.refresh(project)
+    audit.record_audit(session, actor=user, action=audit.FOLDER_CREATE, request=request, target_type="folder",
+                       target_id=project.id, target_label=project.name, detail={"parent_id": project.parent_id})
     session.refresh(project)
     return project
 
@@ -73,9 +77,11 @@ def update_project(
     body: ProjectUpdate,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    request: Request = None,  # type: ignore[assignment]
 ):
     project = _get_project(session, project_id)
     ensure_can(session, user, project_id, Capability.EDIT)
+    prima = {"name": project.name, "description": project.description, "parent_id": project.parent_id}
     # the folder path is part of the names its flows and datasources have in an
     # external lineage catalog: renaming or moving it renames them all there
     moved = body.parent_id is not None and body.parent_id != project.parent_id
@@ -112,11 +118,26 @@ def update_project(
     session.commit()
     session.refresh(project)
     openlineage.renamed(session, lineage_names)
+    cambiati = {k: {"from": v, "to": getattr(project, k)} for k, v in prima.items()
+                if k != "parent_id" and getattr(project, k) != v}
+    if cambiati:
+        audit.record_audit(session, actor=user, action=audit.FOLDER_UPDATE, request=request, target_type="folder",
+                           target_id=project_id, target_label=project.name, detail=cambiati)
+    if project.parent_id != prima["parent_id"]:
+        audit.record_audit(session, actor=user, action=audit.FOLDER_MOVE, request=request, target_type="folder",
+                           target_id=project_id, target_label=project.name,
+                           detail={"from_parent": prima["parent_id"], "to_parent": project.parent_id})
+    session.refresh(project)
     return project
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_project(project_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def delete_project(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    request: Request = None,  # type: ignore[assignment]
+):
     project = _get_project(session, project_id)
     ensure_can(session, user, project_id, Capability.MANAGE)
     has_children = session.exec(select(Project).where(Project.parent_id == project_id)).first()
@@ -164,5 +185,8 @@ def delete_project(project_id: int, user: User = Depends(get_current_user), sess
 
     for perm in session.exec(select(Permission).where(Permission.project_id == project_id)).all():
         session.delete(perm)
+    nome, genitore = project.name, project.parent_id
     session.delete(project)
     session.commit()
+    audit.record_audit(session, actor=user, action=audit.FOLDER_DELETE, request=request, target_type="folder",
+                       target_id=project_id, target_label=nome, detail={"parent_id": genitore})

@@ -36,7 +36,10 @@ def test_the_audit_survives_the_person(session):
 
     delete_user(tizio.id, session=session, current=admin)
 
-    righe = session.exec(select(AuditLog)).all()
+    # the deletion itself is now an entry of its own, by the administrator
+    (cancellazione,) = session.exec(select(AuditLog).where(AuditLog.action == audit.USER_DELETE)).all()
+    assert cancellazione.actor_id == admin.id and cancellazione.target_label == "tizio@x.local"
+    righe = session.exec(select(AuditLog).where(AuditLog.action != audit.USER_DELETE)).all()
     assert len(righe) == 2, "le righe di audit non devono sparire con l'utente"
     for r in righe:
         assert r.actor_id is None                  # il riferimento si azzera…

@@ -1,6 +1,8 @@
 // Client dell'API dati. Passa dal gateway (che autentica e inoltra all'engine).
 // Tutte le chiamate viaggiano col cookie della sessione (HttpOnly) via useApiClient().
 
+import { clientTranslate } from '~/plugins/i18n'
+
 export interface ColumnInfo {
   name: string
   dtype: string
@@ -215,6 +217,10 @@ export function useApi() {
     async closeOtherSessions(): Promise<void> {
       await apiFetch('/auth/sessions/close-others', { method: 'POST' })
     },
+    // one's own password: the gateway checks the current one and closes the other sessions
+    async changeMyPassword(current_password: string, new_password: string): Promise<void> {
+      await apiFetch('/users/me/password', { method: 'POST', body: { current_password, new_password } })
+    },
     async auditAccessActivity(hours = 24): Promise<AccessActivity> {
       return await apiFetch<AccessActivity>(`/audit/access-activity?hours=${hours}`)
     },
@@ -426,5 +432,5 @@ export function pagedQuery(p: { q?: string; limit: number; offset: number }): st
 
 // Estrae un messaggio d'errore leggibile da un errore di $fetch.
 export function errMessage(e: any): string {
-  return e?.data?.detail ?? e?.data?.message ?? e?.message ?? 'Errore sconosciuto'
+  return e?.data?.detail ?? e?.data?.message ?? e?.message ?? (clientTranslate?.('errors.unknown') || 'Unknown error')
 }

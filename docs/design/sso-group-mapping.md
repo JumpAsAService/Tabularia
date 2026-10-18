@@ -223,3 +223,14 @@ OIDC front door was the work.
   session is untouched.
 - **Group auto-creation is off by default.** Mapping onto admin-curated groups keeps
   RBAC hygiene; turn it on only when the IdP is the source of truth for group names.
+- **Groups that carry a role are never mapped by name.** A Tabularia group marked
+  *administrators* is neither granted nor removed by an SSO sign-in, whatever the IdP's
+  group names: administration comes from the IdP only through `OIDC__SUPERUSER_GROUP`.
+  An *observers* group is mapped only when it is listed in `OIDC__GROUP_ALLOWLIST`.
+  Otherwise anyone able to put a group with the right name on their token (self-service
+  groups on Entra ID, a loosely managed Keycloak realm) would become administrator.
+- **API tokens outlive the IdP.** A personal API token keeps working until it expires
+  (`AUTH__API_TOKEN_MAX_DAYS`) or the account is deactivated in Tabularia, even after
+  the user is disabled at the IdP: when someone leaves, deactivate them in Tabularia
+  too (it closes their sessions and revokes their tokens), or set
+  `AUTH__PERSONAL_TOKENS=false` where only service accounts should hold tokens.

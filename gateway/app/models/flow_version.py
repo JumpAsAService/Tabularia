@@ -21,6 +21,6 @@ class FlowVersion(SQLModel, table=True):
     flow_id: int = Field(foreign_key="flows.id", index=True)
     version: int  # progressivo per flusso (1, 2, 3, …); il massimo è la corrente
     definition: str = Field(sa_column=Column(Text, nullable=False))
-    note: str = ""  # es. "creazione", "promossa dalla v2"
+    note: str = ""  # a stable English code the interface translates: "created", "edited", "promoted from v2"
     created_at: datetime = Field(default_factory=_now)
     created_by: Optional[int] = Field(default=None, foreign_key="users.id")

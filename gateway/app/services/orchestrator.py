@@ -59,7 +59,9 @@ from app.db.session import engine, engine_battito
 from app.models import Connection, Datasource, Flow, Run, User
 from app.models.permission import Capability
 from app.models.run import ORCHESTRATION_INTERRUPTED, TERMINAL_STATES  # noqa: F401 — riesportata
-from app.routes.runs import _launch_flow_run, _reconcile, close_if_queued_too_long, launch_ingest_run
+from app.routes.runs import (
+    _launch_flow_run, _reconcile, close_if_queued_too_long, launch_ingest_run, live_refresh, start_refresh_if_free,
+)
 from app.schemas.models import RunCreate
 from app.services import permissions as perm_service
 from app.services.flow_resolver import FlowResolveError, resolve_output_request, sequence_order
@@ -136,15 +138,19 @@ async def _refresh_and_wait(
     if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
         raise OrchestrationError(f"CONNECT missing for the refresh of datasource {ds_id}")
 
-    # se c'è già un refresh in corso lo si attende, altrimenti se ne lancia uno
-    last = session.exec(
-        select(Run)
-        .where(Run.datasource_id == ds.id, Run.kind == "ingest")
-        .order_by(Run.started_at.desc())
-    ).first()
-    if last is not None:
-        last = await _reconcile(session, last)
-    run = last if (last is not None and last.status not in TERMINAL_STATES) else await launch_ingest_run(session, user, ds, conn, trigger_type=trigger_type, parent_run_id=parent_run_id)
+    # se c'è già un refresh in corso lo si attende, altrimenti se ne lancia uno — in
+    # line with every other starter (see runs.start_refresh_if_free)
+    run = None
+    for _ in range(3):  # the running one may end between the two looks: then start ours
+        run = await start_refresh_if_free(session, user, ds, conn, trigger_type=trigger_type,
+                                          parent_run_id=parent_run_id, launch=launch_ingest_run)
+        if run is None:
+            live = live_refresh(session, ds_id)
+            run = session.get(Run, live) if live is not None else None
+        if run is not None:
+            break
+    if run is None:
+        raise OrchestrationError(f"refresh of datasource {ds_id} could not be started")
 
     for _ in range(REFRESH_WAIT_TICKS):
         run = await _reconcile(session, run)
@@ -480,6 +486,15 @@ async def esegui(run_id: int) -> None:
                 await _finalize_orch_run(run_id, "FAILURE", "invalid flow or user")
                 return
             flow_id = flow.id
+            if run.trigger_type == "schedule":
+                # the schedule's author must still hold everything the run will need
+                from app.services import schedule_authority
+
+                gaps = schedule_authority.gaps_of_flow(session, user, flow)
+                if gaps:
+                    logger.warning("orchestrate: scheduled run %s of flow %s not started: %s", run_id, flow_id, gaps)
+                    await _finalize_orch_run(run_id, "FAILURE", schedule_authority.not_started(user, gaps))
+                    return
             try:
                 # i run figli (output/refresh) riferiscono il run di orchestrazione:
                 # così il calendario conta solo quest'ultimo, non i doppioni figli

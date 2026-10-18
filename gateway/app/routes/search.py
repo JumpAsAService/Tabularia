@@ -105,7 +105,8 @@ def search_everything(
             hits.append(SearchHit(
                 kind="datasource", id=d.id, name=d.name,
                 project_id=d.project_id, project_name=nomi_cartella.get(d.project_id),
-                detail=f"{d.rows} righe" if d.rows is not None else "",
+                # a number, not a sentence: the interface writes it in its language
+                rows=d.rows,
             ))
 
         for v in session.exec(

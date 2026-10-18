@@ -84,7 +84,7 @@ def _restricted_ds(g: _Graph, ds_id: int, unknown: set[int]) -> str:
 def _restricted_flow(g: _Graph, flow_id: int, unknown: set[int]) -> str:
     unknown.add(flow_id)
     nid = _fid(flow_id)
-    g.add_node(nid, type="flow", label=f"Flusso #{flow_id}", restricted=True, meta={"reason": "unknown"})
+    g.add_node(nid, type="flow", label=f"Flow #{flow_id}", restricted=True, meta={"reason": "unknown"})
     return nid
 
 
@@ -178,7 +178,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 dest = d.get("destType") or "datasource"
                 if dest == "database":
                     conn_id = d.get("connectionId")
-                    table = (d.get("table") or "").strip() or "(tabella?)"
+                    table = (d.get("table") or "").strip() or "(table?)"
                     sink = f"dbsink:{conn_id}|{table}"
                     conn = conn_by_id.get(conn_id)
                     g.add_node(sink, type="db_sink", label=table, restricted=conn is None,
@@ -189,7 +189,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                     g.add_edge(_fid(f.id), sink, EDGE_WRITE)
                 elif dest == "s3":
                     bucket = (d.get("s3Bucket") or "").strip()
-                    key = (d.get("s3Key") or "").strip() or "(chiave?)"
+                    key = (d.get("s3Key") or "").strip() or "(key?)"
                     sink = f"s3sink:{bucket}|{key}"
                     g.add_node(sink, type="s3_sink", label=key or bucket,
                                meta={"bucket": bucket, "key": key,

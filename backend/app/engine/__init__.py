@@ -131,14 +131,14 @@ ENGINE_CATALOG = [
         "id": "polars",
         "label": "Polars",
         "available": True,
-        "description": "Motore in-process, lazy e in streaming. Predefinito.",
+        "description": "In-process, lazy, streaming engine. Default.",
     },
     {
         "id": "duckdb",
         "label": "DuckDB",
         "available": _DUCKDB_AVAILABLE,
-        "description": "Motore SQL out-of-core (spill su disco): adatto ad aggregazioni e join molto grandi. "
-        "v1: operazioni di base (le trasformazioni avanzate usano Polars).",
+        "description": "Out-of-core SQL engine (spills to disk): suited to very large aggregations and joins. "
+        "v1: basic operations (advanced transforms use Polars).",
     },
     {
         "id": "chdb",
@@ -148,8 +148,8 @@ ENGINE_CATALOG = [
         # se manca, il selettore lo mostra «non configurato», non «in arrivo»
         "optional": True,
         "description": (
-            "Motore SQL out-of-core con dialetto ClickHouse (spill su disco). "
-            "v1: operazioni strutturali (sql/foreach usano Polars o DuckDB)."
+            "Out-of-core SQL engine with ClickHouse dialect (spills to disk). "
+            "v1: structural operations (sql/foreach use Polars or DuckDB)."
             if _CHDB_AVAILABLE
             else "Embedded ClickHouse engine, not included in this image: "
             "rebuild the backend with WITH_CHDB=true to enable it."
@@ -162,10 +162,10 @@ ENGINE_CATALOG = [
         # opzionale: se non disponibile è perché NON È CONFIGURATO (non "in arrivo")
         "optional": True,
         "description": (
-            f"Server ClickHouse esterno ({_CLICKHOUSE_CFG.host}:{_CLICKHOUSE_CFG.port}, trasporto {_CLICKHOUSE_CFG.transport}): "
-            "le trasformazioni girano sul server, non nel worker."
+            f"External ClickHouse server ({_CLICKHOUSE_CFG.host}:{_CLICKHOUSE_CFG.port}, transport {_CLICKHOUSE_CFG.transport}): "
+            "transforms run on the server, not in the worker."
             if _CLICKHOUSE_AVAILABLE
-            else "Server ClickHouse esterno (cloud o self-hosted). Non configurato: imposta CLICKHOUSE_EXTERNAL__HOST."
+            else "External ClickHouse server (cloud or self-hosted). Not configured: set CLICKHOUSE_EXTERNAL__HOST."
         ),
     },
     {
@@ -174,11 +174,11 @@ ENGINE_CATALOG = [
         "available": _BIGQUERY_AVAILABLE,
         "optional": True,
         "description": (
-            f"Google BigQuery (progetto {_BIGQUERY_CFG.project}): legge i parquet dal bucket GCS come tabelle "
-            "esterne e calcola sul servizio, a consumo. "
-            + (f"Step-cache nativa nel dataset {_BIGQUERY_CFG.cache_dataset}." if _BIGQUERY_CFG.cache_dataset else "Senza step-cache: ogni preview rilegge la sorgente.")
+            f"Google BigQuery (project {_BIGQUERY_CFG.project}): reads the parquet files of the GCS bucket as external "
+            "tables and computes on the service, pay per use. "
+            + (f"Native step cache in the dataset {_BIGQUERY_CFG.cache_dataset}." if _BIGQUERY_CFG.cache_dataset else "No step cache: every preview reads the source again.")
             if _BIGQUERY_AVAILABLE
-            else "Google BigQuery (serverless). Non configurato: imposta BIGQUERY__PROJECT e le credenziali."
+            else "Google BigQuery (serverless). Not configured: set BIGQUERY__PROJECT and the credentials."
         ),
     },
 ]

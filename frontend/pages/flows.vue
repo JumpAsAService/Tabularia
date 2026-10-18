@@ -31,6 +31,19 @@ const api = useApi()
 const connectionsApi = useConnections()
 const toast = useToast()
 const { t } = useI18n()
+
+/** A version's note in the language of the interface. The gateway writes stable
+ *  English codes; versions saved before 1.2.0 have the Italian ones. */
+function versionNote(note: string): string {
+  if (note === 'created' || note === 'creazione') return t('flows.versionCreated')
+  if (note === 'edited' || note === 'modifica') return t('flows.versionEdited')
+  if (note === 'baseline') return t('flows.versionBaseline')
+  const promoted = /^(?:promoted from|promossa dalla) v(\d+)$/.exec(note)
+  if (promoted) return t('flows.versionPromoted', { n: promoted[1] })
+  const copy = /^copy of '(.*)'$/s.exec(note)
+  if (copy) return t('flows.versionCopy', { name: copy[1] })
+  return note
+}
 const fmtx = useFormat()
 // l'export dbt è degli amministratori (anche per gruppo): il progetto porta con sé
 // dati e definizioni di altre cartelle. OpenLineage resta per chiunque veda il flusso.
@@ -266,7 +279,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
               @click="createWith(e.id)"
             >
               <span class="mi-top">{{ e.label }}<span v-if="e.id === preferredEngine && e.available" class="pref">{{ $t('flows.preferredTag') }}</span><span v-if="!e.available" class="soon">{{ engineTag(e) }}</span></span>
-              <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
+              <span class="mi-desc">{{ engineDescription(e, $t, $te) }}</span>
             </button>
           </div>
         </div>
@@ -301,7 +314,11 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
               {{ f.name }}
             </span>
             <span class="folder muted"><Folder :size="12" /> {{ folderName[f.project_id] ?? `#${f.project_id}` }}</span>
-            <span v-if="f.run_schedule" class="sched-badge" :title="f.run_schedule"><CalendarClock :size="11" /> {{ $t('flows.scheduledBadge') }}</span>
+            <span
+              v-if="f.run_schedule"
+              class="sched-badge"
+              :title="f.next_run_at ? $t('flows.scheduleTitle', { cron: f.run_schedule, when: fmtDate(f.next_run_at) }) : f.run_schedule"
+            ><CalendarClock :size="11" /> {{ f.next_run_at ? $t('flows.nextRunBadge', { when: fmtDate(f.next_run_at) }) : $t('flows.scheduledBadge') }}</span>
             <span class="when muted">{{ fmtDate(f.updated_at) }}</span>
           </button>
           <div class="flow-actions">
@@ -350,7 +367,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
               <div v-for="v in detail[f.id].versions" :key="v.version" class="ver">
                 <span class="vnum">v{{ v.version }}</span>
                 <span v-if="v.is_current" class="tag">{{ $t('flows.currentTag') }}</span>
-                <span class="vnote muted">{{ v.note }}</span>
+                <span class="vnote muted">{{ versionNote(v.note) }}</span>
                 <span class="vby muted"><User :size="11" /> {{ v.created_by_name ?? '—' }}</span>
                 <span class="vdate muted">{{ fmtDate(v.created_at) }}</span>
                 <button v-if="!v.is_current" class="mini promote" :title="$t('flows.promoteTitle')" @click="promote(f.id, v.version)">
@@ -426,7 +443,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .rstat.run { color: var(--accent); }
 .rstat.none { color: var(--muted); opacity: 0.5; }
 .folder { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; }
-.sched-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--accent-2); }
+.sched-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--accent-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
 .flow-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }

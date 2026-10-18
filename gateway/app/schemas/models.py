@@ -2,7 +2,7 @@
 esporre mai `hashed_password` e per validare gli input."""
 from datetime import datetime, timezone
 from typing import Annotated, Generic, Literal, Optional, TypeVar
-from pydantic import BaseModel, PlainSerializer, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, PlainSerializer, Field, field_validator, model_validator
 
 # ── Datetime in uscita: sempre con l'offset ───────────────────────────────────
 # Le colonne TIMESTAMP del DB sono naive e per convenzione in UTC (vedi
@@ -89,11 +89,28 @@ class MeOut(UserOut):
     personal_tokens: bool = False
     # AUTH__API_TOKEN_MAX_DAYS: la scadenza più lontana che un token può avere
     api_token_max_days: int = 365
+    # the language last chosen in the interface (None = never): the emails follow it
+    locale: Optional[str] = None
+
+
+# A new password, wherever one is set (user creation, an administrator's change,
+# one's own change): the one rule of core/passwords.py, also the bootstrap
+# administrator's. Refused with a 422 that says why.
+def _check_new_password(v: str) -> str:
+    from app.core.passwords import password_problem
+
+    problem = password_problem(v)
+    if problem:
+        raise ValueError(problem)
+    return v
+
+
+NewPassword = Annotated[str, AfterValidator(_check_new_password)]
 
 
 class UserCreate(BaseModel):
     email: str
-    password: str = Field(min_length=6)
+    password: NewPassword
     full_name: str = ""
     is_superuser: bool = False
     is_observer: bool = False
@@ -101,10 +118,23 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
-    password: Optional[str] = Field(default=None, min_length=6)
+    password: Optional[NewPassword] = None
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
     is_observer: Optional[bool] = None
+
+
+class LocaleChange(BaseModel):
+    """The language chosen in the interface: one of its five."""
+    locale: Literal["en", "it", "fr", "de", "es"]
+
+
+class PasswordChange(BaseModel):
+    """One's own password: the current one proves it is the owner at the keyboard,
+    not someone who found the session open."""
+    current_password: str
+    new_password: NewPassword
+
 
 
 # ── Groups ────────────────────────────────────────────────────────────────────
@@ -285,6 +315,7 @@ class SearchHit(BaseModel):
     project_id: Optional[int] = None
     project_name: Optional[str] = None
     detail: str = ""  # riga di contesto, dipende dal tipo (es. db_type/host)
+    rows: Optional[int] = None  # datasource: its row count (the interface formats it)
 
 
 class SearchOut(BaseModel):

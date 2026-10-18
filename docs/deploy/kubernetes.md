@@ -77,21 +77,28 @@ overrides them with `--reload`, which must not reach production.
 - **The client's address**: the gateway reads `X-Forwarded-For` from the right, past
   the proxies it trusts (`--forwarded-allow-ips`, the chart's `gateway.trustedProxies`).
   Without it every client seems to be the ingress controller, and the sign-in
-  throttle, keyed by (address, email), lets anyone lock the administrator out.
+  throttle, keyed by (address, email), lets anyone lock the administrator out. The
+  default trusts every private range, so any pod of the cluster could choose its
+  address: narrow it to the pod CIDR of your ingress controller. The application never
+  reads the header itself: the audit log, the sessions and the throttle all use the
+  address the server resolved.
 
 Ingress settings the application depends on:
 
 | Setting | Why | Value |
 |---|---|---|
-| Max request body size | file uploads stream through the gateway to the engine and can be tens of GB | at least the largest file users upload |
+| Max request body size | file uploads stream through the gateway to the engine; the gateway refuses one over `UPLOAD__MAX_BYTES` (1 GiB by default) with a 413 | 0 (unlimited) or above `UPLOAD__MAX_BYTES` |
 | Request buffering | the proxy must not spool uploads to its own disk | off |
 | Read timeout | previews wait for a worker synchronously (`PREVIEW_TIMEOUT_SECONDS` on the engine API, default 120) | above that ceiling |
-| Rate limit on `/auth/login` | the application has no login throttling of its own | per client IP |
+| Rate limit on `/auth/login` | optional: the gateway already slows repeated failures per (address, email) and per address, across replicas; an edge limit also stops a distributed attack | per client IP, on that path only |
 
 **Egress.** The engine connects to databases that users configure as connections: that
 is the product, and also a server-side request surface. Restrict the engine pods' egress
 with a `NetworkPolicy` to the object storage, ClickHouse, Valkey and the approved
-database hosts, and block cloud metadata endpoints such as `169.254.169.254`.
+database hosts, and block cloud metadata endpoints such as `169.254.169.254`. The chart
+does it from `networkPolicy.egressCIDRs` (entries are CIDRs or `{cidr, except}`), and
+always carves the metadata address out of a range that holds it, `0.0.0.0/0` included.
+With the list empty no egress policy is rendered.
 
 ## Backend image (`backend/Dockerfile`)
 

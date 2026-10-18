@@ -23,7 +23,7 @@ from sqlmodel import Session, select
 from app.core.engine_client import get_engine_client
 from app.models import Connection, DataContractResult, Datasource
 from app.routes.connections import engine_connection_payload
-from app.services import audit, contracts
+from app.services import audit, contracts, email_texts
 
 logger = logging.getLogger(__name__)
 
@@ -33,64 +33,48 @@ MAX_RULES_LISTED = 10
 # questo tempo gli avvisi rimasti aspettano il giro dopo.
 BUDGET_SECONDS = 30.0
 
-_TITOLO = {
-    "refused": "aggiornamento rifiutato",
-    "failed": "contratto violato",
-    "warning": "regole non rispettate (avviso)",
-    "passed": "di nuovo rispettato",
-}
-_FRASE = {
-    "refused": "Un aggiornamento violava una regola bloccante e NON è stato pubblicato: la datasource serve ancora i dati precedenti.",
-    "failed": "I dati che la datasource serve non rispettano una regola bloccante.",
-    "warning": "I dati che la datasource serve non rispettano alcune regole non bloccanti.",
-    "passed": "Tutte le regole sono di nuovo rispettate.",
-}
-_ORIGINE = {
-    "refresh": "refresh della datasource",
-    "publish": "esecuzione di un flusso",
-    "freshness": "freschezza (il tempo passato dall'ultimo aggiornamento)",
-}
-
-
-def _riga(x: dict) -> str:
+def _riga(x: dict, lang: str = email_texts.DEFAULT) -> str:
+    t = email_texts.text
     dove = x.get("column") or ", ".join(x.get("columns") or []) or x.get("name") or ""
-    testa = f"[{'avviso' if x.get('severity') == 'warning' else 'bloccante'}] {x.get('kind')}" + (f" su {dove}" if dove else "")
+    gravita = t(lang, "severity_warning" if x.get("severity") == "warning" else "severity_error")
+    testa = f"[{gravita}] {x.get('kind')}" + (f" {t(lang, 'rule_on', where=dove)}" if dove else "")
     if x.get("error"):
-        return f"{testa}: non valutabile ({str(x['error'])[:200]})"
+        return f"{testa}: {t(lang, 'rule_unevaluable', error=str(x['error'])[:200])}"
     if x.get("violations"):
-        return f"{testa}: {x['violations']} righe"
+        return f"{testa}: {t(lang, 'rule_rows', n=x['violations'])}"
     if x.get("observed") is not None:
-        return f"{testa}: osservato {x['observed']}"
+        return f"{testa}: {t(lang, 'rule_observed', value=x['observed'])}"
     return testa
 
 
-def messaggio(ds: Datasource, r: DataContractResult) -> tuple[str, str]:
-    """(oggetto, corpo) dell'avviso per questa valutazione."""
+def messaggio(ds: Datasource, r: DataContractResult, lang: str = email_texts.DEFAULT) -> tuple[str, str]:
+    """(oggetto, corpo) dell'avviso per questa valutazione, in `lang` (services/email_texts.py)."""
+    t = email_texts.text
     stato = "refused" if r.blocked else r.outcome
     try:
         report = json.loads(r.report)
     except json.JSONDecodeError:
         report = {}
     rotte = [x for x in report.get("rules", []) if not x.get("passed")]
-    righe = [
-        f"Data contract della datasource «{ds.name}»: {_TITOLO.get(stato, stato)}.",
-        "",
-        _FRASE.get(stato, ""),
-        "",
-        f"Quando:    {r.evaluated_at.strftime('%Y-%m-%d %H:%M UTC')}",
-        f"Origine:   {_ORIGINE.get(r.trigger, r.trigger)}" + (f" (esecuzione #{r.run_id})" if r.run_id else ""),
-        f"Contratto: versione {r.contract_version}",
+    titolo = t(lang, f"title_{stato}") if f"title_{stato}" in email_texts.TEXTS["en"] else stato
+    frase = t(lang, f"phrase_{stato}") if f"phrase_{stato}" in email_texts.TEXTS["en"] else ""
+    origine = t(lang, f"origin_{r.trigger}") if f"origin_{r.trigger}" in email_texts.TEXTS["en"] else r.trigger
+    campi = [
+        ("when", r.evaluated_at.strftime("%Y-%m-%d %H:%M UTC")),
+        ("origin", origine + (f" {t(lang, 'contract_run', run=r.run_id)}" if r.run_id else "")),
+        ("contract", t(lang, "contract_version", version=r.contract_version)),
     ]
     if r.rows is not None:
-        righe.append(f"Righe:     {r.rows}")
+        campi.append(("rows", str(r.rows)))
+    righe = [t(lang, "contract_intro", ds=ds.name, title=titolo), "", frase, ""] + email_texts.labelled(lang, campi)
     if rotte:
-        righe += ["", "Regole non rispettate:"] + [f"  - {_riga(x)}" for x in rotte[:MAX_RULES_LISTED]]
+        righe += ["", t(lang, "contract_broken")] + [f"  - {_riga(x, lang)}" for x in rotte[:MAX_RULES_LISTED]]
         if len(rotte) > MAX_RULES_LISTED:
-            righe.append(f"  … e altre {len(rotte) - MAX_RULES_LISTED}")
+            righe.append(f"  {t(lang, 'contract_more', n=len(rotte) - MAX_RULES_LISTED)}")
     elif report.get("error"):
-        righe += ["", f"Il contratto non si è potuto valutare: {str(report['error'])[:300]}"]
-    righe += ["", "—", "Messaggio automatico di Tabularia. Per non riceverlo più, togli gli indirizzi dalle notifiche del data contract."]
-    return f"[Tabularia] Data contract di «{ds.name}»: {_TITOLO.get(stato, stato)}", "\n".join(righe)
+        righe += ["", t(lang, "contract_unevaluable", error=str(report["error"])[:300])]
+    righe += ["", "—", t(lang, "contract_footer")]
+    return t(lang, "contract_subject", ds=ds.name, title=titolo), "\n".join(righe)
 
 
 async def _manda(session: Session, result_id: int) -> str:
@@ -104,13 +88,18 @@ async def _manda(session: Session, result_id: int) -> str:
     conn = session.get(Connection, c.notify_connection_id) if c.notify_connection_id else None
     if not a or conn is None or conn.db_type != "smtp":
         return "skipped"
-    oggetto, corpo = messaggio(ds, r)
-    resp = await get_engine_client().post(
-        "/db/notify", json={"connection": engine_connection_payload(conn), "to": a, "subject": oggetto, "body": corpo}, timeout=60,
-    )
-    ok = resp.status_code < 400
-    if not ok:
-        logger.warning("avviso del data contract della datasource %s rifiutato dall'engine: %s", ds.id, resp.text[:300])
+    # one message per language: each recipient reads it in the language chosen in
+    # the interface, English for an address that is not a user
+    ok = True
+    for lang, gruppo in email_texts.by_language(session, a):
+        oggetto, corpo = messaggio(ds, r, lang)
+        resp = await get_engine_client().post(
+            "/db/notify", json={"connection": engine_connection_payload(conn), "to": gruppo, "subject": oggetto, "body": corpo},
+            timeout=60,
+        )
+        if resp.status_code >= 400:
+            ok = False
+            logger.warning("avviso del data contract della datasource %s rifiutato dall'engine: %s", ds.id, resp.text[:300])
     audit.record_audit(
         session, actor=None, actor_label="scheduler", action=audit.EMAIL_SEND, outcome="success" if ok else "failure",
         target_type="datasource", target_id=ds.id, target_label=ds.name,

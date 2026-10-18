@@ -25,11 +25,15 @@ from app.models import AiChat, AiChatTurn, AiSpend, User
 logger = logging.getLogger(__name__)
 
 MAX_TITLE = 80
+# the default title written before 1.2.0: a chat that still has it gets the title
+# of its first real question. Now an empty title is the default, and the
+# interface writes «New conversation» in its own language.
+_OLD_DEFAULT_TITLE = "Nuova conversazione"
 
 
 def _titolo(domanda: str) -> str:
     pulita = " ".join((domanda or "").split())
-    return (pulita[: MAX_TITLE - 1] + "…") if len(pulita) > MAX_TITLE else (pulita or "Nuova conversazione")
+    return (pulita[: MAX_TITLE - 1] + "…") if len(pulita) > MAX_TITLE else pulita
 
 
 def _chat_di(session: Session, user: User, chat_id: int) -> AiChat:
@@ -126,7 +130,7 @@ def salva_turno(
         from app.models.ai_chat import _now
 
         chat.updated_at = _now()
-        if not chat.title or chat.title == "Nuova conversazione":
+        if not chat.title or chat.title == _OLD_DEFAULT_TITLE:
             chat.title = _titolo(domanda)
         session.add(chat)
     session.commit()

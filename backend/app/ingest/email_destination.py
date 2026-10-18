@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import smtplib
+import ssl
 import tempfile
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
@@ -168,21 +169,48 @@ def build_attachment(bucket: str, key: str, spec: EmailSpec) -> tuple[bytes, str
             pass
 
 
+def _contesto_tls() -> ssl.SSLContext:
+    """The TLS context of an SMTP connection: certificate and name verified, unless
+    the deployment opted out (SMTP__VERIFY_TLS=false). smtplib's own default
+    verifies nothing, so the password went to whoever answered."""
+    from app.core.config import get_settings
+
+    if get_settings().smtp.verify_tls:
+        return ssl.create_default_context()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def _apri(conn: SmtpConnectionSpec) -> smtplib.SMTP:
+    """Connects and encrypts as the connection says (`tls`)."""
+    if conn.tls == "ssl":
+        return smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds, context=_contesto_tls())
+    return smtplib.SMTP(conn.host, conn.port, timeout=conn.timeout_seconds)
+
+
+def _certificato_rifiutato(conn: SmtpConnectionSpec, e: ssl.SSLCertVerificationError) -> EmailDestinationError:
+    motivo = getattr(e, "verify_message", "") or str(e)
+    return EmailDestinationError(
+        f"The certificate of {conn.host} could not be verified ({motivo}). Give the server a certificate "
+        f"that matches its name, or, for a relay with a self-signed one, set SMTP__VERIFY_TLS=false on the engine."
+    )
+
+
 def _spedisci(conn: SmtpConnectionSpec, msg: EmailMessage, destinatari: list[str]) -> None:
     """Apre, cifra, autentica e spedisce. Estratta perché ci sono due cose da
     mandare: l'output di un flusso, con il suo allegato, e un avviso, che non ne
     ha nessuno."""
     try:
-        if conn.tls == "ssl":
-            server = smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds)
-        else:
-            server = smtplib.SMTP(conn.host, conn.port, timeout=conn.timeout_seconds)
-        with server:
+        with _apri(conn) as server:
             if conn.tls == "starttls":
-                server.starttls()
+                server.starttls(context=_contesto_tls())
             if conn.username:
                 server.login(conn.username, conn.resolve_secret())
             server.send_message(msg, to_addrs=destinatari)
+    except ssl.SSLCertVerificationError as e:
+        raise _certificato_rifiutato(conn, e) from e
     except smtplib.SMTPAuthenticationError as e:
         raise EmailDestinationError(f"SMTP authentication rejected by {conn.host}: {e}") from e
     except smtplib.SMTPException as e:
@@ -263,15 +291,13 @@ def test_connection(conn: SmtpConnectionSpec) -> None:
     if not conn.host.strip():
         raise EmailDestinationError("No SMTP server specified.")
     try:
-        if conn.tls == "ssl":
-            server = smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds)
-        else:
-            server = smtplib.SMTP(conn.host, conn.port, timeout=conn.timeout_seconds)
-        with server:
+        with _apri(conn) as server:
             if conn.tls == "starttls":
-                server.starttls()
+                server.starttls(context=_contesto_tls())
             if conn.username:
                 server.login(conn.username, conn.resolve_secret())
+    except ssl.SSLCertVerificationError as e:
+        raise _certificato_rifiutato(conn, e) from e
     except smtplib.SMTPAuthenticationError as e:
         raise EmailDestinationError(f"Authentication rejected by {conn.host}: {e}") from e
     except smtplib.SMTPException as e:

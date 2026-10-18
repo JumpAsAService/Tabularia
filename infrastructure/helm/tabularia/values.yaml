@@ -186,7 +186,9 @@ secrets:
   redisPassword: ""
 
   # Break-glass administrator, seeded on first start only. An existing admin is
-  # never modified, so this is not a password reset.
+  # never modified, so this is not a password reset — except one still holding
+  # 'admin' from an older release, which gets this one. At least 12 characters;
+  # the gateway refuses 'admin' and other published passwords.
   adminPassword: ""
 
   oidcClientSecret: ""
@@ -607,6 +609,9 @@ ingress:
 networkPolicy:
   enabled: true
   # Extra CIDRs the workers must reach: your databases, object storage, IdP.
+  # An entry is a CIDR or {cidr: ..., except: [...]}; the cloud metadata address
+  # (169.254.169.254, fd00:ec2::254) is always carved out of a range holding it.
+  # Empty = no egress policy at all: the workers can reach anything.
   egressCIDRs: []
 
 # Admin → Workers may change the minimum and maximum pods of the two worker

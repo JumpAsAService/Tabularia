@@ -291,10 +291,17 @@ title = "Placeholders"
 prefixes = ["PLACEHOLDERS"]
 intro = "Dates and lists that move by themselves in the names of inputs and outputs. See [placeholders](placeholders.md)."
 
+[[section]]
+id = "engine-email"
+component = "engine"
+title = "Email"
+prefixes = ["SMTP"]
+intro = "The SMTP connections of email outputs and notices are set up in the app; the deployment decides only how their servers are trusted."
+
 # ── Shared ───────────────────────────────────────────────────────────────────
 
 [var.APP__ENV_NAME]
-text = "`production` turns on the gateway's production guard: it refuses to start with the development secrets (`JWT__SECRET`, `AUTH__ADMIN_PASSWORD`, `DB__PASSWORD`) or a `JWT__SECRET` shorter than 32 characters. The engine accepts it and nothing there depends on it."
+text = "`production` turns on the gateway's production guard: it refuses to start with the development secrets (`JWT__SECRET`, `DB__PASSWORD`), an empty or published `AUTH__ADMIN_PASSWORD`, or a `JWT__SECRET` shorter than 32 characters. The engine accepts it and nothing there depends on it."
 production = "set it to `production`, so the gateway refuses the development secrets."
 
 [var.APP__CORS_ORIGINS]
@@ -451,8 +458,12 @@ text = "The longest a session lasts, active or not. Sessions also end at sign-ou
 text = "E-mail of the administrator created at the first start. Existing users are never touched."
 
 [var.AUTH__ADMIN_PASSWORD]
-text = "Password of that administrator, used only when it is created."
-production = "set a password of your own before the first start (the gateway refuses `admin` in production)."
+text = "Password of that administrator, used when it is created. No default: the gateway refuses to create the administrator with an empty password, a published one (`admin`, the guides' examples) or one under 12 characters, in every environment. An administrator still holding `admin` from an older release gets this password at the next start, and its sessions close."
+production = "set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords)."
+required = true
+
+[var.AUTH__ALLOW_KNOWN_ADMIN_PASSWORD]
+text = "Development only: `true` lets a local stack whose scripts sign in with a fixed password (`admin`) create or keep it. Ignored with `APP__ENV_NAME=production`."
 
 [var.AUTH__ADMIN_NAME]
 text = "Display name of that administrator."
@@ -548,6 +559,9 @@ text = "Seconds one read is shared by every open page."
 
 [var.AUDIT__RETENTION_MINUTES]
 text = "Audit entries older than this many minutes are deleted, once a minute. 0 = kept forever. Minutes because on a public demo the useful window is an hour (43200 = thirty days). The privacy notice can quote it."
+
+[var.AUDIT__IP_RETENTION_DAYS]
+text = "Client addresses and browser strings are personal data, kept for this many days: past them they are emptied from audit entries, API tokens and sessions, once an hour, and the entry itself stays (who did what, and when). 0 = kept forever. Deleting an account empties its addresses at once, failed sign-ins with its email included. Independent of `AUDIT__RETENTION_MINUTES`: when that one is shorter, entries go before their addresses would."
 
 [var.WEBHOOKS__RETENTION_DAYS]
 text = "Days the history of webhook calls is kept."
@@ -907,7 +921,18 @@ text = "Default bucket; must match `STORAGE__BUCKET`."
 [var.NUXT_PUBLIC_GRAFANA_URL]
 text = "Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional."
 
+[var.SMTP__VERIFY_TLS]
+text = "Verify the SMTP server's certificate and name, with STARTTLS and with implicit TLS (465). `false` is the explicit opt-out for a relay with a self-signed certificate: the connection is still encrypted, but to a server nobody vouched for, and it receives the SMTP password."
+
+[var.UPLOAD__MAX_BYTES]
+text = "The largest file a person can upload, in bytes; 0 = no ceiling. The gateway answers 413 before calling the engine when the size is declared, and cuts an undeclared (chunked) body at the ceiling; the engine API refuses it too. The file is spooled on the engine's disk and converted there, so this is also a disk bound: keep the engine's temporary space above it. Imports from SFTP, S3 and APIs have their own caps (`SFTP__*`, `S3_SOURCE__*`, `API__*`)."
+
 # ── Compose and Helm only ────────────────────────────────────────────────────
+
+[var.FORWARDED_ALLOW_IPS]
+text = "uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. On Kubernetes the chart sets it from `gateway.trustedProxies`."
+where = "Compose (`infrastructure/.env`), read by the gateway's server"
+default = "`127.0.0.1`"
 
 [var.COMPOSE_PROFILES]
 text = "Compose's own variable: `samples` adds two fake external databases and the init container that builds the «Sample» folder."

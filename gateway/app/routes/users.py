@@ -1,15 +1,15 @@
 """Gestione utenti e appartenenza ai gruppi. Solo superuser."""
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlmodel import Session, select
 
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import User, Group, UserGroupLink
-from app.schemas.models import UserOut, UserCreate, UserUpdate
-from app.services import audit, sessions
+from app.schemas.models import LocaleChange, PasswordChange, UserOut, UserCreate, UserUpdate
+from app.services import audit, login_throttle, sessions
 from app.services.masking import mask_email
-from app.services.permissions import ensure_still_admin, is_admin
+from app.services.permissions import ensure_still_admin, is_admin, is_observer_only
 from app.core.routing import RottaCheRilascia
 
 # Guardia per ROTTA e non per router: l'elenco è una lettura amministrativa
@@ -122,6 +122,102 @@ def create_user(
     return _to_out(user)  # appena creato: nessun gruppo ancora
 
 
+@router.put("/me/locale", status_code=status.HTTP_204_NO_CONTENT)
+def set_my_locale(
+    body: LocaleChange,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """The language chosen in the interface. The interface sends it at sign-in and
+    when it changes; the emails the product sends this user speak it."""
+    if user.locale != body.locale:
+        user.locale = body.locale
+        session.add(user)
+        session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/password-rules")
+def password_rules(_: User = Depends(get_current_user)) -> dict:
+    """The rule of a new password (core/passwords.py), for the interface to check
+    a form before sending it: the same numbers and list the gateway applies."""
+    from app.core import passwords
+
+    return {
+        "min_length": passwords.PASSWORD_MIN_LENGTH,
+        "max_bytes": passwords.PASSWORD_MAX_BYTES,
+        "known": sorted(passwords.KNOWN_PASSWORDS),
+    }
+
+
+def _password_change_key(user: User) -> str:
+    """The throttle key of a password change: the account, from any address. Its
+    own key, apart from sign-in's: a stolen session that guesses must not lock the
+    owner out of signing in."""
+    return f"password-change:{user.id}"
+
+
+@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_my_password(
+    body: PasswordChange,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """One's own password, from the settings menu. The current password is asked
+    again (whoever finds a session open does not get the account for good); the
+    rules are those of user creation. As when an administrator sets it, the
+    other sessions and the API tokens close; this one stays."""
+    from app.routes.api_tokens import nega_se_da_token
+    from app.services import api_tokens
+
+    # a password is a credential that lasts: a token does not set one
+    nega_se_da_token(request)
+    if user.hashed_password is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This account signs in with the identity provider: its password is managed there",
+        )
+    if is_observer_only(session, user):
+        # the guest of a public demo is one account many people share
+        raise HTTPException(status_code=403, detail="An observer account cannot change its password")
+    chiave = _password_change_key(user)
+    attesa = login_throttle.attesa_richiesta(session, None, chiave)
+    if attesa > 0:
+        audit.record_audit(
+            session, actor=user, action=audit.PASSWORD_CHANGE, outcome="failure", request=request,
+            target_type="user", target_id=user.id, target_label=user.email, detail={"reason": "throttled"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many attempts. Try again in {int(attesa) + 1} seconds.",
+            headers={"Retry-After": str(int(attesa) + 1)},
+        )
+    if not verify_password(body.current_password, user.hashed_password):
+        audit.record_audit(
+            session, actor=user, action=audit.PASSWORD_CHANGE, outcome="failure", request=request,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail={"reason": "wrong current password"},
+        )
+        login_throttle.registra_errore(session, None, chiave)
+        # 400 and not 401: a 401 would sign the browser out
+        raise HTTPException(status_code=400, detail="The current password is not correct")
+    login_throttle.registra_successo(session, None, chiave)
+    user.hashed_password = hash_password(body.new_password)
+    session.add(user)
+    # in the same transaction as the change: whoever knew the old password, or
+    # had made a token with it, is out
+    chiuse = sessions.chiudi_tutte(session, user.id, tranne=sessions.sid_corrente(request), commit=False)
+    ritirati = api_tokens.revoca_tutti(session, user.id, commit=False)
+    session.commit()
+    audit.record_audit(
+        session, actor=user, action=audit.PASSWORD_CHANGE, request=request,
+        target_type="user", target_id=user.id, target_label=user.email,
+        detail={"sessions": chiuse, "tokens": ritirati},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 def _get_user(session: Session, user_id: int) -> User:
     user = session.get(User, user_id)
     if user is None:
@@ -197,6 +293,12 @@ def update_user(
             target_type="user", target_id=user.id, target_label=user.email,
             detail={"sessions": chiuse, "tokens": ritirati, "reason": motivo},
         )
+    if body.password is not None:
+        audit.record_audit(
+            session, actor=current, request=request, action=audit.PASSWORD_CHANGE,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail={"by_admin": True},
+        )
     session.refresh(user)
     if user.is_superuser != era_admin:
         audit.record_audit(
@@ -221,6 +323,7 @@ def delete_user(
     user_id: int,
     session: Session = Depends(get_session),
     current: User = Depends(require_superuser),
+    request: Request = None,  # type: ignore[assignment]
 ):
     """Elimina l'utente. Il suo CONTENUTO resta (i dati sono dell'organizzazione,
     non della persona): flussi/datasource/connessioni/run perdono solo il
@@ -235,8 +338,10 @@ def delete_user(
     """
     if user_id == current.id:
         raise HTTPException(status_code=409, detail="You cannot delete your own account")
-    _get_user(session, user_id)
+    email = _get_user(session, user_id).email
     elimina_utente(session, user_id)
+    audit.record_audit(session, actor=current, action=audit.USER_DELETE, request=request,
+                       target_type="user", target_id=user_id, target_label=email)
 
 
 def elimina_utente(session: Session, user_id: int) -> None:
@@ -263,6 +368,11 @@ def elimina_utente(session: Session, user_id: int) -> None:
     session.exec(sa_delete(UserSession).where(UserSession.user_id == user_id))
     session.exec(sa_delete(ApiToken).where(ApiToken.user_id == user_id))
     session.exec(sa_delete(Upload).where(Upload.owner_id == user_id))
+    # the client addresses of the account go with it (services/ip_retention.py);
+    # the rows stay, with the email of the time
+    from app.services import ip_retention
+
+    ip_retention.dimentica_utente(session, user)
     # `audit_logs.actor_id` è una FK verso users: senza azzerarla il DELETE
     # viola il vincolo e l'API risponde 500. Non è un caso limite — `auth.login`
     # è auditato, quindi bastava aver fatto accesso una volta per non essere più

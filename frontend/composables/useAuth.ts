@@ -17,6 +17,10 @@ export interface Me {
   personal_tokens?: boolean
   // la scadenza più lunga che si può dare a un token (AUTH__API_TOKEN_MAX_DAYS)
   api_token_max_days?: number
+  // no local password: the account signs in through the identity provider (SSO)
+  sso_only?: boolean
+  // the language last chosen in the interface: the emails of the product follow it
+  locale?: string | null
 }
 
 // Il cookie della sessione: lo scrive il gateway all'accesso, `HttpOnly`, quindi
@@ -53,6 +57,18 @@ export function dropSession() {
 // I secondi che restano prima dell'uscita per inattività, nell'ultimo minuto;
 // null fuori da lì (vedi plugins/idle-logout.client.ts e IdleWarning.vue)
 export const useIdleWarning = () => useState<number | null>('idle_warning', () => null)
+
+/** Tells the gateway the language of the interface when it is not the one it
+ *  knows (PUT /users/me/locale). Never in the way: a failure is silent. */
+export function syncLocale(me: Me | null, code?: string) {
+  if (!me || !import.meta.client) return
+  const current = code ?? document.cookie.match(/(?:^|;\s*)tabularia-locale=([a-z]{2})/)?.[1] ?? 'en'
+  if (me.locale === current) return
+  const base = useRuntimeConfig().public.apiBase as string
+  $fetch(`${base}/users/me/locale`, { method: 'PUT', body: { locale: current }, credentials: 'include', headers: CSRF_HEADERS })
+    .then(() => { me.locale = current })
+    .catch(() => { /* the next load tries again */ })
+}
 
 export function useAuth() {
   const base = useRuntimeConfig().public.apiBase as string
@@ -103,6 +119,9 @@ export function useAuth() {
     }
     try {
       user.value = await $fetch<Me>(`${base}/auth/me`, { credentials: 'include' })
+      // at sign-in (and on every load of the app) the gateway learns the language
+      // of the interface: the emails it sends this user will speak it
+      if (import.meta.client) syncLocale(user.value)
     } catch (e: any) {
       // Solo un 401 dice che la sessione non vale più (chiusa, scaduta, utente
       // disattivato): allora si esce, come fa useApiClient. Una richiesta interrotta

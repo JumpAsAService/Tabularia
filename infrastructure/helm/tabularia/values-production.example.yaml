@@ -133,3 +133,4 @@ networkPolicy:
   egressCIDRs:
     - 10.0.0.0/8        # internal databases
     - 0.0.0.0/0         # REPLACE: narrow this to your storage and IdP ranges
+                        # (169.254.169.254, the cloud metadata endpoint, is excluded)

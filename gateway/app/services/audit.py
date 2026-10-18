@@ -26,6 +26,8 @@ SSO_LOGIN_FAILED = "auth.sso_login_failed"
 LOGOUT = "auth.logout"
 # sessioni chiuse da chi le possiede (le sue) o da un amministratore (di altri)
 SESSION_REVOKE = "auth.session_revoke"
+# a password set: one's own (settings menu) or another user's (administrator)
+PASSWORD_CHANGE = "auth.password_change"
 # token API e account di servizio (vedi services/api_tokens.py)
 TOKEN_CREATE = "token.create"
 TOKEN_REVOKE = "token.revoke"
@@ -107,16 +109,30 @@ FLOW_GROUP_UPDATE = "flow_group.update"
 FLOW_GROUP_DELETE = "flow_group.delete"
 FLOW_GROUP_RUN = "flow_group.run"
 FLOW_GROUP_SCHEDULE = "flow_group.schedule"
+# folders: moving one changes the inherited permissions of a whole subtree
+FOLDER_CREATE = "folder.create"
+FOLDER_UPDATE = "folder.update"
+FOLDER_MOVE = "folder.move"
+FOLDER_DELETE = "folder.delete"
+DS_UPDATE = "datasource.update"
+USER_DELETE = "user.delete"
+GROUP_CREATE = "group.create"
+QUEUE_JOB_STOP = "queue.job_stop"
 
 
 def client_ip(request: Optional[Request]) -> Optional[str]:
+    """The client's address: the one of the connection, as the server resolved it.
+
+    Behind a reverse proxy the real client is in X-Forwarded-For, but only the
+    server knows whether the hop that wrote it is a proxy we trust: uvicorn reads
+    the header from the addresses in FORWARDED_ALLOW_IPS (`--forwarded-allow-ips`,
+    127.0.0.1 by default) and puts the result here. Reading the header again in
+    the application took a client's own `X-Forwarded-For: <anything>` at its word,
+    in the audit log, in sessions and tokens."""
     if request is None:
         return None
-    # dietro reverse proxy il vero client è nel primo hop di X-Forwarded-For
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else None
+    client = getattr(request, "client", None)
+    return client.host if client else None
 
 
 def record_audit(

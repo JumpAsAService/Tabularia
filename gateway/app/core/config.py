@@ -2,9 +2,14 @@ import os
 import re
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
 from functools import lru_cache
 from typing import Literal, Optional
+
+from app.core.passwords import (
+    KNOWN_PASSWORDS, PASSWORD_MIN_LENGTH, is_known_password, password_problem,
+)
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -67,10 +72,32 @@ class JwtSettings(BaseModel):
 # Admin seedato allo startup (come Grafana/MinIO: credenziali da env, cambiabili
 # velocemente in produzione)
 # ─────────────────────────────────────────────────────────────────────────────
+# The bootstrap administrator's password follows the rule of every password
+# (core/passwords.py): the same list, the same length, the same function. Only the
+# messages name the variable to change.
+ADMIN_PASSWORD_MIN = PASSWORD_MIN_LENGTH
+KNOWN_ADMIN_PASSWORDS = KNOWN_PASSWORDS
+is_known_admin_password = is_known_password
+
+
+def admin_password_problem(password: str) -> Optional[str]:
+    """Why this password cannot be the administrator's, or None if it can."""
+    if not password:
+        return "AUTH__ADMIN_PASSWORD is not set"
+    problem = password_problem(password)
+    return f"AUTH__ADMIN_PASSWORD: {problem}" if problem else None
+
+
 class AuthSettings(BaseModel):
     admin_email: str = "admin@tabularia.local"
-    admin_password: SecretStr = SecretStr("admin")
+    # No default: the first start needs one (see seed.seed_admin, and
+    # admin_password_problem for what is refused).
+    admin_password: SecretStr = SecretStr("")
     admin_name: str = "Administrator"
+    # env: AUTH__ALLOW_KNOWN_ADMIN_PASSWORD — development only: lets a local stack
+    # whose scripts sign in with a fixed password (admin/admin) keep it. Ignored
+    # with APP__ENV_NAME=production.
+    allow_known_admin_password: bool = False
     # env: AUTH__SESSION_IDLE_MINUTES — dopo quanti minuti senza attività una
     # sessione si chiude. 0 = mai (conta solo la durata massima, JWT__ACCESS_TTL_MINUTES).
     # Vale due volte: il gateway rifiuta una sessione rimasta ferma più a lungo, e
@@ -450,6 +477,31 @@ class AuditSettings(BaseModel):
 
     # env: AUDIT__RETENTION_MINUTES — 0 = nessuna cancellazione
     retention_minutes: int = Field(default=0, ge=0)
+    # env: AUDIT__IP_RETENTION_DAYS — days a client address and browser string are
+    # kept (audit rows, API tokens, sessions); past them they are emptied and the
+    # row stays. 0 = kept for ever. Separate from the whole-row retention above:
+    # an address is personal data, the record of who did what is evidence.
+    ip_retention_days: int = Field(default=90, ge=0)
+
+
+class UploadSettings(BaseModel):
+    """File uploads (the editor's «Upload file»). The same variable is read by the
+    engine, as a second barrier behind the gateway.
+
+    env: UPLOAD__MAX_BYTES — the largest file accepted, in bytes; 0 = no ceiling.
+    The gateway answers 413 before the engine is called when the size is declared,
+    and cuts an undeclared (chunked) body at the ceiling. The file is spooled on the
+    engine's disk and converted there: the ceiling is also a disk and time bound."""
+
+    max_bytes: int = Field(default=1024 ** 3, ge=0)
+
+
+def describe_bytes(n: int) -> str:
+    """1073741824 -> '1 GB', 3145728 -> '3 MB': for messages people read."""
+    for unit, size in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if n >= size and n % size == 0:
+            return f"{n // size} {unit}"
+    return f"{n} bytes"
 
 
 class SchedulingSettings(BaseModel):
@@ -529,6 +581,15 @@ class KubernetesSettings(BaseModel):
     timeout_seconds: float = Field(default=10.0, gt=0)
 
 
+
+# How to make a Fernet key with the tools of any machine: the earlier hint imported
+# the `cryptography` package, which a fresh machine does not have. Same commands as
+# infrastructure/.env.example and the getting-started guide.
+FERNET_KEY_HINT = (
+    "generate one with: openssl rand -base64 32 | tr '+/' '-_'  "
+    "(or: python3 -c \"import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())\")"
+)
+
 class Settings(BaseSettings):
     """
     Configurazione del gateway. Priorità: init > env > default.
@@ -549,6 +610,7 @@ class Settings(BaseSettings):
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     audit: AuditSettings = Field(default_factory=AuditSettings)
+    upload: UploadSettings = Field(default_factory=UploadSettings)
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)
     openlineage: OpenLineageSettings = Field(default_factory=OpenLineageSettings)
     kubernetes: KubernetesSettings = Field(default_factory=KubernetesSettings)
@@ -563,11 +625,7 @@ class Settings(BaseSettings):
         un messaggio chiaro. Chiamata allo startup (API, worker, beat)."""
         from cryptography.fernet import Fernet
 
-        hint = (
-            'generate it with: python -c "from cryptography.fernet import Fernet; '
-            'print(Fernet.generate_key().decode())" and set it in infrastructure/.env '
-            "(the same in gateway and engine)"
-        )
+        hint = f"{FERNET_KEY_HINT}, and set it in infrastructure/.env (the same in gateway and engine)"
         key = self.security.fernet_key
         if not key:
             raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")
@@ -618,8 +676,12 @@ class Settings(BaseSettings):
                 f"JWT__SECRET is too short ({len(segreto)} characters, at least "
                 f"{JWT_SECRET_MIN} are needed; generate one: openssl rand -hex 32)"
             )
-        if self.auth.admin_password.get_secret_value() == "admin":
-            problems.append("AUTH__ADMIN_PASSWORD is the default 'admin'")
+        # empty or published; the length is checked when the administrator is created
+        # (seed.seed_admin): an installation running for months with a shorter one
+        # must not stop at the upgrade over a value that is no longer used
+        admin_pw = self.auth.admin_password.get_secret_value()
+        if not admin_pw or is_known_admin_password(admin_pw):
+            problems.append(admin_password_problem(admin_pw))
         if self.db.password.get_secret_value() == "tabularia" and not self.db.url:
             problems.append("DB__PASSWORD is the development default")
         if problems:

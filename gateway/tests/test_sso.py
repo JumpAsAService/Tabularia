@@ -500,3 +500,43 @@ def test_callback_ok_apre_la_sessione_interna_e_scrive_l_audit(session, monkeypa
 
     entry = session.exec(select(AuditLog).where(AuditLog.action == "auth.sso_login")).first()
     assert entry is not None and entry.actor_id == user.id and "analytics" in (entry.detail or "")
+
+
+# ── admin and observer groups are not handed out by name (AUDIT-2026-09-19 M2) ─
+def _special_group(session, name, **flags):
+    g = Group(name=name, **flags)
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    return g
+
+
+def test_an_idp_group_named_like_an_admin_group_does_not_make_an_administrator(session):
+    """Whoever could get a group called like Tabularia's admin group onto their token
+    (self-service groups on Entra, a loose Keycloak realm) became administrator. The
+    IdP grants administration only through OIDC__SUPERUSER_GROUP."""
+    from app.services.permissions import is_admin, is_observer
+
+    _special_group(session, "admins", is_admin=True)
+    _special_group(session, "guests", is_observer=True)
+    make_group(session, "analytics")
+    user, detail = sso.provision_and_sync(session, claims("mario@x.local", groups=["admins", "guests", "analytics"]), cfg())
+    assert group_names(session, user) == {"analytics"}
+    assert not is_admin(session, user) and not is_observer(session, user)
+    assert detail["groups_added"] == ["analytics"]
+
+
+def test_an_observer_group_can_be_mapped_when_allowlisted(session):
+    _special_group(session, "guests", is_observer=True)
+    user, _ = sso.provision_and_sync(session, claims("ospite@x.local", groups=["guests"]), cfg(group_allowlist="guests"))
+    assert group_names(session, user) == {"guests"}
+
+
+def test_an_admin_group_given_in_tabularia_survives_an_authoritative_sso_login(session):
+    """Those memberships are managed in Tabularia: SSO neither adds nor removes them."""
+    admins = _special_group(session, "admins", is_admin=True)
+    user, _ = sso.provision_and_sync(session, claims("capo@x.local"), cfg())
+    session.add(UserGroupLink(user_id=user.id, group_id=admins.id))
+    session.commit()
+    user, detail = sso.provision_and_sync(session, claims("capo@x.local", groups=[]), cfg(authoritative=True))
+    assert "admins" in group_names(session, user) and detail["groups_removed"] == []

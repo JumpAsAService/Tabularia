@@ -52,6 +52,7 @@ from app.routes.ai import router as ai_router
 from app.routes.queue import router as queue_router
 from app.routes.proxy import router as proxy_router
 from app.core.body_limit import BodyLimitMiddleware
+from app.core import api_docs
 
 logging.basicConfig(level=logging.INFO)
 
@@ -157,7 +158,11 @@ app = FastAPI(
     # e il reindirizzamento per la barra finale (che lo perderebbe) si spegne
     root_path=settings.app.root_path,
     redirect_slashes=settings.app.redirect_slashes,
+    # /docs and /redoc with pinned, hash-checked scripts and a CSP (core/api_docs.py)
+    docs_url=None,
+    redoc_url=None,
 )
+api_docs.install(app)
 
 app.add_middleware(BodyLimitMiddleware)
 app.add_middleware(

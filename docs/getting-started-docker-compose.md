@@ -100,18 +100,20 @@ Copy the example settings:
 cp .env.example .env
 ```
 
-Open `.env` in an editor and change three values:
+Open `.env` in an editor and set three values:
 
 ```dotenv
 # the first administrator, created at the first start
 AUTH__ADMIN_EMAIL=admin@example.com
-AUTH__ADMIN_PASSWORD=Change-me-2026
+AUTH__ADMIN_PASSWORD=<a password of your own, at least 12 characters>
 # the time zone of the schedules: '0 6 * * *' means 06:00 here
 APP__TIMEZONE=Europe/Rome
 ```
 
 - **The administrator** comes from these two environment variables: it is created at the
-  first start, and you sign in with them.
+  first start, and you sign in with them. The password has no default: Compose refuses
+  to start without one, and the gateway refuses `admin`, other well-known passwords and
+  anything shorter than 12 characters.
 - **The time zone** is the one the schedules use (an IANA name; the default is UTC).
   Dates on screen follow your browser.
 
@@ -509,6 +511,11 @@ is still compiling its pages. Wait for the gateway to be `(healthy)` in
 **Sign-in fails: *Incorrect email or password*.** Sign in with `AUTH__ADMIN_EMAIL` and
 `AUTH__ADMIN_PASSWORD` from `.env`. After repeated failures the sign-in is paused:
 *Too many sign-in attempts. Try again in 60 seconds.*
+
+**The gateway does not become `(healthy)`.** `docker compose logs --tail 20 gateway`
+names the reason. *Cannot create the administrator* means `AUTH__ADMIN_PASSWORD` is
+`admin`, another well-known password or shorter than 12 characters: choose another one
+in `.env` and run `docker compose up -d` again.
 
 **The `Sample` folder does not appear.**
 

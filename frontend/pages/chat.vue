@@ -27,6 +27,11 @@ import AiSpeaker from '~/components/ui/AiSpeaker.vue'
 import Select from '~/components/ui/Select.vue'
 
 const { t } = useI18n()
+// A chat without a title yet (or with the Italian default written before 1.2.0)
+// is «New conversation» in the language of the interface.
+function chatTitle(title: string): string {
+  return !title || title === 'Nuova conversazione' ? t('chat.newConversation') : title
+}
 const toast = useToast()
 const { user } = useAuth()
 // Osservatore e non amministratore: per lui la conversazione non viene salvata
@@ -88,7 +93,7 @@ const chatsFiltered = computed(() => {
   if (!q) return chats.value
   const parole = q.split(/\s+/)
   return chats.value.filter((c) => {
-    const t = c.title.toLowerCase()
+    const t = chatTitle(c.title).toLowerCase()
     return parole.every((w) => t.includes(w))
   })
 })
@@ -298,7 +303,7 @@ async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt:
   grabbing.value = `${step.id}:${fmt}`
   try {
     const blob = await ai.exportStep(chatId.value, turn.seq, step.id, fmt)
-    const nome = `${step.table?.datasource || 'risultato'}.${fmt}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
+    const nome = `${step.table?.datasource || 'result'}.${fmt}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -317,7 +322,7 @@ async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt:
  *  un ticket, non uno screenshot. */
 function downloadChat() {
   const righe: string[] = [
-    `# ${chats.value.find((c) => c.id === chatId.value)?.title || t('chat.pageTitle')}`, '',
+    `# ${chatTitle(chats.value.find((c) => c.id === chatId.value)?.title ?? '')}`, '',
     `> ${t('aiCompliance.exportNotice')}`, '',
   ]
   for (const turn of turns.value) {
@@ -340,7 +345,7 @@ function downloadChat() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${(chats.value.find((c) => c.id === chatId.value)?.title || 'conversazione').replace(/[^a-z0-9._-]+/gi, '_')}.md`.toLowerCase()
+  a.download = `${(chats.value.find((c) => c.id === chatId.value)?.title || 'conversation').replace(/[^a-z0-9._-]+/gi, '_')}.md`.toLowerCase()
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -459,14 +464,14 @@ watch(draft, async () => {
                 :aria-current="c.id === chatId ? 'true' : undefined"
                 @click="openChat(c.id)"
               >
-                <span class="t">{{ c.title }}</span>
+                <span class="t">{{ chatTitle(c.title) }}</span>
                 <span class="muted small">{{ $t('chat.turns', { n: c.turns }) }} · {{ money(c.cost_usd) }}</span>
               </button>
               <button
                 type="button"
                 class="mini danger"
                 :title="$t('chat.deleteChat')"
-                :aria-label="$t('chat.deleteChatNamed', { name: c.title })"
+                :aria-label="$t('chat.deleteChatNamed', { name: chatTitle(c.title) })"
                 @click="removeChat(c.id)"
               >
                 <Trash2 :size="12" />

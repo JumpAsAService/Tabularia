@@ -66,6 +66,11 @@ metadata:
     {{- include "tabularia.labels" . | nindent 4 }}
 spec:
   podSelector:
+    # name and instance too: a bare component label would also restrict another
+    # release's (or another app's) pods labelled worker or engine in this namespace
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
@@ -82,11 +87,33 @@ spec:
     # In-cluster traffic (broker, metadata database when self-hosted).
     - to:
         - podSelector: {}
-    # Everything the workers are allowed to reach outside the cluster.
+    # Everything the workers are allowed to reach outside the cluster. An entry
+    # is a CIDR, or {cidr, except}. The cloud metadata endpoints are carved out of
+    # any range that contains them (0.0.0.0/0, 169.254.0.0/16, ::/0…): from there a
+    # connection or a SQL file function would read the node's cloud credentials.
     {{- range .Values.networkPolicy.egressCIDRs }}
+    {{- $cidr := . }}
+    {{- $except := list }}
+    {{- if kindIs "map" . }}
+    {{- $cidr = required "networkPolicy.egressCIDRs: an entry given as a map needs `cidr`" .cidr }}
+    {{- $except = .except | default list }}
+    {{- end }}
+    {{- if contains ":" $cidr }}
+    {{- if or (eq $cidr "::/0") (hasPrefix "fd00:" $cidr) }}
+    {{- $except = append $except "fd00:ec2::254/128" }}
+    {{- end }}
+    {{- else if or (eq $cidr "0.0.0.0/0") (hasPrefix "169.254." $cidr) }}
+    {{- $except = append $except "169.254.169.254/32" }}
+    {{- end }}
     - to:
         - ipBlock:
-            cidr: {{ . | quote }}
+            cidr: {{ $cidr | quote }}
+            {{- with ($except | uniq) }}
+            except:
+              {{- range . }}
+              - {{ . | quote }}
+              {{- end }}
+            {{- end }}
     {{- end }}
 {{- end }}
 {{- end }}

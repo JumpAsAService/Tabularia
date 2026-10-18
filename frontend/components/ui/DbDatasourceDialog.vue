@@ -365,7 +365,7 @@ function confirm() {
           <TemplatePreview id="tp-folder" :preview="preview" name="folder" />
           <label>{{ $t('sftp.patternLabel') }} <span class="dd-soft">{{ $t('sftp.patternHint') }}</span></label>
           <div class="dd-row">
-            <input v-model="ftPattern" type="text" spellcheck="false" class="dd-pattern" aria-describedby="tp-pattern" placeholder="vendite_*.csv" @keydown.enter.prevent="checkFolderFiles" />
+            <input v-model="ftPattern" type="text" spellcheck="false" class="dd-pattern" aria-describedby="tp-pattern" placeholder="sales_*.csv" @keydown.enter.prevent="checkFolderFiles" />
             <button type="button" class="dd-check-files" :disabled="ftChecking || !ftPattern.trim()" @click="checkFolderFiles">
               <LoaderCircle v-if="ftChecking" :size="13" class="spin" /><FolderSearch v-else :size="13" /> {{ $t('sftp.checkFiles') }}
             </button>
@@ -465,7 +465,7 @@ function confirm() {
 
         <template v-if="!isFileSource">
           <label>{{ $t('dbDatasourceDialog.sortKeysLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.sortKeysHint') }}</span></label>
-          <input v-model="sortKeysText" type="text" placeholder="id, data_ordine" />
+          <input v-model="sortKeysText" type="text" placeholder="id, order_date" />
         </template>
 
         <label>{{ $t('dbDatasourceDialog.descriptionLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.optionalHint') }}</span></label>

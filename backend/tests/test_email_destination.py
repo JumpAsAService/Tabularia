@@ -33,7 +33,7 @@ class _FintoServer:
 
     ultimo: "_FintoServer | None" = None
 
-    def __init__(self, host, port, timeout=None):
+    def __init__(self, host, port, timeout=None, context=None):
         self.host, self.port = host, port
         self.starttls_chiamato = False
         self.login_con: tuple | None = None
@@ -47,7 +47,7 @@ class _FintoServer:
     def __exit__(self, *a):
         return False
 
-    def starttls(self):
+    def starttls(self, context=None):
         self.starttls_chiamato = True
 
     def login(self, user, pwd):

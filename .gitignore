@@ -2,6 +2,14 @@
 infrastructure/.env
 infrastructure/.env.*
 !infrastructure/.env.example
+# every environment file, wherever it is (gen-env.sh writes
+# infrastructure/production/.env with every production secret); examples stay tracked
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+!.github/scripts/trufflehog.env
 backend/app/config/secrets.toml
 *.pem
 *.key

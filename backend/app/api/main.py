@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.upload_limit import UploadLimit
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import get_settings
 from app.observability.metrics import register_app_metrics
@@ -60,6 +62,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# the ceiling of a file upload, before Starlette spools the file to disk
+app.add_middleware(UploadLimit)
 
 # Solo il gateway: tutto tranne /healthcheck e /metrics vuole il suo token
 app.add_middleware(SoloDalGateway)

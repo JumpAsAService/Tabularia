@@ -134,6 +134,10 @@ services:
       - .env
     environment:
       - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
+      # the first administrator's password: no default, so that no installation
+      # comes up with one everyone knows (the gateway also refuses 'admin' and
+      # anything under 12 characters when it creates the administrator)
+      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD:?set AUTH__ADMIN_PASSWORD in infrastructure/.env - a password of your own, at least 12 characters}
       - ENGINE__BASE_URL=http://backend:8000
       # Il gateway tiene una copia SUA del nome del bucket e la confronta con
       # quello di ogni richiesta, rifiutando con 403 se non combaciano. Derivarla

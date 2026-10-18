@@ -107,6 +107,14 @@ async def run_group(run_id: int) -> None:
         if not perm_service.has_capability(session, user, group.project_id, Capability.RUN):
             await orch._finalize_orch_run(run_id, "FAILURE", f"RUN missing on the folder of flow group '{group.name}'")
             return
+        if run.trigger_type == "schedule":
+            # every cell, before the first one starts: a schedule must not run half a group
+            from app.services import schedule_authority
+
+            gaps = schedule_authority.gaps_of_group(session, user, group)
+            if gaps:
+                await orch._finalize_orch_run(run_id, "FAILURE", schedule_authority.not_started(user, gaps))
+                return
         steps = definition_of(group).steps
         trigger, user_id, name = run.trigger_type, user.id, group.name
 

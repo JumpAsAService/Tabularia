@@ -512,6 +512,26 @@ class ExportSettings(BaseModel):
     max_rows: int = Field(default=5_000_000, ge=0)
 
 
+class SmtpSettings(BaseModel):
+    """Email destinations and notices (SMTP connections).
+
+    env: SMTP__VERIFY_TLS — verify the SMTP server's certificate and name, with
+    STARTTLS and with implicit TLS. false = the deployment's explicit opt-out for a
+    relay with a self-signed certificate (the password then travels encrypted but
+    to a server nobody vouched for)."""
+
+    verify_tls: bool = True
+
+
+class UploadSettings(BaseModel):
+    """File uploads (POST /files), the same variable as the gateway's: it refuses
+    first, the engine API is the second barrier (app/api/upload_limit.py).
+
+    env: UPLOAD__MAX_BYTES — the largest file accepted, in bytes; 0 = no ceiling."""
+
+    max_bytes: int = Field(default=1024 ** 3, ge=0)
+
+
 class AppSettings(BaseModel):
     # NB: nessun codice del backend legge `env_name` — il guard di produzione
     # vive solo nel gateway. Resta qui perché la configurazione condivisa la
@@ -532,6 +552,15 @@ class AppSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # Main Settings (composes all service settings)
 # ─────────────────────────────────────────────────────────────────────────────
+
+# How to make a Fernet key with the tools of any machine: the earlier hint imported
+# the `cryptography` package, which a fresh machine does not have. Same commands as
+# infrastructure/.env.example and the getting-started guide.
+FERNET_KEY_HINT = (
+    "generate one with: openssl rand -base64 32 | tr '+/' '-_'  "
+    "(or: python3 -c \"import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())\")"
+)
+
 class Settings(BaseSettings):
     """
     Main configuration class that composes all service settings.
@@ -567,6 +596,8 @@ class Settings(BaseSettings):
     bigquery: BigQuerySettings = Field(default_factory=BigQuerySettings)
     ingest: IngestSettings = Field(default_factory=IngestSettings)
     export: ExportSettings = Field(default_factory=ExportSettings)
+    upload: UploadSettings = Field(default_factory=UploadSettings)
+    smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     sharepoint: SharePointSettings = Field(default_factory=SharePointSettings)
     sftp: SftpSettings = Field(default_factory=SftpSettings)
     s3_source: S3SourceSettings = Field(default_factory=S3SourceSettings)
@@ -595,11 +626,7 @@ class Settings(BaseSettings):
         un messaggio chiaro. Chiamata allo startup (API, worker, beat)."""
         from cryptography.fernet import Fernet
 
-        hint = (
-            'generate one with: python -c "from cryptography.fernet import Fernet; '
-            'print(Fernet.generate_key().decode())" and set it in infrastructure/.env '
-            "(identical in gateway and engine)"
-        )
+        hint = f"{FERNET_KEY_HINT}, and set it in infrastructure/.env (the same in gateway and engine)"
         key = self.security.fernet_key
         if not key:
             raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")

@@ -24,9 +24,14 @@ from tests.conftest import make_flow, make_permission, make_project, make_run, m
 pytestmark = pytest.mark.anyio
 
 
+# Long and with characters base64 never contains: the payload carries the Fernet
+# ciphertext, and a short password like "pw" turned up inside it by chance.
+SECRET = "sftp-password!never-in-the-payload#42"
+
+
 def _conn(session, project_id, db_type="sftp", **kw):
     base = dict(name="drop", project_id=project_id, db_type=db_type, host="sftp.example.com", port=None,
-                username="tab", password_encrypted=encrypt_secret("pw"), extra=json.dumps({"auth": "password"}),
+                username="tab", password_encrypted=encrypt_secret(SECRET), extra=json.dumps({"auth": "password"}),
                 host_key_type="ssh-ed25519", host_key_fingerprint="SHA256:k")
     base.update(kw)
     c = Connection(**base)
@@ -69,7 +74,7 @@ async def test_the_engine_gets_the_connection_the_target_and_the_run_number(sess
     assert dest["type"] == "sftp"
     assert dest["target"] == {"folder": "/out", "file_name": "vendite_{date}_{run_id}", "format": "csv",
                               "run_id": run.id, "flow": "Report mensile"}
-    assert dest["connection"]["host_key_fingerprint"] == "SHA256:k" and "pw" not in json.dumps(sent)
+    assert dest["connection"]["host_key_fingerprint"] == "SHA256:k" and SECRET not in json.dumps(sent)
     assert run.task_id == "t-transform-1"
     summary = json.loads(run.destination)
     assert summary == {"type": "sftp", "connection_id": conn.id, "host": "sftp.example.com:22", "folder": "/out",

@@ -31,7 +31,7 @@ from sqlmodel import Session, select
 from app.db.session import engine
 from app.models import Connection, Datasource, Flow, FlowGroup, Run, User
 from app.models.run import TERMINAL_STATES
-from app.routes.runs import _reconcile, launch_ingest_run
+from app.routes.runs import _reconcile, launch_ingest_run, start_refresh_if_free
 from app.services.blobgc import sweep_blob_deletions
 from app.services import contracts as contract_service
 from app.services import api_tokens, flow_presence, login_throttle, orchestrator, sessions, webhooks
@@ -110,21 +110,15 @@ async def _fire_ds(session: Session, ds: Datasource, now: datetime, visto: datet
     if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
         _disable_ds(session, ds, f"CONNECT mancante per {user.email} sulla cartella della connessione")
         return
-    last = session.exec(
-        select(Run)
-        .where(Run.datasource_id == ds.id, Run.kind == "ingest")
-        .order_by(Run.started_at.desc())
-    ).first()
-    if last is not None:
-        last = await _reconcile(session, last)
-        if last.status not in TERMINAL_STATES:
-            if _prendi_slot_ds(session, ds, now, visto):
-                logger.info("scheduler: datasource %s ha già un refresh in corso, salto lo slot", ds.id)
-            return
+    ds_id, nome = ds.id, ds.name
     if not _prendi_slot_ds(session, ds, now, visto):
         return  # lo slot l'ha preso un altro processo
-    await launch_ingest_run(session, user, ds, conn, trigger_type="schedule")
-    logger.info("scheduler: refresh schedulato lanciato per datasource %s (%s)", ds.id, ds.name)
+    # in line with the manual refresh and the flows: one refresh at a time
+    run = await start_refresh_if_free(session, user, ds, conn, trigger_type="schedule", launch=launch_ingest_run)
+    if run is None:
+        logger.info("scheduler: datasource %s (%s) is already refreshing, scheduled slot skipped", ds_id, nome)
+        return
+    logger.info("scheduler: refresh schedulato lanciato per datasource %s (%s)", ds_id, nome)
 
 
 # ── flussi: esecuzione schedulata ───────────────────────────────────────────

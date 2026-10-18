@@ -28,6 +28,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.config import OidcSettings, get_settings
@@ -411,7 +412,17 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
         idp_groups &= cfg.allowlist
 
     wanted = _group_ids(session, idp_groups, cfg.auto_create_groups)
-    current = user_group_ids(session, user)
+    # Admin and observer groups carry a ROLE, and are matched by name only: whoever
+    # gets a group with that name onto their token at the IdP (self-service groups
+    # on Entra, a loose Keycloak realm) would get the role. SSO never adds nor
+    # removes those memberships: administration comes from the IdP only through
+    # OIDC__SUPERUSER_GROUP, an observer group only when it is in the allowlist.
+    gestiti_qui = {
+        g.id for g in session.exec(select(Group).where(or_(Group.is_admin, Group.is_observer))).all()
+        if g.is_admin or g.name not in cfg.allowlist
+    }
+    wanted -= gestiti_qui
+    current = user_group_ids(session, user) - gestiti_qui
 
     for gid in wanted - current:
         session.add(UserGroupLink(user_id=user.id, group_id=gid))

@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from cryptography.fernet import Fernet
 
-from app.core.config import get_settings
+from app.core.config import FERNET_KEY_HINT, get_settings
 
 
 @lru_cache
@@ -26,9 +26,8 @@ def _fernet() -> Fernet:
     if not key:
         raise RuntimeError(
             "SECURITY__FERNET_KEY is not set: connection credentials cannot be "
-            "encrypted or decrypted. Set it (identical in gateway and engine) — "
-            'generate one with: python -c "from cryptography.fernet import Fernet; '
-            'print(Fernet.generate_key().decode())"'
+            "encrypted or decrypted. Set it (the same in gateway and engine) — "
+            + FERNET_KEY_HINT
         )
     return Fernet(key)
 

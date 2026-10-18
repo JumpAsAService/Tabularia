@@ -58,6 +58,10 @@ class User(SQLModel, table=True):
     # token API (vedi models/api_token.py). Prende i permessi come gli altri, da
     # gruppi e cartelle. L'email è sintetica (dominio .invalid, che non riceve posta).
     is_service: bool = Field(default=False, sa_column_kwargs={"server_default": "false"})
+    # The language the user last chose in the interface (en, it, fr, de, es): the
+    # emails the product sends them speak it (services/email_texts.py). None =
+    # never chose: English.
+    locale: Optional[str] = Field(default=None, max_length=8)
 
 
 class Group(SQLModel, table=True):

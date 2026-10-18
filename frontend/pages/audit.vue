@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -146,6 +146,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'auth.login_failed': { icon: XCircle, color: u.danger, label: t('audit.loginFailedAction') },
     'auth.logout': { icon: LogOut, color: u.muted, label: t('audit.logoutAction') },
     'auth.session_revoke': { icon: LogOut, color: u.danger, label: t('audit.sessionRevokeAction') },
+    'auth.password_change': { icon: KeyRound, color: u.accent, label: t('audit.passwordChangeAction') },
     'token.create': { icon: KeyRound, color: u.accent, label: t('audit.tokenCreateAction') },
     'token.revoke': { icon: KeyRound, color: u.danger, label: t('audit.tokenRevokeAction') },
     'service_account.create': { icon: Shield, color: u.accent, label: t('audit.serviceAccountCreateAction') },
@@ -166,6 +167,14 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'flow.run': { icon: Workflow, color: u.violet, label: t('audit.flowRunAction') },
     'flow.schedule': { icon: Workflow, color: u.accent, label: t('audit.flowScheduleAction') },
     'flow.promote': { icon: Workflow, color: u.accent, label: t('audit.flowPromoteAction') },
+    'folder.create': { icon: Folder, color: u.success, label: t('audit.folderCreateAction') },
+    'folder.update': { icon: Folder, color: u.accent, label: t('audit.folderUpdateAction') },
+    'folder.move': { icon: Folder, color: u.accent, label: t('audit.folderMoveAction') },
+    'folder.delete': { icon: Folder, color: u.danger, label: t('audit.folderDeleteAction') },
+    'datasource.update': { icon: Database, color: u.accent, label: t('audit.datasourceUpdateAction') },
+    'user.delete': { icon: Shield, color: u.danger, label: t('audit.userDeleteAction') },
+    'group.create': { icon: Shield, color: u.success, label: t('audit.groupCreateAction') },
+    'queue.job_stop': { icon: Server, color: u.danger, label: t('audit.queueJobStopAction') },
     'flow_group.create': { icon: Rows3, color: u.accent, label: t('audit.flowGroupCreateAction') },
     'flow_group.update': { icon: Rows3, color: u.accent, label: t('audit.flowGroupUpdateAction') },
     'flow_group.delete': { icon: Rows3, color: u.danger, label: t('audit.flowGroupDeleteAction') },
@@ -199,12 +208,29 @@ function fmtAgo(iso: string | null) {
   if (s < 86400) return t('audit.timeHoursAgo', { n: Math.floor(s / 3600) })
   return t('audit.timeDaysAgo', { n: Math.floor(s / 86400) })
 }
+// The reasons the gateway writes, in the language of the interface. Some were
+// written in Italian (sign-in) and stay so in older lines; unknown ones as they are.
+const REASONS: Record<string, string> = {
+  'troppi tentativi': 'audit.reasonThrottled',
+  throttled: 'audit.reasonThrottled',
+  'credenziali errate': 'audit.reasonWrongCredentials',
+  'wrong credentials': 'audit.reasonWrongCredentials',
+  'utente disattivato': 'audit.reasonDeactivated',
+  deactivated: 'audit.reasonDeactivated',
+  "password cambiata durante l'accesso": 'audit.reasonPasswordChangedMeanwhile',
+  password: 'audit.reasonPassword',
+  observer: 'audit.reasonObserver',
+  'wrong current password': 'audit.reasonWrongCurrent',
+}
+function reasonLabel(r: string): string {
+  return REASONS[r] ? t(REASONS[r]) : r
+}
 // riassunto compatto del detail (JSON completo nel title)
 function detailSummary(e: AuditEntry): string {
   const d = e.detail
   if (!d) return ''
   const parts: string[] = []
-  if (d.reason) parts.push(String(d.reason))
+  if (d.reason) parts.push(reasonLabel(String(d.reason)))
   if (d.format) parts.push(`${d.format}`)
   if (d.filename && !d.format) parts.push(String(d.filename))
   if (d.cron) parts.push(t('audit.cronLabel', { cron: d.cron }))

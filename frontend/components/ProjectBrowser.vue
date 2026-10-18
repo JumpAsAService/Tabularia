@@ -917,7 +917,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                   {{ $t(e.disabled_by_admin ? 'projectBrowser.notAllowedTag' : (e.optional ? 'projectBrowser.notConfiguredTag' : 'projectBrowser.comingSoonTag')) }}
                 </span>
               </span>
-              <span class="mi-desc">{{ engineDescription(e.id, e.description) }}</span>
+              <span class="mi-desc">{{ engineDescription(e, $t, $te) }}</span>
             </button>
           </template>
         </div>

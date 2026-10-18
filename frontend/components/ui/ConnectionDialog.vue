@@ -453,7 +453,7 @@ function confirm() {
             <input
               v-model="host"
               type="text"
-              :placeholder="isSp ? 'https://azienda.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.azienda.it' : isSftp ? 'sftp.example.com' : isApi ? 'https://api.example.com/v1' : 'db.internal.example.com'"
+              :placeholder="isSp ? 'https://contoso.sharepoint.com/sites/Finance' : isS3 ? 'https://minio.example.com:9000' : isSmtp ? 'smtp.example.com' : isSftp ? 'sftp.example.com' : isApi ? 'https://api.example.com/v1' : 'db.internal.example.com'"
             />
           </div>
           <div v-if="isApi" class="cd-field">
@@ -495,7 +495,7 @@ function confirm() {
           <template v-if="isSmtp">
             <div class="cd-field">
               <label>{{ $t('connectionDialog.fromAddressLabel') }}</label>
-              <input v-model="fromAddress" type="text" placeholder="report@azienda.it" />
+              <input v-model="fromAddress" type="text" placeholder="reports@example.com" />
             </div>
             <div class="cd-field">
               <label>{{ $t('connectionDialog.fromNameLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>
@@ -514,7 +514,7 @@ function confirm() {
             </div>
             <div class="cd-field">
               <label>{{ $t('connectionDialog.allowedDomainsLabel') }} <span class="cd-hint">{{ $t('connectionDialog.allowedDomainsHint') }}</span></label>
-              <input v-model="allowedDomains" type="text" placeholder="azienda.it, clienti.it" />
+              <input v-model="allowedDomains" type="text" placeholder="example.com, customers.example.com" />
             </div>
           </template>
           <template v-else-if="isApi">

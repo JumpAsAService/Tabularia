@@ -206,7 +206,15 @@ function tastiVista(e: KeyboardEvent) {
   gridHeight.value = clampGrid(gridHeight.value + d * (e.shiftKey ? 10 : 1))
   localStorage.setItem('tabularia.gridHeight', String(gridHeight.value))
 }
-const status = ref(t('flowEditor.statusInitial'))
+// null = nothing has happened yet: the bar describes the canvas instead. A fixed
+// «Load a file to get started.» stayed there after a datasource had been picked
+// (1.2.0 getting-started run).
+const status = ref<string | null>(null)
+const idleStatus = computed(() =>
+  getNodes.value.some((n) => n.type === 'source' && (n.data?.datasourceId != null || !!n.data?.parquetKey))
+    ? t('flowEditor.statusHasData')
+    : t('flowEditor.statusInitial'),
+)
 // tipo di stato → icona nella toolbar (spinner / check / errore)
 const statusKind = ref<'info' | 'ok' | 'error' | 'busy'>('info')
 const toast = useToast()
@@ -458,9 +466,21 @@ const savedSnap = ref<string | null>(null)
 const currentSnap = ref<string | null>(null)
 const savedName = ref('')
 let adottaRiferimento = true
+// A NEW flow (never saved) also counts as unsaved as soon as it holds work: a
+// source with data, a step, a link. Its reference state is adopted when the
+// canvas first settles, and a choice made before that moment (a datasource picked
+// right after the page appears, on a slow connection or by a script) became part
+// of the reference: leaving then lost the work without a word (1.2.0
+// getting-started run).
+const newFlowHasWork = computed(() =>
+  flowId.value === null &&
+  (getEdges.value.length > 0 ||
+    getNodes.value.some((n) => n.type !== 'source' || n.data?.datasourceId != null || !!n.data?.parquetKey)))
 const dirty = computed(() =>
-  !soloOsservatore.value && savedSnap.value !== null &&
-  (currentSnap.value !== savedSnap.value || flowName.value.trim() !== savedName.value))
+  !soloOsservatore.value &&
+  (newFlowHasWork.value ||
+    (savedSnap.value !== null &&
+      (currentSnap.value !== savedSnap.value || flowName.value.trim() !== savedName.value))))
 
 const history = createFlowHistory({
   serialize: serializeCanvas,
@@ -1474,7 +1494,7 @@ async function exportSelected(format: 'csv' | 'xlsx') {
     return
   }
   const node = findNode(nodeId)
-  const label = node?.type === 'source' ? 'sorgente' : (node?.data?.opType ?? 'nodo')
+  const label = node?.type === 'source' ? 'source' : (node?.data?.opType ?? 'node')
   const filename = `${flowName.value.trim() || 'tabularia'}_${label}.${format}`
     .toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
 
@@ -1940,7 +1960,7 @@ async function pollTask(id: string) {
   <div v-label-fields class="app" :style="appStyle">
     <Toolbar
       class="toolbar"
-      :status="status"
+      :status="status ?? idleStatus"
       :status-kind="statusKind"
       :busy="busy"
       :can-run="canRun"

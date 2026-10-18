@@ -375,7 +375,8 @@ limits, and they are documented in [`docs/audit`](../../../docs/audit).
 - **Outbound connections are not filtered.** A user who can create database
   connections can make the engine connect to anything the cluster reaches,
   including cloud metadata endpoints. Enable `networkPolicy` with an explicit
-  `egressCIDRs` list.
+  `egressCIDRs` list (CIDRs or `{cidr, except}`); the metadata address
+  169.254.169.254 (fd00:ec2::254) is excluded from any range that holds it.
 - **Outputs that append are not idempotent.** A run interrupted mid-write and
   retried appends its rows twice. Prefer replace mode where you can.
 - **Engines are not perfectly interchangeable.** A flow designed on one engine

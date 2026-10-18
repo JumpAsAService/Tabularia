@@ -9,7 +9,7 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar, Server,
+  SlidersHorizontal, Radar, Server, KeyRound,
 } from 'lucide-vue-next'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
@@ -17,6 +17,8 @@ import WebhooksSection from '~/components/admin/WebhooksSection.vue'
 import EngineSettingsSection from '~/components/admin/EngineSettingsSection.vue'
 import SiemSection from '~/components/admin/SiemSection.vue'
 import WorkersSection from '~/components/admin/WorkersSection.vue'
+import PasswordDialog from '~/components/ui/PasswordDialog.vue'
+import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
 import { isSettingsCategory, useEngineSettings } from '~/composables/useEngineSettings'
 import { useWorkers } from '~/composables/useWorkers'
@@ -172,9 +174,18 @@ const daMigrare = computed(() =>
 )
 
 // ── utenti ──────────────────────────────────────────────────────────────────
+// the one rule of a new password (gateway core/passwords.py), checked before sending
+const { rules: passwordRules, load: loadPasswordRules } = usePasswordRules()
+onMounted(loadPasswordRules)
+
 async function createUser() {
-  if (!nu.value.email || nu.value.password.length < 6) {
-    toast.error(t('adminPanel.emailPasswordRequired'))
+  if (!nu.value.email) {
+    toast.error(t('adminPanel.emailPasswordRequired', { n: passwordRules.value.min_length }))
+    return
+  }
+  const bad = passwordProblem(nu.value.password, passwordRules.value)
+  if (bad) {
+    toast.error(t(bad.key, bad.values))
     return
   }
   try {
@@ -227,6 +238,10 @@ async function toggleObserver(u: UserOut) {
     toast.error(errMessage(e))
   }
 }
+
+// A password for another user (one's own goes through the settings menu, which
+// asks for the current one). The user's sessions and API tokens close.
+const passwordFor = ref<UserOut | null>(null)
 
 async function deleteUser(u: UserOut) {
   if (!confirm(t('adminPanel.confirmDeleteUser', { email: u.email }))) return
@@ -502,6 +517,14 @@ async function toggleMotore(m: EnginePolicy) {
                         <component :is="u.is_active ? XCircle : CheckCircle2" :size="13" />
                       </button>
                       <button
+                        class="mini"
+                        v-if="canWrite"
+                        :disabled="u.id === me?.id || u.sso_only"
+                        :title="u.id === me?.id ? $t('password.ownFromMenu') : u.sso_only ? $t('password.ssoFor') : $t('password.setTitle')"
+                        :aria-label="$t('password.setTitle')"
+                        @click="passwordFor = u"
+                      ><KeyRound :size="13" /></button>
+                      <button
                         class="mini danger"
                         v-if="canWrite"
                         :disabled="u.id === me?.id"
@@ -523,7 +546,7 @@ async function toggleMotore(m: EnginePolicy) {
           <div v-if="canWrite" class="card form">
             <h4><Plus :size="13" /> {{ $t('adminPanel.newUserTitle') }}</h4>
             <input v-model="nu.email" type="email" :placeholder="$t('adminPanel.emailPlaceholder')" :aria-label="$t('adminPanel.emailPlaceholder')" />
-            <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder')" :aria-label="$t('adminPanel.passwordPlaceholder')" autocomplete="new-password" />
+            <input v-model="nu.password" type="password" :placeholder="$t('adminPanel.passwordPlaceholder', { n: passwordRules.min_length })" :aria-label="$t('adminPanel.passwordPlaceholder', { n: passwordRules.min_length })" autocomplete="new-password" />
             <input v-model="nu.full_name" type="text" :placeholder="$t('adminPanel.fullNamePlaceholder')" :aria-label="$t('adminPanel.fullNamePlaceholder')" />
             <label class="chk"><input v-model="nu.is_superuser" type="checkbox" /> {{ $t('adminPanel.superuserLabel') }}</label>
             <label class="chk"><input v-model="nu.is_observer" type="checkbox" /> {{ $t('adminPanel.observerLabel') }}</label>
@@ -821,6 +844,7 @@ async function toggleMotore(m: EnginePolicy) {
         </template>
       </section>
     </div>
+    <PasswordDialog :open="!!passwordFor" :target="passwordFor" @close="passwordFor = null" />
   </div>
 </template>
 

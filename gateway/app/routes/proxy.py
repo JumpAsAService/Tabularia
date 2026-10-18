@@ -22,7 +22,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from sqlmodel import Session
 
-from app.core.config import get_settings
+from app.core.config import describe_bytes, get_settings
 from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user, oauth2_scheme
@@ -427,6 +427,10 @@ async def task_status(request: Request, task_id: str, session: Session = Depends
     return await _forward(request, "GET", f"/tasks/{task_id}", session=session)
 
 
+class _UploadTooLarge(Exception):
+    pass
+
+
 @router.post("/files")
 async def upload(
     request: Request,
@@ -454,16 +458,46 @@ async def upload(
         _release_db(session, user)  # l'upload può durare minuti: senza connessione in mano
         return proprietario
 
+    limite = get_settings().upload.max_bytes
+    troppo = HTTPException(
+        status_code=413,
+        detail=f"The file is too large: the limit is {describe_bytes(limite)} (UPLOAD__MAX_BYTES)",
+    )
+    # a declared size over the ceiling: refused before anything is read or sent
+    dichiarati = request.headers.get("content-length") or ""
+    if limite and dichiarati.isdigit() and int(dichiarati) > limite:
+        raise troppo
     owner_id = await run_in_threadpool(controlli)
+
+    superato = False
+
+    async def contato():
+        """The body as it arrives, cut at the ceiling: a chunked upload declares no
+        size, and a declared one could be a lie."""
+        nonlocal superato
+        ricevuti = 0
+        async for pezzo in request.stream():
+            ricevuti += len(pezzo)
+            if limite and ricevuti > limite:
+                superato = True
+                raise _UploadTooLarge()
+            yield pezzo
+
     client = get_engine_client()
     engine_req = client.build_request(
         "POST",
         "/files",
         params=request.query_params,
         headers=_request_headers(request),
-        content=request.stream(),
+        content=contato(),
     )
-    engine_resp = await client.send(engine_req)
+    try:
+        engine_resp = await client.send(engine_req)
+    except Exception:
+        # the engine sees a body that stops short and throws its spooled copy away
+        if superato:
+            raise troppo from None
+        raise
 
     if engine_resp.status_code < 400:
         def registra() -> None:
