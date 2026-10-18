@@ -69,7 +69,8 @@ class TheCommittedPage(unittest.TestCase):
             checked += 1
             self.assertNotIn(var.default, rows[name], f"{name} shows its default")
             self.assertIn("hidden", rows[name], name)
-        self.assertGreaterEqual(checked, 4)  # JWT, admin, DB and storage passwords
+        # JWT, DB and storage passwords (the administrator's has no default since 1.2.0)
+        self.assertGreaterEqual(checked, 3)
         self.assertNotIn("change-me-in-production", text)
 
 
