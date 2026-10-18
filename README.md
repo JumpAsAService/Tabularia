@@ -5,6 +5,8 @@
 
 # Tabularia
 
+[![CI](https://github.com/JumpAsAService/Tabularia/actions/workflows/ci.yml/badge.svg)](https://github.com/JumpAsAService/Tabularia/actions/workflows/ci.yml)
+
 **Self-hosted, open-source visual data-preparation platform.** A visual flow editor
 on pluggable engines: build a pipeline once, preview it on the whole dataset, and
 decide *later* where the compute runs.

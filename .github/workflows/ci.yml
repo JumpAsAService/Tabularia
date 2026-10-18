@@ -1,0 +1,108 @@
+# The tests of every change: the engine's suite (four engines, with real ClickHouse,
+# PostgreSQL, MinIO and Valkey), the gateway's suite (with a real PostgreSQL for the
+# migrations) and the type check of the interface. Runs on every push, to any branch, and
+# every pull request; the release workflow calls it on the commit it is about to publish and
+# publishes nothing unless it is green.
+#
+# The suites run inside the development images (the published ones have no pytest), by
+# .github/scripts/ci_tests.sh, which runs the same way on a laptop. Not here: live BigQuery,
+# Oracle and SQL Server (credentials, proprietary servers) and the end-to-end oracles of
+# e2e/, which need a whole stack (see docs/release-process.md).
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to test (the release workflow passes the tag's)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ inputs.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  suite:
+    name: ${{ matrix.suite }} tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: engine
+            component: backend
+            build-args: |
+              WITH_DEV=true
+              WITH_CHDB=true
+          - suite: gateway
+            component: gateway
+            build-args: |
+              WITH_DEV=true
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the development image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.component }}
+          build-args: ${{ matrix.build-args }}
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: tabularia-${{ matrix.component }}:ci
+          cache-from: type=gha,scope=ci-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=ci-${{ matrix.component }}
+
+      - name: Tests
+        run: .github/scripts/ci_tests.sh "${{ matrix.suite }}" "tabularia-${{ matrix.component }}:ci"
+
+  interface:
+    name: interface type check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # postinstall runs `nuxt prepare`, which writes .nuxt/tsconfig.json
+      - name: Install
+        run: npm ci
+
+      # vue-tsc is not a dependency of the app: pinned here, pointed at Nuxt's tsconfig
+      - name: Type check
+        run: npx -y -p typescript@5.6.3 -p vue-tsc@2.2.10 vue-tsc --noEmit -p .nuxt/tsconfig.json

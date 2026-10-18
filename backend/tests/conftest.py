@@ -6,6 +6,13 @@ riceve un PolarsEngine già collegato a storage e cache finti.
 """
 from __future__ import annotations
 
+import base64
+import os
+
+# Connection secrets are encrypted with SECURITY__FERNET_KEY: a random key when none is
+# set, so the suite runs on a fresh clone (and in CI) without configuring anything.
+os.environ.setdefault("SECURITY__FERNET_KEY", base64.urlsafe_b64encode(os.urandom(32)).decode())
+
 import polars as pl
 import pytest
 
@@ -13,8 +20,6 @@ from app.engine.base import DataSource
 from app.engine.cache import StepCache
 from app.engine.polars_engine import PolarsEngine
 from tests.fakes import FakeRedis, FakeStorage
-
-import os
 
 # Il bucket dei test e' finto (FakeStorage) tranne nelle suite LIVE, dove i
 # parquet vanno sullo storage vero: allora e' quello configurato.

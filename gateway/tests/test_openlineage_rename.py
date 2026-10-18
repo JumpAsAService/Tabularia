@@ -4,6 +4,7 @@ objects under their new names and, on Marquez, loses the old ones (the user's
 choice of 2026-10-15). The OpenLineage client is the official one with a
 transport that captures; Marquez is an httpx mock transport."""
 import json
+import queue
 from urllib.parse import unquote
 
 import httpx
@@ -61,8 +62,29 @@ def catalog(monkeypatch):
     ol.set_client(None)
 
 
+# The service thread builds a rename's events with a session of its own. In production
+# that is a connection of its own; the tests share ONE SQLite connection (StaticPool), so
+# the thread would read it while the request is still writing the audit entry: under load
+# the events came out wrong. Here the queued work waits for _settle(), which runs it
+# through the service thread's own loop (ol._lavoro), once the request is over.
+_DEFERRED: list = []
+
+
+@pytest.fixture(autouse=True)
+def _service_thread_after_the_request(monkeypatch):
+    _DEFERRED.clear()
+    monkeypatch.setattr(ol, "_accoda", lambda run_id, eventi: _DEFERRED.append((run_id, eventi)) or True)
+    yield
+    _DEFERRED.clear()
+
+
 def _settle():
-    ol.wait_idle()
+    coda = queue.Queue()
+    for voce in _DEFERRED:
+        coda.put(voce)
+    _DEFERRED.clear()
+    coda.put(None)
+    ol._lavoro(coda)
 
 
 @pytest.fixture

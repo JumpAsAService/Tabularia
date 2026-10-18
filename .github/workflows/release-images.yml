@@ -1,5 +1,6 @@
-# Builds the three release images for amd64 and arm64, checks them, certifies that they
-# hold no secrets, and only then pushes them to Docker Hub. See docs/release-process.md.
+# Runs the test suites on the tagged commit (ci.yml), builds the three release images for
+# amd64 and arm64, checks them, certifies that they hold no secrets, and only then pushes
+# them to Docker Hub. See docs/release-process.md.
 #
 # A tag v1.2.0 publishes jumpasaservice/tabularia-{backend,gateway,frontend} as
 #   1.2.0-amd64, 1.2.0-arm64   the single-architecture images, pushed after their scans
@@ -127,9 +128,17 @@ jobs:
           /tmp/scan/bin/python ci/.github/scripts/test_push_guard.py
           /tmp/scan/bin/python ci/.github/scripts/test_image_licence_check.py
 
+  # the test suites on the very commit of the tag: no image is built unless they pass
+  tests:
+    name: Tests
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.prepare.outputs.revision }}
+
   image:
     name: ${{ matrix.component }} ${{ matrix.arch }}
-    needs: prepare
+    needs: [prepare, tests]
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: true

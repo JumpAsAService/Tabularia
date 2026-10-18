@@ -8,7 +8,14 @@ L'engine (data plane) è sostituito da un client httpx con `MockTransport`: le
 funzioni che parlano con l'engine (`_reconcile` via GET /tasks/{id}, il cleanup
 via DELETE /files/object) girano offline e le loro chiamate sono ispezionabili.
 """
+import base64
 import json
+import os
+
+# Connection secrets are encrypted with SECURITY__FERNET_KEY: a random key when none is
+# set, so the suite runs on a fresh clone (and in CI) without configuring anything.
+os.environ.setdefault("SECURITY__FERNET_KEY", base64.urlsafe_b64encode(os.urandom(32)).decode())
+
 import httpx
 import pytest
 from sqlalchemy import StaticPool

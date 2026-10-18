@@ -25,7 +25,9 @@ The tag starts [`.github/workflows/release-images.yml`](../.github/workflows/rel
 1. **Version and tags.** Checks the tag against the version in the code, works out
    which tags to publish, and runs the tests of the secret scanner and of the
    licence check.
-2. **One job per image and architecture** (backend, gateway, frontend × amd64,
+2. **Tests.** The CI workflow (`ci.yml`, below) on the tag's commit: no image is built
+   unless the engine's and the gateway's suites and the interface's type check pass.
+3. **One job per image and architecture** (backend, gateway, frontend × amd64,
    arm64; arm64 runs on GitHub's native ARM runners, no emulation). Each job:
    - builds the image from scratch on fresh base images;
    - smoke-tests it: runs as uid 10001, has the right architecture and version
@@ -35,13 +37,30 @@ The tag starts [`.github/workflows/release-images.yml`](../.github/workflows/rel
    - saves it with `docker save` and **scans it for secrets**, twice (below);
    - only then logs in to Docker Hub and pushes `1.2.0-amd64` or `1.2.0-arm64`. The
      Docker Hub token never enters a job whose scans have not passed.
-3. **Multi-architecture tags.** Joins the two architectures under `1.2.0`, under
+4. **Multi-architecture tags.** Joins the two architectures under `1.2.0`, under
    `1.2` when it is the highest `1.2.x`, and under `latest` when it is the highest
    stable release: moving tags only move forward. A pre-release tag
    (`v1.2.0-rc.1`) publishes its own name only.
 
 **Dry run:** Actions → *Release images* → *Run workflow*, give an existing tag and
 leave *publish* off: everything runs except the pushes.
+
+## The tests (CI)
+
+`.github/workflows/ci.yml` runs on every push, to any branch, and every pull request, and the
+release calls it on the tagged commit:
+
+- **engine**: the backend's suite in its development image (pytest, chDB), next to a real
+  ClickHouse, PostgreSQL, MinIO and Valkey started for the run;
+- **gateway**: the gateway's suite, with a real PostgreSQL for the migrations, the queue
+  locks and the retention;
+- **interface**: `npm ci` and the type check (`vue-tsc`, pinned).
+
+A test that skips because its server is missing would pass unseen, so any skip fails the
+run except those the CI cannot avoid (live BigQuery, Oracle, SQL Server):
+`.github/scripts/ci_skips.py`. The same script runs the suites on a laptop, with the
+commands at the top of `.github/scripts/ci_tests.sh`. The end-to-end oracles of `e2e/`
+need a whole stack and stay a step of the release (`e2e/dbt_export/esegui.py tutto`).
 
 ## The licence check
 
