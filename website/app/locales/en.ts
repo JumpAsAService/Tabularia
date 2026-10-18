@@ -145,9 +145,9 @@ export default {
       rbac: { name: 'Inherited permissions', line: 'Users, groups and nested projects with view, edit, manage and connect.' },
       audit: { name: 'An audit log that answers', line: 'Who signed in, who ran what, which data was downloaded. Append-only, and it can be forwarded to Splunk.' },
       sql: { name: 'Free-form SQL, contained', line: 'A SQL node reads its own input. On ClickHouse, chDB and BigQuery the query is parsed and any other table is refused; DuckDB and Polars run it in a sandbox that sees only the input.' },
-      sample: { name: 'The whole table, every time', line: 'Previews and runs work on the full data. A development sample is optional — switch it on where every read is billed; scheduled runs always read everything.' },
+      sample: { name: 'The whole table, by default', line: 'Previews and runs read the full table: sampling is off unless you turn it on. A development sample is optional, for sources where every read is billed; scheduled runs always read everything.' },
     },
-    sampleAlt: 'The optional Development sample setting of a source node, here switched to “automatic (first 100.000 rows)”, with the note that scheduled runs and Run in production always read the whole table.',
+    sampleAlt: 'The Development sample setting of a source node at its default, “off (all rows)”: previews read the whole table. The note under it says a sample is only for speeding up previews, and that scheduled runs and Run in production always read everything.',
   },
 
   connect: {
