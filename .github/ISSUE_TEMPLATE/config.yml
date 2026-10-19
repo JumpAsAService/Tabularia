@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://jumpasaservice.github.io/Tabularia/docs/
+    about: Getting started, configuration reference, guides.

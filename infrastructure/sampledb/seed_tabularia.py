@@ -83,14 +83,14 @@ class Gateway:
             except Exception:
                 pass
             time.sleep(3)
-        sys.exit(f"il gateway non risponde su {GATEWAY} dopo {minuti} minuti")
+        sys.exit(f"the gateway does not answer at {GATEWAY} after {minuti} minutes")
 
     def login(self) -> None:
         if not ADMIN_EMAIL or not ADMIN_PASSWORD:
-            sys.exit("servono AUTH__ADMIN_EMAIL e AUTH__ADMIN_PASSWORD (le stesse del gateway)")
+            sys.exit("AUTH__ADMIN_EMAIL and AUTH__ADMIN_PASSWORD are needed (the same as the gateway's)")
         s, r = self.call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
         if s != 200:
-            sys.exit(f"login dell'amministratore fallito: {s} {r}")
+            sys.exit(f"the administrator's sign-in failed: {s} {r}")
         self.token = r["access_token"]
 
     def deve(self, metodo: str, path: str, body=None, **kw):
@@ -116,18 +116,18 @@ def prepara_database() -> None:
             cur.execute("SELECT count(*) FROM vendite.ordini")
             righe = cur.fetchone()[0]
     if righe == 0:
-        log(f"database vuoti: genero i dati alla scala «{SCALE}» (può volerci: small secondi, robusta minuti)")
+        log(f"empty databases: generating the data at scale «{SCALE}» (small takes seconds, robusta minutes)")
         pg.close()
         os.environ["SAMPLES_SCALE"] = SCALE
         import generate  # noqa: WPS433 — stesso contenitore, stesso codice
 
         generate.main()
         return
-    log(f"database già pieni ({righe:,} ordini): non rigenero")
+    log(f"databases already filled ({righe:,} orders): nothing to generate")
     import generate
 
     if generate.ensure_ref(pg):
-        log("aggiunte le tabelle pubbliche (calendario, regioni) che mancavano")
+        log("added the missing public tables (calendar, regions)")
     pg.close()
 
 
@@ -137,7 +137,7 @@ def cartella(nome: str, parent_id: int | None, descrizione: str) -> int:
         if p["name"] == nome and p.get("parent_id") == parent_id:
             return p["id"]
     r = gw.deve("POST", "/projects", {"name": nome, "description": descrizione, "parent_id": parent_id})
-    log(f"cartella creata: {nome}")
+    log(f"folder created: {nome}")
     return r["id"]
 
 
@@ -147,7 +147,7 @@ def connessione(progetto: int, nome: str, corpo: dict) -> int:
         if c["name"] == nome and c.get("project_id") == progetto:
             return c["id"]
     r = gw.deve("POST", f"/projects/{progetto}/connections", {"name": nome, **corpo})
-    log(f"connessione creata: {nome}")
+    log(f"connection created: {nome}")
     return r["id"]
 
 
@@ -222,7 +222,7 @@ def datasource(progetto: int, nome: str, conn_id: int, tabella: str, descrizione
     if descrizione:
         corpo["description"] = descrizione
     r = gw.deve("POST", f"/projects/{progetto}/datasources/database", corpo)
-    log(f"tabella importata: {nome} ← {tabella}")
+    log(f"table imported: {nome} ← {tabella}")
     return r["id"]
 
 
@@ -240,9 +240,9 @@ def aspetta_ingest(ids: list[int], minuti: int = 60) -> dict[int, dict]:
                 s, runs = gw.call("GET", f"/datasources/{i}/runs")
                 ultimo = (runs or [{}])[0] if isinstance(runs, list) else {}
                 if ultimo.get("status") == "FAILURE":
-                    sys.exit(f"import fallito per «{d['name']}»: {ultimo.get('error')}")
+                    sys.exit(f"import failed for «{d['name']}»: {ultimo.get('error')}")
         time.sleep(10)
-    sys.exit("l'importazione delle tabelle non è finita in tempo")
+    sys.exit("the tables did not finish importing in time")
 
 
 def descrivi(per_nome: dict[str, dict]) -> None:
@@ -252,7 +252,7 @@ def descrivi(per_nome: dict[str, dict]) -> None:
             continue
         presenti = {c["name"] for c in (d.get("columns") or [])}
         gw.deve("PATCH", f"/datasources/{d['id']}", {"column_descriptions": {k: v for k, v in colonne.items() if k in presenti}})
-    log(f"descritte {len(COLONNE)} tabelle su {len(PRIVATE) + len(PUBLIC)}: le altre restano senza, di proposito")
+    log(f"described {len(COLONNE)} tables of {len(PRIVATE) + len(PUBLIC)}: the others stay undescribed, on purpose")
 
 
 # ── 5. i flussi ───────────────────────────────────────────────────────────────
@@ -580,13 +580,13 @@ def crea_flussi(progetto: int, engine: str, ds: dict[str, dict], uscite_in: int)
         r = gw.deve("POST", f"/projects/{progetto}/flows", {
             "name": spec["name"], "description": spec["description"],
             "definition": spec["c"].definizione(), "engine": engine})
-        log(f"flusso creato: {spec['name']}")
+        log(f"flow created: {spec['name']}")
         if spec["cron"]:
             s, err = gw.call("PUT", f"/flows/{r['id']}/schedule", {"cron": spec["cron"], "production_engine": engine})
             if s >= 400:
-                log(f"  schedulazione non impostata ({s}): {err}")
+                log(f"  schedule not set ({s}): {err}")
             else:
-                log(f"  schedulato: {spec['cron']}")
+                log(f"  scheduled: {spec['cron']}")
         creati.append({**spec, "id": r["id"]})
     return creati
 
@@ -602,7 +602,7 @@ def esegui(flussi_creati: list[dict], uscite_in: int) -> list[str]:
             continue
         s, r = gw.call("POST", f"/flows/{f['id']}/run-now", {})
         if s >= 400:
-            log(f"run non avviato per «{f['name']}» ({s}): {r}")
+            log(f"run not started for «{f['name']}» ({s}): {r}")
             falliti.append(f["name"])
             continue
         run_id = r.get("run_id")
@@ -615,10 +615,10 @@ def esegui(flussi_creati: list[dict], uscite_in: int) -> list[str]:
                 break
             time.sleep(6)
         if stato == "SUCCESS":
-            log(f"eseguito: {f['name']}")
+            log(f"ran: {f['name']}")
         else:
             errore = (run.get("error") or "")[:300] if isinstance(run, dict) else ""
-            log(f"FALLITO: {f['name']} — {stato} {errore}")
+            log(f"FAILED: {f['name']} — {stato} {errore}")
             falliti.append(f["name"])
     return falliti
 
@@ -647,19 +647,19 @@ def crea_viste(progetto: int, engine: str, uscite_in: int) -> None:
             continue
         d = uscite.get(sorgente)
         if not d:
-            log(f"vista «{nome}» saltata: la tabella «{sorgente}» non c'è (il flusso non è stato eseguito?)")
+            log(f"view «{nome}» skipped: table «{sorgente}» is missing (did its flow run?)")
             continue
         spec = {"engine": engine, "filters": [], "computedFields": [], "pivotOn": False,
                 "pivot": {"index": [""], "on": [""], "values": "", "func": "sum"}, "outline": False}
         spec.update(extra)
         gw.deve("POST", f"/projects/{progetto}/saved-views",
                 {"name": nome, "description": descr, "datasource_id": d["id"], "spec": json.dumps(spec)})
-        log(f"vista salvata: {nome}")
+        log(f"view saved: {nome}")
 
 
 # ── tutto insieme ─────────────────────────────────────────────────────────────
 def main() -> None:
-    log(f"inizializzazione dei dati di esempio (scala «{SCALE}»)")
+    log(f"setting up the sample data (scale «{SCALE}»)")
     prepara_database()
     gw.aspetta()
     gw.login()
@@ -685,24 +685,24 @@ def main() -> None:
         ids.append(datasource(private, nome, conn_pg if conn == "pg" else conn_ch, tabella, descr))
     for nome, conn, tabella, descr in PUBLIC:
         ids.append(datasource(public, nome, conn_pg, tabella, descr))
-    log("aspetto che l'importazione delle tabelle finisca…")
+    log("waiting for the tables to finish importing…")
     per_id = aspetta_ingest(ids)
     per_nome = {d["name"]: d for d in per_id.values() if d["project_id"] in (private, public)}
     descrivi(per_nome)
 
     engine = scegli_engine()
-    log(f"motore per i flussi: {engine}")
+    log(f"engine for the flows: {engine}")
     creati = crea_flussi(flows_dir, engine, per_nome, private)
     falliti = []
     if ESEGUI_FLUSSI:
-        log("eseguo i flussi una volta, così le tabelle prodotte esistono…")
+        log("running the flows once, so the tables they produce exist…")
         falliti = esegui(creati, private)
     crea_viste(sample, engine, private)
-    log("FATTO. Cartella «Sample» pronta: Flows, Private tables, Public tables, connessioni e viste. "
-        "Nessun permesso concesso: decide l'amministratore.")
+    log("DONE. The «Sample» folder is ready: Flows, Private tables, Public tables, connections and views. "
+        "No permission granted: that is the administrator's call.")
     if falliti:
-        sys.exit(f"{len(falliti)} flussi non sono riusciti ({', '.join(falliti)}): guarda la cronologia dei run; "
-                 "rilanciare il contenitore riprova solo quelli")
+        sys.exit(f"{len(falliti)} flows did not succeed ({', '.join(falliti)}): see Runs; "
+                 "starting the container again retries only those")
 
 
 if __name__ == "__main__":

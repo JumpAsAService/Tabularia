@@ -211,7 +211,7 @@ time, to pull the two database images). Follow it (its log is in Italian):
 docker compose logs -f sampledb-init
 ```
 
-It ends with `FATTO. Cartella «Sample» pronta: …` (*Done. «Sample» folder ready*) and
+It ends with `DONE. The «Sample» folder is ready: …` and
 exits; `docker compose ps -a` then shows it `Exited (0)`, as it should. It runs again at
 every `docker compose up -d` and finds everything already there.
 

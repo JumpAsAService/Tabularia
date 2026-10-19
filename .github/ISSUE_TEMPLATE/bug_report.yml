@@ -1,0 +1,64 @@
+name: Bug report
+description: Something does not work as the documentation says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. Never paste passwords, tokens, connection strings or private data: remove them from logs and screenshots first.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: In the app, the gear menu shows it; or `GET /system/info` on the gateway.
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How you run it
+      options:
+        - Docker Compose (the development stack in infrastructure/)
+        - Helm on Kubernetes
+        - Something else (say below)
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine of the flow, if it is about a flow
+      options:
+        - Not about a flow
+        - Polars
+        - DuckDB
+        - chDB
+        - ClickHouse (external)
+        - BigQuery
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error message
+      description: For example `docker compose logs --tail 100 gateway` (or `backend`, `worker`). Secrets removed.
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system, Docker version, browser
+      placeholder: "Ubuntu 24.04, Docker 29.7, Firefox 145"

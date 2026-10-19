@@ -76,7 +76,7 @@ PRESETS = {
     "robusta": dict(capi=8, ispettori=56, agenti=700,  clienti=150_000, ordini=12_000_000, attivita=60_000_000),
 }
 if SCALE not in PRESETS:
-    sys.exit(f"SAMPLES_SCALE non valido: {SCALE!r} (usa small|medium|robusta)")
+    sys.exit(f"SAMPLES_SCALE is not valid: {SCALE!r} (use small|medium|robusta)")
 P = PRESETS[SCALE]
 
 rng = np.random.default_rng(SEED)
@@ -357,7 +357,7 @@ def gen_clienti(agenti: pd.DataFrame) -> pd.DataFrame:
     """Anagrafica clienti, ciascuno assegnato a un AGENTE (non ispettore/capo)."""
     ids_agente = agenti.loc[agenti.ruolo == "agente", "id"].to_numpy()
     C = P["clienti"]
-    log(f"  clienti: genero {C:,} anagrafiche con Faker…")
+    log(f"  customers: generating {C:,} records with Faker…")
     geo_idx = rng.integers(0, len(GEO), C)
     canale_idx = rng.integers(0, len(CANALI), C)
     agente_ids = ids_agente[rng.integers(0, len(ids_agente), C)]
@@ -576,7 +576,7 @@ def gen_ordini_e_righe(cur, prod: pd.DataFrame, agente_of, canale_of, agenti: pd
 
         riga_id += tot
         done += n
-        log(f"    ordini {done:,}/{O:,} · righe totali {riga_id:,}")
+        log(f"    orders {done:,}/{O:,} · order lines {riga_id:,}")
 
 
 def gen_attivita(ch, agente_of) -> None:
@@ -609,74 +609,74 @@ def gen_attivita(ch, agente_of) -> None:
         })
         ch.insert_df("analytics.attivita_crm", df)
         done += n
-        log(f"    attività CRM {done:,}/{A:,}")
+        log(f"    CRM activities {done:,}/{A:,}")
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     t0 = time.time()
-    log(f"Scala «{SCALE}» — preset: {P}")
+    log(f"Scale «{SCALE}» — preset: {P}")
     import clickhouse_connect
 
-    log("Connessione a Postgres e ClickHouse…")
+    log("Connecting to Postgres and ClickHouse…")
     pg = psycopg2.connect(**PG)
     pg.autocommit = False
     ch = clickhouse_connect.get_client(**CH)
 
     # schema
-    log("Creo lo schema Postgres…")
+    log("Creating the Postgres schema…")
     with pg.cursor() as cur:
         run_sql_file(cur, os.path.join(HERE, "schema_postgres.sql"))
         run_sql_file(cur, os.path.join(HERE, "schema_ref.sql"))
     pg.commit()
-    log("Creo lo schema ClickHouse…")
+    log("Creating the ClickHouse schema…")
     for stmt in open(os.path.join(HERE, "schema_clickhouse.sql"), encoding="utf-8").read().split(";"):
         if stmt.strip():
             ch.command(stmt)
 
     # dimensioni
-    log("Genero la rete commerciale (agenti)…")
+    log("Generating the sales network (agents)…")
     agenti = gen_agenti()
     ch.insert_df("analytics.agenti", agenti)
-    log(f"  {len(agenti):,} agenti ({P['capi']} capi area, {P['ispettori']} ispettori, {P['agenti']} agenti)")
+    log(f"  {len(agenti):,} agents ({P['capi']} area managers, {P['ispettori']} supervisors, {P['agenti']} agents)")
 
     clienti = gen_clienti(agenti)
     ch.insert_df("analytics.clienti", clienti[[
         "id", "ragione_sociale", "partita_iva", "canale", "indirizzo", "cap",
         "citta", "provincia", "regione", "agente_id", "data_acquisizione", "attivo"]])
-    log(f"  {len(clienti):,} clienti inseriti")
+    log(f"  {len(clienti):,} customers inserted")
     agente_of = clienti.attrs["agente_of"]
     canale_of = clienti.attrs["canale_of"]
 
-    log("Genero i dati di riferimento pubblici (calendario, regioni)…")
+    log("Generating the public reference data (calendar, regions)…")
     with pg.cursor() as cur:
         gen_ref(cur)
     pg.commit()
 
-    log("Genero il catalogo prodotti + listino + costi di produzione…")
+    log("Generating the product catalogue, price list and production costs…")
     prod = build_prodotti()
     with pg.cursor() as cur:
         gen_catalogo(cur, prod)
     pg.commit()
-    log(f"  {len(prod)} SKU")
+    log(f"  {len(prod)} SKUs")
 
     # fatti
-    log("Genero ordini, righe e costi commerciali (Postgres)…")
+    log("Generating orders, order lines and commercial costs (Postgres)…")
     with pg.cursor() as cur:
         gen_ordini_e_righe(cur, prod, agente_of, canale_of, agenti)
     pg.commit()
 
-    log("Costruisco gli indici secondari Postgres…")
+    log("Building the secondary Postgres indexes…")
     with pg.cursor() as cur:
         run_sql_file(cur, os.path.join(HERE, "indexes_postgres.sql"))
     pg.commit()
 
-    log("Genero le attività CRM (ClickHouse)…")
+    log("Generating the CRM activities (ClickHouse)…")
     gen_attivita(ch, agente_of)
 
     pg.close()
-    log(f"FATTO in {int(time.time() - t0)}s. Scala «{SCALE}».")
-    log("Connessioni Tabularia → Postgres sampledb-postgres:5432 / ClickHouse sampledb-clickhouse:8123")
+    log(f"Done in {int(time.time() - t0)}s. Scale «{SCALE}».")
+    log("Tabularia connections → Postgres sampledb-postgres:5432 / ClickHouse sampledb-clickhouse:8123")
 
 
 if __name__ == "__main__":
