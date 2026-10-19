@@ -247,8 +247,10 @@ Two rules:
 2. **It must not change after the first connection is saved.** Rotating it makes
    existing credentials undecryptable. There is no re-encryption path.
 
-Every process refuses to start without it, in every environment — that is
-deliberate, so a missing key fails at deploy time rather than at the first run.
+Every process refuses to start without it — that is deliberate, so a missing key
+fails at deploy time rather than at the first run. (The Compose stack of
+`infrastructure/` is the one exception: it creates a key in its `keys` volume through
+`SECURITY__KEYS_DIR`, which pods cannot share.)
 
 `JWT__SECRET` signs sessions. Changing it logs everyone out. One leaked session
 does not need it: an administrator closes it from the Audit page, and a password

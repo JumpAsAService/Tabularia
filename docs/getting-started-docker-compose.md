@@ -45,8 +45,8 @@ to edit.
 | | Measured | Give Docker at least |
 |---|---|---|
 | CPU | 8 cores used for the first build | 4 cores |
-| Memory | 2.3 GB at rest; 2.6 GB with the sample data | 8 GB. The workers may use up to 4–6 GB each while they work (the `*_MEM_LIMIT` values in `.env`) |
-| Disk | 11 GB after the first start (4.8 GB of images, 6.3 GB of build cache); 13.5 GB with the sample data | 20 GB free |
+| Memory | 2.6 GB at rest, with the sample data | 8 GB. The workers may use up to 4–6 GB each while they work (the `*_MEM_LIMIT` values in `.env`) |
+| Disk | 13.5 GB after the first start, with the sample data (images and build cache take most of it) | 20 GB free |
 | Time | 2 min 42 s for the first `docker compose up -d` (8 cores, a fast connection); then about 15 s until the sign-in page answers | count 5–15 minutes on a laptop or a slower link |
 
 With Docker Desktop the memory is set in *Settings → Resources*.
@@ -437,6 +437,16 @@ RuntimeError: SECURITY__FERNET_KEY is not valid (Fernet key must be 32 url-safe 
 Remove the `SECURITY__FERNET_KEY=` value from `.env` (the stack then uses the key it
 created) or generate a real one with `openssl rand -base64 32 | tr '+/' '-_'`, then
 `docker compose up -d`.
+
+**The gateway never becomes healthy: `SECURITY__KEYS_DIR must be writable by the
+services`.** The images were built before the `keys` volume existed: `docker compose up
+-d` keeps the images it already has. Rebuild them; the `keys-init` container then gives
+the volume to the services:
+
+```bash
+git pull
+docker compose up -d --build
+```
 
 **A port is already in use.**
 

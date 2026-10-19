@@ -785,8 +785,11 @@ PREVIEW__DEFAULT_SAMPLE_ROWS=100000                             # keep the edito
 Recreate the workers (`docker compose up -d`) and the engine shows up in the picker;
 [`docs/configuration.md`](docs/configuration.md) lists every variable, with its default.
 
-**Secrets:** `SECURITY__FERNET_KEY` is mandatory everywhere — gateway, engine and
-workers refuse to start without a valid key, in development too. With
+**Secrets:** `SECURITY__FERNET_KEY` encrypts the connection passwords, the same value in
+gateway, engine and workers; they refuse to start with an invalid one, or with none
+unless a `SECURITY__KEYS_DIR` is shared, where it is created at the first start (the
+Compose stack of `infrastructure/` does that, in its `keys` volume: back it up with the
+data). On Kubernetes the chart sets the key. With
 `APP__ENV_NAME=production` the gateway additionally refuses the dev-default secrets
 (`JWT__SECRET`, admin and DB passwords) until they are overridden. Storage, broker,
 database, timezone and engines are all env-driven — pointing at managed services is a

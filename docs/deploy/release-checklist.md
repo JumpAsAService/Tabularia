@@ -20,7 +20,9 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    [database-migrations.md](../database-migrations.md).
 2. **Backups.** Take a backup of the Postgres metadata database. Object storage
    is append-only by design (every refresh writes a new snapshot), but the
-   metadata is not.
+   metadata is not. With the Compose stack of `infrastructure/`, back up its `keys`
+   volume too when the encryption key was created there (no `SECURITY__FERNET_KEY`
+   in `.env`): without it the stored connection passwords cannot be read.
 3. **Configuration.** Compare `infrastructure/.env.example` with the deployed
    values; the [configuration reference](../configuration.md) has every variable of the
    release, its default and what must change before production. New in 1.0.0: `INGEST__PARQUET_ROW_GROUP_ROWS` (default 1,000,000 —
@@ -97,6 +99,16 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    (the chart's `gateway.trustedProxies`), or every request shows the proxy's.
    Revision 0014 adds a nullable `locale` to `users`: email notices go out in the
    recipient's interface language, English for addresses that are not users.
+   **New after 1.2.0, the Compose stack of `infrastructure/` only:** it starts with no
+   `.env`. `SECURITY__KEYS_DIR` (the `keys` volume) holds the encryption key created at
+   the first start when `SECURITY__FERNET_KEY` is empty, and `AUTH__FIRST_RUN_SETUP`
+   lets the sign-in page create the first administrator while no account exists. A
+   `.env` with its key and password keeps working as it is. The sample data is part of
+   the stack (`--scale sampledb-init=0 --scale sampledb-postgres=0 --scale
+   sampledb-clickhouse=0` leaves it out), and a one-shot `keys-init` container gives the
+   `keys` volume to the services. Upgrade with `git pull` and `docker compose up -d
+   --build`: without `--build` Compose keeps the images it has. Kubernetes and the chart
+   are unchanged.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
