@@ -145,9 +145,11 @@ function onFocusOut (e: FocusEvent) {
           </button>
         </h2>
         <div :id="`point-${i}-body`" class="row__body" role="region" :aria-labelledby="`point-${i}`" :inert="i === index ? undefined : true">
-          <div :ref="(el) => { inners[i] = el as HTMLElement | null }" class="row__inner">
-            <p class="row__text">{{ c.text }}</p>
-            <NuxtLink :to="c.link[0]" class="row__link">{{ c.link[1] }}</NuxtLink>
+          <div class="row__clip">
+            <div :ref="(el) => { inners[i] = el as HTMLElement | null }" class="row__inner">
+              <p class="row__text">{{ c.text }}</p>
+              <NuxtLink :to="c.link[0]" class="row__link">{{ c.link[1] }}</NuxtLink>
+            </div>
           </div>
         </div>
         <span :key="`${index}-${i}`" class="row__time" :style="{ animationDuration: `${DWELL}ms` }" aria-hidden="true" />
@@ -174,12 +176,6 @@ function onFocusOut (e: FocusEvent) {
 .points__table { margin: 0; padding: 6px; list-style: none; border-radius: var(--radius); background: var(--tile); display: grid; gap: 2px; }
 .row { position: relative; border-radius: 6px; overflow: hidden; transition: background-color 320ms var(--ease-out); }
 .row.is-open { background: var(--tile-2); }
-/* the open row carries the flow's blue at its edge: the one that is being read */
-.row::before {
-  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent);
-  transform: scaleY(0); transition: transform 320ms var(--ease-out);
-}
-.row.is-open::before { transform: none; }
 
 .row__h { margin: 0; font: inherit; }
 .row__head {
@@ -197,8 +193,11 @@ function onFocusOut (e: FocusEvent) {
 .row.is-open .row__fact { color: var(--accent-ink); font-weight: 600; }
 
 /* the open row's text: every open row is as tall as the longest text, so the table keeps its height */
-.row__body { height: 0; overflow: hidden; transition: height 420ms var(--ease-out); }
-.row.is-open .row__body { height: var(--body-h, auto); }
+/* opening is a grid track from 0fr to 1fr: no height is animated, and a row at its own height
+   (one column) opens as smoothly as a row at the table's */
+.row__body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 420ms var(--ease-out); }
+.row.is-open .row__body { grid-template-rows: 1fr; }
+.row__clip { min-height: 0; overflow: hidden; }
 /* the link sits at the foot of every open row, whatever the length of its text */
 .row__inner { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 0 20px 18px; height: var(--body-h, auto); }
 .row__text { font-size: clamp(16px, calc(12px + 0.55svh), 17px); line-height: 1.5; max-width: 52ch; color: var(--text); }

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // The field behind the whole home page, ported from the product's sign-in page
 // (frontend/components/ui/OrderingField.vue): values that put themselves in order.
-// Here it is a single canvas fixed behind the page, fainter than on the sign-in page so
-// the text stays readable, paused while the tab is hidden, one still frame under reduced
-// motion. The comments below are the original's.
+// Here it is a single canvas fixed behind the page, paused while the tab is hidden, one still
+// frame under reduced motion. It is strongest on the first screen, where it is the page's
+// message, and fades to a quieter strength as the reader scrolls past the hero, so the long
+// texts below read on a calm ground. The comments below are the original's.
 //
 // Il campo dietro il login: valori che si mettono in ordine.
 //
@@ -19,10 +20,12 @@
 
 const props = withDefaults(
   defineProps<{
-    // how strong the field is against the page (the sign-in page draws at 1)
+    // how strong the field is against the page (the sign-in page draws at 1): on the first
+    // screen, and once the reader has scrolled past the hero
+    heroStrength?: number
     strength?: number
   }>(),
-  { strength: 0.32 },
+  { heroStrength: 0.8, strength: 0.32 },
 )
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -66,6 +69,7 @@ let colors = { text: '#e8ebf2', accent: '#4f8cff', accent2: '#6ee7b7' }
 // su fondo CHIARO lo stesso alpha rende molto meno (testo scuro al 5% su quasi
 // bianco sparisce): i valori e i filetti si rinforzano in proporzione
 let boost = 1
+let themeBoost = 1 // the light theme needs more alpha for the same presence
 let reduced = false
 let ro: ResizeObserver | null = null
 let mo: MutationObserver | null = null
@@ -88,7 +92,14 @@ function readTheme() {
   const cs = getComputedStyle(document.documentElement)
   const v = (n: string, d: string) => cs.getPropertyValue(n).trim() || d
   colors = { text: v('--text', colors.text), accent: v('--accent', colors.accent), accent2: v('--ok', colors.accent2) }
-  boost = (luminance(v('--ground', '#0b0e14')) > 0.6 ? 1.3 : 1) * props.strength
+  themeBoost = luminance(v('--ground', '#0b0e14')) > 0.6 ? 1.3 : 1
+}
+
+// the strength for the current scroll: the hero's on the first screen, easing to the quiet one
+// over the next screen and a half (read once per drawn frame)
+function strengthNow() {
+  const vh = window.innerHeight || 800
+  return lerp(props.heroStrength, props.strength, smooth(vh * 0.35, vh * 1.6, window.scrollY))
 }
 
 function resize() {
@@ -108,6 +119,7 @@ function draw() {
   if (!el || !ctx || !W || !H) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, W, H)
+  boost = themeBoost * strengthNow()
 
   const narrow = W < 720
   const colW = narrow ? 76 : 98
@@ -219,6 +231,13 @@ function onMotionPref() {
   start()
 }
 
+// the still frame (reduced motion, hidden tab) follows the scroll's strength too: one redraw a frame
+let scrollRaf = 0
+function onScroll() {
+  if (raf && !reduced && !document.hidden) return // the running loop redraws anyway
+  if (!scrollRaf) scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; draw() })
+}
+
 onMounted(() => {
   mq = window.matchMedia('(prefers-reduced-motion: reduce)')
   reduced = mq.matches
@@ -232,6 +251,7 @@ onMounted(() => {
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
   mq.addEventListener('change', onMotionPref)
   document.addEventListener('visibilitychange', start)
+  window.addEventListener('scroll', onScroll, { passive: true })
   start()
 })
 
@@ -241,6 +261,8 @@ onBeforeUnmount(() => {
   mo?.disconnect()
   mq?.removeEventListener('change', onMotionPref)
   document.removeEventListener('visibilitychange', start)
+  window.removeEventListener('scroll', onScroll)
+  cancelAnimationFrame(scrollRaf)
 })
 </script>
 
