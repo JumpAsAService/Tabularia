@@ -21,6 +21,11 @@ exposes at `/system/info` and in the app's settings menu.
   (the guide's backup step now includes it); an existing `.env` with its key keeps
   working as it is. To leave the sample data out: `docker compose up -d --scale
   sampledb-init=0 --scale sampledb-postgres=0 --scale sampledb-clickhouse=0`.
+- **Fixed: the gateway never became healthy on a machine with images built before the
+  `keys` volume** (*SECURITY__KEYS_DIR must be writable by the services*). `docker compose
+  up -d` keeps images it already has; one without the keys directory left the new volume
+  to root. A one-shot `keys-init` container now gives the volume to the services before
+  any of them starts, whatever image or container mounts it first.
 
 ## 1.2.0 «Appio» — 2026-10-18
 

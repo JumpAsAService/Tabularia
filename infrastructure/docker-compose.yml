@@ -70,6 +70,17 @@ services:
 
   # Engine (data plane): NOT exposed on the host. Reachable only from the other
   # services on the Docker network (the gateway proxies it). No `ports:`.
+  # The `keys` volume belongs to the services (uid 10001) whatever mounts it first: a
+  # volume Docker creates for an image without that directory, or for a container started
+  # earlier, is root's, and the services could not create the encryption key in it.
+  keys-init:
+    image: alpine:3.20
+    container_name: dataprep-keys-init
+    command: ["sh", "-c", "chown -R 10001:10001 /keys && chmod 700 /keys && find /keys -type f -exec chmod 600 {} +"]
+    volumes:
+      - keys:/keys
+    restart: "no"
+
   backend:
     # SINGLE backend image (see backend/Dockerfile): with chDB and pytest in
     # development, without them in production; same rules, non-root user
@@ -108,6 +119,8 @@ services:
       - ../backend:/app
       - keys:/var/lib/tabularia/keys
     depends_on:
+      keys-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio:
@@ -172,6 +185,8 @@ services:
       - ../gateway:/app
       - keys:/var/lib/tabularia/keys
     depends_on:
+      keys-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       backend:
@@ -224,6 +239,8 @@ services:
       - ../backend:/app
       - keys:/var/lib/tabularia/keys
     depends_on:
+      keys-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio:
@@ -274,6 +291,8 @@ services:
       - ../backend:/app
       - keys:/var/lib/tabularia/keys
     depends_on:
+      keys-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     command: celery -A app.tasks.celery_app beat --schedule /tmp/celerybeat-schedule --loglevel=info
@@ -314,6 +333,8 @@ services:
       - ../backend:/app
       - keys:/var/lib/tabularia/keys
     depends_on:
+      keys-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio:
