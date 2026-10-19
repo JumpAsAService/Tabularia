@@ -62,15 +62,16 @@ Good analyses to try: *category share by month* (product mix), *channel share by
 month* (channel mix), *% fulfilled / cancelled by depot over time* (anomalies), and
 the line margin by sales network.
 
-## Turning them on
+## Turning them on and off
 
-They are a Compose **profile** (`samples`): with the profile on, `up -d` starts the
-two databases and the `sampledb-init` container, which fills them if they are empty
-and then builds the «Sample» folder in Tabularia (below).
+They are on in the Compose stack of `infrastructure/`: `up -d` starts the two databases
+and the `sampledb-init` container, which fills them if they are empty and then builds
+the «Sample» folder in Tabularia (below). With no administrator yet, it waits for the
+one created at the sign-in page. To leave them out:
+`docker compose up -d --scale sampledb-init=0 --scale sampledb-postgres=0 --scale sampledb-clickhouse=0`.
 
 ```bash
-# in infrastructure/.env
-COMPOSE_PROFILES=samples
+# in infrastructure/.env (optional)
 SAMPLES_SCALE=small        # small | medium | robusta
 #SAMPLES_ENGINE=           # engine of the flows; empty = the first one the policy allows
 #SAMPLES_RUN_FLOWS=true    # runs the flows once, so the tables they produce exist

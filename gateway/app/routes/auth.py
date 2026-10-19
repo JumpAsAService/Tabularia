@@ -1,3 +1,4 @@
+import hmac
 import secrets
 from typing import Optional
 
@@ -10,7 +11,8 @@ from app.core.security import hash_password, verify_password
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer
 from app.models import User, UserSession
-from app.services import audit, login_throttle, sessions
+from app.core.passwords import password_problem
+from app.services import audit, first_run, login_throttle, sessions
 from app.services.permissions import is_admin, is_observer, is_observer_only, user_group_ids
 from app.schemas.models import LoginRequest, Token, MeOut, UtcDateTime
 from app.core.routing import RottaCheRilascia
@@ -84,6 +86,79 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
     # serve, e la pagina lo potrebbe leggere: le basta il cookie HttpOnly.
     if request.headers.get(sessions.CSRF_HEADER):
         return Token(access_token="")
+    return Token(access_token=token)
+
+
+# ── the first start of the try-it stack (services/first_run.py) ──────────────
+class SetupStatusOut(BaseModel):
+    needed: bool
+
+
+class SetupRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str = ""
+
+
+class BootstrapRequest(BaseModel):
+    token: str
+
+
+@router.get("/setup", response_model=SetupStatusOut)
+def setup_status(session: Session = Depends(get_session)):
+    """Whether the sign-in page must ask for the first administrator: only on a stack
+    that allows it (AUTH__FIRST_RUN_SETUP, never in production) and while no account exists."""
+    return SetupStatusOut(needed=first_run.needed(session))
+
+
+@router.post("/setup", response_model=Token, status_code=status.HTTP_201_CREATED)
+def setup(body: SetupRequest, request: Request, response: Response, session: Session = Depends(get_session)):
+    """Creates the first administrator and signs it in. Possible once: from the moment any
+    account exists this answers 409, and on a stack without first-run setup 404."""
+    if not first_run.enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    email = body.email.strip().lower()
+    if "@" not in email.strip("@") or len(email) > 254 or any(c.isspace() for c in email):
+        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+    problem = password_problem(body.password)
+    if problem:
+        raise HTTPException(status_code=422, detail=f"Password: {problem}.")
+    first_run.lock(session)
+    if first_run.accounts_exist(session):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The administrator already exists: sign in.")
+    user = User(email=email, full_name=body.full_name.strip()[:200] or "Administrator",
+                hashed_password=hash_password(body.password), is_active=True, is_superuser=True)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    audit.record_audit(session, actor=user, action=audit.FIRST_RUN_SETUP, target_type="user",
+                       target_id=user.id, target_label=user.email, request=request)
+    riga, token = sessions.apri(session, user, request, "password", password_verificata=user.hashed_password)
+    audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
+    sessions.scrivi_cookie(response, request, token, riga)
+    if request.headers.get(sessions.CSRF_HEADER):
+        return Token(access_token="")
+    return Token(access_token=token)
+
+
+@router.post("/bootstrap", response_model=Token)
+def bootstrap(body: BootstrapRequest, request: Request, session: Session = Depends(get_session)):
+    """The sample-data container's sign-in: the start-up token from SECURITY__KEYS_DIR, for
+    a session as the first administrator. 409 until that administrator exists (the
+    container waits for it); 404 on a stack without first-run setup or token."""
+    expected = first_run.bootstrap_token()
+    if not expected:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    if not hmac.compare_digest(body.token.encode(), expected.encode()):
+        audit.record_audit(session, actor=None, actor_label="bootstrap token", action=audit.LOGIN_FAILED,
+                           outcome="failure", detail={"reason": "wrong start-up token"}, request=request)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong start-up token")
+    admin = first_run.first_administrator(session)
+    if admin is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="No administrator yet: create it at the sign-in page first.")
+    _riga, token = sessions.apri(session, admin, request, "bootstrap")
+    audit.record_audit(session, actor=admin, action=audit.BOOTSTRAP_LOGIN, request=request)
     return Token(access_token=token)
 
 

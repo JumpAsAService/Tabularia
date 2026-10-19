@@ -14,6 +14,7 @@ from app.core.engine_client import close_engine_client
 from app.db.migra import prepara_database
 from app.db.session import backfill_flow_versions, lucchetto_di_avvio
 from app.db.seed import seed_admin
+from app.services import first_run
 from app.services.orchestrator import coda_loop
 from app.services.scheduler import scheduler_loop
 from app.services.audit_retention import retention_loop
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
     prepara_database()
     with lucchetto_di_avvio():
         seed_admin()
+        first_run.ensure_bootstrap_token()
         backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
     stop = asyncio.Event()
     from app.services import openlineage

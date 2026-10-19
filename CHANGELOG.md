@@ -3,6 +3,25 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **Try it with three commands and nothing to configure.** `git clone`, `cd
+  Tabularia/infrastructure`, `docker compose up -d`: no `.env`, no key to generate, no
+  password to choose in a file. The Compose stack creates the key that encrypts the
+  connection passwords at the first start, in a `keys` volume every service shares
+  (`SECURITY__KEYS_DIR`; created once even when the services start together, readable by
+  them only), and the sign-in page creates the first administrator while the
+  installation has no account (`AUTH__FIRST_RUN_SETUP`; the stack answers on 127.0.0.1
+  only, never in production, closed for good once any account exists, audited). The
+  sample data is part of the stack: its container waits for that administrator and
+  signs in with a start-up token the gateway leaves in the same volume (`POST
+  /auth/bootstrap`), so the `Sample` folder appears a couple of minutes after the first
+  sign-in. A key or a password set in `.env` still wins; on Kubernetes nothing changes
+  (the chart sets both). **Upgrade note:** back the `keys` volume up with the database
+  (the guide's backup step now includes it); an existing `.env` with its key keeps
+  working as it is. To leave the sample data out: `docker compose up -d --scale
+  sampledb-init=0 --scale sampledb-postgres=0 --scale sampledb-clickhouse=0`.
+
 ## 1.2.0 «Appio» — 2026-10-18
 
 Third release, still «Appio». New sources: SFTP folders (in and out), HTTP APIs and S3

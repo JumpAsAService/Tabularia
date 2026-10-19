@@ -24,6 +24,10 @@ LOGIN_FAILED = "auth.login_failed"
 SSO_LOGIN = "auth.sso_login"            # login via IdP esterno (OIDC)
 SSO_LOGIN_FAILED = "auth.sso_login_failed"
 LOGOUT = "auth.logout"
+# the try-it stack's first administrator, created in the browser (services/first_run.py)
+FIRST_RUN_SETUP = "auth.first_run_setup"
+# the sample-data container signing in with the start-up token (services/first_run.py)
+BOOTSTRAP_LOGIN = "auth.bootstrap_login"
 # sessioni chiuse da chi le possiede (le sue) o da un amministratore (di altri)
 SESSION_REVOKE = "auth.session_revoke"
 # a password set: one's own (settings menu) or another user's (administrator)

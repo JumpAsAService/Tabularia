@@ -176,7 +176,7 @@ export default {
     titleA: 'Run it on',
     titleB: 'your servers.',
     lines: 'Docker Compose to try it on one machine, Helm on Kubernetes for production. Images for amd64 and arm64 on Docker Hub; the latest release on GitHub.',
-    command: 'git clone https://github.com/JumpAsAService/Tabularia.git\ncd Tabularia/infrastructure && cp .env.example .env\n# the administrator\'s password, and the key that encrypts connection passwords\necho "AUTH__ADMIN_PASSWORD=$(openssl rand -hex 12)" >> .env\necho "SECURITY__FERNET_KEY=$(openssl rand -base64 32 | tr \'+/\' \'-_\')" >> .env\ndocker compose up -d\n# sign in at http://localhost:3000 as admin@tabularia.local with:\ngrep \'^AUTH__ADMIN_PASSWORD=.\' .env',
+    command: 'git clone https://github.com/JumpAsAService/Tabularia.git\ncd Tabularia/infrastructure\ndocker compose up -d\n# then open http://localhost:3000 and create the administrator',
     commandLabel: 'Commands to start the try-it stack',
     primary: 'Get started',
     secondary: 'Releases on GitHub',

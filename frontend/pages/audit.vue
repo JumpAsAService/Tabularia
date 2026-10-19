@@ -161,6 +161,8 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'workers.scaling_reset': { icon: Server, color: u.muted, label: t('audit.workersScalingResetAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
+    'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },
+    'auth.bootstrap_login': { icon: KeyRound, color: u.muted, label: t('audit.bootstrapLoginAction') },
     'flow.create': { icon: Workflow, color: u.accent, label: t('audit.flowCreateAction') },
     'flow.update': { icon: Workflow, color: u.accent, label: t('audit.flowUpdateAction') },
     'flow.delete': { icon: Workflow, color: u.danger, label: t('audit.flowDeleteAction') },

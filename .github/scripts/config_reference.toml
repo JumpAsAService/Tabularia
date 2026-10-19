@@ -309,9 +309,12 @@ text = "Origins allowed to call the API from a browser, with the session cookie.
 values = "`*` and `null` refused"
 
 [var.SECURITY__FERNET_KEY]
-text = "Encrypts the credentials of database and file connections, at rest in the gateway and on their way to the engine, which decrypts them only inside the worker. The same value everywhere; never change it once a connection is saved. Generate one with `openssl rand -base64 32 | tr '+/' '-_'`."
-required = true
+text = "Encrypts the credentials of database and file connections, at rest in the gateway and on their way to the engine, which decrypts them only inside the worker. The same value everywhere; never change it once a connection is saved. Empty with `SECURITY__KEYS_DIR` set (the Compose stack): the key created there at the first start. Empty without it: the services refuse to start. Generate one with `openssl rand -base64 32 | tr '+/' '-_'`."
 production = "generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted."
+
+[var.SECURITY__KEYS_DIR]
+text = "A directory every service shares on one machine (the Compose stack mounts the `keys` volume there): the secrets left empty are created in it at the first start and read afterwards, `fernet.key` for `SECURITY__FERNET_KEY` and, with `AUTH__FIRST_RUN_SETUP`, `bootstrap.token`, which the sample-data container exchanges for a session once the administrator exists. Back it up with the data. Not for Kubernetes, where the pods share no volume: the chart sets the key."
+production = "on Kubernetes leave it empty and set `SECURITY__FERNET_KEY`; with Compose, back the `keys` volume up with the database."
 
 [var.CELERY__TASK_TIME_LIMIT]
 text = "Seconds after which the worker kills a task: the real ceiling on a run, an import or a preview. The gateway reads it too, to derive `ENGINE__RUN_STALE_TIMEOUT_SECONDS`."
@@ -458,9 +461,12 @@ text = "The longest a session lasts, active or not. Sessions also end at sign-ou
 text = "E-mail of the administrator created at the first start. Existing users are never touched."
 
 [var.AUTH__ADMIN_PASSWORD]
-text = "Password of that administrator, used when it is created. No default: the gateway refuses to create the administrator with an empty password, a published one (`admin`, the guides' examples) or one under 12 characters, in every environment. An administrator still holding `admin` from an older release gets this password at the next start, and its sessions close."
+text = "Password of that administrator, used when it is created. No default: the gateway refuses to create the administrator with a published password (`admin`, the guides' examples) or one under 12 characters, in every environment. Empty with `AUTH__FIRST_RUN_SETUP` (the Compose stack): no administrator at the start, the sign-in page creates it. Empty otherwise: the gateway refuses to start. An administrator still holding `admin` from an older release gets this password at the next start, and its sessions close."
 production = "set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords)."
-required = true
+
+[var.AUTH__FIRST_RUN_SETUP]
+text = "While no account exists, the sign-in page asks for the first administrator (email and password, the same password rule), signs it in, and from then on is the ordinary sign-in. On with `docker-compose.yml`, which answers on 127.0.0.1 only; `AUTH__ADMIN_PASSWORD`, when set, creates the administrator instead. Ignored with `APP__ENV_NAME=production`."
+production = "leave it off: the administrator comes from `AUTH__ADMIN_PASSWORD`."
 
 [var.AUTH__ALLOW_KNOWN_ADMIN_PASSWORD]
 text = "Development only: `true` lets a local stack whose scripts sign in with a fixed password (`admin`) create or keep it. Ignored with `APP__ENV_NAME=production`."
@@ -933,10 +939,6 @@ text = "The largest file a person can upload, in bytes; 0 = no ceiling. The gate
 text = "uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. On Kubernetes the chart sets it from `gateway.trustedProxies`."
 where = "Compose (`infrastructure/.env`), read by the gateway's server"
 default = "`127.0.0.1`"
-
-[var.COMPOSE_PROFILES]
-text = "Compose's own variable: `samples` adds two fake external databases and the init container that builds the «Sample» folder."
-where = "Compose (`infrastructure/.env`)"
 
 [var.SAMPLES_SCALE]
 text = "Size of the sample data: `small` (seconds, fits a laptop), `medium`, `robusta` (42M order lines, minutes and a few GB). Generated once."

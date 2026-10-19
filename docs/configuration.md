@@ -52,12 +52,12 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 
 | Read by | Variables |
 |---|---|
-| [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 6 |
-| [Gateway](#gateway) | 100 |
+| [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
+| [Gateway](#gateway) | 101 |
 | [Engine and workers](#engine-and-workers) | 86 |
 | [Frontend](#frontend) | 3 |
-| [Compose and Helm only](#compose-and-helm-only) | 14 |
-| **Total** | **209** |
+| [Compose and Helm only](#compose-and-helm-only) | 13 |
+| **Total** | **210** |
 
 ## Before production
 
@@ -65,14 +65,16 @@ The defaults are made for a laptop. Before an installation is reachable by anyon
 set at least these (the [release checklist](deploy/release-checklist.md) lists what
 changed between versions):
 
-- `SECURITY__FERNET_KEY` — generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted.
-- `AUTH__ADMIN_PASSWORD` — set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords).
 - `STORAGE__ACCESS_KEY` — use credentials of your own (`minioadmin` is the development MinIO's).
 - `STORAGE__SECRET_KEY` — use credentials of your own.
+- `SECURITY__FERNET_KEY` — generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted.
 - `DB__PASSWORD` — replace the development password (the gateway refuses it in production unless `DB__URL` is set).
 - `JWT__SECRET` — generate a secret of at least 32 characters (the gateway refuses the default and shorter ones in production).
+- `AUTH__ADMIN_PASSWORD` — set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords).
 - `APP__ENV_NAME` — set it to `production`, so the gateway refuses the development secrets.
+- `SECURITY__KEYS_DIR` — on Kubernetes leave it empty and set `SECURITY__FERNET_KEY`; with Compose, back the `keys` volume up with the database.
 - `AI__MAX_COST_PER_DAY_USD` — set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key).
+- `AUTH__FIRST_RUN_SETUP` — leave it off: the administrator comes from `AUTH__ADMIN_PASSWORD`.
 - `GRAFANA_ADMIN_PASSWORD` — change it wherever Grafana is reachable by others.
 
 ## Shared by the gateway and the engine
@@ -86,7 +88,8 @@ chart do, since every container reads the same `.env` or ConfigMap.
 | `APP__CORS_ORIGINS` | JSON list of strings; `*` and `null` refused | `["http://localhost:3000", "http://127.0.0.1:3000"]` | `app.corsOrigins` | Origins allowed to call the API from a browser, with the session cookie. Needed only when the interface is served from another host than the gateway (then set `AUTH__COOKIE_DOMAIN` too). The engine API applies the same list to its own CORS. |
 | `STORAGE__ENDPOINT` | string | `http://localhost:9002` | `externalServices.storage.endpoint` | URL of the S3-compatible object storage, as the workers reach it (`http://minio:9000` in Compose). The gateway reads it only to name the storage in OpenLineage events (`gs://` for Google Cloud Storage). |
 | `CELERY__TASK_TIME_LIMIT` | integer | `3600` | `engine.taskTimeLimitSeconds` | Seconds after which the worker kills a task: the real ceiling on a run, an import or a preview. The gateway reads it too, to derive `ENGINE__RUN_STALE_TIMEOUT_SECONDS`. Also adjustable in Administration → Settings. |
-| `SECURITY__FERNET_KEY` | string | **required** | `secrets.fernetKey` | **Production:** generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted. Encrypts the credentials of database and file connections, at rest in the gateway and on their way to the engine, which decrypts them only inside the worker. The same value everywhere; never change it once a connection is saved. Generate one with `openssl rand -base64 32 \| tr '+/' '-_'`. |
+| `SECURITY__FERNET_KEY` | string | empty | `secrets.fernetKey` | **Production:** generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted. Encrypts the credentials of database and file connections, at rest in the gateway and on their way to the engine, which decrypts them only inside the worker. The same value everywhere; never change it once a connection is saved. Empty with `SECURITY__KEYS_DIR` set (the Compose stack): the key created there at the first start. Empty without it: the services refuse to start. Generate one with `openssl rand -base64 32 \| tr '+/' '-_'`. |
+| `SECURITY__KEYS_DIR` | string | empty | `extraEnv` | **Production:** on Kubernetes leave it empty and set `SECURITY__FERNET_KEY`; with Compose, back the `keys` volume up with the database. A directory every service shares on one machine (the Compose stack mounts the `keys` volume there): the secrets left empty are created in it at the first start and read afterwards, `fernet.key` for `SECURITY__FERNET_KEY` and, with `AUTH__FIRST_RUN_SETUP`, `bootstrap.token`, which the sample-data container exchanges for a session once the administrator exists. Back it up with the data. Not for Kubernetes, where the pods share no volume: the chart sets the key. |
 | `UPLOAD__MAX_BYTES` | integer, ≥ 0 | `1073741824` (1 GiB) | `extraEnv` | The largest file a person can upload, in bytes; 0 = no ceiling. The gateway answers 413 before calling the engine when the size is declared, and cuts an undeclared (chunked) body at the ceiling; the engine API refuses it too. The file is spooled on the engine's disk and converted there, so this is also a disk bound: keep the engine's temporary space above it. Imports from SFTP, S3 and APIs have their own caps (`SFTP__*`, `S3_SOURCE__*`, `API__*`). |
 
 ## Gateway
@@ -134,9 +137,10 @@ Local sign-in and the session cookie, the first administrator, and the API token
 | `JWT__ALGORITHM` | string | `HS256` | `extraEnv` | Signature algorithm of the session tokens. Leave it. |
 | `JWT__ACCESS_TTL_MINUTES` | integer | `720` | `auth.jwtAccessTtlMinutes` | The longest a session lasts, active or not. Sessions also end at sign-out, from «Your sessions», by an administrator, at a password change or when the account is disabled. |
 | `AUTH__ADMIN_EMAIL` | string | `admin@tabularia.local` | `auth.adminEmail` | E-mail of the administrator created at the first start. Existing users are never touched. |
-| `AUTH__ADMIN_PASSWORD` | string | **required** | `secrets.adminPassword` | **Production:** set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords). Password of that administrator, used when it is created. No default: the gateway refuses to create the administrator with an empty password, a published one (`admin`, the guides' examples) or one under 12 characters, in every environment. An administrator still holding `admin` from an older release gets this password at the next start, and its sessions close. |
+| `AUTH__ADMIN_PASSWORD` | string | empty | `secrets.adminPassword` | **Production:** set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords). Password of that administrator, used when it is created. No default: the gateway refuses to create the administrator with a published password (`admin`, the guides' examples) or one under 12 characters, in every environment. Empty with `AUTH__FIRST_RUN_SETUP` (the Compose stack): no administrator at the start, the sign-in page creates it. Empty otherwise: the gateway refuses to start. An administrator still holding `admin` from an older release gets this password at the next start, and its sessions close. |
 | `AUTH__ADMIN_NAME` | string | `Administrator` | `auth.adminName` | Display name of that administrator. |
 | `AUTH__ALLOW_KNOWN_ADMIN_PASSWORD` | boolean | `false` | `extraEnv` | Development only: `true` lets a local stack whose scripts sign in with a fixed password (`admin`) create or keep it. Ignored with `APP__ENV_NAME=production`. |
+| `AUTH__FIRST_RUN_SETUP` | boolean | `false` | `extraEnv` | **Production:** leave it off: the administrator comes from `AUTH__ADMIN_PASSWORD`. While no account exists, the sign-in page asks for the first administrator (email and password, the same password rule), signs it in, and from then on is the ordinary sign-in. On with `docker-compose.yml`, which answers on 127.0.0.1 only; `AUTH__ADMIN_PASSWORD`, when set, creates the administrator instead. Ignored with `APP__ENV_NAME=production`. |
 | `AUTH__SESSION_IDLE_MINUTES` | integer, ≥ 0 | `0` | `auth.sessionIdleMinutes` | Minutes without activity after which a session closes: the gateway refuses it and the open page signs out by itself after a one-minute warning. 0 = never. |
 | `AUTH__COOKIE_DOMAIN` | string | empty | `auth.cookieDomain` | Domain of the session cookie. Empty = the gateway's host, right when interface and API share a host. With the interface on another host of the same domain (`app.example.com` and `api.example.com`) set the common domain, `example.com`; two unrelated domains do not work. |
 | `AUTH__PERSONAL_TOKENS` | boolean | `true` | `auth.personalTokens` | Whether people may create API tokens for their own scripts, with their own permissions. `false`: only service accounts, created by an administrator, have tokens. |
@@ -505,7 +509,6 @@ containers.
 | `SAMPLES_ENGINE` | empty | Compose (`infrastructure/.env`) | Engine of the sample flows. Empty = the first one the policy allows. |
 | `SAMPLES_RUN_FLOWS` | `true` | Compose (`infrastructure/.env`) | Run the sample flows once at initialisation, so their outputs and views exist. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Compose (`infrastructure/.env`), read by the gateway's server | uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. On Kubernetes the chart sets it from `gateway.trustedProxies`. |
-| `COMPOSE_PROFILES` | empty | Compose (`infrastructure/.env`) | Compose's own variable: `samples` adds two fake external databases and the init container that builds the «Sample» folder. |
 | `MALLOC_ARENA_MAX` | `2` | Compose and Helm (set on the engine containers) | glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools. |
 
 ## Changing this page

@@ -24,6 +24,7 @@ from app.core.config import admin_password_problem, get_settings
 from app.core.security import hash_password, verify_password
 from app.db.session import engine
 from app.models import User, UserSession
+from app.services import first_run
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,11 @@ def _published_password_of(user: User) -> str | None:
 def seed_admin() -> None:
     s = get_settings()
     password = s.auth.admin_password.get_secret_value()
+    if not password and first_run.enabled(s):
+        # the try-it stack with nothing configured: the first administrator is created
+        # in the browser, at the first sign-in (services/first_run.py)
+        logger.info("No AUTH__ADMIN_PASSWORD: while no account exists, the sign-in page creates the administrator.")
+        return
     problem = admin_password_problem(password)
     allowed = s.auth.allow_known_admin_password and not s.is_production()
     with Session(engine) as session:

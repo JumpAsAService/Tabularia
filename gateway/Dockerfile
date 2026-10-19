@@ -50,7 +50,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim-bookworm AS runtime
 
 RUN groupadd --system --gid 10001 app \
- && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
+ && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
+# the directory of the secrets created at the first start (SECURITY__KEYS_DIR): a volume
+# mounted here starts with the services' owner and nobody else's permissions
+ && mkdir -p /var/lib/tabularia/keys && chown 10001:10001 /var/lib/tabularia/keys && chmod 700 /var/lib/tabularia/keys
 
 # HOME=/tmp: l'utente non ha home, e qualche libreria vuole scrivere cache lì.
 ENV PATH="/opt/venv/bin:$PATH" \

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LogIn, KeyRound, Eye, EyeOff, CircleAlert, ArrowUp, Clock } from 'lucide-vue-next'
+import { LogIn, KeyRound, Eye, EyeOff, CircleAlert, ArrowUp, Clock, UserPlus } from 'lucide-vue-next'
+import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { errMessage } from '~/composables/useApi'
 import { useLocale } from '~/composables/useLocale'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
@@ -10,7 +11,8 @@ import Select from '~/components/ui/Select.vue'
 import BrandMark from '~/components/ui/BrandMark.vue'
 import PrivacyNotice from '~/components/ui/PrivacyNotice.vue'
 
-const { login, ssoConfig, ssoLogin } = useAuth()
+const { login, ssoConfig, ssoLogin, setupNeeded, setupAdmin } = useAuth()
+const { rules } = usePasswordRules()
 const { t } = useI18n()
 const { locale, setLocale, locales } = useLocale()
 
@@ -22,6 +24,11 @@ const error = ref('')
 const notice = ref('')
 const showPassword = ref(false)
 const capsLock = ref(false)
+// A new installation of the try-it stack: no account yet, so this card creates the first
+// administrator instead of signing in (the gateway decides: GET /auth/setup).
+const setup = ref(false)
+const fullName = ref('')
+const confirm = ref('')
 
 // La zona quieta del campo segue la card VERA: cambia altezza con l'SSO, con un
 // errore, con la lingua. Una misura fissa lasciava un buco nero attorno al form
@@ -49,6 +56,7 @@ onBeforeUnmount(() => cardRo?.disconnect())
 // SSO OIDC: il pulsante compare solo se il gateway è configurato con un IdP
 const sso = ref<{ enabled: boolean; button_label: string }>({ enabled: false, button_label: '' })
 onMounted(async () => {
+  setup.value = await setupNeeded()
   sso.value = await ssoConfig()
   // il callback SSO rimanda qui con ?sso_error=<codice> se qualcosa è andato storto
   const query = new URLSearchParams(window.location.search)
@@ -64,10 +72,16 @@ function onPasswordKey(e: KeyboardEvent) {
 }
 
 async function onSubmit() {
-  busy.value = true
   error.value = ''
+  if (setup.value) {
+    const problem = passwordProblem(password.value, rules.value)
+    if (problem) { error.value = t(problem.key, problem.values); return }
+    if (password.value !== confirm.value) { error.value = t('login.passwordsDiffer'); return }
+  }
+  busy.value = true
   try {
-    await login(email.value, password.value)
+    if (setup.value) await setupAdmin(email.value, password.value, fullName.value)
+    else await login(email.value, password.value)
     await navigateTo('/')
   } catch (e) {
     error.value = errMessage(e)
@@ -101,7 +115,15 @@ async function onSubmit() {
         <BrandMark :size="40" />
         <h1>Tabularia</h1>
       </header>
-      <p class="tagline">{{ $t('login.tagline') }}</p>
+      <p v-if="!setup" class="tagline">{{ $t('login.tagline') }}</p>
+      <template v-else>
+        <h2 class="setup-title">{{ $t('login.setupTitle') }}</h2>
+        <p class="tagline">{{ $t('login.setupLead') }}</p>
+        <div class="field">
+          <label for="login-name">{{ $t('login.name') }}</label>
+          <input id="login-name" v-model="fullName" type="text" autocomplete="name" />
+        </div>
+      </template>
 
       <div class="field">
         <label for="login-email">{{ $t('login.email') }}</label>
@@ -116,9 +138,9 @@ async function onSubmit() {
             ref="passwordEl"
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
-            autocomplete="current-password"
+            :autocomplete="setup ? 'new-password' : 'current-password'"
             required
-            :aria-describedby="capsLock ? 'login-caps' : undefined"
+            :aria-describedby="capsLock ? 'login-caps' : setup ? 'login-rule' : undefined"
             @keydown="onPasswordKey"
             @keyup="onPasswordKey"
             @blur="capsLock = false"
@@ -134,18 +156,25 @@ async function onSubmit() {
           </button>
         </div>
         <p v-if="capsLock" id="login-caps" class="hint" role="status"><ArrowUp :size="13" /> {{ $t('login.capsLock') }}</p>
+        <p v-else-if="setup" id="login-rule" class="hint">{{ $t('login.passwordRule', { n: rules.min_length }) }}</p>
+      </div>
+
+      <div v-if="setup" class="field">
+        <label for="login-confirm">{{ $t('login.confirmPassword') }}</label>
+        <input id="login-confirm" v-model="confirm" :type="showPassword ? 'text' : 'password'" autocomplete="new-password" required />
       </div>
 
       <p v-if="error" class="err" role="alert"><CircleAlert :size="15" /> <span>{{ error }}</span></p>
       <p v-else-if="notice" class="err note" role="status"><Clock :size="15" /> <span>{{ notice }}</span></p>
 
       <button class="primary submit" type="submit" :disabled="busy">
-        <span v-if="busy" class="spin" aria-hidden="true" /><LogIn v-else :size="15" />
-        {{ busy ? $t('login.signingIn') : $t('login.signIn') }}
+        <span v-if="busy" class="spin" aria-hidden="true" /><UserPlus v-else-if="setup" :size="15" /><LogIn v-else :size="15" />
+        <template v-if="setup">{{ busy ? $t('login.creating') : $t('login.createAdmin') }}</template>
+        <template v-else>{{ busy ? $t('login.signingIn') : $t('login.signIn') }}</template>
       </button>
 
       <!-- SSO opzionale: senza IdP configurato questo blocco non esiste -->
-      <template v-if="sso.enabled">
+      <template v-if="sso.enabled && !setup">
         <div class="sep"><span>{{ $t('login.or') }}</span></div>
         <button class="sso" type="button" @click="ssoLogin()">
           <KeyRound :size="15" /> {{ sso.button_label || $t('login.signInWithSso') }}
@@ -223,6 +252,7 @@ async function onSubmit() {
 .id { display: flex; align-items: center; gap: 12px; }
 h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
 .tagline { margin: -6px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.45; text-wrap: balance; }
+.setup-title { margin: 4px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 12px; font-weight: 500; color: var(--muted); }

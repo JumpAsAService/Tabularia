@@ -3,7 +3,7 @@ import re
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
+from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator, model_validator
 from functools import lru_cache
 from typing import Literal, Optional
 
@@ -98,6 +98,11 @@ class AuthSettings(BaseModel):
     # whose scripts sign in with a fixed password (admin/admin) keep it. Ignored
     # with APP__ENV_NAME=production.
     allow_known_admin_password: bool = False
+    # env: AUTH__FIRST_RUN_SETUP — while no account exists, the sign-in page asks for the
+    # first administrator instead of AUTH__ADMIN_PASSWORD (the try-it Compose stack,
+    # which answers on 127.0.0.1 only). Ignored with APP__ENV_NAME=production, and once
+    # any account exists; AUTH__ADMIN_PASSWORD, when set, still creates the administrator.
+    first_run_setup: bool = False
     # env: AUTH__SESSION_IDLE_MINUTES — dopo quanti minuti senza attività una
     # sessione si chiude. 0 = mai (conta solo la durata massima, JWT__ACCESS_TTL_MINUTES).
     # Vale due volte: il gateway rifiuta una sessione rimasta ferma più a lungo, e
@@ -267,6 +272,13 @@ class SecuritySettings(BaseModel):
     # env: SECURITY__FERNET_KEY (stessa variabile letta dall'engine). OBBLIGATORIA
     # in ogni ambiente: senza, il servizio non parte (check_required_secrets).
     fernet_key: str = ""
+    # env: SECURITY__KEYS_DIR — a directory the services share (one machine, Compose)
+    # where the secrets left empty are created at the first start and read afterwards:
+    # the Fernet key (fernet.key) and, with AUTH__FIRST_RUN_SETUP, the sample-data
+    # container's start-up token (bootstrap.token). Empty = no such directory: the key
+    # must be set. Back it up with the database: without fernet.key the connection
+    # passwords stored in Tabularia cannot be read.
+    keys_dir: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -618,6 +630,19 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")
 
+    @model_validator(mode="after")
+    def _key_from_keys_dir(self) -> "Settings":
+        """No SECURITY__FERNET_KEY but a SECURITY__KEYS_DIR: the key is the one in that
+        directory, created at the first start by whichever service gets there first."""
+        if not self.security.fernet_key and self.security.keys_dir:
+            from cryptography.fernet import Fernet
+
+            from app.core.keys import read_or_create
+
+            self.security.fernet_key = read_or_create(
+                self.security.keys_dir, "fernet.key", lambda: Fernet.generate_key().decode())
+        return self
+
     def check_required_secrets(self) -> None:
         """La chiave Fernet è OBBLIGATORIA in ogni ambiente, anche in sviluppo:
         senza, le credenziali delle connessioni non si possono cifrare né
@@ -625,7 +650,8 @@ class Settings(BaseSettings):
         un messaggio chiaro. Chiamata allo startup (API, worker, beat)."""
         from cryptography.fernet import Fernet
 
-        hint = f"{FERNET_KEY_HINT}, and set it in infrastructure/.env (the same in gateway and engine)"
+        hint = (f"{FERNET_KEY_HINT}, and set it in infrastructure/.env (the same in gateway and engine), "
+                "or give the services a shared SECURITY__KEYS_DIR where it is created")
         key = self.security.fernet_key
         if not key:
             raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")

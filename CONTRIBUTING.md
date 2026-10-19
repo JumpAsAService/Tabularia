@@ -19,11 +19,11 @@ every change:
 ```bash
 git clone https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia/infrastructure
-cp .env.example .env
-echo "AUTH__ADMIN_PASSWORD=$(openssl rand -hex 12)" >> .env
-echo "SECURITY__FERNET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
 docker compose up -d
 ```
+
+Then open http://localhost:3000 and create the administrator. Settings are optional:
+`cp .env.example .env` and edit the copy.
 
 The [getting-started guide](docs/getting-started-docker-compose.md) has every step,
 the sample data and what to do when something does not start. The parts of the

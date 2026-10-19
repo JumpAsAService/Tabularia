@@ -37,6 +37,10 @@ import urllib.request
 GATEWAY = os.getenv("GATEWAY_URL", "http://gateway:8000").rstrip("/")
 ADMIN_EMAIL = os.getenv("AUTH__ADMIN_EMAIL", "")
 ADMIN_PASSWORD = os.getenv("AUTH__ADMIN_PASSWORD", "")
+# with no administrator password (the try-it stack, nothing configured): the start-up
+# token the gateway leaves in the shared keys directory, exchanged for a session as the
+# administrator once someone has created it at the sign-in page (POST /auth/bootstrap)
+BOOTSTRAP_TOKEN_FILE = os.getenv("SAMPLES_BOOTSTRAP_TOKEN_FILE", "/var/lib/tabularia/keys/bootstrap.token")
 SCALE = (os.getenv("SAMPLES_SCALE") or "small").lower()
 ENGINE_VOLUTO = (os.getenv("SAMPLES_ENGINE") or "").strip().lower()
 ESEGUI_FLUSSI = (os.getenv("SAMPLES_RUN_FLOWS") or "true").lower() in ("1", "true", "yes", "si", "sì")
@@ -86,12 +90,38 @@ class Gateway:
         sys.exit(f"the gateway does not answer at {GATEWAY} after {minuti} minutes")
 
     def login(self) -> None:
-        if not ADMIN_EMAIL or not ADMIN_PASSWORD:
-            sys.exit("AUTH__ADMIN_EMAIL and AUTH__ADMIN_PASSWORD are needed (the same as the gateway's)")
+        if not ADMIN_PASSWORD:
+            self.login_with_bootstrap_token()
+            return
+        if not ADMIN_EMAIL:
+            sys.exit("AUTH__ADMIN_EMAIL is needed with AUTH__ADMIN_PASSWORD (the same as the gateway's)")
         s, r = self.call("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
         if s != 200:
             sys.exit(f"the administrator's sign-in failed: {s} {r}")
         self.token = r["access_token"]
+
+    def login_with_bootstrap_token(self) -> None:
+        """No administrator password: wait for the administrator to be created at the
+        sign-in page, then sign in as it with the gateway's start-up token."""
+        try:
+            token = open(BOOTSTRAP_TOKEN_FILE).read().strip()
+        except OSError as e:
+            sys.exit(f"no AUTH__ADMIN_PASSWORD and no start-up token ({e}): set AUTH__ADMIN_PASSWORD in "
+                     "infrastructure/.env, or mount the gateway's SECURITY__KEYS_DIR here")
+        attesa = 0
+        while True:
+            s, r = self.call("POST", "/auth/bootstrap", {"token": token})
+            if s == 200:
+                self.token = r["access_token"]
+                log("signed in as the administrator (start-up token)")
+                return
+            if s != 409:
+                sys.exit(f"the start-up token was refused: {s} {r}")
+            if attesa % 30 == 0:
+                log("waiting for the administrator: open http://localhost:3000 and create it, "
+                    "then the sample data is loaded")
+            time.sleep(5)
+            attesa += 5
 
     def deve(self, metodo: str, path: str, body=None, **kw):
         s, r = self.call(metodo, path, body, **kw)

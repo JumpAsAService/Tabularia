@@ -17,7 +17,7 @@ Docker, a fresh `git clone` of `main`). The screenshots come from that run.
 - [2. Get the code](#2-get-the-code)
 - [3. Configure](#3-configure)
 - [4. Start](#4-start)
-- [5. Sign in](#5-sign-in)
+- [5. Create the administrator](#5-create-the-administrator)
 - [6. Load some data](#6-load-some-data)
 - [7. Build your first flow](#7-build-your-first-flow)
 - [8. Schedule it](#8-schedule-it)
@@ -36,8 +36,9 @@ docker version
 docker compose version
 ```
 
-**git** to get the code, and **openssl** (or Python, or Docker alone: see
-[step 3](#3-configure)) to generate one key.
+**git** to get the code, or a browser: on GitHub, *Code → Download ZIP* gives the same
+files (the folder is then `Tabularia-main`). Nothing else: no key to generate, no file
+to edit.
 
 **Resources.** Measured on the clean run:
 
@@ -94,49 +95,24 @@ Every `docker compose` command of this guide runs from this `infrastructure` fol
 
 ## 3. Configure
 
-Copy the example settings:
+Nothing to do for a trial. At the first start the stack creates the key that encrypts
+the passwords of your database connections (in the `keys` volume, kept with the data),
+and the sign-in page creates the administrator (step 5).
+
+To change a setting later, for example the time zone of the schedules, copy the example
+settings and edit the copy:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` in an editor and set three values:
-
 ```dotenv
-# the first administrator, created at the first start
-AUTH__ADMIN_EMAIL=admin@example.com
-AUTH__ADMIN_PASSWORD=<a password of your own, at least 12 characters>
-# the time zone of the schedules: '0 6 * * *' means 06:00 here
+# the time zone of the schedules: '0 6 * * *' means 06:00 here (an IANA name; default UTC)
 APP__TIMEZONE=Europe/Rome
 ```
 
-- **The administrator** comes from these two environment variables: it is created at the
-  first start, and you sign in with them. The password has no default: Compose refuses
-  to start without one, and the gateway refuses `admin`, other well-known passwords and
-  anything shorter than 12 characters.
-- **The time zone** is the one the schedules use (an IANA name; the default is UTC).
-  Dates on screen follow your browser.
-
-Then add the one setting that has no default, the key that encrypts the passwords of
-the database connections. Compose refuses to start without it:
-
-```bash
-echo "SECURITY__FERNET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
-```
-
-No openssl? Docker alone generates it too; paste the printed value after
-`SECURITY__FERNET_KEY=` in `.env`:
-
-```bash
-docker run --rm python:3.12-alpine python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-```
-
-`.env` already has an empty `SECURITY__FERNET_KEY=` line: the last value in the file
-wins. **Keep this key with your backups**: without it the connection passwords stored in
-Tabularia cannot be read.
-
-Everything else can stay as it is for a trial. Every setting, with its default:
-[Configuration reference](configuration.md).
+Then `docker compose up -d` again. Dates on screen follow your browser. Every setting,
+with its default: [Configuration reference](configuration.md).
 
 ## 4. Start
 
@@ -145,7 +121,7 @@ docker compose up -d
 ```
 
 The first time, Compose builds the images (the engine, the gateway, the app) and pulls
-the others: 2–3 minutes on a fast machine, longer on a laptop. The command returns when
+the others: 2–3 minutes on a fast machine, 5–15 on a laptop. The command returns when
 every container has started. Then check:
 
 ```bash
@@ -167,19 +143,23 @@ after `up` returns.
 
 | Service | URL | Credentials |
 |---|---|---|
-| Tabularia | http://localhost:3000 | the administrator of `.env` |
+| Tabularia | http://localhost:3000 | the administrator you create at the first visit |
 | Gateway (API) | http://localhost:8000 | through the app's sign-in, or an API token |
 | Grafana | http://localhost:3001 | `admin` / `admin` (`GRAFANA_ADMIN_*` in `.env`) |
 | MinIO console | http://localhost:9001 | `minioadmin` / `minioadmin` (`STORAGE__ACCESS_KEY` / `STORAGE__SECRET_KEY`) |
 
-## 5. Sign in
+## 5. Create the administrator
 
-Open http://localhost:3000 and sign in with the email and password you put in `.env`.
+Open http://localhost:3000. The first time, the page asks for the administrator: a name,
+an email and a password (at least 12 characters; `admin` and other well-known passwords
+are refused), typed twice. **Create the administrator** signs you in. The page appears
+only while the installation has no account at all; from then on it is the ordinary
+sign-in, with that email and password.
 
-![The sign-in page](media/getting-started/01-sign-in.png)
+![Creating the administrator](media/getting-started/01-sign-in.png)
 
-A new installation opens on **Explore**, empty: *No folders yet. Create the first one
-with New.*
+The installation opens on **Explore**. The sample data (step 6) arrives a minute or two
+later: reload the page to see the `Sample` folder.
 
 **Theme and language** are in the gear at the top right: five themes (Dark, Light,
 Dracula, Monokai, Imperium) and five languages (English, Italiano, Français, Deutsch,
@@ -190,29 +170,22 @@ Español). The choice is kept by your browser. The same menu has *Your sessions*
 
 ## 6. Load some data
 
-### a. The sample data (recommended)
+### a. The sample data (already there)
 
 A fictional cured-meats company: an ERP on PostgreSQL and a CRM on ClickHouse, with a
-ready-made `Sample` folder in Tabularia. Turn it on and start again:
-
-```bash
-echo "COMPOSE_PROFILES=samples" >> .env
-echo "SAMPLES_SCALE=small" >> .env
-docker compose up -d
-```
-
-This adds three containers: the two databases and `sampledb-init`, which fills them,
-signs in to Tabularia as the administrator and builds the folder. At the `small` scale
-the data takes seconds; the container then runs the eleven sample flows once. On the
-clean run it was done 2 min 30 s after `up` returned (plus about a minute, the first
-time, to pull the two database images). Follow it (its log is in Italian):
+ready-made `Sample` folder in Tabularia. It is part of the stack: three containers, the
+two databases and `sampledb-init`, which fills them, waits for the administrator of
+step 5, signs in as that administrator and builds the folder. At the `small` scale the
+data takes seconds; the container then runs the eleven sample flows once, about two
+minutes. Follow it:
 
 ```bash
 docker compose logs -f sampledb-init
 ```
 
-It ends with `DONE. The «Sample» folder is ready: …` and
-exits; `docker compose ps -a` then shows it `Exited (0)`, as it should. It runs again at
+While no administrator exists it says *waiting for the administrator: open
+http://localhost:3000 and create it*. It ends with `DONE. The «Sample» folder is ready: …`
+and exits; `docker compose ps -a` then shows it `Exited (0)`, as it should. It runs again at
 every `docker compose up -d` and finds everything already there.
 
 Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Postgres)*,
@@ -404,27 +377,28 @@ Compose rebuilds what changed and recreates those containers; the gateway upgrad
 database schema by itself when it starts. With nothing new it takes seconds.
 
 **Back up.** The data lives in Docker volumes named after the folder:
-`infrastructure_postgres_data` (users, flows, schedules, connections, runs) and
-`infrastructure_minio_data` (the datasets, as parquet files). Stop the stack, archive
-both, keep `.env` with them (it holds the encryption key), start again:
+`infrastructure_postgres_data` (users, flows, schedules, connections, runs),
+`infrastructure_minio_data` (the datasets, as parquet files) and `infrastructure_keys`
+(the key that encrypts the connection passwords: without it they cannot be read). Stop
+the stack, archive the three, keep `.env` with them if you made one, start again:
 
 ```bash
 docker compose stop
 mkdir -p ~/tabularia-backup
-for v in postgres_data minio_data; do
+for v in postgres_data minio_data keys; do
   docker run --rm -v infrastructure_$v:/data -v ~/tabularia-backup:/backup alpine \
     tar czf /backup/$v.tgz -C /data .
 done
-cp .env ~/tabularia-backup/env
+[ -f .env ] && cp .env ~/tabularia-backup/env
 docker compose start
 ```
 
-**Restore** into empty volumes (after a reset, or on another machine with the same
-`.env`): create the containers and volumes without starting them, unpack, start.
+**Restore** into empty volumes (after a reset, or on another machine): create the
+containers and volumes without starting them, unpack, start.
 
 ```bash
 docker compose create
-for v in postgres_data minio_data; do
+for v in postgres_data minio_data keys; do
   docker run --rm -v infrastructure_$v:/data -v ~/tabularia-backup:/backup alpine \
     tar xzf /backup/$v.tgz -C /data
 done
@@ -452,23 +426,16 @@ docker builder prune -f
 
 The messages below are the real ones, reproduced on the clean run.
 
-**`required variable SECURITY__FERNET_KEY is missing a value`.** `docker compose up -d`
-stops before starting anything:
-
-```text
-error while interpolating services.gateway.environment.[]: required variable SECURITY__FERNET_KEY is missing a value: SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example
-```
-
-Add the key ([step 3](#3-configure)) and run `docker compose up -d` again.
-
-**The gateway never becomes healthy: `SECURITY__FERNET_KEY is not valid`.** The key is
-there but is not a key (typed by hand, cut short). `docker compose logs gateway` shows:
+**The gateway never becomes healthy: `SECURITY__FERNET_KEY is not valid`.** A key was
+set in `.env` but is not a key (typed by hand, cut short). `docker compose logs gateway`
+shows:
 
 ```text
 RuntimeError: SECURITY__FERNET_KEY is not valid (Fernet key must be 32 url-safe base64-encoded bytes.): …
 ```
 
-Generate one with the command of [step 3](#3-configure), put it in `.env`, then
+Remove the `SECURITY__FERNET_KEY=` value from `.env` (the stack then uses the key it
+created) or generate a real one with `openssl rand -base64 32 | tr '+/' '-_'`, then
 `docker compose up -d`.
 
 **A port is already in use.**
@@ -508,18 +475,21 @@ is still compiling its pages. Wait for the gateway to be `(healthy)` in
 `docker compose ps`; `docker compose logs --tail 5 frontend` ends with
 `Nuxt Nitro server built` when the app is ready.
 
-**Sign-in fails: *Incorrect email or password*.** Sign in with `AUTH__ADMIN_EMAIL` and
-`AUTH__ADMIN_PASSWORD` from `.env`. After repeated failures the sign-in is paused:
-*Too many sign-in attempts. Try again in 60 seconds.*
+**Sign-in fails: *Incorrect email or password*.** Sign in with the email and password
+of the administrator you created (or, if you set them in `.env`, `AUTH__ADMIN_EMAIL` and
+`AUTH__ADMIN_PASSWORD`). After repeated failures the sign-in is paused: *Too many sign-in
+attempts. Try again in 60 seconds.*
 
 **The gateway does not become `(healthy)`.** `docker compose logs --tail 20 gateway`
-names the reason. *Cannot create the administrator* means `AUTH__ADMIN_PASSWORD` is
-`admin`, another well-known password or shorter than 12 characters: choose another one
-in `.env` and run `docker compose up -d` again.
+names the reason. *Cannot create the administrator* means an `AUTH__ADMIN_PASSWORD` set
+in `.env` is `admin`, another well-known password or shorter than 12 characters: choose
+another one, or remove the line to create the administrator at the sign-in page, and run
+`docker compose up -d` again.
 
 **The `Sample` folder does not appear.**
 
-- `.env` was edited but the stack not started again: run `docker compose up -d`.
+- The administrator was created a moment ago: `sampledb-init` needs about two minutes
+  more (`docker compose logs -f sampledb-init`).
 - You are signed in as a user other than an administrator: the folder is shared with
   nobody until an administrator grants it.
 <!-- {% endraw %} -->

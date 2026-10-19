@@ -315,6 +315,8 @@ export default {
     "loginFailedAction": "Inicio de sesión fallido",
     "ssoLoginAction": "Acceso SSO",
     "ssoLoginFailedAction": "Acceso SSO fallido",
+    "firstRunSetupAction": "Primer administrador creado",
+    "bootstrapLoginAction": "Acceso de los datos de ejemplo",
     "workersScalingUpdateAction": "Límites de pods de los workers cambiados",
     "workersScalingResetAction": "Límites de pods de los workers devueltos a la chart",
     "logoutAction": "Cierre de sesión",

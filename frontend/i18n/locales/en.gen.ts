@@ -364,6 +364,8 @@ export default {
     "loginFailedAction": "Failed login",
     "ssoLoginAction": "SSO login",
     "ssoLoginFailedAction": "Failed SSO login",
+    "firstRunSetupAction": "First administrator created",
+    "bootstrapLoginAction": "Sample data signed in",
     "workersScalingUpdateAction": "Worker pod bounds changed",
     "workersScalingResetAction": "Worker pod bounds given back to the chart",
     "logoutAction": "Logout",

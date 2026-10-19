@@ -741,23 +741,18 @@ flow: [getting started with Docker Compose](docs/getting-started-docker-compose.
 ```bash
 git clone https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia/infrastructure
-cp .env.example .env
-# two settings have no default: the administrator's password (at least 12 characters;
-# `admin` and other published passwords are refused) and the key that encrypts the
-# passwords of database connections. Compose refuses to start without them.
-echo "AUTH__ADMIN_PASSWORD=$(openssl rand -hex 12)" >> .env
-echo "SECURITY__FERNET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
-#   no openssl (e.g. Windows)? Docker alone generates the key; paste it after SECURITY__FERNET_KEY=:
-#   docker run --rm python:3.12-alpine python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 docker compose up -d
 ```
 
-grep '^AUTH__ADMIN_PASSWORD=.' .env    # the password to sign in with
-The first `docker compose up -d` builds the images from the code: a few minutes.
+Nothing to configure: open http://localhost:3000 and create the administrator (the page
+asks for it only while the installation has no account). The sample data, a company
+with an ERP and a CRM and eleven ready-made flows, appears a couple of minutes later.
+The first `docker compose up -d` builds the images from the code: 2–3 minutes on a fast
+machine, 5–15 on a laptop. Settings are optional: `cp .env.example .env` and edit.
 
 | Service   | URL                    | Credentials                        |
 |-----------|------------------------|------------------------------------|
-| App       | http://localhost:3000  | `admin@tabularia.local` and the password in `.env` |
+| App       | http://localhost:3000  | the administrator you create at the first visit |
 | Gateway   | http://localhost:8000  | (JWT via app login)                |
 | Grafana   | http://localhost:3001  | `admin` / `admin`                  |
 | MinIO     | http://localhost:9001  | `minioadmin` / `minioadmin`        |
@@ -816,16 +811,11 @@ seasonality (monthly volume, product & channel seasonal mix, per-warehouse
 fulfilment anomalies) so pivots tell a story. Details in
 [`infrastructure/sampledb/README.md`](infrastructure/sampledb/README.md).
 
-Turn it on with the `samples` compose profile:
+It is on in the Compose stack of `infrastructure/`, at the `small` scale (`SAMPLES_SCALE`
+in `.env`: `small` | `medium` | `robusta`). To leave it out:
 
 ```bash
-# in infrastructure/.env
-COMPOSE_PROFILES=samples
-SAMPLES_SCALE=small        # small | medium | robusta
-```
-
-```bash
-docker compose -f infrastructure/docker-compose.yml up -d
+docker compose up -d --scale sampledb-init=0 --scale sampledb-postgres=0 --scale sampledb-clickhouse=0
 ```
 
 The `sampledb-init` container waits for the gateway and the two sample databases,

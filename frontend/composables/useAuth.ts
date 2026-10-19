@@ -90,6 +90,29 @@ export function useAuth() {
     await fetchMe()
   }
 
+  // The try-it stack's first start: while no account exists, the sign-in page creates
+  // the first administrator (gateway: services/first_run.py). Never an error: off or
+  // unreachable simply means the ordinary sign-in.
+  async function setupNeeded(): Promise<boolean> {
+    try {
+      return (await $fetch<{ needed: boolean }>(`${base}/auth/setup`)).needed
+    } catch {
+      return false
+    }
+  }
+
+  async function setupAdmin(email: string, password: string, fullName: string) {
+    await $fetch(`${base}/auth/setup`, {
+      method: 'POST',
+      body: { email, password, full_name: fullName },
+      credentials: 'include',
+      headers: CSRF_HEADERS,
+    })
+    useLeaving().value = false
+    present.value = true
+    await fetchMe()
+  }
+
   // SSO OIDC (opzionale): il gateway dice se è configurato. Mai un errore se
   // spento — la pagina di login deve funzionare comunque.
   async function ssoConfig(): Promise<{ enabled: boolean; button_label: string }> {
@@ -152,5 +175,5 @@ export function useAuth() {
     await navigateTo(reason ? `/login?reason=${reason}` : '/login')
   }
 
-  return { present, user, login, logout, fetchMe, ssoConfig, ssoLogin, completeSso }
+  return { present, user, login, logout, fetchMe, ssoConfig, ssoLogin, completeSso, setupNeeded, setupAdmin }
 }

@@ -1,12 +1,12 @@
 services:
-  # Valkey: fork open source BSD-3 di Redis, drop-in (stesso protocollo/porta).
-  # Il servizio resta chiamato "redis" così REDIS__HOST, il broker Celery e le
-  # URL redis:// non cambiano.
+  # Valkey: BSD-3 open source fork of Redis, drop-in (same protocol/port).
+  # The service keeps the name "redis" so REDIS__HOST, the Celery broker and the
+  # redis:// URLs do not change.
   redis:
     image: valkey/valkey:8-alpine
     container_name: dataprep-valkey
     restart: unless-stopped
-    # nessuna porta sull'host — broker e cache, lo usano solo i container
+    # no port on the host — broker and cache, used only by the containers
     volumes:
       - redis_data:/data
     command: valkey-server --appendonly yes
@@ -16,19 +16,19 @@ services:
       timeout: 3s
       retries: 3
 
-  # Postgres: DB dei metadati del control plane (utenti, gruppi, progetti, permessi).
-  # Lo possiede SOLO il gateway; l'engine resta stateless (Valkey + MinIO).
+  # Postgres: control plane metadata DB (users, groups, projects, permissions).
+  # Owned ONLY by the gateway; the engine stays stateless (Valkey + MinIO).
   postgres:
     image: postgres:16-alpine
     container_name: dataprep-postgres
-    # Riparte da solo come i servizi dell'app. Al riavvio della macchina Docker riaccende
-    # SOLO i container con una politica di riavvio, e lo fa ignorando depends_on: con
-    # backend e gateway «unless-stopped» e questo no, il gateway ripartiva senza Postgres,
-    # rinunciava dopo un minuto e restava acceso ma morto (uvicorn --reload non lo
-    # rilancia) — l'interfaccia dava «NetworkError» finché non lo si riavviava a mano.
+    # Restarts by itself like the app services. When the machine reboots, Docker restarts
+    # ONLY the containers with a restart policy, and does so ignoring depends_on: with
+    # backend and gateway «unless-stopped» and this one not, the gateway came back without
+    # Postgres, gave up after a minute and stayed up but dead (uvicorn --reload does not
+    # relaunch it) — the UI showed «NetworkError» until it was restarted by hand.
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5433:5432"  # 5433 host: evita conflitti con un eventuale Postgres locale
+      - "127.0.0.1:5433:5432"  # 5433 on the host: avoids clashing with a local Postgres, if any
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -41,20 +41,20 @@ services:
       timeout: 3s
       retries: 5
 
-  # MinIO: object storage S3-compatibile vero (streaming multipart su disco,
-  # gestisce file grandi senza bufferizzare in RAM come faceva rclone serve s3).
-  # Le credenziali root vengono dalle stesse variabili che usa l'app (una sola
-  # fonte di verità in .env).
-  # L'immagine ufficiale minio/minio è stata ritirata dai registri: questo è il
-  # fork mantenuto dalla comunità (stesso codice, stesse API), fissato a una
-  # release. MINIO_IMAGE la sostituisce con quella che preferisci.
+  # MinIO: real S3-compatible object storage (multipart streaming to disk,
+  # handles large files without buffering them in RAM as rclone serve s3 did).
+  # The root credentials come from the same variables the app uses (a single
+  # source of truth in .env).
+  # The official minio/minio image has been withdrawn from the registries: this is
+  # the community-maintained fork (same code, same APIs), pinned to a release.
+  # MINIO_IMAGE replaces it with the one you prefer.
   minio:
     image: ${MINIO_IMAGE:-pgsty/minio:RELEASE.2026-08-04T00-00-00Z}
     container_name: dataprep-minio
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9002:9000"  # API S3 (9002 host: la 9000 è occupata da ClickHouse)
-      - "127.0.0.1:9001:9001"  # console web
+      - "127.0.0.1:9002:9000"  # S3 API (9002 on the host: 9000 is taken by ClickHouse)
+      - "127.0.0.1:9001:9001"  # web console
     volumes:
       - minio_data:/data
     environment:
@@ -68,11 +68,11 @@ services:
       retries: 5
       start_period: 10s
 
-  # Engine (data plane): NON esposto sull'host. Raggiungibile solo dagli altri
-  # servizi sulla rete Docker (il gateway ci fa da proxy). Niente `ports:`.
+  # Engine (data plane): NOT exposed on the host. Reachable only from the other
+  # services on the Docker network (the gateway proxies it). No `ports:`.
   backend:
-    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
-    # e pytest, in produzione senza; stesse regole, utente non root
+    # SINGLE backend image (see backend/Dockerfile): with chDB and pytest in
+    # development, without them in production; same rules, non-root user
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -84,42 +84,51 @@ services:
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
     container_name: dataprep-backend
-    # riparte da solo se il container muore (es. OOM-kill del processo principale):
-    # niente engine giù, niente run appesi fino allo stale-timeout
+    # restarts by itself if the container dies (e.g. OOM-kill of the main process):
+    # no engine down, no runs left hanging until the stale timeout
     restart: unless-stopped
     expose:
-      - "8000"  # solo interno alla rete dataprep-network
+      - "8000"  # internal to the dataprep-network network only
+    # .env is optional: with no file at all the stack starts, the Fernet key is created in the
+    # `keys` volume and the first administrator is created at the sign-in page
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
-      # i sorgenti montati appartengono all'utente dell'host, non all'utente 10001
-      # del container: pytest non prova a scriverci la sua cache
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:-}
+      # empty key: the one created at the first start in the shared `keys` volume
+      - SECURITY__KEYS_DIR=/var/lib/tabularia/keys
+      # the stack's own services, also with no .env (the code's defaults are for running outside Docker)
+      - REDIS__HOST=${REDIS__HOST:-redis}
+      - STORAGE__ENDPOINT=${STORAGE__ENDPOINT:-http://minio:9000}
+      # the mounted sources belong to the host's user, not to the container's user
+      # 10001: pytest does not try to write its cache into them
       - PYTEST_ADDOPTS=-p no:cacheprovider
     volumes:
       - ../backend:/app
+      - keys:/var/lib/tabularia/keys
     depends_on:
       redis:
         condition: service_healthy
       minio:
         condition: service_started
-    # Tetto di RAM: un'operazione che esplode (es. cross join) viene uccisa
-    # dall'OOM del container invece di freezare l'host. memswap_limit == mem_limit
-    # DISABILITA lo swap del container (lo swap-thrashing è ciò che blocca il PC).
+    # RAM ceiling: an operation that blows up (e.g. a cross join) is killed by the
+    # container's OOM instead of freezing the host. memswap_limit == mem_limit
+    # DISABLES the container's swap (swap-thrashing is what locks up the PC).
     mem_limit: ${BACKEND_MEM_LIMIT:-4g}
     memswap_limit: ${BACKEND_MEM_LIMIT:-4g}
     # --reload-dir: only the code. Without it the reloader polls every file under
     # /app four times a second, a local .venv included, and takes half a core.
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
 
-  # Gateway (control plane): UNICO ingresso pubblico (:8000). Auth + RBAC + Postgres,
-  # poi inoltra all'engine interno. Qui è UN processo che fa tutto (APP__ROLE=all,
-  # il predefinito): risponde alle richieste, fa scattare le schedulazioni ed
-  # esegue i flussi. In produzione gli stessi due mestieri si possono separare e
-  # replicare (APP__ROLE=api / orchestrator): vedi infrastructure/.env.example.
+  # Gateway (control plane): the ONLY public entry point (:8000). Auth + RBAC +
+  # Postgres, then forwards to the internal engine. Here ONE process does everything
+  # (APP__ROLE=all, the default): it answers requests, fires the schedules and
+  # executes the flows. In production the same two jobs can be split and
+  # replicated (APP__ROLE=api / orchestrator): see infrastructure/.env.example.
   gateway:
-    # immagine UNICA del gateway (vedi gateway/Dockerfile): in sviluppo con
-    # pytest, in produzione senza; stesse regole, utente non root
+    # SINGLE gateway image (see gateway/Dockerfile): with pytest in development,
+    # without it in production; same rules, non-root user
     build:
       context: ../gateway
       dockerfile: Dockerfile
@@ -130,37 +139,46 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
+    # .env is optional: with no file at all the stack starts, the Fernet key is created in the
+    # `keys` volume and the first administrator is created at the sign-in page
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:-}
+      # empty key: the one created at the first start in the shared `keys` volume
+      - SECURITY__KEYS_DIR=/var/lib/tabularia/keys
       # the first administrator's password: no default, so that no installation
       # comes up with one everyone knows (the gateway also refuses 'admin' and
       # anything under 12 characters when it creates the administrator)
-      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD:?set AUTH__ADMIN_PASSWORD in infrastructure/.env - a password of your own, at least 12 characters}
+      # no password: while no account exists, the sign-in page creates the first administrator
+      # (this stack answers on 127.0.0.1 only); a password set here creates it instead
+      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD:-}
+      - AUTH__FIRST_RUN_SETUP=true
       - ENGINE__BASE_URL=http://backend:8000
-      # Il gateway tiene una copia SUA del nome del bucket e la confronta con
-      # quello di ogni richiesta, rifiutando con 403 se non combaciano. Derivarla
-      # dalla stessa variabile del backend è ciò che impedisce ai due di divergere.
+      # The gateway keeps its OWN copy of the bucket name and compares it with the
+      # one in every request, rejecting with 403 if they do not match. Deriving it
+      # from the same variable as the backend is what keeps the two from diverging.
       - ENGINE__BUCKET=${STORAGE__BUCKET:-data-prep}
       - DB__HOST=postgres
       - DB__PORT=5432
-      # sviluppo: il gateway applica da sé le migrazioni dello schema all'avvio
-      # (in produzione le applica un passo separato: python -m app.db.migra)
+      # development: the gateway applies the schema migrations itself at startup
+      # (in production a separate step applies them: python -m app.db.migra)
       - DB__AUTO_MIGRATE=true
-      # i sorgenti montati appartengono all'utente dell'host, non all'utente 10001
-      # del container: pytest non prova a scriverci la sua cache
+      # the mounted sources belong to the host's user, not to the container's user
+      # 10001: pytest does not try to write its cache into them
       - PYTEST_ADDOPTS=-p no:cacheprovider
     volumes:
       - ../gateway:/app
+      - keys:/var/lib/tabularia/keys
     depends_on:
       postgres:
         condition: service_healthy
       backend:
         condition: service_started
-    # rende VISIBILE un gateway wedged: con `uvicorn --reload` un fallimento di
-    # avvio (es. DB non risolvibile) lascia il container "running" ma non servente.
-    # L'immagine è slim (niente curl/wget) → si usa Python stdlib.
+    # makes a wedged gateway VISIBLE: with `uvicorn --reload` a startup failure
+    # (e.g. DB host not resolvable) leaves the container "running" but not serving.
+    # The image is slim (no curl/wget) → the Python stdlib is used.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)"]
       interval: 15s
@@ -171,8 +189,8 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
 
   worker:
-    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
-    # e pytest, in produzione senza; stesse regole, utente non root
+    # SINGLE backend image (see backend/Dockerfile): with chDB and pytest in
+    # development, without them in production; same rules, non-root user
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -181,46 +199,55 @@ services:
         WITH_DEV: "true"
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
-    # NB: niente container_name → così `docker compose up -d --scale worker=N`
-    # può avviare più repliche (un nome fisso collide e blocca lo scaling).
-    # riparte da solo dopo un OOM-kill del processo principale del worker:
-    # il caso limite in cui muore l'intero container invece del solo task-figlio
+    # NB: no container_name → so that `docker compose up -d --scale worker=N`
+    # can start several replicas (a fixed name collides and blocks scaling).
+    # restarts by itself after an OOM-kill of the worker's main process:
+    # the edge case where the whole container dies rather than just the child task
     restart: unless-stopped
+    # .env is optional: with no file at all the stack starts, the Fernet key is created in the
+    # `keys` volume and the first administrator is created at the sign-in page
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      # glibc apre un'arena malloc per thread: con i molti thread di Polars/Arrow
-      # questo gonfia l'RSS residuo (memoria non restituita all'OS). Limitare le
-      # arene riduce la frammentazione e appiattisce gli scalini di memoria.
+      # glibc opens one malloc arena per thread: with the many Polars/Arrow threads
+      # this inflates the leftover RSS (memory not returned to the OS). Capping the
+      # arenas reduces fragmentation and flattens the steps in memory usage.
       - MALLOC_ARENA_MAX=2
-      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:-}
+      # empty key: the one created at the first start in the shared `keys` volume
+      - SECURITY__KEYS_DIR=/var/lib/tabularia/keys
+      # the stack's own services, also with no .env (the code's defaults are for running outside Docker)
+      - REDIS__HOST=${REDIS__HOST:-redis}
+      - STORAGE__ENDPOINT=${STORAGE__ENDPOINT:-http://minio:9000}
     volumes:
       - ../backend:/app
+      - keys:/var/lib/tabularia/keys
     depends_on:
       redis:
         condition: service_healthy
       minio:
         condition: service_started
-    # Tetto di RAM del worker (dove girano i run): un run che esplode (cross join,
-    # aggregazioni giganti) viene ucciso dall'OOM invece di freezare l'host.
-    # memswap_limit == mem_limit disabilita lo swap (evita lo swap-thrashing).
+    # RAM ceiling of the worker (where runs execute): a run that blows up (cross join,
+    # huge aggregations) is OOM-killed instead of freezing the host.
+    # memswap_limit == mem_limit disables swap (avoids swap-thrashing).
     mem_limit: ${WORKER_MEM_LIMIT:-6g}
     memswap_limit: ${WORKER_MEM_LIMIT:-6g}
-    # Worker PURO (niente -B): l'orologio è il servizio `beat` dedicato qui sotto,
-    # così questo servizio è scalabile a N repliche senza duplicare i task
-    # periodici. Niente --concurrency → viene dal conf (CELERY__WORKER_CONCURRENCY,
-    # default 2), unica fonte di verità usata anche per il tetto di memoria
-    # per-figlio. -Q celery: consuma SOLO la coda di default (i run pesanti); le
-    # anteprime vanno sulla coda `preview`, servita dal preview-worker qui sotto.
+    # PURE worker (no -B): the clock is the dedicated `beat` service below, so
+    # this service scales to N replicas without duplicating the periodic tasks.
+    # No --concurrency → it comes from the config (CELERY__WORKER_CONCURRENCY,
+    # default 2), the single source of truth also used for the per-child memory
+    # cap. -Q celery: consumes ONLY the default queue (the heavy runs); the
+    # previews go to the `preview` queue, served by the preview-worker below.
     command: celery -A app.tasks.celery_app worker -E -Q celery --loglevel=info
 
-  # Beat = UNICO orologio dello stack: schedula i task periodici (eviction step
-  # cache, storage-stats) e li mette in coda; a ESEGUIRLI sono i worker. DEVE
-  # restare a 1 replica — N beat accodano i task periodici N volte. Non esegue
-  # task, quindi è leggero e non tocca lo storage (solo il broker).
+  # Beat = the stack's ONLY clock: schedules the periodic tasks (step cache
+  # eviction, storage-stats) and queues them; the workers are the ones that RUN
+  # them. MUST stay at 1 replica — N beats queue the periodic tasks N times. It
+  # runs no tasks, so it is light and does not touch the storage (only the broker).
   beat:
-    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
-    # e pytest, in produzione senza; stesse regole, utente non root
+    # SINGLE backend image (see backend/Dockerfile): with chDB and pytest in
+    # development, without them in production; same rules, non-root user
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -231,25 +258,34 @@ services:
     image: tabularia-backend:dev
     container_name: dataprep-beat
     restart: unless-stopped
+    # .env is optional: with no file at all the stack starts, the Fernet key is created in the
+    # `keys` volume and the first administrator is created at the sign-in page
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:-}
+      # empty key: the one created at the first start in the shared `keys` volume
+      - SECURITY__KEYS_DIR=/var/lib/tabularia/keys
+      # the stack's own services, also with no .env (the code's defaults are for running outside Docker)
+      - REDIS__HOST=${REDIS__HOST:-redis}
+      - STORAGE__ENDPOINT=${STORAGE__ENDPOINT:-http://minio:9000}
     volumes:
       - ../backend:/app
+      - keys:/var/lib/tabularia/keys
     depends_on:
       redis:
         condition: service_healthy
     command: celery -A app.tasks.celery_app beat --schedule /tmp/celerybeat-schedule --loglevel=info
 
-  # Worker DEDICATO alle anteprime: coda `preview`, interattivo. Separato dal
-  # worker dei run così una preview non resta bloccata dietro un run lungo (e
-  # viceversa). Niente beat qui. Le anteprime sono più leggere → concurrency più
-  # alta possibile, ma con lo stesso tetto di memoria per-figlio derivato dal
-  # limite del container (scala automaticamente con mem_limit/concurrency).
+  # Worker DEDICATED to previews: `preview` queue, interactive. Separate from the
+  # runs worker so a preview is not stuck behind a long run (and vice versa).
+  # No beat here. Previews are lighter → higher concurrency is possible, but
+  # with the same per-child memory cap derived from the container limit
+  # (it scales automatically with mem_limit/concurrency).
   preview-worker:
-    # immagine UNICA del backend (vedi backend/Dockerfile): in sviluppo con chDB
-    # e pytest, in produzione senza; stesse regole, utente non root
+    # SINGLE backend image (see backend/Dockerfile): with chDB and pytest in
+    # development, without them in production; same rules, non-root user
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -258,16 +294,25 @@ services:
         WITH_DEV: "true"
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
-    # niente container_name → scalabile con --scale preview-worker=N
+    # no container_name → scalable with --scale preview-worker=N
     restart: unless-stopped
+    # .env is optional: with no file at all the stack starts, the Fernet key is created in the
+    # `keys` volume and the first administrator is created at the sign-in page
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - MALLOC_ARENA_MAX=2
       - CELERY__WORKER_CONCURRENCY=${PREVIEW_WORKER_CONCURRENCY:-4}
-      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:?SECURITY__FERNET_KEY is required even in development - see infrastructure/.env.example}
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:-}
+      # empty key: the one created at the first start in the shared `keys` volume
+      - SECURITY__KEYS_DIR=/var/lib/tabularia/keys
+      # the stack's own services, also with no .env (the code's defaults are for running outside Docker)
+      - REDIS__HOST=${REDIS__HOST:-redis}
+      - STORAGE__ENDPOINT=${STORAGE__ENDPOINT:-http://minio:9000}
     volumes:
       - ../backend:/app
+      - keys:/var/lib/tabularia/keys
     depends_on:
       redis:
         condition: service_healthy
@@ -286,10 +331,10 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      # il browser chiama il GATEWAY (unico ingresso pubblico), non l'engine
+      # the browser calls the GATEWAY (the only public entry point), not the engine
       - NUXT_PUBLIC_API_BASE=http://localhost:8000
       - NUXT_PUBLIC_BUCKET=data-prep
-      # Grafana visto dal BROWSER (iframe della tab Monitoring)
+      # Grafana as seen by the BROWSER (iframe of the Monitoring tab)
       - NUXT_PUBLIC_GRAFANA_URL=http://localhost:3001
     volumes:
       - ../frontend:/app
@@ -297,37 +342,37 @@ services:
     depends_on:
       - gateway
 
-  # ── Monitoraggio ────────────────────────────────────────────────────────
-  # VictoriaMetrics: TSDB Prometheus-compatibile ma leggero; fa da scraper.
+  # ── Monitoring ─────────────────────────────────────────────────────────
+  # VictoriaMetrics: a lightweight Prometheus-compatible TSDB; it is also the scraper.
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.103.0
     container_name: dataprep-victoriametrics
     restart: unless-stopped
-    # nessuna porta sull'host — la interroga Grafana dentro la rete
+    # no port on the host — Grafana queries it inside the network
     volumes:
       - vm_data:/vmdata
       - ./monitoring/scrape.yml:/etc/vm/scrape.yml:ro
     command:
       - "-storageDataPath=/vmdata"
       - "-promscrape.config=/etc/vm/scrape.yml"
-      - "-retentionPeriod=3"  # mesi
+      - "-retentionPeriod=3"  # months
 
-  # Grafana: dashboard. Credenziali admin da variabili d'ambiente (cambiabili in prod).
+  # Grafana: dashboards. Admin credentials from environment variables (change them in prod).
   grafana:
     image: grafana/grafana:11.2.0
     container_name: dataprep-grafana
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3000"  # 3000 è già del frontend
+      - "127.0.0.1:3001:3000"  # 3000 is already the frontend's
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
-      # embed nella tab Monitoring dell'app (iframe): senza allow_embedding
-      # Grafana manda X-Frame-Options: deny. L'anonimo Viewer serve perché
-      # l'iframe non condivide la sessione dell'app: chi raggiunge la :3001
-      # vede le dashboard SENZA login (sola lettura). Ok in locale; se esponi
-      # lo stack, chiudi la porta o metti un auth-proxy davanti.
+      # embedded in the app's Monitoring tab (iframe): without allow_embedding
+      # Grafana sends X-Frame-Options: deny. The anonymous Viewer is needed because
+      # the iframe does not share the app's session: whoever reaches :3001 sees
+      # the dashboards WITHOUT signing in (read-only). Fine locally; if you expose
+      # the stack, close the port or put an auth proxy in front of it.
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
@@ -339,12 +384,12 @@ services:
     depends_on:
       - victoriametrics
 
-  # cAdvisor: metriche per-container (CPU/mem/disco/rete).
+  # cAdvisor: per-container metrics (CPU/mem/disk/network).
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: dataprep-cadvisor
     restart: unless-stopped
-    # nessuna porta sull'host — lo raschia VictoriaMetrics
+    # no port on the host — VictoriaMetrics scrapes it
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -354,7 +399,7 @@ services:
     devices:
       - /dev/kmsg
 
-  # node-exporter: metriche dell'host (CPU, memoria, disco/SSD, load).
+  # node-exporter: host metrics (CPU, memory, disk/SSD, load).
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: dataprep-node-exporter
@@ -364,38 +409,36 @@ services:
     pid: host
     volumes:
       - /:/host:ro
-    # nessuna porta sull'host — lo raschia VictoriaMetrics
+    # no port on the host — VictoriaMetrics scrapes it
 
-  # celery-exporter: task attivi, durate, esiti, profondità coda (via eventi Celery).
+  # celery-exporter: active tasks, durations, outcomes, queue depth (via Celery events).
   celery-exporter:
     image: danihodovic/celery-exporter:latest
     container_name: dataprep-celery-exporter
     restart: unless-stopped
     environment:
       - CE_BROKER_URL=redis://redis:6379/0
-    # nessuna porta sull'host — lo raschia VictoriaMetrics
+    # no port on the host — VictoriaMetrics scrapes it
     depends_on:
       - redis
 
-  # ── Dati di esempio (profilo `samples`) ────────────────────────────────────
-  # Si accendono con COMPOSE_PROFILES=samples nel .env (o `--profile samples`):
-  # due database esterni finti — un gestionale su Postgres e un CRM su
-  # ClickHouse — e un contenitore di inizializzazione che li riempie alla scala
-  # richiesta (SAMPLES_SCALE) e crea in Tabularia la cartella «Sample» con
-  # connessioni, tabelle, flussi, schedulazioni e viste. Gira una volta ed esce;
-  # rilanciarlo non duplica niente. Stessi nomi di volume del vecchio
-  # docker-compose.sampledb.yml: i dati già generati restano.
+  # ── Sample data (on in this try-it stack) ──────────────────────────────────
+  # Two fake external databases — an ERP on Postgres and a CRM on ClickHouse — and an
+  # init container that fills them at the requested scale (SAMPLES_SCALE) and builds
+  # the «Sample» folder in Tabularia: connections, tables, flows, schedules and views.
+  # With no administrator yet it waits for the one created at the sign-in page. It runs
+  # once and exits; running it again duplicates nothing. Not wanted:
+  #   docker compose up -d --scale sampledb-init=0 --scale sampledb-postgres=0 --scale sampledb-clickhouse=0
   sampledb-postgres:
     image: postgres:16-alpine
     container_name: sampledb-postgres
     restart: unless-stopped
-    profiles: ["samples"]
     environment:
       - POSTGRES_USER=shop
       - POSTGRES_PASSWORD=shop
       - POSTGRES_DB=shop
     ports:
-      - "127.0.0.1:5434:5432"  # solo dall'host, solo per curiosare
+      - "127.0.0.1:5434:5432"  # from the host only, just for poking around
     volumes:
       - sampledb_pg:/var/lib/postgresql/data
     command:
@@ -420,7 +463,6 @@ services:
     image: clickhouse/clickhouse-server:24.8
     container_name: sampledb-clickhouse
     restart: unless-stopped
-    profiles: ["samples"]
     environment:
       - CLICKHOUSE_USER=analytics
       - CLICKHOUSE_PASSWORD=analytics
@@ -443,15 +485,14 @@ services:
   sampledb-init:
     build: ./sampledb
     container_name: sampledb-init
-    profiles: ["samples"]
     entrypoint: ["python", "seed_tabularia.py"]
     environment:
       - SAMPLES_SCALE=${SAMPLES_SCALE:-small}
       - SAMPLES_ENGINE=${SAMPLES_ENGINE:-}
       - SAMPLES_RUN_FLOWS=${SAMPLES_RUN_FLOWS:-true}
       - GATEWAY_URL=http://gateway:8000
-      - AUTH__ADMIN_EMAIL=${AUTH__ADMIN_EMAIL}
-      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD}
+      - AUTH__ADMIN_EMAIL=${AUTH__ADMIN_EMAIL:-}
+      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD:-}
       - PG_HOST=sampledb-postgres
       - PG_PORT=5432
       - PG_DB=shop
@@ -469,9 +510,14 @@ services:
         condition: service_healthy
       gateway:
         condition: service_healthy
+    # with no administrator password, the start-up token the gateway leaves there
+    volumes:
+      - keys:/var/lib/tabularia/keys:ro
     restart: "no"
 
 volumes:
+  # the secrets created at the first start (fernet.key, bootstrap.token): back it up with the data
+  keys:
   redis_data:
   minio_data:
   postgres_data:

@@ -315,6 +315,8 @@ export default {
     "loginFailedAction": "Fehlgeschlagene Anmeldung",
     "ssoLoginAction": "SSO-Anmeldung",
     "ssoLoginFailedAction": "Fehlgeschlagene SSO-Anmeldung",
+    "firstRunSetupAction": "Erster Administrator angelegt",
+    "bootstrapLoginAction": "Anmeldung der Beispieldaten",
     "workersScalingUpdateAction": "Pod-Grenzen der Worker geändert",
     "workersScalingResetAction": "Pod-Grenzen der Worker an das Chart zurückgegeben",
     "logoutAction": "Abmeldung",

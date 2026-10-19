@@ -22,15 +22,16 @@ quickest way to see the product, not a production setup:
 ```bash
 git clone https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia/infrastructure
-cp .env.example .env        # then edit: secrets, admin credentials, timezone
-# required: the key that encrypts database-connection passwords (the last value in .env wins)
-echo "SECURITY__FERNET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
 docker compose up -d
 ```
 
-| Service | URL | Default credentials |
+Nothing to configure. Open http://localhost:3000 and create the administrator: the page
+asks for it only while the installation has no account. The first start builds the
+images, 2–3 minutes on a fast machine and 5–15 on a laptop.
+
+| Service | URL | Credentials |
 |---|---|---|
-| App | http://localhost:3000 | `admin@tabularia.local` / `admin` |
+| App | http://localhost:3000 | the administrator you create at the first visit |
 | Gateway | http://localhost:8000 | through the app's sign-in |
 | Grafana | http://localhost:3001 | `admin` / `admin` |
 | MinIO | http://localhost:9001 | `minioadmin` / `minioadmin` |
@@ -41,16 +42,10 @@ flow, or download any node's data as CSV or Excel.
 
 ### Sample data
 
-For a realistic dataset to explore, turn on the `samples` profile in `infrastructure/.env`:
-
-```bash
-COMPOSE_PROFILES=samples
-SAMPLES_SCALE=small        # small | medium | robusta
-```
-
-It adds an ERP on PostgreSQL and a CRM on ClickHouse for a cured-meats company, and builds
-a `Sample` folder in Tabularia with the two connections, eleven flows (three scheduled)
-and four saved views. Details in the
+Already there: an ERP on PostgreSQL and a CRM on ClickHouse for a cured-meats company,
+and a `Sample` folder in Tabularia with the two connections, eleven flows (three
+scheduled) and four saved views. It appears a couple of minutes after the administrator
+is created. Details, and how to leave it out, in the
 [sample database README](../infrastructure/sampledb/README.md).
 
 ## Go to production
@@ -63,8 +58,8 @@ Docker Compose is for trying Tabularia; production runs on Kubernetes with the H
 | Every install and upgrade | [Install and upgrade checklist](deploy/release-checklist.md) |
 | Every setting | [Configuration reference](configuration.md): the environment variables, with their defaults |
 
-`SECURITY__FERNET_KEY` is mandatory everywhere. With `APP__ENV_NAME=production` the
-gateway also refuses the development default secrets (`JWT__SECRET`, admin and database
+`SECURITY__FERNET_KEY` and `AUTH__ADMIN_PASSWORD` are mandatory there: the chart has no
+first-start setup. With `APP__ENV_NAME=production` the gateway also refuses the development default secrets (`JWT__SECRET`, admin and database
 passwords) until they are replaced. Storage, broker, database, timezone and engines are
 set through the environment: pointing Tabularia at managed services is a configuration
 change. Most settings are environment variables, all listed in the

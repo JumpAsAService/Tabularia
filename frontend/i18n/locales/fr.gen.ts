@@ -315,6 +315,8 @@ export default {
     "loginFailedAction": "Connexion échouée",
     "ssoLoginAction": "Connexion SSO",
     "ssoLoginFailedAction": "Échec de connexion SSO",
+    "firstRunSetupAction": "Premier administrateur créé",
+    "bootstrapLoginAction": "Connexion des données d'exemple",
     "workersScalingUpdateAction": "Bornes des pods des workers modifiées",
     "workersScalingResetAction": "Bornes des pods des workers rendues à la chart",
     "logoutAction": "Déconnexion",
