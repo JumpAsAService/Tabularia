@@ -735,25 +735,29 @@ the external ClickHouse's slowest queries without any extra table.
 > Helm chart in [`infrastructure/helm/tabularia`](infrastructure/helm/tabularia).
 > Upgrading: [`docs/deploy/release-checklist.md`](docs/deploy/release-checklist.md).
 
-Requires Docker and Docker Compose.
+Requires Docker and Docker Compose. Step by step, with the sample data and a first scheduled
+flow: [getting started with Docker Compose](docs/getting-started-docker-compose.md).
 
 ```bash
-git clone git@github.com:JumpAsAService/Tabularia.git
+git clone https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia/infrastructure
-cp .env.example .env        # then edit: secrets, admin credentials, timezone
-# required in every environment: the key that encrypts DB-connection passwords.
-# Generate one and paste it as SECURITY__FERNET_KEY in .env (compose refuses to start without it):
-openssl rand -base64 32 | tr '+/' '-_'
-#   or with Python (standard library only, nothing to install):
-#   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-#   neither installed (e.g. Windows)? Docker alone is enough:
+cp .env.example .env
+# two settings have no default: the administrator's password (at least 12 characters;
+# `admin` and other published passwords are refused) and the key that encrypts the
+# passwords of database connections. Compose refuses to start without them.
+echo "AUTH__ADMIN_PASSWORD=$(openssl rand -hex 12)" >> .env
+echo "SECURITY__FERNET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
+#   no openssl (e.g. Windows)? Docker alone generates the key; paste it after SECURITY__FERNET_KEY=:
 #   docker run --rm python:3.12-alpine python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 docker compose up -d
 ```
 
-| Service   | URL                    | Default credentials                |
+grep '^AUTH__ADMIN_PASSWORD=.' .env    # the password to sign in with
+The first `docker compose up -d` builds the images from the code: a few minutes.
+
+| Service   | URL                    | Credentials                        |
 |-----------|------------------------|------------------------------------|
-| App       | http://localhost:3000  | `admin@tabularia.local` / `admin`  |
+| App       | http://localhost:3000  | `admin@tabularia.local` and the password in `.env` |
 | Gateway   | http://localhost:8000  | (JWT via app login)                |
 | Grafana   | http://localhost:3001  | `admin` / `admin`                  |
 | MinIO     | http://localhost:9001  | `minioadmin` / `minioadmin`        |
