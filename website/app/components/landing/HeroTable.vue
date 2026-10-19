@@ -13,9 +13,13 @@
 // view. In one column (phones, narrow windows) rows open on a tap only and keep their own
 // height: an automatic change there would move the page under the reader's thumb. Under reduced
 // motion nothing moves by itself.
+import { Boxes, Gauge, GitFork, ListChecks, LockOpen, Plug, ShieldCheck, Sparkles } from 'lucide-vue-next'
+
 const props = defineProps<{ scrollIndex?: number | null, skipTo?: string }>()
 const t = useCopy()
 const items = t.hero.cards.items
+// one icon per row, in the order of t.hero.cards.items (the product's own icon set)
+const ICONS = [GitFork, Plug, LockOpen, Gauge, Boxes, ListChecks, ShieldCheck, Sparkles]
 const n = items.length
 const DWELL = 6000 // ms on each open row
 const SCROLL_REST = 3500 // ms of still scroll before the rotation resumes
@@ -140,6 +144,7 @@ function onFocusOut (e: FocusEvent) {
             :id="`point-${i}`" :ref="(el) => { heads[i] = el as HTMLButtonElement | null }" type="button" class="row__head"
             :aria-expanded="i === index" :aria-controls="`point-${i}-body`" @click="index = i" @keydown="onKey($event, i)"
           >
+            <span class="row__icon" aria-hidden="true"><component :is="ICONS[i] ?? Sparkles" :size="17" :stroke-width="1.9" /></span>
             <span class="row__title">{{ c.title }}</span>
             <span class="row__fact"><span class="sr-only">{{ t.hero.cards.factLabel }}: </span>{{ c.fact }}</span>
           </button>
@@ -179,11 +184,18 @@ function onFocusOut (e: FocusEvent) {
 
 .row__h { margin: 0; font: inherit; }
 .row__head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 20px; width: 100%;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; width: 100%;
   /* the rows tighten on short windows, so the pinned hero still holds the whole table */
   padding: var(--row-pad, 13px) 18px var(--row-pad, 13px) 20px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; border-radius: 6px;
 }
 .row__head:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+/* the icon: grey on a closed row, the flow's blue in its tinted square on the open one */
+.row__icon {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--muted);
+  transition: background-color 320ms var(--ease-out), color 320ms var(--ease-out);
+}
+.row__head:hover .row__icon { color: var(--text); }
+.row.is-open .row__icon { background: var(--chip-bg); color: var(--chip-ink); }
 .row__title {
   font-size: clamp(17px, calc(13px + 0.75svh), 19px); line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; color: var(--soft);
   transition: color 320ms var(--ease-out);
@@ -199,13 +211,14 @@ function onFocusOut (e: FocusEvent) {
 .row.is-open .row__body { grid-template-rows: 1fr; }
 .row__clip { min-height: 0; overflow: hidden; }
 /* the link sits at the foot of every open row, whatever the length of its text */
-.row__inner { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 0 20px 18px; height: var(--body-h, auto); }
+/* the text lines up under the title, past the icon (20 + 30 + 14) */
+.row__inner { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 0 20px 18px 64px; height: var(--body-h, auto); }
 .row__text { font-size: clamp(16px, calc(12px + 0.55svh), 17px); line-height: 1.5; max-width: 52ch; color: var(--text); }
 .row__link { margin-top: auto; color: var(--accent-ink); font-weight: 600; text-decoration: none; }
 .row__link:hover { text-decoration: underline; text-underline-offset: 4px; }
 
 /* the time left on the open row: a short filled bar along its foot */
-.row__time { position: absolute; left: 20px; right: 18px; bottom: 6px; height: 3px; border-radius: 2px; opacity: 0; }
+.row__time { position: absolute; left: 64px; right: 18px; bottom: 6px; height: 3px; border-radius: 2px; opacity: 0; }
 .row.is-run .row__time { opacity: 1; background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .row.is-run .row__time::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent);
@@ -229,7 +242,15 @@ function onFocusOut (e: FocusEvent) {
   .points__table { animation: surface 700ms var(--ease-out) both; }
   .row { animation: arrive 900ms var(--ease-out) both; animation-delay: calc(200ms + var(--i) * 80ms); }
   .row__title { animation: settle 1100ms var(--ease-out) both; animation-delay: calc(200ms + var(--i) * 80ms); }
+  /* each icon draws itself as its row settles; every Lucide stroke is shorter than 100 units */
+  .row__icon :deep(svg > *) {
+    stroke-dasharray: 100; stroke-dashoffset: 100;
+    animation: draw 1300ms var(--ease-out) both; animation-delay: calc(560ms + var(--i) * 80ms);
+  }
+  .row__icon :deep(svg) { transition: transform 420ms var(--ease-out); }
+  .row__head:hover .row__icon :deep(svg) { transform: rotate(-8deg) scale(1.1); }
 }
+@keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes surface { from { opacity: 0; } }
 @keyframes arrive {
   from { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
@@ -241,9 +262,12 @@ function onFocusOut (e: FocusEvent) {
 /* nothing turns by itself in one column or under reduced motion, and nothing is pinned: no controls */
 @media (max-width: 1000px), (prefers-reduced-motion: reduce) { .points__controls { display: none; } }
 @media (max-width: 520px) {
-  .row__head { flex-direction: column; gap: 4px; padding: 12px 14px 12px 18px; }
+  /* the fact goes under the title */
+  .row__head { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; gap: 2px 12px; padding: 12px 14px 12px 14px; }
+  .row__icon { grid-row: 1 / 3; align-self: start; }
+  .row__fact { grid-column: 2; }
   .row__title { font-size: 18px; }
-  .row__inner { padding: 0 14px 18px 18px; }
-  .row__time { left: 18px; right: 14px; }
+  .row__inner { padding: 0 14px 18px 56px; }
+  .row__time { left: 56px; right: 14px; }
 }
 </style>
