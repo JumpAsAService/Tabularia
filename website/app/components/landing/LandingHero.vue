@@ -1,17 +1,17 @@
 <script setup lang="ts">
 // The hero pins for about one extra screen of scroll: while it is pinned, the reader's own
-// scroll turns the ring, one card per eighth of that distance, and after the last card the page
-// simply carries on. Nothing captures the wheel or the touch: it is a sticky element and a
+// scroll opens the table's rows, one per eighth of that distance, and after the last row the
+// page simply carries on. Nothing captures the wheel or the touch: it is a sticky element and a
 // passive scroll listener (read once per frame), so a fast flick goes straight through.
-// Under reduced motion there is no pin (the ring is a static list of the eight points), and on
-// phones and short windows neither: the hero is taller than the window there, and pinning it
-// would hide its lower part (the deck turns by itself and with its buttons instead).
+// Under reduced motion there is no pin (nothing moves by itself), and on phones and short
+// windows neither: the hero is taller than the window there, and pinning it would hide its
+// lower part (the rows open by themselves and on a tap instead).
 const t = useCopy()
 const config = useRuntimeConfig()
 const n = t.hero.cards.items.length
 
 const pin = ref<HTMLElement | null>(null)
-const scrollIndex = ref<number | null>(null) // the card the scroll position asks for; null outside the pin
+const scrollIndex = ref<number | null>(null) // the row the scroll position asks for; null outside the pin
 const pinned = ref(true)
 let raf = 0
 function measure () {
@@ -75,7 +75,7 @@ onBeforeUnmount(() => {
           <NuxtLink to="/docs" class="btn">{{ t.hero.readDocs }}</NuxtLink>
         </p>
       </div>
-      <LandingHeroWheel class="hero__wheel" :scroll-index="scrollIndex" skip-to="#hero-end" />
+      <LandingHeroTable :scroll-index="scrollIndex" skip-to="#hero-end" />
     </div>
 
     <a href="#how" class="hero__cue">
@@ -88,12 +88,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* The pin: about one extra screen of scroll, during which the hero stays in place and the ring
-   turns. Only where the whole hero fits in the window (two columns, at least 680px tall) and
+/* The pin: about one extra screen of scroll, during which the hero stays in place and the
+   table's rows open one by one. Only where the whole hero fits in the window (two columns, at least 680px tall) and
    motion is welcome; on phones and short windows the hero scrolls normally (see PIN_QUERY). */
 .hero-pin { position: relative; }
 .hero { position: relative; min-height: 92svh; padding-inline: var(--gutter); display: flex; flex-direction: column; }
-/* on very wide screens the hero takes a wider column than the sections below, so the ring has room */
+/* on very wide screens the hero takes a wider column than the sections below */
 @media (min-width: 1600px) {
   .hero { padding-inline: max(var(--margin), calc((100% - 1480px) / 2)); }
   .hero__cue { left: max(var(--margin), calc((100% - 1480px) / 2)); }
@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
 }
 .nav__links a:hover { color: var(--text); background: var(--tile); }
 
-/* the desktop hero: the message on the left, the wheel on the right, both centred on one line */
+/* the desktop hero: the message on the left, the table on the right, both centred on one line */
 .hero__body {
   flex: 1; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(32px, 5vw, 80px);
   align-items: center; padding: 40px 0 72px;
@@ -143,9 +143,4 @@ onBeforeUnmount(() => {
   .hide-sm { display: none; }
 }
 @media (max-width: 460px) { .hide-xs { display: none; } }
-/* reduced motion: the eight points are a list; the message stays at the top beside it */
-@media (prefers-reduced-motion: reduce) {
-  .hero__body { align-items: start; }
-  .hero__copy { position: sticky; top: 24px; }
-}
 </style>
