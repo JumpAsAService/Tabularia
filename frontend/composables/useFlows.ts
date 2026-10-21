@@ -19,6 +19,8 @@ export interface FlowSummary {
   // stato dell'ultimo run: SUCCESS | FAILURE | STARTED | PENDING | null (mai eseguito)
   last_run_status: string | null
   last_run_at: string | null
+  // why this person cannot open it (a container registry they have no access to); null: it opens
+  locked_reason?: string | null
 }
 
 export interface FlowDetail extends FlowSummary {

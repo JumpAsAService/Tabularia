@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 121 |
+| [Gateway](#gateway) | 132 |
 | [Engine and workers](#engine-and-workers) | 86 |
 | [Frontend](#frontend) | 3 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **230** |
+| **Total** | **241** |
 
 ## Before production
 
@@ -290,6 +290,7 @@ Administration → Scripting environments: the Python and R environments the Scr
 | `SCRIPTS__REGISTRY_INSECURE` | boolean | `false` | `scripts.registry.insecure` | The registry speaks plain HTTP or has a self-signed certificate. A test cluster only. |
 | `SCRIPTS__REGISTRY_PUSH_SECRET` | string | empty | `scripts.registry.pushSecret` | Name of a Secret of type `kubernetes.io/dockerconfigjson` in the build namespace, used by the builds to push. Empty = a registry that takes pushes without credentials. |
 | `SCRIPTS__REGISTRY_PULL_SECRET` | string | empty | `scripts.registry.pullSecret` | Name of a Secret of type `kubernetes.io/dockerconfigjson` in the scripts namespace, used by the Jobs to pull the images. Empty = the nodes pull without credentials. |
+| `SCRIPTS__REGISTRY_CA_CONFIGMAP` | string | empty | set by the chart | A ConfigMap of the build namespace holding `ca.crt`: the certificate of the authority that signed the registry's, when it is not a public one (a company CA). The builds verify the registry with it. The chart creates it from `scripts.registry.caCert`. |
 | `SCRIPTS__BUILDER_IMAGE` | string | `moby/buildkit:v0.33.1-rootless` | `scripts.builderImage` | The image that builds the environments: BuildKit, rootless. Replace it with a mirror on a cluster without internet access. |
 | `SCRIPTS__BASE_IMAGES` | string | empty | `scripts.baseImages` | JSON: the language versions offered, and the image each starts from, e.g. `{"python": {"3.12": "python:3.12-slim"}, "r": {"4.5": "rocker/r-ver:4.5.3"}}`. Empty = Python 3.11, 3.12, 3.13, 3.14 (`python:3.x-slim`) and R 4.5, 4.6 (`rocker/r-ver`). Pin them by digest, or point them at a mirror, here. |
 | `SCRIPTS__PYPI_INDEX_URL` | string | empty | `scripts.pypiIndexUrl` | The Python package index the builds install from. Empty = PyPI. |
@@ -302,6 +303,23 @@ Administration → Scripting environments: the Python and R environments the Scr
 | `SCRIPTS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a build's log is kept and shown in the panel. |
 | `SCRIPTS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job after this long, if Tabularia has not removed it first. |
 | `SCRIPTS__LINT` | boolean | `true` | `extraEnv` | The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person. |
+
+### Container registries (Kubernetes)
+
+Administration → Container registries: the registries the images of the Container node come from, their credentials, how to trust their certificate and the repositories allowed ([Container registries](container-registries.md)). Off unless `CONTAINERS__ENABLED` is true; the chart sets it with `containers.enabled`.
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `CONTAINERS__ENABLED` | boolean | `false` | `containers.enabled` | Turns on Administration → Container registries: the registries the images of the Container node come from, on Kubernetes. The Helm chart sets it with `containers.enabled`. |
+| `CONTAINERS__NAMESPACE` | string | empty | set by the chart | Where the flows' runs run the Container nodes, and where each registry's pull Secret is kept. The chart sets it (`containers.namespace`, `<release namespace>-containers` by default), at the `baseline` Pod Security level. |
+| `CONTAINERS__TRIAL_NAMESPACE` | string | empty | set by the chart | Where the editor's «Run» of a Container node and «Try in the cluster» run, with a ResourceQuota of its own. Empty = `CONTAINERS__NAMESPACE`. The chart sets it (`containers.trialNamespace`). |
+| `CONTAINERS__PULL_CHECK_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | «Try in the cluster»: how long a node may take to download an image before the check says it did not. |
+| `CONTAINERS__POLL_SECONDS` | number, > 0 | `3` | `extraEnv` | How often the gateway looks at a Job of the containers' namespaces while it waits for it. |
+| `CONTAINERS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job of the containers' namespaces after this long, if Tabularia has not removed it first. |
+| `CONTAINERS__MAX_CPU` | string | `4` | `containers.limits.cpu` | The most CPU a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.cpu`). |
+| `CONTAINERS__MAX_MEMORY` | string | `16Gi` | `containers.limits.memory` | The most memory a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.memory`). |
+| `CONTAINERS__MAX_TIMEOUT_SECONDS` | integer, ≥ 60 | `86400` | `containers.limits.timeoutSeconds` | The longest timeout a Container node may have. The chart sets it (`containers.limits.timeoutSeconds`). |
+| `CONTAINERS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a container's log the run keeps and the run page shows. |
 
 ## Engine and workers
 

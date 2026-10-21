@@ -76,6 +76,13 @@ NIENTE_SCRIPTING_DA_TOKEN = {
     "de": "Ein API-Token kann die Skriptumgebungen und ihren Bucket nicht ändern: Das geht über die Oberfläche",
     "es": "Un token de API no puede cambiar los entornos de scripting ni su bucket: hazlo desde la interfaz",
 }
+NIENTE_REGISTRY_DA_TOKEN = {
+    "en": "An API token cannot change the container registries: do it from the interface",
+    "it": "Un token API non cambia i container registry: si fa dall'interfaccia",
+    "fr": "Un jeton d'API ne peut pas modifier les registres de conteneurs : faites-le depuis l'interface",
+    "de": "Ein API-Token kann die Container-Registries nicht ändern: Das geht über die Oberfläche",
+    "es": "Un token de API no puede cambiar los registros de contenedores: hazlo desde la interfaz",
+}
 # le POST che leggono soltanto: un token di sola lettura le può usare (un export o
 # un'anteprima calcolano e restituiscono dati, non cambiano niente)
 POST_DI_LETTURA = {"/tasks/export", "/tasks/exports", "/tasks/preview"}

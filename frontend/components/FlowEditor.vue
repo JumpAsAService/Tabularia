@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -20,7 +20,9 @@ import type { NodeStats } from '~/composables/useNodeStats'
 // import esplicito: nel container i componenti nuovi non vengono scansionati
 import FlowEdge from '~/components/edges/FlowEdge.vue'
 import ScriptNode from '~/components/nodes/ScriptNode.vue'
+import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
+import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
@@ -319,12 +321,16 @@ const previewError = ref('')
 // why there is no preview when it is not an error (the nodes after a Script node)
 const previewNote = ref('')
 
+// the nodes that run outside the engine and hand their output to the nodes after them
+const STEP_TYPES = new Set(['script', 'container'])
+// the nodes only a run of the flow carries out (an orchestration on the server)
+const CONTROL_TYPES = new Set(['refresh', 'runflow', 'script', 'container'])
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) ?? null : null))
 const firstSource = computed(() => getNodes.value.find((n) => n.type === 'source'))
 const canRun = computed(
   () =>
     !!firstSource.value?.data?.parquetKey ||
-    getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow' || n.type === 'script'),
+    getNodes.value.some((n) => CONTROL_TYPES.has(n.type ?? '')),
 )
 
 // ── Flusso salvato (persistenza nel gateway) ─────────────────────────────
@@ -336,8 +342,17 @@ const { others: alsoOpenBy } = useFlowPresence(flowId)
 const scriptingEditor = useScriptingEditor()
 const scriptingAvailable = scriptingEditor.available
 onMounted(() => { scriptingEditor.load(true) })
+// Container nodes: the registries this person may take images from (the palette offers
+// the node only when there is one)
+const registriesEditor = useRegistriesEditor()
+const containersAvailable = registriesEditor.available
+onMounted(() => { registriesEditor.load(true) })
+// the texts of the preview after a step node, by its kind
+function stepTexts(nodeId: string): string {
+  return findNode(nodeId)?.type === 'container' ? 'containers.node' : 'scripting.node'
+}
 
-// What each Script node wrote last (a run of the flow, or «Run» in its panel): the
+// What each Script or Container node wrote last (a run of the flow, or «Run» in its panel): the
 // nodes after it preview from that. Read when the flow opens, after a save, after a
 // trial.
 const scriptOutputs = ref<ScriptOutputs>({})
@@ -345,13 +360,13 @@ const fmtWhen = useFormat().dateTime
 const scriptSources = computed(() => Object.fromEntries(Object.entries(scriptOutputs.value)
   .filter(([, v]) => v.output).map(([k, v]) => [k, { bucket: v.output!.bucket, key: v.output!.key }])))
 async function loadScriptOutputs() {
-  if (flowId.value === null || !getNodes.value.some((n) => n.type === 'script')) return
+  if (flowId.value === null || !getNodes.value.some((n) => STEP_TYPES.has(n.type ?? ''))) return
   try {
     scriptOutputs.value = await scriptingEditor.outputs(flowId.value)
   } catch { /* the nodes after a script just have no preview */ }
 }
 
-// «Run» of a Script node: the SAVED flow runs it on the sample (saved first if there
+// «Run» of a Script or Container node: the SAVED flow runs it on the sample (saved first if there
 // are changes), and the run is followed until it ends
 interface ScriptTrial { runId: number | null; status: string; startedAt: number; error: string }
 const scriptTrials = reactive<Record<string, ScriptTrial>>({})
@@ -443,6 +458,7 @@ function serializeCanvas(): string {
 
 async function loadFlow(id: number) {
   const f = await flowsApi.get(id)
+  loadBlocked.value = ''
   flowName.value = f.name
   projectId.value = f.project_id
   flowEngine.value = f.engine || 'polars'
@@ -583,8 +599,16 @@ function redo() {
   if (history.redo()) setStatus(t('flowEditor.redone'), 'info')
 }
 
+// the flow could not be opened (not found, or it runs images of a container registry
+// this person has no access to): an empty canvas is never saved over it
+const loadBlocked = ref('')
+
 async function saveFlow() {
   if (negatoAllOsservatore()) return
+  if (loadBlocked.value) {
+    setStatus(t('flowEditor.cannotSaveUnopened', { error: loadBlocked.value }), 'error')
+    return
+  }
   if (projectId.value === null) {
     setStatus(t('flowEditor.chooseProjectToSave'), 'error')
     return
@@ -759,7 +783,11 @@ onMounted(async () => {
   try {
     if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
-    setStatus(t('flowEditor.flowLoadFailed', { error: errMessage(e) }), 'error')
+    loadBlocked.value = errMessage(e)
+    setStatus(t('flowEditor.flowLoadFailed', { error: loadBlocked.value }), 'error')
+    // nothing on the canvas: it is not a new flow, and nothing of this one is shown
+    applyDefinition({ nodes: [], edges: [] })
+    selectedId.value = null
   }
   if (flowId.value === null) {
     // flusso nuovo: si parte dal canvas iniziale, che è anche il riferimento «salvato»
@@ -1022,6 +1050,7 @@ const NODE_TYPE_COLOR: Record<string, string> = {
   refresh: '#38bdf8',
   runflow: '#c084fc',
   script: '#34d399',
+  container: '#818cf8',
   foreach: '#f472b6',
   comment: 'var(--border)',
 }
@@ -1101,6 +1130,19 @@ function onCanvasDrop(ev: DragEvent) {
     addNodes({
       id, type: 'script', position,
       data: { label: t('scripting.node.title'), files: [], entrypoint: '', timeoutSeconds: 900, retries: 0, retryDelaySeconds: 60 },
+    })
+    selectedId.value = id
+    return
+  }
+
+  if (kind === 'container') {
+    // an image of a registry, run by the gateway as a Kubernetes Job: the registry and
+    // the image are chosen in the node panel; input and output come from its edges
+    const id = `ctl-${++outputCounter}`
+    addNodes({
+      id, type: 'container', position,
+      data: { label: t('containers.node.title'), registryId: null, repository: '', tag: '', command: [], args: [],
+              variables: [], cpu: '1', memory: '1Gi', timeoutSeconds: 900, retries: 0, retryDelaySeconds: 60 },
     })
     selectedId.value = id
     return
@@ -1240,7 +1282,7 @@ function copySelection(): boolean {
 function newNodeId(n: ClipNode): string {
   if (n.type === 'source') return `src-${++sourceCounter}`
   if (n.type === 'output') return `out-${++outputCounter}`
-  if (n.type === 'refresh' || n.type === 'runflow' || n.type === 'script') return `ctl-${++outputCounter}`
+  if (CONTROL_TYPES.has(n.type ?? '')) return `ctl-${++outputCounter}`
   if (n.type === 'comment') return `cmt-${++commentCounter}`
   return `op-${++opCounter}` // operation e foreach
 }
@@ -1473,17 +1515,17 @@ async function runPreview(nodeId: string) {
     previewLoading.value = false
     // what a script writes exists only during a run: the editor cannot preview it
     previewError.value = ''
-    previewNote.value = afterScript ? t('scripting.node.previewAfterRun') : ''
+    previewNote.value = afterScript ? t(`${stepTexts(afterScript)}.previewAfterRun`) : ''
     return
   }
   const t0 = performance.now()
   previewError.value = ''
   // the data come from a script's last run: say which, and whether its code changed since
   const fromScript = afterScript ? scriptOutputs.value[afterScript]?.output : null
-  previewNote.value = fromScript
-    ? t(fromScript.trial ? 'scripting.node.previewFromTrial' : 'scripting.node.previewFromRun',
+  previewNote.value = fromScript && afterScript
+    ? t(`${stepTexts(afterScript)}.${fromScript.trial ? 'previewFromTrial' : 'previewFromRun'}`,
       { when: fmtWhen(fromScript.finished_at) })
-      + (fromScript.stale ? ` ${t('scripting.node.previewStale')}` : '')
+      + (fromScript.stale ? ` ${t(`${stepTexts(afterScript)}.previewStale`)}` : '')
     : ''
   previewLoading.value = true
   try {
@@ -1697,9 +1739,9 @@ function describeOutput(n: Node): OutputSummary {
 
 const runOutputs = computed(() => outputNodes().map(describeOutput))
 
-// nodi di controllo (refresh/runflow/script): richiedono l'orchestrazione server-side
+// nodi di controllo (refresh/runflow/script/container): richiedono l'orchestrazione server-side
 const hasControlNodes = () =>
-  getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow' || n.type === 'script')
+  getNodes.value.some((n) => CONTROL_TYPES.has(n.type ?? ''))
 
 function run() {
   if (negatoAllOsservatore()) return
@@ -2066,10 +2108,15 @@ async function pollTask(id: string) {
     </p>
 
     <div class="sidebar">
-      <OpSidebar :operations="operations" :read-only="soloOsservatore" :scripting="scriptingAvailable" />
+      <OpSidebar :operations="operations" :read-only="soloOsservatore" :scripting="scriptingAvailable" :containers="containersAvailable" />
     </div>
 
     <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
+      <div v-if="loadBlocked" class="non-aperto" role="alert">
+        <ShieldAlert :size="22" />
+        <h2>{{ $t('flowEditor.cannotOpenTitle') }}</h2>
+        <p>{{ loadBlocked }}</p>
+      </div>
       <VueFlow
         :nodes="initialNodes"
         :min-zoom="0.2"
@@ -2099,6 +2146,9 @@ async function pollTask(id: string) {
         </template>
         <template #node-script="props">
           <ScriptNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-container="props">
+          <ContainerNode :id="props.id" :data="props.data" />
         </template>
         <template #node-comment="props">
           <CommentNode :id="props.id" :data="props.data" />
@@ -2245,6 +2295,13 @@ async function pollTask(id: string) {
 </template>
 
 <style scoped>
+.non-aperto {
+  position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 24px; text-align: center; background: var(--bg);
+}
+.non-aperto svg { color: var(--warning); }
+.non-aperto h2 { margin: 0; font-size: 16px; }
+.non-aperto p { margin: 0; max-width: 520px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
 /* the right panel with the assistant beside the node settings */
 .panel.tabbed { display: flex; flex-direction: column; min-height: 0; }
 .panel.tabbed > .nodepanel, .panel.tabbed > .fa { flex: 1; min-height: 0; height: auto; }

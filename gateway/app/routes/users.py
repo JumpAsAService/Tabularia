@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from app.core.security import hash_password, verify_password
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
-from app.models import User, Group, UserGroupLink
+from app.models import ContainerRegistryAccess, User, Group, UserGroupLink
 from app.schemas.models import LocaleChange, PasswordChange, UserOut, UserCreate, UserUpdate
 from app.services import audit, login_throttle, sessions
 from app.services.masking import mask_email
@@ -364,6 +364,7 @@ def elimina_utente(session: Session, user_id: int) -> None:
         session.exec(sa_delete(AiChatTurn).where(AiChatTurn.chat_id.in_(chat_ids)))
         session.exec(sa_delete(AiChat).where(AiChat.id.in_(chat_ids)))
     session.exec(sa_delete(Permission).where(Permission.user_id == user_id))
+    session.exec(sa_delete(ContainerRegistryAccess).where(ContainerRegistryAccess.user_id == user_id))
     session.exec(sa_delete(UserGroupLink).where(UserGroupLink.user_id == user_id))
     session.exec(sa_delete(UserSession).where(UserSession.user_id == user_id))
     session.exec(sa_delete(ApiToken).where(ApiToken.user_id == user_id))

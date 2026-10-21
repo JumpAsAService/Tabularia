@@ -19,6 +19,8 @@ class Cluster:
         self.created: list[tuple[str, str, dict]] = []  # (kind, namespace, body), in order
         self.fail_with = 0
         self.events: dict[str, list[dict]] = {}  # job name → what the cluster said about it
+        # (reason, message, events) of a Pod whose image its node cannot download, for every Job
+        self.pull: Optional[tuple[str, str, list[dict]]] = None
 
     def jobs(self) -> list[dict]:
         return [o for (k, _, _), o in self.objects.items() if k == "jobs"]
@@ -32,7 +34,7 @@ class Cluster:
             reason = "DeadlineExceeded" if code is None else "BackoffLimitExceeded"
             job["status"] = {"failed": 1, "conditions": [{"type": "Failed", "status": "True", "reason": reason}]}
         else:
-            job["status"] = {}
+            job["status"] = {"active": 1} if self.pull else {}
 
     def handle(self, req: httpx.Request) -> httpx.Response:
         assert req.headers["Authorization"] == f"Bearer {self.token}"
@@ -48,6 +50,8 @@ class Cluster:
             return self._pods(ns, name, parts, query)
         if kind == "events":
             job_name = query["fieldSelector"][0].split("=", 1)[1]
+            if self.pull and job_name.endswith("-pod"):
+                return httpx.Response(200, json={"items": self.pull[2]})
             return httpx.Response(200, json={"items": self.events.get(job_name, [])})
         if req.method == "POST":
             body = json.loads(req.content)
@@ -60,6 +64,13 @@ class Cluster:
             if kind == "jobs":
                 self._set_status(body)
             return httpx.Response(201, json=body)
+        if req.method == "PUT" and name:  # a Secret replaced (a registry's pull Secret)
+            if (kind, ns, name) not in self.objects:
+                return httpx.Response(404, json={"message": "not found"})
+            body = json.loads(req.content)
+            self.objects[(kind, ns, name)] = body
+            self.created.append((kind, ns, body))
+            return httpx.Response(200, json=body)
         if req.method == "GET" and name:
             obj = self.objects.get((kind, ns, name))
             if obj is None:
@@ -92,8 +103,10 @@ class Cluster:
             job_name = query["labelSelector"][0].split("=", 1)[1]
             if job_name not in self.results:
                 return httpx.Response(200, json={"items": []})
-            _, _, code = self.results[job_name]
+            outcome, _, code = self.results[job_name]
             state = {"terminated": {"exitCode": code}} if code is not None else {"running": {}}
+            if self.pull and outcome is None:
+                state = {"waiting": {"reason": self.pull[0], "message": self.pull[1]}}
             return httpx.Response(200, json={"items": [{
                 "metadata": {"name": f"{job_name}-pod", "creationTimestamp": "2026-10-21T00:00:00Z"},
                 "status": {"containerStatuses": [{"state": state}]}}]})

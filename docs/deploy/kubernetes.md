@@ -21,7 +21,9 @@ and `values-production.example.yaml` is a filled-in starting point.
 This page remains the reference for *why*; the chart is *how*.
 
 To try Tabularia on one computer first, without knowing Kubernetes, follow
-[Try Tabularia on your computer with minikube](minikube.md).
+[Try Tabularia on your computer with minikube](minikube.md). To try the chart as a company would run
+it (several nodes, enforced network policies, a private registry with its own
+certificate authority), follow [A company-like cluster on one computer](kind.md).
 
 ## Components
 

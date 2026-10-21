@@ -21,6 +21,9 @@ export interface SearchHit {
   detail: string
   /** datasource: its row count */
   rows?: number | null
+  /** a flow this person cannot open (images or scripts not granted to them): shown
+   *  greyed out with the reason, and not opened */
+  locked_reason?: string | null
 }
 
 export interface SearchResults {

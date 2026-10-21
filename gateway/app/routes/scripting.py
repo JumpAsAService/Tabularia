@@ -34,7 +34,7 @@ from app.models import (
 )
 from app.models.scripting import IN_PROGRESS, LANGUAGES, now_utc
 from app.schemas.models import UtcDateTime
-from app.services import api_tokens, audit, script_builds, script_packages
+from app.services import api_tokens, audit, flow_access, script_builds, script_packages
 from app.services.kube_scaling import KubeError
 from app.services.permissions import is_admin
 
@@ -820,44 +820,56 @@ _trials: set = set()
 @editor_router.post("/flows/{flow_id}/nodes/{node_id}/run", response_model=TrialOut, status_code=202)
 async def prova_nodo(flow_id: int, node_id: str, request: Request, session: Session = Depends(get_session),
                      user: User = Depends(get_current_user)):
-    """Runs a Script node of the SAVED flow: the chain before it on the sources'
-    development sample, its code as saved, the nodes after it not run. Its output
-    is what the editor previews the nodes after it from. Answers at once with the
-    run to follow (GET /runs/{id}); one trial per node at a time."""
+    """Runs a Script or Container node of the SAVED flow: the chain before it on the
+    sources' development sample, the node as saved, the nodes after it not run. Its
+    output is what the editor previews the nodes after it from. Answers at once with
+    the run to follow (GET /runs/{id}); one trial per node at a time."""
     import asyncio
 
     from app.deps.permissions import ensure_can
     from app.models.permission import Capability
-    from app.services import script_nodes, script_runs
+    from app.services import container_nodes, script_nodes, script_runs
 
     flow = session.get(Flow, flow_id)
     if flow is None:
         raise HTTPException(status_code=404, detail="Flow not found")
     ensure_can(session, user, flow.project_id, Capability.RUN)
+    flow_access.ensure_can_open(session, user, flow.definition)
     definition = json.loads(flow.definition or "{}")
     node = next((n for n in definition.get("nodes") or [] if n.get("id") == node_id), None)
-    if node is None or node.get("type") != "script":
+    kind = (node or {}).get("type")
+    if node is None or kind not in ("script", "container"):
         raise HTTPException(status_code=404, detail="The node is not in the saved flow: save the flow first")
-    env_id = (node.get("data") or {}).get("environmentId")
-    env = session.get(ScriptEnvironment, env_id) if isinstance(env_id, int) else None
-    if env is None:
-        raise HTTPException(status_code=422, detail="Choose the node's environment, and save the flow")
-    if not script_nodes.can_use(session, user, env):
-        raise HTTPException(status_code=403, detail=f"You cannot run scripts in the environment «{env.name}»")
-    for live in session.exec(select(Run).where(Run.flow_id == flow.id, Run.kind == "script",
+    if kind == "script":
+        env_id = (node.get("data") or {}).get("environmentId")
+        env = session.get(ScriptEnvironment, env_id) if isinstance(env_id, int) else None
+        if env is None:
+            raise HTTPException(status_code=422, detail="Choose the node's environment, and save the flow")
+        if not script_nodes.can_use(session, user, env):
+            raise HTTPException(status_code=403, detail=f"You cannot run scripts in the environment «{env.name}»")
+        label, detail = script_nodes.label(node), {"environment": env.name}
+    else:
+        if not get_settings().containers.enabled:
+            raise HTTPException(status_code=409, detail="Containers are off on this installation")
+        d = node.get("data") or {}
+        if not isinstance(d.get("registryId"), int) or not d.get("repository"):
+            raise HTTPException(status_code=422, detail="Choose the node's registry and image, and save the flow")
+        label, detail = container_nodes.label(node), {"registry": d["registryId"], "image": d["repository"],
+                                                      "tag": d.get("tag") or "latest"}
+    for live in session.exec(select(Run).where(Run.flow_id == flow.id, Run.kind == kind,
                                                Run.trigger_type == "trial",
                                                Run.status.in_(("PENDING", "STARTED")))).all():  # type: ignore[attr-defined]
         if json.loads(live.script or "{}").get("node_id") == node_id:
             return TrialOut(run_id=live.id)
-    run = Run(kind="script", flow_id=flow.id, task_id="", status="PENDING", launched_by=user.id,
+    run = Run(kind=kind, flow_id=flow.id, task_id="", status="PENDING", launched_by=user.id,
               trigger_type="trial", input_key="", output_bucket="", output_key="",
-              script=json.dumps({"node_id": node_id, "label": script_nodes.label(node), "trial": True}))
+              script=json.dumps({"node_id": node_id, "label": label, "trial": True}))
     session.add(run)
     session.commit()
     session.refresh(run)
-    audit.record_audit(session, actor=user, action=audit.SCRIPTING_TRIAL, request=request, target_type="flow",
-                       target_id=flow.id, target_label=flow.name,
-                       detail={"run_id": run.id, "node": node_id, "environment": env.name})
+    audit.record_audit(session, actor=user, action=audit.SCRIPTING_TRIAL if kind == "script" else audit.CONTAINER_TRIAL,
+                       request=request, target_type="flow", target_id=flow.id, target_label=flow.name,
+                       detail={"run_id": run.id, "node": node_id, **detail})
     task = asyncio.create_task(script_runs.run_trial(run.id, user.id, node_id))
     _trials.add(task)
     task.add_done_callback(_trials.discard)
@@ -867,18 +879,20 @@ async def prova_nodo(flow_id: int, node_id: str, request: Request, session: Sess
 @editor_router.get("/flows/{flow_id}/outputs")
 def output_dei_nodi(flow_id: int, session: Session = Depends(get_session),
                     user: User = Depends(get_current_user)) -> dict:
-    """Per Script node of the flow: its latest run, and the output of its latest
-    successful one (a run of the flow or a trial), which the editor previews the nodes
-    after it from; `stale` when the saved code is no longer the code that produced it."""
+    """Per Script or Container node of the flow: its latest run, and the output of its
+    latest successful one (a run of the flow or a trial), which the editor previews the
+    nodes after it from; `stale` when the saved node is no longer the one that produced it."""
     from app.deps.permissions import ensure_can
     from app.models.permission import Capability
-    from app.services import script_nodes, script_runs
+    from app.services import container_nodes, script_nodes, script_runs
 
     flow = session.get(Flow, flow_id)
     if flow is None:
         raise HTTPException(status_code=404, detail="Flow not found")
     ensure_can(session, user, flow.project_id, Capability.VIEW)
+    flow_access.ensure_can_open(session, user, flow.definition)
     saved = {n.get("id"): script_nodes.code_fingerprint(n) for n in script_nodes.script_nodes(flow.definition)}
+    saved |= {n.get("id"): container_nodes.fingerprint(n) for n in container_nodes.container_nodes(flow.definition)}
     out = script_runs.latest_outputs(session, flow.id)
     for node_id, entry in out.items():
         for part in ("last", "output"):

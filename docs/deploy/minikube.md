@@ -15,7 +15,8 @@ Plan about an hour the first time, most of it waiting for downloads.
 
 > **A trial, not a server.** Everything runs on your computer: when it sleeps or shuts
 > down, Tabularia stops. To install Tabularia for a team, on a real Kubernetes cluster,
-> see [Kubernetes and Helm](kubernetes.md).
+> see [Kubernetes and Helm](kubernetes.md). To try it on one computer the way a company
+> runs it (several nodes, a private registry), see [the kind guide](kind.md).
 
 ## What you will set up
 

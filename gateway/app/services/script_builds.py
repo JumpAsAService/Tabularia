@@ -46,6 +46,10 @@ logger = logging.getLogger(__name__)
 # the advisory lock of the builds (pg_advisory_xact_lock), apart from the others
 LUCCHETTO = 7_402_131
 DIGEST_MARK = "TABULARIA_IMAGE_DIGEST="
+ARCH_MARK = "TABULARIA_IMAGE_ARCH="
+# `uname -m` of the build's node → the kubernetes.io/arch label of the nodes
+_ARCHES = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64",
+           "armv7l": "arm", "ppc64le": "ppc64le", "s390x": "s390x"}
 MAX_PACKAGES = 200
 # CRAN publishes sources only: what the usual packages need to compile (arrow, curl,
 # openssl, xml2, the graphics stack, git2r…), installed in every R image
@@ -257,20 +261,53 @@ def _job(name: str, labels: dict, deadline: int, pod: dict) -> dict:
     }
 
 
+# why a push failed: an authority BuildKit does not know, a registry in plain HTTP,
+# credentials the registry refuses
+_UNKNOWN_AUTHORITY = re.compile(r"x509: certificate signed by unknown authority|certificate is not trusted")
+_PLAIN_HTTP = re.compile(r"server gave HTTP response to HTTPS client")
+_PUSH_DENIED = re.compile(r"failed to push.*(401 Unauthorized|403 Forbidden|insufficient_scope|authorization failed)", re.S)
 # a compiler the kernel killed for memory (gcc, g++, clang), or the whole build
 _OUT_OF_MEMORY = re.compile(r"Killed signal terminated program|internal compiler error: Killed|OOMKilled")
+
+
+# a Job whose Pod has failed to download its image for this long fails (the node
+# retries a couple of times in it)
+PULL_FAILURE_SECONDS = 30
+
+
+def _age_seconds(job: dict) -> float:
+    created = (job.get("metadata") or {}).get("creationTimestamp")
+    if not created:
+        return 0.0
+    from datetime import datetime, timezone
+
+    return (datetime.now(timezone.utc) - datetime.fromisoformat(created.replace("Z", "+00:00"))).total_seconds()
 
 
 def _cores(cpu: str) -> float:
     return float(cpu[:-1]) / 1000 if cpu.endswith("m") else float(cpu)
 
 
+CA_PATH = "/home/user/registry-ca/ca.crt"
+
+
 def build_job(v: ScriptEnvironmentVersion, language: str) -> dict:
     s = get_settings().scripts
     tag = f"{repository(v.environment_id)}:v{v.number}"
     output = f"type=image,name={tag},push=true" + (",registry.insecure=true" if s.registry_insecure else "")
+    trust = ""
+    if s.registry_ca_configmap:
+        # the registry's certificate is signed by an authority of the company's: BuildKit
+        # verifies the push with it (its default trusts the public authorities only)
+        host = s.registry.strip().split("/", 1)[0]
+        trust = (
+            "mkdir -p /home/user/.config/buildkit\n"
+            f"printf '[registry.\"%s\"]\\n  ca = [\"{CA_PATH}\"]\\n' {shlex.quote(host)} "
+            "> /home/user/.config/buildkit/buildkitd.toml\n"
+            'export BUILDKITD_FLAGS="$BUILDKITD_FLAGS --config /home/user/.config/buildkit/buildkitd.toml"\n'
+        )
     script = (
-        "set -e\n"
+        "set -e\n" + trust +
         "mkdir -p /home/user/ctx\n"
         'printf "%s" "$TABULARIA_DOCKERFILE" > /home/user/ctx/Dockerfile\n'
         "buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=/home/user/ctx "
@@ -280,9 +317,14 @@ def build_job(v: ScriptEnvironmentVersion, language: str) -> dict:
         "| grep -o 'sha256:[0-9a-f]\\{64\\}')\n"
         'test -n "$digest"\n'
         f'echo; echo "{DIGEST_MARK}$digest"\n'
+        # BuildKit builds for the platform of the node it runs on
+        f'echo "{ARCH_MARK}$(uname -m)"\n'
     )
     mounts = [{"name": "buildkit", "mountPath": "/home/user/.local/share/buildkit"}]
     volumes: list[dict] = [{"name": "buildkit", "emptyDir": {}}]
+    if s.registry_ca_configmap:
+        mounts.append({"name": "registry-ca", "mountPath": CA_PATH.rsplit("/", 1)[0], "readOnly": True})
+        volumes.append({"name": "registry-ca", "configMap": {"name": s.registry_ca_configmap}})
     if s.registry_push_secret:
         mounts.append({"name": "registry", "mountPath": "/home/user/.docker", "readOnly": True})
         volumes.append({"name": "registry", "secret": {
@@ -319,7 +361,7 @@ def check_job(v: ScriptEnvironmentVersion, env: ScriptEnvironment) -> dict:
     pod: dict = {
         "securityContext": {"runAsNonRoot": True, "runAsUser": SCRIPT_UID, "runAsGroup": SCRIPT_UID,
                             "seccompProfile": {"type": "RuntimeDefault"}},
-        "containers": [container], "volumes": [{"name": "tmp", "emptyDir": {}}],
+        "containers": [container], "volumes": [{"name": "tmp", "emptyDir": {}}], **node_selector(v),
     }
     if s.registry_pull_secret:
         pod["imagePullSecrets"] = [{"name": s.registry_pull_secret}]
@@ -352,8 +394,20 @@ def digest_from_log(log: str) -> Optional[str]:
     return None
 
 
+def arch_from_log(log: str) -> Optional[str]:
+    for line in reversed(log.splitlines()):
+        if line.startswith(ARCH_MARK):
+            return _ARCHES.get(line[len(ARCH_MARK):].strip())
+    return None
+
+
+def node_selector(v: ScriptEnvironmentVersion) -> dict:
+    """The nodes an image may run on: those of the architecture it was built for."""
+    return {"nodeSelector": {"kubernetes.io/arch": v.arch}} if v.arch else {}
+
+
 def _strip_digest(log: str) -> str:
-    return "\n".join(x for x in log.splitlines() if not x.startswith(DIGEST_MARK)).rstrip()
+    return "\n".join(x for x in log.splitlines() if not x.startswith((DIGEST_MARK, ARCH_MARK))).rstrip()
 
 
 def _fail(v: ScriptEnvironmentVersion, message: str, log: Optional[str] = None) -> None:
@@ -387,6 +441,12 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
         return
     outcome = kube_jobs.job_outcome(job)
     if outcome is None:
+        # an image the nodes cannot download (BuildKit's, or the one just built) would
+        # otherwise wait for the whole timeout
+        why = await kube_jobs.pull_failure(stage_ns, name)
+        if why and _age_seconds(job) >= PULL_FAILURE_SECONDS:
+            await kube_jobs.delete_job(stage_ns, name)
+            _fail(v, f"The {'build' if v.status == 'building' else 'check of the new image'} cannot start: {why}")
         return
     # the check prints every package and what each exports: room for all of it
     log = await kube_jobs.job_log(stage_ns, name, s.log_max_bytes if v.status == "building" else 8 * 2**20)
@@ -394,6 +454,19 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
     if v.status == "building":
         if outcome == "failed":
             reason = kube_jobs.job_failure(job)
+            if _UNKNOWN_AUTHORITY.search(log or ""):
+                _fail(v, "The image was built but not pushed: the registry's certificate is signed by an authority "
+                         "the build does not trust. Give the chart your authority's certificate "
+                         "(scripts.registry.caCert), or for a test registry set scripts.registry.insecure", log)
+                return
+            if _PLAIN_HTTP.search(log or ""):
+                _fail(v, "The image was built but not pushed: the registry answers in plain HTTP. Set "
+                         "scripts.registry.insecure (the nodes must allow that registry over HTTP too)", log)
+                return
+            if _PUSH_DENIED.search(log or ""):
+                _fail(v, "The image was built but not pushed: the registry refused the credentials. Check the "
+                         "Secret of scripts.registry.pushSecret and its rights on the repository", log)
+                return
             if _OUT_OF_MEMORY.search(log or ""):
                 _fail(v, f"The image build ran out of memory: a compiler was killed. Raise SCRIPTS__BUILD_MEMORY "
                          f"(now {s.build_memory}), or lower SCRIPTS__BUILD_CPU to run fewer compilers at once", log)
@@ -405,6 +478,7 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
             _fail(v, "The build ended without the image's digest", log)
             return
         v.image_ref, v.build_log = f"{repository(v.environment_id)}@{digest}", _strip_digest(log)
+        v.arch = arch_from_log(log)
         manifest = check_job(v, env)
         await kube_jobs.create_job(s.namespace, manifest)
         v.status, v.job_name = "checking", manifest["metadata"]["name"]

@@ -35,6 +35,7 @@ _REFERENCES = {
     "mirrorConnectionId": "connection",
     "projectId": "folder",
     "environmentId": "environment",
+    "registryId": "registry",
 }
 
 
@@ -69,6 +70,10 @@ def reach_of(definition) -> set[tuple[str, object]]:
     from app.services.script_nodes import code_fingerprint, script_nodes
 
     found |= {("script", code_fingerprint(n)) for n in script_nodes(parsed)}
+    # and a Container node runs an image: another image, command or variables too
+    from app.services.container_nodes import container_nodes, fingerprint
+
+    found |= {("container", fingerprint(n)) for n in container_nodes(parsed)}
     return found
 
 
@@ -126,6 +131,13 @@ def gaps_of_flow(session: Session, user: User, flow: Flow, seen: Optional[set[in
             env = session.get(ScriptEnvironment, ref)
             if env is not None and not can_use(session, user, env):
                 gaps.append(f"use of scripting environment '{env.name}'")
+        elif kind == "registry":
+            from app.models import ContainerRegistry
+            from app.services import registry_access
+
+            registry = session.get(ContainerRegistry, ref)
+            if registry is not None and not registry_access.can_use(session, user, registry):
+                gaps.append(f"use of container registry '{registry.name}'")
         elif kind == "flow" and ref not in seen:
             sub = session.get(Flow, ref)
             if sub is not None:
@@ -135,6 +147,14 @@ def gaps_of_flow(session: Session, user: User, flow: Flow, seen: Optional[set[in
         if t == "output" and (d.get("destType") or "datasource") == "datasource" and str(target or "").isdigit():
             if not perm_service.has_capability(session, user, int(target), Capability.EDIT):
                 gaps.append(f"EDIT on folder #{target} (flow '{flow.name}' publishes there)")
+        if t == "container" and isinstance(d.get("registryId"), int) and d.get("repository"):
+            from app.models import ContainerRegistry
+            from app.services import registry_access
+
+            registry = session.get(ContainerRegistry, d["registryId"])
+            if (registry is not None and registry_access.can_use(session, user, registry)
+                    and not registry_access.repository_allowed(session, user, registry, str(d["repository"]))):
+                gaps.append(f"use of the image {d['repository']} of container registry '{registry.name}'")
     try:
         ensure_can_read_keys(session, user, {r for k, r in reach_of(parsed) if k == "key"})
     except HTTPException:

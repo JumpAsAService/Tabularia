@@ -1,0 +1,175 @@
+# Container registries
+
+**Administration → Container registries** lists the image registries the
+[Container node](container-node.md) may take images from. An administrator defines each one: its address, how Tabularia
+trusts its certificate, the credentials, and the repositories whose images may run. The
+people who write flows then pick an image of an allowed repository; they never type a
+registry address or a password.
+
+It is a Kubernetes feature, like [Python and R in flows](scripting.md): the containers
+run as Kubernetes Jobs.
+
+## Turning it on
+
+In the chart's values:
+
+```yaml
+containers:
+  enabled: true
+```
+
+or `CONTAINERS__ENABLED=true` for the gateway. Without it the section says it needs
+Kubernetes and saves nothing.
+
+The chart then creates two namespaces, both at the Pod Security `baseline` level (root
+is allowed inside a container, as most existing images need; privileges and host access
+are not):
+
+| Value | Default | What runs there |
+|---|---|---|
+| `containers.namespace` | `<release namespace>-containers` | the Container nodes of the flows' runs |
+| `containers.trialNamespace` | `<release namespace>-containers-dev` | the editor's trials and **Try in the cluster**, under a ResourceQuota (`containers.trialQuota`) |
+
+The gateway's service account gets a Role in each: Jobs, their Pods, logs and events,
+and Secrets (the pull Secrets below). If your namespaces are created by someone else,
+`containers.createNamespaces: false` and the chart only adds the Roles.
+
+## A registry
+
+| Field | |
+|---|---|
+| **Name** | how flows and the audit call it |
+| **Address** | a host name with its port if any: `docker.io`, `ghcr.io`, `registry.gitlab.com`, `rg.fr-par.scw.cloud`, `registry.acme.internal:5000` |
+| **Protocol** | HTTPS, or HTTP for a registry inside your network |
+| **Certificate** | how HTTPS is checked (below) |
+| **User**, **Password or token** | read access is enough; empty for a registry that serves anonymously |
+| **Allowed repositories** | which images may run (below) |
+| **Usable in flows** | off keeps the registry, and its images can no longer be chosen |
+
+The password or token is encrypted with the installation's key and never shown again:
+leave the field empty to keep it, or **Remove the password** to reach the registry
+anonymously.
+
+Credentials for the usual registries:
+
+| Registry | User | Password or token |
+|---|---|---|
+| Docker Hub (`docker.io`) | your Docker ID | an access token, read-only |
+| GitHub (`ghcr.io`) | your GitHub user | a token with `read:packages` |
+| GitLab (`registry.gitlab.com`) | the deploy token's user | a deploy token with `read_registry` |
+| Scaleway (`rg.<region>.scw.cloud`) | `nologin` | a secret key whose rights include the registry |
+| Harbor | a robot account with *Pull* on the project (`robot$project+name`) | its secret |
+
+### The certificate
+
+- **Public authorities**: the registry's certificate is signed by an authority every
+  system trusts. Docker Hub, GHCR, GitLab and the cloud registries are.
+- **Company authority**: your company signs its own certificates. Paste the
+  authority's certificate, in PEM (`-----BEGIN CERTIFICATE-----` …). It is public: the
+  observers see it too.
+- **Not checked**: Tabularia does not check who answers. Anyone between Tabularia and
+  the registry could pose as it: for a test registry only. The choice is recorded in the
+  audit, like every change of the registry.
+
+**HTTP** has no certificate: images and credentials travel unencrypted, so keep it for a
+registry inside your network.
+
+**The nodes download the images, not Tabularia.** With a company authority or HTTP, the
+cluster's nodes must trust the registry too, as for any image of the cluster: the
+authority installed on the nodes (a node image, or a DaemonSet that writes it into
+containerd's `certs.d`), or the registry allowed over HTTP there. The
+[kind guide](deploy/kind.md#3-nodes-that-trust-the-authority) shows how a node is set up.
+
+### Allowed repositories
+
+One per line:
+
+| Line | Allows |
+|---|---|
+| `team/forecast` | that repository only |
+| `team/*` | every repository under `team/`, at any depth |
+| `*` | the whole registry |
+
+On Docker Hub an official image has no prefix: `python` is saved as `library/python`.
+Images of a repository that is not listed cannot be chosen, nor read: **Tags of a
+repository** answers only for allowed ones.
+
+### Who can use it
+
+Access to a registry is given here, by an administrator, to **groups** and to single
+**users**, and to nothing else: a registry is not tied to folders. For each group or
+user you may also list the repositories they may use, with the same patterns as above;
+left empty, they may use all the repositories the registry allows. Administrators use
+every registry.
+
+Someone with access sees the registry in the flow editor, with only the repositories
+granted to them, and can put its images in a Container node of a flow they may edit.
+Someone without:
+- does not see the registry, nor its repositories or tags;
+- **cannot open a flow that uses it**, nor one whose image is outside what they were
+  granted. The flow is still listed in Explore, in Flows and in the search, greyed out
+  with a lock: it is not a link and has no actions, and hovering it says which registry or image is missing and
+  that an administrator can grant it. Reached by its address, the editor says the same
+  in place of the canvas. Its versions, a copy, a run,
+  a schedule and adding it to a group of flows are refused the same way;
+- cannot add a Container node of that registry to a flow.
+
+A registry that is deleted blocks nobody any more: its Container nodes simply cannot run.
+
+### Variables
+
+What every container of the registry finds in its environment, as for the scripting
+environments: a secret one is encrypted and never shown again. Names are in capitals,
+digits and `_`; those starting with `TABULARIA_` or `AWS_` are set by Tabularia.
+
+## Test
+
+**Test** (it saves first) checks, from the gateway:
+1. that the address answers as a registry;
+2. that the certificate is the one expected;
+3. that the credentials are accepted, the way the registry asks: a token from its
+   authentication service (Docker Hub, GHCR, GitLab, Harbor, Scaleway) or a user and a
+   password (a registry with `htpasswd`);
+4. with an allowed repository named in full, that it can be read: it shows a few of its
+   tags.
+
+The result stays on the registry, and the list shows whether each one works. A failure
+says which part to fix: *The registry's certificate is not signed by a public
+authority: choose «Company authority»*; *The registry answers in plain HTTP: choose
+HTTP*; *The registry refused the user and the password*; *team/forecast is not in the
+registry, or not visible with these credentials*.
+
+The gateway never connects to the cloud metadata addresses, whatever a registry's name
+resolves to. Private addresses are fine: company registries usually are.
+
+## In the cluster
+
+**Test** speaks from the gateway; the images are downloaded by the cluster's nodes,
+which may not trust the same certificates nor reach the same addresses.
+
+**Try in the cluster** checks the nodes: give an allowed repository and a tag (or a
+digest). Tabularia resolves the tag to its digest, then starts a Pod in the trials'
+namespace with that image and a command that does not exist: the node downloads the
+image and then fails to start it, so **nothing of the image runs**. The Pod is removed at
+once. The answer is either *The cluster can download it*, with the digest, or what went
+wrong, in the words of a run:
+- *the nodes do not trust the registry's certificate*: the authority must be installed
+  on the nodes ([kind guide](deploy/kind.md#3-nodes-that-trust-the-authority));
+- *the nodes reach the registry in HTTPS but it answers in HTTP*: the registry must be
+  allowed over HTTP on the nodes;
+- *the registry refused the credentials*, *the image is no longer there*, or that no
+  node downloaded it in time (`CONTAINERS__PULL_CHECK_SECONDS`, 300 s by default: a large
+  image, or a busy cluster).
+
+**Pull Secrets.** A registry with credentials has a Secret
+`tabularia-registry-<id>` (type `kubernetes.io/dockerconfigjson`) in the containers'
+namespaces, written by Tabularia right before a Pod needs it, from the credentials as
+they are then: a changed or removed password never lingers there. A registry without
+credentials has none, and a deleted registry's goes with it. Do not edit them by hand:
+the next run writes them again.
+
+## Audit
+
+Every creation, change, test, deletion and variable is in **Audit**, with who did it.
+The password, the token and the secret variables never are: only that they were set,
+changed or removed.

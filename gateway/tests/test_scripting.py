@@ -46,6 +46,7 @@ class Cluster:
         self.logs: dict[str, str] = {}
         self.calls: list[tuple[str, str]] = []
         self.fail_with = 0
+        self.waiting: dict[str, dict] = {}  # job name → its Pod's waiting state
 
     def finish(self, name: str, ok: bool, log: str = "", reason: str = "BackoffLimitExceeded"):
         job = next(j for (ns, n), j in self.jobs.items() if n == name)
@@ -87,7 +88,10 @@ class Cluster:
         if parts[:2] == ["api", "v1"] and parts[4] == "pods":
             if len(parts) == 5:
                 name = query["labelSelector"][0].split("=", 1)[1]
-                return httpx.Response(200, json={"items": [{"metadata": {"name": f"{name}-x1", "creationTimestamp": "2026-10-20T10:00:00Z"}}]})
+                pod = {"metadata": {"name": f"{name}-x1", "creationTimestamp": "2026-10-20T10:00:00Z"}}
+                if name in self.waiting:
+                    pod["status"] = {"containerStatuses": [{"state": {"waiting": self.waiting[name]}}]}
+                return httpx.Response(200, json={"items": [pod]})
             return httpx.Response(200, text=self.logs.get(parts[5].removesuffix("-x1"), ""))
         return httpx.Response(404, json={"message": f"not mocked: {req.url.path}"})
 
@@ -644,3 +648,61 @@ def test_a_build_out_of_memory_says_which_setting_to_raise(app, session, cluster
     v = session.exec(select(ScriptEnvironmentVersion)).one()
     assert v.status == "failed" and "ran out of memory" in v.error and "SCRIPTS__BUILD_MEMORY (now 4Gi)" in v.error
     assert "Killed signal" in v.build_log
+
+
+def test_an_image_the_nodes_cannot_download_fails_the_build_at_once(app, session, cluster, monkeypatch):
+    monkeypatch.setattr(script_builds, "PULL_FAILURE_SECONDS", 0)
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss)
+    _round(session)
+    cluster.finish("tabularia-build-e1-v1", True, f"{script_builds.DIGEST_MARK}{DIGEST}")
+    _round(session)  # → checking: the new image is pulled by a node
+    cluster.waiting["tabularia-check-e1-v1"] = {
+        "reason": "ErrImagePull",
+        "message": "failed to resolve reference: tls: failed to verify certificate: x509: certificate signed by unknown authority"}
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "failed" and "check of the new image cannot start" in v.error
+    assert "nodes do not trust the registry's certificate" in v.error
+    assert ("tab-scripts", "tabularia-check-e1-v1") not in cluster.jobs
+
+
+def test_a_push_the_registry_refuses_says_why(app, session, cluster):
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss)
+    _round(session)
+    cluster.finish("tabularia-build-e1-v1", False, "#10 ERROR: failed to push registry.example.com/tabularia/tabularia-env-1:v1: "
+                   "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "failed" and "not pushed" in v.error and "scripts.registry.caCert" in v.error
+
+
+def test_the_build_trusts_the_company_authority(cluster, monkeypatch):
+    monkeypatch.setenv("SCRIPTS__REGISTRY", "registry.acme.internal:5000/envs")
+    monkeypatch.setenv("SCRIPTS__REGISTRY_CA_CONFIGMAP", "tab-registry-ca")
+    get_settings.cache_clear()
+    v = ScriptEnvironmentVersion(id=1, environment_id=1, number=1, language_version="3.12",
+                                 base_image="python:3.12-slim", packages="")
+    pod = script_builds.build_job(v, "python")["spec"]["template"]["spec"]
+    script = pod["containers"][0]["command"][2]
+    # BuildKit verifies that registry with the company's authority, mounted from the ConfigMap
+    assert "registry.acme.internal:5000" in script and script_builds.CA_PATH in script and "--config" in script
+    assert {"name": "registry-ca", "configMap": {"name": "tab-registry-ca"}} in pod["volumes"]
+    get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("uname, arch", [("aarch64", "arm64"), ("x86_64", "amd64"), ("mips", None)])
+def test_a_build_keeps_the_architecture_it_was_built_for(app, session, cluster, uname, arch):
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss)
+    _round(session)
+    assert "uname -m" in cluster.job("tabularia-build-e1-v1")["spec"]["template"]["spec"]["containers"][0]["command"][2]
+    cluster.finish("tabularia-build-e1-v1", True,
+                   f"#10 DONE\n{script_builds.DIGEST_MARK}{DIGEST}\n{script_builds.ARCH_MARK}{uname}\n")
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "checking" and v.arch == arch and script_builds.ARCH_MARK not in v.build_log
+    pod = cluster.job("tabularia-check-e1-v1")["spec"]["template"]["spec"]
+    # the check pulls and runs the image where the scripts will
+    assert pod.get("nodeSelector") == ({"kubernetes.io/arch": arch} if arch else None)

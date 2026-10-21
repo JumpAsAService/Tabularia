@@ -51,3 +51,27 @@ def test_a_script_no_exported_output_reads_is_left_out_with_a_note(session, scen
     payload = d.build_export_payload(session, flow, "data-prep", "duckdb")
     assert any("Script node «Score»" in n and "not part of this dbt project" in n for n in payload["notes"])
     assert payload["models"]
+
+
+# ── the Container node: an image is not dbt either ───────────────────────────
+CONTAINER = {"id": "img", "type": "container", "data": {"label": "Forecast", "registryId": 1,
+                                                        "repository": "team/forecast", "tag": "v1"}}
+
+
+def test_an_output_after_a_container_refuses_the_export(session, scena):
+    definition = {"nodes": [_nodo_src("src", scena.ordini.id), CONTAINER, _uscita("o", scena, "Forecast")],
+                  "edges": [_edge("src", "img"), _edge("img", "o")]}
+    flow = make_flow(session, name="Forecasting", project_id=scena.cartella.id, definition=json.dumps(definition))
+    with pytest.raises(d.DbtExportError) as e:
+        d.build_export_payload(session, flow, "data-prep", "duckdb")
+    assert e.value.code == "container_not_exportable"
+    assert e.value.params == {"flow": "Forecasting", "output": "Forecast", "container": "Forecast"}
+    assert set(MESSAGGI["container_not_exportable"]) == {"en", "it", "de", "es", "fr"}
+
+
+def test_a_container_no_exported_output_reads_is_left_out_with_a_note(session, scena):
+    definition = {"nodes": [_nodo_src("src", scena.ordini.id), _uscita("o", scena, "Orders copy"), CONTAINER],
+                  "edges": [_edge("src", "o")]}
+    flow = make_flow(session, name="Copy and train", project_id=scena.cartella.id, definition=json.dumps(definition))
+    payload = d.build_export_payload(session, flow, "data-prep", "duckdb")
+    assert any("Container node «Forecast» (an image)" in n for n in payload["notes"])

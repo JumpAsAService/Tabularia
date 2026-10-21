@@ -26,6 +26,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import Connection, Datasource, Flow, FlowGroup, Project, SavedView, User
 from app.schemas.models import SearchHit, SearchOut
+from app.services import flow_access
 from app.services import permissions as perm_service
 from app.core.routing import RottaCheRilascia
 
@@ -88,7 +89,7 @@ def search_everything(
             hits.append(SearchHit(
                 kind="flow", id=f.id, name=f.name,
                 project_id=f.project_id, project_name=nomi_cartella.get(f.project_id),
-                detail=f.engine,
+                detail=f.engine, locked_reason=flow_access.blocked(session, user, f.definition),
             ))
 
         for g in session.exec(

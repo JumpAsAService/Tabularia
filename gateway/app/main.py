@@ -33,6 +33,7 @@ from app.routes.engine_settings import router as engine_settings_router
 from app.routes.workers import router as workers_router
 from app.routes.siem import router as siem_router
 from app.routes.scripting import editor_router as scripting_editor_router, router as scripting_router
+from app.routes.registries import editor_router as registries_editor_router, router as registries_router
 from app.routes.groups import router as groups_router
 from app.routes.banners import router as banners_router
 from app.routes.privacy import router as privacy_router
@@ -217,6 +218,8 @@ if settings.app.role != "orchestrator":
     app.include_router(siem_router)
     app.include_router(scripting_router)
     app.include_router(scripting_editor_router)
+    app.include_router(registries_router)
+    app.include_router(registries_editor_router)
     app.include_router(groups_router)
     app.include_router(banners_router)
     app.include_router(privacy_router)

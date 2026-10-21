@@ -38,7 +38,7 @@ from app.schemas.models import (
 from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
-from app.services import schedule_authority, script_nodes
+from app.services import flow_access, registry_access, schedule_authority, script_nodes
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 from app.services.copy_names import free_copy_name
@@ -87,7 +87,7 @@ def _validate_production_engine(engine: str | None, session: Session | None = No
 
 # nodi che danno "qualcosa da eseguire": Output, oppure i nodi di controllo
 # (refresh di una datasource, esecuzione di un altro flusso)
-_RUNNABLE_NODE_TYPES = {"output", "refresh", "runflow", "script"}
+_RUNNABLE_NODE_TYPES = {"output", "refresh", "runflow", "script", "container"}
 
 
 def _has_runnable_nodes(definition: str | None) -> bool:
@@ -155,9 +155,9 @@ def list_all_flows(user: User = Depends(get_current_user), session: Session = De
     readable = perm_service.readable_project_ids(session, user)
     if not readable:
         return []
-    return session.exec(
+    return _with_locks(session, user, session.exec(
         select(Flow).where(Flow.project_id.in_(readable)).order_by(Flow.name)
-    ).all()
+    ).all())
 
 
 # NB: registrato PRIMA di /flows/{flow_id} così "search" non è preso per un id
@@ -179,7 +179,7 @@ def search_flows(
         like = f"%{q}%"
         base = base.where(or_(Flow.name.ilike(like), Flow.description.ilike(like)))
     flows, total = paginate(session, base, Flow.name, limit, offset)
-    return Page(items=_with_owner_names(session, flows), total=total)
+    return Page(items=_with_locks(session, user, flows, _with_owner_names(session, flows)), total=total)
 
 
 def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
@@ -209,6 +209,15 @@ def _with_owner_names(session: Session, flows: list[Flow]) -> list[FlowOut]:
     return out
 
 
+def _with_locks(session: Session, user: User, flows: list[Flow], out: list[FlowOut] | None = None) -> list[FlowOut]:
+    """The list items, each saying whether this person can open it (a flow that runs
+    images of a container registry they have no access to is listed, greyed out)."""
+    items = out if out is not None else [FlowOut.model_validate(f, from_attributes=True) for f in flows]
+    for flow, item in zip(flows, items):
+        item.locked_reason = flow_access.blocked(session, user, flow.definition)
+    return items
+
+
 def _get_flow(session: Session, flow_id: int) -> Flow:
     flow = session.get(Flow, flow_id)
     if flow is None:
@@ -221,7 +230,8 @@ def list_flows(project_id: int, user: User = Depends(get_current_user), session:
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.VIEW)
-    return session.exec(select(Flow).where(Flow.project_id == project_id).order_by(Flow.name)).all()
+    return _with_locks(session, user, session.exec(
+        select(Flow).where(Flow.project_id == project_id).order_by(Flow.name)).all())
 
 
 def _check_flow_name(name: str) -> None:
@@ -245,6 +255,7 @@ def create_flow(
     _check_flow_name(body.name)
     _authorize_definition_keys(session, user, body.definition)
     script_nodes.check_definition(session, user, None, body.definition)
+    registry_access.check_definition(session, user, None, body.definition)
     flow = Flow(
         name=body.name,
         description=body.description,
@@ -279,8 +290,10 @@ def duplicate_flow(
     with the original."""
     src = _get_flow(session, flow_id)
     ensure_can(session, user, src.project_id, Capability.EDIT)
+    flow_access.ensure_can_open(session, user, src.definition)
     _authorize_definition_keys(session, user, src.definition)
     script_nodes.check_definition(session, user, None, src.definition)
+    registry_access.check_definition(session, user, None, src.definition)
     flow = Flow(
         name=free_copy_name(session, Flow, src.project_id, src.name),
         description=src.description,
@@ -550,6 +563,8 @@ def flow_presence_leave(
 def get_flow(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.VIEW)
+    # a flow that runs images of a registry this person may not use does not open
+    flow_access.ensure_can_open(session, user, flow.definition)
     return flow
 
 
@@ -594,9 +609,11 @@ def update_flow(
 ):
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.EDIT)
+    flow_access.ensure_can_open(session, user, flow.definition)
     if body.definition is not None:
         _authorize_definition_keys(session, user, body.definition)
         script_nodes.check_definition(session, user, flow.definition, body.definition)
+        registry_access.check_definition(session, user, flow.definition, body.definition)
     if body.name is not None:
         body.name = body.name.strip()
         if not body.name:
@@ -652,6 +669,7 @@ def list_flow_versions(
     """Storico delle versioni del flusso (la più recente è la corrente)."""
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.VIEW)
+    flow_access.ensure_can_open(session, user, flow.definition)
     versions = session.exec(
         select(FlowVersion)
         .where(FlowVersion.flow_id == flow_id)
@@ -695,7 +713,10 @@ def promote_flow_version(
     if target is None:
         raise HTTPException(status_code=404, detail="Version not found")
     _authorize_definition_keys(session, user, target.definition)  # RBAC come su salvataggio
+    flow_access.ensure_can_open(session, user, flow.definition)
+    flow_access.ensure_can_open(session, user, target.definition)
     script_nodes.check_definition(session, user, flow.definition, target.definition)
+    registry_access.check_definition(session, user, flow.definition, target.definition)
     schedule_off = _guard_someone_elses_schedule(flow, user, target.definition, False)
     flow.definition = target.definition
     flow.updated_at = datetime.now(timezone.utc)
@@ -817,6 +838,7 @@ def run_flow_now(
 
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
+    flow_access.ensure_can_open(session, user, flow.definition)
     # Un lancio in più non partirebbe comunque (l'orchestratore lo chiude come
     # «già in esecuzione»), ma resterebbe una riga in `runs` e un giro della coda
     # a testa: ripetuto, spinge in fondo le esecuzioni degli altri flussi.
@@ -874,6 +896,7 @@ def set_flow_schedule(
     di chi schedula (EDIT/CONNECT dei singoli output ri-verificati allora)."""
     flow = _get_flow(session, flow_id)
     ensure_can(session, user, flow.project_id, Capability.RUN)
+    flow_access.ensure_can_open(session, user, flow.definition)
 
     cron = (body.cron or "").strip()
     if not cron:

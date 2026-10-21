@@ -43,6 +43,7 @@ from app.schemas.models import (
 from app.services import audit, orchestrator
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
+from app.services import flow_access
 from app.services.flow_groups import definition_of
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
@@ -108,6 +109,9 @@ def _checked(session: Session, user: User, definition: FlowGroupDefinition,
                 # a cell is something the group RUNS: seeing it is not enough to put it
                 # in a group that someone's schedule will run
                 errors.append(f"step {n}: adding '{obj.name}' needs RUN on its folder")
+            elif cell.kind == "flow" and flow_access.blocked(session, user, obj.definition):
+                # it would run, on this person's authority, images they may not use
+                errors.append(f"step {n}: '{obj.name}' runs images or scripts you have no access to")
     if errors:
         raise HTTPException(status_code=422, detail="; ".join(errors[:10]))
     return definition

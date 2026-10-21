@@ -261,6 +261,27 @@ gateway needs to build the images there.
 {{- .Values.scripts.trialNamespace | default (printf "%s-scripts-dev" .Release.Namespace) -}}
 {{- end -}}
 
+{{- define "tabularia.containersNamespace" -}}
+{{- .Values.containers.namespace | default (printf "%s-containers" .Release.Namespace) -}}
+{{- end -}}
+
+{{- define "tabularia.containerTrialsNamespace" -}}
+{{- .Values.containers.trialNamespace | default (printf "%s-containers-dev" .Release.Namespace) -}}
+{{- end -}}
+
+{{- define "tabularia.containersEnv" -}}
+- name: CONTAINERS__NAMESPACE
+  value: {{ include "tabularia.containersNamespace" . | quote }}
+- name: CONTAINERS__TRIAL_NAMESPACE
+  value: {{ include "tabularia.containerTrialsNamespace" . | quote }}
+- name: CONTAINERS__MAX_CPU
+  value: {{ .Values.containers.limits.cpu | quote }}
+- name: CONTAINERS__MAX_MEMORY
+  value: {{ .Values.containers.limits.memory | quote }}
+- name: CONTAINERS__MAX_TIMEOUT_SECONDS
+  value: {{ .Values.containers.limits.timeoutSeconds | quote }}
+{{- end -}}
+
 {{- define "tabularia.scriptsEnv" -}}
 {{- $s := .Values.scripts -}}
 - name: SCRIPTS__ENABLED
@@ -279,6 +300,10 @@ gateway needs to build the images there.
   value: {{ $s.registry.pushSecret | quote }}
 - name: SCRIPTS__REGISTRY_PULL_SECRET
   value: {{ $s.registry.pullSecret | quote }}
+{{- if $s.registry.caCert }}
+- name: SCRIPTS__REGISTRY_CA_CONFIGMAP
+  value: {{ printf "%s-registry-ca" (include "tabularia.fullname" .) | quote }}
+{{- end }}
 - name: SCRIPTS__BUILDER_IMAGE
   value: {{ $s.builderImage | quote }}
 {{- with $s.baseImages }}

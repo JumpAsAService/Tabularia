@@ -219,7 +219,7 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
         d = session.get(Datasource, i)
         return (d.bucket, d.key) if d and d.key else None
 
-    # where the Script nodes already run wrote their output: the nodes after them read it
+    # where the Script and Container nodes already run wrote their output: the nodes after them read it
     script_outputs: dict[str, tuple[str, str]] = {}
 
     for node in sequence_order(definition):
@@ -279,6 +279,19 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                     engine_mode=engine_mode, script_outputs=script_outputs, resolve_ds=resolve_ds,
                     default_bucket=default_bucket, launch=_launch_flow_run, wait=_wait_run)
             except (script_runs.ScriptFailed, FlowResolveError) as e:
+                raise OrchestrationError(str(e)) from e
+            if out is not None:
+                script_outputs[node["id"]] = out
+        elif t == "container":
+            # as a Script node: a failure stops the flow
+            from app.services import container_runs
+
+            try:
+                out = await container_runs.run_container(
+                    session, user, flow, definition, node, parent_run_id=parent_run_id, trigger_type=trigger_type,
+                    engine_mode=engine_mode, script_outputs=script_outputs, resolve_ds=resolve_ds,
+                    default_bucket=default_bucket, launch=_launch_flow_run, wait=_wait_run)
+            except (container_runs.ContainerFailed, FlowResolveError) as e:
                 raise OrchestrationError(str(e)) from e
             if out is not None:
                 script_outputs[node["id"]] = out

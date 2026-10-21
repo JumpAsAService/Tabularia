@@ -101,6 +101,8 @@ OIDC__POST_LOGIN_URL: {{ include "tabularia.env" (.Values.oidc.postLoginUrl) }}
 OIDC__BUTTON_LABEL: {{ include "tabularia.env" (.Values.oidc.buttonLabel) }}
 {{- end }}
 
+# Administration → Container registries (containers.enabled)
+CONTAINERS__ENABLED: {{ include "tabularia.env" (.Values.containers.enabled) }}
 {{- if .Values.externalServices.clickhouse.enabled }}
 # Optional engine: transformations execute on the remote server instead of in
 # the worker process.

@@ -1,4 +1,4 @@
-{{- if or .Values.adminScaling.enabled .Values.scripts.enabled }}
+{{- if or .Values.adminScaling.enabled .Values.scripts.enabled .Values.containers.enabled }}
 {{/*
 The service account of the gateway and the orchestrator when they talk to the
 Kubernetes API. Every other pod keeps the chart's account, without a token.
@@ -8,6 +8,8 @@ Kubernetes API. Every other pod keeps the chart's account, without a token.
   orchestrator keeps them applied (gateway services/kube_scaling.py).
 - Admin → Scripting environments (scripts.enabled): the Roles of scripts.yaml, in
   the two scripts namespaces only.
+- Container nodes (containers.enabled): the Roles of containers.yaml, in the two
+  containers namespaces only.
 */}}
 {{- $full := include "tabularia.fullname" . }}
 apiVersion: v1

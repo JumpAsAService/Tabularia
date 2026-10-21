@@ -1,0 +1,72 @@
+# Object storage inside the cluster, for the kind guide (docs/deploy/kind.md): MinIO in
+# the namespace tabularia-deps, with a Job that creates Tabularia's bucket, the scripts'
+# bucket, and the scripts' own key (read, write and delete objects of their bucket, no
+# listing, objects gone after a day), as docs/scripting.md asks.
+#
+# The namespace must exist with a Secret "minio" holding root-password and
+# scripts-key before this file is applied. One copy, no backups: a trial cluster.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: minio, namespace: tabularia-deps }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 20Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: minio, namespace: tabularia-deps }
+spec:
+  selector: { matchLabels: { app: minio } }
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: minio } }
+    spec:
+      containers:
+        - name: minio
+          image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+          args: [server, /data]
+          env:
+            - { name: MINIO_ROOT_USER, value: root }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: minio, key: root-password } }
+          ports: [{ containerPort: 9000 }]
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 2Gi } }
+          readinessProbe: { httpGet: { path: /minio/health/ready, port: 9000 }, periodSeconds: 5 }
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: minio } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: minio, namespace: tabularia-deps }
+spec:
+  selector: { app: minio }
+  ports: [{ port: 9000 }]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: minio-setup, namespace: tabularia-deps }
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+          env:
+            - name: ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: minio, key: root-password } }
+            - name: SCRIPTS_KEY
+              valueFrom: { secretKeyRef: { name: minio, key: scripts-key } }
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              mc alias set local http://minio:9000 root "$ROOT_PASSWORD"
+              mc mb -p local/tabularia local/tabularia-scripts
+              printf '%s' '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":"arn:aws:s3:::tabularia-scripts/*"}]}' > /tmp/policy.json
+              mc admin policy create local tabularia-scripts /tmp/policy.json || true
+              mc admin user add local scripts "$SCRIPTS_KEY"
+              mc admin policy attach local tabularia-scripts --user scripts || true
+              mc ilm rule add --expire-days 1 local/tabularia-scripts || true
+              echo done

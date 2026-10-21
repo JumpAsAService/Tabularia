@@ -6,11 +6,12 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3, TriangleAlert, FileCode2 } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { runNotes, notesText } from '~/composables/usePlaceholders'
 import MissingValues from '~/components/ui/MissingValues.vue'
 import ScriptRunDetail from '~/components/scripting/ScriptRunDetail.vue'
+import ContainerRunDetail from '~/components/containers/ContainerRunDetail.vue'
 import { usePagedList } from '~/composables/usePagedList'
 
 const { t } = useI18n()
@@ -37,12 +38,13 @@ function fmtDate(s: string | null): string {
 }
 
 // chi ha avviato il run: se schedulato mostriamo "schedule", altrimenti il nome
-// the Script node's name, from what its run recorded
+// the Script or Container node's name, from what its run recorded
 function scriptLabel(r: RunInfo): string {
+  const fallback = r.kind === 'container' ? t('containers.node.title') : t('scripting.node.title')
   try {
-    return JSON.parse(r.script ?? '{}').label || t('scripting.node.title')
+    return JSON.parse(r.script ?? '{}').label || fallback
   } catch {
-    return t('scripting.node.title')
+    return fallback
   }
 }
 
@@ -95,9 +97,9 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
           <span class="stpill" :class="r.status.toLowerCase()">{{ r.status }}</span>
           <span class="who">
-            <component :is="r.kind === 'ingest' ? Database : r.kind === 'script' ? FileCode2 : r.flow_group_id ? Rows3 : Workflow" :size="13" />
+            <component :is="r.kind === 'ingest' ? Database : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.flow_group_id ? Rows3 : Workflow" :size="13" />
             {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
-            <span v-if="r.kind === 'script'" class="muted">· {{ scriptLabel(r) }}</span>
+            <span v-if="r.kind === 'script' || r.kind === 'container'" class="muted">· {{ scriptLabel(r) }}</span>
           </span>
           <span v-if="r.status === 'SUCCESS' && runNotes(r.notes)" class="msg run-note">
             <TriangleAlert :size="12" /> {{ notesText(runNotes(r.notes)!, t) }}
@@ -123,6 +125,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
             :max="50"
           />
           <ScriptRunDetail v-if="r.kind === 'script' && r.script" :script="r.script" />
+          <ContainerRunDetail v-else-if="r.kind === 'container' && r.script" :info="r.script" />
           <pre v-else-if="r.error_detail" class="trace">{{ r.error_detail }}</pre>
           <p v-else-if="!(r.status === 'SUCCESS' && runNotes(r.notes))" class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>

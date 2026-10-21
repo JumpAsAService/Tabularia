@@ -18,6 +18,8 @@ from typing import Any, Callable, Iterable, Optional
 
 # (bucket, key) dello snapshot corrente di una datasource, o None se assente
 DsResolver = Callable[[int], Optional[tuple[str, str]]]
+# the nodes that run outside Tabularia's engine and hand their output to the nodes after them
+STEP_NODE_TYPES = ("script", "container")
 
 
 class FlowResolveError(ValueError):
@@ -206,8 +208,9 @@ class _Resolver:
     def __init__(self, nodes: list[dict], edges: list[dict], resolve_ds: DsResolver, engine_mode: str = "production",
                  script_outputs: Optional[dict[str, tuple[str, str]]] = None):
         self.by_id = {n["id"]: n for n in nodes}
-        # a Script node is a boundary: the nodes after it start from what it wrote,
-        # known once it has run in this orchestration (services/script_runs.py)
+        # a Script or Container node is a boundary: the nodes after it start from what
+        # it wrote, known once it has run in this orchestration (services/script_runs.py,
+        # services/container_runs.py)
         self.script_outputs = script_outputs or {}
         self.edges = edges
         self.inc = _incoming(edges)
@@ -266,7 +269,7 @@ class _Resolver:
             node = self.by_id.get(cur)
             if not node:
                 break
-            if node.get("type") == "script":
+            if node.get("type") in STEP_NODE_TYPES:
                 source = self.script_outputs.get(cur)
                 source_id = cur
                 break
@@ -480,12 +483,12 @@ def resolve_output_request(
 
 
 def script_input_edge(definition: dict, node_id: str) -> Optional[str]:
-    """The node feeding a Script node's input, None when it has no input."""
+    """The node feeding a Script (or Container) node's input, None when it has no input."""
     return _incoming(definition.get("edges") or []).get(node_id, {}).get("left")
 
 
 def script_has_output(definition: dict, node_id: str) -> bool:
-    """A data edge leaves the Script node: the nodes after it read what it writes."""
+    """A data edge leaves the Script (or Container) node: the nodes after it read what it writes."""
     return any(e.get("source") == node_id and not _is_seq_edge(e) for e in definition.get("edges") or [])
 
 
@@ -493,7 +496,7 @@ def resolve_script_input(
     definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production",
     script_outputs: Optional[dict[str, tuple[str, str]]] = None,
 ) -> Optional[dict]:
-    """The chain that ends at a Script node's input, as the body of a run (bucket,
+    """The chain that ends at a Script (or Container) node's input, as the body of a run (bucket,
     input_key, operations); None when the node has no input."""
     upstream = script_input_edge(definition, node["id"])
     if not upstream:
@@ -545,12 +548,13 @@ def build_output_run_requests(
 
 
 # ordine di esecuzione dei nodi non collegati in sequenza (default sensato)
-_ACTION_TYPES = ("refresh", "script", "output", "runflow")
-_DEFAULT_PRIORITY = {"refresh": 0, "script": 1, "output": 1, "runflow": 2}
+_ACTION_TYPES = ("refresh", "script", "container", "output", "runflow")
+_DEFAULT_PRIORITY = {"refresh": 0, "script": 1, "container": 1, "output": 1, "runflow": 2}
 
 
 def _scripts_upstream(node_id: str, nodes: dict[str, dict], edges: list[dict]) -> set[str]:
-    """The Script nodes a node reads data from, however far up: it runs after them."""
+    """The Script and Container nodes a node reads data from, however far up: it runs
+    after them."""
     into: dict[str, list[str]] = {}
     for e in edges:
         if not _is_seq_edge(e):
@@ -564,7 +568,7 @@ def _scripts_upstream(node_id: str, nodes: dict[str, dict], edges: list[dict]) -
         seen.add(cur)
         parent = (nodes.get(cur) or {}).get("parentNode")
         for up in [*into.get(cur, []), *([parent] if parent else [])]:
-            if (nodes.get(up) or {}).get("type") == "script":
+            if (nodes.get(up) or {}).get("type") in STEP_NODE_TYPES:
                 found.add(up)
             else:
                 stack.append(up)
@@ -587,7 +591,7 @@ def sequence_order(definition: dict) -> list[dict]:
     succ: dict[str, list[str]] = {n["id"]: [] for n in action}
     indeg: dict[str, int] = {n["id"]: 0 for n in action}
     pairs = [(e.get("source"), e.get("target")) for e in edges if e.get("targetHandle") == SEQ_TARGET_HANDLE]
-    # a node that reads what a Script writes runs after it, edge or no edge
+    # a node that reads what a Script or a Container writes runs after it, edge or no edge
     all_nodes = {n["id"]: n for n in nodes if isinstance(n, dict) and "id" in n}
     for n in action:
         pairs += [(s, n["id"]) for s in _scripts_upstream(n["id"], all_nodes, edges)]

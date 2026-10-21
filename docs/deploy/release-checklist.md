@@ -109,12 +109,16 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `keys` volume to the services. Upgrade with `git pull` and `docker compose up -d
    --build`: without `--build` Compose keeps the images it has. Kubernetes and the chart
    are unchanged.
-   **New after 1.2.0, Kubernetes:** revisions 0015 and 0016 add the five tables of the
-   scripting environments, empty, and a column to the runs. Scripting stays off until
+   **New after 1.2.0, Kubernetes:** revisions 0015, 0016 and 0017 add the five tables
+   of the scripting environments, empty, and two columns; 0018 adds the three tables of
+   the container registries, empty (Administration → Container registries, off until
+   `containers.enabled`). Scripting stays off until
    `scripts.enabled`, which needs an image registry and creates three namespaces of its
    own: the scripts, their trials and the image builds (`SCRIPTS__*`, see
    [scripting.md](../scripting.md)). Every pod restarts once on this upgrade: they now
-   also roll when the chart's Secret changes.
+   also roll when the chart's Secret changes. With `networkPolicy.egressCIDRs` set and
+   the broker or the storage in another namespace of the cluster, the workers could
+   not reach them before; they now can, from their host names.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the

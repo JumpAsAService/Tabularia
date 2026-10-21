@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_superuser
-from app.models import Group, User, UserGroupLink, Permission
+from app.models import ContainerRegistryAccess, Group, Permission, ScriptEnvironmentGroup, User, UserGroupLink
 from app.schemas.models import GroupOut, GroupCreate, GroupUpdate
 from app.services import audit
 from app.services.permissions import ensure_still_admin
@@ -138,6 +138,13 @@ def delete_group(
     # questo la cancellazione esplodeva in un 500
     for perm in session.exec(select(Permission).where(Permission.group_id == group_id)).all():
         session.delete(perm)
+    # and what the administration panel gives it: scripting environments, container
+    # registries (their keys protect them too)
+    for row in session.exec(select(ScriptEnvironmentGroup).where(ScriptEnvironmentGroup.group_id == group_id)).all():
+        session.delete(row)
+    for row in session.exec(select(ContainerRegistryAccess).where(ContainerRegistryAccess.group_id == group_id)).all():
+        session.delete(row)
+    session.flush()
     session.delete(group)
     if era_admin:
         ensure_still_admin(session, current)

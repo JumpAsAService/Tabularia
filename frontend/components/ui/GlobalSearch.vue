@@ -11,7 +11,7 @@
 // di rete del browser per vedere ciò che non si può vedere.
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3 } from 'lucide-vue-next'
+import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useSearch, searchHitTarget, type SearchHit, type SearchKind } from '~/composables/useSearch'
@@ -91,6 +91,7 @@ function close() {
 }
 
 function vai(hit: SearchHit) {
+  if (hit.locked_reason) return // a flow this person cannot open: it stays where it is
   close()
   q.value = ''
   hits.value = []
@@ -149,14 +150,17 @@ const mostrati = computed(() => flat.value.length)
               v-for="h in g.items"
               :key="`${h.kind}-${h.id}`"
               class="hit"
-              :class="{ on: indice(h) === cursor }"
+              :class="{ on: indice(h) === cursor, bloccata: !!h.locked_reason }"
               role="option"
               :aria-selected="indice(h) === cursor"
+              :aria-disabled="h.locked_reason ? 'true' : undefined"
+              :title="h.locked_reason || undefined"
               @click="vai(h)"
               @mouseenter="cursor = indice(h)"
             >
               <component :is="ICON[h.kind]" :size="14" class="hicon" />
               <span class="hname">{{ h.name }}</span>
+              <Lock v-if="h.locked_reason" :size="12" class="lucchetto" :aria-label="$t('projectBrowser.lockedFlow')" />
               <!-- dove si trova: due risultati omonimi si distinguono solo così -->
               <span v-if="h.project_name" class="hwhere"><Folder :size="11" /> {{ h.project_name }}</span>
               <span v-if="h.rows != null" class="hdetail">{{ $t('globalSearch.rows', { n: fmt.count(h.rows) }, h.rows) }}</span>
@@ -252,6 +256,9 @@ const mostrati = computed(() => flat.value.length)
   color: var(--text);
 }
 .hit:hover, .hit.on { background: var(--row-hover); box-shadow: none; }
+.hit.bloccata { opacity: 0.45; cursor: not-allowed; }
+.hit.bloccata:hover, .hit.bloccata.on { background: none; }
+.lucchetto { flex: none; color: var(--muted); }
 .hicon { color: var(--muted); flex-shrink: 0; }
 .hname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hwhere {

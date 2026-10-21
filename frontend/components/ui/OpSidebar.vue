@@ -4,14 +4,15 @@
 // handler di FlowEditor.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FileCode2, GripVertical, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, Search } from 'lucide-vue-next'
+import { Container, FileCode2, GripVertical, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const { t } = useI18n()
 
 // readOnly: osservatore — solo trasformazioni, niente sorgenti, controllo, output
 // scripting: the person may write Script nodes (an environment is there for them)
-const props = defineProps<{ operations: string[]; readOnly?: boolean; scripting?: boolean }>()
+// containers: the person may use Container nodes (a registry is granted to them)
+const props = defineProps<{ operations: string[]; readOnly?: boolean; scripting?: boolean; containers?: boolean }>()
 
 // ── ricerca: filtra le voci della palette per etichetta (o nome operazione) ──
 const query = ref('')
@@ -36,7 +37,8 @@ const showRunflow = computed(() => !props.readOnly && match(t('opSidebar.runFlow
 const showOutput = computed(() => !props.readOnly && match(t('opSidebar.outputLabel'), 'output'))
 const showComment = computed(() => !props.readOnly && match(t('opSidebar.noteLabel'), 'comment', 'commento'))
 const showScript = computed(() => !props.readOnly && !!props.scripting && match(t('scripting.node.title'), 'script', 'python', 'r'))
-const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value || showScript.value)
+const showContainer = computed(() => !props.readOnly && !!props.containers && match(t('containers.node.title'), 'container', 'docker', 'image'))
+const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value || showScript.value || showContainer.value)
 const noResults = computed(
   () =>
     !showSource.value &&
@@ -134,6 +136,17 @@ function onDragStart(ev: DragEvent, kind: string) {
       >
         <FileCode2 :size="15" class="item-icon" />
         <span>{{ $t('scripting.node.title') }}</span>
+        <GripVertical :size="13" class="grip" />
+      </div>
+      <div
+        v-if="showContainer"
+        class="item"
+        draggable="true"
+        :style="{ '--item-color': '#818cf8' }"
+        @dragstart="onDragStart($event, 'container')"
+      >
+        <Container :size="15" class="item-icon" />
+        <span>{{ $t('containers.node.title') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>

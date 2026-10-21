@@ -241,10 +241,36 @@ The chart then creates three namespaces next to the release's (`createNamespaces
   needs a user namespace of its own, which only `privileged` admits; its pods still
   run as a user, without privileges.
 
+A registry whose certificate is signed by your company's authority: give it in
+`scripts.registry.caCert` (PEM) for the builds, and install it on the nodes for the
+pulls. Each image is recorded with the architecture it was built for, and its check and
+scripts run on nodes of that architecture. Details, and what fails how, in
+[docs/scripting.md](../../../docs/scripting.md#a-registry-with-your-companys-certificate).
+
 The gateway and the orchestrator get the `<release>-scaler` service account, shared
 with Admin → Workers. In those namespaces only, it may create, read and delete Jobs,
 read their Pods, logs and events, and (scripts and trials) create the ConfigMap and
 Secret a Job mounts. Nothing runs in the release's namespace.
+
+## Container registries
+
+`containers.enabled` turns on **Administration → Container registries**: the registries
+the images of the Container node come from, defined by administrators with their
+credentials, how to trust their certificate (a company authority, or HTTP for an
+internal registry) and the repositories allowed
+([docs/container-registries.md](../../../docs/container-registries.md)). The gateway
+speaks to the registries; the nodes pull the images, so with a company authority or HTTP
+they must trust the registry too (**Try in the cluster**, in the registry's page, checks
+it).
+
+The chart creates `containers.namespace` (default `<release>-containers`) and
+`containers.trialNamespace` (`<release>-containers-dev`, with `containers.trialQuota`),
+both at the `baseline` Pod Security level, and a Role in each for the gateway's account
+(Jobs, Pods, logs, events, Secrets: Tabularia writes a pull Secret per registry there).
+`containers.createNamespaces: false` when they exist already. `containers.limits`
+caps what a Container node may ask for (CPU, memory, timeout). The chart's network
+policies do not cover these namespaces: what a container may reach is decided by the
+cluster's own policies there, as for the scripts' namespaces.
 
 ## Storage and `/tmp`
 
@@ -405,7 +431,10 @@ limits, and they are documented in [`docs/audit`](../../../docs/audit).
   connections can make the engine connect to anything the cluster reaches,
   including cloud metadata endpoints. Enable `networkPolicy` with an explicit
   `egressCIDRs` list (CIDRs or `{cidr, except}`); the metadata address
-  169.254.169.254 (fd00:ec2::254) is excluded from any range that holds it.
+  169.254.169.254 (fd00:ec2::254) is excluded from any range that holds it. The
+  broker, the storage and ClickHouse, when their host is a Service of this cluster
+  in another namespace, are allowed from that host; list any other namespace the
+  workers must reach in `egressNamespaces`.
 - **Outputs that append are not idempotent.** A run interrupted mid-write and
   retried appends its rows twice. Prefer replace mode where you can.
 - **Engines are not perfectly interchangeable.** A flow designed on one engine

@@ -15,6 +15,20 @@ mounts (its code, its variables); nothing else.
 */}}
 {{- $full := include "tabularia.fullname" . }}
 {{- $spaces := dict "scripts" (include "tabularia.scriptsNamespace" .) "trials" (include "tabularia.scriptTrialsNamespace" .) "builds" (include "tabularia.scriptBuildsNamespace" .) }}
+{{- with .Values.scripts.registry.caCert }}
+---
+# the authority of the registry's certificate, for the builds (scripts.registry.caCert)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $full }}-registry-ca
+  namespace: {{ $spaces.builds }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+data:
+  ca.crt: |
+    {{- . | trim | nindent 4 }}
+{{- end }}
 {{- range $kind, $ns := $spaces }}
 {{- if $.Values.scripts.createNamespaces }}
 ---

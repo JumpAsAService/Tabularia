@@ -54,7 +54,7 @@ spec:
         app.kubernetes.io/component: {{ .component }}
     spec:
       {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
-      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled }}
+      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled $.Values.containers.enabled }}
       # Admin → Workers changes the workers' autoscaling bounds (scaling-rbac.yaml);
       # Admin → Scripting environments runs Jobs in the scripts namespaces (scripts.yaml)
       serviceAccountName: {{ include "tabularia.fullname" $ }}-scaler
@@ -123,6 +123,9 @@ spec:
               value: {{ $.Values.gateway.threads | quote }}
             {{- if $.Values.adminScaling.enabled }}
             {{- include "tabularia.scalingEnv" $ | nindent 12 }}
+            {{- end }}
+            {{- if $.Values.containers.enabled }}
+            {{- include "tabularia.containersEnv" $ | nindent 12 }}
             {{- end }}
             {{- if $.Values.scripts.enabled }}
             {{- include "tabularia.scriptsEnv" $ | nindent 12 }}

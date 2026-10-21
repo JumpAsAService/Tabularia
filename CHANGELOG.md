@@ -27,6 +27,68 @@ exposes at `/system/info` and in the app's settings menu.
   to root. A one-shot `keys-init` container now gives the volume to the services before
   any of them starts, whatever image or container mounts it first.
 
+- **The Container node (Kubernetes)** — a step of a flow that runs an image of yours, as
+  a Kubernetes Job ([docs/container-node.md](docs/container-node.md)): a registry, an
+  image and a tag among those granted to you (the tags read from the registry), the
+  command and arguments (or the image's own), variables, CPU and memory within the
+  installation's limits (`containers.limits`), timeout and retries. The tag is resolved
+  to its digest when the run starts and every attempt runs that digest; the registry's
+  pull Secret is written right before the Pod needs it; the registry's variables (secret
+  ones through a Secret) and the node's are in its environment. Input and output are
+  optional, through the scripts bucket, as on the Script node; a node with neither gets
+  no bucket credentials. The Pod runs at the `baseline` Pod Security level, without a
+  service account token. A failure stops the flow; **Run** in the panel tries the saved
+  node on the sample in the trials' namespace, and its output previews the nodes after
+  it; **Runs** shows the image by digest, the command, the exit code and the log. A
+  schedule set by someone else is switched off when the image, command or variables
+  change; the dbt export refuses an output that reads what a Container node writes.
+- **Container registries (Kubernetes)** — Administration → Container registries, where
+  the images of the Container node come from
+  ([docs/container-registries.md](docs/container-registries.md)). An administrator
+  defines each registry: its address, HTTPS checked against the public authorities or
+  your company's authority (PEM), HTTP for an internal registry, or a certificate not
+  checked for a test one (recorded in the audit); a user and a password or token,
+  encrypted and never read back; the repositories whose images may run (`team/forecast`,
+  `team/*`, `*`); who may use it, groups or single users, each with all the repositories
+  or some of them; variables and secrets every container of it finds. In the flow editor
+  only what one may use is shown, and a flow that uses a registry or an image one has no
+  access to does not open (nor its versions, copies, runs, schedules or groups of flows):
+  Explore, Flows and the search list it greyed out, with a lock and the reason. The same
+  now holds for a flow with a Script node of a scripting environment one may not use. **Test** signs in the way the registry asks (a token from its authentication
+  service, as Docker Hub, GHCR, GitLab, Harbor and Scaleway do, or Basic), reads an allowed
+  repository and keeps the result; a failure says which part to fix. **Try in the
+  cluster** checks the nodes instead: a Pod downloads the image by digest and runs
+  nothing of it, and a failure is explained (a certificate the nodes do not trust, HTTP,
+  credentials refused). The chart creates the containers' namespaces at the `baseline`
+  Pod Security level (`containers.namespace`, `containers.trialNamespace` with a quota)
+  and Tabularia keeps a pull Secret per registry there. Migration 0018;
+  `containers.enabled` in the chart (`CONTAINERS__ENABLED`).
+- **A guide to a company-like cluster on one computer**
+  ([docs/deploy/kind.md](docs/deploy/kind.md)): kind with three nodes, enforced network
+  policies and Pod Security, a private registry with TLS signed by a certificate
+  authority of your own and a password, nodes that trust it, PostgreSQL, Valkey and
+  MinIO in their own namespace, Tabularia's images copied into the registry (or built
+  from a branch), Python and R scripts built and run through it. Every command was run
+  as written. `infrastructure/kind/storage.yaml` holds the object storage it applies.
+- **Fixed (Helm chart): with `networkPolicy.egressCIDRs` set, the workers could not reach
+  a broker or a storage installed in another namespace of the cluster.** The policy
+  allowed in-cluster traffic to the release's own namespace only, so the workers timed
+  out on Valkey while their pods looked ready. The namespaces of the broker, the storage
+  and ClickHouse are now allowed from their Service host names, and
+  `networkPolicy.egressNamespaces` lists any other.
+- **Scripting on real clusters**, found by running the chart as a company would (three
+  nodes, enforced network policies, a registry with its own certificate authority and a
+  password):
+  - a registry signed by your company's authority: `scripts.registry.caCert` makes the
+    builds trust it; before, they failed to push (*x509: certificate signed by unknown
+    authority*);
+  - an image a node cannot download (refused credentials, an untrusted certificate, an
+    image no longer there) now fails the run in about half a minute saying which, instead
+    of waiting for the whole timeout and reporting that the script ran too long. A build
+    or a check that cannot start, or a push the registry refuses, says why too;
+  - each environment image records the architecture it was built for (migration
+    0017), and its check and scripts run on nodes of that architecture: on a cluster
+    with amd64 and arm64 nodes, a script no longer lands on the other one.
 - **A guide to try Tabularia on your own computer with minikube**
   ([docs/deploy/minikube.md](docs/deploy/minikube.md)), for people who do not know
   Kubernetes: Windows, macOS and Linux, every command in full (PowerShell and bash where

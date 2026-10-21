@@ -1,0 +1,84 @@
+{{- if .Values.containers.enabled }}
+{{/*
+Container nodes (containers.enabled), docs/container-registries.md: images of the
+customer's own registries, run as Jobs. Two namespaces apart from the release's, at the
+`baseline` Pod Security level (root allowed inside the container, no privilege, no host
+access):
+- the containers namespace, where the flows' runs run them;
+- the trials' one, where the editor's «Run» runs them, with a ResourceQuota of its own.
+The gateway's service account may run Jobs there, read their Pods, logs and events,
+and keep there the pull Secret of each registry and the Secret of a run's variables;
+nothing else.
+*/}}
+{{- $full := include "tabularia.fullname" . }}
+{{- $spaces := dict "containers" (include "tabularia.containersNamespace" .) "trials" (include "tabularia.containerTrialsNamespace" .) }}
+{{- range $kind, $ns := $spaces }}
+{{- if $.Values.containers.createNamespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: baseline
+{{- end }}
+{{- if and (eq $kind "trials") $.Values.containers.trialQuota.enabled }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ $full }}-container-trials
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+spec:
+  hard:
+    {{- toYaml $.Values.containers.trialQuota.hard | nindent 4 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-containers
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # why a Job has no Pod, or its image does not download
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list"]
+  # the pull Secret of each registry (kept in step with its credentials) and the
+  # Secret of a run's variables, owned by its Job
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "update", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-containers
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-containers
+subjects:
+  - kind: ServiceAccount
+    name: {{ $full }}-scaler
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

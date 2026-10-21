@@ -105,6 +105,16 @@ SCRIPTING_VARIABLE_SET = "scripting.variable_set"
 SCRIPTING_VARIABLE_DELETE = "scripting.variable_delete"
 # the editor's «Run» of a Script node: code executed on the cluster, by whom
 SCRIPTING_TRIAL = "scripting.trial"
+# Administration → Container registries (the images of the Container node)
+REGISTRY_CREATE = "registry.create"
+REGISTRY_UPDATE = "registry.update"
+REGISTRY_DELETE = "registry.delete"
+REGISTRY_TEST = "registry.test"
+REGISTRY_CLUSTER_TEST = "registry.cluster_test"
+# the editor's «Run» of a Container node: an image run on the cluster, by whom
+CONTAINER_TRIAL = "container.trial"
+REGISTRY_VARIABLE_SET = "registry.variable_set"
+REGISTRY_VARIABLE_DELETE = "registry.variable_delete"
 ENGINE_DISALLOW = "engine.disallow"
 # assistente AI: quali modelli si possono usare, e ogni query che l'assistente
 # esegue sui dati per conto di un utente (e' un accesso ai dati come un export)

@@ -623,6 +623,9 @@ class ScriptsSettings(BaseModel):
     # first, in build_namespace; the Jobs pull with the second, in namespace
     registry_push_secret: str = ""
     registry_pull_secret: str = ""
+    # a ConfigMap of build_namespace holding ca.crt: the authority (PEM) that signed the
+    # registry's certificate, when it is not a public one (a company CA)
+    registry_ca_configmap: str = ""
     builder_image: str = "moby/buildkit:v0.33.1-rootless"
     # JSON: {"python": {"3.12": "python:3.12-slim", …}, "r": {…}}; empty = the defaults
     base_images: str = ""
@@ -675,6 +678,39 @@ FERNET_KEY_HINT = (
     "(or: python3 -c \"import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())\")"
 )
 
+class ContainersSettings(BaseModel):
+    """Container registries (Administration → Container registries) and the Container
+    node that runs their images, on Kubernetes only: off unless `enabled` is true. The
+    Helm chart sets it with `containers.enabled`, and the two namespaces below."""
+    enabled: bool = False
+    namespace: str = ""  # where the flows' runs run the Container nodes
+    trial_namespace: str = ""  # where the editor's «Run» and «Try in the cluster» run (empty = namespace)
+    # «Try in the cluster»: how long a node may take to download an image
+    pull_check_seconds: int = Field(default=300, ge=30)
+    poll_seconds: float = Field(default=3.0, gt=0)
+    job_ttl_seconds: int = Field(default=3600, ge=60)
+    # the most a Container node may ask for: its CPU and memory, its timeout
+    max_cpu: str = "4"
+    max_memory: str = "16Gi"
+    max_timeout_seconds: int = Field(default=86400, ge=60)
+    # the end of a container's log the run keeps
+    log_max_bytes: int = Field(default=262_144, ge=4096)
+
+    @field_validator("max_cpu")
+    @classmethod
+    def _cpu(cls, v: str) -> str:
+        if not re.fullmatch(r"\d+(\.\d+)?m?", v.strip()):
+            raise ValueError("a Kubernetes CPU quantity: 4, 1.5, 500m")
+        return v.strip()
+
+    @field_validator("max_memory")
+    @classmethod
+    def _memory(cls, v: str) -> str:
+        if not re.fullmatch(r"\d+(\.\d+)?(Ki|Mi|Gi|Ti|K|M|G|T)?", v.strip()):
+            raise ValueError("a Kubernetes memory quantity: 16Gi, 512Mi")
+        return v.strip()
+
+
 class Settings(BaseSettings):
     """
     Configurazione del gateway. Priorità: init > env > default.
@@ -700,6 +736,7 @@ class Settings(BaseSettings):
     openlineage: OpenLineageSettings = Field(default_factory=OpenLineageSettings)
     kubernetes: KubernetesSettings = Field(default_factory=KubernetesSettings)
     scripts: ScriptsSettings = Field(default_factory=ScriptsSettings)
+    containers: ContainersSettings = Field(default_factory=ContainersSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

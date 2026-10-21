@@ -612,3 +612,47 @@ async def test_a_full_quota_is_said_at_once(trial_env, cluster, engine, launches
     run = session.get(Run, run.id)
     assert run.status == "FAILURE" and "tab-scripts-dev has no room left" in run.error and "exceeded quota" in run.error
     assert cluster.jobs() == []
+
+
+@pytest.mark.parametrize("reason, message, events, expected", [
+    ("ImagePullBackOff", 'Back-off pulling image "registry.example.com/tab/env-1@sha256:1"',
+     [{"reason": "Failed", "message": "Failed to pull image: pull access denied, insufficient_scope: authorization failed"},
+      {"reason": "Failed", "message": "Error: ImagePullBackOff"}],
+     "registry refused the cluster's credentials"),
+    ("ErrImagePull", "failed to resolve reference: tls: failed to verify certificate: x509: certificate signed by "
+                     "unknown authority", [], "nodes do not trust the registry's certificate"),
+    ("ErrImagePull", "rpc error: registry.example.com/tab/env-1@sha256:1: not found", [], "not in the registry"),
+])
+async def test_an_image_the_nodes_cannot_download_fails_at_once_saying_why(session, cluster, engine, launches,
+                                                                           monkeypatch, reason, message, events, expected):
+    # without this, the attempt waited for the node's whole timeout and said it ran too long
+    monkeypatch.setattr(script_runs, "PULL_FAILURE_SECONDS", 0)
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    cluster.behave = lambda job: (None, "", None)  # the Job never ends: its Pod waits for its image
+    cluster.pull = (reason, message, events)
+    with pytest.raises(orch.OrchestrationError, match=expected):
+        await _run(session, admin, _flow(session, [_script(env.id)], []))
+    run = _script_run(session)
+    assert run.status == "FAILURE" and "could not download the image" in run.error and "timeout" not in run.error
+    assert cluster.jobs() == []
+
+
+async def test_a_script_runs_on_nodes_of_its_image_s_architecture(session, cluster, engine, launches):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    v = session.get(ScriptEnvironmentVersion, env.current_version_id)
+    v.arch = "arm64"  # built on an arm64 node: an amd64 node could not run it
+    session.add(v)
+    session.commit()
+    await _run(session, admin, _flow(session, [_script(env.id)], []))
+    pod = next(body for kind, _, body in cluster.created if kind == "jobs")["spec"]["template"]["spec"]
+    assert pod["nodeSelector"] == {"kubernetes.io/arch": "arm64"}
+
+
+async def test_a_version_built_before_the_architecture_was_kept_runs_anywhere(session, cluster, engine, launches):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    await _run(session, admin, _flow(session, [_script(env.id)], []))
+    pod = next(body for kind, _, body in cluster.created if kind == "jobs")["spec"]["template"]["spec"]
+    assert "nodeSelector" not in pod

@@ -81,6 +81,9 @@ class ScriptEnvironmentVersion(SQLModel, table=True):
     status: str = Field(default="queued", max_length=16, index=True)
     job_name: Optional[str] = Field(default=None, max_length=63)  # the Job of the current stage
     image_ref: Optional[str] = Field(default=None, max_length=600)  # <registry>/…@sha256:…
+    # the architecture it was built for, the one of the build's node (amd64, arm64): its
+    # check and its scripts run on nodes of that architecture only
+    arch: Optional[str] = Field(default=None, max_length=20)
     lock: Optional[str] = Field(default=None, sa_column=Column(Text))  # what the image holds, from the check
     # JSON {module: [public names]}: what the editor offers while typing, from the check
     completions: Optional[str] = Field(default=None, sa_column=Column(Text))

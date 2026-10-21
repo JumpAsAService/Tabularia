@@ -13,6 +13,7 @@ import { usePlaceholderPreview, type PreviewRequest, type TemplateTarget } from 
 import TemplatePreview from '~/components/ui/TemplatePreview.vue'
 import PlaceholderCheat from '~/components/ui/PlaceholderCheat.vue'
 import ScriptNodePanel from '~/components/scripting/ScriptNodePanel.vue'
+import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
 
 const props = defineProps<{
   node: Node | null
@@ -28,7 +29,7 @@ const props = defineProps<{
   flows?: { id: number; name: string; project_id?: number }[]
   currentFlowId?: number | null
   flowName?: string // {flow} in the Output's templates
-  // Script nodes: their latest runs and outputs, the trials in progress, unsaved changes
+  // Script and Container nodes: their latest runs and outputs, the trials in progress, unsaved changes
   scriptOutputs?: Record<string, any>
   scriptTrials?: Record<string, any>
   flowDirty?: boolean
@@ -43,7 +44,7 @@ const emit = defineEmits<{
   (e: 'export', format: 'csv' | 'xlsx'): void
   (e: 'preview'): void // anteprima a comando (nodo SQL)
   (e: 'email-test'): void // prova a vuoto: manda l'allegato a sé stessi
-  (e: 'script-run', nodeId: string): void // «Run» of a Script node (the flow saved first)
+  (e: 'script-run', nodeId: string): void // «Run» of a Script or Container node (the flow saved first)
 }>()
 
 const isSource = () => props.node?.type === 'source'
@@ -735,6 +736,19 @@ function pickDatasource(id: number | null) {
     <!-- Script node: code run as a Kubernetes Job, in a scripting environment -->
     <template v-else-if="node.type === 'script'">
       <ScriptNodePanel
+        :node="node"
+        :outputs="scriptOutputs?.[node.id] ?? null"
+        :trial="scriptTrials?.[node.id] ?? null"
+        :flow-dirty="!!flowDirty"
+        @update="emit('update', $event)"
+        @delete="emit('delete')"
+        @run="emit('script-run', node.id)"
+      />
+    </template>
+
+    <!-- Container node: an image of a container registry, run as a Kubernetes Job -->
+    <template v-else-if="node.type === 'container'">
+      <ContainerNodePanel
         :node="node"
         :outputs="scriptOutputs?.[node.id] ?? null"
         :trial="scriptTrials?.[node.id] ?? null"

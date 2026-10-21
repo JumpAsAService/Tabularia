@@ -613,6 +613,11 @@ networkPolicy:
   # (169.254.169.254, fd00:ec2::254) is always carved out of a range holding it.
   # Empty = no egress policy at all: the workers can reach anything.
   egressCIDRs: []
+  # Namespaces of this cluster the workers must reach, e.g. a database your users
+  # connect to. The namespaces of the broker, the storage and ClickHouse need no
+  # entry when their host is a Service name (valkey.deps.svc.cluster.local): they are
+  # allowed from it. Setting this alone also turns the egress policy on.
+  egressNamespaces: []
 
 # Admin → Workers may change the minimum and maximum pods of the two worker
 # Deployments on this cluster. Off by default: it gives the gateway and the
@@ -659,6 +664,10 @@ scripts:
     # where the images are pushed and pulled: host[:port]/path. Required.
     repository: ""
     insecure: false        # plain HTTP or a self-signed certificate: a test cluster only
+    # the certificate (PEM) of the authority that signed the registry's, when that is
+    # not a public one, e.g. your company's CA: the builds verify the registry with it.
+    # The images are pulled by the nodes, which must trust it too (docs/scripting.md).
+    caCert: ""
     # names of Secrets of type kubernetes.io/dockerconfigjson: pushSecret in the
     # build namespace (the builds push), pullSecret in the scripts namespace and in the
     # trials' namespace (both pull the images)
@@ -671,6 +680,36 @@ scripts:
   baseImages: {}
   pypiIndexUrl: ""         # empty = PyPI
   cranUrl: ""              # empty = https://cran.r-project.org; or a CRAN mirror
+
+# Administration → Container registries: the registries the images of the Container
+# node come from, with their credentials, how to trust their certificate (a company
+# authority, or plain HTTP for an internal one) and the repositories allowed. Off by
+# default; docs/container-registries.md.
+containers:
+  enabled: false
+  # where the Container nodes run in the flows' runs; empty = "<release namespace>-containers"
+  namespace: ""
+  # where the editor's «Run» of a Container node runs; empty = "<release namespace>-containers-dev",
+  # with a ResourceQuota of its own (trialQuota)
+  trialNamespace: ""
+  trialQuota:
+    enabled: true
+    hard:
+      requests.cpu: "4"
+      requests.memory: 8Gi
+      limits.cpu: "8"
+      limits.memory: 16Gi
+      pods: "10"
+  # create both namespaces at the `baseline` Pod Security level: root is allowed inside
+  # a container (most existing images run as root), privileges and host access are not.
+  # False = they exist already.
+  createNamespaces: true
+  # the most a Container node may ask for (its CPU and memory are both its request and
+  # its limit) and its longest timeout
+  limits:
+    cpu: "4"
+    memory: 16Gi
+    timeoutSeconds: 86400
 
 serviceAccount:
   create: true

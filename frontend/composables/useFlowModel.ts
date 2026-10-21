@@ -128,7 +128,7 @@ export function resolveChain(
   nodes: Node[],
   edges: Edge[],
   targetId: string,
-  // a Script node's latest output (a run of the flow, or the editor's «Run»): the
+  // a Script or Container node's latest output (a run of the flow, or the editor's «Run»): the
   // nodes after it read that, as if it were a source
   scriptSources: Record<string, { bucket: string; key: string }> = {},
 ): { sourceNode: Node | null; operations: Operation[]; afterScript?: string } {
@@ -161,8 +161,8 @@ export function resolveChain(
       sourceNode = node
       break
     }
-    // a Script node: what it wrote last time, when there is a last time
-    if (node.type === 'script') {
+    // a Script or Container node: what it wrote last time, when there is a last time
+    if (node.type === 'script' || node.type === 'container') {
       const out = scriptSources[node.id]
       if (!out) return { sourceNode: null, operations: [], afterScript: node.id }
       sourceNode = { ...node, data: { bucket: out.bucket, parquetKey: out.key } } as Node

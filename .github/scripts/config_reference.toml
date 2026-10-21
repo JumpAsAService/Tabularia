@@ -202,6 +202,13 @@ prefixes = ["SCRIPTS"]
 intro = "Administration → Scripting environments: the Python and R environments the Script node runs in, each built once into an image by a Kubernetes Job (rootless BuildKit) and checked by a second Job. Off unless `SCRIPTS__ENABLED` is true; the chart sets the whole block, the two namespaces and a service account allowed to run Jobs there, with `scripts.enabled`. The Kubernetes API is reached as in `KUBERNETES__API_URL`, `KUBERNETES__TOKEN_FILE` and `KUBERNETES__CA_FILE` ([Scripting environments](scripting.md))."
 
 [[section]]
+id = "gateway-containers"
+component = "gateway"
+title = "Container registries (Kubernetes)"
+prefixes = ["CONTAINERS"]
+intro = "Administration → Container registries: the registries the images of the Container node come from, their credentials, how to trust their certificate and the repositories allowed ([Container registries](container-registries.md)). Off unless `CONTAINERS__ENABLED` is true; the chart sets it with `containers.enabled`."
+
+[[section]]
 id = "engine-api"
 component = "engine"
 title = "Engine API and previews"
@@ -686,6 +693,9 @@ helm = "`scripts.registry.pushSecret`"
 text = "Name of a Secret of type `kubernetes.io/dockerconfigjson` in the scripts namespace, used by the Jobs to pull the images. Empty = the nodes pull without credentials."
 helm = "`scripts.registry.pullSecret`"
 
+[var.SCRIPTS__REGISTRY_CA_CONFIGMAP]
+text = "A ConfigMap of the build namespace holding `ca.crt`: the certificate of the authority that signed the registry's, when it is not a public one (a company CA). The builds verify the registry with it. The chart creates it from `scripts.registry.caCert`."
+
 [var.SCRIPTS__BUILDER_IMAGE]
 text = "The image that builds the environments: BuildKit, rootless. Replace it with a mirror on a cluster without internet access."
 helm = "`scripts.builderImage`"
@@ -722,6 +732,36 @@ text = "How much of the end of a build's log is kept and shown in the panel."
 
 [var.SCRIPTS__JOB_TTL_SECONDS]
 text = "Kubernetes removes a finished Job after this long, if Tabularia has not removed it first."
+
+[var.CONTAINERS__ENABLED]
+text = "Turns on Administration → Container registries: the registries the images of the Container node come from, on Kubernetes. The Helm chart sets it with `containers.enabled`."
+
+[var.CONTAINERS__NAMESPACE]
+text = "Where the flows' runs run the Container nodes, and where each registry's pull Secret is kept. The chart sets it (`containers.namespace`, `<release namespace>-containers` by default), at the `baseline` Pod Security level."
+
+[var.CONTAINERS__TRIAL_NAMESPACE]
+text = "Where the editor's «Run» of a Container node and «Try in the cluster» run, with a ResourceQuota of its own. Empty = `CONTAINERS__NAMESPACE`. The chart sets it (`containers.trialNamespace`)."
+
+[var.CONTAINERS__PULL_CHECK_SECONDS]
+text = "«Try in the cluster»: how long a node may take to download an image before the check says it did not."
+
+[var.CONTAINERS__POLL_SECONDS]
+text = "How often the gateway looks at a Job of the containers' namespaces while it waits for it."
+
+[var.CONTAINERS__JOB_TTL_SECONDS]
+text = "Kubernetes removes a finished Job of the containers' namespaces after this long, if Tabularia has not removed it first."
+
+[var.CONTAINERS__MAX_CPU]
+text = "The most CPU a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.cpu`)."
+
+[var.CONTAINERS__MAX_MEMORY]
+text = "The most memory a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.memory`)."
+
+[var.CONTAINERS__MAX_TIMEOUT_SECONDS]
+text = "The longest timeout a Container node may have. The chart sets it (`containers.limits.timeoutSeconds`)."
+
+[var.CONTAINERS__LOG_MAX_BYTES]
+text = "How much of the end of a container's log the run keeps and the run page shows."
 
 [var.SCRIPTS__LINT]
 text = "The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person."

@@ -1096,7 +1096,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
         if run.status == "PENDING":
             return await close_if_queued_too_long(session, run)
         return run
-    if run.kind == "script":
+    if run.kind in ("script", "container"):
         # a Kubernetes Job the orchestration follows: here only an orphan is closed
         from app.services.script_runs import close_if_orphaned
 

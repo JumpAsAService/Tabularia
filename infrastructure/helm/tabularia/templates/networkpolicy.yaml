@@ -56,7 +56,20 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
-{{- if .Values.networkPolicy.egressCIDRs }}
+{{- /* the namespaces of the dependencies the values name as in-cluster Services
+(valkey.deps.svc.cluster.local → deps): reached without asking for their CIDR */}}
+{{- $namespaces := .Values.networkPolicy.egressNamespaces | default list }}
+{{- $hosts := list .Values.externalServices.redis.host (urlParse (.Values.externalServices.storage.endpoint | default "")).host }}
+{{- if .Values.externalServices.clickhouse.enabled }}
+{{- $hosts = append $hosts .Values.externalServices.clickhouse.host }}
+{{- end }}
+{{- range $hosts }}
+{{- $labels := splitList "." (first (splitList ":" (. | default ""))) }}
+{{- if and (ge (len $labels) 3) (eq (index $labels 2) "svc") }}
+{{- $namespaces = append $namespaces (index $labels 1) }}
+{{- end }}
+{{- end }}
+{{- if or .Values.networkPolicy.egressCIDRs .Values.networkPolicy.egressNamespaces }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -84,9 +97,19 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # In-cluster traffic (broker, metadata database when self-hosted).
+    # In-cluster traffic in this namespace (broker, storage when installed next to it).
     - to:
         - podSelector: {}
+    {{- with ($namespaces | uniq) }}
+    # The namespaces of the broker, the storage and ClickHouse when they are Services
+    # of this cluster, and networkPolicy.egressNamespaces.
+    - to:
+        {{- range . }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+    {{- end }}
     # Everything the workers are allowed to reach outside the cluster. An entry
     # is a CIDR, or {cidr, except}. The cloud metadata endpoints are carved out of
     # any range that contains them (0.0.0.0/0, 169.254.0.0/16, ::/0…): from there a

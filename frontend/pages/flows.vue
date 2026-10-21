@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import {
   Workflow, Search, Trash2, Folder, Plus, CalendarClock, ChevronRight, Pencil, ArrowUpFromLine, User,
-  CheckCircle2, XCircle, LoaderCircle, Circle, Download, Play,
+  CheckCircle2, XCircle, LoaderCircle, Circle, Download, Play, Lock,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { knownError } from '~/composables/knownErrors'
@@ -345,9 +345,10 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
     </p>
 
     <div v-else class="flows">
-      <div v-for="f in items" :key="f.id" class="flow" :class="{ open: expanded === f.id }">
+      <div v-for="f in items" :key="f.id" class="flow" :class="{ open: expanded === f.id, bloccata: !!f.locked_reason }"
+           :title="f.locked_reason || undefined" :aria-disabled="f.locked_reason ? 'true' : undefined">
         <div class="flow-row">
-          <button class="flow-head" @click="toggle(f)">
+          <button class="flow-head" :disabled="!!f.locked_reason" @click="toggle(f)">
             <ChevronRight :size="14" class="chev" :class="{ rot: expanded === f.id }" />
             <span class="fname">
               <component
@@ -358,6 +359,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
                 :title="runStatus(f).label"
               />
               {{ f.name }}
+              <Lock v-if="f.locked_reason" :size="12" class="lucchetto" :aria-label="$t('projectBrowser.lockedFlow')" />
             </span>
             <span class="folder muted"><Folder :size="12" /> {{ folderName[f.project_id] ?? `#${f.project_id}` }}</span>
             <span
@@ -367,7 +369,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
             ><CalendarClock :size="11" /> {{ f.next_run_at ? $t('flows.nextRunBadge', { when: fmtDate(f.next_run_at) }) : $t('flows.scheduledBadge') }}</span>
             <span class="when muted">{{ fmtDate(f.updated_at) }}</span>
           </button>
-          <div class="flow-actions">
+          <div v-if="!f.locked_reason" class="flow-actions">
             <button class="mini" :title="$t('flows.openEditorTitle')" :aria-label="$t('flows.openEditorTitle')" @click="navigateTo(`/editor?flow=${f.id}`)"><Pencil :size="13" /></button>
             <button class="mini" :title="$t('flows.exportDbtTitle')" :disabled="exporting === f.id"
               @click="exportMenuFlow = f">
@@ -466,6 +468,9 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 <!-- stili condivisi delle pagine-lista: .btn-link, .mini, .err, .tag, … -->
 <style scoped src="~/assets/listpage.css" />
 <style scoped>
+.flow.bloccata { opacity: 0.45; cursor: not-allowed; }
+.flow.bloccata .flow-head { cursor: not-allowed; }
+.lucchetto { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
 .prod-engine { font-size: 12px; padding: 2px 6px; max-width: 220px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h1 { display: inline-flex; align-items: center; gap: 8px; }

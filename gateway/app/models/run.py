@@ -144,9 +144,10 @@ class Run(SQLModel, table=True):
     # file was not there ({"missing": [{params, pattern}], "missing_count",
     # "expansions"}). Skipped and listed, not failed: the run page shows them.
     notes: Optional[str] = Field(default=None, sa_column=Column("notes", Text))
-    # kind="script" only: what the Script node ran and how, as JSON — environment and
-    # version, image, files, attempts, exit code, the end of the log, the variables it
-    # was given (secret ones by name only). See services/script_runs.py.
+    # kind="script" or "container" only: what the node ran and how, as JSON — the
+    # environment and version or the registry and image (by digest), files or command,
+    # attempts, exit code, the end of the log, the variables it was given (secret ones
+    # by name only). See services/script_runs.py and services/container_runs.py.
     script: Optional[str] = Field(default=None, sa_column=Column("script", Text))
 
     # ── solo per kind="orchestration" ───────────────────────────────────────

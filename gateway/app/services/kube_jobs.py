@@ -10,6 +10,7 @@ of the API and the token are the ones of KubernetesSettings.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -31,7 +32,7 @@ async def _call(method: str, path: str, body: Optional[dict] = None, *, text: bo
     except OSError:
         token = ""
     if not token:
-        raise KubeError(0, "No service account token: is scripts.enabled set in the Helm chart?")
+        raise KubeError(0, "No service account token: is scripts.enabled or containers.enabled set in the Helm chart?")
     # a Pod's log is plain text, but the API server refuses `Accept: text/plain` (406)
     headers = {"Authorization": f"Bearer {token}", "Accept": "*/*" if text else "application/json"}
     if body is not None:
@@ -80,6 +81,36 @@ async def create_object(namespace: str, kind: str, manifest: dict) -> None:
     except KubeError as e:
         if e.status != 409:
             raise
+
+
+async def put_secret(namespace: str, manifest: dict) -> None:
+    """Creates the Secret, or replaces the one of that name: a registry's pull Secret
+    follows its credentials."""
+    path = f"/api/v1/namespaces/{namespace}/secrets"
+    name = manifest["metadata"]["name"]
+    try:
+        await _call("POST", path, manifest)
+        return
+    except KubeError as e:
+        if e.status != 409:
+            raise
+    current = await _call("GET", f"{path}/{name}")
+    meta = {**manifest["metadata"], "resourceVersion": (current.get("metadata") or {}).get("resourceVersion")}
+    await _call("PUT", f"{path}/{name}", {**manifest, "metadata": meta})
+
+
+async def delete_secret(namespace: str, name: str) -> None:
+    """Deletes the Secret; one already gone is fine."""
+    try:
+        await _call("DELETE", f"/api/v1/namespaces/{namespace}/secrets/{name}")
+    except KubeError as e:
+        if e.status != 404:
+            raise
+
+
+async def job_pods(namespace: str, name: str) -> list[dict]:
+    pods = await _call("GET", f"/api/v1/namespaces/{namespace}/pods?labelSelector={quote('job-name=' + name)}")
+    return list(pods.get("items") or [])
 
 
 async def get_job(namespace: str, name: str) -> Optional[dict]:
@@ -158,6 +189,50 @@ async def job_result(namespace: str, name: str, max_bytes: int) -> tuple[str, Op
             return pod_waiting_reason(pod), exit_code
         raise
     return tail(log, max_bytes), exit_code
+
+
+# a container whose image its node could not download
+_PULL_FAILURES = ("ErrImagePull", "ImagePullBackOff", "InvalidImageName", "ErrImageNeverPull")
+# what the runtime said, in the words of whoever must fix it
+_PULL_REASONS = (
+    (re.compile(r"x509|certificate", re.I),
+     "the nodes do not trust the registry's certificate: its authority must be installed on the nodes"),
+    (re.compile(r"HTTP response to HTTPS client", re.I),
+     "the registry answers in plain HTTP and the nodes expect HTTPS: the nodes must allow that registry over HTTP"),
+    (re.compile(r"401|403|unauthorized|denied|no basic auth|authorization failed|authentication required", re.I),
+     "the registry refused the cluster's credentials: the pull Secret is missing, wrong or expired"),
+    (re.compile(r"manifest unknown|not found", re.I),
+     "the image is not in the registry (any more)"),
+    (re.compile(r"no such host|i/o timeout|connection refused|network is unreachable|dial tcp", re.I),
+     "the nodes cannot reach the registry"),
+)
+
+
+def explain_pull(detail: str) -> str:
+    for pattern, why in _PULL_REASONS:
+        if pattern.search(detail):
+            return f"the cluster could not download the image: {why} ({detail.strip()[:300]})"
+    return f"the cluster could not download the image: {detail.strip()[:300] or 'no reason given'}"
+
+
+async def pull_failure(namespace: str, name: str) -> str:
+    """Why the node cannot download the image of the Job's Pod, "" when it is not
+    failing to. While the node only retries, the Pod says nothing more than
+    "Back-off pulling image": the reason is in the Pod's events."""
+    pods = await _call("GET", f"/api/v1/namespaces/{namespace}/pods?labelSelector={quote('job-name=' + name)}")
+    for pod in pods.get("items") or []:
+        for st in (pod.get("status") or {}).get("containerStatuses") or []:
+            waiting = (st.get("state") or {}).get("waiting") or {}
+            if waiting.get("reason") not in _PULL_FAILURES:
+                continue
+            detail = waiting.get("message") or ""
+            if waiting.get("reason") == "ImagePullBackOff" or not detail:
+                events = await job_events(namespace, pod["metadata"]["name"])
+                said = [e["message"] for e in events if e["reason"] in ("Failed", "FailedToRetrieveImagePullSecret")
+                        and "Back-off" not in e["message"] and e["message"] != "Error: ImagePullBackOff"]
+                detail = " · ".join(dict.fromkeys(said)) or detail
+            return explain_pull(detail)
+    return ""
 
 
 def pod_waiting_reason(pod: dict) -> str:

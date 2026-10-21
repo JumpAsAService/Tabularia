@@ -522,13 +522,14 @@ class _Progetto:
         self._scrivi_modelli(flow, [u for u in uscite if (flow.id, (u["node"] or {}).get("id")) in self._in_attesa])
 
     def _senza_script(self, flow: Flow, definition: dict, nodi: list[str] | None) -> None:
-        """Python or R is not dbt: an Output that reads what a Script node writes, however
-        far down, refuses the export, saying which. A Script node no exported Output
-        reads from (a step that runs something elsewhere) is left out, with a note."""
-        from app.services.flow_resolver import _scripts_upstream
+        """Python, R and images are not dbt: an Output that reads what a Script or a
+        Container node writes, however far down, refuses the export, saying which. One
+        no exported Output reads from (a step that runs something elsewhere) is left
+        out, with a note."""
+        from app.services.flow_resolver import STEP_NODE_TYPES, _scripts_upstream
 
         nodes = {n["id"]: n for n in definition.get("nodes") or [] if isinstance(n, dict) and "id" in n}
-        scripts = {i for i, n in nodes.items() if n.get("type") == "script"}
+        scripts = {i for i, n in nodes.items() if n.get("type") in STEP_NODE_TYPES}
         if not scripts:
             return
         edges = definition.get("edges") or []
@@ -541,6 +542,10 @@ class _Progetto:
                 label = str((script.get("data") or {}).get("label") or script["id"])
                 d = out.get("data") or {}
                 name = str(d.get("table") or d.get("name") or d.get("s3Key") or d.get("sftpFileName") or out["id"])
+                if script.get("type") == "container":
+                    raise DbtExportError(f"the output «{name}» of the flow «{flow.name}» reads what the Container node "
+                                         f"«{label}» writes: an image runs on Tabularia's cluster, not in dbt",
+                                         "container_not_exportable", flow=flow.name, output=name, container=label)
                 raise DbtExportError(f"the output «{name}» of the flow «{flow.name}» reads what the Script node "
                                      f"«{label}» writes: Python or R runs on Tabularia's cluster, not in dbt",
                                      "script_not_exportable", flow=flow.name, output=name, script=label)
@@ -548,7 +553,9 @@ class _Progetto:
         if nodi is None:
             for i in sorted(scripts - feeding):
                 label = str((nodes[i].get("data") or {}).get("label") or i)
-                self.note.append(f"The flow «{flow.name}» also runs the Script node «{label}» (Python or R): it is not "
+                what = "Container node" if nodes[i].get("type") == "container" else "Script node"
+                runs = "an image" if nodes[i].get("type") == "container" else "Python or R"
+                self.note.append(f"The flow «{flow.name}» also runs the {what} «{label}» ({runs}): it is not "
                                  "part of this dbt project, and Tabularia keeps running it with the flow.")
 
     def _scrivi_modelli(self, flow: Flow, uscite: list[dict]) -> None:

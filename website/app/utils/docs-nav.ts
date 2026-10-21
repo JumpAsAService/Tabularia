@@ -20,6 +20,7 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
     title: 'Install & operate',
     items: [
       ['/docs/deploy/kubernetes', 'Kubernetes and Helm'],
+      ['/docs/deploy/kind', 'A company-like cluster on one computer (kind)'],
       ['/docs/deploy/release-checklist', 'Install and upgrade checklist'],
       ['/docs/configuration', 'Configuration reference'],
       ['/docs/engine-settings', 'Engine settings'],
@@ -57,6 +58,8 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
       ['/docs/examples/keycloak', 'Keycloak example'],
       ['/docs/siem-splunk', 'Audit log to Splunk'],
       ['/docs/scripting', 'Python and R in flows'],
+      ['/docs/container-node', 'The Container node'],
+      ['/docs/container-registries', 'Container registries'],
       ['/docs/engines/clickhouse-ai-user', 'A ClickHouse user for the AI assistant'],
     ],
   },

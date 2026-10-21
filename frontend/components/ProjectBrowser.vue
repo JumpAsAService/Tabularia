@@ -46,6 +46,7 @@ import {
   Rows3,
   Copy,
   PencilLine,
+  Lock,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -149,6 +150,9 @@ interface Row {
   progressRun?: RunInfo
   /** valorizzato = la riga è un collegamento; altrimenti è solo testo */
   to?: string
+  /** a flow this person cannot open (a container registry they have no access to):
+   *  listed, greyed out, with the reason; no link, no action */
+  locked?: string
   raw: any
 }
 
@@ -171,7 +175,9 @@ const rows = computed<Row[]>(() => {
     out.push({ kind: 'folder', id: p.id, name: p.name, meta: p.description || '', raw: p })
   }
   for (const f of flows.value) {
-    out.push({ kind: 'flow', id: f.id, name: f.name, meta: fmtDate(f.updated_at), to: `/editor?flow=${f.id}`, raw: f })
+    out.push(f.locked_reason
+      ? { kind: 'flow', id: f.id, name: f.name, meta: fmtDate(f.updated_at), locked: f.locked_reason, raw: f }
+      : { kind: 'flow', id: f.id, name: f.name, meta: fmtDate(f.updated_at), to: `/editor?flow=${f.id}`, raw: f })
   }
   for (const g of flowGroups.value) {
     const steps = g.definition.steps.length
@@ -962,7 +968,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <tbody>
         <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
           <tr
-            :class="{ folderrow: r.kind === 'folder', apribile: apribile(r) }"
+            :class="{ folderrow: r.kind === 'folder', apribile: apribile(r), bloccata: !!r.locked }"
+            :title="r.locked || undefined"
+            :aria-disabled="r.locked ? 'true' : undefined"
             @click="clicRiga($event, r)"
             @auxclick="clicRiga($event, r)"
           >
@@ -991,6 +999,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               </NuxtLink>
               <span v-else class="asname plain">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+                <Lock v-if="r.locked" :size="12" class="lucchetto" :aria-label="$t('projectBrowser.lockedFlow')" />
               </span>
               <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
               <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
@@ -1001,7 +1010,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 <template v-else>{{ r.meta }}</template>
               </span>
             </td>
-            <td class="racts">
+            <td v-if="r.locked" class="racts" />
+            <td v-else class="racts">
               <button
                 v-if="r.kind === 'flow'"
                 class="mini"
@@ -1298,6 +1308,9 @@ table.rows tr > td:first-child { border-radius: 8px 0 0 8px; }
 table.rows tr > td:last-child { border-radius: 0 8px 8px 0; }
 /* la riga che apre qualcosa: si prende per intero, risponde al clic e al fuoco */
 table.rows tr.apribile { cursor: pointer; }
+table.rows tr.bloccata { opacity: 0.45; cursor: not-allowed; }
+table.rows tr.bloccata:hover td { background: none; }
+.lucchetto { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
 table.rows tr.apribile:hover td,
 table.rows tr.apribile:has(.asname:focus-visible) td { background: var(--tint-accent); }
 table.rows tr.apribile:hover .asname,

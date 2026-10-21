@@ -316,6 +316,9 @@ class SearchHit(BaseModel):
     project_name: Optional[str] = None
     detail: str = ""  # riga di contesto, dipende dal tipo (es. db_type/host)
     rows: Optional[int] = None  # datasource: its row count (the interface formats it)
+    # a flow the person asking cannot open (images or scripts the panel did not grant
+    # them): shown greyed out with this reason; None = it opens
+    locked_reason: Optional[str] = None
 
 
 class SearchOut(BaseModel):
@@ -369,6 +372,9 @@ class FlowOut(BaseModel):
     # SUCCESS | FAILURE | STARTED | PENDING | null (mai eseguito)
     last_run_status: Optional[str] = None
     last_run_at: Optional[UtcDateTime] = None
+    # why the person asking cannot open it (it runs images of a container registry
+    # they have no access to): the lists show it, greyed out; None = it opens
+    locked_reason: Optional[str] = None
 
 
 class FlowDetail(FlowOut):
@@ -632,8 +638,9 @@ class RunOut(BaseModel):
     # JSON: what a successful refresh has to say — {"missing": [{params, pattern}],
     # "missing_count", "expansions"}: the values of a range whose file was not there
     notes: Optional[str] = None
-    # kind="script": JSON — environment, version, files, attempts, exit code, the end
-    # of the log, the variables it was given (secret ones by name only)
+    # kind="script" or "container": JSON — environment and version or registry and
+    # image, files or command, attempts, exit code, the end of the log, the variables
+    # it was given (secret ones by name only)
     script: Optional[str] = None
     parent_run_id: Optional[int] = None
     started_at: Optional[UtcDateTime]

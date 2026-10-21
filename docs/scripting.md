@@ -67,6 +67,54 @@ kubectl -n <release>-scripts-dev create secret docker-registry registry-pull \
 Give the push account write access to the repository path, and the pull account read
 access only. A registry that takes anonymous pulls needs no pull secret.
 
+### A registry with your company's certificate
+
+Two programs talk to the registry, and both must trust its certificate:
+- **the builds** push the images. When the certificate is signed by your company's
+  authority, give the chart that authority's certificate:
+
+  ```yaml
+  scripts:
+    registry:
+      caCert: |
+        -----BEGIN CERTIFICATE-----
+        …
+        -----END CERTIFICATE-----
+  ```
+
+  `scripts.registry.insecure: true` instead skips the verification, or allows plain
+  HTTP: for a test registry only.
+- **the nodes** pull the images, as for any pod. Their container runtime must trust
+  the authority too: install it on the nodes the way your platform does it (a node
+  image, a DaemonSet that writes it to containerd's `certs.d`). A registry in plain HTTP
+  must likewise be allowed on the nodes. Tabularia cannot do this from a pod.
+
+When either side refuses the registry, the environment's version fails at once and
+says which side and why. So does a run whose image a node cannot download: the
+credentials are refused, the nodes do not trust the certificate, the image is no
+longer there. It does not wait for its timeout.
+
+### Network policies
+
+With `networkPolicy.egressCIDRs` set, the engine and the workers reach only the
+addresses listed. The engine also writes each Script node's input to the scripts
+bucket: include its address. A bucket, broker or ClickHouse that is a Service of the
+cluster, in another namespace (`minio.storage.svc.cluster.local`), is allowed from its
+host name; for other namespaces, list them in `networkPolicy.egressNamespaces`.
+
+### Nodes of more than one architecture
+
+A build runs on one node and the image is built for that node's architecture (amd64,
+arm64). Tabularia records it, and sends the check of the image and every run of its
+scripts to nodes of the same architecture. On a cluster with amd64 and arm64 nodes,
+the environment works on the nodes of the architecture its build landed on.
+
+### Policies on pods
+
+The builds need the `privileged` Pod Security level for their namespace and
+seccomp and AppArmor `Unconfined` (see above). A cluster whose admission policies
+(Kyverno, Gatekeeper) forbid that for every namespace cannot build environments.
+
 ### A cluster without internet access
 
 The builds download the base image, BuildKit and the packages. Point all four at your
@@ -187,6 +235,13 @@ image is still in the registry.
 
 People in the environment's groups who can edit a flow can add Script nodes with it.
 Administrators can use every environment.
+
+Someone outside those groups **cannot open a flow with a Script node of the
+environment**: its code is not theirs to read. The flow is still listed in Explore, in
+Flows and in the search, greyed out with a lock and the reason on hover; it is not a
+link and has no actions. Reached by its address, the editor says the same in place of
+the canvas. Its versions, a copy, a run, a schedule and adding it to a group of flows
+are refused the same way. An environment that no longer exists blocks nobody.
 
 ### Variables
 

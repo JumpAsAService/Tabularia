@@ -144,7 +144,7 @@ def job_manifest(*, name: str, env: ScriptEnvironment, version: ScriptEnvironmen
         "restartPolicy": "Never", "automountServiceAccountToken": False,
         "securityContext": {"runAsNonRoot": True, "runAsUser": script_builds.SCRIPT_UID,
                             "runAsGroup": script_builds.SCRIPT_UID, "seccompProfile": {"type": "RuntimeDefault"}},
-        "containers": [container],
+        "containers": [container], **script_builds.node_selector(version),
         "volumes": [{"name": "code", "configMap": {"name": code_name, "items": code_items}},
                     {"name": "tmp", "emptyDir": {}}],
     }
@@ -160,6 +160,9 @@ def job_manifest(*, name: str, env: ScriptEnvironment, version: ScriptEnvironmen
 # how long a Job may go without a Pod, the cluster refusing to create it, before the
 # attempt fails saying why (a full quota, a Pod the namespace's policy refuses)
 NO_POD_SECONDS = 10
+# how long a Job's Pod may keep failing to download its image (the node retries a
+# couple of times in it) before the attempt fails saying why
+PULL_FAILURE_SECONDS = 20
 
 
 def namespace_for(trial: bool) -> str:
@@ -181,28 +184,39 @@ async def _refused(ns: str, name: str) -> str:
     return ""
 
 
-async def _attempt(*, name: str, manifest: dict, code: dict[str, str], secret: dict[str, str],
+async def _attempt(*, name: str, manifest: dict, code: Optional[dict[str, str]], secret: dict[str, str],
                    timeout: int, ns: str, on_tick: Optional[Callable[[], None]] = None,
+                   poll_seconds: Optional[float] = None, log_max_bytes: Optional[int] = None,
                    ) -> tuple[bool, str, Optional[int], str]:
-    """One Job: (succeeded, log, exit code, reason when it failed)."""
+    """One Job: (succeeded, log, exit code, reason when it failed). `code`: the files
+    of the ConfigMap its Pod mounts, None for a Pod without (a Container node);
+    `secret`: what goes in the Secret its container reads, when it reads one. Also
+    services/container_runs.py's."""
     s = get_settings().scripts
+    poll_seconds = poll_seconds or s.poll_seconds
+    log_max_bytes = log_max_bytes or s.log_max_bytes
     labels = manifest["metadata"]["labels"]
-    code_name = manifest["spec"]["template"]["spec"]["volumes"][0]["configMap"]["name"]
-    secret_name = manifest["spec"]["template"]["spec"]["containers"][0]["envFrom"][0]["secretRef"]["name"]
+    pod = manifest["spec"]["template"]["spec"]
+    code_name = pod["volumes"][0]["configMap"]["name"] if code is not None else None
+    env_from = pod["containers"][0].get("envFrom") or []
+    secret_name = env_from[0]["secretRef"]["name"] if env_from else None
     job = await kube_jobs.create_job(ns, manifest)
     started = asyncio.get_running_loop().time()
     deadline = started + timeout + GRACE_SECONDS
+    pull_since: Optional[float] = None
     try:
         # owned by the Job: they go away with it. Its Pod waits for them to exist.
         owners = kube_jobs.owned_by(job)
-        await kube_jobs.create_object(ns, "configmaps", {
-            "apiVersion": "v1", "kind": "ConfigMap",
-            "metadata": {"name": code_name, "labels": labels, "ownerReferences": owners}, "data": code})
-        await kube_jobs.create_object(ns, "secrets", {
-            "apiVersion": "v1", "kind": "Secret", "type": "Opaque",
-            "metadata": {"name": secret_name, "labels": labels, "ownerReferences": owners}, "stringData": secret})
+        if code_name:
+            await kube_jobs.create_object(ns, "configmaps", {
+                "apiVersion": "v1", "kind": "ConfigMap",
+                "metadata": {"name": code_name, "labels": labels, "ownerReferences": owners}, "data": code})
+        if secret_name:
+            await kube_jobs.create_object(ns, "secrets", {
+                "apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+                "metadata": {"name": secret_name, "labels": labels, "ownerReferences": owners}, "stringData": secret})
         while True:
-            await asyncio.sleep(s.poll_seconds)
+            await asyncio.sleep(poll_seconds)
             if on_tick:
                 on_tick()
             current = await kube_jobs.get_job(ns, name)
@@ -215,8 +229,17 @@ async def _attempt(*, name: str, manifest: dict, code: dict[str, str], secret: d
                 why = await _refused(ns, name)
                 if why:
                     return False, "", None, why
+            if outcome is None and status.get("active"):
+                why = await kube_jobs.pull_failure(ns, name)
+                now = asyncio.get_running_loop().time()
+                if not why:
+                    pull_since = None
+                elif pull_since is None:
+                    pull_since = now
+                elif now - pull_since >= PULL_FAILURE_SECONDS:
+                    return False, "", None, why
             if outcome is not None:
-                log, exit_code = await kube_jobs.job_result(ns, name, s.log_max_bytes)
+                log, exit_code = await kube_jobs.job_result(ns, name, log_max_bytes)
                 if outcome == "succeeded":
                     return True, log, exit_code, ""
                 reason = kube_jobs.job_failure(current)
@@ -226,13 +249,13 @@ async def _attempt(*, name: str, manifest: dict, code: dict[str, str], secret: d
                     reason = f"it ended with exit code {exit_code}"
                 return False, log, exit_code, reason or "the Job failed"
             if asyncio.get_running_loop().time() > deadline:
-                log, exit_code = await kube_jobs.job_result(ns, name, s.log_max_bytes)
+                log, exit_code = await kube_jobs.job_result(ns, name, log_max_bytes)
                 return False, log, exit_code, "the cluster did not end the Job within its timeout"
     finally:
         try:
             await kube_jobs.delete_job(ns, name)  # its Pod, ConfigMap and Secret go with it
         except KubeError as e:
-            logger.warning("script: Job %s not deleted (%s); its TTL will", name, e)
+            logger.warning("Job %s not deleted (%s); its TTL will", name, e)
 
 
 async def run_script(session: Session, user: User, flow: Flow, definition: dict, node: dict, *,
@@ -413,7 +436,7 @@ def _detail(resp) -> str:
 
 
 async def close_if_orphaned(session: Session, run: Run) -> Run:
-    """A Script run still open whose process died: its orchestration has ended, or —
+    """A Script or Container run still open whose process died: its orchestration has ended, or —
     an editor's trial, which has none — it is older than it could ever last. Its Jobs
     are stopped and it is closed saying so. Called by the run page's reconcile."""
     if run.status in TERMINAL_STATES:
@@ -422,7 +445,7 @@ async def close_if_orphaned(session: Session, run: Run) -> Run:
         parent = session.get(Run, run.parent_run_id)
         if parent is None or parent.status not in TERMINAL_STATES:
             return run
-        reason = "the flow's run ended before the script did (its orchestrator stopped)"
+        reason = f"the flow's run ended before the {run.kind} did (its orchestrator stopped)"
     else:
         try:
             budget = int(json.loads(run.script or "{}").get("budget_seconds") or 0)
@@ -432,15 +455,23 @@ async def close_if_orphaned(session: Session, run: Run) -> Run:
         if not budget or (_now() - started).total_seconds() < budget:
             return run
         reason = "the trial outlived its time: the process running it stopped"
-    if not script_builds.disabled_reason():
+    try:
+        ns = json.loads(run.script or "{}").get("namespace")
+    except ValueError:
+        ns = None
+    if run.kind == "container":
+        from app.services import container_runs
+
+        on, ns = get_settings().containers.enabled, ns or container_runs.namespace_for(not run.parent_run_id)
+        selector = f"{container_runs.LABEL_CONTAINER_RUN}={run.id}"
+    else:
+        on, ns = not script_builds.disabled_reason(), ns or namespace_for(not run.parent_run_id)
+        selector = f"{LABEL_SCRIPT_RUN}={run.id}"
+    if on:
         try:
-            ns = json.loads(run.script or "{}").get("namespace")
-        except ValueError:
-            ns = None
-        try:
-            await kube_jobs.delete_jobs(ns or namespace_for(not run.parent_run_id), f"{LABEL_SCRIPT_RUN}={run.id}")
+            await kube_jobs.delete_jobs(ns, selector)
         except KubeError as e:
-            logger.warning("script: Jobs of run %s not deleted (%s)", run.id, e)
+            logger.warning("%s: Jobs of run %s not deleted (%s)", run.kind, run.id, e)
     run.status, run.finished_at = "FAILURE", _now()
     run.error = reason
     session.add(run)
@@ -448,11 +479,15 @@ async def close_if_orphaned(session: Session, run: Run) -> Run:
     return run
 
 
+STEP_KINDS = ("script", "container")
+
+
 def latest_outputs(session: Session, flow_id: int) -> dict[str, dict]:
-    """Per Script node of the flow: its latest run (any outcome) and the output of its
-    latest successful one, which the editor previews the nodes after it from."""
+    """Per Script or Container node of the flow: its latest run (any outcome) and the
+    output of its latest successful one, which the editor previews the nodes after it
+    from."""
     out: dict[str, dict] = {}
-    rows = session.exec(select(Run).where(Run.flow_id == flow_id, Run.kind == "script")
+    rows = session.exec(select(Run).where(Run.flow_id == flow_id, Run.kind.in_(STEP_KINDS))  # type: ignore[attr-defined]
                         .order_by(Run.started_at.desc()).limit(500)).all()
     for run in rows:
         try:
@@ -476,7 +511,7 @@ def latest_outputs(session: Session, flow_id: int) -> dict[str, dict]:
 
 
 async def run_trial(run_id: int, user_id: int, node_id: str) -> None:
-    """The editor's «Run» of a Script node: the flow as saved, the chain before the
+    """The editor's «Run» of a Script node (or a Container node, the run's kind): the flow as saved, the chain before the
     node on the sources' development sample, the nodes after it not run. A task of
     the gateway process that answered; its own database session."""
     from app.db.session import engine
@@ -499,15 +534,19 @@ async def run_trial(run_id: int, user_id: int, node_id: str) -> None:
             return (d.bucket, d.key) if d and d.key else None
 
         try:
-            if node is None or node.get("type") != "script":
+            if node is None or node.get("type") != run.kind:
                 raise ScriptFailed("the node is no longer in the saved flow")
-            # the Script nodes before this one: their latest output stands in for them
+            if run.kind == "container":
+                from app.services.container_runs import run_container as runner
+            else:
+                runner = run_script
+            # the Script and Container nodes before this one: their latest output stands in for them
             upstream = {nid: (o["output"]["bucket"], o["output"]["key"])
                         for nid, o in latest_outputs(session, flow.id).items() if o["output"]}
-            await run_script(session, user, flow, definition, node, parent_run_id=None, trigger_type="trial",
-                             engine_mode="development", script_outputs=upstream, resolve_ds=resolve_ds,
-                             default_bucket=get_settings().engine.bucket, launch=_launch_flow_run, wait=_wait_run,
-                             trial_run=run)
+            await runner(session, user, flow, definition, node, parent_run_id=None, trigger_type="trial",
+                         engine_mode="development", script_outputs=upstream, resolve_ds=resolve_ds,
+                         default_bucket=get_settings().engine.bucket, launch=_launch_flow_run, wait=_wait_run,
+                         trial_run=run)
         except Exception as e:  # noqa: BLE001 — whatever it was, the run says it and ends
             session.rollback()
             run = session.get(Run, run_id)
@@ -516,4 +555,4 @@ async def run_trial(run_id: int, user_id: int, node_id: str) -> None:
                 run.error = (str(getattr(e, "detail", None) or e) or type(e).__name__)[:2000]
                 session.add(run)
                 session.commit()
-            logger.info("script trial %s ended with: %s", run_id, e)
+            logger.info("trial %s ended with: %s", run_id, e)
