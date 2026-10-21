@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import type { PreviewResult } from '~/composables/useApi'
 
-const props = defineProps<{ result: PreviewResult | null; loading?: boolean; error?: string }>()
+// note: something to say instead of a table that is not an error (no preview after a Script node)
+const props = defineProps<{ result: PreviewResult | null; loading?: boolean; error?: string; note?: string }>()
 
 // numeri a destra con cifre tabellari; i VALORI restano grezzi: nell'anteprima di un
 // passo si vuole vedere il dato esatto, non una sua versione formattata
@@ -43,10 +44,12 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
       </table>
     </div>
     <div v-else-if="error" class="pad" style="color: var(--danger)">{{ error }}</div>
+    <div v-else-if="note && !result" class="pad" style="color: var(--muted)">{{ note }}</div>
     <div v-else-if="!result" class="muted pad">
       {{ $t('dataGrid.selectNode') }}
     </div>
     <template v-else>
+      <div v-if="note" class="pad" style="color: var(--muted); padding-bottom: 0">{{ note }}</div>
       <div class="pad muted">
         {{ $t(result.truncated ? 'dataGrid.summaryTruncated' : 'dataGrid.summary',
               { rows: result.row_count, cols: result.columns.length }) }}

@@ -22,6 +22,7 @@ from app.services.webhooks import consegna_loop as webhooks_loop
 from app.services.regolazioni_motore import spingi_loop as regolazioni_loop
 from app.services.kube_scaling import riapplica_loop as scaling_loop
 from app.services.siem import inoltro_loop as siem_loop
+from app.services.script_builds import build_loop as script_builds_loop
 from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
@@ -31,6 +32,7 @@ from app.routes.webhooks import router as webhooks_router
 from app.routes.engine_settings import router as engine_settings_router
 from app.routes.workers import router as workers_router
 from app.routes.siem import router as siem_router
+from app.routes.scripting import editor_router as scripting_editor_router, router as scripting_router
 from app.routes.groups import router as groups_router
 from app.routes.banners import router as banners_router
 from app.routes.privacy import router as privacy_router
@@ -82,6 +84,9 @@ def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
         asyncio.create_task(scaling_loop(stop)),
         # il registro di audit verso il SIEM (Splunk), ogni pochi secondi, se acceso
         asyncio.create_task(siem_loop(stop)),
+        # on Kubernetes, the images of the scripting environments: built, then checked
+        # (it returns at once elsewhere)
+        asyncio.create_task(script_builds_loop(stop)),
     ]
 
 
@@ -210,6 +215,8 @@ if settings.app.role != "orchestrator":
     app.include_router(engine_settings_router)
     app.include_router(workers_router)
     app.include_router(siem_router)
+    app.include_router(scripting_router)
+    app.include_router(scripting_editor_router)
     app.include_router(groups_router)
     app.include_router(banners_router)
     app.include_router(privacy_router)

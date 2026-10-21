@@ -45,6 +45,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- include "tabularia.secretChecksum" $ | nindent 8 }}
         {{- with .cfg.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -53,8 +54,9 @@ spec:
         app.kubernetes.io/component: {{ .component }}
     spec:
       {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
-      {{- if $.Values.adminScaling.enabled }}
-      # Admin → Workers changes the workers' autoscaling bounds: see scaling-rbac.yaml
+      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled }}
+      # Admin → Workers changes the workers' autoscaling bounds (scaling-rbac.yaml);
+      # Admin → Scripting environments runs Jobs in the scripts namespaces (scripts.yaml)
       serviceAccountName: {{ include "tabularia.fullname" $ }}-scaler
       automountServiceAccountToken: true
       {{- else }}
@@ -121,6 +123,9 @@ spec:
               value: {{ $.Values.gateway.threads | quote }}
             {{- if $.Values.adminScaling.enabled }}
             {{- include "tabularia.scalingEnv" $ | nindent 12 }}
+            {{- end }}
+            {{- if $.Values.scripts.enabled }}
+            {{- include "tabularia.scriptsEnv" $ | nindent 12 }}
             {{- end }}
             {{- include "tabularia.withoutEngineSecrets" $ | nindent 12 }}
           envFrom:

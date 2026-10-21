@@ -9,7 +9,7 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar, Server, KeyRound,
+  SlidersHorizontal, Radar, Server, KeyRound, Code2,
 } from 'lucide-vue-next'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
@@ -17,11 +17,13 @@ import WebhooksSection from '~/components/admin/WebhooksSection.vue'
 import EngineSettingsSection from '~/components/admin/EngineSettingsSection.vue'
 import SiemSection from '~/components/admin/SiemSection.vue'
 import WorkersSection from '~/components/admin/WorkersSection.vue'
+import ScriptingSection from '~/components/admin/ScriptingSection.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
 import { isSettingsCategory, useEngineSettings } from '~/composables/useEngineSettings'
 import { useWorkers } from '~/composables/useWorkers'
+import { useScripting } from '~/composables/useScripting'
 import { errMessage } from '~/composables/useApi'
 import { useProjects, type GroupOut, type Project, type UserOut } from '~/composables/useProjects'
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
@@ -38,6 +40,7 @@ const integr = useIntegrations()
 const impostazioniApi = useEngineSettings()
 const siemApi = useSiem()
 const workersApi = useWorkers()
+const scriptingApi = useScripting()
 // modelli AI: catalogo del provider + scelta dell'amministratore. `null` =
 // assistente non configurato o provider irraggiungibile (la sezione lo dice)
 const modelli = ref<AiModel[] | null>(null)
@@ -52,7 +55,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'siem' | 'ai'
+type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'siem' | 'ai'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
@@ -89,6 +92,8 @@ const nWebhook = ref(0)
 // quante impostazioni del motore sono cambiate dal pannello (le altre valgono dall'ambiente)
 const nImpostazioni = ref(0)
 const nWorker = ref(0)
+// the scripting environments defined
+const nAmbienti = ref(0)
 // l'inoltro dell'audit al SIEM: acceso o no
 const siemAcceso = ref(false)
 // le cartelle, per il filtro dei webhook
@@ -110,6 +115,7 @@ const sezioni = computed(() => [
   { id: 'settings' as Sezione, label: t('engineSettings.navTitle'), icon: SlidersHorizontal, badge: nImpostazioni.value },
   // the workers alive now
   { id: 'workers' as Sezione, label: t('workers.navTitle'), icon: Server, badge: nWorker.value },
+  { id: 'scripting' as Sezione, label: t('scripting.navTitle'), icon: Code2, badge: nAmbienti.value },
   { id: 'siem' as Sezione, label: t('siem.navTitle'), icon: Radar, badge: siemAcceso.value ? 1 : 0 },
   // quanti modelli sono ABILITATI: zero = l'assistente non e' usabile da nessuno
   { id: 'ai' as Sezione, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (modelli.value ?? []).filter((m) => m.enabled).length },
@@ -154,6 +160,9 @@ async function loadAll() {
   } catch { /* la sezione lo dirà quando si apre */ }
   try {
     nWorker.value = (await workersApi.get()).groups.reduce((n, g) => n + g.workers.length, 0)
+  } catch { /* the section says why when it opens */ }
+  try {
+    nAmbienti.value = (await scriptingApi.get()).environments.length
   } catch { /* the section says why when it opens */ }
   // a parte: l'assistente puo' non essere configurato, e non e' un errore del pannello
   try {
@@ -746,6 +755,10 @@ async function toggleMotore(m: EnginePolicy) {
 
         <template v-else-if="sezione === 'workers'">
           <WorkersSection @count="nWorker = $event" />
+        </template>
+
+        <template v-else-if="sezione === 'scripting'">
+          <ScriptingSection :groups="groups" @count="nAmbienti = $event" />
         </template>
 
         <template v-else-if="sezione === 'service'">

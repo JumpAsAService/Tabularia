@@ -46,6 +46,8 @@ export function useDialogA11y(
 
   function suTasto(e: KeyboardEvent) {
     if (!aperto()) return
+    // a code editor uses Esc (its suggestions, its find bar) and Tab (indenting) itself
+    if ((e.target as HTMLElement | null)?.closest?.('[data-own-escape]')) return
 
     if (e.key === 'Escape') {
       // un Select (o altro elemento a comparsa) aperto dentro il dialogo si chiude

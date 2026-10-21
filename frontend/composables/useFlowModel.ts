@@ -128,7 +128,10 @@ export function resolveChain(
   nodes: Node[],
   edges: Edge[],
   targetId: string,
-): { sourceNode: Node | null; operations: Operation[] } {
+  // a Script node's latest output (a run of the flow, or the editor's «Run»): the
+  // nodes after it read that, as if it were a source
+  scriptSources: Record<string, { bucket: string; key: string }> = {},
+): { sourceNode: Node | null; operations: Operation[]; afterScript?: string } {
   const inc = buildIncoming(edges)
 
   // Nodo DENTRO un container foreach: la catena è quella a monte del container
@@ -147,6 +150,7 @@ export function resolveChain(
   const opIds: string[] = []
   const seen = new Set<string>()
   let sourceNode: Node | null = null
+  let afterScript: string | undefined
   let cur: string | undefined = targetId
 
   while (cur && !seen.has(cur)) {
@@ -155,6 +159,14 @@ export function resolveChain(
     if (!node) break
     if (node.type === 'source') {
       sourceNode = node
+      break
+    }
+    // a Script node: what it wrote last time, when there is a last time
+    if (node.type === 'script') {
+      const out = scriptSources[node.id]
+      if (!out) return { sourceNode: null, operations: [], afterScript: node.id }
+      sourceNode = { ...node, data: { bucket: out.bucket, parquetKey: out.key } } as Node
+      afterScript = node.id
       break
     }
     if (node.type === 'operation' || node.type === 'foreach') opIds.push(cur)
@@ -167,7 +179,7 @@ export function resolveChain(
   const sample = sourceNode ? devSampleOperation(sourceNode.data) : null
   if (sample) operations.unshift(sample)
   if (sourceNode) operations.unshift(...sourceFilterOperations(sourceNode.data))
-  return { sourceNode, operations }
+  return { sourceNode, operations, afterScript }
 }
 
 /**

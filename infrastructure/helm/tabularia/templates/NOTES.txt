@@ -3,7 +3,11 @@ Tabularia {{ .Chart.AppVersion }} is being deployed as "{{ .Release.Name }}".
 {{ if .Values.ingress.enabled -}}
 Open:
 {{- range .Values.ingress.hosts }}
+  {{- if .host }}
   http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+  {{- else }}
+  http://<the address of your ingress controller> (no host set: it answers on any name; on minikube, `minikube ip`)
+  {{- end }}
 {{- end }}
 {{- else -}}
 No Ingress was created. Reach the UI with:

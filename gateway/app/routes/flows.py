@@ -38,7 +38,7 @@ from app.schemas.models import (
 from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
-from app.services import schedule_authority
+from app.services import schedule_authority, script_nodes
 from app.services.objects import collect_storage_keys, ensure_can_read_keys
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 from app.services.copy_names import free_copy_name
@@ -87,7 +87,7 @@ def _validate_production_engine(engine: str | None, session: Session | None = No
 
 # nodi che danno "qualcosa da eseguire": Output, oppure i nodi di controllo
 # (refresh di una datasource, esecuzione di un altro flusso)
-_RUNNABLE_NODE_TYPES = {"output", "refresh", "runflow"}
+_RUNNABLE_NODE_TYPES = {"output", "refresh", "runflow", "script"}
 
 
 def _has_runnable_nodes(definition: str | None) -> bool:
@@ -244,6 +244,7 @@ def create_flow(
     ensure_can(session, user, project_id, Capability.EDIT)
     _check_flow_name(body.name)
     _authorize_definition_keys(session, user, body.definition)
+    script_nodes.check_definition(session, user, None, body.definition)
     flow = Flow(
         name=body.name,
         description=body.description,
@@ -279,6 +280,7 @@ def duplicate_flow(
     src = _get_flow(session, flow_id)
     ensure_can(session, user, src.project_id, Capability.EDIT)
     _authorize_definition_keys(session, user, src.definition)
+    script_nodes.check_definition(session, user, None, src.definition)
     flow = Flow(
         name=free_copy_name(session, Flow, src.project_id, src.name),
         description=src.description,
@@ -594,6 +596,7 @@ def update_flow(
     ensure_can(session, user, flow.project_id, Capability.EDIT)
     if body.definition is not None:
         _authorize_definition_keys(session, user, body.definition)
+        script_nodes.check_definition(session, user, flow.definition, body.definition)
     if body.name is not None:
         body.name = body.name.strip()
         if not body.name:
@@ -692,6 +695,7 @@ def promote_flow_version(
     if target is None:
         raise HTTPException(status_code=404, detail="Version not found")
     _authorize_definition_keys(session, user, target.definition)  # RBAC come su salvataggio
+    script_nodes.check_definition(session, user, flow.definition, target.definition)
     schedule_off = _guard_someone_elses_schedule(flow, user, target.definition, False)
     flow.definition = target.definition
     flow.updated_at = datetime.now(timezone.utc)

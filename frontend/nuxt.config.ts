@@ -26,6 +26,20 @@ export default defineNuxtConfig({
   components: [{ path: '~/components', pathPrefix: false }],
 
   vite: {
+    // the code editor of the Script nodes: prepared with the other dependencies, so the
+    // development server does not reload the page the first time an editor opens
+    optimizeDeps: {
+      include: [
+        'monaco-editor/esm/vs/editor/editor.api',
+        'monaco-editor/esm/vs/editor/editor.all.js',
+        'monaco-editor/esm/vs/basic-languages/python/python.contribution',
+        'monaco-editor/esm/vs/basic-languages/r/r.contribution',
+        'monaco-editor/esm/vs/basic-languages/sql/sql.contribution',
+        'monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution',
+        'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution',
+        'monaco-editor/esm/vs/basic-languages/shell/shell.contribution',
+      ],
+    },
     define: {
       // vue-i18n compila i messaggi in JIT (un albero interpretato) invece di
       // generare codice con `new Function`: la Content-Security-Policy di

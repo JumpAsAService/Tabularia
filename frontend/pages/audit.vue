@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2 } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -159,6 +159,14 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'siem.test': { icon: Radar, color: u.muted, label: t('audit.siemTestAction') },
     'workers.scaling_update': { icon: Server, color: u.accent, label: t('audit.workersScalingUpdateAction') },
     'workers.scaling_reset': { icon: Server, color: u.muted, label: t('audit.workersScalingResetAction') },
+    'scripting.storage_update': { icon: Code2, color: u.accent, label: t('audit.scriptingStorageUpdateAction') },
+    'scripting.storage_test': { icon: Code2, color: u.muted, label: t('audit.scriptingStorageTestAction') },
+    'scripting.environment_create': { icon: Code2, color: u.accent, label: t('audit.scriptingEnvCreateAction') },
+    'scripting.environment_update': { icon: Code2, color: u.accent, label: t('audit.scriptingEnvUpdateAction') },
+    'scripting.environment_delete': { icon: Code2, color: u.danger, label: t('audit.scriptingEnvDeleteAction') },
+    'scripting.version_current': { icon: Code2, color: u.accent, label: t('audit.scriptingVersionCurrentAction') },
+    'scripting.variable_set': { icon: Code2, color: u.accent, label: t('audit.scriptingVariableSetAction') },
+    'scripting.variable_delete': { icon: Code2, color: u.muted, label: t('audit.scriptingVariableDeleteAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },

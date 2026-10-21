@@ -667,6 +667,10 @@ before a release.
   ClickHouse 24; planning a long chain of steps grows faster than the steps (150 columns ×
   40 steps: about 96 s on 24.8, under dbt-clickhouse's 300 s).
 - `foreach` cannot be exported; `pivot` only in the federated target.
+- A **Script** node (Python or R) is not dbt: an Output that reads what a script writes,
+  however far down, cannot be exported, and the export says which. A Script node that
+  feeds no exported Output is left out of the project, with a note: Tabularia keeps
+  running it with the flow.
 - ClickHouse and Trino cannot be federated (DuckDB has no scanner for them). A
   ClickHouse source exports natively (all sources on that connection) or with the
   ClickHouse target when it is the server the project runs on; Oracle, SQL Server and

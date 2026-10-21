@@ -21,6 +21,7 @@ from app.api.routes.dbt import router as dbt_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.regolazioni import router as regolazioni_router
 from app.api.routes.workers import router as workers_router
+from app.api.routes.scripts import router as scripts_router
 from app.api.solo_dal_gateway import SoloDalGateway
 
 
@@ -88,6 +89,7 @@ app.include_router(dbt_router)
 app.include_router(contracts_router)
 app.include_router(regolazioni_router)
 app.include_router(workers_router)
+app.include_router(scripts_router)
 
 @app.get("/engines")
 def list_engines():

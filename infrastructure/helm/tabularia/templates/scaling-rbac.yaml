@@ -1,20 +1,25 @@
-{{- if .Values.adminScaling.enabled }}
+{{- if or .Values.adminScaling.enabled .Values.scripts.enabled }}
 {{/*
-Admin → Workers on Kubernetes (adminScaling.enabled): the gateway and the
-orchestrator run with this service account, which may read the two worker
-Deployments and change the bounds of their autoscalers (HPA or KEDA ScaledObject),
-named one by one, and nothing else. The panel sets the bounds, the orchestrator
-keeps them applied (gateway services/kube_scaling.py). Every other pod keeps the
-chart's account, without a token.
+The service account of the gateway and the orchestrator when they talk to the
+Kubernetes API. Every other pod keeps the chart's account, without a token.
+- Admin → Workers (adminScaling.enabled): the Role below, to read the two worker
+  Deployments and change the bounds of their autoscalers (HPA or KEDA
+  ScaledObject), named one by one, and nothing else. The panel sets the bounds, the
+  orchestrator keeps them applied (gateway services/kube_scaling.py).
+- Admin → Scripting environments (scripts.enabled): the Roles of scripts.yaml, in
+  the two scripts namespaces only.
 */}}
 {{- $full := include "tabularia.fullname" . }}
-{{- $names := list (printf "%s-worker" $full) (printf "%s-preview-worker" $full) }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $full }}-scaler
   labels:
     {{- include "tabularia.labels" . | nindent 4 }}
+{{- end }}
+{{- if .Values.adminScaling.enabled }}
+{{- $full := include "tabularia.fullname" . }}
+{{- $names := list (printf "%s-worker" $full) (printf "%s-preview-worker" $full) }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

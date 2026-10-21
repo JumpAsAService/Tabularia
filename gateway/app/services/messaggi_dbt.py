@@ -143,6 +143,13 @@ MESSAGGI: dict[str, dict[str, str]] = {
         "es": "Un nodo «foreach» no se puede exportar: dbt no tiene un bucle en tiempo de ejecución. Déjalo fuera del flujo o exporta las ramas por separado.",
         "fr": "Un nœud «foreach» ne s'exporte pas : dbt n'a pas de boucle à l'exécution. Retirez-le du flux ou exportez les branches séparément.",
     },
+    "script_not_exportable": {
+        "en": "The output «{output}» of the flow «{flow}» reads what the Script node «{script}» writes: Python or R code runs on Tabularia's cluster, not in dbt, so it cannot be exported. Export the outputs before the script, or write its logic with sql nodes.",
+        "it": "L'output «{output}» del flusso «{flow}» legge quello che scrive il nodo Script «{script}»: il codice Python o R gira sul cluster di Tabularia, non in dbt, quindi non si può esportare. Esporta gli output prima dello script, o scrivi la sua logica con nodi sql.",
+        "de": "Die Ausgabe «{output}» des Flows «{flow}» liest, was der Skript-Knoten «{script}» schreibt: Python- oder R-Code läuft im Cluster von Tabularia, nicht in dbt, und lässt sich daher nicht exportieren. Exportieren Sie die Ausgaben vor dem Skript, oder schreiben Sie seine Logik mit sql-Knoten.",
+        "es": "La salida «{output}» del flujo «{flow}» lee lo que escribe el nodo Script «{script}»: el código Python o R se ejecuta en el clúster de Tabularia, no en dbt, así que no se puede exportar. Exporta las salidas anteriores al script, o escribe su lógica con nodos sql.",
+        "fr": "La sortie «{output}» du flux «{flow}» lit ce qu'écrit le nœud Script «{script}» : le code Python ou R s'exécute sur le cluster de Tabularia, pas dans dbt, il ne peut donc pas être exporté. Exportez les sorties avant le script, ou écrivez sa logique avec des nœuds sql.",
+    },
     "native_one_connection": {
         "en": "The native target needs every source on the SAME connection (one warehouse), and this flow uses more than one: use the ClickHouse or the federated target.",
         "it": "Il target nativo vuole tutte le sorgenti sulla STESSA connessione (un solo warehouse), e questo flusso ne usa più di una: usa il target ClickHouse o quello federato.",

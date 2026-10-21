@@ -219,6 +219,9 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
         d = session.get(Datasource, i)
         return (d.bucket, d.key) if d and d.key else None
 
+    # where the Script nodes already run wrote their output: the nodes after them read it
+    script_outputs: dict[str, tuple[str, str]] = {}
+
     for node in sequence_order(definition):
         t = node.get("type")
         d = node.get("data") or {}
@@ -232,7 +235,7 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
             try:
                 # engine_mode decide anche il CAMPIONE di sviluppo: solo "development"
                 # lo inietta; in produzione la catena legge tutti i record
-                req = resolve_output_request(definition, node, resolve_ds, default_bucket, engine_mode)
+                req = resolve_output_request(definition, node, resolve_ds, default_bucket, engine_mode, script_outputs)
                 run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id, engine_mode=engine_mode)
                 run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
                 if run.status != "SUCCESS":
@@ -265,6 +268,20 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                         f"email not sent, refused at launch: {reason}. The next steps of the flow were not run."
                     ) from e
                 errors.append(f"output: {e}")
+        elif t == "script":
+            # a failed script stops the flow, as a failed refresh does: the steps after
+            # it would read nothing, or stale data
+            from app.services import script_runs
+
+            try:
+                out = await script_runs.run_script(
+                    session, user, flow, definition, node, parent_run_id=parent_run_id, trigger_type=trigger_type,
+                    engine_mode=engine_mode, script_outputs=script_outputs, resolve_ds=resolve_ds,
+                    default_bucket=default_bucket, launch=_launch_flow_run, wait=_wait_run)
+            except (script_runs.ScriptFailed, FlowResolveError) as e:
+                raise OrchestrationError(str(e)) from e
+            if out is not None:
+                script_outputs[node["id"]] = out
         elif t == "runflow":
             sub_id = d.get("flowId")
             if not sub_id:

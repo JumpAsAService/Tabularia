@@ -93,6 +93,18 @@ SIEM_TEST = "siem.test"
 # processes per worker are engine settings and go as ENGINE_SETTINGS_UPDATE
 WORKERS_SCALING_UPDATE = "workers.scaling_update"
 WORKERS_SCALING_RESET = "workers.scaling_reset"
+# scripting environments (Admin → Scripting environments): the bucket the scripts work
+# in, and what their code runs with. A variable's value never goes in the detail
+SCRIPTING_STORAGE_UPDATE = "scripting.storage_update"
+SCRIPTING_STORAGE_TEST = "scripting.storage_test"
+SCRIPTING_ENV_CREATE = "scripting.environment_create"
+SCRIPTING_ENV_UPDATE = "scripting.environment_update"
+SCRIPTING_ENV_DELETE = "scripting.environment_delete"
+SCRIPTING_VERSION_CURRENT = "scripting.version_current"
+SCRIPTING_VARIABLE_SET = "scripting.variable_set"
+SCRIPTING_VARIABLE_DELETE = "scripting.variable_delete"
+# the editor's «Run» of a Script node: code executed on the cluster, by whom
+SCRIPTING_TRIAL = "scripting.trial"
 ENGINE_DISALLOW = "engine.disallow"
 # assistente AI: quali modelli si possono usare, e ogni query che l'assistente
 # esegue sui dati per conto di un utente (e' un accesso ai dati come un export)

@@ -590,6 +590,17 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__handle.h-left-bottom { top: 67% !important; }
 .vue-flow__handle.h-left-top:hover,
 .vue-flow__handle.h-left-bottom:hover { transform: translate(-50%, -50%) scale(1.35) !important; }
+/* the same on the right edge: the Script node's data output above its sequence */
+.vue-flow__handle.h-right-top,
+.vue-flow__handle.h-right-bottom {
+  right: 0 !important;
+  left: auto !important;
+  transform: translate(50%, -50%) !important;
+}
+.vue-flow__handle.h-right-top    { top: 33% !important; }
+.vue-flow__handle.h-right-bottom { top: 67% !important; }
+.vue-flow__handle.h-right-top:hover,
+.vue-flow__handle.h-right-bottom:hover { transform: translate(50%, -50%) scale(1.35) !important; }
 
 /* il tipo 'output' collide con un nodo BUILT-IN di Vue Flow: il tema di
    default veste il wrapper (sfondo bianco, 150px, padding, ombre su hover e

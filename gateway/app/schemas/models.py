@@ -632,6 +632,10 @@ class RunOut(BaseModel):
     # JSON: what a successful refresh has to say — {"missing": [{params, pattern}],
     # "missing_count", "expansions"}: the values of a range whose file was not there
     notes: Optional[str] = None
+    # kind="script": JSON — environment, version, files, attempts, exit code, the end
+    # of the log, the variables it was given (secret ones by name only)
+    script: Optional[str] = None
+    parent_run_id: Optional[int] = None
     started_at: Optional[UtcDateTime]
     finished_at: Optional[UtcDateTime]
     progress: Optional[RunProgress] = None  # solo per i run in corso (vedi runs.run_out)

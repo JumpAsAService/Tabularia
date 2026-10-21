@@ -55,6 +55,7 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
       ['/docs/design/sso-group-mapping', 'SSO and group mapping'],
       ['/docs/examples/keycloak', 'Keycloak example'],
       ['/docs/siem-splunk', 'Audit log to Splunk'],
+      ['/docs/scripting', 'Python and R in flows'],
       ['/docs/engines/clickhouse-ai-user', 'A ClickHouse user for the AI assistant'],
     ],
   },

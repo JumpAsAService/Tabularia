@@ -1,3 +1,4 @@
+import json
 import os
 import re
 
@@ -593,6 +594,78 @@ class KubernetesSettings(BaseModel):
     timeout_seconds: float = Field(default=10.0, gt=0)
 
 
+# The language versions an administrator can pick for a scripting environment, and
+# the image each one starts from. The chart may replace them (SCRIPTS__BASE_IMAGES),
+# for instance with images pinned by digest or taken from a mirror.
+DEFAULT_SCRIPT_BASE_IMAGES = {
+    "python": {"3.11": "python:3.11-slim", "3.12": "python:3.12-slim", "3.13": "python:3.13-slim",
+               "3.14": "python:3.14-slim"},
+    "r": {"4.5": "rocker/r-ver:4.5.3", "4.6": "rocker/r-ver:4.6.0"},
+}
+
+
+class ScriptsSettings(BaseModel):
+    """Scripting environments and the Script node (Admin → Scripting environments),
+    on Kubernetes only (services/script_builds.py). Off unless `enabled` is true; the
+    Helm chart sets all of it with `scripts.enabled`, together with the service
+    account that may run Jobs in the two namespaces below. The Kubernetes API is
+    reached as in KubernetesSettings (api_url, token_file, ca_file)."""
+    enabled: bool = False
+    namespace: str = ""  # where the scripts and the image checks run
+    # where the editor's «Run» of a Script node runs (empty = `namespace`): apart, with a
+    # ResourceQuota of its own, so trials never take resources from the flows' runs
+    trial_namespace: str = ""
+    build_namespace: str = ""  # where the image builds run (empty = `namespace`)
+    # where the environment images are pushed: <registry>/tabularia-env-<id>:v<n>
+    registry: str = ""
+    registry_insecure: bool = False  # plain HTTP or a self-signed certificate (a test cluster)
+    # names of Kubernetes Secrets (type dockerconfigjson): the build pushes with the
+    # first, in build_namespace; the Jobs pull with the second, in namespace
+    registry_push_secret: str = ""
+    registry_pull_secret: str = ""
+    builder_image: str = "moby/buildkit:v0.33.1-rootless"
+    # JSON: {"python": {"3.12": "python:3.12-slim", …}, "r": {…}}; empty = the defaults
+    base_images: str = ""
+    pypi_index_url: str = ""  # empty = PyPI
+    cran_url: str = "https://cran.r-project.org"  # CRAN itself, or a mirror of it
+    build_timeout_seconds: int = Field(default=3600, ge=60)
+    # what an image build may use (Kubernetes quantities). The memory is requested
+    # whole, so a build lands only on a node that has it; the compilers it runs at once
+    # follow from both (one per 1.5 GiB, at most one per core: script_builds.build_jobs)
+    build_cpu: str = "2"
+    build_memory: str = "4Gi"
+    check_timeout_seconds: int = Field(default=300, ge=30)
+    poll_seconds: float = Field(default=5.0, gt=0)
+    log_max_bytes: int = Field(default=262_144, ge=4096)
+    job_ttl_seconds: int = Field(default=3600, ge=60)
+    # the code editor underlines what Ruff finds in Python code while it is typed
+    lint: bool = True
+
+    @field_validator("build_cpu")
+    @classmethod
+    def _build_cpu(cls, v: str) -> str:
+        if not re.fullmatch(r"\d+(\.\d+)?m?", v.strip()) or float(v.strip().rstrip("m")) <= 0:
+            raise ValueError("SCRIPTS__BUILD_CPU is a Kubernetes CPU quantity: 2, 1.5 or 1500m")
+        return v.strip()
+
+    @field_validator("build_memory")
+    @classmethod
+    def _build_memory(cls, v: str) -> str:
+        if not re.fullmatch(r"\d+(\.\d+)?(Ki|Mi|Gi|Ti|K|M|G|T)?", v.strip()):
+            raise ValueError("SCRIPTS__BUILD_MEMORY is a Kubernetes memory quantity: 4Gi, 6144Mi")
+        return v.strip()
+
+    def images(self) -> dict[str, dict[str, str]]:
+        if not self.base_images.strip():
+            return DEFAULT_SCRIPT_BASE_IMAGES
+        try:
+            parsed = json.loads(self.base_images)
+        except ValueError as e:
+            raise ValueError(f"SCRIPTS__BASE_IMAGES is not valid JSON ({e})") from None
+        return {lang: {str(v): str(img) for v, img in (parsed.get(lang) or {}).items()}
+                for lang in ("python", "r")}
+
+
 
 # How to make a Fernet key with the tools of any machine: the earlier hint imported
 # the `cryptography` package, which a fresh machine does not have. Same commands as
@@ -626,6 +699,7 @@ class Settings(BaseSettings):
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)
     openlineage: OpenLineageSettings = Field(default_factory=OpenLineageSettings)
     kubernetes: KubernetesSettings = Field(default_factory=KubernetesSettings)
+    scripts: ScriptsSettings = Field(default_factory=ScriptsSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

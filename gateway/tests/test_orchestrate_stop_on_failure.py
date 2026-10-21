@@ -39,7 +39,7 @@ def _flusso(session, *, stop_on_failure=None):
 def _sostituisci(monkeypatch, lanciati: list[str]):
     """L'email fallisce, tutto il resto riesce. Registra CHI viene lanciato."""
 
-    def finto_resolve(definition, node, resolve_ds, default_bucket, engine_mode):
+    def finto_resolve(definition, node, resolve_ds, default_bucket, engine_mode, script_outputs=None):
         lanciati.append(node["data"]["destType"])
         return {"bucket": "b", "input_key": "k.parquet", "operations": []}
 

@@ -1,0 +1,166 @@
+"""The check of the scripts bucket (POST /scripts/storage/test): a probe object
+written, read back and deleted with the administrators' key, and whether that key
+can also list the bucket — which it should not.
+"""
+from __future__ import annotations
+
+import io
+
+import pytest
+from botocore.exceptions import ClientError
+
+from app.api.routes import scripts as routes
+from app.core.crypto import encrypt_secret
+from app.ingest.s3_destination import S3ConnectionSpec
+
+SECRET = "scripts-bucket-s3cret"
+
+
+class FakeS3:
+    def __init__(self, *, can_list: bool = True, denied: str = ""):
+        self.objects: dict[str, bytes] = {}
+        self.can_list = can_list
+        self.denied = denied  # "PutObject" | "GetObject" | "DeleteObject"
+        self.calls: list[str] = []
+
+    def _check(self, op: str):
+        self.calls.append(op)
+        if op == self.denied:
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied."}}, op)
+
+    def put_object(self, Bucket, Key, Body):
+        self._check("PutObject")
+        self.objects[Key] = Body
+
+    def get_object(self, Bucket, Key):
+        self._check("GetObject")
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+    def delete_object(self, Bucket, Key):
+        self._check("DeleteObject")
+        self.objects.pop(Key, None)
+
+    def list_objects_v2(self, Bucket, MaxKeys):
+        self._check("ListObjectsV2")
+        if not self.can_list:
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied."}}, "ListObjectsV2")
+        return {"Contents": []}
+
+
+@pytest.fixture
+def s3(monkeypatch):
+    holder: dict = {}
+
+    def install(fake: FakeS3, *, expect_secret: str = SECRET):
+        def client(self: S3ConnectionSpec):
+            assert self.resolve_secret() == expect_secret  # decrypted only here
+            return fake
+        monkeypatch.setattr(S3ConnectionSpec, "client", client)
+        holder["fake"] = fake
+        return fake
+    return install
+
+
+def _call(**conn) -> dict:
+    spec = {"endpoint_url": "http://minio:9000", "access_key": "scripts", "bucket": "scripts",
+            "secret_key_encrypted": encrypt_secret(SECRET), **conn}
+    return routes.storage_test(routes.StorageTestRequest(connection=S3ConnectionSpec(**spec)))
+
+
+def test_a_key_without_listing_passes_and_leaves_nothing_behind(s3):
+    fake = s3(FakeS3(can_list=False))
+    out = _call()
+    assert out["ok"] is True and out["can_list"] is False
+    assert fake.objects == {}  # the probe is deleted
+    assert fake.calls == ["PutObject", "GetObject", "DeleteObject", "ListObjectsV2"]
+    assert SECRET not in str(out)
+
+
+def test_a_key_that_can_list_passes_with_the_warning(s3):
+    s3(FakeS3(can_list=True))
+    out = _call()
+    assert out["ok"] is True and out["can_list"] is True
+
+
+@pytest.mark.parametrize("denied, step", [("PutObject", "write"), ("GetObject", "read"), ("DeleteObject", "delete")])
+def test_a_missing_right_says_which_step_failed(s3, denied, step):
+    s3(FakeS3(denied=denied))
+    out = _call()
+    assert out["ok"] is False and out["can_list"] is None
+    assert out["message"].startswith(f"Could not {step} _tabularia-check/") and "AccessDenied" in out["message"]
+    assert SECRET not in out["message"]
+
+
+def test_a_secret_that_cannot_be_decrypted_is_a_clear_failure():
+    out = _call(secret_key_encrypted="not-a-fernet-token")
+    assert out["ok"] is False and out["message"].startswith("The client could not be created")
+
+
+# ── a script's output, and the step's files ─────────────────────────────────
+class FakeScriptsBucket(FakeS3):
+    def head_object(self, Bucket, Key):
+        self.calls.append("HeadObject")
+        if Key not in self.objects:
+            # without the listing right S3 answers 403 for a key that does not exist
+            raise ClientError({"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject")
+        return {"ContentLength": len(self.objects[Key])}
+
+    def download_file(self, Bucket, Key, Filename):
+        with open(Filename, "wb") as f:
+            f.write(self.objects[Key])
+
+
+class FakeStorage:
+    def __init__(self):
+        self.uploads: list[tuple[str, str, bytes]] = []
+
+    def upload_file(self, path, bucket, key):
+        self.uploads.append((bucket, key, open(path, "rb").read()))
+
+
+def _parquet() -> bytes:
+    import polars as pl
+
+    buf = io.BytesIO()
+    pl.DataFrame({"x": [1, 2, 3]}).write_parquet(buf)
+    return buf.getvalue()
+
+
+def _import(key: str):
+    spec = S3ConnectionSpec(endpoint_url="http://minio:9000", access_key="scripts", bucket="scripts",
+                            secret_key_encrypted=encrypt_secret(SECRET))
+    return routes.output_import(routes.OutputImportRequest(connection=spec, key=key, bucket="data-prep",
+                                                           output_key="out/abc.parquet"))
+
+
+def test_a_scripts_output_is_copied_into_tabularias_storage(s3, monkeypatch):
+    fake = s3(FakeScriptsBucket())
+    fake.objects["env-1/step/output.parquet"] = _parquet()
+    storage = FakeStorage()
+    monkeypatch.setattr("app.utils.get_storage_service", lambda: storage)
+    out = _import("env-1/step/output.parquet")
+    assert out == {"found": True, "rows": 3, "bytes": len(fake.objects["env-1/step/output.parquet"])}
+    assert storage.uploads[0][:2] == ("data-prep", "out/abc.parquet")
+
+
+def test_an_output_that_was_not_written_or_is_not_parquet(s3, monkeypatch):
+    fake = s3(FakeScriptsBucket())
+    monkeypatch.setattr("app.utils.get_storage_service", lambda: FakeStorage())
+    assert _import("env-1/step/output.parquet") == {"found": False}
+    fake.objects["env-1/step/output.parquet"] = b"a,b\n1,2\n"
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as e:
+        _import("env-1/step/output.parquet")
+    assert e.value.status_code == 400 and "not a parquet file" in e.value.detail
+
+
+def test_the_steps_files_are_deleted_by_key(s3):
+    fake = s3(FakeScriptsBucket())
+    fake.objects = {"env-1/s/input.parquet": b"x", "env-1/s/output.parquet": b"y", "env-1/other/input.parquet": b"z"}
+    spec = S3ConnectionSpec(endpoint_url="http://minio:9000", access_key="scripts", bucket="scripts",
+                            secret_key_encrypted=encrypt_secret(SECRET))
+    out = routes.objects_delete(routes.ObjectsDeleteRequest(connection=spec, keys=["env-1/s/input.parquet",
+                                                                                   "env-1/s/output.parquet"]))
+    assert out == {"deleted": 2, "failed": []} and list(fake.objects) == ["env-1/other/input.parquet"]
+    assert "ListObjectsV2" not in fake.calls

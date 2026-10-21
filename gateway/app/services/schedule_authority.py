@@ -34,6 +34,7 @@ _REFERENCES = {
     "connectionId": "connection",
     "mirrorConnectionId": "connection",
     "projectId": "folder",
+    "environmentId": "environment",
 }
 
 
@@ -64,6 +65,10 @@ def reach_of(definition) -> set[tuple[str, object]]:
                 walk(item)
 
     walk(parsed)
+    # a Script node runs code: new code, or other code, is more than the author chose
+    from app.services.script_nodes import code_fingerprint, script_nodes
+
+    found |= {("script", code_fingerprint(n)) for n in script_nodes(parsed)}
     return found
 
 
@@ -114,6 +119,13 @@ def gaps_of_flow(session: Session, user: User, flow: Flow, seen: Optional[set[in
             conn = session.get(Connection, ref)
             if conn is not None and not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
                 gaps.append(f"CONNECT on connection #{ref}")
+        elif kind == "environment":
+            from app.models import ScriptEnvironment
+            from app.services.script_nodes import can_use
+
+            env = session.get(ScriptEnvironment, ref)
+            if env is not None and not can_use(session, user, env):
+                gaps.append(f"use of scripting environment '{env.name}'")
         elif kind == "flow" and ref not in seen:
             sub = session.get(Flow, ref)
             if sub is not None:

@@ -69,6 +69,13 @@ NIENTE_SIEM_DA_TOKEN = {
     "de": "Ein API-Token kann nicht ändern, wohin das Audit-Protokoll geht: Das geht über die Oberfläche",
     "es": "Un token de API no puede cambiar adónde va el registro de auditoría: hazlo desde la interfaz",
 }
+NIENTE_SCRIPTING_DA_TOKEN = {
+    "en": "An API token cannot change the scripting environments or their bucket: do it from the interface",
+    "it": "Un token API non cambia gli ambienti di scripting né il loro bucket: si fa dall'interfaccia",
+    "fr": "Un jeton d'API ne peut pas modifier les environnements de script ni leur bucket : faites-le depuis l'interface",
+    "de": "Ein API-Token kann die Skriptumgebungen und ihren Bucket nicht ändern: Das geht über die Oberfläche",
+    "es": "Un token de API no puede cambiar los entornos de scripting ni su bucket: hazlo desde la interfaz",
+}
 # le POST che leggono soltanto: un token di sola lettura le può usare (un export o
 # un'anteprima calcolano e restituiscono dati, non cambiano niente)
 POST_DI_LETTURA = {"/tasks/export", "/tasks/exports", "/tasks/preview"}

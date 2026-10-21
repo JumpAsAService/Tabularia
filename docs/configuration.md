@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 101 |
+| [Gateway](#gateway) | 121 |
 | [Engine and workers](#engine-and-workers) | 86 |
 | [Frontend](#frontend) | 3 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **210** |
+| **Total** | **230** |
 
 ## Before production
 
@@ -275,6 +275,33 @@ Lets an administrator change the minimum and maximum number of worker pods from 
 | `KUBERNETES__PREVIEW_WORKER_AUTOSCALER` | string | empty | set by the chart with `adminScaling.enabled` | Their autoscaler, as for the run workers. |
 | `KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS` | integer, ≥ 1 | `8` | `previewWorker.autoscaling.panelMaxReplicas` (or `maxReplicas`) | The highest maximum of preview-worker pods the panel may set. |
 | `KUBERNETES__TIMEOUT_SECONDS` | number, > 0 | `10` | `extraEnv` | Timeout of the calls to the Kubernetes API. |
+
+### Scripting environments (Kubernetes)
+
+Administration → Scripting environments: the Python and R environments the Script node runs in, each built once into an image by a Kubernetes Job (rootless BuildKit) and checked by a second Job. Off unless `SCRIPTS__ENABLED` is true; the chart sets the whole block, the two namespaces and a service account allowed to run Jobs there, with `scripts.enabled`. The Kubernetes API is reached as in `KUBERNETES__API_URL`, `KUBERNETES__TOKEN_FILE` and `KUBERNETES__CA_FILE` ([Scripting environments](scripting.md)).
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `SCRIPTS__ENABLED` | boolean | `false` | `scripts.enabled` | Turns the scripting environments on: the admin section and the image builds. |
+| `SCRIPTS__NAMESPACE` | string | empty | `scripts.namespace` | Namespace where the scripts and the image checks run (Pod Security level `restricted` is enough). |
+| `SCRIPTS__TRIAL_NAMESPACE` | string | empty | `scripts.trialNamespace` (default `<namespace>-scripts-dev`), quota `scripts.trialQuota` | Namespace where the editor's «Run» of a Script node runs, apart from the flows' runs and with a ResourceQuota of its own, so trials never take resources from scheduled flows. A trial that does not fit in the quota fails at once, saying so. Empty = `SCRIPTS__NAMESPACE`. |
+| `SCRIPTS__BUILD_NAMESPACE` | string | empty | `scripts.buildNamespace` | Namespace where the image builds run. Rootless BuildKit needs its own user namespace (seccomp and AppArmor `Unconfined`), which only the `privileged` Pod Security level admits; its pods still run as a user, without privileges. Empty = `SCRIPTS__NAMESPACE`, which must then be `privileged` too: keep them apart. |
+| `SCRIPTS__REGISTRY` | string | empty | `scripts.registry.repository` | Where the environment images are pushed, as `host[:port]/path`: an environment's image is `<registry>/tabularia-env-<id>:v<n>`. The cluster's nodes pull from it. |
+| `SCRIPTS__REGISTRY_INSECURE` | boolean | `false` | `scripts.registry.insecure` | The registry speaks plain HTTP or has a self-signed certificate. A test cluster only. |
+| `SCRIPTS__REGISTRY_PUSH_SECRET` | string | empty | `scripts.registry.pushSecret` | Name of a Secret of type `kubernetes.io/dockerconfigjson` in the build namespace, used by the builds to push. Empty = a registry that takes pushes without credentials. |
+| `SCRIPTS__REGISTRY_PULL_SECRET` | string | empty | `scripts.registry.pullSecret` | Name of a Secret of type `kubernetes.io/dockerconfigjson` in the scripts namespace, used by the Jobs to pull the images. Empty = the nodes pull without credentials. |
+| `SCRIPTS__BUILDER_IMAGE` | string | `moby/buildkit:v0.33.1-rootless` | `scripts.builderImage` | The image that builds the environments: BuildKit, rootless. Replace it with a mirror on a cluster without internet access. |
+| `SCRIPTS__BASE_IMAGES` | string | empty | `scripts.baseImages` | JSON: the language versions offered, and the image each starts from, e.g. `{"python": {"3.12": "python:3.12-slim"}, "r": {"4.5": "rocker/r-ver:4.5.3"}}`. Empty = Python 3.11, 3.12, 3.13, 3.14 (`python:3.x-slim`) and R 4.5, 4.6 (`rocker/r-ver`). Pin them by digest, or point them at a mirror, here. |
+| `SCRIPTS__PYPI_INDEX_URL` | string | empty | `scripts.pypiIndexUrl` | The Python package index the builds install from. Empty = PyPI. |
+| `SCRIPTS__CRAN_URL` | string | `https://cran.r-project.org` | `scripts.cranUrl` | The CRAN repository the R builds install from, and the one the scripts' R sees: CRAN itself or one of its mirrors. CRAN publishes sources, so R packages compile during the build; the images carry the system libraries the usual packages need. |
+| `SCRIPTS__BUILD_TIMEOUT_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | The longest an image build may take before it fails. |
+| `SCRIPTS__BUILD_CPU` | string | `2` | `extraEnv` | CPU an environment's image build may use. With SCRIPTS__BUILD_MEMORY it sets how many compilers run at once (one per core at most), which is what makes R packages built from CRAN's sources take minutes or tens of minutes. |
+| `SCRIPTS__BUILD_MEMORY` | string | `4Gi` | `extraEnv` | Memory an environment's image build requests and may use: it lands only on a node that has it. One compiler runs per 1.5 GiB (arrow's C++ takes over 1 GB each); a build that needs more fails alone, saying its compiler was killed. Raise it, with SCRIPTS__BUILD_CPU, to build R environments faster on large nodes. |
+| `SCRIPTS__CHECK_TIMEOUT_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | The longest the check of a new image may take: pulling it on a node, starting it, listing its packages. |
+| `SCRIPTS__POLL_SECONDS` | number, > 0 | `5` | `extraEnv` | How often the orchestrators look at the builds in progress. |
+| `SCRIPTS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a build's log is kept and shown in the panel. |
+| `SCRIPTS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job after this long, if Tabularia has not removed it first. |
+| `SCRIPTS__LINT` | boolean | `true` | `extraEnv` | The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person. |
 
 ## Engine and workers
 

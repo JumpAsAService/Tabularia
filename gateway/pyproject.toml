@@ -22,6 +22,8 @@ dependencies = [
     "openlineage-python>=1.53.0",
     "sqlglot>=25.0.0",
     "alembic>=1.16",
+    "packaging>=24.0",
+    "ruff>=0.17.1",
 ]
 
 [dependency-groups]

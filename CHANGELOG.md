@@ -27,6 +27,56 @@ exposes at `/system/info` and in the app's settings menu.
   to root. A one-shot `keys-init` container now gives the volume to the services before
   any of them starts, whatever image or container mounts it first.
 
+- **Fixed (Helm chart): a new key or password in the values was not used until the pods
+  restarted by themselves.** The pods carried the ConfigMap's checksum but not the
+  Secret's, so `helm upgrade` with a corrected `secrets.*` value left the old one running.
+  The pods that read the Secret now roll when it changes; a Secret of your own
+  (`existingSecret`) is still yours to roll.
+
+- **Python and R in flows (Kubernetes): the Script node.** A flow step written in
+  Python or R runs as a Kubernetes Job, outside Tabularia, in a scripting environment
+  an administrator defined ([docs/scripting.md](docs/scripting.md)).
+  - **Scripting environments** (Administration): a language version (Python 3.11–3.14,
+    R 4.5–4.6) and a list of packages, built once into an image by a Job (rootless
+    BuildKit) and checked by a second one; versions, an earlier one can be put back;
+    variables of their own, secret or not, separate from Tabularia's; the groups that
+    may use each one. Packages come from PyPI and CRAN (or mirrors), searched from the
+    panel, with a warning for a Python version that has no wheel.
+  - **The Script node**: its input (an edge in) and output (an edge out) are optional.
+    The step before it is written to a bucket kept for the scripts, the script reads
+    it with `TABULARIA_INPUT` and writes `TABULARIA_OUTPUT`, which the next nodes
+    read; with no edges it simply runs as a step. Several files (modules next to the
+    one that runs), retries, a timeout; a failure stops the flow; its run shows the
+    attempts, the exit code, the log and the variables it had (secret ones by name).
+    **Run** in its panel tries the saved node on the sources' sample in a few seconds,
+    and the nodes after a script preview what it wrote last (a trial or the flow's
+    run, saying which and whether the code changed since). Trials run in a namespace
+    of their own with a ResourceQuota (`scripts.trialQuota`), never among the flows'
+    runs; one that does not fit says so at once.
+  - **Problems before running**: the code editor underlines what Ruff finds in Python
+    (undefined names, syntax errors, unused imports) and the imports the environment
+    does not have, when typing pauses, and marks the
+    line where the last run stopped, with its log under the code (`SCRIPTS__LINT`).
+  - **Image builds** run with their own CPU and memory (`SCRIPTS__BUILD_CPU`,
+    `SCRIPTS__BUILD_MEMORY`) and as many compilers as those allow, never as many as
+    the node has cores: an R environment with `arrow` and `forecast` no longer runs
+    the node out of memory.
+  - **dbt export**: a script is not dbt. An Output that reads what a Script node writes,
+    however far down, refuses the export and says which; a Script node no exported
+    Output reads from is left out, with a note in the project.
+  - **The code editor** is Monaco (VS Code's), served by the frontend: the variables
+    and the installed packages are listed and inserted with a click, and offered while
+    typing, with the public names of each module after its alias.
+  - **Safety**: no Tabularia key reaches a Job (the scripts bucket has its own, which
+    should not list the bucket), the code may not name the scripts bucket, writing a
+    script needs the environment's groups, and someone else's schedule stops when the
+    code changes.
+
+  On the chart: `scripts.enabled`, three namespaces of its own (scripts, trials,
+  builds) and a service account limited to Jobs, their logs and events, and the code
+  and variables they mount. Revisions 0015
+  and 0016 add six tables and two nullable columns.
+
 ## 1.2.0 «Appio» — 2026-10-18
 
 Third release, still «Appio». New sources: SFTP folders (in and out), HTTP APIs and S3

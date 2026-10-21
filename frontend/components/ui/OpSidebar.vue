@@ -4,13 +4,14 @@
 // handler di FlowEditor.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GripVertical, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, Search } from 'lucide-vue-next'
+import { FileCode2, GripVertical, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const { t } = useI18n()
 
 // readOnly: osservatore — solo trasformazioni, niente sorgenti, controllo, output
-const props = defineProps<{ operations: string[]; readOnly?: boolean }>()
+// scripting: the person may write Script nodes (an environment is there for them)
+const props = defineProps<{ operations: string[]; readOnly?: boolean; scripting?: boolean }>()
 
 // ── ricerca: filtra le voci della palette per etichetta (o nome operazione) ──
 const query = ref('')
@@ -34,7 +35,8 @@ const showRefresh = computed(() => !props.readOnly && match(t('opSidebar.refresh
 const showRunflow = computed(() => !props.readOnly && match(t('opSidebar.runFlowLabel'), 'runflow'))
 const showOutput = computed(() => !props.readOnly && match(t('opSidebar.outputLabel'), 'output'))
 const showComment = computed(() => !props.readOnly && match(t('opSidebar.noteLabel'), 'comment', 'commento'))
-const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value)
+const showScript = computed(() => !props.readOnly && !!props.scripting && match(t('scripting.node.title'), 'script', 'python', 'r'))
+const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value || showScript.value)
 const noResults = computed(
   () =>
     !showSource.value &&
@@ -121,6 +123,17 @@ function onDragStart(ev: DragEvent, kind: string) {
       >
         <PlayCircle :size="15" class="item-icon" />
         <span>{{ $t('opSidebar.runFlowLabel') }}</span>
+        <GripVertical :size="13" class="grip" />
+      </div>
+      <div
+        v-if="showScript"
+        class="item"
+        draggable="true"
+        :style="{ '--item-color': '#34d399' }"
+        @dragstart="onDragStart($event, 'script')"
+      >
+        <FileCode2 :size="15" class="item-icon" />
+        <span>{{ $t('scripting.node.title') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
     </template>

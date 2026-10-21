@@ -141,6 +141,7 @@ async def _launch_flow_run(
     trigger_type: str = "manual", parent_run_id: int | None = None,
     engine_mode: str = "development",
     dry_run_to: str | None = None,
+    script_destination: tuple[dict, str] | None = None,
 ) -> Run:
     """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
     (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
@@ -153,7 +154,10 @@ async def _launch_flow_run(
     `engine_mode`: "development" = motore dell'editor (`flow.engine`);
     "production" = `flow.production_engine` (se impostato) — è ciò che usa lo
     scheduler, così il DAG in produzione può girare su un motore diverso da
-    quello con cui è stato progettato."""
+    quello con cui è stato progettato.
+
+    `script_destination`: (engine payload, summary) of a Script node's input, built by
+    services/script_runs.py — the scripts bucket, never from the client."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
     engine_name = resolve_run_engine(flow, engine_mode)
 
@@ -234,7 +238,9 @@ async def _launch_flow_run(
     # id, il payload con la secret (cifrata) lo costruisce il gateway — mai il client
     destination_payload = None
     destination_summary = None
-    if body.destination:
+    if script_destination is not None:
+        destination_payload, destination_summary = script_destination
+    elif body.destination:
         conn = session.get(Connection, body.destination.connection_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="Connection not found")
@@ -1090,6 +1096,11 @@ async def _reconcile(session: Session, run: Run) -> Run:
         if run.status == "PENDING":
             return await close_if_queued_too_long(session, run)
         return run
+    if run.kind == "script":
+        # a Kubernetes Job the orchestration follows: here only an orphan is closed
+        from app.services.script_runs import close_if_orphaned
+
+        return await close_if_orphaned(session, run)
     task_id = run.task_id
     if task_id.startswith(PLACEHOLDER_TASK):
         # an SFTP Output's run, written before its task so that {run_id} exists: the

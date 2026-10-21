@@ -1,0 +1,88 @@
+{{- if .Values.scripts.enabled }}
+{{/*
+Admin → Scripting environments (scripts.enabled), docs/scripting.md. Three namespaces
+apart from the release's:
+- the scripts namespace, where the Script nodes and the checks of new images run,
+  at the `restricted` Pod Security level;
+- the trials' namespace, where the editor's «Run» of a Script node runs, `restricted`
+  too, with a ResourceQuota of its own (scripts.trialQuota);
+- the build namespace, where rootless BuildKit builds the images. It needs its own
+  user namespace (seccomp and AppArmor Unconfined), which only `privileged` allows;
+  its pods still run as a user, without privileges.
+The gateway's service account may run Jobs, read their Pods and logs there and,
+in the scripts namespace, create the ConfigMap and the Secret a Script node's Job
+mounts (its code, its variables); nothing else.
+*/}}
+{{- $full := include "tabularia.fullname" . }}
+{{- $spaces := dict "scripts" (include "tabularia.scriptsNamespace" .) "trials" (include "tabularia.scriptTrialsNamespace" .) "builds" (include "tabularia.scriptBuildsNamespace" .) }}
+{{- range $kind, $ns := $spaces }}
+{{- if $.Values.scripts.createNamespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+    pod-security.kubernetes.io/enforce: {{ ternary "privileged" "restricted" (eq $kind "builds") }}
+    pod-security.kubernetes.io/warn: {{ ternary "privileged" "restricted" (eq $kind "builds") }}
+{{- end }}
+{{- if and (eq $kind "trials") $.Values.scripts.trialQuota.enabled }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ $full }}-script-trials
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+spec:
+  hard:
+    {{- toYaml $.Values.scripts.trialQuota.hard | nindent 4 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-scripts
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # why a Job has no Pod: a full quota, a Pod the namespace's policy refuses
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list"]
+  {{- if ne $kind "builds" }}
+  # a Script node's code and its environment's secret variables, owned by its Job
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["create", "get", "delete"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-scripts
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-scripts
+subjects:
+  - kind: ServiceAccount
+    name: {{ $full }}-scaler
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

@@ -100,6 +100,19 @@ the production compose file does.
 {{- end }}
 {{- end -}}
 
+{{/*
+Rolls the pods when the chart's Secret changes, as checksum/config does for the
+ConfigMap: environment variables are read when a container starts, so without it a
+new key or password in the values stays unused until something restarts the pods.
+A Secret of your own (existingSecret) is outside the chart: restart the pods after
+changing it.
+*/}}
+{{- define "tabularia.secretChecksum" -}}
+{{- if not .Values.existingSecret }}
+checksum/secret: {{ include (print .Template.BasePath "/secret.yaml") . | sha256sum }}
+{{- end }}
+{{- end -}}
+
 {{- define "tabularia.envFrom" -}}
 - configMapRef:
     name: {{ include "tabularia.configMapName" . }}
@@ -150,6 +163,7 @@ spec:
         # Roll the pods when configuration changes; without this a values-only
         # upgrade leaves the old settings running.
         checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- include "tabularia.secretChecksum" $root | nindent 8 }}
         {{- with $cfg.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -228,5 +242,53 @@ the same name) and the highest maxReplicas the panel may set for each.
   value: {{ ternary (printf "%s/%s" (ternary "scaledobject" "hpa" (dig "keda" "enabled" false $a)) $name) "" (and $a.enabled true) | quote }}
 - name: KUBERNETES__{{ upper $kind }}_WORKER_MAX_REPLICAS
   value: {{ $a.panelMaxReplicas | default $a.maxReplicas | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Admin → Scripting environments (scripts.enabled): the two namespaces, and what the
+gateway needs to build the images there.
+*/}}
+{{- define "tabularia.scriptsNamespace" -}}
+{{- .Values.scripts.namespace | default (printf "%s-scripts" .Release.Namespace) -}}
+{{- end -}}
+
+{{- define "tabularia.scriptBuildsNamespace" -}}
+{{- .Values.scripts.buildNamespace | default (printf "%s-script-builds" .Release.Namespace) -}}
+{{- end -}}
+
+{{- define "tabularia.scriptTrialsNamespace" -}}
+{{- .Values.scripts.trialNamespace | default (printf "%s-scripts-dev" .Release.Namespace) -}}
+{{- end -}}
+
+{{- define "tabularia.scriptsEnv" -}}
+{{- $s := .Values.scripts -}}
+- name: SCRIPTS__ENABLED
+  value: "true"
+- name: SCRIPTS__NAMESPACE
+  value: {{ include "tabularia.scriptsNamespace" . | quote }}
+- name: SCRIPTS__BUILD_NAMESPACE
+  value: {{ include "tabularia.scriptBuildsNamespace" . | quote }}
+- name: SCRIPTS__TRIAL_NAMESPACE
+  value: {{ include "tabularia.scriptTrialsNamespace" . | quote }}
+- name: SCRIPTS__REGISTRY
+  value: {{ required "scripts.registry.repository is required with scripts.enabled" $s.registry.repository | quote }}
+- name: SCRIPTS__REGISTRY_INSECURE
+  value: {{ $s.registry.insecure | quote }}
+- name: SCRIPTS__REGISTRY_PUSH_SECRET
+  value: {{ $s.registry.pushSecret | quote }}
+- name: SCRIPTS__REGISTRY_PULL_SECRET
+  value: {{ $s.registry.pullSecret | quote }}
+- name: SCRIPTS__BUILDER_IMAGE
+  value: {{ $s.builderImage | quote }}
+{{- with $s.baseImages }}
+- name: SCRIPTS__BASE_IMAGES
+  value: {{ toJson . | quote }}
+{{- end }}
+- name: SCRIPTS__PYPI_INDEX_URL
+  value: {{ $s.pypiIndexUrl | quote }}
+{{- with $s.cranUrl }}
+- name: SCRIPTS__CRAN_URL
+  value: {{ . | quote }}
 {{- end }}
 {{- end -}}

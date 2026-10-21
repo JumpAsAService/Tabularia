@@ -19,6 +19,9 @@ import { useAppInfo } from '~/composables/useAppInfo'
 import type { NodeStats } from '~/composables/useNodeStats'
 // import esplicito: nel container i componenti nuovi non vengono scansionati
 import FlowEdge from '~/components/edges/FlowEdge.vue'
+import ScriptNode from '~/components/nodes/ScriptNode.vue'
+import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
+import { useFormat } from '~/composables/useFormat'
 import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -313,19 +316,70 @@ onEdgeMouseLeave(({ edge }) => {
 const preview = ref<PreviewResult | null>(null)
 const previewLoading = ref(false)
 const previewError = ref('')
+// why there is no preview when it is not an error (the nodes after a Script node)
+const previewNote = ref('')
 
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) ?? null : null))
 const firstSource = computed(() => getNodes.value.find((n) => n.type === 'source'))
 const canRun = computed(
   () =>
     !!firstSource.value?.data?.parquetKey ||
-    getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow'),
+    getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow' || n.type === 'script'),
 )
 
 // ── Flusso salvato (persistenza nel gateway) ─────────────────────────────
 const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : null)
 // chi ALTRO ha questo flusso aperto: l'ultimo che salva sovrascrive, quindi si avvisa
 const { others: alsoOpenBy } = useFlowPresence(flowId)
+// Script nodes: the environments this person may write them for (the palette offers
+// the node only when there is one)
+const scriptingEditor = useScriptingEditor()
+const scriptingAvailable = scriptingEditor.available
+onMounted(() => { scriptingEditor.load(true) })
+
+// What each Script node wrote last (a run of the flow, or «Run» in its panel): the
+// nodes after it preview from that. Read when the flow opens, after a save, after a
+// trial.
+const scriptOutputs = ref<ScriptOutputs>({})
+const fmtWhen = useFormat().dateTime
+const scriptSources = computed(() => Object.fromEntries(Object.entries(scriptOutputs.value)
+  .filter(([, v]) => v.output).map(([k, v]) => [k, { bucket: v.output!.bucket, key: v.output!.key }])))
+async function loadScriptOutputs() {
+  if (flowId.value === null || !getNodes.value.some((n) => n.type === 'script')) return
+  try {
+    scriptOutputs.value = await scriptingEditor.outputs(flowId.value)
+  } catch { /* the nodes after a script just have no preview */ }
+}
+
+// «Run» of a Script node: the SAVED flow runs it on the sample (saved first if there
+// are changes), and the run is followed until it ends
+interface ScriptTrial { runId: number | null; status: string; startedAt: number; error: string }
+const scriptTrials = reactive<Record<string, ScriptTrial>>({})
+async function runScriptNode(nodeId: string) {
+  if (negatoAllOsservatore()) return
+  if (dirty.value || flowId.value === null) await saveFlow()
+  if (dirty.value || flowId.value === null) return // not saved: saveFlow said why
+  scriptTrials[nodeId] = { runId: null, status: 'PENDING', startedAt: Date.now(), error: '' }
+  try {
+    const { run_id } = await scriptingEditor.runNode(flowId.value, nodeId)
+    scriptTrials[nodeId]!.runId = run_id
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000))
+      const run = await runsApi.get(run_id)
+      scriptTrials[nodeId]!.status = run.status
+      if (run.status === 'SUCCESS' || run.status === 'FAILURE') {
+        scriptTrials[nodeId]!.error = run.status === 'FAILURE' ? (run.error ?? '') : ''
+        break
+      }
+    }
+  } catch (e) {
+    scriptTrials[nodeId] = { ...scriptTrials[nodeId]!, status: 'FAILURE', error: errMessage(e) }
+  }
+  await loadScriptOutputs()
+  invalidateColumns()
+  invalidateStats(nodeId)
+  if (selectedId.value) refreshForNode(selectedId.value)
+}
 const alsoOpenLabel = computed(() => {
   const mails = [...new Set(alsoOpenBy.value.map((o) => o.email))]
   return mails.length <= 2 ? mails.join(', ') : `${mails.slice(0, 2).join(', ')} +${mails.length - 2}`
@@ -400,6 +454,7 @@ async function loadFlow(id: number) {
   selectedId.value = null
   history.reset() // un flusso appena caricato non ha niente da annullare
   setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok')
+  loadScriptOutputs()
 }
 
 // Mette sul canvas una definizione (quella salvata, o un'istantanea della
@@ -555,6 +610,7 @@ async function saveFlow() {
     savedSnap.value = currentSnap.value = definizione
     savedName.value = flowName.value.trim()
     setStatus(t('flowEditor.flowSaved', { name: flowName.value.trim() }), 'ok')
+    loadScriptOutputs() // a saved change of code makes the scripts' outputs stale
   } catch (e) {
     setStatus(t('flowEditor.saveFailed', { error: errMessage(e) }), 'error')
   }
@@ -965,6 +1021,7 @@ const NODE_TYPE_COLOR: Record<string, string> = {
   output: '#fbbf24',
   refresh: '#38bdf8',
   runflow: '#c084fc',
+  script: '#34d399',
   foreach: '#f472b6',
   comment: 'var(--border)',
 }
@@ -1033,6 +1090,18 @@ function onCanvasDrop(ev: DragEvent) {
     // nodi di CONTROLLO (non nella catena dati): il gateway li interpreta al run
     const id = `ctl-${++outputCounter}`
     addNodes({ id, type: kind, position, data: {} })
+    selectedId.value = id
+    return
+  }
+
+  if (kind === 'script') {
+    // code run by the gateway as a Kubernetes Job: its environment, then its code,
+    // are chosen in the node panel; input and output come from its edges
+    const id = `ctl-${++outputCounter}`
+    addNodes({
+      id, type: 'script', position,
+      data: { label: t('scripting.node.title'), files: [], entrypoint: '', timeoutSeconds: 900, retries: 0, retryDelaySeconds: 60 },
+    })
     selectedId.value = id
     return
   }
@@ -1171,7 +1240,7 @@ function copySelection(): boolean {
 function newNodeId(n: ClipNode): string {
   if (n.type === 'source') return `src-${++sourceCounter}`
   if (n.type === 'output') return `out-${++outputCounter}`
-  if (n.type === 'refresh' || n.type === 'runflow') return `ctl-${++outputCounter}`
+  if (n.type === 'refresh' || n.type === 'runflow' || n.type === 'script') return `ctl-${++outputCounter}`
   if (n.type === 'comment') return `cmt-${++commentCounter}`
   return `op-${++opCounter}` // operation e foreach
 }
@@ -1297,7 +1366,7 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
   if (!node) return []
   if (node.type === 'source') return (node.data.columns as ColumnInfo[]) ?? []
   if (nodeColumns[nodeId]) return nodeColumns[nodeId]
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
   if (!sourceNode?.data?.parquetKey) return []
   const res = await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
@@ -1394,7 +1463,7 @@ async function refreshForNode(nodeId: string) {
 
 let previewSeq = 0 // solo l'ULTIMA preview lanciata scrive risultato e spegne lo skeleton
 async function runPreview(nodeId: string) {
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
+  const { sourceNode, operations: ops, afterScript } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
   // il seq avanza SEMPRE: anche una preview che non parte deve invalidare quella
   // vecchia ancora in volo, o questa scriverebbe il suo risultato sul nodo nuovo
   const seq = ++previewSeq
@@ -1402,10 +1471,20 @@ async function runPreview(nodeId: string) {
     previewSlots.cancel('preview')
     preview.value = null
     previewLoading.value = false
+    // what a script writes exists only during a run: the editor cannot preview it
+    previewError.value = ''
+    previewNote.value = afterScript ? t('scripting.node.previewAfterRun') : ''
     return
   }
   const t0 = performance.now()
   previewError.value = ''
+  // the data come from a script's last run: say which, and whether its code changed since
+  const fromScript = afterScript ? scriptOutputs.value[afterScript]?.output : null
+  previewNote.value = fromScript
+    ? t(fromScript.trial ? 'scripting.node.previewFromTrial' : 'scripting.node.previewFromRun',
+      { when: fmtWhen(fromScript.finished_at) })
+      + (fromScript.stale ? ` ${t('scripting.node.previewStale')}` : '')
+    : ''
   previewLoading.value = true
   try {
     const res = await apiPreview({
@@ -1454,7 +1533,7 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
     const leftId =
       inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
     if (!leftId) return []
-    ;({ sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId))
+    ;({ sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leftId, scriptSources.value))
   }
   if (!sourceNode?.data?.parquetKey) return []
   const res = await apiPreview({
@@ -1475,7 +1554,7 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
 // ── Grafico: esegue la catena del nodo + aggregazioni extra sull'engine ──
 async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewResult | null> {
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
   if (!sourceNode?.data?.parquetKey) return null
   return await apiPreview({
     bucket: sourceNode.data.bucket ?? bucket,
@@ -1488,7 +1567,7 @@ async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewR
 // ── Export (download csv/xlsx del nodo selezionato) ─────────────────────
 async function exportSelected(format: 'csv' | 'xlsx') {
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId)
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
   if (!sourceNode?.data?.parquetKey) {
     setStatus(t('flowEditor.exportNoData'), 'error')
     return
@@ -1618,9 +1697,9 @@ function describeOutput(n: Node): OutputSummary {
 
 const runOutputs = computed(() => outputNodes().map(describeOutput))
 
-// nodi di controllo (refresh/runflow): richiedono l'orchestrazione server-side
+// nodi di controllo (refresh/runflow/script): richiedono l'orchestrazione server-side
 const hasControlNodes = () =>
-  getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow')
+  getNodes.value.some((n) => n.type === 'refresh' || n.type === 'runflow' || n.type === 'script')
 
 function run() {
   if (negatoAllOsservatore()) return
@@ -1649,7 +1728,7 @@ function run() {
     }
   } else {
     const leaf = leafNodeId(getNodes.value, getEdges.value)
-    const { sourceNode } = resolveChain(getNodes.value, getEdges.value, leaf)
+    const { sourceNode } = resolveChain(getNodes.value, getEdges.value, leaf, scriptSources.value)
     if (!sourceNode?.data?.parquetKey) return
   }
   runDialogError.value = ''
@@ -1662,7 +1741,7 @@ async function executeRun(publish: PublishSpec | null) {
     return
   }
   const leaf = leafNodeId(getNodes.value, getEdges.value)
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leaf)
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, leaf, scriptSources.value)
   if (!sourceNode?.data?.parquetKey) {
     runDialogOpen.value = false
     return
@@ -1775,7 +1854,7 @@ async function emailTestSelected() {
     setStatus(t('flowEditor.emailTestNeedsSavedFlow'), 'error')
     return
   }
-  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id)
+  const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id, scriptSources.value)
   if (!sourceNode?.data?.parquetKey) {
     setStatus(t('flowEditor.outputMissingChain'), 'error')
     return
@@ -1805,7 +1884,7 @@ async function executeOutputRuns() {
   try {
     for (const node of outputNodes()) {
       const label = describeOutput(node).label
-      const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id)
+      const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, node.id, scriptSources.value)
       if (!sourceNode?.data?.parquetKey) {
         runDialogError.value = `${label}: ${t('flowEditor.outputMissingChain')}`
         selectedId.value = node.id
@@ -1987,7 +2066,7 @@ async function pollTask(id: string) {
     </p>
 
     <div class="sidebar">
-      <OpSidebar :operations="operations" :read-only="soloOsservatore" />
+      <OpSidebar :operations="operations" :read-only="soloOsservatore" :scripting="scriptingAvailable" />
     </div>
 
     <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
@@ -2017,6 +2096,9 @@ async function pollTask(id: string) {
         </template>
         <template #node-runflow="props">
           <RunFlowNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-script="props">
+          <ScriptNode :id="props.id" :data="props.data" />
         </template>
         <template #node-comment="props">
           <CommentNode :id="props.id" :data="props.data" />
@@ -2103,6 +2185,10 @@ async function pollTask(id: string) {
         :flows="flowsList"
         :current-flow-id="flowId"
         :flow-name="flowName"
+        :script-outputs="scriptOutputs"
+        :script-trials="scriptTrials"
+        :flow-dirty="dirty"
+        @script-run="runScriptNode"
         @update="patchSelected"
         @delete="deleteSelected"
         @export="exportSelected"
@@ -2143,7 +2229,7 @@ async function pollTask(id: string) {
         </button>
       </div>
       <div class="viewbody" :class="{ scroll: viewTab === 'table' }">
-        <DataGrid v-if="viewTab === 'table'" :result="preview" :loading="previewLoading" :error="previewError" />
+        <DataGrid v-if="viewTab === 'table'" :result="preview" :loading="previewLoading" :error="previewError" :note="previewNote" />
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>

@@ -35,7 +35,7 @@ async def test_the_next_output_waits_for_a_long_queue(session, monkeypatch):
     events: list[str] = []
     polls = {"first": 0}
 
-    def fake_resolve(definition, node, resolve_ds, default_bucket, engine_mode):
+    def fake_resolve(definition, node, resolve_ds, default_bucket, engine_mode, script_outputs=None):
         return {"bucket": "b", "input_key": f"{node['id']}.parquet", "operations": []}
 
     async def fake_launch(session, user, flow, body, **kw):

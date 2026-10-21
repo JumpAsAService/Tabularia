@@ -203,8 +203,12 @@ def _resolve_source(node: dict, resolve_ds: DsResolver) -> Optional[tuple[str, s
 
 
 class _Resolver:
-    def __init__(self, nodes: list[dict], edges: list[dict], resolve_ds: DsResolver, engine_mode: str = "production"):
+    def __init__(self, nodes: list[dict], edges: list[dict], resolve_ds: DsResolver, engine_mode: str = "production",
+                 script_outputs: Optional[dict[str, tuple[str, str]]] = None):
         self.by_id = {n["id"]: n for n in nodes}
+        # a Script node is a boundary: the nodes after it start from what it wrote,
+        # known once it has run in this orchestration (services/script_runs.py)
+        self.script_outputs = script_outputs or {}
         self.edges = edges
         self.inc = _incoming(edges)
         self.resolve_ds = resolve_ds
@@ -261,6 +265,10 @@ class _Resolver:
             seen.add(cur)
             node = self.by_id.get(cur)
             if not node:
+                break
+            if node.get("type") == "script":
+                source = self.script_outputs.get(cur)
+                source_id = cur
                 break
             if node.get("type") == "source":
                 source = _resolve_source(node, self.resolve_ds)
@@ -454,7 +462,8 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
 
 
 def resolve_output_request(
-    definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production"
+    definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production",
+    script_outputs: Optional[dict[str, tuple[str, str]]] = None,
 ) -> dict:
     """Risolve UN nodo Output → corpo-run. Solleva FlowResolveError se la sua
     catena dati non ha una sorgente risolvibile.
@@ -462,11 +471,42 @@ def resolve_output_request(
     `engine_mode`: default "production" (nessun campione, tutti i record); solo
     "development" inietta i campioni di sviluppo dei nodi sorgente. I filtri a
     monte (`data.filters`) delle sorgenti sono iniettati in OGNI modalità."""
-    resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds, engine_mode)
+    resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds, engine_mode,
+                         script_outputs)
     source, operations = resolver.chain(node["id"])
     if source is None:
         raise _no_source(node)
     return _output_body(node, source, operations, default_bucket)
+
+
+def script_input_edge(definition: dict, node_id: str) -> Optional[str]:
+    """The node feeding a Script node's input, None when it has no input."""
+    return _incoming(definition.get("edges") or []).get(node_id, {}).get("left")
+
+
+def script_has_output(definition: dict, node_id: str) -> bool:
+    """A data edge leaves the Script node: the nodes after it read what it writes."""
+    return any(e.get("source") == node_id and not _is_seq_edge(e) for e in definition.get("edges") or [])
+
+
+def resolve_script_input(
+    definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production",
+    script_outputs: Optional[dict[str, tuple[str, str]]] = None,
+) -> Optional[dict]:
+    """The chain that ends at a Script node's input, as the body of a run (bucket,
+    input_key, operations); None when the node has no input."""
+    upstream = script_input_edge(definition, node["id"])
+    if not upstream:
+        return None
+    resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds, engine_mode,
+                         script_outputs)
+    source, operations = resolver.chain(upstream)
+    if source is None:
+        label = str((node.get("data") or {}).get("label") or node.get("id"))
+        raise FlowResolveError(f"script {label}: no source with data upstream "
+                               "(or the source datasource has no snapshot)", "script_no_source", script=label)
+    bucket, key = source
+    return {"bucket": bucket or default_bucket, "input_key": key, "operations": operations}
 
 
 def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_bucket: str,
@@ -505,8 +545,30 @@ def build_output_run_requests(
 
 
 # ordine di esecuzione dei nodi non collegati in sequenza (default sensato)
-_ACTION_TYPES = ("refresh", "output", "runflow")
-_DEFAULT_PRIORITY = {"refresh": 0, "output": 1, "runflow": 2}
+_ACTION_TYPES = ("refresh", "script", "output", "runflow")
+_DEFAULT_PRIORITY = {"refresh": 0, "script": 1, "output": 1, "runflow": 2}
+
+
+def _scripts_upstream(node_id: str, nodes: dict[str, dict], edges: list[dict]) -> set[str]:
+    """The Script nodes a node reads data from, however far up: it runs after them."""
+    into: dict[str, list[str]] = {}
+    for e in edges:
+        if not _is_seq_edge(e):
+            into.setdefault(e.get("target"), []).append(e.get("source"))
+    found: set[str] = set()
+    stack, seen = [node_id], set()
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        parent = (nodes.get(cur) or {}).get("parentNode")
+        for up in [*into.get(cur, []), *([parent] if parent else [])]:
+            if (nodes.get(up) or {}).get("type") == "script":
+                found.add(up)
+            else:
+                stack.append(up)
+    return found
 
 
 def sequence_order(definition: dict) -> list[dict]:
@@ -524,11 +586,13 @@ def sequence_order(definition: dict) -> list[dict]:
 
     succ: dict[str, list[str]] = {n["id"]: [] for n in action}
     indeg: dict[str, int] = {n["id"]: 0 for n in action}
-    for e in edges:
-        if e.get("targetHandle") != SEQ_TARGET_HANDLE:
-            continue
-        s, t = e.get("source"), e.get("target")
-        if s in by_id and t in by_id:
+    pairs = [(e.get("source"), e.get("target")) for e in edges if e.get("targetHandle") == SEQ_TARGET_HANDLE]
+    # a node that reads what a Script writes runs after it, edge or no edge
+    all_nodes = {n["id"]: n for n in nodes if isinstance(n, dict) and "id" in n}
+    for n in action:
+        pairs += [(s, n["id"]) for s in _scripts_upstream(n["id"], all_nodes, edges)]
+    for s, t in dict.fromkeys(pairs):
+        if s in by_id and t in by_id and s != t:
             succ[s].append(t)
             indeg[t] += 1
 

@@ -99,6 +99,11 @@ ingress:
 In production set `existingSecret` instead of `secrets` and manage the Secret
 with your usual tooling.
 
+The pods restart by themselves when the chart's Secret changes (`checksum/secret`,
+as `checksum/config` does for the ConfigMap). A Secret of your own is outside the
+chart: after changing it, restart them with
+`kubectl rollout restart deployment --namespace <namespace>`.
+
 Optional keys follow the feature they belong to. With
 `externalServices.clickhouse.aiUsername` set, the Secret must also hold
 `CLICKHOUSE_EXTERNAL__AI_PASSWORD`: the read-only ClickHouse user the AI
@@ -218,6 +223,28 @@ On docker compose the panel shows the containers and changes the processes per
 worker; the number of containers stays yours (`docker compose up -d --scale
 worker=N`): scaling a service from the app would need the Docker socket, which is
 root on the host.
+
+## Scripting environments
+
+`scripts.enabled` turns on **Administration → Scripting environments**: the Python and
+R environments that user code will run in, each built once into an image by a Job and
+checked by a second one ([docs/scripting.md](../../../docs/scripting.md)). It needs an
+image registry the cluster can pull from (`scripts.registry.repository`, with a push
+Secret and a pull Secret).
+
+The chart then creates three namespaces next to the release's (`createNamespaces`):
+- `<namespace>-scripts`, at the `restricted` Pod Security level, for the checks and
+  the scripts;
+- `<namespace>-scripts-dev`, `restricted`, for the editor's trials, with a
+  ResourceQuota (`trialQuota`) so they never take resources from the flows' runs;
+- `<namespace>-script-builds`, at the `privileged` level, for rootless BuildKit. It
+  needs a user namespace of its own, which only `privileged` admits; its pods still
+  run as a user, without privileges.
+
+The gateway and the orchestrator get the `<release>-scaler` service account, shared
+with Admin → Workers. In those namespaces only, it may create, read and delete Jobs,
+read their Pods, logs and events, and (scripts and trials) create the ConfigMap and
+Secret a Job mounts. Nothing runs in the release's namespace.
 
 ## Storage and `/tmp`
 
