@@ -1,0 +1,73 @@
+# Tabularia on one computer with minikube: the guide is docs/deploy/minikube.md.
+#
+# Copy this file to my-values.yaml and replace every <…> (the quotes stay). Indent
+# with spaces, never tabs: two spaces per level, as below.
+
+# ── Where the data lives: a bucket of your cloud object storage ──────────────
+externalServices:
+  storage:
+    endpoint: "<https://s3.fr-par.scw.cloud>"   # the S3 address of your provider and region
+    region: "<fr-par>"
+    bucket: "<your-bucket-name>"
+
+  # PostgreSQL and Valkey from infrastructure/minikube/dependencies.yaml
+  postgres:
+    host: postgres.tabularia-deps.svc.cluster.local
+  redis:
+    host: valkey.tabularia-deps.svc.cluster.local
+
+  # Optional: flows run on your ClickHouse service (step 9 of the guide). Remove the
+  # "#" at the start of these lines to turn it on.
+  # clickhouse:
+  #   enabled: true
+  #   host: "<your-service.clickhouse.example>"
+  #   port: 8443
+  #   secure: true
+  #   database: tabularia
+  #   username: "<clickhouse-user>"
+  #   transport: s3
+  #   s3Endpoint: "<the same address as storage.endpoint>"
+  #   s3NamedCollection: tabularia_s3
+
+# ── Keys and passwords (step 5 of the guide) ─────────────────────────────────
+secrets:
+  fernetKey: "<the key that ends with =>"
+  jwtSecret: "<a 64-character code>"
+  dbPassword: "<the PostgreSQL password of step 6>"
+  storageAccessKey: "<access key of the bucket>"
+  storageSecretKey: "<secret key of the bucket>"
+  adminPassword: "<your administrator password, at least 12 characters>"
+  # clickhousePassword: "<the password of the ClickHouse user>"
+
+# ── The first administrator ──────────────────────────────────────────────────
+auth:
+  adminEmail: "<you@your-company.com>"
+  adminName: "<Your Name>"
+
+# ── One copy of everything: a laptop, not a server ───────────────────────────
+gateway:
+  replicas: 1
+engineApi:
+  replicaCount: 1
+worker:
+  replicaCount: 1
+previewWorker:
+  replicaCount: 1
+frontend:
+  replicaCount: 1
+
+# ── Reached at http://localhost:8080 (step 8 of the guide) ───────────────────
+ingress:
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+
+# ── Optional: Python and R in flows (step 10 of the guide) ───────────────────
+# scripts:
+#   enabled: true
+#   registry:
+#     repository: "<registry address>:80/tabularia"
+#     insecure: true

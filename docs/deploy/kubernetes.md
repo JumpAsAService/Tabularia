@@ -20,6 +20,9 @@ and `values-production.example.yaml` is a filled-in starting point.
 
 This page remains the reference for *why*; the chart is *how*.
 
+To try Tabularia on one computer first, without knowing Kubernetes, follow
+[Try Tabularia on your computer with minikube](minikube.md).
+
 ## Components
 
 | Component | Image | Command | Exposure | Replicas |

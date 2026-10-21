@@ -27,6 +27,12 @@ exposes at `/system/info` and in the app's settings menu.
   to root. A one-shot `keys-init` container now gives the volume to the services before
   any of them starts, whatever image or container mounts it first.
 
+- **A guide to try Tabularia on your own computer with minikube**
+  ([docs/deploy/minikube.md](docs/deploy/minikube.md)), for people who do not know
+  Kubernetes: Windows, macOS and Linux, every command in full (PowerShell and bash where
+  they differ), the data in a bucket of your cloud, optional ClickHouse and Python and R,
+  and what to do when a step fails. `infrastructure/minikube/` holds what it applies:
+  PostgreSQL and Valkey for one computer, and a settings file to fill in.
 - **Fixed (Helm chart): a new key or password in the values was not used until the pods
   restarted by themselves.** The pods carried the ConfigMap's checksum but not the
   Secret's, so `helm upgrade` with a corrected `secrets.*` value left the old one running.

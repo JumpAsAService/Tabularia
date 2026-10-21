@@ -1,0 +1,66 @@
+# What Tabularia needs next to it on a laptop with minikube (docs/deploy/minikube.md):
+# PostgreSQL, the metadata database, and Valkey, the job queue. Both in the namespace
+# tabularia-deps, which must exist with a Secret "postgres" holding the database
+# password (key "password") before this file is applied.
+#
+# For a trial on one computer only: one copy of each, no backups, no high
+# availability. The data itself is not here: it lives in your cloud bucket.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: postgres, namespace: tabularia-deps }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: postgres, namespace: tabularia-deps }
+spec:
+  selector: { matchLabels: { app: postgres } }
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - { name: POSTGRES_DB, value: tabularia }
+            - { name: POSTGRES_USER, value: tabularia }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres, key: password } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 1Gi } }
+          readinessProbe: { exec: { command: [pg_isready, -U, tabularia] }, periodSeconds: 5 }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: postgres } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: tabularia-deps }
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: valkey, namespace: tabularia-deps }
+spec:
+  selector: { matchLabels: { app: valkey } }
+  template:
+    metadata: { labels: { app: valkey } }
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8-alpine
+          ports: [{ containerPort: 6379 }]
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { memory: 512Mi } }
+          readinessProbe: { exec: { command: [valkey-cli, ping] }, periodSeconds: 5 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: valkey, namespace: tabularia-deps }
+spec:
+  selector: { app: valkey }
+  ports: [{ port: 6379 }]
