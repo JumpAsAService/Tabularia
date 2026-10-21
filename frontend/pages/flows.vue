@@ -2,7 +2,7 @@
 // Flussi nelle cartelle leggibili, con ricerca server-side + paginazione. Ogni
 // flusso ha un expander (come le Esecuzioni) con metriche d'esecuzione, la
 // timeline (Gantt) dei run e lo storico versioni con promozione.
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import Modal from '~/components/ui/Modal.vue'
 import { usePopover } from '~/composables/usePopover'
 import { useI18n } from 'vue-i18n'
@@ -12,6 +12,7 @@ import {
   CheckCircle2, XCircle, LoaderCircle, Circle, Download, Play,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
+import { knownError } from '~/composables/knownErrors'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useConnections } from '~/composables/useConnections'
 import { useAuth } from '~/composables/useAuth'
@@ -97,12 +98,57 @@ async function runProduction(f: FlowSummary) {
     const r = await flowsApi.runNow(f.id, 'production')
     toast.success(t('flows.runProdStarted', { id: r.run_id }))
     items.value = items.value.map((x) => (x.id === f.id ? { ...x, last_run_status: 'PENDING' } : x))
+    followed.set(r.run_id, f.id)
+    follow()
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
     runningProd.value = null
   }
 }
+
+// A run started here is followed until it ends: its row stops spinning and a toast
+// says how it went. (The list's status is the one of the flow's Outputs, not of the
+// run queued here: without following it, the row spun until the page was reloaded.)
+const followed = new Map<number, number>() // run id → flow id
+let followTimer: ReturnType<typeof setTimeout> | undefined
+function follow() {
+  clearTimeout(followTimer)
+  if (!followed.size) return
+  followTimer = setTimeout(async () => {
+    for (const [runId, flowId] of [...followed]) {
+      let run: RunInfo
+      try {
+        run = await runsApi.get(runId)
+      } catch {
+        continue // the next tick
+      }
+      if (run.status !== 'SUCCESS' && run.status !== 'FAILURE') continue
+      followed.delete(runId)
+      const name = items.value.find((x) => x.id === flowId)?.name ?? ''
+      items.value = items.value.map((x) => (x.id === flowId ? { ...x, last_run_status: run.status } : x))
+      if (run.status === 'SUCCESS') toast.success(t('flows.runProdDone', { name, id: runId }))
+      else toast.error(t('flows.runProdFailed', { name, id: runId, error: knownError(run.error, t) || run.error || run.status }))
+      if (detail[flowId]) fetchDetail(flowId)
+    }
+    follow()
+  }, 3000)
+}
+
+// flows already running when the page opened (a schedule, someone else): the list is
+// read again, quietly, until none of them is
+let listTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  listTimer = setInterval(() => {
+    const running = items.value.some((x) => (x.last_run_status === 'PENDING' || x.last_run_status === 'STARTED')
+      && ![...followed.values()].includes(x.id))
+    if (running && !loading.value) load({ quiet: true })
+  }, 10_000)
+})
+onBeforeUnmount(() => {
+  clearTimeout(followTimer)
+  clearInterval(listTimer)
+})
 onMounted(async () => {
   try {
     const projects = await projectsApi.list()

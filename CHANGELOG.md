@@ -33,6 +33,10 @@ exposes at `/system/info` and in the app's settings menu.
   The pods that read the Secret now roll when it changes; a Secret of your own
   (`existingSecret`) is still yours to roll.
 
+- **Fixed: a run started from the Flows tab kept spinning until the page was reloaded,**
+  and its end was never announced. The tab now follows the run it started: the row stops
+  when it ends, and a message says whether it succeeded or why it failed. Flows already
+  running when the page opened are refreshed quietly until they end.
 - **Python and R in flows (Kubernetes): the Script node.** A flow step written in
   Python or R runs as a Kubernetes Job, outside Tabularia, in a scripting environment
   an administrator defined ([docs/scripting.md](docs/scripting.md)).
