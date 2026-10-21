@@ -169,9 +169,15 @@ The browser reaches Tabularia through an ingress controller on the control plane
 ```bash
 kubectl label node tabularia-control-plane ingress-ready=true
 kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml
-kubectl wait --namespace ingress-nginx --for=condition=ready pod \
-  --selector=app.kubernetes.io/component=controller --timeout=5m
+kubectl patch deployment ingress-nginx-controller --namespace ingress-nginx \
+  -p '{"spec":{"template":{"spec":{"nodeSelector":{"ingress-ready":"true","kubernetes.io/os":"linux"}}}}}'
+kubectl rollout status deployment ingress-nginx-controller --namespace ingress-nginx --timeout=5m
 ```
+
+The `patch` keeps the controller on the control plane, the only node that receives port
+8080: kind's manifest lets it start on any of the three nodes. **Check:**
+`curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/` answers `404` (nothing
+is installed behind it yet), not `000`.
 
 ## 5. The private registry
 
@@ -556,6 +562,9 @@ restarts, remove it and run the guide again.
 - **A Container node, or Try in the cluster, says the nodes do not trust the
   registry's certificate**: the authority is missing from `certs.d` for that address
   (step 3); a registry under another name needs a folder of its own there.
+- **http://localhost:8080 does not answer** while every pod is `Running`: the ingress
+  controller runs on a worker. `kubectl get pods --namespace ingress-nginx -o wide` shows
+  its node; run the `patch` of step 4 again.
 - **Pods in `ErrImagePull`**: `kubectl describe pod <name> --namespace <namespace>` says
   why. *x509* means the nodes do not trust the registry (step 3 and the `extraMounts`
   of step 4); *401* or *unauthorized*, a missing or wrong `registry` Secret in that
