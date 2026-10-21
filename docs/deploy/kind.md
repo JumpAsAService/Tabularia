@@ -8,8 +8,9 @@ use there:
 - a private image registry with TLS, signed by a certificate authority of your own (a
   "company CA"), and a password;
 - nodes that trust that authority, as a platform team sets them up;
-- PostgreSQL, Valkey and object storage (MinIO) inside the cluster, in a namespace of
-  their own;
+- PostgreSQL, Valkey and object storage inside the cluster, in a namespace of their own;
+  or, as most companies do, the object storage of your cloud (step 7) and an external
+  ClickHouse for the flows (step 12);
 - Tabularia's images copied into the private registry, and Python and R scripts built
   and run through it;
 - images of your own run as steps of a flow (the Container node), from that registry.
@@ -25,8 +26,8 @@ It was written by running every command below, in this order, with kind 0.33
 
 - **A computer with 16 GB of memory at least** (32 GB to build R environments
   comfortably), 8 cores and 60 GB of free disk.
-- **Linux**, or **macOS** with Docker Desktop, or **Windows** inside WSL 2 (open an
-  Ubuntu terminal and work there).
+- **Linux**, or **macOS** with Docker Desktop, or **Windows** inside WSL 2 (an Ubuntu
+  that runs on Windows: [On Windows](#on-windows) below sets it up).
 - [Docker](https://docs.docker.com/engine/install/), [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
   0.27 or later, [kubectl](https://kubernetes.io/docs/tasks/tools/),
   [Helm](https://helm.sh/docs/intro/install/), `openssl` and `git`.
@@ -34,6 +35,42 @@ It was written by running every command below, in this order, with kind 0.33
 Run every command in **the same terminal**: the steps keep values in shell variables
 (`$WORK`, `$VERSION`, the passwords). If you open a new terminal, run
 `source "$WORK/env"` (step 1 explains it) to get them back.
+
+### On Windows
+
+The guide runs in an Ubuntu inside Windows (WSL 2), where every command works as on
+Linux. Set it up once:
+
+1. **Install WSL 2 with Ubuntu.** In a PowerShell opened as administrator:
+   `wsl --install -d Ubuntu`, then restart the computer. Ubuntu asks for a user name and
+   a password the first time it opens.
+2. **Give it memory and processors.** WSL takes half of the computer's memory by
+   default. In PowerShell, `notepad "$env:USERPROFILE\.wslconfig"`, write
+
+   ```ini
+   [wsl2]
+   memory=24GB
+   processors=8
+   ```
+
+   (16 GB at least; on a 32 GB computer, 24 leaves Windows enough), save, run
+   `wsl --shutdown`, and open Ubuntu again.
+3. **Install Docker inside Ubuntu**: Docker Engine, following
+   [Docker's guide for Ubuntu](https://docs.docker.com/engine/install/ubuntu/), then
+   `sudo usermod -aG docker $USER` and open Ubuntu again. Docker Engine inside Ubuntu
+   behaves as on Linux, ports and mounted folders included, which is what this guide
+   was run on. Docker Desktop with its WSL integration can work too, but its ports
+   pass through one more machine.
+4. **Install the tools inside Ubuntu**, in their Linux versions:
+   `sudo apt install -y openssl git`, then kind, kubectl and Helm from the links above
+   (the Linux instructions).
+5. **Work in Ubuntu's home** (`cd ~`), not in `/mnt/c/…`: the Windows disk is much
+   slower from Ubuntu, and it does not keep the permissions that protect the files of
+   passwords this guide writes.
+
+Run the guide in the Ubuntu terminal, unchanged. The browser of Windows opens
+Tabularia at **http://localhost:8080**: WSL 2 hands the ports it listens on over to
+Windows.
 
 ## 1. Get Tabularia and a working folder
 
@@ -206,23 +243,84 @@ it, with the authority of step 3.
 >
 > The builds take a while the first time (the backend image is about 800 MB).
 
-## 7. PostgreSQL, Valkey and MinIO
+## 7. PostgreSQL, Valkey and the object storage
 
-In the namespace `tabularia-deps`, with passwords made now:
+PostgreSQL and Valkey run in the namespace `tabularia-deps`, with a password made now:
 
 ```bash
-export DB_PASSWORD="$(openssl rand -hex 32)" MINIO_PASSWORD="$(openssl rand -hex 24)" SCRIPTS_KEY="$(openssl rand -hex 24)"
-printf 'export DB_PASSWORD=%s MINIO_PASSWORD=%s SCRIPTS_KEY=%s\n' "$DB_PASSWORD" "$MINIO_PASSWORD" "$SCRIPTS_KEY" >> "$WORK/env"
+export DB_PASSWORD="$(openssl rand -hex 32)"
+printf 'export DB_PASSWORD=%s\n' "$DB_PASSWORD" >> "$WORK/env"
 kubectl create namespace tabularia-deps
 kubectl create secret generic postgres --namespace tabularia-deps --from-literal=password="$DB_PASSWORD"
-kubectl create secret generic minio --namespace tabularia-deps \
-  --from-literal=root-password="$MINIO_PASSWORD" --from-literal=scripts-key="$SCRIPTS_KEY"
-kubectl apply -f infrastructure/minikube/dependencies.yaml -f infrastructure/kind/storage.yaml
-kubectl wait --namespace tabularia-deps --for=condition=complete job/minio-setup --timeout=5m
+kubectl apply -f infrastructure/minikube/dependencies.yaml
 ```
 
-The Job creates two buckets: `tabularia` for Tabularia's data, and `tabularia-scripts`
-with a key of its own (`scripts`) for the Python and R scripts.
+Tabularia keeps its datasets, uploads and results in an S3-compatible bucket, and the
+Python and R scripts exchange their data through a second one. Choose **one** of the
+two ways below: MinIO inside the cluster, to have everything on this computer, or the
+object storage of your cloud, as a company runs it.
+
+### Either: MinIO inside the cluster
+
+```bash
+export MINIO_PASSWORD="$(openssl rand -hex 24)" SCRIPTS_KEY="$(openssl rand -hex 24)"
+kubectl create secret generic minio --namespace tabularia-deps \
+  --from-literal=root-password="$MINIO_PASSWORD" --from-literal=scripts-key="$SCRIPTS_KEY"
+kubectl apply -f infrastructure/kind/storage.yaml
+kubectl wait --namespace tabularia-deps --for=condition=complete job/minio-setup --timeout=5m
+export STORAGE_ENDPOINT="http://minio.tabularia-deps.svc.cluster.local:9000" STORAGE_REGION=us-east-1 \
+  STORAGE_BUCKET=tabularia STORAGE_ACCESS_KEY=root STORAGE_SECRET_KEY="$MINIO_PASSWORD" \
+  SCRIPTS_ENDPOINT="http://minio.tabularia-deps.svc.cluster.local:9000" SCRIPTS_REGION=us-east-1 \
+  SCRIPTS_BUCKET=tabularia-scripts SCRIPTS_ACCESS_KEY=scripts SCRIPTS_SECRET_KEY="$SCRIPTS_KEY"
+```
+
+The Job creates the two buckets: `tabularia` for Tabularia's data, and
+`tabularia-scripts` with a key of its own (`scripts`) for the scripts.
+
+### Or: the object storage of your cloud
+
+In your cloud provider's console:
+
+1. **Create two private buckets** in the same region, for example
+   `tabularia-yourcompany` for Tabularia's data and `tabularia-yourcompany-scripts` for
+   the scripts. On the scripts bucket, add a rule that deletes its objects after one day.
+2. **Create two access keys**: one that reads, writes, lists and deletes objects in the
+   data bucket; one that reads, writes and deletes objects in the scripts bucket, without
+   listing it. [The scripts bucket](../scripting.md#the-scripts-bucket) shows the policies
+   for each provider.
+3. **Note the endpoint and the region** of the buckets:
+
+| Provider | Endpoint | Region, for example |
+|---|---|---|
+| Scaleway | `https://s3.fr-par.scw.cloud` (or `nl-ams`, `pl-waw`) | `fr-par` |
+| AWS | `https://s3.eu-west-1.amazonaws.com` (your region) | `eu-west-1` |
+| Other S3-compatible | the S3 address in your provider's documentation | its region |
+
+> **Scaleway:** an API key works on its **preferred project** for Object Storage. When
+> you create the key (IAM → API keys), choose the project that holds the buckets.
+
+Then give the values to the terminal (replace every `<…>`; the quotes stay):
+
+```bash
+export STORAGE_ENDPOINT="<https://s3.fr-par.scw.cloud>" STORAGE_REGION="<fr-par>" \
+  STORAGE_BUCKET="<tabularia-yourcompany>" \
+  STORAGE_ACCESS_KEY="<access key of the data bucket>" STORAGE_SECRET_KEY="<its secret key>" \
+  SCRIPTS_ENDPOINT="<https://s3.fr-par.scw.cloud>" SCRIPTS_REGION="<fr-par>" \
+  SCRIPTS_BUCKET="<tabularia-yourcompany-scripts>" \
+  SCRIPTS_ACCESS_KEY="<access key of the scripts bucket>" SCRIPTS_SECRET_KEY="<its secret key>"
+```
+
+Nothing about the bucket is in the cluster: the workers reach it over the internet,
+which the network policy of step 8 allows.
+
+### Both ways: keep the values
+
+```bash
+printf 'export STORAGE_ENDPOINT=%q STORAGE_REGION=%q STORAGE_BUCKET=%q STORAGE_ACCESS_KEY=%q STORAGE_SECRET_KEY=%q\n' \
+  "$STORAGE_ENDPOINT" "$STORAGE_REGION" "$STORAGE_BUCKET" "$STORAGE_ACCESS_KEY" "$STORAGE_SECRET_KEY" >> "$WORK/env"
+printf 'export SCRIPTS_ENDPOINT=%q SCRIPTS_REGION=%q SCRIPTS_BUCKET=%q SCRIPTS_ACCESS_KEY=%q SCRIPTS_SECRET_KEY=%q\n' \
+  "$SCRIPTS_ENDPOINT" "$SCRIPTS_REGION" "$SCRIPTS_BUCKET" "$SCRIPTS_ACCESS_KEY" "$SCRIPTS_SECRET_KEY" >> "$WORK/env"
+```
 
 ## 8. Tabularia's settings
 
@@ -238,13 +336,13 @@ image:
 externalServices:
   postgres: { host: postgres.tabularia-deps.svc.cluster.local }
   redis: { host: valkey.tabularia-deps.svc.cluster.local }
-  storage: { endpoint: "http://minio.tabularia-deps.svc.cluster.local:9000", bucket: tabularia, region: us-east-1 }
+  storage: { endpoint: "$STORAGE_ENDPOINT", bucket: "$STORAGE_BUCKET", region: "$STORAGE_REGION" }
 secrets:
   fernetKey: "$(openssl rand -base64 32 | tr '+/' '-_')"
   jwtSecret: "$(openssl rand -hex 32)"
   dbPassword: "$DB_PASSWORD"
-  storageAccessKey: root
-  storageSecretKey: "$MINIO_PASSWORD"
+  storageAccessKey: "$STORAGE_ACCESS_KEY"
+  storageSecretKey: "$STORAGE_SECRET_KEY"
   adminPassword: "$ADMIN_PASSWORD"
 auth:
   adminEmail: "$ADMIN_EMAIL"
@@ -270,9 +368,9 @@ EOF
 
 What some of them do:
 - `networkPolicy.egressCIDRs: ["0.0.0.0/0"]` turns the policy on: the workers reach the
-  internet and your databases, but never the cloud metadata address. A company lists
-  its own ranges instead. The namespace `tabularia-deps` is allowed from the
-  dependencies' host names.
+  internet (a cloud bucket, an external ClickHouse) and your databases, but never the
+  cloud metadata address. A company lists its own ranges instead. The namespace
+  `tabularia-deps` is allowed from the dependencies' host names.
 - `scripts.registry.caCert` is the authority of step 2: the image builds verify the
   registry with it.
 - `containers.enabled` creates the namespaces where the Container nodes run,
@@ -307,15 +405,15 @@ with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
 
 ## 10. Python and R scripts
 
-In **Administration → Scripting environments**, the scripts bucket:
+In **Administration → Scripting environments**, the scripts bucket of step 7:
 
-| Field | Value |
+| Field | Value (`echo` it in the terminal) |
 |---|---|
-| Endpoint | `http://minio.tabularia-deps.svc.cluster.local:9000` |
-| Region | `us-east-1` |
-| Bucket | `tabularia-scripts` |
-| Access key | `scripts` |
-| Secret key | the value of `$SCRIPTS_KEY` (`echo "$SCRIPTS_KEY"`) |
+| Endpoint | `$SCRIPTS_ENDPOINT` |
+| Region | `$SCRIPTS_REGION` |
+| Bucket | `$SCRIPTS_BUCKET` |
+| Access key | `$SCRIPTS_ACCESS_KEY` |
+| Secret key | `$SCRIPTS_SECRET_KEY` |
 
 **Test** answers that it wrote, read and deleted a probe object, and that the key cannot
 list the bucket. Then create an environment, for example Python 3.12. Its image is built
@@ -363,6 +461,68 @@ its variables and the rest.
 Tabularia needs no Secret of yours in the containers' namespaces: it writes the
 registry's own from the credentials above, right before each run.
 
+## 12. Optional: flows on an external ClickHouse
+
+Tabularia can send the work of a flow to a ClickHouse service instead of doing it in its
+workers. ClickHouse then reads and writes the files of the bucket directly, so this
+goes with **the object storage of your cloud** (step 7), with the ClickHouse service in
+the same cloud and region. A ClickHouse service reachable over HTTPS (port 8443), a user
+and its password are needed.
+
+**In ClickHouse**, in the service's SQL console, as its administrator:
+
+```sql
+CREATE DATABASE IF NOT EXISTS tabularia;
+CREATE NAMED COLLECTION tabularia_s3 AS
+    access_key_id = '<access key of the data bucket>',
+    secret_access_key = '<its secret key>';
+```
+
+The *named collection* keeps the bucket's keys inside ClickHouse, so they never travel
+in the queries Tabularia sends. Tabularia is better given a user of its own than the
+administrator; these grants are enough for it:
+
+```sql
+GRANT CREATE TEMPORARY TABLE, S3 ON *.* TO `<clickhouse-user>`;
+GRANT NAMED COLLECTION ON tabularia_s3 TO `<clickhouse-user>`;
+```
+
+With those alone the Viewer reads the bucket's files at every query. To let it keep a
+copy of the datasets over five million rows inside ClickHouse, which is faster, also
+`GRANT CREATE TABLE, DROP TABLE, INSERT, SELECT ON tabularia.* TO <clickhouse-user>;`.
+
+**In the terminal**, the service and the user (replace every `<…>`), then the settings
+added to those of step 8:
+
+```bash
+export CLICKHOUSE_HOST="<your-service.clickhouse.example>" CLICKHOUSE_USER="<clickhouse-user>" \
+  CLICKHOUSE_PASSWORD="<its password>"
+printf 'export CLICKHOUSE_HOST=%q CLICKHOUSE_USER=%q CLICKHOUSE_PASSWORD=%q\n' \
+  "$CLICKHOUSE_HOST" "$CLICKHOUSE_USER" "$CLICKHOUSE_PASSWORD" >> "$WORK/env"
+cat > "$WORK/clickhouse.yaml" <<EOF
+externalServices:
+  clickhouse:
+    enabled: true
+    host: "$CLICKHOUSE_HOST"
+    port: 8443
+    secure: true
+    database: tabularia
+    username: "$CLICKHOUSE_USER"
+    transport: s3
+    s3Endpoint: "$STORAGE_ENDPOINT"
+    s3NamedCollection: tabularia_s3
+secrets:
+  clickhousePassword: "$CLICKHOUSE_PASSWORD"
+EOF
+helm upgrade tabularia infrastructure/helm/tabularia --namespace tabularia \
+  --values "$WORK/values.yaml" --values "$WORK/clickhouse.yaml"
+```
+
+After a minute, **Administration → Engines** lists ClickHouse. Choose it as your
+**Preferred engine** in **Settings**, or as the engine of a flow, and open a datasource in
+the **Viewer**: its rows come from ClickHouse. Every later `helm upgrade` takes both
+files, in this order.
+
 ## What this cluster shows
 
 | Here | In a company's cluster |
@@ -370,7 +530,7 @@ registry's own from the credentials above, right before each run.
 | `certs.d` mounted on the kind nodes | the authority installed on the nodes by the platform team (node image, DaemonSet) |
 | `registry:2.8.3` with a password | Harbor, GitLab, the cloud provider's registry |
 | `0.0.0.0/0` in `egressCIDRs` | the ranges of the company's databases and services |
-| PostgreSQL, Valkey and MinIO in `tabularia-deps` | managed services, or the company's own charts |
+| PostgreSQL, Valkey and MinIO in `tabularia-deps` | managed services, or the company's own charts; the cloud bucket of step 7 is already what a company uses |
 | the ingress on `localhost:8080` | the company's ingress, with TLS and a host name |
 
 When something is refused, Tabularia says which side: a build that cannot push names
@@ -406,5 +566,12 @@ restarts, remove it and run the guide again.
 - **Workers time out on Valkey or MinIO**: a network policy blocks them. The chart allows
   the namespaces of the hosts in `externalServices`; check that those hosts end in
   `.svc.cluster.local`.
+- **Uploads or previews fail with a storage error** (*403*, *Access Denied*,
+  *SignatureDoesNotMatch*, *NoSuchBucket*) with a cloud bucket: check the endpoint,
+  region, bucket and both keys of step 7 (and, on Scaleway, the key's preferred
+  project), fix `$WORK/values.yaml`, and run `helm upgrade` again.
+- **Flows on ClickHouse fail reading the data** (*Access Denied*, *named collection does
+  not exist*): check the named collection of step 12 and its `GRANT`, and that
+  `s3Endpoint` is the bucket's address as the ClickHouse service sees it.
 - **A variable is empty in a new terminal**: run `source "$WORK/env"` (and set `WORK`
   first if it is empty too).
