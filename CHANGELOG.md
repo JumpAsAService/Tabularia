@@ -5,6 +5,17 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.2.1 «Appio» — 2026-10-21
+
+Still «Appio». On Kubernetes, flows run code outside Tabularia: Python and R written in
+the editor, in environments an administrator builds (the Script node), and images of
+your own from your container registries (the Container node), each with access given
+by group or user in the administration panel. A flow that uses what one may not use
+does not open. The chart was tried on a three-node cluster with enforced network
+policies and Pod Security, as a company runs it, and two guides come with it: minikube
+to try Tabularia on your own computer, kind for a company-like cluster on one. The
+Compose stack starts with three commands and nothing to configure.
+
 - **Try it with three commands and nothing to configure.** `git clone`, `cd
   Tabularia/infrastructure`, `docker compose up -d`: no `.env`, no key to generate, no
   password to choose in a file. The Compose stack creates the key that encrypts the

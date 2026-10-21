@@ -99,7 +99,7 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    (the chart's `gateway.trustedProxies`), or every request shows the proxy's.
    Revision 0014 adds a nullable `locale` to `users`: email notices go out in the
    recipient's interface language, English for addresses that are not users.
-   **New after 1.2.0, the Compose stack of `infrastructure/` only:** it starts with no
+   **New in 1.2.1, the Compose stack of `infrastructure/` only:** it starts with no
    `.env`. `SECURITY__KEYS_DIR` (the `keys` volume) holds the encryption key created at
    the first start when `SECURITY__FERNET_KEY` is empty, and `AUTH__FIRST_RUN_SETUP`
    lets the sign-in page create the first administrator while no account exists. A
@@ -109,7 +109,7 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    `keys` volume to the services. Upgrade with `git pull` and `docker compose up -d
    --build`: without `--build` Compose keeps the images it has. Kubernetes and the chart
    are unchanged.
-   **New after 1.2.0, Kubernetes:** revisions 0015, 0016 and 0017 add the five tables
+   **New in 1.2.1, Kubernetes:** revisions 0015, 0016 and 0017 add the five tables
    of the scripting environments, empty, and two columns; 0018 adds the three tables of
    the container registries, empty (Administration → Container registries, off until
    `containers.enabled`). Scripting stays off until
@@ -128,6 +128,10 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    not installed», and nothing else is affected.
 
 ## Rollout order
+
+**From 1.2.0 to 1.2.1:** the migration step, then the engine API and the workers, then
+the gateways and orchestrators: the gateway's scripting environments and Container
+nodes call the engine's new `/scripts` endpoints. Nothing else depends on the order.
 
 **From 1.1.x to 1.2.0:** the migration step, then **the workers, beat and the engine
 API**, then the gateways and orchestrators, the interface last (revision 0013 above:

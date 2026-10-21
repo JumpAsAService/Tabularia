@@ -7,9 +7,9 @@
 
 image:
   registry: registry.example.com
-  backend:  { repository: tabularia-backend,  tag: "1.2.0" }
-  gateway:  { repository: tabularia-gateway,  tag: "1.2.0" }
-  frontend: { repository: tabularia-frontend, tag: "1.2.0" }
+  backend:  { repository: tabularia-backend,  tag: "1.2.1" }
+  gateway:  { repository: tabularia-gateway,  tag: "1.2.1" }
+  frontend: { repository: tabularia-frontend, tag: "1.2.1" }
   pullSecrets:
     - name: regcred
 

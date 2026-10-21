@@ -36,7 +36,7 @@ chDB, ClickHouse or BigQuery.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.2.0 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.2.1 «Appio»** — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
