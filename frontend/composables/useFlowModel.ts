@@ -141,9 +141,9 @@ export function resolveChain(
   if (target?.parentNode) {
     const upstreamId = inc.get(target.parentNode)?.left
     const upstream = upstreamId
-      ? resolveChain(nodes, edges, upstreamId)
+      ? resolveChain(nodes, edges, upstreamId, scriptSources)
       : { sourceNode: null as Node | null, operations: [] as Operation[] }
-    const op = operationFor(nodes, edges, target.parentNode, targetId)
+    const op = operationFor(nodes, edges, target.parentNode, targetId, scriptSources)
     return { sourceNode: upstream.sourceNode, operations: [...upstream.operations, op] }
   }
 
@@ -174,7 +174,7 @@ export function resolveChain(
   }
 
   opIds.reverse()
-  const operations = opIds.map((id) => operationFor(nodes, edges, id))
+  const operations = opIds.map((id) => operationFor(nodes, edges, id, undefined, scriptSources))
   // testa della catena: filtri a monte (sempre), poi il campione (solo editor)
   const sample = sourceNode ? devSampleOperation(sourceNode.data) : null
   if (sample) operations.unshift(sample)
@@ -188,14 +188,19 @@ export function resolveChain(
  * così si può unire anche un ramo trasformato, incluso uno che parte dalla
  * stessa sorgente del ramo sinistro.
  */
-function operationFor(nodes: Node[], edges: Edge[], id: string, bodyUntil?: string): Operation {
+function operationFor(
+  nodes: Node[], edges: Edge[], id: string, bodyUntil?: string,
+  // a branch that starts after a Script or Container node (the right side of a join, a
+  // foreach's driver) reads its last output too, as the main chain does
+  scriptSources: Record<string, { bucket: string; key: string }> = {},
+): Operation {
   const node = nodes.find((n) => n.id === id)!
   const params: Record<string, any> = { ...(node.data.params ?? {}) }
 
   if (node.data.opType === 'join' || node.data.opType === 'union') {
     const rightId = buildIncoming(edges).get(id)?.right
     if (rightId) {
-      const right = resolveChain(nodes, edges, rightId)
+      const right = resolveChain(nodes, edges, rightId, scriptSources)
       if (right.sourceNode?.data?.parquetKey) {
         params.right = {
           source: { bucket: right.sourceNode.data.bucket, key: right.sourceNode.data.parquetKey },
@@ -210,7 +215,7 @@ function operationFor(nodes: Node[], edges: Edge[], id: string, bodyUntil?: stri
     // un'iterazione, le colonne sono i placeholder disponibili
     const driverId = buildIncoming(edges).get(id)?.right
     if (driverId) {
-      const drv = resolveChain(nodes, edges, driverId)
+      const drv = resolveChain(nodes, edges, driverId, scriptSources)
       if (drv.sourceNode?.data?.parquetKey) {
         params.driver = {
           source: { bucket: drv.sourceNode.data.bucket, key: drv.sourceNode.data.parquetKey },
@@ -219,7 +224,7 @@ function operationFor(nodes: Node[], edges: Edge[], id: string, bodyUntil?: stri
       }
     }
     // corpo = catena dei nodi figli dentro il container
-    params.body = containerBody(nodes, edges, id, bodyUntil)
+    params.body = containerBody(nodes, edges, id, bodyUntil, scriptSources)
   }
   return { type: node.data.opType, params }
 }
@@ -229,7 +234,8 @@ function operationFor(nodes: Node[], edges: Edge[], id: string, bodyUntil?: stri
  * input sinistro interno e segue gli archi tra figli. `until` tronca il corpo a
  * quel nodo incluso (per la preview di un nodo interno).
  */
-function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?: string): Operation[] {
+function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?: string,
+  scriptSources: Record<string, { bucket: string; key: string }> = {}): Operation[] {
   // i commenti dentro un container sono solo annotazioni: fuori dal corpo
   const children = nodes.filter((n) => n.parentNode === containerId && n.type !== 'comment')
   if (!children.length) return []
@@ -249,7 +255,7 @@ function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?
   const seen = new Set<string>()
   while (cur && !seen.has(cur)) {
     seen.add(cur)
-    ops.push(operationFor(nodes, edges, cur))
+    ops.push(operationFor(nodes, edges, cur, undefined, scriptSources))
     if (cur === until) break
     cur = next.get(cur)
   }

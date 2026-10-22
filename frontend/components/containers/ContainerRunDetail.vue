@@ -24,6 +24,7 @@ interface ContainerInfo {
   exit_code?: number | null
   variables?: Record<string, { value?: string; secret?: boolean; changed_at?: string | null; node?: boolean }>
   log?: string
+  log_expired?: boolean // emptied after ORCHESTRATOR__LOG_RETENTION_DAYS
 }
 
 const info = computed<ContainerInfo>(() => {
@@ -68,6 +69,7 @@ const io = computed(() => [
     <details :open="!!info.log">
       <summary>{{ $t('scripting.run.log') }}</summary>
       <pre v-if="info.log" class="log">{{ info.log }}</pre>
+      <p v-else-if="info.log_expired" class="muted small">{{ $t('scripting.run.logExpired') }}</p>
       <p v-else class="muted small">{{ $t('scripting.run.noLog') }}</p>
     </details>
     <p v-if="info.image" class="muted small immagine"><code>{{ info.image }}</code></p>

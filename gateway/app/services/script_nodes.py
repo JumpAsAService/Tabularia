@@ -62,13 +62,55 @@ def files_of(node: dict) -> list[dict]:
     return [f for f in files if isinstance(f, dict)]
 
 
+def saved_script_id(node: dict) -> Optional[int]:
+    """The saved script a Script node runs by reference (docs/specs/saved-scripts.md,
+    «The Script node, by reference»), None for a node with its own code."""
+    sid = (node.get("data") or {}).get("scriptId")
+    return sid if isinstance(sid, int) and not isinstance(sid, bool) else None
+
+
 def code_fingerprint(node: dict) -> str:
-    """What the node runs: the environment, the files and the entrypoint."""
+    """What the node runs: the environment, the files and the entrypoint; or the
+    saved script it names."""
     d = node.get("data") or {}
+    if saved_script_id(node) is not None:
+        return hashlib.sha256(json.dumps({"script": saved_script_id(node)}).encode()).hexdigest()
     body = json.dumps({"environment": d.get("environmentId"), "entrypoint": d.get("entrypoint"),
                        "files": sorted((str(f.get("path")), str(f.get("content"))) for f in files_of(node))},
                       sort_keys=True)
     return hashlib.sha256(body.encode()).hexdigest()
+
+
+def fingerprint(session: Session, node: dict) -> str:
+    """As `code_fingerprint`, with the version a saved script is at: a run of an older
+    version is stale once the script changes."""
+    sid = saved_script_id(node)
+    if sid is None:
+        return code_fingerprint(node)
+    from app.models import SavedScript
+
+    script = session.get(SavedScript, sid)
+    version = script.current_version if script else 0
+    return hashlib.sha256(f"{code_fingerprint(node)}:v{version}".encode()).hexdigest()
+
+
+def resolved(session: Session, node: dict):
+    """(the node as it runs, its saved script or None): a node by reference takes the
+    script's current files, entrypoint, environment, timeout and retries."""
+    sid = saved_script_id(node)
+    if sid is None:
+        return node, None
+    from app.models import SavedScript
+    from app.services import saved_scripts
+
+    script = session.get(SavedScript, sid)
+    if script is None:
+        return node, None
+    content = saved_scripts.content_of(session, script)
+    data = {**(node.get("data") or {}), "environmentId": script.environment_id, "files": content["files"],
+            "entrypoint": content["entrypoint"], "timeoutSeconds": content["timeout_seconds"],
+            "retries": content["retries"], "retryDelaySeconds": content["retry_delay_seconds"]}
+    return {**node, "data": data}, script
 
 
 def label(node: dict) -> str:
@@ -163,10 +205,28 @@ def check_definition(session: Session, user: User, before, after) -> None:
     nodes = script_nodes(after)
     if not nodes:
         return
+    from app.services.script_builds import disabled_reason
+
+    if disabled_reason() == "kubernetes":
+        # an installation without scripting (Docker Compose): a flow that came from one
+        # with it is kept as it is; its Script nodes do not run, and the run says so
+        return
     old = {n.get("id"): code_fingerprint(n) for n in script_nodes(before or "{}")}
     storage = session.get(ScriptStorage, 1)
     bucket = (storage.bucket if storage else "").strip()
     for node in nodes:
+        sid = saved_script_id(node)
+        if sid is not None:
+            # the script was checked when it was saved; here only whether it may be named
+            from app.models import SavedScript
+            from app.services import saved_scripts
+
+            if old.get(node.get("id")) == code_fingerprint(node):
+                continue  # unchanged: whoever could not see it could not have opened the flow
+            script = session.get(SavedScript, sid)
+            if script is None or not saved_scripts.can_see(session, user, script):
+                raise _refuse(node, "choose a saved script you may see")
+            continue
         env_id = (node.get("data") or {}).get("environmentId")
         env = session.get(ScriptEnvironment, env_id) if isinstance(env_id, int) else None
         if env_id is not None and env is None:

@@ -127,12 +127,13 @@ def job_manifest(*, name: str, image: str, node: dict, environment: dict[str, st
     }
 
 
-async def run_container(session: Session, user: User, flow: Flow, definition: dict, node: dict, *,
+async def run_container(session: Session, user: User, flow: Optional[Flow], definition: dict, node: dict, *,
                         parent_run_id: Optional[int], trigger_type: str, engine_mode: str,
                         script_outputs: dict[str, tuple[str, str]], resolve_ds, default_bucket: str,
                         launch, wait, trial_run: Optional[Run] = None) -> Optional[tuple[str, str]]:
     """Runs the node; returns where its output is in Tabularia's storage (bucket, key),
-    None when it has none. The arguments are script_runs.run_script's."""
+    None when it has none. The arguments are script_runs.run_script's. Without `flow`,
+    a container cell of a flow group: no input, no output, a run under the group's."""
     from app.routes.registries import client_of
     from app.schemas.models import RunCreate
 
@@ -186,7 +187,7 @@ async def run_container(session: Session, user: User, flow: Flow, definition: di
         "exit_code": None, "variables": snapshot, "log": "", "trial": trial_run is not None,
         "fingerprint": container_nodes.fingerprint(node), "budget_seconds": budget_seconds(d), "namespace": ns,
     }
-    child = trial_run or Run(kind="container", flow_id=flow.id, task_id="", launched_by=user.id,
+    child = trial_run or Run(kind="container", flow_id=flow.id if flow else None, task_id="", launched_by=user.id,
                              trigger_type=trigger_type, parent_run_id=parent_run_id, input_key="")
     child.status, child.engine, child.script = "STARTED", registry.name, json.dumps(info)
     child.output_bucket, child.output_key = (default_bucket if has_output else ""), engine_out_key
@@ -229,8 +230,8 @@ async def run_container(session: Session, user: User, flow: Flow, definition: di
             "TABULARIA_INPUT": f"{bucket_url}/{in_key}" if has_input else "",
             "TABULARIA_OUTPUT": f"{bucket_url}/{out_key}" if has_output else "",
             "TABULARIA_STEP_ID": step_id, "TABULARIA_RUN_ID": str(parent_run_id or child.id),
-            "TABULARIA_FLOW_ID": str(flow.id), "TABULARIA_FLOW_NAME": flow.name, "TABULARIA_NODE_ID": str(node["id"]),
-            **(_storage_env(storage) if uses_bucket else {}), **plain,
+            "TABULARIA_FLOW_ID": str(flow.id) if flow else "", "TABULARIA_FLOW_NAME": flow.name if flow else "",
+            "TABULARIA_NODE_ID": str(node["id"]), **(_storage_env(storage) if uses_bucket else {}), **plain,
         }
         secret = {**({"AWS_ACCESS_KEY_ID": storage.access_key,
                       "AWS_SECRET_ACCESS_KEY": decrypt_secret(storage.secret_key_enc)} if uses_bucket else {}),

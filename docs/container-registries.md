@@ -18,8 +18,10 @@ containers:
   enabled: true
 ```
 
-or `CONTAINERS__ENABLED=true` for the gateway. Without it the section says it needs
-Kubernetes and saves nothing.
+or `CONTAINERS__ENABLED=true` for the gateway. Without it (on Docker Compose, for
+instance) the section, the palette's **Container** and the Container nodes of a flow
+brought from a cluster are greyed out, with the reason; nothing is saved here, and such
+a flow is saved as it is.
 
 The chart then creates two namespaces, both at the Pod Security `baseline` level (root
 is allowed inside a container, as most existing images need; privileges and host access
@@ -30,9 +32,11 @@ are not):
 | `containers.namespace` | `<release namespace>-containers` | the Container nodes of the flows' runs |
 | `containers.trialNamespace` | `<release namespace>-containers-dev` | the editor's trials and **Try in the cluster**, under a ResourceQuota (`containers.trialQuota`) |
 
-The gateway's service account gets a Role in each: Jobs, their Pods, logs and events,
-and Secrets (the pull Secrets below). If your namespaces are created by someone else,
-`containers.createNamespaces: false` and the chart only adds the Roles.
+The gateway's and the orchestrator's service accounts (`…-scaler`, `…-orchestrator`)
+get a Role in each: Jobs, their Pods, logs and events, and Secrets (the pull Secrets
+below). If your namespaces are created by someone else, `containers.createNamespaces:
+false`: the chart still adds the Roles, the trials' ResourceQuota and the network policy
+of the users' code.
 
 ## A registry
 

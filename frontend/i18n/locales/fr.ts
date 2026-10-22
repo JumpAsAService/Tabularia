@@ -2,6 +2,7 @@
 export default {
   nav: {
     performance: "Performances",
+    cluster: 'Cluster',
     explore: 'Explorer',
     flows: 'Flux',
     datasources: 'Sources de données',
@@ -9,6 +10,7 @@ export default {
     viewer: 'Visualiseur',
     assistant: 'Assistant',
     connections: 'Connexions',
+    scripting: 'Scripts',
     runs: 'Exécutions',
     queue: 'File',
     monitoring: 'Supervision',
@@ -258,6 +260,16 @@ export default {
     signInWithSso: 'Se connecter avec le SSO',
     ssoCompleting: 'Connexion en cours…',
     ssoError: 'Échec de la connexion SSO ({code}). Réessayez ou connectez-vous avec votre e-mail.',
+    // what to do, for the sign-in errors a person can act on (the code stays visible)
+    ssoHint: {
+      tx_missing: "La connexion est revenue à une autre adresse que celle de départ : ouvrez Tabularia à l'adresse donnée par votre administrateur, puis réessayez.",
+      tx_expired: "La connexion a pris trop de temps, ou les horloges des serveurs ne sont pas d'accord. Réessayez ; si cela se reproduit, prévenez votre administrateur.",
+      state_mismatch: "Cette connexion a été remplacée par une autre lancée entre-temps. Réessayez depuis cette page.",
+      token_invalid: "La réponse du fournisseur d'identité n'a pas pu être vérifiée. Prévenez votre administrateur : les réglages du fournisseur ou les horloges des serveurs sont à vérifier.",
+      code_rejected: "Le fournisseur d'identité a refusé de terminer la connexion. Prévenez votre administrateur : le secret du client ou l'adresse de retour sont à vérifier.",
+      idp_denied: "Le fournisseur d'identité ne vous a pas laissé entrer. Si vous devriez avoir accès, demandez à votre administrateur.",
+      idp_untrusted: "Le serveur de Tabularia ne fait pas confiance au certificat du fournisseur d'identité. Prévenez votre administrateur : l'autorité de certification de l'entreprise doit être donnée à Tabularia.",
+    },
     signedOutIdle: 'La session a été fermée pour inactivité. Reconnectez-vous pour continuer.',
     setupTitle: "Créer l'administrateur",
     setupLead: "Une nouvelle installation : choisissez l'e-mail et le mot de passe du premier administrateur. Vous vous connecterez avec eux.",

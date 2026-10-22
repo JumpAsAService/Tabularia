@@ -11,6 +11,7 @@ import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizon
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
+import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { knownError } from '~/composables/knownErrors'
 import { useAuth } from '~/composables/useAuth'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
@@ -256,7 +257,7 @@ function cacheChains() {
   const chains: { node_id: string; bucket: string; input_key: string; operations: Operation[] }[] = []
   for (const n of nodes) {
     if (n.type !== 'operation' || n.parentNode) continue // a foreach body runs per iteration
-    const { sourceNode, operations } = resolveChain(nodes, edges, n.id)
+    const { sourceNode, operations } = resolveChain(nodes, edges, n.id, scriptSources.value)
     if (!sourceNode?.data?.parquetKey || !operations.length) continue
     chains.push({ node_id: n.id, bucket: sourceNode.data.bucket ?? bucket, input_key: sourceNode.data.parquetKey, operations })
   }
@@ -370,17 +371,40 @@ async function loadScriptOutputs() {
 // are changes), and the run is followed until it ends
 interface ScriptTrial { runId: number | null; status: string; startedAt: number; error: string }
 const scriptTrials = reactive<Record<string, ScriptTrial>>({})
+let editorGone = false // the page was left: the trials stop following their runs
+onUnmounted(() => { editorGone = true })
 async function runScriptNode(nodeId: string) {
   if (negatoAllOsservatore()) return
-  if (dirty.value || flowId.value === null) await saveFlow()
-  if (dirty.value || flowId.value === null) return // not saved: saveFlow said why
+  const live = scriptTrials[nodeId]
+  if (live && (live.status === 'PENDING' || live.status === 'STARTED')) return // a second click while it starts
   scriptTrials[nodeId] = { runId: null, status: 'PENDING', startedAt: Date.now(), error: '' }
+  // a change made a moment ago (a field, a script picked) counts: the history settles
+  // a change after a short quiet, and «Run» must not run the flow saved before it
+  history.flush()
+  if (dirty.value || flowId.value === null) await saveFlow()
+  if (dirty.value || flowId.value === null) { // not saved: saveFlow said why
+    delete scriptTrials[nodeId]
+    return
+  }
   try {
     const { run_id } = await scriptingEditor.runNode(flowId.value, nodeId)
     scriptTrials[nodeId]!.runId = run_id
-    for (;;) {
-      await new Promise((r) => setTimeout(r, 2000))
-      const run = await runsApi.get(run_id)
+    // a network hiccup or a gateway restarting does not end the trial: a few failed
+    // reads in a row do, and then the run page still has the truth
+    let misses = 0
+    let pause = FIRST_PAUSE_MS
+    const since = Date.now()
+    while (!editorGone) {
+      await new Promise((r) => setTimeout(r, pause))
+      pause = nextPause(pause, since, 2000)
+      let run
+      try {
+        run = await runsApi.get(run_id)
+        misses = 0
+      } catch (e) {
+        if (++misses < 5) continue
+        throw e
+      }
       scriptTrials[nodeId]!.status = run.status
       if (run.status === 'SUCCESS' || run.status === 'FAILURE') {
         scriptTrials[nodeId]!.error = run.status === 'FAILURE' ? (run.error ?? '') : ''
@@ -390,6 +414,7 @@ async function runScriptNode(nodeId: string) {
   } catch (e) {
     scriptTrials[nodeId] = { ...scriptTrials[nodeId]!, status: 'FAILURE', error: errMessage(e) }
   }
+  if (editorGone) return
   await loadScriptOutputs()
   invalidateColumns()
   invalidateStats(nodeId)
@@ -1085,7 +1110,7 @@ function onCanvasDragOver(ev: DragEvent) {
 
 function onCanvasDrop(ev: DragEvent) {
   const kind = ev.dataTransfer?.getData('application/tabularia')
-  if (!kind) return
+  if (!kind || loadBlocked.value) return // a flow that cannot be opened takes nothing under its notice
   if (!TRASFORMAZIONE(kind) && negatoAllOsservatore()) return
   const position = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
 
@@ -1215,6 +1240,9 @@ function patchSelected(patch: Record<string, any>) {
   // pesante e riprovarla a ogni tasto/blur è sprecato. L'anteprima è a comando
   // (bottone «Anteprima» o Cmd/Ctrl+Enter → previewSelected).
   if (findNode(selectedId.value)?.data?.opType === 'sql') return
+  // a Script or Container node previews its last output: its code or its image change
+  // nothing there until it runs
+  if (STEP_TYPES.has(findNode(selectedId.value)?.type ?? '')) return
   refreshForNode(selectedId.value)
 }
 
@@ -1288,6 +1316,7 @@ function newNodeId(n: ClipNode): string {
 }
 
 function pasteClip(clip: FlowClip) {
+  if (loadBlocked.value) return
   const passo = 40 * ++pasteCount
   // un osservatore incolla ciò che può anche aggiungere a mano: le trasformazioni
   const ammesso = (n: ClipNode) => !soloOsservatore.value || n.type === 'operation'
@@ -1328,10 +1357,13 @@ function cutSelection() {
 }
 
 // Nei campi valgono le scorciatoie del browser: lì Ctrl+Z annulla il testo,
-// Ctrl+C copia il testo, Canc cancella un carattere.
+// Ctrl+C copia il testo, Canc cancella un carattere. Also inside a dialog and inside
+// `.nokey` (the code editor): on Chrome and Edge Monaco types through EditContext, a
+// div that is none of the above, and Ctrl+X there cut the Script node off the flow.
 function scriveInUnCampo(): boolean {
   const el = document.activeElement as HTMLElement | null
   return ['INPUT', 'TEXTAREA', 'SELECT'].includes((el?.tagName ?? '').toUpperCase()) || !!el?.isContentEditable
+    || !!el?.closest('.nokey, [role="dialog"]')
 }
 
 // Scorciatoie del canvas: annulla/ripeti, copia/taglia/incolla/duplica, e
@@ -1845,8 +1877,10 @@ async function executeOrchestration() {
 // esecuzione anche per flussi senza nodo Output, che non producono run propri.
 async function pollOrchestration(runId: number) {
   const token = pollToken
-  for (let i = 0; i < 150; i++) {
-    await new Promise((r) => setTimeout(r, 2000))
+  // soon at first, then every two seconds, for five minutes at most
+  const since = Date.now()
+  for (let pause = FIRST_PAUSE_MS; Date.now() < since + 300_000; pause = nextPause(pause, since, 2000)) {
+    await new Promise((r) => setTimeout(r, pause))
     if (token !== pollToken) return
     let run
     try {
@@ -2108,7 +2142,11 @@ async function pollTask(id: string) {
     </p>
 
     <div class="sidebar">
-      <OpSidebar :operations="operations" :read-only="soloOsservatore" :scripting="scriptingAvailable" :containers="containersAvailable" />
+      <OpSidebar
+        :operations="operations" :read-only="soloOsservatore" :scripting="scriptingAvailable" :containers="containersAvailable"
+        :scripting-off="scriptingEditor.state.value?.disabled_reason === 'kubernetes'"
+        :containers-off="registriesEditor.state.value?.disabled_reason === 'kubernetes'"
+      />
     </div>
 
     <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
@@ -2238,6 +2276,7 @@ async function pollTask(id: string) {
         :script-outputs="scriptOutputs"
         :script-trials="scriptTrials"
         :flow-dirty="dirty"
+        :read-only="soloOsservatore"
         @script-run="runScriptNode"
         @update="patchSelected"
         @delete="deleteSelected"

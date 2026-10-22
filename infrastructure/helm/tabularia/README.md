@@ -196,9 +196,9 @@ waiting, and lets an administrator change two things:
 - **Minimum and maximum pods**, on Kubernetes only, with `adminScaling.enabled`
   and an autoscaler on the workers (`autoscaling.enabled`, CPU HPA or KEDA).
 
-`adminScaling.enabled` gives the gateway and the orchestrator a service account
-of their own (`<release>-scaler`) that may `get` the two worker Deployments and
-`get`/`patch` their two autoscalers, named one by one — nothing else, in this
+With `adminScaling.enabled`, the gateway's and the orchestrator's service accounts
+(`<release>-scaler`, `<release>-orchestrator`) may `get` the two worker Deployments
+and `get`/`patch` their two autoscalers, named one by one — nothing else, in this
 namespace only. The panel cannot set a maximum above `autoscaling.panelMaxReplicas`:
 that is your budget per Deployment. An HPA keeps at least one pod; KEDA may go to
 zero.
@@ -247,10 +247,17 @@ pulls. Each image is recorded with the architecture it was built for, and its ch
 scripts run on nodes of that architecture. Details, and what fails how, in
 [docs/scripting.md](../../../docs/scripting.md#a-registry-with-your-companys-certificate).
 
-The gateway and the orchestrator get the `<release>-scaler` service account, shared
-with Admin → Workers. In those namespaces only, it may create, read and delete Jobs,
-read their Pods, logs and events, and (scripts and trials) create the ConfigMap and
-Secret a Job mounts. Nothing runs in the release's namespace.
+The gateway runs as `<release>-scaler`, the orchestrator as `<release>-orchestrator`:
+the accounts of Admin → Workers. In those namespaces only, they may create, read and delete Jobs, read their Pods, logs and
+events, and (scripts and trials) create the ConfigMap and Secret a Job mounts. In the
+builds' namespace, `privileged`, only the orchestrator's account creates Jobs: it alone
+runs the builds, so the gateway, which answers the internet, cannot start a privileged
+Pod. Nothing runs in the release's namespace.
+
+These two accounts are the chart's own, created whenever `adminScaling`, `scripts` or
+`containers` is on: `serviceAccount.create`, `serviceAccount.name` and
+`serviceAccount.annotations` apply to the other pods only. A cluster where the release
+may not create ServiceAccounts, Roles and RoleBindings cannot turn those three on.
 
 ## Container registries
 
@@ -265,12 +272,22 @@ it).
 
 The chart creates `containers.namespace` (default `<release>-containers`) and
 `containers.trialNamespace` (`<release>-containers-dev`, with `containers.trialQuota`),
-both at the `baseline` Pod Security level, and a Role in each for the gateway's account
+both at the `baseline` Pod Security level, and a Role in each for the gateway's and the
+orchestrator's accounts
 (Jobs, Pods, logs, events, Secrets: Tabularia writes a pull Secret per registry there).
 `containers.createNamespaces: false` when they exist already. `containers.limits`
-caps what a Container node may ask for (CPU, memory, timeout). The chart's network
-policies do not cover these namespaces: what a container may reach is decided by the
-cluster's own policies there, as for the scripts' namespaces.
+caps what a Container node may ask for (CPU, memory, timeout). The namespaces where
+users' code runs (scripts, their trials, the image builds, the containers and their
+trials) get a NetworkPolicy (`scripts.blockTabularia`, `containers.blockTabularia`, on by
+default): the code reaches the internet and the other namespaces, never the pods of the
+release's namespace nor the cloud metadata addresses. The private ranges outside the
+cluster stay closed unless listed in `networkPolicy.userCodePrivateCIDRs`: the registry
+the image builds push to when its address is private, a scripts bucket on a private
+endpoint, a company database. A database, broker or storage of Tabularia in another
+namespace of the cluster is reachable from that code: give it a policy of its own.
+The policy needs a network plugin that enforces egress rules (Calico, Cilium);
+without one it has no effect. What to list, in
+[docs/scripting.md](../../../docs/scripting.md#network-policies).
 
 ## Storage and `/tmp`
 
@@ -349,7 +366,54 @@ internal token, derived from the Fernet key. Each role also loses the secrets
 it has no use for: the engine roles never see the session key or the metadata
 password, the gateway never sees the storage or warehouse keys.
 
+## Administration → Cluster
+
+`clusterView.enabled` (on by default) gives Tabularia's administrators and observers a
+page with the pods of the release and of the users' code (the scripts' and containers'
+namespaces): their state, restarts, age, node, CPU and memory against their limits, and
+the warning events, refreshed every three seconds; a Job of a script or a container
+links to the flow, saved script or flow group that started it. The gateway's and the
+orchestrator's accounts get a Role in the release's namespace to `get`/`list` pods and
+pod metrics and `list` events; the scripts' and containers' Roles read their pods'
+metrics too. Nothing cluster-wide, no logs, no exec: for those, a Kubernetes client.
+CPU and memory need metrics-server in the cluster (most managed clusters have it;
+`minikube addons enable metrics-server`; on kind, docs/deploy/kind.md).
+
+## Database backups
+
+`backup.enabled` (on by default; Kubernetes only — on Docker Compose the section is
+greyed out): every night at 03:00 (`backup.schedule`, a cron in
+`app.timezone`) an orchestrator runs `pg_dump` of Tabularia's database and streams it to
+the engine, which stores it in the object storage and keeps the latest `backup.keep`
+(14). Administration → Backups changes those three values without an upgrade, runs one
+at once and downloads them; every download is in the audit log.
+
+By default the files go to Tabularia's own bucket, under `backup.prefix`
+(`backups/postgres/`). **In production give them a bucket of their own** — `backup.bucket`,
+and `backup.endpoint`, `backup.region`, `secrets.backupAccessKey` and
+`secrets.backupSecretKey` when it is elsewhere or needs other keys — so that losing one
+does not lose both; with `networkPolicy.egressCIDRs` restricted, the engine must reach
+that endpoint. The engine alone reads those keys: the chart keeps them out of the
+gateway's and the orchestrator's environment. A backup holds every account's e-mail
+address and the connections' passwords (encrypted with `secrets.fernetKey`): keep the
+bucket private, and the Fernet key apart from it. Restoring one:
+[docs/deploy/upgrading.md](../../../docs/deploy/upgrading.md#when-something-goes-wrong).
+
 ## Upgrades
+
+The whole procedure — backup, `helm upgrade`, the checks, rolling back and restoring —
+is in [docs/deploy/upgrading.md](../../../docs/deploy/upgrading.md). Below, what a given
+release asks for besides it.
+
+**Coming from chart 2.2.0 (Tabularia 1.2.1)** — the namespaces of the users' code get a
+NetworkPolicy (`scripts.blockTabularia`, `containers.blockTabularia`, default `true`).
+Before upgrading, list in `networkPolicy.userCodePrivateCIDRs` the private addresses
+the scripts, the image builds and the Container nodes must reach (the registry the
+builds push to, a scripts bucket on a private endpoint, company databases), or set the
+two values to `false` to keep the previous behaviour. The orchestrator moves to a
+service account of its own, `<release>-orchestrator`, the only one that may create the
+image builds' Jobs: a build that starts while the old orchestrator pod is still
+running fails with *Forbidden*; **Build again** after the upgrade.
 
 **Coming from chart 1.x to 2.0** — values that changed meaning:
 

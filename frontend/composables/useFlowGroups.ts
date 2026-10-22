@@ -5,11 +5,13 @@
 // The gateway checks every cell when the grid is saved and again when it runs;
 // `cells` in the detail is the label of each cell as the reader may see it.
 
-export type FlowGroupCellKind = 'flow' | 'refresh'
+export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container'
 
 export interface FlowGroupCell {
   kind: FlowGroupCellKind
   id: number
+  /** a container cell's settings, as a Container node's data */
+  container?: Record<string, any>
 }
 
 export interface FlowGroupDefinition {

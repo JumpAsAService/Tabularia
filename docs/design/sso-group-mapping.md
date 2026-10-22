@@ -14,7 +14,8 @@ Where it lives:
 | login button and callback landing page | [`frontend/pages/login.vue`](../../frontend/pages/login.vue), [`frontend/pages/auth/callback.vue`](../../frontend/pages/auth/callback.vue) |
 | tests | [`gateway/tests/test_sso.py`](../../gateway/tests/test_sso.py) |
 
-A runnable Keycloak example lives in [`../examples/keycloak/`](../examples/keycloak/).
+A runnable Keycloak example lives in [`../examples/keycloak/`](../examples/keycloak/); the
+step-by-step guide for an installation with Helm is [Single sign-on with Keycloak](../sso-keycloak.md).
 
 ---
 

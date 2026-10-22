@@ -119,6 +119,29 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    also roll when the chart's Secret changes. With `networkPolicy.egressCIDRs` set and
    the broker or the storage in another namespace of the cluster, the workers could
    not reach them before; they now can, from their host names.
+   **New in 1.2.2:** revision 0021 adds the one-row table of the database backups;
+   revisions 0019 and 0020 add the two tables of the saved scripts,
+   empty, and a nullable column of `runs` (the saved script a run belongs to), with its
+   indexes (Explore → New → Script, only where scripting is on). From this version the
+   orchestrators trim history every hour (runs' logs after 30 days, the latest 100
+   contract reports per datasource, the latest 50 versions of flows and saved scripts,
+   assistant conversations untouched for 90 days) and vacuum what they touched: set the
+   four `ORCHESTRATOR__*` values (`orchestrator.*` in the chart) to 0 to keep it all. The
+   space goes back to Postgres for new rows, not to the disk: `VACUUM FULL` (it locks
+   the tables) or `pg_repack`, in a maintenance window, give it back to the disk. The
+   chart adds a read-only Role (`…-cluster-view`) for Administration → Cluster
+   (`clusterView.enabled`, on by default); the gateway now always gets its service
+   account's token on Kubernetes. On Kubernetes, the namespaces
+   of the users' code (the scripts, their trials, the image builds, the Container nodes
+   and their trials) get a network policy, on by default (`scripts.blockTabularia`,
+   `containers.blockTabularia`): the code reaches the internet and the other namespaces
+   of the cluster, not the release's namespace, the cloud metadata address nor the
+   private ranges. **Before upgrading**, list in `networkPolicy.userCodePrivateCIDRs`
+   the private addresses the scripts, the image builds and the Container nodes must
+   reach (the registry the builds push to, a scripts bucket on a private endpoint, a
+   company database), or they stop reaching them. The orchestrator gets a service
+   account of its own (`…-orchestrator`), the only one that may create the image
+   builds' Jobs.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
@@ -128,6 +151,10 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    not installed», and nothing else is affected.
 
 ## Rollout order
+
+**From 1.2.1 to 1.2.2:** the migration step; nothing else depends on the order. An image
+build that starts while the old orchestrator is still running fails with *Forbidden*
+(its service account no longer creates builds): **Build again** once the upgrade is done.
 
 **From 1.2.0 to 1.2.1:** the migration step, then the engine API and the workers, then
 the gateways and orchestrators: the gateway's scripting environments and Container

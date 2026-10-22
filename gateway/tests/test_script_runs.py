@@ -335,7 +335,7 @@ def test_downstream_nodes_run_after_the_script_without_a_sequence_edge():
 
 
 # ── saving ───────────────────────────────────────────────────────────────────
-def test_who_may_save_a_script(session):
+def test_who_may_save_a_script(session, cluster):
     g = Group(name="data science")
     session.add(g)
     session.commit()
@@ -365,7 +365,7 @@ def test_who_may_save_a_script(session):
     ([{"path": "main.py", "content": "x = 1\nkey = 'tab-scripts/env-2/x'"}], "main.py", "line 2 names the scripts bucket"),
     ([{"path": "a.py", "content": ""}, {"path": "A.py", "content": ""}], "a.py", "two files are called"),
 ])
-def test_the_files_and_the_path_check(session, files, entry, message):
+def test_the_files_and_the_path_check(session, cluster, files, entry, message):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     env = _environment(session)
     bad = json.dumps({"nodes": [_script(env.id, files=files, entrypoint=entry)], "edges": []})
@@ -497,6 +497,35 @@ async def test_a_trial_reads_the_latest_output_of_the_script_before_it(trial_env
     s1 = script_runs.latest_outputs(session, flow.id)["s1"]["output"]
     what, body, _ = launches.bodies[-1]
     assert what == "script_input" and body["input_key"] == s1["key"]
+
+
+def test_latest_outputs_reads_two_rows_per_node(session):
+    """The latest run of each node and its latest output, wherever they are in the
+    history; a node whose id begins like another's (s1, s10, s_1) is not confused."""
+    from datetime import datetime, timedelta, timezone
+
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    flow = _flow(session, [_script(env.id), {**_script(env.id), "id": "s10"}, {**_script(env.id), "id": "s_1"}], [])
+    t0 = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    def run(node_id, minutes, status, key=""):
+        r = Run(kind="script", flow_id=flow.id, task_id="", status=status, launched_by=admin.id, input_key="",
+                output_bucket="b", output_key=key, started_at=t0 + timedelta(minutes=minutes),
+                script=json.dumps({"node_id": node_id, "log": f"{node_id}@{minutes}"}))
+        session.add(r)
+
+    run("s1", 0, "SUCCESS", "out/old.parquet")
+    for m in range(1, 30):
+        run("s10", m, "SUCCESS", f"out/s10-{m}.parquet")
+    run("s1", 40, "FAILURE")
+    run("s1x", 50, "SUCCESS", "out/other.parquet")  # not a node of the flow
+    session.commit()
+    out = script_runs.latest_outputs(session, flow.id)
+    assert set(out) == {"s1", "s10"}
+    assert out["s1"]["last"]["status"] == "FAILURE" and out["s1"]["last"]["log"] == "s1@40"
+    assert out["s1"]["output"]["key"] == "out/old.parquet"
+    assert out["s10"]["output"]["key"] == "out/s10-29.parquet" and out["s10"]["last"]["log"] == "s10@29"
 
 
 async def test_a_trial_without_the_script_before_it_says_what_to_run(trial_env, cluster, engine, launches):
@@ -656,3 +685,88 @@ async def test_a_version_built_before_the_architecture_was_kept_runs_anywhere(se
     await _run(session, admin, _flow(session, [_script(env.id)], []))
     pod = next(body for kind, _, body in cluster.created if kind == "jobs")["spec"]["template"]["spec"]
     assert "nodeSelector" not in pod
+
+
+# ── a trial never stays open for ever ────────────────────────────────────────
+async def test_a_trial_left_pending_is_closed_as_never_started(session, cluster):
+    from datetime import datetime, timedelta, timezone
+
+    old = datetime.now(timezone.utc) - timedelta(seconds=script_runs.TRIAL_START_SECONDS + 5)
+    run = Run(kind="script", task_id="", status="PENDING", trigger_type="trial", input_key="", output_bucket="",
+              output_key="", started_at=old, script=json.dumps({"node_id": "s1", "trial": True}))  # no budget: before the fix, never closed
+    session.add(run)
+    session.commit()
+    run = await script_runs.close_if_orphaned(session, run)
+    assert run.status == "FAILURE" and "never started" in run.error
+    fresh = Run(kind="script", task_id="", status="PENDING", trigger_type="trial", input_key="", output_bucket="",
+                output_key="", script=json.dumps({"node_id": "s1", "trial": True}))
+    session.add(fresh)
+    session.commit()
+    assert (await script_runs.close_if_orphaned(session, fresh)).status == "PENDING"
+
+
+async def test_a_trial_stopped_by_its_gateway_says_so(trial_env, cluster, engine, launches, monkeypatch):
+    import asyncio
+
+    session = trial_env
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    flow = _flow(session, [_script(env.id)], [])
+    run = _trial(session, admin, flow)
+    run_id = run.id
+
+    async def forever(*a, **kw):
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(script_runs, "run_script", forever)
+    task = asyncio.create_task(script_runs.run_trial(run_id, admin.id, "s1"))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    session.expire_all()
+    run = session.get(Run, run_id)
+    assert run.status == "FAILURE" and "gateway running the trial stopped" in run.error
+
+
+def test_a_dead_trial_gives_way_to_a_new_one(trial_env, cluster, engine, launches, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.core.security import hash_password
+    from app.db.session import get_session
+    from app.routes import auth as auth_routes
+    from app.routes import scripting as scripting_routes
+
+    session = trial_env
+    started: list = []
+    monkeypatch.setattr(script_runs, "run_trial", lambda *a: _noop(started, a))
+    app = FastAPI()
+    app.include_router(auth_routes.router)
+    app.include_router(scripting_routes.editor_router)
+    app.dependency_overrides[get_session] = lambda: session
+    make_user(session, email="a@x.local", hashed_password=hash_password("una-password-lunga"), is_superuser=True)
+    c = TestClient(app)
+    csrf = {"X-Tabularia-Csrf": "1"}
+    c.post("/auth/login", json={"email": "a@x.local", "password": "una-password-lunga"}, headers=csrf)
+    env_id = _environment(session).id
+    flow_id = _flow(session, [_script(env_id)], []).id
+    first = c.post(f"/scripting/flows/{flow_id}/nodes/s1/run", headers=csrf).json()["run_id"]
+    assert json.loads(session.get(Run, first).script)["budget_seconds"] > 0  # the budget from the start
+    # its process died before marking it started
+    dead = session.get(Run, first)
+    dead.started_at = datetime.now(timezone.utc) - timedelta(seconds=script_runs.TRIAL_START_SECONDS + 5)
+    session.add(dead)
+    session.commit()
+    second = c.post(f"/scripting/flows/{flow_id}/nodes/s1/run", headers=csrf).json()["run_id"]
+    assert second != first and session.get(Run, first).status == "FAILURE"
+
+
+def test_without_scripting_a_flow_keeps_its_script_nodes(session):
+    """Docker Compose: the checks of the Script node do not run (nothing runs them there)."""
+    user = make_user(session, email="u@x.local")
+    broken = json.dumps({"nodes": [{"id": "s1", "type": "script", "data": {"environmentId": 99,
+                                                                           "files": [{"path": "../x.py", "content": ""}]}}]})
+    script_nodes.check_definition(session, user, None, broken)  # kept as it is

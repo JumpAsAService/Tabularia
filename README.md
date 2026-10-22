@@ -118,8 +118,8 @@ engines, from an in-process library to a serverless warehouse.
 - **Schedule and forget.** Put flows on a schedule (timezone-aware, DST-safe) and let
   them refresh on their own; a load heatmap shows busy time-bands and collisions
   before they bite.
-- **Chain the work.** A **flow group** runs flows and database refreshes in steps,
-  drawn as a grid: the cells of a step run in parallel, the steps one after the other,
+- **Chain the work.** A **flow group** runs flows, database refreshes, saved scripts and
+  container images in steps, drawn as a grid: the cells of a step run in parallel, the steps one after the other,
   and a failed step stops the chain. Build it by drag and drop, run it by hand or on a
   schedule, and watch every cell's state as it runs.
 - **Full history & governance.** Every run is recorded with downloadable results; an
@@ -648,8 +648,10 @@ A **flow group** is queued and claimed like a flow's run. Its cells start togeth
 each flow under its own run row, so the flow's schedule cannot start it twice while
 the group runs it. A flow already running is never duplicated: its run counts for the
 cell when it runs in production and started after the previous step, otherwise the
-cell runs the flow once it ends. Cells count in `ORCHESTRATOR__MAX_CONCURRENT` like
-flow runs; within that, how many really run at once is up to the workers and the queue.
+cell runs the flow once it ends. A saved script's cell takes the script's live slot the
+same way; a container cell runs its image as a Container node with no edges. Cells
+count in `ORCHESTRATOR__MAX_CONCURRENT` like flow runs; within that, how many really
+run at once is up to the workers and the queue.
 
 ## Export to dbt
 
@@ -722,11 +724,14 @@ the external ClickHouse's slowest queries without any extra table.
 | `gateway` | FastAPI control plane (auth, RBAC, audit) in role `all`: it also fires schedules and runs flows. Split it into `api` and `orchestrator` copies when you scale (see [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md)) — :8000 |
 | `backend` | FastAPI engine (preview) |
 | `worker` / `preview-worker` | Celery workers (runs, DB ingest / preview) |
+| `beat` | Celery beat: the only clock of the periodic tasks; keep it at one copy |
+| `keys-init` | gives the `keys` volume (the encryption key) to the services, then exits |
 | `postgres` | control-plane metadata |
 | `redis` | Valkey — broker, cache index, counters |
-| `minio` | S3 object storage — :9001 |
+| `minio` | S3 object storage — console :9001, S3 API :9002 |
 | `victoriametrics` / `grafana` | metrics + dashboards — :3001 |
 | `cadvisor` / `node-exporter` / `celery-exporter` | metric exporters |
+| `sampledb-postgres` / `sampledb-clickhouse` / `sampledb-init` | the sample ERP and CRM (:5434, :8124) and the container that builds the `Sample` folder, then exits |
 
 ## Quickstart
 
@@ -749,11 +754,14 @@ asks for it only while the installation has no account). The sample data, a comp
 with an ERP and a CRM and eleven ready-made flows, appears a couple of minutes later.
 The first `docker compose up -d` builds the images from the code: 2–3 minutes on a fast
 machine, 5–15 on a laptop. Settings are optional: `cp .env.example .env` and edit.
+Script and Container nodes, saved scripts, container registries and the automatic
+database backups need Kubernetes: on this stack they are shown greyed out ([Python and R in flows](docs/scripting.md),
+[The Container node](docs/container-node.md)).
 
 | Service   | URL                    | Credentials                        |
 |-----------|------------------------|------------------------------------|
 | App       | http://localhost:3000  | the administrator you create at the first visit |
-| Gateway   | http://localhost:8000  | (JWT via app login)                |
+| Gateway   | http://localhost:8000  | through the app's sign-in, or an API token |
 | Grafana   | http://localhost:3001  | `admin` / `admin`                  |
 | MinIO     | http://localhost:9001  | `minioadmin` / `minioadmin`        |
 
@@ -804,10 +812,12 @@ transaction and checks the result against the models, and a gateway refuses to s
 a database behind its code. Revisions go forward only and keep the previous version
 working during a rolling update; an installation from before Alembic is adopted by the
 first run. How to add a revision: [`docs/database-migrations.md`](docs/database-migrations.md).
+Upgrading an installation on Kubernetes or minikube (backup, rollout, rollback, restore):
+[`docs/deploy/upgrading.md`](docs/deploy/upgrading.md).
 
-## Sample data (optional)
+## Sample data
 
-A realistic, opt-in **cured-meats company** dataset — an ERP on Postgres and a CRM
+A realistic **cured-meats company** dataset, on by default in the Compose stack — an ERP on Postgres and a CRM
 on ClickHouse, generated with Faker/numpy — plus an init container that builds a
 ready-made **`Sample`** folder in Tabularia on top of it. The data ships built-in
 seasonality (monthly volume, product & channel seasonal mix, per-warehouse

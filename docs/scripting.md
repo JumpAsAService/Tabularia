@@ -8,6 +8,15 @@ For whoever runs Tabularia on Kubernetes, and whoever writes the scripts.
   variables are what the code finds in its environment.
 - **The Script node** of the flow editor runs a step's code, one file or several, as a
   Kubernetes Job in one of those environments ([the design](specs/script-node.md)).
+- **Saved scripts** keep code in a folder, with its versions, its inputs and its output,
+  run on their own, on a schedule, in flow groups and by Script nodes
+  ([below](#saved-scripts)).
+- **The Scripting tab** shows what you may use: your scripts, your environments with
+  their packages and variables, your container registries.
+
+All of it needs Kubernetes. On Docker Compose, Scripting environments, the palette's
+**Script** and the Script nodes of a flow brought from a cluster are greyed out, with
+the reason.
 
 The packages come from community indexes only: PyPI for Python, CRAN for R, or your
 mirrors of them.
@@ -19,7 +28,7 @@ mirrors of them.
 | the builds | the **build namespace** | rootless BuildKit builds the image and pushes it to your registry |
 | the checks and the scripts | the **scripts namespace** | the image runs as user 10001, with a read-only root filesystem, no privilege and no capability |
 | the editor's trials (**Run**) | the **trials' namespace** | the same as a script, within a ResourceQuota of its own: trials never take resources from the flows' runs |
-| Tabularia | its own namespace | the gateway and the orchestrator create those Jobs, read their Pods and logs, and delete them, in the two namespaces above only |
+| Tabularia | its own namespace | the orchestrator builds the images; the gateway and the orchestrator run the other Jobs, read their Pods and logs, and delete them, in the three namespaces above only |
 
 The scripts never run in Tabularia's namespace and never see its keys. They reach data
 only through the **scripts bucket** below, with a key the administrators give for it.
@@ -101,6 +110,33 @@ addresses listed. The engine also writes each Script node's input to the scripts
 bucket: include its address. A bucket, broker or ClickHouse that is a Service of the
 cluster, in another namespace (`minio.storage.svc.cluster.local`), is allowed from its
 host name; for other namespaces, list them in `networkPolicy.egressNamespaces`.
+
+The scripts themselves, their trials and the image builds get a policy of their own
+(`scripts.blockTabularia`, on by default): they reach the internet and the other
+namespaces of the cluster (the scripts bucket, your services), but **never the pods of
+Tabularia's namespace** (the gateway, the engine, the workers) nor the cloud metadata
+addresses, and nothing reaches into them. Outside the cluster the private ranges are
+closed too (10/8, 172.16/12, 192.168/16, 100.64/10, and fc00::/7 on IPv6): on most
+network plugins they also hold the cluster's pods.
+
+What the scripts must reach on a private address goes in
+`networkPolicy.userCodePrivateCIDRs`: a company network, a database on `10.20.0.0/16`
+for example, and above all **the registry the builds push to** when it has a private
+address, as company registries usually do (the nodes pull the images, so pulls do not
+depend on it), and a scripts bucket on a private endpoint. Never list a range that
+holds the cluster's pods or Services, nor Tabularia's database, broker or storage. A
+node-local DNS cache on a link-local address (`169.254.20.10/32`) is listed the same way.
+
+Tabularia's database, broker and storage are out of the scripts' reach when they are
+outside the cluster on a private address that is not listed, or in the release's
+namespace. In **another namespace of the cluster** the scripts can reach them: give
+that namespace a policy that lets in Tabularia's namespace only, as
+`infrastructure/minikube/dependencies.yaml` does for its database and queue.
+
+Without a network plugin that enforces network policies the policy is written but has
+no effect. Some enforce only what comes into a pod: kind's own plugin (kindnet) blocks
+traffic into the dependencies above, but not what the scripts send out, which is why
+[the kind guide](deploy/kind.md) installs Calico. Calico and Cilium enforce both.
 
 ### Nodes of more than one architecture
 
@@ -360,13 +396,99 @@ A flow with a Script node runs as an orchestration, like one with a Refresh node
 
 The run page lists the node as a run of its own. It shows the environment and its
 version, the attempts, the exit code, the variables it was given (secret ones by
-name only) and the end of its log.
+name only) and the end of its log: the last 256 KB (`SCRIPTS__LOG_MAX_BYTES`), read
+when the Job ends and kept in Tabularia's database. After 30 days
+(`ORCHESTRATOR__LOG_RETENTION_DAYS`, `orchestrator.logRetentionDays` in the chart; 0
+keeps them) the log is emptied and the run stays, with its outcome, attempts and exit
+code.
 
 Whoever runs the flow, or the author of its schedule, must be allowed to use the
 environment. A schedule set by someone else is switched off when its code changes,
 as for any change that makes a flow reach further.
 
+## Saved scripts
+
+A script can also live on its own, in a folder next to flows and views: **Explore →
+New → Script (Python or R)**, or **New script** in the **Scripting** tab. It is written
+in the same editor as the Script node, in one of the environments you may use, and it
+keeps its **versions**: every save that changes it is one; an older one can be looked
+at and restored, and becomes the newest.
+
+**Who sees it.** VIEW on its folder **and** the use of its environment. Whoever lacks
+either does not see it at all: not in Explore, not in the search, not in the Scripting
+tab, not in the pickers of flows and groups. RUN on the folder runs and schedules it,
+EDIT changes, moves and deletes it. Administrators see every script.
+
+### Inputs
+
+A saved script reads the datasources you declare on its page, each with an **alias**.
+The alias is proposed from the datasource's name (`Vendite Nord 2024` →
+`VENDITE_NORD_2024`; for two datasources with the same name in two folders, the
+folder's name is added) and can be changed: capitals, digits and `_`, unique in the
+script. The script keeps the datasource itself, not its name or its file: renaming,
+moving or refreshing the datasource changes nothing for the script, and every run reads
+its data as it is at that moment.
+
+| Variable | |
+|---|---|
+| `TABULARIA_INPUT_<ALIAS>` | the `s3://` address of that datasource's data, as parquet |
+| `TABULARIA_INPUTS` | every input as JSON, keyed by alias: its datasource's id, real name, folder, address and columns |
+| `TABULARIA_OUTPUT` | where the script may write its result, as parquet |
+| `TABULARIA_SCRIPT_ID`, `TABULARIA_SCRIPT_NAME`, `TABULARIA_SCRIPT_VERSION`, `TABULARIA_RUN_ID`, `TABULARIA_STEP_ID`, `TABULARIA_ATTEMPT` | which script, version, run and attempt this is |
+
+```python
+import json
+import os
+
+import polars as pl
+
+inputs = json.loads(os.environ["TABULARIA_INPUTS"])
+sales = pl.scan_parquet(os.environ["TABULARIA_INPUT_VENDITE_NORD_2024"])
+print("reading", inputs["VENDITE_NORD_2024"]["name"], "from", inputs["VENDITE_NORD_2024"]["folder"])
+sales.group_by("region").agg(pl.col("amount").sum()).sink_parquet(os.environ["TABULARIA_OUTPUT"])
+```
+
+Every run checks again that whoever runs it (or the schedule's author) may still read
+each input: one they no longer may read, deleted, or still without data fails the run
+before anything starts, saying which.
+
+### Output
+
+Optional. What the script writes at `TABULARIA_OUTPUT` is kept and shown at the end of
+the run, on its page; with **Also publish it as a datasource**, it becomes a datasource
+in the folder you choose (EDIT needed there), replaced at every run or not. A script
+that writes nothing (it sends emails, it loads another system) only has its outcome
+and its log.
+
+### Running and scheduling
+
+**Run**, on the script's page, runs the saved version on the whole data, in the scripts
+namespace, queued and carried out like a flow's run: one run of a script at a time. The
+page follows it and shows each run's log and the first rows of its output. **Schedule**
+runs it with a cron, with the authority of whoever set it; as for flows, a change by
+someone else that makes the script reach more (other code, other inputs, another
+publish folder, another environment, another folder) switches the schedule off, and
+the audit log says why.
+
+### In flow groups and flows
+
+- **A cell of a flow group**: the script runs as a step of its own, with its declared
+  inputs; its failure stops the group. Whoever cannot see the script reads a hidden
+  cell.
+- **A Script node by reference**: in the node's panel, **A saved script** instead of
+  **Written here**. The node runs the script's current version, with its environment,
+  timeout, retries and declared inputs, next to the node's own edges
+  (`TABULARIA_INPUT`, `TABULARIA_OUTPUT`); the publish setting is ignored there. A fix
+  to the script reaches every flow that uses it. Whoever cannot see the script cannot
+  open the flow. A change that makes the script reach more switches off the schedules,
+  set by others, of the flows and groups that run it.
+
+A script used by a flow or a group cannot be deleted: the page says which ones use it.
+The **Lineage** shows saved scripts too: the datasources they read, the one they
+publish, the flows that run them.
+
 ## Audit
 
 Every change is in the audit log: the bucket, the environments, a version put in use,
-every variable set or removed. A variable's value is never recorded.
+every variable set or removed, and every saved script created, changed, restored, run,
+scheduled or deleted. A variable's value is never recorded.

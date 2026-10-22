@@ -18,6 +18,8 @@ from app.services import first_run
 from app.services.orchestrator import coda_loop
 from app.services.scheduler import scheduler_loop
 from app.services.audit_retention import retention_loop
+from app.services.housekeeping import housekeeping_loop
+from app.services.db_backup import backup_loop
 from app.services.webhooks import consegna_loop as webhooks_loop
 from app.services.regolazioni_motore import spingi_loop as regolazioni_loop
 from app.services.kube_scaling import riapplica_loop as scaling_loop
@@ -32,6 +34,7 @@ from app.routes.webhooks import router as webhooks_router
 from app.routes.engine_settings import router as engine_settings_router
 from app.routes.workers import router as workers_router
 from app.routes.siem import router as siem_router
+from app.routes.backups import router as backups_router
 from app.routes.scripting import editor_router as scripting_editor_router, router as scripting_router
 from app.routes.registries import editor_router as registries_editor_router, router as registries_router
 from app.routes.groups import router as groups_router
@@ -39,6 +42,7 @@ from app.routes.banners import router as banners_router
 from app.routes.privacy import router as privacy_router
 from app.routes.engine_policy import router as engine_policy_router
 from app.routes.saved_views import router as saved_views_router
+from app.routes.scripts import router as scripts_router
 from app.routes.flow_groups import router as flow_groups_router
 from app.routes.search import router as search_router
 from app.routes.projects import router as projects_router
@@ -75,6 +79,11 @@ def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
         asyncio.create_task(coda_loop(stop)),
         # scadenza del registro delle azioni: parte solo se è configurata
         asyncio.create_task(retention_loop(stop)),
+        # the history that piles up in the database (runs' logs, contract reports,
+        # versions, the assistant's old conversations), trimmed, then vacuumed
+        asyncio.create_task(housekeeping_loop(stop)),
+        # the database's backup into the object storage, on its schedule (Admin → Backups)
+        asyncio.create_task(backup_loop(stop)),
         # le consegne dei webhook, ogni paio di secondi (services/webhooks.py)
         asyncio.create_task(webhooks_loop(stop)),
         # le impostazioni del motore dal pannello, rispedite al motore ogni minuto:
@@ -133,6 +142,7 @@ async def lifespan(app: FastAPI):
 settings = get_settings()
 
 from app.routes import performance as performance_routes
+from app.routes import cluster as cluster_routes
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +226,7 @@ if settings.app.role != "orchestrator":
     app.include_router(engine_settings_router)
     app.include_router(workers_router)
     app.include_router(siem_router)
+    app.include_router(backups_router)
     app.include_router(scripting_router)
     app.include_router(scripting_editor_router)
     app.include_router(registries_router)
@@ -226,6 +237,7 @@ if settings.app.role != "orchestrator":
     app.include_router(engine_policy_router)
     app.include_router(ai_router)
     app.include_router(saved_views_router)
+    app.include_router(scripts_router)
     app.include_router(flow_groups_router)
     app.include_router(search_router)
     app.include_router(projects_router)
@@ -243,6 +255,7 @@ if settings.app.role != "orchestrator":
     # data plane (proxy verso l'engine interno)
     app.include_router(proxy_router)
     app.include_router(performance_routes.router)
+    app.include_router(cluster_routes.router)
 
 
 @app.get("/", tags=["health"])

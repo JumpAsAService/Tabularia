@@ -152,16 +152,20 @@ async def _refresh_and_wait(
     if run is None:
         raise OrchestrationError(f"refresh of datasource {ds_id} could not be started")
 
-    for _ in range(REFRESH_WAIT_TICKS):
+    from app.services.waits import waits
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + REFRESH_WAIT_TICKS * REFRESH_WAIT_INTERVAL_S
+    for pause in waits(REFRESH_WAIT_INTERVAL_S):
         run = await _reconcile(session, run)
-        if run.status in TERMINAL_STATES:
+        if run.status in TERMINAL_STATES or loop.time() >= deadline:
             break
         # rilascia la connessione del pool durante l'attesa: mentre lo stato non
         # cambia _reconcile non committa e la transazione della SELECT terrebbe
         # occupata una connessione per tutto lo sleep → con più orchestrazioni
         # lente in parallelo il pool si esaurisce e il gateway va giù.
         session.commit()
-        await asyncio.sleep(REFRESH_WAIT_INTERVAL_S)
+        await asyncio.sleep(pause)
     if run.status != "SUCCESS":
         raise OrchestrationError(f"refresh of datasource {ds_id} failed ({run.status})")
     logger.info("orchestrate: datasource %s aggiornata (refresh completato)", ds_id)
@@ -180,13 +184,15 @@ async def _wait_run(session: Session, run: Run) -> Run:
     too, and on expiry let the flow move on and close while the output kept
     writing: steps downstream read old data, and the next slot could start the
     same flow again on top of it."""
-    while True:
+    from app.services.waits import waits
+
+    for pause in waits(OUTPUT_WAIT_INTERVAL_S):
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES:
             return run
         # vedi _refresh_and_wait: libera la connessione del pool durante lo sleep
         session.commit()
-        await asyncio.sleep(OUTPUT_WAIT_INTERVAL_S)
+        await asyncio.sleep(pause)
 
 
 async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None, engine_mode: str = "development", custodita: bool = False) -> list[str]:
@@ -498,7 +504,14 @@ async def esegui(run_id: int) -> None:
     registra l'esito sul run."""
     try:
         with Session(engine) as session:
-            group_id = session.exec(select(Run.flow_group_id).where(Run.id == run_id)).first()
+            group_id, script_id = session.exec(
+                select(Run.flow_group_id, Run.saved_script_id).where(Run.id == run_id)).first() or (None, None)
+        if script_id is not None:
+            # a saved script's run: same queue, claim and heartbeat, its own runner
+            from app.services.saved_script_runs import run_queued
+
+            await run_queued(run_id)
+            return
         if group_id is not None:
             # a flow group's run: same queue, claim and heartbeat, its own runner
             from app.services.flow_group_runner import run_group  # imports this module

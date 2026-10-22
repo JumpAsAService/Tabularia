@@ -36,6 +36,7 @@ _REFERENCES = {
     "projectId": "folder",
     "environmentId": "environment",
     "registryId": "registry",
+    "scriptId": "saved_script",
 }
 
 
@@ -138,6 +139,12 @@ def gaps_of_flow(session: Session, user: User, flow: Flow, seen: Optional[set[in
             registry = session.get(ContainerRegistry, ref)
             if registry is not None and not registry_access.can_use(session, user, registry):
                 gaps.append(f"use of container registry '{registry.name}'")
+        elif kind == "saved_script":
+            from app.models import SavedScript
+
+            script = session.get(SavedScript, ref)
+            if script is not None:
+                gaps.extend(gaps_of_script(session, user, script, in_flow=True))
         elif kind == "flow" and ref not in seen:
             sub = session.get(Flow, ref)
             if sub is not None:
@@ -177,11 +184,52 @@ def gaps_of_group(session: Session, user: User, group: FlowGroup) -> list[str]:
                 flow = session.get(Flow, cell.id)
                 if flow is not None:
                     gaps.extend(gaps_of_flow(session, user, flow))
+            elif cell.kind == "script":
+                from app.models import SavedScript
+
+                script = session.get(SavedScript, cell.id)
+                if script is not None:
+                    gaps.extend(gaps_of_script(session, user, script))
+            elif cell.kind == "container":
+                from app.models import ContainerRegistry
+                from app.services import registry_access
+
+                d = cell.container or {}
+                registry = session.get(ContainerRegistry, d.get("registryId")) if isinstance(d.get("registryId"), int) else None
+                if registry is not None and not (registry_access.can_use(session, user, registry) and
+                                                 registry_access.repository_allowed(session, user, registry,
+                                                                                    str(d.get("repository") or ""))):
+                    gaps.append(f"use of the image {d.get('repository')} of container registry '{registry.name}'")
             else:
                 ds = session.get(Datasource, cell.id)
                 if ds is not None:
                     gaps.extend(_refresh_gaps(session, user, ds))
     return list(dict.fromkeys(gaps))
+
+
+def gaps_of_script(session: Session, user: User, script, in_flow: bool = False) -> list[str]:
+    """What a saved script's run needs of its author: to see the script and use its
+    environment, RUN on its folder, to read every declared input, EDIT where it
+    publishes its output (docs/specs/saved-scripts.md, «Schedules»). Run by a Script
+    node of a flow (`in_flow`): seeing it and reading its inputs; the flow's own folder
+    gives the RUN, and the output goes to the nodes after it."""
+    from app.services import saved_scripts
+
+    gaps: list[str] = []
+    if not saved_scripts.can_see(session, user, script):
+        return [f"access to the saved script '{script.name}' (its folder and its environment)"]
+    if not in_flow and not perm_service.has_capability(session, user, script.project_id, Capability.RUN):
+        gaps.append(f"RUN on the folder of the saved script '{script.name}'")
+    content = saved_scripts.content_of(session, script)
+    for item in content.get("inputs") or []:
+        ds = session.get(Datasource, item.get("datasource_id")) if isinstance(item.get("datasource_id"), int) else None
+        if ds is not None and not perm_service.has_capability(session, user, ds.project_id, Capability.VIEW):
+            gaps.append(f"read access to '{ds.name}', input {item.get('alias')} of '{script.name}'")
+    output = content.get("output") or {}
+    if not in_flow and output.get("publish") and isinstance(output.get("project_id"), int) \
+            and not perm_service.has_capability(session, user, output["project_id"], Capability.EDIT):
+        gaps.append(f"EDIT on the folder where '{script.name}' publishes its output")
+    return gaps
 
 
 def not_started(user: User, gaps: list[str]) -> str:

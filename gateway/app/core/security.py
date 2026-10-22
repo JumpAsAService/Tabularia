@@ -33,7 +33,15 @@ def create_access_token(subject: int | str, session_id: str, expires_at: datetim
     return jwt.encode(payload, s.jwt.secret.get_secret_value(), algorithm=s.jwt.algorithm)
 
 
+# How far apart the clocks of the machines that sign and read a token may be. A token
+# signed by one gateway replica is read by another, and the identity provider's by the
+# gateway: without a margin, a clock a fraction of a second behind refuses a token as
+# "not yet valid (iat)" — an SSO round trip through a provider where the person is
+# already signed in takes less than that. A minute, as the identity providers allow.
+CLOCK_SKEW_SECONDS = 60
+
+
 def decode_access_token(token: str) -> dict:
     """Solleva jwt.PyJWTError se il token è invalido/scaduto."""
     s = get_settings()
-    return jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm])
+    return jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm], leeway=CLOCK_SKEW_SECONDS)

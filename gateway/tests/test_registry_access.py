@@ -286,3 +286,22 @@ def test_a_flow_of_a_scripting_environment_gone_opens(app, session, enabled):
     make_permission(session, user_id=ana_id, project_id=project, capability="view")
     script = {"id": "ctl-script-1", "type": "script", "position": {"x": 0, "y": 0}, "data": {"environmentId": 999}}
     assert ana.get(f"/flows/{_flow(session, project, script)}").status_code == 200
+
+
+def test_without_kubernetes_a_flow_with_script_and_container_nodes_is_kept(app, session):
+    """Docker Compose: no scripting, no containers. A flow made on Kubernetes is saved and
+    copied as it is; its nodes do not run there (the run says so)."""
+    from app.core.security import hash_password
+
+    make_user(session, email="boss@x.local", is_superuser=True, hashed_password=hash_password(PASSWORD))
+    ana, ana_id = _login(app, session, "ana@x.local")
+    project = make_project(session, name="Imported").id
+    make_permission(session, user_id=ana_id, project_id=project, capability="edit")
+    script = {"id": "s1", "type": "script", "position": {"x": 0, "y": 0},
+              "data": {"label": "Score", "environmentId": 7, "files": [{"path": "main.py", "content": "print(1)"}],
+                       "entrypoint": "main.py"}}
+    container = _node(9)
+    definition = json.dumps({"nodes": [script, container], "edges": []})
+    r = ana.post(f"/projects/{project}/flows", json={"name": "From Kubernetes", "definition": definition}, headers=CSRF)
+    assert r.status_code == 201, r.text
+    assert ana.post(f"/flows/{r.json()['id']}/duplicate", headers=CSRF).status_code == 201

@@ -94,7 +94,7 @@ the production compose file does.
 {{- end -}}
 
 {{- define "tabularia.withoutEngineSecrets" -}}
-{{- range list "STORAGE__ACCESS_KEY" "STORAGE__SECRET_KEY" "REDIS__PASSWORD" "CLICKHOUSE_EXTERNAL__PASSWORD" "CLICKHOUSE_EXTERNAL__AI_PASSWORD" "BIGQUERY__CREDENTIALS_B64" }}
+{{- range list "STORAGE__ACCESS_KEY" "STORAGE__SECRET_KEY" "BACKUP__ACCESS_KEY" "BACKUP__SECRET_KEY" "REDIS__PASSWORD" "CLICKHOUSE_EXTERNAL__PASSWORD" "CLICKHOUSE_EXTERNAL__AI_PASSWORD" "BIGQUERY__CREDENTIALS_B64" }}
 - name: {{ . }}
   value: ""
 {{- end }}
@@ -316,4 +316,69 @@ gateway needs to build the images there.
 - name: SCRIPTS__CRAN_URL
   value: {{ . | quote }}
 {{- end }}
+{{- end -}}
+
+{{/*
+The subjects of the Roles that let Tabularia talk to the Kubernetes API: the
+gateway's account and the orchestrator's (scaling-rbac.yaml).
+*/}}
+{{- define "tabularia.kubeApiSubjects" -}}
+- kind: ServiceAccount
+  name: {{ include "tabularia.fullname" . }}-scaler
+  namespace: {{ .Release.Namespace }}
+- kind: ServiceAccount
+  name: {{ include "tabularia.fullname" . }}-orchestrator
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+
+{{/*
+Whether an address range given to a network policy holds the cloud metadata address,
+which must then be cut out of it: "true", or nothing. The cut is valid only inside a
+wider range (the API refuses an `except` that is not), so a range beside it, such as a
+node-local DNS cache on 169.254.20.10/32, is left whole; the metadata address listed
+alone is refused. IPv6: the ranges that hold fd00:ec2::254.
+*/}}
+{{- define "tabularia.coversMetadata" -}}
+{{- if contains ":" . -}}
+{{- if has . (list "::/0" "fc00::/7" "fd00::/8") }}true{{ end -}}
+{{- else -}}
+{{- $parts := splitList "/" . -}}
+{{- $p := 32 -}}
+{{- if eq (len $parts) 2 }}{{ $p = atoi (index $parts 1) }}{{ end -}}
+{{- $o := splitList "." (index $parts 0) -}}
+{{- if ne (len $o) 4 }}{{ fail (printf "%s is not an IPv4 address range" .) }}{{ end -}}
+{{- $a := atoi (index $o 0) }}{{ $b := atoi (index $o 1) }}{{ $c := atoi (index $o 2) }}{{ $d := atoi (index $o 3) -}}
+{{- $pow := list 1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 65536 -}}
+{{- if ge $p 32 -}}
+{{- if and (eq $a 169) (eq $b 254) (eq $c 169) (eq $d 254) }}{{ fail "a network policy range must not be the cloud metadata address 169.254.169.254" }}{{ end -}}
+{{- else if lt $p 16 -}}
+{{- $s := index $pow (sub 16 $p) -}}
+{{- if eq (div (add (mul $a 256) $b) $s) (div 43518 $s) }}true{{ end -}}
+{{- else if le $p 24 -}}
+{{- $s := index $pow (sub 24 $p) -}}
+{{- if and (eq $a 169) (eq $b 254) (eq (div $c $s) (div 169 $s)) }}true{{ end -}}
+{{- else -}}
+{{- $s := index $pow (sub 32 $p) -}}
+{{- if and (eq $a 169) (eq $b 254) (eq $c 169) (eq (div $d $s) (div 254 $s)) }}true{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+
+{{/*
+The ConfigMap holding the certificate authority the gateway trusts for the OIDC provider,
+"name|key", or nothing: the chart's own (oidc.caCert) or one that exists (oidc.caConfigMap).
+*/}}
+{{- define "tabularia.oidcCa" -}}
+{{- if .Values.oidc.enabled -}}
+{{- $own := .Values.oidc.caCert -}}
+{{- $existing := (.Values.oidc.caConfigMap | default dict) -}}
+{{- if and $own $existing.name -}}
+{{- fail "oidc.caCert and oidc.caConfigMap.name: set one of them, not both" -}}
+{{- else if $own -}}
+{{ include "tabularia.fullname" . }}-oidc-ca|ca.crt
+{{- else if $existing.name -}}
+{{ $existing.name }}|{{ $existing.key | default "ca.crt" }}
+{{- end -}}
+{{- end -}}
 {{- end -}}

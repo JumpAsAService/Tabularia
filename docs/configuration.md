@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 132 |
-| [Engine and workers](#engine-and-workers) | 86 |
+| [Gateway](#gateway) | 144 |
+| [Engine and workers](#engine-and-workers) | 92 |
 | [Frontend](#frontend) | 3 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **241** |
+| **Total** | **259** |
 
 ## Before production
 
@@ -157,7 +157,7 @@ Optional: Keycloak, Microsoft Entra ID, Auth0, Okta… Off while `OIDC__ISSUER` 
 | `OIDC__CLIENT_SECRET` | string | empty | `secrets.oidcClientSecret` | Secret of that (confidential) client. Required when SSO is on. |
 | `OIDC__REDIRECT_URI` | string | empty | `oidc.redirectUri` | The gateway's callback, e.g. `https://tabularia.example.com/api/auth/sso/callback`; it must match the one registered on the identity provider exactly. Required when SSO is on. |
 | `OIDC__SCOPES` | string | `openid profile email` | `oidc.scopes` | Scopes asked for, separated by spaces; must include `openid`. |
-| `OIDC__GROUPS_CLAIM` | string | `groups` | `oidc.groupsClaim` | Claim that carries the groups: `groups` for Keycloak, `roles` for Entra ID app roles. |
+| `OIDC__GROUPS_CLAIM` | string | `groups` | `oidc.groupsClaim` | Where the groups are: a claim (`groups` for Keycloak's group mapper, `roles` for Entra ID app roles) or a path into the token, as it appears in the JSON: `realm_access.roles` and `resource_access.<client id>.roles` for Keycloak's realm and client roles (a client id with dots works). Several, comma-separated, are joined: `groups,realm_access.roles`. A path the id_token does not carry is looked up in the access token (Keycloak puts the roles there by default), then in the provider's userinfo. |
 | `OIDC__GROUP_ALLOWLIST` | string | empty | `oidc.groupAllowlist` | Identity-provider groups mapped onto Tabularia groups, separated by commas. Empty = all of them. |
 | `OIDC__AUTO_CREATE_GROUPS` | boolean | `false` | `oidc.autoCreateGroups` | `true`: create the Tabularia groups missing at sign-in. `false`: map only onto groups an administrator already made. |
 | `OIDC__AUTHORITATIVE` | boolean | `true` | `oidc.authoritative` | `true`: the identity provider owns group membership (groups absent from the claim are removed). `false`: SSO only adds. |
@@ -168,6 +168,8 @@ Optional: Keycloak, Microsoft Entra ID, Auth0, Okta… Off while `OIDC__ISSUER` 
 | `OIDC__BUTTON_LABEL` | string | `Single sign-on` | `oidc.buttonLabel` | Label of the SSO button on the sign-in page. |
 | `OIDC__DISCOVERY_TTL_SECONDS` | integer | `3600` | `extraEnv` | How long the identity provider's discovery document is trusted before it is fetched again. |
 | `OIDC__TIMEOUT_SECONDS` | number | `10` | `extraEnv` | Timeout of the calls to the identity provider. |
+| `OIDC__CA_FILE` | string | empty | oidc.caCert / oidc.caConfigMap | A PEM file of the certificate authorities to trust for the identity provider, besides the public ones: a company Keycloak whose certificate the company's own authority signed (without it every sign-in fails with `idp_untrusted`). The chart mounts it from `oidc.caCert` or `oidc.caConfigMap`. The gateway refuses to start when the file is not one. |
+| `OIDC__VERIFY_TLS` | boolean | `true` | `oidc.verifyTls` | Whether the identity provider's certificate is checked. `false` accepts it even when no trusted authority signed it (a company Keycloak whose authority you cannot give in `OIDC__CA_FILE`): whoever can stand between the gateway and the provider can then sign in as anyone, administrators included. The gateway logs a warning at every start. See [Single sign-on with Keycloak](sso-keycloak.md#a-certificate-the-gateway-does-not-trust). |
 | `OIDC__LOGIN_TX_TTL_SECONDS` | integer | `600` | `extraEnv` | How long a sign-in may stay on the identity provider's page (the state, nonce and PKCE cookie). |
 
 ### Link to the engine
@@ -214,13 +216,29 @@ How flows are executed: queued in the database, picked up by an orchestrator pro
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `ORCHESTRATOR__REFRESH_WAIT_SECONDS` | integer | `600` | `orchestrator.refreshWaitSeconds` | Longest a flow waits for a Refresh node to complete before aborting rather than reading stale data. Raise it for very long refreshes. An Output node has no cap of its own: it is bounded by `ENGINE__RUN_STALE_TIMEOUT_SECONDS`. |
-| `ORCHESTRATOR__POLL_INTERVAL_SECONDS` | number | `3` | `orchestrator.pollIntervalSeconds` | Seconds between two checks of a step the flow is waiting for. |
+| `ORCHESTRATOR__LOG_RETENTION_DAYS` | integer, ≥ 0 | `30` | `orchestrator.logRetentionDays` | After how many days a run's logs are emptied: what a Script or Container node printed, and the engine's full traceback of a failure. The runs stay, with their outcome, short error, timings and exit code. 0 keeps them for ever. With the three settings below, the orchestrators trim this history every hour and then vacuum the tables they touched. |
+| `ORCHESTRATOR__CONTRACT_RESULTS_KEPT` | integer, ≥ 0 | `100` | `orchestrator.contractResultsKept` | The latest data contract reports kept per datasource; older ones are deleted every hour, never one whose notice is still to be sent. 0 keeps them all. |
+| `ORCHESTRATOR__VERSIONS_KEPT` | integer, ≥ 0 | `50` | `orchestrator.versionsKept` | The latest versions kept per flow and per saved script; the one in use is always kept. 0 keeps them all. |
+| `ORCHESTRATOR__AI_CHAT_RETENTION_DAYS` | integer, ≥ 0 | `90` | `orchestrator.aiChatRetentionDays` | The assistant's conversations untouched for this many days are deleted, with their turns; the spending ledger stays. 0 keeps them. |
+| `ORCHESTRATOR__POLL_INTERVAL_SECONDS` | number | `3` | `orchestrator.pollIntervalSeconds` | The longest wait, in seconds, between two checks of a step the flow is waiting for: the first checks come sooner (a quarter of a second, then every second for half a minute). |
 | `ORCHESTRATOR__QUEUE_POLL_SECONDS` | number, > 0 | `1` | `extraEnv` | Seconds between two looks at the queue of flow executions. |
 | `ORCHESTRATOR__MAX_CONCURRENT` | integer, ≥ 1 | `20` | `orchestrator.maxConcurrent` | Flow executions (and cells of flow groups) one orchestrator process carries at once; the others wait in the queue. Each uses a database connection while it asks the engine about a step: keep it below the pool (`DB__POOL_SIZE`). |
 | `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS` | number, > 0 | `900` | `orchestrator.queueTimeoutSeconds` | An execution still queued after this long (no orchestrator running, or all of them full) is not started any more: it is closed as failed. |
 | `ORCHESTRATOR__HEARTBEAT_SECONDS` | number, > 0 | `10` | `extraEnv` | How often the process executing a flow says it is still there. |
 | `ORCHESTRATOR__DEAD_AFTER_SECONDS` | number, > 0 | `60` | `orchestrator.deadAfterSeconds` | An execution silent for longer belongs to a process that died: another orchestrator closes it as interrupted. The machines' clocks must agree within this margin. |
 | `SCHEDULING__WORKER_CAPACITY` | integer | `2` | `extraEnv` | Flow runs one worker is assumed to carry at once: used only to highlight the crowded minutes in the schedule load heatmap. Match it to the run workers' `CELERY__WORKER_CONCURRENCY`. |
+
+### Database backups
+
+Kubernetes only (on Docker Compose Administration → Backups is greyed out). The automatic backup of the metadata database: an orchestrator runs `pg_dump` on the schedule and streams it to the engine, which stores it in the object storage and removes the oldest beyond the number to keep. `BACKUP__ENABLED`, `BACKUP__SCHEDULE` and `BACKUP__KEEP` are the installation's defaults, which Administration → Backups can change without a restart; where the files go is read by the engine. By default Tabularia's bucket under `backups/postgres/`: in production give the backups a bucket of their own. Restoring one: [Upgrading](deploy/upgrading.md#when-something-goes-wrong).
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `BACKUP__ENABLED` | boolean | `true` | `backup.enabled` | Whether the database is backed up on the schedule. Administration → Backups can turn it off or on; «Back up now» works either way. |
+| `BACKUP__SCHEDULE` | string | `0 3 * * *` | `backup.schedule` | When: a five-field cron (`minute hour day month weekday`) in `APP__TIMEZONE`. The process refuses to start with an invalid one. |
+| `BACKUP__KEEP` | integer, 1–1000 | `14` | `backup.keep` | How many backups stay; after each backup the oldest beyond this number are removed. |
+| `BACKUP__PG_DUMP` | string | `pg_dump` | `extraEnv` | The `pg_dump` used when the image has none of the server's own version. The gateway image has those of PostgreSQL 14 to 18 and uses the server's, so that the server's own `pg_restore` reads the backup; this one (18's) also reads older servers. |
+| `BACKUP__TIMEOUT_SECONDS` | integer, ≥ 60 | `3600` | `backup.timeoutSeconds` | The longest a backup (the dump and its upload) may take before it is stopped and reported as failed. |
 
 ### OpenLineage
 
@@ -263,6 +281,7 @@ Lets an administrator change the minimum and maximum number of worker pods from 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `KUBERNETES__SCALING` | boolean | `false` | `adminScaling.enabled` | Turns the panel's autoscaling bounds on. |
+| `KUBERNETES__CLUSTER_VIEW` | boolean | `false` | `clusterView.enabled` (on by default) | Turns Administration → Cluster on: the pods of Tabularia and of its users' code, their state, CPU and memory (with metrics-server) and the warning events, read-only, for administrators and observers. |
 | `KUBERNETES__API_URL` | string | `https://kubernetes.default.svc` | `extraEnv` | Kubernetes API server, from inside the cluster. |
 | `KUBERNETES__NAMESPACE` | string | empty | `extraEnv` | Namespace of the worker Deployments. Empty = the pod's own, read from its service account. |
 | `KUBERNETES__TOKEN_FILE` | string | `/var/run/secrets/kubernetes.io/serviceaccount/token` | `extraEnv` | Service-account token the gateway authenticates with. |
@@ -278,7 +297,7 @@ Lets an administrator change the minimum and maximum number of worker pods from 
 
 ### Scripting environments (Kubernetes)
 
-Administration → Scripting environments: the Python and R environments the Script node runs in, each built once into an image by a Kubernetes Job (rootless BuildKit) and checked by a second Job. Off unless `SCRIPTS__ENABLED` is true; the chart sets the whole block, the two namespaces and a service account allowed to run Jobs there, with `scripts.enabled`. The Kubernetes API is reached as in `KUBERNETES__API_URL`, `KUBERNETES__TOKEN_FILE` and `KUBERNETES__CA_FILE` ([Scripting environments](scripting.md)).
+Administration → Scripting environments: the Python and R environments the Script node runs in, each built once into an image by a Kubernetes Job (rootless BuildKit) and checked by a second Job. Off unless `SCRIPTS__ENABLED` is true; the chart sets the whole block, the three namespaces and the service accounts of the gateway and the orchestrator allowed to run Jobs there (only the orchestrator's creates the builds), with `scripts.enabled`. The Kubernetes API is reached as in `KUBERNETES__API_URL`, `KUBERNETES__TOKEN_FILE` and `KUBERNETES__CA_FILE` ([Scripting environments](scripting.md)).
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
@@ -299,7 +318,7 @@ Administration → Scripting environments: the Python and R environments the Scr
 | `SCRIPTS__BUILD_CPU` | string | `2` | `extraEnv` | CPU an environment's image build may use. With SCRIPTS__BUILD_MEMORY it sets how many compilers run at once (one per core at most), which is what makes R packages built from CRAN's sources take minutes or tens of minutes. |
 | `SCRIPTS__BUILD_MEMORY` | string | `4Gi` | `extraEnv` | Memory an environment's image build requests and may use: it lands only on a node that has it. One compiler runs per 1.5 GiB (arrow's C++ takes over 1 GB each); a build that needs more fails alone, saying its compiler was killed. Raise it, with SCRIPTS__BUILD_CPU, to build R environments faster on large nodes. |
 | `SCRIPTS__CHECK_TIMEOUT_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | The longest the check of a new image may take: pulling it on a node, starting it, listing its packages. |
-| `SCRIPTS__POLL_SECONDS` | number, > 0 | `5` | `extraEnv` | How often the orchestrators look at the builds in progress. |
+| `SCRIPTS__POLL_SECONDS` | number, > 0 | `5` | `extraEnv` | How often the orchestrators look at the builds in progress, and the longest wait between two looks at a Script node's Job (the first come sooner). |
 | `SCRIPTS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a build's log is kept and shown in the panel. |
 | `SCRIPTS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job after this long, if Tabularia has not removed it first. |
 | `SCRIPTS__LINT` | boolean | `true` | `extraEnv` | The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person. |
@@ -314,7 +333,7 @@ Administration → Container registries: the registries the images of the Contai
 | `CONTAINERS__NAMESPACE` | string | empty | set by the chart | Where the flows' runs run the Container nodes, and where each registry's pull Secret is kept. The chart sets it (`containers.namespace`, `<release namespace>-containers` by default), at the `baseline` Pod Security level. |
 | `CONTAINERS__TRIAL_NAMESPACE` | string | empty | set by the chart | Where the editor's «Run» of a Container node and «Try in the cluster» run, with a ResourceQuota of its own. Empty = `CONTAINERS__NAMESPACE`. The chart sets it (`containers.trialNamespace`). |
 | `CONTAINERS__PULL_CHECK_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | «Try in the cluster»: how long a node may take to download an image before the check says it did not. |
-| `CONTAINERS__POLL_SECONDS` | number, > 0 | `3` | `extraEnv` | How often the gateway looks at a Job of the containers' namespaces while it waits for it. |
+| `CONTAINERS__POLL_SECONDS` | number, > 0 | `3` | `extraEnv` | The longest wait between two looks at a Job of the containers' namespaces while the gateway waits for it (the first come sooner). |
 | `CONTAINERS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job of the containers' namespaces after this long, if Tabularia has not removed it first. |
 | `CONTAINERS__MAX_CPU` | string | `4` | `containers.limits.cpu` | The most CPU a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.cpu`). |
 | `CONTAINERS__MAX_MEMORY` | string | `16Gi` | `containers.limits.memory` | The most memory a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.memory`). |
@@ -361,6 +380,19 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | `STORAGE__REGION` | string | `us-east-1` | `externalServices.storage.region` | Region of the storage (`auto` for Google Cloud Storage). |
 | `STORAGE__DIRECT_READ` | boolean | `true` | `extraEnv` | The DuckDB and chDB engines read sources and cached steps in place, only the columns and row groups a query needs. `false`: download each file first, for a service that does not serve range reads. |
 | `DUCKDB_EXTENSION_DIRECTORY` | string | empty (the image sets `/opt/duckdb-extensions`) | `extraEnv` | Where DuckDB finds its extensions (`httpfs`, for reading the storage in place). The image sets it to the extensions it ships, so nothing is downloaded at runtime. |
+
+### Where the database backups go
+
+The gateway makes the backups of its database (see *Database backups* above); the engine stores them, since it holds the storage credentials. Every field left empty falls back to the object storage's.
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `BACKUP__BUCKET` | string | empty | `backup.bucket` | The bucket of the backups; empty = `STORAGE__BUCKET`. A bucket of their own is advised in production, so that losing one does not lose both. |
+| `BACKUP__PREFIX` | string | `backups/postgres/` | `backup.prefix` | The folder of the backups in the bucket. Only files named like a backup (`tabularia-<time>.dump`) are listed, downloaded or removed there. |
+| `BACKUP__ENDPOINT` | string | empty | `backup.endpoint` | Another object storage for the backups; empty = `STORAGE__ENDPOINT`. |
+| `BACKUP__REGION` | string | empty | `backup.region` | The region of `BACKUP__ENDPOINT`; empty = `STORAGE__REGION`. |
+| `BACKUP__ACCESS_KEY` | string | empty | `secrets.backupAccessKey` | Keys of the backups' bucket when they are not the storage's; empty = `STORAGE__ACCESS_KEY` and `STORAGE__SECRET_KEY`. Read by the engine only: the chart keeps them out of the gateway. |
+| `BACKUP__SECRET_KEY` | string | empty | `secrets.backupSecretKey` | The secret of `BACKUP__ACCESS_KEY`. |
 
 ### Workers and task limits (Celery)
 

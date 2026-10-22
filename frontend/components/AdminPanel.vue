@@ -9,19 +9,21 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes,
+  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup,
 } from 'lucide-vue-next'
 // import espliciti: nel container i componenti nuovi non vengono scansionati
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
 import WebhooksSection from '~/components/admin/WebhooksSection.vue'
 import EngineSettingsSection from '~/components/admin/EngineSettingsSection.vue'
 import SiemSection from '~/components/admin/SiemSection.vue'
+import BackupsSection from '~/components/admin/BackupsSection.vue'
 import WorkersSection from '~/components/admin/WorkersSection.vue'
 import ScriptingSection from '~/components/admin/ScriptingSection.vue'
 import RegistriesSection from '~/components/admin/RegistriesSection.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
+import { useBackups } from '~/composables/useBackups'
 import { isSettingsCategory, useEngineSettings } from '~/composables/useEngineSettings'
 import { useWorkers } from '~/composables/useWorkers'
 import { useScripting } from '~/composables/useScripting'
@@ -41,6 +43,7 @@ const aiApi = useAi()
 const integr = useIntegrations()
 const impostazioniApi = useEngineSettings()
 const siemApi = useSiem()
+const backupsApi = useBackups()
 const workersApi = useWorkers()
 const scriptingApi = useScripting()
 const registriesApi = useRegistries()
@@ -58,7 +61,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'ai'
+type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai'
 const sezione = ref<Sezione>('users')
 
 const users = ref<UserOut[]>([])
@@ -98,8 +101,15 @@ const nWorker = ref(0)
 // the scripting environments defined
 const nAmbienti = ref(0)
 const nRegistri = ref(0)
+// without Kubernetes (Docker Compose) the two sections are shown greyed out, not opened
+const scriptingOff = ref(false)
+const registriesOff = ref(false)
 // l'inoltro dell'audit al SIEM: acceso o no
 const siemAcceso = ref(false)
+// the database backups in the object storage
+const nBackup = ref(0)
+// on Docker Compose the backups are greyed out like the other features of a cluster
+const backupsOff = ref(false)
 // le cartelle, per il filtro dei webhook
 const cartelle = ref<Project[]>([])
 const gruppiFiltrati = computed(() =>
@@ -117,10 +127,11 @@ const sezioni = computed(() => [
   // stato dell'installazione, non quanti ne esistono
   { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
   { id: 'settings' as Sezione, label: t('engineSettings.navTitle'), icon: SlidersHorizontal, badge: nImpostazioni.value },
+  { id: 'backups' as Sezione, label: t('backups.navTitle'), icon: DatabaseBackup, badge: nBackup.value, off: backupsOff.value },
   // the workers alive now
   { id: 'workers' as Sezione, label: t('workers.navTitle'), icon: Server, badge: nWorker.value },
-  { id: 'scripting' as Sezione, label: t('scripting.navTitle'), icon: Code2, badge: nAmbienti.value },
-  { id: 'registries' as Sezione, label: t('registries.navTitle'), icon: Boxes, badge: nRegistri.value },
+  { id: 'scripting' as Sezione, label: t('scripting.navTitle'), icon: Code2, badge: nAmbienti.value, off: scriptingOff.value },
+  { id: 'registries' as Sezione, label: t('registries.navTitle'), icon: Boxes, badge: nRegistri.value, off: registriesOff.value },
   { id: 'siem' as Sezione, label: t('siem.navTitle'), icon: Radar, badge: siemAcceso.value ? 1 : 0 },
   // quanti modelli sono ABILITATI: zero = l'assistente non e' usabile da nessuno
   { id: 'ai' as Sezione, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (modelli.value ?? []).filter((m) => m.enabled).length },
@@ -164,13 +175,22 @@ async function loadAll() {
     siemAcceso.value = (await siemApi.get()).enabled
   } catch { /* la sezione lo dirà quando si apre */ }
   try {
+    const bk = await backupsApi.get()
+    nBackup.value = bk.items.length
+    backupsOff.value = bk.disabled_reason === 'kubernetes'
+  } catch { /* the section says why when it opens */ }
+  try {
     nWorker.value = (await workersApi.get()).groups.reduce((n, g) => n + g.workers.length, 0)
   } catch { /* the section says why when it opens */ }
   try {
-    nAmbienti.value = (await scriptingApi.get()).environments.length
+    const sc = await scriptingApi.get()
+    nAmbienti.value = sc.environments.length
+    scriptingOff.value = sc.disabled_reason === 'kubernetes'
   } catch { /* the section says why when it opens */ }
   try {
-    nRegistri.value = (await registriesApi.get()).registries.length
+    const rg = await registriesApi.get()
+    nRegistri.value = rg.registries.length
+    registriesOff.value = rg.disabled_reason === 'kubernetes'
   } catch { /* the section says why when it opens */ }
   // a parte: l'assistente puo' non essere configurato, e non e' un errore del pannello
   try {
@@ -438,8 +458,10 @@ async function toggleMotore(m: EnginePolicy) {
           v-for="s in sezioni"
           :key="s.id"
           class="navitem"
-          :class="{ on: sezione === s.id }"
-          @click="sezione = s.id"
+          :class="{ on: sezione === s.id, spenta: 'off' in s && s.off }"
+          :aria-disabled="'off' in s && s.off ? 'true' : undefined"
+          :title="'off' in s && s.off ? $t('scripting.kubernetesOnly') : undefined"
+          @click="!('off' in s && s.off) && (sezione = s.id)"
         >
           <component :is="s.icon" :size="15" />
           <span class="lbl">{{ s.label }}</span>
@@ -757,6 +779,9 @@ async function toggleMotore(m: EnginePolicy) {
           <SiemSection @state="siemAcceso = $event" />
         </template>
 
+        <template v-else-if="sezione === 'backups'">
+          <BackupsSection @count="nBackup = $event" />
+        </template>
         <template v-else-if="sezione === 'settings'">
           <EngineSettingsSection @count="nImpostazioni = $event" />
         </template>
@@ -873,6 +898,7 @@ async function toggleMotore(m: EnginePolicy) {
 </template>
 
 <style scoped>
+.navitem.spenta { opacity: .45; cursor: not-allowed; }
 .rowpick { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .rowpick:hover { color: var(--accent); box-shadow: none; }
 .page-head { margin-bottom: 16px; }

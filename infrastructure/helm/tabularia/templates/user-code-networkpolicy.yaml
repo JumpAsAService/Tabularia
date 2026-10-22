@@ -1,0 +1,72 @@
+{{/*
+The namespaces where users' code runs — the Script nodes and their trials, the image
+builds (a package's install script is code too) and the Container nodes with their
+trials — reach the internet and the other namespaces of the cluster (DNS, the scripts
+bucket, the company's services), but never Tabularia's own namespace (its database,
+broker, storage and internal APIs) nor the cloud metadata addresses, where a node's
+credentials are read. Nothing calls into them. docs/specs/script-node.md («Network»),
+docs/container-node.md.
+
+Why the private ranges are left out of «the internet»: on most network plugins (kindnet,
+Calico, Cilium) an address range also matches the cluster's pods and Services, so
+0.0.0.0/0 would let the code reach Tabularia's pods by address. In-cluster traffic goes
+through the namespace rule instead; the company's own private networks outside the
+cluster (a database on 10.x) are opened with networkPolicy.userCodePrivateCIDRs, which
+must not hold the cluster's pod or Service ranges.
+*/}}
+{{- $namespaces := list }}
+{{- if and .Values.scripts.enabled .Values.scripts.blockTabularia }}
+{{- $namespaces = concat $namespaces (list (include "tabularia.scriptsNamespace" .) (include "tabularia.scriptTrialsNamespace" .) (include "tabularia.scriptBuildsNamespace" .)) }}
+{{- end }}
+{{- if and .Values.containers.enabled .Values.containers.blockTabularia }}
+{{- $namespaces = concat $namespaces (list (include "tabularia.containersNamespace" .) (include "tabularia.containerTrialsNamespace" .)) }}
+{{- end }}
+{{- range $ns := ($namespaces | uniq) }}
+{{- if eq $ns $.Release.Namespace }}
+{{- fail (printf "the namespaces of the scripts and the Container nodes must not be Tabularia's own (%s): their network policy would cut Tabularia off" $ns) }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" $ }}-user-code
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # nothing calls the pods of users' code
+  ingress: []
+  egress:
+    # every other namespace of the cluster (DNS, the scripts bucket when it is a
+    # Service, the company's services), never Tabularia's
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: NotIn
+                values: [{{ $.Release.Namespace | quote }}]
+    # the internet: every public address, not the private ranges (where the cluster's
+    # pods and Services are) nor the link-local ones (the cloud metadata)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16"]
+        - ipBlock:
+            cidr: "::/0"
+            except: ["fc00::/7", "fe80::/10"]
+    {{- with $.Values.networkPolicy.userCodePrivateCIDRs }}
+    # the company's private networks outside the cluster (networkPolicy.userCodePrivateCIDRs)
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+            {{- if include "tabularia.coversMetadata" . }}
+            except: [{{ ternary "fd00:ec2::254/128" "169.254.169.254/32" (contains ":" .) | quote }}]
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}

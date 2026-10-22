@@ -7,6 +7,9 @@
 - POST /scripts/output/import: the output a script wrote in the scripts bucket,
   checked to be a parquet file and copied into Tabularia's storage, where the nodes
   after the script read it like any other step.
+- POST /scripts/input/export: a declared input of a saved script, the datasource's
+  current parquet file copied from Tabularia's storage to the scripts bucket, where
+  the script reads it (docs/specs/saved-scripts.md).
 - POST /scripts/objects/delete: a step's files removed from the scripts bucket when
   the run ends (by exact key: the key needs no listing right).
 
@@ -101,12 +104,52 @@ def output_import(request: OutputImportRequest):
         client.download_file(conn.bucket, request.key, path)
         try:
             rows = pq.ParquetFile(path).metadata.num_rows
+            columns = _columns(path)
         except Exception as e:  # noqa: BLE001 — any reason it is not a parquet file
             raise HTTPException(status_code=400, detail=f"The script's output is not a parquet file ({type(e).__name__})")
         get_storage_service().upload_file(path, request.bucket, request.output_key)
     finally:
         os.unlink(path)
-    return {"found": True, "rows": rows, "bytes": head.get("ContentLength")}
+    return {"found": True, "rows": rows, "bytes": head.get("ContentLength"), "columns": columns}
+
+
+def _columns(path: str) -> list[dict]:
+    """The columns as the engine describes a dataset's (name, Polars type): what a
+    datasource published from the output keeps."""
+    import polars as pl
+
+    return [{"name": n, "dtype": str(t)} for n, t in pl.read_parquet_schema(path).items()]
+
+
+class InputExportRequest(BaseModel):
+    connection: S3ConnectionSpec
+    bucket: str  # Tabularia's
+    key: str  # the datasource's parquet file
+    target_key: str  # in the scripts bucket
+
+
+@router.post("/input/export")
+def input_export(request: InputExportRequest):
+    """404 when the datasource's file is gone (a refresh replaced it meanwhile: the
+    run says so, and the next one reads the new one)."""
+    from app.utils import get_storage_service
+
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    try:
+        try:
+            get_storage_service().download_file(request.bucket, request.key, path)
+        except Exception as e:  # noqa: BLE001 — missing, or the storage did not answer
+            raise HTTPException(status_code=404, detail=f"The datasource's file could not be read ({_reason(e)})")
+        conn = request.connection
+        try:
+            conn.client().upload_file(path, conn.bucket, request.target_key)
+        except (ClientError, BotoCoreError) as e:
+            raise HTTPException(status_code=502, detail=f"The scripts bucket answered: {_reason(e)}")
+        size = os.path.getsize(path)
+    finally:
+        os.unlink(path)
+    return {"bytes": size}
 
 
 class ObjectsDeleteRequest(BaseModel):

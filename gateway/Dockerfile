@@ -44,10 +44,46 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project $opts; \
     find /opt/venv -type d -name tests -prune -exec rm -rf {} +
 
+#############################
+#   Stage 2: pg_dump        #
+#############################
+# pg_dump and pg_restore, for the backups of this database (services/db_backup.py), of
+# every PostgreSQL version still supported, from PostgreSQL's own repository: a backup is
+# made with the server's own version, so that the server's own pg_restore reads it (a
+# newer pg_dump writes a format an older pg_restore refuses). Only the two programs of
+# each version go on (a few hundred KB each): the client packages would also bring Perl
+# for their wrappers. 18 is the default, on the PATH.
+FROM python:3.12-slim-bookworm AS pgclient
+
+ARG PG_VERSIONS="14 15 16 17 18"
+RUN set -e; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl; \
+    install -d /usr/share/postgresql-common/pgdg; \
+    curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    for v in $PG_VERSIONS; do apt-get install -y --no-install-recommends "postgresql-client-$v"; done; \
+    for v in $PG_VERSIONS; do \
+      install -d "/pg/$v/bin"; \
+      cp "/usr/lib/postgresql/$v/bin/pg_dump" "/usr/lib/postgresql/$v/bin/pg_restore" "/pg/$v/bin/"; \
+    done
+
 ########################
-#   Stage 2: runtime   #
+#   Stage 3: runtime   #
 ########################
 FROM python:3.12-slim-bookworm AS runtime
+
+# the libraries pg_dump needs, libpq of the same version from the same repository
+COPY --from=pgclient /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc /usr/share/postgresql-common/pgdg/
+COPY --from=pgclient /etc/apt/sources.list.d/pgdg.list /etc/apt/sources.list.d/
+RUN set -e; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1; \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=pgclient /pg /usr/lib/postgresql
+RUN ln -s /usr/lib/postgresql/18/bin/pg_dump /usr/lib/postgresql/18/bin/pg_restore /usr/local/bin/
 
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \

@@ -310,3 +310,76 @@ async def digest(r: Registry, repository: str, reference: str) -> str:
         if not DIGEST.match(found):
             raise RegistryError(f"{r.host} did not say which manifest «{reference}» is")
         return found
+
+
+INDEX_TYPES = ("application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json")
+# an image's configuration is a few kilobytes; past this it is not one
+MAX_CONFIG_BYTES = 2 * 2**20
+
+
+def _platform(p: dict) -> str:
+    return "/".join(x for x in (p.get("os"), p.get("architecture"), p.get("variant")) if x)
+
+
+async def image_config(r: Registry, repository: str, reference: str) -> dict:
+    """What an image does when nothing overrides it, read from its manifest and its
+    configuration blob: the entrypoint and the command, the variables and the labels it
+    declares, where and as whom it runs, the platforms it is built for, its size. The
+    guided choice of the Container node and cell shows and offers it
+    (docs/specs/saved-scripts.md, piece 6)."""
+    repo = repository_name(r.host, repository)
+    if not REPOSITORY.match(repo) or not (TAG.match(reference) or DIGEST.match(reference)):
+        raise RegistryError(f"«{repository}:{reference}» is not an image name")
+    check_host(r.host)
+    async with _Session(r) as s:
+        scope = f"repository:{repo}:pull"
+
+        async def manifest(ref: str) -> tuple[dict, str]:
+            resp = await s.get(f"/v2/{repo}/manifests/{quote(ref)}", scope, headers={"Accept": MANIFEST_TYPES})
+            if resp.status_code == 404:
+                raise RegistryError(f"{repo} has no tag «{ref}»")
+            if resp.status_code != 200:
+                raise _not_visible(repo, resp.status_code, not r.username)
+            try:
+                return resp.json(), resp.headers.get("docker-content-digest", "")
+            except ValueError:
+                raise RegistryError(f"{r.host} answered with a manifest that is not JSON") from None
+
+        body, found = await manifest(reference)
+        platforms: list[str] = []
+        if body.get("mediaType") in INDEX_TYPES or "manifests" in body:
+            entries = [m for m in body.get("manifests") or [] if isinstance(m, dict)
+                       and (m.get("platform") or {}).get("os") not in (None, "unknown")]
+            platforms = [_platform(m["platform"]) for m in entries]
+            if not entries:
+                raise RegistryError(f"{repo}:{reference} names no image for any platform")
+            chosen = next((m for m in entries if m["platform"].get("os") == "linux"
+                           and m["platform"].get("architecture") == "amd64"), entries[0])
+            body, _ = await manifest(chosen["digest"])
+        config = body.get("config") or {}
+        if not DIGEST.match(str(config.get("digest") or "")):
+            raise RegistryError(f"{repo}:{reference} has no configuration Tabularia can read")
+        if int(config.get("size") or 0) > MAX_CONFIG_BYTES:
+            raise RegistryError(f"the configuration of {repo}:{reference} is too large to read")
+        resp = await s.get(f"/v2/{repo}/blobs/{config['digest']}", scope)
+        if resp.status_code != 200:
+            raise _not_visible(repo, resp.status_code, not r.username)
+        try:
+            blob = resp.json()
+        except ValueError:
+            raise RegistryError(f"the configuration of {repo}:{reference} is not JSON") from None
+        c = blob.get("config") or {}
+        env = []
+        for item in c.get("Env") or []:
+            name, _, value = str(item).partition("=")
+            env.append({"name": name, "value": value})
+        if not platforms:
+            platforms = [_platform(blob)] if blob.get("architecture") else []
+        return {
+            "repository": repo, "reference": reference, "digest": found if DIGEST.match(found) else None,
+            "platforms": platforms, "created": blob.get("created"),
+            "entrypoint": [str(x) for x in c.get("Entrypoint") or []], "cmd": [str(x) for x in c.get("Cmd") or []],
+            "env": env, "labels": {str(k): str(v) for k, v in (c.get("Labels") or {}).items()},
+            "working_dir": c.get("WorkingDir") or None, "user": c.get("User") or None,
+            "size": sum(int(x.get("size") or 0) for x in body.get("layers") or [] if isinstance(x, dict)) or None,
+        }

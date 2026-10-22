@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // The flow group editor: a grid where each row is a step and the cells of a row
-// run at the same time (a flow to run, or a database datasource to refresh).
+// run at the same time (a flow to run, a database datasource to refresh, a saved
+// script to run, or an image of a container registry, docs/specs/saved-scripts.md). A
+// Container cell holds its own settings, set in the Container node's panel.
 // Flows and datasources come from the panel on the right, by drag and drop, or
 // from the picker inside an empty cell (the keyboard way). A filled cell can be
 // dragged onto another cell: the two swap.
@@ -14,7 +16,8 @@ import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
   Rows3, Workflow, DatabaseZap, GripVertical, Plus, X, Play, CalendarClock, Save, Search, History,
-  CircleCheck, CircleX, LoaderCircle, Hourglass, SkipForward, CircleSlash, EyeOff, Ban, Check,
+  CircleCheck, CircleX, LoaderCircle, Hourglass, SkipForward, CircleSlash, EyeOff, Ban, Check, FileCode2,
+  Container as ContainerIcon, Settings2,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { knownError } from '~/composables/knownErrors'
@@ -22,6 +25,10 @@ import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
+import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts'
+import { useRegistriesEditor } from '~/composables/useRegistries'
+import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
+import Modal from '~/components/ui/Modal.vue'
 import {
   useFlowGroups, MAX_GROUP_COLUMNS, MAX_GROUP_STEPS,
   type FlowGroupCell, type FlowGroupCellKind, type FlowGroupCellLabel, type FlowGroupDetail, type FlowGroupRun,
@@ -34,6 +41,8 @@ const route = useRoute()
 const groupsApi = useFlowGroups()
 const flowsApi = useFlows()
 const dsApi = useDatasources()
+const scriptsApi = useSavedScripts()
+const registriesEditor = useRegistriesEditor()
 const folderPaths = useFolderPaths()
 
 type Grid = (FlowGroupCell | null)[][]
@@ -58,7 +67,9 @@ const cols = computed(() => Math.max(1, ...grid.value.map((row) => row.length)))
 function rectangular(steps: Grid): Grid {
   const width = Math.max(1, ...steps.map((row) => row.length))
   const rows = steps.length ? steps : [[]]
-  return rows.map((row) => [...row.map((c) => (c ? { kind: c.kind, id: c.id } : null)), ...Array(width - row.length).fill(null)])
+  // a container cell keeps its settings
+  return rows.map((row) => [...row.map((c) => (c ? (c.kind === 'container' ? { kind: c.kind, id: c.id, container: { ...(c.container ?? {}) } } : { kind: c.kind, id: c.id }) : null)),
+    ...Array(width - row.length).fill(null)])
 }
 
 const snapshot = (n: string, g: Grid) => JSON.stringify([n.trim(), g])
@@ -111,8 +122,24 @@ function place(item: { kind: FlowGroupCellKind; id: number }, r: number, c: numb
         return
       }
     }
+    const moving = grid.value[fr]![fc] ?? { kind: item.kind, id: item.id }
     grid.value[fr]![fc] = target
-    grid.value[r]![c] = { kind: item.kind, id: item.id }
+    grid.value[r]![c] = moving // a container cell moves with its settings
+    return
+  }
+  if (item.kind === 'container') {
+    // a new Container cell: the first registry and image one may use, then its panel
+    const first = registriesEditor.state.value?.registries[0]
+    const ids = grid.value.flat().filter((x): x is FlowGroupCell => !!x && x.kind === 'container').map((x) => x.id)
+    grid.value[r]![c] = {
+      kind: 'container', id: Math.max(0, ...ids) + 1,
+      container: {
+        label: t('containers.node.title'), registryId: first?.id ?? null, registryName: first?.name ?? '',
+        repository: first?.repositories.find((x) => !x.includes('*')) ?? '', tag: '', command: [], args: [], variables: [],
+        cpu: '500m', memory: '512Mi', timeoutSeconds: 900, retries: 0, retryDelaySeconds: 60,
+      },
+    }
+    editing.value = [r, c]
     return
   }
   if (inStepElsewhere(r, c, key)) {
@@ -122,9 +149,29 @@ function place(item: { kind: FlowGroupCellKind; id: number }, r: number, c: numb
   grid.value[r]![c] = { kind: item.kind, id: item.id }
 }
 
-// ── what can go in a cell: readable flows and database datasources ──────────
+// ── what can go in a cell: readable flows, database datasources, saved scripts ─
 const flows = ref<FlowSummary[]>([])
 const datasources = ref<DatasourceInfo[]>([])
+const scripts = ref<SavedScript[]>([])
+const KIND_ICON = { flow: Workflow, refresh: DatabaseZap, script: FileCode2, container: ContainerIcon } as const
+const KIND_LABEL = { flow: 'flowGroups.kindFlow', refresh: 'flowGroups.kindRefresh', script: 'flowGroups.kindScript', container: 'flowGroups.kindContainer' } as const
+const SECTION_LABEL = { flow: 'flowGroups.catalogFlows', refresh: 'flowGroups.catalogRefresh', script: 'flowGroups.catalogScripts', container: 'flowGroups.catalogImages' } as const
+
+// ── a Container cell's settings, in the Container node's panel ───────────────
+const editing = ref<[number, number] | null>(null)
+const editingCell = computed(() => (editing.value ? grid.value[editing.value[0]]?.[editing.value[1]] ?? null : null))
+function editCell(r: number, c: number) {
+  if (grid.value[r]?.[c]?.kind === 'container') editing.value = [r, c]
+}
+function patchContainer(patch: Record<string, any>) {
+  const cell = editingCell.value
+  if (!cell || !editing.value) return
+  grid.value[editing.value[0]]![editing.value[1]] = { ...cell, container: { ...(cell.container ?? {}), ...patch } }
+}
+function removeEditing() {
+  if (editing.value) clearCell(editing.value[0], editing.value[1])
+  editing.value = null
+}
 
 interface Item { key: string; kind: FlowGroupCellKind; id: number; name: string; path: string }
 const items = computed<Item[]>(() => [
@@ -132,6 +179,11 @@ const items = computed<Item[]>(() => [
   ...datasources.value
     .filter((d) => d.kind === 'database')
     .map((d) => ({ key: `refresh:${d.id}`, kind: 'refresh' as const, id: d.id, name: d.name, path: folderPaths.pathOf(d.project_id) ?? '' })),
+  ...scripts.value.map((x) => ({ key: `script:${x.id}`, kind: 'script' as const, id: x.id, name: x.name, path: folderPaths.pathOf(x.project_id) ?? '' })),
+  // an image of a registry one may use: a new Container cell each time
+  ...(registriesEditor.available.value
+    ? [{ key: 'container:new', kind: 'container' as const, id: 0, name: t('flowGroups.newContainer'), path: t('flowGroups.newContainerHint') }]
+    : []),
 ])
 const byKey = computed(() => new Map(items.value.map((i) => [i.key, i])))
 
@@ -149,7 +201,12 @@ const savedLabels = computed(() => {
 })
 
 interface CellLabel { name: string | null; path: string; hidden: boolean; missing: boolean }
-function labelFor(cell: { kind: FlowGroupCellKind; id: number }): CellLabel {
+function labelFor(cell: { kind: FlowGroupCellKind; id: number; container?: Record<string, any> }): CellLabel {
+  if (cell.kind === 'container') {
+    const d = cell.container ?? {}
+    const image = d.repository ? `${d.repository}:${d.tag || 'latest'}` : ''
+    return { name: d.label || image || t('flowGroups.kindContainer'), path: image, hidden: false, missing: false }
+  }
   const key = keyOf(cell)
   const known = byKey.value.get(key)
   if (known) return { name: known.name, path: known.path, hidden: false, missing: false }
@@ -170,6 +227,8 @@ const catalog = computed(() => {
   return {
     flows: items.value.filter((i) => i.kind === 'flow' && hit(i)),
     refresh: items.value.filter((i) => i.kind === 'refresh' && hit(i)),
+    script: items.value.filter((i) => i.kind === 'script' && hit(i)),
+    container: items.value.filter((i) => i.kind === 'container'),
   }
 })
 
@@ -177,12 +236,12 @@ const catalog = computed(() => {
 function optionsFor(r: number) {
   const inStep = new Set(grid.value[r]!.filter((c): c is FlowGroupCell => !!c).map(keyOf))
   return items.value
-    .filter((i) => !inStep.has(i.key))
+    .filter((i) => !inStep.has(i.key) || i.kind === 'container')
     .map((i) => ({
       value: i.key,
       label: i.name,
       hint: i.path || undefined,
-      group: t(i.kind === 'flow' ? 'flowGroups.catalogFlows' : 'flowGroups.catalogRefresh'),
+      group: t(SECTION_LABEL[i.kind]),
     }))
 }
 function pick(r: number, c: number, key: string | null) {
@@ -260,9 +319,11 @@ async function load() {
 
 async function loadCatalog() {
   // a list that does not load leaves the panel empty, not the page broken
-  const [f, d] = await Promise.allSettled([flowsApi.list(), dsApi.list()])
+  const [f, d, sc] = await Promise.allSettled([flowsApi.list(), dsApi.list(), scriptsApi.list(), registriesEditor.load()])
   flows.value = f.status === 'fulfilled' ? f.value : []
   datasources.value = d.status === 'fulfilled' ? d.value : []
+  // only the scripts one sees; none where scripting is off
+  scripts.value = sc.status === 'fulfilled' ? sc.value : []
 }
 
 async function save() {
@@ -600,10 +661,17 @@ async function saveSchedule(cron: string) {
                     >
                       <div class="ctop">
                         <GripVertical v-if="canEdit" :size="13" class="grip" />
-                        <component :is="row[c - 1]!.kind === 'flow' ? Workflow : DatabaseZap" :size="14" class="kicon" :class="row[c - 1]!.kind" />
+                        <component :is="KIND_ICON[row[c - 1]!.kind]" :size="14" class="kicon" :class="row[c - 1]!.kind" />
                         <span v-if="labelFor(row[c - 1]!).hidden" class="cname muted"><EyeOff :size="13" /> {{ $t('flowGroups.hiddenCell') }}</span>
                         <span v-else-if="labelFor(row[c - 1]!).missing" class="cname gone"><Ban :size="13" /> {{ $t('flowGroups.missingCell') }}</span>
                         <span v-else class="cname" :title="labelFor(row[c - 1]!).name ?? ''">{{ labelFor(row[c - 1]!).name }}</span>
+                        <button
+                          v-if="row[c - 1]!.kind === 'container'"
+                          class="mini ghost"
+                          :title="$t('flowGroups.editContainer')"
+                          :aria-label="$t('flowGroups.editContainer')"
+                          @click="editCell(r, c - 1)"
+                        ><Settings2 :size="12" /></button>
                         <button
                           v-if="canEdit"
                           class="mini ghost cdel"
@@ -613,7 +681,7 @@ async function saveSchedule(cron: string) {
                         ><X :size="12" /></button>
                       </div>
                       <div class="cpath muted">
-                        {{ $t(row[c - 1]!.kind === 'flow' ? 'flowGroups.kindFlow' : 'flowGroups.kindRefresh') }}<template v-if="labelFor(row[c - 1]!).path"> · {{ labelFor(row[c - 1]!).path }}</template>
+                        {{ $t(KIND_LABEL[row[c - 1]!.kind]) }}<template v-if="labelFor(row[c - 1]!).path"> · {{ labelFor(row[c - 1]!).path }}</template>
                       </div>
                       <div v-if="stateOf(r, c - 1)" class="cstate">
                         <component
@@ -670,9 +738,11 @@ async function saveSchedule(cron: string) {
           </span>
           <p class="cat-hint muted">{{ $t('flowGroups.catalogHint') }}</p>
 
-          <template v-for="section in (['flows', 'refresh'] as const)" :key="section">
+          <template v-for="section in ([
+            'flows', 'refresh', ...(scripts.length ? ['script'] as const : []), ...(catalog.container.length ? ['container'] as const : []),
+          ] as const)" :key="section">
             <div class="cat-group">
-              {{ $t(section === 'flows' ? 'flowGroups.catalogFlows' : 'flowGroups.catalogRefresh') }}
+              {{ $t(section === 'flows' ? SECTION_LABEL.flow : SECTION_LABEL[section]) }}
               <span class="n">{{ catalog[section].length }}</span>
             </div>
             <ul class="cat-list">
@@ -686,7 +756,7 @@ async function saveSchedule(cron: string) {
                 @dragend="endDrag"
               >
                 <GripVertical :size="13" class="grip" />
-                <component :is="i.kind === 'flow' ? Workflow : DatabaseZap" :size="14" class="kicon" :class="i.kind" />
+                <component :is="KIND_ICON[i.kind]" :size="14" class="kicon" :class="i.kind" />
                 <span class="ci-text">
                   <span class="ci-name">{{ i.name }}</span>
                   <span v-if="i.path" class="ci-path muted">{{ i.path }}</span>
@@ -700,6 +770,17 @@ async function saveSchedule(cron: string) {
           </template>
         </aside>
       </div>
+
+      <Modal :open="!!editingCell" :title="$t('flowGroups.containerTitle')" :width="560" @close="editing = null">
+        <ContainerNodePanel
+          v-if="editingCell"
+          :node="{ id: `container-cell-${editingCell.id}`, position: { x: 0, y: 0 }, data: editingCell.container ?? {} } as any"
+          :read-only="!canEdit"
+          in-group
+          @update="patchContainer"
+          @delete="removeEditing"
+        />
+      </Modal>
 
       <ScheduleDialog
         :open="scheduleOpen"
@@ -816,6 +897,8 @@ button.mini { padding: 2px 8px; min-height: 24px; }
 .kicon { flex-shrink: 0; }
 .kicon.flow { color: var(--accent); }
 .kicon.refresh { color: var(--violet); }
+.kicon.script { color: var(--warning); }
+.kicon.container { color: #38bdf8; }
 /* the name is never cut short: two flows may differ only at its end */
 .cname { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 5px; }
 .cname.gone { color: var(--danger); }

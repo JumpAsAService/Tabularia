@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, Boxes } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, Boxes, DatabaseBackup } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -157,6 +157,10 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'engine_settings.update': { icon: SlidersHorizontal, color: u.accent, label: t('audit.engineSettingsUpdateAction') },
     'siem.update': { icon: Radar, color: u.accent, label: t('audit.siemUpdateAction') },
     'siem.test': { icon: Radar, color: u.muted, label: t('audit.siemTestAction') },
+    'backup.update': { icon: DatabaseBackup, color: u.accent, label: t('audit.backupUpdateAction') },
+    'backup.request': { icon: DatabaseBackup, color: u.muted, label: t('audit.backupRequestAction') },
+    'backup.run': { icon: DatabaseBackup, color: u.muted, label: t('audit.backupRunAction') },
+    'backup.download': { icon: Download, color: u.danger, label: t('audit.backupDownloadAction') },
     'workers.scaling_update': { icon: Server, color: u.accent, label: t('audit.workersScalingUpdateAction') },
     'workers.scaling_reset': { icon: Server, color: u.muted, label: t('audit.workersScalingResetAction') },
     'scripting.storage_update': { icon: Code2, color: u.accent, label: t('audit.scriptingStorageUpdateAction') },
@@ -175,6 +179,10 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'registry.variable_set': { icon: Boxes, color: u.accent, label: t('audit.registryVariableSetAction') },
     'registry.variable_delete': { icon: Boxes, color: u.muted, label: t('audit.registryVariableDeleteAction') },
     'container.trial': { icon: Boxes, color: u.accent, label: t('audit.containerTrialAction') },
+    'script.create': { icon: Code2, color: u.accent, label: t('audit.scriptCreateAction') },
+    'script.update': { icon: Code2, color: u.accent, label: t('audit.scriptUpdateAction') },
+    'script.delete': { icon: Code2, color: u.danger, label: t('audit.scriptDeleteAction') },
+    'script.restore': { icon: Code2, color: u.accent, label: t('audit.scriptRestoreAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },

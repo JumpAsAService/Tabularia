@@ -9,7 +9,7 @@
 // filtrato: sono i numeri da mettere nel selettore per tipo, che altrimenti
 // cambierebbero a ogni clic.
 
-export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'connection'
+export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'connection'
 
 export interface SearchHit {
   kind: SearchKind
@@ -38,6 +38,7 @@ export function searchHitTarget(hit: SearchHit): string {
     case 'flow': return `/editor?flow=${hit.id}`
     case 'group': return `/flow-group?id=${hit.id}`
     case 'view': return `/viewer?view=${hit.id}`
+    case 'script': return `/script?id=${hit.id}`
     // col nome come ricerca: la lista è paginata, e la voce può stare oltre la prima pagina
     case 'datasource': return `/datasources?q=${encodeURIComponent(hit.name)}&ds=${hit.id}`
     case 'connection': return `/connections?q=${encodeURIComponent(hit.name)}&conn=${hit.id}`

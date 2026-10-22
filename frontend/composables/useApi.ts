@@ -228,7 +228,7 @@ export function useApi() {
     // grafo di lineage: senza center → grafo completo leggibile; con center →
     // sottografo a monte/valle entro `depth` salti
     async lineage(p?: {
-      type?: 'flow' | 'datasource' | 'connection'
+      type?: 'flow' | 'datasource' | 'connection' | 'script'
       id?: number
       direction?: 'both' | 'upstream' | 'downstream'
       depth?: number
@@ -319,7 +319,7 @@ export function useApi() {
 }
 
 // ── Lineage cross-flow ───────────────────────────────────────────────────────
-export type LineageNodeType = 'flow' | 'datasource' | 'connection' | 'db_sink' | 's3_sink' | 'sftp_sink'
+export type LineageNodeType = 'flow' | 'datasource' | 'connection' | 'script' | 'db_sink' | 's3_sink' | 'sftp_sink'
 export type LineageEdgeKind = 'read' | 'publish' | 'ingest' | 'write' | 'refresh' | 'orchestrate'
 export interface LineageNode {
   id: string

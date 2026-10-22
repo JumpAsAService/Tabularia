@@ -425,7 +425,7 @@ async def test_un_processo_che_risponde_soltanto_non_avvia_lavoro_di_fondo(monke
             avviati.append(nome)
         return ciclo
 
-    cicli = ["scheduler_loop", "coda_loop", "retention_loop", "webhooks_loop", "regolazioni_loop", "siem_loop"]
+    cicli = ["scheduler_loop", "coda_loop", "retention_loop", "housekeeping_loop", "backup_loop", "webhooks_loop", "regolazioni_loop", "siem_loop"]
     for nome in cicli:
         monkeypatch.setattr(main, nome, finto(nome))
 

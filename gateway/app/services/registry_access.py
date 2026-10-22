@@ -164,8 +164,13 @@ def check_definition(session: Session, user: User, before: Optional[str], after:
     an image this person may use. The ones left as they were need nothing more (whoever
     could not use them could not have opened the flow). Every Container node must also
     be well formed (container_nodes.check)."""
+    from app.core.config import get_settings
     from app.services import container_nodes
 
+    if not get_settings().containers.enabled:
+        # an installation without containers (Docker Compose): a flow that came from one
+        # with them is kept as it is; its Container nodes do not run, and the run says so
+        return
     container_nodes.check_definition(after)
     if is_admin(session, user):
         return

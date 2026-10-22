@@ -45,6 +45,9 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- if and $.Values.oidc.enabled $.Values.oidc.caCert }}
+        checksum/oidc-ca: {{ $.Values.oidc.caCert | sha256sum }}
+        {{- end }}
         {{- include "tabularia.secretChecksum" $ | nindent 8 }}
         {{- with .cfg.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -54,10 +57,11 @@ spec:
         app.kubernetes.io/component: {{ .component }}
     spec:
       {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
-      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled $.Values.containers.enabled }}
+      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled $.Values.containers.enabled $.Values.clusterView.enabled }}
       # Admin → Workers changes the workers' autoscaling bounds (scaling-rbac.yaml);
       # Admin → Scripting environments runs Jobs in the scripts namespaces (scripts.yaml)
-      serviceAccountName: {{ include "tabularia.fullname" $ }}-scaler
+      # (the orchestrator has an account of its own: only it creates the image builds)
+      serviceAccountName: {{ include "tabularia.fullname" $ }}-{{ ternary "orchestrator" "scaler" (eq .component "orchestrator") }}
       automountServiceAccountToken: true
       {{- else }}
       serviceAccountName: {{ include "tabularia.serviceAccountName" $ }}
@@ -130,6 +134,10 @@ spec:
             {{- if $.Values.scripts.enabled }}
             {{- include "tabularia.scriptsEnv" $ | nindent 12 }}
             {{- end }}
+            {{- if $.Values.clusterView.enabled }}
+            - name: KUBERNETES__CLUSTER_VIEW
+              value: "true"
+            {{- end }}
             {{- include "tabularia.withoutEngineSecrets" $ | nindent 12 }}
           envFrom:
             {{- include "tabularia.envFrom" $ | nindent 12 }}
@@ -151,10 +159,22 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if include "tabularia.oidcCa" $ }}
+            - name: oidc-ca
+              mountPath: /etc/tabularia/oidc-ca
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: {{ .cfg.tmpSizeLimit }}
+        {{- with include "tabularia.oidcCa" $ }}
+        {{- $ca := splitList "|" . }}
+        - name: oidc-ca
+          configMap:
+            name: {{ index $ca 0 }}
+            items: [{ key: {{ index $ca 1 | quote }}, path: ca.crt }]
+        {{- end }}
       {{- with .cfg.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

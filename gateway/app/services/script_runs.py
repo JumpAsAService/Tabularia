@@ -54,6 +54,9 @@ TABULARIA_VARIABLES = (
 )
 CODE_DIR = "/tabularia/code"
 LABEL_SCRIPT_RUN = "tabularia.io/script-run"
+# how long an editor's trial may stay PENDING: its process marks it STARTED within
+# seconds (a Container trial asks the registry for the digest first, 15 s at most)
+TRIAL_START_SECONDS = 300
 LABEL_ORCHESTRATION = "tabularia.io/run"
 # the most the run waits past the node's timeout before it gives up on the cluster
 GRACE_SECONDS = 180
@@ -204,6 +207,9 @@ async def _attempt(*, name: str, manifest: dict, code: Optional[dict[str, str]],
     started = asyncio.get_running_loop().time()
     deadline = started + timeout + GRACE_SECONDS
     pull_since: Optional[float] = None
+    from app.services.waits import waits
+
+    pauses = waits(poll_seconds)
     try:
         # owned by the Job: they go away with it. Its Pod waits for them to exist.
         owners = kube_jobs.owned_by(job)
@@ -216,7 +222,7 @@ async def _attempt(*, name: str, manifest: dict, code: Optional[dict[str, str]],
                 "apiVersion": "v1", "kind": "Secret", "type": "Opaque",
                 "metadata": {"name": secret_name, "labels": labels, "ownerReferences": owners}, "stringData": secret})
         while True:
-            await asyncio.sleep(poll_seconds)
+            await asyncio.sleep(next(pauses))
             if on_tick:
                 on_tick()
             current = await kube_jobs.get_job(ns, name)
@@ -275,8 +281,19 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
     if reason:
         raise ScriptFailed("scripting environments are off on this installation"
                            if reason == "kubernetes" else "scripting environments are not configured")
-    d = node.get("data") or {}
     label = script_nodes.label(node)
+    # a node by reference runs the saved script's current version, with its declared inputs
+    by_reference = script_nodes.saved_script_id(node) is not None
+    fingerprint = script_nodes.fingerprint(session, node)
+    node, saved = script_nodes.resolved(session, node)
+    if by_reference:
+        from app.services import saved_scripts
+
+        if saved is None:
+            raise ScriptFailed(f"script «{label}» runs a saved script that no longer exists")
+        if not saved_scripts.can_see(session, user, saved):
+            raise ScriptFailed(f"{user.email} cannot see the saved script that «{label}» runs")
+    d = node.get("data") or {}
     env = session.get(ScriptEnvironment, d.get("environmentId")) if isinstance(d.get("environmentId"), int) else None
     if env is None:
         raise ScriptFailed(f"script «{label}» has no scripting environment")
@@ -295,6 +312,11 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
         script_nodes.check_settings(node, env)
     except Exception as e:  # HTTPException from the checks: its detail is the message
         raise ScriptFailed(getattr(e, "detail", str(e))) from None
+    declared: list = []
+    if saved is not None:
+        from app.services import saved_script_runs, saved_scripts
+
+        declared = saved_script_runs.check_inputs(session, user, saved_scripts.content_of(session, saved))
 
     ns = namespace_for(trial_run is not None)
     has_input = script_input_edge(definition, node["id"]) is not None
@@ -312,12 +334,15 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
         "input": has_input, "output": has_output, "entrypoint": d.get("entrypoint"),
         "files": [f["path"] for f in script_nodes.files_of(node)], "attempts": 0, "exit_code": None,
         "variables": snapshot, "log": "", "trial": trial_run is not None,
-        "fingerprint": script_nodes.code_fingerprint(node),
+        "fingerprint": fingerprint,
         # the longest it can take, every attempt and wait included: past it, a run
         # still open was left behind by a process that died (close_if_orphaned)
         "budget_seconds": budget_seconds(d),
         "namespace": ns,
     }
+    if saved is not None:
+        info.update(saved_script_id=saved.id, script=saved.name, script_version=saved.current_version,
+                    inputs=[{"alias": a, "datasource_id": ds.id, "name": ds.name} for a, ds in declared])
     child = trial_run or Run(kind="script", flow_id=flow.id, task_id="", launched_by=user.id,
                              trigger_type=trigger_type, parent_run_id=parent_run_id, input_key="")
     child.status, child.engine, child.script = "STARTED", f"{env.name} v{version.number}", json.dumps(info)
@@ -334,7 +359,17 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
         session.commit()
 
     bucket_url = f"s3://{storage.bucket}"
+    written = [in_key, out_key]
     try:
+        input_env: dict[str, str] = {}
+        if saved is not None:
+            from app.services import saved_script_runs
+
+            input_env, described, keys = await saved_script_runs.prepare_inputs(session, declared, storage, prefix)
+            written += keys
+            input_env.update(TABULARIA_INPUTS=json.dumps(described, ensure_ascii=False),
+                             TABULARIA_SCRIPT_ID=str(saved.id), TABULARIA_SCRIPT_NAME=saved.name,
+                             TABULARIA_SCRIPT_VERSION=str(saved.current_version))
         if has_input:
             req = resolve_script_input(definition, node, resolve_ds, default_bucket, engine_mode, script_outputs)
             target = {"type": "s3", "connection": storage_payload(storage),
@@ -360,7 +395,7 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
             "TABULARIA_OUTPUT": f"{bucket_url}/{out_key}" if has_output else "",
             "TABULARIA_STEP_ID": step_id, "TABULARIA_RUN_ID": str(parent_run_id or child.id),
             "TABULARIA_FLOW_ID": str(flow.id), "TABULARIA_FLOW_NAME": flow.name, "TABULARIA_NODE_ID": str(node["id"]),
-            "HOME": "/tmp", "TMPDIR": "/tmp", **_storage_env(storage), **plain,
+            **input_env, "HOME": "/tmp", "TMPDIR": "/tmp", **_storage_env(storage), **plain,
         }
         secret = {"AWS_ACCESS_KEY_ID": storage.access_key,
                   "AWS_SECRET_ACCESS_KEY": decrypt_secret(storage.secret_key_enc), **secret_vars}
@@ -418,7 +453,7 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
     finally:
         try:
             await get_engine_client().post("/scripts/objects/delete", json={
-                "connection": storage_payload(storage), "keys": [in_key, out_key]})
+                "connection": storage_payload(storage), "keys": written})
         except Exception as e:  # noqa: BLE001 — the bucket's lifecycle rule removes them
             logger.warning("script: step %s not cleaned up (%s)", step_id, type(e).__name__)
 
@@ -452,9 +487,14 @@ async def close_if_orphaned(session: Session, run: Run) -> Run:
         except ValueError:
             budget = 0
         started = run.started_at.replace(tzinfo=timezone.utc) if run.started_at.tzinfo is None else run.started_at
-        if not budget or (_now() - started).total_seconds() < budget:
+        age = (_now() - started).total_seconds()
+        if run.status == "PENDING" and age >= TRIAL_START_SECONDS:
+            # its process took it and never got to say it started: it is gone
+            reason = "the trial never started: the process that took it stopped"
+        elif budget and age >= budget:
+            reason = "the trial outlived its time: the process running it stopped"
+        else:
             return run
-        reason = "the trial outlived its time: the process running it stopped"
     try:
         ns = json.loads(run.script or "{}").get("namespace")
     except ValueError:
@@ -482,32 +522,56 @@ async def close_if_orphaned(session: Session, run: Run) -> Run:
 STEP_KINDS = ("script", "container")
 
 
-def latest_outputs(session: Session, flow_id: int) -> dict[str, dict]:
-    """Per Script or Container node of the flow: its latest run (any outcome) and the
-    output of its latest successful one, which the editor previews the nodes after it
-    from."""
+def _runs_of_node(flow_id: int, node_id: str):
+    """The runs of one node of a flow, newest first. A node's run always writes its
+    `script` with `node_id` first (script_runs, container_runs, the trial's row), so the
+    column's beginning finds them without reading the logs of every other run."""
+    prefix = json.dumps({"node_id": node_id})[:-1] + ","
+    return (select(Run).where(Run.flow_id == flow_id, Run.kind.in_(STEP_KINDS),  # type: ignore[attr-defined]
+                              Run.script.startswith(prefix, autoescape=True))  # type: ignore[union-attr]
+            .order_by(Run.started_at.desc(), Run.id.desc()))
+
+
+def latest_outputs(session: Session, flow_id: int, node_ids: Optional[list[str]] = None) -> dict[str, dict]:
+    """Per Script or Container node of the flow (those of its saved definition, or
+    `node_ids`): its latest run (any outcome) and the output of its latest successful
+    one, which the editor previews the nodes after it from. Two rows per node at most."""
+    if node_ids is None:
+        from app.services import container_nodes
+
+        flow = session.get(Flow, flow_id)
+        definition = flow.definition if flow else None
+        node_ids = [n.get("id") for n in [*script_nodes.script_nodes(definition),
+                                          *container_nodes.container_nodes(definition)] if n.get("id")]
     out: dict[str, dict] = {}
-    rows = session.exec(select(Run).where(Run.flow_id == flow_id, Run.kind.in_(STEP_KINDS))  # type: ignore[attr-defined]
-                        .order_by(Run.started_at.desc()).limit(500)).all()
-    for run in rows:
-        try:
-            info = json.loads(run.script or "{}")
-        except ValueError:
+    for node_id in dict.fromkeys(node_ids):
+        last = session.exec(_runs_of_node(flow_id, node_id).limit(1)).first()
+        if last is None:
             continue
-        node_id = info.get("node_id")
-        if not node_id:
-            continue
-        entry = out.setdefault(node_id, {"last": None, "output": None})
-        if entry["last"] is None:
-            entry["last"] = {"run_id": run.id, "status": run.status, "trial": bool(info.get("trial")),
-                             "error": run.error, "started_at": run.started_at, "finished_at": run.finished_at,
-                             "attempts": info.get("attempts"), "exit_code": info.get("exit_code"),
-                             "log": info.get("log") or "", "fingerprint": info.get("fingerprint")}
-        if entry["output"] is None and run.status == "SUCCESS" and run.output_key:
-            entry["output"] = {"run_id": run.id, "bucket": run.output_bucket, "key": run.output_key,
-                               "rows": run.rows_written, "trial": bool(info.get("trial")),
-                               "finished_at": run.finished_at, "fingerprint": info.get("fingerprint")}
+        ok = last if last.status == "SUCCESS" and last.output_key else session.exec(
+            _runs_of_node(flow_id, node_id).where(Run.status == "SUCCESS", Run.output_key != "").limit(1)).first()
+        _add_to_latest(out, node_id, last)
+        if ok is not None and ok is not last:
+            _add_to_latest(out, node_id, ok)
     return out
+
+
+def _add_to_latest(out: dict[str, dict], node_id: str, run: Run) -> None:
+    try:
+        info = json.loads(run.script or "{}")
+    except ValueError:
+        return
+    entry = out.setdefault(node_id, {"last": None, "output": None})
+    if entry["last"] is None:
+        entry["last"] = {"run_id": run.id, "status": run.status, "trial": bool(info.get("trial")),
+                         "error": run.error, "started_at": run.started_at, "finished_at": run.finished_at,
+                         "attempts": info.get("attempts"), "exit_code": info.get("exit_code"),
+                         "log": info.get("log") or "", "log_expired": bool(info.get("log_expired")),
+                         "fingerprint": info.get("fingerprint")}
+    if entry["output"] is None and run.status == "SUCCESS" and run.output_key:
+        entry["output"] = {"run_id": run.id, "bucket": run.output_bucket, "key": run.output_key,
+                           "rows": run.rows_written, "trial": bool(info.get("trial")),
+                           "finished_at": run.finished_at, "fingerprint": info.get("fingerprint")}
 
 
 async def run_trial(run_id: int, user_id: int, node_id: str) -> None:
@@ -556,3 +620,14 @@ async def run_trial(run_id: int, user_id: int, node_id: str) -> None:
                 session.add(run)
                 session.commit()
             logger.info("trial %s ended with: %s", run_id, e)
+        except asyncio.CancelledError:
+            # the process is stopping (a rollout, a scale-down): the trial says so instead
+            # of staying open; its Job goes with the runner's own clean-up
+            session.rollback()
+            run = session.get(Run, run_id)
+            if run is not None and run.status not in TERMINAL_STATES:
+                run.status, run.finished_at = "FAILURE", _now()
+                run.error = "the gateway running the trial stopped: run it again"
+                session.add(run)
+                session.commit()
+            raise

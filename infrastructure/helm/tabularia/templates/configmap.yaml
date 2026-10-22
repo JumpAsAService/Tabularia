@@ -73,9 +73,23 @@ CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIn
 
 ORCHESTRATOR__REFRESH_WAIT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.refreshWaitSeconds) }}
 ORCHESTRATOR__POLL_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.pollIntervalSeconds) }}
+ORCHESTRATOR__LOG_RETENTION_DAYS: {{ include "tabularia.env" (.Values.orchestrator.logRetentionDays) }}
+ORCHESTRATOR__CONTRACT_RESULTS_KEPT: {{ include "tabularia.env" (.Values.orchestrator.contractResultsKept) }}
+ORCHESTRATOR__VERSIONS_KEPT: {{ include "tabularia.env" (.Values.orchestrator.versionsKept) }}
+ORCHESTRATOR__AI_CHAT_RETENTION_DAYS: {{ include "tabularia.env" (.Values.orchestrator.aiChatRetentionDays) }}
 ORCHESTRATOR__MAX_CONCURRENT: {{ include "tabularia.env" (.Values.orchestrator.maxConcurrent) }}
 ORCHESTRATOR__DEAD_AFTER_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.deadAfterSeconds) }}
 ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.orchestrator.queueTimeoutSeconds) }}
+
+# The database's backups (the orchestrator makes them, the engine stores them)
+BACKUP__ENABLED: {{ include "tabularia.env" (.Values.backup.enabled) }}
+BACKUP__SCHEDULE: {{ .Values.backup.schedule | quote }}
+BACKUP__KEEP: {{ include "tabularia.env" (.Values.backup.keep) }}
+BACKUP__BUCKET: {{ .Values.backup.bucket | quote }}
+BACKUP__PREFIX: {{ .Values.backup.prefix | quote }}
+BACKUP__ENDPOINT: {{ .Values.backup.endpoint | quote }}
+BACKUP__REGION: {{ .Values.backup.region | quote }}
+BACKUP__TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.backup.timeoutSeconds) }}
 OPENLINEAGE__URL: {{ include "tabularia.env" (.Values.openlineage.url) }}
 OPENLINEAGE__NAMESPACE: {{ include "tabularia.env" (.Values.openlineage.namespace) }}
 OPENLINEAGE__FILE: {{ include "tabularia.env" (.Values.openlineage.file) }}
@@ -99,6 +113,11 @@ OIDC__AUTHORITATIVE: {{ include "tabularia.env" (.Values.oidc.authoritative) }}
 OIDC__SUPERUSER_GROUP: {{ include "tabularia.env" (.Values.oidc.superuserGroup) }}
 OIDC__POST_LOGIN_URL: {{ include "tabularia.env" (.Values.oidc.postLoginUrl) }}
 OIDC__BUTTON_LABEL: {{ include "tabularia.env" (.Values.oidc.buttonLabel) }}
+OIDC__VERIFY_TLS: {{ include "tabularia.env" (.Values.oidc.verifyTls) }}
+{{- if include "tabularia.oidcCa" . }}
+# the company's certificate authority, mounted by templates/gateway.yaml
+OIDC__CA_FILE: "/etc/tabularia/oidc-ca/ca.crt"
+{{- end }}
 {{- end }}
 
 # Administration → Container registries (containers.enabled)

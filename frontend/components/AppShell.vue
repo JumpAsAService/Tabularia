@@ -4,6 +4,8 @@ import SessionsDialog from '~/components/ui/SessionsDialog.vue'
 import ApiTokensDialog from '~/components/ui/ApiTokensDialog.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { useAppInfo } from '~/composables/useAppInfo'
+import { useScriptingEditor } from '~/composables/useScripting'
+import { useRegistriesEditor } from '~/composables/useRegistries'
 // Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
 // wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
 import { computed, onMounted, ref, nextTick } from 'vue'
@@ -28,6 +30,8 @@ import {
   MonitorSmartphone,
   KeyRound,
   LockKeyhole,
+  Terminal,
+  Server,
 } from 'lucide-vue-next'
 
 // fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
@@ -84,6 +88,12 @@ const tokensOpen = ref(false)
 const passwordOpen = ref(false)
 const canChangePassword = computed(() => !!user.value && !(user.value.is_observer && !user.value.is_superuser))
 
+// the Scripting tab (pages/scripting.vue): shown when there is something to show in it
+const scriptingEditor = useScriptingEditor()
+const registriesEditor = useRegistriesEditor()
+onMounted(() => { scriptingEditor.load(); registriesEditor.load() })
+const scriptingTab = computed(() => scriptingEditor.available.value || registriesEditor.available.value)
+
 const links = computed(() => [
   { to: '/', label: t('nav.explore'), icon: FolderTree },
   { to: '/flows', label: t('nav.flows'), icon: Workflow },
@@ -92,6 +102,8 @@ const links = computed(() => [
   { to: '/viewer', label: t('nav.viewer'), icon: PieChart },
   { to: '/chat', label: t('nav.assistant'), icon: Sparkles },
   { to: '/connections', label: t('nav.connections'), icon: Plug },
+  // only to whoever may use a scripting environment or a container registry
+  ...(scriptingTab.value ? [{ to: '/scripting', label: t('nav.scripting'), icon: Terminal }] : []),
   { to: '/runs', label: t('nav.runs'), icon: History },
 ])
 
@@ -104,6 +116,7 @@ const adminLinks = computed(() => [
   { to: '/queue', label: t('nav.queue'), icon: Cpu },
   { to: '/monitoring', label: t('nav.monitoring'), icon: Activity },
   { to: '/performance', label: t('nav.performance'), icon: Gauge },
+  { to: '/cluster', label: t('nav.cluster'), icon: Server },
   { to: '/audit', label: t('nav.audit'), icon: ScrollText },
 ])
 const adminOpen = ref(false)

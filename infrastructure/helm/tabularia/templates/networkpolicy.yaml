@@ -121,12 +121,8 @@ spec:
     {{- $cidr = required "networkPolicy.egressCIDRs: an entry given as a map needs `cidr`" .cidr }}
     {{- $except = .except | default list }}
     {{- end }}
-    {{- if contains ":" $cidr }}
-    {{- if or (eq $cidr "::/0") (hasPrefix "fd00:" $cidr) }}
-    {{- $except = append $except "fd00:ec2::254/128" }}
-    {{- end }}
-    {{- else if or (eq $cidr "0.0.0.0/0") (hasPrefix "169.254." $cidr) }}
-    {{- $except = append $except "169.254.169.254/32" }}
+    {{- if include "tabularia.coversMetadata" $cidr }}
+    {{- $except = append $except (ternary "fd00:ec2::254/128" "169.254.169.254/32" (contains ":" $cidr)) }}
     {{- end }}
     - to:
         - ipBlock:

@@ -3,6 +3,7 @@
 export default {
   nav: {
     performance: "Performance",
+    cluster: 'Cluster',
     explore: 'Explore',
     flows: 'Flows',
     datasources: 'Datasources',
@@ -10,6 +11,7 @@ export default {
     viewer: 'Viewer',
     assistant: 'Assistant',
     connections: 'Connections',
+    scripting: 'Scripting',
     runs: 'Runs',
     queue: 'Queue',
     monitoring: 'Monitoring',
@@ -259,6 +261,16 @@ export default {
     signInWithSso: 'Sign in with SSO',
     ssoCompleting: 'Completing sign-in…',
     ssoError: 'Single sign-on failed ({code}). Try again or sign in with your email.',
+    // what to do, for the sign-in errors a person can act on (the code stays visible)
+    ssoHint: {
+      tx_missing: "The sign-in came back to a different address from the one it started at: open Tabularia at the address your administrator gave you, then try again.",
+      tx_expired: "The sign-in took too long, or the servers' clocks disagree. Try again; if it happens again, tell your administrator.",
+      state_mismatch: "This sign-in was replaced by another one started meanwhile. Try again from this page.",
+      token_invalid: "The identity provider's answer could not be checked. Tell your administrator: the provider's settings or the servers' clocks need a look.",
+      code_rejected: "The identity provider refused to complete the sign-in. Tell your administrator: the client secret or the redirect address needs a look.",
+      idp_denied: "The identity provider did not let you in. If you should have access, ask your administrator.",
+      idp_untrusted: "Tabularia's server does not trust the identity provider's certificate. Tell your administrator: the company's certificate authority has to be given to Tabularia.",
+    },
     signedOutIdle: 'You were signed out because the page was left unused. Sign in again to continue.',
     setupTitle: 'Create the administrator',
     setupLead: 'A new installation: choose the email and password of the first administrator. You will sign in with them.',

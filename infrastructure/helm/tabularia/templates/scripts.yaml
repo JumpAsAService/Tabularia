@@ -9,9 +9,10 @@ apart from the release's:
 - the build namespace, where rootless BuildKit builds the images. It needs its own
   user namespace (seccomp and AppArmor Unconfined), which only `privileged` allows;
   its pods still run as a user, without privileges.
-The gateway's service account may run Jobs, read their Pods and logs there and,
-in the scripts namespace, create the ConfigMap and the Secret a Script node's Job
-mounts (its code, its variables); nothing else.
+The gateway's and the orchestrator's service accounts may run Jobs, read their Pods
+and logs there and, in the scripts namespaces, create the ConfigMap and the Secret a
+Script node's Job mounts (its code, its variables); nothing else. In the build
+namespace only the orchestrator's creates Jobs (it runs the builds).
 */}}
 {{- $full := include "tabularia.fullname" . }}
 {{- $spaces := dict "scripts" (include "tabularia.scriptsNamespace" .) "trials" (include "tabularia.scriptTrialsNamespace" .) "builds" (include "tabularia.scriptBuildsNamespace" .) }}
@@ -65,7 +66,8 @@ metadata:
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
-    verbs: ["create", "get", "list", "delete", "deletecollection"]
+    # in the builds' namespace only the orchestrator creates (the Role below)
+    verbs: {{ ternary (list "get" "list" "delete" "deletecollection") (list "create" "get" "list" "delete" "deletecollection") (eq $kind "builds") | toJson }}
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
@@ -76,6 +78,10 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list"]
+  # Administration → Cluster: CPU and memory of the pods, with metrics-server
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
   {{- if ne $kind "builds" }}
   # a Script node's code and its environment's secret variables, owned by its Job
   - apiGroups: [""]
@@ -95,8 +101,38 @@ roleRef:
   kind: Role
   name: {{ $full }}-scripts
 subjects:
+  {{- include "tabularia.kubeApiSubjects" $ | nindent 2 }}
+{{- if eq $kind "builds" }}
+---
+# a build's Job runs where Pod Security allows anything: only the orchestrator, which
+# runs the builds, may create one; the gateway, which answers the internet, may not
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-script-builds
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-script-builds
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-script-builds
+subjects:
   - kind: ServiceAccount
-    name: {{ $full }}-scaler
+    name: {{ $full }}-orchestrator
     namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
 {{- end }}

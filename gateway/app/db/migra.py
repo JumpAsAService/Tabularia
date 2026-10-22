@@ -104,11 +104,11 @@ def migra(eng=None, verifica: bool = True) -> dict:
             diff = differenze(conn)
             if diff:
                 raise RuntimeError(
-                    "dopo la migrazione lo schema del database non è quello dei modelli (manca una revisione, "
-                    f"o il database è stato toccato a mano): {diff[:8]}"
+                    "after the migration the database schema differs from the models (a revision is missing, "
+                    f"or the database was changed by hand): {diff[:8]}"
                 )
     if prima != dopo or adottato:
-        logger.info("schema del database: %s → %s%s", prima or "nessuna revisione", dopo, " (adottato da prima di Alembic)" if adottato else "")
+        logger.info("database schema: %s → %s%s", prima or "no revision", dopo, " (adopted from before Alembic)" if adottato else "")
     return {"prima": prima, "dopo": dopo, "adottato": adottato}
 
 
@@ -129,13 +129,13 @@ def controlla_revisione(eng=None) -> str | None:
         return rev
     conosciute = {r.revision for r in _script().walk_revisions()}
     if rev is not None and rev not in conosciute:
-        logger.warning("il database è alla revisione %s, più nuova di quella di questo gateway (%s): "
-                       "va bene durante un rolling update", rev, voluta)
+        logger.warning("the database is at revision %s, newer than this gateway's (%s): "
+                       "fine during a rolling update", rev, voluta)
         return rev
     raise DatabaseIndietro(
-        f"il database è alla revisione {rev or 'nessuna (vuoto, o di prima di Alembic)'} ma questa versione del gateway "
-        f"vuole la {voluta}: lancia prima il passo delle migrazioni (`python -m app.db.migra`), "
-        "oppure, in sviluppo, DB__AUTO_MIGRATE=true"
+        f"the database is at revision {rev or 'none (empty, or from before Alembic)'} but this version of the gateway "
+        f"needs {voluta}: run the migration step first (`python -m app.db.migra`), "
+        "or, in development, DB__AUTO_MIGRATE=true"
     )
 
 
@@ -174,19 +174,19 @@ def _principale(argomenti: list[str]) -> int:
     if azione == "migra":
         with lucchetto_di_avvio():
             esito = migra()
-        print(f"database alla revisione {esito['dopo']}" + (f" (era {esito['prima'] or 'senza revisione'})" if esito["prima"] != esito["dopo"] else "")
-              + (", adottato da prima di Alembic" if esito["adottato"] else ""))
+        print(f"database at revision {esito['dopo']}" + (f" (was {esito['prima'] or 'without a revision'})" if esito["prima"] != esito["dopo"] else "")
+              + (", adopted from before Alembic" if esito["adottato"] else ""))
         return 0
     if azione == "stato":
         with engine.connect() as conn:
-            print(f"database: {revisione(conn) or 'nessuna revisione'} · codice: {testa()}")
+            print(f"database: {revisione(conn) or 'no revision'} · code: {testa()}")
         return 0
     if azione == "controlla":
         with engine.connect() as conn:
             diff = differenze(conn)
         for d in diff:
             print(d)
-        print("schema uguale ai modelli" if not diff else f"{len(diff)} differenze")
+        print("schema equal to the models" if not diff else f"{len(diff)} differences")
         return 1 if diff else 0
     if azione == "nuova" and len(argomenti) > 1:
         print(nuova_revisione(argomenti[1]))

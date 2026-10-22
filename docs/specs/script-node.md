@@ -258,9 +258,15 @@ page shows it. While the Job runs, the run page can tail the log through the gat
 **Network.** **(owner)** Scripts may call external services: egress is open. It is
 part of the product to leave that responsibility to the users and the administrators
 who define the environments. The chart keeps one fixed NetworkPolicy, on by default
-(`scripts.blockTabularia`), that denies the scripts namespace any traffic to
-Tabularia's own namespace. Its database, Valkey, storage and internal APIs are never
-reachable from a script, whatever the script does.
+(`scripts.blockTabularia`, templates/user-code-networkpolicy.yaml — written after
+the audit of 2026-10-22 found it missing), that denies the scripts namespace any
+traffic to the pods of Tabularia's own namespace, to the cloud metadata addresses and
+to the private ranges outside the cluster not listed in
+`networkPolicy.userCodePrivateCIDRs`. Tabularia's database, Valkey and storage are out
+of a script's reach when they are in the release's namespace or on an unlisted private
+address; in another namespace of the cluster they need a policy of their own (the
+guides' `infrastructure/minikube/dependencies.yaml` has one). The policy needs a
+network plugin that enforces egress rules (Calico, Cilium; kind's kindnet does not).
 
 ## The scripts bucket
 

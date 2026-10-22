@@ -64,3 +64,20 @@ metadata: { name: valkey, namespace: tabularia-deps }
 spec:
   selector: { app: valkey }
   ports: [{ port: 6379 }]
+---
+# Only Tabularia's namespace reaches the database and the queue. The chart keeps the
+# scripts and the Container nodes away from Tabularia's own namespace, but these two
+# live in another one, which the scripts may reach (for the scripts bucket, when it is
+# a MinIO here): without this policy, a script could write tasks into the workers'
+# queue. Enforced where the network plugin applies policies (kind); minikube's default
+# one ignores it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: only-tabularia, namespace: tabularia-deps }
+spec:
+  podSelector:
+    matchExpressions: [{ key: app, operator: In, values: [postgres, valkey] }]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: tabularia } }

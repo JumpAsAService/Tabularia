@@ -109,10 +109,21 @@ class FakeScriptsBucket(FakeS3):
         with open(Filename, "wb") as f:
             f.write(self.objects[Key])
 
+    def upload_file(self, Filename, Bucket, Key):
+        self.calls.append("PutObject")
+        self.objects[Key] = open(Filename, "rb").read()
+
 
 class FakeStorage:
-    def __init__(self):
+    def __init__(self, objects: dict | None = None):
         self.uploads: list[tuple[str, str, bytes]] = []
+        self.objects = objects or {}
+
+    def download_file(self, bucket, key, path):
+        if (bucket, key) not in self.objects:
+            raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
+        with open(path, "wb") as f:
+            f.write(self.objects[(bucket, key)])
 
     def upload_file(self, path, bucket, key):
         self.uploads.append((bucket, key, open(path, "rb").read()))
@@ -139,7 +150,8 @@ def test_a_scripts_output_is_copied_into_tabularias_storage(s3, monkeypatch):
     storage = FakeStorage()
     monkeypatch.setattr("app.utils.get_storage_service", lambda: storage)
     out = _import("env-1/step/output.parquet")
-    assert out == {"found": True, "rows": 3, "bytes": len(fake.objects["env-1/step/output.parquet"])}
+    assert out == {"found": True, "rows": 3, "bytes": len(fake.objects["env-1/step/output.parquet"]),
+                   "columns": [{"name": "x", "dtype": "Int64"}]}
     assert storage.uploads[0][:2] == ("data-prep", "out/abc.parquet")
 
 
@@ -164,3 +176,28 @@ def test_the_steps_files_are_deleted_by_key(s3):
                                                                                    "env-1/s/output.parquet"]))
     assert out == {"deleted": 2, "failed": []} and list(fake.objects) == ["env-1/other/input.parquet"]
     assert "ListObjectsV2" not in fake.calls
+
+
+def _export(key: str):
+    spec = S3ConnectionSpec(endpoint_url="http://minio:9000", access_key="scripts", bucket="scripts",
+                            secret_key_encrypted=encrypt_secret(SECRET))
+    return routes.input_export(routes.InputExportRequest(connection=spec, bucket="data-prep", key=key,
+                                                         target_key="script-1/step/in-SALES.parquet"))
+
+
+def test_a_declared_input_is_copied_to_the_scripts_bucket(s3, monkeypatch):
+    fake = s3(FakeScriptsBucket())
+    data = _parquet()
+    monkeypatch.setattr("app.utils.get_storage_service", lambda: FakeStorage({("data-prep", "datasets/7/v2.parquet"): data}))
+    assert _export("datasets/7/v2.parquet") == {"bytes": len(data)}
+    assert fake.objects == {"script-1/step/in-SALES.parquet": data}
+
+
+def test_an_input_whose_file_is_gone_is_a_404(s3, monkeypatch):
+    fake = s3(FakeScriptsBucket())
+    monkeypatch.setattr("app.utils.get_storage_service", lambda: FakeStorage())
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as e:
+        _export("datasets/7/old.parquet")
+    assert e.value.status_code == 404 and fake.objects == {}

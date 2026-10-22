@@ -67,15 +67,17 @@ const storageChanges = computed(() => {
 })
 const storageDirty = computed(() => Object.keys(storageChanges.value).length > 0)
 
-async function saveStorage() {
+async function saveStorage(): Promise<boolean> {
   savingStorage.value = true
   try {
     const s = await api.saveStorage(storageChanges.value)
     if (state.value) state.value.storage = s
     fillStorage()
     toast.success(t('scripting.storageSaved'))
+    return true
   } catch (e) {
     toast.error(errMessage(e))
+    return false
   } finally {
     savingStorage.value = false
   }
@@ -85,7 +87,8 @@ async function testStorage() {
   testing.value = true
   test.value = null
   try {
-    if (storageDirty.value) await saveStorage()
+    // a save refused: the test would answer for the settings saved before, not these
+    if (storageDirty.value && !(await saveStorage())) return
     test.value = await api.testStorage()
   } catch (e) {
     test.value = { ok: false, message: errMessage(e), can_list: null }
@@ -229,7 +232,13 @@ async function removeEnvironment() {
     back()
   } catch (err: any) {
     const detail = err?.data?.detail
-    toast.error(detail?.code === 'in_use' ? t('scripting.inUse', { flows: detail.flows.join(', ') }) : errMessage(err))
+    if (detail?.code === 'in_use') {
+      // flows with Script nodes of it, or saved scripts of it
+      toast.error(detail.flows?.length ? t('scripting.inUse', { flows: detail.flows.join(', ') })
+        : t('scripting.inUseByScripts', { scripts: (detail.scripts ?? []).join(', ') }))
+    } else {
+      toast.error(errMessage(err))
+    }
   }
 }
 

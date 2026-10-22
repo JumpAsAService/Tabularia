@@ -205,7 +205,11 @@ class OidcSettings(BaseModel):
     redirect_uri: str = ""
     # env: OIDC__SCOPES — separati da spazio
     scopes: str = "openid profile email"
-    # env: OIDC__GROUPS_CLAIM — 'groups' (Keycloak) o 'roles' (app role di Entra)
+    # env: OIDC__GROUPS_CLAIM — where the groups are: 'groups' (Keycloak's group mapper),
+    # 'roles' (Entra ID app roles), or a path into the token: 'realm_access.roles',
+    # 'resource_access.<client>.roles' (Keycloak's realm and client roles); several,
+    # comma-separated, are joined. A path missing from the id_token is looked up in the
+    # access token, then in userinfo (services/sso.py `more_group_claims`)
     groups_claim: str = "groups"
     # env: OIDC__GROUP_ALLOWLIST — nomi separati da virgola; vuoto = tutti
     group_allowlist: str = ""
@@ -234,6 +238,14 @@ class OidcSettings(BaseModel):
     discovery_ttl_seconds: int = 3600
     # env: OIDC__TIMEOUT_SECONDS — timeout delle chiamate all'IdP
     timeout_seconds: float = 10.0
+    # env: OIDC__CA_FILE — a PEM file of the certificate authorities to trust for the
+    # identity provider, besides the public ones: a company Keycloak whose certificate
+    # its own authority signed. Empty = the public ones only (the chart's oidc.caCert)
+    ca_file: str = ""
+    # env: OIDC__VERIFY_TLS — false accepts the identity provider's certificate even when no
+    # trusted authority signed it. Whoever can stand between the gateway and the provider
+    # can then sign in as anyone: prefer OIDC__CA_FILE. Logged at every start
+    verify_tls: bool = True
     # env: OIDC__LOGIN_TX_TTL_SECONDS — validità della transazione di login
     # (cookie con state/nonce/PKCE): quanto può durare la schermata dell'IdP
     login_tx_ttl_seconds: int = 600
@@ -525,6 +537,35 @@ class SchedulingSettings(BaseModel):
     worker_capacity: int = 2
 
 
+class BackupSettings(BaseModel):
+    """The automatic backup of this database (services/db_backup.py): the orchestrators run
+    `pg_dump` on a schedule and the engine stores the file in the object storage
+    (BACKUP__BUCKET / BACKUP__PREFIX, read by the engine: by default Tabularia's bucket,
+    under backups/postgres/). The three values below are the installation's defaults;
+    Administration → Backups changes them without a restart."""
+    # env: BACKUP__ENABLED
+    enabled: bool = True
+    # env: BACKUP__SCHEDULE — five-field cron, in APP__TIMEZONE (03:00 every night)
+    schedule: str = "0 3 * * *"
+    # env: BACKUP__KEEP — how many backups stay; the oldest beyond go
+    keep: int = Field(default=14, ge=1, le=1000)
+    # env: BACKUP__PG_DUMP — the pg_dump used when the image has none of the server's own
+    # version (the gateway image has 14 to 18; this one, 18's, reads older servers too)
+    pg_dump: str = "pg_dump"
+    # env: BACKUP__TIMEOUT_SECONDS — the longest a dump and its upload may take
+    timeout_seconds: int = Field(default=3600, ge=60)
+
+    @field_validator("schedule")
+    @classmethod
+    def _schedule(cls, v: str) -> str:
+        from croniter import croniter
+
+        v = (v or "").strip()
+        if not croniter.is_valid(v):
+            raise ValueError(f"Invalid BACKUP__SCHEDULE: '{v}' (format: 'minute hour day month day-of-week', e.g. '0 3 * * *')")
+        return v
+
+
 class OrchestratorSettings(BaseModel):
     """Attese massime di un flusso sui nodi che devono COMPLETARSI prima dei passi
     a valle (così l'ordine è reale, non cosmetico). Oltre il tetto il flusso aborta
@@ -532,6 +573,19 @@ class OrchestratorSettings(BaseModel):
     lunghi (tabelle enormi o rete lenta)."""
     # env: ORCHESTRATOR__REFRESH_WAIT_SECONDS — tetto d'attesa di un nodo Refresh
     refresh_wait_seconds: int = 600
+    # env: ORCHESTRATOR__LOG_RETENTION_DAYS — after how many days a run's logs (a Script or
+    # Container node's output, the engine's traceback) are emptied; 0 keeps them for ever
+    # (services/run_log_retention.py)
+    log_retention_days: int = Field(default=30, ge=0)
+    # env: ORCHESTRATOR__CONTRACT_RESULTS_KEPT — the latest data contract reports kept per
+    # datasource; 0 keeps them all (services/housekeeping.py)
+    contract_results_kept: int = Field(default=100, ge=0)
+    # env: ORCHESTRATOR__VERSIONS_KEPT — the latest versions kept per flow and per saved
+    # script, the one in use always; 0 keeps them all
+    versions_kept: int = Field(default=50, ge=0)
+    # env: ORCHESTRATOR__AI_CHAT_RETENTION_DAYS — the assistant's conversations untouched for
+    # this long are deleted (not the spending ledger); 0 keeps them
+    ai_chat_retention_days: int = Field(default=90, ge=0)
     # An Output node has no wait cap of its own: the flow waits until it ends, and
     # its life is bounded by ENGINE__RUN_STALE_TIMEOUT_SECONDS (see orchestrator._wait_run).
     # env: ORCHESTRATOR__POLL_INTERVAL_SECONDS — cadenza di polling durante l'attesa
@@ -578,6 +632,9 @@ class KubernetesSettings(BaseModel):
     of it with `adminScaling.enabled`, together with a service account that may read
     the two worker Deployments and change their autoscalers, and nothing else."""
     scaling: bool = False
+    # env: KUBERNETES__CLUSTER_VIEW — Administration → Cluster reads the pods, the events and
+    # their metrics in Tabularia's namespaces (services/cluster_view.py; the chart's clusterView)
+    cluster_view: bool = False
     api_url: str = "https://kubernetes.default.svc"
     namespace: str = ""  # empty = the pod's own, from its service account
     token_file: str = "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -723,6 +780,7 @@ class Settings(BaseSettings):
     ai: AiSettings = Field(default_factory=AiSettings)
     scheduling: SchedulingSettings = Field(default_factory=SchedulingSettings)
     orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
+    backup: BackupSettings = Field(default_factory=BackupSettings)
     db: DbSettings = Field(default_factory=DbSettings)
     jwt: JwtSettings = Field(default_factory=JwtSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
@@ -792,6 +850,19 @@ class Settings(BaseSettings):
             )
         if "openid" not in cfg.scope_list:
             raise RuntimeError("OIDC__SCOPES must include 'openid' (OIDC requires it)")
+        if not cfg.verify_tls:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "SSO: the identity provider's certificate is NOT checked (OIDC__VERIFY_TLS=false): whoever stands "
+                "between the gateway and %s can sign in as anyone. Prefer OIDC__CA_FILE", cfg.issuer)
+        if cfg.ca_file:
+            import ssl
+
+            try:
+                ssl.create_default_context().load_verify_locations(cafile=cfg.ca_file)
+            except (OSError, ssl.SSLError) as e:
+                raise RuntimeError(f"OIDC__CA_FILE {cfg.ca_file} is not a readable PEM file of certificates: {e}") from e
 
     def check_production_safety(self) -> None:
         """Rifiuta di partire in produzione con i default di sviluppo.

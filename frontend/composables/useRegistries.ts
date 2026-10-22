@@ -106,6 +106,22 @@ export interface EditorRegistry {
   variables: { name: string; secret: boolean; value: string | null }[] // set by the administrators
 }
 
+/** What an image does when nothing overrides it, read from its registry. */
+export interface ImageConfig {
+  repository: string
+  reference: string
+  digest: string | null
+  platforms: string[]
+  created: string | null
+  entrypoint: string[]
+  cmd: string[]
+  env: { name: string; value: string }[]
+  labels: Record<string, string>
+  working_dir: string | null
+  user: string | null
+  size: number | null
+}
+
 export interface EditorRegistries {
   disabled_reason: 'kubernetes' | null
   registries: EditorRegistry[]
@@ -130,8 +146,10 @@ export function useRegistriesEditor() {
   }
   const tags = (id: number, repository: string) =>
     apiFetch<{ repository: string; tags: string[] }>(`/registries/${id}/tags`, { query: { repository } })
+  const image = (id: number, repository: string, reference: string) =>
+    apiFetch<ImageConfig>(`/registries/${id}/image`, { query: { repository, reference: reference || 'latest' } })
   // the palette offers the Container node when there is a registry to take images from
   const available = computed(() => !!editorState.value && !editorState.value.disabled_reason
     && editorState.value.registries.length > 0)
-  return { state: editorState, load, tags, available }
+  return { state: editorState, load, tags, image, available }
 }

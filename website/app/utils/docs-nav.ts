@@ -21,6 +21,7 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
     items: [
       ['/docs/deploy/kubernetes', 'Kubernetes and Helm'],
       ['/docs/deploy/kind', 'A company-like cluster on one computer (kind)'],
+      ['/docs/deploy/upgrading', 'Upgrading, backups and restore'],
       ['/docs/deploy/release-checklist', 'Install and upgrade checklist'],
       ['/docs/configuration', 'Configuration reference'],
       ['/docs/engine-settings', 'Engine settings'],
@@ -54,8 +55,9 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
   {
     title: 'Security & governance',
     items: [
+      ['/docs/sso-keycloak', 'Single sign-on with Keycloak'],
       ['/docs/design/sso-group-mapping', 'SSO and group mapping'],
-      ['/docs/examples/keycloak', 'Keycloak example'],
+      ['/docs/examples/keycloak', 'Keycloak example on a laptop'],
       ['/docs/siem-splunk', 'Audit log to Splunk'],
       ['/docs/scripting', 'Python and R in flows'],
       ['/docs/container-node', 'The Container node'],

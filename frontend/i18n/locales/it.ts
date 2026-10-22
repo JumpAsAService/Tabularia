@@ -2,6 +2,7 @@
 export default {
   nav: {
     performance: "Prestazioni",
+    cluster: 'Cluster',
     explore: 'Esplora',
     flows: 'Flussi',
     datasources: 'Datasource',
@@ -9,6 +10,7 @@ export default {
     viewer: 'Viewer',
     assistant: 'Assistente',
     connections: 'Connessioni',
+    scripting: 'Scripting',
     runs: 'Esecuzioni',
     queue: 'Coda',
     monitoring: 'Monitoraggio',
@@ -258,6 +260,16 @@ export default {
     signInWithSso: 'Accedi con SSO',
     ssoCompleting: 'Accesso in corso…',
     ssoError: 'Accesso SSO non riuscito ({code}). Riprova o entra con email e password.',
+    // what to do, for the sign-in errors a person can act on (the code stays visible)
+    ssoHint: {
+      tx_missing: "L'accesso è tornato a un indirizzo diverso da quello da cui era partito: apri Tabularia all'indirizzo che ti ha dato l'amministratore e riprova.",
+      tx_expired: "L'accesso ha richiesto troppo tempo, oppure gli orologi dei server non vanno d'accordo. Riprova; se succede ancora, avvisa l'amministratore.",
+      state_mismatch: "Questo accesso è stato sostituito da un altro avviato nel frattempo. Riprova da questa pagina.",
+      token_invalid: "Non è stato possibile verificare la risposta del provider di identità. Avvisa l'amministratore: vanno controllate le impostazioni del provider o gli orologi dei server.",
+      code_rejected: "Il provider di identità ha rifiutato di completare l'accesso. Avvisa l'amministratore: vanno controllati il client secret o l'indirizzo di ritorno.",
+      idp_denied: "Il provider di identità non ti ha fatto entrare. Se dovresti avere accesso, chiedi all'amministratore.",
+      idp_untrusted: "Il server di Tabularia non si fida del certificato del provider di identità. Avvisa l'amministratore: va data a Tabularia l'autorità di certificazione aziendale.",
+    },
     signedOutIdle: 'La sessione è stata chiusa per inattività. Rientra per continuare.',
     setupTitle: "Crea l'amministratore",
     setupLead: "Una nuova installazione: scegli l'email e la password del primo amministratore. Entrerai con queste.",

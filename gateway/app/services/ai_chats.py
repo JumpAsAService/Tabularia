@@ -21,6 +21,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, func, select
 
 from app.models import AiChat, AiChatTurn, AiSpend, User
+from app.models.ai_chat import _now
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,9 @@ def apri(session: Session, user: User, chat_id: int, model_id: str, engine: Opti
     if (chat.kind or "assistant") != kind:
         raise HTTPException(status_code=404, detail="Conversation not found")
     chat.model_id, chat.engine = model_id, engine
+    # in use again: the housekeeping (ORCHESTRATOR__AI_CHAT_RETENTION_DAYS) must not take
+    # it away while the answer is being written, and the answer's cost with it
+    chat.updated_at = _now()
     session.add(chat)
     session.commit()
     session.refresh(chat)
@@ -127,8 +131,6 @@ def salva_turno(
     ))
     chat = session.get(AiChat, chat_id)
     if chat is not None:
-        from app.models.ai_chat import _now
-
         chat.updated_at = _now()
         if not chat.title or chat.title == _OLD_DEFAULT_TITLE:
             chat.title = _titolo(domanda)

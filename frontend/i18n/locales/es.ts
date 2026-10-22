@@ -2,6 +2,7 @@
 export default {
   nav: {
     performance: "Rendimiento",
+    cluster: 'Clúster',
     explore: 'Explorar',
     flows: 'Flujos',
     datasources: 'Fuentes de datos',
@@ -9,6 +10,7 @@ export default {
     viewer: 'Visor',
     assistant: 'Asistente',
     connections: 'Conexiones',
+    scripting: 'Scripts',
     runs: 'Ejecuciones',
     queue: 'Cola',
     monitoring: 'Monitorización',
@@ -258,6 +260,16 @@ export default {
     signInWithSso: 'Entrar con SSO',
     ssoCompleting: 'Completando el acceso…',
     ssoError: 'Error de acceso SSO ({code}). Inténtalo de nuevo o entra con tu correo.',
+    // what to do, for the sign-in errors a person can act on (the code stays visible)
+    ssoHint: {
+      tx_missing: "El acceso volvió a una dirección distinta de la de partida: abre Tabularia en la dirección que te dio tu administrador y vuelve a intentarlo.",
+      tx_expired: "El acceso tardó demasiado, o los relojes de los servidores no coinciden. Vuelve a intentarlo; si se repite, avisa a tu administrador.",
+      state_mismatch: "Este acceso fue sustituido por otro iniciado mientras tanto. Vuelve a intentarlo desde esta página.",
+      token_invalid: "No se pudo verificar la respuesta del proveedor de identidad. Avisa a tu administrador: hay que revisar los ajustes del proveedor o los relojes de los servidores.",
+      code_rejected: "El proveedor de identidad se negó a completar el acceso. Avisa a tu administrador: hay que revisar el secreto del cliente o la dirección de retorno.",
+      idp_denied: "El proveedor de identidad no te dejó entrar. Si deberías tener acceso, pregunta a tu administrador.",
+      idp_untrusted: "El servidor de Tabularia no confía en el certificado del proveedor de identidad. Avisa a tu administrador: hay que dar a Tabularia la autoridad de certificación de la empresa.",
+    },
     signedOutIdle: 'La sesión se cerró por inactividad. Vuelve a entrar para continuar.',
     setupTitle: 'Crear el administrador',
     setupLead: 'Una instalación nueva: elija el correo y la contraseña del primer administrador. Entrará con ellos.',

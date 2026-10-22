@@ -3,11 +3,14 @@
 // those an administrator granted), the command and arguments, the variables, CPU and
 // memory, and the «Run» of the saved flow. Input and output come from its edges, as on
 // the Script node: through the scripts bucket, as TABULARIA_INPUT and TABULARIA_OUTPUT.
+// The image's own configuration, read from the registry, guides the rest: what it runs
+// by default, the variables it declares, its platforms and labels. In a flow group
+// (`inGroup`) the same panel sets a Container cell: no edges, no «Run» of a flow.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CheckCircle2, Container, KeyRound, LoaderCircle, Play, Plus, RefreshCw, Trash2, TriangleAlert, X, XCircle } from 'lucide-vue-next'
+import { CheckCircle2, Container, Info, KeyRound, LoaderCircle, Play, Plus, RefreshCw, Trash2, TriangleAlert, X, XCircle } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
-import { useRegistriesEditor } from '~/composables/useRegistries'
+import { useRegistriesEditor, type ImageConfig } from '~/composables/useRegistries'
 import type { ScriptOutputs } from '~/composables/useScripting'
 import { useFormat } from '~/composables/useFormat'
 import { errMessage } from '~/composables/useApi'
@@ -19,6 +22,7 @@ const props = defineProps<{
   outputs?: ScriptOutputs[string] | null
   trial?: { runId: number | null; status: string; startedAt: number; error: string } | null
   flowDirty?: boolean
+  inGroup?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -66,7 +70,48 @@ async function loadTags() {
     loadingTags.value = false
   }
 }
-watch(() => [data.value.registryId, data.value.repository], () => { tags.value = null; tagsError.value = '' })
+watch([() => data.value.registryId, () => data.value.repository], () => { tags.value = null; tagsError.value = '' })
+
+// the image's own configuration, read when the image or the tag changes
+const image = ref<ImageConfig | null>(null)
+const imageError = ref('')
+const loadingImage = ref(false)
+let imageSeq = 0
+async function loadImage() {
+  const repository = (data.value.repository ?? '').trim()
+  image.value = null
+  imageError.value = ''
+  if (!registry.value || !repository) return
+  const seq = ++imageSeq
+  loadingImage.value = true
+  try {
+    const got = await registries.image(registry.value.id, repository, (data.value.tag ?? '').trim())
+    if (seq === imageSeq) image.value = got
+  } catch (e) {
+    if (seq === imageSeq) imageError.value = errMessage(e)
+  } finally {
+    if (seq === imageSeq) loadingImage.value = false
+  }
+}
+watch([() => registry.value?.id, () => data.value.repository, () => data.value.tag], loadImage, { immediate: true })
+const runsByDefault = computed(() => [...(image.value?.entrypoint ?? []), ...(image.value?.cmd ?? [])].join(' '))
+const LABEL_KEYS = ['org.opencontainers.image.title', 'org.opencontainers.image.description', 'org.opencontainers.image.version']
+const mainLabels = computed(() => LABEL_KEYS.map((k) => image.value?.labels[k]).filter(Boolean) as string[])
+// what the image declares, offered as variables of the node (its own value is the default)
+const offered = computed(() => (image.value?.env ?? []).filter((v) => v.name !== 'PATH' && !/^(TABULARIA_|AWS_)/.test(v.name)
+  && /^[A-Z_][A-Z0-9_]*$/.test(v.name)
+  && !variables.value.some((x) => x.name === v.name) && !registry.value?.variables.some((x) => x.name === v.name)))
+function offerVariable(v: { name: string; value: string }) {
+  emit('update', { variables: [...variables.value, { name: v.name, value: v.value }] })
+}
+function useDefaults() {
+  if (!image.value) return
+  emit('update', { command: [...image.value.entrypoint], args: [...image.value.cmd] })
+}
+function size(n: number | null) {
+  if (n == null) return ''
+  return n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(0)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
+}
 
 // command and arguments: one per line, as Kubernetes takes them (no shell splitting)
 function lines(value: unknown): string {
@@ -124,6 +169,10 @@ watch(running, (on) => {
 onBeforeUnmount(() => clearInterval(ticker))
 const seconds = computed(() => (props.trial ? Math.max(0, Math.round((now.value - props.trial.startedAt) / 1000)) : 0))
 const last = computed(() => props.outputs?.last ?? null)
+// the trial's own message only when its run is not the last one shown (it never started,
+// or the outputs are not read yet): otherwise the last run says it, with its log
+const failedEarly = computed(() => props.trial?.status === 'FAILURE' && !!props.trial.error
+  && (props.trial.runId == null || last.value?.run_id !== props.trial.runId))
 const timeoutMax = computed(() => state.value?.limits.max_timeout_seconds ?? 86400)
 
 const unavailable = computed(() => {
@@ -142,7 +191,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
       <h3><Container :size="15" /> {{ $t('containers.node.title') }}</h3>
       <button v-if="!readOnly" class="del" :title="$t('containers.node.delete')" @click="emit('delete')"><Trash2 :size="14" /></button>
     </div>
-    <p class="muted outhint">{{ $t('containers.node.hint') }}</p>
+    <p class="muted outhint">{{ inGroup ? $t('containers.node.groupHint') : $t('containers.node.hint') }}</p>
     <p v-if="unavailable" class="warn" role="note"><TriangleAlert :size="13" /> {{ unavailable }}</p>
 
     <label>{{ $t('containers.node.name') }}</label>
@@ -204,6 +253,37 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
       <p v-if="patterns.length" class="muted outhint">{{ $t('containers.node.patterns', { list: patterns.join(', ') }) }}</p>
       <p v-if="tagsError" class="warn"><TriangleAlert :size="13" /> {{ tagsError }}</p>
       <p v-else-if="tags && !tags.length" class="muted outhint">{{ $t('containers.node.noTags') }}</p>
+
+      <div v-if="loadingImage || image || imageError" class="guide" aria-live="polite">
+        <div class="guide-head"><Info :size="13" /> {{ $t('containers.node.imageTitle') }}</div>
+        <p v-if="loadingImage" class="muted outhint"><LoaderCircle :size="12" class="spin" /> {{ $t('containers.node.imageReading') }}</p>
+        <p v-else-if="imageError" class="warn"><TriangleAlert :size="13" /> {{ imageError }}</p>
+        <template v-else-if="image">
+          <p v-if="mainLabels.length" class="guide-labels">{{ mainLabels.join(' · ') }}</p>
+          <dl class="guide-facts">
+            <dt>{{ $t('containers.node.imageRuns') }}</dt>
+            <dd><code>{{ runsByDefault || '—' }}</code></dd>
+            <template v-if="image.platforms.length">
+              <dt>{{ $t('containers.node.imagePlatforms') }}</dt><dd>{{ image.platforms.join(', ') }}</dd>
+            </template>
+            <template v-if="image.created">
+              <dt>{{ $t('containers.node.imageCreated') }}</dt><dd>{{ fmt.ago(image.created) }}<template v-if="image.size"> · {{ size(image.size) }}</template></dd>
+            </template>
+            <template v-if="image.working_dir || image.user">
+              <dt>{{ $t('containers.node.imageWhere') }}</dt><dd><code>{{ image.working_dir ?? '/' }}</code><template v-if="image.user"> · {{ $t('containers.node.imageUser', { user: image.user }) }}</template></dd>
+            </template>
+          </dl>
+          <button v-if="!readOnly && (image.entrypoint.length || image.cmd.length)" type="button" class="mini" @click="useDefaults">
+            {{ $t('containers.node.imageUseDefaults') }}
+          </button>
+          <div v-if="offered.length && !readOnly" class="guide-env">
+            <span class="muted outhint">{{ $t('containers.node.imageDeclares') }}</span>
+            <button v-for="v in offered" :key="v.name" type="button" class="chip" :title="$t('containers.node.imageAddVariable', { name: v.name })" @click="offerVariable(v)">
+              <Plus :size="11" /> {{ v.name }}<span v-if="v.value" class="muted">={{ v.value }}</span>
+            </button>
+          </div>
+        </template>
+      </div>
     </template>
 
     <label>{{ $t('containers.node.command') }}</label>
@@ -228,14 +308,15 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     />
     <p class="muted outhint">{{ $t('containers.node.commandHint') }}</p>
 
-    <div class="trial">
+    <div v-if="!inGroup" class="trial">
       <button type="button" :disabled="!canRun || running" @click="emit('run')">
         <LoaderCircle v-if="running" :size="14" class="spin" /><Play v-else :size="14" />
         {{ running ? $t('containers.node.running', { s: seconds }) : flowDirty ? $t('containers.node.saveAndRun') : $t('containers.node.run') }}
       </button>
       <p class="muted outhint">{{ $t('containers.node.runHint') }}</p>
-      <p v-if="trial?.status === 'FAILURE'" class="esito ko" role="alert"><XCircle :size="13" /> {{ trial.error }}</p>
-      <template v-else-if="last && !running">
+      <!-- a trial that failed before its run said anything (refused, unreachable): only its message -->
+      <p v-if="failedEarly" class="esito ko" role="alert"><XCircle :size="13" /> {{ trial!.error }}</p>
+      <template v-if="last && !running">
         <p class="esito" :class="last.status === 'SUCCESS' ? 'ok' : 'ko'">
           <component :is="last.status === 'SUCCESS' ? CheckCircle2 : XCircle" :size="13" />
           {{ $t(last.trial ? 'containers.node.lastTrial' : 'containers.node.lastRun', { when: fmt.ago(last.finished_at ?? last.started_at), status: last.status }) }}
@@ -247,6 +328,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
           <summary>{{ $t('containers.node.log') }}</summary>
           <pre class="log">{{ last.log }}</pre>
         </details>
+        <p v-else-if="last.log_expired" class="muted outhint">{{ $t('scripting.run.logExpired') }}</p>
       </template>
     </div>
 
@@ -346,6 +428,14 @@ details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .vars li input { min-width: 0; }
 .nuova { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; gap: 6px; }
 .nuova input { min-width: 0; font-size: 12px; }
+.guide { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg-soft); }
+.guide-head { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.guide-labels { margin: 0; font-size: 12px; }
+.guide-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; margin: 0; font-size: 12px; }
+.guide-facts dt { color: var(--muted); }
+.guide-facts dd { margin: 0; overflow-wrap: anywhere; }
+.guide-env { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; padding: 2px 7px; border-radius: 999px; }
 .numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .numbers.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .numbers label { display: flex; flex-direction: column; gap: 4px; }

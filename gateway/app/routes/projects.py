@@ -164,6 +164,10 @@ def delete_project(
         raise HTTPException(status_code=409, detail="The folder contains saved views: move or delete them first")
     if session.exec(select(FlowGroup).where(FlowGroup.project_id == project_id)).first():
         raise HTTPException(status_code=409, detail="The folder contains flow groups: move or delete them first")
+    from app.models import SavedScript
+
+    if session.exec(select(SavedScript).where(SavedScript.project_id == project_id)).first():
+        raise HTTPException(status_code=409, detail="The folder contains scripts: move or delete them first")
     # un webhook limitato a questa cartella: toglierla in silenzio lo allargherebbe
     # a tutte, e la chiave esterna lo impedirebbe comunque con un 500
     from app.models import Webhook

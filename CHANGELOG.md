@@ -3,8 +3,6 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## Unreleased
-
 ## 1.2.2 «Appio» — 2026-10-22
 
 - **Fixed: the space bar typed nothing in the code editor of the Script node on Chrome
@@ -12,6 +10,163 @@ exposes at `/system/info` and in the app's settings menu.
   element the flow canvas did not recognise as a text field, and the canvas kept the
   space for itself (hold space to pan). The keys typed in the code editor now stay
   there, on every browser.
+- **Fixed (Helm chart): the scripts and the containers could reach Tabularia's own
+  namespace.** The policy the design promised was never written: the code of a Script or
+  Container node, the trials and the image builds could reach the database, the broker,
+  the storage of the release and the cloud metadata addresses. Their namespaces now get a
+  NetworkPolicy (`scripts.blockTabularia`, `containers.blockTabularia`, on by default):
+  the internet and the other namespaces stay open, Tabularia's and the metadata do not,
+  and nothing reaches into them. Private networks outside the cluster are opened with
+  `networkPolicy.userCodePrivateCIDRs`: **before upgrading, list there the registry the
+  image builds push to when its address is private** (see the chart's README,
+  Upgrades). The policy needs a network plugin that enforces egress rules (Calico,
+  Cilium). The guides' dependencies (`infrastructure/minikube/dependencies.yaml`) now
+  let only Tabularia's namespace reach their database and queue.
+- **Fixed (Helm chart): a link-local range such as a node-local DNS cache
+  (`169.254.20.10/32`) in `networkPolicy.egressCIDRs` made a policy the cluster
+  refused.** The metadata address is cut only out of the ranges that hold it; listing
+  it alone is refused. The scripts' or containers' namespaces set to the release's own
+  are refused too: their policy would cut Tabularia off.
+- **Fixed: Ctrl+X in the code editor cut the Script node off the flow (Chrome, Edge).**
+  The flow editor's shortcuts (cut, copy, paste, undo, delete, duplicate) now leave alone
+  the code editor and every dialog, on every browser; Ctrl+S saves what was typed in the
+  last moment too.
+- **Fixed: an editor's «Run» of a Script or Container node could stay open for ever**
+  when the gateway running it stopped. It is closed saying so, and the next «Run» starts
+  a new one.
+- **Fixed (Helm chart): the gateway, which answers the internet, could create Jobs in the
+  image builds' `privileged` namespace.** The orchestrator, which alone runs the builds,
+  now has a service account of its own (`<release>-orchestrator`), the only one that may
+  create them; the gateway's may still read and delete them.
+- **Fixed: a successful image build could end as failed** when the Kubernetes API did not
+  answer right between the build and its check. The check's Job is created before the
+  build's is deleted, and the next round goes on.
+- **Fixed: the dbt export refused a flow whose email Output sends what a Script or
+  Container node writes.** An email has no model: the export goes on, with a note.
+- **Faster: the editor's previews of Script and Container nodes** read two runs per node,
+  instead of the flow's last 500 with their logs.
+- **Docker Compose: scripting and containers show as unavailable**, greyed out with the
+  reason (they need Kubernetes, with the feature on in the chart), in Administration, in the palette, in Explore and on the
+  nodes of a flow that came from a cluster; such a flow is saved as it is.
+- **Fixed in the flow editor:** the preview of a join whose right branch reads a Script
+  node; an observer could change a Script or Container node's panel; a failed «Run»
+  hid its log; the tags of a Container node were cleared at every change; a dialog
+  opened at once ignored Esc.
+- **Saved scripts (Kubernetes).** A Python or R script becomes an object of a folder,
+  next to flows and views (**Explore → New → Script**), with the code editor of the
+  Script node and its **versions** (every save that changes it is one; an older one can
+  be looked at and restored). It **reads datasources** declared as its inputs, each by
+  an alias (`TABULARIA_INPUT_<ALIAS>`, and `TABULARIA_INPUTS` with the real names and
+  folders, so two datasources with the same name stay apart; a refresh changes nothing
+  for the script), may leave an **output** shown at the end of the run and, when asked,
+  **published as a datasource**. It runs on its own (**Run** on its page, followed to its
+  end with its log and the first rows of its output), **on a schedule**, as a **cell of a
+  flow group**, and from any flow's **Script node by reference**: fixed once, every flow
+  runs the new version. Whoever lacks VIEW on its folder or the use of its environment
+  does not see it at all; every run checks again, with the runner's authority, each
+  input and the publish folder; a change by someone else that makes it reach more
+  switches off the schedules that run it. Migrations 0019 and 0020
+  ([Python and R in flows](docs/scripting.md#saved-scripts)).
+- **The Scripting tab**, for whoever may use a scripting environment or a container
+  registry: their saved scripts with their last run and schedule, their environments
+  with packages and variables, their registries with images and variables. The
+  **Lineage** shows saved scripts: what they read, what they publish, the flows that run
+  them.
+- **Container images, guided.** The Container node reads the chosen image's own
+  configuration from the registry: what it runs by default, its platforms, its build
+  date, size and labels; one click copies its command, or adds a variable it declares.
+  A **flow group** can run an image as a **Container cell**, a step of its own
+  ([The Container node](docs/container-node.md#in-a-flow-group)).
+- **Faster: a short step is seen ending sooner.** Tabularia looked at a running step
+  (a Script or Container Job, an engine run, a refresh) at a fixed interval, and the
+  interface at another: a one-second script was seen ending after nine to eleven
+  seconds. It now looks soon at first, then every second for half a minute, then at the
+  interval set (`ORCHESTRATOR__POLL_INTERVAL_SECONDS`, `SCRIPTS__POLL_SECONDS`,
+  `CONTAINERS__POLL_SECONDS`, now a ceiling); the same script is seen ending in four to
+  six seconds.
+- **Administration → Cluster (Kubernetes).** What Tabularia has running, refreshed every
+  three seconds: the pods of the release and of the users' code (scripts, their trials,
+  image builds, containers), their state with the reason a container waits or died
+  (CrashLoopBackOff, ImagePullBackOff, OOMKilled…), restarts, age, node, CPU and memory
+  against their limits (with metrics-server), and the warning events; a script's or a
+  container's Job links to the flow, saved script or group that started it. Read-only,
+  for administrators and observers (`clusterView.enabled` in the chart, on by default:
+  read rights on pods, events and pod metrics in those namespaces only).
+- **The database stops growing with history.** Every hour the orchestrators keep the
+  latest 100 data contract reports per datasource (`ORCHESTRATOR__CONTRACT_RESULTS_KEPT`;
+  a report whose notice is still to be sent always stays), the latest 50 versions of a
+  flow and of a saved script (`ORCHESTRATOR__VERSIONS_KEPT`; the one in use always), and
+  delete the assistant's conversations untouched for 90 days
+  (`ORCHESTRATOR__AI_CHAT_RETENTION_DAYS`; the spending ledger stays). 0 keeps everything
+  of that kind. A pass that removed something ends with `VACUUM (ANALYZE)` of the tables
+  it touched: Postgres does not reuse the space of deleted or rewritten rows until a
+  vacuum passes, and this one does not block the application.
+- **Runs keep their logs for 30 days** (`ORCHESTRATOR__LOG_RETENTION_DAYS`,
+  `orchestrator.logRetentionDays` in the chart; 0 keeps them for ever). A run kept what
+  a Script or Container node printed (up to 256 KB) and the engine's full traceback of a
+  failure for ever: a chatty container scheduled every five minutes added tens of
+  gigabytes a year to the database. Past the window the orchestrator empties them, older
+  runs included on its first pass; the runs stay, with their outcome, short error,
+  timings, attempts and exit code, and say that their log was removed.
+- **Fixed: single sign-on with Keycloak failing in company setups.** Reproduced on
+  minikube with Keycloak behind the chart's ingress:
+  - **a second sign-in started meanwhile broke the first.** A double click, another tab
+    or the Back button replaced the only transaction cookie, and the first one came back
+    as `state_mismatch`. Each sign-in now has its own cookie;
+  - **clocks a fraction of a second apart refused the tokens.** An id_token from a
+    Keycloak whose clock is ahead, or a transaction or session token signed by another
+    gateway replica, was "not yet valid": with someone already signed in to Keycloak the
+    round trip takes less than that. A minute of tolerance, as the identity providers
+    allow;
+  - **a sign-in started on http with an https redirect URI lost its cookie**: `Secure` now
+    follows the browser's scheme, as the session's cookie already did;
+  - **`tx_missing` said nothing useful.** The gateway logs the address the sign-in
+    started at and the redirect URI's when they differ, and the login page tells the
+    person what to do for the common codes, in the five languages.
+- **Fixed: single sign-on with an identity provider whose certificate a company's own
+  authority signed.** The gateway trusted the public authorities only: every sign-in
+  failed with `idp_unreachable`. `oidc.caCert` (the authority's certificate) or
+  `oidc.caConfigMap` (an existing ConfigMap, a trust-manager bundle) now gives it,
+  besides the public ones, for every call to the provider (`OIDC__CA_FILE`); a
+  certificate not trusted has a code of its own, `idp_untrusted`, which names the host
+  in the log and tells the person to call their administrator. Whoever cannot have the
+  authority may accept the certificate unchecked with `OIDC__VERIFY_TLS=false`
+  (`oidc.verifyTls`): the installer's choice, explained with its risk in the Keycloak
+  guide and logged at every start. Reproduced and tried on
+  minikube with Keycloak behind such a certificate.
+- **A guide to single sign-on with Keycloak** ([docs/sso-keycloak.md](docs/sso-keycloak.md)), on
+  the website too: the client in Keycloak, groups or roles, the chart's values, the
+  checks, and what each error code means. Every step run against Keycloak 26 with the
+  chart. The website's menu also lists the upgrade guide.
+- **SSO groups from any part of the token.** `OIDC__GROUPS_CLAIM` (`oidc.groupsClaim`)
+  takes a path as it appears in the token's JSON — `realm_access.roles`,
+  `resource_access.<client id>.roles` for Keycloak's realm and client roles, a client id
+  with dots included — and several sources comma-separated, joined. A path the id_token
+  does not carry is read from the access token, where Keycloak puts the roles by default
+  (signature, issuer, expiry and person checked), then from userinfo. Tried on minikube
+  with Keycloak 26.
+- **Automatic backups of the database.** Every night at 03:00 an orchestrator runs
+  `pg_dump` of Tabularia's database and streams it to the engine, which stores it in the
+  object storage — by default Tabularia's bucket under `backups/postgres/`; a bucket of
+  their own (`BACKUP__BUCKET`, `backup.bucket` in the chart) is advised in production —
+  and keeps the latest 14. **Administration → Backups** changes the schedule, the number
+  kept and whether it runs, without a restart; «Back up now» makes one at once; the
+  backups are listed and an administrator downloads them (each download is in the audit
+  log, and so is each backup, failed or not). Nothing is written on the orchestrator's
+  disk. The gateway image now carries `pg_dump` and `pg_restore` of PostgreSQL 14 to 18
+  (5 MB): a backup is made with the server's own version, so the server's own
+  `pg_restore` reads it. Migration 0021 adds the table of the settings. Kubernetes only: on
+  Docker Compose the section is greyed out, with the reason, like scripting and containers.
+- **A guide to upgrading on Kubernetes and minikube** ([docs/deploy/upgrading.md](docs/deploy/upgrading.md)):
+  what an upgrade keeps (PostgreSQL and its volume, the bucket, the secrets), how the
+  `migrate` init container moves the schema while the previous pods keep serving, the
+  order in which the pods roll, how to back up and check, and the way back — `helm
+  rollback` one release, a restore further. Every command was run on minikube. The
+  migration command (`python -m app.db.migra`) now speaks English.
+- **Fixed: the Lineage page failed** as soon as the graph held a datasource or a flow
+  the reader cannot read, or one deleted since.
+- **Fixed: «Run» of a Script or Container node right after a change ran the flow as
+  saved before it** (within a third of a second). The change is saved first.
 
 ## 1.2.1 «Appio» — 2026-10-21
 

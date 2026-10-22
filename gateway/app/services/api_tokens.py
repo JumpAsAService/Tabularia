@@ -69,6 +69,13 @@ NIENTE_SIEM_DA_TOKEN = {
     "de": "Ein API-Token kann nicht ändern, wohin das Audit-Protokoll geht: Das geht über die Oberfläche",
     "es": "Un token de API no puede cambiar adónde va el registro de auditoría: hazlo desde la interfaz",
 }
+NIENTE_BACKUP_DA_TOKEN = {
+    "en": "An API token cannot change, run or download the database backups: do it from the interface",
+    "it": "Un token API non cambia, non avvia e non scarica i backup del database: si fa dall'interfaccia",
+    "fr": "Un jeton d'API ne peut pas modifier, lancer ni télécharger les sauvegardes de la base : faites-le depuis l'interface",
+    "de": "Ein API-Token kann die Datenbank-Backups nicht ändern, starten oder herunterladen: Das geht über die Oberfläche",
+    "es": "Un token de API no puede cambiar, lanzar ni descargar las copias de seguridad de la base de datos: hazlo desde la interfaz",
+}
 NIENTE_SCRIPTING_DA_TOKEN = {
     "en": "An API token cannot change the scripting environments or their bucket: do it from the interface",
     "it": "Un token API non cambia gli ambienti di scripting né il loro bucket: si fa dall'interfaccia",

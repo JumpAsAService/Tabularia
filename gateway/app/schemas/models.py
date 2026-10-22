@@ -1,7 +1,7 @@
 """Schemi di request/response del gateway. Separati dai modelli DB per non
 esporre mai `hashed_password` e per validare gli input."""
 from datetime import datetime, timezone
-from typing import Annotated, Generic, Literal, Optional, TypeVar
+from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
 from pydantic import AfterValidator, BaseModel, PlainSerializer, Field, field_validator, model_validator
 
 # ── Datetime in uscita: sempre con l'offset ───────────────────────────────────
@@ -228,8 +228,12 @@ MAX_GROUP_COLUMNS = 20
 
 
 class FlowGroupCell(BaseModel):
-    kind: Literal["flow", "refresh"]  # run a flow, or refresh a database datasource
-    id: int
+    # run a flow, refresh a database datasource, run a saved script, run an image
+    kind: Literal["flow", "refresh", "script", "container"]
+    id: int  # of the flow, datasource or script; a container cell's own number in the group
+    # a container cell's settings, as a Container node's data (registryId, repository,
+    # tag, command, args, variables, cpu, memory, timeoutSeconds, retries…)
+    container: Optional[dict[str, Any]] = None
 
 
 class FlowGroupDefinition(BaseModel):
@@ -302,7 +306,7 @@ class FlowGroupDetail(FlowGroupOut):
 
 
 # ── Ricerca unificata (per nome, su tutti i tipi di risorsa) ──────────────────
-SearchKind = Literal["folder", "flow", "group", "datasource", "view", "connection"]
+SearchKind = Literal["folder", "flow", "group", "datasource", "view", "script", "connection"]
 
 
 class SearchHit(BaseModel):
@@ -620,6 +624,7 @@ class RunOut(BaseModel):
     kind: str = "flow"
     flow_id: Optional[int] = None
     flow_group_id: Optional[int] = None  # the run of a flow group (no flow, no datasource)
+    saved_script_id: Optional[int] = None  # a saved script's run (docs/specs/saved-scripts.md)
     status: str
     launched_by: Optional[int]
     trigger_type: str = "manual"  # "manual" | "schedule"
@@ -655,6 +660,7 @@ class RunSearchOut(RunOut):
     flow_name: Optional[str] = None
     source_name: Optional[str] = None
     group_name: Optional[str] = None
+    script_name: Optional[str] = None
     launched_by_name: Optional[str] = None  # None se schedulato o utente rimosso
 
 

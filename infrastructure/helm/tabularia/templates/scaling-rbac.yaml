@@ -1,4 +1,4 @@
-{{- if or .Values.adminScaling.enabled .Values.scripts.enabled .Values.containers.enabled }}
+{{- if or .Values.adminScaling.enabled .Values.scripts.enabled .Values.containers.enabled .Values.clusterView.enabled }}
 {{/*
 The service account of the gateway and the orchestrator when they talk to the
 Kubernetes API. Every other pod keeps the chart's account, without a token.
@@ -10,14 +10,23 @@ Kubernetes API. Every other pod keeps the chart's account, without a token.
   the two scripts namespaces only.
 - Container nodes (containers.enabled): the Roles of containers.yaml, in the two
   containers namespaces only.
+- Administration → Cluster (clusterView.enabled): the Role below, to read the pods,
+  their metrics and the events of this namespace; the scripts' and containers' Roles
+  read theirs.
+Two accounts with the same rights: `-scaler` for the gateway, which answers the
+internet, and `-orchestrator` for the orchestrator, which alone may also create the
+image builds' Jobs in their `privileged` namespace (scripts.yaml).
 */}}
 {{- $full := include "tabularia.fullname" . }}
+{{- range list "scaler" "orchestrator" }}
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ $full }}-scaler
+  name: {{ $full }}-{{ . }}
   labels:
-    {{- include "tabularia.labels" . | nindent 4 }}
+    {{- include "tabularia.labels" $ | nindent 4 }}
+{{- end }}
 {{- end }}
 {{- if .Values.adminScaling.enabled }}
 {{- $full := include "tabularia.fullname" . }}
@@ -54,7 +63,38 @@ roleRef:
   kind: Role
   name: {{ $full }}-scaler
 subjects:
-  - kind: ServiceAccount
-    name: {{ $full }}-scaler
-    namespace: {{ .Release.Namespace }}
+  {{- include "tabularia.kubeApiSubjects" . | nindent 2 }}
+{{- end }}
+{{- if .Values.clusterView.enabled }}
+{{- $full := include "tabularia.fullname" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-cluster-view
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-cluster-view
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-cluster-view
+subjects:
+  {{- include "tabularia.kubeApiSubjects" . | nindent 2 }}
 {{- end }}

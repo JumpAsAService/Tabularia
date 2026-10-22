@@ -29,7 +29,7 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.db.session import engine
-from app.models import Connection, Datasource, Flow, FlowGroup, Run, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Run, SavedScript, User
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run, start_refresh_if_free
 from app.services.blobgc import sweep_blob_deletions
@@ -232,6 +232,64 @@ async def _fire_group(session: Session, group: FlowGroup, now: datetime, visto: 
     logger.info("scheduler: run of flow group %s (%s) queued", group_id, name)
 
 
+# ── saved scripts: scheduled runs ───────────────────────────────────────────
+def _advance_script(session: Session, script: SavedScript, now: datetime) -> None:
+    try:
+        script.next_run_at = next_fire(script.run_schedule, now).replace(tzinfo=None)
+    except Exception:
+        script.run_schedule = None
+        script.next_run_at = None
+    session.add(script)
+    session.commit()
+
+
+def _disable_script(session: Session, script: SavedScript, reason: str) -> None:
+    logger.warning("scheduler: schedule of saved script %s turned off (%s)", script.id, reason)
+    script.run_schedule = script.run_scheduled_by = script.next_run_at = None
+    session.add(script)
+    session.commit()
+
+
+async def _fire_script(session: Session, script: SavedScript, now: datetime, visto: datetime | None = None) -> None:
+    """As `_fire_group`: the slot taken, the run queued in the same transaction; the
+    author's rights checked again here and, in full, when the run starts."""
+    from app.services import saved_script_runs, saved_scripts
+
+    visto = script.next_run_at if visto is None else visto
+    user = session.get(User, script.run_scheduled_by) if script.run_scheduled_by else None
+    if user is None or not user.is_active:
+        _disable_script(session, script, "the schedule's author is gone or deactivated")
+        return
+    if not saved_scripts.can_see(session, user, script) \
+            or not perm_service.has_capability(session, user, script.project_id, Capability.RUN):
+        _disable_script(session, script, f"{user.email} can no longer run the script")
+        return
+    script_id, name = script.id, script.name
+    values: dict = {}
+    try:
+        values["next_run_at"] = next_fire(script.run_schedule, now).replace(tzinfo=None)
+    except Exception:
+        values.update(run_schedule=None, next_run_at=None)
+    taken = session.exec(
+        update(SavedScript)
+        .where(SavedScript.id == script_id, SavedScript.next_run_at == visto,
+               SavedScript.next_run_at <= now.replace(tzinfo=None))
+        .values(**values)
+    )
+    if taken.rowcount != 1:
+        session.rollback()  # another process took the slot
+        return
+    saved_script_runs.in_line_for_the_script(session, script_id)  # in line with «Run»
+    if saved_script_runs.script_running(session, script_id):
+        session.commit()
+        logger.info("scheduler: saved script %s (%s) still running, slot skipped", script_id, name)
+        return
+    saved_script_runs.create_script_run(session, user, script, "schedule", commit=False)
+    session.commit()
+    orchestrator.sveglia()
+    logger.info("scheduler: run of saved script %s (%s) queued", script_id, name)
+
+
 # ── loop ────────────────────────────────────────────────────────────────────
 async def _tick() -> None:
     now = datetime.now(timezone.utc)
@@ -303,6 +361,23 @@ async def _tick() -> None:
             except Exception:
                 logger.exception("scheduler: run of flow group %s failed", group.id)
                 _advance_group(session, group, now)
+
+        from app.services import script_builds
+
+        if script_builds.disabled_reason() is None:
+            due_scripts = session.exec(
+                select(SavedScript).where(
+                    SavedScript.run_schedule.is_not(None),  # type: ignore[union-attr]
+                    SavedScript.next_run_at.is_not(None),  # type: ignore[union-attr]
+                    SavedScript.next_run_at <= now_naive,
+                )
+            ).all()
+            for script, visto in [(x, x.next_run_at) for x in due_scripts]:
+                try:
+                    await _fire_script(session, script, now, visto)
+                except Exception:
+                    logger.exception("scheduler: run of saved script %s failed", script.id)
+                    _advance_script(session, script, now)
 
         # data contracts: la freschezza è l'unica regola che si rompe da sola,
         # col passare del tempo — qui la si ricontrolla

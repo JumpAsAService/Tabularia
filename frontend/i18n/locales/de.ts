@@ -2,6 +2,7 @@
 export default {
   nav: {
     performance: "Leistung",
+    cluster: 'Cluster',
     explore: 'Erkunden',
     flows: 'Flüsse',
     datasources: 'Datenquellen',
@@ -9,6 +10,7 @@ export default {
     viewer: 'Viewer',
     assistant: 'Assistent',
     connections: 'Verbindungen',
+    scripting: 'Skripte',
     runs: 'Ausführungen',
     queue: 'Warteschlange',
     monitoring: 'Überwachung',
@@ -258,6 +260,16 @@ export default {
     signInWithSso: 'Mit SSO anmelden',
     ssoCompleting: 'Anmeldung läuft…',
     ssoError: 'SSO-Anmeldung fehlgeschlagen ({code}). Erneut versuchen oder mit E-Mail anmelden.',
+    // what to do, for the sign-in errors a person can act on (the code stays visible)
+    ssoHint: {
+      tx_missing: "Die Anmeldung kam an eine andere Adresse zurück als die, an der sie begann: Öffnen Sie Tabularia unter der Adresse, die Ihnen Ihr Administrator gegeben hat, und versuchen Sie es erneut.",
+      tx_expired: "Die Anmeldung hat zu lange gedauert, oder die Uhren der Server stimmen nicht überein. Versuchen Sie es erneut; passiert es wieder, informieren Sie Ihren Administrator.",
+      state_mismatch: "Diese Anmeldung wurde durch eine inzwischen gestartete ersetzt. Versuchen Sie es auf dieser Seite erneut.",
+      token_invalid: "Die Antwort des Identitätsanbieters konnte nicht geprüft werden. Informieren Sie Ihren Administrator: die Einstellungen des Anbieters oder die Uhren der Server sind zu prüfen.",
+      code_rejected: "Der Identitätsanbieter hat die Anmeldung nicht abgeschlossen. Informieren Sie Ihren Administrator: das Client-Secret oder die Rücksprungadresse sind zu prüfen.",
+      idp_denied: "Der Identitätsanbieter hat Sie nicht hereingelassen. Wenn Sie Zugriff haben sollten, fragen Sie Ihren Administrator.",
+      idp_untrusted: "Der Server von Tabularia vertraut dem Zertifikat des Identitätsanbieters nicht. Informieren Sie Ihren Administrator: Tabularia braucht die Zertifizierungsstelle des Unternehmens.",
+    },
     signedOutIdle: 'Die Sitzung wurde wegen Inaktivität beendet. Melden Sie sich erneut an, um fortzufahren.',
     setupTitle: 'Administrator anlegen',
     setupLead: 'Eine neue Installation: Wählen Sie E-Mail und Passwort des ersten Administrators. Damit melden Sie sich an.',

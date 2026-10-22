@@ -104,7 +104,7 @@ export function useDialogA11y(
       origine = null
       fallback = null
     }
-  })
+  }, { immediate: true }) // a dialog mounted already open (v-if with open=true) gets its keys and focus too
 
   onBeforeUnmount(() => {
     if (typeof document === 'undefined') return

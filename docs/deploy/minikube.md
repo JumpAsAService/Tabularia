@@ -347,8 +347,7 @@ its rows appear.
 ## Step 10 — Optional: Python and R in flows
 
 A Script node runs Python or R code as a step of a flow, in an environment your
-administrator prepares. On minikube it needs the 12 GB of step 2. Script nodes need
-Tabularia 1.2.1 or later.
+administrator prepares. On minikube it needs the 12 GB of step 2.
 
 **1. A place for the environments' images.** minikube has one built in:
 
@@ -380,14 +379,20 @@ policies for each provider.
 1. fill in the scripts bucket (endpoint, region, bucket, the two keys) and press
    **Test**;
 2. create an environment, for example Python 3.12 with the packages your scripts need;
-3. wait until it is **ready**: a few minutes for Python, ten or more for R, whose
+3. wait until it is **Ready**: a few minutes for Python, ten or more for R, whose
    packages are compiled.
 
 Then add a **Script** node to a flow. [Python and R in flows](../scripting.md) explains the
-node, the editor and the variables.
+node, the editor and the variables. You can also keep a script on its own in a folder,
+with its versions: **Explore → New → Script (Python or R)**.
 
 > The registry's address changes if you turn the add-on off and on again. Then put the
 > new address in `my-values.yaml` and run the `helm upgrade` of point 2 again.
+
+> The chart also adds a network rule that keeps the scripts and the image builds away
+> from Tabularia's own pods and from the cloud's metadata address. minikube's network
+> does not apply such rules: here the rule is written but has no effect. A company
+> cluster applies it; [the kind guide](kind.md) builds one on your computer.
 
 ## Every day
 
@@ -408,15 +413,26 @@ minikube start
 Wait for the pods as in step 8 (`kubectl get pods --namespace tabularia`), run the
 `port-forward` command again, and open http://localhost:8080.
 
-**Install a newer release**: download and unzip it as in step 3, copy `my-values.yaml`
-into the new folder, open the terminal there, and run:
+**See what runs**: **Administration → Cluster** in Tabularia shows its pods, and the
+scripts and containers while they run, refreshed every three seconds: their state,
+restarts, CPU and memory, and the warning events. CPU and memory need minikube's
+metrics-server, turned on once:
 
 ```bash
-helm upgrade tabularia infrastructure/helm/tabularia --namespace tabularia --values my-values.yaml
+minikube addons enable metrics-server
+```
+
+**Install a newer release**: back up the database first, then download and unzip the
+release as in step 3, copy `my-values.yaml` into the new folder, open the terminal there,
+and run:
+
+```bash
+helm upgrade tabularia infrastructure/helm/tabularia --namespace tabularia --values my-values.yaml --wait --timeout 20m
 ```
 
 Then reload the page in the browser with **Ctrl+Shift+R** (macOS: **Cmd+Shift+R**): a
-tab left open keeps running the old version.
+tab left open keeps running the old version. The backup, the checks after the upgrade
+and the way back are in [Upgrading Tabularia](upgrading.md).
 
 **Remove everything**:
 
@@ -512,9 +528,9 @@ exist*): check the named collection of step 9 and its `GRANT`, and that `s3Endpo
 bucket's address as seen from the ClickHouse service.
 
 **Scripting environments**
-- *The section says scripting is off*: the `scripts:` block of `my-values.yaml` is still
-  commented out, or `helm upgrade` was not run.
-- *An environment stays "building" for a long time*: R environments compile their
+- *Scripting environments is greyed out in Administration*: the `scripts:` block of
+  `my-values.yaml` is still commented out, or `helm upgrade` was not run.
+- *An environment stays "Building" for a long time*: R environments compile their
   packages; ten to twenty minutes is normal.
 - *"The image build ran out of memory"*: minikube is too small for the build; start
   minikube with more `--memory` (step 2).

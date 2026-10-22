@@ -206,9 +206,9 @@ def evento_del_run(run: Run) -> Optional[str]:
     esito = {"SUCCESS": "succeeded", "FAILURE": "failed"}.get(run.status)
     if esito is None:
         return None
-    if getattr(run, "flow_group_id", None) is not None:
-        # a flow group's own run has no event of its own yet: the flows and the
-        # refreshes inside it send theirs
+    if getattr(run, "flow_group_id", None) is not None or getattr(run, "saved_script_id", None) is not None:
+        # a flow group's own run, a saved script's: no event of their own yet; the
+        # flows and the refreshes inside a group send theirs
         return None
     if run.kind == "orchestration" or (run.kind == "flow" and run.parent_run_id is None):
         return f"flow.run.{esito}"

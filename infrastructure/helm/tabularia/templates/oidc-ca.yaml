@@ -1,0 +1,13 @@
+{{- if and .Values.oidc.enabled .Values.oidc.caCert }}
+# The certificate authority that signed the OIDC provider's certificate (oidc.caCert):
+# the gateway trusts it besides the public ones (OIDC__CA_FILE, see templates/gateway.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tabularia.fullname" . }}-oidc-ca
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+data:
+  ca.crt: |
+{{ .Values.oidc.caCert | trim | indent 4 }}
+{{- end }}

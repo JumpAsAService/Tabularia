@@ -52,6 +52,14 @@ class Run(SQLModel, table=True):
             postgresql_where=text(LIVE_ORCHESTRATION),
             sqlite_where=text(LIVE_ORCHESTRATION),
         ),
+        # one live run per saved script, for the same reason
+        Index(
+            "uq_runs_one_live_script",
+            "saved_script_id",
+            unique=True,
+            postgresql_where=text(LIVE_ORCHESTRATION),
+            sqlite_where=text(LIVE_ORCHESTRATION),
+        ),
         # la coda delle orchestrazioni da rivendicare: solo le righe in attesa
         Index(
             "ix_runs_orchestration_queue",
@@ -81,6 +89,10 @@ class Run(SQLModel, table=True):
     # set on a flow group's own run (kind="orchestration", flow_id None); the runs
     # of its cells point at that run through parent_run_id
     flow_group_id: Optional[int] = Field(default=None, foreign_key="flow_groups.id", index=True)
+    # a saved script's runs (docs/specs/saved-scripts.md): its own orchestration row
+    # (kind="orchestration", queued and claimed as a flow's) and the script run under
+    # it (kind="script"), which holds the attempts, the log and the output
+    saved_script_id: Optional[int] = Field(default=None, foreign_key="saved_scripts.id", index=True)
     # a group run only: the state of every cell, parallel to the group's grid
     # ([[{"state", "run_id", "error"}, ...], ...]); written by the process running
     # the group, read by the editor

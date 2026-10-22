@@ -168,6 +168,13 @@ prefixes = ["ORCHESTRATOR", "SCHEDULING"]
 intro = "How flows are executed: queued in the database, picked up by an orchestrator process (`APP__ROLE` `all` or `orchestrator`), which waits for each step to complete before the next."
 
 [[section]]
+id = "gateway-backup"
+component = "gateway"
+title = "Database backups"
+prefixes = ["BACKUP"]
+intro = "Kubernetes only (on Docker Compose Administration → Backups is greyed out). The automatic backup of the metadata database: an orchestrator runs `pg_dump` on the schedule and streams it to the engine, which stores it in the object storage and removes the oldest beyond the number to keep. `BACKUP__ENABLED`, `BACKUP__SCHEDULE` and `BACKUP__KEEP` are the installation's defaults, which Administration → Backups can change without a restart; where the files go is read by the engine. By default Tabularia's bucket under `backups/postgres/`: in production give the backups a bucket of their own. Restoring one: [Upgrading](deploy/upgrading.md#when-something-goes-wrong)."
+
+[[section]]
 id = "gateway-openlineage"
 component = "gateway"
 title = "OpenLineage"
@@ -199,7 +206,7 @@ id = "gateway-scripts"
 component = "gateway"
 title = "Scripting environments (Kubernetes)"
 prefixes = ["SCRIPTS"]
-intro = "Administration → Scripting environments: the Python and R environments the Script node runs in, each built once into an image by a Kubernetes Job (rootless BuildKit) and checked by a second Job. Off unless `SCRIPTS__ENABLED` is true; the chart sets the whole block, the two namespaces and a service account allowed to run Jobs there, with `scripts.enabled`. The Kubernetes API is reached as in `KUBERNETES__API_URL`, `KUBERNETES__TOKEN_FILE` and `KUBERNETES__CA_FILE` ([Scripting environments](scripting.md))."
+intro = "Administration → Scripting environments: the Python and R environments the Script node runs in, each built once into an image by a Kubernetes Job (rootless BuildKit) and checked by a second Job. Off unless `SCRIPTS__ENABLED` is true; the chart sets the whole block, the three namespaces and the service accounts of the gateway and the orchestrator allowed to run Jobs there (only the orchestrator's creates the builds), with `scripts.enabled`. The Kubernetes API is reached as in `KUBERNETES__API_URL`, `KUBERNETES__TOKEN_FILE` and `KUBERNETES__CA_FILE` ([Scripting environments](scripting.md))."
 
 [[section]]
 id = "gateway-containers"
@@ -227,6 +234,13 @@ component = "engine"
 title = "Object storage"
 prefixes = ["STORAGE"]
 intro = "Any S3-compatible service: MinIO, AWS S3, Cloudflare R2, Backblaze B2, Scaleway, Google Cloud Storage through its S3 API (needed by the BigQuery engine). Every datasource snapshot, cached step and run output lives here."
+
+[[section]]
+id = "engine-backup"
+component = "engine"
+title = "Where the database backups go"
+prefixes = ["BACKUP"]
+intro = "The gateway makes the backups of its database (see *Database backups* above); the engine stores them, since it holds the storage credentials. Every field left empty falls back to the object storage's."
 
 [[section]]
 id = "engine-workers"
@@ -415,7 +429,52 @@ text = "Flow runs one worker is assumed to carry at once: used only to highlight
 text = "Longest a flow waits for a Refresh node to complete before aborting rather than reading stale data. Raise it for very long refreshes. An Output node has no cap of its own: it is bounded by `ENGINE__RUN_STALE_TIMEOUT_SECONDS`."
 
 [var.ORCHESTRATOR__POLL_INTERVAL_SECONDS]
-text = "Seconds between two checks of a step the flow is waiting for."
+text = "The longest wait, in seconds, between two checks of a step the flow is waiting for: the first checks come sooner (a quarter of a second, then every second for half a minute)."
+
+[var.ORCHESTRATOR__LOG_RETENTION_DAYS]
+text = "After how many days a run's logs are emptied: what a Script or Container node printed, and the engine's full traceback of a failure. The runs stay, with their outcome, short error, timings and exit code. 0 keeps them for ever. With the three settings below, the orchestrators trim this history every hour and then vacuum the tables they touched."
+
+[var.ORCHESTRATOR__CONTRACT_RESULTS_KEPT]
+text = "The latest data contract reports kept per datasource; older ones are deleted every hour, never one whose notice is still to be sent. 0 keeps them all."
+
+[var.ORCHESTRATOR__VERSIONS_KEPT]
+text = "The latest versions kept per flow and per saved script; the one in use is always kept. 0 keeps them all."
+
+[var.ORCHESTRATOR__AI_CHAT_RETENTION_DAYS]
+text = "The assistant's conversations untouched for this many days are deleted, with their turns; the spending ledger stays. 0 keeps them."
+
+[var.BACKUP__ENABLED]
+text = "Whether the database is backed up on the schedule. Administration → Backups can turn it off or on; «Back up now» works either way."
+
+[var.BACKUP__SCHEDULE]
+text = "When: a five-field cron (`minute hour day month weekday`) in `APP__TIMEZONE`. The process refuses to start with an invalid one."
+
+[var.BACKUP__KEEP]
+text = "How many backups stay; after each backup the oldest beyond this number are removed."
+
+[var.BACKUP__PG_DUMP]
+text = "The `pg_dump` used when the image has none of the server's own version. The gateway image has those of PostgreSQL 14 to 18 and uses the server's, so that the server's own `pg_restore` reads the backup; this one (18's) also reads older servers."
+
+[var.BACKUP__TIMEOUT_SECONDS]
+text = "The longest a backup (the dump and its upload) may take before it is stopped and reported as failed."
+
+[var.BACKUP__BUCKET]
+text = "The bucket of the backups; empty = `STORAGE__BUCKET`. A bucket of their own is advised in production, so that losing one does not lose both."
+
+[var.BACKUP__PREFIX]
+text = "The folder of the backups in the bucket. Only files named like a backup (`tabularia-<time>.dump`) are listed, downloaded or removed there."
+
+[var.BACKUP__ENDPOINT]
+text = "Another object storage for the backups; empty = `STORAGE__ENDPOINT`."
+
+[var.BACKUP__REGION]
+text = "The region of `BACKUP__ENDPOINT`; empty = `STORAGE__REGION`."
+
+[var.BACKUP__ACCESS_KEY]
+text = "Keys of the backups' bucket when they are not the storage's; empty = `STORAGE__ACCESS_KEY` and `STORAGE__SECRET_KEY`. Read by the engine only: the chart keeps them out of the gateway."
+
+[var.BACKUP__SECRET_KEY]
+text = "The secret of `BACKUP__ACCESS_KEY`."
 
 [var.ORCHESTRATOR__QUEUE_POLL_SECONDS]
 text = "Seconds between two looks at the queue of flow executions."
@@ -533,7 +592,7 @@ text = "The gateway's callback, e.g. `https://tabularia.example.com/api/auth/sso
 text = "Scopes asked for, separated by spaces; must include `openid`."
 
 [var.OIDC__GROUPS_CLAIM]
-text = "Claim that carries the groups: `groups` for Keycloak, `roles` for Entra ID app roles."
+text = "Where the groups are: a claim (`groups` for Keycloak's group mapper, `roles` for Entra ID app roles) or a path into the token, as it appears in the JSON: `realm_access.roles` and `resource_access.<client id>.roles` for Keycloak's realm and client roles (a client id with dots works). Several, comma-separated, are joined: `groups,realm_access.roles`. A path the id_token does not carry is looked up in the access token (Keycloak puts the roles there by default), then in the provider's userinfo."
 
 [var.OIDC__GROUP_ALLOWLIST]
 text = "Identity-provider groups mapped onto Tabularia groups, separated by commas. Empty = all of them."
@@ -564,6 +623,13 @@ text = "How long the identity provider's discovery document is trusted before it
 
 [var.OIDC__TIMEOUT_SECONDS]
 text = "Timeout of the calls to the identity provider."
+
+[var.OIDC__CA_FILE]
+text = "A PEM file of the certificate authorities to trust for the identity provider, besides the public ones: a company Keycloak whose certificate the company's own authority signed (without it every sign-in fails with `idp_untrusted`). The chart mounts it from `oidc.caCert` or `oidc.caConfigMap`. The gateway refuses to start when the file is not one."
+helm = "oidc.caCert / oidc.caConfigMap"
+
+[var.OIDC__VERIFY_TLS]
+text = "Whether the identity provider's certificate is checked. `false` accepts it even when no trusted authority signed it (a company Keycloak whose authority you cannot give in `OIDC__CA_FILE`): whoever can stand between the gateway and the provider can then sign in as anyone, administrators included. The gateway logs a warning at every start. See [Single sign-on with Keycloak](sso-keycloak.md#a-certificate-the-gateway-does-not-trust)."
 
 [var.OIDC__LOGIN_TX_TTL_SECONDS]
 text = "How long a sign-in may stay on the identity provider's page (the state, nonce and PKCE cookie)."
@@ -614,6 +680,10 @@ section = "gateway-openlineage"
 [var.OPENLINEAGE_CONFIG]
 text = "The OpenLineage library's own configuration file (`openlineage.yml`), as an alternative to the variables above."
 section = "gateway-openlineage"
+
+[var.KUBERNETES__CLUSTER_VIEW]
+text = "Turns Administration → Cluster on: the pods of Tabularia and of its users' code, their state, CPU and memory (with metrics-server) and the warning events, read-only, for administrators and observers."
+helm = "`clusterView.enabled` (on by default)"
 
 [var.KUBERNETES__SCALING]
 text = "Turns the panel's autoscaling bounds on."
@@ -725,7 +795,7 @@ text = "Memory an environment's image build requests and may use: it lands only 
 text = "The longest the check of a new image may take: pulling it on a node, starting it, listing its packages."
 
 [var.SCRIPTS__POLL_SECONDS]
-text = "How often the orchestrators look at the builds in progress."
+text = "How often the orchestrators look at the builds in progress, and the longest wait between two looks at a Script node's Job (the first come sooner)."
 
 [var.SCRIPTS__LOG_MAX_BYTES]
 text = "How much of the end of a build's log is kept and shown in the panel."
@@ -746,7 +816,7 @@ text = "Where the editor's «Run» of a Container node and «Try in the cluster�
 text = "«Try in the cluster»: how long a node may take to download an image before the check says it did not."
 
 [var.CONTAINERS__POLL_SECONDS]
-text = "How often the gateway looks at a Job of the containers' namespaces while it waits for it."
+text = "The longest wait between two looks at a Job of the containers' namespaces while the gateway waits for it (the first come sooner)."
 
 [var.CONTAINERS__JOB_TTL_SECONDS]
 text = "Kubernetes removes a finished Job of the containers' namespaces after this long, if Tabularia has not removed it first."

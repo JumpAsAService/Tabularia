@@ -539,6 +539,11 @@ async def cancella_ambiente(environment_id: int, request: Request, session: Sess
     usati = flows_using(session, env.id)
     if usati:
         raise HTTPException(status_code=409, detail={"code": "in_use", "flows": usati})
+    from app.services.saved_scripts import scripts_using_environment
+
+    scripts = scripts_using_environment(session, env.id)
+    if scripts:
+        raise HTTPException(status_code=409, detail={"code": "in_use", "flows": [], "scripts": scripts})
     if not script_builds.disabled_reason():
         try:
             await script_builds.cancel_environment(env.id)
@@ -841,6 +846,10 @@ async def prova_nodo(flow_id: int, node_id: str, request: Request, session: Sess
     if node is None or kind not in ("script", "container"):
         raise HTTPException(status_code=404, detail="The node is not in the saved flow: save the flow first")
     if kind == "script":
+        # a node by reference: the saved script's environment and settings
+        node, _saved = script_nodes.resolved(session, node)
+        if script_nodes.saved_script_id(node) is not None and _saved is None:
+            raise HTTPException(status_code=422, detail="The node runs a saved script that no longer exists")
         env_id = (node.get("data") or {}).get("environmentId")
         env = session.get(ScriptEnvironment, env_id) if isinstance(env_id, int) else None
         if env is None:
@@ -859,11 +868,19 @@ async def prova_nodo(flow_id: int, node_id: str, request: Request, session: Sess
     for live in session.exec(select(Run).where(Run.flow_id == flow.id, Run.kind == kind,
                                                Run.trigger_type == "trial",
                                                Run.status.in_(("PENDING", "STARTED")))).all():  # type: ignore[attr-defined]
-        if json.loads(live.script or "{}").get("node_id") == node_id:
+        if json.loads(live.script or "{}").get("node_id") != node_id:
+            continue
+        # a trial left behind by a process that stopped is closed now, not offered again
+        live = await script_runs.close_if_orphaned(session, live)
+        if live.status in ("PENDING", "STARTED"):
             return TrialOut(run_id=live.id)
+    # the budget from the start: a trial whose process dies before it begins is closed too
+    from app.services import container_runs
+
+    budget = (container_runs.budget_seconds if kind == "container" else script_runs.budget_seconds)(node.get("data") or {})
     run = Run(kind=kind, flow_id=flow.id, task_id="", status="PENDING", launched_by=user.id,
               trigger_type="trial", input_key="", output_bucket="", output_key="",
-              script=json.dumps({"node_id": node_id, "label": label, "trial": True}))
+              script=json.dumps({"node_id": node_id, "label": label, "trial": True, "budget_seconds": budget}))
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -891,9 +908,9 @@ def output_dei_nodi(flow_id: int, session: Session = Depends(get_session),
         raise HTTPException(status_code=404, detail="Flow not found")
     ensure_can(session, user, flow.project_id, Capability.VIEW)
     flow_access.ensure_can_open(session, user, flow.definition)
-    saved = {n.get("id"): script_nodes.code_fingerprint(n) for n in script_nodes.script_nodes(flow.definition)}
+    saved = {n.get("id"): script_nodes.fingerprint(session, n) for n in script_nodes.script_nodes(flow.definition)}
     saved |= {n.get("id"): container_nodes.fingerprint(n) for n in container_nodes.container_nodes(flow.definition)}
-    out = script_runs.latest_outputs(session, flow.id)
+    out = script_runs.latest_outputs(session, flow.id, list(saved))
     for node_id, entry in out.items():
         for part in ("last", "output"):
             if entry[part]:

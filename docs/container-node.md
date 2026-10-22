@@ -22,7 +22,8 @@ image comes ready from a registry.
 - The cluster's nodes can download from the registry: **Try in the cluster**, in the
   registry's page, checks it.
 - For a node with an input or an output, the **scripts bucket** is configured
-  (Administration → Scripting environments): the data travels through it.
+  (Administration → Scripting environments): the data travels through it. When its
+  address is private, it is listed in `networkPolicy.userCodePrivateCIDRs`.
 
 The palette offers **Container**, under *Control*, when at least one registry is granted
 to you.
@@ -43,6 +44,25 @@ to you.
 Command and arguments are passed to the container as they are, one item per line: there
 is no shell, so no quotes, no `$VARIABLE` expansion, no `&&`. Write
 `sh` / `-c` / `your command line` when you want a shell, if the image has one.
+
+**What the image does.** Once the image and the tag are chosen, the panel reads the
+image's own configuration from the registry and shows it: what it runs by default (its
+entrypoint and its command), the platforms it is built for, when it was built and its
+size, its title, description and version when it declares them. **Copy these into the
+command and the arguments** starts from what the image runs (the entrypoint becomes the
+command, the image's command the arguments), to change it. The variables the image
+declares are offered with their default value: one click adds one to the node's
+variables.
+
+## In a flow group
+
+A flow group can run an image as a step of its own: **Container (an image)** in the
+group's catalog, or in the picker of an empty cell. The cell opens the same panel,
+without a flow's «Run»: registry, image, tag, command, arguments, variables, resources,
+timeout and retries. The cell has no data in and none out; its failure stops the group.
+Whoever has no access to the registry or the image cannot open the group, as for a flow
+with a Container node. A change of a cell's image, command or variables by someone else
+switches off the group's schedule, set by another person.
 
 ## What the container finds
 
@@ -120,7 +140,10 @@ With that image, the node's **Arguments** `--days` and `30` run
 The run is a child of the flow's run, shown in **Runs** with the node's name: the
 registry and the image with its digest, the command, the attempts, the exit code, the
 resources, the variables it was given (the secret ones by name only) and the end of its
-log.
+log. The log is read when the Job ends (the last 256 KB, `CONTAINERS__LOG_MAX_BYTES`)
+and kept in Tabularia's database, not in the cluster: the Job goes once it is read.
+After 30 days (`ORCHESTRATOR__LOG_RETENTION_DAYS`; 0 keeps them) it is emptied, and the
+run stays.
 
 **Run**, in the node's panel, runs the node of the saved flow (saving it first) on the
 sources' development sample, without the nodes after it, in the trials' namespace.
@@ -134,7 +157,7 @@ What it writes becomes the preview of the nodes after it, until the node changes
 | Pod Security | `baseline`: the container may run as root, as most existing images do; privileged containers, host paths, host network and added capabilities are refused |
 | service account | none: the Pod gets no token of the cluster's API |
 | privileges | `allowPrivilegeEscalation: false` (no `sudo` inside) |
-| network | what the cluster's own network policies allow in that namespace: the chart's policies do not cover it |
+| network | the internet and the other namespaces of the cluster, never the pods of Tabularia's namespace nor the cloud metadata addresses; private networks outside the cluster only when listed in `networkPolicy.userCodePrivateCIDRs`; nothing reaches into the container (`containers.blockTabularia`, on by default). The details, and what to list, in [Python and R in flows](scripting.md#network-policies) |
 
 ## Who may do what
 

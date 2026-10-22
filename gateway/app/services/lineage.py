@@ -45,6 +45,10 @@ def _dsid(i: int) -> str:
     return f"ds:{i}"
 
 
+def _sid(i: int) -> str:
+    return f"script:{i}"
+
+
 def _cid(i: int) -> str:
     return f"conn:{i}"
 
@@ -212,15 +216,51 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 # dest == "datasource": la produzione è già coperta dall'arco
                 # PUBLISH persistito (datasources.flow_id) quando il flusso è girato
 
+    # ── saved scripts (docs/specs/saved-scripts.md): the ones this person sees, the
+    # datasources they declare as inputs, the one they publish, the flows that run
+    # them by reference ─────────────────────────────────────────────────────────
+    from app.services import saved_scripts
+    from app.services.script_builds import disabled_reason
+
+    stmt = saved_scripts.visible_query(session, user) if disabled_reason() is None else None
+    scripts = list(session.exec(stmt).all()) if stmt is not None else []
+    script_ids = {x.id for x in scripts}
+    for x in scripts:
+        g.add_node(_sid(x.id), type="script", label=x.name, project_id=x.project_id,
+                   meta={"scheduled": bool(x.run_schedule), "version": x.current_version})
+        content = saved_scripts.content_of(session, x)
+        for item in content.get("inputs") or []:
+            ds_id = item.get("datasource_id")
+            if not isinstance(ds_id, int):
+                continue
+            source = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id, unknown_ds)
+            g.add_edge(source, _sid(x.id), EDGE_READ)                # datasource → script
+        out = content.get("output") or {}
+        if out.get("publish"):
+            published = next((d for d in datasources if d.project_id == out.get("project_id")
+                              and d.name == out.get("name")), None)
+            if published is not None:
+                g.add_edge(_sid(x.id), _dsid(published.id), EDGE_PUBLISH)  # script → datasource
+    if script_ids:
+        from app.services.script_nodes import saved_script_id, script_nodes
+
+        for f in flows:
+            if '"scriptId"' not in (f.definition or ""):
+                continue
+            for node in script_nodes(f.definition):
+                sid = saved_script_id(node)
+                if sid in script_ids:
+                    g.add_edge(_fid(f.id), _sid(sid), EDGE_ORCHESTRATE)  # flow → script it runs
+
     # ── motivo dei riferimenti non risolti: rimosso vs non accessibile ─────────
     # una sola query per tipo controlla l'ESISTENZA (non il contenuto: non si
     # rivela nulla di un oggetto in un progetto non leggibile oltre "esiste").
     if unknown_ds:
-        existing = {i for (i,) in session.exec(select(Datasource.id).where(Datasource.id.in_(unknown_ds)))}
+        existing = set(session.exec(select(Datasource.id).where(Datasource.id.in_(unknown_ds))).all())
         for i in unknown_ds:
             g.nodes[_dsid(i)]["meta"]["reason"] = "inaccessible" if i in existing else "removed"
     if unknown_flow:
-        existing = {i for (i,) in session.exec(select(Flow.id).where(Flow.id.in_(unknown_flow)))}
+        existing = set(session.exec(select(Flow.id).where(Flow.id.in_(unknown_flow))).all())
         for i in unknown_flow:
             g.nodes[_fid(i)]["meta"]["reason"] = "inaccessible" if i in existing else "removed"
 

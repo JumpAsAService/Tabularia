@@ -4,7 +4,7 @@ run belong to what the administration panel grants.
 - a Container node: its container registry, and its image, must be granted to the
   person (services/registry_access.py);
 - a Script node: its scripting environment must be one they may use
-  (services/script_nodes.py `can_use`).
+  (services/script_nodes.py `can_use`), or the saved script it runs one they may see.
 
 Whoever lacks one cannot open the flow, nor anything that would show or run it on
 their behalf (its versions, a copy, a save, a run, a schedule, a group of flows, the
@@ -57,6 +57,17 @@ def blocked(session: Session, user: User, definition: Optional[str]) -> Optional
         if env is not None and not can_use(session, user, env):
             return (f"This flow runs scripts in the environment «{env.name}», which you have no access to: "
                     "an administrator can grant it")
+    if '"scriptId"' in definition:
+        from app.models import SavedScript
+        from app.services import saved_scripts
+        from app.services.script_nodes import saved_script_id, script_nodes
+
+        for node in script_nodes(definition):
+            sid = saved_script_id(node)
+            script = session.get(SavedScript, sid) if sid is not None else None
+            if script is not None and not saved_scripts.can_see(session, user, script):
+                # its name stays unsaid: for this person the script does not exist
+                return "This flow runs a saved script you have no access to"
     return None
 
 

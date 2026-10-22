@@ -16,7 +16,7 @@ runs the group, when it runs.
 """
 import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete as sa_delete, update as sa_update
@@ -27,7 +27,7 @@ from app.core.routing import RottaCheRilascia
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Datasource, Flow, FlowGroup, Project, Run, User
+from app.models import Datasource, Flow, FlowGroup, Project, Run, SavedScript, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.schemas.models import (
@@ -37,13 +37,14 @@ from app.schemas.models import (
     FlowGroupDetail,
     FlowGroupOut,
     FlowGroupRunOut,
+    FlowGroupCell,
     FlowGroupScheduleUpdate,
     FlowGroupUpdate,
 )
 from app.services import audit, orchestrator
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
-from app.services import flow_access
+from app.services import flow_access, saved_scripts
 from app.services.flow_groups import definition_of
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
@@ -71,20 +72,59 @@ def _cells(definition: FlowGroupDefinition):
                 yield cell
 
 
-def _objects(session: Session, definition: FlowGroupDefinition) -> tuple[dict[int, Flow], dict[int, Datasource]]:
-    """The flows and datasources a definition names, read with one query per kind."""
-    flow_ids = {c.id for c in _cells(definition) if c.kind == "flow"}
-    ds_ids = {c.id for c in _cells(definition) if c.kind == "refresh"}
-    flows = {f.id: f for f in session.exec(select(Flow).where(Flow.id.in_(flow_ids))).all()} if flow_ids else {}
-    dss = {d.id: d for d in session.exec(select(Datasource).where(Datasource.id.in_(ds_ids))).all()} if ds_ids else {}
-    return flows, dss
+_KIND_NAME = {"flow": "flow", "refresh": "datasource", "script": "saved script", "container": "container"}
+_OBJECT_KINDS = ("flow", "refresh", "script")  # cells naming an object; a container cell holds its settings
+
+
+def _container_node(cell: FlowGroupCell) -> dict:
+    """A container cell as the Container node it runs like (services/container_nodes.py)."""
+    return {"id": f"container-cell-{cell.id}", "type": "container", "data": dict(cell.container or {})}
+
+
+def _cell_key(cell: FlowGroupCell) -> tuple:
+    """What a cell runs: a container cell's settings count, not only its number."""
+    if cell.kind == "container":
+        from app.services import container_nodes
+
+        return (cell.kind, cell.id, container_nodes.fingerprint(_container_node(cell)))
+    return (cell.kind, cell.id)
+
+
+def _container_blocked(session: Session, user: User, definition: FlowGroupDefinition) -> Optional[str]:
+    """Why this person may not open a group with these container cells, as for a flow
+    with Container nodes (services/registry_access.py `blocked`)."""
+    import json as _json
+
+    from app.services import registry_access
+
+    nodes = [_container_node(c) for c in _cells(definition) if c.kind == "container"]
+    if not nodes:
+        return None
+    return registry_access.blocked(session, user, _json.dumps({"nodes": nodes}))
+
+
+def _objects(session: Session, definition: FlowGroupDefinition) -> dict[str, dict[int, Any]]:
+    """The flows, datasources and saved scripts a definition names, by kind of cell,
+    read with one query per kind."""
+    ids = {k: {c.id for c in _cells(definition) if c.kind == k} for k in _OBJECT_KINDS}
+    model = {"flow": Flow, "refresh": Datasource, "script": SavedScript}
+    return {k: ({o.id: o for o in session.exec(select(model[k]).where(model[k].id.in_(ids[k]))).all()} if ids[k] else {})
+            for k in _OBJECT_KINDS}
+
+
+def _sees(session: Session, user: User, kind: str, obj, readable: set[int]) -> bool:
+    """A saved script is seen by whoever may also use its environment: for anyone
+    else it does not exist (docs/specs/saved-scripts.md)."""
+    if kind == "script":
+        return saved_scripts.can_see(session, user, obj)
+    return obj.project_id in readable
 
 
 def _checked(session: Session, user: User, definition: FlowGroupDefinition,
              before: FlowGroupDefinition | None = None) -> FlowGroupDefinition:
     readable = perm_service.readable_project_ids(session, user)
-    flows, dss = _objects(session, definition)
-    already = {(c.kind, c.id) for c in _cells(before)} if before is not None else set()
+    objects = _objects(session, definition)
+    already = {_cell_key(c) for c in _cells(before)} if before is not None else set()
     errors: list[str] = []
     for n, row in enumerate(definition.steps, 1):
         in_step: set[tuple[str, int]] = set()
@@ -94,15 +134,18 @@ def _checked(session: Session, user: User, definition: FlowGroupDefinition,
             key = (cell.kind, cell.id)
             if key in in_step:
                 # two runs of the same flow, or two refreshes of one datasource, at once
-                errors.append(f"step {n}: the same {'flow' if cell.kind == 'flow' else 'datasource'} twice")
+                errors.append(f"step {n}: the same {_KIND_NAME[cell.kind]} twice")
                 continue
             in_step.add(key)
-            if key in already:
+            if _cell_key(cell) in already:
                 continue
-            obj = flows.get(cell.id) if cell.kind == "flow" else dss.get(cell.id)
+            if cell.kind == "container":
+                errors.extend(f"step {n}: {e}" for e in _container_errors(session, user, cell))
+                continue
+            obj = objects[cell.kind].get(cell.id)
             # not found and not visible read the same: a group does not reveal what exists
-            if obj is None or obj.project_id not in readable:
-                errors.append(f"step {n}: {'flow' if cell.kind == 'flow' else 'datasource'} {cell.id} not found")
+            if obj is None or not _sees(session, user, cell.kind, obj, readable):
+                errors.append(f"step {n}: {_KIND_NAME[cell.kind]} {cell.id} not found")
             elif cell.kind == "refresh" and obj.kind != "database":
                 errors.append(f"step {n}: '{obj.name}' is published by a flow, it cannot be refreshed")
             elif not perm_service.has_capability(session, user, obj.project_id, Capability.RUN):
@@ -117,9 +160,31 @@ def _checked(session: Session, user: User, definition: FlowGroupDefinition,
     return definition
 
 
+def _container_errors(session: Session, user: User, cell: FlowGroupCell) -> list[str]:
+    """A container cell, new or changed: well formed, its registry in use, its image one
+    this person may run."""
+    from app.models import ContainerRegistry
+    from app.services import container_nodes, registry_access
+
+    node = _container_node(cell)
+    try:
+        container_nodes.check(node, complete=True)
+    except HTTPException as e:
+        return [str(e.detail)]
+    d = node["data"]
+    registry = session.get(ContainerRegistry, d.get("registryId")) if isinstance(d.get("registryId"), int) else None
+    if registry is None or not registry.enabled:
+        return [f"container «{container_nodes.label(node)}»: choose a registry that is in use"]
+    if not perm_service.is_admin(session, user) and (
+            not registry_access.can_use(session, user, registry)
+            or not registry_access.repository_allowed(session, user, registry, str(d.get("repository") or ""))):
+        return [f"container «{container_nodes.label(node)}»: the image is not among those of «{registry.name}» you may use"]
+    return []
+
+
 def _labels(session: Session, user: User, definition: FlowGroupDefinition) -> list[list[Optional[FlowGroupCellLabel]]]:
     readable = perm_service.readable_project_ids(session, user)
-    flows, dss = _objects(session, definition)
+    objects = _objects(session, definition)
     out: list[list[Optional[FlowGroupCellLabel]]] = []
     for row in definition.steps:
         labels: list[Optional[FlowGroupCellLabel]] = []
@@ -127,10 +192,15 @@ def _labels(session: Session, user: User, definition: FlowGroupDefinition) -> li
             if cell is None:
                 labels.append(None)
                 continue
-            obj = flows.get(cell.id) if cell.kind == "flow" else dss.get(cell.id)
+            if cell.kind == "container":
+                d = cell.container or {}
+                image = f"{d.get('repository') or '?'}:{(d.get('tag') or 'latest')}"
+                labels.append(FlowGroupCellLabel(name=str(d.get("label") or image)))
+                continue
+            obj = objects[cell.kind].get(cell.id)
             if obj is None:
                 labels.append(FlowGroupCellLabel(missing=True))
-            elif obj.project_id not in readable:
+            elif not _sees(session, user, cell.kind, obj, readable):
                 labels.append(FlowGroupCellLabel(hidden=True))
             else:
                 labels.append(FlowGroupCellLabel(name=obj.name, project_id=obj.project_id))
@@ -179,6 +249,9 @@ def list_project_flow_groups(project_id: int, user: User = Depends(get_current_u
 def get_flow_group(group_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     group = _get_group(session, group_id)
     ensure_can(session, user, group.project_id, Capability.VIEW)
+    why = _container_blocked(session, user, definition_of(group))
+    if why:
+        raise HTTPException(status_code=403, detail=why.replace("This flow", "This flow group"))
     return _detail(session, user, group)
 
 
@@ -266,7 +339,7 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
     if body.definition is not None:
         before = definition_of(group)
         definition = _checked(session, user, body.definition, before=before)
-        new_cells = {(c.kind, c.id) for c in _cells(definition)} - {(c.kind, c.id) for c in _cells(before)}
+        new_cells = {_cell_key(c) for c in _cells(definition)} - {_cell_key(c) for c in _cells(before)}
         if new_cells and group.run_schedule and group.run_scheduled_by != user.id:
             # the schedule would run cells its author never chose, with the author's rights
             schedule_off = {"turned_off": True, "author": group.run_scheduled_by,
@@ -406,6 +479,8 @@ def _runs_out(session: Session, user: User, runs: list[Run]) -> list[FlowGroupRu
             grid = []
         grids.append(grid if isinstance(grid, list) else [])
     named = [c for grid in grids for row in grid if isinstance(row, list) for c in row if isinstance(c, dict)]
+    script_ids = {c.get("id") for c in named if c.get("kind") == "script"}
+    scripts = {x.id: x for x in session.exec(select(SavedScript).where(SavedScript.id.in_(script_ids))).all()} if script_ids else {}
     flow_ids = {c.get("id") for c in named if c.get("kind") == "flow"}
     ds_ids = {c.get("id") for c in named if c.get("kind") == "refresh"}
     folder_of = {
@@ -416,6 +491,14 @@ def _runs_out(session: Session, user: User, runs: list[Run]) -> list[FlowGroupRu
                           session.exec(select(Datasource.id, Datasource.project_id).where(Datasource.id.in_(ds_ids))).all()})
     readable = perm_service.readable_project_ids(session, user)
     for cell in named:
+        if cell.get("kind") == "container":
+            continue  # its settings are the group's: whoever reads the group reads its outcome
+        if cell.get("kind") == "script":
+            script = scripts.get(cell.get("id"))
+            if script is None or not saved_scripts.can_see(session, user, script):
+                cell["error"] = None
+                cell["run_id"] = None
+            continue
         folder = folder_of.get((cell.get("kind"), cell.get("id")))
         if folder not in readable:
             cell["error"] = None

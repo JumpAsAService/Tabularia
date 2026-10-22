@@ -611,3 +611,42 @@ async def editor_tag(registry_id: int, repository: str = Query(max_length=255),
         return TagsOut(repository=name, tags=await cr.tags(client_of(r), name))
     except cr.RegistryError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+class ImageEnv(BaseModel):
+    name: str
+    value: str
+
+
+class ImageConfigOut(BaseModel):
+    """What an image does when nothing overrides it (container_registry.image_config)."""
+    repository: str
+    reference: str
+    digest: Optional[str]
+    platforms: list[str]
+    created: Optional[str]
+    entrypoint: list[str]
+    cmd: list[str]
+    env: list[ImageEnv]
+    labels: dict[str, str]
+    working_dir: Optional[str]
+    user: Optional[str]
+    size: Optional[int]
+
+
+@editor_router.get("/{registry_id}/image", response_model=ImageConfigOut)
+async def editor_image(registry_id: int, repository: str = Query(max_length=255), reference: str = Query("latest", max_length=200),
+                       session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    """The configuration of an image this person may use: what the Container node shows
+    and offers to fill in. Nothing about the others, not even whether they exist."""
+    _acceso()
+    r = session.get(ContainerRegistry, registry_id)
+    if r is None or not r.enabled or not registry_access.can_use(session, user, r):
+        raise HTTPException(status_code=404, detail="Container registry not found")
+    name = cr.repository_name(r.host, repository)
+    if not registry_access.repository_allowed(session, user, r, name):
+        raise HTTPException(status_code=403, detail=f"{name} is not among the images of {r.name} you may use")
+    try:
+        return ImageConfigOut(**await cr.image_config(client_of(r), name, reference or "latest"))
+    except cr.RegistryError as e:
+        raise HTTPException(status_code=502, detail=str(e))

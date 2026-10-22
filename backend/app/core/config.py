@@ -53,6 +53,34 @@ class StorageSettings(BaseModel):
         return v if isinstance(v, SecretStr) else SecretStr(str(v))
 
 
+
+class BackupStorageSettings(BaseModel):
+    """Where the backups of Tabularia's database go (the gateway makes them, the engine
+    stores them: it holds the storage credentials). Empty fields fall back to STORAGE__*:
+    by default the backups are in Tabularia's bucket, under their own prefix. A bucket of
+    their own is advised in production, so that losing one does not lose both."""
+    # env: BACKUP__BUCKET — empty = STORAGE__BUCKET
+    bucket: str = ""
+    # env: BACKUP__PREFIX — the folder of the backups in the bucket
+    prefix: str = "backups/postgres/"
+    # env: BACKUP__ENDPOINT / BACKUP__REGION / BACKUP__ACCESS_KEY / BACKUP__SECRET_KEY —
+    # another object storage, or other keys; empty = STORAGE__*'s
+    endpoint: str = ""
+    region: str = ""
+    access_key: str = ""
+    secret_key: SecretStr = Field(default=SecretStr(""))
+
+    @field_validator("secret_key", mode="before")
+    @classmethod
+    def _ensure_secret(cls, v: object) -> SecretStr:
+        return v if isinstance(v, SecretStr) else SecretStr(str(v))
+
+    @field_validator("prefix")
+    @classmethod
+    def _prefix(cls, v: str) -> str:
+        v = v.strip().lstrip("/")
+        return v if not v or v.endswith("/") else v + "/"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Celery Configuration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -594,6 +622,7 @@ class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    backup: BackupStorageSettings = Field(default_factory=BackupStorageSettings)
     celery: CelerySettings = Field(default_factory=CelerySettings)
     workers: WorkersSettings = Field(default_factory=WorkersSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)

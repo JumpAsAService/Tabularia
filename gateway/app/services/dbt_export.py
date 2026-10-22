@@ -482,8 +482,14 @@ class _Progetto:
                 return None
             return (ds.bucket, ds.key) if ds and ds.key else None
 
+        # an email has no model: its chain is not resolved (it may read what a script writes)
+        uscite_def = [n for n in ctx["definition"].get("nodes") or [] if isinstance(n, dict) and n.get("type") == "output"]
+        da_risolvere = nodi
+        if any((n.get("data") or {}).get("destType") == "email" for n in uscite_def):
+            da_risolvere = [n["id"] for n in uscite_def if (n.get("data") or {}).get("destType") != "email"
+                            and (nodi is None or n["id"] in nodi)]
         try:
-            catene = resolve_output_chains(ctx["definition"], resolve_ds, self.bucket, node_ids=nodi)
+            catene = resolve_output_chains(ctx["definition"], resolve_ds, self.bucket, node_ids=da_risolvere)
         except FlowResolveError as e:
             raise _errore_di_lettura(flow, e)
         except (KeyError, TypeError, ValueError, AttributeError) as e:
@@ -533,7 +539,9 @@ class _Progetto:
         if not scripts:
             return
         edges = definition.get("edges") or []
-        outputs = [n for n in nodes.values() if n.get("type") == "output" and (nodi is None or n["id"] in nodi)]
+        # an email is not exported (no model), so what it reads does not matter here
+        outputs = [n for n in nodes.values() if n.get("type") == "output" and (nodi is None or n["id"] in nodi)
+                   and (n.get("data") or {}).get("destType") != "email"]
         feeding: set[str] = set()
         for out in outputs:
             upstream = _scripts_upstream(out["id"], nodes, edges)

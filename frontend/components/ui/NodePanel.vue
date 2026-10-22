@@ -33,6 +33,8 @@ const props = defineProps<{
   scriptOutputs?: Record<string, any>
   scriptTrials?: Record<string, any>
   flowDirty?: boolean
+  // an observer: the Script and Container panels show their code and settings read-only
+  readOnly?: boolean
 }>()
 const { t } = useI18n()
 // names repeat across folders: every catalog picker shows where each option lives
@@ -740,6 +742,7 @@ function pickDatasource(id: number | null) {
         :outputs="scriptOutputs?.[node.id] ?? null"
         :trial="scriptTrials?.[node.id] ?? null"
         :flow-dirty="!!flowDirty"
+        :read-only="!!readOnly"
         @update="emit('update', $event)"
         @delete="emit('delete')"
         @run="emit('script-run', node.id)"
@@ -753,6 +756,7 @@ function pickDatasource(id: number | null) {
         :outputs="scriptOutputs?.[node.id] ?? null"
         :trial="scriptTrials?.[node.id] ?? null"
         :flow-dirty="!!flowDirty"
+        :read-only="!!readOnly"
         @update="emit('update', $event)"
         @delete="emit('delete')"
         @run="emit('script-run', node.id)"

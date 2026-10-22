@@ -21,6 +21,7 @@ import base64
 import hashlib
 import logging
 import secrets
+import ssl
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -32,6 +33,7 @@ from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.config import OidcSettings, get_settings
+from app.core.security import CLOCK_SKEW_SECONDS
 from app.models import Group, User, UserGroupLink
 from app.services.permissions import user_group_ids
 
@@ -57,11 +59,55 @@ TX_TOKEN_TYPE = "sso_tx"
 TX_COOKIE = "tab_sso_tx"
 
 
+def tx_cookie_name(state: str) -> str:
+    """One cookie per sign-in, named after its `state`: a second sign-in started meanwhile
+    (a double click, another tab, the Back button) no longer overwrites the first one's,
+    which then came back as `state_mismatch`. The name holds a digest of the state, never
+    the state itself."""
+    return f"{TX_COOKIE}_{hashlib.sha256(state.encode()).hexdigest()[:16]}"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Discovery (.well-known) e chiavi di firma, con cache
 # ─────────────────────────────────────────────────────────────────────────────
 _discovery_cache: dict[str, tuple[float, dict]] = {}
 _jwks_clients: dict[str, jwt.PyJWKClient] = {}
+
+
+_tls_contexts: dict[str, ssl.SSLContext] = {}
+
+
+def tls(cfg: OidcSettings) -> ssl.SSLContext | bool:
+    """How the provider's certificate is checked: against the public authorities, and,
+    with OIDC__CA_FILE, the company's own too (a Keycloak whose certificate its own
+    authority signed). With OIDC__VERIFY_TLS=false, not at all: the installer's choice."""
+    if not cfg.verify_tls:
+        return False
+    if not cfg.ca_file:
+        return True
+    ctx = _tls_contexts.get(cfg.ca_file)
+    if ctx is None:
+        import certifi
+
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        ctx.load_verify_locations(cafile=cfg.ca_file)
+        _tls_contexts[cfg.ca_file] = ctx
+    return ctx
+
+
+def _untrusted(e: BaseException) -> bool:
+    return isinstance(e, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(e)
+
+
+def unreachable(what: str, url: str, e: BaseException) -> "SsoError":
+    """The provider could not be reached: a certificate the gateway does not trust has a
+    code and a remedy of its own (the most common case in a company)."""
+    if _untrusted(e):
+        host = url.split("/")[2] if "://" in url else url
+        return SsoError(f"{what}: the certificate of {host} is not signed by an authority the gateway trusts "
+                        f"({e}). Give the company's certificate authority in OIDC__CA_FILE (the chart's "
+                        "oidc.caCert), or accept it with OIDC__VERIFY_TLS=false", "idp_untrusted")
+    return SsoError(f"{what} on {url}: {e}", "idp_unreachable")
 
 
 def discovery(cfg: Optional[OidcSettings] = None, *, force: bool = False) -> dict:
@@ -71,11 +117,11 @@ def discovery(cfg: Optional[OidcSettings] = None, *, force: bool = False) -> dic
     if cached and not force and time.time() - cached[0] < cfg.discovery_ttl_seconds:
         return cached[1]
     try:
-        res = httpx.get(cfg.discovery_url, timeout=cfg.timeout_seconds)
+        res = httpx.get(cfg.discovery_url, timeout=cfg.timeout_seconds, verify=tls(cfg))
         res.raise_for_status()
         doc = res.json()
     except Exception as e:
-        raise SsoError(f"OIDC discovery failed on {cfg.discovery_url}: {e}", "idp_unreachable") from e
+        raise unreachable("OIDC discovery failed", cfg.discovery_url, e) from e
     for field in ("authorization_endpoint", "token_endpoint", "jwks_uri", "issuer"):
         if not doc.get(field):
             raise SsoError(f"discovery document without '{field}'", "idp_invalid")
@@ -87,13 +133,18 @@ def reset_discovery_cache() -> None:
     """Usata dai test e dopo un cambio di configurazione."""
     _discovery_cache.clear()
     _jwks_clients.clear()
+    _tls_contexts.clear()
 
 
 def _jwks_client(jwks_uri: str, timeout: float) -> jwt.PyJWKClient:
     client = _jwks_clients.get(jwks_uri)
     if client is None:
         # PyJWKClient tiene in cache le chiavi e le ri-scarica al rollover
-        client = jwt.PyJWKClient(jwks_uri, timeout=int(timeout) or 10)
+        context = tls(get_settings().oidc)
+        if context is False:  # OIDC__VERIFY_TLS=false: the keys too, on the same terms
+            context = ssl._create_unverified_context()
+        client = jwt.PyJWKClient(jwks_uri, timeout=int(timeout) or 10,
+                                 ssl_context=context if isinstance(context, ssl.SSLContext) else None)
         _jwks_clients[jwks_uri] = client
     return client
 
@@ -132,7 +183,8 @@ def read_tx_token(token: str, state_from_idp: str) -> dict:
     """Valida il cookie di transazione e il `state` (difesa CSRF sul callback)."""
     s = get_settings()
     try:
-        payload = jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm])
+        payload = jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm],
+                             leeway=CLOCK_SKEW_SECONDS)
     except jwt.PyJWTError as e:
         raise SsoError(f"transaction cookie invalid or expired: {e}", "tx_expired") from e
     if payload.get("typ") != TX_TOKEN_TYPE:
@@ -175,9 +227,9 @@ def exchange_code(cfg: OidcSettings, code: str, verifier: str) -> dict:
         "code_verifier": verifier,
     }
     try:
-        res = httpx.post(doc["token_endpoint"], data=data, timeout=cfg.timeout_seconds)
+        res = httpx.post(doc["token_endpoint"], data=data, timeout=cfg.timeout_seconds, verify=tls(cfg))
     except Exception as e:
-        raise SsoError(f"token endpoint unreachable: {e}", "idp_unreachable") from e
+        raise unreachable("token endpoint unreachable", doc["token_endpoint"], e) from e
     if res.status_code != 200:
         # il corpo può contenere dettagli della configurazione: resta nei log
         raise SsoError(f"token exchange refused ({res.status_code}): {res.text[:300]}", "code_rejected")
@@ -195,6 +247,8 @@ def validate_id_token(cfg: OidcSettings, id_token: str, nonce: str) -> dict:
     try:
         key = _jwks_client(doc["jwks_uri"], cfg.timeout_seconds).get_signing_key_from_jwt(id_token)
     except Exception as e:
+        if _untrusted(e):
+            raise unreachable("signing keys not readable", doc["jwks_uri"], e) from e
         raise SsoError(f"signing key not retrievable from the JWKS: {e}", "jwks_error") from e
     try:
         claims = jwt.decode(
@@ -204,6 +258,7 @@ def validate_id_token(cfg: OidcSettings, id_token: str, nonce: str) -> dict:
             audience=cfg.client_id,
             issuer=doc["issuer"],
             options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+            leeway=CLOCK_SKEW_SECONDS,  # the provider's clock is not the gateway's
         )
     except jwt.PyJWTError as e:
         raise SsoError(f"invalid id_token: {e}", "token_invalid") from e
@@ -287,21 +342,104 @@ def ensure_admitted(cfg: OidcSettings, email: str, idp_groups: set[str]) -> None
             raise SsoError(f"{email} does not belong to any allowed group", "not_allowed")
 
 
-def normalize_groups(claims: dict, cfg: OidcSettings) -> set[str]:
-    """Nomi dei gruppi dalla claim configurata, normalizzati.
+def group_sources(cfg: OidcSettings) -> list[str]:
+    """Where the groups are (OIDC__GROUPS_CLAIM): one or more claims, comma-separated, each a
+    top-level name (`groups`) or a path into the token (`realm_access.roles`,
+    `resource_access.tabularia.roles`, Keycloak's realm and client roles)."""
+    return [s.strip() for s in (cfg.groups_claim or "").split(",") if s.strip()]
 
-    Keycloak può emettere i path completi (`/analytics`): si toglie lo slash
-    iniziale. La claim può essere una lista o una stringa singola.
+
+def claim_at(claims: Any, path: str) -> Any:
+    """The value at a dotted path of the claims, None when it is not there. A key that
+    itself holds dots (a client id such as `tabularia.gateway`) is matched before the
+    path is split there, the longest first."""
+    if not isinstance(claims, dict):
+        return None
+    if path in claims:
+        return claims[path]
+    parts = path.split(".")
+    for i in range(len(parts) - 1, 0, -1):
+        head = ".".join(parts[:i])
+        if head in claims:
+            found = claim_at(claims[head], ".".join(parts[i:]))
+            if found is not None:
+                return found
+    return None
+
+
+def normalize_groups(claims: dict, cfg: OidcSettings, more: tuple[dict, ...] = ()) -> set[str]:
+    """Nomi dei gruppi dalle claim configurate, normalizzati.
+
+    Each source is read from the id_token's claims, else from the first of `more` that
+    has it (the access token's claims, userinfo: see `more_group_claims`). Keycloak può
+    emettere i path completi (`/analytics`): si toglie lo slash iniziale. A claim may be
+    a list or a single string.
     """
-    raw = claims.get(cfg.groups_claim)
-    if raw is None:
-        return set()
-    if isinstance(raw, str):
-        raw = [raw]
-    if not isinstance(raw, (list, tuple, set)):
-        return set()
-    names = {str(g).strip().lstrip("/").strip() for g in raw}
+    names: set[str] = set()
+    for source in group_sources(cfg):
+        raw = claim_at(claims, source)
+        for other in more:
+            if raw is not None:
+                break
+            raw = claim_at(other, source)
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, (list, tuple, set)):
+            continue
+        names |= {str(g).strip().lstrip("/").strip() for g in raw}
     return {n for n in names if n}
+
+
+def _access_token_claims(cfg: OidcSettings, doc: dict, access_token: str, subject: str) -> Optional[dict]:
+    """The claims of the access token, when it is a JWT signed by the provider's keys,
+    issued by it and for the same person: Keycloak puts the realm's and the clients' roles
+    (`realm_access`, `resource_access`) there and not in the id_token. Its audience is a
+    resource server's, not ours, so it is not checked; it came straight from the token
+    endpoint, server to server. Anything else (an opaque token, Entra's Graph tokens): None."""
+    try:
+        key = _jwks_client(doc["jwks_uri"], cfg.timeout_seconds).get_signing_key_from_jwt(access_token)
+        algs = [a for a in (doc.get("id_token_signing_alg_values_supported") or []) if a in ALLOWED_ALGS] or list(ALLOWED_ALGS)
+        claims = jwt.decode(access_token, key.key, algorithms=algs, issuer=doc["issuer"], leeway=CLOCK_SKEW_SECONDS,
+                            options={"verify_aud": False, "require": ["exp", "iss", "sub"]})
+    except Exception as e:  # noqa: BLE001 — not a token we can read: the other sources remain
+        logger.info("SSO: groups not read from the access token (%s)", type(e).__name__)
+        return None
+    return claims if str(claims.get("sub")) == str(subject) else None
+
+
+def _userinfo_claims(cfg: OidcSettings, doc: dict, access_token: str, subject: str) -> Optional[dict]:
+    """The provider's userinfo answer, for the same person (OIDC: its `sub` must match)."""
+    endpoint = doc.get("userinfo_endpoint")
+    if not endpoint:
+        return None
+    try:
+        res = httpx.get(endpoint, headers={"Authorization": f"Bearer {access_token}"}, timeout=cfg.timeout_seconds,
+                        verify=tls(cfg))
+        res.raise_for_status()
+        claims = res.json()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("SSO: userinfo not readable (%s)", type(e).__name__)
+        return None
+    return claims if isinstance(claims, dict) and str(claims.get("sub")) == str(subject) else None
+
+
+def more_group_claims(cfg: OidcSettings, claims: dict, tokens: dict) -> tuple[dict, ...]:
+    """Where to look for the group sources the id_token does not carry: the access token
+    (Keycloak's roles are there by default), then userinfo. Asked only when one is missing."""
+    missing = [s for s in group_sources(cfg) if claim_at(claims, s) is None]
+    access_token = tokens.get("access_token")
+    if not missing or not access_token:
+        return ()
+    doc = discovery(cfg)
+    found: list[dict] = []
+    at = _access_token_claims(cfg, doc, access_token, claims.get("sub"))
+    if at is not None:
+        found.append(at)
+    if any(all(claim_at(c, s) is None for c in found) for s in missing):
+        info = _userinfo_claims(cfg, doc, access_token, claims.get("sub"))
+        if info is not None:
+            found.append(info)
+    return tuple(found)
 
 
 def _group_ids(session: Session, names: set[str], auto_create: bool) -> set[int]:
@@ -321,7 +459,8 @@ def _group_ids(session: Session, names: set[str], auto_create: bool) -> set[int]
     return ids
 
 
-def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSettings] = None) -> tuple[User, dict]:
+def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSettings] = None,
+                       groups: Optional[set[str]] = None) -> tuple[User, dict]:
     """Crea/aggiorna l'utente dalle claim e riconcilia i suoi gruppi.
 
     Ritorna `(utente, dettaglio)`; il dettaglio finisce nell'audit e dice cosa è
@@ -330,8 +469,11 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     cfg = cfg or get_settings().oidc
     issuer, subject = identity_from_claims(claims)
     email = email_from_claims(claims)
+    # the groups the provider asserts: given by login_user (which also reads the access
+    # token and userinfo), or from the claims alone
+    asserted = set(groups) if groups is not None else normalize_groups(claims, cfg)
     # 0) ha il permesso di entrare? Prima di creare o collegare qualsiasi cosa.
-    ensure_admitted(cfg, email, normalize_groups(claims, cfg))
+    ensure_admitted(cfg, email, set(asserted))
 
     # 1) CHI sta entrando: sempre dalla coppia stabile dell'IdP, mai dall'email.
     user = session.exec(
@@ -398,7 +540,7 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
         user.full_name = str(claims["name"]).strip()
         session.add(user)
 
-    idp_groups = normalize_groups(claims, cfg)
+    idp_groups = set(asserted)
     # il gruppo che concede i privilegi admin non è un gruppo di progetto: si
     # valuta PRIMA dell'allowlist, così non serve elencarlo anche lì
     superuser_before = user.is_superuser
@@ -467,7 +609,8 @@ def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings
         # se l'IdP dichiara l'email NON verificata non ci si fida: sarebbe una
         # via di takeover. Se la claim manca (tipico di Entra) si procede.
         raise SsoError("email not verified by the IdP", "email_unverified")
-    return provision_and_sync(session, claims, cfg)
+    groups = normalize_groups(claims, cfg, more_group_claims(cfg, claims, tokens))
+    return provision_and_sync(session, claims, cfg, groups=groups)
 
 
 def public_config() -> dict[str, Any]:

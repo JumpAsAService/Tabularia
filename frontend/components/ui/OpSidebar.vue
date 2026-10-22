@@ -12,7 +12,12 @@ const { t } = useI18n()
 // readOnly: osservatore — solo trasformazioni, niente sorgenti, controllo, output
 // scripting: the person may write Script nodes (an environment is there for them)
 // containers: the person may use Container nodes (a registry is granted to them)
-const props = defineProps<{ operations: string[]; readOnly?: boolean; scripting?: boolean; containers?: boolean }>()
+// scriptingOff / containersOff: an installation without Kubernetes (Docker Compose): the
+// two nodes are shown greyed out, not dragged, with the reason
+const props = defineProps<{
+  operations: string[]; readOnly?: boolean; scripting?: boolean; containers?: boolean
+  scriptingOff?: boolean; containersOff?: boolean
+}>()
 
 // ── ricerca: filtra le voci della palette per etichetta (o nome operazione) ──
 const query = ref('')
@@ -36,8 +41,8 @@ const showRefresh = computed(() => !props.readOnly && match(t('opSidebar.refresh
 const showRunflow = computed(() => !props.readOnly && match(t('opSidebar.runFlowLabel'), 'runflow'))
 const showOutput = computed(() => !props.readOnly && match(t('opSidebar.outputLabel'), 'output'))
 const showComment = computed(() => !props.readOnly && match(t('opSidebar.noteLabel'), 'comment', 'commento'))
-const showScript = computed(() => !props.readOnly && !!props.scripting && match(t('scripting.node.title'), 'script', 'python', 'r'))
-const showContainer = computed(() => !props.readOnly && !!props.containers && match(t('containers.node.title'), 'container', 'docker', 'image'))
+const showScript = computed(() => !props.readOnly && (!!props.scripting || !!props.scriptingOff) && match(t('scripting.node.title'), 'script', 'python', 'r'))
+const showContainer = computed(() => !props.readOnly && (!!props.containers || !!props.containersOff) && match(t('containers.node.title'), 'container', 'docker', 'image'))
 const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value || showScript.value || showContainer.value)
 const noResults = computed(
   () =>
@@ -130,9 +135,12 @@ function onDragStart(ev: DragEvent, kind: string) {
       <div
         v-if="showScript"
         class="item"
-        draggable="true"
+        :class="{ spento: scriptingOff }"
+        :draggable="!scriptingOff"
+        :title="scriptingOff ? $t('scripting.kubernetesOnly') : undefined"
+        :aria-disabled="scriptingOff ? 'true' : undefined"
         :style="{ '--item-color': '#34d399' }"
-        @dragstart="onDragStart($event, 'script')"
+        @dragstart="!scriptingOff && onDragStart($event, 'script')"
       >
         <FileCode2 :size="15" class="item-icon" />
         <span>{{ $t('scripting.node.title') }}</span>
@@ -141,9 +149,12 @@ function onDragStart(ev: DragEvent, kind: string) {
       <div
         v-if="showContainer"
         class="item"
-        draggable="true"
+        :class="{ spento: containersOff }"
+        :draggable="!containersOff"
+        :title="containersOff ? $t('scripting.kubernetesOnly') : undefined"
+        :aria-disabled="containersOff ? 'true' : undefined"
         :style="{ '--item-color': '#818cf8' }"
-        @dragstart="onDragStart($event, 'container')"
+        @dragstart="!containersOff && onDragStart($event, 'container')"
       >
         <Container :size="15" class="item-icon" />
         <span>{{ $t('containers.node.title') }}</span>
@@ -185,6 +196,7 @@ function onDragStart(ev: DragEvent, kind: string) {
 </template>
 
 <style scoped>
+.item.spento { opacity: .45; cursor: not-allowed; }
 .opsidebar {
   height: 100%;
   overflow-y: auto;

@@ -87,7 +87,7 @@ def test_una_differenza_coi_modelli_ferma_il_passo_senza_mezze_modifiche(databas
         c.execute(text("ALTER TABLE users ADD COLUMN zz_a_mano INTEGER"))      # toccato a mano, o un modello senza revisione
     with database_temporaneo.connect() as c:
         assert any("zz_a_mano" in str(d) for d in m.differenze(c))
-    with pytest.raises(RuntimeError, match="non è quello dei modelli"):
+    with pytest.raises(RuntimeError, match="differs from the models"):
         m.migra(database_temporaneo)
     # un database di prima di Alembic che non torna: l'adozione si annulla tutta.
     # «Di prima di Alembic» = lo schema della BASE, senza tabelle né colonne delle
@@ -100,7 +100,7 @@ def test_una_differenza_coi_modelli_ferma_il_passo_senza_mezze_modifiche(databas
         m.command.upgrade(m._config(c), m.BASE)
         c.execute(text("DROP TABLE alembic_version"))
         c.execute(text("ALTER TABLE users ADD COLUMN zz_a_mano INTEGER"))
-    with pytest.raises(RuntimeError, match="non è quello dei modelli"):
+    with pytest.raises(RuntimeError, match="differs from the models"):
         m.migra(database_temporaneo)
     with database_temporaneo.connect() as c:
         assert m.revisione(c) is None and not inspect(c).has_table("alembic_version")

@@ -53,6 +53,17 @@ def test_a_script_no_exported_output_reads_is_left_out_with_a_note(session, scen
     assert payload["models"]
 
 
+def test_an_email_after_a_script_does_not_refuse_the_export(session, scena):
+    """An email has no model: what it sends may come from a script, the export goes on."""
+    email = {"id": "m", "type": "output", "data": {"destType": "email", "connectionId": 1, "emailTo": ["a@b.it"]}}
+    definition = {"nodes": [_nodo_src("src", scena.ordini.id), _uscita("o", scena, "Orders copy"), SCRIPT, email],
+                  "edges": [_edge("src", "o"), _edge("src", "py"), _edge("py", "m")]}
+    flow = make_flow(session, name="Copy and mail", project_id=scena.cartella.id, definition=json.dumps(definition))
+    payload = d.build_export_payload(session, flow, "data-prep", "duckdb")
+    assert payload["models"]
+    assert any("Script node «Score»" in n for n in payload["notes"])
+
+
 # ── the Container node: an image is not dbt either ───────────────────────────
 CONTAINER = {"id": "img", "type": "container", "data": {"label": "Forecast", "registryId": 1,
                                                         "repository": "team/forecast", "tag": "v1"}}

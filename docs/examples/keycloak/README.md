@@ -9,6 +9,10 @@ and [`gateway/app/services/sso.py`](../../../gateway/app/services/sso.py) for th
 SSO is **optional**: with `OIDC__ISSUER` unset, Tabularia keeps local email + password
 login and the login page shows no SSO button.
 
+This folder is for trying SSO on a laptop with Docker Compose. To connect your company's
+Keycloak to Tabularia installed with Helm, follow
+[Single sign-on with Keycloak](../../sso-keycloak.md).
+
 ## What's here
 
 | file | purpose |
@@ -111,6 +115,23 @@ You should see:
 
 That `groups` array is what `provision_and_sync()` maps onto `user_groups`.
 
+**Roles instead of groups.** If the team keeps the access in Keycloak **roles**, point
+`OIDC__GROUPS_CLAIM` at them with the path they have in the token's JSON:
+
+| What | `OIDC__GROUPS_CLAIM` |
+|---|---|
+| realm roles | `realm_access.roles` |
+| roles of a client | `resource_access.<client id>.roles`, e.g. `resource_access.tabularia-gateway.roles` |
+| groups and realm roles together | `groups,realm_access.roles` |
+
+Each name maps onto the Tabularia group with the same name, as groups do. Keycloak puts
+`realm_access` and `resource_access` in the **access token** only, by default: the gateway
+reads them there (it checks the signature with the realm's keys, the issuer, the expiry
+and that it is the same person) when the id_token does not carry the path, then asks
+userinfo. Keycloak adds its own realm roles too (`offline_access`, `uma_authorization`,
+`default-roles-<realm>`): with `OIDC__AUTO_CREATE_GROUPS=false` they match no group and
+are ignored; `OIDC__GROUP_ALLOWLIST` keeps out whatever else should not count.
+
 ## 5. Point the gateway at Keycloak
 
 Copy the OIDC block into `infrastructure/.env`:
@@ -152,17 +173,22 @@ toggles) is identical.
 
 ## Troubleshooting
 
-A failed sign-in lands back on the login page with `?sso_error=<code>`; the full reason
-is in the gateway log (never in the browser, to avoid leaking IdP or config details).
+A failed sign-in lands back on the login page with `?sso_error=<code>`, and for the
+common ones a sentence telling the person what to do; the full reason is in the gateway
+log, and the code in the audit log (*Failed SSO login*), never more in the browser, to
+avoid leaking IdP or config details.
 
 | code | meaning |
 |---|---|
 | `sso_disabled` | `OIDC__ISSUER` not set on the gateway |
+| `idp_untrusted` | the provider's certificate is signed by an authority the gateway does not trust (a company one): give its certificate in `OIDC__CA_FILE` (the chart's `oidc.caCert` or `oidc.caConfigMap`), or accept it with `OIDC__VERIFY_TLS=false` — see [Single sign-on with Keycloak](../../sso-keycloak.md#a-certificate-the-gateway-does-not-trust) for what that costs |
 | `idp_unreachable` | discovery or token endpoint not reachable from the gateway container (usually the hostname wrinkle in step 2) |
 | `idp_denied` | the IdP refused the login (consent, disabled account, policy) |
-| `state_mismatch`, `tx_missing`, `tx_expired` | the login transaction cookie is missing, stale or tampered with: start the sign-in again |
+| `tx_missing` | the sign-in's cookie did not come back with the callback. Almost always the sign-in **started at another address** than `OIDC__REDIRECT_URI`'s: another host name for the same server, an IP, `http` against `https`. The browser keeps the cookies of each address apart. The gateway logs `sign-in started at <address> but OIDC__REDIRECT_URI is on <address>` when it begins: have people open Tabularia at the redirect URI's address (or register theirs too). Otherwise the browser blocks cookies |
+| `tx_expired` | the sign-in took longer than `OIDC__LOGIN_TX_TTL_SECONDS` (10 minutes; a first sign-in that asks to set a password or a second factor can), or the clocks of the gateway's machines are more than a minute apart: check NTP on the nodes |
+| `state_mismatch` | the `state` Keycloak sent back is not the one of this sign-in (a tampered link, or a callback of an older sign-in replayed): start again. A second sign-in started meanwhile — a double click, another tab — no longer causes it: each sign-in has its own cookie |
 | `code_rejected` | the IdP refused the code exchange: usually a wrong client secret or a redirect URI that does not match exactly |
-| `token_invalid`, `nonce_mismatch`, `jwks_error` | id_token failed validation (signature, `iss`, `aud`, `exp`, `nonce`) |
+| `token_invalid`, `nonce_mismatch`, `jwks_error` | id_token failed validation (signature, `iss`, `aud`, `exp`, `nonce`). The gateway allows a minute between its clock and Keycloak's; further apart, an id_token is "not yet valid" or already expired: check NTP on both. A wrong `iss` is usually Keycloak's hostname (`KC_HOSTNAME`) differing from `OIDC__ISSUER` |
 | `no_email` | the token carries no email, UPN or `preferred_username` in email form |
 | `no_identity` | the token carries no `iss`/`sub`, so it identifies nobody. Tabularia recognises a user by that stable pair, never by the email alone |
 | `email_unverified` | an account with this email already exists and the IdP does not assert the address as **verified**, so it will not be claimed. Linking an existing account happens once and requires proof; a brand-new account does not |

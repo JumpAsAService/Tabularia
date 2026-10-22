@@ -9,6 +9,7 @@ Copre le due cuciture del design (docs/design/sso-group-mapping.md):
 Niente rete: discovery e id_token sono sostituiti da fixture. Il flusso completo
 contro un IdP vero sta in docs/examples/keycloak/.
 """
+import ssl
 import time
 
 import pytest
@@ -117,7 +118,8 @@ def test_tx_token_scaduto_o_di_tipo_errato():
     from app.core.config import get_settings
 
     secret = get_settings().jwt.secret.get_secret_value()
-    scaduto = pyjwt.encode({"typ": sso.TX_TOKEN_TYPE, "state": "s", "exp": int(time.time()) - 10}, secret, algorithm="HS256")
+    # expired beyond the clocks' tolerance (a minute)
+    scaduto = pyjwt.encode({"typ": sso.TX_TOKEN_TYPE, "state": "s", "exp": int(time.time()) - 120}, secret, algorithm="HS256")
     with pytest.raises(sso.SsoError) as e:
         sso.read_tx_token(scaduto, "s")
     assert e.value.code == "tx_expired"
@@ -401,9 +403,10 @@ def test_senza_superuser_group_lo_stato_admin_non_viene_toccato(session):
 class FakeRequest:
     """Minimo indispensabile per le rotte: cookie, header e client (per l'audit)."""
 
-    def __init__(self, cookies=None):
+    def __init__(self, cookies=None, headers=None, scheme="http"):
         self.cookies = cookies or {}
-        self.headers = {}
+        self.headers = headers or {}
+        self.url = type("U", (), {"scheme": scheme})()
         self.client = type("C", (), {"host": "127.0.0.1"})()
 
 
@@ -540,3 +543,308 @@ def test_an_admin_group_given_in_tabularia_survives_an_authoritative_sso_login(s
     session.commit()
     user, detail = sso.provision_and_sync(session, claims("capo@x.local", groups=[]), cfg(authoritative=True))
     assert "admins" in group_names(session, user) and detail["groups_removed"] == []
+
+
+# ── Robustness of the sign-in (problems seen in a company with Keycloak) ─────────────
+def _sso_on(monkeypatch, redirect="https://tabularia.acme.example/api/auth/sso/callback"):
+    from app.core import config as config_mod
+    from app.routes import sso as sso_routes
+
+    enabled = Settings(oidc={"issuer": "https://idp/realms/t", "client_id": "c", "client_secret": "s",
+                             "redirect_uri": redirect, "post_login_url": "https://tabularia.acme.example/auth/callback"})
+    for mod in (sso_routes, config_mod, sso):
+        monkeypatch.setattr(mod, "get_settings", lambda: enabled)
+    monkeypatch.setattr(sso, "discovery", lambda c: {"authorization_endpoint": "https://idp/auth", "issuer": "https://idp/realms/t"})
+    return sso_routes
+
+
+def _tx_cookie(res) -> tuple[str, str]:
+    header = res.headers["set-cookie"]
+    name, rest = header.split("=", 1)
+    return name, header
+
+
+def test_a_second_sign_in_does_not_overwrite_the_first(monkeypatch):
+    """A double click, another tab, the Back button: each sign-in keeps its own cookie,
+    and the first one, finished, finds its own (it came back as state_mismatch)."""
+    routes = _sso_on(monkeypatch)
+    first = routes.sso_login(FakeRequest(headers={"host": "tabularia.acme.example", "x-forwarded-proto": "https"}))
+    second = routes.sso_login(FakeRequest(headers={"host": "tabularia.acme.example", "x-forwarded-proto": "https"}))
+    (n1, _), (n2, _) = _tx_cookie(first), _tx_cookie(second)
+    assert n1 != n2 and n1.startswith(sso.TX_COOKIE + "_")
+    state1 = first.headers["location"].split("state=")[1].split("&")[0]
+    assert sso.tx_cookie_name(state1) == n1
+
+
+def test_the_transaction_cookie_is_secure_as_the_browser_is(monkeypatch):
+    """Secure follows the browser's scheme, as the session's cookie: decided from an https
+    redirect URI, a sign-in started on http lost its cookie (the browser refuses it)."""
+    routes = _sso_on(monkeypatch)
+    on_http = _tx_cookie(routes.sso_login(FakeRequest(headers={"host": "tabularia.acme.example"})))[1]
+    on_https = _tx_cookie(routes.sso_login(FakeRequest(headers={"host": "tabularia.acme.example", "x-forwarded-proto": "https"})))[1]
+    assert "Secure" not in on_http and "Secure" in on_https
+
+
+def test_a_missing_cookie_says_which_addresses_differ(monkeypatch, session, caplog):
+    routes = _sso_on(monkeypatch)
+    with caplog.at_level("WARNING"):
+        routes.sso_login(FakeRequest(headers={"host": "10.0.0.7"}))
+        res = routes.sso_callback(FakeRequest(headers={"host": "tabularia.acme.example", "x-forwarded-proto": "https"}),
+                                  code="abc", state="s", session=session)
+    assert "error=tx_missing" in res.headers["location"]
+    log = caplog.text
+    assert "sign-in started at http://10.0.0.7" in log and "https://tabularia.acme.example" in log
+
+
+def test_clocks_a_little_apart_do_not_break_the_sign_in():
+    """A token signed by a machine whose clock is ahead — another gateway replica, the
+    identity provider — is "not yet valid" by a strict reading: a margin of a minute."""
+    import jwt as pyjwt
+
+    from app.core.config import get_settings
+    from app.core.security import decode_access_token
+
+    secret = get_settings().jwt.secret.get_secret_value()
+    ahead = int(time.time()) + 5
+    tx = pyjwt.encode({"typ": sso.TX_TOKEN_TYPE, "state": "s", "iat": ahead, "exp": ahead + 600}, secret, algorithm="HS256")
+    assert sso.read_tx_token(tx, "s")["state"] == "s"
+    session_token = pyjwt.encode({"sub": "1", "sid": "x", "iat": ahead, "exp": ahead + 600}, secret, algorithm="HS256")
+    assert decode_access_token(session_token)["sub"] == "1"
+
+
+def test_an_id_token_from_a_provider_whose_clock_is_ahead_is_accepted(monkeypatch):
+    """Keycloak on another machine, its clock two seconds ahead: its id_token's iat is in
+    the gateway's future. Refused, every sign-in failed with token_invalid."""
+    import jwt as pyjwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ahead = int(time.time()) + 2
+    claims = {"iss": "https://idp/realms/t", "aud": "c", "sub": "u1", "nonce": "n", "iat": ahead, "exp": ahead + 300}
+    token = pyjwt.encode(claims, key, algorithm="RS256")
+    signing = type("K", (), {"key": key.public_key()})()
+    monkeypatch.setattr(sso, "discovery", lambda c: {"issuer": "https://idp/realms/t", "jwks_uri": "https://idp/jwks",
+                                                     "id_token_signing_alg_values_supported": ["RS256"]})
+    monkeypatch.setattr(sso, "_jwks_client", lambda uri, t: type("J", (), {"get_signing_key_from_jwt": lambda self, tok: signing})())
+    assert sso.validate_id_token(cfg(client_id="c"), token, "n")["sub"] == "u1"
+
+
+# ── Groups from a path of the token (Keycloak's realm and client roles) ──────────────
+def test_a_path_reaches_nested_claims_and_keys_with_dots():
+    claims = {"groups": ["/analytics"], "realm_access": {"roles": ["finance"]},
+              "resource_access": {"tabularia.gateway": {"roles": ["analyst"]}, "account": {"roles": ["view"]}}}
+    assert sso.claim_at(claims, "realm_access.roles") == ["finance"]
+    assert sso.claim_at(claims, "resource_access.tabularia.gateway.roles") == ["analyst"]
+    assert sso.claim_at(claims, "realm_access.nothing") is None and sso.claim_at(claims, "nope") is None
+    both = cfg(groups_claim="groups, realm_access.roles,resource_access.tabularia.gateway.roles")
+    assert sso.normalize_groups(claims, both) == {"analytics", "finance", "analyst"}
+
+
+def _keycloak(monkeypatch, *, access_extra=None, userinfo=None, sub="u1"):
+    """A provider like Keycloak by default: groups in the id_token, roles only in the
+    access token."""
+    import jwt as pyjwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = int(time.time())
+    base = {"iss": "https://idp/realms/t", "sub": "u1", "iat": now, "exp": now + 300}
+    id_token = pyjwt.encode({**base, "aud": "c", "nonce": "n", "email": "mario@acme.example", "groups": ["analytics"]},
+                            key, algorithm="RS256")
+    access = pyjwt.encode({**base, "sub": sub, "realm_access": {"roles": ["finance"]}, **(access_extra or {})},
+                          key, algorithm="RS256")
+    signing = type("K", (), {"key": key.public_key()})()
+    monkeypatch.setattr(sso, "discovery", lambda c=None, **k: {
+        "issuer": "https://idp/realms/t", "jwks_uri": "https://idp/jwks", "userinfo_endpoint": "https://idp/userinfo",
+        "id_token_signing_alg_values_supported": ["RS256"], "token_endpoint": "https://idp/token",
+        "authorization_endpoint": "https://idp/auth"})
+    monkeypatch.setattr(sso, "_jwks_client", lambda uri, t: type("J", (), {"get_signing_key_from_jwt": lambda self, tok: signing})())
+    monkeypatch.setattr(sso, "exchange_code", lambda c, code, v: {"id_token": id_token, "access_token": access})
+    asked = []
+
+    def fake_get(url, headers=None, timeout=None, verify=True):
+        asked.append(url)
+        return type("R", (), {"raise_for_status": lambda self: None, "json": lambda self: userinfo or {"sub": "u1"}})()
+    monkeypatch.setattr(sso.httpx, "get", fake_get)
+    return asked
+
+
+def test_realm_roles_come_from_the_access_token(session, monkeypatch):
+    asked = _keycloak(monkeypatch)
+    for name in ("analytics", "finance"):
+        make_group(session, name)
+    user, detail = sso.login_user(session, "code", {"cv": "v", "nonce": "n"}, cfg(client_id="c", groups_claim="groups,realm_access.roles"))
+    assert sorted(detail["groups"]) == ["analytics", "finance"]
+    assert asked == []  # found in the access token: no call to userinfo
+
+
+def test_an_access_token_of_someone_else_is_not_read(session, monkeypatch):
+    _keycloak(monkeypatch, sub="someone-else")
+    make_group(session, "finance")
+    _, detail = sso.login_user(session, "code", {"cv": "v", "nonce": "n"}, cfg(client_id="c", groups_claim="realm_access.roles"))
+    assert detail["groups"] == []
+
+
+def test_userinfo_when_neither_token_has_the_path(session, monkeypatch):
+    asked = _keycloak(monkeypatch, userinfo={"sub": "u1", "org": {"teams": ["sales"]}})
+    make_group(session, "sales")
+    _, detail = sso.login_user(session, "code", {"cv": "v", "nonce": "n"}, cfg(client_id="c", groups_claim="org.teams"))
+    assert detail["groups"] == ["sales"] and asked == ["https://idp/userinfo"]
+
+
+# ── A provider whose certificate a company's own authority signed ─────────────────────
+def _company_ca(tmp_path):
+    """A certificate authority of a company, as a PEM file."""
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "ACME Internal Root CA")])
+    now = dt.datetime.now(dt.timezone.utc)
+    ca = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+          .serial_number(1).not_valid_before(now).not_valid_after(now + dt.timedelta(days=1))
+          .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True).sign(key, hashes.SHA256()))
+    path = tmp_path / "ca.crt"
+    path.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
+    return str(path)
+
+
+def test_the_company_authority_is_trusted_besides_the_public_ones(tmp_path):
+    sso.reset_discovery_cache()
+    assert sso.tls(cfg()) is True  # without one: the public authorities, as httpx does
+    ctx = sso.tls(cfg(ca_file=_company_ca(tmp_path)))
+    subjects = {dict(x[0] for x in c["subject"]).get("commonName") for c in ctx.get_ca_certs()}
+    assert "ACME Internal Root CA" in subjects and len(subjects) > 50  # the company's and the public ones
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
+
+
+def test_an_untrusted_certificate_says_so_and_what_to_do(monkeypatch):
+    import httpx as real_httpx
+
+    sso.reset_discovery_cache()
+
+    def refused(url, timeout=None, verify=True):
+        raise real_httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate")
+    monkeypatch.setattr(sso.httpx, "get", refused)
+    with pytest.raises(sso.SsoError) as e:
+        sso.discovery(cfg(issuer="https://sso.acme.internal/realms/acme"))
+    assert e.value.code == "idp_untrusted" and "sso.acme.internal" in str(e.value) and "OIDC__CA_FILE" in str(e.value)
+
+    def down(url, timeout=None, verify=True):
+        raise real_httpx.ConnectError("[Errno 111] Connection refused")
+    monkeypatch.setattr(sso.httpx, "get", down)
+    with pytest.raises(sso.SsoError) as e:
+        sso.discovery(cfg(issuer="https://sso.acme.internal/realms/acme"), force=True)
+    assert e.value.code == "idp_unreachable"
+
+
+def test_a_ca_file_that_is_not_one_stops_the_start(tmp_path):
+    bad = tmp_path / "ca.crt"
+    bad.write_text("not a certificate")
+    s = Settings(oidc={"issuer": "https://idp/realms/t", "client_id": "c", "client_secret": "s",
+                       "redirect_uri": "https://t/api/auth/sso/callback", "post_login_url": "https://t/auth/callback",
+                       "ca_file": str(bad)})
+    with pytest.raises(RuntimeError, match="OIDC__CA_FILE"):
+        s.check_sso_config()
+
+
+def test_the_installer_may_accept_an_untrusted_certificate(tmp_path, caplog):
+    """OIDC__VERIFY_TLS=false: the provider's certificate is accepted, whatever signed it,
+    for every call (the keys too), and the start says so."""
+    sso.reset_discovery_cache()
+    off = cfg(verify_tls=False, ca_file=_company_ca(tmp_path))
+    assert sso.tls(off) is False  # it wins over a CA file
+    s = Settings(oidc={"issuer": "https://sso.acme.internal/realms/acme", "client_id": "c", "client_secret": "s",
+                       "redirect_uri": "https://t/api/auth/sso/callback", "post_login_url": "https://t/auth/callback",
+                       "verify_tls": False})
+    with caplog.at_level("WARNING"):
+        s.check_sso_config()
+    assert "NOT checked" in caplog.text and "sso.acme.internal" in caplog.text
+
+
+def _bad_https_server(tmp_path):
+    """A real https server whose certificate is everything a check refuses: self-signed,
+    expired, and made out to another name. It serves a discovery document and the keys."""
+    import datetime as dt
+    import http.server
+    import json
+    import threading
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "wrong.example")])
+    then = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(7).not_valid_before(then).not_valid_after(then + dt.timedelta(days=1))
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName("wrong.example")]), critical=False)
+            .sign(key, hashes.SHA256()))
+    (tmp_path / "srv.crt").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    (tmp_path / "srv.key").write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                                         serialization.NoEncryption()))
+    signer = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    from jwt.algorithms import RSAAlgorithm
+
+    jwk = json.loads(RSAAlgorithm.to_jwk(signer.public_key()))
+    jwk.update({"kid": "k1", "use": "sig", "alg": "RS256"})
+    state = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            base = state["base"]
+            body = ({"issuer": f"{base}/realms/t", "authorization_endpoint": f"{base}/auth",
+                     "token_endpoint": f"{base}/token", "jwks_uri": f"{base}/jwks"}
+                    if self.path.endswith("openid-configuration") else {"keys": [jwk]})
+            data = json.dumps(body).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(tmp_path / "srv.crt", tmp_path / "srv.key")
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    state["base"] = f"https://127.0.0.1:{server.server_address[1]}"
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, state["base"], signer
+
+
+def test_an_unchecked_certificate_is_accepted_for_real_and_a_checked_one_refused(tmp_path, monkeypatch):
+    """Against a real server: a self-signed, expired certificate for another name. Checked,
+    every call is refused as idp_untrusted; with OIDC__VERIFY_TLS=false, the discovery
+    document and the signing keys are read."""
+    import jwt as pyjwt
+
+    from app.core.config import get_settings
+
+    server, base, signer = _bad_https_server(tmp_path)
+    try:
+        sso.reset_discovery_cache()
+        with pytest.raises(sso.SsoError) as e:
+            sso.discovery(cfg(issuer=f"{base}/realms/t"))
+        assert e.value.code == "idp_untrusted"
+
+        off = cfg(issuer=f"{base}/realms/t", verify_tls=False)
+        sso.reset_discovery_cache()
+        doc = sso.discovery(off)
+        assert doc["jwks_uri"] == f"{base}/jwks"
+        # the keys, read by PyJWKClient on the same unchecked terms
+        monkeypatch.setattr(get_settings().oidc, "verify_tls", False)
+        token = pyjwt.encode({"sub": "x"}, signer, algorithm="RS256", headers={"kid": "k1"})
+        key = sso._jwks_client(doc["jwks_uri"], 5).get_signing_key_from_jwt(token)
+        assert key.key_id == "k1"
+    finally:
+        server.shutdown()
+        sso.reset_discovery_cache()

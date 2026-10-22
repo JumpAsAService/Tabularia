@@ -11,7 +11,7 @@
 // di rete del browser per vedere ciò che non si può vedere.
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock } from 'lucide-vue-next'
+import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock, FileCode2 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useSearch, searchHitTarget, type SearchHit, type SearchKind } from '~/composables/useSearch'
@@ -33,9 +33,9 @@ const total = ref(0)
 const cursor = ref(-1) // riga evidenziata dalla tastiera
 
 const ICON: Record<SearchKind, any> = {
-  folder: Folder, flow: Workflow, group: Rows3, datasource: Database, view: Bookmark, connection: Plug,
+  folder: Folder, flow: Workflow, group: Rows3, datasource: Database, view: Bookmark, script: FileCode2, connection: Plug,
 }
-const ORDER: SearchKind[] = ['folder', 'flow', 'group', 'datasource', 'view', 'connection']
+const ORDER: SearchKind[] = ['folder', 'flow', 'group', 'datasource', 'view', 'script', 'connection']
 
 /** Raggruppati per tipo: cinque elenchi corti si leggono meglio di venti righe
  *  mescolate, e il tipo è la prima cosa che serve sapere di un risultato. */

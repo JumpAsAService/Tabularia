@@ -354,7 +354,8 @@ def elimina_utente(session: Session, user_id: int) -> None:
 
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
-        FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedView, Upload, UserSession, Webhook,
+        FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
+        Upload, UserSession, Webhook,
     )
 
     # le conversazioni con l'assistente sono personali: se ne vanno con l'account
@@ -398,6 +399,9 @@ def elimina_utente(session: Session, user_id: int) -> None:
         (Flow, Flow.run_scheduled_by),
         (Datasource, Datasource.refresh_scheduled_by),
         (FlowGroup, FlowGroup.run_scheduled_by),
+        (SavedScript, SavedScript.owner_id),
+        (SavedScript, SavedScript.run_scheduled_by),
+        (SavedScriptVersion, SavedScriptVersion.created_by),
         (AiModel, AiModel.updated_by),
         (Banner, Banner.created_by),
         (DisabledEngine, DisabledEngine.disabled_by),

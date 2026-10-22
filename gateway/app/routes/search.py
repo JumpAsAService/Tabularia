@@ -24,7 +24,7 @@ from sqlmodel import Session, select
 
 from app.db.session import get_session
 from app.deps.auth import get_current_user
-from app.models import Connection, Datasource, Flow, FlowGroup, Project, SavedView, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Project, SavedScript, SavedView, User
 from app.schemas.models import SearchHit, SearchOut
 from app.services import flow_access
 from app.services import permissions as perm_service
@@ -34,7 +34,7 @@ router = APIRouter(route_class=RottaCheRilascia, tags=["search"])
 
 # ordine di presentazione a parità di rilevanza: prima i contenitori, poi ciò che
 # si apre più spesso. Serve anche a rendere deterministico l'ordinamento.
-_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "connection": 5}
+_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "connection": 6}
 
 
 def _like(q: str) -> str:
@@ -53,7 +53,7 @@ def _like(q: str) -> str:
 @router.get("/search", response_model=SearchOut)
 def search_everything(
     q: str = Query("", description="cerca per nome su tutte le risorse"),
-    kind: str | None = Query(None, description="limita a un tipo: folder|flow|group|datasource|view|connection"),
+    kind: str | None = Query(None, description="limita a un tipo: folder|flow|group|datasource|view|script|connection"),
     limit: int = Query(30, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -116,6 +116,17 @@ def search_everything(
             hits.append(SearchHit(
                 kind="view", id=v.id, name=v.name,
                 project_id=v.project_id, project_name=nomi_cartella.get(v.project_id),
+            ))
+
+    # scripts: VIEW on the folder AND the use of their environment (services/saved_scripts.py)
+    from app.services import saved_scripts, script_builds
+
+    stmt = saved_scripts.visible_query(session, user) if script_builds.disabled_reason() is None else None
+    if stmt is not None:
+        for sc in session.exec(stmt.where(SavedScript.name.ilike(pattern, escape="\\"))).all():
+            hits.append(SearchHit(
+                kind="script", id=sc.id, name=sc.name,
+                project_id=sc.project_id, project_name=nomi_cartella.get(sc.project_id),
             ))
 
     # CONNECT è ortogonale a VIEW: chi legge una cartella non ne vede per forza

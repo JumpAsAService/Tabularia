@@ -199,6 +199,7 @@ export interface ScriptNodeRun {
   attempts: number | null
   exit_code: number | null
   log: string
+  log_expired?: boolean // emptied after ORCHESTRATOR__LOG_RETENTION_DAYS
   stale: boolean // the saved code is no longer the one that ran
 }
 export interface ScriptNodeOutput {

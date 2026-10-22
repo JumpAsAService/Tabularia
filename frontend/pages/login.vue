@@ -13,7 +13,7 @@ import PrivacyNotice from '~/components/ui/PrivacyNotice.vue'
 
 const { login, ssoConfig, ssoLogin, setupNeeded, setupAdmin } = useAuth()
 const { rules } = usePasswordRules()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { locale, setLocale, locales } = useLocale()
 
 const email = ref('')
@@ -61,7 +61,11 @@ onMounted(async () => {
   // il callback SSO rimanda qui con ?sso_error=<codice> se qualcosa è andato storto
   const query = new URLSearchParams(window.location.search)
   const code = query.get('sso_error')
-  if (code) error.value = t('login.ssoError', { code })
+  if (code) {
+    // the code, and what to do when there is something to do about it
+    const hint = `login.ssoHint.${code}`
+    error.value = te(hint) ? `${t(hint)} (${code})` : t('login.ssoError', { code })
+  }
   if (query.get('reason') === 'idle') notice.value = t('login.signedOutIdle')
 })
 

@@ -14,6 +14,8 @@ const { t } = useI18n()
 const registries = useRegistriesEditor()
 // the registry's name as it is now (it may have been renamed), else as the node saved it
 const registry = computed(() => registries.state.value?.registries.find((r) => r.id === props.data?.registryId))
+// an installation without Kubernetes keeps the node, greyed out: it does not run there
+const off = computed(() => registries.state.value?.disabled_reason === 'kubernetes')
 const summary = computed(() => {
   const repository = (props.data?.repository ?? '').trim()
   if (!repository) return t('containers.node.chooseImage')
@@ -23,7 +25,7 @@ const registryName = computed(() => registry.value?.name ?? props.data?.registry
 </script>
 
 <template>
-  <div class="node node-container">
+  <div class="node node-container" :class="{ spento: off }" :title="off ? t('scripting.kubernetesOnly') : undefined">
     <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq h-left-bottom" />
     <div class="node-title">
@@ -38,6 +40,7 @@ const registryName = computed(() => registry.value?.name ?? props.data?.registry
 </template>
 
 <style scoped>
+.spento { opacity: .45; }
 .node-container { --node-accent: #818cf8; min-width: 180px; }
 .node-icon { color: var(--node-accent); }
 .node-body { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

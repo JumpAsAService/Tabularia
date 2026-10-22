@@ -27,8 +27,8 @@ Docker, a fresh `git clone` of `main`). The screenshots come from that run.
 
 ## 1. Prerequisites
 
-**Docker.** Docker Engine with the Compose plugin (the `docker compose` command, not
-the old `docker-compose`). This guide was run with Docker Engine 29 and Compose 5 on
+**Docker.** Docker Engine with the Compose plugin, version 2.24 or later (the
+`docker compose` command, not the old `docker-compose`). This guide was run with Docker Engine 29 and Compose 5 on
 x86_64 Linux; Docker Desktop on macOS and Windows works the same way. Check:
 
 ```bash
@@ -45,7 +45,7 @@ to edit.
 | | Measured | Give Docker at least |
 |---|---|---|
 | CPU | 8 cores used for the first build | 4 cores |
-| Memory | 2.6 GB at rest, with the sample data | 8 GB. The workers may use up to 4–6 GB each while they work (the `*_MEM_LIMIT` values in `.env`) |
+| Memory | 2.6 GB at rest, with the sample data | 8 GB. The engine and the two workers may grow to 4–6 GB each while they work (14 GB together): with less memory for Docker, lower `BACKEND_MEM_LIMIT`, `WORKER_MEM_LIMIT` and `PREVIEW_WORKER_MEM_LIMIT` in `.env` |
 | Disk | 13.5 GB after the first start, with the sample data (images and build cache take most of it) | 20 GB free |
 | Time | 2 min 42 s for the first `docker compose up -d` (8 cores, a fast connection); then about 15 s until the sign-in page answers | count 5–15 minutes on a laptop or a slower link |
 
@@ -61,12 +61,12 @@ browser on the same machine.
 | 3001 | Grafana |
 | 9001 / 9002 | MinIO console / MinIO S3 API |
 | 5433 | PostgreSQL (Tabularia's metadata) |
-| 5434, 8124 | the sample databases (PostgreSQL, ClickHouse), only with the sample data |
+| 5434, 8124 | the sample databases (PostgreSQL, ClickHouse), unless you leave the sample data out |
 
 On Linux, this prints the ones already taken (nothing printed: all free):
 
 ```bash
-ss -ltn | grep -E ':(3000|3001|8000|9001|9002|5433)\b'
+ss -ltn | grep -E ':(3000|3001|8000|9001|9002|5433|5434|8124)\b'
 ```
 
 > On a remote server the browser needs both 3000 and 8000 on its own `localhost`:
@@ -120,7 +120,8 @@ with its default: [Configuration reference](configuration.md).
 docker compose up -d
 ```
 
-The first time, Compose builds the images (the engine, the gateway, the app) and pulls
+The first time, Compose builds the images (the engine, the gateway, the app, the sample
+data loader) and pulls
 the others: 2–3 minutes on a fast machine, 5–15 on a laptop. The command returns when
 every container has started. Then check:
 
@@ -128,7 +129,8 @@ every container has started. Then check:
 docker compose ps
 ```
 
-`postgres`, `redis`, `minio` and `gateway` must say `(healthy)`; the others `Up`
+`postgres`, `redis`, `minio`, `gateway`, `sampledb-postgres` and `sampledb-clickhouse`
+must say `(healthy)`; the others `Up`
 (`cadvisor` reports `health: starting` for its first minute). A container that says
 `Restarting` has a problem: see [Troubleshooting](#troubleshooting).
 
@@ -145,7 +147,7 @@ after `up` returns.
 |---|---|---|
 | Tabularia | http://localhost:3000 | the administrator you create at the first visit |
 | Gateway (API) | http://localhost:8000 | through the app's sign-in, or an API token |
-| Grafana | http://localhost:3001 | `admin` / `admin` (`GRAFANA_ADMIN_*` in `.env`) |
+| Grafana | http://localhost:3001 | read-only without signing in; `admin` / `admin` to edit (`GRAFANA_ADMIN_*` in `.env`). The same dashboards are in the app, under Administration → Monitoring |
 | MinIO console | http://localhost:9001 | `minioadmin` / `minioadmin` (`STORAGE__ACCESS_KEY` / `STORAGE__SECRET_KEY`) |
 
 ## 5. Create the administrator
@@ -348,6 +350,20 @@ with a warning or an error, and the contract exports to ODCS. See the
 **Export to dbt.** On the Flows page, **Export flow → dbt** turns a flow into a dbt
 project for your data team, with the data contract as tests. Read its
 [limits](dbt-export.md#limits) before relying on it: [Export to dbt](dbt-export.md).
+
+**Python, R and your own images (Kubernetes only).** The Script node (Python and R
+code in environments an administrator builds), saved scripts and the Container node
+(images from your container registries) run as Kubernetes Jobs, so this stack does not
+have them. You still see them, greyed out, with the reason when you point at them: the
+*Scripting environments* and *Container registries* sections of Administration, the
+*Script* and *Container* nodes in the editor's sidebar (they cannot be dragged), and
+**New → Script (Python or R)** in Explore. A flow made on a cluster with these nodes
+opens and saves as it is; a run that reaches one of them fails, saying that scripting
+or containers are off on this installation. **Administration → Backups**, the automatic
+backups of the database, is greyed out as well: on this stack back up the `postgres`
+service with its own `pg_dump`. To try them on your own computer, use
+[minikube](deploy/minikube.md) or a [kind](deploy/kind.md) cluster; what they do is in
+[Python and R in flows](scripting.md) and [The Container node](container-node.md).
 
 **Production.** Kubernetes and the Helm chart: [Kubernetes and Helm](deploy/kubernetes.md),
 then the [install and upgrade checklist](deploy/release-checklist.md).

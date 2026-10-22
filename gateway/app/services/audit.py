@@ -89,6 +89,11 @@ ENGINE_ALLOW = "engine.allow"
 ENGINE_SETTINGS_UPDATE = "engine_settings.update"
 SIEM_UPDATE = "siem.update"
 SIEM_TEST = "siem.test"
+# the database backups (Admin → Backups): their settings, «Back up now», each backup, a download
+BACKUP_UPDATE = "backup.update"
+BACKUP_REQUEST = "backup.request"
+BACKUP_RUN = "backup.run"
+BACKUP_DOWNLOAD = "backup.download"
 # workers (Admin → Workers): the autoscaling bounds of their pods on Kubernetes; the
 # processes per worker are engine settings and go as ENGINE_SETTINGS_UPDATE
 WORKERS_SCALING_UPDATE = "workers.scaling_update"
@@ -127,6 +132,13 @@ AI_QUERY = "ai.query"
 # verso un indirizzo scritto a mano nel flusso, quindi va tracciata a parte —
 # i domini ammessi dicono DOVE può uscire un dato, l'audit dice COSA è uscito
 EMAIL_SEND = "email.send"
+# saved scripts: Python or R code kept in a folder (routes/scripts.py)
+SCRIPT_CREATE = "script.create"
+SCRIPT_UPDATE = "script.update"
+SCRIPT_DELETE = "script.delete"
+SCRIPT_RESTORE = "script.restore"
+SCRIPT_RUN = "script.run"
+SCRIPT_SCHEDULE = "script.schedule"
 SAVED_VIEW_CREATE = "saved_view.create"
 SAVED_VIEW_UPDATE = "saved_view.update"
 SAVED_VIEW_DELETE = "saved_view.delete"

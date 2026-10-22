@@ -15,6 +15,12 @@ orchestration (services/orchestrator.py), which hands it here from `esegui`.
   and then runs the flow itself.
 - A **refresh** cell refreshes a database datasource, waiting for an import already
   in progress if there is one (`orchestrator._refresh_and_wait`).
+- A **container** cell runs an image as a Container node with no edge does
+  (services/container_runs.py): no data in, none out, a run under the group's.
+- A **script** cell runs a saved script's current version (services/saved_script_runs.py)
+  under a child orchestration row that holds the script's live slot, as a flow cell
+  does; a run of the script already in progress is waited for, and its outcome counts
+  when it started after the previous step ended.
 - When every cell of a step has finished, a failure among them stops the group:
   the following steps are skipped and the run ends FAILURE. The cells keep their
   own errors; the run's error only counts them, because the reader of a group may
@@ -42,7 +48,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.models import Datasource, Flow, FlowGroup, Run, User
+from app.models import Datasource, Flow, FlowGroup, Run, SavedScript, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.schemas.models import FlowGroupCell
@@ -172,6 +178,10 @@ async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step
         try:
             if cell.kind == "flow":
                 error = await _flow_cell(run_id, user_id, trigger, cell.id, cells, step, col, since)
+            elif cell.kind == "script":
+                error = await _script_cell(run_id, user_id, trigger, cell.id, cells, step, col, since)
+            elif cell.kind == "container":
+                error = await _container_cell(run_id, user_id, trigger, cell, cells, step, col)
             else:
                 error = await _refresh_cell(run_id, user_id, trigger, cell.id, cells, step, col)
         except (orch.Spodestata, asyncio.CancelledError):
@@ -259,11 +269,104 @@ async def _flow_cell(run_id: int, user_id: int, trigger: str, flow_id: int, cell
                 orch._vive.discard(child_id)
 
 
+async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, cells: _Cells, step: int, col: int,
+                       since: datetime | None) -> str | None:
+    from app.services import saved_script_runs
+    from app.services.script_runs import ScriptFailed
+
+    with Session(orch.engine) as s:
+        script = s.get(SavedScript, script_id)
+        user = s.get(User, user_id)
+        if script is None:
+            return f"saved script {script_id} no longer exists"
+        if user is None or not user.is_active:
+            return USER_GONE
+        name = script.name
+        for _ in range(SLOT_ATTEMPTS):
+            child = Run(
+                kind="orchestration", saved_script_id=script.id, task_id="", status="STARTED", launched_by=user.id,
+                trigger_type=trigger, engine_mode=ENGINE_MODE, parent_run_id=run_id,
+                claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(),
+                input_key="", output_bucket="", output_key="",
+            )
+            s.add(child)
+            try:
+                s.commit()
+            except IntegrityError:
+                # the script already has a live run: never a second one at the same time
+                s.rollback()
+                live = s.exec(select(Run.id, Run.started_at).where(
+                    Run.kind == "orchestration", Run.saved_script_id == script_id, Run.status == "STARTED",
+                )).first()
+                if live is None:
+                    continue  # it ended in between: take the slot after all
+                if since is None or (live[1] is not None and live[1] >= since):
+                    return await _wait_for(s, run_id, live[0], name, cells, step, col, take_outcome=True)
+                await _wait_for(s, run_id, live[0], name, cells, step, col, take_outcome=False)
+                continue  # it is over: now run the script for this step
+            break
+        else:
+            return f"'{name}': its slot could not be taken"
+
+        child_id = child.id
+        await cells.set(step, col, run_id=child_id, waited=False)
+        with orch._vive_lock:
+            orch._vive.add(child_id)  # the heartbeat keeps it alive, a crash closes it as orphan
+        try:
+            try:
+                await saved_script_runs.execute(s, user, script, parent_run_id=child_id, trigger_type=trigger)
+                error = None
+            except ScriptFailed as e:
+                error = str(e)
+            except asyncio.CancelledError:
+                await orch._finalize_orch_run(child_id, "FAILURE", orch.ORCHESTRATION_INTERRUPTED)
+                raise
+            except Exception as e:
+                logger.exception("flow group run %s: saved script %s failed", run_id, script_id)
+                error = _describe(e)
+            await orch._finalize_orch_run(child_id, "FAILURE" if error else "SUCCESS", error)
+            return f"'{name}': {error}" if error else None
+        finally:
+            with orch._vive_lock:
+                orch._vive.discard(child_id)
+
+
+async def _container_cell(run_id: int, user_id: int, trigger: str, cell: FlowGroupCell, cells: _Cells,
+                          step: int, col: int) -> str | None:
+    from app.core.config import get_settings
+    from app.services import container_runs
+
+    node = {"id": f"container-cell-{cell.id}", "type": "container", "data": dict(cell.container or {})}
+    with Session(orch.engine) as s:
+        user = s.get(User, user_id)
+        if user is None or not user.is_active:
+            return USER_GONE
+        error = None
+        try:
+            await container_runs.run_container(
+                s, user, None, {"nodes": [node], "edges": []}, node, parent_run_id=run_id, trigger_type=trigger,
+                engine_mode=ENGINE_MODE, script_outputs={}, resolve_ds=None,
+                default_bucket=get_settings().engine.bucket, launch=None, wait=None)
+        except container_runs.ContainerFailed as e:
+            error = str(e)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.exception("flow group run %s: container cell %s failed", run_id, cell.id)
+            error = _describe(e)
+        last = s.exec(select(Run.id).where(Run.parent_run_id == run_id, Run.kind == "container")
+                      .order_by(Run.id.desc())).first()
+        await cells.set(step, col, run_id=last)
+        return error
+
+
 async def _wait_for(s: Session, run_id: int, live_id: int, name: str, cells: _Cells, step: int, col: int,
                     take_outcome: bool) -> str | None:
     """Waits for a run already in progress; with `take_outcome`, its outcome is the cell's."""
     await cells.set(step, col, run_id=live_id, waited=take_outcome)
-    while True:
+    from app.services.waits import waits
+
+    for pause in waits(orch.OUTPUT_WAIT_INTERVAL_S):
         row = s.exec(select(Run.status, Run.error).where(Run.id == live_id)).first()
         if row is None:
             return f"'{name}': the run in progress it waited for is gone" if take_outcome else None
@@ -274,7 +377,7 @@ async def _wait_for(s: Session, run_id: int, live_id: int, name: str, cells: _Ce
             return f"'{name}': the run already in progress failed" + (f" ({error})" if error else "")
         orch._ancora_mia(s, run_id)  # stop waiting once the group is no longer ours
         s.commit()  # do not hold a pooled connection through the sleep
-        await asyncio.sleep(orch.OUTPUT_WAIT_INTERVAL_S)
+        await asyncio.sleep(pause)
 
 
 async def _refresh_cell(run_id: int, user_id: int, trigger: str, ds_id: int, cells: _Cells, step: int, col: int) -> str | None:

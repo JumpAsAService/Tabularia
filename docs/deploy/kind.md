@@ -4,10 +4,13 @@ This guide builds, on one computer, a Kubernetes cluster that behaves like a com
 and installs Tabularia on it with the same Helm chart and the same settings you would
 use there:
 - three nodes, so pods are spread and images are pulled by more than one node;
-- network policies and Pod Security that are enforced, not just written down;
+- network policies and Pod Security that are enforced, not just written down, with
+  Calico as the network plugin (or Cilium);
 - a private image registry with TLS, signed by a certificate authority of your own (a
   "company CA"), and a password;
 - nodes that trust that authority, as a platform team sets them up;
+- the scripts and the Container nodes kept away from Tabularia's own services by
+  network policies;
 - PostgreSQL, Valkey and object storage inside the cluster, in a namespace of their own;
   or, as most companies do, the object storage of your cloud (step 7) and an external
   ClickHouse for the flows (step 12);
@@ -20,7 +23,7 @@ production, or test a change of the chart before a customer does. To simply try
 Tabularia, [the minikube guide](minikube.md) is shorter and needs no Kubernetes knowledge.
 
 It was written by running every command below, in this order, with kind 0.33
-(Kubernetes 1.37, containerd 2.3).
+(Kubernetes 1.37, containerd 2.3) and Calico 3.30.
 
 ## What you need
 
@@ -136,13 +139,19 @@ EOF
 ## 4. The cluster
 
 One control-plane node and two workers. The control plane also receives the browser's
-traffic: port 8080 of your computer goes to it.
+traffic: port 8080 of your computer goes to it. kind's own network plugin enforces only
+the rules on what comes into a pod, so the cluster starts without it, and Calico, a
+network plugin many companies run, takes its place: it enforces the rules on what goes
+out too.
 
 ```bash
 cat > "$WORK/kind.yaml" <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: tabularia
+networking:
+  disableDefaultCNI: true
+  podSubnet: 10.244.0.0/16
 nodes:
   - role: control-plane
     extraPortMappings:
@@ -157,12 +166,37 @@ containerdConfigPatches:
     [plugins."io.containerd.cri.v1.images".registry]
       config_path = "/etc/containerd/certs.d"
 EOF
-kind create cluster --config "$WORK/kind.yaml" --wait 3m
+kind create cluster --config "$WORK/kind.yaml"
+```
+
+The nodes are `NotReady` until a network plugin runs. Calico, with the pods' addresses
+of the cluster above:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml \
+  | sed -e 's|# - name: CALICO_IPV4POOL_CIDR|- name: CALICO_IPV4POOL_CIDR|' \
+        -e 's|#   value: "192.168.0.0/16"|  value: "10.244.0.0/16"|' > "$WORK/calico.yaml"
+kubectl apply -f "$WORK/calico.yaml"
+kubectl rollout status daemonset calico-node --namespace kube-system --timeout=10m
+kubectl wait --for=condition=Ready nodes --all --timeout=5m
 kubectl get nodes
 ```
 
-Three nodes, `Ready`. kind applies network policies with its own network plugin, and
-Kubernetes applies Pod Security: nothing more to install for them.
+Three nodes, `Ready`. Calico enforces the network policies, Kubernetes applies Pod
+Security: nothing more to install for them.
+
+> **Cilium instead of Calico**, if your company runs it. Install the
+> [Cilium CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/#install-the-cilium-cli),
+> then, in place of the Calico commands above:
+>
+> ```bash
+> cilium install --version 1.20.3
+> kubectl rollout status daemonset cilium --namespace kube-system --timeout=10m
+> kubectl wait --for=condition=Ready nodes --all --timeout=5m
+> ```
+>
+> Everything else in this guide stays the same: Tabularia's network policies are
+> standard Kubernetes ones, and Cilium enforces them as Calico does.
 
 The browser reaches Tabularia through an ingress controller on the control plane:
 
@@ -178,6 +212,20 @@ The `patch` keeps the controller on the control plane, the only node that receiv
 8080: kind's manifest lets it start on any of the three nodes. **Check:**
 `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/` answers `404` (nothing
 is installed behind it yet), not `000`.
+
+CPU and memory of the pods, for `kubectl top` and for Tabularia's **Administration →
+Cluster**, come from metrics-server. kind's nodes have self-signed certificates, which
+metrics-server is told to accept:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.7.2/components.yaml
+kubectl patch deployment metrics-server --namespace kube-system --type json \
+  -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+kubectl rollout status deployment metrics-server --namespace kube-system --timeout=5m
+```
+
+**Check:** after a minute, `kubectl top nodes` lists the three nodes with their CPU and
+memory.
 
 ## 5. The private registry
 
@@ -261,6 +309,11 @@ kubectl create secret generic postgres --namespace tabularia-deps --from-literal
 kubectl apply -f infrastructure/minikube/dependencies.yaml
 ```
 
+The file also holds a network policy: only Tabularia's namespace (created in step 9)
+reaches the database and the queue. The scripts and the Container nodes may reach this
+namespace, for the scripts bucket when it is MinIO, so without that policy a script
+could write into the workers' queue.
+
 Tabularia keeps its datasets, uploads and results in an S3-compatible bucket, and the
 Python and R scripts exchange their data through a second one. Choose **one** of the
 two ways below: MinIO inside the cluster, to have everything on this computer, or the
@@ -316,8 +369,8 @@ export STORAGE_ENDPOINT="<https://s3.fr-par.scw.cloud>" STORAGE_REGION="<fr-par>
   SCRIPTS_ACCESS_KEY="<access key of the scripts bucket>" SCRIPTS_SECRET_KEY="<its secret key>"
 ```
 
-Nothing about the bucket is in the cluster: the workers reach it over the internet,
-which the network policy of step 8 allows.
+Nothing about the bucket is in the cluster: the workers, the scripts and the Container
+nodes reach it over the internet, which the network policies of step 8 allow.
 
 ### Both ways: keep the values
 
@@ -333,6 +386,18 @@ printf 'export SCRIPTS_ENDPOINT=%q SCRIPTS_REGION=%q SCRIPTS_BUCKET=%q SCRIPTS_A
 The values a company would write: images from its registry, the dependencies in their
 namespace, network policies on, scripting with the company's authority, the Container
 node on.
+
+The image builds push to the registry, and on this computer the registry has a private
+address on kind's Docker network. The scripts' network policy closes private addresses
+unless they are listed, so read the registry's:
+
+```bash
+export REGISTRY_IP="$(docker exec tabularia-control-plane getent ahostsv4 tabularia-registry | awk 'NR==1 {print $1}')"
+echo "$REGISTRY_IP"
+printf 'export REGISTRY_IP=%s\n' "$REGISTRY_IP" >> "$WORK/env"
+```
+
+It prints one address, such as `172.18.0.5`. Then the settings:
 
 ```bash
 cat > "$WORK/values.yaml" <<EOF
@@ -359,6 +424,7 @@ ingress:
 networkPolicy:
   enabled: true
   egressCIDRs: ["0.0.0.0/0"]
+  userCodePrivateCIDRs: ["$REGISTRY_IP/32"]
 scripts:
   enabled: true
   registry:
@@ -377,6 +443,11 @@ What some of them do:
   internet (a cloud bucket, an external ClickHouse) and your databases, but never the
   cloud metadata address. A company lists its own ranges instead. The namespace
   `tabularia-deps` is allowed from the dependencies' host names.
+- `networkPolicy.userCodePrivateCIDRs` is for the scripts, their image builds and the
+  Container nodes. Their namespaces get a policy of their own: they reach the internet
+  and the other namespaces of the cluster, never Tabularia's namespace, and no private
+  address outside the cluster unless it is listed here. List the registry's address
+  only, not kind's whole network: that network holds the nodes too.
 - `scripts.registry.caCert` is the authority of step 2: the image builds verify the
   registry with it.
 - `containers.enabled` creates the namespaces where the Container nodes run,
@@ -395,7 +466,8 @@ kubectl create secret docker-registry registry --namespace tabularia \
 helm install tabularia infrastructure/helm/tabularia --namespace tabularia --values "$WORK/values.yaml"
 ```
 
-The chart creates the three namespaces of the scripts. They need the registry's password
+The chart creates the three namespaces of the scripts (and the two of the Container
+nodes, step 11). The scripts' ones need the registry's password
 too: the builds push with it, the scripts pull with it.
 
 ```bash
@@ -408,6 +480,11 @@ kubectl get pods --namespace tabularia --watch
 
 When every pod is `1/1 Running`, press Ctrl+C and open **http://localhost:8080**. Sign in
 with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
+
+**Administration → Cluster** shows, refreshed every three seconds, the pods of Tabularia
+and, from step 10, the Jobs of the scripts and containers while they run, each linked to
+the flow or script that started it: their state, restarts, CPU and memory against their
+limits, and the cluster's warning events.
 
 ## 10. Python and R scripts
 
@@ -424,8 +501,9 @@ In **Administration → Scripting environments**, the scripts bucket of step 7:
 **Test** answers that it wrote, read and deleted a probe object, and that the key cannot
 list the bucket. Then create an environment, for example Python 3.12. Its image is built
 in the cluster, pushed to the private registry with the company's authority, checked,
-and marked **ready** after a few minutes. Script nodes can use it: see
-[Python and R in flows](../scripting.md).
+and marked **Ready** after a few minutes. Script nodes can use it: see
+[Python and R in flows](../scripting.md). Scripts can also be kept on their own, next to
+flows and views: **Explore → New → Script**.
 
 ## 11. Images of your own
 
@@ -533,9 +611,13 @@ files, in this order.
 
 | Here | In a company's cluster |
 |---|---|
+| metrics-server with `--kubelet-insecure-tls` | the metrics-server of the cluster, usually already there on a managed one |
+| Calico (or Cilium) in place of kind's network plugin | the network plugin of the company's cluster: Calico, Cilium or the cloud provider's, with network policies on |
 | `certs.d` mounted on the kind nodes | the authority installed on the nodes by the platform team (node image, DaemonSet) |
 | `registry:2.8.3` with a password | Harbor, GitLab, the cloud provider's registry |
 | `0.0.0.0/0` in `egressCIDRs` | the ranges of the company's databases and services |
+| the registry's address in `userCodePrivateCIDRs` | the private ranges of the company's registry and services the scripts must reach; none when they are public |
+| the policy in `tabularia-deps` | a managed database and queue on private addresses, which the scripts cannot reach unless listed in `userCodePrivateCIDRs` |
 | PostgreSQL, Valkey and MinIO in `tabularia-deps` | managed services, or the company's own charts; the cloud bucket of step 7 is already what a company uses |
 | the ingress on `localhost:8080` | the company's ingress, with TLS and a host name |
 
@@ -543,6 +625,13 @@ When something is refused, Tabularia says which side: a build that cannot push n
 `scripts.registry.caCert`; a script whose image a node cannot download fails in about
 half a minute saying whether the credentials, the certificate or the image is the
 problem.
+
+## Upgrade it
+
+Build and push the new release's images as in step 6, then follow
+[Upgrading Tabularia](upgrading.md): the commands of its minikube part work here too,
+since PostgreSQL is in the same namespace `tabularia-deps`. MinIO's volume, like
+PostgreSQL's, lives as long as the cluster.
 
 ## Remove it
 
@@ -557,6 +646,9 @@ restarts, remove it and run the guide again.
 
 ## When something goes wrong
 
+- **The nodes stay `NotReady`**: the network plugin is not running yet.
+  `kubectl get pods --namespace kube-system` shows the `calico-node` (or `cilium`) pods
+  and why they wait; an image still downloading takes a few minutes.
 - **`kind create cluster` fails on the port**: something already listens on 8080. Change
   `hostPort` in `$WORK/kind.yaml` and open that port instead.
 - **A Container node, or Try in the cluster, says the nodes do not trust the
@@ -572,6 +664,11 @@ restarts, remove it and run the guide again.
 - **A build fails with "not pushed"**: the message says the certificate
   (`scripts.registry.caCert`) or the credentials (the `registry` Secret of
   `tabularia-script-builds`).
+- **A build fails and the end of its log shows `dial tcp` to the registry's address
+  with a timeout**: the scripts' network policy does not let the builds reach it. The
+  registry's address can change when the computer restarts: run the `REGISTRY_IP`
+  command of step 8 again, fix `userCodePrivateCIDRs` in `$WORK/values.yaml`, and run
+  `helm upgrade` again.
 - **Workers time out on Valkey or MinIO**: a network policy blocks them. The chart allows
   the namespaces of the hosts in `externalServices`; check that those hosts end in
   `.svc.cluster.local`.

@@ -12,6 +12,7 @@ import {
   CheckCircle2, XCircle, LoaderCircle, Circle, Download, Play, Lock,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
+import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { knownError } from '~/composables/knownErrors'
 import { skeletonPad } from '~/composables/useSkeleton'
 import { useConnections } from '~/composables/useConnections'
@@ -99,7 +100,7 @@ async function runProduction(f: FlowSummary) {
     toast.success(t('flows.runProdStarted', { id: r.run_id }))
     items.value = items.value.map((x) => (x.id === f.id ? { ...x, last_run_status: 'PENDING' } : x))
     followed.set(r.run_id, f.id)
-    follow()
+    follow(true)
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
@@ -112,9 +113,19 @@ async function runProduction(f: FlowSummary) {
 // run queued here: without following it, the row spun until the page was reloaded.)
 const followed = new Map<number, number>() // run id → flow id
 let followTimer: ReturnType<typeof setTimeout> | undefined
-function follow() {
+let pageGone = false // a tick already reading when the page was left must not start another
+// soon after a run starts, then every three seconds (composables/waits.ts)
+let followPause = FIRST_PAUSE_MS
+let followSince = Date.now()
+function follow(fresh = false) {
   clearTimeout(followTimer)
-  if (!followed.size) return
+  if (fresh) {
+    followPause = FIRST_PAUSE_MS
+    followSince = Date.now()
+  }
+  if (!followed.size || pageGone) return
+  const pause = followPause
+  followPause = nextPause(followPause, followSince, 3000)
   followTimer = setTimeout(async () => {
     for (const [runId, flowId] of [...followed]) {
       let run: RunInfo
@@ -132,7 +143,7 @@ function follow() {
       if (detail[flowId]) fetchDetail(flowId)
     }
     follow()
-  }, 3000)
+  }, pause)
 }
 
 // flows already running when the page opened (a schedule, someone else): the list is
@@ -146,6 +157,7 @@ onMounted(() => {
   }, 10_000)
 })
 onBeforeUnmount(() => {
+  pageGone = true
   clearTimeout(followTimer)
   clearInterval(listTimer)
 })

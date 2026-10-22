@@ -12,7 +12,7 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import {
   Share2, Workflow, Database, Plug, CloudUpload, HardDriveDownload, Search,
-  AlertTriangle, Clock, ExternalLink, X, Crosshair, Server,
+  AlertTriangle, Clock, ExternalLink, X, Crosshair, Server, FileCode2,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
 import { useSearch, type SearchHit } from '~/composables/useSearch'
@@ -32,7 +32,7 @@ const loading = ref(false)
 const error = ref('')
 
 // selezione: oggetto centrale + parametri di traversata
-type CenterType = 'flow' | 'datasource' | 'connection'
+type CenterType = 'flow' | 'datasource' | 'connection' | 'script'
 const centerType = ref<CenterType | null>(null)
 const centerId = ref<number | null>(null)
 const direction = ref<'both' | 'upstream' | 'downstream'>('both')
@@ -41,7 +41,7 @@ const q = ref('') // ricerca nel picker
 const selected = ref<LineageNode | null>(null) // nodo aperto nel pannello dettaglio
 
 // filtri per tipo di nodo (tutti attivi di default)
-const ALL_TYPES = ['flow', 'datasource', 'connection', 'db_sink', 's3_sink', 'sftp_sink'] as const
+const ALL_TYPES = ['flow', 'datasource', 'connection', 'script', 'db_sink', 's3_sink', 'sftp_sink'] as const
 const enabledTypes = ref<Set<string>>(new Set(ALL_TYPES))
 function toggleType(t: string) {
   const s = new Set(enabledTypes.value)
@@ -54,6 +54,7 @@ const NODE_META = computed<Record<string, { label: string; icon: any; color: str
   flow: { label: t('lineage.nodeFlow'), icon: Workflow, color: '#4f8cff' },
   datasource: { label: t('lineage.nodeDatasource'), icon: Database, color: '#6ee7b7' },
   connection: { label: t('lineage.nodeConnection'), icon: Plug, color: '#a78bfa' },
+  script: { label: t('lineage.nodeScript'), icon: FileCode2, color: '#34d399' },
   db_sink: { label: t('lineage.nodeDbSink'), icon: HardDriveDownload, color: '#fbbf24' },
   s3_sink: { label: t('lineage.nodeS3Sink'), icon: CloudUpload, color: '#38bdf8' },
   sftp_sink: { label: t('sftp.lineageNode'), icon: Server, color: '#f472b6' },
@@ -68,8 +69,8 @@ const EDGE_META = computed<Record<string, { label: string; color: string; dashed
 }))
 
 // ── picker: search the catalog, choose, then Apply ───────────────────────────
-const CENTER_OF_KIND: Record<string, CenterType> = { flow: 'flow', datasource: 'datasource', connection: 'connection' }
-const NODE_PREFIX: Record<CenterType, string> = { flow: 'flow', datasource: 'ds', connection: 'conn' }
+const CENTER_OF_KIND: Record<string, CenterType> = { flow: 'flow', datasource: 'datasource', connection: 'connection', script: 'script' }
+const NODE_PREFIX: Record<CenterType, string> = { flow: 'flow', datasource: 'ds', connection: 'conn', script: 'script' }
 const hits = ref<SearchHit[]>([])
 const searching = ref(false)
 const chosen = ref<{ type: CenterType; id: number } | null>(null)
@@ -111,7 +112,8 @@ function apply() {
   centerId.value = chosen.value.id
 }
 const hitType = (h: SearchHit) =>
-  h.kind === 'flow' ? t('lineage.typeFlow') : h.kind === 'datasource' ? t('lineage.typeDatasource') : t('lineage.typeConnection')
+  h.kind === 'flow' ? t('lineage.typeFlow') : h.kind === 'datasource' ? t('lineage.typeDatasource')
+    : h.kind === 'script' ? t('lineage.nodeScript') : t('lineage.typeConnection')
 
 const centerNodeId = computed(() =>
   centerType.value && centerId.value != null ? `${NODE_PREFIX[centerType.value]}:${centerId.value}` : null,
@@ -274,11 +276,12 @@ function openNode(n: LineageNode) {
   const id = Number(n.id.split(':')[1])
   if (n.type === 'flow') navigateTo(`/editor?flow=${id}`)
   else if (n.type === 'datasource') navigateTo('/datasources')
+  else if (n.type === 'script') navigateTo(`/script?id=${id}`)
 }
 const canRecenter = (n: LineageNode | null) =>
-  !!n && (n.type === 'flow' || n.type === 'datasource' || n.type === 'connection') && !n.restricted
+  !!n && (n.type === 'flow' || n.type === 'datasource' || n.type === 'connection' || n.type === 'script') && !n.restricted
 const canOpen = (n: LineageNode | null) =>
-  !!n && (n.type === 'flow' || n.type === 'datasource') && !n.restricted
+  !!n && (n.type === 'flow' || n.type === 'datasource' || n.type === 'script') && !n.restricted
 
 function fmtDate(iso?: string | null) {
   return fmtx.dateTime(iso)
@@ -508,6 +511,10 @@ function nodeIcon(t: string) {
                 <dt>{{ $t('lineage.rows') }}</dt><dd>{{ selected.meta?.rows ?? '—' }}</dd>
                 <dt>{{ $t('lineage.refreshed') }}</dt><dd>{{ fmtDate(selected.meta?.refreshed_at) }}</dd>
               </template>
+              <template v-else-if="selected.type === 'script'">
+                <dt>{{ $t('lineage.version') }}</dt><dd>v{{ selected.meta?.version ?? '—' }}</dd>
+                <dt>{{ $t('lineage.scheduled') }}</dt><dd>{{ selected.meta?.scheduled ? $t('lineage.yes') : $t('lineage.no') }}</dd>
+              </template>
               <template v-else-if="selected.type === 'connection'">
                 <dt>{{ $t('lineage.type') }}</dt><dd>{{ selected.meta?.db_type ?? '—' }}</dd>
                 <dt>{{ $t('lineage.database') }}</dt><dd>{{ selected.meta?.database || '—' }}</dd>
@@ -610,6 +617,7 @@ function nodeIcon(t: string) {
 .ln-chip.c-flow { border-color: rgba(79, 140, 255, 0.4); }
 .ln-chip.c-datasource { border-color: rgba(110, 231, 183, 0.4); }
 .ln-chip.c-connection { border-color: rgba(167, 139, 250, 0.4); }
+.ln-chip.c-script { border-color: rgba(52, 211, 153, 0.4); }
 .ln-chip.c-db_sink { border-color: rgba(251, 191, 36, 0.4); }
 .ln-chip.c-s3_sink { border-color: rgba(56, 189, 248, 0.4); }
 .ln-chip.c-sftp_sink { border-color: rgba(244, 114, 182, 0.4); }
@@ -704,6 +712,7 @@ function nodeIcon(t: string) {
 :deep(.ln-flow) { border-left-color: #4f8cff; }
 :deep(.ln-datasource) { border-left-color: #6ee7b7; }
 :deep(.ln-connection) { border-left-color: #a78bfa; }
+:deep(.ln-script) { border-left-color: #34d399; }
 :deep(.ln-db_sink) { border-left-color: #fbbf24; }
 :deep(.ln-s3_sink) { border-left-color: #38bdf8; }
 :deep(.ln-sftp_sink) { border-left-color: #f472b6; }

@@ -6,7 +6,8 @@ customer's own registries, run as Jobs. Two namespaces apart from the release's,
 access):
 - the containers namespace, where the flows' runs run them;
 - the trials' one, where the editor's «Run» runs them, with a ResourceQuota of its own.
-The gateway's service account may run Jobs there, read their Pods, logs and events,
+The gateway's and the orchestrator's service accounts may run Jobs there, read their
+Pods, logs and events,
 and keep there the pull Secret of each registry and the Secret of a run's variables;
 nothing else.
 */}}
@@ -59,6 +60,10 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list"]
+  # Administration → Cluster: CPU and memory of the pods, with metrics-server
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
   # the pull Secret of each registry (kept in step with its credentials) and the
   # Secret of a run's variables, owned by its Job
   - apiGroups: [""]
@@ -77,8 +82,6 @@ roleRef:
   kind: Role
   name: {{ $full }}-containers
 subjects:
-  - kind: ServiceAccount
-    name: {{ $full }}-scaler
-    namespace: {{ $.Release.Namespace }}
+  {{- include "tabularia.kubeApiSubjects" $ | nindent 2 }}
 {{- end }}
 {{- end }}

@@ -64,6 +64,7 @@ const disposables: Monaco.IDisposable[] = []
 let timer: ReturnType<typeof setTimeout> | undefined
 function push(now = false) {
   clearTimeout(timer)
+  if (props.readOnly) return // a version looked at, or a reader: nothing goes back to the page
   const send = () => emit('update', { files: local.value.map((f) => ({ ...f })), entrypoint: entry.value })
   if (now) send()
   else timer = setTimeout(send, 400)
@@ -377,7 +378,15 @@ onMounted(async () => {
 
 watch(theme, (th) => monaco.value?.editor.setTheme(th === 'light' ? 'vs' : 'vs-dark'))
 
+// Ctrl/Cmd+S saves the flow (or the script's page) while the editor is open: what was
+// typed in the last 400 ms goes to the node first. In capture, before their handlers.
+function flushOnSave(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') push(true)
+}
+onMounted(() => window.addEventListener('keydown', flushOnSave, true))
+
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', flushOnSave, true)
   push(true) // what was typed in the last moment
   clearTimeout(timer)
   for (const x of lintTimers.values()) clearTimeout(x)

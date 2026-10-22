@@ -23,6 +23,12 @@ interface ScriptInfo {
   exit_code?: number | null
   variables?: Record<string, { value?: string; secret?: boolean; changed_at?: string | null; from_tabularia?: string }>
   log?: string
+  log_expired?: boolean // emptied after ORCHESTRATOR__LOG_RETENTION_DAYS
+  // a saved script (docs/specs/saved-scripts.md): run on its own, or by a Script node
+  saved_script_id?: number
+  script?: string
+  script_version?: number
+  inputs?: { alias: string; datasource_id: number; name: string }[]
 }
 
 const info = computed<ScriptInfo>(() => {
@@ -33,6 +39,7 @@ const info = computed<ScriptInfo>(() => {
   }
 })
 const variables = computed(() => Object.entries(info.value.variables ?? {}))
+const savedName = computed(() => (info.value.saved_script_id ? (info.value.script ?? info.value.label ?? '') : ''))
 const io = computed(() => [
   info.value.input ? t('scripting.run.withInput') : t('scripting.run.noInput'),
   info.value.output ? t('scripting.run.withOutput') : t('scripting.run.noOutput'),
@@ -42,6 +49,14 @@ const io = computed(() => [
 <template>
   <div class="script-run">
     <dl>
+      <div v-if="info.saved_script_id" class="largo">
+        <dt>{{ $t('scripting.run.savedScript') }}</dt>
+        <dd><NuxtLink :to="`/script?id=${info.saved_script_id}`">{{ savedName }}</NuxtLink> · v{{ info.script_version }}</dd>
+      </div>
+      <div v-if="info.inputs?.length" class="largo">
+        <dt>{{ $t('scripting.run.inputs') }}</dt>
+        <dd><span v-for="(i, k) in info.inputs" :key="i.alias"><template v-if="k"> · </template><code>{{ i.alias }}</code> {{ i.name }}</span></dd>
+      </div>
       <div><dt>{{ $t('scripting.run.environment') }}</dt><dd>{{ info.environment }} · v{{ info.version }}</dd></div>
       <div><dt>{{ $t('scripting.run.runs') }}</dt><dd><code>{{ info.entrypoint }}</code> <span class="muted">({{ (info.files ?? []).length }})</span></dd></div>
       <div><dt>{{ $t('scripting.run.attempts') }}</dt><dd>{{ info.attempts ?? 0 }}</dd></div>
@@ -62,6 +77,7 @@ const io = computed(() => [
     <details :open="!!info.log">
       <summary>{{ $t('scripting.run.log') }}</summary>
       <pre v-if="info.log" class="log">{{ info.log }}</pre>
+      <p v-else-if="info.log_expired" class="muted small">{{ $t('scripting.run.logExpired') }}</p>
       <p v-else class="muted small">{{ $t('scripting.run.noLog') }}</p>
     </details>
     <p v-if="info.image" class="muted small immagine"><code>{{ info.image }}</code></p>

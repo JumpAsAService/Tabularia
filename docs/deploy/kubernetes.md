@@ -12,7 +12,7 @@ stack (Scaleway object storage, managed ClickHouse).
 
 A chart that applies everything on this page lives in
 [`infrastructure/helm/tabularia`](../../infrastructure/helm/tabularia). It encodes
-the constraints as templates — the gateway and beat cannot be scaled, the root
+the constraints as templates — beat cannot be scaled, the root
 filesystem is read-only, `/tmp` is sized per role — and refuses to render when a
 required secret is missing. Its
 [README](../../infrastructure/helm/tabularia/README.md) explains each decision,
@@ -58,7 +58,8 @@ overrides them with `--reload`, which must not reach production.
   Postgres advisory lock. The application never migrates in production; it checks that
   the database is not behind its code and refuses to start if it is (a newer database
   is fine: that is the previous version during a rolling update). It seeds the admin
-  user. See [database-migrations.md](../database-migrations.md).
+  user. See [database-migrations.md](../database-migrations.md); upgrading an
+  installation, step by step: [upgrading.md](upgrading.md).
 - **Database connections.** Each gateway and orchestrator process keeps its own pool,
   up to `APP__GATEWAY_THREADS` × 1.25 + `DB__MAX_OVERFLOW` (25 with twelve threads):
   size Postgres' `max_connections` for the sum.
@@ -104,6 +105,21 @@ database hosts, and block cloud metadata endpoints such as `169.254.169.254`. Th
 does it from `networkPolicy.egressCIDRs` (entries are CIDRs or `{cidr, except}`), and
 always carves the metadata address out of a range that holds it, `0.0.0.0/0` included.
 With the list empty no egress policy is rendered.
+
+**Administration → Cluster** (`clusterView.enabled`, on by default) shows the pods of
+the release and of the users' code, their state, CPU and memory, and the warning events,
+read with read-only rights in those namespaces (no logs, no exec); CPU and memory need
+metrics-server.
+
+**Users' code** (`scripts.enabled`, `containers.enabled`) runs as Jobs in namespaces of
+its own, never in the release's. The gateway (`…-scaler`) and the orchestrator
+(`…-orchestrator`) are the only pods with a Kubernetes API token, and only the
+orchestrator may create the image builds, in their `privileged` namespace. Those
+namespaces get a NetworkPolicy: the internet and the other namespaces, not the pods of
+the release's namespace, the private ranges (unless listed in
+`networkPolicy.userCodePrivateCIDRs`) nor the cloud metadata. It needs a network plugin
+that enforces egress rules. See [Python and R in flows](../scripting.md#network-policies)
+and [The Container node](../container-node.md).
 
 ## Backend image (`backend/Dockerfile`)
 
@@ -182,8 +198,9 @@ applies unchanged.
 ## Worker lifecycle
 
 - **Graceful shutdown.** A run can last up to the Celery task limit (3600 s). On
-  `SIGTERM` a worker stops taking tasks and waits for the running ones; with the default
-  `terminationGracePeriodSeconds: 30`, every deploy kills in-flight runs. Tasks are not
+  `SIGTERM` a worker stops taking tasks and waits for the running ones; with Kubernetes'
+  default `terminationGracePeriodSeconds: 30`, every deploy would kill in-flight runs
+  (the chart sets 3600 s for the run workers, 120 s for the preview workers). Tasks are not
   redelivered (`acks_late` is off, on purpose: outputs in append mode are not
   idempotent), so a killed run is marked failed after `ENGINE__RUN_STALE_TIMEOUT_SECONDS`
   (default 3900). Set the grace period close to 3600 s for run workers, or accept that
@@ -254,8 +271,12 @@ column of the [configuration reference](../configuration.md) says which is which
 
 **SSO behind real hostnames.** `OIDC__REDIRECT_URI` is
 `https://<host>/api/auth/sso/callback` and must be registered, identical, on the
-identity provider; `OIDC__POST_LOGIN_URL` is `https://<host>/auth/callback`.
-See [`docs/examples/keycloak/`](../examples/keycloak/).
+identity provider; `OIDC__POST_LOGIN_URL` is `https://<host>/auth/callback`. `<host>` is
+the address people open Tabularia at: a sign-in started at another name of the same
+server (an IP, an internal alias) loses its cookie on the way back and fails with
+`tx_missing` (the gateway logs both addresses). The gateway allows a minute between its
+clocks and the identity provider's; keep NTP on the nodes. Step by step, with
+Keycloak: [Single sign-on with Keycloak](../sso-keycloak.md).
 
 ## Frontend
 

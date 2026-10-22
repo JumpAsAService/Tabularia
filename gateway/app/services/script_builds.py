@@ -450,6 +450,17 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
         return
     # the check prints every package and what each exports: room for all of it
     log = await kube_jobs.job_log(stage_ns, name, s.log_max_bytes if v.status == "building" else 8 * 2**20)
+    digest = digest_from_log(log) if v.status == "building" and outcome != "failed" else None
+    if digest:
+        v.image_ref, v.build_log = f"{repository(v.environment_id)}@{digest}", _strip_digest(log)
+        v.arch = arch_from_log(log)
+        manifest = check_job(v, env)
+        # the check's Job first, then the build's goes: when the API server fails in
+        # between, the build's Job is still there and the next round reads it again
+        await kube_jobs.create_job(s.namespace, manifest)
+        await kube_jobs.delete_job(stage_ns, name)
+        v.status, v.job_name = "checking", manifest["metadata"]["name"]
+        return
     await kube_jobs.delete_job(stage_ns, name)  # what it had to say is in `log`
     if v.status == "building":
         if outcome == "failed":
@@ -473,15 +484,7 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
                 return
             _fail(v, f"The image build failed{f' ({reason})' if reason else ''}: the end of the build log says why", log)
             return
-        digest = digest_from_log(log)
-        if not digest:
-            _fail(v, "The build ended without the image's digest", log)
-            return
-        v.image_ref, v.build_log = f"{repository(v.environment_id)}@{digest}", _strip_digest(log)
-        v.arch = arch_from_log(log)
-        manifest = check_job(v, env)
-        await kube_jobs.create_job(s.namespace, manifest)
-        v.status, v.job_name = "checking", manifest["metadata"]["name"]
+        _fail(v, "The build ended without the image's digest", log)
         return
     # checking
     if outcome == "failed":

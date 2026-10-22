@@ -39,13 +39,15 @@ DIGEST = "sha256:" + "ab" * 32
 
 class Cluster:
     """The Kubernetes API for Jobs, their Pods and logs. A Job's outcome and log are
-    set by the test (`finish`); `fail_with` makes every call answer that status."""
+    set by the test (`finish`); `fail_with` makes every call answer that status,
+    `fail_creates` the next creations of a Job."""
 
     def __init__(self):
         self.jobs: dict[tuple[str, str], dict] = {}
         self.logs: dict[str, str] = {}
         self.calls: list[tuple[str, str]] = []
         self.fail_with = 0
+        self.fail_creates = 0
         self.waiting: dict[str, dict] = {}  # job name → its Pod's waiting state
 
     def finish(self, name: str, ok: bool, log: str = "", reason: str = "BackoffLimitExceeded"):
@@ -68,6 +70,9 @@ class Cluster:
         if parts[:2] == ["apis", "batch"]:
             ns = parts[4]
             if req.method == "POST":
+                if self.fail_creates:
+                    self.fail_creates -= 1
+                    return httpx.Response(503, json={"message": "etcdserver: request timed out"})
                 body = json.loads(req.content)
                 key = (ns, body["metadata"]["name"])
                 if key in self.jobs:
@@ -417,6 +422,23 @@ def test_a_cluster_that_does_not_answer_only_delays(app, session, cluster):
     cluster.fail_with = 0
     _round(session)
     assert session.exec(select(ScriptEnvironmentVersion)).one().status == "building"
+
+
+def test_a_cluster_that_fails_between_build_and_check_only_delays(app, session, cluster):
+    """The build succeeded, the check's Job cannot be created this round: the build's
+    Job stays, and the next round goes on from it instead of failing the version."""
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss)
+    _round(session)
+    cluster.finish("tabularia-build-e1-v1", True, f"{script_builds.DIGEST_MARK}{DIGEST}\n")
+    cluster.fail_creates = 1
+    _round(session)
+    assert session.exec(select(ScriptEnvironmentVersion)).one().status == "building"
+    assert ("tab-builds", "tabularia-build-e1-v1") in cluster.jobs
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "checking" and v.error is None
+    assert ("tab-builds", "tabularia-build-e1-v1") not in cluster.jobs and ("tab-scripts", "tabularia-check-e1-v1") in cluster.jobs
 
 
 def test_a_newer_ready_version_becomes_current_an_older_one_does_not(app, session, cluster):
