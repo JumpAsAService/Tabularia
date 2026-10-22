@@ -5,6 +5,14 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.2.2 «Appio» — 2026-10-22
+
+- **Fixed: the space bar typed nothing in the code editor of the Script node on Chrome
+  and Edge.** The editor takes the text through the browser's EditContext there, an
+  element the flow canvas did not recognise as a text field, and the canvas kept the
+  space for itself (hold space to pan). The keys typed in the code editor now stay
+  there, on every browser.
+
 ## 1.2.1 «Appio» — 2026-10-21
 
 Still «Appio». On Kubernetes, flows run code outside Tabularia: Python and R written in

@@ -11,7 +11,7 @@ body:
     attributes:
       label: Version
       description: In the app, the gear menu shows it; or `GET /system/info` on the gateway.
-      placeholder: "1.2.1"
+      placeholder: "1.2.2"
     validations:
       required: true
   - type: dropdown

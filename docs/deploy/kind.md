@@ -75,9 +75,9 @@ Windows.
 ## 1. Get Tabularia and a working folder
 
 ```bash
-git clone --branch v1.2.1 https://github.com/JumpAsAService/Tabularia.git
+git clone --branch v1.2.2 https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia
-export VERSION=1.2.1 WORK="$HOME/tabularia-kind"
+export VERSION=1.2.2 WORK="$HOME/tabularia-kind"
 mkdir -p "$WORK"
 ```
 

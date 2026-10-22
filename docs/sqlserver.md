@@ -54,7 +54,7 @@ ways below.
 From a checkout of the release tag:
 
 ```bash
-docker build --build-arg WITH_MSSQL=true -t registry.example.com/tabularia-backend:1.2.1-mssql backend/
+docker build --build-arg WITH_MSSQL=true -t registry.example.com/tabularia-backend:1.2.2-mssql backend/
 ```
 
 `WITH_MSSQL=true` installs the `sqlserver` extra of `backend/pyproject.toml`
@@ -78,14 +78,14 @@ driver the release was tested with (`mssql-python` 1.15.0):
 
 ```dockerfile
 # the release you run, 1.1.1 or later
-FROM jumpasaservice/tabularia-backend:1.2.1
+FROM jumpasaservice/tabularia-backend:1.2.2
 USER root
 RUN pip --python /opt/venv/bin/python install --no-cache-dir "mssql-python==1.15.0"
 USER 10001:10001
 ```
 
 ```bash
-docker build -t registry.example.com/tabularia-backend:1.2.1-mssql .
+docker build -t registry.example.com/tabularia-backend:1.2.2-mssql .
 ```
 
 The image keeps everything else of the published one: user 10001, read-only root
@@ -107,7 +107,7 @@ engine API, both workers and beat.
     registry: ""
     backend:
       repository: registry.example.com/tabularia-backend
-      tag: "1.2.1-mssql"
+      tag: "1.2.2-mssql"
     gateway:
       repository: jumpasaservice/tabularia-gateway
     frontend:
@@ -119,7 +119,7 @@ engine API, both workers and beat.
 ### Check it
 
 ```bash
-docker run --rm registry.example.com/tabularia-backend:1.2.1-mssql python -c "import mssql_python; print('ok')"
+docker run --rm registry.example.com/tabularia-backend:1.2.2-mssql python -c "import mssql_python; print('ok')"
 ```
 
 Then, in Tabularia, the SQL Server type is no longer marked *not installed here*, and

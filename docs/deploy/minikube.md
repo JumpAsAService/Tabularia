@@ -146,7 +146,7 @@ minikube addons enable ingress
 1. Open [the latest release](https://github.com/JumpAsAService/Tabularia/releases/latest).
 2. Under **Assets**, click **Source code (zip)**.
 3. Unzip it, for example in your Documents folder. You get a folder such as
-   `Tabularia-1.2.1`, with a folder `infrastructure` inside.
+   `Tabularia-1.2.2`, with a folder `infrastructure` inside.
 4. Open your terminal **in that folder**:
    - **Windows**: open the folder in File Explorer, right-click an empty area,
      **Open in Terminal**. On Windows 10: hold Shift, right-click, **Open PowerShell

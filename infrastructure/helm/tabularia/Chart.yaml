@@ -10,11 +10,11 @@ description: |
 type: application
 
 # Chart version — bump on every chart change.
-version: 2.2.0
+version: 2.2.1
 
 # Version of Tabularia this chart was written against. Overridden per component
 # by image.tag values when you pin your own builds.
-appVersion: "1.2.1"  # release «Appio»
+appVersion: "1.2.2"  # release «Appio»
 
 keywords:
   - data-preparation
