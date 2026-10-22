@@ -396,7 +396,10 @@ onBeforeUnmount(() => {
         {{ environment.language_version ?? '' }}
       </span>
     </template>
-    <div class="layout">
+    <!-- nokey: the flow editor's keys (Space pans, Backspace deletes the selected node) stay
+         out of the code. Monaco types through EditContext on Chrome and Edge: an element
+         Vue Flow does not recognise as a text field -->
+    <div class="layout nokey">
       <!-- the node's files -->
       <aside class="files" :aria-label="$t('scripting.editor.files')">
         <div class="side-title">{{ $t('scripting.editor.files') }}</div>
