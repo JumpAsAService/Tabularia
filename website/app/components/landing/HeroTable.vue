@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The hero's key points as the table the product makes: eight rows, each a point and a short
+// The hero's key points as the table the product makes: nine rows, each a point and a short
 // fact, all readable at once. One row is open, with its text and link; every few seconds the
 // next one opens (WCAG 2.2.2: a pause control, and it waits while the pointer or the focus is in
 // the table and while the tab is hidden). On load the rows arrive scattered and grey, like the
@@ -13,13 +13,13 @@
 // view. In one column (phones, narrow windows) rows open on a tap only and keep their own
 // height: an automatic change there would move the page under the reader's thumb. Under reduced
 // motion nothing moves by itself.
-import { Boxes, Gauge, GitFork, ListChecks, LockOpen, Plug, ShieldCheck, Sparkles } from 'lucide-vue-next'
+import { Boxes, CodeXml, Gauge, GitFork, ListChecks, LockOpen, Plug, ShieldCheck, Sparkles } from 'lucide-vue-next'
 
 const props = defineProps<{ scrollIndex?: number | null, skipTo?: string }>()
 const t = useCopy()
 const items = t.hero.cards.items
 // one icon per row, in the order of t.hero.cards.items (the product's own icon set)
-const ICONS = [GitFork, Plug, LockOpen, Gauge, Boxes, ListChecks, ShieldCheck, Sparkles]
+const ICONS = [GitFork, Plug, LockOpen, Gauge, Boxes, CodeXml, ListChecks, ShieldCheck, Sparkles]
 const n = items.length
 const DWELL = 6000 // ms on each open row
 const SCROLL_REST = 3500 // ms of still scroll before the rotation resumes

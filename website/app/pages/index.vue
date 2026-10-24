@@ -17,6 +17,7 @@ useReveal()
       <LandingIntro />
       <LandingStory />
       <LandingEngines />
+      <LandingCode />
       <LandingOpen />
       <LandingStack />
       <LandingGovernance />

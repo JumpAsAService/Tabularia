@@ -22,7 +22,9 @@ workers. Storage follows the same curve, from MinIO on the same host to S3, Scal
 Google Cloud Storage; deployment from one `docker compose up` to Helm on Kubernetes.
 
 Database sources and destinations, loops, charts, scheduling, cross-flow lineage, an
-AI assistant over your own catalog and an audit trail come in the box.
+AI assistant over your own catalog and an audit trail come in the box. On Kubernetes,
+your team also **writes Python and R in governed environments** and **orchestrates its
+own containers**, as steps of the same flows.
 
 <p align="center">
   <img src="docs/media/build-a-flow.gif" width="100%"
@@ -118,10 +120,24 @@ engines, from an in-process library to a serverless warehouse.
 - **Schedule and forget.** Put flows on a schedule (timezone-aware, DST-safe) and let
   them refresh on their own; a load heatmap shows busy time-bands and collisions
   before they bite.
-- **Chain the work.** A **flow group** runs flows, database refreshes, saved scripts and
-  container images in steps, drawn as a grid: the cells of a step run in parallel, the steps one after the other,
+- **Write R and Python in a governed environment.** Administrators define the
+  environments — language version, pinned packages, the groups that may use them,
+  variables and secrets — and Tabularia builds the image. Every script runs as a
+  Kubernetes Job in its own namespace, with CPU and memory limits, network policies and
+  a timeout; scripts live in folders with their versions, Python is checked by Ruff as
+  you type, and every run keeps its log. An optional assistant writes and fixes the code
+  beside it without ever seeing a row of data ([Python and R in flows](docs/scripting.md)).
+- **Orchestrate your containers.** Run the images your team already ships — from Harbor,
+  GitHub, GitLab, Docker Hub or your cloud's registry, limited to the repositories an
+  administrator allows each group — with the command, arguments, variables, CPU and
+  memory you set. A container gets its input as parquet and hands back its output, or
+  just does its job elsewhere; retries, timeouts, logs and the outcome come with it
+  ([The Container node](docs/container-node.md), [Container registries](docs/container-registries.md)).
+- **Chain the work.** A **flow group** runs flows, datasource refreshes, saved scripts,
+  container images and **Pushmail** emails (datasources sent as Excel files) in steps,
+  drawn as a grid: the cells of a step run in parallel, the steps one after the other,
   and a failed step stops the chain. Build it by drag and drop, run it by hand or on a
-  schedule, and watch every cell's state as it runs.
+  schedule, and watch every cell's state as it runs ([Pushmail](docs/pushmail.md)).
 - **Full history & governance.** Every run is recorded with downloadable results; an
   **audit log** captures logins, flow runs, data exports and permission changes —
   "who entered, who ran what, which data was downloaded" — with a 24-hour access chart,
@@ -640,6 +656,16 @@ works, its version is not applied over yours without asking. The conversation is
 with the flow and reopens with it; spending caps and the audit log count it like the
 data assistant's.
 
+### In the script editor
+
+Beside the code of a Script node or a saved script, **Assistant** writes and fixes
+Python and R for the script's environment, and «Explain and fix the last error» starts
+from a failed run. It proposes whole files, applied only when you say so, as one change
+you can undo. **No data reaches the model**: the code, the environment and its
+packages, the names of the variables and of the inputs' columns, and only the error of
+a failed run's log, never what the script printed. See
+[docs/scripting.md](docs/scripting.md#the-assistant).
+
 ## Scheduling & timezone
 
 Cron-style schedules are evaluated in a **deployment-wide timezone** (`APP__TIMEZONE`,
@@ -655,7 +681,9 @@ each flow under its own run row, so the flow's schedule cannot start it twice wh
 the group runs it. A flow already running is never duplicated: its run counts for the
 cell when it runs in production and started after the previous step, otherwise the
 cell runs the flow once it ends. A saved script's cell takes the script's live slot the
-same way; a container cell runs its image as a Container node with no edges. Cells
+same way; a container cell runs its image as a Container node with no edges; a
+Pushmail cell sends one email with an `.xlsx` per datasource, its recipients within the
+SMTP connection's allowed domains, checked again when it runs. Cells
 count in `ORCHESTRATOR__MAX_CONCURRENT` like flow runs; within that, how many really
 run at once is up to the workers and the queue.
 

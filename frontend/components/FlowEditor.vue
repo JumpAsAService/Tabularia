@@ -330,6 +330,9 @@ const STEP_TYPES = new Set(['script', 'container'])
 // the nodes only a run of the flow carries out (an orchestration on the server)
 const CONTROL_TYPES = new Set(['refresh', 'runflow', 'script', 'container'])
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) ?? null : null))
+// a data edge leaves the selected node (not a sequence edge): a Script node must write its output
+const selectedHasDataOut = computed(() => !!selectedId.value
+  && getEdges.value.some((e) => e.source === selectedId.value && !String(e.sourceHandle ?? '').startsWith('seq')))
 const firstSource = computed(() => getNodes.value.find((n) => n.type === 'source'))
 const canRun = computed(
   () =>
@@ -2325,6 +2328,7 @@ async function pollTask(id: string) {
         :script-outputs="scriptOutputs"
         :script-trials="scriptTrials"
         :flow-dirty="dirty"
+        :has-data-out="selectedHasDataOut"
         :read-only="soloOsservatore"
         @script-run="runScriptNode"
         @update="patchSelected"

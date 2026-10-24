@@ -81,6 +81,34 @@ export interface AiDone {
   // the flow editor's assistant: the new canvas (null when nothing changed) and the nodes it touched
   definition?: string | null
   touched?: string[]
+  // the script editor's assistant: the files it proposes (null when it proposed none)
+  proposal?: ScriptProposal | null
+}
+
+export interface ScriptProposal {
+  files: { path: string; content: string }[]
+  entrypoint: string
+  changed: string[]
+  removed: string[]
+  summary: string
+}
+
+/** One turn of the script editor's assistant: no data goes, only the code, the
+ *  environment, the names of the variables and columns, the error of a failed run. */
+export interface ScriptAssistBody {
+  message: string
+  model: string
+  chat_id?: number | null
+  environment_id: number
+  files: { path: string; content: string }[]
+  entrypoint: string
+  variables: string[]
+  inputs: { variable: string; columns: { name: string; dtype: string }[] }[]
+  output: 'required' | 'optional' | 'none'
+  saved: boolean
+  run_log?: string
+  run_exit_code?: number | null
+  locale: string
 }
 
 export interface FlowAssistBody {
@@ -171,6 +199,9 @@ export function useAi() {
   /** One turn of the flow editor's assistant: it changes the canvas sent and returns it in `done`. */
   const flowAssist = (body: FlowAssistBody, handlers: AiChatHandlers, signal?: AbortSignal) =>
     stream('/ai/flow-assist', body, handlers, signal)
+  /** One turn of the script editor's assistant: its proposal of files comes in `done`. */
+  const scriptAssist = (body: ScriptAssistBody, handlers: AiChatHandlers, signal?: AbortSignal) =>
+    stream('/ai/script-assist', body, handlers, signal)
 
   function dispatch(block: string, h: AiChatHandlers) {
     let event = 'message'
@@ -210,6 +241,7 @@ export function useAi() {
       apiFetch<AiModel>(`/ai/models/${encodeURIComponent(modelId)}`, { method: 'PUT', body: { enabled } }),
     chat,
     flowAssist,
+    scriptAssist,
     /** The user's latest conversation with the flow editor's assistant about a flow, or null. */
     latestFlowChat: (flowId: number) => apiFetch<AiChatDetail | null>(`/ai/flow-chats/latest?flow_id=${flowId}`),
     chats,

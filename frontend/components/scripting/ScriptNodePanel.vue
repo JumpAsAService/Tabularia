@@ -25,6 +25,10 @@ const props = defineProps<{
   outputs?: ScriptOutputs[string] | null
   trial?: { runId: number | null; status: string; startedAt: number; error: string } | null
   flowDirty?: boolean
+  // for the editor's assistant: the columns coming in (names and types) and whether the
+  // node has a data edge going out
+  inputColumns?: { name: string; dtype: string }[]
+  hasDataOut?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
@@ -274,6 +278,8 @@ const unavailable = computed(() => {
         : scripting.state.value?.tabularia_variables ?? []"
       :read-only="readOnly || byRef"
       :last-run="last"
+      :inputs="inputColumns?.length ? [{ variable: 'TABULARIA_INPUT', columns: inputColumns }] : []"
+      :output="hasDataOut ? 'required' : 'none'"
       @update="emit('update', $event)"
       @close="editorOpen = false"
     />

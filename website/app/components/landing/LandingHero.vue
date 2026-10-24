@@ -56,6 +56,7 @@ onBeforeUnmount(() => {
       <ul role="list" class="nav__links">
         <li class="hide-sm"><a href="#how">{{ t.nav.how }}</a></li>
         <li class="hide-sm"><a href="#engines">{{ t.nav.engines }}</a></li>
+        <li class="hide-sm"><a href="#code">{{ t.nav.code }}</a></li>
         <li class="hide-sm"><a href="#stack">{{ t.nav.stack }}</a></li>
         <li><NuxtLink to="/docs">{{ t.nav.docs }}</NuxtLink></li>
         <li class="hide-xs"><a :href="config.public.repo">{{ t.nav.github }}</a></li>

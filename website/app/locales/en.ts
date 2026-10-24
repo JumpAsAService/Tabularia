@@ -8,13 +8,14 @@ export default {
   meta: {
     title: 'Tabularia · Messy in. Trusted out.',
     description:
-      'Self-hosted, open-source data preparation. Connect any source, build a flow on a canvas, preview every step, run it on five engines with one semantics, publish a table people can trust.',
+      'Self-hosted, open-source data preparation. Connect any source, build a flow on a canvas, preview every step, run it on five engines with one semantics, write Python and R in governed environments, orchestrate your containers, publish a table people can trust.',
   },
 
   nav: {
     home: 'Tabularia home',
     how: 'How it works',
     engines: 'Engines',
+    code: 'Python, R, containers',
     stack: 'Integrations',
     docs: 'Docs',
     github: 'GitHub',
@@ -34,7 +35,7 @@ export default {
       pause: 'Pause the rotation',
       play: 'Play the rotation',
       keys: 'the up and down arrow keys move between the points; scrolling moves too',
-      skip: 'Skip the eight points',
+      skip: 'Skip the nine points',
       factLabel: 'In short',
       items: [
         { title: 'Open source. No fees per seat.', fact: 'AGPL-3.0', text: 'AGPL-3.0, self-hosted on your servers. Every user, every flow, no licence count.', link: ['/docs/getting-started', 'Get started'] },
@@ -42,9 +43,10 @@ export default {
         { title: 'No vendor lock-in.', fact: 'Parquet · dbt', text: 'AGPL code, parquet in your own bucket, an open REST API, OpenLineage. A flow can also be exported as a dbt project.', link: ['/#open', 'What you keep'] },
         { title: 'Built for big tables.', fact: '25M rows · 0.6 s', text: 'Polars streams, DuckDB spills to disk, DuckDB and chDB read only the columns and row groups a query needs, and ClickHouse or BigQuery read the parquet where it lies. On a managed ClickHouse, an aggregation over 25 million rows answers in 0.6 s.', link: ['/#engines', 'The five engines'] },
         { title: 'Fits your infrastructure.', fact: 'Compose · Helm', text: 'Docker Compose to try it, Helm on Kubernetes for production; your S3, your Postgres, your databases; OIDC sign-in; API tokens and signed webhooks.', link: ['/#stack', 'Integrations'] },
+        { title: 'Python, R and your containers, governed.', fact: 'Kubernetes', text: 'Write Python and R in environments an administrator defines, or run the images your team already ships, as steps of the same flows: Kubernetes Jobs with limits, versions, logs and an audit trail.', link: ['/#code', 'Code and containers'] },
         { title: 'Contracts and lineage from day one.', fact: 'OpenLineage', text: 'Rules checked before anything is published, and a lineage map of every flow and datasource, also sent out as OpenLineage.', link: ['/#governance', 'Governance'] },
         { title: 'Make your DPO chill.', fact: 'Audit → SIEM', text: 'An append-only audit log that can go to Splunk, sessions you can revoke, roles and inherited permissions, an audit retention you set and the privacy notice quotes.', link: ['/docs/siem-splunk', 'Audit log to Splunk'] },
-        { title: 'AI that answers, and builds flows.', fact: 'Optional', text: 'Ask your data in plain language, or let the editor’s assistant build the flow on the canvas, step by step. Optional, on the provider you choose.', link: ['/#stack', 'The assistant'] },
+        { title: 'AI that answers, builds flows and writes code.', fact: 'Optional', text: 'Ask your data in plain language, let the editor’s assistant build the flow on the canvas, or have it write and fix your Python and R without ever seeing a row. Optional, on the provider you choose.', link: ['/#stack', 'The assistant'] },
       ],
     },
   },
@@ -105,6 +107,32 @@ export default {
     ],
   },
 
+  code: {
+    title: 'Your code and your containers, governed',
+    lead: 'When a click is not enough, the data team writes Python or R, or runs the image it already ships: inside the same flows, with the same permissions, schedules and audit trail. On Kubernetes, as Jobs you can account for.',
+    rows: {
+      python: {
+        name: 'Write R and Python in a governed environment',
+        line: 'Administrators define the environments: the language version, the packages pinned, the groups that may use them, the variables and the secrets. Tabularia builds the image and runs every script as a Kubernetes Job in its own namespace, with CPU and memory limits, network policies and a timeout. Scripts are saved in folders with their versions; Python is checked by Ruff as you type; every run keeps its log.',
+      },
+      assistant: {
+        name: 'An assistant that never sees your data',
+        line: 'Beside the code, it writes and fixes Python and R for the script’s environment. It gets the code, the packages, the names and types of the columns and the error of a failed run: never a row. What it proposes is applied only when you say so.',
+      },
+      containers: {
+        name: 'Orchestrate your containers',
+        line: 'Any image of your registries (Harbor, GitHub, GitLab, Docker Hub, your cloud’s), from the repositories an administrator allows to each group. Set the command, the arguments, the variables, CPU and memory: the container gets its input as parquet and hands back its output, or simply does its job elsewhere. Retries, timeouts, logs and the outcome come with it.',
+      },
+      groups: {
+        name: 'One schedule for all of it',
+        line: 'A flow group runs steps in order and cells side by side: refresh the sources, run the flows, a script and a container, then email the results as Excel files. A failed step stops the ones after it, and every cell checks its rights again when it runs.',
+      },
+    },
+    assistantNote: 'Columns and the error go to the model. Rows never do.',
+    docsLink: 'Python and R in flows',
+    containersLink: 'The Container node',
+  },
+
   open: {
     title: 'Nothing you cannot take with you',
     lead: 'No proprietary store: what Tabularia keeps is in formats and interfaces you already use. (The bundled Grafana keeps its own default analytics and update checks unless you turn them off.)',
@@ -135,7 +163,7 @@ export default {
 
   governance: {
     title: 'Governed from the first run',
-    lead: 'Sessions that can be closed, secrets encrypted at rest, engine limits an administrator sets without restarts.',
+    lead: 'Sessions that can be closed, secrets encrypted at rest, and about a hundred settings an administrator changes from the panel, most of them without a restart.',
     cells: {
       contract: { name: 'Data contracts', line: 'Columns, types and rules checked before publishing. An error blocks the publish; the last good data keeps serving.' },
       sso: { name: 'Single sign-on', line: 'Any OIDC provider (Keycloak, Entra ID, Okta, Auth0…), verified against Keycloak; local sign-in stays as break-glass.' },
@@ -152,7 +180,7 @@ export default {
     titleB: 'Every day’s file.',
     button: 'The placeholder language',
     sources:
-      'Postgres, MySQL, MariaDB, ClickHouse, Trino, Oracle, Microsoft SQL Server (its driver is added by you), SharePoint Excel; uploaded files (CSV, Excel, JSON, parquet) and folders on SFTP or S3 (CSV, Excel, NDJSON, parquet); HTTP APIs with page-number, offset-and-limit, cursor or next-link pagination, and API keys, bearer tokens, basic auth or OAuth2 client credentials. Results go to a datasource, a database table, SFTP, S3 or email.',
+      'Postgres, MySQL, MariaDB, ClickHouse, Trino, Oracle, Microsoft SQL Server (its driver is added by you), SharePoint (Excel and CSV); uploaded files (CSV, Excel, JSON, parquet) and folders on SFTP or S3 (CSV, Excel, NDJSON, parquet); HTTP APIs with page-number, offset-and-limit, cursor or next-link pagination, and API keys, bearer tokens, basic auth or OAuth2 client credentials. Results go to a datasource, a database table, SFTP, S3 or email, and a flow group can email several datasources as Excel files.',
     datasourcesAlt: 'The Datasources page: database tables from the sample company with their folders and row counts, two marked AI ready.',
     tryLabel: 'Try a name',
     tryHint: 'Edit it as a datasource’s file name: {day} and {day_end} (the range), {symbol} (a list), {today}, {now-2h}, {last_refresh}, formats such as {day:ddMMyyyy} or {now:%Y%m%d}. It is checked and resolved with the product’s rules and messages, for the selected day and the time zone you pick.',
@@ -168,7 +196,7 @@ export default {
     ],
     sampleNote: 'Sample schedule times; {symbol} is a list variable (AAPL, MSFT) and {run_id} the run’s number.',
     scheduleTitle: 'Then put it on a schedule.',
-    scheduleText: 'Time-zone aware and DST-safe. The schedule load shows busy bands and collisions before they bite; flow groups chain flows and refreshes in steps.',
+    scheduleText: 'Time-zone aware and DST-safe. The schedule load shows busy bands and collisions before they bite; flow groups chain refreshes, flows, scripts, containers and emails in steps.',
     scheduleAlt: 'The schedule load of the Flows page: a week of time bands with the scheduled runs, and the note that no minute exceeds the worker capacity.',
   },
 
@@ -186,8 +214,8 @@ export default {
 
   footer: {
     groups: [
-      { title: 'Product', links: [['How it works', '/#how'], ['Engines', '/#engines'], ['Integrations', '/#stack'], ['Install', '/#install']] },
-      { title: 'Documentation', links: [['Getting started', '/docs/getting-started'], ['Kubernetes and Helm', '/docs/deploy/kubernetes'], ['Configuration reference', '/docs/configuration'], ['API and webhooks', '/docs/api'], ['Export to dbt', '/docs/dbt-export']] },
+      { title: 'Product', links: [['How it works', '/#how'], ['Engines', '/#engines'], ['Python, R, containers', '/#code'], ['Integrations', '/#stack'], ['Install', '/#install']] },
+      { title: 'Documentation', links: [['Getting started', '/docs/getting-started'], ['Kubernetes and Helm', '/docs/deploy/kubernetes'], ['Python and R', '/docs/scripting'], ['Containers', '/docs/container-node'], ['Configuration reference', '/docs/configuration'], ['API and webhooks', '/docs/api'], ['Export to dbt', '/docs/dbt-export']] },
       { title: 'Project', links: [['Source on GitHub', 'repo'], ['Releases', 'releases'], ['Issues', 'issues'], ['Images on Docker Hub', 'dockerhub']] },
     ],
     contactTitle: 'Contact',

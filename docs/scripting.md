@@ -385,6 +385,22 @@ call any service. One thing is checked when the flow is saved: the code may not 
 the scripts bucket, where the files of the other runs are. Read and write through
 `TABULARIA_INPUT` and `TABULARIA_OUTPUT`.
 
+### The assistant
+
+Where the installation has an [AI assistant](../README.md#ai-assistant), **Assistant**
+in the editor's header puts it beside the code, in place of the environment's panel.
+Ask for a change, or a script that does something with the inputs: it answers and may
+**propose files**, whole, listed with what each change adds and removes. **Apply** writes
+them in the editor as one change (Ctrl+Z in a file takes it back); **Discard** leaves the
+code as it is. It never saves nor runs the script. After a failed run, **Explain and
+fix the last error** asks it why, with the error.
+
+**What reaches the model:** the code, the environment's language, version and packages,
+the names of the variables the script finds, the names and types of its inputs'
+columns, and, for a failed run, only the error of its log (the Python traceback, the R
+error): never a row of data, nor anything else the script printed. Its conversations
+are saved as the other assistants', with the same daily caps.
+
 ### Running
 
 A flow with a Script node runs as an orchestration, like one with a Container node.

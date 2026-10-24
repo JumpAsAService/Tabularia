@@ -19,7 +19,7 @@ import re
 from decimal import Decimal
 from uuid import uuid4
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Callable, Optional
+from typing import Any, AsyncIterator, Callable, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -35,7 +35,7 @@ from app.deps.permissions import ensure_can
 from app.models.permission import Capability
 from app.models import AiChat, AiModel, Datasource, User
 from app.services.permissions import is_observer_only
-from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, audit
+from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_script_agent, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import allowed_engines
 from app.services.permissions import readable_project_ids
@@ -546,6 +546,97 @@ async def flow_assist(
         model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=engine,
         ephemeral=False, chat_id=chat_id, locale=body.locale, kind="flow",
         flow_id=flow.id if flow is not None else None, extra_done=changes, request_limit=cfg.max_flow_requests,
+    )
+    return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+# ── the script editor's assistant ────────────────────────────────────────────
+class ScriptFileIn(BaseModel):
+    path: str = Field(min_length=1, max_length=900)
+    content: str = Field(max_length=300_000)
+
+
+class ScriptColumnIn(BaseModel):
+    name: str = Field(max_length=300)
+    dtype: str = Field(default="", max_length=100)
+
+
+class ScriptInputIn(BaseModel):
+    variable: str = Field(min_length=1, max_length=200)
+    columns: list[ScriptColumnIn] = Field(default_factory=list, max_length=2000)
+
+
+class ScriptAssistRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=8000)
+    model: str = Field(min_length=1, max_length=200)
+    chat_id: Optional[int] = None
+    environment_id: int
+    files: list[ScriptFileIn] = Field(default_factory=list, max_length=60)
+    entrypoint: str = Field(default="", max_length=900)
+    # names only: the script's variables, as the editor lists them
+    variables: list[str] = Field(default_factory=list, max_length=300)
+    # names and types of the inputs' columns: no rows
+    inputs: list[ScriptInputIn] = Field(default_factory=list, max_length=50)
+    output: Literal["required", "optional", "none"] = "optional"
+    saved: bool = False
+    # the last run's log, when it failed: only its error part reaches the model
+    run_log: str = Field(default="", max_length=300_000)
+    run_exit_code: Optional[int] = None
+    locale: str = Field(default="en", max_length=10)
+
+
+@router.post("/script-assist")
+async def script_assist(
+    body: ScriptAssistRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    """One turn of the script editor's assistant. Its proposal of files comes back in
+    `done.proposal` (null when it proposed nothing): the editor applies it if the person
+    wants. No data reaches the model: the code, the environment, the names of the
+    variables and of the inputs' columns, and the error of a failed run."""
+    from app.models import ScriptEnvironment, ScriptEnvironmentVersion
+    from app.services import script_nodes
+
+    ensure_configured()
+    cfg = get_settings().ai
+    if body.model not in enabled_model_ids(session):
+        raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
+    if is_observer_only(session, user):
+        raise HTTPException(status_code=403, detail="Observers do not write scripts")
+    env = session.get(ScriptEnvironment, body.environment_id)
+    if env is None or not script_nodes.can_use(session, user, env):
+        raise HTTPException(status_code=404, detail="Environment not found")
+    if sum(len(f.content) for f in body.files) > script_nodes.MAX_CODE_BYTES:
+        raise HTTPException(status_code=422, detail="The code is too large for the assistant")
+    _check_spending(session, user)
+    version = session.get(ScriptEnvironmentVersion, env.current_version_id) if env.current_version_id else None
+    if version is None:  # never built: the latest declared
+        version = session.exec(select(ScriptEnvironmentVersion).where(ScriptEnvironmentVersion.environment_id == env.id)
+                               .order_by(ScriptEnvironmentVersion.number.desc())).first()
+    error = ""
+    if body.run_log or body.run_exit_code is not None:
+        error = ai_script_agent.error_excerpt(body.run_log, env.language)
+        if not error and body.run_exit_code is not None:
+            error = f"(no error message in the log; the process ended with exit code {body.run_exit_code})"
+    chat = ai_chats.apri(session, user, body.chat_id, body.model, None, kind="script") if body.chat_id else None
+    chat_id = chat.id if chat is not None else None
+    history = ai_chats.storia(session, chat, cfg.max_history_messages) if chat is not None else []
+    deps = ai_script_agent.ScriptDeps(
+        user=user, session_factory=_new_session, engine=None, model_id=body.model, locale=body.locale,
+        request=request, chat_id=chat_id, language=env.language,
+        language_version=version.language_version if version else "", environment=env.name,
+        packages=[p.strip() for p in (version.packages if version else "").splitlines() if p.strip()],
+        variables=[v for v in body.variables if v], files=[f.model_dump() for f in body.files],
+        entrypoint=body.entrypoint, inputs=[i.model_dump() for i in body.inputs], output=body.output,
+        saved=body.saved, error=error,
+    )
+    stream = _turn_stream(
+        agent=ai_script_agent.script_agent, message=body.message, history=history, deps=deps,
+        model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=None,
+        ephemeral=False, chat_id=chat_id, locale=body.locale, kind="script",
+        extra_done=lambda: {"proposal": deps.proposal},
     )
     return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
 

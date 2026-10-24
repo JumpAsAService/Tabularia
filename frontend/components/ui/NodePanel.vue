@@ -33,6 +33,8 @@ const props = defineProps<{
   scriptOutputs?: Record<string, any>
   scriptTrials?: Record<string, any>
   flowDirty?: boolean
+  // the selected node has a data edge going out (a Script node must then write its output)
+  hasDataOut?: boolean
   // an observer: the Script and Container panels show their code and settings read-only
   readOnly?: boolean
 }>()
@@ -742,6 +744,8 @@ function pickDatasource(id: number | null) {
     <template v-else-if="node.type === 'script'">
       <ScriptNodePanel
         :node="node"
+        :input-columns="inputColumns"
+        :has-data-out="!!hasDataOut"
         :outputs="scriptOutputs?.[node.id] ?? null"
         :trial="scriptTrials?.[node.id] ?? null"
         :flow-dirty="!!flowDirty"

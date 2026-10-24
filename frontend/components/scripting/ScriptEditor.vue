@@ -14,7 +14,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  Check, CheckCircle2, FilePlus2, FileCode2, KeyRound, LoaderCircle, Package, Pencil, Play, Trash2, Variable, X, XCircle,
+  Check, CheckCircle2, FilePlus2, FileCode2, KeyRound, LoaderCircle, Package, Pencil, Play, Sparkles, Trash2, Variable, X, XCircle,
 } from 'lucide-vue-next'
 import type * as Monaco from 'monaco-editor'
 import Modal from '~/components/ui/Modal.vue'
@@ -24,6 +24,8 @@ import { runError } from '~/composables/scriptDiagnostics'
 import { useTheme } from '~/composables/useTheme'
 import { languageOf, loadMonaco, type MonacoApi } from '~/composables/useMonaco'
 import { suggest, variableReference, type CompletionContext } from '~/composables/scriptCompletions'
+import { useAi, type AiStatus, type ScriptProposal } from '~/composables/useAi'
+import ScriptAssistant, { type ScriptInputColumns } from '~/components/scripting/ScriptAssistant.vue'
 
 interface ScriptFile { path: string; content: string }
 
@@ -38,6 +40,10 @@ const props = defineProps<{
   lastRun?: ScriptNodeRun | null
   // a saved script's page, not a Script node: the texts about the node and the flow differ
   saved?: boolean
+  // for the assistant: the inputs' columns (names and types, no rows) and whether the
+  // script must, may or does not write TABULARIA_OUTPUT
+  inputs?: ScriptInputColumns[]
+  output?: 'required' | 'optional' | 'none'
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: { files: ScriptFile[]; entrypoint: string }): void
@@ -278,6 +284,44 @@ function makeEntry(path: string) {
   push(true)
 }
 
+// ── the assistant, beside the code (when the installation has one) ───────────
+const aiApi = useAi()
+const aiStatus = ref<AiStatus | null>(null)
+const side = ref<'env' | 'assistant'>('env')
+const aiAvailable = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !props.readOnly)
+onMounted(async () => {
+  try { aiStatus.value = await aiApi.status() } catch { /* no assistant: the panel stays as it was */ }
+})
+
+// a proposal of the assistant, as ONE change: its files replaced in their models with
+// an edit (Ctrl+Z takes it back), the new ones added, the removed ones dropped
+function applyProposal(p: ScriptProposal) {
+  const m = monaco.value
+  for (const path of p.removed) {
+    local.value = local.value.filter((f) => f.path !== path)
+    models.get(path)?.dispose()
+    models.delete(path)
+  }
+  for (const f of p.files) {
+    if (!p.changed.includes(f.path)) continue
+    const mine = local.value.find((x) => x.path === f.path)
+    const model = models.get(f.path)
+    if (mine && model && m) {
+      model.pushEditOperations([], [{ range: model.getFullModelRange(), text: f.content }], () => null)
+    } else if (mine) {
+      mine.content = f.content
+    } else {
+      local.value.push({ path: f.path, content: f.content })
+    }
+  }
+  entry.value = local.value.some((f) => f.path === p.entrypoint) ? p.entrypoint : entry.value
+  push(true)
+  lintAll()
+  const first = p.changed[0]
+  if (first) nextTick(() => show(first))
+  else if (!local.value.some((f) => f.path === current.value)) nextTick(() => show(entry.value))
+}
+
 // ── what the script finds in its environment ─────────────────────────────────
 const variables = computed(() => [
   ...props.tabulariaVariables.map((name) => ({ name, source: 'tabularia' as const, value: null as string | null })),
@@ -406,6 +450,10 @@ onBeforeUnmount(() => {
         <FileCode2 :size="13" /> {{ environment.name }} · {{ environment.language === 'r' ? 'R' : 'Python' }}
         {{ environment.language_version ?? '' }}
       </span>
+      <button v-if="aiAvailable" type="button" class="assist-toggle" :class="{ on: side === 'assistant' }"
+              :aria-pressed="side === 'assistant'" @click="side = side === 'assistant' ? 'env' : 'assistant'">
+        <Sparkles :size="13" /> {{ $t('scriptAssistant.toggle') }}
+      </button>
     </template>
     <!-- nokey: the flow editor's keys (Space pans, Backspace deletes the selected node) stay
          out of the code. Monaco types through EditContext on Chrome and Edge: an element
@@ -481,8 +529,24 @@ onBeforeUnmount(() => {
         </details>
       </div>
 
+      <!-- the assistant, in place of the environment's panel -->
+      <aside v-if="aiAvailable && side === 'assistant' && aiStatus" class="env assist">
+        <ScriptAssistant
+          :status="aiStatus"
+          :environment-id="environment.id"
+          :files="local"
+          :entrypoint="entry"
+          :variables="variables.map((v) => v.name)"
+          :inputs="inputs ?? []"
+          :output="output ?? 'optional'"
+          :saved="!!saved"
+          :last-run="lastRun ?? null"
+          :read-only="readOnly"
+          @apply="applyProposal"
+        />
+      </aside>
       <!-- what the script finds -->
-      <aside class="env" :aria-label="$t('scripting.editor.environment')">
+      <aside v-else class="env" :aria-label="$t('scripting.editor.environment')">
         <div class="side-title"><Variable :size="13" /> {{ $t('scripting.editor.variables') }}</div>
         <p class="nota">{{ $t('scripting.editor.variablesHint') }}</p>
         <ul class="vars">
@@ -513,7 +577,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .ambiente { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-right: 8px; }
+.assist-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; font-size: 12px; margin-right: 6px; }
+.assist-toggle.on { border-color: var(--accent); color: var(--accent-hi); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; gap: 12px; height: min(72vh, 900px); min-height: 420px; }
+.layout:has(.assist) { grid-template-columns: 210px minmax(0, 1fr) 360px; }
+.env.assist { overflow: hidden; }
 .files, .env { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
 .side-title { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 4px; }
 ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

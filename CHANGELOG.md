@@ -46,6 +46,14 @@ exposes at `/system/info` and in the app's settings menu.
   backup now writes a heartbeat; a claim without one for two minutes is ignored.
 - **Fixed: with PostgreSQL not answering, the sign-in and every page answered a bare
   «Internal Server Error».** They now answer 503, «The database is not answering».
+- **An assistant for scripts**, beside the code of a Script node or a saved script
+  (where an AI assistant is configured): it writes and fixes Python and R for the
+  script's environment, proposes whole files that are applied only when the user says
+  so (one change, Ctrl+Z takes it back), and «Explain and fix the last error» starts
+  from a failed run. No data reaches the model: the code, the environment and its
+  packages, the names of the variables and of the inputs' columns, and only the error
+  part of a failed run's log. The editor of a saved script now shows its latest run
+  too, with the line it stopped at.
 - **The Refresh datasource and Run flow nodes are no longer offered in the editor**: a
   flow group does the same, in steps (refreshes, flows, scripts, images, Pushmail).
   Flows saved with them keep running and scheduling as before; selecting one of these

@@ -382,6 +382,22 @@ async function saveSchedule(cron: string) {
 }
 
 const editorVariables = computed(() => savedScriptVariables((content.value?.inputs ?? []).map((i) => i.alias)))
+// the latest run, for the editor: its log, the line it stopped at, and the assistant's
+// «fix the last error»; stale when the script has been saved since that version
+const editorLastRun = computed(() => {
+  const r = runs.value[0]
+  if (!r || r.status === 'PENDING' || r.status === 'STARTED') return null
+  return {
+    run_id: r.run_id, status: r.status, trial: false, error: r.error, started_at: r.started_at, finished_at: r.finished_at,
+    attempts: r.attempts, exit_code: r.exit_code, log: r.log, log_expired: r.log_expired,
+    stale: r.script_version != null && detail.value?.current_version != null && r.script_version !== detail.value.current_version,
+  }
+})
+// the editor's assistant knows each input's columns (names and types, never rows)
+const assistantInputs = computed(() => (content.value?.inputs ?? []).map((i) => ({
+  variable: `TABULARIA_INPUT_${i.alias}`,
+  columns: datasources.value.find((d) => d.id === i.datasource_id)?.columns.map((c) => ({ name: c.name, dtype: c.dtype })) ?? [],
+})))
 
 // Ctrl/Cmd+S saves, also with the code editor open (it hands over its last keys first)
 function onKey(e: KeyboardEvent) {
@@ -695,6 +711,9 @@ const unavailable = computed(() => {
         :entrypoint="viewing ? viewing.entrypoint : content?.entrypoint ?? ''"
         :tabularia-variables="editorVariables"
         :read-only="!canEdit || !!viewing"
+        :inputs="assistantInputs"
+        :last-run="viewing ? null : editorLastRun"
+        output="optional"
         saved
         @update="onCode"
         @close="editorOpen = false; viewing = null"
