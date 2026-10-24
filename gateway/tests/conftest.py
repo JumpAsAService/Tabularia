@@ -134,6 +134,8 @@ class FakeEngine:
         self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
         self.dbt_export_script: list[tuple[int, dict] | None] = []  # risposte in fila, una per chiamata (None = lo zip)
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
+        self.pushmails: list[dict] = []  # bodies received on POST /db/pushmail
+        self.pushmail_status = 200  # a different answer to test an engine that refuses the email
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
         self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
         self.copies: list[tuple[str, str, str]] = []  # (bucket, source, target) copied on the storage
@@ -239,6 +241,11 @@ class FakeEngine:
             if self.transform_status >= 400:
                 return httpx.Response(self.transform_status, json={"detail": "engine refused"})
             return httpx.Response(200, json={"task_id": f"t-transform-{len(self.transforms)}"})
+        if path == "/db/pushmail" and request.method == "POST":
+            self.pushmails.append(json.loads(request.content or b"{}"))
+            if self.pushmail_status >= 400:
+                return httpx.Response(self.pushmail_status, json={"detail": "engine refused"})
+            return httpx.Response(200, json={"task_id": f"t-pushmail-{len(self.pushmails)}", "status": "submitted", "message": ""})
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]
             if request.method == "DELETE":  # revoca + terminate del task

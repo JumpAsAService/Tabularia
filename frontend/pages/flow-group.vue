@@ -17,7 +17,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
   Rows3, Workflow, DatabaseZap, GripVertical, Plus, X, Play, CalendarClock, Save, Search, History,
   CircleCheck, CircleX, LoaderCircle, Hourglass, SkipForward, CircleSlash, EyeOff, Ban, Check, FileCode2,
-  Container as ContainerIcon, Settings2,
+  Container as ContainerIcon, Settings2, Mail,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { knownError } from '~/composables/knownErrors'
@@ -28,10 +28,12 @@ import { useDatasources, type DatasourceInfo } from '~/composables/useDatasource
 import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
+import PushmailCellPanel from '~/components/containers/PushmailCellPanel.vue'
+import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import Modal from '~/components/ui/Modal.vue'
 import {
   useFlowGroups, MAX_GROUP_COLUMNS, MAX_GROUP_STEPS,
-  type FlowGroupCell, type FlowGroupCellKind, type FlowGroupCellLabel, type FlowGroupDetail, type FlowGroupRun,
+  type FlowGroupCell, type FlowGroupCellKind, type FlowGroupCellLabel, type FlowGroupDetail, type FlowGroupRun, type PushmailConfig,
 } from '~/composables/useFlowGroups'
 
 const { t } = useI18n()
@@ -43,6 +45,7 @@ const flowsApi = useFlows()
 const dsApi = useDatasources()
 const scriptsApi = useSavedScripts()
 const registriesEditor = useRegistriesEditor()
+const connApi = useConnections()
 const folderPaths = useFolderPaths()
 
 type Grid = (FlowGroupCell | null)[][]
@@ -67,9 +70,13 @@ const cols = computed(() => Math.max(1, ...grid.value.map((row) => row.length)))
 function rectangular(steps: Grid): Grid {
   const width = Math.max(1, ...steps.map((row) => row.length))
   const rows = steps.length ? steps : [[]]
-  // a container cell keeps its settings
-  return rows.map((row) => [...row.map((c) => (c ? (c.kind === 'container' ? { kind: c.kind, id: c.id, container: { ...(c.container ?? {}) } } : { kind: c.kind, id: c.id }) : null)),
-    ...Array(width - row.length).fill(null)])
+  // a container or pushmail cell keeps its settings
+  return rows.map((row) => [...row.map((c) => (c ? copyCell(c) : null)), ...Array(width - row.length).fill(null)])
+}
+function copyCell(c: FlowGroupCell): FlowGroupCell {
+  if (c.kind === 'container') return { kind: c.kind, id: c.id, container: { ...(c.container ?? {}) } }
+  if (c.kind === 'pushmail') return { kind: c.kind, id: c.id, pushmail: JSON.parse(JSON.stringify(c.pushmail ?? {})) }
+  return { kind: c.kind, id: c.id }
 }
 
 const snapshot = (n: string, g: Grid) => JSON.stringify([n.trim(), g])
@@ -142,6 +149,19 @@ function place(item: { kind: FlowGroupCellKind; id: number }, r: number, c: numb
     editing.value = [r, c]
     return
   }
+  if (item.kind === 'pushmail') {
+    // a new Pushmail cell: the first SMTP connection, then its panel
+    const ids = grid.value.flat().filter((x): x is FlowGroupCell => !!x && x.kind === 'pushmail').map((x) => x.id)
+    grid.value[r]![c] = {
+      kind: 'pushmail', id: Math.max(0, ...ids) + 1,
+      pushmail: {
+        label: '', connectionId: smtpConnections.value[0]?.id ?? null, to: [], cc: [], subject: '{flow} {today:yyyy-MM-dd}',
+        body: '', bodyIsHtml: false, timezone: 'UTC', attachments: [{ datasourceId: null, fileName: '', maxRows: 10_000 }],
+      },
+    }
+    editing.value = [r, c]
+    return
+  }
   if (inStepElsewhere(r, c, key)) {
     toast.error(t('flowGroups.duplicateInStep', { name: labelFor(item).name ?? '#' + item.id }))
     return
@@ -153,15 +173,24 @@ function place(item: { kind: FlowGroupCellKind; id: number }, r: number, c: numb
 const flows = ref<FlowSummary[]>([])
 const datasources = ref<DatasourceInfo[]>([])
 const scripts = ref<SavedScript[]>([])
-const KIND_ICON = { flow: Workflow, refresh: DatabaseZap, script: FileCode2, container: ContainerIcon } as const
-const KIND_LABEL = { flow: 'flowGroups.kindFlow', refresh: 'flowGroups.kindRefresh', script: 'flowGroups.kindScript', container: 'flowGroups.kindContainer' } as const
-const SECTION_LABEL = { flow: 'flowGroups.catalogFlows', refresh: 'flowGroups.catalogRefresh', script: 'flowGroups.catalogScripts', container: 'flowGroups.catalogImages' } as const
+const KIND_ICON = { flow: Workflow, refresh: DatabaseZap, script: FileCode2, container: ContainerIcon, pushmail: Mail } as const
+const KIND_LABEL = { flow: 'flowGroups.kindFlow', refresh: 'flowGroups.kindRefresh', script: 'flowGroups.kindScript', container: 'flowGroups.kindContainer', pushmail: 'pushmail.kind' } as const
+const SECTION_LABEL = { flow: 'flowGroups.catalogFlows', refresh: 'flowGroups.catalogRefresh', script: 'flowGroups.catalogScripts', container: 'flowGroups.catalogImages', pushmail: 'pushmail.catalog' } as const
+// the SMTP connections one may send through: a Pushmail cell is offered when there is one
+const connections = ref<ConnectionInfo[]>([])
+const smtpConnections = computed(() => connections.value.filter((c) => c.db_type === 'smtp'))
 
 // ── a Container cell's settings, in the Container node's panel ───────────────
 const editing = ref<[number, number] | null>(null)
 const editingCell = computed(() => (editing.value ? grid.value[editing.value[0]]?.[editing.value[1]] ?? null : null))
 function editCell(r: number, c: number) {
-  if (grid.value[r]?.[c]?.kind === 'container') editing.value = [r, c]
+  const kind = grid.value[r]?.[c]?.kind
+  if (kind === 'container' || kind === 'pushmail') editing.value = [r, c]
+}
+function patchPushmail(patch: Partial<PushmailConfig>) {
+  const cell = editingCell.value
+  if (!cell || !editing.value) return
+  grid.value[editing.value[0]]![editing.value[1]] = { ...cell, pushmail: { ...(cell.pushmail as PushmailConfig), ...patch } }
 }
 function patchContainer(patch: Record<string, any>) {
   const cell = editingCell.value
@@ -183,6 +212,10 @@ const items = computed<Item[]>(() => [
   // an image of a registry one may use: a new Container cell each time
   ...(registriesEditor.available.value
     ? [{ key: 'container:new', kind: 'container' as const, id: 0, name: t('flowGroups.newContainer'), path: t('flowGroups.newContainerHint') }]
+    : []),
+  // an email with datasources attached: a new Pushmail cell each time
+  ...(smtpConnections.value.length
+    ? [{ key: 'pushmail:new', kind: 'pushmail' as const, id: 0, name: t('pushmail.new'), path: t('pushmail.newHint') }]
     : []),
 ])
 const byKey = computed(() => new Map(items.value.map((i) => [i.key, i])))
@@ -207,6 +240,16 @@ function labelFor(cell: { kind: FlowGroupCellKind; id: number; container?: Recor
     const image = d.repository ? `${d.repository}:${d.tag || 'latest'}` : ''
     return { name: d.label || image || t('flowGroups.kindContainer'), path: image, hidden: false, missing: false }
   }
+  if (cell.kind === 'pushmail') {
+    const d = (cell as FlowGroupCell).pushmail
+    const n = (d?.attachments ?? []).filter((a) => a.datasourceId != null).length
+    const to = (d?.to ?? [])[0]
+    return {
+      name: d?.label?.trim() || t('pushmail.kind'),
+      path: [t('pushmail.files', { n }, n), to ? (d!.to.length > 1 ? `${to} +${d!.to.length - 1}` : to) : ''].filter(Boolean).join(' → '),
+      hidden: false, missing: false,
+    }
+  }
   const key = keyOf(cell)
   const known = byKey.value.get(key)
   if (known) return { name: known.name, path: known.path, hidden: false, missing: false }
@@ -229,6 +272,7 @@ const catalog = computed(() => {
     refresh: items.value.filter((i) => i.kind === 'refresh' && hit(i)),
     script: items.value.filter((i) => i.kind === 'script' && hit(i)),
     container: items.value.filter((i) => i.kind === 'container'),
+    pushmail: items.value.filter((i) => i.kind === 'pushmail'),
   }
 })
 
@@ -236,7 +280,7 @@ const catalog = computed(() => {
 function optionsFor(r: number) {
   const inStep = new Set(grid.value[r]!.filter((c): c is FlowGroupCell => !!c).map(keyOf))
   return items.value
-    .filter((i) => !inStep.has(i.key) || i.kind === 'container')
+    .filter((i) => !inStep.has(i.key) || i.kind === 'container' || i.kind === 'pushmail')
     .map((i) => ({
       value: i.key,
       label: i.name,
@@ -319,7 +363,8 @@ async function load() {
 
 async function loadCatalog() {
   // a list that does not load leaves the panel empty, not the page broken
-  const [f, d, sc] = await Promise.allSettled([flowsApi.list(), dsApi.list(), scriptsApi.list(), registriesEditor.load()])
+  const [f, d, sc, , cn] = await Promise.allSettled([flowsApi.list(), dsApi.list(), scriptsApi.list(), registriesEditor.load(), connApi.list()])
+  connections.value = cn.status === 'fulfilled' ? cn.value : []
   flows.value = f.status === 'fulfilled' ? f.value : []
   datasources.value = d.status === 'fulfilled' ? d.value : []
   // only the scripts one sees; none where scripting is off
@@ -666,10 +711,10 @@ async function saveSchedule(cron: string) {
                         <span v-else-if="labelFor(row[c - 1]!).missing" class="cname gone"><Ban :size="13" /> {{ $t('flowGroups.missingCell') }}</span>
                         <span v-else class="cname" :title="labelFor(row[c - 1]!).name ?? ''">{{ labelFor(row[c - 1]!).name }}</span>
                         <button
-                          v-if="row[c - 1]!.kind === 'container'"
+                          v-if="row[c - 1]!.kind === 'container' || row[c - 1]!.kind === 'pushmail'"
                           class="mini ghost"
-                          :title="$t('flowGroups.editContainer')"
-                          :aria-label="$t('flowGroups.editContainer')"
+                          :title="row[c - 1]!.kind === 'pushmail' ? $t('pushmail.edit') : $t('flowGroups.editContainer')"
+                          :aria-label="row[c - 1]!.kind === 'pushmail' ? $t('pushmail.edit') : $t('flowGroups.editContainer')"
                           @click="editCell(r, c - 1)"
                         ><Settings2 :size="12" /></button>
                         <button
@@ -740,6 +785,7 @@ async function saveSchedule(cron: string) {
 
           <template v-for="section in ([
             'flows', 'refresh', ...(scripts.length ? ['script'] as const : []), ...(catalog.container.length ? ['container'] as const : []),
+            ...(catalog.pushmail.length ? ['pushmail'] as const : []),
           ] as const)" :key="section">
             <div class="cat-group">
               {{ $t(section === 'flows' ? SECTION_LABEL.flow : SECTION_LABEL[section]) }}
@@ -771,9 +817,21 @@ async function saveSchedule(cron: string) {
         </aside>
       </div>
 
-      <Modal :open="!!editingCell" :title="$t('flowGroups.containerTitle')" :width="560" @close="editing = null">
+      <Modal :open="editingCell?.kind === 'pushmail'" :title="$t('pushmail.title')" :width="620" @close="editing = null">
+        <PushmailCellPanel
+          v-if="editingCell?.kind === 'pushmail' && editingCell.pushmail"
+          :config="editingCell.pushmail"
+          :connections="smtpConnections"
+          :datasources="datasources"
+          :group-name="name"
+          :read-only="!canEdit"
+          @update="patchPushmail"
+          @delete="removeEditing"
+        />
+      </Modal>
+      <Modal :open="editingCell?.kind === 'container'" :title="$t('flowGroups.containerTitle')" :width="560" @close="editing = null">
         <ContainerNodePanel
-          v-if="editingCell"
+          v-if="editingCell?.kind === 'container'"
           :node="{ id: `container-cell-${editingCell.id}`, position: { x: 0, y: 0 }, data: editingCell.container ?? {} } as any"
           :read-only="!canEdit"
           in-group
@@ -899,6 +957,7 @@ button.mini { padding: 2px 8px; min-height: 24px; }
 .kicon.refresh { color: var(--violet); }
 .kicon.script { color: var(--warning); }
 .kicon.container { color: #38bdf8; }
+.kicon.pushmail { color: #f472b6; }
 /* the name is never cut short: two flows may differ only at its end */
 .cname { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 5px; }
 .cname.gone { color: var(--danger); }

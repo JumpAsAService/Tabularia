@@ -17,6 +17,10 @@ orchestration (services/orchestrator.py), which hands it here from `esegui`.
   in progress if there is one (`orchestrator._refresh_and_wait`).
 - A **container** cell runs an image as a Container node with no edge does
   (services/container_runs.py): no data in, none out, a run under the group's.
+- A **pushmail** cell sends one email with one .xlsx per datasource through an SMTP
+  connection, as an engine task under a run of its own (kind="pushmail"); every part
+  of it — the connection, the recipients' domains, the datasources — is checked again
+  with the rights of whoever runs the group (routes/flow_groups.py `pushmail_errors`).
 - A **script** cell runs a saved script's current version (services/saved_script_runs.py)
   under a child orchestration row that holds the script's live slot, as a flow cell
   does; a run of the script already in progress is waited for, and its outcome counts
@@ -182,6 +186,8 @@ async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step
                 error = await _script_cell(run_id, user_id, trigger, cell.id, cells, step, col, since)
             elif cell.kind == "container":
                 error = await _container_cell(run_id, user_id, trigger, cell, cells, step, col)
+            elif cell.kind == "pushmail":
+                error = await _pushmail_cell(run_id, user_id, trigger, cell, cells, step, col)
             else:
                 error = await _refresh_cell(run_id, user_id, trigger, cell.id, cells, step, col)
         except (orch.Spodestata, asyncio.CancelledError):
@@ -361,6 +367,82 @@ async def _container_cell(run_id: int, user_id: int, trigger: str, cell: FlowGro
                      if _node_id(r) == node["id"]), None)
         await cells.set(step, col, run_id=mine)
         return error
+
+
+async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGroupCell, cells: _Cells,
+                         step: int, col: int) -> str | None:
+    import uuid
+
+    from app.core.engine_client import get_engine_client
+    from app.models import Connection
+    from app.routes.connections import engine_connection_payload
+    from app.routes.flow_groups import pushmail_errors
+    from app.routes.runs import PLACEHOLDER_TASK
+    from app.services import audit
+
+    with Session(orch.engine) as s:
+        user = s.get(User, user_id)
+        if user is None or not user.is_active:
+            return USER_GONE
+        cfg = cell.pushmail
+        problems = pushmail_errors(s, user, cell)
+        if problems or cfg is None:
+            return "; ".join(problems) or "pushmail: the cell has no settings"
+        name = cfg.label.strip() or "Pushmail"
+        group_run = s.get(Run, run_id)
+        group = s.get(FlowGroup, group_run.flow_group_id) if group_run else None
+        conn = s.get(Connection, cfg.connectionId)
+        datasources = {d.id: d for d in s.exec(select(Datasource).where(
+            Datasource.id.in_([a.datasourceId for a in cfg.attachments]))).all()}
+        empty = [datasources[a.datasourceId].name for a in cfg.attachments if not datasources[a.datasourceId].key]
+        if empty:
+            return f"«{name}»: no data yet in {', '.join(empty)} (never imported or published)"
+        to = [a.strip() for a in cfg.to if a.strip()]
+        cc = [a.strip() for a in cfg.cc if a.strip()]
+        # the run first: its number is the {run_id} of the names; a placeholder task
+        # until the engine queues it (routes/runs.py closes it if it never is)
+        child = Run(kind="pushmail", task_id=f"{PLACEHOLDER_TASK}{uuid.uuid4().hex}", status="PENDING",
+                    launched_by=user.id, trigger_type=trigger, parent_run_id=run_id,
+                    input_key="", output_bucket="", output_key="",
+                    email=json.dumps({"connection_id": conn.id, "host": conn.host, "to": to + cc, "subject": cfg.subject,
+                                      "attachments": [datasources[a.datasourceId].name for a in cfg.attachments],
+                                      "cell": name, "ok": None}))
+        s.add(child)
+        s.commit()
+        s.refresh(child)
+        await cells.set(step, col, run_id=child.id)
+        spec = {
+            "to": to, "cc": cc, "subject": cfg.subject, "body": cfg.body, "body_is_html": cfg.bodyIsHtml,
+            "timezone": (cfg.timezone or "").strip() or "UTC", "run_id": child.id, "flow": group.name if group else "",
+            "lang": user.locale if user.locale in ("en", "it", "fr", "de", "es") else "en",
+            "attachments": [{"bucket": datasources[a.datasourceId].bucket, "key": datasources[a.datasourceId].key,
+                             "label": datasources[a.datasourceId].name, "file_name": a.fileName, "max_rows": a.maxRows}
+                            for a in cfg.attachments],
+        }
+        # who sent what to whom, written when it leaves, whatever the outcome
+        audit.record_audit(
+            s, actor=user, action=audit.EMAIL_SEND, target_type="flow_group",
+            target_id=group.id if group else None, target_label=group.name if group else None,
+            detail={"connection_id": conn.id, "host": conn.host, "to": to + cc, "subject": cfg.subject,
+                    "cell": name, "datasources": [a.datasourceId for a in cfg.attachments], "trigger": trigger,
+                    "run_id": child.id},
+        )
+        try:
+            resp = await get_engine_client().post("/db/pushmail", json={
+                "connection": engine_connection_payload(conn), "spec": spec}, timeout=30)
+            answer = resp.json() if resp.content else {}
+            if resp.status_code >= 400:
+                raise RuntimeError(str(answer.get("detail") or resp.status_code))
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — refused or not reachable: the cell fails saying why
+            await orch._finalize_orch_run(child.id, "FAILURE", f"the engine did not take the email: {e}")
+            return f"«{name}»: the engine did not take the email: {e}"
+        s.exec(update(Run).where(Run.id == child.id).values(task_id=answer["task_id"]))
+        s.commit()
+        s.refresh(child)
+        done = await orch._wait_run(s, child)
+        return None if done.status == "SUCCESS" else f"«{name}»: {done.error or 'the email was not sent'}"
 
 
 def _node_id(run: Run) -> str | None:

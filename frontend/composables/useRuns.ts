@@ -38,6 +38,8 @@ export interface RunInfo {
   // kind "script": JSON — environment, version, files, attempts, exit code, the end of
   // the log, the variables it was given (secret ones by name only); see ScriptRunDetail
   script?: string | null
+  // the email sent: JSON — recipients, subject, attachments, outcome (a Pushmail cell's run too)
+  email?: string | null
   parent_run_id?: number | null
   started_at: string | null
   finished_at: string | null

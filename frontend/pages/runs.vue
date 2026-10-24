@@ -6,7 +6,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container, Mail } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { runNotes, notesText } from '~/composables/usePlaceholders'
 import MissingValues from '~/components/ui/MissingValues.vue'
@@ -40,6 +40,13 @@ function fmtDate(s: string | null): string {
 // chi ha avviato il run: se schedulato mostriamo "schedule", altrimenti il nome
 // the Script or Container node's name, from what its run recorded
 function scriptLabel(r: RunInfo): string {
+  if (r.kind === 'pushmail') {
+    try {
+      return JSON.parse(r.email ?? '{}').cell || t('pushmail.kind')
+    } catch {
+      return t('pushmail.kind')
+    }
+  }
   const fallback = r.kind === 'container' ? t('containers.node.title') : t('scripting.node.title')
   try {
     return JSON.parse(r.script ?? '{}').label || fallback
@@ -97,9 +104,9 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
           <span class="stpill" :class="r.status.toLowerCase()">{{ te(`runs.pill_${r.status}`) ? t(`runs.pill_${r.status}`) : r.status }}</span>
           <span class="who">
-            <component :is="r.kind === 'ingest' ? Database : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.flow_group_id ? Rows3 : Workflow" :size="13" />
+            <component :is="r.kind === 'ingest' ? Database : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.kind === 'pushmail' ? Mail : r.flow_group_id ? Rows3 : Workflow" :size="13" />
             {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
-            <span v-if="r.kind === 'script' || r.kind === 'container'" class="muted">· {{ scriptLabel(r) }}</span>
+            <span v-if="r.kind === 'script' || r.kind === 'container' || r.kind === 'pushmail'" class="muted">· {{ scriptLabel(r) }}</span>
           </span>
           <span v-if="r.status === 'SUCCESS' && runNotes(r.notes)" class="msg run-note">
             <TriangleAlert :size="12" /> {{ notesText(runNotes(r.notes)!, t) }}

@@ -224,6 +224,15 @@ class PolarsEngine(DeferredStepCache, Engine):
     # di memoria: il collect dell'export Excel non supera mai ~1M righe.
     XLSX_MAX_ROWS = 1_048_576 - 1  # -1: una riga è l'header
 
+    def count(self, source: DataSource) -> int:
+        """The rows of a source, counted in streaming (memory: nothing)."""
+        with self._session() as ctx:
+            lf = self._lazy_from_cache(ctx, source, [], plan_hashes(self._source_id(source), []), record=False)
+            try:
+                return int(lf.select(pl.len()).collect(engine="streaming").item())
+            except _ERRORI_POLARS as e:
+                raise EngineError(f"Error while reading the data: {e}") from e
+
     def export(
         self,
         source: DataSource,

@@ -2,7 +2,7 @@
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Node } from '@vue-flow/core'
-import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, FlaskConical, Filter, Plus, X } from 'lucide-vue-next'
+import { FileText, Settings, Link2, Trash2, Download, FileSpreadsheet, Repeat, Database, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, FlaskConical, Filter, Plus, X, Rows3 } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type SourceFilter } from '~/composables/useFlowModel'
@@ -708,6 +708,7 @@ function pickDatasource(id: number | null) {
       <p class="muted outhint">
         {{ $t('nodePanel.refreshHint') }}
       </p>
+      <p class="retired" role="note"><Rows3 :size="13" /> {{ $t('nodePanel.retiredNode') }}</p>
       <label>{{ $t('nodePanel.datasourceToRefreshLabel') }}</label>
       <Select
         searchable
@@ -727,6 +728,7 @@ function pickDatasource(id: number | null) {
       <p class="muted outhint">
         {{ $t('nodePanel.runFlowHint') }}
       </p>
+      <p class="retired" role="note"><Rows3 :size="13" /> {{ $t('nodePanel.retiredNode') }}</p>
       <label>{{ $t('nodePanel.flowToRunLabel') }}</label>
       <Select
         :model-value="node.data.flowId ?? null"
@@ -888,6 +890,8 @@ label { font-size: 12px; color: var(--muted); }
 .dspick { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 5px; }
 .dspick > label { display: inline-flex; align-items: center; gap: 5px; }
 .outhint { font-size: 12px; margin: 2px 0 0; }
+.retired { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.45; margin: 6px 0 2px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); }
+.retired svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 .outhint code { font-size: 11px; }
 .commenttext { font-family: inherit; }
 .partchecks {

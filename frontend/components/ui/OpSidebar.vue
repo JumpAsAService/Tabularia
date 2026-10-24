@@ -4,7 +4,7 @@
 // handler di FlowEditor.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Container, FileCode2, GripVertical, HardDriveDownload, RefreshCw, PlayCircle, StickyNote, Search } from 'lucide-vue-next'
+import { Container, FileCode2, GripVertical, HardDriveDownload, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const { t } = useI18n()
@@ -37,13 +37,13 @@ const hasForeach = computed(() => props.operations.includes('foreach'))
 // visibilità delle singole voci fisse e dei rispettivi gruppi
 const showSource = computed(() => !props.readOnly && match(t(SOURCE_META.label), 'source'))
 const showForeach = computed(() => !props.readOnly && hasForeach.value && match(t(opMeta('foreach').label), 'foreach'))
-const showRefresh = computed(() => !props.readOnly && match(t('opSidebar.refreshDatasourceLabel'), 'refresh'))
-const showRunflow = computed(() => !props.readOnly && match(t('opSidebar.runFlowLabel'), 'runflow'))
+// «Refresh datasource» and «Run flow» are no longer offered: a flow group refreshes
+// datasources and runs flows, in steps; the nodes of flows saved before still run
 const showOutput = computed(() => !props.readOnly && match(t('opSidebar.outputLabel'), 'output'))
 const showComment = computed(() => !props.readOnly && match(t('opSidebar.noteLabel'), 'comment', 'commento'))
 const showScript = computed(() => !props.readOnly && (!!props.scripting || !!props.scriptingOff) && match(t('scripting.node.title'), 'script', 'python', 'r'))
 const showContainer = computed(() => !props.readOnly && (!!props.containers || !!props.containersOff) && match(t('containers.node.title'), 'container', 'docker', 'image'))
-const showControl = computed(() => showForeach.value || showRefresh.value || showRunflow.value || showScript.value || showContainer.value)
+const showControl = computed(() => showForeach.value || showScript.value || showContainer.value)
 const noResults = computed(
   () =>
     !showSource.value &&
@@ -108,28 +108,6 @@ function onDragStart(ev: DragEvent, kind: string) {
       >
         <component :is="opMeta('foreach').icon" :size="15" class="item-icon" />
         <span>{{ $t(opMeta('foreach').label) }}</span>
-        <GripVertical :size="13" class="grip" />
-      </div>
-      <div
-        v-if="showRefresh"
-        class="item"
-        draggable="true"
-        :style="{ '--item-color': '#38bdf8' }"
-        @dragstart="onDragStart($event, 'refresh')"
-      >
-        <RefreshCw :size="15" class="item-icon" />
-        <span>{{ $t('opSidebar.refreshDatasourceLabel') }}</span>
-        <GripVertical :size="13" class="grip" />
-      </div>
-      <div
-        v-if="showRunflow"
-        class="item"
-        draggable="true"
-        :style="{ '--item-color': '#c084fc' }"
-        @dragstart="onDragStart($event, 'runflow')"
-      >
-        <PlayCircle :size="15" class="item-icon" />
-        <span>{{ $t('opSidebar.runFlowLabel') }}</span>
         <GripVertical :size="13" class="grip" />
       </div>
       <div

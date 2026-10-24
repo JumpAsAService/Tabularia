@@ -61,6 +61,7 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
       ['/docs/siem-splunk', 'Audit log to Splunk'],
       ['/docs/scripting', 'Python and R in flows'],
       ['/docs/container-node', 'The Container node'],
+      ['/docs/pushmail', 'Pushmail: datasources by email'],
       ['/docs/container-registries', 'Container registries'],
       ['/docs/engines/clickhouse-ai-user', 'A ClickHouse user for the AI assistant'],
     ],

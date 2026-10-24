@@ -46,6 +46,18 @@ exposes at `/system/info` and in the app's settings menu.
   backup now writes a heartbeat; a claim without one for two minutes is ignored.
 - **Fixed: with PostgreSQL not answering, the sign-in and every page answered a bare
   «Internal Server Error».** They now answer 503, «The database is not answering».
+- **The Refresh datasource and Run flow nodes are no longer offered in the editor**: a
+  flow group does the same, in steps (refreshes, flows, scripts, images, Pushmail).
+  Flows saved with them keep running and scheduling as before; selecting one of these
+  nodes says where to go instead.
+- **Pushmail, a new cell of the flow groups**: one email through an SMTP connection
+  with one `.xlsx` per datasource (up to 20), To and Cc, a subject and file names with
+  the date placeholders, and the rows at most of each datasource; a datasource with
+  more sends its first rows and the email says so. Several datasources, or a big one,
+  bring a warning to ask the administrators how large a message the SMTP relay takes;
+  more than 15 MB of files is never sent. CONNECT on the connection, the allowed
+  domains and VIEW on the datasources are checked when the group is saved and again
+  when it runs; every email is audited. Guide: docs/pushmail.md.
 - **SharePoint reads CSV files too**, not only Excel: the datasource has a format —
   Excel and CSV by each file's extension (the default), Excel only, CSV only — and the
   CSV options of the SFTP datasource (separator, encoding, header); the sheet is now

@@ -5,13 +5,29 @@
 // The gateway checks every cell when the grid is saved and again when it runs;
 // `cells` in the detail is the label of each cell as the reader may see it.
 
-export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container'
+export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container' | 'pushmail'
+
+/** A Pushmail cell: one email through an SMTP connection, one .xlsx per datasource. */
+export interface PushmailAttachment { datasourceId: number | null; fileName: string; maxRows: number }
+export interface PushmailConfig {
+  label: string
+  connectionId: number | null
+  to: string[]
+  cc: string[]
+  subject: string
+  body: string
+  bodyIsHtml: boolean
+  timezone: string
+  attachments: PushmailAttachment[]
+}
 
 export interface FlowGroupCell {
   kind: FlowGroupCellKind
   id: number
   /** a container cell's settings, as a Container node's data */
   container?: Record<string, any>
+  /** a pushmail cell's settings (components/containers/PushmailCellPanel.vue) */
+  pushmail?: PushmailConfig
 }
 
 export interface FlowGroupDefinition {

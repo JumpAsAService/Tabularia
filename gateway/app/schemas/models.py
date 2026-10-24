@@ -227,13 +227,42 @@ MAX_GROUP_STEPS = 50
 MAX_GROUP_COLUMNS = 20
 
 
+PUSHMAIL_MAX_ROWS = 1_000_000  # under the Excel format's own limit
+PUSHMAIL_MAX_ATTACHMENTS = 20
+PUSHMAIL_MAX_RECIPIENTS = 50
+
+
+class PushmailAttachmentCell(BaseModel):
+    """A datasource of a Pushmail cell: its file's name (a template with the Outputs'
+    placeholders, `.xlsx` added) and the rows it may hold at most."""
+    datasourceId: int
+    fileName: str = Field(min_length=1, max_length=255)
+    maxRows: int = Field(default=10_000, ge=1, le=PUSHMAIL_MAX_ROWS)
+
+
+class PushmailCell(BaseModel):
+    """A Pushmail cell's settings: an email through an SMTP connection, one .xlsx per
+    datasource (docs/pushmail.md)."""
+    label: str = Field(default="", max_length=200)
+    connectionId: Optional[int] = None
+    to: list[str] = Field(default_factory=list, max_length=PUSHMAIL_MAX_RECIPIENTS)
+    cc: list[str] = Field(default_factory=list, max_length=PUSHMAIL_MAX_RECIPIENTS)
+    subject: str = Field(default="", max_length=500)
+    body: str = Field(default="", max_length=20_000)
+    bodyIsHtml: bool = False
+    timezone: str = Field(default="UTC", max_length=64)  # of the placeholders' dates
+    attachments: list[PushmailAttachmentCell] = Field(default_factory=list, max_length=PUSHMAIL_MAX_ATTACHMENTS)
+
+
 class FlowGroupCell(BaseModel):
-    # run a flow, refresh a database datasource, run a saved script, run an image
-    kind: Literal["flow", "refresh", "script", "container"]
-    id: int  # of the flow, datasource or script; a container cell's own number in the group
+    # run a flow, refresh a database datasource, run a saved script, run an image,
+    # send datasources by email
+    kind: Literal["flow", "refresh", "script", "container", "pushmail"]
+    id: int  # of the flow, datasource or script; a container or pushmail cell's own number in the group
     # a container cell's settings, as a Container node's data (registryId, repository,
     # tag, command, args, variables, cpu, memory, timeoutSeconds, retries…)
     container: Optional[dict[str, Any]] = None
+    pushmail: Optional[PushmailCell] = None
 
 
 class FlowGroupDefinition(BaseModel):

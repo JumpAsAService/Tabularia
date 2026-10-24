@@ -114,6 +114,32 @@ def notify(request: NotifyRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+class PushmailRequest(BaseModel):
+    """A Pushmail cell: the SMTP connection (password still encrypted) and what to send
+    (app.ingest.pushmail.PushmailSpec). The recipients come checked by the gateway."""
+
+    connection: dict
+    spec: dict
+
+
+@router.post("/pushmail", response_model=TaskResponse)
+def pushmail(request: PushmailRequest):
+    """Queues the email of a Pushmail cell; polled on GET /tasks/{task_id}. Checked here
+    first, so a cell set up wrong is refused at once, not by a worker later."""
+    from app.ingest.pushmail import PushmailSpec
+    from app.tasks.jobs import pushmail_task
+
+    if request.connection.get("db_type") != "smtp":
+        raise HTTPException(status_code=422, detail="An SMTP connection is required")
+    try:
+        spec = PushmailSpec(**request.spec)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"pushmail: {e}") from e
+    task = pushmail_task.delay(connection=request.connection, spec=spec.model_dump())
+    logger.info("📩 Submitting pushmail_task: %d datasources", len(spec.attachments))
+    return TaskResponse(task_id=task.id, status="submitted", message=f"Pushmail of {len(spec.attachments)} datasources")
+
+
 class DbIngestRequest(BaseModel):
     connection: DbConnectionSpec
     source: DbSourceSpec

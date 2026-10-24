@@ -387,7 +387,7 @@ the scripts bucket, where the files of the other runs are. Read and write throug
 
 ### Running
 
-A flow with a Script node runs as an orchestration, like one with a Refresh node.
+A flow with a Script node runs as an orchestration, like one with a Container node.
 - **Order.** The node runs after the steps it reads from and before the ones that
   read from it, with or without a sequence edge.
 - **Limits.** **Timeout** stops it; **Retries** runs it again, as a new Job, after the

@@ -1185,14 +1185,6 @@ function onCanvasDrop(ev: DragEvent) {
     return
   }
 
-  if (kind === 'refresh' || kind === 'runflow') {
-    // nodi di CONTROLLO (non nella catena dati): il gateway li interpreta al run
-    const id = `ctl-${++outputCounter}`
-    addNodes({ id, type: kind, position, data: {} })
-    selectedId.value = id
-    return
-  }
-
   if (kind === 'script') {
     // code run by the gateway as a Kubernetes Job: its environment, then its code,
     // are chosen in the node panel; input and output come from its edges

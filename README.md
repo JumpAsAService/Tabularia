@@ -408,7 +408,10 @@ no run, no waiting for the whole pipeline.</em></p>
   [Publishing to an external bucket](#publishing-to-an-external-bucket) —, drop a file on
   an SFTP server or an S3 bucket, or send it by email; append/replace + post-SQL for
   tables; names built with [placeholders](#dynamic-inputs-and-outputs)),
-  `refresh` (re-ingest a DB source), `runflow` (invoke another flow).
+  `script` and `container` (code and images run as Kubernetes Jobs). Refreshing
+  datasources and running other flows in order is the job of a **flow group** (steps of
+  flows, refreshes, scripts, images and Pushmail emails); the `refresh` and `runflow`
+  nodes of flows saved before still run, but are no longer offered.
 
 Every node's output is **content-addressed and cached**: editing the last step of a
 10-step flow recomputes one step, not ten. The copy is written *after* the preview
