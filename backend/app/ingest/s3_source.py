@@ -49,6 +49,7 @@ from app.ingest.converters import IngestError
 from app.ingest.models import CsvOptions
 from app.ingest.s3_destination import S3ConnectionSpec
 from app.ingest.sharepoint_source import FILE_COLUMN, MODIFIED_COLUMN
+from app.ingest.sheets import PEEK_BYTES, sheets_of_first
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +227,11 @@ def _gather(client, bucket: str, source: S3SourceSpec, now, last_refresh) -> tup
 def check_files(conn: S3ConnectionSpec, source: S3SourceSpec, now=None, last_refresh: str | None = None) -> ft.Gathered:
     """«Check the files»: every object the expansions take, and the values without one."""
     bucket = bucket_of(conn, source)
-    g, _ = _gather(conn.client(), bucket, source, now, last_refresh)
+    client = conn.client()
+    g, _ = _gather(client, bucket, source, now, last_refresh)
+    if source.format in ("auto", "excel"):  # the sheets of the first workbook, to choose from
+        g.sheets = sheets_of_first(g.files, lambda o: o.key, lambda o: o.size,
+                                   lambda o, local: _download(client, bucket, o, local, PEEK_BYTES), lambda o: o.rel or o.key)
     return g
 
 

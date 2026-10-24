@@ -188,3 +188,71 @@ def test_a_pool_that_cannot_resize_is_left_alone():
     c = Consumer()
     c.pool = SoloPool()
     assert resize(c, 4) == 1 and c.prefetch == []
+
+
+# ── a STARTED task whose worker is gone (worker_pool.lost) ─────────────────────
+def _worker(fake, name, started_at):
+    fake.set(worker_pool.KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at}))
+
+
+def test_a_task_of_a_worker_still_in_the_same_life_is_not_lost(regolazioni_isolate):
+    _worker(regolazioni_isolate, "celery@w1", started_at=100.0)
+    assert worker_pool.lost("t", {"pid": 7, "hostname": "celery@w1", "since": 150.0}) == ""
+
+
+def test_a_task_of_a_worker_that_started_again_is_lost(regolazioni_isolate):
+    # an OOMKilled container starts again in the same pod, with the same name
+    _worker(regolazioni_isolate, "celery@w1", started_at=200.0)
+    assert worker_pool.lost("t", {"pid": 7, "hostname": "celery@w1", "since": 150.0}) == worker_pool.LOST
+
+
+def test_a_task_of_a_worker_gone_is_lost_once_it_stays_gone(regolazioni_isolate, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(worker_pool.time, "time", lambda: clock[0])
+    meta = {"pid": 7, "hostname": "celery@gone", "since": 900.0}
+    assert worker_pool.lost("t", meta) == ""  # first seen missing: a blip of Valkey, maybe
+    clock[0] += worker_pool.CONFIRM_SECONDS - 1
+    assert worker_pool.lost("t", meta) == ""
+    clock[0] += 2
+    assert worker_pool.lost("t", meta) == worker_pool.LOST
+    # back meanwhile (it wrote again after the blip): not lost
+    _worker(regolazioni_isolate, "celery@gone", started_at=800.0)
+    assert worker_pool.lost("t", meta) == ""
+
+
+@pytest.mark.parametrize("meta", [
+    None, "x", {"pid": 7}, {"pid": 7, "hostname": "celery@old"},  # an older worker's meta: no verdict
+])
+def test_without_the_facts_no_verdict(regolazioni_isolate, meta, monkeypatch):
+    monkeypatch.setattr(worker_pool, "CONFIRM_SECONDS", 0)
+    assert worker_pool.lost("t", meta) == ""
+
+
+def test_without_valkey_no_verdict(monkeypatch):
+    def broken():
+        raise ConnectionError("valkey down")
+    monkeypatch.setattr(regolazioni, "_client", broken)
+    assert worker_pool.lost("t", {"pid": 7, "hostname": "celery@w1", "since": 1.0}) == ""
+
+
+def test_every_task_notes_its_worker_and_its_start():
+    from app.tasks.celery_app import _TaskCheNonUccideIlWorker, celery_app
+
+    seen = []
+
+    class Probe(_TaskCheNonUccideIlWorker):
+        name = "tests.worker_pool.probe"
+
+        def run(self):
+            return "done"
+
+        def update_state(self, state=None, meta=None, **kw):
+            seen.append((state, meta))
+
+    task = celery_app.register_task(Probe())
+    task.push_request(id="t-9", hostname="celery@w1", called_directly=False, is_eager=False)
+    try:
+        assert task() == "done"
+    finally:
+        task.pop_request()
+    assert seen and seen[0][0] == "STARTED" and seen[0][1]["hostname"] == "celery@w1" and seen[0][1]["since"] > 0

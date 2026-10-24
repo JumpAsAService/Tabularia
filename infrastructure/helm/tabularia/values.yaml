@@ -451,6 +451,12 @@ gateway:
   # Threads per process. Fewer serve more: Python runs one at a time and they
   # only contend (measured: 68 requests/s with 40, 79 with 6).
   threads: 12
+  # How long a pod that is stopping (an upgrade, a restart from Administration →
+  # Settings, a drain, a scale-in) may finish what it is answering: a preview waits up
+  # to 290 s for the engine, an upload as long as it takes. It first waits 5 s for the
+  # Service to stop sending it requests, then stops taking new ones and finishes these
+  # for up to this minus 15 s.
+  terminationGracePeriodSeconds: 300
   # CPU is a good signal here, unlike for the workers: the gateway is busy
   # exactly when it burns CPU.
   autoscaling:
@@ -477,6 +483,9 @@ gateway:
       requests: { cpu: 100m, memory: 256Mi }
       limits: { memory: 1Gi }
     tmpSizeLimit: 1Gi
+    # it answers no one: stopping, it closes the executions it carries as interrupted
+    # and stops their steps (the next pod does not resume them)
+    terminationGracePeriodSeconds: 60
     nodeSelector: {}
     tolerations: []
     affinity: {}
@@ -497,8 +506,11 @@ engineApi:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { memory: 4Gi }
   # Uploads land here before being converted to parquet, and CSV/Excel exports
-  # are built here. Size it for the largest file your users upload.
+  # are built here. Size it for the uploads at once at their largest: each stands
+  # here twice while it is converted. Past it the kubelet evicts the pod at once.
   tmpSizeLimit: 20Gi
+  # As the gateway's: a stopping pod finishes the uploads and previews it is serving.
+  terminationGracePeriodSeconds: 300
   autoscaling:
     enabled: false
     minReplicas: 2
@@ -522,7 +534,9 @@ worker:
   # Size it for the largest dataset a single run touches.
   tmpSizeLimit: 50Gi
   # Runs can be long. Give Celery time to finish the current task before SIGKILL,
-  # otherwise a rolling update aborts work mid-write.
+  # otherwise a rolling update aborts work mid-write. Keep it above the tasks' hard
+  # limit (CELERY__TASK_TIME_LIMIT, also raised from Administration → Settings): a
+  # longer task is killed by any upgrade, restart, drain or scale-in.
   terminationGracePeriodSeconds: 3600
   autoscaling:
     enabled: false
@@ -536,8 +550,10 @@ worker:
       enabled: false
       listLength: 5
       pollingInterval: 15
-      # seconds without work before a pod is taken away: a long one, so a quiet
-      # minute between two runs does not stop a pod that is about to be needed
+      # with a minimum of 0 only: seconds with nothing waiting in the queue before
+      # the last pod goes (a running task is not «waiting», so a long one is
+      # cut after terminationGracePeriodSeconds). Above zero the scale-in follows the
+      # HPA's own pace (five minutes of fewer tasks waiting).
       cooldownPeriod: 600
     # The highest maxReplicas Admin → Workers may set (adminScaling): your budget
     # for this Deployment.
@@ -693,6 +709,17 @@ adminScaling:
 clusterView:
   enabled: true
 
+# Administration → Settings may restart the pods that read a changed setting only when
+# they start (the ones marked with the rollout icon: the gateway's threads and pool,
+# the workers' memory, the engine API's threads…), one at a time, through the
+# Kubernetes eviction API, so the PodDisruptionBudgets hold. It gives the gateway and
+# the orchestrator the right to read the pods of the release's namespace, and the
+# orchestrator alone the right to evict them; nothing else: not to change a Deployment,
+# which would mean running any image.
+# Off: the panel saves those settings and names the components to restart by hand.
+settingsRollout:
+  enabled: true
+
 # Admin → Scripting environments: the Python and R environments the Script node runs
 # in, each built once into an image by a Job (rootless BuildKit) and checked by a
 # second Job. Off by default. It gives the gateway's and the orchestrator's service
@@ -785,7 +812,8 @@ containers:
 serviceAccount:
   create: true
   # Only the gateway and the orchestrator talk to the Kubernetes API, with adminScaling,
-  # scripts or containers on, through accounts of their own (-scaler, -orchestrator);
+  # scripts, containers, clusterView or settingsRollout on, through accounts of their own
+  # (-scaler, -orchestrator);
   # every other pod runs as this account, without its token. Workload
   # identity (IRSA, GKE) brings its own credentials and is not affected.
   automountToken: false

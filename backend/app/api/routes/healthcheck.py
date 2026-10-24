@@ -13,9 +13,10 @@ router = APIRouter(
 settings = get_settings()
 
 @router.get('/', status_code=status.HTTP_200_OK, tags=["health"])
-def health_check():
+async def health_check():
     """
-    Health check for the application
+    Health check for the application: on the event loop, apart from the threads where
+    hundreds of previews may be waiting for their workers (the probes' endpoint)
     """
     return JSONResponse(content={"status": "healthy"}, status_code=status.HTTP_200_OK) 
 

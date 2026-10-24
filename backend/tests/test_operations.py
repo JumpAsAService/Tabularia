@@ -100,6 +100,15 @@ def test_filter_contains_su_testo():
     assert set(out["paese"]) == {"IT"}
 
 
+@pytest.mark.parametrize("value, expected", [
+    ("Speck+Brie", {"Speck+Brie"}), ("1.5", {"Box 1.5 kg"}), ("C++", {"C++ manuale"}), ("Vino (", {"Vino (rosso)"}),
+])
+def test_filter_contains_takes_the_text_as_written(value, expected):
+    # as a regular expression «+», «.», «(» meant something else: 0 rows, others' rows, an error
+    df = pl.DataFrame({"p": ["Speck+Brie", "SpeckkBrie", "Box 1.5 kg", "Box 105 kg", "C++ manuale", "C manuale", "Vino (rosso)"]})
+    assert set(apply("filter", {"column": "p", "operator": "contains", "value": value}, df=df)["p"]) == expected
+
+
 def test_filter_is_null_e_is_not_null():
     df = pl.DataFrame({"v": [1, None, 3]})
     assert apply("filter", {"column": "v", "operator": "is_null"}, df=df).height == 1
@@ -690,3 +699,13 @@ def test_foreach_vieta_placeholder_nel_percorso_sorgente(storage, anagrafica):
             )
     finally:
         ctx.cleanup()
+
+
+def test_inf_and_nan_are_shown_not_emptied():
+    # a division by zero: inf/NaN became null in JSON, an empty cell taken for a missing value
+    from app.engine.base import PreviewResult
+
+    res = PreviewResult(columns=[], rows=[{"a": float("inf"), "b": float("-inf"), "c": float("nan"), "d": 1.5, "e": None}],
+                        row_count=1, truncated=False)
+    assert res.rows == [{"a": "inf", "b": "-inf", "c": "NaN", "d": 1.5, "e": None}]
+    assert '"inf"' in res.model_dump_json()

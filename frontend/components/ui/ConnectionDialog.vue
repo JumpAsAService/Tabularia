@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Dialog di creazione/modifica di una connessione database, con test in-place.
 // La password non viene mai mostrata: in modifica, campo vuoto = non cambiarla.
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert, TriangleAlert } from 'lucide-vue-next'
+import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert, TriangleAlert, Info } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import {
@@ -124,6 +124,7 @@ watch(
   (open) => {
     if (!open) return
     testResult.value = null
+    showExample.value = false
     const c = props.existing
     name.value = c?.name ?? ''
     description.value = c?.description ?? ''
@@ -195,6 +196,92 @@ const DEFAULT_PORTS: Record<string, string> = {
   sftp: '22',
 }
 const portPlaceholder = computed(() => DEFAULT_PORTS[dbType.value] ?? '')
+
+// «(i)» beside the type: the fields of that type filled with an example, under the same
+// labels as the form, and a tip. It follows the authentication chosen for SFTP and HTTP
+// APIs. The values are made up: nothing is copied into the form.
+const showExample = ref(false)
+const infoBtn = ref<HTMLButtonElement | null>(null)
+// the close button goes away with the box: the focus back on the (i), inside the dialog
+function closeExample() {
+  showExample.value = false
+  nextTick(() => infoBtn.value?.focus())
+}
+const SECRET = '••••••••'
+const exampleRows = computed<[string, string][]>(() => {
+  const L = (k: string) => t(k)
+  const db = (host: string, port: string, user: string, database: string, schema: string, dbLabel = 'connectionDialog.databaseLabel'): [string, string][] => [
+    [L('connectionDialog.hostLabel'), host],
+    [L('connectionDialog.portLabel'), port],
+    [L('connectionDialog.usernameLabel'), user],
+    [L('connectionDialog.passwordLabel'), SECRET],
+    [L(dbLabel), database],
+    ...(schema ? [[L('connectionDialog.schemaLabel'), schema] as [string, string]] : []),
+  ]
+  switch (dbType.value) {
+    case 'postgresql': return db('db.example.com', '5432', 'tabularia_reader', 'sales', 'public')
+    case 'mysql': return db('mysql.example.com', '3306', 'reporting', 'shop', '')
+    case 'mariadb': return db('mariadb.example.com', '3306', 'reporting', 'shop', '')
+    case 'clickhouse': return db('clickhouse.example.com', '8443', 'reader', 'analytics', '')
+    case 'trino': return db('trino.example.com', '8443', 'analyst', 'hive', 'sales', 'connectionDialog.catalogLabel')
+    case 'oracle': return db('oracle.example.com', '1521', 'REPORTING', 'ORCLPDB1', 'HR', 'connectionDialog.serviceNameLabel')
+    case 'sqlserver': return [
+      ...db('sql.example.com', '1433', 'reporting', 'Sales', 'dbo'),
+      [L('connectionDialog.sqlTlsLabel'), L('connectionDialog.sqlTlsVerify')],
+    ]
+    case 's3': return [
+      [L('connectionDialog.endpointLabel'), 'https://s3.eu-west-1.amazonaws.com'],
+      [L('connectionDialog.accessKeyLabel'), 'AKIAIOSFODNN7EXAMPLE'],
+      [L('connectionDialog.secretKeyLabel'), SECRET],
+      [L('connectionDialog.bucketLabel'), 'company-data'],
+      [L('connectionDialog.regionLabel'), 'eu-west-1'],
+    ]
+    case 'smtp': return [
+      [L('connectionDialog.smtpHostLabel'), 'smtp.office365.com'],
+      [L('connectionDialog.portLabel'), '587'],
+      [L('connectionDialog.usernameLabel'), 'reports@example.com'],
+      [L('connectionDialog.passwordLabel'), SECRET],
+      [L('connectionDialog.fromAddressLabel'), 'reports@example.com'],
+      [L('connectionDialog.fromNameLabel'), 'Tabularia'],
+      [L('connectionDialog.tlsLabel'), 'STARTTLS (587)'],
+      [L('connectionDialog.allowedDomainsLabel'), 'example.com'],
+    ]
+    case 'sharepoint': return [
+      [L('sharepoint.siteLabel'), 'https://contoso.sharepoint.com/sites/Finance'],
+      [L('sharepoint.clientIdLabel'), '11111111-2222-3333-4444-555555555555'],
+      [L('sharepoint.secretLabel'), SECRET],
+      [L('sharepoint.tenantLabel'), '66666666-7777-8888-9999-000000000000'],
+      [L('sharepoint.libraryLabel'), 'Documents'],
+    ]
+    case 'sftp': return [
+      [L('sftp.hostLabel'), 'sftp.example.com'],
+      [L('connectionDialog.portLabel'), '22'],
+      [L('connectionDialog.usernameLabel'), 'exports'],
+      [L('sftp.authLabel'), sftpAuth.value === 'key' ? L('sftp.authKey') : L('sftp.authPassword')],
+      sftpAuth.value === 'key'
+        ? [L('sftp.privateKeyLabel'), '-----BEGIN OPENSSH PRIVATE KEY----- …']
+        : [L('connectionDialog.passwordLabel'), SECRET],
+    ]
+    case 'api': {
+      const rows: [string, string][] = [[L('apiSource.baseUrlLabel'), 'https://api.example.com/v1']]
+      const auth = apiAuth.value
+      rows.push([L('apiSource.authLabel'), L({ none: 'apiSource.authNone', api_key: 'apiSource.authApiKey', bearer: 'apiSource.authBearer', basic: 'apiSource.authBasic', oauth2: 'apiSource.authOauth2' }[auth])])
+      if (auth === 'api_key') rows.push([L('apiSource.keyNameLabel'), 'X-API-Key'], [L('apiSource.keyInLabel'), L('apiSource.keyInHeader')])
+      if (auth === 'basic') rows.push([L('connectionDialog.usernameLabel'), 'reports'])
+      if (auth === 'oauth2') rows.push(
+        [L('apiSource.clientIdLabel'), 'tabularia'],
+        [L('apiSource.tokenUrlLabel'), 'https://login.example.com/oauth2/token'],
+        [L('apiSource.scopeLabel'), 'read'],
+      )
+      if (auth !== 'none') rows.push([L(`apiSource.secret_${auth}`), SECRET])
+      rows.push([L('apiSource.defaultHeadersLabel'), 'Accept: application/json'], [L('apiSource.testPathLabel'), '/status'])
+      return rows
+    }
+    default: return []
+  }
+})
+const typeLabel = computed(() => DB_TYPES.find((o) => o.value === dbType.value)?.label ?? dbType.value)
+const exampleTip = computed(() => t(`connectionExamples.tips.${dbType.value}`))
 
 function draft(): ConnectionDraft {
   return {
@@ -425,7 +512,7 @@ function confirm() {
       >
         <div class="cd-head">
           <h3 id="cd-title"><Plug :size="15" /> {{ isEdit ? $t('connectionDialog.titleEdit') : $t('connectionDialog.titleNew') }}</h3>
-          <button class="cd-x" @click="emit('cancel')"><X :size="14" /></button>
+          <button class="cd-x" :aria-label="$t('connectionDialog.cancelButton')" @click="emit('cancel')"><X :size="14" /></button>
         </div>
 
         <div class="cd-grid">
@@ -433,10 +520,37 @@ function confirm() {
             <label>{{ $t('connectionDialog.nameLabel') }}</label>
             <input v-model="name" type="text" :placeholder="$t('connectionDialog.namePlaceholder')" />
           </div>
-          <div class="cd-field" :class="{ 'cd-wide': isS3 || isSp || isApi }">
+          <div class="cd-field cd-type" :class="{ 'cd-wide': isS3 || isSp || isApi }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
             <Select :model-value="dbType" :options="typeOptions" @update:model-value="changeType" />
+            <button
+              ref="infoBtn"
+              type="button"
+              class="cd-info"
+              :class="{ on: showExample }"
+              :aria-expanded="showExample"
+              aria-controls="cd-example"
+              :title="$t('connectionExamples.button')"
+              :aria-label="$t('connectionExamples.button')"
+              @click="showExample = !showExample"
+            >
+              <Info :size="14" />
+            </button>
           </div>
+          <section v-if="showExample" id="cd-example" class="cd-example cd-wide" :aria-label="$t('connectionExamples.title', { type: typeLabel })">
+            <p class="cd-example-title">
+              <span>{{ $t('connectionExamples.title', { type: typeLabel }) }}</span>
+              <button type="button" class="cd-x" :aria-label="$t('connectionExamples.close')" @click="closeExample"><X :size="12" /></button>
+            </p>
+            <dl>
+              <template v-for="[k, v] in exampleRows" :key="k">
+                <dt>{{ k }}</dt>
+                <dd><code>{{ v }}</code></dd>
+              </template>
+            </dl>
+            <p class="cd-example-tip">{{ exampleTip }}</p>
+            <p class="cd-example-note">{{ $t('connectionExamples.madeUp') }}</p>
+          </section>
           <div v-if="!isS3 && !isSp && !isApi" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
@@ -752,5 +866,26 @@ function confirm() {
 .cd-test.ko { color: var(--danger); }
 .cd-err { color: var(--danger); font-size: 12px; margin: 0; }
 .cd-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.cd-type { position: relative; }
+/* the (i) sits at the end of the type's label row, outside the label: the label stays
+   the Select's own name (v-label-fields) */
+.cd-info {
+  position: absolute; top: -3px; right: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--muted);
+}
+.cd-info:hover, .cd-info.on { color: var(--accent); background: var(--tint-accent); box-shadow: none; }
+.cd-example {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel)); padding: 10px 12px; font-size: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.cd-example p { margin: 0; }
+.cd-example-title { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--text); }
+.cd-example dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; }
+.cd-example dt { color: var(--muted); }
+.cd-example dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.cd-example code { font-size: 11.5px; }
+.cd-example-tip { line-height: 1.5; }
+.cd-example-note { color: var(--muted); font-size: 11px; }
 .cd-spacer { flex: 1; }
 </style>

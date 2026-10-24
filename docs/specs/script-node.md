@@ -187,10 +187,20 @@ on it do not run, and the orchestration ends in FAILURE.
 
 ### Cancelling and orphans
 
-- **Stop.** An administrator stopping the run from the queue page also deletes the
-  Job (`propagationPolicy: Background`).
-- **Orphans.** When `chiudi_orfane` closes an orchestration with a stopped
-  heartbeat, it deletes the Jobs labelled with that run.
+- **Stop.** Not built: the queue page stops the engine's Celery tasks only. A Script
+  run ends with its Job: its timeout (`activeDeadlineSeconds`), the orchestration being
+  interrupted (below), or `kubectl delete job` by hand.
+- **Orphans.** When an orchestration is closed as interrupted (its process stopping,
+  `chiudi_orfane` finding its heartbeat stopped, the same pod starting again), its steps
+  still open are stopped (`orchestrator.ferma_passi`): the Jobs of its Script and
+  Container nodes are deleted, its engine tasks revoked. A new attempt starts only while
+  its run is still open. An editor's trial beats on its own row (`heartbeat_at`, every
+  20 s) and is closed two minutes after it stops.
+- **The cluster misbehaving.** One failed answer of the Kubernetes API (unreachable,
+  429, 5xx) is asked again at the next look, until the node's deadline; a log the cluster
+  cannot give (the Pod's node lost) is asked for 30 s, then the outcome is told without
+  it. A Pod the cluster took away (evicted, a drained node) and a container that cannot
+  be created are said to be; a Pod never scheduled within the timeout says why.
 - **Clean-up of finished Jobs.** `ttlSecondsAfterFinished` (one hour by default)
   removes finished Jobs the orchestrator did not get to.
 

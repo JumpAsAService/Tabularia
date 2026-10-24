@@ -27,7 +27,7 @@ orchestration (services/orchestrator.py), which hands it here from `esegui`.
   not be allowed to read every flow or datasource in it (see routes/flow_groups.py).
 
 Every cell holds a database connection while it runs, as an orchestration does, so
-cells share the process's budget of `orchestrator.MAX_CONCURRENT`: past it they
+cells share the process's budget of `ORCHESTRATOR__MAX_CONCURRENT`: past it they
 wait, and the queue takes fewer runs meanwhile. Within that, how many cells really
 run at once is up to the workers and the queue.
 
@@ -170,7 +170,7 @@ async def _run_steps(run_id: int, user_id: int, trigger: str, cells: _Cells,
 async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step: int, col: int,
                     cell: FlowGroupCell, since: datetime | None) -> str | None:
     """Runs one cell and records its state; returns why it failed, or None."""
-    while orch.celle_in_corso >= orch.MAX_CONCURRENT:
+    while orch.celle_in_corso >= orch.concorrenza():
         await asyncio.sleep(CELL_SLOT_WAIT_S)  # the process's budget is full: the cell stays waiting
     orch.celle_in_corso += 1
     try:
@@ -255,7 +255,7 @@ async def _flow_cell(run_id: int, user_id: int, trigger: str, flow_id: int, cell
             except (FlowResolveError, orch.OrchestrationError) as e:
                 errors = [str(e)]
             except asyncio.CancelledError:
-                await orch._finalize_orch_run(child_id, "FAILURE", orch.ORCHESTRATION_INTERRUPTED)
+                await orch.interrompi(child_id)
                 raise
             except Exception as e:
                 # anything else (the engine answering an error, the network): the
@@ -319,7 +319,7 @@ async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, 
             except ScriptFailed as e:
                 error = str(e)
             except asyncio.CancelledError:
-                await orch._finalize_orch_run(child_id, "FAILURE", orch.ORCHESTRATION_INTERRUPTED)
+                await orch.interrompi(child_id)
                 raise
             except Exception as e:
                 logger.exception("flow group run %s: saved script %s failed", run_id, script_id)
@@ -354,10 +354,20 @@ async def _container_cell(run_id: int, user_id: int, trigger: str, cell: FlowGro
         except Exception as e:
             logger.exception("flow group run %s: container cell %s failed", run_id, cell.id)
             error = _describe(e)
-        last = s.exec(select(Run.id).where(Run.parent_run_id == run_id, Run.kind == "container")
-                      .order_by(Run.id.desc())).first()
-        await cells.set(step, col, run_id=last)
+        # this cell's own run (its node id is the cell's): not the latest container run of
+        # the group, which with parallel cells is a sister's, and none when it never started
+        mine = next((r.id for r in s.exec(select(Run).where(Run.parent_run_id == run_id, Run.kind == "container")
+                                          .order_by(Run.id.desc())).all()
+                     if _node_id(r) == node["id"]), None)
+        await cells.set(step, col, run_id=mine)
         return error
+
+
+def _node_id(run: Run) -> str | None:
+    try:
+        return json.loads(run.script or "{}").get("node_id")
+    except ValueError:
+        return None
 
 
 async def _wait_for(s: Session, run_id: int, live_id: int, name: str, cells: _Cells, step: int, col: int,
@@ -366,7 +376,7 @@ async def _wait_for(s: Session, run_id: int, live_id: int, name: str, cells: _Ce
     await cells.set(step, col, run_id=live_id, waited=take_outcome)
     from app.services.waits import waits
 
-    for pause in waits(orch.OUTPUT_WAIT_INTERVAL_S):
+    for pause in waits(orch._orc().poll_interval_seconds):
         row = s.exec(select(Run.status, Run.error).where(Run.id == live_id)).first()
         if row is None:
             return f"'{name}': the run in progress it waited for is gone" if take_outcome else None

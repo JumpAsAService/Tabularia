@@ -135,7 +135,8 @@ With that image, the node's **Arguments** `--days` and `30` run
 4. **The outcome.** A failure stops the flow, as a failed Script node does: the steps
    after it would read nothing, or stale data. A download the node cannot make (a
    certificate it does not trust, credentials refused, an image gone) fails within
-   about twenty seconds, saying why.
+   about twenty seconds, saying why. A container that goes over its **Memory** is
+   stopped by the cluster, and the run says so (exit code 137).
 
 The run is a child of the flow's run, shown in **Runs** with the node's name: the
 registry and the image with its digest, the command, the attempts, the exit code, the

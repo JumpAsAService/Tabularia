@@ -14,6 +14,22 @@ export interface SavedViewSpec {
   pivotOn: boolean
   pivot: { index: string[]; on: string[]; values: string; func: string }
   outline: boolean
+  // the tab shown and the chart's settings (views saved before have neither)
+  tab?: 'table' | 'chart'
+  chart?: ChartSettings | null
+}
+
+export interface ChartSettings {
+  type: string
+  x: string
+  by: string
+  func: string
+  y: string
+  xFunc: string
+  xNum: string
+  yFunc: string
+  yNum: string
+  topN: number
 }
 
 export interface SavedView {

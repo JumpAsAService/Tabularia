@@ -27,6 +27,12 @@ class _Avanzamento:
         self._task = current_task if current_task and current_task.request.id else None
         self._fase: str | None = None
         self._quando = 0.0
+        # the worker and the start stay in the meta: the engine tells a lost task by them
+        self._chi: dict = {}
+        if self._task is not None:
+            from app.tasks.worker_pool import task_started_meta
+
+            self._chi = task_started_meta(self._task.request)
 
     def __call__(self, fase: str, **conti: int) -> None:
         if self._task is None:
@@ -36,7 +42,7 @@ class _Avanzamento:
             return
         self._fase, self._quando = fase, ora
         try:
-            self._task.update_state(state="STARTED", meta={"phase": fase, **conti})
+            self._task.update_state(state="STARTED", meta={**self._chi, "phase": fase, **conti})
         except Exception as e:  # noqa: BLE001
             logger.warning("avanzamento non registrato: %s", e)
 

@@ -68,6 +68,15 @@ overrides them with `--reload`, which must not reach production.
   flows, encrypted connection credentials, runs, audit log): back it up.
 - **Valkey** is the Celery broker and the step-cache index. Its content is disposable:
   losing it drops queued tasks and makes the cache start cold, nothing else.
+- **One installation per Valkey database.** The queues and keys have fixed names. Two
+  installations on the same Valkey and the same `externalServices.redis.db` (staging and
+  production on one managed Redis, both on db 0) share them: one's workers run the
+  other's tasks, with the wrong key and storage, and Administration → Settings and
+  → Workers mix the two. Give each its own db number, or its own instance.
+- **One release per namespace.** The namespaces of the users' code are named after the
+  release's namespace, and the Jobs, Secrets and images made at run time after run ids:
+  two releases in one namespace collide (the second install fails on the namespaces; with
+  `createNamespaces: false` they share them, and follow each other's Jobs).
 
 ## Networking
 
@@ -202,9 +211,20 @@ applies unchanged.
   default `terminationGracePeriodSeconds: 30`, every deploy would kill in-flight runs
   (the chart sets 3600 s for the run workers, 120 s for the preview workers). Tasks are not
   redelivered (`acks_late` is off, on purpose: outputs in append mode are not
-  idempotent), so a killed run is marked failed after `ENGINE__RUN_STALE_TIMEOUT_SECONDS`
-  (default 3900). Set the grace period close to 3600 s for run workers, or accept that
-  deploys interrupt runs.
+  idempotent). Keep the grace period above the task limit (raised from Administration →
+  Settings too), or accept that deploys interrupt the longer runs.
+- **A worker killed mid-run** (OOMKilled: on cgroup v2 the kernel kills the whole
+  container; an emptyDir past its `sizeLimit`; its node lost) leaves its runs started in
+  Celery's results. The engine tells them apart from running ones by the worker's own
+  record in Valkey (gone, or started again after the run began) and reports them failed,
+  «The worker running it stopped before the end», within about half a minute, instead of
+  waiting for `ENGINE__RUN_STALE_TIMEOUT_SECONDS`.
+- **Gateway and engine.** Stopping, they wait 5 s (`preStop`) for the Service to drop
+  them, then finish the requests in flight (a preview waits up to 290 s, an upload as long
+  as it takes) for up to their grace period minus 15 s: `gateway.terminationGracePeriodSeconds`
+  and `engineApi.terminationGracePeriodSeconds`, 300 s. The orchestrator's is 60 s: it
+  closes the executions it carries as interrupted and stops their steps already with a
+  worker (revoked), so a flow run again does not write on top of them.
 - **Memory.** Set a memory limit per pod. The per-child memory cap is derived from the
   container limit and `CELERY__WORKER_CONCURRENCY`, so the limit is also the tuning knob.
 
@@ -216,6 +236,8 @@ applies unchanged.
 | Engine API | `GET /healthcheck/` |
 | Frontend | `GET /login` |
 
+The gateway's and the engine's answer on the event loop, apart from the threads serving
+requests, so a busy pod is not taken for a dead one; the chart gives every probe 5 s.
 Workers and beat expose no HTTP port; rely on the restart policy.
 
 ## Configuration
@@ -253,7 +275,7 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `APP__CORS_ORIGINS` | ✓ | | JSON list with the public frontend URL, e.g. `["https://app.example.com"]`. Needed **only** when the frontend is served from a different host than the gateway — then set `AUTH__COOKIE_DOMAIN` too; the reference ingress puts both on one host, where it can stay unset (`app.corsOrigins` in the chart). `*` is refused: the session is a cookie |
 | `ENGINE__BASE_URL` | ✓ | | internal URL of the engine API |
 | `ENGINE__BUCKET` | ✓ | | the gateway's own copy of the bucket name; it compares it against the bucket in every request and rejects a mismatch with 403. It **must equal** `STORAGE__BUCKET`, so the chart and the compose file both derive it from the same single value — set it by hand only if you know why |
-| `ENGINE__SETTINGS_PANEL` | ✓ | | Administration → Settings may change some engine parameters at runtime (row group size, read timeout, export cap, task time limits, caches; docs/engine-settings.md). `false` keeps the environment the only source (`engine.settingsPanel`) |
+| `ENGINE__SETTINGS_PANEL` | ✓ | | Administration → Settings may change about a hundred settings of the gateway and the engine at runtime (docs/engine-settings.md); the ones read at start are applied by restarting their pods one at a time (`settingsRollout.enabled`). `false` keeps the environment the only source (`engine.settingsPanel`) |
 | `REDIS__HOST`, `REDIS__PORT`, `REDIS__DB` | | ✓ | broker and cache index |
 | `STORAGE__ENDPOINT`, `STORAGE__ACCESS_KEY`, `STORAGE__SECRET_KEY` *secret*, `STORAGE__BUCKET`, `STORAGE__REGION` | | ✓ | object storage |
 | `CELERY__WORKER_CONCURRENCY` | | ✓ | per worker pod |

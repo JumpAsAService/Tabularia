@@ -75,7 +75,7 @@ From a folder: **New → From database**, choose the SFTP connection, then:
 | Files | A name or a glob: `vendite_*.csv`; `*` and `?` within a name, `**` for any subfolder (`**/*.csv`; links to folders are not followed). Case-sensitive. `..` is refused, in the folder too. **Check files** lists what it takes. |
 | Format | *From each file's extension* (`.csv` `.txt` `.tsv`, `.parquet` `.pq`, `.xlsx` `.xlsm` `.xls`, `.ndjson` `.jsonl`: a glob may mix them; any other extension refuses the import), or CSV, Parquet, Excel, NDJSON for every file. |
 | CSV separator, encoding, header | The reading options of the file sources: one-character separator; UTF-8, UTF-8 with invalid bytes replaced, or Windows-1252; whether the first row is the header. |
-| Excel sheet | Empty = the first sheet. |
+| Excel sheet | Empty = the first sheet of the workbook, hidden or not. After «Check the files» the field becomes a list of the sheets of the first workbook found (one of 50 MB at most is downloaded for it), the hidden ones marked. |
 | Time zone, variables, initial last refresh | Folder and files may hold [placeholders](placeholders.md) — `sales_{yesterday:yyyyMMdd}.csv`, `in/{day}` — and the datasource's list and range variables (`day = today-7 .. today step 1d`). |
 | Refresh | **Snapshot** (the table is rebuilt), or **append by key**: the rows whose key columns (`_param_day, id`, `_file`…) come again replace the old ones. |
 

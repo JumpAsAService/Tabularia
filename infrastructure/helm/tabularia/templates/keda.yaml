@@ -22,8 +22,9 @@ metadata:
 spec:
   scaleTargetRef:
     name: {{ include "tabularia.fullname" $ }}-{{ $role }}
-  minReplicaCount: {{ $cfg.autoscaling.minReplicas }}
-  maxReplicaCount: {{ $cfg.autoscaling.maxReplicas }}
+  {{- $so := dict "root" $ "apiVersion" "keda.sh/v1alpha1" "kind" "ScaledObject" "name" (printf "%s-%s" (include "tabularia.fullname" $) $role) }}
+  minReplicaCount: {{ include "tabularia.panelBound" (merge (dict "field" "minReplicaCount" "value" $cfg.autoscaling.minReplicas) $so) }}
+  maxReplicaCount: {{ include "tabularia.panelBound" (merge (dict "field" "maxReplicaCount" "value" $cfg.autoscaling.maxReplicas) $so) }}
   pollingInterval: {{ $cfg.autoscaling.keda.pollingInterval }}
   cooldownPeriod: {{ $cfg.autoscaling.keda.cooldownPeriod }}
   triggers:

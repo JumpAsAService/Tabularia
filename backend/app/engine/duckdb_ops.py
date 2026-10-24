@@ -33,10 +33,14 @@ from app.engine.operations import (
     MAX_PIVOT_COLUMNS,
     _reject_dynamic_source_keys,
     check_filter_value,
+    check_strict_union,
+    non_iso_values,
+    temporal_value_error,
     _substitute,
     PIVOT_LABEL_SEP,
     SAMPLE_BUCKETS,
     sample_threshold,
+    sort_keys,
 )
 
 DuckOpFn = Callable[..., "duckdb.DuckDBPyRelation"]
@@ -182,26 +186,21 @@ def op_filter(rel, params, a, ctx):
     column = _require(params, "column")
     operator = params.get("operator", "eq")
     check_filter_value(operator, params.get("value"))
+    bad = non_iso_values(operator, params.get("value"))
+    if bad and dict(zip(rel.columns, (str(t).upper() for t in rel.types))).get(column, "").startswith(("DATE", "TIME")):
+        raise temporal_value_error(bad[0])
     return rel.query(a, f"SELECT * FROM {a} WHERE {_predicate(column, operator, params.get('value'))}")
 
 
 # ── riordino / righe ──────────────────────────────────────────────────────────
 @_register("sort")
 def op_sort(rel, params, a, ctx):
-    cols = _as_list(_require(params, "by"))
-    # `ignore_missing`: lo mette SOLO l'iniezione del publish (gateway), mai
-    # l'utente. Una chiave di ordinamento dichiarata sull'Output e poi sparita
-    # dalla catena (colonna rinominata o tolta) non deve far fallire OGNI run
-    # del flusso — e non è nemmeno togliibile dalla checklist, che mostra solo
-    # le colonne esistenti. Un `sort` chiesto esplicitamente resta severo.
-    if params.get("ignore_missing"):
-        have = set(rel.columns)
-        cols = [c for c in cols if c in have]
-        if not cols:
-            return rel
-    direction = "DESC" if params.get("descending") else "ASC"
+    # the keys and a direction each (operations.sort_keys: `ignore_missing` too)
+    keys = sort_keys(params, rel.columns)
+    if not keys:
+        return rel
     # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
-    order = ", ".join(f"{_qi(c)} {direction} NULLS LAST" for c in cols)
+    order = ", ".join(f"{_qi(c)} {'DESC' if d else 'ASC'} NULLS LAST" for c, d in keys)
     return rel.query(a, f"SELECT * FROM {a} ORDER BY {order}")
 
 
@@ -218,12 +217,24 @@ def op_sample(rel, params, a, ctx):
     return rel.query(a, f"SELECT * FROM {a} USING SAMPLE {pct:.4f} PERCENT (bernoulli, {seed})")
 
 
+# The rows' own order (that of the file, through filters and joins): `row_number() OVER ()`
+# follows it (preserve_insertion_order); DuckDB's first()/last() and a window without an
+# ORDER BY took any row of the group, Polars the first one.
+_RN = "__tabularia_rn"
+
+
+def _numbered(a: str) -> str:
+    return f"(SELECT *, row_number() OVER () AS {_RN} FROM {a})"
+
+
 @_register("unique")
 def op_unique(rel, params, a, ctx):
     subset = params.get("subset")
     if subset:
         part = ", ".join(_qi(c) for c in subset)
-        return rel.query(a, f"SELECT * FROM {a} QUALIFY row_number() OVER (PARTITION BY {part}) = 1")
+        # the first row of each group, in the data's order (as Polars keeps the first)
+        return rel.query(a, f"SELECT * EXCLUDE ({_RN}) FROM {_numbered(a)} "
+                            f"QUALIFY row_number() OVER (PARTITION BY {part} ORDER BY {_RN}) = 1")
     return rel.query(a, f"SELECT DISTINCT * FROM {a}")
 
 
@@ -249,6 +260,22 @@ _AGG = {
 }
 
 
+def _agg_expr(func: str, col: str) -> str:
+    """The aggregate of a group_by or a pivot: n_unique is a DISTINCT count (the pivot
+    used the plain count of _AGG, counting repeats); first and last follow the rows'
+    order (the input numbered by `_numbered`)."""
+    if func == "n_unique":
+        return f"count(DISTINCT {_qi(col)})"
+    if func in ("first", "last"):
+        return f"{func}({_qi(col)} ORDER BY {_RN})"
+    return f"{_AGG[func]}({_qi(col)})"
+
+
+def _source_for(a: str, funcs) -> str:
+    """The input of an aggregation: numbered when first or last need the order."""
+    return _numbered(a) if any(f in ("first", "last") for f in funcs) else a
+
+
 @_register("group_by")
 def op_group_by(rel, params, a, ctx):
     by = _as_list(_require(params, "by"))
@@ -260,9 +287,9 @@ def op_group_by(rel, params, a, ctx):
         if func not in _AGG:
             raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
-        expr = f"count(DISTINCT {_qi(col)})" if func == "n_unique" else f"{_AGG[func]}({_qi(col)})"
-        parts.append(f"{expr} AS {_qi(alias)}")
-    return _recast_hugeint(ctx, rel.query(a, f"SELECT {', '.join(parts)} FROM {a} GROUP BY {by_sql}"))
+        parts.append(f"{_agg_expr(func, col)} AS {_qi(alias)}")
+    src = _source_for(a, [g.get("func", "sum") for g in aggs])
+    return _recast_hugeint(ctx, rel.query(a, f"SELECT {', '.join(parts)} FROM {src} GROUP BY {by_sql}"))
 
 
 def _recast_hugeint(ctx, rel):
@@ -374,9 +401,11 @@ def op_join(rel, params, a, ctx):
 def op_union(rel, params, a, ctx):
     right = ctx.build_right(_require(params, "right"))
     ln, rn = ctx.register(rel), ctx.register(right)
-    # relaxed = allinea per nome (colonne mancanti → null); strict = schema identico
-    op = "UNION ALL" if params.get("strategy") == "strict" else "UNION ALL BY NAME"
-    return ctx.con.sql(f"SELECT * FROM {ln} {op} SELECT * FROM {rn}")
+    # relaxed = allinea per nome (colonne mancanti → null); strict = stesse colonne e tipi,
+    # in qualunque ordine, unite per nome (posizionale scambiava le colonne in silenzio)
+    if params.get("strategy") == "strict":
+        check_strict_union(list(zip(rel.columns, map(str, rel.types))), list(zip(right.columns, map(str, right.types))))
+    return ctx.con.sql(f"SELECT * FROM {ln} UNION ALL BY NAME SELECT * FROM {rn}")
 
 
 # ── pivot / unpivot (righe↔colonne) ───────────────────────────────────────────
@@ -402,7 +431,7 @@ def op_pivot(rel, params, a, ctx):
         )
     idx_sql = ", ".join(_qi(c) for c in index)
     piv = ctx.con.sql(
-        f"PIVOT {name} ON {on_sql} USING {_AGG[func]}({_qi(values)}) GROUP BY {idx_sql}"
+        f"PIVOT {_source_for(name, [func])} ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {idx_sql}"
     )
     # sum di interi → HUGEINT (decimale per Polars): riportato a BIGINT come gli altri engine
     return _recast_hugeint(ctx, piv)

@@ -57,7 +57,7 @@ spec:
         app.kubernetes.io/component: {{ .component }}
     spec:
       {{- include "tabularia.imagePullSecrets" $ | nindent 6 }}
-      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled $.Values.containers.enabled $.Values.clusterView.enabled }}
+      {{- if or $.Values.adminScaling.enabled $.Values.scripts.enabled $.Values.containers.enabled $.Values.clusterView.enabled $.Values.settingsRollout.enabled }}
       # Admin → Workers changes the workers' autoscaling bounds (scaling-rbac.yaml);
       # Admin → Scripting environments runs Jobs in the scripts namespaces (scripts.yaml)
       # (the orchestrator has an account of its own: only it creates the image builds)
@@ -69,6 +69,7 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .cfg.terminationGracePeriodSeconds | default 60 }}
       {{- if $.Values.migrations.enabled }}
       initContainers:
         # The database schema, before the application starts: the Alembic
@@ -115,6 +116,14 @@ spec:
             - --proxy-headers
             - --forwarded-allow-ips={{ $.Values.gateway.trustedProxies }}
             - --timeout-keep-alive=75
+            # stopping: the requests in flight finish, within the grace period
+            - --timeout-graceful-shutdown={{ max 5 (sub (.cfg.terminationGracePeriodSeconds | default 60) 15) }}
+          # Stopping, the pod first waits for the Service to drop it: closing its socket
+          # at once refused the requests still sent to it (a 500 from the gateway's proxy,
+          # a 502 from the ingress) at every upgrade, restart or scale-in.
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
           ports:
             - name: http
               containerPort: 8000
@@ -138,21 +147,39 @@ spec:
             - name: KUBERNETES__CLUSTER_VIEW
               value: "true"
             {{- end }}
+            # which pods are the release's (Administration → Settings names them, and restarts
+            # them with settingsRollout: scaling-rbac.yaml), and where
+            - name: KUBERNETES__RELEASE
+              value: {{ $.Release.Name | quote }}
+            - name: KUBERNETES__APP_NAME
+              value: {{ include "tabularia.name" $ | quote }}
+            - name: KUBERNETES__NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
+            {{- if $.Values.settingsRollout.enabled }}
+            - name: KUBERNETES__ROLLOUT
+              value: "true"
+            {{- end }}
             {{- include "tabularia.withoutEngineSecrets" $ | nindent 12 }}
           envFrom:
             {{- include "tabularia.envFrom" $ | nindent 12 }}
           # The schema is migrated by the init container above; the application
           # starts once it is done. Room before probing for a cold start.
+          # /health answers on the event loop, apart from the threads that serve the
+          # requests: a busy gateway is not a dead one. 5 s, not the default 1 s.
           startupProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 5
+            timeoutSeconds: 5
             failureThreshold: 30
           readinessProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
           resources:
             {{- toYaml .cfg.resources | nindent 12 }}

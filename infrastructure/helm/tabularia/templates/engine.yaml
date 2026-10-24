@@ -45,12 +45,24 @@ spec:
       automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.engineApi.terminationGracePeriodSeconds | default 60 }}
       containers:
         - name: engine
           image: {{ include "tabularia.image" (dict "root" $ "component" "backend") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          # stopping: the uploads and previews in flight finish, within the grace period
+          command:
+            - uvicorn
+            - app.api.main:app
+            - --host=0.0.0.0
+            - --port=8000
+            - --timeout-graceful-shutdown={{ max 5 (sub (.Values.engineApi.terminationGracePeriodSeconds | default 60) 15) }}
+          # first the Service drops the pod, then it stops (as the gateway's)
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
           ports:
             - name: http
               containerPort: 8000
@@ -59,13 +71,17 @@ spec:
           env:
             - name: MALLOC_ARENA_MAX
               value: "2"
+            - name: TMP_SIZE_LIMIT
+              value: {{ .Values.engineApi.tmpSizeLimit | quote }}
             {{- include "tabularia.withoutGatewaySecrets" . | nindent 12 }}
           readinessProbe:
             httpGet: { path: /healthcheck/, port: http }
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet: { path: /healthcheck/, port: http }
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
           resources:
             {{- toYaml .Values.engineApi.resources | nindent 12 }}

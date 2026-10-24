@@ -25,12 +25,13 @@ import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
-import type { PreviewResult, ColumnInfo, Operation } from '~/composables/useApi'
+import type { PreviewResult, ColumnInfo, Operation, IngestResult } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { createFlowHistory } from '~/composables/useFlowHistory'
 import { onBeforeRouteLeave } from 'vue-router'
 import Modal from '~/components/ui/Modal.vue'
+import SheetPickerDialog from '~/components/ui/SheetPickerDialog.vue'
 import { buildClip, instantiateClip, readClip, writeClip, type ClipNode, type FlowClip } from '~/composables/useFlowClipboard'
 import { useFlows } from '~/composables/useFlows'
 import { useProjects } from '~/composables/useProjects'
@@ -73,6 +74,8 @@ const {
   removeSelectedNodes,
   screenToFlowCoordinate,
   fitView,
+  setCenter,
+  getViewport,
   onNodesInitialized,
 } = useVueFlow()
 
@@ -981,39 +984,74 @@ function targetSourceId(): string {
 async function onUpload(file: File) {
   if (negatoAllOsservatore()) return
   const sid = targetSourceId()
+  await loadFile(sid, file, undefined, (res) => {
+    // a workbook with several sheets: which ones, while the first one converts
+    if ((res.sheets?.length ?? 0) > 1) {
+      sheetChoice.value = { file, sid, sheets: res.sheets!, hidden: res.hidden_sheets ?? [], read: res.sheet ?? res.sheets![0] }
+    }
+  })
+}
+
+// ── Sheets of a workbook ─────────────────────────────────────────────────
+const sheetChoice = ref<{ file: File; sid: string; sheets: string[]; hidden: string[]; read: string } | null>(null)
+
+// every sheet ticked is a source, read from the same file again; the sheet already
+// read stays on its source when it is ticked, or that source takes the first one
+async function importSheets(names: string[]) {
+  const c = sheetChoice.value
+  sheetChoice.value = null
+  if (!c || !names.length) return
+  const rest = names.filter((n) => n !== c.read)
+  if (!names.includes(c.read) && findNode(c.sid)) await loadFile(c.sid, c.file, rest.shift())
+  for (const name of rest) {
+    const id = addSource()
+    // a sheet that cannot be read (empty, say) leaves no empty source behind: the status says why
+    if (!(await loadFile(id, c.file, name))) removeNodes(id, true)
+  }
+  // the new sources stand below the others: the whole canvas in view
+  if (rest.length) nextTick(() => fitView({ padding: 0.15, duration: 300, maxZoom: 1 }))
+}
+
+// uploads a file into a source (a workbook: `sheet`, or the first visible one);
+// `uploaded` sees the answer before a big file's conversion is waited for
+async function loadFile(sid: string, file: File, sheet?: string, uploaded?: (res: IngestResult) => void): Promise<boolean> {
   busy.value = true
-  setStatus(t('flowEditor.uploading', { name: file.name }), 'busy')
+  setStatus(t('flowEditor.uploading', { name: sheet ? `${file.name} · ${sheet}` : file.name }), 'busy')
   try {
-    const res = await api.uploadFile(file)
+    const res = await api.uploadFile(file, undefined, sheet)
     updateNodeData(sid, {
       datasetId: res.dataset_id,
       datasourceId: null, // l'upload scollega l'eventuale datasource scelta prima
       parquetKey: res.parquet_key,
       filename: file.name,
+      sheet: res.sheet ?? null,
       rows: res.dataset?.rows ?? null,
       columns: res.dataset?.columns ?? [],
     })
     selectedId.value = sid
+    uploaded?.(res)
 
     if (res.status === 'ready') {
       // file piccolo: conversione già fatta in modo sincrono
       nodeColumns[sid] = res.dataset?.columns ?? []
-      setStatus(t('flowEditor.ready', { rows: res.dataset?.rows }), 'ok')
+      setStatus(t('flowEditor.ready', { rows: res.dataset?.rows }, res.dataset?.rows ?? 2), 'ok')
       await refreshForNode(sid)
     } else {
       // file grande: conversione async su Celery → aspetta il completamento
       setStatus(t('flowEditor.convertingTask', { id: res.task_id }), 'busy')
-      await pollConversion(sid, res.task_id!)
+      await pollConversion(sid, res.task_id!, res.parquet_key)
     }
+    return true
   } catch (e) {
     setStatus(t('flowEditor.uploadFailed', { error: errMessage(e) }), 'error')
+    return false
   } finally {
     busy.value = false
   }
 }
 
 // Attende la conversione async di un file grande, poi popola la sorgente.
-async function pollConversion(sid: string, taskId: string) {
+async function pollConversion(sid: string, taskId: string, parquetKey: string) {
   for (let i = 0; i < 1800; i++) {
     // ~2s * 1800 = fino a ~1h (pari al task_time_limit del backend)
     await new Promise((r) => setTimeout(r, 2000))
@@ -1023,12 +1061,14 @@ async function pollConversion(sid: string, taskId: string) {
     } catch {
       continue
     }
+    // the source has taken another file or sheet meanwhile: this conversion is not its
+    if (findNode(sid)?.data?.parquetKey !== parquetKey) return
     if (st.status === 'SUCCESS') {
       const info: any = st.result ?? {}
       // la fine della conversione completa il caricamento: non è un passo a sé
       history.quietly(() => updateNodeData(sid, { rows: info.rows ?? null, columns: info.columns ?? [] }))
       nodeColumns[sid] = info.columns ?? []
-      setStatus(t('flowEditor.ready', { rows: info.rows }), 'ok')
+      setStatus(t('flowEditor.ready', { rows: info.rows }, info.rows ?? 2), 'ok')
       await refreshForNode(sid)
       return
     }
@@ -1041,8 +1081,8 @@ async function pollConversion(sid: string, taskId: string) {
   setStatus(t('flowEditor.conversionTimeout'), 'error')
 }
 
-function addSource() {
-  if (negatoAllOsservatore()) return
+function addSource(): string {
+  if (negatoAllOsservatore()) return ''
   const id = `src-${++sourceCounter}`
   addNodes({
     id,
@@ -1051,6 +1091,7 @@ function addSource() {
     data: { bucket, datasetId: null, parquetKey: null, filename: null, rows: null, columns: [] },
   })
   selectedId.value = id
+  return id
 }
 
 function addOperation() {
@@ -1066,6 +1107,10 @@ function addOperation() {
   addEdges({ id: `e-${parentId}-left-${id}`, source: parentId, target: id, targetHandle: 'left' })
   selectedId.value = id
   refreshForNode(id)
+  // the new node beside the last one could land off the canvas, under the minimap: the
+  // view moves to it, at the zoom it has
+  const at = { x: (parent?.position.x ?? 60) + 230 + 80, y: (parent?.position.y ?? 140) + 40 }
+  nextTick(() => setCenter(at.x, at.y, { zoom: getViewport().zoom, duration: 300 }))
 }
 
 // ── Minimap: each node in the colour of its edge on the canvas ────────────
@@ -1373,7 +1418,16 @@ function onKeydown(e: KeyboardEvent) {
   // il «Salva pagina» del browser)
   if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
     e.preventDefault()
-    if (!runDialogOpen.value && !soloOsservatore.value) saveFlow()
+    if (runDialogOpen.value || soloOsservatore.value) return
+    // a field of the node's panel records its value on «change», which fires when it loses
+    // the focus: saved at once, the flow kept the value from before the one just typed (and
+    // nothing said it was not saved). The field gives its value, then takes the focus back.
+    const field = document.activeElement as HTMLElement | null
+    if (field && ['INPUT', 'TEXTAREA', 'SELECT'].includes(field.tagName.toUpperCase())) {
+      field.blur()
+      field.focus()
+    }
+    nextTick(() => saveFlow())
     return
   }
   if (scriveInUnCampo() || runDialogOpen.value) return
@@ -1582,7 +1636,10 @@ async function runPreview(nodeId: string) {
     // "superata da una piu' recente" non e' un errore: non va mai mostrato
     if (seq === previewSeq && !isSuperseded(e)) {
       preview.value = null
-      previewError.value = errMessage(e)
+      const message = errMessage(e)
+      // a node just added and not set yet: not an error in red, the hint to set it
+      if (/required parameter missing: '/.test(message)) previewNote.value = t('flowEditor.completeNodeHint')
+      else previewError.value = message
     }
   } finally {
     await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
@@ -2285,6 +2342,16 @@ async function pollTask(id: string) {
         @email-test="emailTestSelected"
       />
     </div>
+
+    <SheetPickerDialog
+      :open="!!sheetChoice"
+      :filename="sheetChoice?.file.name ?? ''"
+      :sheets="sheetChoice?.sheets ?? []"
+      :hidden="sheetChoice?.hidden ?? []"
+      :read="sheetChoice?.read ?? ''"
+      @choose="importSheets"
+      @close="sheetChoice = null"
+    />
 
     <RunDialog
       :open="runDialogOpen"

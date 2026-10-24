@@ -63,6 +63,7 @@ QUEUE_MAX = 500                # run chiusi in attesa di spedizione, per process
                                # (al banco: 57 KB a run con datasource da 150 colonne → al più ~28 MB)
 _LOCK = threading.Lock()
 _client: Any = None            # OpenLineageClient, costruito una volta (o iniettato dai test)
+_client_timeout: Any = None    # il timeout con cui è stato costruito: cambia dal pannello → si ricostruisce
 _coda: "queue.Queue[tuple[int, list] | None] | None" = None
 _worker: threading.Thread | None = None
 _scartati = 0                  # eventi scartati a coda piena (per il log e i test)
@@ -87,20 +88,21 @@ def describe() -> str:
 
 def set_client(client: Any) -> None:
     """Per i test: un client con un trasporto che cattura gli eventi."""
-    global _client
+    global _client, _client_timeout
     with _LOCK:
-        _client = client
+        _client, _client_timeout = client, None
 
 
 def _get_client() -> Any:
-    global _client
+    global _client, _client_timeout
     with _LOCK:
-        if _client is not None:
+        s = get_settings().openlineage
+        if _client is not None and (_client_timeout is None or _client_timeout == s.timeout_seconds):
             return _client
         from openlineage.client import OpenLineageClient
         from openlineage.client.transport import get_default_factory
 
-        s = get_settings().openlineage
+        _client_timeout = s.timeout_seconds
         configurazioni = []
         if s.url:
             # pochi tentativi: un collector morto non deve tenere il thread per minuti

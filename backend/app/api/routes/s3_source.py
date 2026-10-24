@@ -53,6 +53,7 @@ def inspect(request: S3InspectRequest):
             "missing": g.missing[:50],
             "missing_total": len(g.missing),
             "expansions": g.expansions,
+            "sheets": g.sheets,
         }
     except S3SourceError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None

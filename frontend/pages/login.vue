@@ -88,7 +88,11 @@ async function onSubmit() {
     else await login(email.value, password.value)
     await navigateTo('/')
   } catch (e) {
-    error.value = errMessage(e)
+    // the two answers of a wrong sign-in, in the page's language (the server's are in English)
+    const said = errMessage(e)
+    const wait = /^Too many sign-in attempts\. Try again in (\d+) seconds\.$/.exec(said)
+    error.value = said === 'Incorrect email or password' ? t('login.wrongCredentials')
+      : wait ? t('login.tooManyAttempts', { s: wait[1] }) : said
     // quasi sempre è la password: il fuoco torna lì, pronta da riscrivere
     await nextTick()
     passwordEl.value?.select()

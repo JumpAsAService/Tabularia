@@ -28,6 +28,7 @@ import pyarrow as pa
 from botocore.exceptions import ClientError
 from chdb import session as chdb_session
 
+from app.core.regolazioni import valore_all_avvio
 from app.engine import storage_direct
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
@@ -41,10 +42,11 @@ logger = logging.getLogger(__name__)
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
 # ── budget memoria (env, con default prudenti sotto il cap per-figlio del worker) ──
-_MAX_MEMORY = int(os.getenv("CHDB_MAX_MEMORY_USAGE", str(1_500_000_000)))       # ~1.4 GB
-_EXT_GROUP_BY = int(os.getenv("CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY", str(512 * 1024 * 1024)))
-_EXT_SORT = int(os.getenv("CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT", str(512 * 1024 * 1024)))
-_MAX_BYTES_IN_JOIN = int(os.getenv("CHDB_MAX_BYTES_IN_JOIN", str(512 * 1024 * 1024)))
+# the environment's, or the panel's when the process started (core/regolazioni.py)
+_MAX_MEMORY = int(valore_all_avvio("CHDB_MAX_MEMORY_USAGE"))       # ~1.4 GB by default
+_EXT_GROUP_BY = int(valore_all_avvio("CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY"))
+_EXT_SORT = int(valore_all_avvio("CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT"))
+_MAX_BYTES_IN_JOIN = int(valore_all_avvio("CHDB_MAX_BYTES_IN_JOIN"))
 
 
 class ChdbContext:

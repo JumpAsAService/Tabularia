@@ -45,6 +45,25 @@ TICK_SECONDS = 60
 
 
 # ── datasource: refresh schedulato ──────────────────────────────────────────
+def ricalcola_tutte(session: Session) -> int:
+    """The schedules' time zone changed (Administration → Settings, APP__TIMEZONE): the
+    next slot of every schedule again, read in the new zone. Without it each one would
+    fire once more at the old zone's hour (a monthly one, a month later)."""
+    now = datetime.now(timezone.utc)
+    n = 0
+    for model, schedule, nxt in ((Datasource, "refresh_schedule", "next_refresh_at"), (Flow, "run_schedule", "next_run_at"),
+                                 (FlowGroup, "run_schedule", "next_run_at"), (SavedScript, "run_schedule", "next_run_at")):
+        for obj in session.exec(select(model).where(getattr(model, schedule).is_not(None))).all():
+            try:
+                setattr(obj, nxt, next_fire(getattr(obj, schedule), now).replace(tzinfo=None))
+            except ValueError:
+                continue  # a schedule no longer valid: the tick disables it with its reason
+            session.add(obj)
+            n += 1
+    session.commit()
+    return n
+
+
 def _advance_ds(session: Session, ds: Datasource, now: datetime) -> None:
     try:
         ds.next_refresh_at = next_fire(ds.refresh_schedule, now).replace(tzinfo=None)

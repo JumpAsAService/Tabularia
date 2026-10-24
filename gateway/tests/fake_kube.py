@@ -21,6 +21,7 @@ class Cluster:
         self.events: dict[str, list[dict]] = {}  # job name → what the cluster said about it
         # (reason, message, events) of a Pod whose image its node cannot download, for every Job
         self.pull: Optional[tuple[str, str, list[dict]]] = None
+        self.ended = ""  # the runtime's reason for a container's end (OOMKilled, Error), for every Job
 
     def jobs(self) -> list[dict]:
         return [o for (k, _, _), o in self.objects.items() if k == "jobs"]
@@ -104,7 +105,8 @@ class Cluster:
             if job_name not in self.results:
                 return httpx.Response(200, json={"items": []})
             outcome, _, code = self.results[job_name]
-            state = {"terminated": {"exitCode": code}} if code is not None else {"running": {}}
+            state = {"terminated": {"exitCode": code, **({"reason": self.ended} if self.ended else {})}} \
+                if code is not None else {"running": {}}
             if self.pull and outcome is None:
                 state = {"waiting": {"reason": self.pull[0], "message": self.pull[1]}}
             return httpx.Response(200, json={"items": [{

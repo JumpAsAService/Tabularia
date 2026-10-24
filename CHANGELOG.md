@@ -5,6 +5,176 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## 1.2.2 «Appio» — 2026-10-22
 
+- **Administration → Settings holds every setting an administrator may own**, about a
+  hundred instead of fourteen, in a box per component (Gateway, Kubernetes, Engine) with
+  a search: sign-in and sessions, single sign-on, orchestration and schedules, history
+  kept, webhooks, the AI assistant's limits and budget, dbt export, uploads, backups'
+  timeout, monitoring, OpenLineage, the Kubernetes calls, scripts, image builds and
+  Container nodes, the workers' recycling and memory, the embedded engines, the caps of
+  SFTP, S3 folders, HTTP APIs and placeholders. Most apply within ten seconds on every
+  process, gateway and orchestrator replicas included. The ones read only when a process
+  starts carry a restart icon; a banner lists the components still running a previous
+  value and, on Kubernetes, restarts their pods one at a time through the eviction API
+  (Helm `settingsRollout.enabled`, on by default; the chart grants reading and evicting
+  the release's pods, not changing its Deployments); on Docker Compose it names the
+  services to restart. Addresses, credentials, the switches tied to the cluster and the
+  audit log's retention stay in the environment, on purpose. Constraints between
+  settings are checked (heartbeat and dead-after, executions and database pool, the
+  run's lost threshold and the engine's hard limit, both ways). Schema revision 0022
+  adds two empty tables and a column. Guide: docs/engine-settings.md.
+- **Fixed: `helm rollback` to the previous release stopped half way.** The `migrate` step
+  of the older release found a database revision it did not know and every new gateway
+  and orchestrator pod stayed in `Init:CrashLoopBackOff`, while the other components had
+  already gone back. From this release on, a database newer than the code is left as it
+  is, with a warning, and the rollback completes. **Upgrade note:** 1.2.1 and earlier
+  still stop that way: to go back from 1.2.2 to 1.2.1, restore the backup taken before
+  the upgrade (docs/deploy/upgrading.md, tried on kind).
+- **Fixed (Helm chart): with `clusterView` and `settingsRollout` off, the backups never
+  ran.** Without a service account token the gateway took the cluster for Docker Compose:
+  the nightly backup and «Back up now» stayed off. It now knows a Kubernetes pod by
+  `KUBERNETES_SERVICE_HOST`, which Kubernetes always sets.
+- **Fixed (Helm chart): the scripts' or the Container nodes' namespace set to the
+  release's own, with `blockTabularia: false`, gave the gateway rights on the release's
+  Secret.** That namespace is now refused whatever `blockTabularia` says, and so are two
+  user-code namespaces with the same name. `extraEnv` refuses too the names the chart sets
+  container by container (`APP__GATEWAY_THREADS`, `CELERY__WORKER_CONCURRENCY`, …),
+  which silently covered the value given there.
+- **Fixed: after restoring a backup, no backup could be made for over an hour.** A
+  backup is taken while its own run is marked in the database, so the restored database
+  said a backup was running, on a process long gone: «Back up now» was refused and the
+  nightly one skipped until that claim aged past the longest a backup may take. A running
+  backup now writes a heartbeat; a claim without one for two minutes is ignored.
+- **Fixed: with PostgreSQL not answering, the sign-in and every page answered a bare
+  «Internal Server Error».** They now answer 503, «The database is not answering».
+- **SharePoint reads CSV files too**, not only Excel: the datasource has a format —
+  Excel and CSV by each file's extension (the default), Excel only, CSV only — and the
+  CSV options of the SFTP datasource (separator, encoding, header); the sheet is now
+  optional (empty = the first). One table can stack workbooks and CSV files, united by
+  column name. Datasources saved before keep reading Excel files only, so a `Budget/*`
+  of theirs does not start taking the CSV files beside the workbooks. The connection
+  type is called «SharePoint» (it was «SharePoint (Excel)»).
+- **The sheet of an Excel file is chosen, no longer always the first.** Uploading a
+  workbook with several sheets in the editor opens a window that lists them (the hidden
+  ones marked): every sheet ticked becomes a source on the canvas, and the source shows
+  its sheet. Without a choice the first *visible* sheet is read (before, a hidden first
+  sheet was). An empty or missing sheet is refused saying so. In the SharePoint, SFTP and
+  «S3 folder» datasources, «Check the files» now lists the sheets of the first workbook
+  found, and the sheet is picked from that list instead of typed; for SFTP and S3 «the
+  first sheet» names which one it is.
+- **The Sort node sorts on several columns, a direction each**: the first column decides,
+  the next ones break the ties (region ascending, then amount descending). In the editor a
+  row per column, with ascending/descending, arrows to change which decides first, and «+
+  add a column»; the node's label shows the direction of each. Same order on every engine
+  and in the dbt export (before, DuckDB, the ClickHouse engines and BigQuery applied the
+  first direction to every column of a list). Flows saved before, one column with one
+  yes/no, open and run as they did. The AI assistant writes the new form too.
+- **Fixed: on ClickHouse (external, or chDB) every filter on a date-time failed.** The
+  editor's calendar sends `2024-01-15T10:30`, without seconds, and ClickHouse reads a
+  DateTime only with them («Cannot parse time component of DateTime»). The value is now
+  written in full for a date-time column; a text column keeps it as it is. A value that is
+  not a date (`15/01/2024`) is refused in the same words on every engine, not with the
+  database's error and the query in it.
+- **Fixed: the filter «contains» on Polars read the value as a regular expression** (also
+  in a source node's filters): «Speck+Brie» found nothing and a run published an empty
+  datasource, «1.5» found «105» too, «Vino (» was an error. The text as written now, as on
+  the other engines.
+- **Fixed (DuckDB): a pivot with «distinct count» counted every row**; **«first», «last»
+  and «Unique» took any row of the group** on large data (DuckDB aggregates in parallel),
+  where Polars took the first: both now take the first row in the data's order (Polars'
+  «Unique» kept any too).
+- **Fixed: a union «identical schemas» of two inputs with the same columns in another order
+  swapped them without a word on DuckDB and ClickHouse** (the products' names in the ids).
+  Columns are now put together by name on every engine; inputs with other columns or types
+  are refused, saying which.
+- **Fixed: a CSV saved by Excel in Italian (or French, German, Spanish) uploaded from the
+  editor**: `;`-separated, it answered 500; with decimal commas, the prices stayed text and a
+  conversion emptied them; in Windows-1252, «Città» came as «Citt�». The separator, the
+  decimal comma (thousands grouped by dots too) and the encoding are now read from the file.
+  A column whose type changes after the first 10,000 rows no longer answers 500: the types
+  are guessed again on the whole file. Any CSV the reader cannot read is refused saying
+  why; spaces around the headers go, as for the SFTP and S3 datasources.
+- **Fixed: a division by zero showed as an empty cell in the preview** (a missing value that
+  «is null» did not find); it shows inf or NaN.
+- **Fixed: converting text to yes/no failed on Polars, and read «true» as empty on
+  ClickHouse**: true/t/1/yes/y and false/f/0/no/n on every engine, anything else empty.
+- **Fixed: Ctrl+S in the flow editor, with the cursor still in a field of the node's panel,
+  saved the value from before the one just typed**, said «saved», and the change was lost at
+  the next reload. The field now gives its value first.
+- **Fixed in the interface:** the chart of the Viewer and of the editor's preview stayed blank
+  with its axes chosen, until a control changed; a saved view now keeps its chart (the tab and
+  the axes); changes in Administration → Settings not saved are asked about before going to
+  another section or page; the Viewer says when it shows the first rows only; thirty-one
+  actions of the audit log showed as raw keys; the runs' status was in English in every
+  language, and so was a wrong sign-in; «+ Operation» put the new node off the canvas;
+  a node just added showed a red error instead of a hint; the editor's way back went to
+  All folders instead of the flow's; the code editor of a saved script spoke of a node and
+  a flow; the pages Runs, Connections and Viewer, and the Explore's path, were wider than a
+  phone; the page kept asking every few seconds for a memory reading the installation does
+  not have (on Kubernetes). A few texts in Italian, French, German and Spanish too.
+- **Fixed: about twenty-five texts of the Explore page were in English in French, German
+  and Spanish** (the search, New, the empty folder, the path).
+- **Fixed: an orchestrator that stopped left the flow's steps writing.** A `helm
+  upgrade`, a restart from Administration → Settings, an eviction or an OOM closed the
+  flow as interrupted, but its Output or refresh already with a worker went on, and the
+  flow could start again at once on top of it (the same rows twice in an append Output).
+  The steps still open of an interrupted flow are now stopped with it: their engine tasks
+  revoked, the Jobs of Script and Container nodes deleted. After a database outage the
+  orphans' sweep waits until every live orchestrator has beaten again, and never closes
+  what its own process runs.
+- **Fixed: a worker killed mid-run left its runs «running» for an hour,** then failed them
+  with «Timeout… raise the limit». On cgroup v2 an OOM kills the whole container, and an
+  evicted pod or a lost node write nothing either. The engine now tells such a task from
+  a running one by the worker's own record and fails it within seconds (the same pod's
+  container started again) or about a minute (the pod gone), saying the worker stopped.
+- **Fixed: one failed answer of the Kubernetes API failed a Script or Container node,**
+  ignored its retries and deleted a Job running fine (a 503 during a control plane
+  upgrade, a 429). It is asked again at the next look; a log the cluster cannot give (the
+  Pod's node lost) no longer fails the node either. A Pod the cluster takes away (a drained
+  node), a container that cannot be created and a Pod never scheduled are now said to be,
+  as is a script or container out of memory, with its limit, instead of «exit code 137».
+  Two Container nodes of one registry at once no longer fail on its pull Secret (409); an
+  image build or «Try in the cluster» the cluster refuses (Pod Security, a quota) fails at
+  once saying why, instead of after an hour; a build killed at its memory says so.
+- **Fixed: an editor's trial still running could be closed as an orphan** when its input
+  waited long in the workers' queue, and one whose gateway pod went stayed «running» for
+  half an hour. Trials now beat on their own run: a live one is never closed, a dead one
+  within two minutes. A run closed meanwhile keeps its outcome.
+- **Fixed: with two gateway replicas, a setting just saved could show «not applied»** for
+  up to ten seconds, on the page served by the other replica. The page now puts in force
+  the values it reads.
+- **Fixed (Helm chart): with Helm 4, every `helm upgrade` failed once the workers'
+  autoscaling bounds had been changed from Administration → Workers** (a server-side
+  apply conflict on `maxReplicas`, the upgrade stopped half way). The chart now renders
+  the bounds the panel set.
+- **Helm chart: the gateway and the engine stop gracefully.** They wait 5 s for the Service
+  to drop them, then finish the requests in flight within a 300 s grace period
+  (`gateway.terminationGracePeriodSeconds`, `engineApi.terminationGracePeriodSeconds`): an
+  upgrade or a scale-in no longer answers 500 or 502 to the requests caught in between
+  (tried on kind: none of 2,791 requests failed while both rolled). Their probes answer on
+  the event loop and wait 5 s, so a busy gateway is not restarted as a dead one; the
+  gateway's database connections time out and keep alive. An engine that does not answer
+  is a 503 that says so, not a 500.
+- **Fixed: DuckDB took the processes per worker from the environment, not from
+  Administration → Workers:** a pool grown from the panel gave each process a share of
+  memory meant for fewer, and the kernel killed the container. It also spills within the
+  pod's `/tmp` now (`TMP_SIZE_LIMIT`, set by the chart), past which the kubelet evicts
+  the pod; its CPUs are read on cgroup v1 too.
+- **Fixed:** a backup stopped by its orchestrator's shutdown is recorded as failed (it
+  vanished, and the night's backup was skipped in silence); the engine's API empties its
+  temporary directory when its container starts again in the same pod; the SIEM export
+  and the workers' scaling no longer share a database lock, nor a flow group's queue and
+  a datasource's refresh; a flow group's parallel Container cells each link their own
+  run; a failed attempt's output is deleted before the next one; «Try in the cluster»
+  answers within 270 s, under the ingress' 300 s, saying when a large image is still
+  downloading.
+- **Documented:** one installation per Redis database, one release per namespace, the
+  workers' grace period above the tasks' hard limit (the panel cannot check the chart),
+  KEDA's `cooldownPeriod`.
+- **Fixed: a failed task could show the error as Python's own words**
+  (`<class 'botocore.exceptions.EndpointConnectionError'>(…)`); it now reads as a sentence,
+  «The object storage is not answering: …» for the storage.
+- **Fixed: about fifty texts of the administration panel were in English in French,
+  German and Spanish** (users, groups, banners, engines).
 - **Fixed: the space bar typed nothing in the code editor of the Script node on Chrome
   and Edge.** The editor takes the text through the browser's EditContext there, an
   element the flow canvas did not recognise as a text field, and the canvas kept the
@@ -89,9 +259,15 @@ exposes at `/system/info` and in the app's settings menu.
   image builds, containers), their state with the reason a container waits or died
   (CrashLoopBackOff, ImagePullBackOff, OOMKilled…), restarts, age, node, CPU and memory
   against their limits (with metrics-server), and the warning events; a script's or a
-  container's Job links to the flow, saved script or group that started it. Read-only,
-  for administrators and observers (`clusterView.enabled` in the chart, on by default:
-  read rights on pods, events and pod metrics in those namespaces only).
+  container's Job links to the flow, saved script or group that started it. Read at a
+  glance: one bar of every pod by state; a map with a row per node of the cluster and a
+  tile per pod on it (a square for Tabularia's, a circle for a script or a container; the
+  pods not on a node yet apart), each leading to its row; the pods grouped by component
+  ("2 of 2 ready"), with the last minute of CPU drawn from the page's own readings and
+  memory against the limit; a row lights up for a moment when its pod changes state. A
+  pod per block at phone width. Read-only, for administrators and observers
+  (`clusterView.enabled` in the chart, on by default: read rights on pods, events and pod
+  metrics in those namespaces only).
 - **The database stops growing with history.** Every hour the orchestrators keep the
   latest 100 data contract reports per datasource (`ORCHESTRATOR__CONTRACT_RESULTS_KEPT`;
   a report whose notice is still to be sent always stays), the latest 50 versions of a

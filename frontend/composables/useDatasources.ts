@@ -151,8 +151,12 @@ export interface SharePointDatasourceDraft extends Partial<FileTemplatesDraft> {
   description?: string
   connection_id: number
   path: string // percorso nella raccolta, anche con glob: Budget/2026/*.xlsx
-  sheet: string
+  format: SharePointFormat // auto = Excel and CSV, by each file's extension
+  sheet: string // Excel: empty = the first sheet
+  csv: { separator: string; has_header: boolean; encoding: string }
 }
+
+export type SharePointFormat = 'auto' | 'excel' | 'csv'
 
 export function useDatasources() {
   const { apiFetch } = useApiClient()

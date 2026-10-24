@@ -14,12 +14,14 @@ Fixed here:
 - what may be saved: who may write a script, the path check, a node still empty;
 - a schedule set by someone else stops when the code changes.
 """
+import asyncio
 import json
+import re
 
 import httpx
 import pytest
 from fastapi import HTTPException
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.core.crypto import encrypt_secret
@@ -269,6 +271,23 @@ async def test_a_failing_script_stops_the_flow_and_cleans_up(session, cluster, e
     run = _script_run(session)
     assert run.status == "FAILURE" and "exit code 1" in run.error and "ZeroDivisionError" in json.loads(run.script)["log"]
     assert len(engine.deletes) == 1 and cluster.objects == {}
+
+
+@pytest.mark.parametrize("ended, expected", [
+    ("OOMKilled", "script «Score» failed: it ran out of memory: it went over its memory limit (4Gi)"),
+    # kind's nodes, and some runtimes, kill it the same way but say Error
+    ("Error", "script «Score» failed: it was killed (exit code 137): most often because it went over its memory "
+              "limit (4Gi)"),
+])
+async def test_a_script_out_of_memory_says_so(session, cluster, engine, launches, ended, expected):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    cluster.behave = lambda job: ("failed", "", 137)
+    cluster.ended = ended
+    flow = _flow(session, [_script(env.id)], [])
+    with pytest.raises(orch.OrchestrationError, match=re.escape(expected)):
+        await _run(session, admin, flow)
+    assert json.loads(_script_run(session).script)["exit_code"] == 137
 
 
 async def test_a_timeout_says_so(session, cluster, engine, launches):
@@ -770,3 +789,183 @@ def test_without_scripting_a_flow_keeps_its_script_nodes(session):
     broken = json.dumps({"nodes": [{"id": "s1", "type": "script", "data": {"environmentId": 99,
                                                                            "files": [{"path": "../x.py", "content": ""}]}}]})
     script_nodes.check_definition(session, user, None, broken)  # kept as it is
+
+
+# ── the cluster misbehaving while a Job runs ───────────────────────────────────
+async def test_a_blip_of_the_kubernetes_api_is_asked_again(session, cluster, engine, launches, monkeypatch):
+    """One 503 of the API server (an upgrade of the control plane, API Priority and
+    Fairness) failed the node at once, skipped its retries and deleted a Job running fine."""
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    cluster.behave = lambda job: (None, "", None)  # still running
+    real, looks = cluster.handle, {"n": 0}
+
+    def flaky(req):
+        if req.method == "GET" and "/jobs/" in req.url.path:
+            looks["n"] += 1
+            if looks["n"] == 3:
+                return httpx.Response(503, json={"message": "the server is currently unable to handle the request"})
+            if looks["n"] > 5:
+                cluster.results[req.url.path.rsplit("/", 1)[1]] = ("succeeded", "done", 0)
+        return real(req)
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(flaky))
+    _, errors = await _run(session, admin, _flow(session, [_script(env.id, retries=2, retryDelaySeconds=0)], []))
+    info = json.loads(_script_run(session).script)
+    assert errors == [] and info["attempts"] == 1 and info["log"].endswith("done")
+
+
+async def test_an_answer_that_is_not_a_blip_still_fails(session, cluster, engine, launches, monkeypatch):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    cluster.behave = lambda job: (None, "", None)
+    real = cluster.handle
+
+    def forbidden(req):
+        if req.method == "GET" and "/jobs/" in req.url.path:
+            return httpx.Response(403, json={"message": "jobs.batch is forbidden"})
+        return real(req)
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(forbidden))
+    with pytest.raises(orch.OrchestrationError, match="403"):
+        await _run(session, admin, _flow(session, [_script(env.id)], []))
+
+
+async def test_a_log_the_lost_node_cannot_give_ends_the_attempt_without_it(session, cluster, engine, launches,
+                                                                           monkeypatch):
+    # the Pod's node is lost: the API server cannot reach its kubelet, the log answers 500
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    monkeypatch.setattr(script_runs, "LOG_RETRY_SECONDS", 0)
+    cluster.behave = lambda job: ("failed", "", 1)
+    real = cluster.handle
+
+    def lost_node(req):
+        if req.url.path.endswith("/log"):
+            return httpx.Response(500, json={"message": "dial tcp 172.18.0.4:10250: connect: no route to host"})
+        return real(req)
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(lost_node))
+    with pytest.raises(orch.OrchestrationError, match="it ended with exit code 1"):
+        await _run(session, admin, _flow(session, [_script(env.id, retries=1, retryDelaySeconds=0)], []))
+    info = json.loads(_script_run(session).script)
+    assert info["attempts"] == 2 and "the cluster did not give the log" in info["log"]  # the retries did run
+
+
+async def test_a_pod_the_cluster_took_away_says_so(session, cluster, engine, launches, monkeypatch):
+    # a node drained (or the autoscaler consolidating): the Pod is evicted, then deleted
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    cluster.behave = lambda job: ("failed", "", 143)
+    real = cluster.handle
+
+    def evicted(req):
+        r = real(req)
+        if req.method == "GET" and req.url.path.endswith("/pods") and r.status_code == 200:
+            body = r.json()
+            for p in body["items"]:
+                p["status"]["conditions"] = [{"type": "DisruptionTarget", "status": "True",
+                                              "reason": "EvictionByEvictionAPI"}]
+            return httpx.Response(200, json=body)
+        return r
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(evicted))
+    with pytest.raises(orch.OrchestrationError, match=re.escape(kube_jobs.STOPPED_BY_CLUSTER)):
+        await _run(session, admin, _flow(session, [_script(env.id)], []))
+
+
+@pytest.mark.parametrize("ended, code, expected", [
+    ("Evicted", None, kube_jobs.STOPPED_BY_CLUSTER),
+    ("Error", 143, "exit code 143"),
+    ("Error", 2, "it ended with exit code 2"),
+])
+def test_how_an_end_is_told(ended, code, expected):
+    assert expected in kube_jobs.explain_exit(code, ended, "1Gi")
+
+
+def test_a_digest_holding_401_is_not_refused_credentials():
+    digest = "sha256:" + "0" * 20 + "401" + "f" * 41
+    detail = (f'Failed to pull image "registry.example.com/tab/env@{digest}": failed to resolve reference: dial tcp: '
+              "lookup registry.example.com on 10.96.0.10:53: no such host")
+    assert "cannot reach the registry" in kube_jobs.explain_pull(detail)
+    assert "refused the cluster's credentials" in kube_jobs.explain_pull("failed to fetch token: 401 Unauthorized")
+
+
+def test_an_image_for_another_architecture_is_said_to_be():
+    detail = ('Failed to pull image "docker.io/acme/tool@sha256:' + "ab" * 32 + '": rpc error: code = NotFound desc = '
+              "failed to pull and unpack image: no match for platform in manifest: not found")
+    assert "no version for the nodes' architecture" in kube_jobs.explain_pull(detail)
+
+
+async def test_a_container_that_cannot_be_created_fails_saying_why(session, cluster, engine, launches, monkeypatch):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    monkeypatch.setattr(script_runs, "PULL_FAILURE_SECONDS", 0)
+    cluster.behave = lambda job: (None, "", None)
+    cluster.pull = ("CreateContainerError", "no command specified", [])
+    with pytest.raises(orch.OrchestrationError, match="could not start its container: no command specified"):
+        await _run(session, admin, _flow(session, [_script(env.id)], []))
+
+
+async def test_a_live_trial_whose_input_waits_long_is_not_an_orphan(trial_env, cluster, engine, launches, monkeypatch):
+    """Its input waited in a busy run queue past the trial's budget: the editor's own polling
+    closed it as an orphan, then the runner wrote SUCCESS over that error."""
+    from datetime import timedelta
+
+    session = trial_env
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    flow = _flow(session, [SOURCE, _script(env.id)], [_edge("src", "s1")])
+    trial_id = _trial(session, admin, flow).id
+    seen = {}
+
+    async def slow_input(s, input_run):
+        await asyncio.sleep(0.05)  # the beat goes first
+        with Session(session.get_bind()) as other:
+            t = other.get(Run, trial_id)
+            t.started_at = script_runs._now() - timedelta(seconds=10 * 86400)  # far past any budget
+            other.add(t)
+            other.commit()
+            seen["closed"] = (await script_runs.close_if_orphaned(other, t)).status
+        input_run.status = "SUCCESS"
+        return input_run
+
+    monkeypatch.setattr(orch, "_wait_run", slow_input)
+    await script_runs.run_trial(trial_id, admin.id, "s1")
+    session.expire_all()
+    assert seen["closed"] == "STARTED" and session.get(Run, trial_id).status == "SUCCESS"
+
+
+async def test_a_trial_whose_process_stopped_beating_is_closed_soon(session, cluster):
+    from datetime import timedelta
+
+    run = Run(kind="script", task_id="", status="STARTED", trigger_type="trial", input_key="", output_bucket="",
+              output_key="", script=json.dumps({"node_id": "s1", "trial": True, "budget_seconds": 7200}),
+              heartbeat_at=script_runs._now() - timedelta(seconds=script_runs.TRIAL_DEAD_SECONDS + 5))
+    session.add(run)
+    session.commit()
+    closed = await script_runs.close_if_orphaned(session, run)
+    assert closed.status == "FAILURE" and "the process running it is gone" in closed.error  # not in two hours
+
+
+async def test_a_run_closed_meanwhile_keeps_its_outcome(trial_env, cluster, engine, launches, monkeypatch):
+    session = trial_env
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    flow = _flow(session, [SOURCE, _script(env.id)], [_edge("src", "s1")])
+    trial_id = _trial(session, admin, flow).id
+
+    async def closed_meanwhile(s, input_run):
+        with Session(session.get_bind()) as other:
+            t = other.get(Run, trial_id)
+            t.status, t.error = "FAILURE", "closed by someone else"
+            other.add(t)
+            other.commit()
+        input_run.status = "SUCCESS"
+        return input_run
+
+    monkeypatch.setattr(orch, "_wait_run", closed_meanwhile)
+    await script_runs.run_trial(trial_id, admin.id, "s1")
+    session.expire_all()
+    run = session.get(Run, trial_id)
+    assert (run.status, run.error) == ("FAILURE", "closed by someone else")

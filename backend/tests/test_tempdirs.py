@@ -32,6 +32,16 @@ def test_a_process_writes_its_temporary_files_in_a_directory_of_its_own(root, mo
     assert os.environ["TMPDIR"] == str(d)  # subprocesses and DuckDB spills follow it
 
 
+def test_what_an_earlier_process_with_the_same_pid_left_is_emptied(root):
+    # a container started again in its Pod keeps /tmp (an emptyDir) and its pids: the
+    # engine's API is pid 1 every time, and its old upload spools stayed for good
+    mine = root / "tabularia" / str(os.getpid())
+    mine.mkdir(parents=True)
+    (mine / "upload_abc").write_bytes(b"x" * 1000)
+    d = tempdirs.use_process_dir(root)
+    assert d == mine and list(d.iterdir()) == []
+
+
 def test_the_directory_of_a_dead_process_is_removed(root):
     dead = root / "tabularia" / str(_dead_pid())
     dead.mkdir(parents=True)

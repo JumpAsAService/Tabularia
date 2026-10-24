@@ -735,7 +735,9 @@ async def launch_ingest_run(
             timeout=CONTROLLO,
             json={
                 "connection": engine_connection_payload(conn),
-                "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", ""), **_template_part(ref)},
+                # format and csv only when saved: one saved before CSV reads Excel only
+                "source": {"path": ref.get("path", ""), "sheet": ref.get("sheet", ""),
+                           **{k: ref[k] for k in ("format", "csv") if k in ref}, **_template_part(ref)},
                 "bucket": bucket,
                 "output_key": output_key,
                 **_refresh_context(session, ds, ref, ("path",)),
@@ -834,7 +836,9 @@ async def launch_ingest_run(
 # per task id che NON conosce più (risultato scaduto, Redis svuotato, worker
 # morto) → senza cutoff il run resterebbe zombie per sempre. Configurabile via
 # ENGINE__RUN_STALE_TIMEOUT_SECONDS.
-STALE_AFTER_SECONDS = get_settings().engine.run_stale_timeout_seconds
+def stale_after_seconds() -> int:
+    """ENGINE__RUN_STALE_TIMEOUT_SECONDS, read at each use (Administration → Settings)."""
+    return get_settings().engine.run_stale_timeout_seconds
 SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di rimandare
 
 # firme di un OOM-kill: il worker ha superato il limite di memoria del container
@@ -842,10 +846,14 @@ SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di
 # (WorkerLostError / SIGKILL) è criptico → lo traduciamo in qualcosa di chiaro.
 _OOM_SIGNS = ("signal 9", "sigkill", "workerlosterror", "memoryerror", "out of memory")
 _OOM_MESSAGE = (
-    "The run ran out of available memory and was stopped. "
-    "Reduce the data (filter/limit) or simplify the flow; if it needs more memory, "
-    "raise the worker's limit (WORKER_MEM_LIMIT)."
+    "The run was stopped: its worker process was killed, most often because it ran out of available "
+    "memory. Reduce the data (filter/limit) or simplify the flow; if it needs more memory, raise the "
+    "workers' limit (worker.resources.limits.memory in the Helm chart, WORKER_MEM_LIMIT with Compose). "
+    "A worker stopped meanwhile (an upgrade, a drained node) ends a run the same way: run it again."
 )
+# what the engine already says in words, about a worker that died with its task
+# (backend/app/tasks/worker_pool.py, LOST): not replaced by the message above
+_ENGINE_TOLD = ("The worker running it stopped before the end",)
 
 
 # Messaggi già tradotti dal backend col testo del SERVER del database
@@ -893,7 +901,7 @@ def _notes_of(result: dict) -> str | None:
 def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
     """Traduce i fallimenti da OOM (worker ucciso dal limite di memoria) in un
     messaggio chiaro; il traceback grezzo resta in `error_detail`."""
-    if error and error.startswith(_DB_MESSAGE_PREFIXES):
+    if error and error.startswith(_DB_MESSAGE_PREFIXES + _ENGINE_TOLD):
         return error
     blob = f"{error or ''}\n{error_detail or ''}".lower()
     if any(sign in blob for sign in _OOM_SIGNS):
@@ -1023,7 +1031,6 @@ def _is_stale_swap(ds: Datasource, run: Run) -> bool:
     return ds.snapshot_run_id is not None and run.id is not None and run.id < ds.snapshot_run_id
 
 
-QUEUE_TIMEOUT_SECONDS = get_settings().orchestrator.queue_timeout_seconds
 QUEUE_TIMED_OUT = (
     "The run stayed in the queue too long without an orchestrator picking it up: "
     "it did not run. Launch the flow again."
@@ -1040,7 +1047,7 @@ async def close_if_queued_too_long(session: Session, run: Run) -> Run:
     chi ha lanciato vede l'esito anche a orchestratori spenti) e l'orchestratore
     prima di prendere dalla coda. UPDATE condizionato: la chiude uno solo."""
     creata = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
-    if (datetime.now(timezone.utc) - creata).total_seconds() <= QUEUE_TIMEOUT_SECONDS:
+    if (datetime.now(timezone.utc) - creata).total_seconds() <= get_settings().orchestrator.queue_timeout_seconds:
         return run
     chiusa = session.exec(
         update(Run)
@@ -1134,13 +1141,13 @@ async def _reconcile(session: Session, run: Run) -> Run:
     # `started_at` include l'attesa in coda, e con i worker occupati un run appena
     # partito verrebbe dichiarato scaduto mentre sta scrivendo.
     _age = _age_seconds(run.engine_started_at or run.started_at)
-    if new_status not in TERMINAL_STATES and _age > STALE_AFTER_SECONDS:
+    if new_status not in TERMINAL_STATES and _age > stale_after_seconds():
         # il task NON si ferma da solo: senza revoca continuerebbe a girare — e a
         # SCRIVERE — mentre il run risulta fallito. Su un Output in append questo
         # porta l'utente a rilanciare e ad accodare le stesse righe due volte.
         await _revoke_task(run)
         new_status = "FAILURE"
-        _mins = STALE_AFTER_SECONDS // 60
+        _mins = stale_after_seconds() // 60
         error = (
             f"Timeout: the run exceeded the maximum time ({_mins} min) without completing and "
             "was stopped. If the flow is just slow, raise the limit "

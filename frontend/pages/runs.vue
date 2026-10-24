@@ -14,7 +14,7 @@ import ScriptRunDetail from '~/components/scripting/ScriptRunDetail.vue'
 import ContainerRunDetail from '~/components/containers/ContainerRunDetail.vue'
 import { usePagedList } from '~/composables/usePagedList'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const fmtx = useFormat()
 const runsApi = useRuns()
 const status = ref<'FAILURE' | 'SUCCESS' | ''>('FAILURE') // di default gli errori
@@ -95,7 +95,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
       <div v-for="r in items" :key="r.id" class="run" :class="{ open: expanded === r.id }">
         <button class="run-row" @click="toggle(r.id)">
           <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
-          <span class="stpill" :class="r.status.toLowerCase()">{{ r.status }}</span>
+          <span class="stpill" :class="r.status.toLowerCase()">{{ te(`runs.pill_${r.status}`) ? t(`runs.pill_${r.status}`) : r.status }}</span>
           <span class="who">
             <component :is="r.kind === 'ingest' ? Database : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.flow_group_id ? Rows3 : Workflow" :size="13" />
             {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
@@ -143,7 +143,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
    intestazioni, li fissa qui per rendere esattamente come prima. */
 .page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .count { font-weight: 400; font-size: 14px; }
-.head-actions { display: flex; align-items: center; gap: 10px; }
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .searchbox { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--panel-2); }
 .searchbox input { border: none; background: transparent; outline: none; color: var(--text); width: 220px; }
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
@@ -176,4 +176,11 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .trace { margin: 0; padding: 10px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 340px; overflow: auto; }
 .small { font-size: 12.5px; }
 .mini { padding: 6px 8px; }
+/* a phone: the name beside the status, the message, who and when under them (the six
+   columns needed ~550 px and the page scrolled sideways) */
+@media (max-width: 720px) {
+  .run-row { grid-template-columns: 18px auto minmax(0, 1fr); row-gap: 4px; }
+  .run-row .msg, .run-row .by, .run-row .when { grid-column: 2 / -1; }
+  .searchbox input { width: 140px; }
+}
 </style>

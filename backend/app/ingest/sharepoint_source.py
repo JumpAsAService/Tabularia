@@ -1,4 +1,4 @@
-"""Sorgente SharePoint: file Excel di una raccolta documenti → parquet.
+"""Sorgente SharePoint: file Excel (and CSV) di una raccolta documenti → parquet.
 
 Per il finance i dati veri vivono in Excel su SharePoint. Qui si definisce un
 SITO (la connessione) e, per ogni datasource, un PERCORSO — anche con glob — e
@@ -27,7 +27,7 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from urllib.parse import quote, unquote, urlparse
 
 import polars as pl
@@ -37,12 +37,17 @@ from app.core.config import get_settings
 from app.core.crypto import decrypt_secret
 from app.ingest import file_templates as ft
 from app.ingest.converters import IngestError
+from app.ingest.models import CsvOptions
 
 logger = logging.getLogger(__name__)
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 LOGIN_BASE = "https://login.microsoftonline.com"
 EXCEL_EXTENSIONS = (".xlsx", ".xlsm", ".xlsb", ".xls")
+CSV_EXTENSIONS = (".csv", ".tsv")
+# which files a datasource takes, by its format: «excel» for the ones saved before CSV
+# was read (a `Budget/*` of theirs must not start taking the CSV next to the workbooks)
+EXTENSIONS = {"excel": EXCEL_EXTENSIONS, "csv": CSV_EXTENSIONS, "auto": EXCEL_EXTENSIONS + CSV_EXTENSIONS}
 # colonne di provenienza aggiunte a ogni riga: al finance serve sapere da QUALE
 # file arriva un numero, e spesso mese o filiale stanno solo nel nome del file
 FILE_COLUMN = "_file"
@@ -83,7 +88,10 @@ class SharePointSourceSpec(ft.FileTemplates):
     # percorso nella raccolta, con glob: `Budget/2026/*.xlsx`, `**/chiusura_*.xlsx`;
     # with placeholders and the datasource's variables: `Chiusure/{month:yyyy-MM}.xlsx`
     path: str
-    sheet: str = Field(min_length=1)
+    # auto = Excel and CSV, each by its extension; a datasource saved without it: Excel only
+    format: Literal["auto", "excel", "csv"] = "excel"
+    csv: CsvOptions = Field(default_factory=CsvOptions)
+    sheet: str = ""  # Excel: empty = the first sheet
 
 
 @dataclass
@@ -243,8 +251,8 @@ def _has_wildcard(s: str) -> bool:
     return any(c in s for c in "*?[")
 
 
-def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
-    """I file Excel della raccolta che corrispondono a `pattern`. Segmento per
+def find_files(client: GraphClient, pattern: str, extensions: tuple[str, ...] = EXCEL_EXTENSIONS) -> list[RemoteFile]:
+    """I file (Excel, or those of `extensions`) della raccolta che corrispondono a `pattern`. Segmento per
     segmento: i tratti senza jolly si attraversano senza elencare, `*` elenca una
     cartella, `**` scende a ogni profondità. Senza distinzione fra maiuscole e
     minuscole, come SharePoint. Esclusi i file di blocco di Office (`~$…`), che
@@ -289,7 +297,7 @@ def find_files(client: GraphClient, pattern: str) -> list[RemoteFile]:
             if tail:
                 if "folder" in it:
                     walk(path, tail)
-            elif "file" in it and name.casefold().endswith(EXCEL_EXTENSIONS) and not name.startswith("~$"):
+            elif "file" in it and name.casefold().endswith(extensions) and not name.startswith("~$"):
                 found[path] = RemoteFile(
                     id=it["id"], path=path, size=int(it.get("size") or 0),
                     modified_at=str(it.get("lastModifiedDateTime") or ""), etag=str(it.get("eTag") or ""),
@@ -345,6 +353,17 @@ def read_sheet(local_path: str, sheet: str | None, shown_as: str, error: type[In
     return df.rename({c: c.strip() for c in df.columns if c != c.strip()})
 
 
+def read_one(local_path: str, shown_as: str, source: SharePointSourceSpec) -> pl.DataFrame:
+    """A workbook by its sheet, a CSV with the datasource's reading options: the same
+    readers, and the same strict header, as the SFTP and S3 datasources."""
+    if not shown_as.casefold().endswith(CSV_EXTENSIONS):
+        return read_sheet(local_path, source.sheet.strip() or None, shown_as)
+    from app.ingest import file_readers  # it imports this module: here, not at the top
+
+    fmt = "tsv" if shown_as.casefold().endswith(".tsv") else "csv"
+    return file_readers.read_file(local_path, shown_as, fmt, source.csv, "", SharePointError)
+
+
 def _expansions(source: SharePointSourceSpec, now, last_refresh) -> list[ft.Expansion]:
     return ft.expand({"path": source.path}, source, SharePointError, now, last_refresh)
 
@@ -360,7 +379,8 @@ def gather_files(client: GraphClient, source: SharePointSourceSpec, now=None,
                  last_refresh: str | None = None) -> tuple[ft.Gathered, list[ft.Expansion]]:
     """The files of every expansion of the path, each once, and the values without one."""
     exps = _expansions(source, now, last_refresh)
-    g = ft.gather(exps, lambda e: find_files(client, e.values["path"]), lambda f: f.path,
+    exts = EXTENSIONS[source.format]
+    g = ft.gather(exps, lambda e: find_files(client, e.values["path"], exts), lambda f: f.path,
                   lambda e: e.values["path"], MAX_FILES, SharePointError)
     return g, exps
 
@@ -388,7 +408,8 @@ def ingest_sharepoint_to_parquet(
     if not files:
         if len(exps) > 1:
             raise ft.nothing_found(SharePointError, g, f"'{source.path}'")
-        raise SharePointError(f"No Excel file matches '{exps[0].values['path']}'")
+        kind = {"excel": "Excel file", "csv": "CSV file", "auto": "Excel or CSV file"}[source.format]
+        raise SharePointError(f"No {kind} matches '{exps[0].values['path']}'")
     total = sum(f.size for f in files)
     if total > MAX_TOTAL_BYTES:
         raise SharePointError(f"The {len(files)} files total {total / 1024**3:.1f} GB: over the {MAX_TOTAL_BYTES // 1024**3} GB limit")
@@ -401,7 +422,7 @@ def ingest_sharepoint_to_parquet(
             avanza("files", file=i + 1, files=len(files), rows=letti)
             local = os.path.join(tmp, f"{i}{os.path.splitext(f.path)[1]}")
             client.download(f.id, local)
-            df = read_sheet(local, source.sheet, f.path)
+            df = read_one(local, f.path, source)
             os.remove(local)
             columns_by_file[f.path] = df.columns
             letti += df.height

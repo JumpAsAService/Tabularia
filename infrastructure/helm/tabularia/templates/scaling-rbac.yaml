@@ -1,4 +1,4 @@
-{{- if or .Values.adminScaling.enabled .Values.scripts.enabled .Values.containers.enabled .Values.clusterView.enabled }}
+{{- if or .Values.adminScaling.enabled .Values.scripts.enabled .Values.containers.enabled .Values.clusterView.enabled .Values.settingsRollout.enabled }}
 {{/*
 The service account of the gateway and the orchestrator when they talk to the
 Kubernetes API. Every other pod keeps the chart's account, without a token.
@@ -13,6 +13,11 @@ Kubernetes API. Every other pod keeps the chart's account, without a token.
 - Administration → Cluster (clusterView.enabled): the Role below, to read the pods,
   their metrics and the events of this namespace; the scripts' and containers' Roles
   read theirs.
+- Administration → Settings (settingsRollout.enabled): the Roles below, to read the pods
+  of this namespace (both accounts) and evict them (the orchestrator's only, which runs
+  the rollout), one at a time, when a setting read at start changes (gateway
+  services/settings_rollout.py). Eviction, not a patch of the Deployments: a patch
+  could change their image or account.
 Two accounts with the same rights: `-scaler` for the gateway, which answers the
 internet, and `-orchestrator` for the orchestrator, which alone may also create the
 image builds' Jobs in their `privileged` namespace (scripts.yaml).
@@ -97,4 +102,59 @@ roleRef:
   name: {{ $full }}-cluster-view
 subjects:
   {{- include "tabularia.kubeApiSubjects" . | nindent 2 }}
+{{- end }}
+{{- if .Values.settingsRollout.enabled }}
+{{- $full := include "tabularia.fullname" . }}
+{{- /* both read the pods (the panel's state); only the orchestrator, which runs the
+rollout and answers nobody from outside, evicts them */}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-rollout-read
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-rollout-read
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-rollout-read
+subjects:
+  {{- include "tabularia.kubeApiSubjects" . | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-rollout
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-rollout
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-rollout
+subjects:
+  - kind: ServiceAccount
+    name: {{ $full }}-orchestrator
+    namespace: {{ .Release.Namespace }}
 {{- end }}

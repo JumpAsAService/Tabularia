@@ -1464,6 +1464,8 @@ button.danger:hover { background: var(--danger-fill); color: var(--on-danger); }
 
 @media (max-width: 720px) {
   .bar { flex-wrap: wrap; }
+  /* the path on a line of its own, scrolled sideways if long: it was cut to «All f» */
+  .crumbs { flex-basis: 100%; overflow-x: auto; }
   .searchbox input { width: 120px; }
   .rmeta { display: none; }
 }

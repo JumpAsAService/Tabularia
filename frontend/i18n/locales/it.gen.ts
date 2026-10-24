@@ -2,6 +2,29 @@
 // The base locale (it.ts) holds nav/settings/login; these are the rest.
 export default {
   "cluster": {
+    "healthLabel": "{ok} in esecuzione, {wait} in avvio o in attesa, {bad} in difficoltà, {done} terminati",
+    "legend": {
+      "ok": "in esecuzione",
+      "wait": "in avvio o in attesa",
+      "bad": "in difficoltà",
+      "done": "terminati",
+      "atWork": "script e container al lavoro"
+    },
+    "mapTitle": "Dove girano",
+    "mapLead": "Una riga per nodo del cluster: un quadrato è un pod di Tabularia, un cerchio uno script o un container. Selezionane uno per trovarne la riga.",
+    "unscheduled": "Non ancora su un nodo",
+    "replicasReady": "{ready} su {n} pronti",
+    "col": {
+      "state": "Stato",
+      "pod": "Pod",
+      "startedBy": "Avviato da",
+      "node": "Nodo",
+      "age": "Età",
+      "restarts": "Riavvii",
+      "cpu": "CPU · ultimo minuto"
+    },
+    "idleCode": "Niente in esecuzione ora in: {list}.",
+    "tileLabel": "{name}: {state}, CPU {cpu}, memoria {mem}",
     "title": "Cluster",
     "lead": "Quello che Tabularia ha in esecuzione su Kubernetes, letto ogni tre secondi: i suoi pod e quelli di script e container, stato e riavvii, CPU e memoria rispetto ai limiti, e gli eventi di avviso. In sola lettura.",
     "updated": "in diretta · aggiornato {s}s fa",
@@ -433,7 +456,7 @@ export default {
     "flowRunAction": "Flusso eseguito",
     "flowScheduleAction": "Flusso schedulato",
     "flowUpdateAction": "Flusso modificato",
-    "heading": "Audit log",
+    "heading": "Registro di audit",
     "loginAction": "Login",
     "loginFailedAction": "Login fallito",
     "ssoLoginAction": "Login SSO",
@@ -498,6 +521,37 @@ export default {
     "reasonPassword": "password nuova",
     "reasonObserver": "diventato osservatore",
     "reasonWrongCurrent": "password attuale errata",
+    "aiModelEnableAction": "Modello AI attivato",
+    "aiModelDisableAction": "Modello AI disattivato",
+    "aiQueryAction": "Domanda all'assistente",
+    "bannerCreateAction": "Banner creato",
+    "bannerDeleteAction": "Banner eliminato",
+    "contractSaveAction": "Contratto dei dati salvato",
+    "contractDeleteAction": "Contratto dei dati eliminato",
+    "emailSendAction": "Email inviata",
+    "engineAllowAction": "Motore consentito",
+    "engineDisallowAction": "Motore non più consentito",
+    "userPromoteAction": "Reso amministratore",
+    "userDemoteAction": "Tolti i privilegi di amministratore",
+    "groupPromoteAction": "Gruppo reso amministratore",
+    "groupDemoteAction": "Tolti al gruppo i privilegi di amministratore",
+    "groupAdminJoinAction": "Entrato in un gruppo di amministratori",
+    "groupAdminLeaveAction": "Uscito da un gruppo di amministratori",
+    "userObserverGrantAction": "Reso osservatore",
+    "userObserverRevokeAction": "Tolto il ruolo di osservatore",
+    "groupObserverGrantAction": "Gruppo reso osservatore",
+    "groupObserverRevokeAction": "Tolto al gruppo il ruolo di osservatore",
+    "privacyUpdateAction": "Informativa sulla privacy modificata",
+    "savedViewCreateAction": "Vista salvata",
+    "savedViewUpdateAction": "Vista modificata",
+    "savedViewDeleteAction": "Vista eliminata",
+    "scriptRunAction": "Script salvato eseguito",
+    "scriptScheduleAction": "Script salvato pianificato",
+    "scriptingTrialAction": "Nodo Script eseguito dall'editor",
+    "settingsUpdateAction": "Impostazioni modificate",
+    "settingsRolloutAction": "Riavvio per le impostazioni",
+    "settingsRolloutCancelAction": "Riavvio annullato",
+    "transformRunAction": "Esecuzione dall'editor",
   },
   "banners": {
     "levelInfo": "Informazione",
@@ -734,7 +788,7 @@ export default {
     "outputMissingChain": "collega l'output a una catena con dati",
     "outputRunStarted": "run #{id} avviato…",
     "partitionsLabel": " · partizioni: {list}",
-    "ready": "Pronto: {rows} righe",
+    "ready": "Pronto: {rows} riga | Pronto: {rows} righe",
     "refreshLinked": "Refresh collegato alla datasource «{name}»",
     "resizeHint": "Trascina per ridimensionare",
     "resizePanel": "Larghezza del pannello: trascina, o usa le frecce",
@@ -756,6 +810,7 @@ export default {
     "uploadFailed": "Upload fallito: {error}",
     "uploading": "Caricamento {name}…",
     "statusHasData": "Dati pronti: seleziona un passo per vederne le righe.",
+    "completeNodeHint": "Imposta il nodo nel pannello a destra per vederne l'anteprima.",
   },
   "flows": {
     "devEngineLabel": "Engine (sviluppo)",
@@ -1041,7 +1096,7 @@ export default {
     "noteLabel": "Nota",
     "outputGroup": "Output",
     "outputLabel": "Output (datasource / database)",
-    "refreshDatasourceLabel": "Refresh datasource",
+    "refreshDatasourceLabel": "Aggiorna datasource",
     "runFlowLabel": "Esegui flusso",
     "searchPlaceholder": "Cerca componente…",
     "sourcesGroup": "Sorgenti",
@@ -1093,7 +1148,15 @@ export default {
     "valuePlaceholder": "valore",
     "valuePlaceholderPh": "es. {ph} — o valori: 10, IT, [1,2]",
     "valuePlaceholderPlain": "es. 10, IT, [1,2] — date: [\"2024-01-01\",\"2024-12-31\"]",
-    "yesLabel": "sì"
+    "yesLabel": "sì",
+    "sortAsc": "Crescente",
+    "sortDesc": "Decrescente",
+    "sortFlip": "Passa da crescente a decrescente e viceversa",
+    "sortUp": "Sposta su: decide prima",
+    "sortDown": "Sposta giù: decide dopo",
+    "sortRemove": "Togli questa colonna dall'ordinamento",
+    "sortAdd": "+ aggiungi una colonna",
+    "sortHint": "Le righe si ordinano per la prima colonna; le successive decidono tra valori uguali.",
   },
   "projectBrowser": {
     "kind_script": "Script",
@@ -1266,7 +1329,7 @@ export default {
     "noRunsFailedSearch": "Nessuna esecuzione fallita per questa ricerca.",
     "noRunsSearch": "Nessuna esecuzione per questa ricerca.",
     "refresh": "Aggiorna",
-    "refreshDatasource": "refresh datasource",
+    "refreshDatasource": "aggiornamento datasource",
     "runNumber": "run #{id}",
     "searchPlaceholder": "Cerca flusso, sorgente, autore o errore…",
     "statusAll": "Tutti",
@@ -1275,7 +1338,11 @@ export default {
     "title": "Esecuzioni",
     "triggerSchedule": "schedule",
     "triggeredByName": "Avviato da {name}",
-    "triggeredByScheduler": "Avviato dallo scheduler"
+    "triggeredByScheduler": "Avviato dallo scheduler",
+    "pill_SUCCESS": "riuscito",
+    "pill_FAILURE": "fallito",
+    "pill_STARTED": "in corso",
+    "pill_PENDING": "in attesa",
   },
   "scheduleDialog": {
     "notifyLabel": "Avvisami se fallisce",
@@ -1330,7 +1397,7 @@ export default {
     "sampleRandom": "campione: {p}% casuale",
     "sampleTitle": "Campione di sviluppo: le preview usano questo sottoinsieme; la produzione legge tutto",
     "noData": "nessun dato — carica un file",
-    "rowsCount": "{n} righe",
+    "rowsCount": "{n} riga | {n} righe",
     "title": "Sorgente"
   },
   "toastHost": {
@@ -1419,7 +1486,8 @@ export default {
     "toPlaceholder": "a",
     "valueColumnPlaceholder": "colonna valore",
     "valuePlaceholder": "valore",
-    "valuesLabel": "Valori"
+    "valuesLabel": "Valori",
+    "rowsColsMetaFirst": "Prime {n} righe · {m} colonne",
   },
   "nodeStats": {
     "cached": "Risultato in cache: i nodi successivi ripartono da qui",
@@ -1504,7 +1572,7 @@ export default {
     "title": "Data contract — {name}",
     "close": "Chiudi",
     "loading": "Carico il contratto…",
-    "open": "Data contract",
+    "open": "Contratto dei dati",
     "intro": "Un data contract è ciò che questa datasource promette a chi la usa: quali colonne ha, di che tipo, e quali regole rispettano i valori. Le regole si verificano ogni volta che arrivano dati nuovi, prima di pubblicarli.",
     "state": {
       "pending": "Data contract: non ancora verificato sui dati correnti",
@@ -1779,6 +1847,474 @@ export default {
       "empty": "Nessun worker si è fatto vivo nell'ultimo minuto."
     }
   },
+  "panelSettings": {
+    "title": "Impostazioni",
+    "lead": "Quello che un amministratore può cambiare senza toccare l'installazione, in un riquadro per componente. Quasi tutte valgono entro {seconds} secondi in ogni processo. Il valore di partenza resta quello dell'installazione (l'ambiente, i values di Helm) e con un clic ci si torna. Indirizzi, credenziali e interruttori legati al cluster non sono qui: sono dell'installazione.",
+    "rolloutLegend": "Lette solo all'avvio di un processo: si salvano subito e valgono quando i loro componenti ripartono.",
+    "search": "Cerca un'impostazione (nome o variabile)",
+    "noMatch": "Nessuna impostazione corrisponde.",
+    "automatic": "automatico",
+    "on": "Acceso",
+    "off": "Spento",
+    "empty": "(vuoto)",
+    "engineDown": "Il motore non risponde, le sue impostazioni non si possono leggere adesso: {error}",
+    "groupHasRollout": "Alcune di queste valgono quando i loro componenti ripartono",
+    "appliesAfter": "Vale quando ripartono: {components}",
+    "waitingRollout": "In attesa di un riavvio",
+    "waitingRolloutHint": "Salvata: i processi che la leggono tengono il valore di prima finché non ripartono (vedi il riquadro in alto).",
+    "unsavedN": "{n} da salvare",
+    "fromPanelN": "{n} dal pannello",
+    "saved": "Salvate: valgono entro {seconds} secondi in ogni processo",
+    "savedRollout": "Salvate. Quelle con l'icona del riavvio valgono quando i loro componenti ripartono: vedi il riquadro in alto",
+    "rejected": "Alcuni valori sono stati rifiutati, i loro campi dicono perché. Salvate: {n}",
+    "sections": {
+      "gateway": {
+        "title": "Gateway",
+        "lead": "L'API web, l'accesso, l'orchestrazione delle esecuzioni e delle pianificazioni, le integrazioni."
+      },
+      "kubernetes": {
+        "title": "Kubernetes",
+        "lead": "Le chiamate al cluster, gli script Python e R, la costruzione delle loro immagini, i nodi Container."
+      },
+      "engine": {
+        "title": "Motore",
+        "lead": "I worker che eseguono flussi, import e anteprime, l'API del motore, le sorgenti e le destinazioni dei dati."
+      }
+    },
+    "components": {
+      "gateway": "Gateway",
+      "orchestrator": "Orchestratore",
+      "engine": "API del motore",
+      "worker": "Worker delle esecuzioni",
+      "preview_worker": "Worker delle anteprime",
+      "beat": "Pianificatore (beat)"
+    },
+    "units": {
+      "minutes": "minuti",
+      "days": "giorni",
+      "seconds": "secondi",
+      "rows": "righe",
+      "gib": "GiB",
+      "mib": "MiB",
+      "usd": "USD",
+      "tokens": "token",
+      "messages": "messaggi",
+      "requests": "richieste",
+      "chats": "chat",
+      "runs": "esecuzioni",
+      "threads": "thread",
+      "connections": "connessioni",
+      "reports": "referti",
+      "versions": "versioni",
+      "files": "file",
+      "keys": "chiavi",
+      "pages": "pagine",
+      "calls": "chiamate",
+      "retries": "tentativi",
+      "redirects": "redirect",
+      "values": "valori",
+      "tasks": "task",
+      "processes": "processi"
+    },
+    "errors": {
+      "unknown": "Impostazione sconosciuta",
+      "unavailable": "Non disponibile su questa installazione",
+      "boolean": "Serve acceso o spento",
+      "integer": "Serve un numero intero",
+      "number": "Serve un numero",
+      "text": "Serve un testo",
+      "too_long": "Al massimo {max} caratteri",
+      "invalid": "Valore non valido",
+      "min": "Almeno {limit}",
+      "max": "Al massimo {limit}",
+      "below": "Deve restare sotto «{other}» ({limit})",
+      "above": "Deve restare sopra «{other}» ({limit})",
+      "heartbeat_dead_after": "Il battito deve stare almeno tre volte nel silenzio dopo cui un'esecuzione è data per persa",
+      "concurrent_pool": "Le esecuzioni per orchestratore devono stare nel pool del database: pool più margine fa {limit}",
+      "stale_below_hard_limit": "Almeno {limit}: il limite duro dei task del motore più cinque minuti, o un'esecuzione ancora al lavoro verrebbe data per persa",
+      "engine_unreachable": "Il motore non risponde, e questa si controlla sul suo limite di tempo: riprova fra un momento",
+      "allowlist_needed": "Far entrare solo i membri dei gruppi presi richiede quei gruppi: elencali prima",
+      "env_too_high": "Il valore dell'installazione supera {limit}, il massimo che la soglia dell'esecuzione persa consente: alza prima la soglia, o tieni un valore dal pannello",
+      "too_small": "Troppo poco per far girare qualcosa"
+    },
+    "rollout": {
+      "region": "Riavvii da fare",
+      "title": "{n} componente usa ancora un valore di prima | {n} componenti usano ancora valori di prima",
+      "howKube": "Il riavvio ferma i loro pod uno alla volta e ogni volta aspetta che il nuovo sia pronto: un componente con un solo pod resta indisponibile per qualche secondo.",
+      "orchestratorWarning": "Riavviare l'orchestratore ferma le esecuzioni che porta avanti: si chiudono come fallite e si possono rilanciare. Meglio in un momento tranquillo.",
+      "start": "Riavvialo | Riavviali ({n})",
+      "saveFirst": "Prima salva o annulla le modifiche.",
+      "started": "Riavvio in corso, un pod alla volta",
+      "left": "{old} pod su {pods} ancora da riavviare",
+      "waitingFor": "in attesa che {pods} sia pronto",
+      "stop": "Ferma",
+      "howCompose": "Riavvia questi servizi dove gira l'installazione, poi segnalo come fatto:",
+      "howManual": "Questa installazione non lascia al pannello il riavvio dei pod (settingsRollout.enabled è spento nei values di Helm): riavvia questi Deployment, poi segnalo come fatto:",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "done": "Fatto, riavviati",
+      "podsError": "I pod di {component} non si possono leggere adesso: {error}",
+      "copyFailed": "Questo browser non lascia copiare alla pagina su questo indirizzo: il comando è selezionato, copialo con Ctrl+C"
+    },
+    "groups": {
+      "signin": {
+        "title": "Accesso e sessioni",
+        "lead": "Quanto dura una sessione, e i token API."
+      },
+      "sso": {
+        "title": "Accesso unico (SSO)",
+        "lead": "Chi può entrare dal provider di identità, e in quali gruppi finisce."
+      },
+      "orchestration": {
+        "title": "Orchestrazione e pianificazioni",
+        "lead": "Come girano i flussi: coda, attese, esecuzioni insieme, il fuso delle pianificazioni."
+      },
+      "history": {
+        "title": "Storia conservata",
+        "lead": "Per quanto si tengono log, referti, versioni e conversazioni."
+      },
+      "webhooks": {
+        "title": "Webhook e SIEM",
+        "lead": "Le chiamate verso altri sistemi alla fine di un'esecuzione."
+      },
+      "ai": {
+        "title": "Assistente AI",
+        "lead": "Il modello, i suoi limiti e quanto può spendere."
+      },
+      "dbt": {
+        "title": "Export dbt",
+        "lead": "Lo scaricamento di un flusso come progetto dbt."
+      },
+      "previews": {
+        "title": "Anteprime e caricamenti",
+        "lead": "Il campione automatico dell'editor e il file più grande accettato."
+      },
+      "backups": {
+        "title": "Backup del database",
+        "lead": "Si accendono, si pianificano e si conservano in Amministrazione → Backup."
+      },
+      "monitoring": {
+        "title": "Monitoraggio",
+        "lead": "Le chiamate alle metriche mostrate in Monitoraggio."
+      },
+      "openlineage": {
+        "title": "OpenLineage",
+        "lead": "Gli eventi di lineage spediti alla fine di un'esecuzione."
+      },
+      "processes": {
+        "title": "Processi del gateway",
+        "lead": "Thread e connessioni al database del gateway e dell'orchestratore: letti all'avvio."
+      },
+      "kubernetes": {
+        "title": "API di Kubernetes",
+        "lead": "Le chiamate di Tabularia al cluster."
+      },
+      "scripts": {
+        "title": "Script Python e R",
+        "lead": "I Job dei nodi Script e l'editor del codice."
+      },
+      "builds": {
+        "title": "Costruzione delle immagini",
+        "lead": "Costruzione e verifica degli ambienti di scripting."
+      },
+      "containers": {
+        "title": "Nodi Container",
+        "lead": "Quanto può chiedere un nodo Container, e i suoi Job."
+      }
+    },
+    "items": {
+      "jwt_access_ttl_minutes": {
+        "label": "Durata massima di una sessione",
+        "help": "Passato questo tempo si rientra, anche mentre si lavora. Vale per le sessioni aperte da adesso."
+      },
+      "auth_session_idle_minutes": {
+        "label": "Sessione chiusa dopo inattività",
+        "help": "Minuti senza attività dopo cui una sessione si chiude, e una pagina aperta esce da sola. 0 = mai (conta solo la durata massima)."
+      },
+      "auth_personal_tokens": {
+        "label": "Token API personali",
+        "help": "Ogni utente può crearsi token API per i suoi script, con i suoi permessi. Spento, i token li hanno solo gli account di servizio creati dall'amministratore; quelli già dati funzionano finché non vengono revocati o scadono."
+      },
+      "auth_api_token_max_days": {
+        "label": "Scadenza più lontana di un token API",
+        "help": "Ogni token scade: una credenziale senza fine è una credenziale che nessuno ricorda di aver dato. Vale per i token creati da adesso."
+      },
+      "oidc_groups_claim": {
+        "label": "Dove sono i gruppi nel token",
+        "help": "La claim con i gruppi dell'utente: 'groups' (il mapper dei gruppi di Keycloak), 'roles' (gli app role di Entra ID), o un percorso come 'realm_access.roles' o 'resource_access.<client>.roles'. Più d'uno, separati da virgola, si uniscono."
+      },
+      "oidc_group_allowlist": {
+        "label": "Gruppi presi dal provider di identità",
+        "help": "Nomi separati da virgola: solo questi diventano gruppi di Tabularia. Vuoto = tutti."
+      },
+      "oidc_auto_create_groups": {
+        "label": "Crea i gruppi mancanti",
+        "help": "Acceso, un gruppo del token che Tabularia non ha viene creato all'accesso. Spento, gli utenti finiscono solo nei gruppi già fatti da un amministratore."
+      },
+      "oidc_authoritative": {
+        "label": "L'appartenenza la decide il provider",
+        "help": "Acceso, a ogni accesso un utente esce dai gruppi che il suo token non ha più. Spento, l'SSO aggiunge soltanto."
+      },
+      "oidc_allowed_email_domains": {
+        "label": "Domini e-mail ammessi",
+        "help": "Domini separati da virgola: chiunque altro viene respinto, anche se il provider lo autentica. Vuoto = qualunque dominio."
+      },
+      "oidc_require_allowlisted_group": {
+        "label": "Solo i membri dei gruppi presi",
+        "help": "Acceso, entra solo chi appartiene ad almeno un gruppo dell'elenco qui sopra."
+      },
+      "oidc_button_label": {
+        "label": "Testo del pulsante di accesso",
+        "help": "Cosa dice il pulsante nella pagina di accesso, per esempio il nome dell'account aziendale."
+      },
+      "oidc_discovery_ttl_seconds": {
+        "label": "Per quanto si tiene la configurazione del provider",
+        "help": "Il documento di discovery del provider si rilegge dopo questo tempo: abbassalo mentre la configurazione del provider cambia."
+      },
+      "oidc_timeout_seconds": {
+        "label": "Attesa del provider di identità",
+        "help": "Quanto può durare una chiamata al provider prima che l'accesso fallisca dicendo perché."
+      },
+      "oidc_login_tx_ttl_seconds": {
+        "label": "Tempo per entrare dal provider",
+        "help": "Quanto può restare aperta la pagina del provider prima che l'accesso vada ricominciato."
+      },
+      "app_timezone": {
+        "label": "Fuso orario delle pianificazioni",
+        "help": "Le espressioni cron delle pianificazioni si leggono in questo fuso (ora legale compresa), per esempio Europe/Rome. Non cambia come si mostrano gli orari: ognuno vede quelli del suo browser. Vale dalla prossima esecuzione pianificata."
+      },
+      "engine_run_stale_timeout_seconds": {
+        "label": "Esecuzione data per persa dopo",
+        "help": "Un'esecuzione senza esito oltre questa età si chiude come fallita. Deve restare sopra il limite duro dei task del motore più cinque minuti, o si chiuderebbe un'esecuzione ancora al lavoro."
+      },
+      "orchestrator_refresh_wait_seconds": {
+        "label": "Attesa massima di un nodo Refresh",
+        "help": "Quanto un flusso aspetta l'import avviato da un nodo Refresh prima di fallire."
+      },
+      "orchestrator_poll_interval_seconds": {
+        "label": "Ogni quanto un flusso controlla i suoi passi",
+        "help": "La pausa più lunga fra due controlli mentre un flusso aspetta un import o un Output: più bassa, i flussi finiscono prima e interrogano il motore più spesso."
+      },
+      "orchestrator_queue_poll_seconds": {
+        "label": "Ogni quanto si legge la coda",
+        "help": "Ogni quanto un orchestratore cerca le esecuzioni in coda."
+      },
+      "orchestrator_max_concurrent": {
+        "label": "Esecuzioni insieme per orchestratore",
+        "help": "Le altre aspettano in coda. Ognuna tiene una connessione al database mentre interroga il motore, quindi devono stare nel pool (Processi del gateway)."
+      },
+      "orchestrator_queue_timeout_seconds": {
+        "label": "Permanenza massima in coda",
+        "help": "Un'esecuzione che aspetta di più (nessun orchestratore acceso, o tutti pieni) si chiude come fallita invece di partire ore dopo, quando nessuno se l'aspetta più."
+      },
+      "orchestrator_heartbeat_seconds": {
+        "label": "Battito delle esecuzioni",
+        "help": "Ogni quanto un'esecuzione in corso dice che è viva. Deve stare tre volte nel silenzio qui sotto."
+      },
+      "orchestrator_dead_after_seconds": {
+        "label": "Esecuzione data per persa dopo il silenzio",
+        "help": "Oltre questo silenzio il processo che la porta avanti è dato per morto e l'esecuzione si chiude come fallita. Gli orologi delle macchine devono andare d'accordo entro questo margine."
+      },
+      "scheduling_worker_capacity": {
+        "label": "Esecuzioni insieme nella mappa delle pianificazioni",
+        "help": "Serve solo a segnare i minuti affollati nella mappa del carico delle pianificazioni: mettici i processi dei worker delle esecuzioni (Amministrazione → Worker)."
+      },
+      "orchestrator_log_retention_days": {
+        "label": "Log delle esecuzioni tenuti per",
+        "help": "Dopo tanti giorni il log di un'esecuzione (l'uscita di un nodo Script o Container, l'errore del motore) si svuota; l'esecuzione resta. 0 = per sempre."
+      },
+      "orchestrator_contract_results_kept": {
+        "label": "Referti dei data contract tenuti",
+        "help": "Gli ultimi referti tenuti per datasource. 0 = tutti."
+      },
+      "orchestrator_versions_kept": {
+        "label": "Versioni tenute",
+        "help": "Le ultime versioni tenute per flusso e per script salvato; quella in uso resta sempre. 0 = tutte."
+      },
+      "orchestrator_ai_chat_retention_days": {
+        "label": "Conversazioni dell'assistente tenute per",
+        "help": "Le conversazioni non toccate da tanto si cancellano (non quanto sono costate). 0 = per sempre."
+      },
+      "webhooks_retention_days": {
+        "label": "Consegne dei webhook tenute per",
+        "help": "Per quanto si tiene il registro delle consegne, riuscite o no."
+      },
+      "webhooks_timeout_seconds": {
+        "label": "Attesa del ricevente",
+        "help": "Quanto un webhook aspetta la risposta dell'altro sistema prima di contare la consegna come fallita."
+      },
+      "ai_default_model": {
+        "label": "Modello proposto per primo",
+        "help": "Il modello che il selettore dell'assistente propone, se un amministratore l'ha abilitato. Vuoto = il primo disponibile."
+      },
+      "ai_max_result_rows": {
+        "label": "Righe di una query dell'assistente",
+        "help": "Le righe massime che una query dell'assistente restituisce, al modello e alla chat."
+      },
+      "ai_max_requests": {
+        "label": "Giri del modello per messaggio",
+        "help": "Il tetto alle chiamate al modello e ai suoi strumenti per rispondere a un messaggio."
+      },
+      "ai_max_flow_requests": {
+        "label": "Giri del modello nell'editor dei flussi",
+        "help": "Lo stesso, per l'assistente dell'editor dei flussi, che fa un giro per ogni passo che costruisce e controlla."
+      },
+      "ai_max_history_messages": {
+        "label": "Messaggi di storia rimandati",
+        "help": "Quanti messaggi precedenti vanno con ogni domanda: più contesto, più costo."
+      },
+      "ai_max_cost_per_turn_usd": {
+        "label": "Spesa massima per risposta",
+        "help": "Una risposta che costerebbe di più si ferma. 0 = nessun tetto."
+      },
+      "ai_max_cost_per_day_usd": {
+        "label": "Spesa massima per utente al giorno",
+        "help": "Superata, l'assistente non è disponibile per quell'utente fino al giorno dopo. 0 = nessun tetto."
+      },
+      "ai_max_cost_per_day_total_usd": {
+        "label": "Spesa massima al giorno, tutti insieme",
+        "help": "Superata, l'assistente non è disponibile fino al giorno dopo. Utile dove un account è condiviso, come una demo pubblica. 0 = nessun tetto."
+      },
+      "ai_max_input_tokens_per_turn": {
+        "label": "Token letti al massimo per risposta",
+        "help": "Il tetto a quello che il modello legge per rispondere a un messaggio, tutti i suoi giri insieme."
+      },
+      "ai_max_chats_listed": {
+        "label": "Conversazioni in elenco per utente",
+        "help": "Il tetto dell'elenco: le conversazioni più vecchie non vengono cancellate per questo."
+      },
+      "ai_dbt_export_timeout_seconds": {
+        "label": "Tempo dell'AI in un export dbt",
+        "help": "Secondi per tutte le chiamate all'AI di un export dbt (descrizioni, traduzioni). L'ingress taglia una richiesta a 300 s: tieni questo e l'attesa del motore qui sotto insieme sotto quel limite."
+      },
+      "engine_dbt_export_timeout_seconds": {
+        "label": "Attesa del motore che costruisce un export dbt",
+        "help": "Superata, lo scaricamento si ferma dicendo perché invece di restare appeso finché l'ingress lo taglia. Con il tempo dell'AI qui sopra deve stare sotto i 300 s dell'ingress."
+      },
+      "preview_default_sample_rows": {
+        "label": "Campione automatico dell'editor",
+        "help": "Righe che le anteprime dell'editor dei flussi leggono da ogni sorgente se non si dice altro, per restare veloci sulle tabelle grandi. 0 = tabelle intere. Vale quando una pagina si riapre."
+      },
+      "upload_max_bytes": {
+        "label": "File più grande caricabile",
+        "help": "I file più grandi si rifiutano prima di riceverli, dal gateway e dal motore. 0 = nessun tetto."
+      },
+      "backup_timeout_seconds": {
+        "label": "Durata massima di un backup",
+        "help": "Il dump del database e il suo caricamento insieme; oltre, il backup fallisce."
+      },
+      "monitoring_timeout_seconds": {
+        "label": "Attesa delle metriche",
+        "help": "Quanto la pagina Monitoraggio aspetta il server delle metriche."
+      },
+      "monitoring_cache_seconds": {
+        "label": "Metriche condivise per",
+        "help": "Più browser su Monitoraggio entro questo tempo condividono una sola lettura delle metriche."
+      },
+      "openlineage_timeout_seconds": {
+        "label": "Attesa del collettore di lineage",
+        "help": "Quanto un evento aspetta la risposta del collettore. Gli eventi partono in sottofondo: un collettore lento li ritarda, non le esecuzioni."
+      },
+      "app_gateway_threads": {
+        "label": "Richieste servite insieme",
+        "help": "Thread che servono le richieste di un processo del gateway o dell'orchestratore. Di più non è più veloce: condividono un solo interprete. Letto all'avvio del processo."
+      },
+      "db_pool_size": {
+        "label": "Connessioni al database tenute aperte",
+        "help": "Per processo. Automatico = una per thread qui sopra, cioè quante ne usano. Letto all'avvio del processo."
+      },
+      "db_max_overflow": {
+        "label": "Connessioni in più nei momenti di punta",
+        "help": "Si aprono quando il pool è occupato e si chiudono quando tornano. Pool più margine, per i processi, deve restare sotto il max_connections di Postgres. Letto all'avvio del processo."
+      },
+      "kubernetes_timeout_seconds": {
+        "label": "Attesa dell'API di Kubernetes",
+        "help": "Quanto può durare una chiamata al cluster (Job, pod, scala) prima di fallire dicendo perché."
+      },
+      "scripts_poll_seconds": {
+        "label": "Ogni quanto si guarda il Job di uno script",
+        "help": "La pausa più lunga fra due controlli del Job di un nodo Script in corso."
+      },
+      "scripts_job_ttl_seconds": {
+        "label": "Job degli script finiti tenuti per",
+        "help": "Per quanto il cluster tiene un Job finito e il suo pod, per chi vuole guardarli."
+      },
+      "scripts_log_max_bytes": {
+        "label": "Uscita degli script tenuta",
+        "help": "La fine dell'uscita di uno script che resta con l'esecuzione."
+      },
+      "scripts_lint": {
+        "label": "Controlla il Python mentre si scrive",
+        "help": "L'editor del codice sottolinea quello che Ruff trova nel codice Python. Vale quando l'editor si riapre."
+      },
+      "scripts_build_timeout_seconds": {
+        "label": "Durata massima della costruzione di un'immagine",
+        "help": "Oltre, la costruzione di un ambiente di scripting fallisce: i pacchetti R grandi compilano a lungo."
+      },
+      "scripts_build_cpu": {
+        "label": "CPU della costruzione di un'immagine",
+        "help": "Una quantità Kubernetes, come 2 o 500m. Con la memoria decide quanti compilatori girano insieme."
+      },
+      "scripts_build_memory": {
+        "label": "Memoria della costruzione di un'immagine",
+        "help": "Una quantità Kubernetes, come 4Gi. Si chiede intera: una costruzione finisce solo su un nodo che ce l'ha."
+      },
+      "scripts_check_timeout_seconds": {
+        "label": "Durata massima della verifica di un'immagine",
+        "help": "Il Job che verifica un ambiente costruito caricandone i pacchetti."
+      },
+      "containers_pull_check_seconds": {
+        "label": "Tempo per scaricare un'immagine",
+        "help": "«Prova nel cluster»: quanto può metterci un nodo a scaricare l'immagine prima che la prova fallisca. La prova risponde entro 270 s: un download più lungo viene segnalato e continua nel cluster."
+      },
+      "containers_poll_seconds": {
+        "label": "Ogni quanto si guarda il Job di un container",
+        "help": "La pausa più lunga fra due controlli del Job di un nodo Container in corso."
+      },
+      "containers_job_ttl_seconds": {
+        "label": "Job dei container finiti tenuti per",
+        "help": "Per quanto il cluster tiene un Job finito e il suo pod."
+      },
+      "containers_max_cpu": {
+        "label": "CPU massima che un nodo Container può chiedere",
+        "help": "Una quantità Kubernetes, come 4 o 1500m."
+      },
+      "containers_max_memory": {
+        "label": "Memoria massima che un nodo Container può chiedere",
+        "help": "Una quantità Kubernetes, come 16Gi."
+      },
+      "containers_max_timeout_seconds": {
+        "label": "Timeout più lungo di un nodo Container",
+        "help": "Il massimo che un nodo Container può darsi come timeout."
+      },
+      "containers_log_max_bytes": {
+        "label": "Uscita dei container tenuta",
+        "help": "La fine del log di un container che resta con l'esecuzione."
+      }
+    },
+    "notAppliedGatewayHint": "Salvata ma non in vigore: non passa più un controllo (l'ambiente è cambiato sotto), oppure questa replica non l'ha ancora letta (entro {seconds} secondi).",
+    "leaveConfirm": "Alcune impostazioni sono cambiate e non salvate. Uscire senza salvare?",
+  },
+  "connectionExamples": {
+    "button": "Esempio dei campi",
+    "title": "Esempio: {type}",
+    "close": "Chiudi l'esempio",
+    "madeUp": "Valori inventati, per mostrare la forma di ogni campo: niente viene copiato nel modulo.",
+    "tips": {
+      "postgresql": "Meglio un utente che può solo leggere (SELECT sugli schemi che servono). Lo schema è facoltativo: vuoto, quello predefinito del database.",
+      "mysql": "Meglio un utente che può solo leggere. MySQL non ha schemi: lascia vuoto Schema.",
+      "mariadb": "Meglio un utente che può solo leggere. MariaDB non ha schemi: lascia vuoto Schema.",
+      "clickhouse": "Porta 8443 per HTTPS (ClickHouse Cloud e quasi tutti i servizi gestiti), 8123 per HTTP semplice in una rete privata.",
+      "trino": "Il catalogo è il connettore da cui Trino legge (hive, iceberg, postgresql…); lo schema è facoltativo.",
+      "oracle": "Database è il service name (non il SID). Schema è il proprietario delle tabelle: vuoto, quello dell'utente.",
+      "sqlserver": "Tieni il certificato verificato; fidarsi senza verifica va bene solo per un server con certificato autofirmato dentro la tua rete.",
+      "s3": "Lascia vuoto l'endpoint per AWS. Su Scaleway è https://s3.fr-par.scw.cloud, su MinIO l'indirizzo del server con la sua porta. Il bucket è facoltativo: vuoto, ogni datasource indica il suo.",
+      "smtp": "Porta 587 con STARTTLS per quasi tutti i provider (Microsoft 365, Gmail con una password per le app), 465 con SSL/TLS per gli altri. I domini ammessi limitano a chi possono scrivere i nodi Email.",
+      "sharepoint": "Client ID e secret vengono da un'app registrata in Entra ID con il permesso Sites.Selected; il tenant ID è nella pagina di panoramica dell'app.",
+      "sftp": "Con una chiave privata, incolla il file intero, righe di intestazione comprese. Il primo test mostra la chiave del server: confrontala con quella del tuo amministratore prima di accettarla.",
+      "api": "Il segreto e le intestazioni vanno solo all'host dell'URL base. Il percorso di test è una chiamata leggera a cui basta rispondere 200."
+    }
+  },
   "engineSettings": {
     "navTitle": "Impostazioni",
     "title": "Impostazioni del motore",
@@ -1826,12 +2362,12 @@ export default {
         "lead": "I download CSV ed Excel dall'editor, dal viewer e dalla chat.",
       },
       "execution": {
-        "title": "Esecuzione",
-        "lead": "Quanto può durare un task del motore: esecuzioni dei flussi, import, anteprime. Vale dal task successivo, senza riavviare i worker.",
+        "title": "Worker ed esecuzioni",
+        "lead": "Quanto può durare un task del motore, e come i worker rinnovano i loro processi e la loro memoria."
       },
       "cache": {
         "title": "Cache dei passi",
-        "lead": "I risultati intermedi che rendono rapide le anteprime nell'editor.",
+        "lead": "I risultati intermedi che rendono veloci le anteprime dell'editor, e le pulizie del pianificatore."
       },
       "clickhouse": {
         "title": "ClickHouse",
@@ -1840,6 +2376,30 @@ export default {
       "bigquery": {
         "title": "BigQuery",
         "lead": "Il motore BigQuery.",
+      },
+      "embedded": {
+        "title": "Motori incorporati",
+        "lead": "La memoria di chDB e il tetto dei cross join, nei worker."
+      },
+      "engine_api": {
+        "title": "API del motore",
+        "lead": "Il servizio del motore: i suoi thread e l'attesa di un'anteprima."
+      },
+      "sftp": {
+        "title": "SFTP",
+        "lead": "I tetti delle datasource che leggono file da un server SFTP."
+      },
+      "s3": {
+        "title": "Cartelle S3",
+        "lead": "I tetti delle datasource che leggono file da una cartella di un bucket."
+      },
+      "api": {
+        "title": "API HTTP",
+        "lead": "Tetti e maniere delle datasource che chiamano un'API HTTP. Una datasource può abbassarli per sé, mai alzarli."
+      },
+      "placeholders": {
+        "title": "Segnaposto",
+        "lead": "Le variabili nei nomi di input e output."
       },
     },
     "items": {
@@ -1857,7 +2417,7 @@ export default {
       },
       "celery_task_time_limit": {
         "label": "Durata massima di un task (limite duro)",
-        "help": "Oltre questo tempo il processo del task viene fermato. Non può superare la soglia oltre cui il gateway dichiara perso un run: per andare oltre si alzano nell'ambiente sia questo valore sia ENGINE__RUN_STALE_TIMEOUT_SECONDS.",
+        "help": "Oltre questo tempo il processo del task viene fermato. Non può superare la soglia oltre cui il gateway dichiara perso un run: per andare oltre si alzano nell'ambiente sia questo valore sia ENGINE__RUN_STALE_TIMEOUT_SECONDS. Un worker che si ferma aspetta i suoi task solo per worker.terminationGracePeriodSeconds del chart (1 h di serie): alza anche quello.",
       },
       "celery_task_soft_time_limit": {
         "label": "Preavviso di chiusura (limite morbido)",
@@ -1890,6 +2450,150 @@ export default {
       "bigquery_maximum_bytes_billed": {
         "label": "Tetto di byte fatturati per query",
         "help": "BigQuery rifiuta, prima di eseguirla, una query che leggerebbe più di così: protegge dalla bolletta. 0 = nessun tetto.",
+      },
+      "clickhouse_external_connect_timeout": {
+        "label": "Attesa per collegarsi a ClickHouse",
+        "help": "Quanto può durare l'apertura di una connessione. Vale per le connessioni aperte da adesso."
+      },
+      "sftp_max_file_bytes": {
+        "label": "File più grande",
+        "help": "Ogni file che corrisponde si scarica e si legge in memoria per impilarlo: uno più grande fa rifiutare l'import, nominandolo."
+      },
+      "sftp_max_files": {
+        "label": "File al massimo per aggiornamento",
+        "help": "Un modello sbagliato (**/*) non deve scaricare un server intero."
+      },
+      "sftp_max_total_bytes": {
+        "label": "Byte al massimo per aggiornamento",
+        "help": "Tutti i file che corrispondono insieme, controllati sulle dimensioni elencate prima di scaricare qualunque cosa."
+      },
+      "sftp_timeout_seconds": {
+        "label": "Attesa del server",
+        "help": "Connessione e handshake: un server muto fallisce entro questo tempo."
+      },
+      "s3_source_max_file_bytes": {
+        "label": "Oggetto più grande",
+        "help": "Ogni oggetto si scarica e si legge in memoria: uno più grande fa rifiutare l'import, nominandolo."
+      },
+      "s3_source_max_files": {
+        "label": "File al massimo per aggiornamento",
+        "help": "Gli oggetti letti da un aggiornamento."
+      },
+      "s3_source_max_total_bytes": {
+        "label": "Byte al massimo per aggiornamento",
+        "help": "Tutti gli oggetti che corrispondono insieme, controllati sull'elenco prima di scaricare qualunque cosa."
+      },
+      "s3_source_max_listed": {
+        "label": "Chiavi esaminate al massimo",
+        "help": "Le chiavi che i modelli di un aggiornamento possono scorrere: ** su un bucket enorme si ferma qui."
+      },
+      "s3_source_max_request_seconds": {
+        "label": "Scaricamento più lungo di un oggetto",
+        "help": "Un server che manda i byte col contagocce si ferma qui."
+      },
+      "api_timeout_seconds": {
+        "label": "Attesa di ogni richiesta",
+        "help": "La connessione e ogni attesa di dati di una richiesta, anche quella del token."
+      },
+      "api_max_pages": {
+        "label": "Pagine al massimo per chiamata",
+        "help": "Una paginazione che non finisce mai si ferma qui."
+      },
+      "api_max_calls": {
+        "label": "Chiamate al massimo per aggiornamento",
+        "help": "Le combinazioni delle variabili a elenco."
+      },
+      "api_max_rows": {
+        "label": "Righe al massimo per aggiornamento",
+        "help": "Le righe ricevute da un aggiornamento, prima che un append le aggiunga alla tabella."
+      },
+      "api_max_response_bytes": {
+        "label": "Risposta più grande",
+        "help": "Una risposta, decompressa: si tiene in memoria per leggerla."
+      },
+      "api_max_total_bytes": {
+        "label": "Byte al massimo per aggiornamento",
+        "help": "Tutte le risposte di un aggiornamento insieme."
+      },
+      "api_max_retries": {
+        "label": "Tentativi di una richiesta fallita",
+        "help": "Dopo 429, 500, 502, 503, 504 o un errore di rete, con una pausa che cresce o il Retry-After del server."
+      },
+      "api_max_retry_wait_seconds": {
+        "label": "Retry-After più lungo accettato",
+        "help": "Un server che chiede di aspettare di più fa fallire l'aggiornamento invece di tenere occupato un worker."
+      },
+      "api_max_redirects": {
+        "label": "Redirect al massimo",
+        "help": "I redirect seguiti da una richiesta."
+      },
+      "api_max_request_seconds": {
+        "label": "Durata massima di una richiesta",
+        "help": "Dall'invio all'ultimo byte della risposta: un server che risponde col contagocce si ferma qui."
+      },
+      "api_min_interval_seconds": {
+        "label": "Pausa minima fra le richieste",
+        "help": "Fra due richieste di un aggiornamento; una datasource può chiederne di più."
+      },
+      "placeholders_max_values": {
+        "label": "Valori al massimo di una variabile",
+        "help": "I valori di un intervallo (day = today-400 .. today sono 400) e le combinazioni delle variabili di una datasource a file. Controllato al salvataggio e a ogni aggiornamento."
+      },
+      "app_engine_api_threads": {
+        "label": "Richieste servite insieme",
+        "help": "I thread dell'API del motore: quasi tutti aspettano un task, e costano poco. Letto all'avvio dell'API del motore."
+      },
+      "previews_timeout_seconds": {
+        "label": "Attesa massima di un'anteprima",
+        "help": "Oltre, l'anteprima si ferma dicendo perché. Letto all'avvio dell'API del motore."
+      },
+      "celery_max_tasks_per_child": {
+        "label": "Task prima di rinnovare un processo",
+        "help": "Il processo di un worker si sostituisce dopo tanti task, restituendo la memoria che le librerie trattengono. Letto all'avvio dei worker."
+      },
+      "celery_max_memory_per_child_kb": {
+        "label": "Memoria di un processo prima di rinnovarlo",
+        "help": "Oltre, il processo di un worker si sostituisce alla fine del suo task. Automatico = dal limite di memoria del container (la quota qui sotto). Letto all'avvio dei worker."
+      },
+      "celery_max_memory_headroom_frac": {
+        "label": "Quota della memoria del container",
+        "help": "Senza il valore qui sopra: il limite di memoria del container per questa quota, diviso fra i suoi processi. Letto all'avvio dei worker."
+      },
+      "celery_max_memory_per_child_fallback_kb": {
+        "label": "Memoria per processo senza limite",
+        "help": "Si usa quando il container non ha un limite di memoria. Letto all'avvio dei worker."
+      },
+      "celery_max_memory_per_child_floor_kb": {
+        "label": "Memoria minima per processo",
+        "help": "La memoria per processo non scende mai sotto, per quanti processi dividano il container. Letto all'avvio dei worker."
+      },
+      "cache_sweep_interval_seconds": {
+        "label": "Ogni quanto si tolgono i passi scaduti",
+        "help": "La pulizia della cache dei passi fatta dal pianificatore. Letto all'avvio del pianificatore."
+      },
+      "metrics_storage_stats_interval_seconds": {
+        "label": "Ogni quanto si misura lo storage",
+        "help": "Per le metriche dello storage in Monitoraggio. Letto all'avvio del pianificatore."
+      },
+      "chdb_max_memory_usage": {
+        "label": "Memoria di una query chDB",
+        "help": "Oltre, la query fallisce invece di prendersi la memoria del worker. Letto all'avvio dei worker."
+      },
+      "chdb_max_bytes_before_external_group_by": {
+        "label": "Aggregazioni su disco oltre",
+        "help": "Oltre questa memoria un'aggregazione di chDB continua su disco. 0 = mai. Letto all'avvio dei worker."
+      },
+      "chdb_max_bytes_before_external_sort": {
+        "label": "Ordinamenti su disco oltre",
+        "help": "Oltre questa memoria un ordinamento di chDB continua su disco. 0 = mai. Letto all'avvio dei worker."
+      },
+      "chdb_max_bytes_in_join": {
+        "label": "Memoria di un join chDB",
+        "help": "Oltre, il join fallisce dicendo perché. 0 = nessun tetto. Letto all'avvio dei worker."
+      },
+      "engine_max_cross_join_rows": {
+        "label": "Righe al massimo di un cross join",
+        "help": "Un cross join che ne produrrebbe di più si rifiuta prima di partire. Letto all'avvio dei worker."
       },
     },
   },
@@ -2282,6 +2986,8 @@ export default {
       "runStoppedHere": "L'ultimo run si è fermato qui",
       "lastRunSource": "Ultimo run",
       "problems": "{errors} errori, {warnings} avvisi",
+      "footerSaved": "Le modifiche restano in questa pagina: «Salva» ne fa una nuova versione.",
+      "noRunSaved": "Mai eseguito: «Esegui» in questa pagina esegue la versione salvata.",
     },
     "packagesAlways": "Sempre installati: {list}.",
     "resources": "Risorse di ogni script",
@@ -2505,5 +3211,16 @@ export default {
     "newContainerHint": "un'immagine di un registry che ti è concesso",
     "editContainer": "Imposta il container",
     "containerTitle": "Cella Container"
+  },
+  "sheetPicker": {
+    "title": "Fogli da importare",
+    "intro": "«{file}» ha {n} fogli. È stato letto «{read}»; spunta quelli che ti servono: ognuno diventa una sorgente sul canvas.",
+    "read": "letto",
+    "hidden": "nascosto",
+    "keep": "Tieni solo «{read}»",
+    "import": "Importa | Importa 1 foglio | Importa {n} fogli",
+    "sheet": "foglio «{name}»",
+    "fromFile": "i fogli di «{file}»",
+    "firstSheet": "il primo foglio",
   },
 }

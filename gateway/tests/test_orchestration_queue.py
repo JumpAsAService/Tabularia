@@ -26,7 +26,7 @@ from sqlmodel import Session, select
 
 import app.services.orchestrator as orch
 from app.models import Flow, Run
-from app.models.run import ORCHESTRATION_INTERRUPTED
+from app.models.run import ORCHESTRATION_INTERRUPTED, STEP_INTERRUPTED
 from app.routes.flows import run_flow_now
 from app.services import scheduler
 from tests.conftest import make_flow, make_project, make_run, make_user
@@ -214,7 +214,7 @@ async def test_chi_batte_non_e_orfano_chi_ha_smesso_si(session, coda):
     utente, cartella = coda
     adesso = orch._adesso()
     viva = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, cartella, "a").id, claimed_by="vivo", heartbeat_at=adesso - timedelta(seconds=5))
-    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, cartella, "b").id, claimed_by="morto", heartbeat_at=adesso - timedelta(seconds=orch.DEAD_AFTER_S + 30))
+    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, cartella, "b").id, claimed_by="morto", heartbeat_at=adesso - timedelta(seconds=orch._orc().dead_after_seconds + 30))
     in_coda = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, cartella, "c").id)
 
     assert await orch.chiudi_orfane() == 1
@@ -234,6 +234,95 @@ async def test_chiusa_l_orfana_il_flusso_puo_ripartire(session, coda):
     assert orch.rivendica(5) == ([], [nuovo.id])  # finché l'orfana è lì, il flusso risulta occupato
     await orch.chiudi_orfane()
     assert orch.rivendica(5) == ([nuovo.id], [])
+
+
+# ── i passi di un'orchestrazione interrotta ───────────────────────────────────
+# Un orchestratore che si ferma (rolling update, riavvio dal pannello, sfratto, OOM)
+# chiudeva il flusso come interrotto ma lasciava scrivere l'Output già consegnato a un
+# worker: il flusso, chiuso, poteva ripartire sopra di lui (righe doppie in append).
+async def test_lo_spegnimento_ferma_anche_l_output_gia_partito(session, coda, fake_engine, monkeypatch):
+    utente, cartella = coda
+    monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.05)
+    flusso = _flusso(session, utente, cartella)
+    run = orch.create_orchestration_run(session, utente, flusso)
+    assert orch.rivendica(5)[0] == [run.id]
+    partito, figlio = asyncio.Event(), {}
+
+    async def orchestrate(s, u, f, **kw):
+        out = make_run(s, kind="flow", status="STARTED", task_id="t-output", flow_id=f.id,
+                       parent_run_id=kw["parent_run_id"])
+        figlio["id"] = out.id
+        fake_engine.set_task("t-output", "STARTED")
+        partito.set()
+        await orch._wait_run(s, out)
+        return []
+
+    monkeypatch.setattr(orch, "orchestrate", orchestrate)
+    task = asyncio.create_task(orch.esegui(run.id))
+    await partito.wait()
+    task.cancel()  # lo spegnimento del lifespan al SIGTERM
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert (_stato(session, run.id).status, _stato(session, run.id).error) == ("FAILURE", ORCHESTRATION_INTERRUPTED)
+    out = _stato(session, figlio["id"])
+    assert (out.status, out.error) == ("FAILURE", STEP_INTERRUPTED) and fake_engine.revoked == ["t-output"]
+
+
+async def test_chi_chiude_l_orfana_ferma_i_suoi_passi(session, coda, fake_engine):
+    utente, cartella = coda
+    flusso = _flusso(session, utente, cartella)
+    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+                     claimed_by="morto", heartbeat_at=datetime(2020, 1, 1))
+    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=morta.id)
+    in_coda = make_run(session, kind="flow", status="PENDING", task_id="t-dopo", flow_id=flusso.id,
+                       parent_run_id=morta.id)
+    finito = make_run(session, kind="flow", status="SUCCESS", task_id="t-prima", flow_id=flusso.id,
+                      parent_run_id=morta.id)
+    assert await orch.chiudi_orfane() == 1
+    assert sorted(fake_engine.revoked) == ["t-dopo", "t-out"]
+    assert _stato(session, out.id).status == _stato(session, in_coda.id).status == "FAILURE"
+    assert _stato(session, finito.id).status == "SUCCESS"  # quel che è finito resta com'è
+
+
+async def test_cio_che_questo_processo_esegue_non_e_orfano_anche_col_battito_vecchio(session, coda, fake_engine,
+                                                                                      monkeypatch):
+    # Postgres fermo oltre dead_after (un failover): al ritorno ogni battito è vecchio, anche
+    # quello di chi esegue ancora; il giro degli orfani non chiude (né ferma) le proprie
+    utente, cartella = coda
+    flusso = _flusso(session, utente, cartella)
+    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+                   claimed_by=orch.ISTANZA, heartbeat_at=datetime(2020, 1, 1))
+    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=mia.id)
+    monkeypatch.setattr(orch, "_vive", {mia.id})
+    assert await orch.chiudi_orfane() == 0
+    assert _stato(session, mia.id).status == _stato(session, out.id).status == "STARTED" and fake_engine.revoked == []
+
+
+def test_il_giro_degli_orfani_aspetta_che_il_processo_batta_da_un_intervallo_intero(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(orch.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(orch, "_battito_ok_dal", None)
+    assert not orch.battito_sano()  # il database non risponde (o non ancora)
+    monkeypatch.setattr(orch, "_battito_ok_dal", 1000.0)
+    clock[0] += orch._orc().dead_after_seconds - 1
+    assert not orch.battito_sano()  # tornato da poco: gli altri non hanno ancora battuto
+    clock[0] += 1
+    assert orch.battito_sano()
+
+
+async def test_al_riavvio_le_esecuzioni_precedenti_fermano_i_loro_passi(session, coda, fake_engine, monkeypatch):
+    utente, cartella = coda
+    flusso = _flusso(session, utente, cartella)
+    ospite = orch.ISTANZA.rsplit(":", 1)[0]
+    prima = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+                     claimed_by=f"{ospite}:vecchia-firma", heartbeat_at=orch._adesso())
+    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=prima.id)
+    stop = asyncio.Event()
+    stop.set()  # il ciclo fa solo l'avvio e si ferma
+    monkeypatch.setattr(orch, "avvia_battito", lambda ev: None)
+    await orch.coda_loop(stop)
+    assert _stato(session, prima.id).error == ORCHESTRATION_INTERRUPTED
+    assert _stato(session, out.id).status == "FAILURE" and fake_engine.revoked == ["t-out"]
 
 
 # ── eseguire ─────────────────────────────────────────────────────────────────
@@ -331,7 +420,7 @@ async def test_fermare_il_processo_chiude_le_esecuzioni_in_corso(session, coda, 
 # ── il lavoratore, dall'inizio alla fine ─────────────────────────────────────
 async def test_il_lavoratore_prende_esegue_e_si_ferma(session, coda, monkeypatch):
     utente, cartella = coda
-    monkeypatch.setattr(orch, "QUEUE_POLL_S", 0.05)
+    monkeypatch.setattr(orch._orc(), "queue_poll_seconds", 0.05)
     stop = asyncio.Event()
     lavoratore = asyncio.create_task(orch.coda_loop(stop))
     try:
@@ -454,7 +543,7 @@ async def test_una_riga_firmata_il_cui_task_e_morto_smette_di_battere(session, c
     assert orch.batti() == 0
     # passato il tempo, è un'orfana come le altre
     vecchio = session.get(Run, run.id)
-    vecchio.heartbeat_at = orch._adesso() - timedelta(seconds=orch.DEAD_AFTER_S + 5)
+    vecchio.heartbeat_at = orch._adesso() - timedelta(seconds=orch._orc().dead_after_seconds + 5)
     session.add(vecchio); session.commit()
     assert await orch.chiudi_orfane() == 1
     nuovo = orch.create_orchestration_run(session, utente, flusso)
@@ -528,7 +617,7 @@ def test_all_avvio_si_chiudono_le_esecuzioni_di_un_incarnazione_precedente(sessi
     altro_pid = riga("c", "host-a:7:vecchia")        # un altro processo sulla stessa macchina
     simile = riga("d", "host-a:12:vecchia")          # «host-a:1» è un prefisso di «host-a:12»: non deve bastare
     mia = riga("e", "host-a:1:nuova")
-    assert orch.chiudi_le_mie(True) == 1
+    assert len(orch.chiudi_le_mie(True)) == 1
     assert _stato(session, precedente).status == "FAILURE" and _stato(session, precedente).error == ORCHESTRATION_INTERRUPTED
     assert [_stato(session, r).status for r in (altro_host, altro_pid, simile, mia)] == ["STARTED"] * 4
 
@@ -539,7 +628,7 @@ def test_allo_spegnimento_si_chiudono_tutte_le_proprie(session, coda, monkeypatc
     adesso = orch._adesso()
     mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, cartella, "a").id, claimed_by="host-a:1:io", heartbeat_at=adesso).id
     altrui = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, cartella, "b").id, claimed_by="host-b:1:x", heartbeat_at=adesso).id
-    assert orch.chiudi_le_mie(False) == 1
+    assert len(orch.chiudi_le_mie(False)) == 1
     assert (_stato(session, mia).status, _stato(session, altrui).status) == ("FAILURE", "STARTED")
 
 
@@ -607,7 +696,7 @@ async def test_un_esecuzione_in_coda_da_troppo_non_parte_piu(session, coda):
 
     utente, cartella = coda
     vecchia = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, cartella, "a").id,
-                       started_at=datetime.now(timezone.utc) - timedelta(seconds=orch.QUEUE_TIMEOUT_S + 60))
+                       started_at=datetime.now(timezone.utc) - timedelta(seconds=orch._orc().queue_timeout_seconds + 60))
     fresca = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, cartella, "b").id)
     # chi la guarda (anche un processo che risponde soltanto) la trova chiusa
     letta = await _reconcile(session, session.get(Run, vecchia.id))
@@ -619,7 +708,7 @@ async def test_un_esecuzione_in_coda_da_troppo_non_parte_piu(session, coda):
 async def test_l_orchestratore_chiude_la_coda_scaduta_prima_di_prenderla(session, coda):
     utente, cartella = coda
     vecchia = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, cartella).id,
-                       started_at=datetime.now(timezone.utc) - timedelta(seconds=orch.QUEUE_TIMEOUT_S + 60))
+                       started_at=datetime.now(timezone.utc) - timedelta(seconds=orch._orc().queue_timeout_seconds + 60))
     await orch.chiudi_orfane()
     assert _stato(session, vecchia.id).status == "FAILURE"
     assert orch.rivendica(5) == ([], [])

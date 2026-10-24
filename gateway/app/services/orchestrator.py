@@ -48,7 +48,6 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from math import ceil
 
 from sqlalchemy import delete, or_, text, update
 from sqlalchemy.exc import IntegrityError
@@ -58,9 +57,10 @@ from app.core.config import get_settings
 from app.db.session import engine, engine_battito
 from app.models import Connection, Datasource, Flow, Run, User
 from app.models.permission import Capability
-from app.models.run import ORCHESTRATION_INTERRUPTED, TERMINAL_STATES  # noqa: F401 — riesportata
+from app.models.run import ORCHESTRATION_INTERRUPTED, STEP_INTERRUPTED, TERMINAL_STATES  # noqa: F401 — riesportata
 from app.routes.runs import (
-    _launch_flow_run, _reconcile, close_if_queued_too_long, launch_ingest_run, live_refresh, start_refresh_if_free,
+    _launch_flow_run, _reconcile, _revoke_task, close_if_queued_too_long, launch_ingest_run, live_refresh,
+    start_refresh_if_free,
 )
 from app.schemas.models import RunCreate
 from app.services import permissions as perm_service
@@ -70,21 +70,30 @@ logger = logging.getLogger(__name__)
 
 MAX_FLOW_DEPTH = 5  # guardia sui runflow annidati (oltre al set anti-ciclo)
 
-# Tetti d'attesa (ORCHESTRATOR__* nell'env): l'orchestratore aspetta che refresh e
-# output COMPLETINO prima dei passi a valle, così l'ordine è reale. Espressi in
-# secondi e convertiti in tick di polling; oltre il tetto il flusso aborta invece
-# di leggere dati stantii.
-_orc = get_settings().orchestrator
-REFRESH_WAIT_INTERVAL_S = _orc.poll_interval_seconds
-OUTPUT_WAIT_INTERVAL_S = _orc.poll_interval_seconds
-REFRESH_WAIT_TICKS = max(1, ceil(_orc.refresh_wait_seconds / _orc.poll_interval_seconds))
+# Tetti d'attesa e ritmi della coda (ORCHESTRATOR__* nell'env, o Amministrazione →
+# Settings): l'orchestratore aspetta che refresh e output COMPLETINO prima dei passi a
+# valle, così l'ordine è reale; oltre il tetto il flusso aborta invece di leggere dati
+# stantii. Letti a ogni uso, non all'avvio: una modifica dal pannello vale entro pochi
+# secondi, anche per le esecuzioni già in corso.
+def _orc():
+    return get_settings().orchestrator
 
-# ── Coda ─────────────────────────────────────────────────────────────────────
-QUEUE_POLL_S = _orc.queue_poll_seconds
-MAX_CONCURRENT = _orc.max_concurrent
-HEARTBEAT_S = _orc.heartbeat_seconds
-DEAD_AFTER_S = _orc.dead_after_seconds
-QUEUE_TIMEOUT_S = _orc.queue_timeout_seconds
+
+def concorrenza() -> int:
+    """ORCHESTRATOR__MAX_CONCURRENT, never beyond the connections this process's pool can
+    give (each execution holds one while it asks the engine). The pool is sized when the
+    process starts: raised together from the panel, the executions follow the pool only
+    once the processes have restarted."""
+    voluta = _orc().max_concurrent
+    try:
+        overflow = int(getattr(engine.pool, "_max_overflow", 0))
+        if overflow < 0:  # no ceiling on the pool
+            return voluta
+        return max(1, min(voluta, engine.pool.size() + overflow))
+    except Exception:  # noqa: BLE001 — a pool without a size (the tests' SQLite)
+        return voluta
+
+
 ORPHAN_SWEEP_S = 15.0  # ogni quanto si cercano le orchestrazioni di processi morti
 
 # La firma di QUESTO processo sulle orchestrazioni che esegue. Cambia a ogni
@@ -155,8 +164,8 @@ async def _refresh_and_wait(
     from app.services.waits import waits
 
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + REFRESH_WAIT_TICKS * REFRESH_WAIT_INTERVAL_S
-    for pause in waits(REFRESH_WAIT_INTERVAL_S):
+    deadline = loop.time() + max(_orc().refresh_wait_seconds, _orc().poll_interval_seconds)
+    for pause in waits(_orc().poll_interval_seconds):
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES or loop.time() >= deadline:
             break
@@ -186,7 +195,7 @@ async def _wait_run(session: Session, run: Run) -> Run:
     same flow again on top of it."""
     from app.services.waits import waits
 
-    for pause in waits(OUTPUT_WAIT_INTERVAL_S):
+    for pause in waits(_orc().poll_interval_seconds):
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES:
             return run
@@ -352,7 +361,7 @@ def create_orchestration_run(
 # spazio di nomi dei lucchetti consultivi «coda del flusso» (il secondo numero è l'id)
 _LUCCHETTO_CODA = 74610001
 # the same for flow groups, in a namespace of their own (a group and a flow can share an id)
-_GROUP_QUEUE_LOCK = 74610002
+_GROUP_QUEUE_LOCK = 74610004
 
 
 def create_group_run(session: Session, user: User, group, trigger_type: str = "manual", commit: bool = True) -> Run:
@@ -445,6 +454,54 @@ async def _finalize_orch_run(run_id: int, status: str, error: str | None = None,
 
         openlineage.run_closed(session, run)
         await notify_failure(session, run)
+
+
+async def ferma_passi(run_id: int) -> int:
+    """The steps still open of an orchestration closed as interrupted are stopped: an
+    Output or a refresh already with a worker went on writing while the flow, closed,
+    could start again on top of it (the same rows twice in an append Output, two
+    writers on a replaced table). Their engine tasks are revoked, the Jobs of Script
+    and Container nodes deleted, a flow group's flows closed the same way. Called
+    after the orchestration is closed (a Script or Container run is an orphan only
+    then); best effort, one step at a time: what fails is logged, the rest still go."""
+    from app.services.script_runs import close_if_orphaned
+
+    fermati = 0
+    with Session(engine) as session:
+        aperti = session.exec(select(Run).where(
+            Run.parent_run_id == run_id, Run.status.not_in(TERMINAL_STATES))).all()  # type: ignore[union-attr]
+        for run in aperti:
+            try:
+                if run.kind in ("script", "container"):
+                    await close_if_orphaned(session, run)
+                    fermati += 1
+                    continue
+                if run.kind == "orchestration":  # a flow of a flow group
+                    chiuso = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
+                                          .values(status="FAILURE", error=ORCHESTRATION_INTERRUPTED,
+                                                  finished_at=datetime.now(timezone.utc)))
+                    session.commit()
+                    if chiuso.rowcount == 1:
+                        fermati += 1 + await ferma_passi(run.id)
+                    continue
+                await _revoke_task(run)
+                chiuso = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
+                                      .values(status="FAILURE", error=STEP_INTERRUPTED,
+                                              finished_at=datetime.now(timezone.utc)))
+                session.commit()
+                fermati += chiuso.rowcount
+            except Exception:  # noqa: BLE001 — one step must not keep the others running
+                session.rollback()
+                logger.exception("orchestrate: passo %s dell'orchestrazione interrotta %s non fermato", run.id, run_id)
+    if fermati:
+        logger.warning("orchestrate: %d passi dell'orchestrazione interrotta %s fermati", fermati, run_id)
+    return fermati
+
+
+async def interrompi(run_id: int) -> None:
+    """Closes an orchestration whose process is stopping, then stops its steps."""
+    await _finalize_orch_run(run_id, "FAILURE", ORCHESTRATION_INTERRUPTED)
+    await ferma_passi(run_id)
 
 
 # ── Prendere dalla coda ──────────────────────────────────────────────────────
@@ -557,8 +614,9 @@ async def esegui(run_id: int) -> None:
             logger.info("orchestrate: flusso %s completato (%s)", flow_id, status)
     except asyncio.CancelledError:
         # il processo si sta fermando: i passi rimanenti non verranno eseguiti.
-        # Lo si scrive subito, invece di lasciarlo scoprire a chi ne cercherà il battito
-        await _finalize_orch_run(run_id, "FAILURE", ORCHESTRATION_INTERRUPTED)
+        # Lo si scrive subito, invece di lasciarlo scoprire a chi ne cercherà il battito,
+        # e si fermano quelli già partiti
+        await interrompi(run_id)
         raise
     except Exception:
         logger.exception("orchestrate: run %s fallito", run_id)
@@ -580,9 +638,10 @@ def batti() -> int:
     può togliergli."""
     with _vive_lock:
         ids = list(_vive)
-    if not ids:
-        return 0
     with Session(engine_battito) as session:
+        if not ids:
+            session.exec(text("SELECT 1"))  # the database answers: see battito_sano
+            return 0
         vive = session.exec(
             update(Run)
             .where(Run.id.in_(ids), Run.kind == "orchestration", Run.status == "STARTED", Run.claimed_by == ISTANZA)  # type: ignore[union-attr]
@@ -592,6 +651,18 @@ def batti() -> int:
         return vive.rowcount
 
 
+# since when (time.monotonic) this process's beats have gone through, without a miss
+_battito_ok_dal: float | None = None
+
+
+def battito_sano() -> bool:
+    """This process has been beating for a whole `dead_after_seconds`. Right after the
+    database comes back from an outage every heartbeat is old, the living ones too:
+    the orphans' sweep waits until every live orchestrator has had the time to beat
+    again, instead of closing (and now stopping the steps of) runs that are running."""
+    return _battito_ok_dal is not None and time.monotonic() - _battito_ok_dal >= _orc().dead_after_seconds
+
+
 def avvia_battito(ferma: threading.Event) -> threading.Thread:
     """In un THREAD suo e non sul ciclo degli eventi: il battito dice che il
     processo è vivo, e deve continuare anche mentre il ciclo è occupato. Se
@@ -599,10 +670,20 @@ def avvia_battito(ferma: threading.Event) -> threading.Thread:
     orchestrazioni che stanno girando."""
 
     def gira() -> None:
-        while not ferma.wait(HEARTBEAT_S):
+        # a second at a time, reading the interval each time: a beat made shorter from the
+        # panel applies at once, not after the long wait already started
+        ultimo = time.monotonic()
+        while not ferma.wait(1.0):
+            if time.monotonic() - ultimo < _orc().heartbeat_seconds:
+                continue
+            ultimo = time.monotonic()
+            global _battito_ok_dal
             try:
                 batti()
+                if _battito_ok_dal is None:
+                    _battito_ok_dal = time.monotonic()
             except Exception:
+                _battito_ok_dal = None
                 logger.exception("orchestrate: battito non riuscito")
 
     t = threading.Thread(target=gira, name="battito-orchestrazioni", daemon=True)
@@ -617,11 +698,15 @@ async def chiudi_orfane() -> int:
     resterebbero STARTED per sempre, e il flusso non potrebbe più ripartire.
 
     Vale anche per le righe senza battito, che sono di una versione precedente."""
-    taglio = _adesso() - timedelta(seconds=DEAD_AFTER_S)
+    taglio = _adesso() - timedelta(seconds=_orc().dead_after_seconds)
+    with _vive_lock:
+        mie_vive = list(_vive)
     orfana = (
         (Run.kind == "orchestration")
         & (Run.status == "STARTED")
         & or_(Run.heartbeat_at.is_(None), Run.heartbeat_at < taglio)  # type: ignore[union-attr]
+        # what this very process is running is alive, whatever its beat says
+        & ~((Run.claimed_by == ISTANZA) & Run.id.in_(mie_vive or [-1]))  # type: ignore[union-attr]
     )
     chiuse = 0
     from app.services.notifier import notify_failure
@@ -643,9 +728,10 @@ async def chiudi_orfane() -> int:
             if chiusa.rowcount != 1:
                 continue
             chiuse += 1
+            await ferma_passi(run_id)
             await notify_failure(session, session.get(Run, run_id))
         # e quelle rimaste in coda oltre il tempo massimo: non partono più
-        vecchie = _adesso() - timedelta(seconds=QUEUE_TIMEOUT_S)
+        vecchie = _adesso() - timedelta(seconds=_orc().queue_timeout_seconds)
         for run in session.exec(
             select(Run).where(Run.kind == "orchestration", Run.status == "PENDING", Run.started_at < vecchie)
         ).all():
@@ -655,7 +741,7 @@ async def chiudi_orfane() -> int:
     return chiuse
 
 
-def chiudi_le_mie(solo_le_precedenti: bool) -> int:
+def chiudi_le_mie(solo_le_precedenti: bool) -> list[int]:
     """Chiude come interrotte le esecuzioni firmate da questo processo.
 
     All'AVVIO (`solo_le_precedenti`): quelle di una sua incarnazione precedente —
@@ -681,7 +767,7 @@ def chiudi_le_mie(solo_le_precedenti: bool) -> int:
         for (run_id,) in chiuse:
             webhooks.accoda_per_run(session, session.get(Run, run_id))  # nella stessa transazione
         session.commit()
-        return len(chiuse)
+        return [run_id for (run_id,) in chiuse]
 
 
 # ── Il lavoratore ────────────────────────────────────────────────────────────
@@ -732,33 +818,36 @@ async def coda_loop(stop: asyncio.Event) -> None:
     avvia_battito(ferma_battito)
     logger.info(
         "orchestratore %s avviato: coda ogni %ss, fino a %d esecuzioni insieme",
-        ISTANZA, QUEUE_POLL_S, MAX_CONCURRENT,
+        ISTANZA, _orc().queue_poll_seconds, concorrenza(),
     )
     ultima_ricerca = 0.0
     try:
         precedenti = await asyncio.to_thread(chiudi_le_mie, True)
         if precedenti:
-            logger.warning("orchestratore: %d esecuzioni di un avvio precedente di questo processo, chiuse", precedenti)
+            logger.warning("orchestratore: %d esecuzioni di un avvio precedente di questo processo, chiuse",
+                           len(precedenti))
+        for run_id in precedenti:
+            await ferma_passi(run_id)
     except Exception:
         logger.exception("orchestratore: chiusura delle esecuzioni precedenti non riuscita")
     try:
         while not stop.is_set():
             _sveglia.clear()
             try:
-                liberi = MAX_CONCURRENT - len(_in_corso) - celle_in_corso
+                liberi = concorrenza() - len(_in_corso) - celle_in_corso
                 if liberi > 0:
                     prese, respinte = await asyncio.to_thread(rivendica, liberi)
                     for run_id in prese:
                         _avvia(run_id)
                     for run_id in respinte:
                         await _finalize_orch_run(run_id, "FAILURE", ALREADY_RUNNING, solo_in_coda=True)
-                if time.monotonic() - ultima_ricerca >= ORPHAN_SWEEP_S:
+                if time.monotonic() - ultima_ricerca >= ORPHAN_SWEEP_S and battito_sano():
                     ultima_ricerca = time.monotonic()
                     await chiudi_orfane()
             except Exception:
                 logger.exception("orchestratore: errore nel giro della coda")
             try:
-                await asyncio.wait_for(_sveglia.wait(), timeout=QUEUE_POLL_S)
+                await asyncio.wait_for(_sveglia.wait(), timeout=_orc().queue_poll_seconds)
             except asyncio.TimeoutError:
                 pass
     finally:

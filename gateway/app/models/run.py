@@ -20,6 +20,11 @@ ORCHESTRATION_INTERRUPTED = (
     "Orchestration interrupted: the process running it stopped and the remaining steps "
     "were not run. Check what has already been produced and run the flow again."
 )
+# a step of an interrupted orchestration that was still running: stopped with it
+STEP_INTERRUPTED = (
+    "Stopped: the orchestration this step belonged to was interrupted (the process running "
+    "it stopped). Check what has already been produced and run the flow again."
+)
 
 
 class Run(SQLModel, table=True):

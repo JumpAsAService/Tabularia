@@ -298,6 +298,7 @@ export interface FieldSpec {
     | 'strategy' // union: relaxed | strict
     | 'joinkeys' // join: righe colonna sinistra → colonna destra (nomi anche diversi)
     | 'reorder' // riordino colonne con drag-and-drop
+    | 'sortlist' // sort keys in order, a direction each (by[] + descending[])
     | 'json' // textarea con JSON libero (es. items del foreach)
     | 'sqltext' // textarea con una query SQL intera (Execute SQL); preview MANUALE
   optional?: boolean
@@ -314,10 +315,7 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
     { key: 'operator', label: 'params.filter_operator', control: 'operator' },
     { key: 'value', label: 'params.filter_value', control: 'value' },
   ],
-  sort: [
-    { key: 'by', label: 'params.sort_by', control: 'column' },
-    { key: 'descending', label: 'params.sort_descending', control: 'boolean' },
-  ],
+  sort: [{ key: 'by', label: 'params.sort_by', control: 'sortlist' }],
   limit: [{ key: 'n', label: 'params.limit_n', control: 'number' }],
   unique: [{ key: 'subset', label: 'params.unique_subset', control: 'columns', optional: true }],
   fill_null: [{ key: 'columns', label: 'params.fill_null_columns', control: 'filllist' }],
@@ -430,8 +428,6 @@ export function defaultParams(opType: string): Record<string, any> {
       return { how: 'inner' }
     case 'union':
       return { strategy: 'relaxed' }
-    case 'sort':
-      return { descending: false }
     case 'foreach':
       return { add_keys_as_columns: true }
     case 'sql':

@@ -2,6 +2,29 @@
 // The base locale (de.ts) holds nav/settings/login; these are the rest.
 export default {
   "cluster": {
+    "healthLabel": "{ok} laufen, {wait} starten oder warten, {bad} mit Problemen, {done} beendet",
+    "legend": {
+      "ok": "laufen",
+      "wait": "starten oder warten",
+      "bad": "mit Problemen",
+      "done": "beendet",
+      "atWork": "Skripte und Container bei der Arbeit"
+    },
+    "mapTitle": "Wo sie laufen",
+    "mapLead": "Eine Zeile pro Knoten des Clusters: ein Quadrat ist ein Pod von Tabularia, ein Kreis ein Skript oder ein Container. Wählen Sie einen aus, um seine Zeile zu finden.",
+    "unscheduled": "Noch auf keinem Knoten",
+    "replicasReady": "{ready} von {n} bereit",
+    "col": {
+      "state": "Status",
+      "pod": "Pod",
+      "startedBy": "Gestartet von",
+      "node": "Knoten",
+      "age": "Alter",
+      "restarts": "Neustarts",
+      "cpu": "CPU · letzte Minute"
+    },
+    "idleCode": "Gerade läuft nichts in: {list}.",
+    "tileLabel": "{name}: {state}, CPU {cpu}, Speicher {mem}",
     "title": "Cluster",
     "lead": "Was Tabularia auf Kubernetes ausführt, alle drei Sekunden gelesen: die eigenen Pods und die der Skripte und Container, Status und Neustarts, CPU und Speicher gegenüber ihren Limits, und die Warn-Ereignisse. Nur lesend.",
     "updated": "live · vor {s} s aktualisiert",
@@ -220,7 +243,56 @@ export default {
     "userCreated": "Benutzer {email} erstellt",
     "userDeleted": "Benutzer {email} gelöscht",
     "userPlaceholder": "Benutzer…",
-    "usersTitle": "Benutzer"
+    "usersTitle": "Benutzer",
+    "searchPlaceholder": "suchen…",
+    "clearSearch": "Suche löschen",
+    "noSearchResults": "Keine Treffer für diese Suche",
+    "colUser": "Benutzer",
+    "colGroups": "Gruppen",
+    "colCreated": "Erstellt",
+    "colLastSeen": "Zuletzt aktiv",
+    "colName": "Name",
+    "colMembers": "Mitglieder",
+    "colLevel": "Stufe",
+    "colMessage": "Nachricht",
+    "neverSeen": "nie",
+    "ssoTag": "sso",
+    "noUsers": "Keine Benutzer",
+    "disableUserTitle": "Benutzer deaktivieren",
+    "enableUserTitle": "Benutzer wieder aktivieren",
+    "userDisabled": "Benutzer {email} deaktiviert",
+    "userEnabled": "Benutzer {email} wieder aktiviert",
+    "groupNameRequired": "Geben Sie der Gruppe einen Namen",
+    "deleteGroupTitle": "Gruppe löschen",
+    "confirmDeleteGroup": "Gruppe „{name}“ löschen? Ihre Mitglieder behalten ihr Konto, sie verlieren nur diese Mitgliedschaft.",
+    "groupDeleted": "Gruppe „{name}“ gelöscht",
+    "membersTitle": "Mitglieder von {name}",
+    "noMembers": "Noch keine Mitglieder",
+    "removeFromGroupTitle": "Aus der Gruppe entfernen",
+    "userRemovedFromGroup": "Benutzer aus der Gruppe entfernt",
+    "bannersTitle": "Banner der Seite „Erkunden“",
+    "bannersHint": "Oben auf der Seite „Erkunden“ angezeigt, für alle.",
+    "noBanners": "Keine Banner",
+    "newBannerTitle": "Neues Banner",
+    "bannerMessagePlaceholder": "Nachricht, die alle sehen",
+    "createBannerButton": "Banner hinzufügen",
+    "deleteBannerTitle": "Banner entfernen",
+    "confirmDeleteBanner": "Dieses Banner entfernen? Es verschwindet für alle.",
+    "bannerCreated": "Banner hinzugefügt",
+    "bannerDeleted": "Banner entfernt",
+    "bannerMessageRequired": "Schreiben Sie die Nachricht des Banners",
+    "enginesTitle": "Engines",
+    "enginesHint": "Auf welchen Engines Flows gebaut werden dürfen. Eine abzuschalten stoppt die Flows nicht, die sie schon nutzen: Sie laufen weiter und bleiben hier aufgeführt, bis jemand sie umstellt.",
+    "colEngine": "Engine",
+    "colFlowsUsing": "Flows, die sie noch nutzen",
+    "notAllowedTag": "nicht erlaubt",
+    "allowEngineTitle": "Diese Engine wieder erlauben",
+    "disallowEngineTitle": "Für neue Flows nicht mehr wählbar machen",
+    "engineAllowed": "{engine} kann wieder gewählt werden",
+    "engineDisallowed": "{engine} kann nicht mehr gewählt werden",
+    "enginesToMigrate": "Flows, die noch auf einer nicht mehr erlaubten Engine laufen: {count}.",
+    "enginesAllCompliant": "Alle Flows laufen auf einer erlaubten Engine.",
+    "lastEngineKept": "Mindestens eine Engine muss erlaubt bleiben.",
   },
   "sessions": {
     "title": "Ihre Sitzungen",
@@ -449,6 +521,37 @@ export default {
     "reasonPassword": "neues Passwort",
     "reasonObserver": "zum Beobachter gemacht",
     "reasonWrongCurrent": "aktuelles Passwort falsch",
+    "aiModelEnableAction": "KI-Modell aktiviert",
+    "aiModelDisableAction": "KI-Modell deaktiviert",
+    "aiQueryAction": "Frage an den Assistenten",
+    "bannerCreateAction": "Banner erstellt",
+    "bannerDeleteAction": "Banner gelöscht",
+    "contractSaveAction": "Datenvertrag gespeichert",
+    "contractDeleteAction": "Datenvertrag gelöscht",
+    "emailSendAction": "E-Mail gesendet",
+    "engineAllowAction": "Engine erlaubt",
+    "engineDisallowAction": "Engine nicht mehr erlaubt",
+    "userPromoteAction": "Zum Administrator gemacht",
+    "userDemoteAction": "Administratorrechte entzogen",
+    "groupPromoteAction": "Gruppe zum Administrator gemacht",
+    "groupDemoteAction": "Der Gruppe die Administratorrechte entzogen",
+    "groupAdminJoinAction": "Einer Administratorgruppe beigetreten",
+    "groupAdminLeaveAction": "Eine Administratorgruppe verlassen",
+    "userObserverGrantAction": "Zum Beobachter gemacht",
+    "userObserverRevokeAction": "Beobachterrolle entzogen",
+    "groupObserverGrantAction": "Gruppe zum Beobachter gemacht",
+    "groupObserverRevokeAction": "Der Gruppe die Beobachterrolle entzogen",
+    "privacyUpdateAction": "Datenschutzhinweis geändert",
+    "savedViewCreateAction": "Ansicht gespeichert",
+    "savedViewUpdateAction": "Ansicht geändert",
+    "savedViewDeleteAction": "Ansicht gelöscht",
+    "scriptRunAction": "Gespeichertes Skript ausgeführt",
+    "scriptScheduleAction": "Gespeichertes Skript geplant",
+    "scriptingTrialAction": "Skript-Knoten im Editor ausgeführt",
+    "settingsUpdateAction": "Einstellungen geändert",
+    "settingsRolloutAction": "Neustart für die Einstellungen",
+    "settingsRolloutCancelAction": "Neustart abgebrochen",
+    "transformRunAction": "Ausführung aus dem Editor",
   },
   "chartPanel": {
     "areaChart": "Fläche",
@@ -511,7 +614,16 @@ export default {
     "titleEdit": "Verbindung bearbeiten",
     "titleNew": "Neue Verbindung",
     "typeLabel": "Verbindungstyp",
-    "usernameLabel": "Benutzername"
+    "usernameLabel": "Benutzername",
+    "smtpHostLabel": "SMTP-Server",
+    "fromAddressLabel": "Absenderadresse",
+    "fromNameLabel": "Absendername",
+    "fromNamePlaceholder": "Tabularia-Berichte",
+    "tlsLabel": "Verschlüsselung",
+    "tlsNone": "Keine (nicht empfohlen)",
+    "allowedDomainsLabel": "Erlaubte Domains",
+    "allowedDomainsHint": "(durch Kommas getrennt, leer = keine Grenze)",
+    "noteSmtp": "Die erlaubten Domains sind die einzige Grenze dafür, wohin diese Verbindung senden kann: Leer kann jeder mit der Berechtigung CONNECT auf diesen Ordner Daten an jede Adresse senden.",
   },
   "connections": {
     "colFolder": "Ordner",
@@ -532,7 +644,7 @@ export default {
   },
   "columnDescriptions": {
     "heading": "Feldbeschreibungen",
-    "intro": "Beschreiben Sie, was jedes Feld von",
+    "intro": "Beschreiben Sie die Bedeutung jedes Felds von",
     "introTail": "Diese Notizen dokumentieren den Datensatz für Menschen und geben dem KI-Assistenten die Bedeutung jedes Felds.",
     "colName": "Feld",
     "colType": "Typ",
@@ -671,7 +783,7 @@ export default {
     "outputMissingChain": "verbinde den Output mit einer Kette mit Daten",
     "outputRunStarted": "Run #{id} gestartet…",
     "partitionsLabel": " · Partitionen: {list}",
-    "ready": "Bereit: {rows} Zeilen",
+    "ready": "Bereit: {rows} Zeile | Bereit: {rows} Zeilen",
     "refreshLinked": "Refresh mit der Datasource «{name}» verknüpft",
     "resizeHint": "Ziehen zum Anpassen der Größe",
     "resizePanel": "Breite des Bereichs: ziehen oder Pfeiltasten verwenden",
@@ -693,6 +805,7 @@ export default {
     "uploadFailed": "Upload fehlgeschlagen: {error}",
     "uploading": "Lade {name} hoch…",
     "statusHasData": "Daten bereit: Wähle einen Schritt, um seine Zeilen zu sehen.",
+    "completeNodeHint": "Richten Sie den Knoten im Bereich rechts ein, um seine Vorschau zu sehen.",
   },
   "flows": {
     "devEngineLabel": "Engine (Entwicklung)",
@@ -750,6 +863,7 @@ export default {
     "versionCopy": "Kopie von «{name}»",
     "nextRunBadge": "nächste Ausführung {when}",
     "scheduleTitle": "Zeitplan {cron} · nächste Ausführung {when} (Ortszeit)",
+    "notAllowedTag": "hier nicht erlaubt",
   },
   "foreachNode": {
     "driverLabel": "Treiber",
@@ -1012,7 +1126,15 @@ export default {
     "valuePlaceholder": "Wert",
     "valuePlaceholderPh": "z. B. {ph} — oder Werte: 10, IT, [1,2]",
     "valuePlaceholderPlain": "z. B. 10, IT, [1,2] — Daten: [\"2024-01-01\",\"2024-12-31\"]",
-    "yesLabel": "ja"
+    "yesLabel": "ja",
+    "sortAsc": "Aufsteigend",
+    "sortDesc": "Absteigend",
+    "sortFlip": "Zwischen aufsteigend und absteigend wechseln",
+    "sortUp": "Nach oben: entscheidet zuerst",
+    "sortDown": "Nach unten: entscheidet danach",
+    "sortRemove": "Diese Spalte aus der Sortierung entfernen",
+    "sortAdd": "+ Spalte hinzufügen",
+    "sortHint": "Die Zeilen werden nach der ersten Spalte sortiert; die weiteren entscheiden bei gleichen Werten.",
   },
   "projectBrowser": {
     "kind_script": "Skripte",
@@ -1089,6 +1211,29 @@ export default {
     "confirmDeleteFlowGroup": "Flow-Gruppe „{name}“ löschen? Ihre Flows und Datasources bleiben, wie sie sind.",
     "flowGroupDeleted": "Flow-Gruppe „{name}“ gelöscht",
     "groupSteps": "{n} Schritt | {n} Schritte",
+    "pathLabel": "Ordnerpfad",
+    "rootCrumb": "Alle Ordner",
+    "searchPlaceholder": "nach Name filtern…",
+    "clearSearch": "Filter leeren",
+    "newButton": "Neu",
+    "newFolderLabel": "Neuer Ordner hier",
+    "allSegment": "Alle",
+    "kind_folder": "Ordner",
+    "kind_flow": "Flows",
+    "kind_datasource": "Datenquellen",
+    "kind_view": "Ansichten",
+    "kind_connection": "Verbindungen",
+    "kind_group": "Flow-Gruppen",
+    "emptyRoot": "Noch keine Ordner. Legen Sie den ersten mit Neu an.",
+    "emptyFolder": "Dieser Ordner ist leer.",
+    "noMatches": "Hier passt nichts zu „{q}“.",
+    "deleteTitle": "Löschen",
+    "folderSettingsTitle": "Ordnereinstellungen",
+    "closeDrawer": "Einstellungen schließen",
+    "revokeTitle": "Diese Berechtigung entziehen",
+    "notAllowedTag": "hier nicht erlaubt",
+    "confirmDeleteSavedView": "Ansicht „{name}“ löschen? Die Daten bleiben: Eine Ansicht ist nur eine Konfiguration.",
+    "savedViewDeleted": "Ansicht „{name}“ gelöscht",
   },
   "queue": {
     "confirmStopJob": "Job {id}… stoppen? Die laufende Ausführung wird unterbrochen.",
@@ -1188,7 +1333,11 @@ export default {
     "title": "Ausführungen",
     "triggerSchedule": "Zeitplan",
     "triggeredByName": "Gestartet von {name}",
-    "triggeredByScheduler": "Vom Scheduler gestartet"
+    "triggeredByScheduler": "Vom Scheduler gestartet",
+    "pill_SUCCESS": "erfolgreich",
+    "pill_FAILURE": "fehlgeschlagen",
+    "pill_STARTED": "läuft",
+    "pill_PENDING": "wartet",
   },
   "scheduleDialog": {
     "notifyLabel": "Bei Fehlschlag benachrichtigen",
@@ -1243,7 +1392,7 @@ export default {
     "sampleRandom": "Stichprobe: {p} % zufällig",
     "sampleTitle": "Entwicklungs-Stichprobe: Vorschauen nutzen diese Teilmenge; die Produktion liest alles",
     "noData": "keine Daten — Datei hochladen",
-    "rowsCount": "{n} Zeilen",
+    "rowsCount": "{n} Zeile | {n} Zeilen",
     "title": "Quelle"
   },
   "toastHost": {
@@ -1280,7 +1429,7 @@ export default {
     "saveViewTitle": "Ansicht speichern",
     "savedViewsLabel": "Gespeicherte Ansichten",
     "savedViewsPlaceholder": "eine Ansicht wählen…",
-    "viewDatasourceMissing": "Die Datasource dieser Ansicht existiert nicht mehr",
+    "viewDatasourceMissing": "Diese Ansicht verweist auf die Datenquelle „{name}“, die für Sie nicht mehr verfügbar ist.",
     "viewFolderLabel": "Ordner",
     "viewFolderPlaceholder": "Ordner wählen",
     "viewNameLabel": "Name",
@@ -1332,7 +1481,8 @@ export default {
     "toPlaceholder": "bis",
     "valueColumnPlaceholder": "Wertespalte",
     "valuePlaceholder": "Wert",
-    "valuesLabel": "Werte"
+    "valuesLabel": "Werte",
+    "rowsColsMetaFirst": "Erste {n} Zeilen · {m} Spalten",
   },
   "nodeStats": {
     "cached": "Ergebnis im Cache: die folgenden Knoten setzen hier an",
@@ -1692,6 +1842,474 @@ export default {
       "empty": "Kein Worker hat sich in der letzten Minute gemeldet."
     }
   },
+  "panelSettings": {
+    "title": "Einstellungen",
+    "lead": "Was ein Administrator ändern darf, ohne das Deployment anzufassen, in einem Kasten pro Komponente. Die meisten gelten innerhalb von {seconds} Sekunden für alle Prozesse. Der Ausgangswert bleibt der der Installation (die Umgebung, die Helm-Values), und ein Klick führt zu ihm zurück. Adressen, Zugangsdaten und die an den Cluster gebundenen Schalter stehen nicht hier: Sie gehören zur Installation.",
+    "rolloutLegend": "Nur beim Start eines Prozesses gelesen: sofort gespeichert, angewendet, wenn seine Komponenten neu starten.",
+    "search": "Einstellung suchen (Name oder Variable)",
+    "noMatch": "Keine Einstellung passt.",
+    "automatic": "automatisch",
+    "on": "Ein",
+    "off": "Aus",
+    "empty": "(leer)",
+    "engineDown": "Die Engine antwortet nicht, ihre Einstellungen lassen sich gerade nicht lesen: {error}",
+    "groupHasRollout": "Einige davon gelten erst, wenn ihre Komponenten neu starten",
+    "appliesAfter": "Gilt nach dem Neustart von: {components}",
+    "waitingRollout": "Wartet auf einen Neustart",
+    "waitingRolloutHint": "Gespeichert: Die Prozesse, die den Wert lesen, behalten den vorherigen bis zu ihrem Neustart (siehe den Hinweis oben).",
+    "unsavedN": "{n} nicht gespeichert",
+    "fromPanelN": "{n} aus dem Panel",
+    "saved": "Gespeichert: gilt innerhalb von {seconds} Sekunden für alle Prozesse",
+    "savedRollout": "Gespeichert. Die Werte mit dem Neustart-Symbol gelten, wenn ihre Komponenten neu starten: siehe den Hinweis oben",
+    "rejected": "Einige Werte wurden abgelehnt, ihre Felder sagen, warum. Gespeichert: {n}",
+    "sections": {
+      "gateway": {
+        "title": "Gateway",
+        "lead": "Die Web-API, die Anmeldung, die Orchestrierung von Läufen und Zeitplänen, die Integrationen."
+      },
+      "kubernetes": {
+        "title": "Kubernetes",
+        "lead": "Die Aufrufe an den Cluster, die Python- und R-Skripte, die Builds ihrer Images, die Container-Knoten."
+      },
+      "engine": {
+        "title": "Engine",
+        "lead": "Die Worker, die Flows, Importe und Vorschauen ausführen, die API der Engine, die Quellen und Ziele der Daten."
+      }
+    },
+    "components": {
+      "gateway": "Gateway",
+      "orchestrator": "Orchestrator",
+      "engine": "Engine-API",
+      "worker": "Lauf-Worker",
+      "preview_worker": "Vorschau-Worker",
+      "beat": "Scheduler (beat)"
+    },
+    "units": {
+      "minutes": "Minuten",
+      "days": "Tage",
+      "seconds": "Sekunden",
+      "rows": "Zeilen",
+      "gib": "GiB",
+      "mib": "MiB",
+      "usd": "USD",
+      "tokens": "Token",
+      "messages": "Nachrichten",
+      "requests": "Anfragen",
+      "chats": "Unterhaltungen",
+      "runs": "Läufe",
+      "threads": "Threads",
+      "connections": "Verbindungen",
+      "reports": "Berichte",
+      "versions": "Versionen",
+      "files": "Dateien",
+      "keys": "Keys",
+      "pages": "Seiten",
+      "calls": "Aufrufe",
+      "retries": "Wiederholungen",
+      "redirects": "Weiterleitungen",
+      "values": "Werte",
+      "tasks": "Aufgaben",
+      "processes": "Prozesse"
+    },
+    "errors": {
+      "unknown": "Unbekannte Einstellung",
+      "unavailable": "In dieser Installation nicht verfügbar",
+      "boolean": "Ein oder Aus ist nötig",
+      "integer": "Eine ganze Zahl ist nötig",
+      "number": "Eine Zahl ist nötig",
+      "text": "Ein Text ist nötig",
+      "too_long": "Höchstens {max} Zeichen",
+      "invalid": "Kein gültiger Wert",
+      "min": "Mindestens {limit}",
+      "max": "Höchstens {limit}",
+      "below": "Muss unter „{other}“ bleiben ({limit})",
+      "above": "Muss über „{other}“ bleiben ({limit})",
+      "heartbeat_dead_after": "Das Lebenszeichen muss mindestens dreimal in die Stille passen, nach der eine Ausführung als verloren gilt",
+      "concurrent_pool": "Die Ausführungen pro Orchestrator müssen in den Datenbank-Pool passen: Pool plus Überlauf ergeben {limit}",
+      "stale_below_hard_limit": "Mindestens {limit}: das harte Zeitlimit der Engine-Aufgaben plus fünf Minuten, sonst würde ein noch arbeitender Lauf für verloren erklärt",
+      "engine_unreachable": "Die Engine antwortet nicht, und dieser Wert wird gegen ihr Zeitlimit geprüft: Versuchen Sie es gleich noch einmal",
+      "allowlist_needed": "Nur Mitglieder der übernommenen Gruppen zuzulassen, braucht diese Gruppen: zuerst eintragen",
+      "env_too_high": "Der Wert der Installation liegt über {limit}, dem Höchstwert, den die Schwelle für verlorene Läufe erlaubt: zuerst die Schwelle anheben oder einen Wert aus dem Panel behalten",
+      "too_small": "Zu wenig, um etwas laufen zu lassen"
+    },
+    "rollout": {
+      "region": "Ausstehende Neustarts",
+      "title": "{n} Komponente läuft noch mit einem vorherigen Wert | {n} Komponenten laufen noch mit vorherigen Werten",
+      "howKube": "Beim Neustart werden ihre Pods einzeln heruntergefahren, und jedes Mal wird gewartet, bis der neue bereit ist: Eine Komponente mit nur einem Pod ist einige Sekunden lang nicht erreichbar.",
+      "orchestratorWarning": "Ein Neustart des Orchestrators beendet die Ausführungen, die gerade auf ihm laufen: Sie werden als fehlgeschlagen abgeschlossen und lassen sich erneut starten. Besser in einem ruhigen Moment.",
+      "start": "Neu starten | Alle neu starten ({n})",
+      "saveFirst": "Speichern oder verwerfen Sie zuerst die Änderungen.",
+      "started": "Neustart läuft, ein Pod nach dem anderen",
+      "left": "Noch {old} von {pods} Pods neu zu starten",
+      "waitingFor": "wartet, bis {pods} bereit ist",
+      "stop": "Anhalten",
+      "howCompose": "Starten Sie diese Dienste dort neu, wo die Installation läuft, und bestätigen Sie es dann:",
+      "howManual": "Diese Installation erlaubt dem Panel nicht, Pods neu zu starten (settingsRollout.enabled ist in den Helm-Values ausgeschaltet): Starten Sie diese Deployments neu und bestätigen Sie es dann:",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "done": "Erledigt, neu gestartet",
+      "podsError": "Die Pods von {component} können gerade nicht gelesen werden: {error}",
+      "copyFailed": "Dieser Browser lässt die Seite unter dieser Adresse nicht kopieren: Der Befehl ist markiert, mit Strg+C kopieren"
+    },
+    "groups": {
+      "signin": {
+        "title": "Anmeldung und Sitzungen",
+        "lead": "Wie lange eine Sitzung dauert, und die API-Token."
+      },
+      "sso": {
+        "title": "Single Sign-On",
+        "lead": "Wer über den Identitätsanbieter hereinkommt und welche Gruppen er erhält."
+      },
+      "orchestration": {
+        "title": "Orchestrierung und Zeitpläne",
+        "lead": "Wie Flows laufen: Warteschlange, Wartezeiten, gleichzeitige Ausführungen, die Zeitzone der Zeitpläne."
+      },
+      "history": {
+        "title": "Aufbewahrter Verlauf",
+        "lead": "Wie lange Logs, Berichte, Versionen und Unterhaltungen aufbewahrt werden."
+      },
+      "webhooks": {
+        "title": "Webhooks und SIEM",
+        "lead": "Die Aufrufe an andere Systeme am Ende eines Laufs."
+      },
+      "ai": {
+        "title": "KI-Assistent",
+        "lead": "Das Modell, seine Grenzen und was er ausgeben darf."
+      },
+      "dbt": {
+        "title": "dbt-Export",
+        "lead": "Der Download eines Flows als dbt-Projekt."
+      },
+      "previews": {
+        "title": "Vorschauen und Uploads",
+        "lead": "Die automatische Stichprobe des Editors und die größte zulässige Datei."
+      },
+      "backups": {
+        "title": "Datenbank-Backups",
+        "lead": "Eingeschaltet, geplant und aufbewahrt werden sie unter Verwaltung → Backups."
+      },
+      "monitoring": {
+        "title": "Monitoring",
+        "lead": "Die Abfragen der Metriken, die unter Monitoring angezeigt werden."
+      },
+      "openlineage": {
+        "title": "OpenLineage",
+        "lead": "Die Lineage-Ereignisse, die am Ende eines Laufs gesendet werden."
+      },
+      "processes": {
+        "title": "Gateway-Prozesse",
+        "lead": "Threads und Datenbankverbindungen von Gateway und Orchestrator: beim Start gelesen."
+      },
+      "kubernetes": {
+        "title": "Kubernetes-API",
+        "lead": "Die Aufrufe von Tabularia an den Cluster."
+      },
+      "scripts": {
+        "title": "Python- und R-Skripte",
+        "lead": "Die Jobs der Script-Knoten und der Code-Editor."
+      },
+      "builds": {
+        "title": "Image-Builds",
+        "lead": "Die Builds und Prüfungen der Skriptumgebungen."
+      },
+      "containers": {
+        "title": "Container-Knoten",
+        "lead": "Was ein Container-Knoten anfordern darf, und seine Jobs."
+      }
+    },
+    "items": {
+      "jwt_access_ttl_minutes": {
+        "label": "Höchstdauer einer Sitzung",
+        "help": "Nach dieser Zeit muss man sich neu anmelden, auch mitten in der Arbeit. Gilt für Sitzungen, die ab jetzt geöffnet werden."
+      },
+      "auth_session_idle_minutes": {
+        "label": "Sitzung endet nach Inaktivität",
+        "help": "Minuten ohne Aktivität, nach denen eine Sitzung endet und eine offene Seite sich selbst abmeldet. 0 = nie (nur die Höchstdauer zählt)."
+      },
+      "auth_personal_tokens": {
+        "label": "Persönliche API-Token",
+        "help": "Jeder Benutzer darf API-Token für seine Skripte erstellen, mit seinen eigenen Berechtigungen. Aus: Nur die Dienstkonten, die der Administrator anlegt, haben Token; bereits ausgegebene Token funktionieren weiter, bis sie widerrufen werden oder ablaufen."
+      },
+      "auth_api_token_max_days": {
+        "label": "Späteste Ablaufzeit eines API-Tokens",
+        "help": "Jedes Token läuft ab: An einen Zugang ohne Ende erinnert sich irgendwann niemand mehr. Gilt für Token, die ab jetzt erstellt werden."
+      },
+      "oidc_groups_claim": {
+        "label": "Wo die Gruppen im Token stehen",
+        "help": "Der Claim mit den Gruppen des Benutzers: 'groups' (Gruppen-Mapper von Keycloak), 'roles' (App-Rollen von Entra ID) oder ein Pfad wie 'realm_access.roles' oder 'resource_access.<client>.roles'. Mehrere, durch Kommas getrennt, werden zusammengeführt."
+      },
+      "oidc_group_allowlist": {
+        "label": "Vom Identitätsanbieter übernommene Gruppen",
+        "help": "Namen, durch Kommas getrennt: Nur diese werden zu Tabularia-Gruppen. Leer = alle."
+      },
+      "oidc_auto_create_groups": {
+        "label": "Fehlende Gruppen anlegen",
+        "help": "Ein: Eine Gruppe aus dem Token, die es in Tabularia nicht gibt, wird bei der Anmeldung angelegt. Aus: Benutzer kommen nur in Gruppen, die ein Administrator bereits angelegt hat."
+      },
+      "oidc_authoritative": {
+        "label": "Der Identitätsanbieter bestimmt die Mitgliedschaft",
+        "help": "Ein: Bei jeder Anmeldung verlässt ein Benutzer die Gruppen, die sein Token nicht mehr enthält. Aus: Single Sign-On fügt nur hinzu."
+      },
+      "oidc_allowed_email_domains": {
+        "label": "Zugelassene E-Mail-Domains",
+        "help": "Domains, durch Kommas getrennt: Alle anderen werden abgewiesen, auch wenn der Identitätsanbieter sie anmeldet. Leer = jede Domain."
+      },
+      "oidc_require_allowlisted_group": {
+        "label": "Nur Mitglieder der übernommenen Gruppen",
+        "help": "Ein: Nur wer mindestens einer Gruppe aus der Liste oben angehört, kommt herein."
+      },
+      "oidc_button_label": {
+        "label": "Text der Anmeldeschaltfläche",
+        "help": "Was auf der Schaltfläche der Anmeldeseite steht, zum Beispiel der Name des Firmenkontos."
+      },
+      "oidc_discovery_ttl_seconds": {
+        "label": "Wie lange die Konfiguration des Anbieters gilt",
+        "help": "Das Discovery-Dokument des Identitätsanbieters wird nach dieser Zeit neu gelesen: Senken Sie den Wert, solange sich die Konfiguration des Anbieters ändert."
+      },
+      "oidc_timeout_seconds": {
+        "label": "Wartezeit auf den Identitätsanbieter",
+        "help": "Wie lange ein Aufruf beim Identitätsanbieter dauern darf, bevor die Anmeldung mit Angabe des Grundes scheitert."
+      },
+      "oidc_login_tx_ttl_seconds": {
+        "label": "Zeit für die Anmeldung beim Anbieter",
+        "help": "Wie lange die Seite des Anbieters offen bleiben darf, bevor die Anmeldung neu beginnen muss."
+      },
+      "app_timezone": {
+        "label": "Zeitzone der Zeitpläne",
+        "help": "Die cron-Ausdrücke der Zeitpläne werden in dieser Zone gelesen (Sommerzeit inbegriffen), zum Beispiel Europe/Berlin. Die Anzeige der Uhrzeiten ändert sich nicht: Jeder sieht die seines Browsers. Gilt ab dem nächsten geplanten Lauf."
+      },
+      "engine_run_stale_timeout_seconds": {
+        "label": "Lauf gilt als verloren nach",
+        "help": "Ein Lauf, der nach dieser Zeit noch kein Ergebnis hat, wird als fehlgeschlagen abgeschlossen. Muss über dem harten Zeitlimit der Engine-Aufgaben plus fünf Minuten bleiben, sonst würde ein noch arbeitender Lauf abgeschlossen."
+      },
+      "orchestrator_refresh_wait_seconds": {
+        "label": "Längste Wartezeit auf einen Refresh-Knoten",
+        "help": "Wie lange ein Flow auf den Import wartet, den ein Refresh-Knoten startet, bevor er scheitert."
+      },
+      "orchestrator_poll_interval_seconds": {
+        "label": "Wie oft ein laufender Flow seine Schritte prüft",
+        "help": "Die längste Pause zwischen zwei Prüfungen, während ein Flow auf einen Import oder einen Output wartet: Niedriger heißt, Flows enden früher und fragen die Engine öfter."
+      },
+      "orchestrator_queue_poll_seconds": {
+        "label": "Wie oft die Warteschlange gelesen wird",
+        "help": "In welchem Abstand ein Orchestrator nach Ausführungen sucht, die in der Warteschlange warten."
+      },
+      "orchestrator_max_concurrent": {
+        "label": "Gleichzeitige Ausführungen pro Orchestrator",
+        "help": "Weitere warten in der Warteschlange. Jede hält eine Datenbankverbindung, während sie die Engine abfragt, deshalb müssen sie in den Pool passen (Gateway-Prozesse)."
+      },
+      "orchestrator_queue_timeout_seconds": {
+        "label": "Längste Zeit in der Warteschlange",
+        "help": "Eine Ausführung, die länger wartet (kein Orchestrator läuft, oder alle sind voll), wird als fehlgeschlagen abgeschlossen, statt Stunden später zu starten, wenn niemand mehr damit rechnet."
+      },
+      "orchestrator_heartbeat_seconds": {
+        "label": "Lebenszeichen der Ausführungen",
+        "help": "Wie oft eine laufende Ausführung meldet, dass sie lebt. Muss dreimal in die Stille unten passen."
+      },
+      "orchestrator_dead_after_seconds": {
+        "label": "Ausführung gilt als verloren nach Stille von",
+        "help": "Nach dieser Stille gilt der ausführende Prozess als tot, und die Ausführung wird als fehlgeschlagen abgeschlossen. Die Uhren der Maschinen dürfen höchstens um diese Zeit voneinander abweichen."
+      },
+      "scheduling_worker_capacity": {
+        "label": "Gleichzeitige Läufe in der Zeitplan-Auslastung",
+        "help": "Dient nur dazu, die überlasteten Minuten in der Auslastungsübersicht der Zeitpläne zu markieren: Tragen Sie die Prozesse der Lauf-Worker ein (Verwaltung → Worker)."
+      },
+      "orchestrator_log_retention_days": {
+        "label": "Lauf-Logs aufbewahrt für",
+        "help": "Nach so vielen Tagen wird das Log eines Laufs geleert (die Ausgabe eines Script- oder Container-Knotens, der Fehler der Engine); der Lauf selbst bleibt. 0 = für immer."
+      },
+      "orchestrator_contract_results_kept": {
+        "label": "Aufbewahrte Data-Contract-Berichte",
+        "help": "Die neuesten Berichte, die pro Datenquelle aufbewahrt werden. 0 = alle."
+      },
+      "orchestrator_versions_kept": {
+        "label": "Aufbewahrte Versionen",
+        "help": "Die neuesten Versionen pro Flow und pro gespeichertem Skript; die verwendete bleibt immer. 0 = alle."
+      },
+      "orchestrator_ai_chat_retention_days": {
+        "label": "Assistenten-Unterhaltungen aufbewahrt für",
+        "help": "Unterhaltungen, die so lange unberührt bleiben, werden gelöscht (ihre Kosten bleiben erfasst). 0 = für immer."
+      },
+      "webhooks_retention_days": {
+        "label": "Webhook-Zustellungen aufbewahrt für",
+        "help": "Wie lange das Protokoll der Zustellungen, erfolgreich oder nicht, aufbewahrt wird."
+      },
+      "webhooks_timeout_seconds": {
+        "label": "Wartezeit auf den Empfänger",
+        "help": "Wie lange ein Webhook auf die Antwort des anderen Systems wartet, bevor die Zustellung als fehlgeschlagen gilt."
+      },
+      "ai_default_model": {
+        "label": "Zuerst vorgeschlagenes Modell",
+        "help": "Das Modell, das die Auswahl des Assistenten vorschlägt, sofern ein Administrator es freigegeben hat. Leer = das erste verfügbare."
+      },
+      "ai_max_result_rows": {
+        "label": "Zeilen einer Abfrage des Assistenten",
+        "help": "Die Höchstzahl an Zeilen, die eine Abfrage des Assistenten liefert, an das Modell und an den Chat."
+      },
+      "ai_max_requests": {
+        "label": "Modellrunden pro Nachricht",
+        "help": "Die Grenze für die Aufrufe des Modells und seiner Tools beim Beantworten einer Nachricht."
+      },
+      "ai_max_flow_requests": {
+        "label": "Modellrunden im Flow-Editor",
+        "help": "Dasselbe für den Assistenten des Flow-Editors, der für jeden Schritt, den er baut und prüft, eine Runde braucht."
+      },
+      "ai_max_history_messages": {
+        "label": "Mitgesendete Nachrichten aus dem Verlauf",
+        "help": "Wie viele frühere Nachrichten jede Frage begleiten: mehr Kontext, mehr Kosten."
+      },
+      "ai_max_cost_per_turn_usd": {
+        "label": "Höchstkosten pro Antwort",
+        "help": "Eine Antwort, die mehr kosten würde, bricht ab. 0 = keine Grenze."
+      },
+      "ai_max_cost_per_day_usd": {
+        "label": "Höchstkosten pro Benutzer und Tag",
+        "help": "Darüber ist der Assistent für diesen Benutzer bis zum nächsten Tag nicht verfügbar. 0 = keine Grenze."
+      },
+      "ai_max_cost_per_day_total_usd": {
+        "label": "Höchstkosten pro Tag, alle zusammen",
+        "help": "Darüber ist der Assistent bis zum nächsten Tag nicht verfügbar. Nützlich, wo ein Konto geteilt wird, etwa bei einer öffentlichen Demo. 0 = keine Grenze."
+      },
+      "ai_max_input_tokens_per_turn": {
+        "label": "Höchstzahl gelesener Token pro Antwort",
+        "help": "Die Grenze dessen, was das Modell liest, um eine Nachricht zu beantworten, alle Runden zusammen."
+      },
+      "ai_max_chats_listed": {
+        "label": "Aufgelistete Unterhaltungen pro Benutzer",
+        "help": "Die Obergrenze der Liste: Ältere Unterhaltungen werden dadurch nicht gelöscht."
+      },
+      "ai_dbt_export_timeout_seconds": {
+        "label": "KI-Zeit eines dbt-Exports",
+        "help": "Sekunden für alle KI-Aufrufe eines dbt-Exports (Beschreibungen, Übersetzungen). Der Ingress bricht eine Anfrage nach 300 s ab: Dieser Wert und die Wartezeit auf die Engine darunter müssen zusammen unter dieser Grenze bleiben."
+      },
+      "engine_dbt_export_timeout_seconds": {
+        "label": "Wartezeit auf die Engine beim Erstellen eines dbt-Exports",
+        "help": "Danach bricht der Download mit Angabe des Grundes ab, statt zu hängen, bis der Ingress ihn kappt. Zusammen mit der KI-Zeit darüber muss der Wert unter den 300 s des Ingress bleiben."
+      },
+      "preview_default_sample_rows": {
+        "label": "Automatische Stichprobe des Editors",
+        "help": "Zeilen, die die Vorschauen des Flow-Editors standardmäßig aus jeder Quelle lesen, damit sie auch bei großen Tabellen schnell bleiben. 0 = ganze Tabellen. Gilt, wenn eine Seite neu geöffnet wird."
+      },
+      "upload_max_bytes": {
+        "label": "Größte hochgeladene Datei",
+        "help": "Größere Dateien werden abgelehnt, bevor sie empfangen werden, vom Gateway und von der Engine. 0 = keine Grenze."
+      },
+      "backup_timeout_seconds": {
+        "label": "Höchstdauer eines Backups",
+        "help": "Dump der Datenbank und Upload zusammen; danach scheitert das Backup."
+      },
+      "monitoring_timeout_seconds": {
+        "label": "Wartezeit auf die Metriken",
+        "help": "Wie lange die Monitoring-Seite auf den Metrik-Server wartet."
+      },
+      "monitoring_cache_seconds": {
+        "label": "Metriken geteilt für",
+        "help": "Mehrere Browser auf der Monitoring-Seite teilen sich innerhalb dieser Zeit eine Abfrage der Metriken."
+      },
+      "openlineage_timeout_seconds": {
+        "label": "Wartezeit auf den Lineage-Collector",
+        "help": "Wie lange ein Ereignis auf die Antwort des Collectors wartet. Ereignisse werden im Hintergrund gesendet: Ein langsamer Collector verzögert sie, nicht die Läufe."
+      },
+      "app_gateway_threads": {
+        "label": "Gleichzeitig bediente Anfragen",
+        "help": "Threads, die die Anfragen eines Gateway- oder Orchestrator-Prozesses bedienen. Mehr ist nicht schneller: Sie teilen sich einen Interpreter. Beim Start des Prozesses gelesen."
+      },
+      "db_pool_size": {
+        "label": "Offen gehaltene Datenbankverbindungen",
+        "help": "Pro Prozess. Automatisch = eine pro Thread oben, so viele brauchen sie. Beim Start des Prozesses gelesen."
+      },
+      "db_max_overflow": {
+        "label": "Zusätzliche Verbindungen bei Lastspitzen",
+        "help": "Geöffnet, wenn der Pool ausgelastet ist, geschlossen, sobald sie zurückgegeben werden. Pool plus Überlauf, mal die Zahl der Prozesse, muss unter max_connections von Postgres bleiben. Beim Start des Prozesses gelesen."
+      },
+      "kubernetes_timeout_seconds": {
+        "label": "Wartezeit auf die Kubernetes-API",
+        "help": "Wie lange ein Aufruf an den Cluster (Jobs, Pods, Skalierung) dauern darf, bevor er mit Angabe des Grundes scheitert."
+      },
+      "scripts_poll_seconds": {
+        "label": "Wie oft der Job eines Skripts geprüft wird",
+        "help": "Die längste Pause zwischen zwei Blicken auf den Job eines laufenden Script-Knotens."
+      },
+      "scripts_job_ttl_seconds": {
+        "label": "Beendete Skript-Jobs aufbewahrt für",
+        "help": "Wie lange der Cluster einen beendeten Job und seinen Pod behält, für alle, die sie sich ansehen wollen."
+      },
+      "scripts_log_max_bytes": {
+        "label": "Aufbewahrte Skriptausgabe",
+        "help": "Das Ende der Ausgabe eines Skripts, das mit dem Lauf gespeichert wird."
+      },
+      "scripts_lint": {
+        "label": "Python beim Tippen prüfen",
+        "help": "Der Code-Editor unterstreicht, was Ruff im Python-Code findet. Gilt, wenn der Editor neu geöffnet wird."
+      },
+      "scripts_build_timeout_seconds": {
+        "label": "Höchstdauer eines Image-Builds",
+        "help": "Danach scheitert der Build einer Skriptumgebung: Große R-Pakete kompilieren lange."
+      },
+      "scripts_build_cpu": {
+        "label": "CPU eines Image-Builds",
+        "help": "Eine Kubernetes-Mengenangabe, etwa 2 oder 500m. Zusammen mit dem Speicher bestimmt sie, wie viele Compiler gleichzeitig laufen."
+      },
+      "scripts_build_memory": {
+        "label": "Speicher eines Image-Builds",
+        "help": "Eine Kubernetes-Mengenangabe, etwa 4Gi. Wird vollständig angefordert: Ein Build landet nur auf einem Cluster-Knoten, der so viel frei hat."
+      },
+      "scripts_check_timeout_seconds": {
+        "label": "Höchstdauer der Prüfung eines Images",
+        "help": "Der Job, der eine gebaute Umgebung prüft, indem er ihre Pakete lädt."
+      },
+      "containers_pull_check_seconds": {
+        "label": "Zeit zum Herunterladen eines Images",
+        "help": "«Im Cluster testen»: wie lange ein Cluster-Knoten zum Herunterladen des Images brauchen darf, bevor der Test scheitert. Der Test antwortet nach höchstens 270 s: ein längerer Download wird gemeldet und läuft im Cluster weiter."
+      },
+      "containers_poll_seconds": {
+        "label": "Wie oft der Job eines Containers geprüft wird",
+        "help": "Die längste Pause zwischen zwei Blicken auf den Job eines laufenden Container-Knotens."
+      },
+      "containers_job_ttl_seconds": {
+        "label": "Beendete Container-Jobs aufbewahrt für",
+        "help": "Wie lange der Cluster einen beendeten Job und seinen Pod behält."
+      },
+      "containers_max_cpu": {
+        "label": "Höchste CPU, die ein Container-Knoten anfordern darf",
+        "help": "Eine Kubernetes-Mengenangabe, etwa 4 oder 1500m."
+      },
+      "containers_max_memory": {
+        "label": "Höchster Speicher, den ein Container-Knoten anfordern darf",
+        "help": "Eine Kubernetes-Mengenangabe, etwa 16Gi."
+      },
+      "containers_max_timeout_seconds": {
+        "label": "Längstes Timeout eines Container-Knotens",
+        "help": "Das höchste Timeout, das ein Container-Knoten für sich festlegen darf."
+      },
+      "containers_log_max_bytes": {
+        "label": "Aufbewahrte Container-Ausgabe",
+        "help": "Das Ende des Logs eines Containers, das mit dem Lauf gespeichert wird."
+      }
+    },
+    "notAppliedGatewayHint": "Gespeichert, aber nicht in Kraft: Er besteht eine Prüfung nicht mehr (die Umgebung hat sich geändert), oder diese Replik hat ihn noch nicht gelesen (binnen {seconds} Sekunden).",
+    "leaveConfirm": "Einige Einstellungen sind geändert und nicht gespeichert. Ohne Speichern verlassen?",
+  },
+  "connectionExamples": {
+    "button": "Beispiel für die Felder",
+    "title": "Beispiel: {type}",
+    "close": "Beispiel schließen",
+    "madeUp": "Erfundene Werte, die die Form jedes Felds zeigen: Nichts wird ins Formular übernommen.",
+    "tips": {
+      "postgresql": "Am besten ein Benutzer, der nur lesen darf (SELECT auf die benötigten Schemas). Das Schema ist optional: leer gilt das Standardschema der Datenbank.",
+      "mysql": "Am besten ein Benutzer, der nur lesen darf. MySQL hat keine Schemas: Schema leer lassen.",
+      "mariadb": "Am besten ein Benutzer, der nur lesen darf. MariaDB hat keine Schemas: Schema leer lassen.",
+      "clickhouse": "Port 8443 für HTTPS (ClickHouse Cloud und die meisten verwalteten Dienste), 8123 für einfaches HTTP in einem privaten Netz.",
+      "trino": "Der Katalog ist der Connector, über den Trino liest (hive, iceberg, postgresql…); das Schema ist optional.",
+      "oracle": "Datenbank ist der Service-Name (nicht die SID). Schema ist der Eigentümer der Tabellen: leer der des Benutzers.",
+      "sqlserver": "Lassen Sie das Zertifikat prüfen; ihm ungeprüft zu vertrauen passt nur zu einem Server mit selbstsigniertem Zertifikat in Ihrem Netz.",
+      "s3": "Für AWS den Endpoint leer lassen. Bei Scaleway ist es https://s3.fr-par.scw.cloud, bei MinIO die Adresse des Servers mit Port. Der Bucket ist optional: leer nennt jede Datenquelle ihren eigenen.",
+      "smtp": "Port 587 mit STARTTLS für die meisten Anbieter (Microsoft 365, Gmail mit App-Passwort), 465 mit SSL/TLS für die übrigen. Die erlaubten Domains begrenzen, an wen die E-Mail-Knoten schreiben dürfen.",
+      "sharepoint": "Client-ID und Secret stammen aus einer in Entra ID registrierten App mit der Berechtigung Sites.Selected; die Tenant-ID steht auf der Übersichtsseite der App.",
+      "sftp": "Bei einem privaten Schlüssel die ganze Datei einfügen, Kopfzeilen eingeschlossen. Der erste Test zeigt den Schlüssel des Servers: vor dem Akzeptieren mit dem Ihres Administrators vergleichen.",
+      "api": "Secret und Header gehen nur an den Host der Basis-URL. Der Testpfad ist ein leichter Aufruf, der nur mit 200 antworten muss."
+    }
+  },
   "engineSettings": {
     "navTitle": "Einstellungen",
     "title": "Engine-Einstellungen",
@@ -1739,12 +2357,12 @@ export default {
         "lead": "CSV- und Excel-Downloads aus dem Editor, dem Viewer und dem Chat.",
       },
       "execution": {
-        "title": "Ausführung",
-        "lead": "Wie lange eine Engine-Aufgabe dauern darf: Flow-Läufe, Importe, Vorschauen. Gilt ab der nächsten Aufgabe, ohne die Worker neu zu starten.",
+        "title": "Worker und Läufe",
+        "lead": "Wie lange eine Engine-Aufgabe dauern darf und wie die Worker ihre Prozesse und ihren Speicher erneuern."
       },
       "cache": {
         "title": "Schritt-Cache",
-        "lead": "Die Zwischenergebnisse, die Vorschauen im Editor schnell machen.",
+        "lead": "Die Zwischenergebnisse, die Vorschauen im Editor schnell machen, und die Aufräumläufe des Schedulers."
       },
       "clickhouse": {
         "title": "ClickHouse",
@@ -1753,6 +2371,30 @@ export default {
       "bigquery": {
         "title": "BigQuery",
         "lead": "Die BigQuery-Engine.",
+      },
+      "embedded": {
+        "title": "Eingebettete Engines",
+        "lead": "Der Speicher von chDB und die Grenze der Cross Joins, in den Workern."
+      },
+      "engine_api": {
+        "title": "Engine-API",
+        "lead": "Der eigene Dienst der Engine: seine Threads und die Wartezeit einer Vorschau."
+      },
+      "sftp": {
+        "title": "SFTP",
+        "lead": "Die Obergrenzen der Datenquellen, die Dateien von einem SFTP-Server lesen."
+      },
+      "s3": {
+        "title": "S3-Ordner",
+        "lead": "Die Obergrenzen der Datenquellen, die Dateien aus einem Ordner eines Buckets lesen."
+      },
+      "api": {
+        "title": "HTTP-APIs",
+        "lead": "Die Obergrenzen und Umgangsformen der Datenquellen, die eine HTTP-API aufrufen. Eine Datenquelle kann sie für sich senken, nie erhöhen."
+      },
+      "placeholders": {
+        "title": "Platzhalter",
+        "lead": "Die Variablen in den Namen von Eingaben und Ausgaben."
       },
     },
     "items": {
@@ -1770,7 +2412,7 @@ export default {
       },
       "celery_task_time_limit": {
         "label": "Höchstdauer einer Aufgabe (hartes Limit)",
-        "help": "Nach dieser Zeit wird der Prozess der Aufgabe beendet. Darf die Schwelle nicht überschreiten, nach der das Gateway einen Lauf für verloren erklärt: Um darüber hinauszugehen, in der Umgebung diesen Wert und ENGINE__RUN_STALE_TIMEOUT_SECONDS erhöhen.",
+        "help": "Nach dieser Zeit wird der Prozess der Aufgabe beendet. Darf die Schwelle nicht überschreiten, nach der das Gateway einen Lauf für verloren erklärt: Um darüber hinauszugehen, in der Umgebung diesen Wert und ENGINE__RUN_STALE_TIMEOUT_SECONDS erhöhen. Ein Worker, der anhält, wartet auf seine Aufgaben nur worker.terminationGracePeriodSeconds des Charts lang (standardmäßig 1 h): auch diesen Wert erhöhen.",
       },
       "celery_task_soft_time_limit": {
         "label": "Vorwarnung zum Beenden (weiches Limit)",
@@ -1803,6 +2445,150 @@ export default {
       "bigquery_maximum_bytes_billed": {
         "label": "Höchstzahl abgerechneter Bytes pro Abfrage",
         "help": "BigQuery lehnt eine Abfrage, die mehr lesen würde, schon vor der Ausführung ab: Das schützt die Rechnung. 0 = keine Grenze.",
+      },
+      "clickhouse_external_connect_timeout": {
+        "label": "Wartezeit beim Verbinden mit ClickHouse",
+        "help": "Wie lange das Öffnen einer Verbindung dauern darf. Gilt für Verbindungen, die ab jetzt geöffnet werden."
+      },
+      "sftp_max_file_bytes": {
+        "label": "Größte Datei",
+        "help": "Jede passende Datei wird heruntergeladen und zum Stapeln im Speicher gelesen: Eine größere lässt den Import scheitern, mit Nennung der Datei."
+      },
+      "sftp_max_files": {
+        "label": "Höchstzahl an Dateien pro Aktualisierung",
+        "help": "Ein missratenes Muster (**/*) darf nicht einen ganzen Server herunterladen."
+      },
+      "sftp_max_total_bytes": {
+        "label": "Höchstzahl an Bytes pro Aktualisierung",
+        "help": "Alle passenden Dateien zusammen, geprüft anhand der aufgelisteten Größen, bevor etwas heruntergeladen wird."
+      },
+      "sftp_timeout_seconds": {
+        "label": "Wartezeit auf den Server",
+        "help": "Verbindung und Handshake: Ein stummer Server scheitert innerhalb dieser Zeit."
+      },
+      "s3_source_max_file_bytes": {
+        "label": "Größtes Objekt",
+        "help": "Jedes Objekt wird heruntergeladen und im Speicher gelesen: Ein größeres lässt den Import scheitern, mit Nennung des Objekts."
+      },
+      "s3_source_max_files": {
+        "label": "Höchstzahl an Dateien pro Aktualisierung",
+        "help": "Objekte, die eine Aktualisierung liest."
+      },
+      "s3_source_max_total_bytes": {
+        "label": "Höchstzahl an Bytes pro Aktualisierung",
+        "help": "Alle passenden Objekte zusammen, geprüft anhand der Auflistung, bevor etwas heruntergeladen wird."
+      },
+      "s3_source_max_listed": {
+        "label": "Höchstzahl durchsuchter Keys",
+        "help": "Keys, die die Muster einer Aktualisierung durchgehen dürfen: ** auf einem riesigen Bucket endet hier."
+      },
+      "s3_source_max_request_seconds": {
+        "label": "Längster Download eines Objekts",
+        "help": "Ein Server, der die Bytes tröpfchenweise schickt, wird hier gestoppt."
+      },
+      "api_timeout_seconds": {
+        "label": "Wartezeit pro Anfrage",
+        "help": "Verbindungsaufbau und jedes Warten auf Daten einer Anfrage, auch bei der Token-Anfrage."
+      },
+      "api_max_pages": {
+        "label": "Höchstzahl an Seiten pro Aufruf",
+        "help": "Eine Paginierung, die nie endet, stoppt hier."
+      },
+      "api_max_calls": {
+        "label": "Höchstzahl an Aufrufen pro Aktualisierung",
+        "help": "Die Kombinationen der Listenvariablen."
+      },
+      "api_max_rows": {
+        "label": "Höchstzahl an Zeilen pro Aktualisierung",
+        "help": "Zeilen, die eine Aktualisierung empfängt, bevor ein Anhängen sie der Tabelle hinzufügt."
+      },
+      "api_max_response_bytes": {
+        "label": "Größte Antwort",
+        "help": "Eine einzelne Antwort, entpackt: Sie wird zum Lesen im Speicher gehalten."
+      },
+      "api_max_total_bytes": {
+        "label": "Höchstzahl an Bytes pro Aktualisierung",
+        "help": "Alle Antworten einer Aktualisierung zusammen."
+      },
+      "api_max_retries": {
+        "label": "Wiederholungen einer fehlgeschlagenen Anfrage",
+        "help": "Nach 429, 500, 502, 503, 504 oder einem Netzwerkfehler, mit wachsender Pause oder nach dem Retry-After des Servers."
+      },
+      "api_max_retry_wait_seconds": {
+        "label": "Längstes akzeptiertes Retry-After",
+        "help": "Verlangt ein Server längeres Warten, scheitert die Aktualisierung, statt einen Worker zu blockieren."
+      },
+      "api_max_redirects": {
+        "label": "Höchstzahl an Weiterleitungen",
+        "help": "Weiterleitungen, denen eine Anfrage folgt."
+      },
+      "api_max_request_seconds": {
+        "label": "Höchstdauer einer Anfrage",
+        "help": "Vom Senden bis zum letzten Byte der Antwort: Ein Server, der seine Antwort tröpfeln lässt, wird hier gestoppt."
+      },
+      "api_min_interval_seconds": {
+        "label": "Kürzeste Pause zwischen Anfragen",
+        "help": "Zwischen zwei Anfragen einer Aktualisierung; eine Datenquelle kann mehr verlangen."
+      },
+      "placeholders_max_values": {
+        "label": "Höchstzahl an Werten einer Variable",
+        "help": "Werte eines Bereichs (day = today-400 .. today ergibt 400) und Kombinationen der Variablen einer Dateidatenquelle. Geprüft beim Speichern und bei jeder Aktualisierung."
+      },
+      "app_engine_api_threads": {
+        "label": "Gleichzeitig bediente Anfragen",
+        "help": "Threads der Engine-API: Die meisten warten auf eine Aufgabe und kosten wenig. Beim Start der Engine-API gelesen."
+      },
+      "previews_timeout_seconds": {
+        "label": "Längste Wartezeit auf eine Vorschau",
+        "help": "Danach bricht die Vorschau mit Angabe des Grundes ab. Beim Start der Engine-API gelesen."
+      },
+      "celery_max_tasks_per_child": {
+        "label": "Aufgaben, bevor ein Prozess erneuert wird",
+        "help": "Der Prozess eines Workers wird nach so vielen Aufgaben ersetzt und gibt den Speicher frei, den die Bibliotheken festhalten. Beim Start der Worker gelesen."
+      },
+      "celery_max_memory_per_child_kb": {
+        "label": "Speicher eines Prozesses, bevor er erneuert wird",
+        "help": "Darüber wird der Prozess eines Workers am Ende seiner Aufgabe ersetzt. Leer = aus dem Speicherlimit des Containers (Anteil unten). Beim Start der Worker gelesen."
+      },
+      "celery_max_memory_headroom_frac": {
+        "label": "Anteil am Speicher des Containers",
+        "help": "Ohne den Wert oben: das Speicherlimit des Containers mal diesen Anteil, geteilt durch seine Prozesse. Beim Start der Worker gelesen."
+      },
+      "celery_max_memory_per_child_fallback_kb": {
+        "label": "Speicher pro Prozess ohne Limit",
+        "help": "Verwendet, wenn der Container kein Speicherlimit hat. Beim Start der Worker gelesen."
+      },
+      "celery_max_memory_per_child_floor_kb": {
+        "label": "Mindestspeicher pro Prozess",
+        "help": "Der Speicher pro Prozess sinkt nie darunter, egal wie viele Prozesse sich den Container teilen. Beim Start der Worker gelesen."
+      },
+      "cache_sweep_interval_seconds": {
+        "label": "Wie oft abgelaufene Schritte entfernt werden",
+        "help": "Der Aufräumlauf des Schedulers im Schritt-Cache. Beim Start des Schedulers gelesen."
+      },
+      "metrics_storage_stats_interval_seconds": {
+        "label": "Wie oft der Speicherplatz gemessen wird",
+        "help": "Für die Speicherplatz-Metriken unter Monitoring. Beim Start des Schedulers gelesen."
+      },
+      "chdb_max_memory_usage": {
+        "label": "Speicher einer chDB-Abfrage",
+        "help": "Darüber scheitert die Abfrage, statt den Speicher des Workers zu belegen. Beim Start der Worker gelesen."
+      },
+      "chdb_max_bytes_before_external_group_by": {
+        "label": "Aggregationen auf Festplatte ab",
+        "help": "Ab diesem Speicherverbrauch setzt chDB eine Aggregation auf der Festplatte fort. 0 = nie. Beim Start der Worker gelesen."
+      },
+      "chdb_max_bytes_before_external_sort": {
+        "label": "Sortierungen auf Festplatte ab",
+        "help": "Ab diesem Speicherverbrauch setzt chDB eine Sortierung auf der Festplatte fort. 0 = nie. Beim Start der Worker gelesen."
+      },
+      "chdb_max_bytes_in_join": {
+        "label": "Speicher eines chDB-Joins",
+        "help": "Darüber scheitert der Join mit Angabe des Grundes. 0 = keine Grenze. Beim Start der Worker gelesen."
+      },
+      "engine_max_cross_join_rows": {
+        "label": "Höchstzahl an Zeilen eines Cross Joins",
+        "help": "Ein Cross Join, der mehr erzeugen würde, wird schon vor dem Start abgelehnt. Beim Start der Worker gelesen."
       },
     },
   },
@@ -2195,6 +2981,8 @@ export default {
       "runStoppedHere": "Der letzte Lauf ist hier stehen geblieben",
       "lastRunSource": "Letzter Lauf",
       "problems": "{errors} Fehler, {warnings} Warnungen",
+      "footerSaved": "Die Änderungen bleiben auf dieser Seite: „Speichern“ macht daraus eine neue Version.",
+      "noRunSaved": "Noch nicht ausgeführt: „Ausführen“ auf dieser Seite führt die gespeicherte Version aus.",
     },
     "packagesAlways": "Immer installiert: {list}.",
     "resources": "Ressourcen jedes Skripts",
@@ -2435,5 +3223,21 @@ export default {
     "kind_connection": "Verbindungen",
     "kind_group": "Flussgruppen",
     "rows": "{n} Zeile | {n} Zeilen",
+  },
+  "banners": {
+    "levelInfo": "Information",
+    "levelWarning": "Warnung",
+    "levelDanger": "Kritisch"
+  },
+  "sheetPicker": {
+    "title": "Zu importierende Blätter",
+    "intro": "«{file}» hat {n} Blätter. «{read}» wurde gelesen; markieren Sie die gewünschten: Jedes wird eine Quelle auf der Arbeitsfläche.",
+    "read": "gelesen",
+    "hidden": "ausgeblendet",
+    "keep": "Nur «{read}» behalten",
+    "import": "Importieren | 1 Blatt importieren | {n} Blätter importieren",
+    "sheet": "Blatt «{name}»",
+    "fromFile": "die Blätter von «{file}»",
+    "firstSheet": "das erste Blatt",
   },
 }

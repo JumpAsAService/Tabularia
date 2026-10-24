@@ -32,7 +32,10 @@ from typing import Any, Callable
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
-from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, pivot_label, sample_threshold
+from app.engine.operations import (
+    MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
+    temporal_value_error,
+)
 from app.engine.sql_guard import ensure_reads_only_input
 
 BqOpFn = Callable[..., str]
@@ -215,6 +218,9 @@ def op_filter(sql, params, ctx):
     column = _require(params, "column")
     operator = params.get("operator", "eq")
     check_filter_value(operator, params.get("value"))
+    bad = non_iso_values(operator, params.get("value"))
+    if bad and dict(ctx.schema_of(sql)).get(column, "").upper() in ("DATE", "DATETIME", "TIMESTAMP", "TIME"):
+        raise temporal_value_error(bad[0])
     pred = _predicate(ctx, column, operator, params.get("value"))
     return f"SELECT * FROM {_sub(sql)} WHERE {pred}"
 
@@ -222,14 +228,11 @@ def op_filter(sql, params, ctx):
 # ── riordino / righe ──────────────────────────────────────────────────────────
 @_register("sort")
 def op_sort(sql, params, ctx):
-    cols = _as_list(_require(params, "by"))
-    if params.get("ignore_missing"):  # vedi chdb_ops.op_sort
-        have = set(ctx.columns_of(sql))
-        cols = [c for c in cols if c in have]
-        if not cols:
-            return sql
-    direction = "DESC" if params.get("descending") else "ASC"
-    order = ", ".join(f"{ctx.qi(c)} {direction} NULLS LAST" for c in cols)
+    # the keys and a direction each (operations.sort_keys: `ignore_missing` too)
+    keys = sort_keys(params, ctx.columns_of(sql) if params.get("ignore_missing") else None)
+    if not keys:
+        return sql
+    order = ", ".join(f"{ctx.qi(c)} {'DESC' if d else 'ASC'} NULLS LAST" for c, d in keys)
     return f"SELECT * FROM {_sub(sql)} ORDER BY {order}"
 
 
@@ -466,7 +469,11 @@ def op_join(sql, params, ctx):
 def op_union(sql, params, ctx):
     right = ctx.build_right(_require(params, "right"))
     if params.get("strategy") == "strict":
-        return f"SELECT * FROM {_sub(sql)} UNION ALL SELECT * FROM {_sub(right)}"
+        # same columns and types in any order, put together by NAME (by position swapped them)
+        left_s, right_s = ctx.schema_of(sql), ctx.schema_of(right)
+        check_strict_union(list(left_s), list(right_s))
+        cols = ", ".join(ctx.qi(n) for n, _ in left_s)
+        return f"SELECT {cols} FROM {_sub(sql)} UNION ALL SELECT {cols} FROM {_sub(right)}"
     lcols, rcols = ctx.columns_of(sql), ctx.columns_of(right)
     allcols = lcols + [c for c in rcols if c not in set(lcols)]
     lset, rset = set(lcols), set(rcols)

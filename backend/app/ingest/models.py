@@ -17,6 +17,9 @@ class CsvOptions(BaseModel):
     # "utf8" o "utf8-lossy" (unici accettati da Polars in lazy)
     encoding: str = "utf8"
     try_parse_dates: bool = True
+    # the separator, the decimal comma and the encoding read from the file itself (an
+    # upload from the editor, which sends the file alone): ingest/sniff.py
+    sniff: bool = False
 
 
 class IngestOptions(BaseModel):
@@ -26,7 +29,7 @@ class IngestOptions(BaseModel):
     # override dei tipi inferiti: {"colonna": "int"|"float"|"str"|"date"|...}
     dtype_overrides: dict[str, str] = Field(default_factory=dict)
     csv: CsvOptions = Field(default_factory=CsvOptions)
-    # per Excel: nome del foglio (None = primo)
+    # per Excel: nome del foglio (None = the first visible one, ingest/sheets.py)
     sheet: Optional[str] = None
 
 
@@ -52,3 +55,8 @@ class IngestResult(BaseModel):
     dataset: Optional[DatasetInfo] = None
     # presente solo quando status == "processing" (conversione async via Celery)
     task_id: Optional[str] = None
+    # an Excel file: its sheets in order, the hidden ones, and the one read (the editor
+    # offers the others after the upload)
+    sheets: Optional[list[str]] = None
+    hidden_sheets: Optional[list[str]] = None
+    sheet: Optional[str] = None

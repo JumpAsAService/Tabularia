@@ -25,3 +25,11 @@ def test_messaggi_del_database_passano_invariati():
            "(TOO_MANY_ROWS_OR_BYTES, code 396). This is a limit set by the server: reduce the data "
            "with a filter or a LIMIT.")
     assert _friendly_error(err, "Traceback ... IncompleteRead(198 bytes read)") == err
+
+
+def test_a_worker_lost_as_the_engine_tells_it_stays_as_told():
+    # the engine's words for a task whose worker died with it (OOMKilled, its pod gone)
+    err = ("The worker running it stopped before the end: killed at its memory limit (OOMKilled), or its pod "
+           "restarted or removed (an upgrade, a drained node). Run it again; if it happens again, give the "
+           "workers more memory or fewer processes each.")
+    assert _friendly_error(err, None) == err

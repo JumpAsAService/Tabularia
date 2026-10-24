@@ -67,6 +67,8 @@ class Gathered:
     params: dict[str, dict[str, str]]  # file key → the params of the first expansion that found it
     missing: list[dict[str, Any]] = field(default_factory=list)
     expansions: int = 1
+    # «Check the files»: the sheets of the first workbook taken (ingest/sheets.py)
+    sheets: dict[str, Any] | None = None
 
 
 def _err(error: type[IngestError], fn: Callable, *a, **kw):

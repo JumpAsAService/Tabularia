@@ -90,6 +90,14 @@ def migra(eng=None, verifica: bool = True) -> dict:
     eng = eng or engine
     with eng.begin() as conn:
         prima = revisione(conn)
+        if prima is not None and prima not in {r.revision for r in _script().walk_revisions()}:
+            # a database newer than this code: the previous release rolled back to with
+            # `helm rollback` (docs/deploy/upgrading.md). Every revision keeps the previous
+            # release working (expand/contract), so it starts on it; going further back
+            # means restoring a backup
+            logger.warning("the database is at revision %s, newer than this gateway's (%s): nothing to migrate, "
+                           "this release runs on it (a rollback of one release)", prima, testa())
+            return {"prima": prima, "dopo": prima, "adottato": False}
         adottato = False
         if prima is None and inspect(conn).has_table("users"):
             # un database di prima di Alembic: portarlo allo stato della base e marcarlo

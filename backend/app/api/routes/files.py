@@ -47,7 +47,7 @@ def _parse_dtype_overrides(raw: Optional[str]) -> dict[str, str]:
 def upload_file(
     file: UploadFile = File(..., description="File da ingerire"),
     format: Optional[FileFormat] = Form(None, description="Forza il formato (default: da estensione)"),
-    separator: str = Form(",", description="Separatore CSV"),
+    separator: Optional[str] = Form(None, description="Separatore CSV (assente = letto dal file)"),
     has_header: bool = Form(True, description="Il CSV ha l'header?"),
     sheet: Optional[str] = Form(None, description="Foglio Excel (default: primo)"),
     dtype_overrides: Optional[str] = Form(None, description='JSON {colonna: dtype}, es. {"id":"int"}'),
@@ -55,11 +55,14 @@ def upload_file(
     options = IngestOptions(
         format=format,
         dtype_overrides=_parse_dtype_overrides(dtype_overrides),
-        csv=CsvOptions(separator=separator, has_header=has_header),
+        # the editor sends the file alone: separator, decimal comma and encoding read from it
+        csv=CsvOptions(separator=separator or ",", has_header=has_header, sniff=separator is None),
         sheet=sheet,
     )
 
-    # streaming dell'upload su file temporaneo (niente caricamento in RAM)
+    # streaming dell'upload su file temporaneo (niente caricamento in RAM). Starlette's
+    # spool is an unnamed file (O_TMPFILE with O_EXCL: it cannot be linked to a name), so
+    # the upload stands twice in /tmp while it is converted: the chart's tmpSizeLimit says so
     fd, tmp_path = tempfile.mkstemp(prefix="upload_")
     os.close(fd)
     try:

@@ -44,8 +44,17 @@ def ping_solo_se_ferma(eng, ferma_da_s: float = PING_SE_FERMA_DA_S) -> None:
             raise InvalidatePoolError("connection died while idle in the pool") from e
 
 
+# A database that does not answer at all (a failover leaving its address silent) held
+# every thread on a connection that never came, or on a query whose server was gone.
+_POSTGRES = {"connect_timeout": 10, "keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10,
+             "keepalives_count": 3}
+
+
 def _crea_engine(**opzioni):
-    eng = create_engine(get_settings().db.dsn, echo=False, **opzioni)
+    dsn = get_settings().db.dsn
+    if dsn.startswith("postgres"):
+        opzioni.setdefault("connect_args", dict(_POSTGRES))
+    eng = create_engine(dsn, echo=False, **opzioni)
     ping_solo_se_ferma(eng)
     return eng
 
@@ -54,6 +63,13 @@ def _misura_del_pool() -> int:
     s = get_settings()
     return s.db.pool_size or s.app.gateway_threads
 
+
+# The panel's settings before the pool is made: its size is among them (Administration →
+# Settings, `db.pool_size`, `db.max_overflow`, applied when a process starts). A connection
+# of its own, closed at once; a database without the table yet has none.
+from app.core import overrides as _overrides  # noqa: E402
+
+_overrides.load_at_start(get_settings().db.dsn)
 
 # Ogni thread tiene al massimo una connessione alla volta (vedi `a_fine_rotta`),
 # quindi il pool va a misura dei thread. Con i 5 della libreria le altre erano

@@ -9,7 +9,7 @@ motore (backend/app/core/regolazioni.py).
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column
+from sqlalchemy import BigInteger, Column, Text
 from sqlmodel import Field, SQLModel
 
 
@@ -20,6 +20,9 @@ class EngineSetting(SQLModel, table=True):
     key: str = Field(primary_key=True, max_length=80)
     # interi grandi: il tetto dei byte di BigQuery arriva a decine di TiB
     value: int = Field(sa_column=Column(BigInteger, nullable=False))
+    # the value as JSON, for the settings that are not whole numbers (a decimal, true/false):
+    # `value` keeps an integer for the previous version of the gateway during an upgrade
+    value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     updated_at: datetime
     # l'email di chi l'ha cambiato (resta anche se l'utente viene tolto; l'audit ha il resto)
     updated_by: Optional[str] = Field(default=None, max_length=320)

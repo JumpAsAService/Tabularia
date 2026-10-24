@@ -76,16 +76,23 @@ function onVisibility() {
  * @param opts.fast  chi ha bisogno del dato fresco (l'editor): finché c'è almeno
  *                   un consumatore così, si chiede ogni 10 secondi invece di 30.
  */
+// the installation answered 404: there is nothing to read, for the life of the page
+let absent = false
+
 export function useSystemMemory(opts: { fast?: boolean } = {}) {
   const { apiFetch } = useApiClient()
 
   onMounted(() => {
     tick = async () => {
+      if (absent) return
       try {
         memory.value = await apiFetch<MemoryInfo>('/system/memory')
         unavailable.value = false
-      } catch {
+      } catch (e: any) {
         unavailable.value = true // 503/offline: non è un errore da mostrare in toast
+        // 404: this installation has no such reading (on Kubernetes, without node-exporter),
+        // and asking every 10 s filled the console with red for nothing: asked no more
+        if ((e?.response?.status ?? e?.statusCode) === 404) absent = true
       }
     }
     consumers++

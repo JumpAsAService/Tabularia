@@ -29,6 +29,10 @@ export interface IngestResult {
   size_bytes: number
   dataset?: { dataset_id: string; rows: number; columns: ColumnInfo[] }
   task_id?: string
+  // a workbook: its sheets in order, the hidden ones, the one read
+  sheets?: string[] | null
+  hidden_sheets?: string[] | null
+  sheet?: string | null
 }
 
 export interface TaskResponse {
@@ -135,9 +139,10 @@ export function useApi() {
       return await apiFetch<string[]>('/tasks/operations')
     },
 
-    async uploadFile(file: File, dtypeOverrides?: Record<string, string>): Promise<IngestResult> {
+    async uploadFile(file: File, dtypeOverrides?: Record<string, string>, sheet?: string): Promise<IngestResult> {
       const fd = new FormData()
       fd.append('file', file)
+      if (sheet) fd.append('sheet', sheet) // a workbook: this sheet (none = the first visible one)
       if (dtypeOverrides && Object.keys(dtypeOverrides).length) {
         fd.append('dtype_overrides', JSON.stringify(dtypeOverrides))
       }

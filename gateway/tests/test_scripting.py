@@ -410,7 +410,7 @@ def test_a_build_without_digest_or_a_vanished_job_fails(app, session, cluster):
     cluster.jobs.clear()  # someone deleted it by hand
     _round(session)
     v2 = session.exec(select(ScriptEnvironmentVersion).where(ScriptEnvironmentVersion.number == 2)).one()
-    assert v2.status == "failed" and "gone from the cluster" in v2.error
+    assert v2.status == "failed" and "is no longer in the cluster" in v2.error
 
 
 def test_a_cluster_that_does_not_answer_only_delays(app, session, cluster):
@@ -670,6 +670,64 @@ def test_a_build_out_of_memory_says_which_setting_to_raise(app, session, cluster
     v = session.exec(select(ScriptEnvironmentVersion)).one()
     assert v.status == "failed" and "ran out of memory" in v.error and "SCRIPTS__BUILD_MEMORY (now 4Gi)" in v.error
     assert "Killed signal" in v.build_log
+
+
+def test_a_build_pod_the_cluster_refuses_fails_at_once_saying_why(app, session, cluster, monkeypatch):
+    # the build namespace at Pod Security baseline (createNamespaces: false), a quota, a
+    # LimitRange: the version stayed «building» an hour, then failed saying nothing of it
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss)
+    _round(session)  # queued → building
+    cluster.job("tabularia-build-e1-v1")["metadata"]["creationTimestamp"] = "2026-10-20T10:00:00Z"
+    real = cluster.handle
+
+    def refusing(req):
+        if req.url.path.endswith("/pods"):
+            return httpx.Response(200, json={"items": []})  # the Job controller could create none
+        if req.url.path.endswith("/events"):
+            return httpx.Response(200, json={"items": [{"reason": "FailedCreate", "message":
+                'Error creating: pods "tabularia-build-e1-v1-x" is forbidden: violates PodSecurity "baseline:latest": '
+                'seccompProfile (container "build" must not set securityContext.seccompProfile.type to "Unconfined")'}]})
+        return real(req)
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(refusing))
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "failed" and "The build cannot start: the cluster refused to create its Pod" in v.error
+    assert "PodSecurity" in v.error and not cluster.jobs
+
+
+def test_a_build_the_kernel_killed_whole_is_out_of_memory(app, session, cluster, monkeypatch):
+    # cgroup v2: the kernel kills the whole container, the compiler never prints «Killed signal»
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss, language="r", language_version="4.5", packages="forecast")
+    _round(session)
+    cluster.finish("tabularia-build-e1-v1", False, "#11 478.5 installing *source* package 'arrow' ...\n")
+    real = cluster.handle
+
+    def killed(req):
+        r = real(req)
+        if req.url.path.endswith("/pods"):
+            body = r.json()
+            body["items"][0]["status"] = {"containerStatuses": [{"state": {"terminated": {"exitCode": 137,
+                                                                                          "reason": "Error"}}}]}
+            return httpx.Response(200, json=body)
+        return r
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(killed))
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "failed" and "ran out of memory" in v.error and "SCRIPTS__BUILD_MEMORY" in v.error
+
+
+def test_a_build_past_its_deadline_names_the_setting(app, session, cluster):
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    _create(boss)
+    _round(session)
+    cluster.finish("tabularia-build-e1-v1", False, "", reason="DeadlineExceeded")
+    _round(session)
+    v = session.exec(select(ScriptEnvironmentVersion)).one()
+    assert v.status == "failed" and "SCRIPTS__BUILD_TIMEOUT_SECONDS (3600 s)" in v.error
 
 
 def test_an_image_the_nodes_cannot_download_fails_the_build_at_once(app, session, cluster, monkeypatch):

@@ -814,24 +814,6 @@ class FileTemplatesSpec(BaseModel):
         return out
 
 
-class SharePointDatasourceCreate(FileTemplatesSpec):
-    """Datasource da file Excel su SharePoint: un percorso (anche con glob) e un
-    foglio. Più file corrispondenti vengono impilati in una tabella sola. The path
-    may hold placeholders and variables (FileTemplatesSpec)."""
-    name: str
-    description: str = ""
-    connection_id: int
-    path: str = Field(min_length=1, max_length=1000)
-    sheet: str = Field(min_length=1, max_length=255)
-
-
-def no_dot_dot(path: str) -> str:
-    """SFTP folders and patterns say where they are: going up with '..' is refused."""
-    if ".." in (path or "").replace("\\", "/").split("/"):
-        raise ValueError("'..' is not allowed: write the folder you mean")
-    return path
-
-
 class SftpCsvOptions(BaseModel):
     """How the CSV files of an SFTP folder are read (the options of the file sources)."""
     separator: str = Field(default=",", min_length=1, max_length=1)
@@ -839,6 +821,28 @@ class SftpCsvOptions(BaseModel):
     # utf8-lossy replaces invalid bytes; windows-1252 is the usual Excel export
     encoding: Literal["utf8", "utf8-lossy", "windows-1252"] = "utf8"
     null_values: list[str] = Field(default_factory=list, max_length=20)
+
+
+class SharePointDatasourceCreate(FileTemplatesSpec):
+    """Datasource da file Excel e CSV su SharePoint: un percorso (anche con glob), the
+    format, the sheet of the workbooks and the reading options of the CSV. Più file
+    corrispondenti vengono impilati in una tabella sola. The path may hold placeholders
+    and variables (FileTemplatesSpec)."""
+    name: str
+    description: str = ""
+    connection_id: int
+    path: str = Field(min_length=1, max_length=1000)
+    # auto = Excel and CSV by their extension; without it (callers of before) Excel only
+    format: Literal["auto", "excel", "csv"] = "excel"
+    sheet: str = Field(default="", max_length=255)  # Excel: empty = the first sheet
+    csv: SftpCsvOptions = Field(default_factory=SftpCsvOptions)
+
+
+def no_dot_dot(path: str) -> str:
+    """SFTP folders and patterns say where they are: going up with '..' is refused."""
+    if ".." in (path or "").replace("\\", "/").split("/"):
+        raise ValueError("'..' is not allowed: write the folder you mean")
+    return path
 
 
 class SftpDatasourceCreate(FileTemplatesSpec):
@@ -910,6 +914,7 @@ class S3FilesQuery(FileTemplatesSpec):
 
 class SharePointFilesQuery(FileTemplatesSpec):
     path: str = Field(min_length=1, max_length=1000)
+    format: Literal["auto", "excel", "csv"] = "excel"
 
 
 class PlaceholderPreviewQuery(BaseModel):

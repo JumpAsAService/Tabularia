@@ -49,11 +49,11 @@ NIENTE_RUOLI_DA_TOKEN = {
     "es": "Un token de API no puede hacer una cuenta administradora u observadora, ni reactivarla: hazlo desde la interfaz",
 }
 NIENTE_IMPOSTAZIONI_DA_TOKEN = {
-    "en": "An API token cannot change the engine settings: do it from the interface",
-    "it": "Un token API non cambia le impostazioni del motore: si fa dall'interfaccia",
-    "fr": "Un jeton d'API ne peut pas modifier les réglages du moteur : faites-le depuis l'interface",
-    "de": "Ein API-Token kann die Engine-Einstellungen nicht ändern: Das geht über die Oberfläche",
-    "es": "Un token de API no puede cambiar los ajustes del motor: hazlo desde la interfaz",
+    "en": "An API token cannot change the settings: do it from the interface",
+    "it": "Un token API non cambia le impostazioni: si fa dall'interfaccia",
+    "fr": "Un jeton d'API ne peut pas modifier les réglages : faites-le depuis l'interface",
+    "de": "Ein API-Token kann die Einstellungen nicht ändern: Das geht über die Oberfläche",
+    "es": "Un token de API no puede cambiar los ajustes: hazlo desde la interfaz",
 }
 NIENTE_WORKER_DA_TOKEN = {
     "en": "An API token cannot change the workers or their scaling: do it from the interface",

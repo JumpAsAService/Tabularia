@@ -71,7 +71,7 @@ def tx_cookie_name(state: str) -> str:
 # Discovery (.well-known) e chiavi di firma, con cache
 # ─────────────────────────────────────────────────────────────────────────────
 _discovery_cache: dict[str, tuple[float, dict]] = {}
-_jwks_clients: dict[str, jwt.PyJWKClient] = {}
+_jwks_clients: dict[tuple[str, float], jwt.PyJWKClient] = {}  # by address and timeout: the timeout changes from the panel
 
 
 _tls_contexts: dict[str, ssl.SSLContext] = {}
@@ -137,7 +137,7 @@ def reset_discovery_cache() -> None:
 
 
 def _jwks_client(jwks_uri: str, timeout: float) -> jwt.PyJWKClient:
-    client = _jwks_clients.get(jwks_uri)
+    client = _jwks_clients.get((jwks_uri, timeout))
     if client is None:
         # PyJWKClient tiene in cache le chiavi e le ri-scarica al rollover
         context = tls(get_settings().oidc)
@@ -145,7 +145,7 @@ def _jwks_client(jwks_uri: str, timeout: float) -> jwt.PyJWKClient:
             context = ssl._create_unverified_context()
         client = jwt.PyJWKClient(jwks_uri, timeout=int(timeout) or 10,
                                  ssl_context=context if isinstance(context, ssl.SSLContext) else None)
-        _jwks_clients[jwks_uri] = client
+        _jwks_clients[(jwks_uri, timeout)] = client
     return client
 
 

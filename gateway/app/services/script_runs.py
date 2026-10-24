@@ -32,6 +32,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
+from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -57,6 +58,10 @@ LABEL_SCRIPT_RUN = "tabularia.io/script-run"
 # how long an editor's trial may stay PENDING: its process marks it STARTED within
 # seconds (a Container trial asks the registry for the digest first, 15 s at most)
 TRIAL_START_SECONDS = 300
+# an editor's trial says it is alive this often (Run.heartbeat_at), from the process
+# running it; one silent this long is closed: that process stopped (a gateway's Pod gone)
+TRIAL_BEAT_SECONDS = 20
+TRIAL_DEAD_SECONDS = 120
 LABEL_ORCHESTRATION = "tabularia.io/run"
 # the most the run waits past the node's timeout before it gives up on the cluster
 GRACE_SECONDS = 180
@@ -166,6 +171,25 @@ NO_POD_SECONDS = 10
 # how long a Job's Pod may keep failing to download its image (the node retries a
 # couple of times in it) before the attempt fails saying why
 PULL_FAILURE_SECONDS = 20
+# how long a finished Job's log may stay unreadable (its node lost: the API server cannot
+# reach the kubelet) before the attempt ends without it
+LOG_RETRY_SECONDS = 30
+
+
+def transient(e: KubeError) -> bool:
+    """An answer of the Kubernetes API worth asking again: not reached, throttled (API
+    Priority and Fairness), or failing on its side (an upgrade of the control plane)."""
+    return e.status == 0 or e.status == 429 or e.status >= 500
+
+
+def run_still_open(session: Session, run_id: Optional[int]) -> bool:
+    """The run is still open in the database (no one closed it meanwhile, as interrupted
+    for instance): a new attempt starts only then."""
+    if run_id is None:
+        return True
+    session.commit()  # a fresh read, not the transaction's snapshot
+    status = session.exec(select(Run.status).where(Run.id == run_id)).first()
+    return status is not None and status not in TERMINAL_STATES
 
 
 def namespace_for(trial: bool) -> str:
@@ -173,18 +197,11 @@ def namespace_for(trial: bool) -> str:
     return (s.trial_namespace or s.namespace) if trial else s.namespace
 
 
-async def _refused(ns: str, name: str) -> str:
-    """Why the cluster does not create the Job's Pod, "" when it is not refusing."""
+def _memory_limit(manifest: dict) -> str:
     try:
-        events = await kube_jobs.job_events(ns, name)
-    except KubeError:
+        return manifest["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["memory"]
+    except (KeyError, IndexError, TypeError):
         return ""
-    for e in reversed(events):
-        if e["reason"] == "FailedCreate":
-            if "exceeded quota" in e["message"]:
-                return f"the namespace {ns} has no room left (its ResourceQuota is full): {e['message'][:300]}"
-            return f"the cluster refused to create its Pod: {e['message'][:300]}"
-    return ""
 
 
 async def _attempt(*, name: str, manifest: dict, code: Optional[dict[str, str]], secret: dict[str, str],
@@ -221,41 +238,69 @@ async def _attempt(*, name: str, manifest: dict, code: Optional[dict[str, str]],
             await kube_jobs.create_object(ns, "secrets", {
                 "apiVersion": "v1", "kind": "Secret", "type": "Opaque",
                 "metadata": {"name": secret_name, "labels": labels, "ownerReferences": owners}, "stringData": secret})
+        log_since: Optional[float] = None
+        unscheduled, ran = "", False  # why its Pod waits for a node; whether its container ran
         while True:
             await asyncio.sleep(next(pauses))
             if on_tick:
                 on_tick()
-            current = await kube_jobs.get_job(ns, name)
-            if current is None:
-                return False, "", None, f"the Job {name} is gone from the cluster before it ended"
-            outcome = kube_jobs.job_outcome(current)
-            status = current.get("status") or {}
-            if (outcome is None and not any(status.get(k) for k in ("active", "ready", "succeeded", "failed"))
-                    and asyncio.get_running_loop().time() - started > NO_POD_SECONDS):
-                why = await _refused(ns, name)
-                if why:
-                    return False, "", None, why
-            if outcome is None and status.get("active"):
-                why = await kube_jobs.pull_failure(ns, name)
-                now = asyncio.get_running_loop().time()
-                if not why:
-                    pull_since = None
-                elif pull_since is None:
-                    pull_since = now
-                elif now - pull_since >= PULL_FAILURE_SECONDS:
-                    return False, "", None, why
-            if outcome is not None:
-                log, exit_code = await kube_jobs.job_result(ns, name, log_max_bytes)
-                if outcome == "succeeded":
-                    return True, log, exit_code, ""
-                reason = kube_jobs.job_failure(current)
-                if "DeadlineExceeded" in reason:
-                    reason = f"it ran longer than its timeout ({timeout} s)"
-                elif exit_code is not None:
-                    reason = f"it ended with exit code {exit_code}"
-                return False, log, exit_code, reason or "the Job failed"
-            if asyncio.get_running_loop().time() > deadline:
-                log, exit_code = await kube_jobs.job_result(ns, name, log_max_bytes)
+            now = asyncio.get_running_loop().time()
+            try:
+                current = await kube_jobs.get_job(ns, name)
+                if current is None:
+                    return False, "", None, f"the Job {name} is gone from the cluster before it ended"
+                outcome = kube_jobs.job_outcome(current)
+                status = current.get("status") or {}
+                if (outcome is None and not any(status.get(k) for k in ("active", "ready", "succeeded", "failed"))
+                        and now - started > NO_POD_SECONDS):
+                    why = await kube_jobs.refused(ns, name)
+                    if why:
+                        return False, "", None, why
+                if outcome is None and status.get("active"):
+                    why, waiting, has_run = await kube_jobs.start_state(ns, name)
+                    unscheduled, ran = waiting or unscheduled, ran or has_run
+                    if not why:
+                        pull_since = None
+                    elif pull_since is None:
+                        pull_since = now
+                    elif now - pull_since >= PULL_FAILURE_SECONDS:
+                        return False, "", None, why
+                if outcome is not None:
+                    try:
+                        log, exit_code, ended = await kube_jobs.job_result(ns, name, log_max_bytes)
+                    except kube_jobs.LogUnavailable as e:
+                        # the Job has ended, its log does not come: asked again for a while,
+                        # then the outcome is told without it
+                        if not transient(e):
+                            raise
+                        log_since = log_since if log_since is not None else now
+                        if now - log_since < LOG_RETRY_SECONDS:
+                            continue
+                        log, exit_code, ended = f"(the cluster did not give the log: {e})", e.exit_code, e.reason
+                    if outcome == "succeeded":
+                        return True, log, exit_code, ""
+                    reason = kube_jobs.job_failure(current)
+                    if "DeadlineExceeded" in reason:
+                        reason = (f"its Pod never started within its timeout ({timeout} s): {unscheduled}"
+                                  if unscheduled and not ran else f"it ran longer than its timeout ({timeout} s)")
+                    elif exit_code is not None or ended:
+                        reason = kube_jobs.explain_exit(exit_code, ended, _memory_limit(manifest))
+                    elif "BackoffLimitExceeded" in reason and ran:
+                        # its Pod went without an exit code (deleted with it): taken away by the cluster
+                        reason = kube_jobs.STOPPED_BY_CLUSTER
+                    return False, log, exit_code, reason or "the Job failed"
+            except KubeError as e:
+                # one answer of the API that failed is not the Job failing: ask again at the
+                # next look, until the node's own deadline
+                if not transient(e) or now > deadline:
+                    raise
+                logger.warning("Job %s: the Kubernetes API answered %s, asking again (%s)", name, e.status, e)
+                continue
+            if now > deadline:
+                try:
+                    log, exit_code, _ = await kube_jobs.job_result(ns, name, log_max_bytes)
+                except KubeError as e:
+                    log, exit_code = f"(the cluster did not give the log: {e})", getattr(e, "exit_code", None)
                 return False, log, exit_code, "the cluster did not end the Job within its timeout"
     finally:
         try:
@@ -352,6 +397,8 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
     session.refresh(child)
 
     def save(**values) -> None:
+        if values.get("status") in TERMINAL_STATES and not run_still_open(session, child.id):
+            return  # closed meanwhile (an orphan's reconcile, an interruption): its outcome stays
         for k, v in values.items():
             setattr(child, k, v)
         child.script = json.dumps(info)
@@ -422,6 +469,10 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
             if attempt <= retries:
                 logger.info("script: run %s attempt %s failed (%s), again in %ss", child.id, attempt, reason, delay)
                 await asyncio.sleep(delay)
+                if not run_still_open(session, parent_run_id or child.id):
+                    raise ScriptFailed(f"script «{label}» failed: {reason} (not run again: its run was closed)")
+                if has_output:  # what the failed attempt wrote is not the next one's output
+                    await _delete_objects(storage, [out_key])
         if not ok:
             raise ScriptFailed(f"script «{label}» failed: {reason}")
 
@@ -458,6 +509,15 @@ async def run_script(session: Session, user: User, flow: Flow, definition: dict,
             logger.warning("script: step %s not cleaned up (%s)", step_id, type(e).__name__)
 
 
+async def _delete_objects(storage, keys: list[str]) -> None:
+    """Removes these keys from the scripts bucket, as best it can."""
+    try:
+        await get_engine_client().post("/scripts/objects/delete", json={
+            "connection": storage_payload(storage), "keys": keys})
+    except Exception as e:  # noqa: BLE001 — the bucket's lifecycle rule removes them
+        logger.warning("script: %s not removed from the scripts bucket (%s)", keys, type(e).__name__)
+
+
 def budget_seconds(d: dict) -> int:
     timeout, retries, delay = int(d.get("timeoutSeconds", 900)), int(d.get("retries", 0)), int(d.get("retryDelaySeconds", 60))
     return (timeout + GRACE_SECONDS) * (retries + 1) + delay * retries + 900  # 900: preparing the input
@@ -488,7 +548,14 @@ async def close_if_orphaned(session: Session, run: Run) -> Run:
             budget = 0
         started = run.started_at.replace(tzinfo=timezone.utc) if run.started_at.tzinfo is None else run.started_at
         age = (_now() - started).total_seconds()
-        if run.status == "PENDING" and age >= TRIAL_START_SECONDS:
+        beat = run.heartbeat_at.replace(tzinfo=timezone.utc) if run.heartbeat_at and run.heartbeat_at.tzinfo is None \
+            else run.heartbeat_at
+        if beat is not None:
+            # a trial that beats is alive, however long its input waits in the workers' queue
+            if (_now() - beat).total_seconds() < TRIAL_DEAD_SECONDS:
+                return run
+            reason = "the trial stopped: the process running it is gone (a gateway restarted or removed)"
+        elif run.status == "PENDING" and age >= TRIAL_START_SECONDS:
             # its process took it and never got to say it started: it is gone
             reason = "the trial never started: the process that took it stopped"
         elif budget and age >= budget:
@@ -577,7 +644,31 @@ def _add_to_latest(out: dict[str, dict], node_id: str, run: Run) -> None:
 async def run_trial(run_id: int, user_id: int, node_id: str) -> None:
     """The editor's «Run» of a Script node (or a Container node, the run's kind): the flow as saved, the chain before the
     node on the sources' development sample, the nodes after it not run. A task of
-    the gateway process that answered; its own database session."""
+    the gateway process that answered; its own database session. It beats while it runs
+    (Run.heartbeat_at): close_if_orphaned tells a live trial from one whose process died."""
+    beating = asyncio.create_task(_beat_trial(run_id))
+    try:
+        await _run_trial(run_id, user_id, node_id)
+    finally:
+        beating.cancel()
+
+
+async def _beat_trial(run_id: int) -> None:
+    """Says the trial is alive while its process runs it (close_if_orphaned reads it)."""
+    from app.db.session import engine
+
+    while True:
+        try:
+            with Session(engine) as s:
+                s.exec(update(Run).where(Run.id == run_id, Run.status.not_in(TERMINAL_STATES))  # type: ignore[union-attr]
+                       .values(heartbeat_at=_now()))
+                s.commit()
+        except Exception as e:  # noqa: BLE001 — the database away: the next beat
+            logger.debug("trial %s: beat not written (%s)", run_id, e)
+        await asyncio.sleep(TRIAL_BEAT_SECONDS)
+
+
+async def _run_trial(run_id: int, user_id: int, node_id: str) -> None:
     from app.db.session import engine
     from app.routes.runs import _launch_flow_run
     from app.services.orchestrator import _wait_run

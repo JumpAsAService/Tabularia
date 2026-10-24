@@ -39,7 +39,7 @@ def test_l_import_da_sharepoint_conta_i_file(monkeypatch):
 
 class _TaskFinto:
     def __init__(self):
-        self.request = type("R", (), {"id": "t-1"})()
+        self.request = type("R", (), {"id": "t-1", "hostname": "celery@w1"})()
         self.stati = []
 
     def update_state(self, state, meta):
@@ -56,8 +56,12 @@ def test_il_task_scrive_al_piu_ogni_due_secondi_ma_sempre_al_cambio_di_fase(monk
     avanza = jobs._Avanzamento()
     for fase, righe in (("reading", 1), ("reading", 2), ("reading", 3), ("reading", 4), ("reading", 5), ("saving", 5)):
         avanza(fase, rows=righe)
-    assert task.stati == [("STARTED", {"phase": "reading", "rows": 1}), ("STARTED", {"phase": "reading", "rows": 4}),
-                          ("STARTED", {"phase": "saving", "rows": 5})]
+    avanzamenti = [(stato, {k: v for k, v in meta.items() if k not in ("pid", "hostname", "since")})
+                   for stato, meta in task.stati]
+    assert avanzamenti == [("STARTED", {"phase": "reading", "rows": 1}), ("STARTED", {"phase": "reading", "rows": 4}),
+                           ("STARTED", {"phase": "saving", "rows": 5})]
+    # the worker and the start stay in every meta: the engine tells a lost task by them
+    assert all(meta["hostname"] == "celery@w1" and meta["since"] > 0 for _, meta in task.stati)
 
 
 def test_fuori_da_un_worker_non_fa_niente_e_un_guasto_non_ferma_l_import(monkeypatch):
@@ -86,3 +90,25 @@ def test_l_engine_restituisce_l_avanzamento(monkeypatch, info, atteso):
 
     monkeypatch.setattr(rotta_tasks, "AsyncResult", _Risultato)
     assert rotta_tasks.get_task_status("t-1").progress == atteso
+
+
+def test_un_task_il_cui_worker_e_morto_e_fallito(monkeypatch, regolazioni_isolate):
+    """A worker OOMKilled or whose pod went leaves its tasks STARTED in the result backend:
+    the engine says they failed, and why, instead of «running» for an hour."""
+    from app.tasks import worker_pool
+
+    info = {"pid": 9, "hostname": "celery@gone", "since": 100.0, "phase": "reading", "rows": 3}
+
+    class _Risultato:
+        def __init__(self, task_id, app=None):
+            self.status, self.state, self.info = "STARTED", "STARTED", info
+
+    monkeypatch.setattr(rotta_tasks, "AsyncResult", _Risultato)
+    regolazioni_isolate.set(worker_pool.KEY_PREFIX + "celery@gone", '{"started_at": 200.0}')  # started again since
+    out = rotta_tasks.get_task_status("t-1")
+    assert out.status == "FAILURE" and out.error == worker_pool.LOST and out.progress is None
+    monkeypatch.setattr(rotta_tasks.exports, "ensure_owner", lambda task_id, owner: None)
+    assert rotta_tasks.export_status("t-1") == {"status": "failed", "code": 503, "detail": worker_pool.LOST}
+    regolazioni_isolate.set(worker_pool.KEY_PREFIX + "celery@gone", '{"started_at": 50.0}')  # the same life: running
+    out = rotta_tasks.get_task_status("t-1")
+    assert out.status == "STARTED" and out.progress == {"phase": "reading", "rows": 3}

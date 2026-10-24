@@ -226,3 +226,47 @@ def test_a_retry_after_http_date_does_not_crash():
     waits = []
     c = sp.GraphClient(_conn(), http=g.request, sleep=waits.append)
     assert len(sp.find_files(c, "Budget/2026/*.xlsx")) == 2 and waits == [1.0]
+
+
+# ── CSV files ───────────────────────────────────────────────────────────────────
+CSV_TREE = {"Export/gen.csv": b"id;importo\n1;10.5\n2;20\n", "Export/feb.xlsx": FEB, "Export/note.txt": b"leggimi"}
+
+
+def _ingest_spec(graph, **spec):
+    st = FakeStorage()
+    res = sp.ingest_sharepoint_to_parquet(_conn(), sp.SharePointSourceSpec(**spec), "b", "datasets/x.parquet", st, client=_client(graph))
+    return res, pl.read_parquet(io.BytesIO(st.blobs[("b", "datasets/x.parquet")]))
+
+
+def test_a_datasource_of_before_takes_the_excel_files_only():
+    """Saved without a format: a `*` next to CSV files keeps taking the workbooks alone."""
+    res, df = _ingest_spec(FakeGraph(CSV_TREE), path="Export/*", sheet="Dati")
+    assert [f["path"] for f in res["files"]] == ["Export/feb.xlsx"]
+
+
+def test_csv_files_with_their_options():
+    res, df = _ingest_spec(FakeGraph(CSV_TREE), path="Export/*", format="csv", csv={"separator": ";"})
+    assert [f["path"] for f in res["files"]] == ["Export/gen.csv"]
+    assert df.select("id", "importo").rows() == [(1, 10.5), (2, 20.0)]
+    assert df["_file"].to_list() == ["Export/gen.csv"] * 2
+
+
+def test_auto_stacks_workbooks_and_csv_by_name_the_text_file_left_out():
+    res, df = _ingest_spec(FakeGraph(CSV_TREE), path="Export/*", format="auto", csv={"separator": ";"})
+    assert [f["path"] for f in res["files"]] == ["Export/feb.xlsx", "Export/gen.csv"]
+    assert sorted(df.select("id", "_file").rows()) == [(1, "Export/gen.csv"), (2, "Export/gen.csv"), (3, "Export/feb.xlsx")]
+
+
+def test_an_empty_sheet_name_reads_the_first_sheet():
+    res, df = _ingest_spec(FakeGraph({"B/gen.xlsx": GEN}), path="B/*.xlsx")
+    assert res["rows_written"] == 2
+
+
+def test_a_csv_without_a_proper_header_is_refused_like_a_workbook():
+    with pytest.raises(sp.SharePointError, match="gen.csv"):
+        _ingest_spec(FakeGraph({"E/gen.csv": b"id;id\n1;2\n"}), path="E/*", format="csv", csv={"separator": ";"})
+
+
+def test_nothing_found_names_what_was_looked_for():
+    with pytest.raises(sp.SharePointError, match="No CSV file matches"):
+        _ingest_spec(FakeGraph({"E/a.xlsx": GEN}), path="E/*", format="csv")

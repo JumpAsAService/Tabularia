@@ -58,7 +58,8 @@ async def test_creating_it_queues_a_sharepoint_ingest_with_path_and_sheet(sessio
     assert out.kind == "database" and out.source_type == "sharepoint"
     (route, sent), = fake_engine.ingests
     assert route == "/sharepoint/ingest"
-    assert sent["source"] == {"path": "Budget/2026/*.xlsx", "sheet": "Dati"}
+    assert sent["source"] == {"path": "Budget/2026/*.xlsx", "sheet": "Dati", "format": "excel",
+                              "csv": {"separator": ",", "has_header": True, "encoding": "utf8", "null_values": []}}
     assert sent["connection"]["tenant_id"] == "tenant-id" and "segreto" not in json.dumps(sent)
     assert sent["output_key"].startswith("datasets/")
 
@@ -127,12 +128,40 @@ async def test_listing_the_files_of_a_glob_asks_the_engine(session, fake_engine)
     conn = _conn(session, p.id)
     await list_sharepoint_files(conn.id, SharePointFilesQuery(path="Budget/**/*.xlsx"), admin, session)
     assert fake_engine.inspects[0]["action"] == "files" and fake_engine.inspects[0]["path"] == "Budget/**/*.xlsx"
+    # the format says which files the path takes: Excel only unless asked
+    assert fake_engine.inspects[0]["source"] == {"path": "Budget/**/*.xlsx", "format": "excel"}
+    await list_sharepoint_files(conn.id, SharePointFilesQuery(path="Budget/*", format="auto"), admin, session)
+    assert fake_engine.inspects[1]["source"]["format"] == "auto"
 
 
-@pytest.mark.parametrize("field", ["path", "sheet"])
-def test_path_and_sheet_are_mandatory(field):
+async def test_csv_files_with_their_reading_options(session, fake_engine):
+    admin = make_user(session, email="a@x.it", is_superuser=True)
+    p = make_project(session, name="p")
+    conn = _conn(session, p.id)
+    body = _body(conn.id, path="Export/*.csv", sheet="", format="csv", csv={"separator": ";", "encoding": "windows-1252"})
+    await create_sharepoint_datasource(p.id, body, _Req(), admin, session)
+    (_, sent), = fake_engine.ingests
+    assert sent["source"]["format"] == "csv" and sent["source"]["csv"]["separator"] == ";"
+    assert sent["source"]["csv"]["encoding"] == "windows-1252" and sent["source"]["sheet"] == ""
+
+
+async def test_a_datasource_saved_before_csv_keeps_reading_excel_only(session, fake_engine):
+    """Its saved JSON has no format: the refresh sends none, and the engine reads Excel only."""
+    admin = make_user(session, email="a@x.it", is_superuser=True)
+    p = make_project(session, name="p")
+    conn = _conn(session, p.id)
+    out = await create_sharepoint_datasource(p.id, _body(conn.id), _Req(), admin, session)
+    ds = session.get(Datasource, out.id)
+    ds.source_ref = json.dumps({"path": "Budget/2026/*.xlsx", "sheet": "Dati"})
+    session.add(ds); session.commit()
+    await refresh_datasource(out.id, _Req(), admin, session)
+    assert fake_engine.ingests[-1][1]["source"] == {"path": "Budget/2026/*.xlsx", "sheet": "Dati"}
+
+
+def test_the_path_is_mandatory_the_sheet_is_not():
     with pytest.raises(Exception):
-        _body(1, **{field: ""})
+        _body(1, path="")
+    assert _body(1, sheet="").sheet == ""  # empty = the first sheet of each workbook
 
 
 async def test_a_sharepoint_connection_cannot_be_a_database_destination(session, fake_engine):

@@ -57,6 +57,9 @@ class MotoreFinto:
         self.ricevute.append(corpo)
         errori = []
         for k, v in corpo["values"].items():
+            if k in ("export.max_rows", "celery.task_time_limit") and (isinstance(v, bool) or not isinstance(v, int)):
+                errori.append({"key": k, "code": "integer"})  # the engine checks the type (core/regolazioni.py)
+                continue
             if k == "export.max_rows" and v < 0:
                 errori.append({"key": k, "code": "min", "limit": 0})
             if k == "celery.task_time_limit" and v > corpo["max_task_time_limit"]:
@@ -178,7 +181,7 @@ def test_un_token_non_cambia_le_impostazioni(app, session):
     h = {"Authorization": f"Bearer {token}"}
     assert script.get("/admin/engine-settings", headers=h).json()["editable"] is False
     r = script.put("/admin/engine-settings", json={"values": {"export.max_rows": 1}}, headers={**h, "Accept-Language": "it"})
-    assert r.status_code == 403 and "impostazioni del motore" in r.json()["detail"]
+    assert r.status_code == 403 and "non cambia le impostazioni" in r.json()["detail"]
 
 
 def test_col_pannello_spento_dall_ambiente_si_vedono_e_non_valgono(app, session, motore, monkeypatch):

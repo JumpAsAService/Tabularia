@@ -205,11 +205,14 @@ def clean_params(operation: str, params: Any) -> dict:
         return {"column": column, "operator": op, "value": value}
     if operation == "sort":
         by = p.get("by")
-        if isinstance(by, list) and len(by) == 1:
-            by = by[0]
-        if not isinstance(by, str) or not by:
-            raise ModelRetry("sort takes ONE column in by (to sort on several, use an sql step with ORDER BY).")
-        return {"by": by, "descending": bool(p.get("descending"))}
+        by = [by] if isinstance(by, str) else by
+        if not isinstance(by, list) or not by or not all(isinstance(c, str) and c for c in by):
+            raise ModelRetry("sort needs by: a list of column names.")
+        desc = p.get("descending", False)
+        desc = [desc] * len(by) if isinstance(desc, bool) else desc
+        if not isinstance(desc, list) or len(desc) != len(by) or not all(isinstance(d, bool) for d in desc):
+            raise ModelRetry("sort descending: one true/false for all, or a list with one per column in by.")
+        return {"by": by, "descending": desc}
     if operation == "limit":
         n = p.get("n")
         if not isinstance(n, int) or isinstance(n, bool) or n < 1:
@@ -355,7 +358,7 @@ _REFERENCE = """Operations and their params (column names are case-sensitive):
 - rename {mapping: {old: new}}.
 - cast {columns: {col: type}}; types: int, float, str, bool, date, datetime. A value that does not convert becomes null.
 - filter {column, operator, value}; operators: eq ne gt ge lt le (one value), in not_in (a list), between ([from, to]), contains starts_with ends_with (text), is_null is_not_null (no value). Numbers as JSON numbers, dates as ISO text ("2024-01-31").
-- sort {by: one column, descending: bool}. Nulls always go last.
+- sort {by: [..], descending: [bool, ..]}: on the first column, then the next ones on equal values; one direction per column (true = descending). Nulls always go last.
 - limit {n}. unique {subset?: [..]}. drop_nulls {subset?: [..]}. fill_null {columns: {col: value}}.
 - group_by {by: [..], aggregations: [{column, func, alias?}]}; funcs: sum mean min max count median std var first last n_unique.
 - pivot {index: [..], on: [..], values: col, func}; unpivot {index?: [..], on?: [..], variable_name?, value_name?}.

@@ -213,6 +213,16 @@ async def test_a_registry_without_credentials_has_no_pull_secret(session, cluste
     assert errors == [] and "imagePullSecrets" not in _job(cluster)["spec"]["template"]["spec"]
 
 
+async def test_a_container_out_of_memory_says_so_with_its_limit(session, cluster, registry, engine, launches):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    reg = _registry(session)
+    cluster.behave = lambda job: ("failed", "", 137)
+    cluster.ended = "OOMKilled"
+    with pytest.raises(orch.OrchestrationError, match=r"container «Forecast» failed: it ran out of memory: it went "
+                                                      r"over its memory limit \(1Gi\)"):
+        await _run(session, admin, _flow(session, [_container(reg.id)], []))
+
+
 async def test_a_failure_is_retried_then_stops_the_flow(session, cluster, registry, engine, launches):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     reg = _registry(session)
@@ -225,7 +235,9 @@ async def test_a_failure_is_retried_then_stops_the_flow(session, cluster, regist
     assert run.status == "FAILURE" and info["attempts"] == 2 and "── attempt 2 ──\nTraceback: boom" in info["log"]
     assert [b["metadata"]["name"] for k, _, b in cluster.created if k == "jobs"] == [
         f"tabularia-container-{run.id}-a1", f"tabularia-container-{run.id}-a2"]
-    assert launches.bodies == [] and len(engine.deletes) == 1  # the Output never ran; the step cleaned up
+    # the Output never ran; what attempt 1 wrote went before attempt 2, the step cleaned up at the end
+    assert launches.bodies == [] and len(engine.deletes) == 2
+    assert [k.rsplit("/", 1)[1] for k in engine.deletes[0]["keys"]] == ["output.parquet"]
 
 
 async def test_a_tag_that_is_not_there(session, cluster, registry, engine, launches):

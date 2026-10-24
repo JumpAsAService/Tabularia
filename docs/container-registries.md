@@ -165,6 +165,11 @@ wrong, in the words of a run:
   node downloaded it in time (`CONTAINERS__PULL_CHECK_SECONDS`, 300 s by default: a large
   image, or a busy cluster).
 
+The check answers within 270 s, under the ingress' 300 s
+(`nginx.ingress.kubernetes.io/proxy-read-timeout`). A node still downloading a large
+image then is said to be, and its Pod is left to finish the download (for up to
+`CONTAINERS__PULL_CHECK_SECONDS`): the next try finds the image on that node.
+
 **Pull Secrets.** A registry with credentials has a Secret
 `tabularia-registry-<id>` (type `kubernetes.io/dockerconfigjson`) in the containers'
 namespaces, written by Tabularia right before a Pod needs it, from the credentials as

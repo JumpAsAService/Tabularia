@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, Boxes, DatabaseBackup } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -218,6 +218,37 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
     'permission.grant': { icon: Shield, color: u.success, label: t('audit.permissionGrantAction') },
     'permission.revoke': { icon: Shield, color: u.danger, label: t('audit.permissionRevokeAction') },
+    'ai.model_enable': { icon: Sparkles, color: u.accent, label: t('audit.aiModelEnableAction') },
+    'ai.model_disable': { icon: Sparkles, color: u.muted, label: t('audit.aiModelDisableAction') },
+    'ai.query': { icon: Sparkles, color: u.muted, label: t('audit.aiQueryAction') },
+    'banner.create': { icon: Megaphone, color: u.accent, label: t('audit.bannerCreateAction') },
+    'banner.delete': { icon: Megaphone, color: u.danger, label: t('audit.bannerDeleteAction') },
+    'contract.save': { icon: FileCheck, color: u.accent, label: t('audit.contractSaveAction') },
+    'contract.delete': { icon: FileCheck, color: u.danger, label: t('audit.contractDeleteAction') },
+    'email.send': { icon: Mail, color: u.violet, label: t('audit.emailSendAction') },
+    'engine.allow': { icon: Cpu, color: u.success, label: t('audit.engineAllowAction') },
+    'engine.disallow': { icon: Cpu, color: u.danger, label: t('audit.engineDisallowAction') },
+    'user.promote': { icon: Shield, color: u.danger, label: t('audit.userPromoteAction') },
+    'user.demote': { icon: Shield, color: u.muted, label: t('audit.userDemoteAction') },
+    'group.promote': { icon: Shield, color: u.danger, label: t('audit.groupPromoteAction') },
+    'group.demote': { icon: Shield, color: u.muted, label: t('audit.groupDemoteAction') },
+    'group.admin_join': { icon: Shield, color: u.danger, label: t('audit.groupAdminJoinAction') },
+    'group.admin_leave': { icon: Shield, color: u.muted, label: t('audit.groupAdminLeaveAction') },
+    'user.observer_grant': { icon: Shield, color: u.accent, label: t('audit.userObserverGrantAction') },
+    'user.observer_revoke': { icon: Shield, color: u.muted, label: t('audit.userObserverRevokeAction') },
+    'group.observer_grant': { icon: Shield, color: u.accent, label: t('audit.groupObserverGrantAction') },
+    'group.observer_revoke': { icon: Shield, color: u.muted, label: t('audit.groupObserverRevokeAction') },
+    'privacy.update': { icon: Shield, color: u.accent, label: t('audit.privacyUpdateAction') },
+    'saved_view.create': { icon: Database, color: u.success, label: t('audit.savedViewCreateAction') },
+    'saved_view.update': { icon: Database, color: u.accent, label: t('audit.savedViewUpdateAction') },
+    'saved_view.delete': { icon: Database, color: u.danger, label: t('audit.savedViewDeleteAction') },
+    'script.run': { icon: Code2, color: u.violet, label: t('audit.scriptRunAction') },
+    'script.schedule': { icon: Code2, color: u.accent, label: t('audit.scriptScheduleAction') },
+    'scripting.trial': { icon: Code2, color: u.accent, label: t('audit.scriptingTrialAction') },
+    'settings.update': { icon: SlidersHorizontal, color: u.accent, label: t('audit.settingsUpdateAction') },
+    'settings.rollout': { icon: SlidersHorizontal, color: u.violet, label: t('audit.settingsRolloutAction') },
+    'settings.rollout_cancel': { icon: SlidersHorizontal, color: u.muted, label: t('audit.settingsRolloutCancelAction') },
+    'transform.run': { icon: Workflow, color: u.violet, label: t('audit.transformRunAction') },
   }
 })
 function meta(a: string) {

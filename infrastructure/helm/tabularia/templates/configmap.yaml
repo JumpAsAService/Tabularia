@@ -174,8 +174,18 @@ BIGQUERY__MAXIMUM_BYTES_BILLED: {{ include "tabularia.env" (.Values.externalServ
 
 {{- /* extraEnv adds what this file does not set; it never overrides it */ -}}
 {{- $fixed := include "tabularia.configData" . | fromYaml -}}
+{{- /* and the ones set container by container, which would cover a ConfigMap value */ -}}
+{{- $perContainer := list "APP__ROLE" "APP__GATEWAY_THREADS" "CELERY__WORKER_CONCURRENCY" "MALLOC_ARENA_MAX"
+      "KUBERNETES__SCALING" "KUBERNETES__CLUSTER_VIEW" "KUBERNETES__NAMESPACE" "KUBERNETES__RELEASE" "KUBERNETES__APP_NAME" "KUBERNETES__ROLLOUT"
+      "KUBERNETES__RUN_WORKER_DEPLOYMENT" "KUBERNETES__RUN_WORKER_AUTOSCALER" "KUBERNETES__RUN_WORKER_MAX_REPLICAS"
+      "KUBERNETES__PREVIEW_WORKER_DEPLOYMENT" "KUBERNETES__PREVIEW_WORKER_AUTOSCALER" "KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS"
+      "SCRIPTS__ENABLED" "SCRIPTS__NAMESPACE" "SCRIPTS__TRIAL_NAMESPACE" "SCRIPTS__BUILD_NAMESPACE" "SCRIPTS__REGISTRY"
+      "SCRIPTS__REGISTRY_INSECURE" "SCRIPTS__REGISTRY_PUSH_SECRET" "SCRIPTS__REGISTRY_PULL_SECRET" "SCRIPTS__REGISTRY_CA_CONFIGMAP"
+      "SCRIPTS__BASE_IMAGES" "SCRIPTS__BUILDER_IMAGE" "SCRIPTS__PYPI_INDEX_URL" "SCRIPTS__CRAN_URL"
+      "CONTAINERS__NAMESPACE" "CONTAINERS__TRIAL_NAMESPACE" "CONTAINERS__MAX_CPU" "CONTAINERS__MAX_MEMORY" "CONTAINERS__MAX_TIMEOUT_SECONDS"
+      "NUXT_PUBLIC_API_BASE" "NUXT_PUBLIC_BUCKET" "NUXT_PUBLIC_GRAFANA_URL" -}}
 {{- range $name, $_ := .Values.extraEnv }}
-{{- if hasKey $fixed $name }}
+{{- if or (hasKey $fixed $name) (has $name $perContainer) }}
 {{- fail (printf "extraEnv.%s: the chart already sets %s from its own value in values.yaml - change that one" $name $name) }}
 {{- end }}
 {{- end }}

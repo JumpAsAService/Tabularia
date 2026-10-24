@@ -170,3 +170,32 @@ async def test_a_container_cell_runs_under_the_groups_run(session, db_engine, cl
     vars_ = {e["name"]: e["value"] for e in job["spec"]["template"]["spec"]["containers"][0]["env"]}
     assert vars_["TABULARIA_FLOW_ID"] == "" and vars_["TABULARIA_INPUT"] == "" and vars_["TABULARIA_OUTPUT"] == ""
     assert job["spec"]["template"]["spec"]["containers"][0]["image"].endswith(DIGEST)
+
+
+async def test_parallel_container_cells_each_point_to_their_own_run(session, db_engine, cluster, registry, engine,
+                                                                     monkeypatch):
+    # each cell linked to «the latest container run of the group»: a sister's, with parallel cells
+    monkeypatch.setattr(orch, "engine", db_engine)
+    monkeypatch.setattr(orch, "engine_battito", db_engine)
+
+    async def quiet(s, run):
+        return None
+    monkeypatch.setattr("app.services.notifier.notify_failure", quiet)
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    r = _registry(session)
+    p = make_project(session, name="p")
+    cells = [_cell(r.id, n=1, label="First"), _cell(r.id, n=2, label="Second"), _cell(r.id, n=3, label="Third")]
+    group = FlowGroup(name="nightly", project_id=p.id, definition=json.dumps({"steps": [cells]}))
+    session.add(group)
+    session.commit()
+    run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=admin.id,
+              trigger_type="manual", claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(), input_key="",
+              output_bucket="", output_key="")
+    session.add(run)
+    session.commit()
+    run_id = run.id
+    await orch.esegui(run_id)
+    with Session(db_engine) as s:
+        states = json.loads(s.get(Run, run_id).group_cells)[0]
+        labels = {c.id: json.loads(c.script)["label"] for c in s.exec(select(Run).where(Run.kind == "container")).all()}
+    assert [labels[c["run_id"]] for c in states] == ["First", "Second", "Third"]

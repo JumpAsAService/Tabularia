@@ -22,6 +22,7 @@ from app.engine.base import ColumnInfo
 from app.ingest.converters import convert_to_parquet
 from app.ingest.formats import FileFormat, canonical_ext, detect_format
 from app.ingest.models import DatasetInfo, IngestOptions, IngestResult
+from app.ingest.sheets import default_sheet, workbook_sheets
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,17 @@ class IngestService:
         self.storage.upload_file(local_path, self.bucket, raw_key)
         logger.info("Raw caricato: %s (%d byte, formato=%s)", raw_key, size, fmt.value)
 
+        # a workbook: its sheets go back with the answer, and without a choice the first
+        # visible one is read (also by the background conversion, which gets the options)
+        workbook: dict = {}
+        if fmt is FileFormat.excel:
+            sheets = workbook_sheets(local_path)
+            if sheets:
+                if options.sheet is None:
+                    options = options.model_copy(update={"sheet": default_sheet(sheets)})
+                workbook = {"sheets": [s.name for s in sheets],
+                            "hidden_sheets": [s.name for s in sheets if s.hidden], "sheet": options.sheet}
+
         if size <= self.SYNC_THRESHOLD_BYTES:
             info = self.convert_stored(
                 dataset_id, raw_key, parquet_key, fmt, options, local_raw=local_path
@@ -87,6 +99,7 @@ class IngestService:
                 format=fmt,
                 size_bytes=size,
                 dataset=info,
+                **workbook,
             )
 
         # oltre soglia -> background (import ritardato per evitare cicli)
@@ -108,6 +121,7 @@ class IngestService:
             format=fmt,
             size_bytes=size,
             task_id=task.id,
+            **workbook,
         )
 
     # ─────────────────────────────────────────────────────────────────────

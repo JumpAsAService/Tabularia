@@ -1,12 +1,21 @@
 """Regolazioni dal pannello: i parametri del motore che l'amministratore cambia da
 Amministrazione → Impostazioni, senza toccare l'ambiente e senza riavvii.
 
-Solo quelli che il motore legge al momento dell'uso (`VOCI`): dimensione dei row
-group, timeout di lettura degli import, tetto dell'export, durata dei task, cache
-dei passi, ClickHouse, BigQuery. Restano fuori, e si cambiano solo nell'ambiente,
-le credenziali, gli indirizzi, e quello che un processo legge una volta all'avvio
-(memoria dei worker, thread dell'API). Worker concurrency is the exception: every
-worker resizes its own pool from `workers.*` while it runs (tasks/worker_pool.py).
+Quelli che il motore legge al momento dell'uso (`VOCI` senza `rollout`): dimensione
+dei row group, timeout di lettura degli import, tetto dell'export, durata dei task,
+cache dei passi, ClickHouse, BigQuery, i tetti di SFTP, cartelle S3, API HTTP e
+segnaposto. Worker concurrency is one of them: every worker resizes its own pool from
+`workers.*` while it runs (tasks/worker_pool.py).
+
+Those a process reads once when it starts (`rollout`: memory and recycling of the
+workers, the API's threads, the embedded engines' memory, the beat's intervals) are
+taken from here ONCE, at the process's first reading (`all_avvio`), and stay frozen
+until it starts again: the panel saves them and the components named in `rollout` are
+rolled out (docs/specs/panel-settings.md). A pod that starts later takes them as well.
+A few are not settings fields but variables read at import (`ambiente`).
+
+Restano fuori, e si cambiano solo nell'ambiente, le credenziali, gli indirizzi, e gli
+interruttori legati alle risorse del chart.
 
 Come arrivano: il gateway le conserva nel suo database (la fonte vera, con l'audit)
 e le scrive qui con `PUT /settings`; il motore le tiene in Valkey (`CHIAVE`), che
@@ -23,6 +32,8 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -39,9 +50,16 @@ SETTE_GIORNI = 7 * 24 * 3600
 class Voce:
     chiave: str  # "<sezione>.<campo>" delle impostazioni del motore
     categoria: str  # raggruppa le voci nel pannello (le etichette le traduce il frontend)
-    unita: str  # rows | seconds | bytes | threads | processes
-    minimo: int
-    massimo: int
+    unita: str  # rows | seconds | bytes | threads | processes | files | keys | … | "" (a fraction, yes/no)
+    minimo: float
+    massimo: float
+    tipo: str = "int"  # int | float | bool
+    # the components that read it only when they start (engine, worker, preview-worker,
+    # beat): empty = applied live
+    rollout: tuple[str, ...] = ()
+    # not a settings field: the variable read at import, and its default
+    ambiente: str = ""
+    predefinito: Any = None
 
     @property
     def sezione(self) -> str:
@@ -54,8 +72,10 @@ class Voce:
     @property
     def variabile(self) -> str:
         """La variabile d'ambiente che la imposta (e che resta il valore di partenza)."""
-        return f"{self.sezione.upper()}__{self.campo.upper()}"
+        return self.ambiente or f"{self.sezione.upper()}__{self.campo.upper()}"
 
+
+WORKERS = ("worker", "preview-worker")
 
 # Gli intervalli sono più stretti di quelli che l'ambiente accetta: dal pannello
 # non si deve poter mettere in ginocchio il sistema per un errore di battitura (un
@@ -74,6 +94,53 @@ VOCI: tuple[Voce, ...] = (
     Voce("clickhouse_external.materialize_min_rows", "clickhouse", "rows", 0, 1_000_000_000),
     Voce("clickhouse_external.materialize_ttl_seconds", "clickhouse", "seconds", 60, SETTE_GIORNI),
     Voce("bigquery.maximum_bytes_billed", "bigquery", "bytes", 0, 100 * 1024**4),
+    Voce("clickhouse_external.connect_timeout", "clickhouse", "seconds", 1, 300),
+    Voce("sftp.max_file_bytes", "sftp", "bytes", 1024**2, 100 * 1024**3),
+    Voce("sftp.max_files", "sftp", "files", 1, 100_000),
+    Voce("sftp.max_total_bytes", "sftp", "bytes", 1024**2, 1024**4),
+    Voce("sftp.timeout_seconds", "sftp", "seconds", 1, 600, tipo="float"),
+    Voce("s3_source.max_file_bytes", "s3", "bytes", 1024**2, 100 * 1024**3),
+    Voce("s3_source.max_files", "s3", "files", 1, 100_000),
+    Voce("s3_source.max_total_bytes", "s3", "bytes", 1024**2, 1024**4),
+    Voce("s3_source.max_listed", "s3", "keys", 100, 10_000_000),
+    Voce("s3_source.max_request_seconds", "s3", "seconds", 10, 86_400, tipo="float"),
+    Voce("api.timeout_seconds", "api", "seconds", 1, 600, tipo="float"),
+    Voce("api.max_pages", "api", "pages", 1, 1_000_000),
+    Voce("api.max_calls", "api", "calls", 1, 100_000),
+    Voce("api.max_rows", "api", "rows", 1, 1_000_000_000),
+    Voce("api.max_response_bytes", "api", "bytes", 1024, 10 * 1024**3),
+    Voce("api.max_total_bytes", "api", "bytes", 1024, 1024**4),
+    Voce("api.max_retries", "api", "retries", 0, 20),
+    Voce("api.max_retry_wait_seconds", "api", "seconds", 0, 3600, tipo="float"),
+    Voce("api.max_redirects", "api", "redirects", 0, 30),
+    Voce("api.max_request_seconds", "api", "seconds", 1, 86_400, tipo="float"),
+    Voce("api.min_interval_seconds", "api", "seconds", 0, 3600, tipo="float"),
+    Voce("placeholders.max_values", "placeholders", "values", 1, 100_000),
+    # set from the gateway's panel together with the gateway's own (the second barrier)
+    Voce("upload.max_bytes", "upload", "bytes", 0, 1024**4),
+    # ── read when a process starts ──
+    Voce("app.engine_api_threads", "engine_api", "threads", 40, 2000, rollout=("engine",)),
+    # at most under the chart's ingress timeout (proxy-read-timeout 300 s): past it people
+    # would see the proxy's 504 while the engine keeps working; more goes in the environment
+    Voce("previews.timeout_seconds", "engine_api", "seconds", 10, 290, tipo="float", rollout=("engine",),
+         ambiente="PREVIEW_TIMEOUT_SECONDS", predefinito=120.0),
+    Voce("celery.max_tasks_per_child", "execution", "tasks", 1, 100_000, rollout=WORKERS),
+    Voce("celery.max_memory_per_child_kb", "execution", "kilobytes", 100 * 1024, 256 * 1024**2, rollout=WORKERS),
+    Voce("celery.max_memory_headroom_frac", "execution", "", 0.1, 0.95, tipo="float", rollout=WORKERS),
+    Voce("celery.max_memory_per_child_fallback_kb", "execution", "kilobytes", 100 * 1024, 256 * 1024**2, rollout=WORKERS),
+    Voce("celery.max_memory_per_child_floor_kb", "execution", "kilobytes", 50 * 1024, 256 * 1024**2, rollout=WORKERS),
+    Voce("cache.sweep_interval_seconds", "cache", "seconds", 60, 7 * 86_400, rollout=("beat",)),
+    Voce("metrics.storage_stats_interval_seconds", "cache", "seconds", 10, 3600, rollout=("beat",)),
+    Voce("chdb.max_memory_usage", "embedded", "bytes", 128 * 1024**2, 1024**4, rollout=WORKERS,
+         ambiente="CHDB_MAX_MEMORY_USAGE", predefinito=1_500_000_000),
+    Voce("chdb.max_bytes_before_external_group_by", "embedded", "bytes", 0, 1024**4, rollout=WORKERS,
+         ambiente="CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY", predefinito=512 * 1024**2),
+    Voce("chdb.max_bytes_before_external_sort", "embedded", "bytes", 0, 1024**4, rollout=WORKERS,
+         ambiente="CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT", predefinito=512 * 1024**2),
+    Voce("chdb.max_bytes_in_join", "embedded", "bytes", 0, 1024**4, rollout=WORKERS,
+         ambiente="CHDB_MAX_BYTES_IN_JOIN", predefinito=512 * 1024**2),
+    Voce("engine.max_cross_join_rows", "execution", "rows", 1000, 10_000_000_000, rollout=WORKERS,
+         ambiente="ENGINE_MAX_CROSS_JOIN_ROWS", predefinito=50_000_000),
     # processes per worker container: shown in Admin → Workers, not among the settings
     Voce("workers.run_concurrency", "workers", "processes", 1, 32),
     Voce("workers.preview_concurrency", "workers", "processes", 1, 32),
@@ -89,13 +156,29 @@ VINCOLI = (
 )
 
 
+def _dall_ambiente(voce: Voce) -> Any:
+    """A variable read at import (`Voce.ambiente`): what the environment gives it."""
+    raw = (os.getenv(voce.ambiente) or "").strip()
+    if not raw:
+        return voce.predefinito
+    try:
+        return float(raw) if voce.tipo == "float" else int(raw)
+    except ValueError:
+        # as before these settings could come from the panel: a typing mistake in the
+        # environment stops the process, it does not quietly become the default
+        raise ValueError(f"{voce.ambiente}={raw!r} is not a {'number' if voce.tipo == 'float' else 'whole number'}") from None
+
+
 def _valore(s: Any, chiave: str) -> Any:
+    voce = PER_CHIAVE.get(chiave)
+    if voce is not None and voce.ambiente:
+        return _dall_ambiente(voce)
     sezione, campo = chiave.split(".", 1)
     return getattr(getattr(s, sezione), campo)
 
 
 def valida(valori: Any, base: Any, limite_duro_max: Optional[int] = None,
-           cambiate: Optional[set[str]] = None) -> tuple[dict[str, int], list[dict]]:
+           cambiate: Optional[set[str]] = None) -> tuple[dict[str, Any], list[dict]]:
     """(valori buoni, errori). Gli errori hanno un codice, non una frase: la frase la
     scrive il frontend nella lingua di chi guarda.
 
@@ -105,7 +188,7 @@ def valida(valori: Any, base: Any, limite_duro_max: Optional[int] = None,
     restarle sotto. `cambiate`: le voci che chi scrive ha appena cambiato — quando
     un vincolo salta fra una cambiata e una che c'era già, la colpa è della
     cambiata (l'errore deve nominare quello che si è toccato)."""
-    buoni: dict[str, int] = {}
+    buoni: dict[str, Any] = {}
     errori: list[dict] = []
     if not isinstance(valori, dict):  # un JSON valido che non è un oggetto (una lista, un numero)
         return {}, [{"key": "", "code": "unknown"}]
@@ -114,7 +197,25 @@ def valida(valori: Any, base: Any, limite_duro_max: Optional[int] = None,
         if voce is None:
             errori.append({"key": chiave, "code": "unknown"})
             continue
-        if isinstance(v, bool) or not isinstance(v, int):
+        if voce.tipo == "bool":
+            if isinstance(v, bool):
+                buoni[chiave] = v
+            else:
+                errori.append({"key": chiave, "code": "boolean"})
+            continue
+        if voce.tipo == "float":
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                errori.append({"key": chiave, "code": "number"})
+                continue
+            try:
+                v = float(v)
+            except OverflowError:  # an integer beyond any decimal (10**400)
+                errori.append({"key": chiave, "code": "max", "limit": voce.massimo})
+                continue
+            if not math.isfinite(v):
+                errori.append({"key": chiave, "code": "number"})
+                continue
+        elif isinstance(v, bool) or not isinstance(v, int):
             errori.append({"key": chiave, "code": "integer"})
             continue
         massimo = voce.massimo
@@ -126,9 +227,15 @@ def valida(valori: Any, base: Any, limite_duro_max: Optional[int] = None,
             errori.append({"key": chiave, "code": "max", "limit": massimo})
         else:
             buoni[chiave] = v
+    cambiate = cambiate or set()
+    # the hard limit taken back to the environment's: that value too must stay under the
+    # gateway's lost-run threshold (else a run still alive would be closed as failed)
+    duro = "celery.task_time_limit"
+    if limite_duro_max is not None and duro not in buoni and duro in cambiate \
+            and _valore(base, duro) > limite_duro_max:
+        errori.append({"key": duro, "code": "env_too_high", "limit": limite_duro_max})
     # finché ne salta uno: togliere una voce può rompere un vincolo già controllato
     # (morbido tolto → torna quello dell'ambiente, magari sopra il duro impostato)
-    cambiate = cambiate or set()
     toccato = True
     while toccato:
         toccato = False
@@ -152,11 +259,13 @@ def valida(valori: Any, base: Any, limite_duro_max: Optional[int] = None,
     return buoni, errori
 
 
-def applica(base: Any, buoni: dict[str, int]) -> Any:
-    """`base` con i valori sopra, sezione per sezione (le altre restano gli stessi oggetti)."""
+def applica(base: Any, buoni: dict[str, Any]) -> Any:
+    """`base` con i valori sopra, sezione per sezione (le altre restano gli stessi oggetti).
+    The variables read at import are not settings: their modules ask `valore_all_avvio`."""
+    buoni = {k: v for k, v in buoni.items() if not PER_CHIAVE[k].ambiente}
     if not buoni:
         return base
-    per_sezione: dict[str, dict[str, int]] = {}
+    per_sezione: dict[str, dict[str, Any]] = {}
     for chiave, v in buoni.items():
         sezione, campo = chiave.split(".", 1)
         per_sezione.setdefault(sezione, {})[campo] = v
@@ -169,7 +278,10 @@ def applica(base: Any, buoni: dict[str, int]) -> Any:
 
 _lock = threading.Lock()
 _letto = float("-inf")  # quando si è riletto l'ultima volta (monotonic)
-_valori: dict[str, int] = {}  # gli ultimi letti e validi
+_valori: dict[str, Any] = {}  # gli ultimi letti e validi, live ones and rollout ones
+# the rollout ones as they were at this process's first reading: frozen until it starts
+# again (None = not read yet)
+_avvio: Optional[dict[str, Any]] = None
 _versione = 0  # cresce a ogni cambiamento: chiave delle copie in cache
 _risultato: tuple[Any, int, Any] | None = None  # (base, versione, impostazioni)
 # (id dell'oggetto, versione) → (l'oggetto, la sua copia): l'oggetto resta qui
@@ -197,7 +309,15 @@ def leggi_grezzi() -> dict:
     return json.loads(raw) if raw else {}
 
 
-def _correnti() -> dict[str, int]:
+def _fissa_avvio(valori: dict[str, Any]) -> None:
+    global _avvio
+    if _avvio is None:
+        _avvio = {k: v for k, v in valori.items() if PER_CHIAVE[k].rollout}
+        if _avvio:
+            logger.info("regolazioni read when this process starts, from the panel: %s", _avvio)
+
+
+def _correnti() -> dict[str, Any]:
     global _letto, _valori, _versione
     ora = time.monotonic()
     if ora - _letto < RILEGGI_OGNI:
@@ -210,6 +330,7 @@ def _correnti() -> dict[str, int]:
             grezzi = leggi_grezzi()
         except Exception as e:  # noqa: BLE001 — Valkey giù: restano gli ultimi valori
             logger.warning("regolazioni: Valkey non risponde, restano le ultime lette (%s)", e)
+            _fissa_avvio(_valori)
             return _valori
         from app.core.config import settings_dall_ambiente
 
@@ -218,8 +339,10 @@ def _correnti() -> dict[str, int]:
             # gateway rimette le sue entro un minuto
             logger.warning("regolazioni: in Valkey c'è un %s invece di un oggetto: restano le ultime lette",
                            type(grezzi).__name__)
+            _fissa_avvio(_valori)
             return _valori
         buoni, errori = valida(grezzi, settings_dall_ambiente())
+        _fissa_avvio(buoni)
         if buoni != _valori:
             if errori:
                 logger.warning("regolazioni: scartate perché non valide: %s", errori)
@@ -230,11 +353,64 @@ def _correnti() -> dict[str, int]:
     return _valori
 
 
+def _in_vigore() -> dict[str, Any]:
+    """The live ones as they are now, the rollout ones as this process started with."""
+    correnti = _correnti()
+    return {**{k: v for k, v in correnti.items() if not PER_CHIAVE[k].rollout}, **(_avvio or {})}
+
+
+ATTESA_ALL_AVVIO = 45.0  # seconds: the gateway sends its values at least every minute
+
+
+def attendi_al_primo_avvio(massimo: float = ATTESA_ALL_AVVIO) -> bool:
+    """A worker or beat that starts on an empty Valkey (a restart without persistence, a
+    new cluster) would freeze the environment's values of the settings read at start, for
+    its whole life, while the panel shows the panel's. It waits for the gateway's values
+    instead, up to `massimo` seconds; True if they came."""
+    inizio = time.monotonic()
+    fine = inizio + massimo
+    while True:
+        try:
+            if _client().get(CHIAVE) is not None:
+                attesa = time.monotonic() - inizio
+                if attesa >= 2:  # a warning: Celery's logging is not set up yet at import
+                    logger.warning("regolazioni: waited %ds for the gateway's values (Valkey had none)", int(attesa))
+                return True
+        except Exception:  # noqa: BLE001 — Valkey not up yet: the broker waits for it too
+            pass
+        if time.monotonic() >= fine:
+            logger.warning("regolazioni: no values from the gateway after %ss: this process starts with the "
+                           "environment's for the settings read at start", int(massimo))
+            return False
+        time.sleep(2)
+
+
+def all_avvio(base: Any) -> Any:
+    """`base` with the rollout ones this process started with (Celery's configuration,
+    built from the environment's settings). Forces the first reading."""
+    _correnti()
+    return applica(base, _avvio or {})
+
+
+def valore_all_avvio(variabile: str) -> Any:
+    """A variable read at import (CHDB_MAX_MEMORY_USAGE…): the panel's value this process
+    started with, else the environment's."""
+    voce = next(v for v in VOCI if v.ambiente == variabile)
+    _correnti()
+    return (_avvio or {}).get(voce.chiave, _dall_ambiente(voce))
+
+
+def avvio() -> dict[str, Any]:
+    """The rollout ones this process started with (the panel's; the others: the environment's)."""
+    _correnti()
+    return dict(_avvio or {})
+
+
 def applicate(base: Any) -> Any:
     """Le impostazioni dell'ambiente con sopra le regolazioni correnti. È la strada
     di ogni `get_settings()`: costa un confronto finché non c'è da rileggere."""
     global _risultato
-    valori = _correnti()
+    valori = _in_vigore()
     if not valori:
         return base
     r = _risultato
@@ -249,7 +425,8 @@ def sovrapposte(oggetto: Any, sezione: str) -> Any:
     """Una sezione delle impostazioni tenuta da un oggetto creato una volta (il
     motore ClickHouse tiene la sua dall'avvio): con sopra le regolazioni correnti
     di quella sezione. Lo stesso oggetto se non ce ne sono."""
-    campi = {k.split(".", 1)[1]: v for k, v in _correnti().items() if k.startswith(sezione + ".")}
+    campi = {k.split(".", 1)[1]: v for k, v in _in_vigore().items()
+             if k.startswith(sezione + ".") and not PER_CHIAVE[k].ambiente}
     if not campi:
         return oggetto
     chiave = (id(oggetto), _versione)
@@ -263,22 +440,24 @@ def sovrapposte(oggetto: Any, sezione: str) -> Any:
     return copia
 
 
-def dimentica() -> None:
-    """Si rilegge alla prossima richiesta (test, e `get_settings.cache_clear()`)."""
-    global _letto, _valori, _risultato, _versione
+def dimentica(anche_avvio: bool = True) -> None:
+    """Si rilegge alla prossima richiesta (test, e `get_settings.cache_clear()`).
+    `anche_avvio=False` after a change: what this process started with stays."""
+    global _letto, _valori, _risultato, _versione, _avvio
     with _lock:
         _letto = float("-inf")
         _valori = {}
+        if anche_avvio:
+            _avvio = None
         _risultato = None
         _versione += 1
         _copie.clear()
 
 
-def scrivi(buoni: dict[str, int]) -> None:
+def scrivi(buoni: dict[str, Any]) -> None:
     """Le nuove regolazioni per tutti i processi (le ha già validate chi chiama).
     Questo processo le usa subito; gli altri entro RILEGGI_OGNI."""
-    if buoni:
-        _client().set(CHIAVE, json.dumps(buoni, sort_keys=True))
-    else:
-        _client().delete(CHIAVE)
-    dimentica()
+    # always written, `{}` too: a key present means the gateway has sent its values, which
+    # the workers wait for when they start (`attendi_al_primo_avvio`)
+    _client().set(CHIAVE, json.dumps(buoni, sort_keys=True))
+    dimentica(anche_avvio=False)

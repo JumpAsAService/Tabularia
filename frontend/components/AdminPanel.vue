@@ -14,7 +14,7 @@ import {
 // import espliciti: nel container i componenti nuovi non vengono scansionati
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
 import WebhooksSection from '~/components/admin/WebhooksSection.vue'
-import EngineSettingsSection from '~/components/admin/EngineSettingsSection.vue'
+import SettingsSection from '~/components/admin/SettingsSection.vue'
 import SiemSection from '~/components/admin/SiemSection.vue'
 import BackupsSection from '~/components/admin/BackupsSection.vue'
 import WorkersSection from '~/components/admin/WorkersSection.vue'
@@ -25,6 +25,7 @@ import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRule
 import { useSiem } from '~/composables/useSiem'
 import { useBackups } from '~/composables/useBackups'
 import { isSettingsCategory, useEngineSettings } from '~/composables/useEngineSettings'
+import { usePanelSettings } from '~/composables/usePanelSettings'
 import { useWorkers } from '~/composables/useWorkers'
 import { useScripting } from '~/composables/useScripting'
 import { useRegistries } from '~/composables/useRegistries'
@@ -42,6 +43,7 @@ const engineApi = useEnginePolicy()
 const aiApi = useAi()
 const integr = useIntegrations()
 const impostazioniApi = useEngineSettings()
+const pannelloApi = usePanelSettings()
 const siemApi = useSiem()
 const backupsApi = useBackups()
 const workersApi = useWorkers()
@@ -63,6 +65,13 @@ const fmtx = useFormat()
 
 type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai'
 const sezione = ref<Sezione>('users')
+// the Settings section with changes not saved: asked before going to another section
+const impostazioniDaSalvare = ref(false)
+function vaiA(id: Sezione) {
+  if (id === sezione.value) return
+  if (sezione.value === 'settings' && impostazioniDaSalvare.value && !confirm(t('panelSettings.leaveConfirm'))) return
+  sezione.value = id
+}
 
 const users = ref<UserOut[]>([])
 const groups = ref<GroupOut[]>([])
@@ -168,9 +177,10 @@ async function loadAll() {
   } catch { /* le sezioni lo diranno quando si aprono */ }
   try {
     // the processes per worker are engine settings too, but they have their own section
-    nImpostazioni.value = (await impostazioniApi.get()).items
-      .filter((v) => v.value !== null && isSettingsCategory(v.category)).length
-  } catch { /* motore giù: la sezione lo dirà quando si apre */ }
+    const [gw, eng] = await Promise.allSettled([pannelloApi.gateway(), impostazioniApi.get()])
+    nImpostazioni.value = (gw.status === 'fulfilled' ? gw.value.items.filter((v) => v.value !== null).length : 0)
+      + (eng.status === 'fulfilled' ? eng.value.items.filter((v) => v.value !== null && isSettingsCategory(v.category)).length : 0)
+  } catch { /* la sezione lo dirà quando si apre */ }
   try {
     siemAcceso.value = (await siemApi.get()).enabled
   } catch { /* la sezione lo dirà quando si apre */ }
@@ -461,7 +471,7 @@ async function toggleMotore(m: EnginePolicy) {
           :class="{ on: sezione === s.id, spenta: 'off' in s && s.off }"
           :aria-disabled="'off' in s && s.off ? 'true' : undefined"
           :title="'off' in s && s.off ? $t('scripting.kubernetesOnly') : undefined"
-          @click="!('off' in s && s.off) && (sezione = s.id)"
+          @click="!('off' in s && s.off) && vaiA(s.id)"
         >
           <component :is="s.icon" :size="15" />
           <span class="lbl">{{ s.label }}</span>
@@ -783,7 +793,7 @@ async function toggleMotore(m: EnginePolicy) {
           <BackupsSection @count="nBackup = $event" />
         </template>
         <template v-else-if="sezione === 'settings'">
-          <EngineSettingsSection @count="nImpostazioni = $event" />
+          <SettingsSection @count="nImpostazioni = $event" @dirty="impostazioniDaSalvare = $event" />
         </template>
 
         <template v-else-if="sezione === 'workers'">

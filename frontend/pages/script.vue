@@ -695,6 +695,7 @@ const unavailable = computed(() => {
         :entrypoint="viewing ? viewing.entrypoint : content?.entrypoint ?? ''"
         :tabularia-variables="editorVariables"
         :read-only="!canEdit || !!viewing"
+        saved
         @update="onCode"
         @close="editorOpen = false; viewing = null"
       />

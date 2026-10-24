@@ -8,10 +8,11 @@ parlano solo con questa interfaccia, mai con Polars direttamente.
 """
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -49,6 +50,18 @@ class PreviewResult(BaseModel):
     # cache non usata (Viewer). None = non c'e' un passo a monte da mettere in cache.
     cache_state: str | None = Field(default=None)
     cache_cap_rows: int | None = Field(default=None, description="Tetto di righe della cache, quando conta")
+
+    @field_validator("rows")
+    @classmethod
+    def _non_finite_as_text(cls, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """A division by zero gives inf or NaN: in JSON they became null, an empty cell the
+        preview showed as a missing value — that «is null» did not find and «fill nulls»
+        did not fill, and the export wrote as inf. Shown as what they are."""
+        for row in rows:
+            for k, v in row.items():
+                if isinstance(v, float) and not math.isfinite(v):
+                    row[k] = "NaN" if math.isnan(v) else ("inf" if v > 0 else "-inf")
+        return rows
 
 
 class RunResult(BaseModel):

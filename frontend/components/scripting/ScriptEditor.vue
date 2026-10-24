@@ -36,6 +36,8 @@ const props = defineProps<{
   tabulariaVariables: string[]
   readOnly?: boolean
   lastRun?: ScriptNodeRun | null
+  // a saved script's page, not a Script node: the texts about the node and the flow differ
+  saved?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: { files: ScriptFile[]; entrypoint: string }): void
@@ -469,7 +471,7 @@ onBeforeUnmount(() => {
                     { when: fmt.ago(lastRun.finished_at ?? lastRun.started_at), status: lastRun.status }) }}
               <span v-if="lastRun.stale" class="muted">· {{ $t('scripting.editor.runStale') }}</span>
             </template>
-            <span v-else class="muted">{{ $t('scripting.editor.noRun') }}</span>
+            <span v-else class="muted">{{ $t(saved ? 'scripting.editor.noRunSaved' : 'scripting.editor.noRun') }}</span>
             <button v-if="stopped" type="button" class="vai" @click.prevent="goToError">
               {{ $t('scripting.editor.goTo', { place: `${stopped.path}:${stopped.line}` }) }}
             </button>
@@ -503,7 +505,7 @@ onBeforeUnmount(() => {
       </aside>
     </div>
     <template #footer>
-      <span class="muted piede">{{ $t('scripting.editor.footer') }}</span>
+      <span class="muted piede">{{ $t(saved ? 'scripting.editor.footerSaved' : 'scripting.editor.footer') }}</span>
       <button type="button" class="primary" @click="emit('close')"><X :size="13" /> {{ $t('scripting.editor.close') }}</button>
     </template>
   </Modal>

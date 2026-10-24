@@ -47,6 +47,32 @@ def test_filter(storage, src):
     assert {r["paese"] for r in res.rows} == {"DE", "IT"}
 
 
+
+def test_filter_on_dates_takes_the_editors_values(storage):
+    """As the other engines: the editor's ISO values, and a value that is not a date said
+    in the same words, not with ClickHouse's error and the query."""
+    from datetime import date, datetime
+
+    df = pl.DataFrame({"id": [1, 2, 3], "ts": [datetime(2024, 1, 14, 18), datetime(2024, 1, 15, 6), datetime(2024, 1, 16)],
+                       "day": [date(2024, 1, 14), date(2024, 1, 15), date(2024, 1, 16)], "note": ["a", "b", "c"]})
+    src = upload_df(storage, df, "datasets/dates_chdb.parquet")
+
+    def ids(ops):
+        return sorted(r["id"] for r in _engine(storage).preview(src, ops, limit=10).rows)
+
+    # what the calendar sends, without seconds: ClickHouse could not read it
+    assert ids([{"type": "filter", "params": {"column": "ts", "operator": "gt", "value": "2024-01-15T05:30"}}]) == [2, 3]
+    assert ids([{"type": "filter", "params": {"column": "ts", "operator": "between",
+                                              "value": ["2024-01-15T00:00", "2024-01-15T23:59"]}}]) == [2]
+    assert ids([{"type": "filter", "params": {"column": "ts", "operator": "in", "value": ["2024-01-15T06:00"]}}]) == [2]
+    assert ids([{"type": "filter", "params": {"column": "day", "operator": "eq", "value": "2024-01-15"}}]) == [2]
+    # a text column keeps the text as it is
+    assert ids([{"type": "filter", "params": {"column": "note", "operator": "lt", "value": "2024-01-15T05:30"}}]) == []
+    for col in ("ts", "day"):
+        with pytest.raises(EngineError, match="is not valid for a date or time column: use the ISO format"):
+            _engine(storage).preview(src, [{"type": "filter", "params": {"column": col, "operator": "gt",
+                                                                          "value": "15/01/2024"}}], limit=10)
+
 def test_group_by(storage, src):
     ops = [{"type": "group_by", "params": {
         "by": ["paese"],

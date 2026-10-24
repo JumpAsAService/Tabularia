@@ -525,8 +525,10 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         import clickhouse_connect
 
         utente, password = self._credentials()
+        # the connect timeout too: it changes from the panel, and a client keeps the one it
+        # was made with
         chiave = (self.cfg.host, self.cfg.port, self.cfg.database or "default",
-                  utente, bool(self.cfg.secure))
+                  utente, bool(self.cfg.secure), self.cfg.connect_timeout)
         cache = getattr(_CLIENTI_PER_THREAD, "per_chiave", None)
         if cache is None:
             cache = _CLIENTI_PER_THREAD.per_chiave = {}

@@ -194,7 +194,8 @@ async def test_a_canvas_reading_a_hidden_file_is_not_previewed(session, world, f
     ("filter", {"column": "c", "operator": "between", "value": [1]}, "between"),
     ("filter", {"column": "c", "operator": "in", "value": []}, "list"),
     ("group_by", {"by": ["c"], "aggregations": [{"column": "a", "func": "average"}]}, "func among"),
-    ("sort", {"by": ["a", "b"]}, "ONE column"),
+    ("sort", {"by": []}, "list of column names"),
+    ("sort", {"by": ["a", "b"], "descending": [True]}, "one per column"),
     ("sql", {"query": "WITH x AS (SELECT 1) SELECT * FROM x"}, "starts with SELECT"),
     ("cast", {"columns": {"a": "integer"}}, "types among"),
     ("join", {"how": "outer", "on": ["id"]}, "how must be"),
@@ -207,7 +208,9 @@ def test_wrong_params_tell_the_model_what_to_fix(operation, params, message):
 
 
 def test_params_come_out_as_the_editor_form_writes_them():
-    assert clean_params("sort", {"by": ["amount"], "descending": True}) == {"by": "amount", "descending": True}
+    assert clean_params("sort", {"by": ["amount"], "descending": True}) == {"by": ["amount"], "descending": [True]}
+    assert clean_params("sort", {"by": ["a", "b"], "descending": [False, True]}) == {"by": ["a", "b"], "descending": [False, True]}
+    assert clean_params("sort", {"by": "a"}) == {"by": ["a"], "descending": [False]}
     assert clean_params("filter", {"column": "x", "operator": "is_null", "value": 3}) == {"column": "x", "operator": "is_null"}
     assert clean_params("join", {"how": "left", "left_on": ["a"], "right_on": ["b"]}) == {"how": "left", "left_on": ["a"], "right_on": ["b"]}
     assert clean_params("sql", {"query": " SELECT * FROM self; "}) == {"query": "SELECT * FROM self"}

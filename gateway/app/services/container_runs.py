@@ -40,9 +40,10 @@ from app.models import ContainerRegistry, ContainerRegistryVariable, Flow, Run, 
 from app.services import container_cluster, container_nodes, kube_jobs, registry_access
 from app.services import container_registry as cr
 from app.services.flow_resolver import resolve_script_input, script_has_output, script_input_edge
+from app.models.run import TERMINAL_STATES
 from app.services.kube_scaling import KubeError
 from app.services.script_runs import (
-    GRACE_SECONDS, _attempt, _detail, _storage_env, storage_payload,
+    GRACE_SECONDS, _attempt, _delete_objects, _detail, _storage_env, run_still_open, storage_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,6 +197,8 @@ async def run_container(session: Session, user: User, flow: Optional[Flow], defi
     session.refresh(child)
 
     def save(**values) -> None:
+        if values.get("status") in TERMINAL_STATES and not run_still_open(session, child.id):
+            return  # closed meanwhile (an orphan's reconcile, an interruption): its outcome stays
         for k, v in values.items():
             setattr(child, k, v)
         child.script = json.dumps(info)
@@ -260,6 +263,10 @@ async def run_container(session: Session, user: User, flow: Optional[Flow], defi
             if attempt <= retries:
                 logger.info("container: run %s attempt %s failed (%s), again in %ss", child.id, attempt, reason, delay)
                 await asyncio.sleep(delay)
+                if not run_still_open(session, parent_run_id or child.id):
+                    raise ContainerFailed(f"container «{label}» failed: {reason} (not run again: its run was closed)")
+                if has_output:  # what the failed attempt wrote is not the next one's output
+                    await _delete_objects(storage, [out_key])
         if not ok:
             raise ContainerFailed(f"container «{label}» failed: {reason}")
 

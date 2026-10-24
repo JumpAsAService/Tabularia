@@ -22,6 +22,11 @@ Bundling them as subcharts would produce a deployment that looks complete and
 quietly loses data on the first node failure. Point the chart at managed services
 through `externalServices`.
 
+Each installation needs its own Redis database (`externalServices.redis.db`) or
+instance: the queues and keys have fixed names, and two installations sharing them run
+each other's tasks. And one release per namespace: the namespaces of the users' code
+are named after the release's namespace.
+
 **Neither is the monitoring stack.** The compose file ships VictoriaMetrics,
 Grafana, cAdvisor, node-exporter and a Celery exporter for local work; in a
 cluster you almost certainly already run your own. Two things in the product
@@ -197,7 +202,7 @@ waiting, and lets an administrator change two things:
   and an autoscaler on the workers (`autoscaling.enabled`, CPU HPA or KEDA).
 
 With `adminScaling.enabled`, the gateway's and the orchestrator's service accounts
-(`<release>-scaler`, `<release>-orchestrator`) may `get` the two worker Deployments
+(`<release>-tabularia-scaler`, `<release>-tabularia-orchestrator`) may `get` the two worker Deployments
 and `get`/`patch` their two autoscalers, named one by one — nothing else, in this
 namespace only. The panel cannot set a maximum above `autoscaling.panelMaxReplicas`:
 that is your budget per Deployment. An HPA keeps at least one pod; KEDA may go to
@@ -247,17 +252,19 @@ pulls. Each image is recorded with the architecture it was built for, and its ch
 scripts run on nodes of that architecture. Details, and what fails how, in
 [docs/scripting.md](../../../docs/scripting.md#a-registry-with-your-companys-certificate).
 
-The gateway runs as `<release>-scaler`, the orchestrator as `<release>-orchestrator`:
+The gateway runs as `<release>-tabularia-scaler`, the orchestrator as `<release>-tabularia-orchestrator`:
 the accounts of Admin → Workers. In those namespaces only, they may create, read and delete Jobs, read their Pods, logs and
 events, and (scripts and trials) create the ConfigMap and Secret a Job mounts. In the
 builds' namespace, `privileged`, only the orchestrator's account creates Jobs: it alone
 runs the builds, so the gateway, which answers the internet, cannot start a privileged
 Pod. Nothing runs in the release's namespace.
 
-These two accounts are the chart's own, created whenever `adminScaling`, `scripts` or
-`containers` is on: `serviceAccount.create`, `serviceAccount.name` and
-`serviceAccount.annotations` apply to the other pods only. A cluster where the release
-may not create ServiceAccounts, Roles and RoleBindings cannot turn those three on.
+These two accounts are the chart's own, created whenever `adminScaling`, `scripts`,
+`containers`, `clusterView` or `settingsRollout` is on (the last two are on by default):
+`serviceAccount.create`, `serviceAccount.name` and `serviceAccount.annotations` apply to
+the other pods only. A cluster where the release may not create ServiceAccounts, Roles
+and RoleBindings must turn all five off (`clusterView.enabled=false`,
+`settingsRollout.enabled=false`).
 
 ## Container registries
 
@@ -270,8 +277,9 @@ speaks to the registries; the nodes pull the images, so with a company authority
 they must trust the registry too (**Try in the cluster**, in the registry's page, checks
 it).
 
-The chart creates `containers.namespace` (default `<release>-containers`) and
-`containers.trialNamespace` (`<release>-containers-dev`, with `containers.trialQuota`),
+The chart creates `containers.namespace` (default `<namespace>-containers`, after the
+release's namespace) and `containers.trialNamespace` (`<namespace>-containers-dev`, with
+`containers.trialQuota`),
 both at the `baseline` Pod Security level, and a Role in each for the gateway's and the
 orchestrator's accounts
 (Jobs, Pods, logs, events, Secrets: Tabularia writes a pull Secret per registry there).
@@ -366,6 +374,21 @@ internal token, derived from the Fernet key. Each role also loses the secrets
 it has no use for: the engine roles never see the session key or the metadata
 password, the gateway never sees the storage or warehouse keys.
 
+## Administration → Settings: restarts
+
+`settingsRollout.enabled` (on by default) lets Administration → Settings apply the
+settings read only when a process starts (marked with the restart icon: the gateway's
+threads and database pool, the workers' memory and recycling, the engine API's threads,
+the scheduler's intervals): the orchestrator evicts the pods of the components concerned
+one at a time, through the eviction API, waiting each time for the new pod to be ready,
+so the PodDisruptionBudgets hold. The gateway's and the orchestrator's accounts get a Role
+in the release's namespace to `get`/`list` pods, the orchestrator's alone one to `create`
+`pods/eviction` (it runs the restart and answers nobody from outside), and the variable
+`KUBERNETES__ROLLOUT`. Not the right to patch the
+Deployments, as `kubectl rollout restart` would need: that right is the right to change
+their image or account. Off, the panel saves those settings and names the components to
+restart by hand (docs/engine-settings.md).
+
 ## Administration → Cluster
 
 `clusterView.enabled` (on by default) gives Tabularia's administrators and observers a
@@ -411,7 +434,7 @@ Before upgrading, list in `networkPolicy.userCodePrivateCIDRs` the private addre
 the scripts, the image builds and the Container nodes must reach (the registry the
 builds push to, a scripts bucket on a private endpoint, company databases), or set the
 two values to `false` to keep the previous behaviour. The orchestrator moves to a
-service account of its own, `<release>-orchestrator`, the only one that may create the
+service account of its own, `<release>-tabularia-orchestrator`, the only one that may create the
 image builds' Jobs: a build that starts while the old orchestrator pod is still
 running fails with *Forbidden*; **Build again** after the upgrade.
 

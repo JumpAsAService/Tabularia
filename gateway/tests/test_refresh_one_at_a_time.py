@@ -181,7 +181,7 @@ async def test_a_flow_waits_for_the_refresh_already_running(session, monkeypatch
         return run
 
     monkeypatch.setattr(orch, "_reconcile", reconcile)
-    monkeypatch.setattr(orch, "REFRESH_WAIT_INTERVAL_S", 0.01)
+    monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.01)
     await orch._refresh_and_wait(session, session.get(User, user_id), ds_id)
     assert engine.ingests == 0 and set(waited) == {live.id}
 

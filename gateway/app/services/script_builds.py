@@ -273,6 +273,8 @@ _OUT_OF_MEMORY = re.compile(r"Killed signal terminated program|internal compiler
 # a Job whose Pod has failed to download its image for this long fails (the node
 # retries a couple of times in it)
 PULL_FAILURE_SECONDS = 30
+# a Job still without a Pod this long after it was created: the cluster may be refusing it
+NO_POD_SECONDS = 10
 
 
 def _age_seconds(job: dict) -> float:
@@ -436,20 +438,32 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
     stage_ns = build_namespace() if v.status == "building" else s.namespace
     name = v.job_name or job_name("build" if v.status == "building" else "check", v)
     job = await kube_jobs.get_job(stage_ns, name)
+    stage = "build" if v.status == "building" else "check of the new image"
     if job is None:
-        _fail(v, f"The Job {name} is gone from the cluster before it ended")
+        _fail(v, f"The Job {name} of the {stage} is no longer in the cluster (deleted, or removed once finished "
+                 "while no orchestrator was running): build the environment again")
         return
     outcome = kube_jobs.job_outcome(job)
     if outcome is None:
-        # an image the nodes cannot download (BuildKit's, or the one just built) would
-        # otherwise wait for the whole timeout
-        why = await kube_jobs.pull_failure(stage_ns, name)
-        if why and _age_seconds(job) >= PULL_FAILURE_SECONDS:
+        # a Pod the cluster refuses (Pod Security, a quota, a LimitRange), or an image the
+        # nodes cannot download (BuildKit's, or the one just built), would otherwise wait
+        # for the whole timeout and then say nothing of it
+        why = ""
+        if not kube_jobs.has_pod(job) and _age_seconds(job) >= NO_POD_SECONDS:
+            why = await kube_jobs.refused(stage_ns, name)
+        if not why:
+            why = await kube_jobs.pull_failure(stage_ns, name)
+            why = why if why and _age_seconds(job) >= PULL_FAILURE_SECONDS else ""
+        if why:
             await kube_jobs.delete_job(stage_ns, name)
-            _fail(v, f"The {'build' if v.status == 'building' else 'check of the new image'} cannot start: {why}")
+            _fail(v, f"The {stage} cannot start: {why}")
         return
     # the check prints every package and what each exports: room for all of it
-    log = await kube_jobs.job_log(stage_ns, name, s.log_max_bytes if v.status == "building" else 8 * 2**20)
+    try:
+        log, exit_code, ended = await kube_jobs.job_result(
+            stage_ns, name, s.log_max_bytes if v.status == "building" else 8 * 2**20)
+    except kube_jobs.LogUnavailable as e:
+        log, exit_code, ended = f"(the cluster did not give the log: {e})", e.exit_code, e.reason
     digest = digest_from_log(log) if v.status == "building" and outcome != "failed" else None
     if digest:
         v.image_ref, v.build_log = f"{repository(v.environment_id)}@{digest}", _strip_digest(log)
@@ -478,9 +492,15 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
                 _fail(v, "The image was built but not pushed: the registry refused the credentials. Check the "
                          "Secret of scripts.registry.pushSecret and its rights on the repository", log)
                 return
-            if _OUT_OF_MEMORY.search(log or ""):
+            if _OUT_OF_MEMORY.search(log or "") or ended == "OOMKilled" or exit_code == 137:
+                # the compiler's own line, or (cgroup v2: the kernel kills the whole container)
+                # only the exit code
                 _fail(v, f"The image build ran out of memory: a compiler was killed. Raise SCRIPTS__BUILD_MEMORY "
                          f"(now {s.build_memory}), or lower SCRIPTS__BUILD_CPU to run fewer compilers at once", log)
+                return
+            if "DeadlineExceeded" in reason:
+                _fail(v, f"The image build took longer than SCRIPTS__BUILD_TIMEOUT_SECONDS ({s.build_timeout_seconds} s): "
+                         "raise it, or give the build more CPU (SCRIPTS__BUILD_CPU)", log)
                 return
             _fail(v, f"The image build failed{f' ({reason})' if reason else ''}: the end of the build log says why", log)
             return
@@ -538,8 +558,8 @@ async def build_loop(stop: asyncio.Event) -> None:
         return
     from app.db.session import engine
 
-    every = get_settings().scripts.poll_seconds
     while not stop.is_set():
+        every = get_settings().scripts.poll_seconds  # changes from the panel at the next round
         try:
             await un_giro(engine)
         except Exception as e:  # noqa: BLE001 — database or cluster down: at the next round

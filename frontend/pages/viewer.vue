@@ -15,7 +15,7 @@ import { useApi, errMessage, type Operation, type ColumnInfo } from '~/composabl
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
-import { useSavedViews, type SavedView, type SavedViewSpec } from '~/composables/useSavedViews'
+import { useSavedViews, type ChartSettings, type SavedView, type SavedViewSpec } from '~/composables/useSavedViews'
 import { useProjects, type Project } from '~/composables/useProjects'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 
@@ -112,7 +112,11 @@ const addComputed = () => computedFields.value.push({ name: '', expr: '' })
 const baseCols = ref<ColumnInfo[]>([]) // colonne dopo filtri+campi (NO pivot) → chart & pivot config
 const tableCols = ref<ColumnInfo[]>([]) // colonne mostrate in tabella (con eventuale pivot)
 const rows = ref<Record<string, any>[]>([])
+// more rows than ROW_LIMIT: the table shows the first ones, and says so
+const truncated = ref(false)
 const view = ref<'table' | 'chart'>('table')
+// the chart's settings, kept in a saved view
+const chart = ref<ChartSettings | null>(null)
 const loading = ref(false)
 const error = ref('')
 const ROW_LIMIT = 500
@@ -194,6 +198,7 @@ async function apply() {
     }
     const res = await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys }, 'table')
     rows.value = res.rows
+    truncated.value = !!res.truncated
     tableCols.value = res.columns
     if (!conPivot) baseCols.value = res.columns
   } catch (e) {
@@ -292,6 +297,8 @@ function buildSpec(): SavedViewSpec {
       func: pivot.value.func,
     },
     outline: outline.value,
+    tab: view.value,
+    chart: chart.value,
   }
 }
 
@@ -312,6 +319,9 @@ function applySpec(raw: string) {
     func: s.pivot?.func ?? 'sum',
   }
   outline.value = !!s.outline
+  // the tab and the chart: a view saved on its chart opened on the table, the chart reset
+  view.value = s.tab === 'chart' ? 'chart' : 'table'
+  chart.value = s.chart ?? null
 }
 
 async function openSavedView(id: number | null) {
@@ -524,7 +534,7 @@ onMounted(async () => {
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>
           <span v-if="loading" class="muted">{{ $t('viewer.computing') }}</span>
           <span v-else-if="error" class="err">{{ error }}</span>
-          <span class="rmeta muted">{{ $t('viewer.rowsColsMeta', { n: rows.length, m: tableCols.length }) }}</span>
+          <span class="rmeta muted">{{ truncated ? $t('viewer.rowsColsMetaFirst', { n: rows.length, m: tableCols.length }) : $t('viewer.rowsColsMeta', { n: rows.length, m: tableCols.length }) }}</span>
           <div class="expbtns">
             <button :disabled="!rows.length || !!exporting" :title="$t('viewer.exportCsvTitle')" @click="exportView('csv')">
               <Download :size="13" /> {{ exporting === 'csv' ? '…' : 'CSV' }}
@@ -558,7 +568,7 @@ onMounted(async () => {
         </div>
 
         <div v-show="view === 'chart'" class="chartwrap">
-          <ChartPanel :columns="baseCols" :query="chartQuery" />
+          <ChartPanel :columns="baseCols" :query="chartQuery" :settings="chart" @update:settings="chart = $event" />
         </div>
       </section>
     </div>
@@ -569,7 +579,7 @@ onMounted(async () => {
 <style scoped src="~/assets/listpage.css"></style>
 <style scoped>
 .viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.head-actions { display: flex; align-items: center; gap: 8px; }
+.head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .vwsel { width: 200px; }
 /* riquadro di salvataggio: stessa meccanica del menù "nuovo flusso" — uno
    sfondo che cattura il click fuori, e il pannello sopra.

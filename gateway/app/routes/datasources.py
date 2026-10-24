@@ -342,7 +342,7 @@ async def create_sharepoint_datasource(
 
     È una datasource `kind="database"` a tutti gli effetti — refresh manuale e
     schedulato, storico degli import, spinner, snapshot swap — con
-    `source_type="sharepoint"` e `source_ref` = JSON {path, sheet}: cambia solo
+    `source_type="sharepoint"` e `source_ref` = JSON {path, sheet, format, csv}: cambia solo
     CHI porta i dati (vedi launch_ingest_run)."""
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -354,12 +354,12 @@ async def create_sharepoint_datasource(
     if conn.db_type != "sharepoint":
         raise HTTPException(status_code=422, detail="A SharePoint connection is required")
     name, path, sheet = body.name.strip(), body.path.strip(), body.sheet.strip()
-    if not name or not path or not sheet:
-        raise HTTPException(status_code=422, detail="Name, path and sheet are required")
+    if not name or not path:
+        raise HTTPException(status_code=422, detail="Name and path are required")
     if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
         raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
 
-    ref = {"path": path, "sheet": sheet, **body.template_fields()}
+    ref = {"path": path, "sheet": sheet, "format": body.format, "csv": body.csv.model_dump(), **body.template_fields()}
     await validate_file_templates(conn, ref, ("path",))
     ds = Datasource(
         name=name, description=body.description, project_id=project_id, owner_id=user.id,
@@ -379,7 +379,8 @@ async def create_sharepoint_datasource(
     audit.record_audit(
         session, actor=user, action=audit.DS_CREATE, target_type="datasource",
         target_id=ds.id, target_label=ds.name,
-        detail={"project_id": project_id, "connection_id": conn.id, "source_type": "sharepoint", "path": path, "sheet": sheet},
+        detail={"project_id": project_id, "connection_id": conn.id, "source_type": "sharepoint", "path": path,
+                "format": body.format, "sheet": sheet},
         request=request,
     )
     return _to_out(ds)

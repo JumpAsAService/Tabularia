@@ -85,7 +85,8 @@ async def _out(session: Session, who: User) -> BackupOut:
     return BackupOut(
         available=reason is None, disabled_reason=reason, enabled=eff["enabled"], schedule=eff["schedule"],
         keep=eff["keep"], timezone=get_settings().app.timezone, defaults=eff["defaults"], changed=eff["changed"],
-        next_at=r.next_at if eff["enabled"] else None, running_since=r.running_since, requested_at=r.requested_at,
+        next_at=r.next_at if eff["enabled"] else None,
+        running_since=r.running_since if db_backup.in_corso(r) else None, requested_at=r.requested_at,
         last_ok_at=r.last_ok_at, last_name=r.last_name, last_size=r.last_size, last_seconds=r.last_seconds,
         last_error=r.last_error if full else None, last_error_at=r.last_error_at,
         bucket=found.get("bucket"), prefix=found.get("prefix"), same_as_data=found.get("same_as_data"),
@@ -139,7 +140,7 @@ async def adesso(request: Request, session: Session = Depends(get_session), admi
         raise HTTPException(status_code=409, detail="Backups are not available on this installation")
     db_backup.row(session)
     taken = session.exec(update(DatabaseBackup).where(
-        DatabaseBackup.id == 1, DatabaseBackup.running_since.is_(None), DatabaseBackup.requested_at.is_(None))  # type: ignore[union-attr]
+        DatabaseBackup.id == 1, db_backup.ferma(), DatabaseBackup.requested_at.is_(None))  # type: ignore[union-attr]
         .values(requested_at=datetime.now(timezone.utc).replace(tzinfo=None), requested_by=admin.email)).rowcount
     session.commit()
     if taken != 1:

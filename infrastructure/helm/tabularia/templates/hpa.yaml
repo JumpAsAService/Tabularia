@@ -37,8 +37,9 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ include "tabularia.fullname" $ }}-{{ $name }}
-  minReplicas: {{ $cfg.autoscaling.minReplicas }}
-  maxReplicas: {{ $cfg.autoscaling.maxReplicas }}
+  {{- $hpa := dict "root" $ "apiVersion" "autoscaling/v2" "kind" "HorizontalPodAutoscaler" "name" (printf "%s-%s" (include "tabularia.fullname" $) $name) }}
+  minReplicas: {{ include "tabularia.panelBound" (merge (dict "field" "minReplicas" "value" $cfg.autoscaling.minReplicas) $hpa) }}
+  maxReplicas: {{ include "tabularia.panelBound" (merge (dict "field" "maxReplicas" "value" $cfg.autoscaling.maxReplicas) $hpa) }}
   metrics:
     - type: Resource
       resource:

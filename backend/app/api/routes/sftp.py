@@ -70,6 +70,7 @@ def files_answer(g) -> dict:
         "missing": g.missing[:50],
         "missing_total": len(g.missing),
         "expansions": g.expansions,
+        "sheets": g.sheets,
     }
 
 

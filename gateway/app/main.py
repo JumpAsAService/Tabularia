@@ -2,12 +2,14 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
 
 from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
@@ -25,6 +27,7 @@ from app.services.regolazioni_motore import spingi_loop as regolazioni_loop
 from app.services.kube_scaling import riapplica_loop as scaling_loop
 from app.services.siem import inoltro_loop as siem_loop
 from app.services.script_builds import build_loop as script_builds_loop
+from app.services.settings_rollout import rollout_loop as settings_rollout_loop
 from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
 from app.routes.users import router as users_router
@@ -32,6 +35,8 @@ from app.routes.api_tokens import router as api_tokens_router
 from app.routes.service_accounts import router as service_accounts_router
 from app.routes.webhooks import router as webhooks_router
 from app.routes.engine_settings import router as engine_settings_router
+from app.routes.gateway_settings import rollout_router as settings_rollout_router
+from app.routes.gateway_settings import router as gateway_settings_router
 from app.routes.workers import router as workers_router
 from app.routes.siem import router as siem_router
 from app.routes.backups import router as backups_router
@@ -97,6 +102,9 @@ def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
         # on Kubernetes, the images of the scripting environments: built, then checked
         # (it returns at once elsewhere)
         asyncio.create_task(script_builds_loop(stop)),
+        # on Kubernetes, the pods restarted one at a time after a setting read at start
+        # changed, when an administrator asks (it returns at once elsewhere)
+        asyncio.create_task(settings_rollout_loop(stop)),
     ]
 
 
@@ -119,6 +127,16 @@ async def lifespan(app: FastAPI):
         first_run.ensure_bootstrap_token()
         backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
     stop = asyncio.Event()
+    # the panel's settings, read again every few seconds by every process, whatever its role.
+    # Once now, the database being up: the first reading at import may have found it not
+    # ready yet, and the background work below must not start with the environment's
+    # values (a shorter retention would delete what the panel keeps)
+    from app.core.overrides import overrides_loop, reload as reload_overrides
+    from app.db.session import engine as db_engine
+
+    await asyncio.to_thread(reload_overrides, db_engine)
+
+    rilettura = asyncio.create_task(overrides_loop(stop))
     from app.services import openlineage
 
     logger.info(openlineage.describe())
@@ -127,7 +145,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         stop.set()
-        for task in fondo:
+        for task in [*fondo, rilettura]:
             task.cancel()
             try:
                 await task
@@ -193,6 +211,33 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
+@app.exception_handler(DBAPIError)
+async def _database_down(request: Request, exc: DBAPIError):
+    """PostgreSQL not answering (restarting, its node drained, the network): a 503 that
+    says so, instead of a bare «Internal Server Error» that sends people looking at their
+    password. Other database errors stay 500s: they are bugs."""
+    if not (exc.connection_invalidated or isinstance(exc, (OperationalError, InterfaceError))):
+        raise exc
+    logger.warning("database not answering on %s %s: %s", request.method, request.url.path, str(exc).splitlines()[0][:200])
+    return JSONResponse(status_code=503, content={"detail": "The database is not answering: try again in a moment"})
+
+
+@app.exception_handler(httpx.TransportError)
+async def _service_down(request: Request, exc: httpx.TransportError):
+    """The engine (or another service a request calls) not answering — a pod of it just
+    stopping, its node drained: a 503 that says who, instead of a bare 500."""
+    try:
+        target = exc.request.url
+    except RuntimeError:  # an error raised without its request
+        target = None
+    engine_url = httpx.URL(get_settings().engine.base_url)
+    is_engine = target is not None and (target.host, target.port) == (engine_url.host, engine_url.port)
+    logger.warning("%s not answering on %s %s: %s", target.host if target else "a service", request.method,
+                   request.url.path, type(exc).__name__)
+    who = "The engine is not answering" if is_engine else "A service Tabularia calls is not answering"
+    return JSONResponse(status_code=503, content={"detail": f"{who}: try again in a moment"})
+
+
 @app.exception_handler(RequestValidationError)
 async def _richiesta_non_valida(request: Request, exc: RequestValidationError):
     """Il 422 di FastAPI, tranne quando il valore rifiutato non si scrive in JSON:
@@ -207,9 +252,12 @@ async def _richiesta_non_valida(request: Request, exc: RequestValidationError):
 
 
 @app.get("/health", include_in_schema=False)
-def health():
+async def health():
     """Liveness: l'app sta servendo. Usato dall'healthcheck del container per
-    rendere VISIBILE un gateway wedged (app giù ma container ancora 'running')."""
+    rendere VISIBILE un gateway wedged (app giù ma container ancora 'running').
+    On the event loop, not in the threads that serve the requests: twelve slow
+    requests (a database that answers late) made the probes fail and Kubernetes
+    restart a busy gateway, with everything it was doing."""
     return {"status": "ok"}
 
 
@@ -224,6 +272,8 @@ if settings.app.role != "orchestrator":
     app.include_router(service_accounts_router)
     app.include_router(webhooks_router)
     app.include_router(engine_settings_router)
+    app.include_router(gateway_settings_router)
+    app.include_router(settings_rollout_router)
     app.include_router(workers_router)
     app.include_router(siem_router)
     app.include_router(backups_router)

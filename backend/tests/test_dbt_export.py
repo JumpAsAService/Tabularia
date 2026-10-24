@@ -76,6 +76,15 @@ def test_il_sort_del_publish_ignora_le_colonne_che_non_ci_sono():
     assert "ORDER BY" not in sql
 
 
+def test_sort_on_several_columns_keeps_a_direction_each():
+    ops = [{"type": "sort", "params": {"by": ["sparita", "importo", "id"], "descending": [True, True, False], "ignore_missing": True}}]
+    sql, _, _ = d.compile_model_sql({"key": "k"}, ops, _resolve)
+    assert 'ORDER BY "importo" DESC NULLS LAST, "id" ASC NULLS LAST' in sql and "sparita" not in sql
+    assert "-- sort by importo descending, id ascending (nulls last)" in sql
+    sql, _, _ = d.compile_model_sql({"key": "k"}, [{"type": "sort", "params": {"by": ["importo", "id"], "descending": True}}], _resolve)
+    assert 'ORDER BY "importo" DESC NULLS LAST, "id" DESC NULLS LAST' in sql
+
+
 def test_join_con_ramo_destro_compilato_come_cte_e_colonne_right():
     sql, cols, _ = d.compile_model_sql(
         {"key": "a"},

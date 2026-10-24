@@ -49,7 +49,7 @@ five engines (BigQuery live, against a real project):
   the pivot too;
 - `median` uses linear interpolation (R7);
 - sorting always puts **nulls last**, ascending and descending — a "top N" never returns
-  nulls;
+  nulls; on several columns each keeps its own direction, the next ones breaking the ties;
 - a failed cast yields `NULL`, never an error; numbers cast to integer are **truncated**,
   not rounded; numeric strings are trimmed of surrounding whitespace;
 - in a join, a `NULL` key never matches; a missing side is `NULL`, never a default value;
@@ -65,13 +65,12 @@ without any error.
 
 | Operation | What differs | Engines |
 |---|---|---|
-| `contains` | **Polars treats the text as a regular expression**; the others match a literal substring. | Polars vs all others |
 | `not_in` with a `NULL` in the list | DuckDB and BigQuery return **zero rows** (strict SQL: `<> NULL` is never true). | DuckDB, BigQuery |
 | `round()` in `compute` | Polars and the ClickHouse engines round half to **even** (`0.5 → 0`); DuckDB and BigQuery round half **away from zero** (`0.5 → 1`). Relevant for money. | DuckDB, BigQuery |
+| `CAST(x AS INTEGER)` in `compute` | Polars and the ClickHouse engines truncate (`47.5 → 47`); DuckDB rounds (`47.5 → 48`). The `cast` operation truncates on every engine: prefer it. | DuckDB |
 | `%` (modulo) with negative numbers | Polars takes the sign of the divisor (`-5 % 3 = 1`); the others take the sign of the dividend (`-5 % 3 = -2`). | Polars |
 | `concat()` in `compute` | Polars, DuckDB and BigQuery skip a `NULL` argument; the ClickHouse engines return `NULL`. The `\|\|` operator is consistent everywhere — prefer it. | chDB, ClickHouse |
 | `contains` / `ends_with` on a **numeric** column | The number is turned into text differently: `100.0` on Polars and DuckDB, `100` on the ClickHouse engines and BigQuery. | chDB, ClickHouse, BigQuery |
-| `sort` with a per-column list of directions | DuckDB, chDB and BigQuery apply the first direction to **every** column; Polars applies them per column. | DuckDB, chDB, BigQuery |
 | `join` with key columns of different types | DuckDB coerces and finds matches; Polars, the ClickHouse engines and BigQuery raise an error. | DuckDB |
 | `cast` to boolean | Polars **fails** on text; DuckDB and BigQuery parse `"true"`/`"false"` (DuckDB also `t`/`1`/`yes`/`y` and `f`/`0`/`no`/`n`, in any case; BigQuery: any non-zero number is `true`); the ClickHouse engines return an integer and turn `-1` into `NULL`. | all |
 
@@ -92,7 +91,7 @@ Legitimate dialect differences. Know them, choose accordingly.
 | Topic | Behaviour |
 |---|---|
 | Integer overflow in `sum` | Polars and chDB wrap around silently; DuckDB and BigQuery raise an error. |
-| `first` / `last`, and which row `unique` keeps | Deterministic in practice on small data in-process, but not guaranteed: on large data DuckDB's parallel aggregation returns an arbitrary row of the group even right after a `sort` (seen at 200 000+ rows), and the same holds on a parallel ClickHouse server and on BigQuery (`ANY_VALUE`, `ROW_NUMBER` over an unordered partition). A sort helps on Polars and on small data; the dbt export orders `first`/`last` by the sort before them on every target. |
+| `first` / `last`, and which row `unique` keeps | After a `sort`, the first and last rows **in that order**, on Polars, DuckDB and the ClickHouse engines (checked on 400 000 rows, a ClickHouse server included). Without a sort, the first and last rows of the data as read on Polars and DuckDB; any row of the group on the ClickHouse engines and BigQuery. |
 | Casting text to `datetime` | The ClickHouse engines parse almost anything, including a numeric string read as a Unix timestamp; Polars, DuckDB and BigQuery only accept standard formats and return `NULL` otherwise. Polars and DuckDB **drop** a `Z` or a UTC offset written after the seconds and keep the clock time: `2024-01-05 10:30:00+02` is 10:30 UTC, not 08:30. They disagree on `24:00:00` (DuckDB: midnight of the next day; Polars: `NULL`), on `23:59:60`, a `Z` right after the minutes, a lowercase `z` and an offset after a space (Polars reads them; DuckDB: `NULL`). |
 | Casting text to `date` | Permissiveness varies: `2024-1-5` works on Polars, DuckDB and BigQuery, `2024/01/05` and `2024-01-05 10:00` only on DuckDB. A two-digit year is that year, not this century's: `24-01-05` is the year 24 on Polars and DuckDB. Use ISO dates. |
 | Casting text to `float` | `inf`, `nan` and a number beyond the double range (`1e400` → infinity) agree on Polars and DuckDB; `1_000.5` is 1000.5 on DuckDB and `NULL` on Polars. |
@@ -109,11 +108,10 @@ Legitimate dialect differences. Know them, choose accordingly.
 1. **Keep the production engine equal to the development engine** unless you have a
    reason not to. When they differ, re-check any flow that uses an operation from the
    first table above.
-2. **Avoid `contains` with punctuation** (`.`, `(`, `+`, `*`) until it is uniform, or
-   accept that it means a regular expression on Polars.
-3. **Prefer `\|\|` over `concat()`**, and ISO dates in text you cast.
-4. **Sort explicitly** when you rely on `first`, `last`, or which duplicate `unique` keeps — and on large data
-   do not rely on them after a sort on the DuckDB engine: aggregate with `min`/`max` of a sortable key instead.
+2. **Prefer `\|\|` over `concat()`**, and ISO dates in text you cast.
+3. **Sort explicitly** when you rely on `first`, `last`, or which duplicate `unique` keeps.
+4. **In `compute`, write the engine's SQL** (its dialect): `round()`, a `CAST` to an integer, `%`
+   and the date functions can give other numbers on another engine.
 5. **Check the engine recorded on the run** when a production number differs from what you
    saw in the editor. It is the first thing to look at.
 6. **On BigQuery, write `compute` expressions in the DuckDB dialect**: they are translated;

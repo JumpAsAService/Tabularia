@@ -693,7 +693,28 @@ helm = "`adminScaling.enabled`"
 text = "Kubernetes API server, from inside the cluster."
 
 [var.KUBERNETES__NAMESPACE]
-text = "Namespace of the worker Deployments. Empty = the pod's own, read from its service account."
+text = "Namespace of the release's pods and Deployments. Empty = the pod's own, read from its service account."
+helm = "set by the chart (the pod's namespace)"
+
+[var.KUBERNETES__RELEASE]
+text = "The Helm release: Administration → Settings selects its pods by `app.kubernetes.io/instance` to restart them, and names it in the command it shows when it cannot."
+
+[var.KUBERNETES__APP_NAME]
+text = "The `app.kubernetes.io/name` of the release's pods, so that the rollout of Administration → Settings leaves alone the other charts of an umbrella release with components of the same names."
+
+[var.KUBERNETES__ROLLOUT]
+text = "Administration → Settings restarts the pods that read a changed setting only when they start, one at a time, by eviction (docs/engine-settings.md). Off, it names the components to restart by hand."
+helm = "`settingsRollout.enabled` (on by default)"
+
+[var.KUBERNETES_SERVICE_HOST]
+text = "Set by Kubernetes in every container, never by hand: the gateway knows from it that it runs in a cluster, also when no service account token is mounted."
+section = "gateway-kubernetes"
+where = "Kubernetes"
+
+[var.HOSTNAME]
+text = "Set by the container runtime, never by hand: the pod's name, so that the orchestrator running a rollout of Administration → Settings evicts itself last."
+section = "gateway-kubernetes"
+where = "Kubernetes"
 
 [var.KUBERNETES__TOKEN_FILE]
 text = "Service-account token the gateway authenticates with."
@@ -813,7 +834,7 @@ text = "Where the flows' runs run the Container nodes, and where each registry's
 text = "Where the editor's «Run» of a Container node and «Try in the cluster» run, with a ResourceQuota of its own. Empty = `CONTAINERS__NAMESPACE`. The chart sets it (`containers.trialNamespace`)."
 
 [var.CONTAINERS__PULL_CHECK_SECONDS]
-text = "«Try in the cluster»: how long a node may take to download an image before the check says it did not."
+text = "«Try in the cluster»: how long a node may take to download an image before the check says it did not. The check answers within 270 s (the ingress cuts at 300 s): a longer download is said to be going on, and goes on in the cluster up to this."
 
 [var.CONTAINERS__POLL_SECONDS]
 text = "The longest wait between two looks at a Job of the containers' namespaces while the gateway waits for it (the first come sooner)."
@@ -1164,6 +1185,11 @@ text = "Grafana administrator of the development stack."
 text = "Its password."
 production = "change it wherever Grafana is reachable by others."
 default = "development value (hidden)"
+
+[var.TMP_SIZE_LIMIT]
+text = "Set by the Helm chart on the workers and the engine: the `sizeLimit` of their `/tmp` (an emptyDir), a Kubernetes quantity (`50Gi`). Past it the kubelet evicts the pod at once, so DuckDB spills at most half of it, shared by the worker's processes, and a query that needs more fails saying so. Unset (Compose): DuckDB's own cap, most of the free disk."
+section = "engine-embedded"
+where = "Helm (set on the workers and the engine)"
 
 [var.MALLOC_ARENA_MAX]
 text = "glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools."

@@ -23,24 +23,27 @@ logger = logging.getLogger(__name__)
 # Un task in coda che ha risolto la vecchia chiave viene fallito da _reconcile
 # dopo il timeout stale del run; oltre questa finestra nessun run legge più il
 # blob superato. Grace = quel tetto + margine (deve restare ≥ stale timeout).
-BLOB_DELETION_GRACE_SECONDS = get_settings().engine.run_stale_timeout_seconds + 600
+def blob_deletion_grace_seconds() -> int:
+    """Read at each use: ENGINE__RUN_STALE_TIMEOUT_SECONDS can change from the panel."""
+    return get_settings().engine.run_stale_timeout_seconds + 600
 
 
 def schedule_blob_deletion(
     session: Session, bucket: str, key: str, reason: str = "",
-    grace_seconds: int = BLOB_DELETION_GRACE_SECONDS,
+    grace_seconds: int | None = None,
 ) -> None:
     """Marca un blob per la cancellazione differita (dopo la grace). Aggiunge alla
     sessione ma NON committa: il commit spetta al chiamante, così la marcatura è
     atomica con lo swap / il publish che ha reso il blob obsoleto."""
     if not key:
         return
+    grace = grace_seconds if grace_seconds is not None else blob_deletion_grace_seconds()
     session.add(
         PendingBlobDeletion(
             bucket=bucket,
             key=key,
             reason=reason,
-            delete_after=datetime.now(timezone.utc) + timedelta(seconds=grace_seconds),
+            delete_after=datetime.now(timezone.utc) + timedelta(seconds=grace),
         )
     )
 

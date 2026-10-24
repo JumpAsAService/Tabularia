@@ -68,8 +68,14 @@ def sweep_dead(base: Path | None = None) -> int:
 
 def use_process_dir(base: Path | None = None) -> Path:
     """Points this process's temporary files (tempfile, and TMPDIR for what it starts)
-    at a directory of its own, then removes those of dead processes."""
+    at a directory of its own, then removes those of dead processes. A directory already
+    there under this pid is a dead process's of the same pid: a container started again
+    in its Pod (OOMKilled, its liveness probe) keeps /tmp, an emptyDir, and gives the
+    same pids again (the engine's API is pid 1 every time). It is emptied first."""
     d = _root(base) / str(os.getpid())
+    if d.is_dir():
+        shutil.rmtree(d, ignore_errors=True)
+        logger.info("temporary files: %s was left by an earlier process with this pid, emptied", d)
     d.mkdir(parents=True, exist_ok=True)
     tempfile.tempdir = str(d)
     os.environ["TMPDIR"] = str(d)

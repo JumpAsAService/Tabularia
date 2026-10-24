@@ -79,7 +79,7 @@ engines, from an in-process library to a serverless warehouse.
   </p>
 
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
-  ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint Excel; write results
+  ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint (Excel and CSV); write results
   back to a database table (Oracle and SQL Server are sources only, for now) or publish
   them as a reusable datasource. SQL Server's driver is Microsoft's, under Microsoft's
   licence, so it is not in the published images: you add it to yours
@@ -528,11 +528,14 @@ performed.
   **service accounts** for schedulers and CI, read-only or read-write, always
   expiring, revocable, recorded in the audit log; **webhooks** that call another
   system when a flow or a datasource refresh finishes, signed with HMAC and retried.
-- **Engine settings from the panel** ([docs/engine-settings.md](docs/engine-settings.md)):
-  administrators change the parameters the engine reads when it needs them (row group
-  size, import read timeout, export cap, task time limits, step cache, ClickHouse and
-  BigQuery limits) from Administration → Settings, without restarts. The environment
-  stays the starting point; every change is checked by the engine and audited.
+- **Settings from the panel** ([docs/engine-settings.md](docs/engine-settings.md)):
+  administrators change about a hundred settings of the gateway, the Kubernetes features
+  and the engine (limits, waits, retention, the assistant's budget, the caps of the data
+  sources) from Administration → Settings, in a box per component. Most apply within
+  seconds on every process; the ones read only at start are marked, and the panel
+  restarts their pods one at a time on Kubernetes. Addresses, credentials and the
+  switches tied to the cluster stay in the environment; every change is checked and
+  audited.
 - **Audit log to Splunk** ([docs/siem-splunk.md](docs/siem-splunk.md)): every audit entry
   forwarded to the Splunk HTTP Event Collector within seconds, nothing skipped when
   Splunk is down, configured and tested from Administration → SIEM.

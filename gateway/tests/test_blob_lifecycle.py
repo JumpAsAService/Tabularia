@@ -15,7 +15,7 @@ from sqlmodel import select
 from app.models import Datasource, PendingBlobDeletion, Run
 from app.routes.runs import _finalize_ingest, _publish_datasource, _reconcile
 from app.services.blobgc import (
-    BLOB_DELETION_GRACE_SECONDS,
+    blob_deletion_grace_seconds,
     schedule_blob_deletion,
     sweep_blob_deletions,
 )
@@ -36,7 +36,7 @@ async def test_schedule_adds_row_with_grace(session):
     assert len(rows) == 1
     assert rows[0].key == "datasets/x.parquet"
     delta = rows[0].delete_after.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)
-    assert 0 < delta.total_seconds() <= BLOB_DELETION_GRACE_SECONDS + 5
+    assert 0 < delta.total_seconds() <= blob_deletion_grace_seconds() + 5
 
 
 async def test_schedule_empty_key_is_noop(session):

@@ -42,7 +42,8 @@ def test_le_credenziali_e_gli_indirizzi_non_sono_nell_elenco():
     chiavi = {v.chiave for v in regolazioni.VOCI}
     for vietata in ("storage.secret_key", "storage.endpoint", "redis.host", "security.fernet_key",
                     "clickhouse_external.password", "clickhouse_external.host", "bigquery.credentials_b64",
-                    "celery.worker_concurrency", "celery.max_memory_per_child_kb"):
+                    "celery.worker_concurrency", "celery.timezone", "storage.direct_read",
+                    "clickhouse_external.transport", "redis.url"):
         assert vietata not in chiavi
 
 
@@ -229,7 +230,12 @@ def test_il_catalogo_dice_ambiente_valore_e_intervallo():
     assert voci["export.max_rows"]["env_var"] == "EXPORT__MAX_ROWS"
     assert voci["ingest.parquet_row_group_rows"]["value"] is None
     assert voci["celery.task_time_limit"]["max"] == 3000
-    assert {v["category"] for v in c["items"]} == {"import", "export", "execution", "cache", "clickhouse", "bigquery", "workers"}
+    assert {v["category"] for v in c["items"]} == {
+        "import", "export", "execution", "cache", "clickhouse", "bigquery", "workers", "sftp", "s3", "api",
+        "placeholders", "upload", "engine_api", "embedded"}
+    assert voci["api.min_interval_seconds"]["kind"] == "float" and voci["export.max_rows"]["kind"] == "int"
+    assert voci["celery.max_tasks_per_child"]["rollout"] == ["worker", "preview-worker"]
+    assert voci["chdb.max_memory_usage"]["env_var"] == "CHDB_MAX_MEMORY_USAGE"
 
 
 def test_la_scrittura_e_tutto_o_niente():
@@ -286,3 +292,133 @@ def test_l_errore_nomina_la_voce_appena_cambiata():
         settings_dall_ambiente(), cambiate={"celery.task_time_limit"})
     assert errori[0]["key"] == "celery.task_time_limit" and errori[0]["code"] == "above"
     assert buoni.get("celery.task_soft_time_limit") == 1700
+
+
+# ── decimals, and what a process reads when it starts (2026-10-23) ───────────
+
+def test_decimals_take_integers_too_and_refuse_the_rest():
+    buoni, errori = regolazioni.valida({"api.min_interval_seconds": 1, "sftp.timeout_seconds": 2.5},
+                                       settings_dall_ambiente())
+    assert errori == [] and buoni == {"api.min_interval_seconds": 1.0, "sftp.timeout_seconds": 2.5}
+    assert isinstance(buoni["api.min_interval_seconds"], float)
+    for cattivo in ("1", True, float("nan"), float("inf")):
+        assert _errori({"api.min_interval_seconds": cattivo})[0]["code"] == "number"
+    assert _errori({"celery.max_memory_headroom_frac": 0.99})[0] == {
+        "key": "celery.max_memory_headroom_frac", "code": "max", "limit": 0.95}
+
+
+def test_the_new_live_ones_reach_their_readers():
+    regolazioni.scrivi({"sftp.max_files": 3, "api.max_pages": 7, "placeholders.max_values": 9,
+                        "s3_source.max_listed": 1000, "upload.max_bytes": 0})
+    s = get_settings()
+    assert (s.sftp.max_files, s.api.max_pages, s.placeholders.max_values, s.s3_source.max_listed,
+            s.upload.max_bytes) == (3, 7, 9, 1000, 0)
+    from app.api.upload_limit import _from_settings
+
+    assert _from_settings() == 0
+
+
+def test_a_rollout_one_waits_for_the_process_to_start_again():
+    env = settings_dall_ambiente()
+    assert get_settings().celery.max_tasks_per_child == env.celery.max_tasks_per_child  # first reading
+    regolazioni.scrivi({"celery.max_tasks_per_child": 7, "export.max_rows": 5})
+    s = get_settings()
+    assert s.export.max_rows == 5  # the live one at once
+    assert s.celery.max_tasks_per_child == env.celery.max_tasks_per_child  # this process: as it started
+    assert regolazioni.avvio() == {}
+    regolazioni.dimentica()  # a process that starts now
+    assert get_settings().celery.max_tasks_per_child == 7
+    assert regolazioni.all_avvio(env).celery.max_tasks_per_child == 7
+    assert regolazioni.avvio() == {"celery.max_tasks_per_child": 7}
+
+
+def test_a_variable_read_at_import_takes_the_panel_value_of_the_start(regolazioni_isolate, monkeypatch):
+    monkeypatch.delenv("CHDB_MAX_MEMORY_USAGE", raising=False)
+    assert regolazioni.valore_all_avvio("CHDB_MAX_MEMORY_USAGE") == 1_500_000_000  # the default
+    regolazioni.dimentica()
+    monkeypatch.setenv("CHDB_MAX_MEMORY_USAGE", "2000000000")
+    assert regolazioni.valore_all_avvio("CHDB_MAX_MEMORY_USAGE") == 2_000_000_000  # the environment's
+    regolazioni_isolate.set(regolazioni.CHIAVE, json.dumps({"chdb.max_memory_usage": 3_000_000_000}))
+    regolazioni.dimentica()
+    assert regolazioni.valore_all_avvio("CHDB_MAX_MEMORY_USAGE") == 3_000_000_000  # the panel's
+    s = get_settings()  # not a settings field: nothing to lay on the settings
+    assert not hasattr(s, "chdb")
+    from app.api.routes.regolazioni import leggi
+
+    voce = next(v for v in leggi()["items"] if v["key"] == "chdb.max_memory_usage")
+    assert (voce["env_value"], voce["value"]) == (2_000_000_000, 3_000_000_000)
+
+
+def test_valkey_down_at_start_the_environment_applies(regolazioni_isolate, monkeypatch):
+    class Giu:
+        def get(self, *_):
+            raise ConnectionError("Valkey non risponde")
+    monkeypatch.setattr(regolazioni, "_client", lambda: Giu())
+    regolazioni.dimentica()
+    env = settings_dall_ambiente()
+    assert regolazioni.all_avvio(env).celery.max_tasks_per_child == env.celery.max_tasks_per_child
+    assert regolazioni.avvio() == {}
+
+
+# ── from the bug hunt of 2026-10-23 ───────────────────────────────────────────
+
+def test_an_integer_too_large_for_a_decimal_is_refused_not_raised():
+    """10**400 made float() raise inside `valida`: a 500, and in Valkey a get_settings that failed everywhere."""
+    assert _errori({"api.min_interval_seconds": 10 ** 400})[0]["code"] == "max"
+
+
+def test_a_malformed_variable_read_at_import_stops_the_process(regolazioni_isolate, monkeypatch):
+    """As before these settings were in the panel: «2GB» does not quietly become the default."""
+    monkeypatch.setenv("CHDB_MAX_MEMORY_USAGE", "2GB")
+    regolazioni.dimentica()
+    with pytest.raises(ValueError, match="CHDB_MAX_MEMORY_USAGE"):
+        regolazioni.valore_all_avvio("CHDB_MAX_MEMORY_USAGE")
+
+
+def test_the_cross_join_cap_is_not_greyed_out_without_chdb():
+    """It limits every engine: with chDB missing, its category was shown as unavailable."""
+    from app.api.routes.regolazioni import leggi
+
+    voce = next(v for v in leggi()["items"] if v["key"] == "engine.max_cross_join_rows")
+    assert voce["category"] == "execution"
+
+
+def test_the_hard_limit_back_to_the_environment_respects_the_gateway_threshold():
+    """Back to the environment's 3600 with the gateway declaring runs lost after 3300 + 300."""
+    buoni, errori = regolazioni.valida({}, settings_dall_ambiente(), limite_duro_max=3000,
+                                       cambiate={"celery.task_time_limit"})
+    assert errori == [{"key": "celery.task_time_limit", "code": "env_too_high", "limit": 3000}]
+    # a periodic send (nothing changed): the environment is the installer's, not refused
+    assert regolazioni.valida({}, settings_dall_ambiente(), limite_duro_max=3000)[1] == []
+
+
+def test_no_values_is_written_and_a_starting_worker_waits_for_them(regolazioni_isolate, monkeypatch):
+    """A key deleted when there were no values could not tell «none» from «not sent yet»:
+    a worker started on an empty Valkey froze the environment's values for its whole life."""
+    regolazioni.scrivi({})
+    assert regolazioni_isolate.get(regolazioni.CHIAVE) == "{}"
+    assert regolazioni.attendi_al_primo_avvio(massimo=0) is True
+    regolazioni_isolate.delete(regolazioni.CHIAVE)
+    monkeypatch.setattr(regolazioni.time, "sleep", lambda s: None)
+    assert regolazioni.attendi_al_primo_avvio(massimo=0) is False
+
+
+def test_a_resized_pool_keeps_the_memory_the_panel_set(regolazioni_isolate):
+    """The pool resized from Administration → Workers took the environment's memory ceiling
+    again, over the panel's the worker started with."""
+    from app.tasks import worker_pool
+
+    regolazioni_isolate.set(regolazioni.CHIAVE, json.dumps({"celery.max_memory_per_child_kb": 3_000_000}))
+    regolazioni.dimentica()
+    assert worker_pool.per_process_kb(4) == 3_000_000
+
+
+def test_an_exception_celery_could_not_rebuild_reads_as_a_sentence():
+    """Seen on kind with the storage down: «<class 'botocore.exceptions.EndpointConnectionError'>(['…'])»
+    was the error people read."""
+    from app.api.routes.tasks import leggibile
+
+    raw = "<class 'botocore.exceptions.EndpointConnectionError'>(['Could not connect to the endpoint URL: \"http://minio:9000/b/k\"'])"
+    assert leggibile(raw) == 'The object storage is not answering: Could not connect to the endpoint URL: "http://minio:9000/b/k"'
+    assert leggibile("<class 'foo.Bar'>(['went wrong'])") == "Bar: went wrong"
+    assert leggibile("a plain message") == "a plain message"

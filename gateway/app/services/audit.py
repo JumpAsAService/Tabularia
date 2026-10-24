@@ -87,6 +87,11 @@ BANNER_DELETE = "banner.delete"
 # motori consentiti: cambiano ciò che TUTTA l'installazione può scegliere
 ENGINE_ALLOW = "engine.allow"
 ENGINE_SETTINGS_UPDATE = "engine_settings.update"
+# the gateway's settings from Administration → Settings (app/core/overrides.py)
+SETTINGS_UPDATE = "settings.update"
+# «Roll out» of the components that read a changed setting only at start, and its cancel
+SETTINGS_ROLLOUT = "settings.rollout"
+SETTINGS_ROLLOUT_CANCEL = "settings.rollout_cancel"
 SIEM_UPDATE = "siem.update"
 SIEM_TEST = "siem.test"
 # the database backups (Admin → Backups): their settings, «Back up now», each backup, a download

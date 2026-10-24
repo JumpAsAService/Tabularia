@@ -1,7 +1,10 @@
 import logging
+import os
+import sys
 
 from celery import Celery, Task
 from celery.signals import before_task_publish, worker_init, worker_process_init, worker_ready
+from app.core import regolazioni
 from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_dall_ambiente
 from app.tasks.worker_pool import PoolFromPanel
 
@@ -11,6 +14,13 @@ logger = logging.getLogger(__name__)
 # per i limiti di tempo, la riserva per un messaggio che non li porta (vedi
 # `_limiti_di_tempo_in_vigore` più sotto, dove contano le regolazioni del pannello)
 settings = settings_dall_ambiente()
+# a worker or beat (not the engine's API, which is how the values arrive) waits for the
+# gateway's values when Valkey has none yet, rather than freezing the environment's
+if os.path.basename(sys.argv[0]).startswith("celery") and {"worker", "beat"} & set(sys.argv[1:]):
+    regolazioni.attendi_al_primo_avvio()
+# what is read only when a process starts, with the panel's values of that moment
+# (memory and recycling of the children, the beat's intervals): core/regolazioni.py
+avvio = regolazioni.all_avvio(settings)
 # la chiave Fernet è obbligatoria in ogni ambiente: il worker che dovrà
 # decifrare le credenziali non deve nemmeno partire senza
 settings.check_required_secrets()
@@ -25,6 +35,15 @@ class _TaskCheNonUccideIlWorker(Task):
     def __call__(self, *args, **kwargs):
         from polars.exceptions import PanicException
 
+        if self.request.id and not self.request.called_directly and not self.request.is_eager:
+            # Celery's STARTED meta, with when the task began: the engine tells a task
+            # whose worker died from one still running (worker_pool.lost)
+            try:
+                from app.tasks.worker_pool import task_started_meta
+
+                self.update_state(state="STARTED", meta=task_started_meta(self.request))
+            except Exception:  # noqa: BLE001 — a missed note never stops the task
+                logger.debug("STARTED meta not written", exc_info=True)
         try:
             return super().__call__(*args, **kwargs)
         except PanicException as e:
@@ -69,9 +88,9 @@ celery_app.conf.update(
     # riciclo del processo figlio: rilascia all'OS la memoria che glibc malloc
     # trattiene dopo le allocazioni native di Polars/Arrow (RSS a scalini che non
     # rientra). Ricicla dopo N task E oltre un tetto di RSS.
-    worker_max_tasks_per_child=settings.celery.max_tasks_per_child,
+    worker_max_tasks_per_child=avvio.celery.max_tasks_per_child,
     # derivato dal limite cgroup/concurrency (o override esplicito via env)
-    worker_max_memory_per_child=resolve_max_memory_per_child_kb(settings.celery),
+    worker_max_memory_per_child=resolve_max_memory_per_child_kb(avvio.celery),
     # eventi task per celery-exporter (metriche: task attivi, durate, esiti)
     worker_send_task_events=True,
     task_send_sent_event=True,
@@ -94,12 +113,12 @@ celery_app.steps["consumer"].add(PoolFromPanel)
 celery_app.conf.beat_schedule = {
     "evict-step-cache": {
         "task": "app.tasks.jobs.evict_cache_task",
-        "schedule": float(settings.cache.sweep_interval_seconds),
+        "schedule": float(avvio.cache.sweep_interval_seconds),
     },
     # campiona la dimensione dei prefissi di storage per le metriche
     "storage-stats": {
         "task": "app.tasks.jobs.storage_stats_task",
-        "schedule": float(settings.metrics.storage_stats_interval_seconds),
+        "schedule": float(avvio.metrics.storage_stats_interval_seconds),
     },
     # drop delle copie materializzate per il viewer (ClickHouse esterno) non più
     # usate; il task si auto-salta se la feature è spenta

@@ -21,9 +21,10 @@ alzando anche quella soglia.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from sqlalchemy import text
@@ -71,11 +72,54 @@ def salvate(session: Session) -> dict[str, EngineSetting]:
     return {r.key: r for r in session.exec(select(EngineSetting)).all()}
 
 
-def in_vigore(session: Session) -> dict[str, int]:
+# set from the gateway's own settings, sent to the engine with its ones: the engine's
+# limit on uploads is the second barrier after the gateway's (routes/gateway_settings.py)
+DAL_GATEWAY = ("upload.max_bytes",)
+
+
+def valore(riga: EngineSetting) -> Any:
+    """The saved value: the JSON one (a decimal, true/false), else the integer."""
+    if riga.value_json is not None:
+        try:
+            v = json.loads(riga.value_json)
+        except ValueError:
+            return None
+        # the previous version of the gateway (a rolling update) writes `value` only and
+        # leaves the JSON as it was: when they disagree, its newer integer wins
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and riga.value != int(round(v)):
+            return riga.value
+        return v
+    return riga.value
+
+
+def colonne(v: Any) -> tuple[int, Optional[str]]:
+    """(value, value_json) of a row: an integer in `value` for the previous version of
+    the gateway during an upgrade; the rest in JSON."""
+    if isinstance(v, int) and not isinstance(v, bool):
+        return v, None
+    return int(round(v)) if isinstance(v, float) else int(bool(v)), json.dumps(v)
+
+
+def dal_gateway() -> dict[str, Any]:
+    """The gateway's values the engine applies too, from the table rather than from this
+    process's copy (up to ten seconds old: a round could send back the previous one)."""
+    from app.core import overrides
+
+    try:
+        from app.core.config import settings_from_env
+        from app.db.session import engine
+
+        attuali, _ = overrides.check(overrides.read_rows(engine), settings_from_env())
+    except Exception:  # noqa: BLE001 — the database not answering: this process's copy
+        attuali = overrides.current()
+    return {k: attuali[k] for k in DAL_GATEWAY if k in attuali}
+
+
+def in_vigore(session: Session) -> dict[str, Any]:
     """Quelle da spedire al motore: nessuna se il pannello è spento dall'ambiente."""
     if not dal_pannello():
         return {}
-    return {k: r.value for k, r in salvate(session).items()}
+    return {k: valore(r) for k, r in salvate(session).items() if k not in DAL_GATEWAY}
 
 
 async def catalogo() -> dict:
@@ -86,27 +130,36 @@ async def catalogo() -> dict:
     return r.json()
 
 
-async def spingi(valori: dict[str, int], cambiate: Optional[list[str]] = None) -> httpx.Response:
+async def spingi(valori: dict[str, Any], cambiate: Optional[list[str]] = None,
+                 con_gateway: bool = True) -> httpx.Response:
+    valori = {**{k: v for k, v in valori.items() if k not in DAL_GATEWAY},
+              **(dal_gateway() if con_gateway and dal_pannello() else {})}
     return await get_engine_client().put(
         "/settings", json={"values": valori, "max_task_time_limit": limite_duro_max(), "changed": cambiate or []},
         timeout=CONTROLLO,
     )
 
 
-async def spingi_scartando(valori: dict[str, int]) -> dict[str, int]:
+async def spingi_scartando(valori: dict[str, Any]) -> dict[str, Any]:
     """Spedisce; se il motore ne rifiuta qualcuna (salvata quando valeva, non vale
     più: l'ambiente o la soglia del gateway sono cambiati) la toglie e rispedisce,
     finché il motore accetta, invece di lasciare in vigore quelle vecchie o di non
     spedire niente. Torna quelle che il motore applica; le scartate restano salvate
     (il pannello le mostra «non applicate») e finiscono nel log."""
     attuali = dict(valori)
-    for _ in range(len(valori) + 1):
-        r = await spingi(attuali)
+    con_gateway = True
+    for _ in range(len(valori) + 2):
+        r = await spingi(attuali, con_gateway=con_gateway)
         if r.status_code != 422:
             r.raise_for_status()
             return attuali
         errori = (r.json().get("detail") or {}).get("errors") or []
         cattive = {e.get("key") for e in errori} & set(attuali)
+        if con_gateway and {e.get("key") for e in errori} & set(DAL_GATEWAY):
+            # an engine older than the upload limit from the panel: without it
+            logger.warning("regolazioni del motore: the engine refuses %s: sent without", errori)
+            con_gateway = False
+            continue
         if not cattive:  # il motore rifiuta, ma niente di quello che c'è: non si insiste
             r.raise_for_status()
         logger.warning("regolazioni del motore: scartate perché non valgono più: %s", errori)

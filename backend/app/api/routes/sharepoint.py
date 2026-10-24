@@ -23,6 +23,7 @@ from app.ingest.sharepoint_source import (
     gather_files,
     validate_source,
 )
+from app.ingest.sheets import sheets_of_first
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sharepoint", tags=["sharepoint"])
@@ -50,7 +51,7 @@ class SharePointIngestRequest(BaseModel):
 @router.post("/inspect")
 def inspect(request: SharePointInspectRequest):
     try:
-        source = request.source or SharePointSourceSpec(path=request.path or "*", sheet="-")
+        source = request.source or SharePointSourceSpec(path=request.path or "*")
         if request.action == "validate":
             return validate_source(source, last_refresh=request.last_refresh)
         client = GraphClient(request.connection)
@@ -58,12 +59,16 @@ def inspect(request: SharePointInspectRequest):
             client.drive_id()  # token + sito + raccolta: tutto ciò che può andare storto
             return {"ok": True}
         g, _ = gather_files(client, source, last_refresh=request.last_refresh)
+        # the sheets of the first file, to choose the sheet from a list
+        sheets = sheets_of_first(g.files, lambda f: f.path, lambda f: f.size,
+                                 lambda f, local: client.download(f.id, local), lambda f: f.path)
         return {
             "files": [{"path": f.path, "size": f.size, "modified_at": f.modified_at} for f in g.files[:200]],
             "total": len(g.files),
             "missing": g.missing[:50],
             "missing_total": len(g.missing),
             "expansions": g.expansions,
+            "sheets": sheets,
         }
     except SharePointError as e:
         raise HTTPException(status_code=400, detail=str(e))

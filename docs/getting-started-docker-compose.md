@@ -204,7 +204,9 @@ only once the administrator shares it. More: [the sample database](../infrastruc
 
 CSV, TSV, JSON, Excel and parquet files are loaded from the flow editor: in a new flow
 (step 7, first two clicks), **Upload file** in the toolbar. The file becomes the flow's
-source and the preview shows it at once.
+source and the preview shows it at once. An Excel workbook is read from its first visible
+sheet; when it has more than one, a window lists them and every sheet you tick becomes a
+source of its own.
 
 ![A CSV uploaded as the source of a flow](media/getting-started/14-upload-csv.png)
 

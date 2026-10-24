@@ -137,6 +137,19 @@ def test_filter_and_sort(storage, src):
     assert [r["vendite"] for r in res.rows] == [300, 250]
 
 
+def test_filter_on_dates_takes_the_editors_calendar(storage, src):
+    """The editor's calendar sends 2024-02-01T10:30, without seconds: ClickHouse refused it
+    («Cannot parse time component of DateTime»), every date-time filter failed."""
+    def paesi(params):
+        return sorted(r["paese"] for r in _engine(storage).preview(src, [{"type": "filter", "params": params}], limit=10).rows)
+
+    assert paesi({"column": "quando", "operator": "gt", "value": "2024-02-01T10:30"}) == ["FR", "IT"]
+    assert paesi({"column": "quando", "operator": "between", "value": ["2024-01-01T00:00", "2024-02-01T11:00"]}) == ["FR", "IT"]
+    assert paesi({"column": "giorno", "operator": "ge", "value": "2024-03-01"}) == ["DE", "IT"]
+    with pytest.raises(EngineError, match="is not valid for a date or time column"):
+        paesi({"column": "quando", "operator": "gt", "value": "01/02/2024"})
+
+
 def test_group_by(storage, src):
     ops = [{"type": "group_by", "params": {
         "by": ["paese"],

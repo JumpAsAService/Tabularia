@@ -106,11 +106,29 @@ def test_off_plans_nothing_but_back_up_now_still_runs(session):
 def test_a_backup_left_by_a_dead_process_is_taken_again_later(session):
     db_backup.claim(session, NOW)
     r = _row(session)
-    r.requested_at, r.running_since = NOW, NOW - timedelta(minutes=5)
+    # running for an hour, its heartbeat 30 s ago: alive
+    r.requested_at, r.running_since, r.alive_at = NOW, NOW - timedelta(hours=1), NOW - timedelta(seconds=30)
     session.add(r)
     session.commit()
-    assert db_backup.claim(session, NOW) is None  # still running, as far as anyone knows
-    assert db_backup.claim(session, NOW + timedelta(hours=2)) is not None  # past the longest a backup takes
+    assert db_backup.claim(session, NOW) is None
+    # no heartbeat for three minutes: its process is gone
+    assert db_backup.claim(session, NOW + timedelta(minutes=3)) is not None
+
+
+def test_a_database_restored_from_a_backup_does_not_block_the_backups(session):
+    """The dump is taken while its own backup is marked running: restored, that claim of a
+    process long gone blocked «Back up now» and the nightly backup for over an hour
+    (found on kind, 2026-10-23)."""
+    r = db_backup.row(session)
+    r.running_since, r.alive_at, r.claimed_by = NOW - timedelta(minutes=10), NOW - timedelta(minutes=10), "gone:1:x"
+    session.add(r)
+    session.commit()
+    assert not db_backup.in_corso(_row(session), NOW)
+    r = _row(session)
+    r.requested_at = NOW
+    session.add(r)
+    session.commit()
+    assert db_backup.claim(session, NOW) is not None
 
 
 def test_pg_dump_gets_the_password_from_the_environment(monkeypatch):
@@ -165,6 +183,31 @@ async def test_a_failed_backup_says_why(session, store, monkeypatch):
     assert not out["ok"] and "AccessDenied" in _row(session).last_error
     voci = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).all()
     assert [v.outcome for v in voci] == ["failure", "failure"] and voci[0].actor_label == db_backup.SCHEDULE_ACTOR
+
+
+@pytest.mark.anyio
+async def test_a_backup_stopped_with_its_process_says_so(session, store, monkeypatch):
+    # a drain or an upgrade at 03:00 stops the orchestrator mid-backup: the next time has
+    # already moved to tomorrow, and nothing said that tonight's was lost
+    import asyncio
+
+    started = asyncio.Event()
+
+    async def slow():
+        yield b"PGDMP"
+        started.set()
+        await asyncio.sleep(60)
+    monkeypatch.setattr(db_backup, "_pg_dump", slow)
+    db_backup.row(session)
+    task = asyncio.create_task(db_backup.make(keep=3))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    r = _row(session)
+    assert "Stopped before the end" in r.last_error and r.running_since is None
+    voce = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).one()
+    assert voce.outcome == "failure"
 
 
 async def _works():

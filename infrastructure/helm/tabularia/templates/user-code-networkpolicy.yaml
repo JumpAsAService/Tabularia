@@ -14,6 +14,28 @@ through the namespace rule instead; the company's own private networks outside t
 cluster (a database on 10.x) are opened with networkPolicy.userCodePrivateCIDRs, which
 must not hold the cluster's pod or Service ranges.
 */}}
+{{- /*
+Whatever blockTabularia says: the users' code never runs in Tabularia's namespace (the
+Roles of scripts.yaml and containers.yaml there would let the gateway read and rewrite
+the release's Secret and run Jobs with any of its accounts), and each of its namespaces
+is one of its own (two the same would make the Namespace and its Roles twice, with
+different rules).
+*/ -}}
+{{- $userCode := list }}
+{{- if .Values.scripts.enabled }}
+{{- $userCode = concat $userCode (list (include "tabularia.scriptsNamespace" .) (include "tabularia.scriptTrialsNamespace" .) (include "tabularia.scriptBuildsNamespace" .)) }}
+{{- end }}
+{{- if .Values.containers.enabled }}
+{{- $userCode = concat $userCode (list (include "tabularia.containersNamespace" .) (include "tabularia.containerTrialsNamespace" .)) }}
+{{- end }}
+{{- range $ns := $userCode }}
+{{- if eq $ns $.Release.Namespace }}
+{{- fail (printf "the namespaces of the scripts and the Container nodes must not be Tabularia's own (%s): the Roles they get would reach the release's Secret" $ns) }}
+{{- end }}
+{{- end }}
+{{- if ne (len $userCode) (len ($userCode | uniq)) }}
+{{- fail (printf "the namespaces of the scripts (scripts.namespace, trialNamespace, buildNamespace) and of the Container nodes (containers.namespace, trialNamespace) must all differ: %s" (join ", " $userCode)) }}
+{{- end }}
 {{- $namespaces := list }}
 {{- if and .Values.scripts.enabled .Values.scripts.blockTabularia }}
 {{- $namespaces = concat $namespaces (list (include "tabularia.scriptsNamespace" .) (include "tabularia.scriptTrialsNamespace" .) (include "tabularia.scriptBuildsNamespace" .)) }}

@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 144 |
-| [Engine and workers](#engine-and-workers) | 92 |
+| [Gateway](#gateway) | 149 |
+| [Engine and workers](#engine-and-workers) | 93 |
 | [Frontend](#frontend) | 3 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **259** |
+| **Total** | **265** |
 
 ## Before production
 
@@ -90,7 +90,7 @@ chart do, since every container reads the same `.env` or ConfigMap.
 | `CELERY__TASK_TIME_LIMIT` | integer | `3600` | `engine.taskTimeLimitSeconds` | Seconds after which the worker kills a task: the real ceiling on a run, an import or a preview. The gateway reads it too, to derive `ENGINE__RUN_STALE_TIMEOUT_SECONDS`. Also adjustable in Administration → Settings. |
 | `SECURITY__FERNET_KEY` | string | empty | `secrets.fernetKey` | **Production:** generate a key of your own and keep it with your backups: without it the saved connections cannot be decrypted. Encrypts the credentials of database and file connections, at rest in the gateway and on their way to the engine, which decrypts them only inside the worker. The same value everywhere; never change it once a connection is saved. Empty with `SECURITY__KEYS_DIR` set (the Compose stack): the key created there at the first start. Empty without it: the services refuse to start. Generate one with `openssl rand -base64 32 \| tr '+/' '-_'`. |
 | `SECURITY__KEYS_DIR` | string | empty | `extraEnv` | **Production:** on Kubernetes leave it empty and set `SECURITY__FERNET_KEY`; with Compose, back the `keys` volume up with the database. A directory every service shares on one machine (the Compose stack mounts the `keys` volume there): the secrets left empty are created in it at the first start and read afterwards, `fernet.key` for `SECURITY__FERNET_KEY` and, with `AUTH__FIRST_RUN_SETUP`, `bootstrap.token`, which the sample-data container exchanges for a session once the administrator exists. Back it up with the data. Not for Kubernetes, where the pods share no volume: the chart sets the key. |
-| `UPLOAD__MAX_BYTES` | integer, ≥ 0 | `1073741824` (1 GiB) | `extraEnv` | The largest file a person can upload, in bytes; 0 = no ceiling. The gateway answers 413 before calling the engine when the size is declared, and cuts an undeclared (chunked) body at the ceiling; the engine API refuses it too. The file is spooled on the engine's disk and converted there, so this is also a disk bound: keep the engine's temporary space above it. Imports from SFTP, S3 and APIs have their own caps (`SFTP__*`, `S3_SOURCE__*`, `API__*`). |
+| `UPLOAD__MAX_BYTES` | integer, ≥ 0 | `1073741824` (1 GiB) | `extraEnv` | The largest file a person can upload, in bytes; 0 = no ceiling. The gateway answers 413 before calling the engine when the size is declared, and cuts an undeclared (chunked) body at the ceiling; the engine API refuses it too. The file is spooled on the engine's disk and converted there, so this is also a disk bound: keep the engine's temporary space above it. Imports from SFTP, S3 and APIs have their own caps (`SFTP__*`, `S3_SOURCE__*`, `API__*`). Also adjustable in Administration → Settings. |
 
 ## Gateway
 
@@ -108,8 +108,8 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | `APP__CODENAME` | string | `Appio` | `extraEnv` | The release's name. Set by the code; leave it. |
 | `APP__ROLE` | one of `all`, `api`, `orchestrator` | `all` | set per workload: `api` for the gateway, `orchestrator` for the orchestrator | What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database. |
 | `APP__ROOT_PATH` | string; a path such as `/api` | empty | `ingress.apiPrefix` | Path prefix a reverse proxy publishes the gateway under, stripping it before forwarding (`/api` when one host serves interface and API). It fixes the paths the gateway writes for the browser: the SSO cookie, `/docs`, redirects. Empty = published at the root. |
-| `APP__GATEWAY_THREADS` | integer, ≥ 4 | `40` | `gateway.threads` | Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values. |
-| `APP__TIMEZONE` | string; an IANA name, e.g. `Europe/Rome` | `UTC` | `app.timezone` | Time zone in which cron schedules are read (wall-clock time, daylight saving included); they are stored in UTC. Timestamps are still shown in each viewer's own time zone. |
+| `APP__GATEWAY_THREADS` | integer, ≥ 4 | `40` | `gateway.threads` | Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |
+| `APP__TIMEZONE` | string; an IANA name, e.g. `Europe/Rome` | `UTC` | `app.timezone` | Time zone in which cron schedules are read (wall-clock time, daylight saving included); they are stored in UTC. Timestamps are still shown in each viewer's own time zone. Also adjustable in Administration → Settings. |
 
 ### Metadata database (Postgres)
 
@@ -123,8 +123,8 @@ Users, groups, permissions, flows, connections, runs, schedules and the audit lo
 | `DB__PASSWORD` | string | development value (hidden) | `secrets.dbPassword` | **Production:** replace the development password (the gateway refuses it in production unless `DB__URL` is set). Postgres password. |
 | `DB__NAME` | string | `tabularia` | `externalServices.postgres.database` | Postgres database. |
 | `DB__URL` | string | empty | `existingSecret` | A full DSN (`postgresql://user:password@host:5432/dbname`) for a managed Postgres that does not fit the pieces above; when set it wins over them. It holds the password: treat it as a secret. |
-| `DB__POOL_SIZE` | integer, ≥ 1 | empty | `extraEnv` | Connections kept open to Postgres. Empty = one per thread (`APP__GATEWAY_THREADS`), which is what the gateway needs. Pool plus overflow, summed over every gateway process, must stay under Postgres' `max_connections`. |
-| `DB__MAX_OVERFLOW` | integer, ≥ 0 | `10` | `extraEnv` | Extra connections opened at a peak and closed when returned. |
+| `DB__POOL_SIZE` | integer, ≥ 1 | empty | `extraEnv` | Connections kept open to Postgres. Empty = one per thread (`APP__GATEWAY_THREADS`), which is what the gateway needs. Pool plus overflow, summed over every gateway process, must stay under Postgres' `max_connections`. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |
+| `DB__MAX_OVERFLOW` | integer, ≥ 0 | `10` | `extraEnv` | Extra connections opened at a peak and closed when returned. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |
 | `DB__AUTO_MIGRATE` | boolean | `false` | `extraEnv` | `true`: the gateway migrates the schema itself at startup (the development Compose file sets it). `false`: migrations are a step of their own (`python -m app.db.migra`, the chart's init container) and the gateway only refuses a database behind its code. |
 
 ### Sign-in, sessions and API tokens
@@ -135,16 +135,16 @@ Local sign-in and the session cookie, the first administrator, and the API token
 |---|---|---|---|---|
 | `JWT__SECRET` | string | development value (hidden) | `secrets.jwtSecret` | **Production:** generate a secret of at least 32 characters (the gateway refuses the default and shorter ones in production). Signs every session and API token (HS256). Generate one with `openssl rand -hex 32`; changing it signs everybody out. |
 | `JWT__ALGORITHM` | string | `HS256` | `extraEnv` | Signature algorithm of the session tokens. Leave it. |
-| `JWT__ACCESS_TTL_MINUTES` | integer | `720` | `auth.jwtAccessTtlMinutes` | The longest a session lasts, active or not. Sessions also end at sign-out, from «Your sessions», by an administrator, at a password change or when the account is disabled. |
+| `JWT__ACCESS_TTL_MINUTES` | integer | `720` | `auth.jwtAccessTtlMinutes` | The longest a session lasts, active or not. Sessions also end at sign-out, from «Your sessions», by an administrator, at a password change or when the account is disabled. Also adjustable in Administration → Settings. |
 | `AUTH__ADMIN_EMAIL` | string | `admin@tabularia.local` | `auth.adminEmail` | E-mail of the administrator created at the first start. Existing users are never touched. |
 | `AUTH__ADMIN_PASSWORD` | string | empty | `secrets.adminPassword` | **Production:** set a password of your own before the first start (at least 12 characters; the gateway refuses `admin` and other published passwords). Password of that administrator, used when it is created. No default: the gateway refuses to create the administrator with a published password (`admin`, the guides' examples) or one under 12 characters, in every environment. Empty with `AUTH__FIRST_RUN_SETUP` (the Compose stack): no administrator at the start, the sign-in page creates it. Empty otherwise: the gateway refuses to start. An administrator still holding `admin` from an older release gets this password at the next start, and its sessions close. |
 | `AUTH__ADMIN_NAME` | string | `Administrator` | `auth.adminName` | Display name of that administrator. |
 | `AUTH__ALLOW_KNOWN_ADMIN_PASSWORD` | boolean | `false` | `extraEnv` | Development only: `true` lets a local stack whose scripts sign in with a fixed password (`admin`) create or keep it. Ignored with `APP__ENV_NAME=production`. |
 | `AUTH__FIRST_RUN_SETUP` | boolean | `false` | `extraEnv` | **Production:** leave it off: the administrator comes from `AUTH__ADMIN_PASSWORD`. While no account exists, the sign-in page asks for the first administrator (email and password, the same password rule), signs it in, and from then on is the ordinary sign-in. On with `docker-compose.yml`, which answers on 127.0.0.1 only; `AUTH__ADMIN_PASSWORD`, when set, creates the administrator instead. Ignored with `APP__ENV_NAME=production`. |
-| `AUTH__SESSION_IDLE_MINUTES` | integer, ≥ 0 | `0` | `auth.sessionIdleMinutes` | Minutes without activity after which a session closes: the gateway refuses it and the open page signs out by itself after a one-minute warning. 0 = never. |
+| `AUTH__SESSION_IDLE_MINUTES` | integer, ≥ 0 | `0` | `auth.sessionIdleMinutes` | Minutes without activity after which a session closes: the gateway refuses it and the open page signs out by itself after a one-minute warning. 0 = never. Also adjustable in Administration → Settings. |
 | `AUTH__COOKIE_DOMAIN` | string | empty | `auth.cookieDomain` | Domain of the session cookie. Empty = the gateway's host, right when interface and API share a host. With the interface on another host of the same domain (`app.example.com` and `api.example.com`) set the common domain, `example.com`; two unrelated domains do not work. |
-| `AUTH__PERSONAL_TOKENS` | boolean | `true` | `auth.personalTokens` | Whether people may create API tokens for their own scripts, with their own permissions. `false`: only service accounts, created by an administrator, have tokens. |
-| `AUTH__API_TOKEN_MAX_DAYS` | integer, 1–3650 | `365` | `auth.apiTokenMaxDays` | The furthest expiry of an API token: every token has one. |
+| `AUTH__PERSONAL_TOKENS` | boolean | `true` | `auth.personalTokens` | Whether people may create API tokens for their own scripts, with their own permissions. `false`: only service accounts, created by an administrator, have tokens. Also adjustable in Administration → Settings. |
+| `AUTH__API_TOKEN_MAX_DAYS` | integer, 1–3650 | `365` | `auth.apiTokenMaxDays` | The furthest expiry of an API token: every token has one. Also adjustable in Administration → Settings. |
 
 ### Single sign-on (OIDC)
 
@@ -157,20 +157,20 @@ Optional: Keycloak, Microsoft Entra ID, Auth0, Okta… Off while `OIDC__ISSUER` 
 | `OIDC__CLIENT_SECRET` | string | empty | `secrets.oidcClientSecret` | Secret of that (confidential) client. Required when SSO is on. |
 | `OIDC__REDIRECT_URI` | string | empty | `oidc.redirectUri` | The gateway's callback, e.g. `https://tabularia.example.com/api/auth/sso/callback`; it must match the one registered on the identity provider exactly. Required when SSO is on. |
 | `OIDC__SCOPES` | string | `openid profile email` | `oidc.scopes` | Scopes asked for, separated by spaces; must include `openid`. |
-| `OIDC__GROUPS_CLAIM` | string | `groups` | `oidc.groupsClaim` | Where the groups are: a claim (`groups` for Keycloak's group mapper, `roles` for Entra ID app roles) or a path into the token, as it appears in the JSON: `realm_access.roles` and `resource_access.<client id>.roles` for Keycloak's realm and client roles (a client id with dots works). Several, comma-separated, are joined: `groups,realm_access.roles`. A path the id_token does not carry is looked up in the access token (Keycloak puts the roles there by default), then in the provider's userinfo. |
-| `OIDC__GROUP_ALLOWLIST` | string | empty | `oidc.groupAllowlist` | Identity-provider groups mapped onto Tabularia groups, separated by commas. Empty = all of them. |
-| `OIDC__AUTO_CREATE_GROUPS` | boolean | `false` | `oidc.autoCreateGroups` | `true`: create the Tabularia groups missing at sign-in. `false`: map only onto groups an administrator already made. |
-| `OIDC__AUTHORITATIVE` | boolean | `true` | `oidc.authoritative` | `true`: the identity provider owns group membership (groups absent from the claim are removed). `false`: SSO only adds. |
+| `OIDC__GROUPS_CLAIM` | string | `groups` | `oidc.groupsClaim` | Where the groups are: a claim (`groups` for Keycloak's group mapper, `roles` for Entra ID app roles) or a path into the token, as it appears in the JSON: `realm_access.roles` and `resource_access.<client id>.roles` for Keycloak's realm and client roles (a client id with dots works). Several, comma-separated, are joined: `groups,realm_access.roles`. A path the id_token does not carry is looked up in the access token (Keycloak puts the roles there by default), then in the provider's userinfo. Also adjustable in Administration → Settings. |
+| `OIDC__GROUP_ALLOWLIST` | string | empty | `oidc.groupAllowlist` | Identity-provider groups mapped onto Tabularia groups, separated by commas. Empty = all of them. Also adjustable in Administration → Settings. |
+| `OIDC__AUTO_CREATE_GROUPS` | boolean | `false` | `oidc.autoCreateGroups` | `true`: create the Tabularia groups missing at sign-in. `false`: map only onto groups an administrator already made. Also adjustable in Administration → Settings. |
+| `OIDC__AUTHORITATIVE` | boolean | `true` | `oidc.authoritative` | `true`: the identity provider owns group membership (groups absent from the claim are removed). `false`: SSO only adds. Also adjustable in Administration → Settings. |
 | `OIDC__SUPERUSER_GROUP` | string | empty | `oidc.superuserGroup` | Members of this group are administrators. Empty = nobody becomes one through SSO. |
-| `OIDC__ALLOWED_EMAIL_DOMAINS` | string | empty | `oidc.allowedEmailDomains` | Only people with an e-mail in these domains may sign in, separated by commas. Empty = anyone the identity provider authenticates, which may be a whole company directory. |
-| `OIDC__REQUIRE_ALLOWLISTED_GROUP` | boolean | `false` | `oidc.requireAllowlistedGroup` | `true`: signing in requires one of the groups of `OIDC__GROUP_ALLOWLIST` (or the administrators' group). |
+| `OIDC__ALLOWED_EMAIL_DOMAINS` | string | empty | `oidc.allowedEmailDomains` | Only people with an e-mail in these domains may sign in, separated by commas. Empty = anyone the identity provider authenticates, which may be a whole company directory. Also adjustable in Administration → Settings. |
+| `OIDC__REQUIRE_ALLOWLISTED_GROUP` | boolean | `false` | `oidc.requireAllowlistedGroup` | `true`: signing in requires one of the groups of `OIDC__GROUP_ALLOWLIST` (or the administrators' group). Also adjustable in Administration → Settings. |
 | `OIDC__POST_LOGIN_URL` | string | `http://localhost:3000/auth/callback` | `oidc.postLoginUrl` | The interface page that receives the session after SSO, e.g. `https://tabularia.example.com/auth/callback`. |
-| `OIDC__BUTTON_LABEL` | string | `Single sign-on` | `oidc.buttonLabel` | Label of the SSO button on the sign-in page. |
-| `OIDC__DISCOVERY_TTL_SECONDS` | integer | `3600` | `extraEnv` | How long the identity provider's discovery document is trusted before it is fetched again. |
-| `OIDC__TIMEOUT_SECONDS` | number | `10` | `extraEnv` | Timeout of the calls to the identity provider. |
+| `OIDC__BUTTON_LABEL` | string | `Single sign-on` | `oidc.buttonLabel` | Label of the SSO button on the sign-in page. Also adjustable in Administration → Settings. |
+| `OIDC__DISCOVERY_TTL_SECONDS` | integer | `3600` | `extraEnv` | How long the identity provider's discovery document is trusted before it is fetched again. Also adjustable in Administration → Settings. |
+| `OIDC__TIMEOUT_SECONDS` | number | `10` | `extraEnv` | Timeout of the calls to the identity provider. Also adjustable in Administration → Settings. |
 | `OIDC__CA_FILE` | string | empty | oidc.caCert / oidc.caConfigMap | A PEM file of the certificate authorities to trust for the identity provider, besides the public ones: a company Keycloak whose certificate the company's own authority signed (without it every sign-in fails with `idp_untrusted`). The chart mounts it from `oidc.caCert` or `oidc.caConfigMap`. The gateway refuses to start when the file is not one. |
 | `OIDC__VERIFY_TLS` | boolean | `true` | `oidc.verifyTls` | Whether the identity provider's certificate is checked. `false` accepts it even when no trusted authority signed it (a company Keycloak whose authority you cannot give in `OIDC__CA_FILE`): whoever can stand between the gateway and the provider can then sign in as anyone, administrators included. The gateway logs a warning at every start. See [Single sign-on with Keycloak](sso-keycloak.md#a-certificate-the-gateway-does-not-trust). |
-| `OIDC__LOGIN_TX_TTL_SECONDS` | integer | `600` | `extraEnv` | How long a sign-in may stay on the identity provider's page (the state, nonce and PKCE cookie). |
+| `OIDC__LOGIN_TX_TTL_SECONDS` | integer | `600` | `extraEnv` | How long a sign-in may stay on the identity provider's page (the state, nonce and PKCE cookie). Also adjustable in Administration → Settings. |
 
 ### Link to the engine
 
@@ -178,9 +178,9 @@ Optional: Keycloak, Microsoft Entra ID, Auth0, Okta… Off while `OIDC__ISSUER` 
 |---|---|---|---|---|
 | `ENGINE__BASE_URL` | string | `http://localhost:8000` | set by the chart (the engine Service) | Internal URL of the engine API (`http://backend:8000` in Compose). The gateway is its only client. |
 | `ENGINE__BUCKET` | string | `data-prep` | `externalServices.storage.bucket` | The gateway's copy of the bucket name, compared with the bucket of every request (a mismatch is refused with 403). It must equal `STORAGE__BUCKET`: the Compose file and the chart derive it from that value, so set it by hand only if you know why. |
-| `ENGINE__RUN_STALE_TIMEOUT_SECONDS` | integer | `CELERY__TASK_TIME_LIMIT` + 300 | `engine.runStaleTimeoutSeconds` | A run that has not reached a final state after this long is declared lost and marked failed. It must stay above `CELERY__TASK_TIME_LIMIT`, so the gateway gives up only after the worker has killed the task. |
+| `ENGINE__RUN_STALE_TIMEOUT_SECONDS` | integer | `CELERY__TASK_TIME_LIMIT` + 300 | `engine.runStaleTimeoutSeconds` | A run that has not reached a final state after this long is declared lost and marked failed. It must stay above `CELERY__TASK_TIME_LIMIT`, so the gateway gives up only after the worker has killed the task. Also adjustable in Administration → Settings. |
 | `ENGINE__SETTINGS_PANEL` | boolean | `true` | `engine.settingsPanel` | Whether Administration → Settings may change some engine parameters at runtime ([engine settings](engine-settings.md)). `false`: the environment is the only source, the panel shows the values without changing them, and values saved before stop applying. |
-| `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS` | number, > 0 and ≤ 3600 | `100` | `extraEnv` | Seconds the gateway waits for the engine to build one dbt export; past it the download stops with a clear 504 instead of hanging until the ingress cuts it. Keep it, plus `AI__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout. |
+| `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS` | number, > 0 and ≤ 3600 | `100` | `extraEnv` | Seconds the gateway waits for the engine to build one dbt export; past it the download stops with a clear 504 instead of hanging until the ingress cuts it. Keep it, plus `AI__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout. Also adjustable in Administration → Settings. |
 
 ### AI assistant
 
@@ -191,23 +191,23 @@ Optional: a chat over the catalog and an assistant in the flow editor, against a
 | `AI__BASE_URL` | string | empty | `ai.baseUrl` | OpenAI-compatible endpoint, e.g. `https://api.scaleway.ai/v1`. Empty = assistant off. |
 | `AI__ACCESS_KEY` | string | empty | `ai.accessKey` | Identifier of the key (Scaleway calls it access key); the protocol authenticates with the secret alone, this only tells which key is in use. |
 | `AI__SECRET_KEY` | string | empty | `secrets.aiSecretKey` | The API key. Empty = assistant off. |
-| `AI__DEFAULT_MODEL` | string | empty | `ai.defaultModel` | Model proposed first in the picker, if an administrator enabled it. |
-| `AI__MAX_RESULT_ROWS` | integer, 1–2000 | `200` | `ai.maxResultRows` | Rows a query of the assistant may return, to the model and to the chat. |
-| `AI__MAX_REQUESTS` | integer, 1–50 | `12` | `ai.maxRequests` | Model round-trips per message of the data chat: the cap on its tool-calling loop. |
-| `AI__MAX_FLOW_REQUESTS` | integer, 1–80 | `30` | `ai.maxFlowRequests` | The same for the flow editor's assistant, which takes a round-trip for every step it builds and checks. |
-| `AI__MAX_HISTORY_MESSAGES` | integer, 0–400 | `60` | `extraEnv` | Past messages of a conversation replayed to the model: higher remembers more and costs more per turn. |
-| `AI__MAX_COST_PER_TURN_USD` | number, ≥ 0 | `0.5` | `ai.maxCostPerTurnUsd` | Spending ceiling of one turn, in dollars, enforced by pydantic-ai. The round-trip cap does not limit tokens. |
-| `AI__MAX_COST_PER_DAY_USD` | number, ≥ 0 | `0` | `ai.maxCostPerDayUsd` | **Production:** set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key). Daily ceiling per user, in dollars. 0 = none. |
-| `AI__MAX_COST_PER_DAY_TOTAL_USD` | number, ≥ 0 | `0` | `ai.maxCostPerDayTotalUsd` | Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 0 = none. |
-| `AI__MAX_INPUT_TOKENS_PER_TURN` | integer, ≥ 1000 | `400000` | `extraEnv` | Input tokens one turn may send to the model. |
-| `AI__DBT_EXPORT_TIMEOUT_SECONDS` | number, > 0 and ≤ 3600 | `180` | `extraEnv` | Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart). |
-| `AI__MAX_CHATS_LISTED` | integer, 1–500 | `100` | `extraEnv` | Conversations listed per person; older ones are not deleted, only left out of the list. |
+| `AI__DEFAULT_MODEL` | string | empty | `ai.defaultModel` | Model proposed first in the picker, if an administrator enabled it. Also adjustable in Administration → Settings. |
+| `AI__MAX_RESULT_ROWS` | integer, 1–2000 | `200` | `ai.maxResultRows` | Rows a query of the assistant may return, to the model and to the chat. Also adjustable in Administration → Settings. |
+| `AI__MAX_REQUESTS` | integer, 1–50 | `12` | `ai.maxRequests` | Model round-trips per message of the data chat: the cap on its tool-calling loop. Also adjustable in Administration → Settings. |
+| `AI__MAX_FLOW_REQUESTS` | integer, 1–80 | `30` | `ai.maxFlowRequests` | The same for the flow editor's assistant, which takes a round-trip for every step it builds and checks. Also adjustable in Administration → Settings. |
+| `AI__MAX_HISTORY_MESSAGES` | integer, 0–400 | `60` | `extraEnv` | Past messages of a conversation replayed to the model: higher remembers more and costs more per turn. Also adjustable in Administration → Settings. |
+| `AI__MAX_COST_PER_TURN_USD` | number, ≥ 0 | `0.5` | `ai.maxCostPerTurnUsd` | Spending ceiling of one turn, in dollars, enforced by pydantic-ai. The round-trip cap does not limit tokens. Also adjustable in Administration → Settings. |
+| `AI__MAX_COST_PER_DAY_USD` | number, ≥ 0 | `0` | `ai.maxCostPerDayUsd` | **Production:** set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key). Daily ceiling per user, in dollars. 0 = none. Also adjustable in Administration → Settings. |
+| `AI__MAX_COST_PER_DAY_TOTAL_USD` | number, ≥ 0 | `0` | `ai.maxCostPerDayTotalUsd` | Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 0 = none. Also adjustable in Administration → Settings. |
+| `AI__MAX_INPUT_TOKENS_PER_TURN` | integer, ≥ 1000 | `400000` | `extraEnv` | Input tokens one turn may send to the model. Also adjustable in Administration → Settings. |
+| `AI__DBT_EXPORT_TIMEOUT_SECONDS` | number, > 0 and ≤ 3600 | `180` | `extraEnv` | Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart). Also adjustable in Administration → Settings. |
+| `AI__MAX_CHATS_LISTED` | integer, 1–500 | `100` | `extraEnv` | Conversations listed per person; older ones are not deleted, only left out of the list. Also adjustable in Administration → Settings. |
 
 ### Development sample
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `PREVIEW__DEFAULT_SAMPLE_ROWS` | integer, ≥ 0 | `0` | `app.previewDefaultSampleRows` | Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and trial runs. People switch it off per node; scheduled runs and «Run in production» always read everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample. |
+| `PREVIEW__DEFAULT_SAMPLE_ROWS` | integer, ≥ 0 | `0` | `app.previewDefaultSampleRows` | Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and trial runs. People switch it off per node; scheduled runs and «Run in production» always read everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample. Also adjustable in Administration → Settings. |
 
 ### Orchestration and scheduling
 
@@ -215,18 +215,18 @@ How flows are executed: queued in the database, picked up by an orchestrator pro
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `ORCHESTRATOR__REFRESH_WAIT_SECONDS` | integer | `600` | `orchestrator.refreshWaitSeconds` | Longest a flow waits for a Refresh node to complete before aborting rather than reading stale data. Raise it for very long refreshes. An Output node has no cap of its own: it is bounded by `ENGINE__RUN_STALE_TIMEOUT_SECONDS`. |
-| `ORCHESTRATOR__LOG_RETENTION_DAYS` | integer, ≥ 0 | `30` | `orchestrator.logRetentionDays` | After how many days a run's logs are emptied: what a Script or Container node printed, and the engine's full traceback of a failure. The runs stay, with their outcome, short error, timings and exit code. 0 keeps them for ever. With the three settings below, the orchestrators trim this history every hour and then vacuum the tables they touched. |
-| `ORCHESTRATOR__CONTRACT_RESULTS_KEPT` | integer, ≥ 0 | `100` | `orchestrator.contractResultsKept` | The latest data contract reports kept per datasource; older ones are deleted every hour, never one whose notice is still to be sent. 0 keeps them all. |
-| `ORCHESTRATOR__VERSIONS_KEPT` | integer, ≥ 0 | `50` | `orchestrator.versionsKept` | The latest versions kept per flow and per saved script; the one in use is always kept. 0 keeps them all. |
-| `ORCHESTRATOR__AI_CHAT_RETENTION_DAYS` | integer, ≥ 0 | `90` | `orchestrator.aiChatRetentionDays` | The assistant's conversations untouched for this many days are deleted, with their turns; the spending ledger stays. 0 keeps them. |
-| `ORCHESTRATOR__POLL_INTERVAL_SECONDS` | number | `3` | `orchestrator.pollIntervalSeconds` | The longest wait, in seconds, between two checks of a step the flow is waiting for: the first checks come sooner (a quarter of a second, then every second for half a minute). |
-| `ORCHESTRATOR__QUEUE_POLL_SECONDS` | number, > 0 | `1` | `extraEnv` | Seconds between two looks at the queue of flow executions. |
-| `ORCHESTRATOR__MAX_CONCURRENT` | integer, ≥ 1 | `20` | `orchestrator.maxConcurrent` | Flow executions (and cells of flow groups) one orchestrator process carries at once; the others wait in the queue. Each uses a database connection while it asks the engine about a step: keep it below the pool (`DB__POOL_SIZE`). |
-| `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS` | number, > 0 | `900` | `orchestrator.queueTimeoutSeconds` | An execution still queued after this long (no orchestrator running, or all of them full) is not started any more: it is closed as failed. |
-| `ORCHESTRATOR__HEARTBEAT_SECONDS` | number, > 0 | `10` | `extraEnv` | How often the process executing a flow says it is still there. |
-| `ORCHESTRATOR__DEAD_AFTER_SECONDS` | number, > 0 | `60` | `orchestrator.deadAfterSeconds` | An execution silent for longer belongs to a process that died: another orchestrator closes it as interrupted. The machines' clocks must agree within this margin. |
-| `SCHEDULING__WORKER_CAPACITY` | integer | `2` | `extraEnv` | Flow runs one worker is assumed to carry at once: used only to highlight the crowded minutes in the schedule load heatmap. Match it to the run workers' `CELERY__WORKER_CONCURRENCY`. |
+| `ORCHESTRATOR__REFRESH_WAIT_SECONDS` | integer | `600` | `orchestrator.refreshWaitSeconds` | Longest a flow waits for a Refresh node to complete before aborting rather than reading stale data. Raise it for very long refreshes. An Output node has no cap of its own: it is bounded by `ENGINE__RUN_STALE_TIMEOUT_SECONDS`. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__LOG_RETENTION_DAYS` | integer, ≥ 0 | `30` | `orchestrator.logRetentionDays` | After how many days a run's logs are emptied: what a Script or Container node printed, and the engine's full traceback of a failure. The runs stay, with their outcome, short error, timings and exit code. 0 keeps them for ever. With the three settings below, the orchestrators trim this history every hour and then vacuum the tables they touched. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__CONTRACT_RESULTS_KEPT` | integer, ≥ 0 | `100` | `orchestrator.contractResultsKept` | The latest data contract reports kept per datasource; older ones are deleted every hour, never one whose notice is still to be sent. 0 keeps them all. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__VERSIONS_KEPT` | integer, ≥ 0 | `50` | `orchestrator.versionsKept` | The latest versions kept per flow and per saved script; the one in use is always kept. 0 keeps them all. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__AI_CHAT_RETENTION_DAYS` | integer, ≥ 0 | `90` | `orchestrator.aiChatRetentionDays` | The assistant's conversations untouched for this many days are deleted, with their turns; the spending ledger stays. 0 keeps them. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__POLL_INTERVAL_SECONDS` | number | `3` | `orchestrator.pollIntervalSeconds` | The longest wait, in seconds, between two checks of a step the flow is waiting for: the first checks come sooner (a quarter of a second, then every second for half a minute). Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__QUEUE_POLL_SECONDS` | number, > 0 | `1` | `extraEnv` | Seconds between two looks at the queue of flow executions. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__MAX_CONCURRENT` | integer, ≥ 1 | `20` | `orchestrator.maxConcurrent` | Flow executions (and cells of flow groups) one orchestrator process carries at once; the others wait in the queue. Each uses a database connection while it asks the engine about a step: keep it below the pool (`DB__POOL_SIZE`). Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS` | number, > 0 | `900` | `orchestrator.queueTimeoutSeconds` | An execution still queued after this long (no orchestrator running, or all of them full) is not started any more: it is closed as failed. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__HEARTBEAT_SECONDS` | number, > 0 | `10` | `extraEnv` | How often the process executing a flow says it is still there. Also adjustable in Administration → Settings. |
+| `ORCHESTRATOR__DEAD_AFTER_SECONDS` | number, > 0 | `60` | `orchestrator.deadAfterSeconds` | An execution silent for longer belongs to a process that died: another orchestrator closes it as interrupted. The machines' clocks must agree within this margin. Also adjustable in Administration → Settings. |
+| `SCHEDULING__WORKER_CAPACITY` | integer | `2` | `extraEnv` | Flow runs one worker is assumed to carry at once: used only to highlight the crowded minutes in the schedule load heatmap. Match it to the run workers' `CELERY__WORKER_CONCURRENCY`. Also adjustable in Administration → Settings. |
 
 ### Database backups
 
@@ -238,7 +238,7 @@ Kubernetes only (on Docker Compose Administration → Backups is greyed out). Th
 | `BACKUP__SCHEDULE` | string | `0 3 * * *` | `backup.schedule` | When: a five-field cron (`minute hour day month weekday`) in `APP__TIMEZONE`. The process refuses to start with an invalid one. |
 | `BACKUP__KEEP` | integer, 1–1000 | `14` | `backup.keep` | How many backups stay; after each backup the oldest beyond this number are removed. |
 | `BACKUP__PG_DUMP` | string | `pg_dump` | `extraEnv` | The `pg_dump` used when the image has none of the server's own version. The gateway image has those of PostgreSQL 14 to 18 and uses the server's, so that the server's own `pg_restore` reads the backup; this one (18's) also reads older servers. |
-| `BACKUP__TIMEOUT_SECONDS` | integer, ≥ 60 | `3600` | `backup.timeoutSeconds` | The longest a backup (the dump and its upload) may take before it is stopped and reported as failed. |
+| `BACKUP__TIMEOUT_SECONDS` | integer, ≥ 60 | `3600` | `backup.timeoutSeconds` | The longest a backup (the dump and its upload) may take before it is stopped and reported as failed. Also adjustable in Administration → Settings. |
 
 ### OpenLineage
 
@@ -251,7 +251,7 @@ Optional: what every run read and wrote, sent to a catalog in the OpenLineage st
 | `OPENLINEAGE__API_KEY` | string | empty | `secrets.openlineageApiKey` | Bearer token, if the collector asks for one. |
 | `OPENLINEAGE__FILE` | string | empty | `openlineage.file` | Also, or instead, write the events as JSON Lines to this file. |
 | `OPENLINEAGE__NAMESPACE` | string | `tabularia` | `openlineage.namespace` | Namespace of this installation's jobs. |
-| `OPENLINEAGE__TIMEOUT_SECONDS` | number, > 0 | `10` | `openlineage.timeoutSeconds` | How long the collector may take to answer. Events are sent after the run is closed, from a background thread: a collector that is down never fails a run. |
+| `OPENLINEAGE__TIMEOUT_SECONDS` | number, > 0 | `10` | `openlineage.timeoutSeconds` | How long the collector may take to answer. Events are sent after the run is closed, from a background thread: a collector that is down never fails a run. Also adjustable in Administration → Settings. |
 | `OPENLINEAGE_URL` | string | empty | `extraEnv` | The OpenLineage library's own variable: switches lineage on like `OPENLINEAGE__URL`, configured the library's way. |
 | `OPENLINEAGE_CONFIG` | string | empty | `extraEnv` | The OpenLineage library's own configuration file (`openlineage.yml`), as an alternative to the variables above. |
 
@@ -261,8 +261,8 @@ Webhook receivers are added in Administration → Webhooks ([API](api.md)); forw
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `WEBHOOKS__RETENTION_DAYS` | integer, ≥ 1 | `30` | `webhooks.retentionDays` | Days the history of webhook calls is kept. |
-| `WEBHOOKS__TIMEOUT_SECONDS` | number, > 0 and ≤ 60 | `10` | `webhooks.timeoutSeconds` | How long a webhook receiver may take to answer. |
+| `WEBHOOKS__RETENTION_DAYS` | integer, ≥ 1 | `30` | `webhooks.retentionDays` | Days the history of webhook calls is kept. Also adjustable in Administration → Settings. |
+| `WEBHOOKS__TIMEOUT_SECONDS` | number, > 0 and ≤ 60 | `10` | `webhooks.timeoutSeconds` | How long a webhook receiver may take to answer. Also adjustable in Administration → Settings. |
 | `AUDIT__RETENTION_MINUTES` | integer, ≥ 0 | `0` | `app.auditRetentionMinutes` | Audit entries older than this many minutes are deleted, once a minute. 0 = kept forever. Minutes because on a public demo the useful window is an hour (43200 = thirty days). The privacy notice can quote it. |
 | `AUDIT__IP_RETENTION_DAYS` | integer, ≥ 0 | `90` | `extraEnv` | Client addresses and browser strings are personal data, kept for this many days: past them they are emptied from audit entries, API tokens and sessions, once an hour, and the entry itself stays (who did what, and when). 0 = kept forever. Deleting an account empties its addresses at once, failed sign-ins with its email included. Independent of `AUDIT__RETENTION_MINUTES`: when that one is shorter, entries go before their addresses would. |
 
@@ -271,8 +271,8 @@ Webhook receivers are added in Administration → Webhooks ([API](api.md)); forw
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `MONITORING__NODE_EXPORTER_URL` | string | `http://node-exporter:9100/metrics` | `monitoring.nodeExporterUrl` | node-exporter the RAM badge and the Monitoring panel read the host's memory from, live. Empty = badge off (the chart deploys no node-exporter). |
-| `MONITORING__TIMEOUT_SECONDS` | number | `3` | `extraEnv` | Timeout of that read. |
-| `MONITORING__CACHE_SECONDS` | number | `3` | `extraEnv` | Seconds one read is shared by every open page. |
+| `MONITORING__TIMEOUT_SECONDS` | number | `3` | `extraEnv` | Timeout of that read. Also adjustable in Administration → Settings. |
+| `MONITORING__CACHE_SECONDS` | number | `3` | `extraEnv` | Seconds one read is shared by every open page. Also adjustable in Administration → Settings. |
 
 ### Worker autoscaling from the panel (Kubernetes)
 
@@ -283,7 +283,7 @@ Lets an administrator change the minimum and maximum number of worker pods from 
 | `KUBERNETES__SCALING` | boolean | `false` | `adminScaling.enabled` | Turns the panel's autoscaling bounds on. |
 | `KUBERNETES__CLUSTER_VIEW` | boolean | `false` | `clusterView.enabled` (on by default) | Turns Administration → Cluster on: the pods of Tabularia and of its users' code, their state, CPU and memory (with metrics-server) and the warning events, read-only, for administrators and observers. |
 | `KUBERNETES__API_URL` | string | `https://kubernetes.default.svc` | `extraEnv` | Kubernetes API server, from inside the cluster. |
-| `KUBERNETES__NAMESPACE` | string | empty | `extraEnv` | Namespace of the worker Deployments. Empty = the pod's own, read from its service account. |
+| `KUBERNETES__NAMESPACE` | string | empty | set by the chart (the pod's namespace) | Namespace of the release's pods and Deployments. Empty = the pod's own, read from its service account. |
 | `KUBERNETES__TOKEN_FILE` | string | `/var/run/secrets/kubernetes.io/serviceaccount/token` | `extraEnv` | Service-account token the gateway authenticates with. |
 | `KUBERNETES__CA_FILE` | string | `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt` | `extraEnv` | Certificate authority of the API server. |
 | `KUBERNETES__NAMESPACE_FILE` | string | `/var/run/secrets/kubernetes.io/serviceaccount/namespace` | `extraEnv` | Where the pod's namespace is read when `KUBERNETES__NAMESPACE` is empty. |
@@ -293,7 +293,12 @@ Lets an administrator change the minimum and maximum number of worker pods from 
 | `KUBERNETES__PREVIEW_WORKER_DEPLOYMENT` | string | empty | set by the chart with `adminScaling.enabled` | Deployment of the preview workers. |
 | `KUBERNETES__PREVIEW_WORKER_AUTOSCALER` | string | empty | set by the chart with `adminScaling.enabled` | Their autoscaler, as for the run workers. |
 | `KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS` | integer, ≥ 1 | `8` | `previewWorker.autoscaling.panelMaxReplicas` (or `maxReplicas`) | The highest maximum of preview-worker pods the panel may set. |
-| `KUBERNETES__TIMEOUT_SECONDS` | number, > 0 | `10` | `extraEnv` | Timeout of the calls to the Kubernetes API. |
+| `KUBERNETES__TIMEOUT_SECONDS` | number, > 0 | `10` | `extraEnv` | Timeout of the calls to the Kubernetes API. Also adjustable in Administration → Settings. |
+| `KUBERNETES__ROLLOUT` | boolean | `false` | `settingsRollout.enabled` (on by default) | Administration → Settings restarts the pods that read a changed setting only when they start, one at a time, by eviction (docs/engine-settings.md). Off, it names the components to restart by hand. |
+| `KUBERNETES__RELEASE` | string | empty | set by the chart | The Helm release: Administration → Settings selects its pods by `app.kubernetes.io/instance` to restart them, and names it in the command it shows when it cannot. |
+| `KUBERNETES__APP_NAME` | string | empty | set by the chart | The `app.kubernetes.io/name` of the release's pods, so that the rollout of Administration → Settings leaves alone the other charts of an umbrella release with components of the same names. |
+| `KUBERNETES_SERVICE_HOST` | string | empty | `extraEnv` | Set by Kubernetes in every container, never by hand: the gateway knows from it that it runs in a cluster, also when no service account token is mounted. |
+| `HOSTNAME` | string | empty | `extraEnv` | Set by the container runtime, never by hand: the pod's name, so that the orchestrator running a rollout of Administration → Settings evicts itself last. |
 
 ### Scripting environments (Kubernetes)
 
@@ -314,14 +319,14 @@ Administration → Scripting environments: the Python and R environments the Scr
 | `SCRIPTS__BASE_IMAGES` | string | empty | `scripts.baseImages` | JSON: the language versions offered, and the image each starts from, e.g. `{"python": {"3.12": "python:3.12-slim"}, "r": {"4.5": "rocker/r-ver:4.5.3"}}`. Empty = Python 3.11, 3.12, 3.13, 3.14 (`python:3.x-slim`) and R 4.5, 4.6 (`rocker/r-ver`). Pin them by digest, or point them at a mirror, here. |
 | `SCRIPTS__PYPI_INDEX_URL` | string | empty | `scripts.pypiIndexUrl` | The Python package index the builds install from. Empty = PyPI. |
 | `SCRIPTS__CRAN_URL` | string | `https://cran.r-project.org` | `scripts.cranUrl` | The CRAN repository the R builds install from, and the one the scripts' R sees: CRAN itself or one of its mirrors. CRAN publishes sources, so R packages compile during the build; the images carry the system libraries the usual packages need. |
-| `SCRIPTS__BUILD_TIMEOUT_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | The longest an image build may take before it fails. |
-| `SCRIPTS__BUILD_CPU` | string | `2` | `extraEnv` | CPU an environment's image build may use. With SCRIPTS__BUILD_MEMORY it sets how many compilers run at once (one per core at most), which is what makes R packages built from CRAN's sources take minutes or tens of minutes. |
-| `SCRIPTS__BUILD_MEMORY` | string | `4Gi` | `extraEnv` | Memory an environment's image build requests and may use: it lands only on a node that has it. One compiler runs per 1.5 GiB (arrow's C++ takes over 1 GB each); a build that needs more fails alone, saying its compiler was killed. Raise it, with SCRIPTS__BUILD_CPU, to build R environments faster on large nodes. |
-| `SCRIPTS__CHECK_TIMEOUT_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | The longest the check of a new image may take: pulling it on a node, starting it, listing its packages. |
-| `SCRIPTS__POLL_SECONDS` | number, > 0 | `5` | `extraEnv` | How often the orchestrators look at the builds in progress, and the longest wait between two looks at a Script node's Job (the first come sooner). |
-| `SCRIPTS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a build's log is kept and shown in the panel. |
-| `SCRIPTS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job after this long, if Tabularia has not removed it first. |
-| `SCRIPTS__LINT` | boolean | `true` | `extraEnv` | The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person. |
+| `SCRIPTS__BUILD_TIMEOUT_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | The longest an image build may take before it fails. Also adjustable in Administration → Settings. |
+| `SCRIPTS__BUILD_CPU` | string | `2` | `extraEnv` | CPU an environment's image build may use. With SCRIPTS__BUILD_MEMORY it sets how many compilers run at once (one per core at most), which is what makes R packages built from CRAN's sources take minutes or tens of minutes. Also adjustable in Administration → Settings. |
+| `SCRIPTS__BUILD_MEMORY` | string | `4Gi` | `extraEnv` | Memory an environment's image build requests and may use: it lands only on a node that has it. One compiler runs per 1.5 GiB (arrow's C++ takes over 1 GB each); a build that needs more fails alone, saying its compiler was killed. Raise it, with SCRIPTS__BUILD_CPU, to build R environments faster on large nodes. Also adjustable in Administration → Settings. |
+| `SCRIPTS__CHECK_TIMEOUT_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | The longest the check of a new image may take: pulling it on a node, starting it, listing its packages. Also adjustable in Administration → Settings. |
+| `SCRIPTS__POLL_SECONDS` | number, > 0 | `5` | `extraEnv` | How often the orchestrators look at the builds in progress, and the longest wait between two looks at a Script node's Job (the first come sooner). Also adjustable in Administration → Settings. |
+| `SCRIPTS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a build's log is kept and shown in the panel. Also adjustable in Administration → Settings. |
+| `SCRIPTS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job after this long, if Tabularia has not removed it first. Also adjustable in Administration → Settings. |
+| `SCRIPTS__LINT` | boolean | `true` | `extraEnv` | The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person. Also adjustable in Administration → Settings. |
 
 ### Container registries (Kubernetes)
 
@@ -332,13 +337,13 @@ Administration → Container registries: the registries the images of the Contai
 | `CONTAINERS__ENABLED` | boolean | `false` | `containers.enabled` | Turns on Administration → Container registries: the registries the images of the Container node come from, on Kubernetes. The Helm chart sets it with `containers.enabled`. |
 | `CONTAINERS__NAMESPACE` | string | empty | set by the chart | Where the flows' runs run the Container nodes, and where each registry's pull Secret is kept. The chart sets it (`containers.namespace`, `<release namespace>-containers` by default), at the `baseline` Pod Security level. |
 | `CONTAINERS__TRIAL_NAMESPACE` | string | empty | set by the chart | Where the editor's «Run» of a Container node and «Try in the cluster» run, with a ResourceQuota of its own. Empty = `CONTAINERS__NAMESPACE`. The chart sets it (`containers.trialNamespace`). |
-| `CONTAINERS__PULL_CHECK_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | «Try in the cluster»: how long a node may take to download an image before the check says it did not. |
-| `CONTAINERS__POLL_SECONDS` | number, > 0 | `3` | `extraEnv` | The longest wait between two looks at a Job of the containers' namespaces while the gateway waits for it (the first come sooner). |
-| `CONTAINERS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job of the containers' namespaces after this long, if Tabularia has not removed it first. |
-| `CONTAINERS__MAX_CPU` | string | `4` | `containers.limits.cpu` | The most CPU a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.cpu`). |
-| `CONTAINERS__MAX_MEMORY` | string | `16Gi` | `containers.limits.memory` | The most memory a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.memory`). |
-| `CONTAINERS__MAX_TIMEOUT_SECONDS` | integer, ≥ 60 | `86400` | `containers.limits.timeoutSeconds` | The longest timeout a Container node may have. The chart sets it (`containers.limits.timeoutSeconds`). |
-| `CONTAINERS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a container's log the run keeps and the run page shows. |
+| `CONTAINERS__PULL_CHECK_SECONDS` | integer, ≥ 30 | `300` | `extraEnv` | «Try in the cluster»: how long a node may take to download an image before the check says it did not. The check answers within 270 s (the ingress cuts at 300 s): a longer download is said to be going on, and goes on in the cluster up to this. Also adjustable in Administration → Settings. |
+| `CONTAINERS__POLL_SECONDS` | number, > 0 | `3` | `extraEnv` | The longest wait between two looks at a Job of the containers' namespaces while the gateway waits for it (the first come sooner). Also adjustable in Administration → Settings. |
+| `CONTAINERS__JOB_TTL_SECONDS` | integer, ≥ 60 | `3600` | `extraEnv` | Kubernetes removes a finished Job of the containers' namespaces after this long, if Tabularia has not removed it first. Also adjustable in Administration → Settings. |
+| `CONTAINERS__MAX_CPU` | string | `4` | `containers.limits.cpu` | The most CPU a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.cpu`). Also adjustable in Administration → Settings. |
+| `CONTAINERS__MAX_MEMORY` | string | `16Gi` | `containers.limits.memory` | The most memory a Container node may ask for (its request and its limit). The chart sets it (`containers.limits.memory`). Also adjustable in Administration → Settings. |
+| `CONTAINERS__MAX_TIMEOUT_SECONDS` | integer, ≥ 60 | `86400` | `containers.limits.timeoutSeconds` | The longest timeout a Container node may have. The chart sets it (`containers.limits.timeoutSeconds`). Also adjustable in Administration → Settings. |
+| `CONTAINERS__LOG_MAX_BYTES` | integer, ≥ 4096 | `262144` | `extraEnv` | How much of the end of a container's log the run keeps and the run page shows. Also adjustable in Administration → Settings. |
 
 ## Engine and workers
 
@@ -354,8 +359,8 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `APP__ENGINE_API_THREADS` | integer, ≥ 40 | `200` | `extraEnv` | Synchronous requests the engine API serves at once. Every open preview holds a thread while it waits for a worker, so this is how many previews can be in flight; they sleep and cost little. |
-| `PREVIEW_TIMEOUT_SECONDS` | number | `120` | `engine.previewTimeoutSeconds` | Longest the engine API waits for a preview worker; then it revokes the job and answers 504. Keep any reverse proxy's read timeout above it. |
+| `APP__ENGINE_API_THREADS` | integer, ≥ 40 | `200` | `extraEnv` | Synchronous requests the engine API serves at once. Every open preview holds a thread while it waits for a worker, so this is how many previews can be in flight; they sleep and cost little. Also adjustable in Administration → Settings, applied after a restart of the engine API. |
+| `PREVIEW_TIMEOUT_SECONDS` | number | `120` | `engine.previewTimeoutSeconds` | Longest the engine API waits for a preview worker; then it revokes the job and answers 504. Keep any reverse proxy's read timeout above it. Also adjustable in Administration → Settings, applied after a restart of the engine API. |
 
 ### Broker and cache index (Valkey or Redis)
 
@@ -410,11 +415,11 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | `CELERY__RESULT_SERIALIZER` | string | `json` | `extraEnv` | Format of the results. Leave it. |
 | `CELERY__TIMEZONE` | string | `UTC` | `extraEnv` | Clock of beat's periodic tasks. Leave it on UTC: the gateway converts schedules to UTC before queuing them. |
 | `CELERY__ENABLE_UTC` | boolean | `true` | `extraEnv` | Celery's own UTC switch. Leave it. |
-| `CELERY__MAX_TASKS_PER_CHILD` | integer | `50` | `extraEnv` | A worker process is replaced after this many tasks, so memory the allocator keeps does not pile up. |
-| `CELERY__MAX_MEMORY_PER_CHILD_KB` | integer | empty | `extraEnv` | Resident memory (KB) past which a worker process is replaced at the end of its task. Empty = worked out from the container's memory limit × `CELERY__MAX_MEMORY_HEADROOM_FRAC` ÷ concurrency, never below the floor: set it only to force a fixed value. |
-| `CELERY__MAX_MEMORY_HEADROOM_FRAC` | number | `0.75` | `extraEnv` | Share of the container's memory limit given to the worker processes; the rest is margin for the main process and the page cache. |
-| `CELERY__MAX_MEMORY_PER_CHILD_FALLBACK_KB` | integer | `1500000` | `extraEnv` | The cap used when the container has no readable memory limit. |
-| `CELERY__MAX_MEMORY_PER_CHILD_FLOOR_KB` | integer | `512000` | `extraEnv` | The cap is never below this, so processes are not replaced too often. |
+| `CELERY__MAX_TASKS_PER_CHILD` | integer | `50` | `extraEnv` | A worker process is replaced after this many tasks, so memory the allocator keeps does not pile up. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CELERY__MAX_MEMORY_PER_CHILD_KB` | integer | empty | `extraEnv` | Resident memory (KB) past which a worker process is replaced at the end of its task. Empty = worked out from the container's memory limit × `CELERY__MAX_MEMORY_HEADROOM_FRAC` ÷ concurrency, never below the floor: set it only to force a fixed value. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CELERY__MAX_MEMORY_HEADROOM_FRAC` | number | `0.75` | `extraEnv` | Share of the container's memory limit given to the worker processes; the rest is margin for the main process and the page cache. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CELERY__MAX_MEMORY_PER_CHILD_FALLBACK_KB` | integer | `1500000` | `extraEnv` | The cap used when the container has no readable memory limit. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CELERY__MAX_MEMORY_PER_CHILD_FLOOR_KB` | integer | `512000` | `extraEnv` | The cap is never below this, so processes are not replaced too often. Also adjustable in Administration → Settings, applied after a restart of the workers. |
 | `WORKERS__RUN_CONCURRENCY` | integer | `0` | `extraEnv` | Processes per run-worker container, resized within seconds without stopping running tasks. 0 = keep `CELERY__WORKER_CONCURRENCY`. Also adjustable in Administration → Workers. |
 | `WORKERS__PREVIEW_CONCURRENCY` | integer | `0` | `extraEnv` | The same for the preview workers. Also adjustable in Administration → Workers. |
 
@@ -425,9 +430,9 @@ The editor keeps the output of intermediate steps, so the next preview starts fr
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `CACHE__TTL_SECONDS` | integer | `86400` | `cache.ttlSeconds` | A cached step unused for this long is deleted (its parquet and its index entry). Also adjustable in Administration → Settings. |
-| `CACHE__SWEEP_INTERVAL_SECONDS` | integer | `3600` | `cache.sweepIntervalSeconds` | How often the cache is swept. |
+| `CACHE__SWEEP_INTERVAL_SECONDS` | integer | `3600` | `cache.sweepIntervalSeconds` | How often the cache is swept. Also adjustable in Administration → Settings, applied after a restart of the scheduler (beat). |
 | `CACHE__MAX_STEP_ROWS` | integer | `1000000` | `extraEnv` | Steps with more rows are not cached: a copy as large as the source saves nothing over re-reading it and costs gigabytes of writes. 0 = no cap. Also adjustable in Administration → Settings. |
-| `METRICS__STORAGE_STATS_INTERVAL_SECONDS` | integer | `60` | `extraEnv` | How often the size of the storage prefixes is measured and published as a metric. |
+| `METRICS__STORAGE_STATS_INTERVAL_SECONDS` | integer | `60` | `extraEnv` | How often the size of the storage prefixes is measured and published as a metric. Also adjustable in Administration → Settings, applied after a restart of the scheduler (beat). |
 
 ### Embedded engines (chDB, DuckDB, Polars)
 
@@ -435,11 +440,12 @@ The engines that run inside the worker process. See [engine differences](engines
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `CHDB_MAX_MEMORY_USAGE` | integer | `1500000000` | `extraEnv` | Memory budget of the embedded chDB engine, in bytes; keep it under the worker's per-process cap. |
-| `CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY` | integer | `536870912` (512 MiB) | `extraEnv` | Past this, a chDB GROUP BY spills to disk. |
-| `CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT` | integer | `536870912` (512 MiB) | `extraEnv` | Past this, a chDB ORDER BY spills to disk. |
-| `CHDB_MAX_BYTES_IN_JOIN` | integer | `536870912` (512 MiB) | `extraEnv` | Past this, a chDB join fails instead of growing. |
-| `ENGINE_MAX_CROSS_JOIN_ROWS` | integer | `50000000` | `extraEnv` | Rows a cross join may produce in a run before it is refused with a clear error instead of exhausting memory. 0 = no cap. |
+| `TMP_SIZE_LIMIT` | string | empty | `engineApi.tmpSizeLimit` | Set by the Helm chart on the workers and the engine: the `sizeLimit` of their `/tmp` (an emptyDir), a Kubernetes quantity (`50Gi`). Past it the kubelet evicts the pod at once, so DuckDB spills at most half of it, shared by the worker's processes, and a query that needs more fails saying so. Unset (Compose): DuckDB's own cap, most of the free disk. |
+| `ENGINE_MAX_CROSS_JOIN_ROWS` | integer | `50000000` | `extraEnv` | Rows a cross join may produce in a run before it is refused with a clear error instead of exhausting memory. 0 = no cap. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CHDB_MAX_MEMORY_USAGE` | integer | `1500000000` | `extraEnv` | Memory budget of the embedded chDB engine, in bytes; keep it under the worker's per-process cap. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY` | integer | `536870912` (512 MiB) | `extraEnv` | Past this, a chDB GROUP BY spills to disk. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT` | integer | `536870912` (512 MiB) | `extraEnv` | Past this, a chDB ORDER BY spills to disk. Also adjustable in Administration → Settings, applied after a restart of the workers. |
+| `CHDB_MAX_BYTES_IN_JOIN` | integer | `536870912` (512 MiB) | `extraEnv` | Past this, a chDB join fails instead of growing. Also adjustable in Administration → Settings, applied after a restart of the workers. |
 
 ### External ClickHouse engine
 
@@ -455,7 +461,7 @@ Optional: flows run on a remote ClickHouse server (managed or self-hosted) inste
 | `CLICKHOUSE_EXTERNAL__AI_PASSWORD` | string | empty | `secrets.clickhouseAiPassword` | Its password. |
 | `CLICKHOUSE_EXTERNAL__DATABASE` | string | `default` | `externalServices.clickhouse.database` | Working database; it must exist. In `push` mode it holds the staging tables (the user needs CREATE, INSERT and DROP on it). |
 | `CLICKHOUSE_EXTERNAL__SECURE` | boolean | `false` | `externalServices.clickhouse.secure` | TLS; managed services require it (port 8443). |
-| `CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT` | integer | `10` | `externalServices.clickhouse.connectTimeout` | Seconds to wait for the handshake. |
+| `CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT` | integer | `10` | `externalServices.clickhouse.connectTimeout` | Seconds to wait for the handshake. Also adjustable in Administration → Settings. |
 | `CLICKHOUSE_EXTERNAL__TRANSPORT` | string; `s3` or `push` | `s3` | `externalServices.clickhouse.transport` | How the server reaches the data. `s3`: ClickHouse reads and writes the parquet files directly on the storage, nothing passes through the worker (the storage must be reachable from the server). `push`: the worker uploads the source into a staging table and streams the result back; works with any server. |
 | `CLICKHOUSE_EXTERNAL__S3_ENDPOINT` | string | empty | `externalServices.clickhouse.s3Endpoint` | The storage endpoint as the server sees it (`s3` mode), e.g. `https://s3.fr-par.scw.cloud`. Empty = `STORAGE__ENDPOINT`, right only when the server is on the same network. |
 | `CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION` | string | empty | `externalServices.clickhouse.s3NamedCollection` | A named collection created on the server with the storage credentials, so the keys never travel in queries nor reach the `query_log`. |
@@ -490,7 +496,7 @@ Database imports stream Arrow batches into parquet snapshots; a CSV or Excel dow
 
 ### SharePoint datasources
 
-Excel files on SharePoint are read through Microsoft Graph with an app registered on Entra ID; tenant, client and site belong to the connection. These two endpoints are deployment settings on purpose: whoever creates a connection cannot point the backend at another host.
+Excel and CSV files on SharePoint are read through Microsoft Graph with an app registered on Entra ID; tenant, client and site belong to the connection. These two endpoints are deployment settings on purpose: whoever creates a connection cannot point the backend at another host.
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
@@ -503,10 +509,10 @@ Caps of the «SFTP folder» datasource, checked on the listed sizes before anyth
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `SFTP__MAX_FILE_BYTES` | integer, ≥ 1 | `536870912` (512 MiB) | `extraEnv` | Bytes of one file: each one is downloaded to the worker's disk and read in memory to be stacked. |
-| `SFTP__MAX_FILES` | integer, ≥ 1 | `500` | `extraEnv` | Files one refresh may read. |
-| `SFTP__MAX_TOTAL_BYTES` | integer, ≥ 1 | `2147483648` (2 GiB) | `extraEnv` | Bytes of all the matching files together. |
-| `SFTP__TIMEOUT_SECONDS` | number, > 0 | `30` | `extraEnv` | Connection and SSH handshake: a silent server fails within this time. |
+| `SFTP__MAX_FILE_BYTES` | integer, ≥ 1 | `536870912` (512 MiB) | `extraEnv` | Bytes of one file: each one is downloaded to the worker's disk and read in memory to be stacked. Also adjustable in Administration → Settings. |
+| `SFTP__MAX_FILES` | integer, ≥ 1 | `500` | `extraEnv` | Files one refresh may read. Also adjustable in Administration → Settings. |
+| `SFTP__MAX_TOTAL_BYTES` | integer, ≥ 1 | `2147483648` (2 GiB) | `extraEnv` | Bytes of all the matching files together. Also adjustable in Administration → Settings. |
+| `SFTP__TIMEOUT_SECONDS` | number, > 0 | `30` | `extraEnv` | Connection and SSH handshake: a silent server fails within this time. Also adjustable in Administration → Settings. |
 
 ### S3 folder datasources
 
@@ -514,11 +520,11 @@ Caps of the «S3 folder» datasource, checked on the object listing before anyth
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `S3_SOURCE__MAX_FILE_BYTES` | integer, ≥ 1 | `536870912` (512 MiB) | `extraEnv` | Bytes of one object: downloaded to the worker's disk and read in memory. |
-| `S3_SOURCE__MAX_FILES` | integer, ≥ 1 | `500` | `extraEnv` | Files one refresh may read. |
-| `S3_SOURCE__MAX_TOTAL_BYTES` | integer, ≥ 1 | `2147483648` (2 GiB) | `extraEnv` | Bytes of all the matching objects together. |
-| `S3_SOURCE__MAX_LISTED` | integer, ≥ 1 | `100000` | `extraEnv` | Keys the globs of one refresh may scan, all their expansions together: `**` on a huge bucket stops here. |
-| `S3_SOURCE__MAX_REQUEST_SECONDS` | number, > 0 | `600` | `extraEnv` | Wall-clock time of one object's download: a server that drips the bytes stops here. |
+| `S3_SOURCE__MAX_FILE_BYTES` | integer, ≥ 1 | `536870912` (512 MiB) | `extraEnv` | Bytes of one object: downloaded to the worker's disk and read in memory. Also adjustable in Administration → Settings. |
+| `S3_SOURCE__MAX_FILES` | integer, ≥ 1 | `500` | `extraEnv` | Files one refresh may read. Also adjustable in Administration → Settings. |
+| `S3_SOURCE__MAX_TOTAL_BYTES` | integer, ≥ 1 | `2147483648` (2 GiB) | `extraEnv` | Bytes of all the matching objects together. Also adjustable in Administration → Settings. |
+| `S3_SOURCE__MAX_LISTED` | integer, ≥ 1 | `100000` | `extraEnv` | Keys the globs of one refresh may scan, all their expansions together: `**` on a huge bucket stops here. Also adjustable in Administration → Settings. |
+| `S3_SOURCE__MAX_REQUEST_SECONDS` | number, > 0 | `600` | `extraEnv` | Wall-clock time of one object's download: a server that drips the bytes stops here. Also adjustable in Administration → Settings. |
 
 ### API datasources
 
@@ -526,17 +532,17 @@ Caps and manners of the «API call» datasource. A datasource may lower the per-
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `API__TIMEOUT_SECONDS` | number, > 0 | `30` | `extraEnv` | Connection and read timeout of one request, the token request included. |
-| `API__MAX_PAGES` | integer, ≥ 1 | `1000` | `extraEnv` | Pages of one call: a pagination that never ends stops here. |
-| `API__MAX_CALLS` | integer, ≥ 1 | `500` | `extraEnv` | Calls of one refresh (the combinations of the list variables). |
-| `API__MAX_ROWS` | integer, ≥ 1 | `2000000` | `extraEnv` | Rows one refresh may receive. |
-| `API__MAX_RESPONSE_BYTES` | integer, ≥ 1 | `104857600` (100 MiB) | `extraEnv` | Bytes of one response, decompressed: it is held in memory to be parsed. |
-| `API__MAX_TOTAL_BYTES` | integer, ≥ 1 | `1073741824` (1 GiB) | `extraEnv` | Bytes of all the responses of one refresh. |
-| `API__MAX_RETRIES` | integer, ≥ 0 | `4` | `extraEnv` | Retries of a request that failed with 429, 500, 502, 503, 504 or a network error, with exponential backoff or the server's `Retry-After`. |
-| `API__MAX_RETRY_WAIT_SECONDS` | number, ≥ 0 | `120` | `extraEnv` | A `Retry-After` longer than this fails the refresh instead of holding a worker. |
-| `API__MAX_REDIRECTS` | integer, ≥ 0 | `5` | `extraEnv` | Redirects followed per request. |
-| `API__MAX_REQUEST_SECONDS` | number, > 0 | `300` | `extraEnv` | Wall-clock time of one request, from sending it to the last byte of the answer. |
-| `API__MIN_INTERVAL_SECONDS` | number, ≥ 0 | `0` | `extraEnv` | Minimum pause between two requests of one refresh; a datasource can ask for more. |
+| `API__TIMEOUT_SECONDS` | number, > 0 | `30` | `extraEnv` | Connection and read timeout of one request, the token request included. Also adjustable in Administration → Settings. |
+| `API__MAX_PAGES` | integer, ≥ 1 | `1000` | `extraEnv` | Pages of one call: a pagination that never ends stops here. Also adjustable in Administration → Settings. |
+| `API__MAX_CALLS` | integer, ≥ 1 | `500` | `extraEnv` | Calls of one refresh (the combinations of the list variables). Also adjustable in Administration → Settings. |
+| `API__MAX_ROWS` | integer, ≥ 1 | `2000000` | `extraEnv` | Rows one refresh may receive. Also adjustable in Administration → Settings. |
+| `API__MAX_RESPONSE_BYTES` | integer, ≥ 1 | `104857600` (100 MiB) | `extraEnv` | Bytes of one response, decompressed: it is held in memory to be parsed. Also adjustable in Administration → Settings. |
+| `API__MAX_TOTAL_BYTES` | integer, ≥ 1 | `1073741824` (1 GiB) | `extraEnv` | Bytes of all the responses of one refresh. Also adjustable in Administration → Settings. |
+| `API__MAX_RETRIES` | integer, ≥ 0 | `4` | `extraEnv` | Retries of a request that failed with 429, 500, 502, 503, 504 or a network error, with exponential backoff or the server's `Retry-After`. Also adjustable in Administration → Settings. |
+| `API__MAX_RETRY_WAIT_SECONDS` | number, ≥ 0 | `120` | `extraEnv` | A `Retry-After` longer than this fails the refresh instead of holding a worker. Also adjustable in Administration → Settings. |
+| `API__MAX_REDIRECTS` | integer, ≥ 0 | `5` | `extraEnv` | Redirects followed per request. Also adjustable in Administration → Settings. |
+| `API__MAX_REQUEST_SECONDS` | number, > 0 | `300` | `extraEnv` | Wall-clock time of one request, from sending it to the last byte of the answer. Also adjustable in Administration → Settings. |
+| `API__MIN_INTERVAL_SECONDS` | number, ≥ 0 | `0` | `extraEnv` | Minimum pause between two requests of one refresh; a datasource can ask for more. Also adjustable in Administration → Settings. |
 
 ### Placeholders
 
@@ -544,7 +550,7 @@ Dates and lists that move by themselves in the names of inputs and outputs. See 
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `PLACEHOLDERS__MAX_VALUES` | integer, ≥ 1 | `1000` | `extraEnv` | Values of one range variable, and combinations of all the variables of a file datasource; checked when the datasource is saved and at every refresh. An API call is also bounded by `API__MAX_CALLS`. |
+| `PLACEHOLDERS__MAX_VALUES` | integer, ≥ 1 | `1000` | `extraEnv` | Values of one range variable, and combinations of all the variables of a file datasource; checked when the datasource is saved and at every refresh. An API call is also bounded by `API__MAX_CALLS`. Also adjustable in Administration → Settings. |
 
 ### Email
 

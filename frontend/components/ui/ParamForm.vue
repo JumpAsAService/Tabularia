@@ -2,7 +2,7 @@
 import { isSuperseded } from '~/composables/usePreviewSlots'
 import { reactive, computed, watch, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Info, X, Calendar, Play, GripVertical, Search } from 'lucide-vue-next'
+import { Info, X, Calendar, Play, GripVertical, Search, ArrowUpNarrowWide, ArrowDownWideNarrow, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import type { ColumnInfo } from '~/composables/useApi'
 import { typedValue, typedValueText } from '~/composables/typedValue'
 import {
@@ -87,6 +87,8 @@ const aggRows = reactive<{ column: string; func: string; alias: string }[]>([])
 const exprRows = reactive<{ name: string; expr: string }[]>([])
 // join: coppie chiave sinistra → chiave destra (nomi anche diversi)
 const joinRows = reactive<{ left: string; right: string }[]>([])
+// sort: the keys in order, a direction each
+const sortRows = reactive<{ column: string; desc: boolean }[]>([])
 // reorder: ordine corrente delle colonne (drag-and-drop)
 const reorderCols = reactive<string[]>([])
 const dragIndex = ref<number | null>(null)
@@ -105,6 +107,7 @@ function rebuild() {
   lastEmitted = paramsKey(props.params) // the form now shows these: Redo after Undo differs again
   for (const k of Object.keys(state)) delete state[k]
   castRows.length = renameRows.length = fillRows.length = aggRows.length = exprRows.length = joinRows.length = 0
+  sortRows.length = 0
   reorderCols.length = 0
   const p = props.params ?? {}
 
@@ -157,6 +160,14 @@ function rebuild() {
       case 'reorder':
         syncReorder() // ordine salvato + eventuali colonne nuove a monte (in coda)
         break
+      case 'sortlist': {
+        // `by` one column or a list; `descending` one yes/no for all (flows saved
+        // before) or one per column
+        const by: string[] = Array.isArray(p.by) ? p.by : p.by ? [p.by] : []
+        by.forEach((c, i) => sortRows.push({ column: String(c), desc: Array.isArray(p.descending) ? !!p.descending[i] : !!p.descending }))
+        if (!sortRows.length) sortRows.push({ column: '', desc: false }) // una riga pronta
+        break
+      }
       default:
         state[f.key] = p[f.key]
     }
@@ -316,6 +327,14 @@ function build(): Record<string, any> {
       case 'reorder':
         if (reorderCols.length) out.columns = [...reorderCols]
         break
+      case 'sortlist': {
+        const rows = sortRows.filter((r) => r.column)
+        if (rows.length) {
+          out.by = rows.map((r) => r.column)
+          out.descending = rows.map((r) => r.desc)
+        }
+        break
+      }
       default:
         if (state[f.key] !== undefined && state[f.key] !== '') out[f.key] = state[f.key]
     }
@@ -382,6 +401,22 @@ const visibleAggRows = computed(() => {
 function addExpr() { exprRows.push({ name: '', expr: '' }); }
 function addJoinKey() { joinRows.push({ left: '', right: '' }); }
 function removeRow(rows: any[], i: number) { rows.splice(i, 1); emitUpdate() }
+
+// sort: the first row decides, the next ones break the ties; the arrows move a key
+function addSort() { sortRows.push({ column: '', desc: false }) }
+function removeSort(i: number) {
+  sortRows.splice(i, 1)
+  if (!sortRows.length) sortRows.push({ column: '', desc: false })
+  emitUpdate()
+}
+function moveSort(i: number, by: number) {
+  const j = i + by
+  if (j < 0 || j >= sortRows.length) return
+  const [moved] = sortRows.splice(i, 1)
+  sortRows.splice(j, 0, moved)
+  emitUpdate()
+}
+function flipSort(r: { desc: boolean }) { r.desc = !r.desc; emitUpdate() }
 
 // opzioni colonne per i due lati del join (schemi distinti)
 const leftColOptions = computed(() => leftNames.value.map((n) => ({ value: n, label: n })))
@@ -685,6 +720,38 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         </template>
       </div>
 
+      <!-- sort: columns in order, a direction each -->
+      <div v-else-if="f.control === 'sortlist'" class="rows">
+        <div v-for="(r, i) in sortRows" :key="i" class="row sortrow">
+          <span class="sortn" aria-hidden="true">{{ i + 1 }}</span>
+          <Select
+            :model-value="r.column"
+            :options="columnSelectOptions()"
+            searchable
+            :placeholder="$t('paramForm.columnPlaceholder')"
+            @update:model-value="(v: any) => { r.column = v; emitUpdate() }"
+          />
+          <button
+            type="button"
+            class="dirbtn"
+            :title="$t('paramForm.sortFlip')"
+            :aria-label="`${r.column || $t('paramForm.columnPlaceholder')}: ${r.desc ? $t('paramForm.sortDesc') : $t('paramForm.sortAsc')}. ${$t('paramForm.sortFlip')}`"
+            @click="flipSort(r)"
+          >
+            <ArrowDownWideNarrow v-if="r.desc" :size="13" />
+            <ArrowUpNarrowWide v-else :size="13" />
+            {{ r.desc ? $t('paramForm.sortDesc') : $t('paramForm.sortAsc') }}
+          </button>
+          <span v-if="sortRows.length > 1" class="moves">
+            <button type="button" class="mv" :disabled="i === 0" :title="$t('paramForm.sortUp')" :aria-label="$t('paramForm.sortUp')" @click="moveSort(i, -1)"><ChevronUp :size="12" /></button>
+            <button type="button" class="mv" :disabled="i === sortRows.length - 1" :title="$t('paramForm.sortDown')" :aria-label="$t('paramForm.sortDown')" @click="moveSort(i, 1)"><ChevronDown :size="12" /></button>
+          </span>
+          <button type="button" class="x" :title="$t('paramForm.sortRemove')" :aria-label="$t('paramForm.sortRemove')" @click="removeSort(i)"><X :size="13" /></button>
+        </div>
+        <button type="button" @click="addSort">{{ $t('paramForm.sortAdd') }}</button>
+        <p v-if="sortRows.length > 1" class="sqlhint">{{ $t('paramForm.sortHint') }}</p>
+      </div>
+
       <!-- group_by: righe colonna/funzione/alias -->
       <div v-else-if="f.control === 'agglist'" class="rows">
         <div v-if="aggRows.length > AGG_SEARCH_THRESHOLD" class="rowsearch">
@@ -739,6 +806,14 @@ label { font-size: 12px; color: var(--muted); }
 .row { display: flex; gap: 4px; align-items: center; }
 .row .x { padding: 2px 8px; }
 .jarrow { color: var(--muted); flex-shrink: 0; font-size: 13px; }
+/* sort: priority number, direction toggle, move arrows */
+.sortrow > :deep(*:nth-child(2)) { flex: 1; min-width: 0; }
+.sortn { flex-shrink: 0; width: 14px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dirbtn { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; min-width: 8.6em; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.dirbtn svg { color: var(--accent); }
+.moves { display: flex; flex-direction: column; flex-shrink: 0; }
+.moves .mv { padding: 0 4px; line-height: 0; border-radius: 4px; }
+.moves .mv:disabled { opacity: 0.3; cursor: default; }
 /* reorder: lista trascinabile di colonne */
 .reorder { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow-y: auto; }
 .reorder-row {

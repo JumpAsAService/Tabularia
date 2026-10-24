@@ -43,7 +43,9 @@ def test_client_validation_re_raises_and_drops_the_client():
     class C:
         def command(self, sql): raise SoftTimeLimitExceeded()
         def close(self): closed.append(1)
-    ce._CLIENTI_PER_THREAD.per_chiave = {("h", eng.cfg.port, "default", "default", bool(eng.cfg.secure)): (C(), 0.0)}
+    # the cache's key: address, database, user, TLS and the connect timeout (it changes from the panel)
+    ce._CLIENTI_PER_THREAD.per_chiave = {("h", eng.cfg.port, "default", "default", bool(eng.cfg.secure),
+                                          eng.cfg.connect_timeout): (C(), 0.0)}
     with pytest.raises(SoftTimeLimitExceeded):
         eng._client()
     assert closed == [1] and ce._CLIENTI_PER_THREAD.per_chiave == {}

@@ -125,3 +125,14 @@ def test_le_revisioni_sono_una_catena_sola_numerata():
     numeri = sorted(int(r.revision) for r in revisioni)
     assert numeri == list(range(1, len(numeri) + 1)) and all(len(r.revision) == 4 for r in revisioni)
     assert m.BASE == "0001" and script.get_revision(m.BASE).down_revision is None
+
+
+def test_un_database_piu_nuovo_del_codice_non_ferma_il_passo(database_temporaneo, monkeypatch):
+    """The previous release after a `helm rollback`: its `migrate` step found a revision it
+    does not know and stopped every new pod (Init:CrashLoopBackOff), so the rollback the
+    upgrade guide promises never completed (tried on kind, 1.2.2 → 1.2.1, 2026-10-23)."""
+    m.migra(database_temporaneo)
+    with database_temporaneo.begin() as c:
+        c.execute(text("UPDATE alembic_version SET version_num = '9999'"))
+    assert m.migra(database_temporaneo) == {"prima": "9999", "dopo": "9999", "adottato": False}
+    assert m.controlla_revisione(database_temporaneo) == "9999"

@@ -649,6 +649,14 @@ class KubernetesSettings(BaseModel):
     preview_worker_autoscaler: str = ""
     preview_worker_max_replicas: int = Field(default=8, ge=1)
     timeout_seconds: float = Field(default=10.0, gt=0)
+    # env: KUBERNETES__ROLLOUT, KUBERNETES__RELEASE — Administration → Settings restarts
+    # the pods of this Helm release that read a changed setting only at start, one at a
+    # time (services/settings_rollout.py); set by the chart (settingsRollout.enabled)
+    rollout: bool = False
+    release: str = ""
+    # env: KUBERNETES__APP_NAME — the app.kubernetes.io/name of the release's pods, so that
+    # the other charts of an umbrella release, with components of the same names, are left alone
+    app_name: str = ""
 
 
 # The language versions an administrator can pick for a scripting environment, and
@@ -742,7 +750,9 @@ class ContainersSettings(BaseModel):
     enabled: bool = False
     namespace: str = ""  # where the flows' runs run the Container nodes
     trial_namespace: str = ""  # where the editor's «Run» and «Try in the cluster» run (empty = namespace)
-    # «Try in the cluster»: how long a node may take to download an image
+    # «Try in the cluster»: how long a node may take to download an image. The request
+    # answers within 270 s (the ingress cuts at 300 s); a longer download goes on in the
+    # cluster for up to this (services/container_cluster.py)
     pull_check_seconds: int = Field(default=300, ge=30)
     poll_seconds: float = Field(default=3.0, gt=0)
     job_ttl_seconds: int = Field(default=3600, ge=60)
@@ -899,5 +909,36 @@ class Settings(BaseSettings):
 
 
 @lru_cache
-def get_settings() -> Settings:
+def settings_from_env() -> Settings:
+    """The settings of the environment alone (`.env`, the Helm values), read once."""
     return Settings()
+
+
+def on_kubernetes() -> bool:
+    """In a pod of a Kubernetes cluster. The kubelet sets KUBERNETES_SERVICE_HOST in every
+    container; the service account's token is mounted only when a feature that calls the
+    Kubernetes API is on (with clusterView and settingsRollout off, it is not), so the
+    token alone would take such an installation for Docker Compose."""
+    from pathlib import Path
+
+    return bool(os.environ.get("KUBERNETES_SERVICE_HOST")) or Path(get_settings().kubernetes.token_file).exists()
+
+
+def get_settings() -> Settings:
+    """The settings in force: the environment's with, on top, the ones an administrator
+    changed from Administration → Settings (app/core/overrides.py). While none are, it is
+    the very object of the environment."""
+    from app.core import overrides
+
+    return overrides.overlay(settings_from_env())
+
+
+def _cache_clear() -> None:
+    from app.core import overrides
+
+    settings_from_env.cache_clear()
+    overrides.forget()
+
+
+# tests (and code that changes the environment) start over with `get_settings.cache_clear()`
+get_settings.cache_clear = _cache_clear  # type: ignore[attr-defined]

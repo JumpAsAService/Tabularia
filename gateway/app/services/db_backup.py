@@ -11,9 +11,11 @@ a bucket of its own is advised in production, so that losing one does not lose b
 Then the oldest beyond the number to keep are removed.
 
 One backup at a time across the orchestrators: the one that moves the row's `next_at`
-(or takes the request of «Back up now») makes it; the others find nothing due. A process
-that dies while backing up leaves `running_since` behind, which is ignored once older
-than the longest a backup may take.
+(or takes the request of «Back up now») makes it; the others find nothing due. The one at
+work writes a heartbeat (`alive_at`) every `BATTITO` seconds; a claim without one for
+`VIVO` seconds is ignored: a process that died while backing up, or a database restored
+from a backup (the dump was taken while its own backup was marked running: without the
+heartbeat the restored claim blocked the backups for the longest a backup may take).
 
 The file is PostgreSQL's custom format: `pg_restore` reads it (docs/deploy/upgrading.md).
 It holds the users' e-mail addresses and the connections' passwords (encrypted with the
@@ -31,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Optional
 
 import httpx
-from sqlalchemy import or_, update
+from sqlalchemy import func, or_, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
@@ -63,9 +65,9 @@ def disabled_reason(session: Session) -> Optional[str]:
     of the compose file is backed up with its own tools, and the panel shows the section
     greyed out, as the other features of a cluster), "postgres" (another database:
     development, tests), "pg_dump" (the program is not in this image)."""
-    from pathlib import Path
+    from app.core.config import on_kubernetes
 
-    if not Path(get_settings().kubernetes.token_file).exists():
+    if not on_kubernetes():
         return "kubernetes"
     if session.get_bind().dialect.name != "postgresql":
         return "postgres"
@@ -133,20 +135,36 @@ def claim(session: Session, ora: Optional[datetime] = None) -> Optional[dict[str
     if not due:
         return None
     who = r.requested_by if r.requested_at is not None else None
-    stale = ora - timedelta(seconds=get_settings().backup.timeout_seconds + 600)
     from app.services.orchestrator import ISTANZA
 
     taken = session.exec(
         update(DatabaseBackup)
-        .where(DatabaseBackup.id == 1,
-               or_(DatabaseBackup.running_since.is_(None), DatabaseBackup.running_since < stale),  # type: ignore[union-attr]
+        .where(DatabaseBackup.id == 1, ferma(ora),
                or_(DatabaseBackup.requested_at.is_not(None), DatabaseBackup.next_at <= ora))  # type: ignore[union-attr]
-        .values(running_since=ora, claimed_by=ISTANZA, requested_at=None, requested_by=None,
+        .values(running_since=ora, alive_at=ora, claimed_by=ISTANZA, requested_at=None, requested_by=None,
                 next_at=_next(eff["schedule"], ora) if eff["enabled"] else None,
                 next_for=eff["schedule"] if eff["enabled"] else None)
     ).rowcount
     session.commit()
     return {"keep": eff["keep"], "who": who} if taken == 1 else None
+
+
+BATTITO = 30.0  # seconds between two heartbeats of the running backup
+VIVO = 120.0  # seconds without a heartbeat after which a running backup is taken for dead
+
+
+def ferma(ora: Optional[datetime] = None):
+    """The condition of a row with no live backup running."""
+    ora = ora or _adesso()
+    morto = ora - timedelta(seconds=VIVO)
+    return or_(DatabaseBackup.running_since.is_(None),  # type: ignore[union-attr]
+               func.coalesce(DatabaseBackup.alive_at, DatabaseBackup.running_since) < morto)
+
+
+def in_corso(r: DatabaseBackup, ora: Optional[datetime] = None) -> bool:
+    if r.running_since is None:
+        return False
+    return (r.alive_at or r.running_since) >= (ora or _adesso()) - timedelta(seconds=VIVO)
 
 
 # where the image keeps pg_dump of each PostgreSQL version (gateway/Dockerfile)
@@ -266,12 +284,31 @@ async def _rotate(keep: int) -> int:
     return len(old)
 
 
+async def _batti() -> None:
+    """While this process backs up: it is alive (`alive_at`), every BATTITO seconds."""
+    from app.db.session import engine
+    from app.services.orchestrator import ISTANZA
+
+    def uno() -> None:
+        with Session(engine) as session:
+            session.exec(update(DatabaseBackup).where(DatabaseBackup.id == 1, DatabaseBackup.claimed_by == ISTANZA)
+                         .values(alive_at=_adesso()))
+            session.commit()
+
+    while True:
+        await asyncio.sleep(BATTITO)
+        try:
+            await asyncio.to_thread(uno)
+        except Exception as e:  # noqa: BLE001 — the database not answering: the backup fails on its own
+            logger.info("backup: heartbeat not written (%s)", e)
+
+
 def _close(**values) -> None:
     from app.db.session import engine
 
     with Session(engine) as session:
         session.exec(update(DatabaseBackup).where(DatabaseBackup.id == 1)
-                     .values(running_since=None, claimed_by=None, **values))
+                     .values(running_since=None, alive_at=None, claimed_by=None, **values))
         session.commit()
 
 
@@ -288,15 +325,30 @@ async def make(keep: int, who: Optional[str] = None) -> dict[str, Any]:
     """One backup: dump, store, rotate; the outcome written on the row and in the audit log."""
     started = time.monotonic()
     name = datetime.now(timezone.utc).strftime("tabularia-%Y-%m-%dT%H-%M-%SZ.dump")
+    battito = asyncio.create_task(_batti())
     try:
         size = await _upload(name, _pg_dump())
         removed = await _rotate(keep)
     except Exception as e:  # noqa: BLE001 — every failure is written down, none stops the loop
+        battito.cancel()
         reason = str(e) if isinstance(e, BackupFailed) else f"{type(e).__name__}: {str(e)[:500]}"
         logger.warning("backup: failed (%s)", reason)
         _close(last_error=reason[:2000], last_error_at=_adesso())
         _audit("failure", who, {"name": name, "error": reason[:500]})
         return {"ok": False, "error": reason}
+    except asyncio.CancelledError:
+        # the orchestrator stopping (a drain, an upgrade at 03:00): said, not lost in silence,
+        # as the next scheduled time has already moved on to tomorrow
+        battito.cancel()
+        reason = "Stopped before the end: the process running it stopped (a restart or an upgrade). Run it now"
+        logger.warning("backup: %s", reason)
+        try:
+            _close(last_error=reason, last_error_at=_adesso())
+            _audit("failure", who, {"name": name, "error": reason})
+        except Exception:  # noqa: BLE001 — stopping anyway
+            logger.exception("backup: the interruption not recorded")
+        raise
+    battito.cancel()
     seconds = round(time.monotonic() - started, 1)
     logger.info("backup: %s stored (%s bytes, %s s), %s old removed", name, size, seconds, removed)
     _close(last_ok_at=_adesso(), last_name=name, last_size=size, last_seconds=seconds)

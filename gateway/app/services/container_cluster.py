@@ -9,7 +9,9 @@ the nodes need to download an image, and a way to check that they can.
   not exist: the node downloads the image, then fails to start it, so nothing of the
   image runs. The download is what is checked; a failure is explained the way a run's
   is (kube_jobs.pull_failure): credentials refused, a certificate the nodes do not
-  trust, plain HTTP, an image no longer there.
+  trust, plain HTTP, an image no longer there. The request waits at most
+  REQUEST_WAIT_SECONDS; a large image still downloading then is said to be, and the
+  node goes on downloading it, so the next try finds it there.
 """
 from __future__ import annotations
 
@@ -29,6 +31,12 @@ from app.services.kube_scaling import KubeError
 MISSING_COMMAND = "/tabularia-pull-check-does-not-exist"
 # how long the node may keep failing to download before the check says so
 PULL_FAILURE_SECONDS = 20
+# how long the check's Job may go without a Pod before the cluster's refusal is looked for
+NO_POD_SECONDS = 10
+# the longest the check holds its request: the ingress cuts one at 300 s (Helm values:
+# proxy-read-timeout) with a bare 504. A node still downloading by then is said to be,
+# and its Job is left to finish the download (activeDeadlineSeconds, then its TTL).
+REQUEST_WAIT_SECONDS = 270
 LABEL = "tabularia.io/registry"
 
 
@@ -128,16 +136,23 @@ async def try_pull(registry: ContainerRegistry, password: str, repository: str, 
     ns = trial_namespace()
     name = f"tabularia-pull-{registry.id}-{uuid.uuid4().hex[:8]}"
     loop = asyncio.get_running_loop()
+    wait = min(s.pull_check_seconds + 10, REQUEST_WAIT_SECONDS)
+    keep = False
     try:
         secret = await sync_pull_secret(registry, password, ns)
         await kube_jobs.create_job(ns, _pull_check_job(name, image, secret))
         started, failing_since = loop.time(), None
-        while loop.time() - started < s.pull_check_seconds + 10:
+        while loop.time() - started < wait:
             await asyncio.sleep(s.poll_seconds)
             pods = await kube_jobs.job_pods(ns, name)
             if await _pulled(ns, pods):
                 return {"ok": True, "image": image,
                         "message": f"A node of the cluster downloaded {image}; nothing of it was run"}
+            if not pods and loop.time() - started >= NO_POD_SECONDS:
+                # no Pod to download anything: the cluster refuses it (a full quota, Pod Security)
+                refused = await kube_jobs.refused(ns, name)
+                if refused:
+                    return {"ok": False, "image": image, "message": f"The check could not run: {refused}"}
             why = await kube_jobs.pull_failure(ns, name)
             now = loop.time()
             if not why:
@@ -146,12 +161,19 @@ async def try_pull(registry: ContainerRegistry, password: str, repository: str, 
                 failing_since = now
             elif now - failing_since >= PULL_FAILURE_SECONDS:
                 return {"ok": False, "image": image, "message": why}
+        if s.pull_check_seconds + 10 > wait:
+            keep = True
+            return {"ok": False, "image": image,
+                    "message": f"A node is still downloading {image} after {wait} s (a large image, or a busy "
+                               f"cluster). It goes on downloading it for up to {s.pull_check_seconds} s: try "
+                               "again in a few minutes"}
         return {"ok": False, "image": image,
                 "message": f"No node downloaded {image} within {s.pull_check_seconds} s (a large image, or a busy cluster)"}
     except KubeError as e:
         return {"ok": False, "image": image, "message": f"The cluster refused the check: {e}"}
     finally:
         try:
-            await kube_jobs.delete_job(ns, name)
+            if not keep:
+                await kube_jobs.delete_job(ns, name)
         except KubeError:
             pass  # its TTL removes it

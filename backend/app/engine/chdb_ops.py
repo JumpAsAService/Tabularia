@@ -22,7 +22,10 @@ from typing import Any, Callable
 from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
-from app.engine.operations import MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, pivot_label, sample_threshold
+from app.engine.operations import (
+    MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
+    temporal_value_error, TEXT_TRUE, TEXT_FALSE,
+)
 from app.engine.sql_guard import ensure_reads_only_input
 
 ChdbOpFn = Callable[..., str]
@@ -154,7 +157,12 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
     if dt == "datetime":
         return f"parseDateTimeBestEffortOrNull(trimBoth(toString({c})))"
     if dt == "bool":
-        return f"toUInt8OrNull(trimBoth(toString({c})))"
+        if is_text:  # the words DuckDB takes («true» was NULL, «2» was 2)
+            w = f"lower(trimBoth({c}))"
+            yes = ", ".join(f"'{x}'" for x in TEXT_TRUE)
+            no = ", ".join(f"'{x}'" for x in TEXT_FALSE)
+            return f"CAST(multiIf({w} IN ({yes}), 1, {w} IN ({no}), 0, NULL) AS Nullable(Bool))"
+        return f"CAST(if(isNull({c}), NULL, {c} != 0) AS Nullable(Bool))"
     raise EngineError(f"cast: unsupported type '{dt}'")
 
 
@@ -200,28 +208,55 @@ def _predicate(column: str, operator: str, value: Any) -> str:
 def op_filter(sql, params, ctx):
     column = _require(params, "column")
     operator = params.get("operator", "eq")
-    check_filter_value(operator, params.get("value"))
-    pred = _predicate(column, operator, params.get("value"))
+    value = params.get("value")
+    check_filter_value(operator, value)
+    bad = non_iso_values(operator, value)
+    timed = operator not in ("contains", "starts_with", "ends_with") and any(map(_iso_datetime, _as_list(value)))
+    if bad or timed:  # only then the column's type matters: one DESCRIBE
+        ctype = dict(ctx.schema_of(sql)).get(column, "")
+        if bad and re.search(r"\bDate(Time)?(32|64)?\b", ctype):
+            raise temporal_value_error(bad[0])
+        if timed and "DateTime" in ctype:
+            norm = [_datetime_literal(v) if _iso_datetime(v) else v for v in _as_list(value)]
+            value = norm if isinstance(value, list) else norm[0]
+    pred = _predicate(column, operator, value)
     return f"SELECT * FROM {_sub(sql)} WHERE {pred}"
+
+
+def _iso_datetime(v: Any) -> bool:
+    """An ISO date-time with its time (not a bare date)."""
+    if not isinstance(v, str) or len(v) <= 10:
+        return False
+    from datetime import datetime
+
+    try:
+        datetime.fromisoformat(v)
+    except ValueError:
+        return False
+    return True
+
+
+def _datetime_literal(v: str) -> str:
+    """The editor's calendar sends 2024-01-15T05:30, without seconds: ClickHouse reads a
+    DateTime only with them («Cannot parse time component»), so every filter on a date-time
+    failed on chDB and on an external ClickHouse. The full form, in UTC as the columns are."""
+    from datetime import datetime, timezone
+
+    d = datetime.fromisoformat(v)
+    if d.tzinfo is not None:
+        d = d.astimezone(timezone.utc).replace(tzinfo=None)
+    return d.strftime("%Y-%m-%d %H:%M:%S") + (f".{d.microsecond:06d}" if d.microsecond else "")
 
 
 # ── riordino / righe ──────────────────────────────────────────────────────────
 @_register("sort")
 def op_sort(sql, params, ctx):
-    cols = _as_list(_require(params, "by"))
-    # `ignore_missing`: lo mette SOLO l'iniezione del publish (gateway), mai
-    # l'utente. Una chiave di ordinamento dichiarata sull'Output e poi sparita
-    # dalla catena (colonna rinominata o tolta) non deve far fallire OGNI run
-    # del flusso — e non è nemmeno togliibile dalla checklist, che mostra solo
-    # le colonne esistenti. Un `sort` chiesto esplicitamente resta severo.
-    if params.get("ignore_missing"):
-        have = set(ctx.columns_of(sql))
-        cols = [c for c in cols if c in have]
-        if not cols:
-            return sql
-    direction = "DESC" if params.get("descending") else "ASC"
+    # the keys and a direction each (operations.sort_keys: `ignore_missing` too)
+    keys = sort_keys(params, ctx.columns_of(sql) if params.get("ignore_missing") else None)
+    if not keys:
+        return sql
     # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
-    order = ", ".join(f"{_qi(c)} {direction} NULLS LAST" for c in cols)
+    order = ", ".join(f"{_qi(c)} {'DESC' if d else 'ASC'} NULLS LAST" for c, d in keys)
     return f"SELECT * FROM {_sub(sql)} ORDER BY {order}"
 
 
@@ -469,8 +504,12 @@ def op_join(sql, params, ctx):
 def op_union(sql, params, ctx):
     right = ctx.build_right(_require(params, "right"))
     if params.get("strategy") == "strict":
-        # schema identico: UNION ALL posizionale
-        return f"SELECT * FROM {_sub(sql)} UNION ALL SELECT * FROM {_sub(right)}"
+        # stesse colonne e tipi, in qualunque ordine: unite per NOME (posizionale le
+        # scambiava in silenzio)
+        left_s, right_s = ctx.schema_of(sql), ctx.schema_of(right)
+        check_strict_union([(n, _bare_type(t)) for n, t in left_s], [(n, _bare_type(t)) for n, t in right_s])
+        cols = ", ".join(_qi(n) for n, _ in left_s)
+        return f"SELECT {cols} FROM {_sub(sql)} UNION ALL SELECT {cols} FROM {_sub(right)}"
     # relaxed: allinea per NOME (ClickHouse non ha UNION ALL BY NAME) → per ogni
     # colonna dell'unione, ciascun lato la seleziona o NULL se assente
     lcols, rcols = ctx.columns_of(sql), ctx.columns_of(right)
@@ -479,6 +518,16 @@ def op_union(sql, params, ctx):
     lsel = ", ".join((_qi(c) if c in lset else "NULL") + f" AS {_qi(c)}" for c in allcols)
     rsel = ", ".join((_qi(c) if c in rset else "NULL") + f" AS {_qi(c)}" for c in allcols)
     return f"SELECT {lsel} FROM {_sub(sql)} UNION ALL SELECT {rsel} FROM {_sub(right)}"
+
+
+def _bare_type(t: str) -> str:
+    """The type without Nullable(…)/LowCardinality(…): a side with NULLs and one without
+    hold the same type."""
+    while True:
+        m = re.fullmatch(r"(?:Nullable|LowCardinality)\((.*)\)", t.strip())
+        if not m:
+            return t.strip()
+        t = m.group(1)
 
 
 # ── pivot / unpivot (righe↔colonne) ───────────────────────────────────────────

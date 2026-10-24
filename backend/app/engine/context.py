@@ -14,6 +14,7 @@ import tempfile
 import polars as pl
 from botocore.exceptions import ClientError
 
+from app.core.regolazioni import valore_all_avvio
 from app.engine.base import DataSource
 from app.engine.exceptions import SourceNotFoundError
 from app.engine.temporal import naive_utc_lazy
@@ -24,7 +25,7 @@ _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 # tetto di righe di un CROSS JOIN in un run: oltre, l'operazione viene rifiutata
 # con un errore chiaro invece di far esplodere la RAM (il prodotto cartesiano
 # L×R è la causa n.1 di OOM). Configurabile via env; 0/negativo = nessun tetto.
-MAX_CROSS_JOIN_ROWS = int(os.getenv("ENGINE_MAX_CROSS_JOIN_ROWS", "50000000"))
+MAX_CROSS_JOIN_ROWS = int(valore_all_avvio("ENGINE_MAX_CROSS_JOIN_ROWS"))  # env, or the panel's at start
 
 
 class OperationContext:

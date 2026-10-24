@@ -198,6 +198,9 @@ spec:
             # pools that inflates resident memory. Capping the arenas flattens it.
             - name: MALLOC_ARENA_MAX
               value: "2"
+            # past the size of /tmp the kubelet evicts the pod at once: DuckDB spills within it
+            - name: TMP_SIZE_LIMIT
+              value: {{ $cfg.tmpSizeLimit | quote }}
             {{- include "tabularia.withoutGatewaySecrets" $root | nindent 12 }}
           resources:
             {{- toYaml $cfg.resources | nindent 12 }}
@@ -381,4 +384,28 @@ The ConfigMap holding the certificate authority the gateway trusts for the OIDC 
 {{ $existing.name }}|{{ $existing.key | default "ca.crt" }}
 {{- end -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+A bound of a workers' autoscaler (an HPA's minReplicas or maxReplicas, a ScaledObject's
+minReplicaCount or maxReplicaCount). With adminScaling, Administration → Workers sets them
+on the cluster, as a field manager of its own: Helm 4 applies server side and stopped the
+whole upgrade on such a field holding another value (a conflict). The live value is
+rendered instead while another manager holds the field: the same value is no conflict,
+and it is the one the panel would put back anyway.
+Args (a dict): root, apiVersion, kind, name, field, value (the chart's)
+*/}}
+{{- define "tabularia.panelBound" -}}
+{{- $v := .value -}}
+{{- if .root.Values.adminScaling.enabled -}}
+{{- $live := lookup .apiVersion .kind .root.Release.Namespace .name -}}
+{{- if $live -}}
+{{- range ($live.metadata.managedFields | default list) -}}
+{{- if and (ne .manager "helm") (hasKey (dig "fieldsV1" "f:spec" (dict) .) (printf "f:%s" $.field)) -}}
+{{- $v = index $live.spec $.field -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $v -}}
 {{- end -}}

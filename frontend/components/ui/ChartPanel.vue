@@ -21,6 +21,7 @@ import {
   ChartScatter,
 } from 'lucide-vue-next'
 import type { ColumnInfo, Operation, PreviewResult } from '~/composables/useApi'
+import type { ChartSettings } from '~/composables/useSavedViews'
 import { errMessage } from '~/composables/useApi'
 import { AGG_LABELS } from '~/composables/useFlowModel'
 import { useChartTheme } from '~/composables/useChartTheme'
@@ -33,7 +34,10 @@ const fmtx = useFormat()
 const props = defineProps<{
   columns: ColumnInfo[] // colonne in uscita dal nodo selezionato
   query: (ops: Operation[], limit?: number) => Promise<PreviewResult | null>
+  // the chart's settings, for who keeps them (a saved view): given back when it opens
+  settings?: ChartSettings | null
 }>()
+const emit = defineEmits<{ (e: 'update:settings', s: ChartSettings): void }>()
 
 // palette categorica VALIDATA (lightness band, CVD, contrasto): tinte mid-tone
 // che restano leggibili sia su fondo scuro sia chiaro. MAX 5 serie: mai ciclare
@@ -84,6 +88,23 @@ const xNumCol = ref('')
 const yFunc = ref('sum')
 const yNumCol = ref('')
 const topN = ref(20)
+
+// the settings in from who keeps them, and out at every change
+function applySettings(s: ChartSettings | null | undefined) {
+  if (!s) return
+  chartType.value = (s.type as ChartType) || chartType.value
+  for (const [r, v] of [[xCol, s.x], [byCol, s.by], [func, s.func], [yCol, s.y], [xFunc, s.xFunc],
+                        [xNumCol, s.xNum], [yFunc, s.yFunc], [yNumCol, s.yNum]] as const) {
+    if (typeof v === 'string') r.value = v
+  }
+  if (typeof s.topN === 'number') topN.value = s.topN
+}
+applySettings(props.settings)
+watch(() => props.settings, (s) => applySettings(s))
+watch([chartType, xCol, byCol, func, yCol, xFunc, xNumCol, yFunc, yNumCol, topN], () => emit('update:settings', {
+  type: chartType.value, x: xCol.value, by: byCol.value, func: func.value, y: yCol.value, xFunc: xFunc.value,
+  xNum: xNumCol.value, yFunc: yFunc.value, yNum: yNumCol.value, topN: topN.value,
+}))
 
 const numericCols = computed(() =>
   props.columns.filter((c) => /Int|Float|Decimal/i.test(c.dtype)).map((c) => c.name),
@@ -172,7 +193,9 @@ watch(
   },
   { immediate: true },
 )
-watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN], refresh)
+// immediate: the columns' watch above already set the axes before this one existed, and the
+// chart stayed blank («Choose the columns…») with them chosen, until a control changed
+watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN], refresh, { immediate: true })
 
 // Testo → HTML sicuro. Serve SOLO dentro i formatter dei tooltip di ECharts,
 // che sono l'unico punto del frontend in cui costruiamo HTML da una stringa.

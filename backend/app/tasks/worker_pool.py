@@ -55,7 +55,8 @@ def per_process_kb(processes: int) -> int:
     the container's share per process (config.resolve_max_memory_per_child_kb)."""
     from app.core.config import resolve_max_memory_per_child_kb, settings_dall_ambiente
 
-    celery = settings_dall_ambiente().celery
+    # with the panel's values this process started with, as Celery's own configuration
+    celery = regolazioni.all_avvio(settings_dall_ambiente()).celery
     return resolve_max_memory_per_child_kb(celery.model_copy(update={"worker_concurrency": max(1, processes)}))
 
 
@@ -90,7 +91,7 @@ def state(consumer: Any, kind: str, started_with: int, started_at: float) -> dic
 
     from app.core.config import cgroup_mem_limit_bytes, cgroup_mem_used_bytes, settings_dall_ambiente
 
-    celery = settings_dall_ambiente().celery
+    celery = regolazioni.all_avvio(settings_dall_ambiente()).celery
     busy = len(worker_state.active_requests)
     inner = getattr(consumer.pool, "_pool", None)
     per_process = getattr(inner, "_max_memory_per_child", None)
@@ -126,6 +127,52 @@ def forget(name: str) -> None:
     r = regolazioni._client()
     r.delete(KEY_PREFIX + name)
     r.srem(REGISTRY, name)
+
+
+# a task the result backend says STARTED, whose worker is no longer there to finish it
+LOST = ("The worker running it stopped before the end: killed at its memory limit (OOMKilled), or "
+        "its pod restarted or removed (an upgrade, a drained node). Run it again; if it happens again, "
+        "give the workers more memory or fewer processes each.")
+SUSPECT_PREFIX = "tabularia:task-suspect:"
+# a worker missing from the registry for this long after it was first seen missing is
+# gone: two of its reports (`TICK`) would have come back meanwhile, after a blip of Valkey
+CONFIRM_SECONDS = 2 * TICK + 5
+
+
+def lost(task_id: str, meta: Any) -> str:
+    """Why a task the result backend says STARTED will never end ("" while it may).
+    A killed worker writes nothing: its container OOMKilled (the kernel kills every
+    process of it on cgroup v2), its pod evicted or its node lost. Its tasks stayed
+    STARTED until the gateway's stale timeout, an hour later, said the wrong thing.
+    The STARTED meta names the worker and when the task began (task_started_meta):
+    - the worker's state is no longer written (`TTL`), and still not some seconds
+      later: it is gone;
+    - its state is written by a worker started after the task began: the same pod's
+      container started again, the task died with the old one.
+    Without those facts (an older worker's meta), or without Valkey: "" (the task may run)."""
+    if not isinstance(meta, dict) or not isinstance(meta.get("hostname"), str):
+        return ""
+    since = meta.get("since")
+    try:
+        r = regolazioni._client()
+        raw = r.get(KEY_PREFIX + meta["hostname"])
+        if raw is not None:
+            started_at = json.loads(raw).get("started_at")
+            restarted = isinstance(since, (int, float)) and isinstance(started_at, (int, float)) and started_at > since
+            return LOST if restarted else ""
+        if not isinstance(since, (int, float)):
+            return ""  # a worker of an older version: its meta says nothing of when
+        now = time.time()
+        r.set(SUSPECT_PREFIX + task_id, now, nx=True, ex=3600)
+        first = float(r.get(SUSPECT_PREFIX + task_id) or now)
+        return LOST if now - first >= CONFIRM_SECONDS else ""
+    except Exception:  # noqa: BLE001 — Valkey down or a state unreadable: no verdict
+        return ""
+
+
+def task_started_meta(request: Any) -> dict:
+    """The STARTED meta of a task: Celery's own (pid, worker) and when it began, for `lost`."""
+    return {"pid": os.getpid(), "hostname": getattr(request, "hostname", None), "since": time.time()}
 
 
 def live_workers() -> list[dict]:

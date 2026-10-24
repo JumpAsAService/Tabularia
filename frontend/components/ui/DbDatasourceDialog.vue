@@ -7,10 +7,11 @@
 // call). The file sources share the «dynamic» part: placeholders in the names,
 // variables, refresh mode — with a live preview of what the names give now.
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Database, X, Table2, Code2, LoaderCircle, FileSpreadsheet, FolderSearch, FileText } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
-import { cleanApiCall, emptyApiCall, type ApiCallDraft, type ApiDatasourceDraft, type DbDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import { cleanApiCall, emptyApiCall, type SharePointFormat, type ApiCallDraft, type ApiDatasourceDraft, type DbDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
 import { cleanFileTemplates, emptyFileTemplates, usePlaceholderPreview, type FileTemplatesDraft, type FilesCheck, type PreviewRequest } from '~/composables/usePlaceholders'
 import ApiCallForm from '~/components/ui/ApiCallForm.vue'
 import DynamicSourceFields from '~/components/ui/DynamicSourceFields.vue'
@@ -52,14 +53,16 @@ const sql = ref('')
 // tabella. Vuoto = nessun ordine. Un nome sbagliato dà l'errore parlante del DB.
 const sortKeysText = ref('')
 
-// Connessione SharePoint: niente tabella né SQL — un PERCORSO (anche con glob) e
-// un FOGLIO. Più file corrispondenti diventano una tabella sola, e ogni riga dice
+// Connessione SharePoint: niente tabella né SQL — un PERCORSO (anche con glob), the
+// format (Excel, CSV or both by extension) e il FOGLIO of the workbooks. Più file corrispondenti diventano una tabella sola, e ogni riga dice
 // da quale file arriva. Il file deve essere machine readable: intestazione in
 // prima riga, un nome per colonna. Non ci sono opzioni per aggirarlo, apposta.
+const { t } = useI18n()
 const selected = computed(() => props.connections.find((c) => c.id === connectionId.value) ?? null)
 const isSp = computed(() => selected.value?.db_type === 'sharepoint')
 const spPath = ref('')
 const spSheet = ref('')
+const spFormat = ref<SharePointFormat>('auto')
 const spFiles = ref<FilesCheck['files'] | null>(null)
 const spTotal = ref(0)
 const spCheck = ref<FilesCheck | null>(null)
@@ -74,7 +77,7 @@ async function checkFiles() {
   spError.value = ''
   spFiles.value = null
   try {
-    const res = await connApi.sharepointFiles(connectionId.value, { path, ...cleanFileTemplates(dyn.value) })
+    const res = await connApi.sharepointFiles(connectionId.value, { path, format: spFormat.value, ...cleanFileTemplates(dyn.value) })
     if (seq !== spSeq || path !== spPath.value.trim()) return
     spFiles.value = res.files
     spTotal.value = res.total
@@ -85,7 +88,27 @@ async function checkFiles() {
     if (seq === spSeq) spChecking.value = false
   }
 }
-watch(spPath, () => { spFiles.value = null; spError.value = '' })
+// another format takes other files: checked again
+watch([spPath, spFormat], () => { spFiles.value = null; spError.value = '' })
+
+// the sheets of the first workbook a check found: a list to choose from (the name
+// typed before stays among them); none while the files are not checked
+function sheetOptions(check: FilesCheck | null, current: string, firstLabel?: string) {
+  const book = check?.sheets
+  if (!book?.sheets.length) return null
+  const names = current && !book.sheets.includes(current) ? [current, ...book.sheets] : book.sheets
+  return [
+    // empty = the workbook's first sheet, hidden or not: which one it is, said
+    ...(firstLabel ? [{ value: '', label: `${firstLabel} — ${book.sheets[0]}` }] : []),
+    ...names.map((n) => ({ value: n, label: n, hint: book.hidden.includes(n) ? t('sheetPicker.hidden') : undefined })),
+  ]
+}
+const spSheets = computed(() => (spFiles.value ? sheetOptions(spCheck.value, spSheet.value) : null))
+// SharePoint needs a sheet: the first visible one, until another is chosen
+watch(spCheck, (c) => {
+  const book = c?.sheets
+  if (book && !spSheet.value.trim()) spSheet.value = book.sheets.find((s) => !book.hidden.includes(s)) ?? book.sheets[0] ?? ''
+})
 
 // SFTP connection: a FOLDER and a glob of file names; every matching file is read
 // at each refresh and stacked (`_file` says which). Files stay on the server.
@@ -156,8 +179,36 @@ async function checkFolderFiles() {
 watch([ftFolder, ftPattern, s3Bucket], () => { ftFiles.value = null; ftError.value = '' })
 // other variables or another zone: another list of files
 watch(dyn, () => { ftFiles.value = null; ftError.value = ''; spFiles.value = null; spError.value = '' }, { deep: true })
-const showsCsvOptions = computed(() => ftFormat.value === 'auto' || ftFormat.value === 'csv')
-const showsSheet = computed(() => ftFormat.value === 'auto' || ftFormat.value === 'excel')
+const ftSheets = computed(() => (ftFiles.value ? sheetOptions(ftCheck.value, ftSheet.value, t('sheetPicker.firstSheet')) : null))
+
+// the reading options, one block for SharePoint and the folder sources: the format
+// (SharePoint: Excel, CSV, or both), the CSV options, the sheet of the workbooks. The
+// CSV options (ftSeparator, ftEncoding, ftHeader) serve the one source shown
+const fileFormat = computed<string>({
+  get: () => (isSp.value ? spFormat.value : ftFormat.value),
+  set: (v) => { if (isSp.value) spFormat.value = v as SharePointFormat; else ftFormat.value = v as typeof ftFormat.value },
+})
+const formatOptions = computed(() => isSp.value
+  ? [
+      { value: 'auto', label: t('sharepoint.formatAuto') },
+      { value: 'excel', label: 'Excel' },
+      { value: 'csv', label: 'CSV' },
+    ]
+  : [
+      { value: 'auto', label: t('sftp.formatAuto') },
+      { value: 'csv', label: 'CSV' },
+      { value: 'parquet', label: 'Parquet' },
+      { value: 'excel', label: 'Excel' },
+      { value: 'ndjson', label: 'NDJSON' },
+    ])
+const showsCsvOptions = computed(() => fileFormat.value === 'auto' || fileFormat.value === 'csv')
+const showsSheet = computed(() => fileFormat.value === 'auto' || fileFormat.value === 'excel')
+const sheetModel = computed<string>({
+  get: () => (isSp.value ? spSheet.value : ftSheet.value),
+  set: (v) => { if (isSp.value) spSheet.value = v; else ftSheet.value = v },
+})
+const sheetList = computed(() => (isSp.value ? spSheets.value : ftSheets.value))
+const sheetFile = computed(() => (isSp.value ? spCheck.value : ftCheck.value)?.sheets?.file)
 
 // tabelle della connessione scelta (best-effort: se fallisce si digita a mano)
 const tables = ref<string[]>([])
@@ -177,6 +228,7 @@ watch(
     sortKeysText.value = ''
     spPath.value = ''
     spSheet.value = ''
+    spFormat.value = 'auto'
     spFiles.value = null
     spError.value = ''
     spChecking.value = false
@@ -227,7 +279,7 @@ const incomplete = () =>
   !name.value.trim() ||
   connectionId.value === null ||
   (isSp.value
-    ? !spPath.value.trim() || !spSheet.value.trim() || appendWithoutKeys.value
+    ? !spPath.value.trim() || (showsCsvOptions.value && ftSeparator.value.length !== 1) || appendWithoutKeys.value
     : isFolderSource.value
       ? !ftPattern.value.trim() || ftSeparator.value.length !== 1 || appendWithoutKeys.value
         || (isS3.value && !s3Bucket.value.trim() && !(selected.value?.database ?? '').trim())
@@ -243,7 +295,9 @@ function confirm() {
       description: description.value,
       connection_id: connectionId.value!,
       path: spPath.value.trim(),
+      format: spFormat.value,
       sheet: spSheet.value.trim(),
+      csv: { separator: ftSeparator.value, has_header: ftHeader.value, encoding: ftEncoding.value },
       ...cleanFileTemplates(dyn.value),
     })
     return
@@ -336,10 +390,6 @@ function confirm() {
             </template>
             <MissingValues v-if="spCheck?.missing?.length" :missing="spCheck.missing" :count="spCheck.missing_total" :expansions="spCheck.expansions" />
           </div>
-          <label>{{ $t('sharepoint.sheetLabel') }}</label>
-          <input v-model="spSheet" type="text" :placeholder="$t('sharepoint.sheetPlaceholder')" />
-          <p class="muted dd-hint">{{ $t('sharepoint.machineReadable') }}</p>
-          <DynamicSourceFields v-model="dyn" :preview="preview" keys-placeholder="_param_day, _file" />
         </template>
 
         <template v-if="isFolderSource">
@@ -383,17 +433,12 @@ function confirm() {
             </template>
             <MissingValues v-if="ftCheck?.missing?.length" :missing="ftCheck.missing" :count="ftCheck.missing_total" :expansions="ftCheck.expansions" />
           </div>
+        </template>
+
+        <!-- how the files are read: SharePoint and the folder sources alike -->
+        <template v-if="isSp || isFolderSource">
           <label>{{ $t('sftp.formatLabel') }}</label>
-          <Select
-            v-model="ftFormat"
-            :options="[
-              { value: 'auto', label: $t('sftp.formatAuto') },
-              { value: 'csv', label: 'CSV' },
-              { value: 'parquet', label: 'Parquet' },
-              { value: 'excel', label: 'Excel' },
-              { value: 'ndjson', label: 'NDJSON' },
-            ]"
-          />
+          <Select v-model="fileFormat" :options="formatOptions" />
           <div v-if="showsCsvOptions" class="dd-csv">
             <div>
               <label>{{ $t('sftp.separatorLabel') }}</label>
@@ -413,11 +458,12 @@ function confirm() {
             <label class="dd-check"><input v-model="ftHeader" type="checkbox" /> {{ $t('sftp.headerLabel') }}</label>
           </div>
           <template v-if="showsSheet">
-            <label>{{ $t('sftp.sheetLabel') }}</label>
-            <input v-model="ftSheet" type="text" :placeholder="$t('sftp.sheetPlaceholder')" />
+            <label>{{ $t('sftp.sheetLabel') }} <span v-if="sheetList" class="dd-soft">{{ $t('sheetPicker.fromFile', { file: sheetFile }) }}</span></label>
+            <Select v-if="sheetList" v-model="sheetModel" :options="sheetList" />
+            <input v-else v-model="sheetModel" type="text" :placeholder="isSp ? $t('sharepoint.sheetPlaceholder') : $t('sftp.sheetPlaceholder')" />
           </template>
-          <p class="muted dd-hint">{{ isS3 ? $t('s3Source.machineReadable') : $t('sftp.machineReadable') }}</p>
-          <DynamicSourceFields v-model="dyn" :preview="preview" />
+          <p class="muted dd-hint">{{ isSp ? $t('sharepoint.machineReadable') : isS3 ? $t('s3Source.machineReadable') : $t('sftp.machineReadable') }}</p>
+          <DynamicSourceFields v-model="dyn" :preview="preview" :keys-placeholder="isSp ? '_param_day, _file' : undefined" />
         </template>
 
         <ApiCallForm v-if="isApi" v-model="apiCall" :connection-id="connectionId" />

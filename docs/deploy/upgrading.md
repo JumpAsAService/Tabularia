@@ -254,9 +254,13 @@ helm rollback tabularia <the revision before> --namespace tabularia --wait --tim
 ```
 
 The pods go back to the previous images and values; the database stays migrated, which
-the previous release accepts: it starts with a warning that the database is newer than
-its code. This holds for **one release back**. Further back, or when the data itself is
-in question, restore the backup.
+the previous release accepts: its `migrate` step finds a revision it does not know, does
+nothing, and the gateway starts with a warning that the database is newer than its code.
+This holds for **one release back**, and **from 1.2.2 on**: 1.2.1 and earlier stop on a
+database migrated by a newer release (their new pods stay in `Init:CrashLoopBackOff`, and
+the release is left half rolled back), so going back to them means restoring the backup
+taken before the upgrade, below. Further back, or when the data itself is in question,
+restore the backup too.
 
 **Restore the backup.** First the file: the one of step 1, or one of the automatic
 backups — **Download** in Administration → Backups while Tabularia still works, otherwise

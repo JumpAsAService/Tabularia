@@ -1,6 +1,6 @@
 // Connessioni a database esterni. Tutte le operazioni richiedono la capability
 // CONNECT sulla cartella della connessione; la password non esce mai dalle API.
-import type { ApiCallDraft } from '~/composables/useDatasources'
+import type { ApiCallDraft, SharePointFormat } from '~/composables/useDatasources'
 import type { FileTemplatesDraft, FilesCheck } from '~/composables/usePlaceholders'
 import { pagedQuery, type Page } from '~/composables/useApi'
 
@@ -106,7 +106,7 @@ export const DB_TYPES = [
   // file Excel su SharePoint via Microsoft Graph: host=URL del sito,
   // username=client id dell'app Entra ID, password=secret, database=tenant id,
   // extra.library=raccolta documenti
-  { value: 'sharepoint', label: 'SharePoint (Excel)' },
+  { value: 'sharepoint', label: 'SharePoint' },
   // files on an SSH server: host, port 22, user, password OR private key
   // (extra.auth); the server's host key is accepted by the first test
   { value: 'sftp', label: 'SFTP (files)' },
@@ -176,7 +176,7 @@ export function useConnections() {
       apiFetch<FilesCheck>(`/connections/${id}/sftp/files`, { method: 'POST', body }),
 
     // i file Excel che un percorso/glob prende su una connessione SharePoint
-    sharepointFiles: (id: number, body: { path: string } & Partial<FileTemplatesDraft>) =>
+    sharepointFiles: (id: number, body: { path: string; format?: SharePointFormat } & Partial<FileTemplatesDraft>) =>
       apiFetch<FilesCheck>(`/connections/${id}/sharepoint/files`, { method: 'POST', body }),
 
     // the objects a folder + glob takes in a bucket of an S3 connection (empty bucket =

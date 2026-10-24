@@ -23,23 +23,85 @@ from tests.fakes import FakeRedis
 
 @pytest.fixture(autouse=True)
 def fresh_budget():
-    real = duckdb_budget.budget  # tests may replace it; teardown order is not ours to pick
+    real = duckdb_budget._budget_for  # tests may replace budget(); teardown order is not ours to pick
     real.cache_clear()
     yield
     real.cache_clear()
 
 
+def _share(monkeypatch, cpus=8):
+    """per_process_kb as the worker computes it: a 4 GiB container × 0.75, shared."""
+    from app.tasks import worker_pool
+
+    monkeypatch.setattr(worker_pool, "per_process_kb", lambda processes: 4 * 1024 * 1024 * 3 // 4 // processes)
+    monkeypatch.setattr(duckdb_budget, "_container_cpus", lambda: cpus)
+
+
 def test_the_budget_is_the_childs_share(monkeypatch):
-    monkeypatch.setattr(duckdb_budget, "resolve_max_memory_per_child_kb", lambda celery: 786_432)  # 4 GiB × 0.75 / 4
-    monkeypatch.setattr(duckdb_budget, "_container_cpus", lambda: 8)
+    _share(monkeypatch)
     monkeypatch.setattr(config.get_settings().celery, "worker_concurrency", 4)
     assert duckdb_budget.budget() == (768 - duckdb_budget.PROCESS_OVERHEAD_MB, 2)
 
 
 def test_a_tiny_share_still_leaves_a_floor(monkeypatch):
-    monkeypatch.setattr(duckdb_budget, "resolve_max_memory_per_child_kb", lambda celery: 200_000)
-    monkeypatch.setattr(duckdb_budget, "_container_cpus", lambda: 1)
+    _share(monkeypatch, cpus=1)
+    monkeypatch.setattr(config.get_settings().celery, "worker_concurrency", 16)
     assert duckdb_budget.budget() == (duckdb_budget.MIN_MEMORY_MB, 1)
+
+
+@pytest.mark.parametrize("argv, key", [
+    (["celery", "-A", "app.tasks.celery_app", "worker", "-E", "-Q", "celery"], "workers.run_concurrency"),
+    (["celery", "-A", "app.tasks.celery_app", "worker", "-E", "--queues=preview"], "workers.preview_concurrency"),
+])
+def test_the_panels_pool_size_is_the_share(monkeypatch, regolazioni_isolate, argv, key):
+    """Admin → Workers grows a pool started with 2 processes to 6: every connection gets a
+    sixth, not a half (six halves of the container: the kernel killed it whole)."""
+    from app.core import regolazioni
+
+    _share(monkeypatch)
+    monkeypatch.setattr(duckdb_budget.sys, "argv", argv)
+    monkeypatch.setattr(config.get_settings().celery, "worker_concurrency", 2)
+    assert duckdb_budget.budget() == (1536 - duckdb_budget.PROCESS_OVERHEAD_MB, 4)
+    regolazioni.scrivi({key: 6})
+    regolazioni.dimentica()
+    assert duckdb_budget.budget() == (512 - duckdb_budget.PROCESS_OVERHEAD_MB, 1)
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("50Gi", 50 * 2**30), ("500M", 500 * 10**6), ("1.5Gi", int(1.5 * 2**30)), ("1024", 1024), ("", None),
+    ("lots", None),
+])
+def test_a_kubernetes_quantity(text, expected):
+    assert duckdb_budget.quantity_bytes(text) == expected
+
+
+def test_duckdb_spills_within_the_pods_tmp(monkeypatch):
+    """Past the emptyDir's sizeLimit the kubelet evicts the pod at once: DuckDB spilled up to
+    90% of the node's free disk, not of /tmp."""
+    import duckdb
+
+    monkeypatch.setattr(config.get_settings().celery, "worker_concurrency", 2)
+    monkeypatch.setattr(duckdb_budget.sys, "argv", ["celery", "worker", "-Q", "celery"])
+    monkeypatch.setenv("TMP_SIZE_LIMIT", "8Gi")
+    assert duckdb_budget.spill_mib() == 2048  # half of 8 GiB, for two processes
+    con = duckdb.connect(":memory:")
+    duckdb_budget.apply(con)
+    assert con.execute("SELECT current_setting('max_temp_directory_size')").fetchone()[0] in ("2.0 GiB", "2.1 GB")
+    monkeypatch.delenv("TMP_SIZE_LIMIT")
+    assert duckdb_budget.spill_mib() is None
+
+
+def test_the_cpus_of_a_cgroup_v1_container(monkeypatch):
+    files = {"/sys/fs/cgroup/cpu/cpu.cfs_quota_us": "300000\n", "/sys/fs/cgroup/cpu/cpu.cfs_period_us": "100000\n"}
+
+    def fake_open(path, *a, **kw):
+        if path in files:
+            import io
+            return io.StringIO(files[path])
+        raise FileNotFoundError(path)
+    monkeypatch.setattr(duckdb_budget.os, "cpu_count", lambda: 16)
+    monkeypatch.setattr("builtins.open", fake_open)
+    assert duckdb_budget._container_cpus() == 3
 
 
 def test_the_engine_connection_uses_it_and_its_own_spill_directory(storage, monkeypatch):

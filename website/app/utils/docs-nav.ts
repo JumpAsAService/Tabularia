@@ -24,7 +24,7 @@ export const DOCS_GROUPS: { title: string, items: [string, string][] }[] = [
       ['/docs/deploy/upgrading', 'Upgrading, backups and restore'],
       ['/docs/deploy/release-checklist', 'Install and upgrade checklist'],
       ['/docs/configuration', 'Configuration reference'],
-      ['/docs/engine-settings', 'Engine settings'],
+      ['/docs/engine-settings', 'Settings from the panel'],
       ['/docs/database-migrations', 'Database migrations'],
     ],
   },

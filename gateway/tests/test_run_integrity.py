@@ -50,7 +50,7 @@ async def test_stale_run_is_revoked_not_just_marked_failed(session, fake_engine,
     scrive di nascosto. Ora il task viene fermato davvero."""
     import app.routes.runs as runs_mod
 
-    monkeypatch.setattr(runs_mod, "STALE_AFTER_SECONDS", 60)
+    monkeypatch.setattr(runs_mod, "stale_after_seconds", lambda: 60)
     run = make_run(
         session, kind="flow", status="STARTED", task_id="t-stale", flow_id=1,
         started_at=_ago(600), engine_started_at=_ago(600),
@@ -69,7 +69,7 @@ async def test_queue_wait_is_not_counted_as_execution_time(session, fake_engine,
     cronometro parte dall'esecuzione reale, non dalla nascita della riga."""
     import app.routes.runs as runs_mod
 
-    monkeypatch.setattr(runs_mod, "STALE_AFTER_SECONDS", 60)
+    monkeypatch.setattr(runs_mod, "stale_after_seconds", lambda: 60)
     run = make_run(
         session, kind="flow", status="STARTED", task_id="t-queued", flow_id=1,
         started_at=_ago(3600),      # in coda da un'ora…

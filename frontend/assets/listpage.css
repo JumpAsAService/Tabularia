@@ -17,7 +17,7 @@
   gap: 9px;
 }
 .count { font-size: 13px; font-weight: 500; }
-.head-actions { display: flex; align-items: center; gap: 10px; }
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .searchbox {
   display: inline-flex;
   align-items: center;

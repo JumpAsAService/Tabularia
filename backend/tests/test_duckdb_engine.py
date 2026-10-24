@@ -44,6 +44,30 @@ def test_filter(storage, src):
     assert {r["paese"] for r in res.rows} == {"DE", "IT"}
 
 
+def test_filter_on_dates_takes_the_editors_values(storage):
+    """The calendar of the editor sends 2024-01-15 or 2024-01-15T10:30: the same rows as
+    Polars; a value that is not a date says so in the same words, not with the SQL in it."""
+    from datetime import date, datetime
+
+    df = pl.DataFrame({"id": [1, 2, 3], "ts": [datetime(2024, 1, 14, 18), datetime(2024, 1, 15, 6), datetime(2024, 1, 16)],
+                       "day": [date(2024, 1, 14), date(2024, 1, 15), date(2024, 1, 16)], "note": ["a", "b", "c"]})
+    src = upload_df(storage, df, "datasets/dates_duck.parquet")
+
+    def ids(ops):
+        return sorted(r["id"] for r in _engine(storage).preview(src, ops, limit=10).rows)
+
+    assert ids([{"type": "filter", "params": {"column": "ts", "operator": "gt", "value": "2024-01-15T05:30"}}]) == [2, 3]
+    assert ids([{"type": "filter", "params": {"column": "ts", "operator": "between",
+                                              "value": ["2024-01-15T00:00", "2024-01-15T23:59"]}}]) == [2]
+    assert ids([{"type": "filter", "params": {"column": "day", "operator": "eq", "value": "2024-01-15"}}]) == [2]
+    for col in ("ts", "day"):
+        with pytest.raises(EngineError, match="is not valid for a date or time column: use the ISO format"):
+            _engine(storage).preview(src, [{"type": "filter", "params": {"column": col, "operator": "gt",
+                                                                          "value": "15/01/2024"}}], limit=10)
+    # on a text column any text is a value
+    assert ids([{"type": "filter", "params": {"column": "note", "operator": "gt", "value": "15/01/2024"}}]) == [1, 2, 3]
+
+
 def test_group_by(storage, src):
     ops = [{"type": "group_by", "params": {
         "by": ["paese"],
@@ -265,3 +289,32 @@ def test_unpivot(storage):
     res = _engine(storage).preview(s, ops, limit=10)
     assert {c.name for c in res.columns} == {"paese", "metric", "val"}
     assert res.row_count == 4
+
+
+def test_first_last_and_unique_follow_the_rows_order(storage, monkeypatch):
+    """On enough rows DuckDB aggregates in parallel: first()/last() and «Unique» kept any row
+    of the group (368658 where the first row was 3), Polars the first. Now the same."""
+    import numpy as np
+
+    from app.engine import duckdb_budget
+    from app.engine.polars_engine import PolarsEngine
+
+    monkeypatch.setattr(duckdb_budget, "budget", lambda: (2048, 8))  # several threads, as in a worker
+    n = 600_000
+    rng = np.random.default_rng(7)
+    df = pl.DataFrame({"g": rng.integers(0, 12, n), "riga": np.arange(n), "v": rng.integers(0, 1000, n)})
+    src = upload_df(storage, df, "datasets/order_duck.parquet")
+    polars = PolarsEngine(storage=storage, cache=StepCache(storage, redis_client=FakeRedis()))
+    cases = [
+        [{"type": "group_by", "params": {"by": ["g"], "aggregations": [
+            {"column": "riga", "func": "first", "alias": "f"}, {"column": "riga", "func": "last", "alias": "l"}]}}],
+        [{"type": "unique", "params": {"subset": ["g"]}}],
+        [{"type": "filter", "params": {"column": "v", "operator": "gt", "value": 500}},
+         {"type": "pivot", "params": {"index": ["g"], "on": "v", "values": "riga", "func": "first"}},
+         {"type": "select", "params": {"columns": ["g", "501", "999"]}}],
+    ]
+    for ops in cases:
+        want = sorted(tuple(r.values()) for r in polars.preview(src, ops, limit=100).rows)
+        for _ in range(3):
+            got = sorted(tuple(r.values()) for r in _engine(storage).preview(src, ops, limit=100).rows)
+            assert got == want, ops[0]["type"]

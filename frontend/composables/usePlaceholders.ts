@@ -102,6 +102,8 @@ export interface FilesCheck {
   missing?: MissingValue[]
   missing_total?: number
   expansions?: number
+  // the sheets of the first workbook taken: the sheet is chosen from them
+  sheets?: { file: string; sheets: string[]; hidden: string[] } | null
 }
 
 // the notes of a successful refresh (RunInfo.notes, JSON): the values skipped

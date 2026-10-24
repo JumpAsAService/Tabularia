@@ -64,6 +64,7 @@ from app.ingest import file_readers
 from app.ingest import file_templates as ft
 from app.ingest.converters import IngestError
 from app.ingest.models import CsvOptions
+from app.ingest.sheets import sheets_of_first
 from app.ingest.sharepoint_source import FILE_COLUMN, MODIFIED_COLUMN
 
 logger = logging.getLogger(__name__)
@@ -540,11 +541,15 @@ def _gather(client, source: SftpSourceSpec, now: datetime | None, last_refresh: 
 
 def check_files(conn: SftpConnectionSpec, source: SftpSourceSpec, now: datetime | None = None,
                 last_refresh: str | None = None) -> ft.Gathered:
-    """«Check the files»: every file the expansions take, and the values without one."""
+    """«Check the files»: every file the expansions take, and the values without one;
+    the sheets of the first workbook among them, to choose the sheet from a list."""
     with open_sftp(conn) as client:
         g, exps = _gather(client, source, now, last_refresh)
         if len(exps) == 1 and not g.files:
             resolve_folder(client, exps[0].values["folder"])  # a folder that is not there says so
+        if source.format in ("auto", "excel"):
+            g.sheets = sheets_of_first(g.files, lambda f: f.path, lambda f: f.size,
+                                       lambda f, local: client.get(f.path, local), lambda f: f.rel or f.path)
         return g
 
 

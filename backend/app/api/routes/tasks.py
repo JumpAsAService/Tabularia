@@ -1,4 +1,4 @@
-import os
+import re
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -8,6 +8,7 @@ from celery.result import AsyncResult
 from celery.exceptions import TaskRevokedError, TimeoutError as CeleryTimeoutError
 from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
+from app.tasks import worker_pool
 from app.api import exports, preview_slots
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
@@ -20,6 +21,7 @@ from app.engine.base import Operation
 from app.engine.cache import StepCache, plan_hashes
 import logging
 from app.core.config import get_settings
+from app.core.regolazioni import valore_all_avvio
 from app.core.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
@@ -83,7 +85,7 @@ def list_operations():
 
 
 # timeout dell'attesa del risultato dell'anteprima (secondi); override via env
-PREVIEW_TIMEOUT_SECONDS = float(os.getenv("PREVIEW_TIMEOUT_SECONDS", "120"))
+PREVIEW_TIMEOUT_SECONDS = float(valore_all_avvio("PREVIEW_TIMEOUT_SECONDS"))  # env, or the panel's at start
 # mappa il tag d'errore del task allo status HTTP
 _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "superseded": 409}
 # ogni quanto l'attesa controlla di non essere stata superata
@@ -258,6 +260,25 @@ def start_export(request: ExportStart):
     return TaskResponse(task_id=task_id, status="submitted", message=f"Exporting {request.input_key} as {request.format}")
 
 
+# an exception Celery could not rebuild from its JSON (botocore's want keyword arguments)
+# comes back as «<class 'botocore.exceptions.EndpointConnectionError'>(['Could not …'])»
+_NON_RICOSTRUITA = re.compile(r"^<class '(?:[\w.]+\.)?(\w+)'>\((?:\[|\()?['\"]?(.*?)['\"]?,?(?:\]|\))?\)$", re.S)
+# the storage not answering: what an administrator reads instead of botocore's names
+_STORAGE_GIU = {"EndpointConnectionError", "ConnectTimeoutError", "ConnectionClosedError", "ReadTimeoutError"}
+
+
+def leggibile(info: object) -> str:
+    """The reason of a failed task, as people read it."""
+    testo = str(info)
+    m = _NON_RICOSTRUITA.match(testo.strip())
+    if not m:
+        return testo
+    nome, messaggio = m.group(1), m.group(2).strip()
+    if nome in _STORAGE_GIU:
+        return f"The object storage is not answering: {messaggio}"
+    return f"{nome}: {messaggio}" if messaggio else nome
+
+
 @router.get("/exports/{task_id}")
 def export_status(task_id: str, owner: str | None = None):
     """`running`, `ready` (with the file name and size) or `failed` (with the
@@ -271,7 +292,11 @@ def export_status(task_id: str, owner: str | None = None):
         error = _failed(payload)
         return {"status": "failed", "code": error.status_code, "detail": error.detail}
     if result.state in ("FAILURE", "REVOKED"):
-        return {"status": "failed", "code": 500, "detail": redact_secrets(str(result.info))}
+        return {"status": "failed", "code": 500, "detail": redact_secrets(leggibile(result.info))}
+    if result.state == "STARTED":
+        perso = worker_pool.lost(task_id, result.info)
+        if perso:
+            return {"status": "failed", "code": 503, "detail": perso}
     return {"status": "running"}
 
 
@@ -383,7 +408,7 @@ def get_task_status(task_id: str):
     if result.status == "SUCCESS":
         response.result = result.result
     elif result.status == "FAILURE":
-        response.error = redact_secrets(str(result.info))
+        response.error = redact_secrets(leggibile(result.info))
         # traceback completo: la causa vera (stack Polars, SQL, batch) che
         # `str(info)` da solo perde — salvato dal gateway in Run.error_detail
         # il traceback contiene il SQL costruito dall'engine, che senza named
@@ -393,9 +418,13 @@ def get_task_status(task_id: str):
         response.message = "Task is pending"
     elif result.status == "STARTED":
         response.message = "Task is running"
-        # meta di STARTED: {pid, hostname} di Celery, o l'avanzamento di un import
+        # meta di STARTED: {pid, hostname, since} del worker, più l'avanzamento di un import
         info = result.info
-        if isinstance(info, dict) and isinstance(info.get("phase"), str):
+        perso = worker_pool.lost(task_id, info)
+        if perso:
+            # its worker died with it (OOMKilled, pod gone): it will never end
+            response.status, response.message, response.error = "FAILURE", None, perso
+        elif isinstance(info, dict) and isinstance(info.get("phase"), str):
             response.progress = {k: info[k] for k in ("phase", "rows", "file", "files", "call", "calls", "pages")
                                  if info.get(k) is not None}
     elif result.status == "RETRY":

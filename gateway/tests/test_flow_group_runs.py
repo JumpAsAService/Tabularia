@@ -27,7 +27,7 @@ pytestmark = pytest.mark.anyio
 def world(session, db_engine, monkeypatch):
     monkeypatch.setattr(orch, "engine", db_engine)
     monkeypatch.setattr(orch, "engine_battito", db_engine)
-    monkeypatch.setattr(orch, "OUTPUT_WAIT_INTERVAL_S", 0.01)
+    monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.01)
 
     async def no_side_effects(session, run):
         return None
@@ -328,8 +328,8 @@ async def test_a_run_started_before_its_step_does_not_count_for_it(world, db_eng
 
 
 async def test_cells_share_the_process_budget(world, db_engine, monkeypatch):
-    """Every cell holds a database connection: past MAX_CONCURRENT they wait their turn."""
-    monkeypatch.setattr(orch, "MAX_CONCURRENT", 2)
+    """Every cell holds a database connection: past ORCHESTRATOR__MAX_CONCURRENT they wait their turn."""
+    monkeypatch.setattr(orch._orc(), "max_concurrent", 2)
     monkeypatch.setattr(runner, "CELL_SLOT_WAIT_S", 0.01)
     at_once: list[int] = []
 

@@ -59,10 +59,12 @@ def memory_bytes(q: Optional[str]) -> Optional[int]:
 def disabled_reason() -> Optional[str]:
     """Why the page has nothing to show: "kubernetes" off it (Docker Compose), "off"
     when the chart's clusterView is off."""
+    from app.core.config import on_kubernetes
+
     k = get_settings().kubernetes
-    if not Path(k.token_file).exists():
+    if not on_kubernetes():
         return "kubernetes"
-    if not k.cluster_view:
+    if not k.cluster_view or not Path(k.token_file).exists():
         return "off"
     return None
 

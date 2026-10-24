@@ -22,6 +22,12 @@ class Scrittura(BaseModel):
     changed: list[str] = []
 
 
+def _chdb() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("chdb") is not None
+
+
 def _catalogo(max_task_time_limit: Optional[int] = None) -> dict:
     env = settings_dall_ambiente()
     try:
@@ -35,6 +41,7 @@ def _catalogo(max_task_time_limit: Optional[int] = None) -> dict:
             massimo = min(massimo, max_task_time_limit)
         voci.append({
             "key": v.chiave, "category": v.categoria, "unit": v.unita, "min": v.minimo, "max": massimo,
+            "kind": v.tipo, "rollout": list(v.rollout),
             "env_var": v.variabile, "env_value": regolazioni._valore(env, v.chiave),
             "value": impostate.get(v.chiave),
         })
@@ -43,7 +50,8 @@ def _catalogo(max_task_time_limit: Optional[int] = None) -> dict:
         # le categorie dei motori che questa installazione non ha: il pannello le
         # mostra spente (regolarle non cambierebbe niente)
         "unavailable": [c for c, attiva in (("clickhouse", env.clickhouse_external.enabled),
-                                            ("bigquery", env.bigquery.enabled)) if not attiva],
+                                            ("bigquery", env.bigquery.enabled),
+                                            ("embedded", _chdb()),) if not attiva],
         "refresh_seconds": regolazioni.RILEGGI_OGNI,
         "discarded": scartate,
     }

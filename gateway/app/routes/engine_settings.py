@@ -7,12 +7,12 @@ ENGINE__SETTINGS_PANEL=false si vedono e non si cambiano. Quali parametri, con c
 limiti e come arrivano ai processi del motore: services/regolazioni_motore.py.
 """
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional, Union
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, StrictInt
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt
 from sqlmodel import Session
 
 from app.core.routing import RottaCheRilascia
@@ -22,6 +22,7 @@ from app.models import EngineSetting, User
 from app.schemas.models import UtcDateTime
 from app.services import api_tokens, audit
 from app.services import regolazioni_motore as rm
+from app.services import settings_rollout
 from app.services.permissions import is_admin
 from app.services.masking import mask_email
 
@@ -31,13 +32,16 @@ router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/engine-settings"
 class SettingOut(BaseModel):
     key: str
     category: str
-    unit: str  # rows | seconds | bytes | threads
-    min: int
-    max: int
+    unit: str  # rows | seconds | bytes | threads | …
+    kind: str = "int"  # int | float | bool
+    # the components to roll out for it to apply (worker, preview-worker, engine, beat); empty = live
+    rollout: list[str] = []
+    min: float
+    max: float
     env_var: str
-    env_value: int  # quello dell'ambiente: il valore di partenza
-    value: Optional[int]  # quello impostato dal pannello (None = vale l'ambiente)
-    applied: Optional[int]  # quello che il motore sta applicando adesso (None = l'ambiente)
+    env_value: Any  # quello dell'ambiente: il valore di partenza
+    value: Any  # quello impostato dal pannello (None = vale l'ambiente)
+    applied: Any  # quello che il motore sta applicando adesso (None = l'ambiente)
     updated_at: Optional[UtcDateTime] = None
     updated_by: Optional[str] = None
 
@@ -51,9 +55,9 @@ class SettingsOut(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    # solo quelle che cambiano: un numero INTERO imposta (non un testo, non un true:
-    # `true` diventerebbe 1 senza che il motore lo veda), null torna all'ambiente
-    values: dict[str, Optional[StrictInt]] = Field(max_length=50)
+    # solo quelle che cambiano, null torna all'ambiente. Strict: un testo non diventa un
+    # numero, né `true` un 1 senza che il motore lo veda (il motore controlla il tipo)
+    values: dict[str, Optional[Union[StrictBool, StrictInt, StrictFloat]]] = Field(max_length=80)
 
 
 def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
@@ -84,12 +88,15 @@ async def _stato(session: Session, chi: User, request: Request) -> SettingsOut:
     pieno = is_admin(session, chi)
     voci = []
     for v in cat["items"]:
+        if v["key"] in rm.DAL_GATEWAY:
+            continue  # in the gateway's box (routes/gateway_settings.py)
         r = righe.get(v["key"])
         chi_lha = r.updated_by if r is not None else None
         voci.append(SettingOut(
             key=v["key"], category=v["category"], unit=v["unit"], min=v["min"], max=v["max"],
+            kind=v.get("kind", "int"), rollout=v.get("rollout", []),
             env_var=v["env_var"], env_value=v["env_value"],
-            value=r.value if r is not None and rm.dal_pannello() else None,
+            value=rm.valore(r) if r is not None and rm.dal_pannello() else None,
             applied=v["value"],
             updated_at=r.updated_at if r is not None else None,
             updated_by=(chi_lha if pieno else mask_email(chi_lha)) if chi_lha else None,
@@ -122,7 +129,7 @@ async def scrivi(
     if not await rm.blocca(session):
         raise HTTPException(status_code=409, detail="Another change to the settings is in progress: try again in a moment")
     try:
-        note = {v["key"] for v in (await rm.catalogo())["items"]}
+        note = {v["key"] for v in (await rm.catalogo())["items"]} - set(rm.DAL_GATEWAY)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=503, detail=MOTORE_VECCHIO + ": nothing was changed")
@@ -133,7 +140,7 @@ async def scrivi(
     if sconosciute:
         return JSONResponse(status_code=422, content={"detail": {"errors": [{"key": k, "code": "unknown"} for k in sconosciute]}})
     righe = rm.salvate(session)
-    prima = {k: r.value for k, r in righe.items()}
+    prima = {k: rm.valore(r) for k, r in righe.items() if k not in rm.DAL_GATEWAY}
     dopo = dict(prima)
     for k, v in body.values.items():
         if v is None:
@@ -150,6 +157,10 @@ async def scrivi(
         invio = {**{k: v for k, v in valide.items() if k not in body.values},
                  **{k: v for k, v in body.values.items() if v is not None}}
         r = await rm.spingi(invio, cambiate=list(cambi))
+        errori = ((r.json().get("detail") or {}).get("errors") or []) if r.status_code == 422 else []
+        if errori and {e.get("key") for e in errori} <= set(rm.DAL_GATEWAY):
+            # an engine older than the upload limit from the panel: without it
+            r = await rm.spingi(invio, cambiate=list(cambi), con_gateway=False)
     except (httpx.HTTPError, RuntimeError):
         raise HTTPException(status_code=503, detail="The engine is not responding: nothing was changed")
     if r.status_code == 422:
@@ -159,10 +170,13 @@ async def scrivi(
     if r.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"The engine answered {r.status_code}: nothing was changed")
     ora = datetime.now(timezone.utc).replace(tzinfo=None)
+    # the ones read only at start: their components run the old value until they start again
+    da_riavviare = {v["key"]: v.get("rollout") or [] for v in (r.json() or {}).get("items", [])}
+    settings_rollout.mark_changed(session, (c for k in cambi for c in da_riavviare.get(k, [])))
     for k in cambi:
         if k in dopo:
-            riga = righe.get(k) or EngineSetting(key=k, value=dopo[k], updated_at=ora)
-            riga.value, riga.updated_at, riga.updated_by = dopo[k], ora, admin.email
+            riga = righe.get(k) or EngineSetting(key=k, value=0, updated_at=ora)
+            (riga.value, riga.value_json), riga.updated_at, riga.updated_by = rm.colonne(dopo[k]), ora, admin.email
             session.add(riga)
         elif k in righe:
             session.delete(righe[k])

@@ -208,6 +208,7 @@ function pickDatasource(id: number | null) {
     bucket: ds.bucket,
     parquetKey: ds.key,
     filename: ds.name,
+    sheet: null,
     rows: ds.rows,
     columns: ds.columns,
   })
@@ -240,7 +241,7 @@ function pickDatasource(id: number | null) {
         <button class="del" :title="$t('nodePanel.deleteSourceTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
       </div>
       <template v-if="node.data.parquetKey">
-        <p><strong>{{ node.data.filename }}</strong></p>
+        <p><strong>{{ node.data.filename }}</strong><span v-if="node.data.sheet" class="muted"> · {{ $t('sheetPicker.sheet', { name: node.data.sheet }) }}</span></p>
         <p class="muted">{{ $t('nodePanel.rowsColsSummary', { rows: node.data.rows, cols: (node.data.columns || []).length }) }}</p>
         <p class="muted mono">{{ node.data.parquetKey }}</p>
         <div class="exportbar">

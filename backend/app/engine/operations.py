@@ -104,6 +104,12 @@ def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
             elif isinstance(target, pl.Datetime) or target == pl.Datetime:
                 # "2024-01-05 10:30:00" (spazio) vale quanto "2024-01-05T10:30:00"
                 e = e.str.replace(r"^(\d{4}-\d{2}-\d{2})\s+", "${1}T")
+            if target == pl.Boolean:
+                # Polars does not cast text to bool: the words DuckDB takes, else NULL
+                exprs.append(e.str.to_lowercase().replace_strict(TEXT_TRUE + TEXT_FALSE,
+                                                                [True] * len(TEXT_TRUE) + [False] * len(TEXT_FALSE),
+                                                                default=None, return_dtype=pl.Boolean).alias(c))
+                continue
             e = e.cast(target, strict=False)
         elif target.is_integer() and src is not None and (src.is_float() or src.is_decimal()):
             e = e.cast(pl.Float64).cast(target, strict=False)  # troncamento verso zero
@@ -116,6 +122,11 @@ def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
 # ─────────────────────────────────────────────────────────────────────────────
 # Filtro righe
 # ─────────────────────────────────────────────────────────────────────────────
+# the text a cast to bool reads, on every engine (DuckDB's own rule, case aside)
+TEXT_TRUE = ["true", "t", "1", "yes", "y"]
+TEXT_FALSE = ["false", "f", "0", "no", "n"]
+
+
 def _coerce_value(value: Any, dtype: pl.DataType | None) -> Any:
     """Adatta il valore del filtro al tipo della colonna.
 
@@ -135,11 +146,42 @@ def _coerce_value(value: Any, dtype: pl.DataType | None) -> Any:
         if dtype == pl.Time:
             return time.fromisoformat(value)
     except ValueError:
-        raise EngineError(
-            f"value '{value}' is not valid for a date or time column: "
-            f"use the ISO format (e.g. 2024-01-15 or 2024-01-15T10:30:00)"
-        )
+        raise temporal_value_error(value)
     return value
+
+
+def temporal_value_error(value: Any) -> EngineError:
+    return EngineError(
+        f"value '{value}' is not valid for a date or time column: "
+        f"use the ISO format (e.g. 2024-01-15 or 2024-01-15T10:30:00)"
+    )
+
+
+# operators whose value is text whatever the column (or that have none)
+_TEXT_OPERATORS = {"contains", "starts_with", "ends_with", "is_null", "is_not_null"}
+
+
+def non_iso_values(operator: str, value: Any) -> list[str]:
+    """The values of a filter that are not an ISO date, date-time or time. The SQL engines
+    compare a date column with the text as it is, and a value like «15/01/2024» gave the
+    database's own error, the query in it: they look at the column's type only then
+    (with ISO values, nothing to look up) and raise temporal_value_error, as Polars does."""
+    if operator in _TEXT_OPERATORS:
+        return []
+    from datetime import datetime, time
+
+    out = []
+    for v in value if isinstance(value, list) else [value]:
+        if not isinstance(v, str):
+            continue
+        try:
+            datetime.fromisoformat(v)
+        except ValueError:
+            try:
+                time.fromisoformat(v)
+            except ValueError:
+                out.append(v)
+    return out
 
 
 def _predicate(column: str, operator: str, value: Any, dtype: pl.DataType | None = None) -> pl.Expr:
@@ -167,7 +209,9 @@ def _predicate(column: str, operator: str, value: Any, dtype: pl.DataType | None
             lo, hi = (_coerce_value(v, dtype) for v in (value[0], value[1]))
             return col.is_between(pl.lit(lo), pl.lit(hi))
         case "contains":
-            return col.cast(pl.String).str.contains(str(value))
+            # the text as written: as a regular expression «Speck+Brie» or «1.5» matched
+            # other rows (or none), and «Vino (» was an error (DuckDB and ClickHouse: literal)
+            return col.cast(pl.String).str.contains(str(value), literal=True)
         case "starts_with":
             return col.cast(pl.String).str.starts_with(str(value))
         case "ends_with":
@@ -210,24 +254,36 @@ def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 # ─────────────────────────────────────────────────────────────────────────────
 # Ordinamento / limit / deduplica / null
 # ─────────────────────────────────────────────────────────────────────────────
+def sort_keys(params: dict[str, Any], have: Any = None) -> list[tuple[str, bool]]:
+    """(column, descending) of a sort, shared by every engine and the dbt export.
+    `descending`: a list, one per column (the editor's sort on several columns), or one
+    yes/no for all (flows saved before); a list shorter than the columns is ascending
+    for the rest. `ignore_missing` (set ONLY by the gateway's publish, never by a person):
+    the columns no longer in the chain (`have`) are left out — a sort key declared on the
+    Output and since renamed or removed must not fail every run, and the checklist shows
+    only the columns that exist. A sort asked for explicitly stays strict."""
+    by = params.get("by")
+    if by in (None, "", []):
+        raise EngineError("required parameter missing: 'by'")
+    by = by if isinstance(by, list) else [by]
+    desc = params.get("descending", False)
+    dirs = [bool(x) for x in desc] if isinstance(desc, list) else [bool(desc)] * len(by)
+    dirs += [False] * (len(by) - len(dirs))
+    keys = list(zip(by, dirs))
+    if params.get("ignore_missing") and have is not None:
+        keys = [(c, d) for c, d in keys if c in set(have)]
+    return keys
+
+
 @register("sort")
 def op_sort(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    by = _require(params, "by")
-    descending = params.get("descending", False)
-    # `ignore_missing`: lo mette SOLO l'iniezione del publish (gateway), mai
-    # l'utente. Una chiave di ordinamento dichiarata sull'Output e poi sparita
-    # dalla catena (colonna rinominata o tolta) non deve far fallire OGNI run
-    # del flusso — e non è nemmeno togliibile dalla checklist, che mostra solo
-    # le colonne esistenti. Un `sort` chiesto esplicitamente resta severo.
-    if params.get("ignore_missing"):
-        have = set(lf.collect_schema().names())
-        by = [c for c in (by if isinstance(by, list) else [by]) if c in have]
-        if not by:
-            return lf
+    keys = sort_keys(params, lf.collect_schema().names() if params.get("ignore_missing") else None)
+    if not keys:
+        return lf
     # STANDARD CROSS-ENGINE: i NULL vanno SEMPRE in coda (asc e desc), così un
     # "top N" (sort desc + limit) non è mai fatto di NULL. DuckDB/ClickHouse
-    # usano NULLS LAST esplicito.
-    return lf.sort(by, descending=descending, nulls_last=True)
+    # usano NULLS LAST esplicito. Una direzione per colonna.
+    return lf.sort([c for c, _ in keys], descending=[d for _, d in keys], nulls_last=True)
 
 
 @register("limit")
@@ -263,7 +319,9 @@ def op_sample(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 
 @register("unique")
 def op_unique(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    return lf.unique(subset=params.get("subset"), keep=params.get("keep", "any"))
+    # the first row of each group, in the data's order: «any» kept a different one from
+    # run to run (and from DuckDB's)
+    return lf.unique(subset=params.get("subset"), keep=params.get("keep", "first"), maintain_order=True)
 
 
 @register("fill_null")
@@ -520,8 +578,32 @@ def op_union(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     strategy = params.get("strategy") or "relaxed"
     if strategy not in ("relaxed", "strict"):
         raise EngineError(f"union: unsupported strategy: '{strategy}' (use relaxed or strict)")
-    how = "diagonal_relaxed" if strategy == "relaxed" else "vertical"
-    return pl.concat([lf, right_lf], how=how)
+    if strategy == "relaxed":
+        return pl.concat([lf, right_lf], how="diagonal_relaxed")
+    left_s, right_s = lf.collect_schema(), right_lf.collect_schema()
+    check_strict_union([(n, str(t)) for n, t in left_s.items()], [(n, str(t)) for n, t in right_s.items()])
+    # by name, in the order of the chain (the right one may list them in another)
+    return pl.concat([lf, right_lf.select(list(left_s.names()))], how="vertical")
+
+
+def check_strict_union(left: list[tuple[str, str]], right: list[tuple[str, str]]) -> None:
+    """A strict union takes two inputs with the same columns, of the same types, in any
+    order, and puts them together by name. Shared by every engine: DuckDB and ClickHouse
+    put them together by position (two columns in another order were swapped, the names
+    of the products in the ids, without a word), Polars stopped with its plan."""
+    lnames, rnames = [n for n, _ in left], [n for n, _ in right]
+    missing = [n for n in lnames if n not in rnames]
+    extra = [n for n in rnames if n not in lnames]
+    if missing or extra:
+        said = "; ".join(x for x in (f"missing on the right: {', '.join(missing)}" if missing else "",
+                                     f"only on the right: {', '.join(extra)}" if extra else "") if x)
+        raise EngineError(f"union (identical schemas): the two inputs have different columns ({said}). "
+                          "Choose «Align by name» to fill what is missing with empty values")
+    rtypes = dict(right)
+    differ = [f"{n} ({t} / {rtypes[n]})" for n, t in left if rtypes[n] != t]
+    if differ:
+        raise EngineError(f"union (identical schemas): these columns have different types: {', '.join(differ)}. "
+                          "Convert them first, or choose «Align by name»")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

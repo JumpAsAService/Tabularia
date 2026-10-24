@@ -153,4 +153,9 @@ async function remove(c: ConnectionInfo) {
 <style scoped>
 /* la connessione aperta dalla ricerca globale: si ritrova a colpo d'occhio */
 tr.target td { background: var(--tint-accent); }
+/* a phone: the table fits (752 px wide, the page scrolled sideways) */
+@media (max-width: 720px) {
+  td.nowrap { white-space: normal; overflow-wrap: anywhere; }
+  th:nth-child(2), td:nth-child(2), th:nth-child(4), td:nth-child(4) { display: none; }
+}
 </style>

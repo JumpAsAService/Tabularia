@@ -60,7 +60,7 @@ async def test_the_next_output_waits_for_a_long_queue(session, monkeypatch):
     monkeypatch.setattr(orch, "resolve_output_request", fake_resolve)
     monkeypatch.setattr(orch, "_launch_flow_run", fake_launch)
     monkeypatch.setattr(orch, "_reconcile", fake_reconcile)
-    monkeypatch.setattr(orch, "OUTPUT_WAIT_INTERVAL_S", 0)
+    monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.001)
 
     user = make_user(session, email="a@x.local", is_superuser=True)
     errors = await orch.orchestrate(session, user, _flow(session))

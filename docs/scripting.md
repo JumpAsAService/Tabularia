@@ -65,11 +65,11 @@ The Secrets hold the registry's credentials: the push one in the builds' namespa
 pull one in the scripts' and in the trials' namespaces:
 
 ```bash
-kubectl -n <release>-script-builds create secret docker-registry registry-push \
+kubectl -n <namespace>-script-builds create secret docker-registry registry-push \
   --docker-server=registry.example.com --docker-username=… --docker-password=…
-kubectl -n <release>-scripts create secret docker-registry registry-pull \
+kubectl -n <namespace>-scripts create secret docker-registry registry-pull \
   --docker-server=registry.example.com --docker-username=… --docker-password=…
-kubectl -n <release>-scripts-dev create secret docker-registry registry-pull \
+kubectl -n <namespace>-scripts-dev create secret docker-registry registry-pull \
   --docker-server=registry.example.com --docker-username=… --docker-password=…
 ```
 
@@ -392,7 +392,10 @@ A flow with a Script node runs as an orchestration, like one with a Refresh node
   read from it, with or without a sequence edge.
 - **Limits.** **Timeout** stops it; **Retries** runs it again, as a new Job, after the
   delay.
-- **Failure.** A failure stops the flow: the steps after it would read nothing.
+- **Failure.** A failure stops the flow: the steps after it would read nothing. A
+  script that goes over the environment's memory limit is stopped by the cluster; the
+  run says so, with the limit (exit code 137: some clusters, kind among them, report it
+  as a plain kill, and the run then says that the limit is the likeliest cause).
 
 The run page lists the node as a run of its own. It shows the environment and its
 version, the attempts, the exit code, the variables it was given (secret ones by

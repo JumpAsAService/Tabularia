@@ -23,6 +23,23 @@ def xlsx(rows, sheet="Dati") -> bytes:
     return buf.getvalue()
 
 
+def workbook(sheets: dict[str, list], hidden: tuple[str, ...] = ()) -> bytes:
+    """A workbook of several sheets {name: rows}; `hidden` ones hidden (never the first
+    visible one: the sheet open in Excel cannot be hidden)."""
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    for name, rows in sheets.items():
+        ws = wb.add_worksheet(name)
+        for i, r in enumerate(rows):
+            for j, v in enumerate(r):
+                ws.write(i, j, v)
+        if name in hidden:
+            ws.hide()
+    wb.get_worksheet_by_name(next(n for n in sheets if n not in hidden)).activate()
+    wb.close()
+    return buf.getvalue()
+
+
 class _Resp:
     def __init__(self, status=200, body=None, content=b"", headers=None):
         self.status_code = status; self._body = body; self.content = content; self.headers = headers or {}

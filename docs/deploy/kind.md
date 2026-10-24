@@ -621,6 +621,13 @@ files, in this order.
 | PostgreSQL, Valkey and MinIO in `tabularia-deps` | managed services, or the company's own charts; the cloud bucket of step 7 is already what a company uses |
 | the ingress on `localhost:8080` | the company's ingress, with TLS and a host name |
 
+PostgreSQL here keeps its data on a volume of the node it runs on (kind's local storage):
+draining that node (`kubectl drain`) stops it, and Tabularia with it, until the node is
+back (`kubectl uncordon`); the sign-in then answers that the database is not answering.
+Tabularia's own components move from node to node one pod at a time, as their
+PodDisruptionBudgets allow. A company's PostgreSQL is a managed service, or replicated by
+an operator, and survives a drain.
+
 When something is refused, Tabularia says which side: a build that cannot push names
 `scripts.registry.caCert`; a script whose image a node cannot download fails in about
 half a minute saying whether the credentials, the certificate or the image is the

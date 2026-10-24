@@ -1012,17 +1012,15 @@ async def list_sharepoint_files(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """I file Excel che un percorso (anche con glob) prende su questo sito: il
+    """I file (Excel, CSV) che un percorso (anche con glob) prende su questo sito: il
     riscontro mentre si configura la datasource, PRIMA di importare."""
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type != "sharepoint":
         raise HTTPException(status_code=422, detail="This is not a SharePoint connection")
-    fields = body.template_fields()
-    if fields or any(c in body.path for c in "{}"):
-        return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path,
-                                     source={"path": body.path, "sheet": "-", **fields})
-    return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path)
+    # the format says which files the path takes (Excel, CSV or both)
+    return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path,
+                                 source={"path": body.path, "format": body.format, **body.template_fields()})
 
 
 @router.post("/connections/{conn_id}/s3/files")

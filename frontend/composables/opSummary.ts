@@ -48,7 +48,12 @@ export function opSummary(op: string, params: Record<string, any> | null | undef
       const valore = p.value == null || p.value === '' || /null/.test(p.operator ?? '') ? '' : ` ${Array.isArray(p.value) ? elenco(p.value) : p.value}`
       return `${p.column} ${op2}${valore}`.trim()
     }
-    case 'sort': return `${elenco(p.by)}${p.descending ? ' ↓' : ' ↑'}`
+    case 'sort': {
+      // a direction each (a list), or one for all (flows saved before)
+      const by = Array.isArray(p.by) ? p.by : p.by ? [p.by] : []
+      const desc = (i: number) => (Array.isArray(p.descending) ? !!p.descending[i] : !!p.descending)
+      return elenco(by.map((c: string, i: number) => `${c} ${desc(i) ? '↓' : '↑'}`))
+    }
     case 'limit': return p.n != null ? `n = ${p.n}` : ''
     case 'sample': return p.n != null ? `n = ${p.n}` : p.fraction != null ? `${Math.round(Number(p.fraction) * 100)}%` : ''
     case 'group_by': {

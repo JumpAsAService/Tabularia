@@ -13,8 +13,9 @@ What comes from the code, so it cannot drift:
   - the variables of the development compose file (`${NAME:-default}`) and of
     infrastructure/.env.example, and the names the Helm chart sets, with the values.yaml
     key each one comes from;
-  - which engine settings an administrator can also change from the panel
-    (`Voce(…)` in backend/app/core/regolazioni.py).
+  - which settings an administrator can also change from the panel, and which of them
+    apply only when their components restart (`Voce(…)` in backend/app/core/regolazioni.py
+    and gateway/app/core/overrides.py).
 
 What is written by hand, in config_reference.toml next to this file: the one-line
 explanation of each variable, the section titles and their introductions, and the notes
@@ -47,6 +48,7 @@ GATEWAY_CONFIG = "gateway/app/core/config.py"
 BACKEND_APP = "backend/app"
 GATEWAY_APP = "gateway/app"
 PANEL = "backend/app/core/regolazioni.py"
+GATEWAY_PANEL = "gateway/app/core/overrides.py"
 COMPOSE = "infrastructure/docker-compose.yml"
 ENV_EXAMPLE = "infrastructure/.env.example"
 HELM_TEMPLATES = "infrastructure/helm/tabularia/templates"
@@ -79,6 +81,7 @@ class Variable:
     helm: str | None = None  # values.yaml key, or "" when the chart computes the value
     helm_secret: bool = False
     panel: str = ""  # the panel's category, when an administrator can also change it there
+    panel_restart: str = ""  # the components that read it only when they start, from the panel
 
 
 @dataclass
@@ -243,14 +246,41 @@ def direct_reads(app_dir: Path, reader: str, variables: dict[str, Variable]) -> 
                 var.default = {"int": int, "float": float}.get(cast, lambda v: v)(default)
 
 
-def panel_settings(path: Path) -> dict[str, str]:
-    """Variable → its category in the panel: `Voce("ingest.parquet_row_group_rows", "import", …)`."""
+def panel_settings(path: Path) -> dict[str, tuple]:
+    """Variable → (its category in the panel, the components that read it only when they
+    start): `Voce("ingest.parquet_row_group_rows", "import", …)`, with `rollout=` and, for a
+    variable that is not a settings field, `ambiente="CHDB_MAX_MEMORY_USAGE"`."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    # module constants used as `rollout=` (GW, WORKERS): their tuples of names
+    tuples = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) \
+                and isinstance(node.value, ast.Tuple):
+            tuples[node.targets[0].id] = [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
     keys = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and _name(node.func) == "Voce" and len(node.args) > 1 \
                 and isinstance(node.args[0], ast.Constant) and isinstance(node.args[1], ast.Constant):
-            keys[node.args[0].value.replace(".", "__").upper()] = node.args[1].value
+            kw = {k.arg: k.value for k in node.keywords}
+            name = node.args[0].value.replace(".", "__").upper()
+            if isinstance(kw.get("ambiente"), ast.Constant) and kw["ambiente"].value:
+                name = kw["ambiente"].value
+            restart = []
+            if isinstance(kw.get("rollout"), ast.Name):
+                restart = tuples.get(kw["rollout"].id, [])
+            elif isinstance(kw.get("rollout"), ast.Tuple):
+                restart = [e.value for e in kw["rollout"].elts if isinstance(e, ast.Constant)]
+            read = None
+            if isinstance(kw.get("ambiente"), ast.Constant) and kw["ambiente"].value:
+                tipo = kw["tipo"].value if isinstance(kw.get("tipo"), ast.Constant) else "int"
+                default = kw["predefinito"].value if isinstance(kw.get("predefinito"), ast.Constant) else MISSING
+                if isinstance(kw.get("predefinito"), ast.BinOp):  # 512 * 1024**2
+                    try:
+                        default = eval(compile(ast.Expression(kw["predefinito"]), "<predefinito>", "eval"), {})
+                    except Exception:  # noqa: BLE001 — shown as written
+                        default = MISSING
+                read = ({"float": "number"}.get(tipo, "integer"), default)
+            keys[name] = (node.args[1].value, ", ".join(restart), read)
     return keys
 
 
@@ -338,11 +368,20 @@ def collect(root: Path) -> Found:
         var.readers.add("helm")
         var.helm, var.helm_secret = path_, secret
 
-    for name, category in panel_settings(root / PANEL).items():
-        if name in variables:
-            variables[name].panel = category
-        else:
-            errors.append(f"{PANEL}: the panel setting {name} is not a setting of the engine")
+    for path_, who in ((PANEL, "engine"), (GATEWAY_PANEL, "gateway")):
+        for name, (category, restart, read) in panel_settings(root / path_).items():
+            if read is not None:
+                # a variable read at import through the catalogue (`valore_all_avvio`), not os.getenv
+                var = variables.setdefault(name, Variable(name, order=len(variables)))
+                var.readers.add(who)
+                var.type = var.type or read[0]
+                if var.default is MISSING and read[1] is not MISSING:
+                    var.default = read[1]
+            if name in variables:
+                variables[name].panel = category
+                variables[name].panel_restart = restart
+            else:
+                errors.append(f"{path_}: the panel setting {name} is not a setting of the {who}")
     return Found(variables, errors)
 
 
@@ -416,13 +455,26 @@ def show_helm(var: Variable, text: dict) -> str:
     return "`existingSecret`" if is_secret(var, text) else "`extraEnv`"
 
 
+def restarted(components: str) -> str:
+    """«worker, preview-worker» → «workers»: the words of the panel's restart banner."""
+    names = {"gateway": "gateway", "orchestrator": "orchestrator", "engine": "engine API", "beat": "scheduler (beat)",
+             "worker": "workers", "preview-worker": "workers"}
+    seen = []
+    for c in components.split(", "):
+        n = names.get(c, c)
+        if n not in seen:
+            seen.append(n)
+    return " and ".join(seen)
+
+
 def describe(var: Variable, text: dict) -> str:
     out = text["text"].strip()
     if text.get("production"):
         out = f"**Production:** {text['production'].strip()} {out}"
     if var.panel:
         # the workers' processes are shown in Admin → Workers, not among the settings
-        out += f" Also adjustable in Administration → {'Workers' if var.panel == 'workers' else 'Settings'}."
+        out += f" Also adjustable in Administration → {'Workers' if var.panel == 'workers' else 'Settings'}"
+        out += f", applied after a restart of the {restarted(var.panel_restart)}." if var.panel_restart else "."
     return cell(out)
 
 

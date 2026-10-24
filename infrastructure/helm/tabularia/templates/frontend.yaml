@@ -65,9 +65,11 @@ spec:
             # "/" redirects to the login page, so probe the page itself.
             httpGet: { path: /login, port: http }
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet: { path: /login, port: http }
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}

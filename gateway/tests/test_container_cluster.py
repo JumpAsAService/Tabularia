@@ -7,7 +7,8 @@ Fixed here:
 - «Try in the cluster» resolves the tag to a digest, runs a Pod with the image and a
   command that does not exist, in the trials' namespace, and says whether a node
   downloaded it; a download that keeps failing is explained, not waited for; the Job
-  never stays behind;
+  never stays behind, but for a download still going when the request must answer
+  (under the ingress' 300 s), which is said and left to finish;
 - the check is an administrator's, recorded in the audit, and only for allowed
   repositories.
 """
@@ -127,6 +128,44 @@ def test_a_download_that_fails_is_explained(app, session, cluster, registry, mes
     assert cluster.jobs() == []
 
 
+def test_a_download_longer_than_the_request_is_said_and_left_to_finish(app, session, cluster, registry, monkeypatch):
+    # CONTAINERS__PULL_CHECK_SECONDS is 300 by default and the ingress cuts a request at
+    # 300 s: the check answers before, saying the node is still downloading
+    monkeypatch.setattr(container_cluster, "REQUEST_WAIT_SECONDS", 0.05)
+    boss = _boss(app, session)
+    rid = _create(boss)
+    cluster.behave = lambda job: (None, "", None)  # pulling: no event, no failure
+    out = boss.post(f"/admin/registries/{rid}/cluster-test", json={"repository": "team/forecast", "reference": "v3"},
+                    headers=CSRF).json()
+    assert out["ok"] is False and "still downloading" in out["message"] and "up to 300 s" in out["message"]
+    assert len(cluster.jobs()) == 1  # the node goes on downloading: its deadline and TTL end it
+    job = next(body for kind, ns, body in cluster.created if kind == "jobs")
+    assert job["spec"]["activeDeadlineSeconds"] == 300 and job["spec"]["ttlSecondsAfterFinished"] > 0
+
+
+def test_a_check_the_cluster_refuses_says_why(app, session, cluster, registry, monkeypatch):
+    # the trials' quota full: no Pod, nothing downloading; it said «still downloading»
+    monkeypatch.setattr(container_cluster, "NO_POD_SECONDS", 0)
+    boss = _boss(app, session)
+    rid = _create(boss)
+    cluster.behave = lambda job: (None, "", None)
+    real = cluster.handle
+
+    def quota_full(req):
+        if req.url.path.endswith("/pods"):
+            return httpx.Response(200, json={"items": []})
+        if req.url.path.endswith("/events"):
+            return httpx.Response(200, json={"items": [{"reason": "FailedCreate", "message":
+                'Error creating: pods "x" is forbidden: exceeded quota: tabularia-container-trials, requested: '
+                "pods=1, used: pods=10, limited: pods=10"}]})
+        return real(req)
+
+    monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(quota_full))
+    out = boss.post(f"/admin/registries/{rid}/cluster-test", json={"repository": "team/forecast", "reference": "v3"},
+                    headers=CSRF).json()
+    assert out["ok"] is False and "ResourceQuota is full" in out["message"] and cluster.jobs() == []
+
+
 def test_what_the_gateway_cannot_resolve_is_said_before_the_cluster(app, session, cluster, registry):
     boss = _boss(app, session)
     rid = _create(boss)
@@ -160,3 +199,54 @@ def test_a_deleted_registry_takes_its_pull_secrets(app, session, cluster, regist
         asyncio.run(container_cluster.sync_pull_secret(reg, TOKEN, ns))
     assert boss.delete(f"/admin/registries/{rid}", headers=CSRF).status_code == 204
     assert not [k for k in cluster.objects if k[0] == "secrets"]
+
+
+class _RacingCluster(httpx.AsyncBaseTransport):
+    """Secrets only, as the API server keeps them: a PUT with a stale resourceVersion is
+    refused with 409, and other requests come in between."""
+
+    def __init__(self):
+        self.secrets: dict[str, dict] = {}
+        self.rv, self.puts = 0, 0
+
+    async def handle_async_request(self, req):
+        import asyncio
+
+        await asyncio.sleep(0.01)
+        name = req.url.path.rstrip("/").split("/")[-1]
+        if req.method == "POST":
+            body = json.loads(req.content)
+            if body["metadata"]["name"] in self.secrets:
+                return httpx.Response(409, json={"message": "already exists"})
+            self.rv += 1
+            self.secrets[body["metadata"]["name"]] = {**body, "metadata": {**body["metadata"],
+                                                                           "resourceVersion": str(self.rv)}}
+            return httpx.Response(201, json=body)
+        if req.method == "GET":
+            return httpx.Response(200, json=self.secrets[name])
+        body = json.loads(req.content)  # PUT
+        self.puts += 1
+        if body["metadata"].get("resourceVersion") != self.secrets[name]["metadata"]["resourceVersion"]:
+            return httpx.Response(409, json={"message": "the object has been modified"})
+        self.rv += 1
+        self.secrets[name] = {**body, "metadata": {**body["metadata"], "resourceVersion": str(self.rv)}}
+        return httpx.Response(200, json=self.secrets[name])
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("password", ["tok", "new-token"])
+async def test_two_runs_of_one_registry_write_its_pull_secret_at_once(cluster, monkeypatch, password):
+    # parallel Container cells of a flow group: one of the two failed with 409
+    import asyncio
+
+    racing = _RacingCluster()
+    monkeypatch.setattr(kube_jobs, "_transport", racing)
+    reg = ContainerRegistry(id=7, name="Acme", host="reg.test", username="ada")
+    await container_cluster.sync_pull_secret(reg, "tok", "tab-containers")  # an earlier run wrote it
+    results = await asyncio.gather(*[container_cluster.sync_pull_secret(reg, password, "tab-containers")
+                                     for _ in range(2)], return_exceptions=True)
+    assert results == ["tabularia-registry-7", "tabularia-registry-7"]
+    auth = json.loads(base64.b64decode(racing.secrets["tabularia-registry-7"]["data"][".dockerconfigjson"]))
+    assert auth["auths"]["reg.test"]["password"] == password
+    if password == "tok":
+        assert racing.puts == 0  # unchanged credentials: nothing rewritten

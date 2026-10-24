@@ -50,7 +50,7 @@ from app.engine.duckdb_ops import (
     unpivot_value_type,
 )
 from app.engine.exceptions import EngineError
-from app.engine.operations import PIVOT_LABEL_SEP, check_filter_value
+from app.engine.operations import PIVOT_LABEL_SEP, check_filter_value, sort_keys
 
 # resolver di una sorgente ({key} | {model} | {seed}) → (ref SQL, colonne, tipi DuckDB per colonna)
 logger = logging.getLogger(__name__)
@@ -1163,14 +1163,13 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         return model.add(f"SELECT {tutte} FROM {ref} WHERE {pred}"), s
 
     if op_type == "sort":
-        by = _as_list(_require(params, "by"))
-        if params.get("ignore_missing") and cols:
-            by = [c for c in by if c in set(cols)]
-            if not by:
-                return ref, s
-        direction = "DESC" if params.get("descending") else "ASC"
+        _require(params, "by")
+        # the keys and a direction each, as the engines (operations.sort_keys)
+        keys = sort_keys(params, cols or None)
+        if not keys:
+            return ref, s
         # standard cross-engine: NULL sempre in coda (come il motore)
-        order = ", ".join(f"{_byte(model, q(c), s.tipo(c))} {direction} NULLS LAST" for c in by)
+        order = ", ".join(f"{_byte(model, q(c), s.tipo(c))} {'DESC' if d else 'ASC'} NULLS LAST" for c, d in keys)
         return model.add(f"SELECT {tutte} FROM {ref} ORDER BY {order}"), s
 
     if op_type == "limit":
@@ -1475,7 +1474,9 @@ def _etichetta(op_type: str, params: dict, resolve: SourceResolver, cols: Option
         valore = "" if op in ("is_null", "is_not_null") else f" {_v(p.get('value'))}"
         return f"filter_{col}", f"keep rows where {col} {ops.get(op, op)}{valore}"
     if op_type == "sort":
-        return f"sort_by_{'_'.join(by[:2])}", f"sort by {', '.join(by)} {'descending' if p.get('descending') else 'ascending'} (nulls last)"
+        keys = sort_keys(p, cols or None) if by else []
+        return f"sort_by_{'_'.join(by[:2])}", "sort by " + ", ".join(
+            f"{c} {'descending' if d else 'ascending'}" for c, d in keys) + " (nulls last)"
     if op_type == "group_by":
         aggs = ", ".join(f"{a.get('func', 'sum')}({a.get('column')}) as {a.get('alias') or a.get('column') + '_' + a.get('func', 'sum')}" for a in (p.get("aggregations") or []))
         return f"aggregate_by_{'_'.join(by[:2])}", f"aggregate by {', '.join(by)}: {aggs}"
@@ -1581,10 +1582,8 @@ def _ordine_dopo(op_type: str, params: dict, prima: _S) -> Optional[list[tuple[s
     that keep the rows' order and the keys' values, lost by every other."""
     p, ordine = params or {}, prima.ordine
     if op_type == "sort":
-        by = _as_list(p.get("by") or [])
-        if p.get("ignore_missing") and prima.cols:
-            by = [c for c in by if c in set(prima.cols)]
-        return [(c, bool(p.get("descending"))) for c in by] if by else ordine
+        keys = sort_keys(p, prima.cols or None) if p.get("by") else []
+        return keys or ordine
     if not ordine:
         return None
     chiavi = {k for k, _ in ordine}

@@ -60,7 +60,7 @@ MAX_BYTE = 900_000  # e non oltre questi byte (HEC ha un tetto per richiesta)
 MAX_LOTTI_PER_GIRO = 20
 ATTESA_MAX = 300  # secondi: il tetto delle attese fra un tentativo fallito e l'altro
 LETTI = 4096
-LUCCHETTO = 7_402_119
+LUCCHETTO = 7_402_122
 SOURCETYPE, SOURCE, HOST = "tabularia:audit", "tabularia", "tabularia"
 # il canale HEC: obbligatorio se il token ha la conferma d'indicizzazione (useACK),
 # ignorato altrimenti. Uno per processo basta
