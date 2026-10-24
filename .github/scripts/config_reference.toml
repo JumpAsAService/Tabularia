@@ -289,7 +289,7 @@ id = "engine-sharepoint"
 component = "engine"
 title = "SharePoint datasources"
 prefixes = ["SHAREPOINT"]
-intro = "Excel files on SharePoint are read through Microsoft Graph with an app registered on Entra ID; tenant, client and site belong to the connection. These two endpoints are deployment settings on purpose: whoever creates a connection cannot point the backend at another host."
+intro = "Excel and CSV files on SharePoint are read through Microsoft Graph with an app registered on Entra ID; tenant, client and site belong to the connection. These two endpoints are deployment settings on purpose: whoever creates a connection cannot point the backend at another host."
 
 [[section]]
 id = "engine-sftp"
