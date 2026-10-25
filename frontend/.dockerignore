@@ -1,4 +1,4 @@
-# prodotti locali: le immagini installano e compilano da sé
+# local build output: the images install and build on their own
 node_modules/
 .nuxt/
 .output/
@@ -7,10 +7,10 @@ node_modules/
 dist/
 *.log
 
-# niente segreti né configurazione locale nelle immagini
+# no secrets nor local configuration in the images
 .env
 .env.*
 
-# file del repository che l'immagine non usa
+# repository files the image does not use
 .git/
 Dockerfile*

@@ -252,14 +252,14 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
     if not conn.from_address.strip():
         raise EmailDestinationError("The SMTP connection has no sender address.")
 
-    data, nome_file = build_attachment(bucket, key, spec)
+    data, file_name = build_attachment(bucket, key, spec)
 
     msg = EmailMessage()
     msg["From"] = conn.sender()
     msg["To"] = ", ".join(a for a in spec.to if a.strip())
     if spec.cc:
         msg["Cc"] = ", ".join(a for a in spec.cc if a.strip())
-    msg["Subject"] = spec.subject or nome_file
+    msg["Subject"] = spec.subject or file_name
     msg["Message-ID"] = make_msgid()
 
     if spec.body_is_html:
@@ -269,15 +269,15 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
         msg.set_content(spec.body or "")
 
     maintype, subtype = _MIME[spec.attachment_format]
-    msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=nome_file)
+    msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=file_name)
 
     _send(conn, msg, recipients)
 
-    logger.info("📧 email sent to %d recipients, attachment %s (%d bytes)", len(recipients), nome_file, len(data))
+    logger.info("📧 email sent to %d recipients, attachment %s (%d bytes)", len(recipients), file_name, len(data))
     return {
         "ok": True,
         "recipients": len(recipients),
-        "attachment": nome_file,
+        "attachment": file_name,
         "subject": str(msg["Subject"]),
         "bytes": len(data),
     }

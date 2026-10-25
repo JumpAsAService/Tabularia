@@ -49,5 +49,5 @@ celerybeat-schedule*
 .claude/settings.local.json
 infrastructure/gcp_keys.json
 
-# ── Oracoli e2e: i progetti esportati e i log (e2e/dbt_export/README.md) ─────
-e2e/dbt_export/.lavoro/
+# ── e2e oracles: the exported projects and the logs (e2e/dbt_export/README.md) ─
+e2e/dbt_export/.work/

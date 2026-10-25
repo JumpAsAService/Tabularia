@@ -6,17 +6,17 @@
 // message, and fades to a quieter strength as the reader scrolls past the hero, so the long
 // texts below read on a calm ground. The comments below are the original's.
 //
-// Il campo dietro il login: valori che si mettono in ordine.
+// The field behind the login: values putting themselves in order.
 //
-// Esiste UNA tabella perfetta — colonne a passo fisso, righe a passo fisso —
-// che scorre piano verso destra. Ogni valore se ne allontana tanto più quanto è
-// a sinistra: sparso, inclinato, di misura diversa, e scritto SPORCO (separatori
-// misti, spazi, n/a). Attraversando il centro rientra nella sua cella e diventa
-// il valore pulito, allineato a destra. È quello che fa il prodotto, mostrato
-// invece che detto; e non è la pioggia di Matrix: nulla cade, tutto si sistema.
+// There is ONE perfect table — fixed-step columns, fixed-step rows — scrolling slowly to
+// the right. Every value drifts away from it the more it is on the left: scattered,
+// tilted, of different size, and written DIRTY (mixed separators, spaces, n/a). Crossing
+// the centre it goes back into its cell and becomes the clean value, aligned right. It is
+// what the product does, shown instead of told; and it is not Matrix's rain: nothing
+// falls, everything settles.
 //
-// Un canvas solo, decorativo (aria-hidden). Colori letti dai token del tema,
-// quindi segue dark / light / dracula / monokai / imperium senza saperne niente.
+// One canvas only, decorative (aria-hidden). Colours read from the theme's tokens, so it
+// follows dark / light / dracula / monokai / imperium without knowing anything about them.
 
 const props = withDefaults(
   defineProps<{
@@ -30,7 +30,7 @@ const props = withDefaults(
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 
-// sporco → pulito. Solo numeri e i loro modi di essere sbagliati.
+// dirty → clean. Only numbers and their ways of being wrong.
 const VALUES: [string, string][] = [
   [' 1.204,50', '1204.50'], ['12,0', '12.00'], ['n/a', '—'], ['3,1E2', '310.00'],
   ['0042', '42'], ['7.5 %', '0.075'], ['1 980', '1980'], ['-,5', '-0.50'],
@@ -41,11 +41,11 @@ const VALUES: [string, string][] = [
   ['0,07', '0.07'], ['318,', '318'], ['+41', '41'], ['1/2', '0.50'],
 ]
 const MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" // taste-skill-ignore: data values, drawn on a decorative canvas
-const SPEED = 13 // px/s: la tabella scorre, non corre
+const SPEED = 13 // px/s: the table scrolls, it does not run
 const FPS = 15 // behind a whole page: the drift is under 1 px per frame at 15 fps, and it costs half of 30
 
-// hash intero deterministico di (colonna assoluta, riga) → il contenuto di una
-// cella non cambia mentre attraversa lo schermo
+// deterministic integer hash of (absolute column, row) → a cell's content does not change
+// while it crosses the screen
 function hash(a: number, b: number): number {
   let h = (a * 374761393 + b * 668265263) | 0
   h = (h ^ (h >>> 13)) * 1274126177
@@ -61,20 +61,20 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 let raf = 0
 let last = 0
-let clock = 0 // secondi di animazione (si ferma con la scheda nascosta)
+let clock = 0 // seconds of animation (it stops with the tab hidden)
 let W = 0
 let H = 0
 let dpr = 1
 let colors = { text: '#e8ebf2', accent: '#4f8cff', accent2: '#6ee7b7' }
-// su fondo CHIARO lo stesso alpha rende molto meno (testo scuro al 5% su quasi
-// bianco sparisce): i valori e i filetti si rinforzano in proporzione
+// on a LIGHT background the same alpha renders much less (dark text at 5% on near white
+// vanishes): the values and the rules are strengthened in proportion
 let boost = 1
 let themeBoost = 1 // the light theme needs more alpha for the same presence
 let reduced = false
 let ro: ResizeObserver | null = null
 let mo: MutationObserver | null = null
 let mq: MediaQueryList | null = null
-// stringhe dei font precostruite (misure a mezzo pixel): niente template per cella
+// font strings prebuilt (half-pixel sizes): no template per cell
 const FONTS: string[] = []
 for (let i = 0; i <= 60; i++) FONTS[i] = `${i / 2}px ${MONO}`
 
@@ -126,17 +126,16 @@ function draw() {
   const rowH = narrow ? 26 : 30
   const cleanSize = narrow ? 11 : 12.5
 
-  // DOVE i valori si sistemano. La fascia è legata alla card, non a frazioni
-  // fisse dello schermo: a 1440 px cadeva quasi tutta SOTTO il form, e il
-  // momento che dà senso alla pagina non lo vedeva nessuno. Largo: si chiude
-  // appena a sinistra della card, così a destra la tabella esce già intera.
-  // Stretto: la card occupa tutta la larghezza, l'asse diventa verticale —
-  // caos sopra, tabella sotto.
+  // WHERE the values settle. The band is tied to the card, not to fixed fractions of the
+  // screen: at 1440 px it fell almost entirely UNDER the form, and nobody saw the moment
+  // that gives the page its sense. Wide: it closes just to the left of the card, so on the
+  // right the table comes out whole already. Narrow: the card takes the whole width, the
+  // axis becomes vertical — chaos above, table below.
   // the whole page: noise on the left (on a phone, at the top), the table on the right
   const to = narrow ? H * 0.62 : W * 0.56
   const from = narrow ? H * 0.22 : W * 0.18
 
-  // filetti della tabella: compaiono solo dove c'è ordine
+  // the table's rules: they appear only where there is order
   const rule = narrow ? ctx.createLinearGradient(0, from, 0, to) : ctx.createLinearGradient(from, 0, to + 120, 0)
   rule.addColorStop(0, 'transparent')
   rule.addColorStop(1, colors.text)
@@ -155,16 +154,16 @@ function draw() {
   ctx.textAlign = 'right'
 
   for (let c = -1; c < cols; c++) {
-    const k = c - shift // colonna ASSOLUTA: identità stabile mentre scorre
-    const gx = c * colW + offset + colW - 14 // filo destro della cella
+    const k = c - shift // ABSOLUTE column: a stable identity while it scrolls
+    const gx = c * colW + offset + colW - 14 // the cell's right edge
     const ox = narrow ? 0 : smooth(from, to, gx)
     for (let r = 0; r < rows; r++) {
       const h = hash(k, r)
-      if (h % 100 >= 44) continue // la tabella ha dei vuoti: respira (sparser than on the sign-in page)
+      if (h % 100 >= 44) continue // the table has gaps: it breathes (sparser than on the sign-in page)
       const gy = r * rowH + rowH / 2
       const o = narrow ? smooth(from, to, gy) : ox
 
-      // quanto è lontano dalla sua cella: tutto scala con (1 - o)
+      // how far it is from its cell: everything scales with (1 - o)
       const d = 1 - o
       const wob = Math.sin(clock * (0.11 + unit(h, 1) * 0.16) + unit(h, 2) * 6.283)
       const wob2 = Math.cos(clock * (0.09 + unit(h, 3) * 0.13) + unit(h, 4) * 6.283)
@@ -173,16 +172,16 @@ function draw() {
 
       const size = Math.round(lerp(9 + unit(h, 7) * 15, cleanSize, o) * 2)
       const rot = d * ((unit(h, 8) - 0.5) * 1.1 + wob * 0.12)
-      // al passaggio si accende appena: una cucitura di luce dove i dati si sistemano
+      // on passing it lights up slightly: a seam of light where the data settles
       const seam = Math.exp(-Math.pow((o - 0.5) / 0.17, 2)) * 0.2
       const alpha = (lerp(0.05 + unit(h, 9) * 0.2, 0.19, o) + seam) * boost
       const pair = VALUES[h % VALUES.length]!
-      // pochi valori in accento, solo a tabella fatta — e solo valori VERI: un
-      // trattino acceso non dice niente
+      // a few values in accent, only with the table done — and only REAL values: a lit dash says
+      // nothing
       const lit = h % 23 === 0 && o > 0.62 && pair[1] !== '—'
 
-      // sporco → pulito: il primo SPARISCE prima che il secondo compaia. Disegnati
-      // insieme si impastavano, e sembrava un difetto invece di una trasformazione
+      // dirty → clean: the first DISAPPEARS before the second appears. Drawn together they
+      // smudged, and it looked like a defect instead of a transformation
       const out = 1 - smooth(0.38, 0.5, o)
       const inn = smooth(0.5, 0.62, o)
       const text = out > 0 ? pair[0] : pair[1]
@@ -195,7 +194,7 @@ function draw() {
       if (rot > 0.002 || rot < -0.002) {
         const cs = Math.cos(rot) * dpr
         const sn = Math.sin(rot) * dpr
-        ctx.setTransform(cs, sn, -sn, cs, x * dpr, y * dpr) // niente save/restore per cella
+        ctx.setTransform(cs, sn, -sn, cs, x * dpr, y * dpr) // no save/restore per cell
         ctx.fillText(text, 0, 0)
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       } else {
@@ -209,11 +208,10 @@ function draw() {
 
 function frame(now: number) {
   raf = requestAnimationFrame(frame)
-  // margine di 4 ms: a 60 Hz i fotogrammi arrivano ogni ~16,7 ms e un confronto
-  // secco su 33,3 alterna passi da 33 e da 50 ms — scatti visibili su uno
-  // scorrimento lento e uniforme
+  // a 4 ms margin: at 60 Hz the frames arrive every ~16.7 ms and a dry comparison on 33.3
+  // alternates 33 and 50 ms steps — visible jolts on a slow, even scroll
   if (now - last < 1000 / FPS - 4) return
-  clock += Math.min(0.1, (now - last) / 1000) // dopo una pausa non si salta in avanti
+  clock += Math.min(0.1, (now - last) / 1000) // after a pause it does not jump ahead
   last = now
   draw()
 }
@@ -241,7 +239,7 @@ function onScroll() {
 onMounted(() => {
   mq = window.matchMedia('(prefers-reduced-motion: reduce)')
   reduced = mq.matches
-  // chi chiede meno movimento vede la stessa immagine, ferma: il senso resta
+  // whoever asks for less motion sees the same image, still: the sense stays
   clock = 40
   readTheme()
   resize()

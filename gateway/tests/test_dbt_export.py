@@ -467,7 +467,7 @@ def test_a_materialization_not_allowed_is_refused_and_free_forms_too(session, sc
 
 def test_the_plan_tells_the_dialog_targets_sources_and_outputs(session, scene):
     flow = _flow_with_two_outputs(session, scene)
-    piano = d.piano_export(session, flow, "data-prep")
+    piano = d.export_plan(session, flow, "data-prep")
     by_id = {t["id"]: t for t in piano["targets"]}
     assert [t["id"] for t in piano["targets"]] == ["clickhouse", "duckdb", "native"] and all(t["available"] for t in piano["targets"])
     assert by_id["duckdb"]["sources"] == [{"key": f"{scene.pg.id}:vendite", "connection": "gestionale", "schema": "vendite",
@@ -483,7 +483,7 @@ def test_the_plan_tells_the_dialog_targets_sources_and_outputs(session, scene):
         _src_node("s", scene.orders.id), _op("p", "pivot", {"index": ["id"], "on": "canale", "values": "importo"}),
         {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "P", "projectId": scene.folder.id, "overwrite": True}},
     ], "edges": [_edge("s", "p"), _edge("p", "o")]}))
-    by_id = {t["id"]: t for t in d.piano_export(session, pivot, "data-prep")["targets"]}
+    by_id = {t["id"]: t for t in d.export_plan(session, pivot, "data-prep")["targets"]}
     assert by_id["duckdb"]["available"] and not by_id["native"]["available"] and "pivot" in by_id["clickhouse"]["reason"]
 
 

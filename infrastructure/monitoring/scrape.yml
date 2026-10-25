@@ -1,4 +1,4 @@
-# Target da cui VictoriaMetrics raccoglie le metriche (formato Prometheus).
+# Targets VictoriaMetrics collects metrics from (Prometheus format).
 global:
   scrape_interval: 15s
 
@@ -7,26 +7,26 @@ scrape_configs:
     static_configs:
       - targets: ["victoriametrics:8428"]
 
-  - job_name: backend           # FastAPI: request/latenza + metriche cache custom
+  - job_name: backend           # FastAPI: requests/latency + custom cache metrics
     metrics_path: /metrics
     static_configs:
       - targets: ["backend:8000"]
 
-  - job_name: celery            # task Celery: attivi, durate, esiti, coda
+  - job_name: celery            # Celery tasks: active, durations, outcomes, queue
     static_configs:
       - targets: ["celery-exporter:9808"]
 
-  - job_name: cadvisor          # per-container: CPU/mem/disco/rete
+  - job_name: cadvisor          # per container: CPU/mem/disk/network
     static_configs:
       - targets: ["cadvisor:8080"]
     metric_relabel_configs:
-      # cAdvisor riemette come container_label_* TUTTE le label OCI dell'immagine
-      # (~20: build_date, vcs_ref, vendor, version…). Sono rumore, e due sono ad
-      # alta cardinalità che CAMBIA a ogni rebuild — com_docker_compose_config_hash
-      # e com_docker_compose_image=sha256:… — quindi ogni `docker compose build`
-      # crea nuove timeseries e gonfia il TSDB. In più sballano il tetto di 30
-      # label/timeseries di VM, che scartava proprio le label utili (name, image).
-      # Le eliminiamo allo scrape: restano id/image/name/job/instance.
+      # cAdvisor re-emits ALL the image's OCI labels as container_label_*
+      # (~20: build_date, vcs_ref, vendor, version…). They are noise, and two have
+      # a high cardinality that CHANGES at every rebuild — com_docker_compose_config_hash
+      # and com_docker_compose_image=sha256:… — so every `docker compose build`
+      # creates new timeseries and bloats the TSDB. They also break VM's cap of 30
+      # labels per timeseries, which dropped precisely the useful labels (name, image).
+      # They are dropped at scrape time: id/image/name/job/instance remain.
       - regex: 'container_label_.*'
         action: labeldrop
 

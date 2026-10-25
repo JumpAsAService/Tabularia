@@ -1,16 +1,16 @@
--- Gestionale ordini di un'azienda di SALUMI (database "shop", multi-schema).
--- Sorgente di test per il connettore Postgres di Tabularia. Le tabelle-fatto
--- (ordini/righe/costi) sono UNLOGGED: caricamento bulk molto più veloce (niente
--- WAL) — dati usa-e-getta. Gli indici secondari li crea `indexes_postgres.sql`
--- DOPO il load (COPY su tabella senza indici = molto più veloce).
+-- Order management of a CURED-MEATS company (database "shop", several schemas).
+-- A test source for Tabularia's Postgres connector. The fact tables
+-- (orders/lines/costs) are UNLOGGED: a much faster bulk load (no WAL) —
+-- throwaway data. The secondary indexes are created by `indexes_postgres.sql`
+-- AFTER the load (COPY into a table without indexes = much faster).
 --
--- I dati NON sono in questo file: li genera `generate.py` (Faker + numpy).
+-- The data is NOT in this file: `generate.py` generates it (Faker + numpy).
 
 CREATE SCHEMA IF NOT EXISTS catalogo;
 CREATE SCHEMA IF NOT EXISTS vendite;
--- le tabelle di riferimento «pubbliche» (calendario, regioni) stanno in schema_ref.sql
+-- the «public» reference tables (calendario, regioni) are in schema_ref.sql
 
--- ── Catalogo prodotti ───────────────────────────────────────────────────────
+-- ── Product catalogue ───────────────────────────────────────────────────────
 DROP TABLE IF EXISTS vendite.costi_commerciali CASCADE;
 DROP TABLE IF EXISTS vendite.righe_ordine CASCADE;
 DROP TABLE IF EXISTS vendite.ordini CASCADE;
@@ -30,18 +30,18 @@ CREATE TABLE catalogo.prodotti (
     unita_misura      text NOT NULL           -- kg | pz
 );
 
--- Storico prezzi di listino (più periodi per prodotto): permette di confrontare
--- il prezzo applicato in riga con il listino vigente alla data dell'ordine.
+-- List price history (several periods per product): it lets the price applied on a
+-- line be compared with the list price in force at the order date.
 CREATE TABLE catalogo.listino_prezzi (
     id             int PRIMARY KEY,
     prodotto_id    int NOT NULL,
     valido_dal     date NOT NULL,
-    valido_al      date,                       -- NULL = ancora valido
-    prezzo_listino numeric(10,4) NOT NULL      -- per unità di misura del prodotto
+    valido_al      date,                       -- NULL = still valid
+    prezzo_listino numeric(10,4) NOT NULL      -- per the product's unit of measure
 );
 
--- Costi di PRODUZIONE per prodotto (con storico): materia prima, lavorazione e
--- confezionamento. Uno dei due addendi del margine di riga.
+-- PRODUCTION costs per product (with history): raw material, processing and
+-- packaging. One of the two terms of the line margin.
 CREATE TABLE catalogo.costi_produzione (
     id                        int PRIMARY KEY,
     prodotto_id               int NOT NULL,
@@ -51,9 +51,9 @@ CREATE TABLE catalogo.costi_produzione (
     costo_confezionamento_pz  numeric(10,4) NOT NULL
 );
 
--- ── Vendite ─────────────────────────────────────────────────────────────────
--- Testata ordine. cliente_id e agente_id sono chiavi LOGICHE verso il CRM su
--- ClickHouse (clienti / agenti): il join cross-database è il senso del dataset.
+-- ── Sales ───────────────────────────────────────────────────────────────────
+-- Order header. cliente_id and agente_id are LOGICAL keys to the CRM on
+-- ClickHouse (clienti / agenti): the cross-database join is the point of the dataset.
 CREATE UNLOGGED TABLE vendite.ordini (
     id          bigint PRIMARY KEY,
     numero      text   NOT NULL,
@@ -70,12 +70,12 @@ CREATE UNLOGGED TABLE vendite.righe_ordine (
     ordine_id      bigint NOT NULL,
     prodotto_id    int    NOT NULL,     -- → catalogo.prodotti.id
     quantita       numeric(10,3) NOT NULL,
-    prezzo_unitario numeric(10,4) NOT NULL,   -- prezzo applicato (può scostarsi dal listino)
-    sconto_pct     numeric(5,2) NOT NULL      -- sconto di riga in %
+    prezzo_unitario numeric(10,4) NOT NULL,   -- price applied (it may differ from the list price)
+    sconto_pct     numeric(5,2) NOT NULL      -- line discount in %
 );
 
--- Costi COMMERCIALI per riga d'ordine: provvigione dell'agente, logistica,
--- promo. Il secondo addendo del margine di riga.
+-- COMMERCIAL costs per order line: the agent's commission, logistics,
+-- promotions. The second term of the line margin.
 CREATE UNLOGGED TABLE vendite.costi_commerciali (
     id                  bigint PRIMARY KEY,
     riga_ordine_id      bigint NOT NULL,

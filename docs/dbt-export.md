@@ -174,7 +174,7 @@ DBT_PROFILES_DIR=. dbt run-operation create_tabularia_sources --log-level-file n
 
 The source passwords are part of the `CREATE TABLE` it runs, and dbt writes the SQL it
 runs into `logs/dbt.log` at debug level: `--log-level-file none` keeps them out of it
-(the oracle `ciclo.py` checks both ways: with it the password is in no file, without it
+(the oracle `lifecycle.py` checks both ways: with it the password is in no file, without it
 it is in `logs/dbt.log`). ClickHouse keeps the password in
 each table's definition — `SHOW CREATE` prints `[HIDDEN]` — so give it a read-only user
 on the sources. A `tab_src_*` database an earlier export created with the PostgreSQL or
@@ -248,7 +248,7 @@ leaving the page while it prepares the zip cancels the download. The file keeps 
 letters of the flow's name (accented, Greek, Cyrillic…): `<flow>_dbt_<target>.zip`, with
 `_folder` for the folder package.
 
-The oracle `cartella.py` checks the folder package with a "team project" that has its
+The oracle `folder_package.py` checks the folder package with a "team project" that has its
 own model, tagged like the flow, and its own `sources.yml` already declaring the sales
 source: the folder copied in, with the profile blocks `INTEGRATION.md` gives, must build
 with the command it gives, give the data Tabularia publishes and leave their model
@@ -583,7 +583,7 @@ than UTC. They check:
   name) has not drifted apart — two checks that read the code and need no stack.
 
 The oracles are in the repository, in [`e2e/dbt_export/`](../e2e/dbt_export/README.md):
-`python3 e2e/dbt_export/esegui.py tutto` runs them against a running stack and says which
+`python3 e2e/dbt_export/run_all.py all` runs them against a running stack and says which
 are green. Run them after any change to the exporter or to the engines it mirrors, and
 before a release.
 

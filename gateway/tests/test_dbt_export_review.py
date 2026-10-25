@@ -23,7 +23,7 @@ from tests.test_dbt_export_resolution import _flow, _models, _refusal, _db_outpu
 
 
 def _piano(session, flow, language="en"):
-    return {t["id"]: t for t in d.piano_export(session, flow, "data-prep", language)["targets"]}
+    return {t["id"]: t for t in d.export_plan(session, flow, "data-prep", language)["targets"]}
 
 
 def _connection(session, scene, db_type, name="contabilita", **kw):
@@ -94,7 +94,7 @@ def test_the_plan_says_when_clickhouse_takes_the_flow_only_into_a_project_that_d
     assert ch["available"] is False and ch["requires"] == {"package": "folder", "declared": [key]}
     assert [(s["key"], s["tables"]) for s in ch["sources"]] == [(key, ["LEDGER"])]
     assert "requires" not in piano["duckdb"] and "requires" not in piano["native"]
-    assert [o["key"] for o in d.piano_export(session, flow, "data-prep")["outputs"]] == [f"{flow.id}:o"]   # its materializations too
+    assert [o["key"] for o in d.export_plan(session, flow, "data-prep")["outputs"]] == [f"{flow.id}:o"]   # its materializations too
     # what the plan says, the download keeps
     opz = d.DbtOptions(target="clickhouse", package="folder", sources={key: {"declared": True}})
     assert d.build_export_payload(session, flow, "data-prep", options=opz)["sources"][0]["declared"] is True

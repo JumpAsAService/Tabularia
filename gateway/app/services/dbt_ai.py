@@ -215,10 +215,10 @@ async def _reservation(session: Session, flow_id: int, version: int, key: str, d
             logger.warning("dbt export: AI claim on flow %s v%s not released", flow_id, version, exc_info=True)
 
 
-def _record_spend(session: Session, user: User, model_id: str, uso: Any) -> None:
+def _record_spend(session: Session, user: User, model_id: str, usage: Any) -> None:
     try:
-        ai_chats.record_spend(session, user_id=user.id, model_id=model_id, input_tokens=uso.input_tokens,
-                                output_tokens=uso.output_tokens, cost=ai_pricing.cost_of(uso, model_id))
+        ai_chats.record_spend(session, user_id=user.id, model_id=model_id, input_tokens=usage.input_tokens,
+                                output_tokens=usage.output_tokens, cost=ai_pricing.cost_of(usage, model_id))
     except Exception:  # noqa: BLE001 — the accounting must not lose an export paid for already
         logger.exception("dbt export: AI spending not recorded")
 
@@ -235,7 +235,7 @@ async def _run(model_id: str, output_type: type, instructions: str, question: st
     from app.services import ai_agent
 
     cfg = get_settings().ai
-    uso = RunUsage()   # ours, passed in: pydantic-ai counts into it, so a run stopped halfway still says what it spent
+    usage = RunUsage()   # ours, passed in: pydantic-ai counts into it, so a run stopped halfway still says what it spent
     try:
         rest = deadline - time.monotonic()
         if rest <= 0:
@@ -244,7 +244,7 @@ async def _run(model_id: str, output_type: type, instructions: str, question: st
         limits = UsageLimits(request_limit=3,
                              cost_limit=Decimal(str(cfg.max_cost_per_turn_usd)) if cfg.max_cost_per_turn_usd else None,
                              input_tokens_limit=cfg.max_input_tokens_per_turn)
-        outcome = await asyncio.wait_for(agent.run(question, usage=uso, usage_limits=limits), timeout=rest)
+        outcome = await asyncio.wait_for(agent.run(question, usage=usage, usage_limits=limits), timeout=rest)
     except TimeoutError as e:
         logger.warning("dbt export: the AI (%s) did not answer within the export's budget", model_id)
         raise _expired() from e
@@ -252,8 +252,8 @@ async def _run(model_id: str, output_type: type, instructions: str, question: st
         logger.warning("dbt export: AI call failed (%s): %s", model_id, e)
         raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
     finally:
-        if uso.requests:
-            _record_spend(session, user, model_id, uso)
+        if usage.requests:
+            _record_spend(session, user, model_id, usage)
     return outcome.output
 
 

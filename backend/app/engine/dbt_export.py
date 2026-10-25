@@ -144,9 +144,9 @@ def _byte(model: "_Model", expr_: str, kind: Optional[str]) -> str:
     return f'{expr_} COLLATE "C"' if _per_byte(model, kind) else expr_
 
 
-def _typed_projection(dialect: Optional[str], cols: list[str], tipi: dict) -> str:
+def _typed_projection(dialect: Optional[str], cols: list[str], types_: dict) -> str:
     """The columns with Tabularia's types; one whose type is not known as it is."""
-    return ", ".join(f"{_typed(dialect, c, tipi[c]) if tipi.get(c) else _qi(c)} AS {_qi(c)}" for c in cols)
+    return ", ".join(f"{_typed(dialect, c, types_[c]) if types_.get(c) else _qi(c)} AS {_qi(c)}" for c in cols)
 
 
 def _typed_type(kind: Optional[str]) -> Optional[str]:
@@ -164,7 +164,7 @@ SEED_TEXT = "VARCHAR ~"   # the type of a seed's text column written so (see `_t
 _SEED_CODES = {"~": "~0", " ": "~1", "\t": "~2", "\r": "~3"}
 
 
-def _il_loader_lo_cambia(v: str) -> bool:
+def _the_loader_changes_it(v: str) -> bool:
     return (v.strip().lower() in ("", "null") or "\r" in v or v[:1] in (" ", "\t") or v[-1:] in (" ", "\t")
             or v == "\\N" or v.startswith("~"))
 
@@ -180,10 +180,10 @@ def encode_seed(df: Any) -> tuple[Any, list[str]]:
         if duck_type(str(t)) != "VARCHAR":
             continue
         texts = df[c].cast(pl.String).to_list()
-        if not any(v is not None and _il_loader_lo_cambia(v) for v in texts):
+        if not any(v is not None and _the_loader_changes_it(v) for v in texts):
             continue
         changed.append(c)
-        written = [v if v is None or not _il_loader_lo_cambia(v) else "~" + "".join(_SEED_CODES.get(ch, ch) for ch in v) for v in texts]
+        written = [v if v is None or not _the_loader_changes_it(v) else "~" + "".join(_SEED_CODES.get(ch, ch) for ch in v) for v in texts]
         df = df.with_columns(pl.Series(c, written, dtype=pl.String))
     return df, changed
 
@@ -256,12 +256,12 @@ def _refuse_uppercase(model: "_Model", s: "_S", step: str) -> None:
             "columns_differ_only_by_case", columns=", ".join(doubles), step=step)
 
 
-MAX_NOME_POSTGRES = 63   # Postgres keeps the first 63 bytes of a name (NAMEDATALEN - 1), whole characters only
+MAX_POSTGRES_NAME = 63   # Postgres keeps the first 63 bytes of a name (NAMEDATALEN - 1), whole characters only
 
 
-def nome_in_postgres(nome: str) -> str:
+def name_in_postgres(name: str) -> str:
     """The name a column has in Postgres: its first 63 bytes, without a character cut in half."""
-    return nome.encode()[:MAX_NOME_POSTGRES].decode(errors="ignore")
+    return name.encode()[:MAX_POSTGRES_NAME].decode(errors="ignore")
 
 
 def _refuse_long(model: "_Model", s: "_S", step: str) -> None:
@@ -272,13 +272,13 @@ def _refuse_long(model: "_Model", s: "_S", step: str) -> None:
         return
     per: dict[str, list[str]] = {}
     for c in s.cols:
-        per.setdefault(nome_in_postgres(c), []).append(c)
+        per.setdefault(name_in_postgres(c), []).append(c)
     doubles = [c for group in per.values() if len(group) > 1 for c in group]
     if doubles:
         raise DbtExportError(
             f"{step}: the columns {', '.join(f'«{c}»' for c in doubles)} are the same column in Postgres, which keeps only the first "
-            f"{MAX_NOME_POSTGRES} bytes of a name. Shorten one of them in the flow, or use the federated or the ClickHouse target.",
-            "column_names_too_long", columns=", ".join(doubles), limit=MAX_NOME_POSTGRES)
+            f"{MAX_POSTGRES_NAME} bytes of a name. Shorten one of them in the flow, or use the federated or the ClickHouse target.",
+            "column_names_too_long", columns=", ".join(doubles), limit=MAX_POSTGRES_NAME)
 
 
 # the types the probe reports and the export keeps (a list, a struct, a map: not known)
@@ -324,12 +324,12 @@ class _Probe:
             self._con.execute("SET lock_configuration = true")
         return self._con
 
-    def _vista(self, con, nome: str, sql: str) -> None:
+    def _view(self, con, name: str, sql: str) -> None:
         """The step as an EMPTY TABLE with its columns: the next step binds against it alone. As a
         view, every step re-bound the whole chain before it (150 columns, 120 steps: 10 s)."""
         if len(con.extract_statements(sql)) != 1:
             raise ValueError("not one statement")
-        con.execute(f"CREATE TABLE {_qi(nome)} AS SELECT * FROM ({sql}) LIMIT 0")
+        con.execute(f"CREATE TABLE {_qi(name)} AS SELECT * FROM ({sql}) LIMIT 0")
 
     def align(self, model: "_Model") -> bool:
         """The tables of the steps added since the last call. False (and off) at the first
@@ -339,11 +339,11 @@ class _Probe:
         try:
             con = self._connection()
             while self._done < len(model.ctes):
-                nome, sql, _ = model.ctes[self._done]
-                sql = model.probes.get(nome, sql)
+                name, sql, _ = model.ctes[self._done]
+                sql = model.probes.get(name, sql)
                 for placeholder, duck in model.for_probe.items():
                     sql = sql.replace(placeholder, duck)
-                self._vista(con, nome, sql)
+                self._view(con, name, sql)
                 self._done += 1
         except Exception as e:  # noqa: BLE001 — the probe only helps: without it the export goes on
             step = model.ctes[self._done][0] if self._done < len(model.ctes) else "?"
@@ -497,26 +497,26 @@ class _Model:
         return placeholder
 
     def _unique_name(self, base: str) -> str:
-        nome, n = _step_slug(base), 2
-        while nome in self._used:
-            nome = f"{_step_slug(base, 36)}_{n}"
+        name, n = _step_slug(base), 2
+        while name in self._used:
+            name = f"{_step_slug(base, 36)}_{n}"
             n += 1
-        self._used.add(nome)
-        return nome
+        self._used.add(name)
+        return name
 
     def _next_name(self, base: str) -> str:
         """The name `add` will give the next step called `base` (it does not reserve it)."""
-        nome, n = _step_slug(base), 2
-        while nome in self._used:
-            nome = f"{_step_slug(base, 36)}_{n}"
+        name, n = _step_slug(base), 2
+        while name in self._used:
+            name = f"{_step_slug(base, 36)}_{n}"
             n += 1
-        return nome
+        return name
 
-    def add(self, sql: str, nome: Optional[str] = None, note: Optional[str] = None, probe: Optional[str] = None) -> str:
-        if nome is None and self.labels:
-            nome, step_note = self.labels[-1]
+    def add(self, sql: str, step_name: Optional[str] = None, note: Optional[str] = None, probe: Optional[str] = None) -> str:
+        if step_name is None and self.labels:
+            step_name, step_note = self.labels[-1]
             note = note if note is not None else step_note
-        name = self._unique_name(nome or self.namer.next())
+        name = self._unique_name(step_name or self.namer.next())
         self.ctes.append((name, sql, _comment(note or "")))
         if probe is not None:
             self.probes[name] = probe
@@ -707,7 +707,7 @@ def _escape_value(body: str) -> Optional[str]:
     def one(m: re.Match) -> str:
         if m.group(0) == "''":
             return "'"
-        octal, hexadecimal, unicode, car = m.groups()
+        octal, hexadecimal, unicode, char = m.groups()
         if unicode:
             raise ValueError(m.group(0))
         if octal or hexadecimal:
@@ -715,7 +715,7 @@ def _escape_value(body: str) -> Optional[str]:
             if not 0 < n < 0x80:
                 raise ValueError(m.group(0))
             return chr(n)
-        return _ONE_ESCAPE.get(car, car)
+        return _ONE_ESCAPE.get(char, char)
 
     try:
         return _ESCAPE_E.sub(one, body)
@@ -766,8 +766,8 @@ def _rewrite_query(query: str, ref: str, read: str = "duckdb", write: str = "duc
         raise DbtExportError(f"sql: the query cannot be parsed ({e})", "sql_unreadable", detail=str(e)[:200])
     cte = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
     for t in tree.find_all(exp.Table):
-        nome = t.name.lower()
-        if not t.args.get("db") and nome in ("self", "input") and nome not in cte:
+        name = t.name.lower()
+        if not t.args.get("db") and name in ("self", "input") and name not in cte:
             if not t.alias:
                 t.set("alias", exp.TableAlias(this=exp.to_identifier(t.name)))
             t.set("this", exp.to_identifier(ref))
@@ -1223,15 +1223,15 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
             # check, matching words, refused EXTRACT(YEAR FROM …) too)
             if nat and not out_cols:
                 _needs_list(model, _S([]), "compute")
-            step = dict(nome=f"compute_{name}", note=f"{name} = {expr}" + (" (replaces the column, in place)" if name in out_cols else ""))
+            step = dict(step_name=f"compute_{name}", note=f"{name} = {expr}" + (" (replaces the column, in place)" if name in out_cols else ""))
             active = model.probe.active
-            step_name = model._next_name(step["nome"])
+            step_name = model._next_name(step["step_name"])
             expr_ = _expression(model, expr, step_name)
             if not out_cols:
                 # the columns are not known (after a pivot): the column is replaced where it is if
                 # it exists, added at the end otherwise — like the engine, which sees the real ones
-                riga = "__tabularia_row"
-                cur = model.add(f"SELECT unnest(struct_update({riga}, {q(name)} := {expr_})) FROM {cur} AS {riga}", **step)
+                line = "__tabularia_row"
+                cur = model.add(f"SELECT unnest(struct_update({line}, {q(name)} := {expr_})) FROM {cur} AS {line}", **step)
             elif name in out_cols:
                 # an existing column: overwritten IN ITS PLACE (as the engine)
                 if nat:
@@ -1371,10 +1371,10 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         melt = on if on else [c for c in cols if c not in set(index)]
         if not melt:
             raise DbtExportError("unpivot: no columns to turn into rows", "unpivot_nothing")
-        tipi = [s.kind(c) for c in melt]
+        types_ = [s.kind(c) for c in melt]
         # the engine's supertype of the melted columns; with a type not known, the union of the
         # SELECTs below finds it (never text by default: a number stays a number)
-        vtype = unpivot_value_type([t for t in tipi]) if all(tipi) else None
+        vtype = unpivot_value_type([t for t in types_]) if all(types_) else None
         keep = [c for c in cols if c in set(index)] if cols else list(index)
         # a portable form, the same in both targets: one SELECT per unpivoted column, NULLs
         # included (as the engine, which uses UNPIVOT INCLUDE NULLS)
@@ -1399,9 +1399,9 @@ def _resolve(resolve: SourceResolver, spec: dict) -> tuple[str, list[str], dict,
     """(ref, columns, types, readable name). The name comes from the resolver when it
     gives one, otherwise from the dbt reference itself (`source('…', 'orders')` → orders)."""
     r = resolve(spec)
-    ref, cols, tipi = r[0], r[1], r[2]
-    nome = (r[3] if len(r) > 3 and r[3] else None) or ref_label(ref) or spec.get("model") or spec.get("seed") or "source"
-    return ref, cols, tipi, nome
+    ref, cols, types_ = r[0], r[1], r[2]
+    name = (r[3] if len(r) > 3 and r[3] else None) or ref_label(ref) or spec.get("model") or spec.get("seed") or "source"
+    return ref, cols, types_, name
 
 
 def ref_label(ref: str) -> Optional[str]:
@@ -1410,7 +1410,7 @@ def ref_label(ref: str) -> Optional[str]:
     return (m.group(1) or m.group(2)) if m else None
 
 
-def _base(model: _Model, src_ref: str, s: _S, nome: str = "source", right: bool = False, typed: bool = True) -> tuple[str, _S]:  # noqa: C901
+def _base(model: _Model, src_ref: str, s: _S, name: str = "source", right: bool = False, typed: bool = True) -> tuple[str, _S]:  # noqa: C901
     """A model's first step: the source with the TYPES Tabularia gave it at the import,
     so the project sees the data as the flow does (a warehouse numeric Tabularia reads
     as text). Another model of the project
@@ -1420,8 +1420,8 @@ def _base(model: _Model, src_ref: str, s: _S, nome: str = "source", right: bool 
     off the casts of all the others. Returns the step and the schema after it."""
     known = bool(s.cols) and all(s.types.get(c) for c in s.cols)
     typed_items = typed and any(s.types.get(c) for c in s.cols)
-    step = dict(nome=f"{'right_' if right else ''}source_{nome}",
-                 note=f"{'right side, ' if right else ''}source: {nome}" + (", with the column types Tabularia reads" if typed_items else "")
+    step = dict(step_name=f"{'right_' if right else ''}source_{name}",
+                 note=f"{'right side, ' if right else ''}source: {name}" + (", with the column types Tabularia reads" if typed_items else "")
                  + ("" if known or not typed_items else " (the columns of other types as they are)")
                  + (", and the texts the seed writes as `~…` read back" if typed and SEED_TEXT in s.types.values() else ""))
     if typed_items:
@@ -1431,8 +1431,8 @@ def _base(model: _Model, src_ref: str, s: _S, nome: str = "source", right: bool 
     else:
         sql = f"SELECT * FROM {src_ref}"
     after = _S(s.cols, {c: _typed_type(t) for c, t in s.types.items()}) if s.cols else s
-    _refuse_uppercase(model, s, step["nome"])
-    _refuse_long(model, s, step["nome"])
+    _refuse_uppercase(model, s, step["step_name"])
+    _refuse_long(model, s, step["step_name"])
     # the probe reads an empty table with those types, never the source; a column of a type the export
     # cannot name is a struct no warehouse type is: passed on, it stays not known (a struct is not a
     # type the probe reports), and a step that reads it as anything else stops the probe there. It
@@ -1448,8 +1448,8 @@ def _compile_right(model: _Model, ref_spec: dict, resolve: SourceResolver, right
     """Compiles the right side of a join or union (a sub-flow {source, operations} or a
     plain source) as extra CTEs of the model."""
     spec = ref_spec["source"] if "source" in ref_spec else ref_spec
-    src_ref, src_cols, src_types, nome = _resolve(resolve, spec)
-    base, s = _base(model, src_ref, _S(src_cols, src_types), nome, right=True, typed="model" not in spec)
+    src_ref, src_cols, src_types, name = _resolve(resolve, spec)
+    base, s = _base(model, src_ref, _S(src_cols, src_types), name, right=True, typed="model" not in spec)
     return _compile_ops(model, base, s, ref_spec.get("operations") or [] if "source" in ref_spec else [], resolve, right_namer)
 
 
@@ -1481,14 +1481,14 @@ def _label(op_type: str, params: dict, resolve: SourceResolver, cols: Optional[l
     if op_type in ("join", "union"):
         right = p.get("right") or {}
         try:
-            nome = _resolve(resolve, right["source"] if "source" in right else right)[3]
+            name = _resolve(resolve, right["source"] if "source" in right else right)[3]
         except Exception:  # noqa: BLE001
-            nome = "right"
+            name = "right"
         if op_type == "union":
-            return f"union_{nome}", f"append the rows of {nome} ({'same columns, in order' if p.get('strategy') == 'strict' else 'matched by column name'})"
+            return f"union_{name}", f"append the rows of {name} ({'same columns, in order' if p.get('strategy') == 'strict' else 'matched by column name'})"
         how = p.get("how", "inner")
         key_names = ", ".join(_as_list(p["on"])) if p.get("on") else " and ".join(f"{a} = {b}" for a, b in zip(_as_list(p.get("left_on") or []), _as_list(p.get("right_on") or [])))
-        return f"{how}_join_{nome}", f"{how} join with {nome}" + (f" on {key_names}" if key_names else "")
+        return f"{how}_join_{name}", f"{how} join with {name}" + (f" on {key_names}" if key_names else "")
     simple = {
         "select": ("select_columns", lambda: f"keep the columns {', '.join(p.get('columns') or [])}"),
         "reorder": ("reorder_columns", lambda: f"put first {', '.join(p.get('columns') or [])}"),
@@ -1504,8 +1504,8 @@ def _label(op_type: str, params: dict, resolve: SourceResolver, cols: Optional[l
         "unpivot": (f"unpivot_{'_'.join((p.get('on') or [])[:2])}", lambda: f"turn {', '.join(p.get('on') or []) or 'the columns'} into rows ({p.get('variable_name') or 'variable'}, {p.get('value_name') or 'value'})"),
     }
     if op_type in simple:
-        nome, note = simple[op_type]
-        return nome, note()
+        name, note = simple[op_type]
+        return name, note()
     return op_type, op_type
 
 
@@ -1518,8 +1518,8 @@ def _wrong_shape(op_type: str, p: dict) -> bool:
     """Whether a node's parameters lack the shape the editor writes (a mapping that is not one, an
     aggregation without a column, a limit that is not a number…): then an error compiling it is the
     node's. False: they have it, and the error is the exporter's own."""
-    def list_of(v, *tipi) -> bool:
-        return isinstance(v, list) and all(isinstance(x, tipi) and x != "" for x in v)
+    def list_of(v, *types_) -> bool:
+        return isinstance(v, list) and all(isinstance(x, types_) and x != "" for x in v)
 
     def integer(v) -> bool:
         try:
@@ -1696,9 +1696,9 @@ def compile_model_sql(source: dict, operations: list, resolve: SourceResolver, n
     filled with this model's): no model repeats one (see `_Model._used`)."""
     model = _Model(_Namer("s"), native=native, dialect=dialect, text=text or "duckdb", used=used)
     right_namer = _Namer("r")
-    src_ref, src_cols, src_types, nome = _resolve(resolve, source)
+    src_ref, src_cols, src_types, name = _resolve(resolve, source)
     try:
-        base, s = _base(model, src_ref, _S(src_cols, src_types), nome, typed="model" not in source)
+        base, s = _base(model, src_ref, _S(src_cols, src_types), name, typed="model" not in source)
         final, out = _compile_ops(model, base, s, operations, resolve, right_namer)
     finally:
         model.probe.close()
@@ -1736,10 +1736,10 @@ def put_back_texts(sql: str, info: dict | None) -> str:
 
 def typed_query(sql: str, cols: list[str], dtypes: dict) -> str:
     """A query (a datasource from a query) with the types Tabularia gave it."""
-    tipi = {c: source_type(dtypes.get(c)) for c in cols}
-    if not cols or not any(tipi.values()):
+    types_ = {c: source_type(dtypes.get(c)) for c in cols}
+    if not cols or not any(types_.values()):
         return sql
-    return f"SELECT {_typed_projection(None, cols, tipi)} FROM ({sql}) AS _q"
+    return f"SELECT {_typed_projection(None, cols, types_)} FROM ({sql}) AS _q"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1799,8 +1799,8 @@ def _dot_without_line_break(regex: str) -> str:
                 if regex[j] == "\\":
                     j += 2
                 elif regex[j] == "[" and j + 1 < n and regex[j + 1] in ":.=":
-                    fine = regex.find(regex[j + 1] + "]", j + 2)
-                    j = fine + 2 if fine != -1 else n
+                    deadline = regex.find(regex[j + 1] + "]", j + 2)
+                    j = deadline + 2 if deadline != -1 else n
                 else:
                     j += 1
             out.append(regex[i:j + 1])
@@ -1857,13 +1857,13 @@ def _among_accepted(q: str, values: list, kind: Optional[str], dialect: Optional
     return f"{_as_text(q, kind, dialect)} IN ({', '.join(_lit(str(v)) for v in values)})"
 
 
-def singular_test_sql(test: dict, tipi: Optional[dict] = None, dialect: Optional[str] = None) -> str:
+def singular_test_sql(test: dict, types_: Optional[dict] = None, dialect: Optional[str] = None) -> str:
     """A contract rule that is not a generic dbt test → a query that SELECTS the
-    violations (dbt fails it when it returns rows). `tipi`: the
+    violations (dbt fails it when it returns rows). `types_`: the
     model's column types; `dialect`: the warehouse the test is translated for."""
     q, t = _qi, f'"{TEST_IDENT}" AS "{TEST_IDENT}"'
     kind, col = test.get("kind"), test.get("column")
-    tipi = tipi or {}
+    types_ = types_ or {}
     if kind == "not_null":
         if not col:
             raise DbtExportError("not_null: a column is required", "contract_rule_invalid", rule="not_null")
@@ -1872,7 +1872,7 @@ def singular_test_sql(test: dict, tipi: Optional[dict] = None, dialect: Optional
         if not col or not isinstance(test.get("values"), list) or not test["values"]:
             raise DbtExportError("accepted_values: a column and a list of values are required", "contract_rule_invalid",
                                  rule="accepted_values")
-        return f"SELECT * FROM {t} WHERE {q(col)} IS NOT NULL AND NOT ({_among_accepted(q(col), test['values'], tipi.get(col), dialect)})"
+        return f"SELECT * FROM {t} WHERE {q(col)} IS NOT NULL AND NOT ({_among_accepted(q(col), test['values'], types_.get(col), dialect)})"
     if kind == "range":
         conds = []
         if test.get("min") is not None:
@@ -1886,7 +1886,7 @@ def singular_test_sql(test: dict, tipi: Optional[dict] = None, dialect: Optional
         if not col or not test.get("regex"):
             raise DbtExportError("pattern: a column and a regex are required", "contract_rule_invalid", rule="pattern")
         # the whole value, read as text (a pattern on an integer column made the test ERROR)
-        text = _as_text(q(col), tipi.get(col), dialect)
+        text = _as_text(q(col), types_.get(col), dialect)
         return (f"SELECT * FROM {t} WHERE {q(col)} IS NOT NULL "
                 f"AND NOT regexp_matches({text}, {_lit(_whole_regex(str(test['regex']), dialect))})")
     if kind == "row_count":
@@ -2012,17 +2012,17 @@ def _fix_for_dialect(tree, dialect: str):
         utf8 = {exp.Upper: "upperUTF8", exp.Lower: "lowerUTF8", exp.Reverse: "reverseUTF8", exp.Substring: "substringUTF8",
                 exp.Left: "leftUTF8", exp.Right: "rightUTF8"}
         for node in reversed(list(tree.walk(bfs=False))):   # the inner calls first: the outer copies them
-            nome = utf8.get(type(node))
+            name = utf8.get(type(node))
             if isinstance(node, exp.Pad):
-                nome = "leftPadUTF8" if node.args.get("is_left") else "rightPadUTF8"
+                name = "leftPadUTF8" if node.args.get("is_left") else "rightPadUTF8"
             if isinstance(node, exp.StrPosition) and not node.args.get("occurrence"):
                 # strpos/instr/position count characters; ClickHouse's POSITION counts bytes
                 arguments = [a for a in (node.this, node.args.get("substr"), node.args.get("position")) if a is not None]
                 node.replace(exp.Anonymous(this="positionUTF8", expressions=[a.copy() for a in arguments]))
                 continue
-            if nome:
+            if name:
                 arguments = [a for a in (node.this, *(node.args.get(k) for k in ("start", "length", "expression", "fill_pattern"))) if a is not None]
-                node.replace(exp.Anonymous(this=nome, expressions=[a.copy() for a in arguments]))
+                node.replace(exp.Anonymous(this=name, expressions=[a.copy() for a in arguments]))
     return tree
 
 
@@ -2131,7 +2131,7 @@ def _dates_as_text(tree) -> None:
                 c.replace(c.this.copy())
 
 
-def _schema_di_default(conn: dict) -> str:
+def _default_schema(conn: dict) -> str:
     return "public" if conn["db_type"] == "postgresql" else (conn.get("database") or "")
 
 
@@ -2144,7 +2144,7 @@ class TargetClickHouse:
         self.engine_host = (engine_host or "").strip().lower()
         self.federated: dict[str, dict] = {}     # database name → how to create it
 
-    def database_per(self, conn_id: int, schema: str, table: str | None = None) -> str:
+    def database_for(self, conn_id: int, schema: str, table: str | None = None) -> str:
         """The ClickHouse database that shows `schema` of a connection; `table`: a table
         the project reads there, which the macro creates in it."""
         conn = self.conns.get(int(conn_id))
@@ -2166,13 +2166,13 @@ class TargetClickHouse:
                 "PostgreSQL, MySQL or MariaDB. Use another target for this flow.",
                 "clickhouse_cannot_read", connection=conn.get("name"), db_type=conn["db_type"],
             )
-        nome = federated_db_name(conn["id"], schema)
-        f = self.federated.setdefault(nome, {"name": nome, "engine": engine_name, "conn": conn, "schema": schema, "tables": set()})
+        name = federated_db_name(conn["id"], schema)
+        f = self.federated.setdefault(name, {"name": name, "engine": engine_name, "conn": conn, "schema": schema, "tables": set()})
         if f["schema"] != schema:   # two schemas, one database: never read one in place of the other
-            raise DbtExportError(f"the schemas «{f['schema']}» and «{schema}» would share the ClickHouse database {nome}")
+            raise DbtExportError(f"the schemas «{f['schema']}» and «{schema}» would share the ClickHouse database {name}")
         if table:
             f["tables"].add(table)
-        return nome
+        return name
 
     def sources(self, sources: list[dict]) -> list[dict]:
         """sources.yml: every source's schema becomes the ClickHouse database that shows it."""
@@ -2182,8 +2182,8 @@ class TargetClickHouse:
                 out.append(src)   # in their project: they declare it, no federated database to create
                 continue
             for t in src.get("tables") or []:
-                self.database_per(src["connection_id"], src["schema"], t["name"])
-            out.append({**src, "database": None, "schema": self.database_per(src["connection_id"], src["schema"])})
+                self.database_for(src["connection_id"], src["schema"], t["name"])
+            out.append({**src, "database": None, "schema": self.database_for(src["connection_id"], src["schema"])})
         return out
 
     def translate_query(self, sql: str, conn_id: int, label: str, proposal: str | None = None,
@@ -2199,7 +2199,7 @@ class TargetClickHouse:
         if conn is None:
             raise DbtExportError(f"connection {conn_id} is unknown to the export")
         if conn["db_type"] == "clickhouse":
-            self.database_per(conn_id, conn.get("database") or "")   # the same server, or a refusal
+            self.database_for(conn_id, conn.get("database") or "")   # the same server, or a refusal
             return sql
         dialect = _SQLGLOT_DIALECT.get(conn["db_type"])
         if proposal is not None:
@@ -2225,7 +2225,7 @@ class TargetClickHouse:
             # a CTE only where it is visible: any other name is a table of the connection
             if not t.name or reads_a_cte(t):
                 continue
-            t.set("db", exp.to_identifier(self.database_per(conn_id, t.db or _schema_di_default(conn), t.name)))
+            t.set("db", exp.to_identifier(self.database_for(conn_id, t.db or _default_schema(conn), t.name)))
             t.set("catalog", None)
         _dates_as_text(tree)
         _fix_for_dialect(tree, "clickhouse")   # Date32/DateTime64, and the *UTF8 functions, as in the models
@@ -2342,9 +2342,9 @@ class ClickHouseSyntaxCheck:
                 self.close()
                 self._via, self.skipped = False, True
                 return None
-            riga = next((r for r in text.splitlines() if "Syntax error" in r), text.splitlines()[0])
-            riga = re.sub(r"^.*?DB::Exception:\s*", "", riga)
-            return re.sub(r"\.\s*Expected one of:.*$", "", riga).strip()[:200]
+            line = next((r for r in text.splitlines() if "Syntax error" in r), text.splitlines()[0])
+            line = re.sub(r"^.*?DB::Exception:\s*", "", line)
+            return re.sub(r"\.\s*Expected one of:.*$", "", line).strip()[:200]
 
 
 def reads_a_cte(t) -> bool:
@@ -2416,20 +2416,20 @@ def check_proposal(sql: str, dialect: str, allowed: set[str] | None, columns: li
         if not isinstance(t.this, exp.Identifier):
             no("table_function", "it reads a table function")
     for f in tree.find_all(exp.Func):
-        nome = f.name if isinstance(f, exp.Anonymous) else f.sql_name()
-        if nome and _FORBIDDEN_FUNCTIONS.fullmatch(str(nome)):
-            no("function_not_allowed", f"it calls {nome}, which reads data or settings outside the model", function=str(nome))
+        name = f.name if isinstance(f, exp.Anonymous) else f.sql_name()
+        if name and _FORBIDDEN_FUNCTIONS.fullmatch(str(name)):
+            no("function_not_allowed", f"it calls {name}, which reads data or settings outside the model", function=str(name))
     for t in tree.find_all(exp.Table):
         if allowed is None or reads_a_cte(t):
             continue
         if t.args.get("db") or t.args.get("catalog") or t.name not in allowed:
-            nome = ".".join(p for p in (t.catalog, t.db, t.name) if p)
-            no("unknown_table", f"it reads a table the model does not read ({nome})", table=nome)
+            name = ".".join(p for p in (t.catalog, t.db, t.name) if p)
+            no("unknown_table", f"it reads a table the model does not read ({name})", table=name)
     for i in tree.find_all(exp.In):
         if i.args.get("field") is not None:
             # ClickHouse `x IN db.table` reads that table, and it is not a FROM
-            nome = i.args["field"].sql(dialect=dialect)
-            no("unknown_table", f"it reads a table the model does not read ({nome})", table=nome)
+            name = i.args["field"].sql(dialect=dialect)
+            no("unknown_table", f"it reads a table the model does not read ({name})", table=name)
     if columns is not None:
         if any(isinstance(x, exp.Star) or (isinstance(x, exp.Column) and isinstance(x.this, exp.Star)) for x in tree.selects):
             no("star", "it uses * instead of listing the columns")
@@ -2472,9 +2472,9 @@ def _ch_literal(v: Any) -> str:
     return neutralize_jinja("'" + t.replace("\\", "\\\\").replace("'", "\\'") + "'")
 
 
-def _ident_ch(nome: str) -> str:
+def _ident_ch(name: str) -> str:
     """A ClickHouse identifier between backticks, written in a Jinja file."""
-    return neutralize_jinja("`" + str(nome).replace("\\", "\\\\").replace("`", "\\`") + "`")
+    return neutralize_jinja("`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`")
 
 
 def _structure_sql(database: str, table: str, engine_name: str) -> str:
@@ -2534,15 +2534,15 @@ def _clickhouse_sources_macro(federated: list[dict]) -> str:
             else:   # MySQL: the schema is the database
                 arguments = [_ch_literal(address), _ch_literal(f["schema"]), _ch_literal(table), _ch_literal(c.get("username")),
                              "'{{ " + pw + " }}'"]
-            nome = f"`{db}`.{_ident_ch(table)}"
+            name = f"`{db}`.{_ident_ch(table)}"
             rows += [
                 "{% call statement('" + db + "') -%}",
-                f"CREATE OR REPLACE TABLE {nome} AS {f['engine'].lower()}({', '.join(arguments)})",
+                f"CREATE OR REPLACE TABLE {name} AS {f['engine'].lower()}({', '.join(arguments)})",
                 "{%- endcall %}",
                 "{%- set structure %}" + _structure_sql(db, table, f["engine"]) + "{% endset %}",
                 "{%- set columns = run_query(structure).columns[0].values() %}",
                 "{% call statement('" + db + "') -%}",
-                f"CREATE OR REPLACE TABLE {nome} ({{{{ columns | join(', ') }}}}) ENGINE = {f['engine']}({', '.join(arguments)})",
+                f"CREATE OR REPLACE TABLE {name} ({{{{ columns | join(', ') }}}}) ENGINE = {f['engine']}({', '.join(arguments)})",
                 "{%- endcall %}",
             ]
         rows.append("{{ log('Tabularia source ready: " + db + "', info=True) }}")
@@ -2558,7 +2558,7 @@ def _clickhouse_settings() -> list[str]:
     return ["        join_use_nulls: 1", f"        max_query_size: {MAX_QUERY_SIZE}"]
 
 
-def _riga_secure(default: str) -> str:
+def _secure_line(default: str) -> str:
     """`secure:` of a dbt-clickhouse profile: `default` ('true'/'false') unless CLICKHOUSE_SECURE
     says otherwise. as_bool wants Python's True/False: what a person writes (true, 1, yes)
     is taken too."""
@@ -2580,19 +2580,19 @@ def _clickhouse_profile(project: str, ch: dict) -> str:
     port = ch.get("port") or (8443 if ch.get("secure") else 8123)
     safe = "true" if ch.get("secure") else "false"
     return "\n".join([
-        f"{_y_nome(project, key=True)}:", "  target: dev", "  outputs:", "    dev:", "      type: clickhouse",
+        f"{_y_name(project, key=True)}:", "  target: dev", "  outputs:", "    dev:", "      type: clickhouse",
         # YAML first (a double-quoted scalar), then Jinja: a quote or a backslash in the host survives both
         "      host: " + _y_key("{{ env_var('CLICKHOUSE_HOST'" + (f", {_jinja_str(host)}" if host else "") + ") }}"),
         "      port: \"{{ env_var('CLICKHOUSE_PORT', '" + str(port) + "') | as_number }}\"",
-        _riga_secure(safe),
+        _secure_line(safe),
         "      user: \"{{ env_var('CLICKHOUSE_USER') }}\"",
         "      password: \"{{ env_var('CLICKHOUSE_PASSWORD') }}\"",
-        f"      schema: {_y_nome(ch.get('target_schema') or 'dbt_tabularia')}",
+        f"      schema: {_y_name(ch.get('target_schema') or 'dbt_tabularia')}",
         "      custom_settings:", *_clickhouse_settings(),
     ]) + "\n"
 
 
-def _nome_secret(a: dict) -> str:
+def _secret_name(a: dict) -> str:
     return f"tabularia_{_slug(a['alias'])}"
 
 
@@ -2609,7 +2609,7 @@ def _duck_secret(a: dict) -> str:
     port = c.get("port")
     return "\n".join([
         f"        - type: {_DUCK_ATTACH_TYPE[db_type]}",
-        f"          name: {_nome_secret(a)}",
+        f"          name: {_secret_name(a)}",
         f"          host: {_y(c['host'])}",
         f"          port: {port if isinstance(port, int) else _y(port)}",
         f"          database: {_y(c['database'])}",
@@ -2624,7 +2624,7 @@ def _duck_attach(a: dict) -> str:
         "        - path: \"\"",
         f"          type: {_DUCK_ATTACH_TYPE[a['db_type']]}",
         f"          alias: {a['alias']}",
-        f"          secret: {_nome_secret(a)}",
+        f"          secret: {_secret_name(a)}",
     ])
 
 
@@ -2645,13 +2645,13 @@ _NOT_QUOTABLE = {
 }
 
 
-def quotable_name(nome: Optional[str], adapter: str, dove: str = "relation") -> None:
-    """Refuses a name `adapter` cannot write (see `_NOT_QUOTABLE`): `dove` is source (a source's
+def quotable_name(name: Optional[str], adapter: str, where: str = "relation") -> None:
+    """Refuses a name `adapter` cannot write (see `_NOT_QUOTABLE`): `where` is source (a source's
     schema or table), relation (a model's table) or schema (a model's or the project's schema)."""
-    for car in _NOT_QUOTABLE[adapter][dove]:
-        if nome and car in nome:
-            raise DbtExportError(f"the name «{nome}» has the character {car}, which {adapter} cannot quote in a relation name",
-                                 "name_not_quotable", name=nome, character=car, adapter=adapter)
+    for char in _NOT_QUOTABLE[adapter][where]:
+        if name and char in name:
+            raise DbtExportError(f"the name «{name}» has the character {char}, which {adapter} cannot quote in a relation name",
+                                 "name_not_quotable", name=name, character=char, adapter=adapter)
 
 
 def native_adapter(db_type: Optional[str]) -> str:
@@ -2671,16 +2671,16 @@ def _native_profile(project: str, native: dict) -> str:
     c = native["conn"]
     pw = "{{ env_var('%s') }}" % native["pw_env"]
     schema = native.get("target_schema") or "dbt_tabularia"
-    lines = [f"{_y_nome(project, key=True)}:", "  target: dev", "  outputs:", "    dev:", f"      type: {adapter}"]
+    lines = [f"{_y_name(project, key=True)}:", "  target: dev", "  outputs:", "    dev:", f"      type: {adapter}"]
     # connection values are text the admin typed: quoted (YAML) and neutralised (dbt renders the profile)
     if adapter == "postgres":
         lines += [f"      host: {_y(c['host'])}", f"      port: {c['port']}", f"      user: {_y(c['username'])}",
-                  f"      password: \"{pw}\"", f"      dbname: {_y(c['database'])}", f"      schema: {_y_nome(schema)}"]
+                  f"      password: \"{pw}\"", f"      dbname: {_y(c['database'])}", f"      schema: {_y_name(schema)}"]
     elif adapter == "clickhouse":
         lines += [f"      host: {_y(c['host'])}", f"      port: {c['port']}", f"      user: {_y(c['username'])}",
                   # TLS where Tabularia uses it (dbt-clickhouse does not infer it from the port: `secure: false`
                   # spoke plain HTTP to a TLS port 8443)
-                  f"      password: \"{pw}\"", f"      schema: {_y_nome(schema)}", _riga_secure(str(tls_for_port(c["port"])).lower()),
+                  f"      password: \"{pw}\"", f"      schema: {_y_name(schema)}", _secure_line(str(tls_for_port(c["port"])).lower()),
                   # as the ClickHouse target: the missing side of an outer join is NULL, not 0 / ''
                   "      custom_settings:", *_clickhouse_settings()]
     return "\n".join(lines) + "\n"
@@ -2714,7 +2714,7 @@ def _y_key(s: Any) -> str:
 _YAML_PAROLE = frozenset("y n yes no on off true false null".split())
 
 
-def _y_nome(s: Any, key: bool = False) -> str:
+def _y_name(s: Any, key: bool = False) -> str:
     """A name (model, source, schema, table, project) in YAML: as it is when YAML can only
     read it as that string (an identifier that is not `on`, `yes`, `null`…), otherwise
     quoted — a flow «On» became the profile `True`, an output «Yes» a model named True."""
@@ -2736,7 +2736,7 @@ def _schema_yaml(models: list[dict]) -> str:
     """models/schema.yml: descriptions, columns and generic tests (from the data contract)."""
     out = ["version: 2", "", "models:"]
     for m in models:
-        out.append(f"  - name: {_y_nome(m['name'])}")
+        out.append(f"  - name: {_y_name(m['name'])}")
         if m.get("description"):
             out.append(f"    description: {_y(m['description'])}")
         if m.get("tags") or m.get("meta"):
@@ -2777,16 +2777,16 @@ def _schema_yaml(models: list[dict]) -> str:
 def _sources_yaml(sources: list[dict]) -> str:
     out = ["version: 2", "", "sources:"]
     for s in sources:
-        out.append(f"  - name: {_y_nome(s['name'])}")
+        out.append(f"  - name: {_y_name(s['name'])}")
         if s.get("database"):
-            out.append(f"    database: {_y_nome(s['database'])}")
-        out.append(f"    schema: {_y_nome(s['schema'])}")
+            out.append(f"    database: {_y_name(s['database'])}")
+        out.append(f"    schema: {_y_name(s['schema'])}")
         out.append("    tables:")
         for t in sorted(s["tables"], key=lambda t: t["name"] if isinstance(t, dict) else t):
             if not isinstance(t, dict):
-                out.append(f"      - name: {_y_nome(t)}")
+                out.append(f"      - name: {_y_name(t)}")
                 continue
-            out.append(f"      - name: {_y_nome(t['name'])}")
+            out.append(f"      - name: {_y_name(t['name'])}")
             if t.get("description"):
                 out.append(f"        description: {_y(t['description'])}")
             if t.get("columns"):
@@ -2801,7 +2801,7 @@ def _sources_yaml(sources: list[dict]) -> str:
 def _seeds_yaml(seeds: list[dict]) -> str:
     out = ["version: 2", "", "seeds:"]
     for s in seeds:
-        out.append(f"  - name: {_y_nome(s['name'])}")
+        out.append(f"  - name: {_y_name(s['name'])}")
         if s.get("description"):
             out.append(f"    description: {_y(s['description'])}")
         # tagged as the models: the folder package's `+tag:<flow>,tag:tabularia` still loads it
@@ -2896,12 +2896,12 @@ def build_dbt_project(
     project = _project_name(flow_name)
     files: dict[str, str] = {}
     seeds, tests, notes = seeds or [], tests or [], list(notes or [])
-    dove = _Layout(layout)
+    where = _Layout(layout)
 
     if clickhouse is not None:
         files["profiles.yml"] = _clickhouse_profile(project, clickhouse)
         if clickhouse.get("federati"):
-            files[dove.macro("create_tabularia_sources")] = _clickhouse_sources_macro(clickhouse["federati"])
+            files[where.macro("create_tabularia_sources")] = _clickhouse_sources_macro(clickhouse["federati"])
     elif native:
         files["profiles.yml"] = _native_profile(project, native)
     else:
@@ -2909,13 +2909,13 @@ def build_dbt_project(
         secrets = "\n".join(_duck_secret(a) for a in (attachments or []))
         attach = "\n".join(_duck_attach(a) for a in (attachments or []))
         files["profiles.yml"] = (
-            f"{_y_nome(project, key=True)}:\n"
+            f"{_y_name(project, key=True)}:\n"
             f"  target: dev\n"
             f"  outputs:\n"
             f"    dev:\n"
             f"      type: duckdb\n"
             f"      path: {project}.duckdb\n"
-            + (f"      schema: {_y_nome(schema)}\n" if schema else "")
+            + (f"      schema: {_y_name(schema)}\n" if schema else "")
             + _DUCK_SETTINGS
             + (f"      extensions: [{', '.join(extensions)}]\n" if extensions else "")
             + (f"      secrets:\n{secrets}\n      attach:\n{attach}\n" if attach else "")
@@ -2930,27 +2930,27 @@ def build_dbt_project(
         f"seed-paths: [\"seeds\"]\n"
         f"test-paths: [\"tests\"]\n"
         f"macro-paths: [\"macros\"]\n"
-        f"models:\n  {_y_nome(project, key=True)}:\n    +materialized: table\n"
+        f"models:\n  {_y_name(project, key=True)}:\n    +materialized: table\n"
     )
 
     # the «already declared» ones are in their sources.yml: only a folder copied into their project has one
     ours = package_sources(sources, layout)
     ours = [x for x in ours if not x.get("declared")]
     if ours:
-        files[dove.models("sources.yml")] = _sources_yaml(ours)
-    files[dove.models("schema.yml")] = _schema_yaml(models)
+        files[where.models("sources.yml")] = _sources_yaml(ours)
+    files[where.models("schema.yml")] = _schema_yaml(models)
     for m in models:
         # m["sql"] is final dbt SQL: user text already neutralised, the exporter's macros in place
-        files[dove.model(m)] = _model_header(m) + m["sql"] + "\n"
-    if any(m.get("schema") for m in models) and not dove.folder:
+        files[where.model(m)] = _model_header(m) + m["sql"] + "\n"
+    if any(m.get("schema") for m in models) and not where.folder:
         # not in the folder for an existing project: it would change the schema names of their WHOLE project
-        files[dove.macro("generate_schema_name")] = _SCHEMA_MACRO
+        files[where.macro("generate_schema_name")] = _SCHEMA_MACRO
     for s in seeds:
-        files[dove.seed(f"{_slug(s['name'])}.csv")] = s["csv"]
+        files[where.seed(f"{_slug(s['name'])}.csv")] = s["csv"]
     if seeds:
-        files[dove.seed("schema.yml")] = _seeds_yaml(seeds)
+        files[where.seed("schema.yml")] = _seeds_yaml(seeds)
     for t in tests:
-        files[dove.test(f"{_slug(t['name'])}.sql")] = (
+        files[where.test(f"{_slug(t['name'])}.sql")] = (
             f"{{{{ config(severity={_jinja_str(t.get('severity', 'error'))}) }}}}\n"
             + (f"-- {_comment(t['description'])}\n" if t.get("description") else "")
             + t["sql"] + "\n"
@@ -3018,10 +3018,10 @@ def build_dbt_project(
     if tests or any(c.get("tests") for m in models for c in (m.get("columns") or [])):
         steps += "DBT_PROFILES_DIR=. dbt test\n"
     provenance = _provenance(models, exported_by) + _ai_section(ai)
-    if dove.folder:
+    if where.folder:
         files.pop("profiles.yml", None)
         files["INTEGRATION.md"] = _integration(
-            flow_name, intro, provenance, flow_description, what, models, sources, seeds, tests, notes, dove,
+            flow_name, intro, provenance, flow_description, what, models, sources, seeds, tests, notes, where,
             attachments=attachments, native=native, clickhouse=clickhouse, pip=pip, pw_envs=pw_envs, preparation=preparation,
         )
         return files
@@ -3065,21 +3065,21 @@ class _Layout:
         self.below = f"/{folder}" if folder else ""
         self.layers = bool(layout.get("layers"))
 
-    def models(self, nome: str) -> str:
-        return f"models{self.below}/{nome}"
+    def models(self, name: str) -> str:
+        return f"models{self.below}/{name}"
 
     def model(self, m: dict) -> str:
         level = f"{self._LAYER.get(m.get('kind') or 'output', 'marts')}/" if self.layers else ""
         return self.models(f"{level}{_slug(m['name'])}.sql")
 
-    def seed(self, nome: str) -> str:
-        return f"seeds{self.below}/{nome}"
+    def seed(self, name: str) -> str:
+        return f"seeds{self.below}/{name}"
 
-    def test(self, nome: str) -> str:
-        return f"tests{self.below}/{nome}"
+    def test(self, name: str) -> str:
+        return f"tests{self.below}/{name}"
 
-    def macro(self, nome: str) -> str:
-        return f"macros{self.below}/{nome}.sql"
+    def macro(self, name: str) -> str:
+        return f"macros{self.below}/{name}.sql"
 
 
 def _provenance(models: list[dict], exported_by: str | None = None) -> str:
@@ -3130,18 +3130,18 @@ def _flow_tag(flow_name: str, models: list[dict]) -> str:
     return _slug(flow_name)
 
 
-def _integration(flow_name, intro, provenance, flow_description, what, models, sources, seeds, tests, notes, dove, *,
+def _integration(flow_name, intro, provenance, flow_description, what, models, sources, seeds, tests, notes, where, *,
                   attachments, native, clickhouse, pip, pw_envs, preparation) -> str:
     """INTEGRATION.md of the folder for an existing project: what to copy, what their
     profile needs, which sources they must declare already, how to run it."""
     tag = _flow_tag(flow_name, models)
-    copy = [f"- `models{dove.below}/` — {len(models)} models, `schema.yml`" + (", `sources.yml`" if any(not x.get("declared") for x in sources) else "")]
+    copy = [f"- `models{where.below}/` — {len(models)} models, `schema.yml`" + (", `sources.yml`" if any(not x.get("declared") for x in sources) else "")]
     if seeds:
-        copy.append(f"- `seeds{dove.below}/` — {len(seeds)} seeds (with their column types)")
+        copy.append(f"- `seeds{where.below}/` — {len(seeds)} seeds (with their column types)")
     if tests:
-        copy.append(f"- `tests{dove.below}/` — {len(tests)} singular tests from the data contract")
+        copy.append(f"- `tests{where.below}/` — {len(tests)} singular tests from the data contract")
     if clickhouse is not None and clickhouse.get("federati"):
-        copy.append(f"- `macros{dove.below}/` — `create_tabularia_sources`, which creates the source databases in ClickHouse")
+        copy.append(f"- `macros{where.below}/` — `create_tabularia_sources`, which creates the source databases in ClickHouse")
     settings_ = ("```yaml\n      custom_settings:\n" + "\n".join(_clickhouse_settings()) + "\n```\n")
     if clickhouse is not None:
         profile = ("Your **dbt-clickhouse** output needs `join_use_nulls` (without it the missing side of an outer join is "
@@ -3168,13 +3168,13 @@ def _integration(flow_name, intro, provenance, flow_description, what, models, s
                       + ", ".join(f"`{t['name']}`" for t in sorted(x["tables"], key=lambda t: t["name"])) + "."
                       for x in declared]
     if any(not x.get("declared") for x in sources):
-        source_rows.append(f"- The others are declared in `models{dove.below}/sources.yml`.")
-    con_schema = [m for m in models if m.get("schema")]
+        source_rows.append(f"- The others are declared in `models{where.below}/sources.yml`.")
+    with_schema = [m for m in models if m.get("schema")]
     note = list(notes) + [
         f"The model `{m['name']}` has `schema='{m['schema']}'`: with dbt's default naming it lands in "
         f"`<your schema>_{m['schema']}`. The complete project ships a `generate_schema_name` macro that writes into "
         f"`{m['schema']}` itself; this folder does not, because it would rename the schemas of your whole project."
-        for m in con_schema
+        for m in with_schema
     ]
     return (
         f"# Add «{flow_name}» to your dbt project\n\n{intro}\n" + provenance

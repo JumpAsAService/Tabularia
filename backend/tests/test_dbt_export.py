@@ -398,9 +398,9 @@ def test_every_postgres_or_mysql_schema_is_a_federated_database():
     ch = d.TargetClickHouse([_PG, _MY, {"id": 3, "name": "crm", "db_type": "clickhouse", "host": "CH.local", "database": "analytics"}], "ch.local")
     # a schema that is not a plain lowercase name has a fingerprint of its exact name too (#68)
     piu = d.federated_db_name(1, "Vendite Più")
-    assert ch.database_per(1, "vendite") == "tab_src_1_vendite" and ch.database_per(1, "Vendite Più") == piu and piu.startswith("tab_src_1_vendite_pi_")
-    assert ch.database_per(2, "shop") == "tab_src_2_shop"
-    assert ch.database_per(3, "analytics") == "analytics"          # the same server: its tables, as they are
+    assert ch.database_for(1, "vendite") == "tab_src_1_vendite" and ch.database_for(1, "Vendite Più") == piu and piu.startswith("tab_src_1_vendite_pi_")
+    assert ch.database_for(2, "shop") == "tab_src_2_shop"
+    assert ch.database_for(3, "analytics") == "analytics"          # the same server: its tables, as they are
     assert {f["name"]: f["engine"] for f in ch.federated.values()} == {"tab_src_1_vendite": "PostgreSQL", piu: "PostgreSQL", "tab_src_2_shop": "MySQL"}
     sources = ch.sources([{"name": "db_1_vendite", "database": None, "schema": "vendite", "connection_id": 1, "tables": []}])
     assert sources[0]["schema"] == "tab_src_1_vendite" and sources[0]["database"] is None
@@ -410,9 +410,9 @@ def test_another_clickhouse_or_a_type_clickhouse_cannot_read_are_refused():
     ch = d.TargetClickHouse([{"id": 3, "name": "crm", "db_type": "clickhouse", "host": "altro.local", "database": "a"},
                              {"id": 4, "name": "lago", "db_type": "trino", "host": "t.local"}], "ch.local")
     with pytest.raises(d.DbtExportError, match="ANOTHER ClickHouse"):
-        ch.database_per(3, "a")
+        ch.database_for(3, "a")
     with pytest.raises(d.DbtExportError, match="trino"):
-        ch.database_per(4, "x")
+        ch.database_for(4, "x")
 
 
 def test_a_datasources_query_translates_onto_the_federated_tables():
@@ -609,7 +609,7 @@ def test_a_refusal_reaches_the_gateway_with_code_and_parameters():
     assert e.value.status_code == 422 and e.value.detail["code"] == "pivot_not_portable"
     assert "pivot" in e.value.detail["message"] and e.value.detail["params"] == {}
     with pytest.raises(d.DbtExportError) as e2:
-        d.TargetClickHouse([{"id": 3, "name": "crm", "db_type": "clickhouse", "host": "altro"}], "ch").database_per(3, "a")
+        d.TargetClickHouse([{"id": 3, "name": "crm", "db_type": "clickhouse", "host": "altro"}], "ch").database_for(3, "a")
     assert e2.value.code == "other_clickhouse" and e2.value.params == {"connection": "crm", "host": "altro"}
 
 
@@ -743,14 +743,14 @@ def test_the_clickhouse_target_refuses_oracle_with_a_reason():
     # ClickHouse cannot read Oracle live: no federated database, a clear refusal
     ch = d.TargetClickHouse([{"id": 9, "name": "contabilita", "db_type": "oracle", "host": "ora.x.it", "database": "ORCLPDB1"}], "ch.local")
     with pytest.raises(d.DbtExportError) as e:
-        ch.database_per(9, "FIN")
+        ch.database_for(9, "FIN")
     assert e.value.code == "clickhouse_cannot_read" and e.value.params["db_type"] == "oracle"
 
 
 def test_the_clickhouse_target_refuses_sql_server_with_a_reason():
     ch = d.TargetClickHouse([{"id": 9, "name": "vendite", "db_type": "sqlserver", "host": "sql.x.it", "database": "vendite"}], "ch.local")
     with pytest.raises(d.DbtExportError) as e:
-        ch.database_per(9, "dbo")
+        ch.database_for(9, "dbo")
     assert e.value.code == "clickhouse_cannot_read" and e.value.params["db_type"] == "sqlserver"
 
 
@@ -1236,7 +1236,7 @@ def _export_snapshot(sources: dict, main: str, ops: list, **kw):
     return cols, rows, [_duck_family(t) for t in types]
 
 
-def _parita(sources: dict, main: str, ops: list, engines=("polars", "duckdb")):
+def _parity(sources: dict, main: str, ops: list, engines=("polars", "duckdb")):
     out = {e: _engine_snapshot(e, sources, main, ops) for e in engines}
     out["export"] = _export_snapshot(sources, main, ops)
     return out
@@ -1260,17 +1260,17 @@ def _equal(par: dict, types: bool = True):
 def test_a_join_after_a_pivot_keeps_the_pivot_columns():
     src = {"clienti": _CUSTOMERS, "vendite": _SALES}
     right = [{"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("vendite"), "operations": [_PIVOT]}}}]
-    par = _parita(src, "clienti", right)
+    par = _parity(src, "clienti", right)
     assert par["polars"][0] == ["cliente", "nome", "2023", "2024"]
     _equal(par, types=False)
     left = [_PIVOT, {"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("clienti")}}}]
-    par = _parita(src, "vendite", left)
+    par = _parity(src, "vendite", left)
     assert par["polars"][0] == ["cliente", "2023", "2024", "nome"]
     _equal(par, types=False)
     # keys with other names: the pivot's index comes back as cliente_right, like the engine
     key_names = [{"type": "join", "params": {"how": "full", "left_on": ["cliente"], "right_on": ["cliente"],
                                           "right": {"source": _key("vendite"), "operations": [_PIVOT]}}}]
-    par = _parita(src, "clienti", key_names)
+    par = _parity(src, "clienti", key_names)
     assert par["polars"][0] == ["cliente", "nome", "cliente_right", "2023", "2024"]
     _equal(par, types=False)
     # the pivot on the LEFT, joined back on its index with left_on/right_on (what the editor writes as
@@ -1279,20 +1279,20 @@ def test_a_join_after_a_pivot_keeps_the_pivot_columns():
     for how in ("left", "inner", "full"):
         back = [_PIVOT, {"type": "join", "params": {"how": how, "left_on": ["cliente"], "right_on": ["cliente"],
                                                         "right": {"source": _key("clienti")}}}]
-        par = _parita(src, "vendite", back)
+        par = _parity(src, "vendite", back)
         assert par["polars"][0] == ["cliente", "2023", "2024", "cliente_right", "nome"], how
         _equal(par, types=False)
     # and a column the flow makes after the pivot, or renames, is known too; a dropped one is gone
     after = [_PIVOT, {"type": "compute", "params": {"columns": [{"name": "nome", "expr": "'x'"}]}},
             {"type": "rename", "params": {"mapping": {"cliente": "id"}}},
             {"type": "join", "params": {"how": "left", "left_on": ["id"], "right_on": ["cliente"], "right": {"source": _key("clienti")}}}]
-    par = _parita(src, "vendite", after)
+    par = _parity(src, "vendite", after)
     assert par["polars"][0] == ["id", "2023", "2024", "nome", "cliente", "nome_right"]
     _equal(par, types=False)
     removed = [_PIVOT, {"type": "compute", "params": {"columns": [{"name": "nome", "expr": "'x'"}]}},
              {"type": "drop", "params": {"columns": ["nome"]}},
              {"type": "join", "params": {"how": "left", "left_on": ["cliente"], "right_on": ["cliente"], "right": {"source": _key("clienti")}}}]
-    par = _parita(src, "vendite", removed)
+    par = _parity(src, "vendite", removed)
     assert par["polars"][0] == ["cliente", "2023", "2024", "cliente_right", "nome"]
     _equal(par, types=False)
 
@@ -1301,7 +1301,7 @@ def test_a_pivot_column_that_the_other_side_also_has_gets_the_right_suffix():
     customers = _CUSTOMERS.with_columns(_pl.Series("2023", ["x", "y", "z"]))
     src = {"clienti": customers, "vendite": _SALES}
     ops = [{"type": "join", "params": {"how": "inner", "on": "cliente", "right": {"source": _key("vendite"), "operations": [_PIVOT]}}}]
-    par = _parita(src, "clienti", ops)
+    par = _parity(src, "clienti", ops)
     assert par["polars"][0] == ["cliente", "nome", "2023", "2023_right", "2024"]
     _equal(par, types=False)
 
@@ -1318,13 +1318,13 @@ def test_a_pivot_on_the_left_whose_column_the_right_side_also_has_fails_the_run_
     with pytest.raises(duckdb.Error, match="2024"):
         _duck_with(src).sql(sql).fetchall()
     # without a collision the same model runs and gives what the engine gives
-    _equal(_parita({"clienti": _CUSTOMERS, "vendite": _SALES}, "vendite", ops), types=False)
+    _equal(_parity({"clienti": _CUSTOMERS, "vendite": _SALES}, "vendite", ops), types=False)
 
 
 def test_a_compute_after_a_pivot_replaces_the_column_in_place_or_adds_it():
     ops = [_PIVOT, {"type": "compute", "params": {"columns": [{"name": "2023", "expr": '"2023" * 2'},
                                                               {"name": "tot", "expr": 'coalesce("2023", 0) + coalesce("2024", 0)'}]}}]
-    par = _parita({"vendite": _SALES}, "vendite", ops)
+    par = _parity({"vendite": _SALES}, "vendite", ops)
     assert par["polars"][0] == ["cliente", "2023", "2024", "tot"]
     _equal(par, types=False)
 
@@ -1334,13 +1334,13 @@ def test_steps_after_a_pivot_never_claim_to_know_only_some_of_its_columns():
     whole: the join after them then listed only those columns."""
     src = {"clienti": _CUSTOMERS, "vendite": _SALES}
     join = {"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("clienti")}}}
-    par = _parita(src, "vendite", [_PIVOT, {"type": "reorder", "params": {"columns": ["2024"]}}, join])
+    par = _parity(src, "vendite", [_PIVOT, {"type": "reorder", "params": {"columns": ["2024"]}}, join])
     assert par["polars"][0] == ["2024", "cliente", "2023", "nome"]
     _equal(par, types=False)
     others_ = _pl.DataFrame({"cliente": [9], "extra": ["e"]})
     src["altri"] = others_
     union = {"type": "union", "params": {"right": {"source": _key("altri")}}}
-    par = _parita(src, "vendite", [_PIVOT, union, join], engines=("duckdb",))
+    par = _parity(src, "vendite", [_PIVOT, union, join], engines=("duckdb",))
     assert par["duckdb"][0] == ["cliente", "2023", "2024", "extra", "nome"]
     assert par["export"][:2] == par["duckdb"][:2]
 
@@ -1352,7 +1352,7 @@ _ORDERS = _pl.DataFrame({"id": [1, 2, 3, 4], "importo": [10.7, 20.2, 5.9, -7.6],
 def test_cast_to_int_of_a_computed_number_truncates_like_the_engine():
     ops = [{"type": "compute", "params": {"columns": [{"name": "x", "expr": "importo * 1"}, {"name": "t2", "expr": "testo || ''"}]}},
            {"type": "cast", "params": {"columns": {"x": "int", "t2": "int"}}}]
-    par = _parita({"ordini": _ORDERS}, "ordini", ops)
+    par = _parity({"ordini": _ORDERS}, "ordini", ops)
     assert [r[3:] for r in par["polars"][1]] == [(10.0, None), (20.0, None), (5.0, 42.0), (-7.0, None)]
     _equal(par)
     # native: the same guarded forms, written for the warehouse (no bare CAST of a double or a text)
@@ -1363,10 +1363,10 @@ def test_cast_to_int_of_a_computed_number_truncates_like_the_engine():
 def test_cast_after_a_sql_node_or_a_union_of_two_types_uses_the_real_type():
     sql_op = [{"type": "sql", "params": {"query": "SELECT id, importo AS f, testo FROM self"}},
               {"type": "cast", "params": {"columns": {"f": "int"}}}]
-    _equal(_parita({"ordini": _ORDERS}, "ordini", sql_op))
+    _equal(_parity({"ordini": _ORDERS}, "ordini", sql_op))
     others_ = _pl.DataFrame({"id": [9], "importo": [1.5], "testo": ["7"]}).with_columns(_pl.col("testo").cast(_pl.String))
     union = [{"type": "union", "params": {"right": {"source": _key("altri")}}}, {"type": "cast", "params": {"columns": {"importo": "int"}}}]
-    _equal(_parita({"ordini": _ORDERS, "altri": others_}, "ordini", union))
+    _equal(_parity({"ordini": _ORDERS, "altri": others_}, "ordini", union))
 
 
 def test_a_cast_of_a_column_whose_type_nobody_knows_is_refused_not_guessed():
@@ -1380,7 +1380,7 @@ def test_a_cast_of_a_column_whose_type_nobody_knows_is_refused_not_guessed():
     assert e.value.code == "cast_type_unknown" and e.value.params == {"column": "n"}
     # a column whose type IS known still casts, and so does a pivot column (its type is the aggregate's)
     d.compile_model_sql({"key": "t"}, [{"type": "cast", "params": {"columns": {"id": "str"}}}], resolve)
-    par = _parita({"vendite": _SALES}, "vendite", [_PIVOT, {"type": "cast", "params": {"columns": {"2023": "float"}}}])
+    par = _parity({"vendite": _SALES}, "vendite", [_PIVOT, {"type": "cast", "params": {"columns": {"2023": "float"}}}])
     _equal(par, types=False)
     assert par["export"][2] == ["int", "float", "int"]
 
@@ -1524,11 +1524,11 @@ def test_unpivot_of_a_computed_number_stays_a_number():
     ops = [{"type": "compute", "params": {"columns": [{"name": "doppio", "expr": "numero * 2"}]}},
            {"type": "unpivot", "params": {"index": ["id"], "on": ["numero", "doppio"], "variable_name": "misura", "value_name": "valore"}},
            {"type": "sort", "params": {"by": ["valore"]}}]
-    par = _parita(src, "n", ops)
+    par = _parity(src, "n", ops)
     assert par["polars"][2] == ["int", "str", "float"]
     _equal(par)
     gb = ops[:2] + [{"type": "group_by", "params": {"by": ["misura"], "aggregations": [{"column": "valore", "func": "sum", "alias": "tot"}]}}]
-    _equal(_parita(src, "n", gb))
+    _equal(_parity(src, "n", gb))
 
 
 # #10 — a sql node's unaliased expressions keep the names DuckDB gives them
@@ -1541,10 +1541,10 @@ _RIGHT = _pl.DataFrame({"id": [1, 2], "z": ["b1", "b2"]})
 def test_an_unaliased_expression_in_a_sql_node_then_a_join_runs(query):
     ops = [{"type": "sql", "params": {"query": query}},
            {"type": "join", "params": {"how": "inner", "on": "id", "right": {"source": _key("destra")}}}]
-    par = _parita({"casi": _CASES, "destra": _RIGHT}, "casi", ops, engines=("duckdb",))
+    par = _parity({"casi": _CASES, "destra": _RIGHT}, "casi", ops, engines=("duckdb",))
     assert par["export"] == par["duckdb"]
     nul = [{"type": "sql", "params": {"query": query}}, {"type": "drop_nulls", "params": {}}]
-    par = _parita({"casi": _CASES}, "casi", nul, engines=("duckdb",))
+    par = _parity({"casi": _CASES}, "casi", nul, engines=("duckdb",))
     assert par["export"] == par["duckdb"]
 
 
@@ -1873,7 +1873,7 @@ def test_a_sql_node_with_a_pivot_has_columns_the_data_decides():
            {"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("clienti")}}}]
     _, cols, _ = _export_sql(src, "vendite", ops)
     assert cols == []
-    par = _parita(src, "vendite", ops, engines=("duckdb",))
+    par = _parity(src, "vendite", ops, engines=("duckdb",))
     assert par["export"][:2] == par["duckdb"][:2] and par["duckdb"][0] == ["cliente", "2023", "2024", "nome"]
 
 
@@ -2272,7 +2272,7 @@ def test_the_native_target_refuses_mysql_and_mariadb(db_type):
     assert e2.value.code == "no_native_adapter"
     # still a source: attached by the federated target, read by a ClickHouse database engine
     assert "type: mysql" in _project(attachments=[{"alias": "db_2", "db_type": db_type, "pw_env": "P", "conn": conn}])["profiles.yml"]
-    assert d.TargetClickHouse([{**_MY, "db_type": db_type}], "ch").database_per(2, "shop") == "tab_src_2_shop"
+    assert d.TargetClickHouse([{**_MY, "db_type": db_type}], "ch").database_for(2, "shop") == "tab_src_2_shop"
 
 
 # #6 — a column of a type the export cannot write (an array, a uuid, bytea) is passed through as
@@ -2999,12 +2999,12 @@ def test_a_clickhouse_that_never_answers_does_not_hold_the_export_and_the_readme
 def test_every_source_schema_has_a_database_of_its_own_on_clickhouse():
     ch = d.TargetClickHouse([_PG, _MY], "ch.local")
     schemas = ("Sales", "sales", "sales-eu", "sales_eu", "vendite_città", "vendite_citt", "продажи", "склад", "default", "Vendite Più")
-    names = {s: ch.database_per(1, s, "orders") for s in schemas}
+    names = {s: ch.database_for(1, s, "orders") for s in schemas}
     assert len(set(names.values())) == len(schemas)
     assert {f["name"]: f["schema"] for f in ch.federated.values()} == {n: s for s, n in names.items()}
     # a schema that is already a plain lowercase name keeps the database it always had
     assert names["sales"] == "tab_src_1_sales" and names["sales_eu"] == "tab_src_1_sales_eu" and names["default"] == "tab_src_1_default"
-    assert ch.database_per(2, "shop") == "tab_src_2_shop"
+    assert ch.database_for(2, "shop") == "tab_src_2_shop"
     # the others: the readable part and a short fingerprint of the exact name, the same at every export
     assert re.fullmatch(r"tab_src_1_sales_[0-9a-f]{10}", names["Sales"]) and re.fullmatch(r"tab_src_1_default_[0-9a-f]{10}", names["продажи"])
     assert names == {s: d.federated_db_name(1, s) for s in schemas}

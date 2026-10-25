@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "dbt_export"))
-from marionette import Firefox, ferma  # noqa: E402
+from marionette import Firefox, stop  # noqa: E402
 
 UI = os.environ.get("UI", "http://localhost:3000")
 API = os.environ.get("API", "http://localhost:8000")
@@ -58,20 +58,20 @@ proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", P
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     ff = Firefox()
-    ff.vai(f"{UI}/favicon.svg")
+    ff.go(f"{UI}/favicon.svg")
     ff.js("localStorage.clear(); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
-    ff.entra(UI, token)
-    ff.vai(f"{UI}/editor?flow={flow['id']}")
-    ok("the editor shows the Output", ff.aspetta("document.querySelectorAll('.node-output').length === 1", 40))
-    ff.aspetta("!!Array.from(document.querySelectorAll('button.primary')).find(b => b.innerText.includes('Run') && !b.disabled)", 20)
+    ff.sign_in(UI, token)
+    ff.go(f"{UI}/editor?flow={flow['id']}")
+    ok("the editor shows the Output", ff.wait_for("document.querySelectorAll('.node-output').length === 1", 40))
+    ff.wait_for("!!Array.from(document.querySelectorAll('button.primary')).find(b => b.innerText.includes('Run') && !b.disabled)", 20)
     ff.js("Array.from(document.querySelectorAll('button.primary')).find(b => b.innerText.includes('Run')).click(); return 1")
-    ok("the run dialog opens", ff.aspetta("!!document.querySelector('.rd-card')", 10))
+    ok("the run dialog opens", ff.wait_for("!!document.querySelector('.rd-card')", 10))
     ff.js("document.querySelector('.rd-actions button.primary').click(); return 1")
-    ok("the run starts", ff.aspetta("!document.querySelector('.rd-card')", 20),
+    ok("the run starts", ff.wait_for("!document.querySelector('.rd-card')", 20),
        ff.js("return (document.querySelector('.rd-err')||{innerText:''}).innerText"))
-    ff.foto(os.path.join(SHOTS, "editor-mirror.png"))
+    ff.shot(os.path.join(SHOTS, "editor-mirror.png"))
 finally:
-    ferma(proc)
+    stop(proc)
 
 end, run = time.time() + 120, {}
 while time.time() < end:

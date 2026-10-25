@@ -40,7 +40,7 @@ from app.engine.dbt_export import (
     compile_model_sql,
     duck_type,
     neutralize_jinja,
-    nome_in_postgres,
+    name_in_postgres,
     quotable_name,
     cte_names,
     in_byte,
@@ -133,7 +133,7 @@ def export_dbt(req: ExportRequest) -> StreamingResponse:
         sources = package_sources(req.sources, req.layout)   # «already declared»: the folder package only
         sources = ch.sources(sources) if ch else sources
         _quotable_names(req, sources)
-        notes = list(req.notes) + [_seed_note(s) for s in seeds if s["cambiate"]]
+        notes = list(req.notes) + [_seed_note(s) for s in seeds if s["changed"]]
         models, tests = _compile(req, seeds, ch, notes)
         if ch:
             notes.extend(_timestamptz_note(req, ch))
@@ -250,16 +250,16 @@ def _read_seeds(seeds: list[SeedSpec], dialect: str | None = None) -> list[dict]
             except OSError:
                 pass
         columns = s.columns or [{"name": c, "description": ""} for c in df.columns]
-        tipi = {c: duck_type(str(t)) for c, t in df.schema.items()}
+        types_ = {c: duck_type(str(t)) for c, t in df.schema.items()}
         out.append({"name": s.name, "csv": csv, "description": s.description, "columns": columns, "_cols": list(df.columns),
-                    "_types": {c: SEED_TEXT if c in changed else t for c, t in tipi.items()}, "cambiate": changed,
-                    "column_types": {c: _type_in_dialect(t, dialect) for c, t in tipi.items() if t}})
+                    "_types": {c: SEED_TEXT if c in changed else t for c, t in types_.items()}, "changed": changed,
+                    "column_types": {c: _type_in_dialect(t, dialect) for c, t in types_.items() if t}})
     return out
 
 
 def _seed_note(seed: dict) -> str:
     """README: the seed whose texts are written as `~…`, and why."""
-    columns = ", ".join(f"`{c}`" for c in seed["cambiate"])
+    columns = ", ".join(f"`{c}`" for c in seed["changed"])
     return (f"In the seed `{seed['name']}`, the texts of {columns} that dbt would load changed (an empty text, `null`, a blank "
             "text or `\\N` as NULL, the spaces at the ends cut, `\\r` as a newline) are written `~` + the text in the CSV, with `~`, "
             "space, tab and `\\r` written `~0`, `~1`, `~2`, `~3`. The first step of every model that reads the seed gives them "
@@ -292,10 +292,10 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
     registry: dict[str, tuple[list[str], dict]] = {}   # model → (output columns, types)
     seed_cols = {s["name"]: (s["_cols"], s["_types"]) for s in seeds}
     # a database table read live: a timestamptz stays one until the first step (see source_type)
-    tipi_di = lambda e: {c: source_type(t) for c, t in (e.get("types") or {}).items()}
+    types_of = lambda e: {c: source_type(t) for c, t in (e.get("types") or {}).items()}
     ident_to_macro: dict[str, str] = {e["ident"]: e["macro"] for e in req.source_map.values()} if native else {}
     schema: dict[str, list[str]] = {e["ident"]: e.get("columns") or [] for e in req.source_map.values()} if native else {}
-    ident_di: dict[str, str] = {}                  # model/seed → identifier (native)
+    ident_of: dict[str, str] = {}                  # model/seed → identifier (native)
     # Federated: the SQL is not translated, so the macros would sit in it next to the
     # user's text, and the Jinja neutralisation must not touch OURS. Each macro is a
     # placeholder until the text is neutralised; the marker is random (nobody can write
@@ -308,34 +308,34 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
             placeholders[macro] = f"{marker}{len(placeholders)}__"
         return placeholders[macro]
 
-    def ident_per(nome: str, cols: list[str]) -> str:
-        if nome not in ident_di:
-            ident_di[nome] = f"__m_{len(ident_di)}"
-            ident_to_macro[ident_di[nome]] = "{{ ref('%s') }}" % nome
-            schema[ident_di[nome]] = cols
-        return ident_di[nome]
+    def ident_for(name: str, cols: list[str]) -> str:
+        if name not in ident_of:
+            ident_of[name] = f"__m_{len(ident_of)}"
+            ident_to_macro[ident_of[name]] = "{{ ref('%s') }}" % name
+            schema[ident_of[name]] = cols
+        return ident_of[name]
 
     def resolve(src: dict):
         if src.get("model") is not None:
-            nome = src["model"]
-            if nome not in registry:
-                raise DbtExportError(f"model referenced before it was compiled: {nome}")
-            cols, tipi = registry[nome]
-            return (ident_per(nome, cols) if native else placeholder("{{ ref('%s') }}" % nome)), cols, tipi, nome
+            name = src["model"]
+            if name not in registry:
+                raise DbtExportError(f"model referenced before it was compiled: {name}")
+            cols, types_ = registry[name]
+            return (ident_for(name, cols) if native else placeholder("{{ ref('%s') }}" % name)), cols, types_, name
         if src.get("seed") is not None:
-            nome = src["seed"]
-            if nome not in seed_cols:
-                raise DbtExportError(f"seed not read: {nome}")
-            cols, tipi = seed_cols[nome]
-            return (ident_per(nome, cols) if native else placeholder("{{ ref('%s') }}" % nome)), cols, tipi, nome
+            name = src["seed"]
+            if name not in seed_cols:
+                raise DbtExportError(f"seed not read: {name}")
+            cols, types_ = seed_cols[name]
+            return (ident_for(name, cols) if native else placeholder("{{ ref('%s') }}" % name)), cols, types_, name
         e = req.source_map.get(src.get("key"))
         if e is None:
             raise DbtExportError(f"unmapped source: {src.get('key')}")
         if native:
-            return e["ident"], e.get("columns") or [], tipi_di(e), e.get("label")
-        return placeholder(e["ref"]), e.get("columns") or [], tipi_di(e), e.get("label") or ref_label(e["ref"])
+            return e["ident"], e.get("columns") or [], types_of(e), e.get("label")
+        return placeholder(e["ref"]), e.get("columns") or [], types_of(e), e.get("label") or ref_label(e["ref"])
 
-    def con_le_macro(sql: str) -> str:
+    def with_macros(sql: str) -> str:
         """Federated: the user's text neutralised, then the exporter's macros in place."""
         sql = neutralize_jinja(sql)
         for macro, s in placeholders.items():
@@ -346,12 +346,12 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
     used: set[str] = set()         # the CTE names of the whole project: no model repeats one (#62)
     test_files: set[str] = set()   # a singular test is the file tests/<slug of its name>.sql: one name, one file
 
-    def nome_del_test(nome: str) -> str:
+    def test_name(name: str) -> str:
         """The name itself, or with `_2`, `_3`… when another test has its file (two columns
         `Codice` and `code` give the same slug)."""
-        chosen, n = nome, 2
+        chosen, n = name, 2
         while _slug(chosen) in test_files:
-            chosen, n = f"{nome}_{n}", n + 1
+            chosen, n = f"{name}_{n}", n + 1
         test_files.add(_slug(chosen))
         return chosen
     sizes: dict[str, tuple[int, bool, set]] = {}   # ClickHouse: model → (bytes, ephemeral?, models it refs)
@@ -364,7 +364,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
             if m.kind == "raw":
                 cols = [c["name"] for c in m.columns if c.get("name")]
                 dtypes = {c["name"]: c.get("dtype") for c in m.columns if c.get("name")}
-                tipi = {c: duck_type(dtypes.get(c)) for c in cols}   # after _typed_raw: a timestamptz is a naive UTC TIMESTAMP
+                types_ = {c: duck_type(dtypes.get(c)) for c in cols}   # after _typed_raw: a timestamptz is a naive UTC TIMESTAMP
                 sql = (m.raw_sql or "").strip()
                 if ch and m.translate:
                     # ClickHouse target: the query, written for the source, runs in ClickHouse on the federated databases
@@ -401,7 +401,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
             else:
                 if not m.source:
                     raise DbtExportError(f"the model «{m.name}» has no source")
-                raw, cols, tipi = compile_model_sql(m.source, m.operations, resolve, native=native, dialect=dialect, info=info,
+                raw, cols, types_ = compile_model_sql(m.source, m.operations, resolve, native=native, dialect=dialect, info=info,
                                                     text=m.dialect, used=used)
                 to_review = info.get("da_rivedere") or []
                 if to_review and notes is not None:
@@ -430,8 +430,8 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                                             target_dialect=dialect, columns=cols)
                         raise
                 else:
-                    sql = con_le_macro(raw)
-            registry[m.name] = (cols, tipi)
+                    sql = with_macros(raw)
+            registry[m.name] = (cols, types_)
             if dialect == "clickhouse" and m.materialized not in ("view", "ephemeral"):
                 # dbt-clickhouse writes a table's column list as "…" without escaping a double quote
                 # in it: the model failed at `dbt run` (a view, an ephemeral model and the other adapters build it)
@@ -447,8 +447,8 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                 if m.materialized != "ephemeral" and over_the_limit(total):
                     raise too_large(m.name, total)
             if dialect == "postgres" and notes is not None:
-                notes.extend(f"In `{m.name}`, the column `{c}` is `{nome_in_postgres(c)}` in Postgres, which keeps only the first 63 "
-                             "bytes of a name." for c in cols if nome_in_postgres(c) != c)
+                notes.extend(f"In `{m.name}`, the column `{c}` is `{name_in_postgres(c)}` in Postgres, which keeps only the first 63 "
+                             "bytes of a name." for c in cols if name_in_postgres(c) != c)
             # the column rules dbt's generic tests do not run as Tabularia does become singular tests
             columns, of_column = column_tests(m.columns)
             models.append({"name": m.name, "kind": m.kind, "sql": sql, "materialized": m.materialized, "description": m.description,
@@ -457,17 +457,17 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                            "meta": {**m.meta, "ai_translated": True} if m.name in translated else m.meta,
                            "ai_translated": m.name in translated, "ai_translated_from": translated.get(m.name)})
             for t in [*m.tests, *of_column]:
-                tsql = singular_test_sql(t, tipi, dialect)
+                tsql = singular_test_sql(t, types_, dialect)
                 if native:
                     tsql = transpile_model(tsql, dialect, {TEST_IDENT: cols})
                 # the rule's text (an expression, a regex, a bound) neutralised, then the ref() to the model
                 tsql = substitute_source_idents(neutralize_jinja(tsql), {TEST_IDENT: "{{ ref('%s') }}" % m.name})
                 if t in of_column:
-                    nome, description = f"{m.name}__{t['kind']}_{t.get('id') or t['column']}", \
+                    name, description = f"{m.name}__{t['kind']}_{t.get('id') or t['column']}", \
                         f"Contract rule {t['kind']} on {m.name}, column «{t['column']}»"
                 else:
-                    nome, description = f"{m.name}__{t.get('kind')}_{t.get('id') or len(tests) + 1}", f"Contract rule {t.get('kind')} on {m.name}"
-                tests.append({"name": nome_del_test(nome), "sql": tsql, "severity": t.get("severity", "error"), "description": description})
+                    name, description = f"{m.name}__{t.get('kind')}_{t.get('id') or len(tests) + 1}", f"Contract rule {t.get('kind')} on {m.name}"
+                tests.append({"name": test_name(name), "sql": tsql, "severity": t.get("severity", "error"), "description": description})
     finally:
         if check:
             check.close()
@@ -501,10 +501,10 @@ def _timestamptz_note(req: ExportRequest, ch: TargetClickHouse) -> list[str]:
             + "), or every instant shifts by the zone's offset. Tabularia reads them in UTC."]
 
 
-def _with_ephemerals(nome: str, sizes: dict[str, tuple[int, bool, set]]) -> int:
+def _with_ephemerals(name: str, sizes: dict[str, tuple[int, bool, set]]) -> int:
     """The bytes of a model with every ephemeral model dbt inlines into it (those it reads,
     and theirs, once each)."""
-    seen, to_see, total = {nome}, list(sizes[nome][2]), sizes[nome][0]
+    seen, to_see, total = {name}, list(sizes[name][2]), sizes[name][0]
     while to_see:
         r = to_see.pop()
         if r in seen or r not in sizes or not sizes[r][1]:
@@ -543,12 +543,12 @@ def _typed_raw(sql: str, cols: list[str], dtypes: dict, dialect: str | None) -> 
     import sqlglot
     from sqlglot import exp
 
-    tipi = {c: source_type(dtypes.get(c)) for c in cols}
-    if not cols or not any(tipi.values()):
+    types_ = {c: source_type(dtypes.get(c)) for c in cols}
+    if not cols or not any(types_.values()):
         return sql
     # a column of a type the export cannot write passes as it is (only it)
     proj = ", ".join(
-        _fix_for_dialect(exp.alias_(sqlglot.parse_one(_typed(dialect, c, tipi[c]), read="duckdb") if tipi[c] else exp.column(c, quoted=True),
+        _fix_for_dialect(exp.alias_(sqlglot.parse_one(_typed(dialect, c, types_[c]), read="duckdb") if types_[c] else exp.column(c, quoted=True),
                                     c, quoted=True), dialect).sql(dialect=dialect)
         for c in cols
     )

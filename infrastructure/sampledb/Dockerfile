@@ -1,5 +1,5 @@
-# Generatore dei dati di esempio (Faker + numpy + pandas). Immagine usa-e-getta:
-# gira una volta per popolare i due DB, poi si può rimuovere.
+# The sample data generator (Faker + numpy + pandas). A throwaway image:
+# it runs once to fill the two databases, then it can be removed.
 FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .

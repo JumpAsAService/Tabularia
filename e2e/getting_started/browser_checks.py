@@ -24,7 +24,7 @@ import json, os, subprocess, sys, time, urllib.error, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "dbt_export"))
-from marionette import Firefox, ferma  # noqa: E402
+from marionette import Firefox, stop  # noqa: E402
 
 UI = os.environ.get("UI", "http://localhost:3000")
 API = os.environ.get("API", "http://localhost:8000")
@@ -62,10 +62,10 @@ def locale(code):
 
 
 def sign_in_as(token, code="en"):
-    ff.vai(f"{UI}/favicon.svg")
+    ff.go(f"{UI}/favicon.svg")
     ff.js("localStorage.clear(); return 1")
     locale(code)
-    ff.entra(UI, token)
+    ff.sign_in(UI, token)
 
 
 # ── 1. passwords ─────────────────────────────────────────────────────────────
@@ -90,9 +90,9 @@ def open_settings_item(label):
     # the gear is in the server's HTML before the page is live: click until the menu opens
     for _ in range(20):
         ff.js("document.querySelector('.settings .gear')?.click(); return 1")
-        if ff.aspetta("!!document.querySelector('.settings .menu')", 1):
+        if ff.wait_for("!!document.querySelector('.settings .menu')", 1):
             break
-    ff.aspetta(f"[...document.querySelectorAll('.settings .menu .menu-item')].some(b => b.innerText.trim() === {json.dumps(label)})", 10)
+    ff.wait_for(f"[...document.querySelectorAll('.settings .menu .menu-item')].some(b => b.innerText.trim() === {json.dumps(label)})", 10)
     return ff.js(f"""const b = [...document.querySelectorAll('.settings .menu .menu-item')].find(b => b.innerText.trim() === {json.dumps(label)});
       if (!b) return [...document.querySelectorAll('.settings .menu .menu-item')].map(b => b.innerText.trim()); b.click(); return true""")
 
@@ -120,30 +120,30 @@ def check_passwords():
         mine = login(email, first)
         elsewhere = login(email, first)  # another device
         sign_in_as(mine)
-        ff.vai(f"{UI}/")
-        ff.aspetta("!!document.querySelector('.settings .gear')", 30)
+        ff.go(f"{UI}/")
+        ff.wait_for("!!document.querySelector('.settings .gear')", 30)
         # the gateway learns the language of the interface: the emails follow it
         ok("at sign-in the gateway learns the interface language",
            wait_for(lambda: api("GET", "/auth/me", token=mine)[1].get("locale") == "en"), api("GET", "/auth/me", token=mine)[1].get("locale"))
         for _ in range(20):
             ff.js("document.querySelector('.settings .gear')?.click(); return 1")
-            if ff.aspetta("!!document.querySelector('.settings .menu')", 1):
+            if ff.wait_for("!!document.querySelector('.settings .menu')", 1):
                 break
         ff.js("""const l = [...document.querySelectorAll('.settings .menu .menu-label')].find(l => l.innerText.trim() === 'Language');
           let n = l.nextElementSibling; (n.querySelector('.sel-trigger') || n).click(); return 1""")
-        ff.aspetta("document.querySelectorAll('.sel-panel .sel-opt').length > 0", 5)
+        ff.wait_for("document.querySelectorAll('.sel-panel .sel-opt').length > 0", 5)
         ff.js("[...document.querySelectorAll('.sel-panel .sel-opt')].find(o => o.innerText.trim() === 'Français').click(); return 1")
         ok("choosing French in the menu tells the gateway",
            wait_for(lambda: api("GET", "/auth/me", token=mine)[1].get("locale") == "fr"), api("GET", "/auth/me", token=mine)[1].get("locale"))
         locale("en")
-        ff.vai(f"{UI}/")
-        ff.aspetta("!!document.querySelector('.settings .gear')", 30)
+        ff.go(f"{UI}/")
+        ff.wait_for("!!document.querySelector('.settings .gear')", 30)
         ok("«Change password» is in the settings menu", open_settings_item("Change password") is True)
         ok("the dialog asks for the current password and the new one twice",
-           ff.aspetta("document.querySelectorAll('.modal-card .pd-field').length === 3", 5))
+           ff.wait_for("document.querySelectorAll('.modal-card .pd-field').length === 3", 5))
         fill("Current password", "not-the-password"); fill("New password", "zz-second-password"); fill("Repeat the new password", "zz-second-password")
         submit_dialog()
-        ff.aspetta("!!document.querySelector('.modal-card .pd-error')", 10)
+        ff.wait_for("!!document.querySelector('.modal-card .pd-error')", 10)
         ok("a wrong current password is refused, in words", dialog_error() == "The current password is not correct.", dialog_error())
         ok("…and the page stays signed in", ff.js("return location.pathname") == "/")
         fill("Current password", first); fill("Repeat the new password", "zz-other")
@@ -157,11 +157,11 @@ def check_passwords():
         ok("a published password is refused before asking", "published" in dialog_error(), dialog_error())
         fill("New password", "zz-second-password"); fill("Repeat the new password", "zz-second-password")
         submit_dialog()
-        ok("the right one changes it and closes the dialog", ff.aspetta("!document.querySelector('.modal-card')", 10))
-        ff.foto(f"{SHOTS}/gs-password-changed.png")
+        ok("the right one changes it and closes the dialog", ff.wait_for("!document.querySelector('.modal-card')", 10))
+        ff.shot(f"{SHOTS}/gs-password-changed.png")
         ok("the other device is signed out", api("GET", "/auth/me", token=elsewhere)[0] == 401)
-        ff.vai(f"{UI}/flows")
-        ok("this browser stays signed in", ff.aspetta("location.pathname === '/flows' && !!document.querySelector('.settings .gear')", 20))
+        ff.go(f"{UI}/flows")
+        ok("this browser stays signed in", ff.wait_for("location.pathname === '/flows' && !!document.querySelector('.settings .gear')", 20))
         ok("the old password no longer signs in", api("POST", "/auth/login", {"email": email, "password": first})[0] == 401)
         ok("the new one does", api("POST", "/auth/login", {"email": email, "password": "zz-second-password"})[0] == 200)
         audit = api("GET", "/audit?action=auth.password_change&limit=5", token=admin)[1]
@@ -169,17 +169,17 @@ def check_passwords():
 
         # an administrator sets it from Administration → Users
         sign_in_as(admin)
-        ff.vai(f"{UI}/admin")
-        ff.aspetta(f"document.body.innerText.includes({json.dumps(email)})", 30)
+        ff.go(f"{UI}/admin")
+        ff.wait_for(f"document.body.innerText.includes({json.dumps(email)})", 30)
         clicked = ff.js(f"""const row = [...document.querySelectorAll('table.rows tbody tr')].find(r => r.innerText.includes({json.dumps(email)}));
           const b = row && [...row.querySelectorAll('button.mini')].find(b => b.getAttribute('aria-label') === 'Set a new password');
           if (!b) return false; b.click(); return true""")
         ok("each user row has «Set a new password»", clicked)
         ok("the administrator's dialog has no current-password field",
-           ff.aspetta("document.querySelectorAll('.modal-card .pd-field').length === 2", 5))
+           ff.wait_for("document.querySelectorAll('.modal-card .pd-field').length === 2", 5))
         fill("New password", "zz-third-password"); fill("Repeat the new password", "zz-third-password")
         submit_dialog()
-        ok("the administrator sets it", ff.aspetta("!document.querySelector('.modal-card')", 10))
+        ok("the administrator sets it", ff.wait_for("!document.querySelector('.modal-card')", 10))
         ok("the user signs in with it", api("POST", "/auth/login", {"email": email, "password": "zz-third-password"})[0] == 200)
         own_disabled = ff.js(f"""const row = [...document.querySelectorAll('table.rows tbody tr')].find(r => r.innerText.includes({json.dumps(os.environ['ADMIN_EMAIL'])}));
           const b = row && [...row.querySelectorAll('button.mini')].find(b => b.getAttribute('aria-label') === 'Set a new password');
@@ -191,7 +191,7 @@ def check_passwords():
               const set = (sel, v) => {{ const i = f.querySelector(sel); i.value = v; i.dispatchEvent(new Event('input', {{bubbles: true}})) }};
               set('input[type=email]', 'zz-new@example.com'); set('input[type=password]', {json.dumps(bad)});
               [...f.querySelectorAll('button')].pop().click(); return 1""")
-            ok(f"user creation refuses «{bad}» before sending", ff.aspetta(
+            ok(f"user creation refuses «{bad}» before sending", ff.wait_for(
                 f"[...document.querySelectorAll('.toast')].some(t => t.innerText.includes({json.dumps(says)}))", 5),
                 ff.js("return [...document.querySelectorAll('.toast')].map(t => t.innerText)"))
         ok("…and nothing was created", not any(u["email"] == "zz-new@example.com" for u in api("GET", "/users", token=admin)[1]))
@@ -202,10 +202,10 @@ def check_passwords():
         subprocess.run(["docker", "exec", "-e", f"PGPASSWORD={env('DB__PASSWORD')}", "dataprep-postgres", "psql", "-q",
                         "-U", env("DB__USER"), "-d", env("DB__NAME"), "-c", sql], check=True, capture_output=True)
         sign_in_as(sso)
-        ff.vai(f"{UI}/")
-        ff.aspetta("!!document.querySelector('.settings .gear')", 30)
+        ff.go(f"{UI}/")
+        ff.wait_for("!!document.querySelector('.settings .gear')", 30)
         opened = open_settings_item("Change password")
-        ok("an SSO account opens «Change password» too", ff.aspetta("!!document.querySelector('.modal-card')", 5), opened)
+        ok("an SSO account opens «Change password» too", ff.wait_for("!!document.querySelector('.modal-card')", 5), opened)
         text = ff.js("return document.querySelector('.modal-card').innerText")
         ok("an SSO account is told the identity provider manages its password",
            "identity provider" in text and not ff.js("return !!document.querySelector('.modal-card input[type=password]')"), text)
@@ -219,10 +219,10 @@ def check_passwords():
 
 def check_right_strip():
     print("== top bar: no invisible strip on the right")
-    ff.invia("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1440, "height": 900})
-    ff.vai(f"{UI}/")
-    ok("Explore opens", ff.aspetta("!!document.querySelector('.topbar') && !!document.querySelector('.newwrap .btn-link')", 30))
-    ff.aspetta("!!document.querySelector('.memgauge')", 15)
+    ff.send("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1440, "height": 900})
+    ff.go(f"{UI}/")
+    ok("Explore opens", ff.wait_for("!!document.querySelector('.topbar') && !!document.querySelector('.newwrap .btn-link')", 30))
+    ff.wait_for("!!document.querySelector('.memgauge')", 15)
     gauge = ff.js("""const g = document.querySelector('.topbar .memgauge'); if (!g) return null;
       const r = g.getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}""")
     ok("the memory gauge is in the top bar", gauge, gauge)
@@ -240,7 +240,7 @@ def check_right_strip():
     ok("below the top bar no point of the gauge's column hits the gauge", not hits, hits[:10])
     # the button the strip covered in the getting-started run: «New» → folder «Create»
     ff.js("document.querySelector('.newwrap .btn-link').click(); return 1")
-    ff.aspetta("!!document.querySelector('.menu-pop .menu-row button.primary')", 5)
+    ff.wait_for("!!document.querySelector('.menu-pop .menu-row button.primary')", 5)
     ff.js("""const i = document.querySelector('.menu-pop .menu-row input'); i.value = 'zz';
       i.dispatchEvent(new Event('input', {bubbles: true})); return 1""")
     hit = ff.js("""const b = document.querySelector('.menu-pop .menu-row button.primary'); const r = b.getBoundingClientRect();
@@ -248,7 +248,7 @@ def check_right_strip():
       return pts.map(([x, y]) => { const e = document.elementFromPoint(x, y); return !!e && (e === b || b.contains(e)) })""")
     ok("the folder «Create» button gets the click everywhere on it", hit and all(hit), hit)
     ff.js("document.querySelector('.menu-backdrop')?.click(); return 1")
-    ff.foto(f"{SHOTS}/gs-right-strip.png")
+    ff.shot(f"{SHOTS}/gs-right-strip.png")
 
 
 # ── 3. no Italian in the English interface ─────────────────────────────────────
@@ -266,12 +266,12 @@ def check_no_italian():
     print("== English interface: no Italian left")
     flows = api("GET", "/flows", token=admin)[1]
     sched = next(f for f in flows if f["run_schedule"])
-    ff.vai(f"{UI}/flows")
-    ff.aspetta("document.querySelectorAll('.flow-row').length > 0", 30)
+    ff.go(f"{UI}/flows")
+    ff.wait_for("document.querySelectorAll('.flow-row').length > 0", 30)
     # the schedule dialog's description of the cron
     ff.js(f"""const row = [...document.querySelectorAll('.flows > .flow')].find(r => r.querySelector('.fname').innerText.trim() === {json.dumps(sched['name'])});
       [...row.querySelectorAll('.flow-actions button')].find(b => b.getAttribute('aria-label') === 'Schedule run' || b.title.startsWith('Schedule')).click(); return 1""")
-    ff.aspetta("!!document.querySelector('.sd-desc')", 10)
+    ff.wait_for("!!document.querySelector('.sd-desc')", 10)
     desc = ff.js("return document.querySelector('.sd-desc').innerText")
     ok("the cron is described in English", desc and not italian_in(desc) and ("At" in desc or "Every" in desc), desc)
     ff.js("""const i = document.querySelector('.sd-card input[type=text]'); i.value = '0 6 * * 1';
@@ -290,33 +290,33 @@ def check_no_italian():
     # the versions of a flow: notes translated (older ones were written in Italian)
     ff.js(f"""const row = [...document.querySelectorAll('.flows > .flow')].find(r => r.querySelector('.fname').innerText.trim() === {json.dumps(sched['name'])});
       row.querySelector('.flow-head').click(); return 1""")
-    ff.aspetta("document.querySelectorAll('.versions .ver').length > 0", 20)
+    ff.wait_for("document.querySelectorAll('.versions .ver').length > 0", 20)
     notes = ff.js("return [...document.querySelectorAll('.versions .vnote')].map(n => n.innerText.trim())")
     ok("the version notes are English", notes and not any(italian_in(n) for n in notes), notes)
     # the engine menu of a new flow
     ff.js("document.querySelector('.newflow .btn-link').click(); return 1")
-    ff.aspetta("document.querySelectorAll('.newflow .menu-item').length > 0", 10)
+    ff.wait_for("document.querySelectorAll('.newflow .menu-item').length > 0", 10)
     engines = ff.js("return [...document.querySelectorAll('.newflow .menu-item')].map(b => b.innerText.replace(/\\s+/g, ' ').trim())")
     bq = next((e for e in engines if e.startswith("BigQuery")), "")
     ok("the BigQuery entry is described in English", bq and not italian_in(bq) and "Google BigQuery" in bq, bq)
     ok("no engine is described in Italian", not any(italian_in(e) for e in engines), engines)
-    ff.foto(f"{SHOTS}/gs-engine-menu-en.png")
+    ff.shot(f"{SHOTS}/gs-engine-menu-en.png")
     ff.js("document.querySelector('.newflow .menu-backdrop').click(); return 1")
     # the global search: «N rows», not «N righe»
     ds = next(d for d in api("GET", "/datasources", token=admin)[1] if d.get("rows"))
     ff.js(f"""const i = document.querySelector('.gs input'); i.focus(); i.value = {json.dumps(ds['name'])};
       i.dispatchEvent(new Event('input', {{bubbles: true}})); return 1""")
-    ff.aspetta("!!document.querySelector('.gs .hdetail')", 10)
+    ff.wait_for("!!document.querySelector('.gs .hdetail')", 10)
     details = ff.js("return [...document.querySelectorAll('.gs .hdetail')].map(d => d.innerText.trim())")
     ok("a datasource found by the search says its rows in English", any(d.endswith("rows") or d.endswith("row") for d in details)
        and not any(italian_in(d) for d in details), details)
     # French follows the interface
     locale("fr")
-    ff.vai(f"{UI}/flows")
-    ff.aspetta("document.querySelectorAll('.flow-row').length > 0", 30)
+    ff.go(f"{UI}/flows")
+    ff.wait_for("document.querySelectorAll('.flow-row').length > 0", 30)
     ff.js(f"""const row = [...document.querySelectorAll('.flows > .flow')].find(r => r.querySelector('.fname').innerText.trim() === {json.dumps(sched['name'])});
       [...row.querySelectorAll('.flow-actions button')].find(b => b.querySelector('.lucide-calendar-clock')).click(); return 1""")
-    ff.aspetta("!!document.querySelector('.sd-desc')", 10)
+    ff.wait_for("!!document.querySelector('.sd-desc')", 10)
     ff.js("""const i = document.querySelector('.sd-card input[type=text]'); i.value = '0 6 * * 1';
       i.dispatchEvent(new Event('input', {bubbles: true})); return 1""")
     time.sleep(0.3)
@@ -331,10 +331,10 @@ def check_no_italian():
 def pick_datasource(name):
     """Select the source node, open the datasource picker in its panel, choose `name`."""
     ff.js("document.querySelector('.vue-flow__node-source').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
-    ff.aspetta("!!document.querySelector('.nodepanel .sel-trigger')", 10)
+    ff.wait_for("!!document.querySelector('.nodepanel .sel-trigger')", 10)
     ff.js("""const t = document.querySelector('.nodepanel .sel-trigger');
       t.click(); return 1""")
-    ff.aspetta("document.querySelectorAll('.sel-panel .sel-opt').length > 0", 10)
+    ff.wait_for("document.querySelectorAll('.sel-panel .sel-opt').length > 0", 10)
     return ff.js(f"""const o = [...document.querySelectorAll('.sel-panel .sel-opt')].find(o => o.innerText.trim().startsWith({json.dumps(name)}));
       if (!o) return [...document.querySelectorAll('.sel-panel .sel-opt')].map(o => o.innerText.trim()); o.click(); return true""")
 
@@ -346,27 +346,27 @@ def status_text():
 def check_new_flow():
     print("== a new flow: status and the warning on leaving")
     ds = next(d for d in api("GET", "/datasources", token=admin)[1] if d.get("rows"))
-    ff.vai(f"{UI}/editor?engine=polars&project={ds['project_id']}")
-    ok("the editor opens", ff.aspetta("!!document.querySelector('.vue-flow__node-source')", 40))
+    ff.go(f"{UI}/editor?engine=polars&project={ds['project_id']}")
+    ok("the editor opens", ff.wait_for("!!document.querySelector('.vue-flow__node-source')", 40))
     time.sleep(1)
     st = status_text()
     ok("an empty new flow asks for a datasource or a file", "datasource" in st.lower() and "file" in st.lower(), st)
     picked = pick_datasource(ds["name"])
     ok("a datasource is picked in the source node", picked is True, picked)
-    ff.aspetta("!document.querySelector('.status')?.innerText.includes('file')", 10)
+    ff.wait_for("!document.querySelector('.status')?.innerText.includes('file')", 10)
     st = status_text()
     ok("after the pick the status no longer asks for a file", "file" not in st.lower() and st, st)
     time.sleep(1)  # the change settles into the history
     ff.js("document.querySelector('a.navbtn[href=\"/\"]').click(); return 1")
-    warned = ff.aspetta("[...document.querySelectorAll('.modal-card h2')].some(h => h.innerText.trim().length) && location.pathname === '/editor'", 8)
+    warned = ff.wait_for("[...document.querySelectorAll('.modal-card h2')].some(h => h.innerText.trim().length) && location.pathname === '/editor'", 8)
     ok("leaving the unsaved new flow asks first", warned, ff.js("return location.pathname"))
-    ff.foto(f"{SHOTS}/gs-new-flow-leave.png")
+    ff.shot(f"{SHOTS}/gs-new-flow-leave.png")
     if warned:
         ff.js("[...document.querySelectorAll('.modal-card button')].find(b => b.classList.contains('danger')).click(); return 1")
-        ok("«leave without saving» leaves", ff.aspetta("location.pathname === '/'", 10))
+        ok("«leave without saving» leaves", ff.wait_for("location.pathname === '/'", 10))
     # closing the tab or reloading: the browser's own warning is armed
-    ff.vai(f"{UI}/editor?engine=polars&project={ds['project_id']}")
-    ff.aspetta("!!document.querySelector('.vue-flow__node-source')", 40)
+    ff.go(f"{UI}/editor?engine=polars&project={ds['project_id']}")
+    ff.wait_for("!!document.querySelector('.vue-flow__node-source')", 40)
     time.sleep(1)
     pick_datasource(ds["name"])
     time.sleep(1)
@@ -387,8 +387,8 @@ if __name__ == "__main__":
     proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", PROFILE, "about:blank"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        ff = Firefox(porta=PORT)
-        ff.invia("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1440, "height": 900})
+        ff = Firefox(port=PORT)
+        ff.send("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1440, "height": 900})
         sign_in_as(admin)
         for name in wanted:
             try:
@@ -397,6 +397,6 @@ if __name__ == "__main__":
                 ok(f"section «{name}» ran to the end", False, e)
                 sign_in_as(admin)
     finally:
-        ferma(proc)
+        stop(proc)
     print(f"\n{sum(results)}/{len(results)} ok")
     sys.exit(0 if all(results) else 1)

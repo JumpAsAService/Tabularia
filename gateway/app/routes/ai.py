@@ -660,11 +660,11 @@ class _NothingToSave(Exception):
 async def _name_chat(chat_id: int, turn_id: int, model_id: str, question: str, locale: str) -> None:
     """Names the conversation just born, outside the user's turn."""
     try:
-        title, uso = await ai_agent.suggest_title(model_id, question, locale)
+        title, usage = await ai_agent.suggest_title(model_id, question, locale)
         with _new_session() as session:
             if title:
                 ai_chats.rename(session, chat_id, title)
-            ai_chats.add_cost(session, turn_id, ai_pricing.cost_of(uso, model_id) if uso else None)
+            ai_chats.add_cost(session, turn_id, ai_pricing.cost_of(usage, model_id) if usage else None)
     except Exception:  # noqa: BLE001 — an extra: the conversation keeps the fallback title
         logger.info("assistant: chat %s not renamed", chat_id, exc_info=True)
     finally:

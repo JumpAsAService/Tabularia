@@ -263,7 +263,7 @@ def start_export(request: ExportStart):
 # comes back as «<class 'botocore.exceptions.EndpointConnectionError'>(['Could not …'])»
 _NOT_REBUILT = re.compile(r"^<class '(?:[\w.]+\.)?(\w+)'>\((?:\[|\()?['\"]?(.*?)['\"]?,?(?:\]|\))?\)$", re.S)
 # the storage not answering: what an administrator reads instead of botocore's names
-_STORAGE_GIU = {"EndpointConnectionError", "ConnectTimeoutError", "ConnectionClosedError", "ReadTimeoutError"}
+_STORAGE_DOWN = {"EndpointConnectionError", "ConnectTimeoutError", "ConnectionClosedError", "ReadTimeoutError"}
 
 
 def readable(info: object) -> str:
@@ -272,10 +272,10 @@ def readable(info: object) -> str:
     m = _NOT_REBUILT.match(text.strip())
     if not m:
         return text
-    nome, message = m.group(1), m.group(2).strip()
-    if nome in _STORAGE_GIU:
+    name, message = m.group(1), m.group(2).strip()
+    if name in _STORAGE_DOWN:
         return f"The object storage is not answering: {message}"
-    return f"{nome}: {message}" if message else nome
+    return f"{name}: {message}" if message else name
 
 
 @router.get("/exports/{task_id}")

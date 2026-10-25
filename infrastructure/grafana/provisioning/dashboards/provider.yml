@@ -1,4 +1,4 @@
-# Carica le dashboard JSON dalla cartella montata.
+# Loads the JSON dashboards from the mounted folder.
 apiVersion: 1
 
 providers:

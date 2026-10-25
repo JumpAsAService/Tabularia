@@ -171,9 +171,9 @@ def test_the_report_counts_errors_and_warnings():
     assert (r["outcome"], r["errors"], r["warnings"], r["rows"]) == ("failed", 1, 2, 5)
 
 
-@pytest.mark.parametrize("severita", [None, "info", "blocker", "", 3])
-def test_a_severity_neither_warning_nor_error_does_not_pass_silently(severita):
-    r = evaluate(data(), {"rules": [{"id": "a", "kind": "not_null", "column": "id", "severity": severita}]})
+@pytest.mark.parametrize("severity", [None, "info", "blocker", "", 3])
+def test_a_severity_neither_warning_nor_error_does_not_pass_silently(severity):
+    r = evaluate(data(), {"rules": [{"id": "a", "kind": "not_null", "column": "id", "severity": severity}]})
     assert r["rules"][0]["passed"] is False and "severity" in r["rules"][0]["error"] and r["outcome"] == "failed"
 
 

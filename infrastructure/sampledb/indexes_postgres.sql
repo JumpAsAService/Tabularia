@@ -1,6 +1,6 @@
--- Indici secondari creati DOPO il caricamento bulk (COPY su tabelle senza indici
--- è molto più veloce; qui si costruiscono in blocco). Servono ai join tipici del
--- calcolo del margine e all'attribuzione per cliente/agente.
+-- Secondary indexes created AFTER the bulk load (COPY into tables without indexes
+-- is much faster; here they are built in one go). They serve the typical joins of
+-- the margin calculation and the attribution by customer/agent.
 
 CREATE INDEX IF NOT EXISTS ix_listino_prodotto     ON catalogo.listino_prezzi (prodotto_id);
 CREATE INDEX IF NOT EXISTS ix_costiprod_prodotto    ON catalogo.costi_produzione (prodotto_id);

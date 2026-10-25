@@ -392,12 +392,12 @@ def export_flow_dbt_plan(
     """What the download dialog needs: the possible targets (or why not, in the language of
     whoever asks), the sources of each with the default name, the outputs with the
     allowed materializations."""
-    from app.services.dbt_export import piano_export
+    from app.services.dbt_export import export_plan
 
     from app.services.dbt_ai import ai_model, version_texts
 
     flow = _flow_for_dbt(session, user, flow_id)
-    piano = piano_export(session, flow, get_settings().engine.bucket, request_language(request))
+    piano = export_plan(session, flow, get_settings().engine.bucket, request_language(request))
     model = ai_model(session)
     # `stored`: what the AI wrote for this version, which a re-export reuses without a call even with
     # the AI switched off: the dialog can still offer it, and the same version gives the same zip

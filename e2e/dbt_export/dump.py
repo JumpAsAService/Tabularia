@@ -1,7 +1,7 @@
-"""Gira DENTRO l'immagine dbt: legge tutte le tabelle prodotte da dbt e le stampa in JSON,
+"""Runs INSIDE the dbt image: reads every table dbt produced and prints it as JSON,
 with each column's type as the warehouse declares it (the matrix compares type families).
-uso: python dump.py duckdb <file.duckdb> | python dump.py postgres <host> <db> <utente> <schema> (password in PGPASSWORD)
-   | python dump.py clickhouse <host> <porta> <database> (utente/password in CLICKHOUSE_USER/CLICKHOUSE_PASSWORD)"""
+usage: python dump.py duckdb <file.duckdb> | python dump.py postgres <host> <db> <user> <schema> (password in PGPASSWORD)
+   | python dump.py clickhouse <host> <port> <database> (user/password in CLICKHOUSE_USER/CLICKHOUSE_PASSWORD)"""
 import json, os, sys
 out = {}
 if sys.argv[1] == "duckdb":

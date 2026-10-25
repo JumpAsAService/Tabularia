@@ -64,14 +64,14 @@ MAX_IDENTIFIER = 63
 _MAX_PREFIX = 20
 _CTE = len("__dbt__cte__")
 MAX_UPSTREAM_DEPTH = 8          # upstream flows included, at most
-# what a dbt adapter cannot have in a name, by where the name is (the engine's _UNQUOTABLE, same
+# what a dbt adapter cannot have in a name, by where the name is (the engine's _NOT_QUOTABLE, same
 # roles): dbt writes `<quote>name<quote>` without escaping (BaseRelation.quoted), and ClickHouse reads
 # backslash escapes between backticks — every role. A model's OWN table (relation) and schema are also
 # written between `'`, unescaped, in the queries that list a schema's relations and a table's columns,
 # and dbt-postgres compares the schema with ILIKE, where a backslash escapes; a source name with
 # a ' is refused too, as the engine does. The plan says it, instead of the download's 422 (or the
 # team's `dbt run`).
-_UNQUOTABLE = {
+_NOT_QUOTABLE = {
     "dbt-postgres": {"source": "\"'", "relation": "\"'", "schema": "\"'\\"},
     "dbt-duckdb": {"source": "\"'", "relation": '"', "schema": '"'},
     "dbt-clickhouse": {"source": "`\\'", "relation": "`\\'", "schema": "`\\'"},
@@ -145,11 +145,11 @@ def _quotable(name: str, adapter: str, where: str) -> None:
     dbt: «Cannot parse escape sequence» on ClickHouse, «zero-length delimited identifier»
     on DuckDB, an unclosed `'` in dbt's own queries): the plan says it, not the team's
     `dbt run`. `where` is source (a source's schema or table), relation (a model's own
-    table) or schema (a model's own schema), as in `_UNQUOTABLE`."""
-    for car in _UNQUOTABLE[adapter][where]:
-        if car in name:
-            raise DbtExportError(f"the name «{name}» has the character {car}, which {adapter} cannot quote in a relation name",
-                                 "name_not_quotable", name=name, character=car, adapter=adapter)
+    table) or schema (a model's own schema), as in `_NOT_QUOTABLE`."""
+    for char in _NOT_QUOTABLE[adapter][where]:
+        if char in name:
+            raise DbtExportError(f"the name «{name}» has the character {char}, which {adapter} cannot quote in a relation name",
+                                 "name_not_quotable", name=name, character=char, adapter=adapter)
 
 
 def _parse_ref(source_ref: str, default_schema: str) -> tuple[str, str]:
@@ -877,7 +877,7 @@ async def engine_export(payload: dict) -> httpx.Response:
         raise DbtExportError(f"the engine cannot be reached ({detail})", "engine_unreachable", detail=detail) from e
 
 
-def piano_export(session: Session, flow: Flow, default_bucket: str, language: str = "en") -> dict:
+def export_plan(session: Session, flow: Flow, default_bucket: str, language: str = "en") -> dict:
     """What the download dialog needs: for each target whether it is possible (and why
     not), its sources with the default name; the outputs with the allowed
     materializations. It does not call the engine: what only the engine knows (a

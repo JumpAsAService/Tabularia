@@ -318,13 +318,13 @@ def _pin_start(values: dict[str, Any]) -> None:
 
 def _current() -> dict[str, Any]:
     global _read_at, _values, _version
-    ora = time.monotonic()
-    if ora - _read_at < REREAD_EVERY:
+    now = time.monotonic()
+    if now - _read_at < REREAD_EVERY:
         return _values
     with _lock:
-        if ora - _read_at < REREAD_EVERY:  # another thread just read them
+        if now - _read_at < REREAD_EVERY:  # another thread just read them
             return _values
-        _read_at = ora
+        _read_at = now
         try:
             raw_values = read_raw()
         except Exception as e:  # noqa: BLE001 — Valkey down: the last values stay
@@ -367,7 +367,7 @@ def wait_at_first_start(maximum: float = WAIT_AT_START) -> bool:
     its whole life, while the panel shows the panel's. It waits for the gateway's values
     instead, up to `maximum` seconds; True if they came."""
     start = time.monotonic()
-    fine = start + maximum
+    deadline = start + maximum
     while True:
         try:
             if _client().get(KEY) is not None:
@@ -377,7 +377,7 @@ def wait_at_first_start(maximum: float = WAIT_AT_START) -> bool:
                 return True
         except Exception:  # noqa: BLE001 — Valkey not up yet: the broker waits for it too
             pass
-        if time.monotonic() >= fine:
+        if time.monotonic() >= deadline:
             logger.warning("regolazioni: no values from the gateway after %ss: this process starts with the "
                            "environment's for the settings read at start", int(maximum))
             return False

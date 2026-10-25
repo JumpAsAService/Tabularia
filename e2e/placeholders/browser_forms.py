@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "dbt_export"))
-from marionette import Firefox, ferma  # noqa: E402
+from marionette import Firefox, stop  # noqa: E402
 
 UI = os.environ.get("UI", "http://localhost:3000")
 API = os.environ.get("API", "http://localhost:8000")
@@ -59,7 +59,7 @@ def write(sel, value, root="document"):
 
 def pick(trigger_js, label):
     ff.js(f"const t = {trigger_js}; t.click(); return 1")
-    ff.aspetta("document.querySelectorAll('.sel-panel .sel-opt').length > 0", 5)
+    ff.wait_for("document.querySelectorAll('.sel-panel .sel-opt').length > 0", 5)
     return ff.js(f"""const o = Array.from(document.querySelectorAll('.sel-panel .sel-opt')).find(o => o.innerText.trim().startsWith({json.dumps(label)}));
       if (!o) return Array.from(document.querySelectorAll('.sel-panel .sel-opt')).map(o => o.innerText.trim()); o.click(); return true""")
 
@@ -69,12 +69,12 @@ def text(sel):
 
 
 def open_dialog(conn_name, ds_name):
-    ff.vai(f"{UI}/?folder={PID}")
-    ff.aspetta("document.body.innerText.includes('zz lake')", 30)
+    ff.go(f"{UI}/?folder={PID}")
+    ff.wait_for("document.body.innerText.includes('zz lake')", 30)
     ff.js("Array.from(document.querySelectorAll('button.btn-link')).find(b => /New|Nuov/.test(b.innerText)).click(); return 1")
-    ff.aspetta("!!document.querySelector('.menu-pop')", 5)
+    ff.wait_for("!!document.querySelector('.menu-pop')", 5)
     ff.js("Array.from(document.querySelectorAll('.menu-pop .menu-item')).find(b => b.querySelector('svg.lucide-database')).click(); return 1")
-    ff.aspetta("!!document.querySelector('.dd-card')", 10)
+    ff.wait_for("!!document.querySelector('.dd-card')", 10)
     write(".dd-card input[type=text]", ds_name)
     return pick("Array.from(document.querySelectorAll('.dd-card label'))[1].nextElementSibling", conn_name)
 
@@ -84,39 +84,39 @@ proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", P
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     ff = Firefox()
-    ff.invia("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1100})
-    ff.vai(f"{UI}/favicon.svg")
+    ff.send("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1100})
+    ff.go(f"{UI}/favicon.svg")
     ff.js("localStorage.clear(); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
-    ff.entra(UI, token)
+    ff.sign_in(UI, token)
 
     print("— datasource dialog: S3 folder")
     ok("the S3 connection can be chosen", open_dialog("zz lake", "s3 dal browser") is True)
     ok("the S3 fields appear, the bucket says the connection's default",
-       ff.aspetta("!!document.querySelector('.dd-s3-bucket') && document.querySelector('.dd-s3-bucket').placeholder.includes('zzph-in')", 5),
+       ff.wait_for("!!document.querySelector('.dd-s3-bucket') && document.querySelector('.dd-s3-bucket').placeholder.includes('zzph-in')", 5),
        text(".dd-card"))
     write(".dd-card .dd-folder", "daily/{day}")
     write(".dd-card .dd-pattern", "sales.csv")
     write(".dd-card .dyn-variables", "day = today-3 .. today")
     ok("the folder's live preview: 3 values, first … last (the step defaults to 1d)",
-       ff.aspetta(f"document.querySelector('[data-preview=folder]') && document.querySelector('[data-preview=folder]').innerText.includes('3 values')"
+       ff.wait_for(f"document.querySelector('[data-preview=folder]') && document.querySelector('[data-preview=folder]').innerText.includes('3 values')"
                   f" && document.querySelector('[data-preview=folder]').innerText.includes('daily/{d(3).isoformat()}')"
                   f" && document.querySelector('[data-preview=folder]').innerText.includes('daily/{d(1).isoformat()}')", 10),
        text("[data-preview=folder]"))
     ff.js("document.querySelector('.dd-check-files').click(); return 1")
     ok("«Check the files»: the two files and the missing day",
-       ff.aspetta("document.querySelectorAll('.dd-files li').length >= 2 && !!document.querySelector('[data-missing]')", 30), text(".dd-card"))
+       ff.wait_for("document.querySelectorAll('.dd-files li').length >= 2 && !!document.querySelector('[data-missing]')", 30), text(".dd-card"))
     ok("…the missing value named", d(2).isoformat() in text("[data-missing]"), text("[data-missing]"))
     write(".dd-card .dyn-timezone", "Mars/Base")
-    ok("a wrong time zone is said at once", ff.aspetta("(document.querySelector('[data-preview=global]')||{innerText:''}).innerText.includes('time zone')", 10),
+    ok("a wrong time zone is said at once", ff.wait_for("(document.querySelector('[data-preview=global]')||{innerText:''}).innerText.includes('time zone')", 10),
        text(".dd-card"))
     write(".dd-card .dyn-timezone", "UTC")
-    ff.foto(os.path.join(SHOTS, "ph-1-s3-dialog.png"))
+    ff.shot(os.path.join(SHOTS, "ph-1-s3-dialog.png"))
     pick("document.querySelector('.dyn-mode .sel-trigger')", "adds the new rows")
-    ok("append waits for its key columns", ff.aspetta("!!document.querySelector('.dyn-err') && document.querySelector('.dd-actions button.primary').disabled", 5))
+    ok("append waits for its key columns", ff.wait_for("!!document.querySelector('.dyn-err') && document.querySelector('.dd-actions button.primary').disabled", 5))
     write(".dd-card .dyn-keys", "_param_day, id")
-    ok("…and with them it can be created", ff.aspetta("!document.querySelector('.dd-actions button.primary').disabled", 5))
+    ok("…and with them it can be created", ff.wait_for("!document.querySelector('.dd-actions button.primary').disabled", 5))
     ff.js("document.querySelector('.dd-actions button.primary').click(); return 1")
-    ok("create closes the dialog", ff.aspetta("!document.querySelector('.dd-card')", 20), text(".dd-err"))
+    ok("create closes the dialog", ff.wait_for("!document.querySelector('.dd-card')", 20), text(".dd-err"))
     end, ds = time.time() + 90, None
     while time.time() < end:
         ds = next((x for x in api("GET", f"/projects/{PID}/datasources", token=token) if x["name"] == "s3 dal browser"), None)
@@ -129,67 +129,67 @@ try:
 
     print("— datasource dialog: SFTP folder and SharePoint")
     open_dialog("zz drop", "sftp dal browser")
-    ff.aspetta("!!document.querySelector('.dd-pattern')", 5)
+    ff.wait_for("!!document.querySelector('.dd-pattern')", 5)
     write(".dd-card .dd-folder", "ph/in")
     write(".dd-card .dd-pattern", "sales_{day:yyyyMMdd}.csv")
     write(".dd-card .dyn-variables", "day = today-3 .. today step 1d")
-    ok("the pattern's preview", ff.aspetta(f"(document.querySelector('[data-preview=pattern]')||{{innerText:''}}).innerText.includes('sales_{d(3):%Y%m%d}.csv')", 10),
+    ok("the pattern's preview", ff.wait_for(f"(document.querySelector('[data-preview=pattern]')||{{innerText:''}}).innerText.includes('sales_{d(3):%Y%m%d}.csv')", 10),
        text("[data-preview=pattern]"))
     ff.js("document.querySelector('.dd-check-files').click(); return 1")
-    ok("SFTP «Check the files» with the missing day", ff.aspetta("!!document.querySelector('[data-missing]')", 30) and d(2).isoformat() in text("[data-missing]"),
+    ok("SFTP «Check the files» with the missing day", ff.wait_for("!!document.querySelector('[data-missing]')", 30) and d(2).isoformat() in text("[data-missing]"),
        text(".dd-card"))
     write(".dd-card .dd-pattern", "sales_{tomorrow}.csv")
-    ok("an unknown placeholder is said under the field", ff.aspetta("(document.querySelector('[data-preview=pattern]')||{innerText:''}).innerText.includes('unknown placeholder')", 10),
+    ok("an unknown placeholder is said under the field", ff.wait_for("(document.querySelector('[data-preview=pattern]')||{innerText:''}).innerText.includes('unknown placeholder')", 10),
        text("[data-preview=pattern]"))
-    ff.foto(os.path.join(SHOTS, "ph-2-sftp-dialog.png"))
+    ff.shot(os.path.join(SHOTS, "ph-2-sftp-dialog.png"))
     open_dialog("zz sp", "sp dal browser")
-    ff.aspetta("!!document.querySelector('.dd-sp-path')", 5)
+    ff.wait_for("!!document.querySelector('.dd-sp-path')", 5)
     write(".dd-card .dd-sp-path", "Chiusure/{month:yyyy-MM}.xlsx")
     write(".dd-card .dyn-variables", "month = start_of_month-3m .. start_of_month step 1m")
     m3 = (today.replace(day=1) - timedelta(days=80)).replace(day=1)
-    ok("SharePoint: the path's preview over the months", ff.aspetta("(document.querySelector('[data-preview=path]')||{innerText:''}).innerText.includes('3 values')", 10),
+    ok("SharePoint: the path's preview over the months", ff.wait_for("(document.querySelector('[data-preview=path]')||{innerText:''}).innerText.includes('3 values')", 10),
        text("[data-preview=path]"))
     ff.js("Array.from(document.querySelectorAll('.dd-actions button')).find(b => /Cancel|Annulla/.test(b.innerText)).click(); return 1")
 
     print("— Output panel")
     flow = next(f for f in flows if f["name"] == "Giorni fuori")
-    ff.vai(f"{UI}/editor?flow={flow['id']}")
-    ff.aspetta("document.querySelectorAll('.node-output').length >= 2", 40)
+    ff.go(f"{UI}/editor?flow={flow['id']}")
+    ff.wait_for("document.querySelectorAll('.node-output').length >= 2", 40)
     ff.js("Array.from(document.querySelectorAll('.node-output')).find(n => n.innerText.includes('giorni')).click(); return 1")
     ok("the SFTP Output shows its zone and the resolved file name",
-       ff.aspetta("!!document.querySelector('.out-timezone') && document.querySelector('.out-timezone').value === 'Pacific/Kiritimati'"
+       ff.wait_for("!!document.querySelector('.out-timezone') && document.querySelector('.out-timezone').value === 'Pacific/Kiritimati'"
                   " && (document.querySelector('#tp-out-sftp-file-name')||{innerText:''}).innerText.includes('giorni_')", 15),
        text("#tp-out-sftp-file-name"))
     far = datetime.now(timezone.utc).astimezone(__import__("zoneinfo").ZoneInfo("Pacific/Kiritimati"))
     ok("…in that zone, {run_id} still to come", f"giorni_{far:%Y%m%d}_{{run_id}}" in text("#tp-out-sftp-file-name"), text("#tp-out-sftp-file-name"))
     ok("…and the dated folder", f"/config/ph/out/{far:%Y}/{far:%m}" in text("#tp-out-sftp-folder"), text("#tp-out-sftp-folder"))
     write(".out-sftp-file-name", "x_{today:yyyy/MM}")
-    ok("a slash from a value is refused while typing", ff.aspetta("(document.querySelector('#tp-out-sftp-file-name')||{innerText:''}).innerText.includes(\"'/'\")", 10),
+    ok("a slash from a value is refused while typing", ff.wait_for("(document.querySelector('#tp-out-sftp-file-name')||{innerText:''}).innerText.includes(\"'/'\")", 10),
        text("#tp-out-sftp-file-name"))
-    ff.foto(os.path.join(SHOTS, "ph-3-output-panel.png"))
+    ff.shot(os.path.join(SHOTS, "ph-3-output-panel.png"))
     # leave the flow as it was: reload without saving
-    ff.vai(f"{UI}/editor?flow={flow['id']}")
-    ff.aspetta("document.querySelectorAll('.node-output').length >= 2", 40)
+    ff.go(f"{UI}/editor?flow={flow['id']}")
+    ff.wait_for("document.querySelectorAll('.node-output').length >= 2", 40)
     ff.js("Array.from(document.querySelectorAll('.node-output')).find(n => n.innerText.includes('Giorni_fuori') || n.innerText.includes('flussi')).click(); return 1")
-    ok("the S3 Output's key resolved", ff.aspetta(f"(document.querySelector('#tp-out-s3-key')||{{innerText:''}}).innerText.includes('Giorni_fuori_{far:%Y-%m-%d}.parquet')", 15),
+    ok("the S3 Output's key resolved", ff.wait_for(f"(document.querySelector('#tp-out-s3-key')||{{innerText:''}}).innerText.includes('Giorni_fuori_{far:%Y-%m-%d}.parquet')", 15),
        text("#tp-out-s3-key"))
 
     print("— the run's notes")
-    ff.vai(f"{UI}/runs")
-    ff.aspetta("document.querySelectorAll('.stpill').length > 0", 30)  # the first page (failures) loaded
+    ff.go(f"{UI}/runs")
+    ff.wait_for("document.querySelectorAll('.stpill').length > 0", 30)  # the first page (failures) loaded
     ff.js("Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Succeeded').click(); return 1")
-    ok("the runs page shows the values without a file", ff.aspetta("!!document.querySelector('.run-note')", 30), ff.js("return document.body.innerText.slice(0, 600)"))
-    ff.foto(os.path.join(SHOTS, "ph-4-runs.png"))
+    ok("the runs page shows the values without a file", ff.wait_for("!!document.querySelector('.run-note')", 30), ff.js("return document.body.innerText.slice(0, 600)"))
+    ff.shot(os.path.join(SHOTS, "ph-4-runs.png"))
 
     print("— in Italian")
     ff.js("document.cookie = 'tabularia-locale=it; path=/; max-age=86400; samesite=lax'; localStorage.clear(); return 1")
     open_dialog("zz lake", "x")
-    ff.aspetta("!!document.querySelector('.dyn-variables')", 10)
-    ok("the dynamic section in Italian", ff.aspetta("['Variabili','Fuso orario'].every(w => document.querySelector('.dd-card').innerText.includes(w))", 10),
+    ff.wait_for("!!document.querySelector('.dyn-variables')", 10)
+    ok("the dynamic section in Italian", ff.wait_for("['Variabili','Fuso orario'].every(w => document.querySelector('.dd-card').innerText.includes(w))", 10),
        text(".dd-card"))
-    ff.foto(os.path.join(SHOTS, "ph-5-it.png"))
+    ff.shot(os.path.join(SHOTS, "ph-5-it.png"))
 finally:
-    ferma(proc)
+    stop(proc)
 
 print(f"\n{sum(results)}/{len(results)} ok")
 sys.exit(0 if all(results) else 1)

@@ -23,8 +23,8 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "pymysql>=1.1.0",
-    # Oracle in modalità Thin (puro Python, niente Instant Client): fetch_df_batches
-    # dà i risultati in streaming come batch Arrow
+    # Oracle in Thin mode (pure Python, no Instant Client): fetch_df_batches
+    # streams the results as Arrow batches
     "oracledb>=3.4",
     "python-multipart>=0.0.32",
     "redis>=8.0.0",

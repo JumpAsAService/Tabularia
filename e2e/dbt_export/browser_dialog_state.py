@@ -20,15 +20,15 @@ The export POSTs are answered inside the page by a tiny fake zip (no engine work
 last check, which downloads for real. The plans are the gateway's, served from the page WITHOUT
 the AI options: no check can make a call to the AI provider (the AI checks serve their own
 plans, and their downloads are the fake zip).
-Firefox headless via Marionette (port 2828), as browser_dialogo.py.
-usage: python3 browser_dialogo_stato.py [part of a check's name, e.g. 69 or 48real]"""
+Firefox headless via Marionette (port 2828), as browser_dialog.py.
+usage: python3 browser_dialog_state.py [part of a check's name, e.g. 69 or 48real]"""
 import copy, json, os, subprocess, sys, time, urllib.error, urllib.request
 
-from ambiente import BASE, DOVE, UI, env
-from marionette import ENTER, ESC, TAB, Firefox, ferma
+from environment import BASE, WORKDIR, UI, env
+from marionette import ENTER, ESC, TAB, Firefox, stop
 
 A_NAME, B_NAME = "Margin by Category and Month", "Cost to Serve by Channel"   # Sample flows
-PROFILE = os.path.join(DOVE, "firefox-dbt-dialogo-stato")
+PROFILE = os.path.join(WORKDIR, "firefox-dbt-dialogo-stato")
 ONLY = sys.argv[1] if len(sys.argv) > 1 else ""
 results = []
 
@@ -125,10 +125,10 @@ def remember(flow_id, choices):
 def close_if_open():
     if ff.js("return !!document.querySelector('.dx-card')"):
         ff.js("document.querySelector('.dx-card .dx-x').click(); return 1")
-        ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.wait_for("!document.querySelector('.dx-card')", 5)
     if ff.js("return !!document.querySelector('.export-body')"):
         ff.js("document.querySelector('.export-cancel').click(); return 1")
-        ff.aspetta("!document.querySelector('.export-body')", 5)
+        ff.wait_for("!document.querySelector('.export-body')", 5)
 
 
 def open_dialog(name, loaded=True):
@@ -137,11 +137,11 @@ def open_dialog(name, loaded=True):
     ff.js("""
       const az = Array.from(document.querySelectorAll('.flow-actions')).find(a => a.parentElement.innerText.includes(arguments[0]));
       az.querySelector('button svg.lucide-download').closest('button').click(); return 1""", name)
-    assert ff.aspetta("!!document.querySelector('[role=dialog] .export-body')", 10), "export menu"
+    assert ff.wait_for("!!document.querySelector('[role=dialog] .export-body')", 10), "export menu"
     ff.js("Array.from(document.querySelectorAll('[role=dialog] .export-opt')).find(b => b.querySelector('strong').innerText.trim() === 'dbt').click(); return 1")
-    assert ff.aspetta("!!document.querySelector('.dx-card')", 10), "dbt dialog"
+    assert ff.wait_for("!!document.querySelector('.dx-card')", 10), "dbt dialog"
     if loaded:
-        assert ff.aspetta("!!document.querySelector('.dx-card input[name=dx-target]')", 30), "plan"
+        assert ff.wait_for("!!document.querySelector('.dx-card input[name=dx-target]')", 30), "plan"
         time.sleep(0.2)
 
 
@@ -208,7 +208,7 @@ def go(path, text=None):
     cond = f"location.pathname === {json.dumps(path)}"
     if text:
         cond += f" && Array.from(document.querySelectorAll('.flow-actions')).some(a => a.parentElement.innerText.includes({json.dumps(text)}))"
-    assert ff.aspetta(cond, 30), f"page {path}"
+    assert ff.wait_for(cond, 30), f"page {path}"
     time.sleep(0.5)
 
 
@@ -228,7 +228,7 @@ ORACLE = {"key": "7:FIN", "connection": "ora", "schema": "FIN", "default_name": 
 
 
 def oracle_plan(fid):
-    """What piano_export gives for `fid` reading an Oracle table next to its Postgres one: no
+    """What export_plan gives for `fid` reading an Oracle table next to its Postgres one: no
     target is available, and ClickHouse takes the flow only into the team's own project that
     already declares the Oracle source (folder package)."""
     p = plan(fid)
@@ -307,12 +307,12 @@ proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", P
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     ff = Firefox()
-    ff.invia("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1000})
-    ff.vai(f"{UI}/favicon.svg")
+    ff.send("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1000})
+    ff.go(f"{UI}/favicon.svg")
     ff.js("localStorage.clear(); localStorage.setItem('tabularia-theme', 'dark'); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
-    ff.entra(UI, token)
-    ff.vai(f"{UI}/flows")
-    assert ff.aspetta("document.querySelectorAll('.flow-actions').length > 3", 40), "flows page"
+    ff.sign_in(UI, token)
+    ff.go(f"{UI}/flows")
+    assert ff.wait_for("document.querySelectorAll('.flow-actions').length > 3", 40), "flows page"
     ff.js(HOOKS)
 
     # the gateway's plan gives each source the default it suffixes from (#48)
@@ -329,8 +329,8 @@ try:
         download()
         time.sleep(0.5)
         s = state()
-        ff.tasti(ESC)
-        closed = ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.keys(ESC)
+        closed = ff.wait_for("!document.querySelector('.dx-card')", 5)
         open_dialog(B_NAME)
         sb = state()
         ok("69a: after Esc on A's running download, B's Download is free", closed and s.get("primLabel") == "Preparing…"
@@ -347,7 +347,7 @@ try:
         download()
         time.sleep(0.4)
         ff.js("document.querySelector('.dx-card .dx-x').click(); return 1")
-        ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.wait_for("!document.querySelector('.dx-card')", 5)
         open_dialog(B_NAME)
         time.sleep(4.5)
         sb = state()
@@ -360,7 +360,7 @@ try:
         download()
         time.sleep(0.4)
         ff.js("document.querySelector('.dx-card .dx-x').click(); return 1")
-        ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.wait_for("!document.querySelector('.dx-card')", 5)
         open_dialog(B_NAME)
         time.sleep(3.5)
         sb = state()
@@ -369,8 +369,8 @@ try:
         reset(planDelayFor=A, planDelay=3500, honourAbort=False)
         open_dialog(A_NAME, loaded=False)
         time.sleep(0.4)
-        ff.tasti(ESC)
-        ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.keys(ESC)
+        ff.wait_for("!document.querySelector('.dx-card')", 5)
         open_dialog(B_NAME)
         before = state()["outputs"]
         time.sleep(4)
@@ -386,7 +386,7 @@ try:
         time.sleep(0.4)
         s = state()
         ff.js("Array.from(document.querySelectorAll('.dx-card .dx-actions button')).find(b => !b.classList.contains('primary')).click(); return 1")
-        closed = ff.aspetta("!document.querySelector('.dx-card')", 3)
+        closed = ff.wait_for("!document.querySelector('.dx-card')", 3)
         time.sleep(4)
         ok("69e: Cancel works while preparing, and nothing downloads afterwards", not s["cancelDisabled"] and closed and not ff.js("return window.__dx.dl.length"),
            {"busy": s, "closed": closed, "dl": ff.js("return window.__dx.dl")})
@@ -415,7 +415,7 @@ try:
         open_dialog(A_NAME)
         visible = ff.js("return Array.from(document.querySelectorAll('.dx-card .dx-source .dx-check')).filter(e => e.offsetParent !== null).length")
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("70: complete project: no 'Already declared' checkbox, nothing declared in the request",
            visible == 0 and not any(v.get("declared") for v in body.get("sources", {}).values()), {"visible": visible, "sources": body.get("sources")})
@@ -424,7 +424,7 @@ try:
         ticks = ff.js("""const c = Array.from(document.querySelectorAll('.dx-card .dx-source')).map(r => r.querySelector('.dx-check input')).filter(x => x && x.offsetParent !== null);
                          return c.map(x => x.checked)""")
         download()
-        ff.aspetta("window.__dx.posts.length === 2", 5)
+        ff.wait_for("window.__dx.posts.length === 2", 5)
         body = (last_post() or {}).get("body", {})
         ok("70: folder package: the checkbox is there, remembered, and sent", ticks and ticks[0] is True
            and body.get("sources", {}).get(key, {}).get("declared") is True and body.get("package") == "folder", {"checked": ticks, "body": body})
@@ -435,7 +435,7 @@ try:
         open_dialog(B_NAME)
         visible = ff.js(f"const el = {field('Schema')}; return !!el && el.offsetParent !== null")
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("77: folder package: no Schema field, no schema in the request", not visible and "schema" not in body and body.get("package") == "folder",
            {"visible": visible, "body": body})
@@ -443,7 +443,7 @@ try:
         package("project")
         value = ff.js(f"const el = {field('Schema')}; return el && el.offsetParent !== null ? el.value : null")
         download()
-        ff.aspetta("window.__dx.posts.length === 2", 5)
+        ff.wait_for("window.__dx.posts.length === 2", 5)
         body = (last_post() or {}).get("body", {})
         ok("77: complete project: the Schema field is back with its value, and sent", value == "analisi" and body.get("schema") == "analisi", {"value": value, "body": body})
     if case("74"):
@@ -452,7 +452,7 @@ try:
         target("duckdb")
         package("folder")
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         memory = json.loads(ff.js(f"return localStorage.getItem('tabularia.dbtExport.{B}')") or "{}")
         ok("74: an empty folder downloads into the default folder, and is remembered empty",
@@ -461,7 +461,7 @@ try:
         f = ff.js(f"const el = {field('Folder')}; return el && [el.value, el.placeholder]")
         package("project")
         download()
-        ff.aspetta("window.__dx.posts.length === 2", 5)
+        ff.wait_for("window.__dx.posts.length === 2", 5)
         body = (last_post() or {}).get("body", {})
         ok("74: reopened, the field is empty with the default as placeholder; the complete project has no folder",
            f == ["", PLANS[B]["default_folder"]] and body.get("folder") == "", {"field": f, "sent": body.get("folder")})
@@ -475,7 +475,7 @@ try:
         package("folder")
         s = state()
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("43: the plan's ASCII default folder is used as is, with no error", not s["primDisabled"] and not ff.js("return !!document.querySelector('.dx-bad')")
            and body.get("folder") == "zz_qualita_citta", {"state": s, "body": body})
@@ -527,7 +527,7 @@ try:
         r = [invalid(source(i)) for i in (0, 1)]
         ok("48: the same name on sources with different tables is accepted (dbt allows it)", all(x and x["invalid"] in (None, "false") for x in r) and r[0]["download"], r)
     if case("48real"):
-        # what piano_export sends for the schemas «Sales», «sales» and «altro» of one connection:
+        # what export_plan sends for the schemas «Sales», «sales» and «altro» of one connection:
         # the gateway already moved the second default aside (_2), and names a source from the
         # unsuffixed default again once a typed name changes the collisions
         reset()
@@ -598,7 +598,7 @@ try:
         package("folder")
         type_source(1, "fin_team")
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("49folder: the download sends ClickHouse, the folder package and the Oracle source declared under the typed name",
            body.get("target") == "clickhouse" and body.get("package") == "folder" and "schema" not in body
@@ -634,7 +634,7 @@ try:
         inc = ff.js(INCLUDE_GROUP)
         ok("55off: ticked, the hint names the model that wrote them", bool(inc["hint"]) and "old-model" in inc["hint"], inc)
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("55off: the download asks for them: ai_descriptions true, no ai_translations",
            body.get("ai_descriptions") is True and "ai_translations" not in body, body)
@@ -647,7 +647,7 @@ try:
         tick("translations kept")
         inc = ff.js(INCLUDE_GROUP)
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("55off: translations kept by two models: offered, the hint names both, only ai_translations true",
            bool(inc["hint"]) and "m-one, m-two" in inc["hint"] and body.get("ai_translations") is True
@@ -660,7 +660,7 @@ try:
         open_dialog(B_NAME)
         inc = ff.js(INCLUDE_GROUP)
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("55off: control, AI off with nothing kept: no AI option and none sent, even when remembered",
            len(inc["boxes"]) == 2 and "ai_descriptions" not in body and "ai_translations" not in body, {"include": inc, "body": body})
@@ -678,7 +678,7 @@ try:
         ok("55on: a kind nothing was kept for is written by the configured model: the hint names it",
            "new-model" in hint and "old-model" not in hint, hint)
         download()
-        ff.aspetta("window.__dx.posts.length === 1", 5)
+        ff.wait_for("window.__dx.posts.length === 1", 5)
         body = (last_post() or {}).get("body", {})
         ok("55on: AI on: both options sent as ticked", body.get("ai_translations") is True and body.get("ai_descriptions") is False, body)
         reset()
@@ -694,7 +694,7 @@ try:
         open_dialog(B_NAME)
         target("duckdb")
         download()
-        ff.aspetta("window.__dx.dl.length === 1", 5)
+        ff.wait_for("window.__dx.dl.length === 1", 5)
         ok("75: the file name is the gateway's RFC 5987 filename*", ff.js("return window.__dx.dl") == ["Qualità_città_Ελλάδα_dbt_duckdb.zip"], ff.js("return window.__dx.dl"))
         reset(rename={str(B): "zz Qualità città Ελλάδα"})
         go("/datasources")
@@ -702,7 +702,7 @@ try:
         open_dialog("zz Qualità città Ελλάδα")
         target("duckdb")
         download()
-        ff.aspetta("window.__dx.dl.length === 1", 5)
+        ff.wait_for("window.__dx.dl.length === 1", 5)
         ok("75: without the header the name still keeps accented and non-Latin letters",
            ff.js("return window.__dx.dl") == ["zz_Qualità_città_Ελλάδα_dbt_duckdb.zip"], ff.js("return window.__dx.dl"))
         reset()
@@ -716,14 +716,14 @@ try:
           for (const b of document.querySelectorAll('[data-zzdx]')) delete b.dataset.zzdx;
           const az = Array.from(document.querySelectorAll('.flow-actions')).find(a => a.parentElement.innerText.includes(arguments[0]));
           const b = az.querySelector('button svg.lucide-download').closest('button'); b.dataset.zzdx = '1'; b.focus(); return 1""", name)
-        ff.tasti(ENTER)
-        assert ff.aspetta("!!document.querySelector('[role=dialog] .export-body')", 10), "menu"
+        ff.keys(ENTER)
+        assert ff.wait_for("!!document.querySelector('[role=dialog] .export-body')", 10), "menu"
         for _ in range(6):
             if ff.js("return !!document.activeElement?.classList.contains('export-opt') && document.activeElement.innerText.includes('dbt')"):
                 break
-            ff.tasti(TAB)
-        ff.tasti(ENTER)
-        assert ff.aspetta("!!document.querySelector('.dx-card input[name=dx-target]')", 30), "dbt dialog by keyboard"
+            ff.keys(TAB)
+        ff.keys(ENTER)
+        assert ff.wait_for("!!document.querySelector('.dx-card input[name=dx-target]')", 30), "dbt dialog by keyboard"
         time.sleep(0.3)
 
     ACTIVE = "return {tag: document.activeElement?.tagName, export: document.activeElement?.dataset?.zzdx === '1'}"
@@ -731,25 +731,25 @@ try:
         reset()
         by_keyboard(A_NAME)
         inside = ff.js("return document.querySelector('.dx-card').contains(document.activeElement)")
-        ff.tasti(ESC)
-        ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.keys(ESC)
+        ff.wait_for("!document.querySelector('.dx-card')", 5)
         time.sleep(0.3)
         a = ff.js(ACTIVE)
         ok("71: Esc closes the dbt dialog and focus is back on the row's Export button", inside and a["export"], a)
         by_keyboard(B_NAME)
         ff.js("Array.from(document.querySelectorAll('.dx-card .dx-actions button')).find(b => !b.classList.contains('primary')).focus(); return 1")
-        ff.tasti(ENTER)
-        ff.aspetta("!document.querySelector('.dx-card')", 5)
+        ff.keys(ENTER)
+        ff.wait_for("!document.querySelector('.dx-card')", 5)
         time.sleep(0.3)
         a = ff.js(ACTIVE)
         ok("71: Cancel (Enter) also gives focus back to the row's Export button", a["export"], a)
         # control: the export menu alone still gives focus back
         close_if_open()
         ff.js("const b = document.querySelector('[data-zzdx]'); b.focus(); return 1")
-        ff.tasti(ENTER)
-        ff.aspetta("!!document.querySelector('[role=dialog] .export-body')", 10)
-        ff.tasti(ESC)
-        ff.aspetta("!document.querySelector('.export-body')", 5)
+        ff.keys(ENTER)
+        ff.wait_for("!!document.querySelector('[role=dialog] .export-body')", 10)
+        ff.keys(ESC)
+        ff.wait_for("!document.querySelector('.export-body')", 5)
         time.sleep(0.3)
         ok("71: control, the export menu alone gives focus back as before", ff.js(ACTIVE)["export"], ff.js(ACTIVE))
         # control: another dialog of the same composable (Schedule) is unchanged
@@ -757,10 +757,10 @@ try:
           for (const b of document.querySelectorAll('[data-zzdx]')) delete b.dataset.zzdx;
           const az = Array.from(document.querySelectorAll('.flow-actions')).find(a => a.parentElement.innerText.includes(arguments[0]));
           const b = az.querySelector('button svg.lucide-calendar-clock').closest('button'); b.dataset.zzdx = '1'; b.focus(); return 1""", B_NAME)
-        ff.tasti(ENTER)
-        opened = ff.aspetta("!!document.querySelector('[role=dialog]') && document.querySelector('[role=dialog]').contains(document.activeElement)", 10)
-        ff.tasti(ESC)
-        ff.aspetta("!document.querySelector('[role=dialog]')", 5)
+        ff.keys(ENTER)
+        opened = ff.wait_for("!!document.querySelector('[role=dialog]') && document.querySelector('[role=dialog]').contains(document.activeElement)", 10)
+        ff.keys(ESC)
+        ff.wait_for("!document.querySelector('[role=dialog]')", 5)
         time.sleep(0.3)
         ok("71: control, the Schedule dialog still gives focus back to its button", opened and ff.js(ACTIVE)["export"], ff.js(ACTIVE))
 
@@ -770,7 +770,7 @@ try:
         open_dialog(A_NAME)
         target("duckdb")
         download()
-        done = ff.aspetta("window.__dx.dl.length === 1 && !document.querySelector('.dx-card')", 120)
+        done = ff.wait_for("window.__dx.dl.length === 1 && !document.querySelector('.dx-card')", 120)
         ok("real: a real export downloads, named after the flow, and closes the dialog", done and ff.js("return window.__dx.dl") == ["Margin_by_Category_and_Month_dbt_duckdb.zip"],
            {"dl": ff.js("return window.__dx.dl"), "state": state()})
 finally:
@@ -778,11 +778,11 @@ finally:
         ff.js("for (const k of Object.keys(localStorage)) if (k.startsWith('tabularia.dbtExport.')) localStorage.removeItem(k); return 1")
     except Exception:  # noqa: BLE001
         pass
-    ferma(proc)
+    stop(proc)
     try:
         api("POST", "/auth/logout", token=token)
     except urllib.error.HTTPError:
         pass
 
-print(f"\n{sum(results)}/{len(results)} verifiche passate")
+print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

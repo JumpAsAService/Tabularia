@@ -466,12 +466,12 @@ async def suggest_title(model_id: str, question: str, locale: str = "en") -> tup
             instructions=_TITLE_INSTRUCTIONS.format(language=_LANGUAGES.get(locale[:2].lower(), "English")),
         )
         payload = await agent.run(question_text[:1000], usage_limits=UsageLimits(request_limit=1))
-        uso = payload.usage
-        uso = uso() if callable(uso) else uso
+        usage = payload.usage
+        usage = usage() if callable(usage) else usage
         title = " ".join(str(payload.output or "").split()).strip(" \"'«»`.")
         if not title:
-            return None, uso
-        return title[:TITLE_MAX_CHARS].rstrip(" ,;:-"), uso
+            return None, usage
+        return title[:TITLE_MAX_CHARS].rstrip(" ,;:-"), usage
     except Exception:  # noqa: BLE001 — an extra: it must never disturb the answer
         logger.info("assistant: title not generated for the chat (model %s)", model_id, exc_info=True)
         return None, None

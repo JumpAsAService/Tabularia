@@ -60,7 +60,7 @@ def test_native_output_on_another_connection_is_an_ordinary_model_in_the_target_
         assert any(f"The model `{name}`" in n and "«dw»" in n and "data team" in n for n in p["notes"]), name
     assert (m["righe"]["schema"], m["righe"]["alias"]) == ("report", "righe")       # on the source connection: its real table
     assert not any("The model `righe`" in n for n in p["notes"])
-    assert next(t for t in d.piano_export(session, flow, "data-prep")["targets"] if t["id"] == "native")["available"]
+    assert next(t for t in d.export_plan(session, flow, "data-prep")["targets"] if t["id"] == "native")["available"]
 
 
 @pytest.mark.parametrize("db_schema, expected", [("vendite", "vendite"), ("", "public")])
@@ -122,7 +122,7 @@ def test_an_upstream_flow_brings_in_only_the_outputs_read(session, scene):
         p = d.build_export_payload(session, downstream, "data-prep", target)
         assert [m["name"] for m in p["models"]] == ["web", "all", "both"], target
         assert not any("schema" in m or "alias" in m for m in p["models"]), target
-    assert [o["model"] for o in d.piano_export(session, downstream, "data-prep")["outputs"]] == ["web", "all", "both"]
+    assert [o["model"] for o in d.export_plan(session, downstream, "data-prep")["outputs"]] == ["web", "all", "both"]
 
 
 def test_the_upstream_model_is_the_one_of_the_flow_that_published_the_datasource(session, scene):
@@ -172,7 +172,7 @@ def test_a_loop_through_a_join_right_input_is_refused_with_a_reason(session, sce
     flow = _flow(session, scene, "Loopy", definition["nodes"], definition["edges"])
     e = _refusal(session, flow)
     assert e.code == "flow_loop" and e.params["flow"] == "Loopy" and e.params["node"] in ("j", "k")
-    piano = d.piano_export(session, flow, "data-prep", "it")
+    piano = d.export_plan(session, flow, "data-prep", "it")
     assert all(not t["available"] and t["reason"].startswith("Il flusso «Loopy» ha un ciclo") for t in piano["targets"])
     # the scheduler uses the same resolver: a coded error, not a RecursionError
     with pytest.raises(FlowResolveError) as fe:
@@ -251,7 +251,7 @@ def test_clickhouse_does_not_read_oracle_sql_server_or_trino(session, scene, db_
     flow = _flow(session, scene, "Ledger", [_src_node("a", rows.id), _ds_output("o", "Ledger out", scene.folder.id)], [_edge("a", "o")])
     e = _refusal(session, flow, "clickhouse")
     assert e.code == "clickhouse_cannot_read" and e.params == {"connection": "contabilita", "db_type": db_type}
-    assert not any(t["available"] for t in d.piano_export(session, flow, "data-prep")["targets"])
+    assert not any(t["available"] for t in d.export_plan(session, flow, "data-prep")["targets"])
 
 
 def test_a_seed_over_the_engine_cap_is_refused_before_the_download(session, scene):
@@ -262,7 +262,7 @@ def test_a_seed_over_the_engine_cap_is_refused_before_the_download(session, scen
                    [_edge("s", "j"), _edge("g", "j", "right"), _edge("j", "o")])
     e = _refusal(session, flow)
     assert e.code == "seed_too_large" and e.params == {"source": "big list", "rows": "1,000,000,000", "max": "50,000"}
-    assert not any(t["available"] for t in d.piano_export(session, flow, "data-prep")["targets"])
+    assert not any(t["available"] for t in d.export_plan(session, flow, "data-prep")["targets"])
     big.rows = d.SEED_MAX_ROWS
     session.add(big); session.commit()
     assert d.build_export_payload(session, flow, "data-prep", "duckdb")["seeds"][0]["name"] == "seed_big_list"
@@ -279,7 +279,7 @@ def test_mysql_and_mariadb_have_no_native_target_and_the_reason_points_to_the_ot
     flow = _flow(session, scene, "Shop", [_src_node("s", products.id), _ds_output("o", "Shop out", scene.folder.id)], [_edge("s", "o")])
     e = _refusal(session, flow, "native")
     assert e.code == "no_native_adapter" and e.params == {"db_type": db_type}
-    by_id = {t["id"]: t for t in d.piano_export(session, flow, "data-prep", "en")["targets"]}
+    by_id = {t["id"]: t for t in d.export_plan(session, flow, "data-prep", "en")["targets"]}
     assert by_id["duckdb"]["available"] and by_id["clickhouse"]["available"] and not by_id["native"]["available"]
     assert "federated target" in by_id["native"]["reason"] and "ClickHouse target" in by_id["native"]["reason"]
     assert d.build_export_payload(session, flow, "data-prep", "clickhouse")["clickhouse"]["connections"][0]["port"] == 3306
@@ -309,7 +309,7 @@ def test_upstream_models_carry_the_upstream_flow_dialect_and_a_query_none(sessio
 # ── #73 #22 #43: names ───────────────────────────────────────────────────────
 def test_a_prefixed_name_is_the_prefix_plus_the_name_the_plan_shows(session, scene):
     flow = _flow(session, scene, "Year", [_src_node("s", scene.orders.id), _ds_output("o", "2024 margin", scene.folder.id)], [_edge("s", "o")])
-    name = d.piano_export(session, flow, "data-prep")["outputs"][0]["model"]
+    name = d.export_plan(session, flow, "data-prep")["outputs"][0]["model"]
     assert name == "m_2024_margin"
     p = d.build_export_payload(session, flow, "data-prep", options=d.DbtOptions(prefix="tab_"))
     assert p["models"][-1]["name"] == "tab_" + name
@@ -324,7 +324,7 @@ def test_names_fit_the_postgres_identifier_limit_whatever_the_prefix(session, sc
         _ds_output("o1", long_, scene.folder.id), _ds_output("o2", long_ + " restated", scene.folder.id),
         _op("g", "limit", {"n": 5}), _ds_output("o3", long_ + " sample", scene.folder.id),
     ], [_edge("s", "f"), _edge("f", "o1"), _edge("f", "o2"), _edge("f", "g"), _edge("g", "o3")])
-    piano = [o["model"] for o in d.piano_export(session, flow, "data-prep")["outputs"]]
+    piano = [o["model"] for o in d.export_plan(session, flow, "data-prep")["outputs"]]
     prefix = "abcdefghijklmnopqrst"                       # the longest prefix the dialog accepts
     for target in ("duckdb", "native", "clickhouse"):
         p = d.build_export_payload(session, flow, "data-prep", options=d.DbtOptions(target=target, prefix=prefix))
@@ -341,7 +341,7 @@ def test_names_fit_the_postgres_identifier_limit_whatever_the_prefix(session, sc
                                           ("zz dialog monthly sales report by geographic area", "zz_dialog_monthly_sales_report_by_geogra")])
 def test_the_default_folder_is_one_the_options_accept(session, scene, name, wait):
     flow = _flow(session, scene, name, [_src_node("s", scene.orders.id), _ds_output("o", "Out", scene.folder.id)], [_edge("s", "o")])
-    folder = d.piano_export(session, flow, "data-prep")["default_folder"]
+    folder = d.export_plan(session, flow, "data-prep")["default_folder"]
     assert folder == wait and d.DbtOptions(package="folder", folder=folder).folder == folder
 
 
@@ -453,7 +453,7 @@ def test_an_incomplete_node_makes_every_target_unavailable_in_the_plan(session, 
     nodes = [_src_node("s", scene.orders.id), _src_node("r", scene.customers.id), node, _ds_output("o", "Out", scene.folder.id)]
     edges = [_edge("s", "j"), _edge("j", "o")] + ([_edge("r", "j", "right")] if right else [])
     flow = _flow(session, scene, "Half done", nodes, edges)
-    piano = d.piano_export(session, flow, "data-prep", "it")
+    piano = d.export_plan(session, flow, "data-prep", "it")
     assert [t["available"] for t in piano["targets"]] == [False, False, False], piano["targets"]
     with pytest.raises(d.DbtExportError) as e:
         d.build_export_payload(session, flow, "data-prep")
@@ -469,4 +469,4 @@ def test_complete_joins_filters_and_aggregations_stay_available(session, scene):
             _op("t", "sort", {"by": ["canale"]}), _ds_output("o", "Out", scene.folder.id)]
     edges = [_edge("s", "j"), _edge("r", "j", "right"), _edge("j", "f"), _edge("f", "g"), _edge("g", "t"), _edge("t", "o")]
     flow = _flow(session, scene, "Done", nodes, edges)
-    assert all(t["available"] for t in d.piano_export(session, flow, "data-prep")["targets"])
+    assert all(t["available"] for t in d.export_plan(session, flow, "data-prep")["targets"])

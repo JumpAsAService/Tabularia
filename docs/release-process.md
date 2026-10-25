@@ -60,7 +60,7 @@ A test that skips because its server is missing would pass unseen, so any skip f
 run except those the CI cannot avoid (live BigQuery, Oracle, SQL Server):
 `.github/scripts/ci_skips.py`. The same script runs the suites on a laptop, with the
 commands at the top of `.github/scripts/ci_tests.sh`. The end-to-end oracles of `e2e/`
-need a whole stack and stay a step of the release (`e2e/dbt_export/esegui.py tutto`).
+need a whole stack and stay a step of the release (`e2e/dbt_export/run_all.py all`).
 
 ## The licence check
 

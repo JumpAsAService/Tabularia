@@ -1,26 +1,26 @@
 # syntax=docker/dockerfile:1.9
 #
-# Immagine UNICA del backend, per sviluppo e produzione (engine API, worker,
-# worker delle anteprime, beat): leggera, utente non root, pronta per un
-# filesystem in sola lettura. Sviluppo e produzione usano lo stesso file e le
-# stesse regole: cambia solo cosa viene installato.
+# The ONE backend image, for development and production (engine API, worker,
+# preview worker, beat): light, non-root user, ready for a read-only
+# filesystem. Development and production use the same file and the same
+# rules: only what gets installed changes.
 #
-# Stessa immagine per i quattro ruoli, cambia solo il comando (vedi
+# The same image for the four roles, only the command changes (see
 # docs/deploy/kubernetes.md):
 #   API      uvicorn app.api.main:app --host 0.0.0.0 --port 8000      (default)
 #   worker   celery -A app.tasks.celery_app worker -E -Q celery --loglevel=info
 #   preview  celery -A app.tasks.celery_app worker -E -Q preview --loglevel=info
 #   beat     celery -A app.tasks.celery_app beat --schedule /tmp/celerybeat-schedule --loglevel=info
 #
-# Unica directory scrivibile: /tmp (TMPDIR). Qui finiscono upload, parquet
-# intermedi, riversamenti di DuckDB/Polars e lo stato di chDB. A runtime va
-# montata come volume (emptyDir) dimensionato sul dataset più pesante.
+# The only writable directory: /tmp (TMPDIR). Uploads, intermediate parquet
+# files, DuckDB/Polars spills and chDB's state end up here. At runtime it is
+# mounted as a volume (emptyDir) sized on the heaviest dataset.
 #
-# Tre opzioni di build, tutte spente di default, cioè l'immagine di produzione:
-#   WITH_CHDB=true  include chDB, l'engine ClickHouse embedded, con pandas e
-#                   numpy che servono solo a lui: quasi 600 MB. In produzione il
-#                   dialetto ClickHouse lo copre l'engine ClickHouse esterno.
-#   WITH_DEV=true   include le dipendenze di sviluppo (pytest).
+# Three build options, all off by default, that is the production image:
+#   WITH_CHDB=true  includes chDB, the embedded ClickHouse engine, with pandas and
+#                   numpy that only it needs: almost 600 MB. In production the
+#                   ClickHouse dialect is covered by the external ClickHouse engine.
+#   WITH_DEV=true   includes the development dependencies (pytest).
 #   WITH_MSSQL=true includes the SQL Server driver (the `sqlserver` extra:
 #                   mssql-python and Microsoft's ODBC driver, mssql-python-odbc).
 #                   That driver is under MICROSOFT'S licence, not an open-source one:
@@ -28,7 +28,7 @@
 #                   builds with this option accepts Microsoft's terms
 #                   (docs/sqlserver.md). Without it a SQL Server connection says
 #                   that the driver is not installed.
-# Il docker-compose di sviluppo accende le prime due (WITH_MSSQL from the
+# The development docker-compose turns on the first two (WITH_MSSQL from the
 # environment, off by default, so that development runs what is published):
 #   docker build --build-arg WITH_CHDB=true --build-arg WITH_DEV=true .
 
@@ -44,18 +44,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /build
 
-# Solo le dipendenze di runtime (niente gruppo dev: pytest resta fuori), dal
-# lockfile. Il progetto non è un pacchetto installabile: il codice si copia.
-# Il virtualenv sta in /opt/venv e NON in /app, così un bind mount dei sorgenti
-# su /app non lo nasconde.
+# Only the runtime dependencies (no dev group: pytest stays out), from the
+# lockfile. The project is not an installable package: the code is copied.
+# The virtualenv lives in /opt/venv and NOT in /app, so that a bind mount of the
+# sources on /app does not hide it.
 ARG WITH_CHDB=false
 ARG WITH_DEV=false
 ARG WITH_MSSQL=false
 
-# Senza chDB si saltano anche pandas e numpy: il codice dell'applicazione non li
-# usa, li richiede solo chDB. Le suite di test incluse nei pacchetti di terzi
-# (pyarrow, numpy, pandas…) non servono a runtime e vengono rimosse; i test di
-# Tabularia non stanno nell'immagine, in sviluppo arrivano dal bind mount.
+# Without chDB pandas and numpy are skipped too: the application's code does not
+# use them, only chDB requires them. The test suites shipped in third-party packages
+# (pyarrow, numpy, pandas…) are not needed at runtime and are removed; Tabularia's
+# tests are not in the image, in development they come from the bind mount.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -93,9 +93,9 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends libltdl7 libkrb5-3 libgssapi-krb5-2 \
  && rm -rf /var/lib/apt/lists/*
 
-# HOME=/tmp: l'utente non ha home, e qualche libreria vuole scrivere cache lì.
-# MALLOC_ARENA_MAX=2: con i molti thread di Polars/Arrow limita la
-# frammentazione della memoria, come nel compose.
+# HOME=/tmp: the user has no home, and some libraries want to write caches there.
+# MALLOC_ARENA_MAX=2: with the many Polars/Arrow threads it limits memory
+# fragmentation, as in the compose.
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -107,19 +107,19 @@ ENV PATH="/opt/venv/bin:$PATH" \
 
 WORKDIR /app
 
-# Dal builder arriva solo il virtualenv: niente uv, niente toolchain, niente cache.
+# Only the virtualenv comes from the builder: no uv, no toolchain, no cache.
 COPY --from=builder /opt/venv /opt/venv
 # and DuckDB's httpfs extension (see the builder)
 COPY --from=builder /opt/duckdb-extensions /opt/duckdb-extensions
 ENV DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb-extensions
 
-# Solo il codice dell'applicazione: niente test, niente file di sviluppo.
-# I segreti locali restano fuori grazie al .dockerignore.
+# Only the application's code: no tests, no development files.
+# Local secrets stay out thanks to .dockerignore.
 COPY --chown=10001:10001 app ./app
 
 USER 10001:10001
 
 EXPOSE 8000
 
-# Nessun ENTRYPOINT: il comando di ogni ruolo sostituisce questo default.
+# No ENTRYPOINT: each role's command replaces this default.
 CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -23,7 +23,7 @@ wheels/
 *.egg
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Virtual Environment (NON copiare nel container!)
+# Virtual Environment (NEVER copy it into the container!)
 # ─────────────────────────────────────────────────────────────────────────────
 .venv/
 venv/
@@ -79,7 +79,7 @@ docs/
 !.env.example
 *.pem
 *.key
-# il file dei segreti locali sta sotto app/config: non deve MAI entrare in un'immagine
+# the local secrets file lives under app/config: it must NEVER get into an image
 app/config/secrets.toml
 **/secrets.toml
 
@@ -93,7 +93,7 @@ data/
 *.sqlite3
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Docker (non copiare file Docker nel container)
+# Docker (do not copy Docker files into the container)
 # ─────────────────────────────────────────────────────────────────────────────
 Dockerfile
 docker-compose*.yml

@@ -129,7 +129,7 @@ _SQLSERVER_TCP = {"0X2AF9": "Name or service not known", "0X2AFA": "Name or serv
                   "0X274D": "Connection refused", "0X2749": "Connection refused", "0X2751": "Connection refused",
                   "0X274C": "timed out"}
 _SQLSERVER_ARROW_RE = re.compile(r"Unsupported data type for Arrow batch fetch for column - (.+?), Type - (-?\d+)")
-_SQLSERVER_TIPI = {"-150": "sql_variant", "-151": "a CLR type: geometry, geography, hierarchyid"}
+_SQLSERVER_TYPES = {"-150": "sql_variant", "-151": "a CLR type: geometry, geography, hierarchyid"}
 _SQLSERVER_LOGIN_HINT = (
     "Check the connection's username, password and database: SQL Server reports a database "
     "that does not exist, or that the user cannot open, as a failed login."
@@ -253,9 +253,9 @@ def _oracle(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
         codes = _ORACLE_CODE_RE.findall(text)
         if not codes:
             return None
-        ora = [(c, m) for c, m in codes if c.startswith("ORA-")]
-        if ora:
-            code, message = ora[0]
+        now = [(c, m) for c, m in codes if c.startswith("ORA-")]
+        if now:
+            code, message = now[0]
         elif any(p.search(t) for t in _texts(chain) for _, p in _NET_PATTERNS):
             return None
         else:
@@ -269,7 +269,7 @@ def _sqlserver(chain: list[BaseException], texts: list[str], host: Optional[str]
     for t in texts:
         m = _SQLSERVER_ARROW_RE.search(t)
         if m:
-            kind = _SQLSERVER_TIPI.get(m.group(2), f"ODBC type {m.group(2)}")
+            kind = _SQLSERVER_TYPES.get(m.group(2), f"ODBC type {m.group(2)}")
             return (f"column {m.group(1)} has a type that cannot be imported ({kind}).",
                     "Convert it in a SQL source, e.g. CAST(col AS NVARCHAR(4000)).")
     for e in chain:
@@ -279,8 +279,8 @@ def _sqlserver(chain: list[BaseException], texts: list[str], host: Optional[str]
         driver = str(getattr(e, "driver_error", None) or "").strip()
         if "certificate verify failed" in ddbc:
             cause = ddbc.split("::", 1)[-1].rstrip("]").strip().replace("failed:", "failed: ")
-            dove = f"{host}:{port}" if host and port else (host or "the server")
-            return f"the TLS certificate of {dove} cannot be verified ({cause}).", _SQLSERVER_TLS_HINT
+            where = f"{host}:{port}" if host and port else (host or "the server")
+            return f"the TLS certificate of {where} cannot be verified ({cause}).", _SQLSERVER_TLS_HINT
         m = _SQLSERVER_TCP_RE.search(ddbc)
         if m and m.group(1).upper() in _SQLSERVER_TCP:
             return _network([_SQLSERVER_TCP[m.group(1).upper()]], host, port), None

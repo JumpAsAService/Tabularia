@@ -732,10 +732,10 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         _t0 = time.perf_counter()
         _phases: dict[str, float] = {}
 
-        def _phase(nome, da):
-            ora = time.perf_counter()
-            _phases[nome] = (ora - da) * 1000
-            return ora
+        def _phase(name, since):
+            now = time.perf_counter()
+            _phases[name] = (now - since) * 1000
+            return now
 
         ops = _coerce_ops(operations)
         _t = _t0

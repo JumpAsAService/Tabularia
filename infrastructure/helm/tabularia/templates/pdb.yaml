@@ -5,21 +5,21 @@ disruptions (node drains, cluster upgrades): they move one by one. maxUnavailabl
 rather than minAvailable, so that a component scaled to one replica is never
 blocked from moving. Beat is left out: it is a singleton with Recreate.
 */}}
-{{- range $componente := list "gateway" "orchestrator" "engine" "worker" "preview-worker" "frontend" }}
+{{- range $component := list "gateway" "orchestrator" "engine" "worker" "preview-worker" "frontend" }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "tabularia.fullname" $ }}-{{ $componente }}
+  name: {{ include "tabularia.fullname" $ }}-{{ $component }}
   labels:
     {{- include "tabularia.labels" $ | nindent 4 }}
-    app.kubernetes.io/component: {{ $componente }}
+    app.kubernetes.io/component: {{ $component }}
 spec:
   maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "tabularia.name" $ }}
       app.kubernetes.io/instance: {{ $.Release.Name }}
-      app.kubernetes.io/component: {{ $componente }}
+      app.kubernetes.io/component: {{ $component }}
 {{- end }}
 {{- end }}

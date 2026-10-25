@@ -1,4 +1,4 @@
-# Datasource auto-provisionato: VictoriaMetrics parla il protocollo Prometheus.
+# Auto-provisioned datasource: VictoriaMetrics speaks the Prometheus protocol.
 apiVersion: 1
 
 datasources:
