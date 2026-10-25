@@ -44,7 +44,9 @@ const projectsApi = useProjects()
 const scriptId = ref<number | null>(Number(route.query.id) || null)
 const projectId = ref<number | null>(Number(route.query.project) || null)
 const detail = ref<SavedScriptDetail | null>(null)
-const loading = ref(!!scriptId.value)
+// true for a new script too, until its environment is chosen: Create stays off until then (a
+// click before it was refused with «choose an environment» on a field not filled in yet)
+const loading = ref(true)
 const loadError = ref('')
 const saving = ref(false)
 
@@ -81,14 +83,17 @@ function apply(d: SavedScriptDetail) {
 async function load() {
   if (scriptId.value == null) {
     // a new script: the first environment one may use, and its language's template
-    loading.value = false
-    await scripting.load(true)
-    const first = environments.value[0]
-    environmentId.value = first?.id ?? null
-    content.value = {
-      files: first ? starterFiles(first.language) : [], entrypoint: first ? starterFiles(first.language)[0]!.path : '',
-      inputs: [], output: { publish: false, name: '', project_id: null, overwrite: true },
-      timeout_seconds: 900, retries: 0, retry_delay_seconds: 60,
+    try {
+      await scripting.load(true)
+      const first = environments.value[0]
+      environmentId.value = first?.id ?? null
+      content.value = {
+        files: first ? starterFiles(first.language) : [], entrypoint: first ? starterFiles(first.language)[0]!.path : '',
+        inputs: [], output: { publish: false, name: '', project_id: null, overwrite: true },
+        timeout_seconds: 900, retries: 0, retry_delay_seconds: 60,
+      }
+    } finally {
+      loading.value = false
     }
     savedAs.value = ''
     return
@@ -490,7 +495,7 @@ const unavailable = computed(() => {
             <Play v-else :size="14" />
             {{ $t('scripts.run') }}
           </button>
-          <button v-if="canEdit" class="primary" :disabled="saving || (!dirty && scriptId != null) || !!unavailable || inputsInvalid" @click="save">
+          <button v-if="canEdit" class="primary" :disabled="saving || loading || (!dirty && scriptId != null) || !!unavailable || inputsInvalid" @click="save">
             <LoaderCircle v-if="saving" :size="14" class="spin" />
             <Save v-else :size="14" />
             {{ scriptId == null ? $t('scripts.create') : $t('scripts.save') }}
