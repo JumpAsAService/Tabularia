@@ -20,6 +20,8 @@ from tests.conftest import make_datasource, make_permission, make_project, make_
 pytestmark = pytest.mark.anyio
 
 
+SMTP_PASSWORD = "smtp-password-in-clear-0d1e"
+
 @pytest.fixture
 def world(session, db_engine, monkeypatch, fake_engine):
     monkeypatch.setattr(orch, "engine", db_engine)
@@ -33,7 +35,7 @@ def world(session, db_engine, monkeypatch, fake_engine):
     p = make_project(session, name="Report")
     mail = make_project(session, name="Mail")
     smtp = Connection(name="relay", project_id=mail.id, db_type="smtp", host="smtp.acme.example", port=587,
-                      username="bot", password_encrypted=encrypt_secret("pw"),
+                      username="bot", password_encrypted=encrypt_secret(SMTP_PASSWORD),
                       extra=json.dumps({"from_address": "data@acme.example", "allowed_domains": "acme.example"}))
     session.add(smtp)
     session.commit()
@@ -155,7 +157,9 @@ async def test_the_cell_sends_through_the_engine_and_waits_for_the_outcome(world
     assert json.loads(child.email)["ok"] is True and cells[0][0]["run_id"] == child.id
     (sent,) = world["engine"].pushmails
     spec = sent["spec"]
-    assert sent["connection"]["db_type"] == "smtp" and "pw" not in json.dumps(sent)
+    # the password travels encrypted, never in clear (a short one such as «pw» turned up by
+    # chance inside the random ciphertext once in about thirty runs)
+    assert sent["connection"]["db_type"] == "smtp" and SMTP_PASSWORD not in json.dumps(sent)
     assert spec["to"] == ["anna@acme.example"] and spec["cc"] == ["bruno@acme.example"]
     assert spec["run_id"] == child.id and spec["flow"] == "Mattino" and spec["lang"] == "en"
     assert [(a["key"], a["label"], a["file_name"], a["max_rows"]) for a in spec["attachments"]] == [
