@@ -41,8 +41,8 @@ def _definition(*nodes) -> str:
 @pytest.fixture
 def world(session, db_engine, monkeypatch):
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
-    monkeypatch.setattr(orch, "_vive", set())
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
+    monkeypatch.setattr(orch, "_alive", set())
     notices: list[int] = []
 
     async def notify(session, run):
@@ -88,7 +88,7 @@ def _status(session, run_id):
 async def test_a_schedule_whose_author_keeps_the_rights_runs(world):
     s, w = world["session"], world
     run_id = _scheduled_run(s, w["author"], w["flow"])
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     assert w["started"] == [w["flow"].id] and _status(s, run_id).status == "SUCCESS"
 
 
@@ -104,7 +104,7 @@ async def test_an_author_who_lost_read_access_to_a_source_does_not_start(world):
         s.delete(p)
     s.commit()
     run_id = _scheduled_run(s, w["author"], w["flow"])
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     run = _status(s, run_id)
     assert w["started"] == []
     assert run.status == "FAILURE" and "author@x.it" in run.error and f"datasource #{w['payroll'].id}" in run.error
@@ -118,7 +118,7 @@ async def test_a_flow_it_runs_needs_run_too(world):
     s.add(w["flow"])
     s.commit()
     run_id = _scheduled_run(s, w["author"], w["flow"])
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     run = _status(s, run_id)
     assert run.status == "FAILURE" and "RUN on the folder of flow 'sub'" in run.error and w["started"] == []
 
@@ -133,7 +133,7 @@ async def test_a_refresh_needs_connect_on_its_connection(world):
     s.add(w["flow"])
     s.commit()
     run_id = _scheduled_run(s, w["author"], w["flow"])
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     assert "CONNECT on connection 'erp'" in _status(s, run_id).error
 
 
@@ -144,7 +144,7 @@ async def test_a_manual_run_is_not_preflighted(world):
     s.add(w["flow"])
     s.commit()
     run = orch.create_orchestration_run(s, w["author"], w["flow"], "manual")
-    await orch.esegui(run.id)
+    await orch.run_it(run.id)
     assert w["started"] == [w["flow"].id]
 
 

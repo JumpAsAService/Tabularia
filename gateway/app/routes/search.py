@@ -1,23 +1,22 @@
-"""Ricerca unificata per NOME su tutte le risorse del catalogo.
+"""Unified search by NAME over all the catalog's resources.
 
-Esistono già `/flows/search`, `/datasources/search` e `/connections/search`, ma
-ciascuna risponde per un tipo solo e due tipi non ne avevano affatto (cartelle e
-viste salvate). Chi cerca «margine» non sa, e non deve sapere, se quello che
-cerca è un flusso o una vista: questa rotta risponde alla domanda vera.
+`/flows/search`, `/datasources/search` and `/connections/search` exist already, but
+each answers for one kind only and two kinds had none at all (folders and saved
+views). Whoever looks for «margine» does not know, and must not need to know, whether
+what they look for is a flow or a view: this route answers the real question.
 
-**Perché non una UNION SQL.** I cinque tipi vivono in tabelle senza colonne in
-comune e — soprattutto — con permessi DIVERSI: le cartelle usano l'insieme
-navigabile (`visible_project_ids`, che include gli antenati per mostrare il
-percorso), i contenuti usano quello leggibile (`readable_project_ids`), e le
-connessioni una capability ORTOGONALE (CONNECT: chi ha solo VIEW non le vede).
-Una UNION dovrebbe portarsi dietro tre filtri diversi in un unico statement.
-Cinque query filtrate e un'unione in Python dicono la stessa cosa in modo
-leggibile, ed è la scelta che questo codice fa già altrove (vedi
-services/permissions.py, che risolve l'albero in Python di proposito).
+**Why not an SQL UNION.** The five kinds live in tables with no columns in common and
+— above all — with DIFFERENT permissions: folders use the navigable set
+(`visible_project_ids`, which includes the ancestors to show the path), contents use
+the readable one (`readable_project_ids`), and connections an ORTHOGONAL capability
+(CONNECT: whoever has only VIEW does not see them). A UNION would have to carry three
+different filters in one statement. Five filtered queries and a union in Python say
+the same thing readably, and it is the choice this code makes elsewhere already (see
+services/permissions.py, which resolves the tree in Python on purpose).
 
-**Si cerca solo nel NOME.** È ciò che serve, ed è prevedibile: un risultato che
-compare per una corrispondenza in un campo che l'utente non vede è un risultato
-che sembra un errore.
+**Only the NAME is searched.** It is what is needed, and it is predictable: a result
+that shows up for a match in a field the user does not see is a result that looks like
+a mistake.
 """
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
@@ -28,94 +27,94 @@ from app.models import Connection, Datasource, Flow, FlowGroup, Project, SavedSc
 from app.schemas.models import SearchHit, SearchOut
 from app.services import flow_access
 from app.services import permissions as perm_service
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["search"])
+router = APIRouter(route_class=ReleasingRoute, tags=["search"])
 
-# ordine di presentazione a parità di rilevanza: prima i contenitori, poi ciò che
-# si apre più spesso. Serve anche a rendere deterministico l'ordinamento.
+# presentation order at equal relevance: the containers first, then what is opened
+# most often. It also makes the sorting deterministic.
 _KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "connection": 6}
 
 
 def _like(q: str) -> str:
-    """Testo cercato → pattern LIKE, con gli speciali resi letterali: chi cerca
-    `a_b` intende `a_b`, non «a, un carattere qualsiasi, b».
+    """Searched text → LIKE pattern, with the special characters made literal: whoever
+    searches `a_b` means `a_b`, not «a, any character, b».
 
-    L'escape va DICHIARATO a ogni `ilike(..., escape="\\\\")`: in PostgreSQL la
-    barra rovescia è già l'escape predefinito di LIKE, in SQLite no. Senza
-    dichiararlo la stessa ricerca darebbe risultati diversi fra i test (SQLite) e
-    la produzione (Postgres), che è il tipo di divergenza peggiore: verde qui,
-    sbagliata sul campo.
+    The escape must be DECLARED at every `ilike(..., escape="\\\\")`: in PostgreSQL the
+    backslash is LIKE's default escape already, in SQLite it is not. Without declaring it
+    the same search would give different results between the tests (SQLite) and
+    production (Postgres), which is the worst kind of divergence: green here, wrong in
+    the field.
     """
     return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
 @router.get("/search", response_model=SearchOut)
 def search_everything(
-    q: str = Query("", description="cerca per nome su tutte le risorse"),
-    kind: str | None = Query(None, description="limita a un tipo: folder|flow|group|datasource|view|script|connection"),
+    q: str = Query("", description="searches by name over all the resources"),
+    kind: str | None = Query(None, description="limits to one kind: folder|flow|group|datasource|view|script|connection"),
     limit: int = Query(30, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    termine = q.strip()
-    if not termine:
+    term = q.strip()
+    if not term:
         return SearchOut(items=[], total=0, counts={})
 
-    pattern = _like(termine)
-    leggibili = perm_service.readable_project_ids(session, user)
-    navigabili = perm_service.visible_project_ids(session, user)
-    connettibili = perm_service.connectable_project_ids(session, user)
+    pattern = _like(term)
+    readable = perm_service.readable_project_ids(session, user)
+    navigable = perm_service.visible_project_ids(session, user)
+    connectable = perm_service.connectable_project_ids(session, user)
 
-    # nomi delle cartelle: servono a dire DOVE si trova ogni risultato
-    nomi_cartella = dict(session.exec(select(Project.id, Project.name)).all())
+    # the folders' names: needed to say WHERE each result is
+    folder_names = dict(session.exec(select(Project.id, Project.name)).all())
 
     hits: list[SearchHit] = []
 
-    if navigabili:
+    if navigable:
         for p in session.exec(
-            select(Project).where(Project.id.in_(navigabili), Project.name.ilike(pattern, escape="\\"))
+            select(Project).where(Project.id.in_(navigable), Project.name.ilike(pattern, escape="\\"))
         ).all():
             hits.append(SearchHit(
                 kind="folder", id=p.id, name=p.name,
-                project_id=p.parent_id, project_name=nomi_cartella.get(p.parent_id),
+                project_id=p.parent_id, project_name=folder_names.get(p.parent_id),
             ))
 
-    if leggibili:
+    if readable:
         for f in session.exec(
-            select(Flow).where(Flow.project_id.in_(leggibili), Flow.name.ilike(pattern, escape="\\"))
+            select(Flow).where(Flow.project_id.in_(readable), Flow.name.ilike(pattern, escape="\\"))
         ).all():
             hits.append(SearchHit(
                 kind="flow", id=f.id, name=f.name,
-                project_id=f.project_id, project_name=nomi_cartella.get(f.project_id),
+                project_id=f.project_id, project_name=folder_names.get(f.project_id),
                 detail=f.engine, locked_reason=flow_access.blocked(session, user, f.definition),
             ))
 
         for g in session.exec(
-            select(FlowGroup).where(FlowGroup.project_id.in_(leggibili), FlowGroup.name.ilike(pattern, escape="\\"))
+            select(FlowGroup).where(FlowGroup.project_id.in_(readable), FlowGroup.name.ilike(pattern, escape="\\"))
         ).all():
             hits.append(SearchHit(
                 kind="group", id=g.id, name=g.name,
-                project_id=g.project_id, project_name=nomi_cartella.get(g.project_id),
+                project_id=g.project_id, project_name=folder_names.get(g.project_id),
             ))
 
         for d in session.exec(
-            select(Datasource).where(Datasource.project_id.in_(leggibili), Datasource.name.ilike(pattern, escape="\\"))
+            select(Datasource).where(Datasource.project_id.in_(readable), Datasource.name.ilike(pattern, escape="\\"))
         ).all():
             hits.append(SearchHit(
                 kind="datasource", id=d.id, name=d.name,
-                project_id=d.project_id, project_name=nomi_cartella.get(d.project_id),
+                project_id=d.project_id, project_name=folder_names.get(d.project_id),
                 # a number, not a sentence: the interface writes it in its language
                 rows=d.rows,
             ))
 
         for v in session.exec(
-            select(SavedView).where(SavedView.project_id.in_(leggibili), SavedView.name.ilike(pattern, escape="\\"))
+            select(SavedView).where(SavedView.project_id.in_(readable), SavedView.name.ilike(pattern, escape="\\"))
         ).all():
             hits.append(SearchHit(
                 kind="view", id=v.id, name=v.name,
-                project_id=v.project_id, project_name=nomi_cartella.get(v.project_id),
+                project_id=v.project_id, project_name=folder_names.get(v.project_id),
             ))
 
     # scripts: VIEW on the folder AND the use of their environment (services/saved_scripts.py)
@@ -126,23 +125,23 @@ def search_everything(
         for sc in session.exec(stmt.where(SavedScript.name.ilike(pattern, escape="\\"))).all():
             hits.append(SearchHit(
                 kind="script", id=sc.id, name=sc.name,
-                project_id=sc.project_id, project_name=nomi_cartella.get(sc.project_id),
+                project_id=sc.project_id, project_name=folder_names.get(sc.project_id),
             ))
 
-    # CONNECT è ortogonale a VIEW: chi legge una cartella non ne vede per forza
-    # le connessioni, quindi l'insieme è un altro
-    if connettibili:
+    # CONNECT is orthogonal to VIEW: whoever reads a folder does not necessarily see its
+    # connections, so the set is another
+    if connectable:
         for c in session.exec(
-            select(Connection).where(Connection.project_id.in_(connettibili), Connection.name.ilike(pattern, escape="\\"))
+            select(Connection).where(Connection.project_id.in_(connectable), Connection.name.ilike(pattern, escape="\\"))
         ).all():
             hits.append(SearchHit(
                 kind="connection", id=c.id, name=c.name,
-                project_id=c.project_id, project_name=nomi_cartella.get(c.project_id),
+                project_id=c.project_id, project_name=folder_names.get(c.project_id),
                 detail=c.db_type,
             ))
 
-    # i conteggi descrivono TUTTO ciò che combacia, non la pagina corrente: è il
-    # numero che va nel selettore per tipo
+    # the counts describe EVERYTHING that matches, not the current page: it is the number
+    # that goes in the kind selector
     counts: dict[str, int] = {}
     for h in hits:
         counts[h.kind] = counts.get(h.kind, 0) + 1
@@ -150,11 +149,11 @@ def search_everything(
     if kind:
         hits = [h for h in hits if h.kind == kind]
 
-    # rilevanza minima ma reale: chi COMINCIA col termine cercato viene prima.
-    # Senza, cercare "ordini" mette "riordini_2024" sopra "ordini".
-    minuscolo = termine.lower()
+    # minimal but real relevance: whoever STARTS with the searched term comes first.
+    # Without it, searching "ordini" puts "riordini_2024" above "ordini".
+    lowercase = term.lower()
     hits.sort(key=lambda h: (
-        0 if h.name.lower().startswith(minuscolo) else 1,
+        0 if h.name.lower().startswith(lowercase) else 1,
         _KIND_ORDER.get(h.kind, 9),
         h.name.lower(),
     ))

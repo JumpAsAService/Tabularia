@@ -25,7 +25,7 @@ class DatabaseBackup(SQLModel, table=True):
     # a backup in progress, and the process making it
     running_since: Optional[datetime] = None
     claimed_by: Optional[str] = Field(default=None, max_length=200)
-    # the running backup's heartbeat: a claim without one for VIVO seconds is a dead
+    # the running backup's heartbeat: a claim without one for ALIVE seconds is a dead
     # process's, or one restored from a dump taken while it ran (the dump holds its own claim)
     alive_at: Optional[datetime] = None
     # how the last ones went

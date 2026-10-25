@@ -1,9 +1,9 @@
-"""Webhook: Tabularia chiama un indirizzo esterno quando un'esecuzione finisce.
+"""Webhooks: Tabularia calls an external address when a run ends.
 
-`Webhook` è l'abbonamento (dove, a quali eventi, per quale cartella);
-`WebhookDelivery` è una consegna: nasce nella stessa transazione che chiude il
-run (non si perde se il processo muore subito dopo) e la spedisce un ciclo degli
-orchestratori, con nuovi tentativi a distanza crescente. Vedi services/webhooks.py.
+`Webhook` is the subscription (where, on which events, for which folder);
+`WebhookDelivery` is a delivery: it is born in the same transaction that closes the
+run (it is not lost when the process dies right after) and a loop of the orchestrators
+sends it, with new attempts at growing intervals. See services/webhooks.py.
 """
 from datetime import datetime
 from typing import Optional
@@ -17,12 +17,12 @@ class Webhook(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(max_length=120)
     url: str = Field(max_length=2000)
-    # il segreto con cui si firma ogni consegna: cifrato (Fernet) perché serve
-    # in chiaro a ogni firma; si mostra solo alla creazione e alla rigenerazione
+    # the secret every delivery is signed with: encrypted (Fernet) because it is needed in
+    # clear at every signature; it is shown only at creation and regeneration
     secret_enc: str = Field(sa_column=Column(Text, nullable=False))
-    # eventi a cui è abbonato, JSON (lista di nomi, vedi webhooks.EVENTI)
+    # the events it subscribes to, JSON (a list of names, see webhooks.EVENTI)
     events: str = Field(sa_column=Column(Text, nullable=False))
-    # solo gli eventi di questa cartella e delle sue sottocartelle; nessuna = tutte
+    # only the events of this folder and its subfolders; none = all
     project_id: Optional[int] = Field(default=None, foreign_key="projects.id")
     active: bool = True
     created_by: Optional[int] = Field(default=None, foreign_key="users.id")
@@ -32,19 +32,19 @@ class Webhook(SQLModel, table=True):
 class WebhookDelivery(SQLModel, table=True):
     __tablename__ = "webhook_deliveries"
     __table_args__ = (
-        # la coda: quelle da spedire, in ordine di quando sono dovute
+        # the queue: the ones to send, in order of when they are due
         Index(
             "ix_webhook_deliveries_due", "next_attempt_at",
             postgresql_where=text("status = 'pending'"), sqlite_where=text("status = 'pending'"),
         ),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
-    # senza chiave esterna, apposta: la consegna nasce nella transazione che chiude
-    # un run, e un webhook tolto in quell'istante farebbe fallire la CHIUSURA del
-    # run. Una consegna di un webhook che non c'è più si chiude da sé («tolto»).
+    # without a foreign key, on purpose: the delivery is born in the transaction that closes
+    # a run, and a webhook removed in that instant would fail the run's CLOSING. A delivery
+    # of a webhook no longer there closes by itself («tolto»).
     webhook_id: int = Field(index=True)
     event: str = Field(max_length=64)
-    # il corpo esatto che si spedisce (e si firma): uguale a ogni tentativo
+    # the exact body that is sent (and signed): the same at every attempt
     payload: str = Field(sa_column=Column(Text, nullable=False))
     status: str = Field(default="pending", max_length=16)  # pending | sending | delivered | failed
     attempts: int = 0
@@ -53,6 +53,6 @@ class WebhookDelivery(SQLModel, table=True):
     delivered_at: Optional[datetime] = None
     last_status_code: Optional[int] = None
     last_error: Optional[str] = Field(default=None, max_length=500)
-    # quando un processo l'ha presa per spedirla: se muore a metà, oltre un
-    # tempo la consegna torna in coda (almeno una consegna, mai zero)
+    # when a process took it to send it: if it dies halfway, past a time the delivery goes
+    # back in the queue (at least once, never zero)
     claimed_at: Optional[datetime] = None

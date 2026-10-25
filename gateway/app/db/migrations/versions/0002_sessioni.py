@@ -1,16 +1,16 @@
-"""sessioni — una riga per ogni accesso aperto (vedi models/user_session.py)
+"""sessions — one row for every open sign-in (see models/user_session.py)
 
-Una tabella nuova, che il codice della versione precedente non legge, e
-users.last_seen_ip svuotata (quel codice la riscrive, ma non la legge): continua a
-funzionare durante un aggiornamento a rotazione.
+A new table, which the previous version's code does not read, and
+users.last_seen_ip emptied (that code writes it again, but does not read it): it keeps
+working during a rolling update.
 
-Revisione 0002, dopo 0001 — 2026-10-12 07:11:48.262075
-Solo in avanti, e compatibile col codice della versione precedente (expand/contract):
-vedi docs/database-migrations.md.
+Revision 0002, after 0001 — 2026-10-12 07:11:48.262075
+Forward only, and compatible with the previous version's code (expand/contract):
+see docs/database-migrations.md.
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel  # noqa: F401 — i tipi di SQLModel (AutoString) nelle colonne generate
+import sqlmodel  # noqa: F401 — SQLModel's types (AutoString) in the generated columns
 
 
 revision = '0002'
@@ -36,11 +36,11 @@ def upgrade() -> None:
     op.create_index(op.f('ix_user_sessions_expires_at'), 'user_sessions', ['expires_at'], unique=False)
     op.create_index(op.f('ix_user_sessions_user_id'), 'user_sessions', ['user_id'], unique=False)
     # ### end Alembic commands ###
-    # L'ultimo indirizzo di ogni utente stava in users.last_seen_ip, senza scadenza:
-    # ora sta nella sessione e se ne va con lei. Quelli raccolti finora si cancellano.
+    # Every user's last address sat in users.last_seen_ip, without expiry: now it sits in
+    # the session and goes with it. Those collected so far are deleted.
     op.execute("UPDATE users SET last_seen_ip = NULL")
 
 
 def downgrade() -> None:
-    # solo in avanti (scelta del progetto): si corregge con una revisione nuova
-    raise NotImplementedError("le migrazioni del gateway vanno solo in avanti")
+    # forward only (the project's choice): corrected with a new revision
+    raise NotImplementedError("the gateway's migrations go forward only")

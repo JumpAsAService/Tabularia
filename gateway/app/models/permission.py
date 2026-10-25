@@ -5,23 +5,23 @@ from sqlmodel import SQLModel, Field
 
 class Capability(str, enum.Enum):
     """
-    Cosa un soggetto può fare su un progetto. Gerarchia (chi può di più può di
-    meno): VIEW < RUN < EDIT < MANAGE. CONNECT è ortogonale (usare/creare
-    connessioni dati). MANAGE include tutto.
+    What a subject may do on a project. Hierarchy (whoever may do more may do less):
+    VIEW < RUN < EDIT < MANAGE. CONNECT is orthogonal (using/creating data connections).
+    MANAGE includes everything.
     """
-    VIEW = "view"       # vedere il progetto e il suo contenuto
-    RUN = "run"         # eseguire i flow
-    EDIT = "edit"       # creare/modificare contenuto
-    CONNECT = "connect" # usare/gestire connessioni dati
-    MANAGE = "manage"   # gestire il progetto e i suoi permessi
+    VIEW = "view"       # see the project and its content
+    RUN = "run"         # run the flows
+    EDIT = "edit"       # create/change content
+    CONNECT = "connect" # use/manage data connections
+    MANAGE = "manage"   # manage the project and its permissions
 
 
-# rango per l'implicazione lineare; CONNECT resta fuori (ortogonale)
+# rank for the linear implication; CONNECT stays out (orthogonal)
 _RANK = {Capability.VIEW: 0, Capability.RUN: 1, Capability.EDIT: 2, Capability.MANAGE: 3}
 
 
 def grant_satisfies(granted: str, needed: str) -> bool:
-    """Un permesso `granted` soddisfa la capability `needed`?"""
+    """Does a `granted` permission satisfy the `needed` capability?"""
     g, n = Capability(granted), Capability(needed)
     if g is Capability.MANAGE:
         return True
@@ -34,13 +34,12 @@ def grant_satisfies(granted: str, needed: str) -> bool:
 
 class Permission(SQLModel, table=True):
     """
-    Un permesso concede una `capability` su un `project` a un soggetto: un utente
-    (`user_id`) OPPURE un gruppo (`group_id`). Solo concessioni (allow-only) in
-    questo primo taglio; niente regole di deny.
+    A permission grants a `capability` on a `project` to a subject: a user (`user_id`) OR
+    a group (`group_id`). Grants only (allow-only) in this first cut; no deny rules.
     """
     __tablename__ = "permissions"
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="projects.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="users.id", index=True)
     group_id: Optional[int] = Field(default=None, foreign_key="groups.id", index=True)
-    capability: str  # valore di Capability
+    capability: str  # a Capability value

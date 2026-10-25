@@ -1,22 +1,21 @@
-"""Motori consentiti nell'installazione: lettura e modifica dal pannello admin.
+"""The engines allowed in the installation: read and changed from the admin panel.
 
-Serve a standardizzare la flotta — «qui si progetta solo su ClickHouse» — senza
-doverlo ripetere a ogni flusso.
+It serves to standardize the fleet — «here one designs only on ClickHouse» — without
+having to repeat it at every flow.
 
-Il contratto, scelto deliberatamente:
+The contract, chosen deliberately:
 
-- disabilitare un motore impedisce di SCEGLIERLO (creazione, cambio motore,
-  motore di produzione), ma NON ferma i flussi che lo usano già: un interruttore
-  premuto qui non deve poter fermare un DAG schedulato mentre gira;
-- perché la standardizzazione non resti cosmetica, ogni motore riporta quanti
-  flussi lo usano ancora — è la lista di lavoro della migrazione, visibile
-  all'amministratore invece che sepolta nel database;
-- l'ULTIMO motore consentito non si può togliere: un'installazione senza motori
-  non potrebbe più creare un flusso, e sarebbe un vicolo cieco raggiungibile con
-  un clic.
+- disabling an engine prevents CHOOSING it (creation, engine change, production
+  engine), but does NOT stop the flows that use it already: a switch pressed here must
+  not be able to stop a scheduled DAG while it runs;
+- so that standardization does not stay cosmetic, every engine reports how many flows
+  still use it — it is the migration's work list, visible to the administrator instead
+  of buried in the database;
+- the LAST allowed engine cannot be removed: an installation without engines could no
+  longer create a flow, and it would be a dead end reachable with one click.
 
-Scrittura solo superuser, e ogni cambio finisce nell'audit: modifica ciò che
-l'intera installazione può fare.
+Write for superusers only, and every change ends up in the audit: it changes what the
+whole installation can do.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, or_
@@ -28,15 +27,15 @@ from app.models import DisabledEngine, Flow, User
 from app.schemas.models import EnginePolicyOut, EnginePolicyUpdate
 from app.services import audit
 from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/engine-policy", tags=["engine-policy"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/engine-policy", tags=["engine-policy"])
 
 
 def _flows_using(session: Session, engine_id: str) -> int:
-    """Flussi che userebbero ancora questo motore: quello di SVILUPPO o quello
-    di PRODUZIONE: sono due campi distinti e un flusso può essere fuori standard
-    per l'uno o per l'altro."""
+    """The flows that would still use this engine: the DEVELOPMENT one or the PRODUCTION
+    one: they are two distinct fields and a flow may be off standard for one or the
+    other."""
     return session.exec(
         select(func.count())
         .select_from(Flow)
@@ -44,12 +43,12 @@ def _flows_using(session: Session, engine_id: str) -> int:
     ).one()
 
 
-def _stato(session: Session) -> list[EnginePolicyOut]:
-    vietati = disabled_engines(session)
+def _state(session: Session) -> list[EnginePolicyOut]:
+    forbidden = disabled_engines(session)
     return [
         EnginePolicyOut(
             engine_id=e,
-            allowed=e not in vietati,
+            allowed=e not in forbidden,
             flows_using=_flows_using(session, e),
         )
         for e in KNOWN_ENGINES
@@ -61,8 +60,8 @@ def list_engine_policy(
     user: User = Depends(require_observer),
     session: Session = Depends(get_session),
 ):
-    """Tutti i motori noti, con lo stato e quanti flussi li usano ancora."""
-    return _stato(session)
+    """All the known engines, with their state and how many flows still use them."""
+    return _state(session)
 
 
 @router.put("/{engine_id}", response_model=EnginePolicyOut)
@@ -77,33 +76,33 @@ def set_engine_policy(
     if eid not in KNOWN_ENGINES:
         raise HTTPException(status_code=404, detail=f"Unknown engine: '{engine_id}'")
 
-    vietati = disabled_engines(session)
-    riga = session.get(DisabledEngine, eid)
+    forbidden = disabled_engines(session)
+    row = session.get(DisabledEngine, eid)
 
     if body.allowed:
-        if riga is not None:
-            session.delete(riga)
+        if row is not None:
+            session.delete(row)
             session.commit()
     else:
-        # niente vicoli ciechi: se questo fosse l'ultimo consentito, nessuno
-        # potrebbe più creare un flusso e nemmeno rimediare dall'interfaccia
-        if len(vietati | {eid}) >= len(KNOWN_ENGINES):
+        # no dead ends: if this were the last allowed one, nobody could create a flow any more
+        # nor fix it from the interface
+        if len(forbidden | {eid}) >= len(KNOWN_ENGINES):
             raise HTTPException(
                 status_code=422,
                 detail="At least one engine must stay allowed: without one, no flow could be created.",
             )
-        if riga is None:
+        if row is None:
             session.add(DisabledEngine(engine_id=eid, disabled_by=user.id))
             session.commit()
 
-    usati = _flows_using(session, eid)
+    used = _flows_using(session, eid)
     audit.record_audit(
         session, actor=user,
         action=audit.ENGINE_ALLOW if body.allowed else audit.ENGINE_DISALLOW,
         target_type="engine", target_label=eid,
-        # il conteggio va nel registro: dice quanti flussi restano fuori
-        # standard NEL MOMENTO della decisione, che è l'informazione utile
-        # a chi legge l'audit mesi dopo
-        detail={"flows_using": usati}, request=request,
+        # the count goes in the log: it says how many flows stay off standard AT THE MOMENT of
+        # the decision, which is the useful information for whoever reads the audit months
+        # later
+        detail={"flows_using": used}, request=request,
     )
-    return EnginePolicyOut(engine_id=eid, allowed=body.allowed, flows_using=usati)
+    return EnginePolicyOut(engine_id=eid, allowed=body.allowed, flows_using=used)

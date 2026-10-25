@@ -10,10 +10,10 @@ def _now() -> datetime:
 
 class Connection(SQLModel, table=True):
     """
-    Una connessione a un database esterno (PostgreSQL/MySQL/MariaDB/ClickHouse/
-    Trino). Vive in una cartella come flussi e datasource, ma con la capability
-    ORTOGONALE `CONNECT`: chi la possiede può creare/usare/gestire le connessioni
-    di quel ramo, senza mai vedere la password (cifrata a riposo, mai nelle API).
+    A connection to an external database (PostgreSQL/MySQL/MariaDB/ClickHouse/Trino). It
+    lives in a folder as flows and datasources do, but with the ORTHOGONAL `CONNECT`
+    capability: whoever has it can create/use/manage that branch's connections, without
+    ever seeing the password (encrypted at rest, never in the API).
     """
     __tablename__ = "connections"
     __table_args__ = (UniqueConstraint("project_id", "name", name="uq_connection_project_name"),)
@@ -26,18 +26,17 @@ class Connection(SQLModel, table=True):
 
     db_type: str  # postgresql | mysql | mariadb | clickhouse | trino | oracle | sqlserver | s3 | smtp | sharepoint | sftp | api
     host: str
-    port: Optional[int] = None  # None = porta di default del db_type
+    port: Optional[int] = None  # None = the db_type's default port
     username: str = ""
     password_encrypted: str = Field(default="", sa_column=Column(Text, nullable=False))
     database: str = ""
-    db_schema: str = ""  # schema Postgres / schema Trino; vuoto = default
+    db_schema: str = ""  # Postgres schema / Trino schema; empty = default
 
-    # Opzioni specifiche del TIPO di connessione, in JSON. Le colonne qui sopra
-    # coprono ciò che i database e S3 hanno in comune; SMTP invece porta tre
-    # impostazioni senza una colonna naturale — mittente, modalità TLS e domini
-    # ammessi per i destinatari — e riusare `database`/`db_schema` come fa S3 ne
-    # avrebbe lasciata fuori una comunque. Meglio un posto dichiarato che un
-    # terzo trucco. Vuoto ("{}") per tutti gli altri tipi.
+    # Options specific to the connection's KIND, in JSON. The columns above cover what the
+    # databases and S3 have in common; SMTP instead carries three settings without a natural
+    # column — sender, TLS mode and the allowed domains for the recipients — and reusing
+    # `database`/`db_schema` as S3 does would have left one out anyway. Better a declared
+    # place than a third trick. Empty ("{}") for every other kind.
     extra: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
     # SFTP. The private key (PEM or OpenSSH) and its passphrase, encrypted TOGETHER

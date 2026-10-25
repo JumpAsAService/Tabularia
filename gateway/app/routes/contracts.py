@@ -1,9 +1,9 @@
-"""Data contracts di una datasource: leggere, scrivere, verificare, proporre.
+"""A datasource's data contracts: read, write, check, propose.
 
-Chi può: leggere il contratto e il suo stato chi ha VIEW sulla cartella della
-datasource (vede già i dati); scriverlo, verificarlo e farsene proporre uno chi
-ha EDIT. Le rotte che aspettano l'engine sono asincrone e non tengono una
-connessione al database mentre aspettano (vedi routes/proxy.py).
+Who may: read the contract and its state whoever has VIEW on the datasource's folder
+(they see the data already); write it, check it and get one proposed whoever has
+EDIT. The routes that wait for the engine are asynchronous and do not hold a
+database connection while waiting (see routes/proxy.py).
 """
 import json
 import logging
@@ -17,29 +17,29 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.core.engine_client import get_engine_client
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, DataContract, DataContractResult, Datasource, User
 from app.models.permission import Capability
-from app.routes.proxy import _release_db, _utente
+from app.routes.proxy import _release_db, _user
 from app.schemas.models import UtcDateTime
 from app.services import audit, contracts, notify_targets, odcs
 from app.services.permissions import has_capability
 
 logger = logging.getLogger(__name__)
-router = APIRouter(route_class=RottaCheRilascia, tags=["contracts"])
+router = APIRouter(route_class=ReleasingRoute, tags=["contracts"])
 
-# quanto si aspetta l'engine per una verifica chiesta a mano (lui rinuncia a 120 s)
+# how long the engine is waited for a check asked by hand (it gives up at 120 s)
 ENGINE_WAIT_SECONDS = 150
 
 
 class ContractIn(BaseModel):
     document: dict[str, Any]
     enabled: bool = True
-    # Chi avvisare quando lo stato cambia. None = come prima; "" toglie gli
-    # indirizzi; 0 toglie la connessione (come per l'avviso dei flussi).
+    # Whom to notify when the state changes. None = as before; "" removes the addresses; 0
+    # removes the connection (as for the flows' notice).
     notify_emails: Optional[str] = None
     notify_connection_id: Optional[int] = None
 
@@ -49,24 +49,24 @@ class ContractOut(BaseModel):
     version: int
     enabled: bool
     document: dict[str, Any]
-    # ciò che l'icona dice: pending | passed | warning | failed
+    # what the icon says: pending | passed | warning | failed
     status: str
     checked_at: Optional[UtcDateTime] = None
     errors: int = 0
     warnings: int = 0
-    # l'ultimo aggiornamento è stato rifiutato: si stanno servendo i dati di prima
+    # the last update was refused: the data of before is being served
     blocked: bool = False
     blocked_at: Optional[UtcDateTime] = None
     blocked_run_id: Optional[int] = None
     report: Optional[dict[str, Any]] = None
     updated_at: Optional[UtcDateTime] = None
-    # la verifica chiesta con questa richiesta non è riuscita (engine giù, dataset
-    # troppo grande): il contratto è salvato, lo stato resta quello di prima
+    # the check asked with this request failed (engine down, dataset too large): the
+    # contract is saved, the state stays the one of before
     check_error: Optional[str] = None
-    # chi legge può anche modificarlo (EDIT sulla cartella): l'interfaccia mostra
-    # i comandi solo a chi li può usare. Chi scrive è arrivato qui con EDIT.
+    # whoever reads may also change it (EDIT on the folder): the interface shows the
+    # commands only to whoever can use them. Whoever writes got here with EDIT.
     editable: bool = True
-    # chi viene avvisato al cambio di stato: lo vede solo chi può modificarlo
+    # who is notified at a change of state: only whoever can change it sees it
     notify_emails: str = ""
     notify_connection_id: Optional[int] = None
 
@@ -118,19 +118,19 @@ def _contract(session: Session, ds_id: int) -> DataContract:
 
 
 def _snapshot(ds: Datasource) -> dict:
-    """Ciò che serve all'engine per valutare i dati che la datasource serve adesso."""
-    prodotto = ds.refreshed_at or ds.updated_at or ds.created_at
-    if prodotto is not None and prodotto.tzinfo is None:
-        prodotto = prodotto.replace(tzinfo=timezone.utc)
-    return {"bucket": ds.bucket, "key": ds.key, "snapshot_at": prodotto.isoformat() if prodotto else None}
+    """What the engine needs to evaluate the data the datasource serves now."""
+    produced = ds.refreshed_at or ds.updated_at or ds.created_at
+    if produced is not None and produced.tzinfo is None:
+        produced = produced.replace(tzinfo=timezone.utc)
+    return {"bucket": ds.bucket, "key": ds.key, "snapshot_at": produced.isoformat() if produced else None}
 
 
 async def _ask_engine(path: str, body: dict) -> tuple[dict | None, str | None]:
-    """(risposta, None) oppure (None, perché non c'è)."""
+    """(answer, None) or (None, why there is none)."""
     try:
         resp = await get_engine_client().post(path, json=body, timeout=ENGINE_WAIT_SECONDS)
     except Exception as e:  # engine irraggiungibile
-        logger.warning("engine %s non raggiungibile: %s", path, e)
+        logger.warning("engine %s not reachable: %s", path, e)
         return None, "The engine cannot be reached"
     if resp.status_code >= 400:
         try:
@@ -140,13 +140,13 @@ async def _ask_engine(path: str, body: dict) -> tuple[dict | None, str | None]:
     return resp.json(), None
 
 
-# ── lettura ──────────────────────────────────────────────────────────────────
+# ── reading ──────────────────────────────────────────────────────────────────
 @router.get("/datasources/{ds_id}/contract", response_model=ContractOut)
 def get_contract(ds_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     ds = _datasource(session, user, ds_id, Capability.VIEW)
     out = _out(_contract(session, ds_id))
     out.editable = has_capability(session, user, ds.project_id, Capability.EDIT)
-    if not out.editable:  # gli indirizzi sono dati personali: non servono a chi legge soltanto
+    if not out.editable:  # the addresses are personal data: whoever only reads does not need them
         out.notify_emails, out.notify_connection_id = "", None
     return out
 
@@ -175,71 +175,71 @@ def contract_history(
 
 @router.get("/datasources/{ds_id}/contract/odcs")
 def export_odcs(ds_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> Response:
-    """Il contratto nel formato aperto ODCS (YAML): ciò che si consegna a un
-    catalogo o a un altro strumento. Solo export: la fonte resta il contratto qui."""
+    """The contract in the open ODCS format (YAML): what is handed to a catalog or another
+    tool. Export only: the source stays the contract here."""
     ds = _datasource(session, user, ds_id, Capability.VIEW)
     c = _contract(session, ds_id)
     try:
-        colonne = json.loads(ds.columns or "[]")
-        descrizioni = json.loads(ds.column_descriptions or "{}")
+        columns = json.loads(ds.columns or "[]")
+        descriptions = json.loads(ds.column_descriptions or "{}")
     except json.JSONDecodeError:
-        colonne, descrizioni = [], {}
-    documento = odcs.to_odcs(
+        columns, descriptions = [], {}
+    document = odcs.to_odcs(
         datasource_id=ds.id, name=ds.name, description=ds.description or "",
-        columns=colonne if isinstance(colonne, list) else [],
-        column_descriptions=descrizioni if isinstance(descrizioni, dict) else {},
+        columns=columns if isinstance(columns, list) else [],
+        column_descriptions=descriptions if isinstance(descriptions, dict) else {},
         document=_loads(c.document) or {"rules": []}, version=c.version, enabled=c.enabled, created_at=c.created_at,
     )
-    nome = re.sub(r"[^A-Za-z0-9._-]+", "_", ds.name).strip("._") or f"datasource_{ds.id}"
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", ds.name).strip("._") or f"datasource_{ds.id}"
     return Response(
-        content=odcs.dump_yaml(documento), media_type="application/yaml",
-        headers={"Content-Disposition": f'attachment; filename="{nome}.odcs.yaml"'},
+        content=odcs.dump_yaml(document), media_type="application/yaml",
+        headers={"Content-Disposition": f'attachment; filename="{name}.odcs.yaml"'},
     )
 
 
-# ── scrittura ────────────────────────────────────────────────────────────────
+# ── writing ──────────────────────────────────────────────────────────────────
 def _notify_targets(session: Session, user: User, ds_id: int, body: ContractIn) -> tuple[str | None, int | None] | None:
-    """(indirizzi, connessione SMTP) da salvare, controllati; None = non toccarli.
+    """(addresses, SMTP connection) to save, checked; None = do not touch them.
 
-    Decidere A CHI spedisce un server di posta chiede CONNECT sulla sua
-    connessione: sia quando la si sceglie, sia quando si cambiano gli indirizzi
-    tenendo quella che c'è. Chi modifica soltanto le regole rimanda tutto com'è e
-    non ne ha bisogno; e spegnere gli avvisi è sempre permesso."""
+    Deciding TO WHOM a mail server sends asks for CONNECT on its connection: both when it
+    is chosen, and when the addresses change keeping the one there. Whoever only changes
+    the rules sends everything back as it is and does not need it; and turning the
+    notices off is always allowed."""
     if body.notify_emails is None and body.notify_connection_id is None:
         return None
-    attuale = contracts.get(session, ds_id)
-    prima = (attuale.notify_emails, attuale.notify_connection_id) if attuale else (None, None)
-    emails, conn_id = prima
+    current_one = contracts.get(session, ds_id)
+    before = (current_one.notify_emails, current_one.notify_connection_id) if current_one else (None, None)
+    emails, conn_id = before
     if body.notify_emails is not None:
         emails = ", ".join(notify_targets.parse_recipients(body.notify_emails)) or None
     if body.notify_connection_id is not None:
         conn_id = None if body.notify_connection_id in (0, -1) else body.notify_connection_id
     if emails and conn_id:
-        if (emails, conn_id) != prima:
+        if (emails, conn_id) != before:
             notify_targets.smtp_connection(session, user, conn_id)
         notify_targets.ensure_deliverable(session.get(Connection, conn_id), emails.split(", "))
-    elif conn_id and conn_id != prima[1]:
-        notify_targets.smtp_connection(session, user, conn_id)   # scelta senza indirizzi: deve comunque essere SMTP e sua
+    elif conn_id and conn_id != before[1]:
+        notify_targets.smtp_connection(session, user, conn_id)   # chosen without addresses: it must still be SMTP and theirs
     return emails, conn_id
 
 
 @router.put("/datasources/{ds_id}/contract", response_model=ContractOut)
 async def put_contract(
     ds_id: int, body: ContractIn, request: Request,
-    user: User = Depends(_utente), session: Session = Depends(get_session),
+    user: User = Depends(_user), session: Session = Depends(get_session),
 ):
-    """Crea o sostituisce il contratto, poi lo verifica sui dati correnti. La
-    verifica qui non può bloccare niente (non c'è uno snapshot nuovo da
-    rifiutare): dice solo se i dati che ci sono già lo rispettano."""
+    """Creates or replaces the contract, then checks it on the current data. The check here
+    cannot block anything (there is no new snapshot to refuse): it only says whether the
+    data there already respects it."""
     try:
         document = contracts.validate_document(body.document)
     except contracts.ContractInvalid as e:
         raise HTTPException(status_code=422, detail={"message": "The contract is not valid", "errors": e.errors})
 
-    def salva() -> tuple[dict, bool]:
+    def save() -> tuple[dict, bool]:
         ds = _datasource(session, user, ds_id, Capability.EDIT)
         c = contracts.save(session, ds, document, body.enabled, user.id, notify=_notify_targets(session, user, ds_id, body))
-        da_verificare = c.enabled and c.status == "pending" and bool(document["rules"])
+        to_check = c.enabled and c.status == "pending" and bool(document["rules"])
         snap = _snapshot(ds)
         session.commit()
         audit.record_audit(
@@ -249,25 +249,25 @@ async def put_contract(
             request=request,
         )
         _release_db(session, user)
-        return snap, da_verificare
+        return snap, to_check
 
-    snap, da_verificare = await run_in_threadpool(salva)
-    report, errore = (None, None)
-    if da_verificare:
-        report, errore = await _ask_engine("/contracts/evaluate", {**snap, "document": document})
+    snap, to_check = await run_in_threadpool(save)
+    report, error = (None, None)
+    if to_check:
+        report, error = await _ask_engine("/contracts/evaluate", {**snap, "document": document})
 
-    def chiudi() -> ContractOut:
+    def close() -> ContractOut:
         c = _contract(session, ds_id)
-        # il referto vale solo se il contratto è ancora quello appena salvato
+        # the report holds only if the contract is still the one just saved
         if report is not None and json.loads(c.document) == document:
             contracts.record_result(session, c, report, trigger="save", snapshot_key=snap["key"])
             session.commit()
             session.refresh(c)
-        out = _out(c, errore)
+        out = _out(c, error)
         _release_db(session, user)
         return out
 
-    return await run_in_threadpool(chiudi)
+    return await run_in_threadpool(close)
 
 
 @router.delete("/datasources/{ds_id}/contract", status_code=status.HTTP_204_NO_CONTENT)
@@ -285,44 +285,44 @@ def delete_contract(
 
 
 @router.post("/datasources/{ds_id}/contract/check", response_model=ContractOut)
-async def check_contract(ds_id: int, user: User = Depends(_utente), session: Session = Depends(get_session)):
-    """Verifica adesso il contratto sui dati che la datasource sta servendo."""
+async def check_contract(ds_id: int, user: User = Depends(_user), session: Session = Depends(get_session)):
+    """Checks the contract now on the data the datasource is serving."""
 
-    def prima() -> tuple[dict, dict]:
+    def before() -> tuple[dict, dict]:
         ds = _datasource(session, user, ds_id, Capability.EDIT)
         c = _contract(session, ds_id)
-        dati = (_snapshot(ds), _loads(c.document) or {"rules": []})
+        data = (_snapshot(ds), _loads(c.document) or {"rules": []})
         _release_db(session, user)
-        return dati
+        return data
 
-    snap, document = await run_in_threadpool(prima)
-    report, errore = await _ask_engine("/contracts/evaluate", {**snap, "document": document})
+    snap, document = await run_in_threadpool(before)
+    report, error = await _ask_engine("/contracts/evaluate", {**snap, "document": document})
 
-    def dopo() -> ContractOut:
+    def after() -> ContractOut:
         c = _contract(session, ds_id)
         if report is not None and (_loads(c.document) or {}) == document:
             contracts.record_result(session, c, report, trigger="manual", snapshot_key=snap["key"])
             session.commit()
             session.refresh(c)
-        out = _out(c, errore)
+        out = _out(c, error)
         _release_db(session, user)
         return out
 
-    return await run_in_threadpool(dopo)
+    return await run_in_threadpool(after)
 
 
 @router.post("/datasources/{ds_id}/contract/proposal")
-async def propose_contract(ds_id: int, user: User = Depends(_utente), session: Session = Depends(get_session)) -> dict:
-    """Un contratto proposto dai dati correnti. Non lo salva: è un punto di partenza."""
+async def propose_contract(ds_id: int, user: User = Depends(_user), session: Session = Depends(get_session)) -> dict:
+    """A contract proposed from the current data. It does not save it: it is a starting point."""
 
-    def prima() -> dict:
+    def before() -> dict:
         ds = _datasource(session, user, ds_id, Capability.EDIT)
         snap = _snapshot(ds)
         _release_db(session, user)
         return snap
 
-    snap = await run_in_threadpool(prima)
-    risposta, errore = await _ask_engine("/contracts/profile", {"bucket": snap["bucket"], "key": snap["key"]})
-    if risposta is None:
-        raise HTTPException(status_code=502, detail=errore or "Data profile not available")
-    return {"document": risposta.get("proposal") or {"rules": []}, "profile": risposta.get("profile")}
+    snap = await run_in_threadpool(before)
+    answer, error = await _ask_engine("/contracts/profile", {"bucket": snap["bucket"], "key": snap["key"]})
+    if answer is None:
+        raise HTTPException(status_code=502, detail=error or "Data profile not available")
+    return {"document": answer.get("proposal") or {"rules": []}, "profile": answer.get("profile")}

@@ -1,4 +1,4 @@
-"""Le chiamate di CONTROLLO verso l'engine hanno un tetto (audit 2026-10-08, M3).
+"""Le chiamate di CHECK verso l'engine hanno un tetto (audit 2026-10-08, M3).
 
 Il client verso l'engine non ha timeout, per gli upload da gigabyte. Ma lo usano
 anche il lancio dei run, la riconciliazione e le pulizie: un engine inchiodato o
@@ -27,7 +27,7 @@ async def engine_muto(monkeypatch):
     porta = server.sockets[0].getsockname()[1]
     client = httpx.AsyncClient(base_url=f"http://127.0.0.1:{porta}", timeout=None)  # come quello vero
     monkeypatch.setattr(ec, "_client", client)
-    monkeypatch.setattr(runs, "CONTROLLO", httpx.Timeout(0.3, connect=0.3))
+    monkeypatch.setattr(runs, "CHECK", httpx.Timeout(0.3, connect=0.3))
     yield
     await client.aclose()
     server.close()
@@ -45,7 +45,7 @@ async def test_la_revoca_non_resta_appesa_a_un_engine_muto(session, engine_muto)
 
 
 async def test_il_tetto_vale_per_il_controllo_non_per_il_resto():
-    assert ec.CONTROLLO.read == 30.0 and ec.CONTROLLO.connect == 5.0
+    assert ec.CHECK.read == 30.0 and ec.CHECK.connect == 5.0
     ec._client = None
     try:
         assert ec.get_engine_client().timeout.read is None   # upload ed export restano senza tetto

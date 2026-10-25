@@ -17,22 +17,22 @@ from tests.conftest import make_flow, make_project, make_run, make_user
 
 @pytest.fixture
 def scenario(session, monkeypatch):
-    progetto = make_project(session, name="P")
-    autore = make_user(session, email="alice@x.it")
+    project = make_project(session, name="P")
+    author = make_user(session, email="alice@x.it")
     conn = Connection(
-        name="posta", db_type="smtp", project_id=progetto.id, owner_id=autore.id,
+        name="posta", db_type="smtp", project_id=project.id, owner_id=author.id,
         host="smtp.x.it", port=587, username="u", extra='{"from_address": "tabularia@x.it"}',
     )
     session.add(conn)
     session.commit()
     session.refresh(conn)
-    flow = make_flow(session, name="Fatturato", project_id=progetto.id)
+    flow = make_flow(session, name="Fatturato", project_id=project.id)
     flow.notify_emails = "alice@x.it, bruno@x.it"
     flow.notify_connection_id = conn.id
     session.add(flow)
     session.commit()
 
-    inviati = []
+    sent = []
 
     class _Resp:
         status_code = 200
@@ -40,17 +40,17 @@ def scenario(session, monkeypatch):
 
     class _Client:
         async def post(self, url, json=None, timeout=None):
-            inviati.append({"url": url, **(json or {})})
+            sent.append({"url": url, **(json or {})})
             return _Resp()
 
     monkeypatch.setattr(notifier, "get_engine_client", lambda: _Client())
-    return flow, conn, inviati
+    return flow, conn, sent
 
 
-def _run(session, flow, *, status="FAILURE", trigger="schedule", quando=None, error="boom", kind="orchestration"):
+def _run(session, flow, *, status="FAILURE", trigger="schedule", when=None, error="boom", kind="orchestration"):
     """L'esecuzione programmata di un flusso è il run di ORCHESTRAZIONE: è quello
     che l'orchestratore passa al notificatore."""
-    t = quando or datetime.now(timezone.utc).replace(tzinfo=None)
+    t = when or datetime.now(timezone.utc).replace(tzinfo=None)
     return make_run(
         session, kind=kind, flow_id=flow.id, status=status, trigger_type=trigger,
         error=error, started_at=t, finished_at=t, task_id="" if kind == "orchestration" else "t-1",
@@ -62,10 +62,10 @@ def _avvisa(session, run):
 
 
 def test_a_scheduled_failure_sends_the_notice(session, scenario):
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     _avvisa(session, _run(session, flow))
-    assert len(inviati) == 1
-    msg = inviati[0]
+    assert len(sent) == 1
+    msg = sent[0]
     assert msg["to"] == ["alice@x.it", "bruno@x.it"]
     assert flow.name in msg["subject"]
     assert "boom" in msg["body"]  # l'errore vero, non un «qualcosa è andato storto»
@@ -73,44 +73,44 @@ def test_a_scheduled_failure_sends_the_notice(session, scenario):
 
 def test_a_manual_failure_says_nothing(session, scenario):
     """Chi lancia a mano sta guardando lo schermo: avvisarlo è rumore."""
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     _avvisa(session, _run(session, flow, trigger="manual"))
-    assert inviati == []
+    assert sent == []
 
 
 def test_a_success_says_nothing(session, scenario):
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     _avvisa(session, _run(session, flow, status="SUCCESS", error=None))
-    assert inviati == []
+    assert sent == []
 
 
 def test_it_does_not_repeat_while_it_keeps_failing(session, scenario):
     """Un flusso rotto che scatta ogni cinque minuti manderebbe 300 email al
     giorno, e alla terza nessuno le leggerebbe più."""
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     ieri = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
-    _run(session, flow, quando=ieri)  # era già fallita
+    _run(session, flow, when=ieri)  # era già fallita
     _avvisa(session, _run(session, flow))
-    assert inviati == []
+    assert sent == []
 
 
 def test_it_speaks_again_after_a_recovery(session, scenario):
     """Fallito, risolto, fallito di nuovo: il secondo guasto è una notizia."""
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     base = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
-    _run(session, flow, quando=base)
-    _run(session, flow, status="SUCCESS", error=None, quando=base + timedelta(hours=1))
-    _avvisa(session, _run(session, flow, quando=base + timedelta(hours=2)))
-    assert len(inviati) == 1
+    _run(session, flow, when=base)
+    _run(session, flow, status="SUCCESS", error=None, when=base + timedelta(hours=1))
+    _avvisa(session, _run(session, flow, when=base + timedelta(hours=2)))
+    assert len(sent) == 1
 
 
 def test_without_recipients_or_connection_nothing_is_sent(session, scenario):
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     flow.notify_emails = None
     session.add(flow)
     session.commit()
     _avvisa(session, _run(session, flow))
-    assert inviati == []
+    assert sent == []
 
 
 def test_a_broken_notice_never_changes_the_outcome(session, scenario, monkeypatch):
@@ -163,11 +163,11 @@ def test_the_notice_is_about_the_orchestration_not_its_output_runs(session, scen
     """Per mesi qui c'era scritto kind == "flow": l'orchestratore passa il run di
     orchestrazione, e l'avviso non partiva mai. I run "flow" sono i figli (uno per
     nodo Output) e da soli non avvisano."""
-    flow, _, inviati = scenario
+    flow, _, sent = scenario
     _avvisa(session, _run(session, flow, kind="flow"))
-    assert inviati == []
+    assert sent == []
     _avvisa(session, _run(session, flow))
-    assert len(inviati) == 1
+    assert len(sent) == 1
 
 
 def test_a_rejected_launch_does_not_count_as_a_previous_failure(session, scenario):
@@ -175,9 +175,9 @@ def test_a_rejected_launch_does_not_count_as_a_previous_failure(session, scenari
     fallita: non deve zittire l'avviso della prossima che fallisce davvero."""
     from datetime import timedelta
 
-    flow, _, inviati = scenario
-    ora = datetime.now(timezone.utc).replace(tzinfo=None)
-    _run(session, flow, status="SUCCESS", quando=ora - timedelta(hours=2), error=None)
-    _run(session, flow, trigger="manual", quando=ora - timedelta(hours=1), error="flow already running")
-    _avvisa(session, _run(session, flow, quando=ora))
-    assert len(inviati) == 1
+    flow, _, sent = scenario
+    at = datetime.now(timezone.utc).replace(tzinfo=None)
+    _run(session, flow, status="SUCCESS", when=at - timedelta(hours=2), error=None)
+    _run(session, flow, trigger="manual", when=at - timedelta(hours=1), error="flow already running")
+    _avvisa(session, _run(session, flow, when=at))
+    assert len(sent) == 1

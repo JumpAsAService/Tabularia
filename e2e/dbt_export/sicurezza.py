@@ -111,13 +111,13 @@ def frase(codice: str, **parametri) -> str:
     import importlib.util
     from ambiente import REPO
 
-    for nome, percorso in (("app.core.lingua", "gateway/app/core/lingua.py"), ("messaggi_dbt", "gateway/app/services/messaggi_dbt.py")):
+    for nome, percorso in (("app.core.language", "gateway/app/core/language.py"), ("messaggi_dbt", "gateway/app/services/dbt_messages.py")):
         if nome not in sys.modules:
             spec = importlib.util.spec_from_file_location(nome, f"{REPO}/{percorso}")
             modulo = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(modulo)
             sys.modules[nome] = modulo
-    return sys.modules["messaggi_dbt"].traduci(codice, parametri, "en")
+    return sys.modules["messaggi_dbt"].translate(codice, parametri, "en")
 
 
 def dettaglio(risposta) -> str:

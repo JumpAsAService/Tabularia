@@ -17,7 +17,7 @@ from sqlmodel import Session
 
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import require_observer, require_superuser
 from app.models import DatabaseBackup, User
@@ -26,7 +26,7 @@ from app.services import api_tokens, audit, db_backup
 from app.services.permissions import is_admin
 from app.services.schedule import ScheduleError, validate_schedule
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/backups", tags=["backups"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/backups", tags=["backups"])
 
 
 class BackupItem(BaseModel):
@@ -70,10 +70,10 @@ class BackupUpdate(BaseModel):
     reset: list[str] = []
 
 
-def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
-    from app.routes.api_tokens import nega_se_da_token
+def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
+    from app.routes.api_tokens import deny_if_from_token
 
-    nega_se_da_token(request, api_tokens.NIENTE_BACKUP_DA_TOKEN)
+    deny_if_from_token(request, api_tokens.NO_BACKUP_FROM_TOKEN)
 
 
 async def _out(session: Session, who: User) -> BackupOut:
@@ -86,7 +86,7 @@ async def _out(session: Session, who: User) -> BackupOut:
         available=reason is None, disabled_reason=reason, enabled=eff["enabled"], schedule=eff["schedule"],
         keep=eff["keep"], timezone=get_settings().app.timezone, defaults=eff["defaults"], changed=eff["changed"],
         next_at=r.next_at if eff["enabled"] else None,
-        running_since=r.running_since if db_backup.in_corso(r) else None, requested_at=r.requested_at,
+        running_since=r.running_since if db_backup.running(r) else None, requested_at=r.requested_at,
         last_ok_at=r.last_ok_at, last_name=r.last_name, last_size=r.last_size, last_seconds=r.last_seconds,
         last_error=r.last_error if full else None, last_error_at=r.last_error_at,
         bucket=found.get("bucket"), prefix=found.get("prefix"), same_as_data=found.get("same_as_data"),
@@ -97,11 +97,11 @@ async def _out(session: Session, who: User) -> BackupOut:
 
 
 @router.get("", response_model=BackupOut)
-async def stato(session: Session = Depends(get_session), who: User = Depends(require_observer)):
+async def state(session: Session = Depends(get_session), who: User = Depends(require_observer)):
     return await _out(session, who)
 
 
-@router.put("", response_model=BackupOut, dependencies=[Depends(_niente_token)])
+@router.put("", response_model=BackupOut, dependencies=[Depends(_no_token)])
 async def cambia(body: BackupUpdate, request: Request, session: Session = Depends(get_session),
                  admin: User = Depends(require_superuser)):
     r = db_backup.row(session)
@@ -132,15 +132,15 @@ async def cambia(body: BackupUpdate, request: Request, session: Session = Depend
     return await _out(session, admin)
 
 
-@router.post("/run", response_model=BackupOut, dependencies=[Depends(_niente_token)])
-async def adesso(request: Request, session: Session = Depends(get_session), admin: User = Depends(require_superuser)):
+@router.post("/run", response_model=BackupOut, dependencies=[Depends(_no_token)])
+async def now(request: Request, session: Session = Depends(get_session), admin: User = Depends(require_superuser)):
     """«Back up now»: the first orchestrator that looks (every few seconds) makes it."""
     reason = db_backup.disabled_reason(session)
     if reason:
         raise HTTPException(status_code=409, detail="Backups are not available on this installation")
     db_backup.row(session)
     taken = session.exec(update(DatabaseBackup).where(
-        DatabaseBackup.id == 1, db_backup.ferma(), DatabaseBackup.requested_at.is_(None))  # type: ignore[union-attr]
+        DatabaseBackup.id == 1, db_backup.stop(), DatabaseBackup.requested_at.is_(None))  # type: ignore[union-attr]
         .values(requested_at=datetime.now(timezone.utc).replace(tzinfo=None), requested_by=admin.email)).rowcount
     session.commit()
     if taken != 1:
@@ -149,8 +149,8 @@ async def adesso(request: Request, session: Session = Depends(get_session), admi
     return await _out(session, admin)
 
 
-@router.get("/{name}/download", dependencies=[Depends(_niente_token)])
-async def scarica(name: str, request: Request, session: Session = Depends(get_session),
+@router.get("/{name}/download", dependencies=[Depends(_no_token)])
+async def download(name: str, request: Request, session: Session = Depends(get_session),
                   admin: User = Depends(require_superuser)):
     if not db_backup.NAME.match(name):
         raise HTTPException(status_code=404, detail="No such backup")

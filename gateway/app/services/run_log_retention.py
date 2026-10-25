@@ -25,40 +25,40 @@ logger = logging.getLogger(__name__)
 
 # rows per transaction: a first pass over years of runs must not hold one long
 # transaction while the application works
-LOTTO = 500
-MAX_LOTTI = 200
+BATCH = 500
+MAX_BATCHES = 200
 STEP_KINDS = ("script", "container")
 # a JSON with a log (json.dumps writes `"log": "…"`), not emptied yet
 _WITH_LOG = '%"log": "_%'
 _EMPTIED = '%"log_expired": %'  # true, or false for a log that was empty already
 
 
-def _adesso() -> datetime:
+def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC columns
 
 
-def svuota(session: Session, giorni: int, ora: datetime | None = None) -> int:
-    """Empties the logs of the runs ended more than `giorni` days ago. Returns how
+def empty_out(session: Session, days: int, at: datetime | None = None) -> int:
+    """Empties the logs of the runs ended more than `days` days ago. Returns how
     many runs lost something."""
-    if giorni <= 0:
+    if days <= 0:
         return 0
-    taglio = (ora or _adesso()) - timedelta(days=giorni)
-    vecchi = (Run.finished_at.is_not(None), Run.finished_at < taglio)  # type: ignore[union-attr]
-    tolti = 0
+    cutoff = (at or _now()) - timedelta(days=days)
+    old_ones = (Run.finished_at.is_not(None), Run.finished_at < cutoff)  # type: ignore[union-attr]
+    removed_items = 0
     # the engine's tracebacks: one UPDATE per batch
-    for _ in range(MAX_LOTTI):
-        ids = select(Run.id).where(*vecchi, Run.error_detail.is_not(None)).limit(LOTTO).scalar_subquery()  # type: ignore[union-attr]
+    for _ in range(MAX_BATCHES):
+        ids = select(Run.id).where(*old_ones, Run.error_detail.is_not(None)).limit(BATCH).scalar_subquery()  # type: ignore[union-attr]
         n = session.exec(update(Run).where(Run.id.in_(ids)).values(error_detail=None)  # type: ignore[union-attr]
                          .execution_options(synchronize_session=False)).rowcount or 0
         session.commit()
-        tolti += n
-        if n < LOTTO:
+        removed_items += n
+        if n < BATCH:
             break
     # the logs of Script and Container runs, inside their JSON
-    for _ in range(MAX_LOTTI):
+    for _ in range(MAX_BATCHES):
         rows = session.exec(select(Run.id, Run.script).where(
-            *vecchi, Run.kind.in_(STEP_KINDS), Run.script.like(_WITH_LOG),  # type: ignore[union-attr]
-            ~Run.script.like(_EMPTIED)).limit(LOTTO)).all()  # type: ignore[union-attr]
+            *old_ones, Run.kind.in_(STEP_KINDS), Run.script.like(_WITH_LOG),  # type: ignore[union-attr]
+            ~Run.script.like(_EMPTIED)).limit(BATCH)).all()  # type: ignore[union-attr]
         for run_id, raw in rows:
             try:
                 info = json.loads(raw or "{}")
@@ -69,7 +69,7 @@ def svuota(session: Session, giorni: int, ora: datetime | None = None) -> int:
             session.exec(update(Run).where(Run.id == run_id).values(script=json.dumps(info))
                          .execution_options(synchronize_session=False))
         session.commit()
-        tolti += len(rows)
-        if len(rows) < LOTTO:
+        removed_items += len(rows)
+        if len(rows) < BATCH:
             break
-    return tolti
+    return removed_items

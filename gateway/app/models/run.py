@@ -8,14 +8,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# la condizione dell'indice unico parziale (anche nelle migrazioni di db/session.py)
+# the partial unique index's condition (in db/session.py's migrations too)
 LIVE_ORCHESTRATION = "kind = 'orchestration' AND status = 'STARTED'"
 # a refresh still running: the condition of a partial index, so a query that writes it
 # the same way reads only the live rows (the "importing…" flag of every datasource list)
 LIVE_INGEST = "kind = 'ingest' AND status NOT IN ('SUCCESS', 'FAILURE')"
 
-# cosa si scrive su un'orchestrazione che nessuno finirà (niente apici: entra
-# anche in un'istruzione SQL delle migrazioni)
+# what is written on an orchestration nobody will finish (no quotes: it goes into an
+# SQL statement of the migrations too)
 ORCHESTRATION_INTERRUPTED = (
     "Orchestration interrupted: the process running it stopped and the remaining steps "
     "were not run. Check what has already been produced and run the flow again."
@@ -29,19 +29,18 @@ STEP_INTERRUPTED = (
 
 class Run(SQLModel, table=True):
     """
-    Un'esecuzione di un flusso: la riga nasce al lancio (PENDING) e viene
-    riconciliata pigramente con lo stato del task Celery ogni volta che
-    qualcuno la legge (nessun poller in background: chi guarda, aggiorna).
+    A flow's run: the row is born at launch (PENDING) and is reconciled lazily with the
+    Celery task's state each time someone reads it (no background poller: whoever looks,
+    updates).
 
-    Se al lancio è stata chiesta la pubblicazione (`publish_name`), al passaggio
-    a SUCCESS l'output diventa una Datasource riusabile come sorgente.
+    When publishing was asked at launch (`publish_name`), on the move to SUCCESS the
+    output becomes a Datasource reusable as a source.
     """
     __tablename__ = "runs"
     __table_args__ = (
-        # Di un flusso gira UNA orchestrazione alla volta, e lo garantisce il
-        # database: con più processi che eseguono, un elenco in memoria non lo
-        # vede nessun altro. Chi prova a far partire la seconda riceve l'errore
-        # dell'indice (vedi `orchestrator.rivendica`).
+        # ONE orchestration of a flow runs at a time, and the database guarantees it: with
+        # several processes running, a list in memory is seen by nobody else. Whoever tries to
+        # start the second gets the index's error (see `orchestrator.claim`).
         Index(
             "uq_runs_one_live_orchestration",
             "flow_id",
@@ -65,7 +64,7 @@ class Run(SQLModel, table=True):
             postgresql_where=text(LIVE_ORCHESTRATION),
             sqlite_where=text(LIVE_ORCHESTRATION),
         ),
-        # la coda delle orchestrazioni da rivendicare: solo le righe in attesa
+        # the queue of the orchestrations to claim: only the waiting rows
         Index(
             "ix_runs_orchestration_queue",
             "id",
@@ -87,8 +86,8 @@ class Run(SQLModel, table=True):
         ),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
-    # kind="flow": esecuzione di un flusso (flow_id valorizzato).
-    # kind="ingest": refresh di una datasource database (datasource_id valorizzato).
+    # kind="flow": a flow's run (flow_id set).
+    # kind="ingest": refresh of a database datasource (datasource_id set).
     kind: str = Field(default="flow", index=True)
     flow_id: Optional[int] = Field(default=None, foreign_key="flows.id", index=True)
     # set on a flow group's own run (kind="orchestration", flow_id None); the runs
@@ -102,60 +101,58 @@ class Run(SQLModel, table=True):
     # ([[{"state", "run_id", "error"}, ...], ...]); written by the process running
     # the group, read by the editor
     group_cells: Optional[str] = Field(default=None, sa_column=Column("group_cells", Text))
-    task_id: str = Field(index=True)  # id del task Celery sull'engine
+    task_id: str = Field(index=True)  # id of the Celery task on the engine
     status: str = "PENDING"  # PENDING | STARTED | SUCCESS | FAILURE
     launched_by: Optional[int] = Field(default=None, foreign_key="users.id")
-    # come è stato avviato: "manual" (un utente) oppure "schedule" (lo scheduler);
-    # per gli schedulati `launched_by` è l'autore dello schedule, ma in cronologia
-    # mostriamo semplicemente "schedule". Colonna `trigger_type`: "trigger" è
-    # parola riservata SQL.
+    # how it was started: "manual" (a user) or "schedule" (the scheduler); for the
+    # scheduled ones `launched_by` is the schedule's author, but in the history we simply
+    # show "schedule". Column `trigger_type`: "trigger" is an SQL reserved word.
     trigger_type: str = Field(default="manual")
-    # engine con cui il run è stato ESEGUITO (dev o produzione del flusso al
-    # momento del lancio): in cronologia si vede con cosa ha girato davvero
+    # the engine the run RAN with (the flow's dev or production one at launch time): the
+    # history shows what it really ran on
     engine: Optional[str] = None
-    # run di orchestrazione che ha generato questo run figlio (output/refresh
-    # lanciati DENTRO un'orchestrazione). None = esecuzione di ALTO LIVELLO
-    # (orchestrazione, run diretto dell'editor, refresh standalone): così il
-    # calendar plot conta le esecuzioni una sola volta, senza i doppioni figli.
+    # the orchestration run that generated this child run (output/refresh launched INSIDE
+    # an orchestration). None = a TOP-LEVEL run (orchestration, the editor's direct run,
+    # standalone refresh): so the calendar plot counts the runs only once, without the
+    # child duplicates.
     parent_run_id: Optional[int] = Field(default=None, foreign_key="runs.id", index=True)
 
     input_key: str
     output_bucket: str
     output_key: str
     rows_written: Optional[int] = None
-    error: Optional[str] = Field(default=None, sa_column=Column(Text))  # sintesi (per la lista)
-    # traceback completo dell'engine (per capire la causa): mostrato nel dettaglio
+    error: Optional[str] = Field(default=None, sa_column=Column(Text))  # summary (for the list)
+    # the engine's whole traceback (to understand the cause): shown in the detail
     error_detail: Optional[str] = Field(default=None, sa_column=Column("error_detail", Text))
 
-    # richiesta di pubblicazione (facoltativa, decisa al lancio); per i run
-    # kind="ingest" `datasource_id` è la datasource che il refresh aggiorna
+    # the publishing request (optional, decided at launch); for kind="ingest" runs
+    # `datasource_id` is the datasource the refresh updates
     publish_name: Optional[str] = None
     publish_project_id: Optional[int] = Field(default=None, foreign_key="projects.id")
     publish_description: str = ""
-    # sovrascrivi la datasource omonima (kind="flow") invece di crearne una nuova
+    # overwrite the datasource with the same name (kind="flow") instead of creating a new one
     publish_overwrite: bool = False
-    # colonne di ORDER BY promesse alla datasource pubblicata (JSON): il risultato
-    # esce ordinato e la datasource le eredita (vedi _publish_datasource)
+    # the ORDER BY columns promised to the published datasource (JSON): the result comes
+    # out sorted and the datasource inherits them (see _publish_datasource)
     publish_sort_keys: str = "[]"
     datasource_id: Optional[int] = Field(default=None, foreign_key="datasources.id")
 
-    # destinazione database dell'output (nodo Output): riassunto JSON per la
-    # cronologia — {connection_id, db_type, host, database, table, mode}
+    # the output's database destination (Output node): a JSON summary for the history —
+    # {connection_id, db_type, host, database, table, mode}
     destination: Optional[str] = Field(default=None, sa_column=Column("destination", Text))
 
-    # copia dell'output su uno storage S3 esterno, IN AGGIUNTA alla datasource
-    # pubblicata: riassunto JSON dell'esito — {bucket, key, format, ok, error?}.
-    # È BEST-EFFORT per scelta: la datasource è il risultato primario, questa è
-    # una consegna a valle, e un suo fallimento non deve annullare la
-    # pubblicazione. L'errore finisce qui perché altrimenti resterebbe solo nei
-    # log del worker, invisibile a chi guarda la cronologia.
+    # a copy of the output to an external S3 storage, AS WELL AS the published datasource:
+    # a JSON summary of the outcome — {bucket, key, format, ok, error?}. It is BEST EFFORT
+    # by choice: the datasource is the primary result, this is a delivery downstream, and
+    # its failure must not undo the publishing. The error ends up here because otherwise it
+    # would stay only in the worker's logs, invisible to whoever looks at the history.
     mirror: Optional[str] = Field(default=None, sa_column=Column("mirror", Text))
 
-    # invio dell'output come allegato email (nodo Output destType="email"):
-    # riassunto JSON — {connection_id, host, to, subject, attachment, ok, error?}.
-    # A differenza della copia NON è best-effort: un report che non parte è il
-    # risultato che non c'è. Il dettaglio sta qui perché l'audit registra COSA è
-    # uscito e verso chi, mentre questa colonna dice se è arrivato.
+    # sending the output as an email attachment (Output node destType="email"): a JSON
+    # summary — {connection_id, host, to, subject, attachment, ok, error?}. Unlike the copy
+    # it is NOT best effort: a report that does not go out is the result that is not there.
+    # The detail is here because the audit records WHAT went out and to whom, while this
+    # column says whether it arrived.
     email: Optional[str] = Field(default=None, sa_column=Column("email", Text))
     # what a successful refresh has to say, as JSON: the values of a range whose
     # file was not there ({"missing": [{params, pattern}], "missing_count",
@@ -167,22 +164,22 @@ class Run(SQLModel, table=True):
     # by name only). See services/script_runs.py and services/container_runs.py.
     script: Optional[str] = Field(default=None, sa_column=Column("script", Text))
 
-    # ── solo per kind="orchestration" ───────────────────────────────────────
-    # Nasce PENDING = in coda; chi la esegue la porta a STARTED firmandola.
-    # "development" | "production": con quale motore lanciare gli output
+    # ── only for kind="orchestration" ───────────────────────────────────────
+    # Born PENDING = queued; whoever runs it brings it to STARTED signing it.
+    # "development" | "production": the engine to launch the outputs with
     engine_mode: Optional[str] = None
-    # il processo che la sta eseguendo, e l'ultima volta che ha detto «ci sono».
-    # Un'orchestrazione STARTED il cui battito è fermo da troppo è di un processo
-    # morto: nessuno la finirà, e va chiusa dicendolo.
+    # the process running it, and the last time it said «here». A STARTED orchestration
+    # whose heartbeat has been still for too long belongs to a dead process: nobody will
+    # finish it, and it must be closed saying so.
     claimed_by: Optional[str] = None
     heartbeat_at: Optional[datetime] = None
 
     started_at: datetime = Field(default_factory=_now)
-    # istante in cui il task ha cominciato a girare DAVVERO sul worker (Celery
-    # riporta STARTED, `task_track_started=True`). `started_at` nasce col lancio e
-    # include l'attesa in coda, quindi non misura l'esecuzione: con i worker
-    # occupati un run appena partito risulterebbe già scaduto. Il timeout di
-    # staleness parte da qui. None = non ancora osservato in esecuzione.
+    # the instant the task REALLY started running on the worker (Celery reports STARTED,
+    # `task_track_started=True`). `started_at` is born with the launch and includes the
+    # wait in the queue, so it does not measure the run: with busy workers a run just
+    # started would show as expired already. The staleness timeout starts from here. None
+    # = not seen running yet.
     engine_started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
 

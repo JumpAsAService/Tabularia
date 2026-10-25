@@ -1,19 +1,20 @@
-"""SSO OIDC opzionale: porta d'ingresso verso un IdP esterno (Keycloak, Entra
-ID/MSAL, Auth0, Okta…) e sincronizzazione dei gruppi.
+"""Optional OIDC SSO: the way in towards an external IdP (Keycloak, Entra ID/MSAL,
+Auth0, Okta…) and the groups' synchronization.
 
-Principio: l'IdP dimostra CHI è l'utente, poi si apre la SOLITA sessione interna
-(`sessions.apri`). `get_current_user`, l'RBAC e l'audit restano identici —
-il raggio d'impatto è confinato a queste due cuciture:
+Principle: the IdP proves WHO the user is, then the USUAL internal session opens
+(`sessions.open_session`). `get_current_user`, RBAC and the audit stay the same — the blast
+radius is confined to these two seams:
 
-1. **accettazione**: authorization code flow con PKCE, `state` e `nonce`; l'
-   id_token è validato contro il JWKS dell'IdP (firma, `iss`, `aud`, `exp`, `nonce`);
-2. **sincronizzazione**: la claim dei gruppi (`groups` su Keycloak, `roles` per le
-   app role di Entra) viene riconciliata su `user_groups`, che è l'unica cosa che
-   l'RBAC legge (`user_group_ids`). La mappatura è PER NOME: nessun id esterno
-   entra nel modello dei permessi.
+1. **acceptance**: authorization code flow with PKCE, `state` and `nonce`; the
+   id_token is validated against the IdP's JWKS (signature, `iss`, `aud`, `exp`,
+   `nonce`);
+2. **synchronization**: the groups' claim (`groups` on Keycloak, `roles` for Entra's
+   app roles) is reconciled onto `user_groups`, which is the only thing RBAC reads
+   (`user_group_ids`). The mapping is BY NAME: no external id enters the permission
+   model.
 
-Nessuna dipendenza nuova: discovery e token exchange con `httpx`, validazione con
-`PyJWT` (`PyJWKClient`), PKCE con la stdlib — entrambe già usate dal gateway.
+No new dependency: discovery and token exchange with `httpx`, validation with
+`PyJWT` (`PyJWKClient`), PKCE with the stdlib — both used by the gateway already.
 """
 from __future__ import annotations
 
@@ -41,20 +42,20 @@ logger = logging.getLogger(__name__)
 
 
 class SsoError(Exception):
-    """Errore del flusso SSO. Il messaggio è per i LOG: all'utente arriva un
-    codice generico (non si espongono dettagli dell'IdP o della configurazione)."""
+    """An error of the SSO flow. The message is for the LOGS: the user gets a generic code
+    (no detail of the IdP or of the configuration is exposed)."""
 
     def __init__(self, message: str, code: str = "sso_failed"):
         super().__init__(message)
         self.code = code
 
 
-# algoritmi di firma ACCETTATI per l'id_token: solo asimmetrici. Mai `none`, mai
-# HS* (userebbe il client secret come chiave simmetrica: superficie inutile).
+# the signing algorithms ACCEPTED for the id_token: asymmetric only. Never `none`,
+# never HS* (it would use the client secret as a symmetric key: a needless surface).
 ALLOWED_ALGS = ("RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512")
 
-# tipo del cookie di transazione del login (state/nonce/PKCE), firmato col segreto
-# del gateway: niente stato server-side, funziona anche con più repliche.
+# the type of the login transaction's cookie (state/nonce/PKCE), signed with the
+# gateway's secret: no server-side state, it works with several replicas too.
 TX_TOKEN_TYPE = "sso_tx"
 TX_COOKIE = "tab_sso_tx"
 
@@ -68,7 +69,7 @@ def tx_cookie_name(state: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Discovery (.well-known) e chiavi di firma, con cache
+# Discovery (.well-known) and signing keys, cached
 # ─────────────────────────────────────────────────────────────────────────────
 _discovery_cache: dict[str, tuple[float, dict]] = {}
 _jwks_clients: dict[tuple[str, float], jwt.PyJWKClient] = {}  # by address and timeout: the timeout changes from the panel
@@ -130,7 +131,7 @@ def discovery(cfg: Optional[OidcSettings] = None, *, force: bool = False) -> dic
 
 
 def reset_discovery_cache() -> None:
-    """Usata dai test e dopo un cambio di configurazione."""
+    """Used by the tests and after a configuration change."""
     _discovery_cache.clear()
     _jwks_clients.clear()
     _tls_contexts.clear()
@@ -139,7 +140,7 @@ def reset_discovery_cache() -> None:
 def _jwks_client(jwks_uri: str, timeout: float) -> jwt.PyJWKClient:
     client = _jwks_clients.get((jwks_uri, timeout))
     if client is None:
-        # PyJWKClient tiene in cache le chiavi e le ri-scarica al rollover
+        # PyJWKClient caches the keys and downloads them again at rollover
         context = tls(get_settings().oidc)
         if context is False:  # OIDC__VERIFY_TLS=false: the keys too, on the same terms
             context = ssl._create_unverified_context()
@@ -150,15 +151,15 @@ def _jwks_client(jwks_uri: str, timeout: float) -> jwt.PyJWKClient:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Transazione di login: state + nonce + PKCE in un cookie firmato e di breve vita
+# Login transaction: state + nonce + PKCE in a signed, short-lived cookie
 # ─────────────────────────────────────────────────────────────────────────────
 def _b64url(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
 def new_pkce_pair() -> tuple[str, str]:
-    """(code_verifier, code_challenge S256). PKCE protegge lo scambio del code
-    anche per un client confidenziale: è raccomandato da OAuth 2.1."""
+    """(code_verifier, code_challenge S256). PKCE protects the code exchange for a
+    confidential client too: OAuth 2.1 recommends it."""
     verifier = _b64url(secrets.token_bytes(48))
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     return verifier, challenge
@@ -180,7 +181,7 @@ def issue_tx_token(state: str, nonce: str, verifier: str, next_url: str = "") ->
 
 
 def read_tx_token(token: str, state_from_idp: str) -> dict:
-    """Valida il cookie di transazione e il `state` (difesa CSRF sul callback)."""
+    """Validates the transaction cookie and the `state` (CSRF defence on the callback)."""
     s = get_settings()
     try:
         payload = jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm],
@@ -189,7 +190,7 @@ def read_tx_token(token: str, state_from_idp: str) -> dict:
         raise SsoError(f"transaction cookie invalid or expired: {e}", "tx_expired") from e
     if payload.get("typ") != TX_TOKEN_TYPE:
         raise SsoError("transaction cookie of the wrong type", "tx_invalid")
-    # confronto a tempo costante: lo state è un segreto anti-CSRF
+    # constant-time comparison: the state is an anti-CSRF secret
     if not secrets.compare_digest(str(payload.get("state", "")), str(state_from_idp or "")):
         raise SsoError("state does not match (possible CSRF on the callback)", "state_mismatch")
     return payload
@@ -215,8 +216,8 @@ def build_authorize_url(cfg: OidcSettings, state: str, nonce: str, challenge: st
 
 
 def exchange_code(cfg: OidcSettings, code: str, verifier: str) -> dict:
-    """Scambia il code con i token. Il client secret viaggia SOLO qui, da server
-    a server: non passa mai dal browser."""
+    """Exchanges the code for the tokens. The client secret travels ONLY here, server to
+    server: it never goes through the browser."""
     doc = discovery(cfg)
     data = {
         "grant_type": "authorization_code",
@@ -231,7 +232,7 @@ def exchange_code(cfg: OidcSettings, code: str, verifier: str) -> dict:
     except Exception as e:
         raise unreachable("token endpoint unreachable", doc["token_endpoint"], e) from e
     if res.status_code != 200:
-        # il corpo può contenere dettagli della configurazione: resta nei log
+        # the body may hold configuration details: it stays in the logs
         raise SsoError(f"token exchange refused ({res.status_code}): {res.text[:300]}", "code_rejected")
     payload = res.json()
     if not payload.get("id_token"):
@@ -240,7 +241,7 @@ def exchange_code(cfg: OidcSettings, code: str, verifier: str) -> dict:
 
 
 def validate_id_token(cfg: OidcSettings, id_token: str, nonce: str) -> dict:
-    """Verifica firma (JWKS), `iss`, `aud`, `exp` e `nonce`. Ritorna le claim."""
+    """Checks signature (JWKS), `iss`, `aud`, `exp` and `nonce`. Returns the claims."""
     doc = discovery(cfg)
     algs = [a for a in (doc.get("id_token_signing_alg_values_supported") or []) if a in ALLOWED_ALGS]
     algs = algs or list(ALLOWED_ALGS)
@@ -262,18 +263,18 @@ def validate_id_token(cfg: OidcSettings, id_token: str, nonce: str) -> dict:
         )
     except jwt.PyJWTError as e:
         raise SsoError(f"invalid id_token: {e}", "token_invalid") from e
-    # il nonce lega il token a QUESTA richiesta di login (replay protection)
+    # the nonce ties the token to THIS login request (replay protection)
     if not secrets.compare_digest(str(claims.get("nonce", "")), str(nonce or "")):
         raise SsoError("nonce does not match in the id_token", "nonce_mismatch")
     return claims
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Provisioning JIT + sincronizzazione dei gruppi
+# JIT provisioning + the groups' synchronization
 # ─────────────────────────────────────────────────────────────────────────────
 def email_from_claims(claims: dict) -> str:
-    """Email dell'utente. Entra ID spesso non manda `email` ma lo UPN in
-    `preferred_username`/`upn`: si accettano come alternativa."""
+    """The user's email. Entra ID often does not send `email` but the UPN in
+    `preferred_username`/`upn`: they are accepted as an alternative."""
     for field in ("email", "preferred_username", "upn"):
         value = str(claims.get(field) or "").strip()
         if "@" in value:
@@ -282,15 +283,15 @@ def email_from_claims(claims: dict) -> str:
 
 
 def identity_from_claims(claims: dict) -> tuple[str, str]:
-    """Identità STABILE dell'utente presso l'IdP: la coppia (issuer, subject).
+    """The user's STABLE identity at the IdP: the (issuer, subject) pair.
 
-    È questa — non l'email — a dire CHI sta entrando. Il subject lo assegna
-    l'IdP, è immutabile e l'utente non se lo può scegliere; email, UPN e
-    `preferred_username` invece sono modificabili in molte directory, e chi può
-    sceglierseli potrebbe altrimenti farsi riconoscere come qualcun altro.
+    It is this — not the email — that says WHO is signing in. The IdP assigns the
+    subject, it is immutable and the user cannot choose it; email, UPN and
+    `preferred_username` instead can be changed in many directories, and whoever can
+    choose them could otherwise get recognized as someone else.
 
-    `validate_id_token` esige già `iss` e `sub`, quindi nel flusso reale ci sono
-    sempre: qui si rifiuta comunque un token che ne sia privo.
+    `validate_id_token` requires `iss` and `sub` already, so in the real flow they are
+    always there: a token without them is refused here anyway.
     """
     issuer = str(claims.get("iss") or "").strip()
     subject = str(claims.get("sub") or "").strip()
@@ -302,12 +303,11 @@ def identity_from_claims(claims: dict) -> tuple[str, str]:
 
 
 def claim_is_true(value: Any) -> bool:
-    """Una claim booleana è vera SOLO se lo afferma esplicitamente.
+    """A boolean claim is true ONLY when it says so explicitly.
 
-    Gli IdP mandano indifferentemente booleani o stringhe, e la vecchia guardia
-    controllava `is False`: bastava che la claim mancasse, o valesse `"false"`
-    o `0`, per superarla. Qui l'assenza vale NON confermato, che è l'unico
-    default sicuro per una verifica.
+    IdPs send booleans or strings indifferently, and the old guard checked `is False`:
+    the claim missing, or being `"false"` or `0`, was enough to get past it. Here the
+    absence means NOT confirmed, the only safe default for a check.
     """
     if isinstance(value, bool):
         return value
@@ -315,30 +315,30 @@ def claim_is_true(value: Any) -> bool:
 
 
 def ensure_admitted(cfg: OidcSettings, email: str, idp_groups: set[str]) -> None:
-    """Chi può ENTRARE, che è cosa diversa da quali gruppi riceve.
+    """Who may SIGN IN, which is not the same as which groups they get.
 
-    Senza questi due cancelli un account attivo nasce per chiunque l'IdP
-    autentichi: puntato alla directory aziendale, significa tutta l'azienda.
-    Entrambi sono spenti di default, quindi non cambiano nulla a chi già usa
-    l'SSO; chi li accende decide esplicitamente il perimetro.
+    Without these two gates an active account is born for anyone the IdP authenticates:
+    pointed at the company directory, that means the whole company. Both are off by
+    default, so they change nothing for whoever uses SSO already; whoever turns them on
+    decides the perimeter explicitly.
     """
     if cfg.allowed_domains:
-        dominio = email.rsplit("@", 1)[-1].lower()
-        if dominio not in cfg.allowed_domains:
-            raise SsoError(f"domain {dominio} is not allowed to sign in", "not_allowed")
+        domain = email.rsplit("@", 1)[-1].lower()
+        if domain not in cfg.allowed_domains:
+            raise SsoError(f"domain {domain} is not allowed to sign in", "not_allowed")
 
     if cfg.require_allowlisted_group:
-        ammessi = set(cfg.allowlist)
+        allowed = set(cfg.allowlist)
         if cfg.superuser_group:
-            ammessi.add(cfg.superuser_group)
-        if not ammessi:
-            # configurazione contraddittoria: si richiede un gruppo ammesso ma
-            # non ne è elencato nessuno → nessuno entrerebbe mai, in silenzio
+            allowed.add(cfg.superuser_group)
+        if not allowed:
+            # contradictory configuration: an allowed group is required but none is listed →
+            # nobody would ever sign in, silently
             raise SsoError(
                 "OIDC__REQUIRE_ALLOWLISTED_GROUP is on but OIDC__GROUP_ALLOWLIST is empty",
                 "config_error",
             )
-        if not (idp_groups & ammessi):
+        if not (idp_groups & allowed):
             raise SsoError(f"{email} does not belong to any allowed group", "not_allowed")
 
 
@@ -368,11 +368,11 @@ def claim_at(claims: Any, path: str) -> Any:
 
 
 def normalize_groups(claims: dict, cfg: OidcSettings, more: tuple[dict, ...] = ()) -> set[str]:
-    """Nomi dei gruppi dalle claim configurate, normalizzati.
+    """The groups' names from the configured claims, normalized.
 
     Each source is read from the id_token's claims, else from the first of `more` that
-    has it (the access token's claims, userinfo: see `more_group_claims`). Keycloak può
-    emettere i path completi (`/analytics`): si toglie lo slash iniziale. A claim may be
+    has it (the access token's claims, userinfo: see `more_group_claims`). Keycloak may
+    issue full paths (`/analytics`): the leading slash is removed. A claim may be
     a list or a single string.
     """
     names: set[str] = set()
@@ -450,16 +450,16 @@ def more_group_claims(cfg: OidcSettings, claims: dict, tokens: dict) -> tuple[di
 
 
 def _group_ids(session: Session, names: set[str], auto_create: bool) -> set[int]:
-    """Id dei gruppi Tabularia corrispondenti ai nomi. Con `auto_create` i nomi
-    mancanti diventano gruppi nuovi; altrimenti vengono semplicemente ignorati
-    (l'admin decide quali gruppi esistono)."""
+    """The ids of the Tabularia groups matching the names. With `auto_create` the missing
+    names become new groups; otherwise they are simply ignored (the admin decides which
+    groups exist)."""
     if not names:
         return set()
     existing = {g.name: g for g in session.exec(select(Group).where(Group.name.in_(names))).all()}
     ids = {g.id for g in existing.values()}
     if auto_create:
         for missing in names - set(existing):
-            group = Group(name=missing, description="creato dall'SSO al primo login")
+            group = Group(name=missing, description="created by SSO at the first login")
             session.add(group)
             session.flush()
             ids.add(group.id)
@@ -468,10 +468,10 @@ def _group_ids(session: Session, names: set[str], auto_create: bool) -> set[int]
 
 def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSettings] = None,
                        groups: Optional[set[str]] = None, groups_known: Optional[bool] = None) -> tuple[User, dict]:
-    """Crea/aggiorna l'utente dalle claim e riconcilia i suoi gruppi.
+    """Creates/updates the user from the claims and reconciles their groups.
 
-    Ritorna `(utente, dettaglio)`; il dettaglio finisce nell'audit e dice cosa è
-    cambiato (utente creato, gruppi aggiunti/rimossi, superuser).
+    Returns `(user, detail)`; the detail ends up in the audit and says what changed
+    (user created, groups added/removed, superuser).
     """
     cfg = cfg or get_settings().oidc
     issuer, subject = identity_from_claims(claims)
@@ -481,10 +481,10 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     asserted = set(groups) if groups is not None else normalize_groups(claims, cfg)
     if groups_known is None:
         groups_known = groups_claim_found(claims, cfg)
-    # 0) ha il permesso di entrare? Prima di creare o collegare qualsiasi cosa.
+    # 0) may they sign in? Before creating or linking anything.
     ensure_admitted(cfg, email, set(asserted))
 
-    # 1) CHI sta entrando: sempre dalla coppia stabile dell'IdP, mai dall'email.
+    # 1) WHO is signing in: always from the IdP's stable pair, never from the email.
     user = session.exec(
         select(User).where(User.oidc_issuer == issuer, User.oidc_subject == subject)
     ).first()
@@ -492,10 +492,10 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     linked = False
 
     if user is None:
-        # 2) Identità mai vista. Esiste già un account con quell'email?
-        omonimo = session.exec(select(User).where(User.email == email)).first()
-        if omonimo is None:
-            # utente solo-SSO: nessuna password locale (colonna nullable)
+        # 2) An identity never seen. Is there an account with that email already?
+        same_name = session.exec(select(User).where(User.email == email)).first()
+        if same_name is None:
+            # an SSO-only user: no local password (nullable column)
             user = User(
                 email=email,
                 full_name=str(claims.get("name") or claims.get("given_name") or "").strip(),
@@ -507,41 +507,41 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
             session.add(user)
             session.flush()
             created = True
-        elif not omonimo.is_active:
+        elif not same_name.is_active:
             raise SsoError(f"user {email} is deactivated in Tabularia", "user_disabled")
-        elif omonimo.is_service:
-            # un account di servizio entra solo con un token, mai da un IdP
+        elif same_name.is_service:
+            # a service account signs in only with a token, never from an IdP
             raise SsoError(f"{email} is a service account", "identity_conflict")
-        elif omonimo.oidc_subject:
-            # quell'account appartiene già a un'ALTRA identità dell'IdP: due
-            # persone non possono rivendicare lo stesso utente
+        elif same_name.oidc_subject:
+            # that account belongs to ANOTHER identity of the IdP already: two people cannot claim
+            # the same user
             raise SsoError(
                 f"the account {email} is already linked to another IdP identity", "identity_conflict"
             )
         elif not claim_is_true(claims.get("email_verified")):
-            # QUI stava il takeover: un account esistente veniva rivendicato solo
-            # perché il token portava la sua email. Il collegamento avviene una
-            # volta sola e richiede che l'IdP dichiari l'email VERIFICATA.
+            # HERE was the takeover: an existing account was claimed just because the token
+            # carried its email. The link happens once only and requires the IdP to declare the
+            # email VERIFIED.
             raise SsoError(
                 f"the IdP does not declare the email {email} verified: linking to the "
                 "existing account refused",
                 "email_unverified",
             )
         else:
-            omonimo.oidc_issuer = issuer
-            omonimo.oidc_subject = subject
-            session.add(omonimo)
-            user = omonimo
+            same_name.oidc_issuer = issuer
+            same_name.oidc_subject = subject
+            session.add(same_name)
+            user = same_name
             linked = True
 
     if not user.is_active:
         raise SsoError(f"user {user.email} is deactivated in Tabularia", "user_disabled")
 
-    # L'email presso l'IdP può cambiare: si aggiorna, l'identità resta la stessa.
-    # Non si tocca se l'indirizzo è già di qualcun altro (vincolo UNIQUE).
+    # The email at the IdP may change: it is updated, the identity stays the same. It is
+    # not touched when the address belongs to someone else already (UNIQUE constraint).
     if user.email != email:
-        occupata = session.exec(select(User).where(User.email == email, User.id != user.id)).first()
-        if occupata is None:
+        busy_one = session.exec(select(User).where(User.email == email, User.id != user.id)).first()
+        if busy_one is None:
             user.email = email
             session.add(user)
 
@@ -550,8 +550,8 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
         session.add(user)
 
     idp_groups = set(asserted)
-    # il gruppo che concede i privilegi admin non è un gruppo di progetto: si
-    # valuta PRIMA dell'allowlist, così non serve elencarlo anche lì
+    # the group that grants admin privileges is not a project group: it is weighed BEFORE
+    # the allowlist, so it need not be listed there too
     superuser_before = user.is_superuser
     if not groups_known:
         # No group source in the token. Keycloak and Entra leave the claim out when the
@@ -575,12 +575,12 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     # on Entra, a loose Keycloak realm) would get the role. SSO never adds nor
     # removes those memberships: administration comes from the IdP only through
     # OIDC__SUPERUSER_GROUP, an observer group only when it is in the allowlist.
-    gestiti_qui = {
+    managed_here = {
         g.id for g in session.exec(select(Group).where(or_(Group.is_admin, Group.is_observer))).all()
         if g.is_admin or g.name not in cfg.allowlist
     }
-    wanted -= gestiti_qui
-    current = user_group_ids(session, user) - gestiti_qui
+    wanted -= managed_here
+    current = user_group_ids(session, user) - managed_here
 
     for gid in wanted - current:
         session.add(UserGroupLink(user_id=user.id, group_id=gid))
@@ -603,8 +603,8 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
 
     detail = {
         "created": created,
-        # collegamento di un account PREESISTENTE a un'identità dell'IdP: avviene
-        # una volta sola e va lasciato in chiaro nell'audit
+        # linking a PRE-EXISTING account to an IdP identity: it happens once only and must be
+        # left in plain sight in the audit
         "linked": linked,
         "groups_added": _names(wanted - current),
         "groups_removed": _names(removed_ids),
@@ -619,13 +619,13 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
 
 
 def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings] = None) -> tuple[User, dict]:
-    """Callback completo: code → token → validazione → utente sincronizzato."""
+    """The whole callback: code → token → validation → user synchronized."""
     cfg = cfg or get_settings().oidc
     tokens = exchange_code(cfg, code, tx["cv"])
     claims = validate_id_token(cfg, tokens["id_token"], tx["nonce"])
     if claims.get("email_verified") is False:
-        # se l'IdP dichiara l'email NON verificata non ci si fida: sarebbe una
-        # via di takeover. Se la claim manca (tipico di Entra) si procede.
+        # when the IdP declares the email NOT verified it is not trusted: it would be a way to
+        # take over. When the claim is missing (typical of Entra) it goes on.
         raise SsoError("email not verified by the IdP", "email_unverified")
     more = more_group_claims(cfg, claims, tokens)
     return provision_and_sync(session, claims, cfg, groups=normalize_groups(claims, cfg, more),
@@ -633,7 +633,7 @@ def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings
 
 
 def public_config() -> dict[str, Any]:
-    """Ciò che la pagina di login può sapere SENZA essere autenticata: se l'SSO
-    esiste e come si chiama il pulsante. Mai issuer, client id o segreti."""
+    """What the login page may know WITHOUT being authenticated: whether SSO exists and
+    what the button is called. Never issuer, client id or secrets."""
     cfg = get_settings().oidc
     return {"enabled": cfg.enabled, "button_label": cfg.button_label}

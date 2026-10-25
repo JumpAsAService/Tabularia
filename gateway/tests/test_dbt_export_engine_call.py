@@ -17,7 +17,7 @@ from sqlmodel import select
 
 from app.models import AuditLog
 from app.services import dbt_export as d
-from app.services.messaggi_dbt import traduci
+from app.services.dbt_messages import translate
 from tests.test_dbt_export import _flusso_a_due_uscite, _richiesta_in, scena  # noqa: F401 (scena is a fixture)
 
 
@@ -35,13 +35,13 @@ def _limite(monkeypatch, seconds):
     get_settings.cache_clear()
 
 
-async def _esporta(session, scena, lingua="it", **opzioni):
+async def _esporta(session, scena, language="it", **options):
     from app.routes import flows as flows_routes
 
     flow = _flusso_a_due_uscite(session, scena)
     # the test's own guard: without the bound the call below would wait for the fake engine's 30 s
-    return await asyncio.wait_for(flows_routes.export_flow_dbt_con_opzioni(
-        flow.id, d.OpzioniDbt(target="duckdb", **opzioni), _richiesta_in(lingua), scena.capo, session), 10)
+    return await asyncio.wait_for(flows_routes.export_flow_dbt_with_options(
+        flow.id, d.DbtOptions(target="duckdb", **options), _richiesta_in(language), scena.capo, session), 10)
 
 
 def _download_registrati(session) -> int:
@@ -71,13 +71,13 @@ async def test_an_engine_that_does_not_answer_stops_the_export_within_the_bound(
 
     _engine(monkeypatch, lento)
     _limite(monkeypatch, 0.3)
-    inizio = time.monotonic()
+    start = time.monotonic()
     with pytest.raises(HTTPException) as e:
         await _esporta(session, scena, "it")
-    assert time.monotonic() - inizio < 5
+    assert time.monotonic() - start < 5
     # 504: the engine (upstream of the gateway) did not answer in time; coded and in Italian, not the engine's text
     assert e.value.status_code == 504
-    assert e.value.detail == traduci("engine_timeout", {"seconds": "0.3"}, "it")
+    assert e.value.detail == translate("engine_timeout", {"seconds": "0.3"}, "it")
     assert e.value.detail.startswith("Il motore non ha costruito il progetto dbt entro 0.3 s"), e.value.detail
     assert "ENGINE__DBT_EXPORT_TIMEOUT_SECONDS" in e.value.detail
     assert _download_registrati(session) == 0    # nothing was served: no download in the audit
@@ -92,7 +92,7 @@ async def test_a_read_timeout_of_the_http_client_is_the_same_refusal(session, sc
     with pytest.raises(HTTPException) as e:
         await _esporta(session, scena, "de")
     assert e.value.status_code == 504
-    assert e.value.detail == traduci("engine_timeout", {"seconds": "100"}, "de"), e.value.detail
+    assert e.value.detail == translate("engine_timeout", {"seconds": "100"}, "de"), e.value.detail
 
 
 @pytest.mark.anyio
@@ -104,7 +104,7 @@ async def test_an_engine_that_cannot_be_reached_is_a_coded_refusal_not_a_500(ses
     with pytest.raises(HTTPException) as e:
         await _esporta(session, scena, "fr")
     assert e.value.status_code == 502
-    assert e.value.detail == traduci("engine_unreachable", {"detail": "All connection attempts failed"}, "fr")
+    assert e.value.detail == translate("engine_unreachable", {"detail": "All connection attempts failed"}, "fr")
     assert e.value.detail.startswith("Le moteur est injoignable (All connection attempts failed)"), e.value.detail
     assert _download_registrati(session) == 0
 
@@ -124,8 +124,8 @@ async def test_an_engine_that_answers_in_time_still_gives_the_zip(session, scena
 @pytest.mark.parametrize("code, params", [("engine_timeout", {"seconds": "100"}),
                                           ("engine_unreachable", {"detail": "All connection attempts failed"})])
 def test_the_engine_call_s_refusals_read_in_every_language(code, params):
-    from app.core.lingua import LINGUE
+    from app.core.language import LANGUAGES
 
-    for lingua in LINGUE:
-        frase = traduci(code, params, lingua, "ORIGINAL")
-        assert frase != "ORIGINAL" and "{" not in frase and all(v in frase for v in params.values()), (code, lingua, frase)
+    for language in LANGUAGES:
+        sentence = translate(code, params, language, "ORIGINAL")
+        assert sentence != "ORIGINAL" and "{" not in sentence and all(v in sentence for v in params.values()), (code, language, sentence)

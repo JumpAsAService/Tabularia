@@ -166,7 +166,7 @@ def _create(c, **kw):
 
 
 def _round(session):
-    changed = asyncio.run(script_builds.un_giro(session.get_bind()))
+    changed = asyncio.run(script_builds.one_round(session.get_bind()))
     session.expire_all()  # the round wrote with a session of its own
     return changed
 

@@ -259,7 +259,7 @@ def panel_settings(path: Path) -> dict[str, tuple]:
             tuples[node.targets[0].id] = [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
     keys = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _name(node.func) in ("Item", "Voce") and len(node.args) > 1 \
+        if isinstance(node, ast.Call) and _name(node.func) == "Item" and len(node.args) > 1 \
                 and isinstance(node.args[0], ast.Constant) and isinstance(node.args[1], ast.Constant):
             kw = {k.arg: k.value for k in node.keywords}
             name = node.args[0].value.replace(".", "__").upper()

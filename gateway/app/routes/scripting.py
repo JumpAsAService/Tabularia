@@ -25,7 +25,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.crypto import encrypt_secret
 from app.core.engine_client import get_engine_client
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import (
@@ -38,9 +38,9 @@ from app.services import api_tokens, audit, flow_access, script_builds, script_p
 from app.services.kube_scaling import KubeError
 from app.services.permissions import is_admin
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/scripting", tags=["scripting"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/scripting", tags=["scripting"])
 # what the flow editor needs to write a Script node, for whoever may write one
-editor_router = APIRouter(route_class=RottaCheRilascia, prefix="/scripting", tags=["scripting"])
+editor_router = APIRouter(route_class=ReleasingRoute, prefix="/scripting", tags=["scripting"])
 
 VARIABLE_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 # set by Tabularia in every Job: an administrator cannot define them
@@ -176,14 +176,14 @@ class ScriptingOut(BaseModel):
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
-def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
+def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
     """After authentication (the dependency above), before the body is read."""
-    from app.routes.api_tokens import nega_se_da_token
+    from app.routes.api_tokens import deny_if_from_token
 
-    nega_se_da_token(request, api_tokens.NIENTE_SCRIPTING_DA_TOKEN)
+    deny_if_from_token(request, api_tokens.NO_SCRIPTING_FROM_TOKEN)
 
 
-def _acceso() -> None:
+def _is_on() -> None:
     reason = script_builds.disabled_reason()
     if reason == "kubernetes":
         raise HTTPException(status_code=409, detail="Scripting environments need Kubernetes (SCRIPTS__ENABLED)")
@@ -337,7 +337,7 @@ def _new_version(session: Session, env: ScriptEnvironment, language_version: str
 
 # ── the section ──────────────────────────────────────────────────────────────
 @router.get("", response_model=ScriptingOut)
-def leggi(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
+def read(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
     settings = get_settings().scripts
     try:
         languages = {lang: sorted(v, key=lambda x: [int(p) if p.isdigit() else p for p in x.split(".")])
@@ -349,42 +349,42 @@ def leggi(request: Request, session: Session = Depends(get_session), chi: User =
         disabled_reason=script_builds.disabled_reason(), languages=languages, registry=settings.registry,
         storage=_storage_out(_storage(session)),
         environments=[EnvironmentSummary(**_summary(session, e, _versions(session, e.id))) for e in envs],
-        editable=is_admin(session, chi) and not api_tokens.nome_corrente(request),
+        editable=is_admin(session, chi) and not api_tokens.current_name(request),
     )
 
 
 # ── the bucket ───────────────────────────────────────────────────────────────
-@router.put("/storage", response_model=StorageOut, dependencies=[Depends(_niente_token)])
-def scrivi_storage(body: StorageUpdate, request: Request, session: Session = Depends(get_session),
+@router.put("/storage", response_model=StorageOut, dependencies=[Depends(_no_token)])
+def write_storage(body: StorageUpdate, request: Request, session: Session = Depends(get_session),
                    admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     s = _storage(session)
-    cambi: dict = {}
-    for campo in ("endpoint", "region", "bucket", "access_key"):
-        v = getattr(body, campo)
-        if v is not None and v.strip() != getattr(s, campo):
-            cambi[campo] = {"from": getattr(s, campo), "to": v.strip()}
-            setattr(s, campo, v.strip())
+    changes: dict = {}
+    for field in ("endpoint", "region", "bucket", "access_key"):
+        v = getattr(body, field)
+        if v is not None and v.strip() != getattr(s, field):
+            changes[field] = {"from": getattr(s, field), "to": v.strip()}
+            setattr(s, field, v.strip())
     if s.endpoint:
-        parti = urlsplit(s.endpoint)
-        if parti.scheme not in ("http", "https") or not parti.hostname:
+        parts = urlsplit(s.endpoint)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
             raise HTTPException(status_code=422, detail="The endpoint is an http(s) address (empty = AWS)")
     if body.secret_key is not None:
         s.secret_key_enc = encrypt_secret(body.secret_key.strip()) if body.secret_key.strip() else None
-        cambi["secret_key"] = "changed" if body.secret_key.strip() else "removed"
-    if not cambi:
+        changes["secret_key"] = "changed" if body.secret_key.strip() else "removed"
+    if not changes:
         return _storage_out(s)
     s.updated_at, s.updated_by = now_utc(), admin.email
     session.add(s)
     session.commit()
     session.refresh(s)
     audit.record_audit(session, actor=admin, action=audit.SCRIPTING_STORAGE_UPDATE, request=request,
-                       target_type="scripting", target_label=s.bucket or None, detail={"changes": cambi})
+                       target_type="scripting", target_label=s.bucket or None, detail={"changes": changes})
     return _storage_out(s)
 
 
-@router.post("/storage/test", response_model=StorageTestOut, dependencies=[Depends(_niente_token)])
-async def prova_storage(request: Request, session: Session = Depends(get_session),
+@router.post("/storage/test", response_model=StorageTestOut, dependencies=[Depends(_no_token)])
+async def trial_storage(request: Request, session: Session = Depends(get_session),
                         admin: User = Depends(require_superuser)):
     """Writes, reads and deletes a probe object with the key, from the engine (the
     workers write there the same way), and says whether the key can list the bucket."""
@@ -410,14 +410,14 @@ async def prova_storage(request: Request, session: Session = Depends(get_session
 
 # ── environments ─────────────────────────────────────────────────────────────
 @router.get("/environments/{environment_id}", response_model=EnvironmentOut)
-def leggi_ambiente(environment_id: int, session: Session = Depends(get_session), _chi: User = Depends(require_observer)):
+def read_environment(environment_id: int, session: Session = Depends(get_session), _chi: User = Depends(require_observer)):
     return _out(session, _environment(session, environment_id))
 
 
-@router.post("/environments", response_model=EnvironmentOut, status_code=201, dependencies=[Depends(_niente_token)])
-def crea_ambiente(body: EnvironmentCreate, request: Request, session: Session = Depends(get_session),
+@router.post("/environments", response_model=EnvironmentOut, status_code=201, dependencies=[Depends(_no_token)])
+def create_environment(body: EnvironmentCreate, request: Request, session: Session = Depends(get_session),
                   admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     if body.language not in LANGUAGES:
         raise HTTPException(status_code=422, detail="The language is python or r")
     _language_version(body.language, body.language_version)
@@ -440,28 +440,28 @@ def crea_ambiente(body: EnvironmentCreate, request: Request, session: Session = 
     return _out(session, env)
 
 
-@router.put("/environments/{environment_id}", response_model=EnvironmentOut, dependencies=[Depends(_niente_token)])
-def cambia_ambiente(environment_id: int, body: EnvironmentUpdate, request: Request,
+@router.put("/environments/{environment_id}", response_model=EnvironmentOut, dependencies=[Depends(_no_token)])
+def change_environment(environment_id: int, body: EnvironmentUpdate, request: Request,
                     session: Session = Depends(get_session), admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     env = _environment(session, environment_id)
-    cambi: dict = {}
+    changes: dict = {}
     if body.name is not None and body.name.strip() != env.name:
-        cambi["name"] = {"from": env.name, "to": _name(session, body.name, env.id)}
-        env.name = cambi["name"]["to"]
-    for campo in ("description", "enabled", "cpu_request", "cpu_limit", "memory_request", "memory_limit",
+        changes["name"] = {"from": env.name, "to": _name(session, body.name, env.id)}
+        env.name = changes["name"]["to"]
+    for field in ("description", "enabled", "cpu_request", "cpu_limit", "memory_request", "memory_limit",
                   "max_timeout_seconds"):
-        v = getattr(body, campo)
+        v = getattr(body, field)
         if isinstance(v, str):
             v = v.strip()
-        if v is not None and v != getattr(env, campo):
-            cambi[campo] = {"from": getattr(env, campo), "to": v}
-            setattr(env, campo, v)
+        if v is not None and v != getattr(env, field):
+            changes[field] = {"from": getattr(env, field), "to": v}
+            setattr(env, field, v)
     _resources(env)
     if body.group_ids is not None:
-        prima, _ = _group_names(session, env.id)
-        if sorted(set(body.group_ids)) != sorted(prima):
-            cambi["groups"] = {"from": prima, "to": sorted(set(body.group_ids))}
+        before, _ = _group_names(session, env.id)
+        if sorted(set(body.group_ids)) != sorted(before):
+            changes["groups"] = {"from": before, "to": sorted(set(body.group_ids))}
         _groups(session, env, body.group_ids)
     latest = next(iter(_versions(session, env.id)), None)
     lv = body.language_version if body.language_version is not None else (latest.language_version if latest else None)
@@ -471,25 +471,25 @@ def cambia_ambiente(environment_id: int, body: EnvironmentUpdate, request: Reque
         raise HTTPException(status_code=422, detail="The environment needs a language version")
     if latest is None or lv != latest.language_version or pk != latest.packages:
         new_version = _new_version(session, env, lv, pk, admin)
-        cambi["build"] = {"language_version": lv, "packages": pk.splitlines()}
-    if not cambi:
+        changes["build"] = {"language_version": lv, "packages": pk.splitlines()}
+    if not changes:
         return _out(session, env)
     env.updated_at, env.updated_by = now_utc(), admin.email
     session.add(env)
     session.commit()
     audit.record_audit(session, actor=admin, action=audit.SCRIPTING_ENV_UPDATE, request=request,
                        target_type="script_environment", target_id=env.id, target_label=env.name,
-                       detail={"changes": cambi, **({"version": new_version.number} if new_version else {})})
+                       detail={"changes": changes, **({"version": new_version.number} if new_version else {})})
     return _out(session, env)
 
 
 @router.post("/environments/{environment_id}/rebuild", response_model=EnvironmentOut,
-             dependencies=[Depends(_niente_token)])
-def ricostruisci(environment_id: int, request: Request, session: Session = Depends(get_session),
+             dependencies=[Depends(_no_token)])
+def rebuild(environment_id: int, request: Request, session: Session = Depends(get_session),
                  admin: User = Depends(require_superuser)):
     """A new version from the same language version and packages as the latest: after
     a failed build, or to start again from an updated base image."""
-    _acceso()
+    _is_on()
     env = _environment(session, environment_id)
     latest = next(iter(_versions(session, env.id)), None)
     if latest is None:
@@ -507,12 +507,12 @@ def ricostruisci(environment_id: int, request: Request, session: Session = Depen
 
 
 @router.post("/environments/{environment_id}/versions/{version_id}/current", response_model=EnvironmentOut,
-             dependencies=[Depends(_niente_token)])
-def rendi_corrente(environment_id: int, version_id: int, request: Request, session: Session = Depends(get_session),
+             dependencies=[Depends(_no_token)])
+def make_current(environment_id: int, version_id: int, request: Request, session: Session = Depends(get_session),
                    admin: User = Depends(require_superuser)):
     """Runs go back (or forward) to a version already built: its image is still in
     the registry."""
-    _acceso()
+    _is_on()
     env = _environment(session, environment_id)
     v = session.get(ScriptEnvironmentVersion, version_id)
     if v is None or v.environment_id != env.id:
@@ -521,24 +521,24 @@ def rendi_corrente(environment_id: int, version_id: int, request: Request, sessi
         raise HTTPException(status_code=409, detail="Only a version built and checked can run scripts")
     if env.current_version_id == v.id:
         return _out(session, env)
-    prima = env.current_version_id
+    before = env.current_version_id
     env.current_version_id, env.updated_at, env.updated_by = v.id, now_utc(), admin.email
     session.add(env)
     session.commit()
-    previous = session.get(ScriptEnvironmentVersion, prima) if prima else None
+    previous = session.get(ScriptEnvironmentVersion, before) if before else None
     audit.record_audit(session, actor=admin, action=audit.SCRIPTING_VERSION_CURRENT, request=request,
                        target_type="script_environment", target_id=env.id, target_label=env.name,
                        detail={"from": previous.number if previous else None, "to": v.number})
     return _out(session, env)
 
 
-@router.delete("/environments/{environment_id}", status_code=204, dependencies=[Depends(_niente_token)])
-async def cancella_ambiente(environment_id: int, request: Request, session: Session = Depends(get_session),
+@router.delete("/environments/{environment_id}", status_code=204, dependencies=[Depends(_no_token)])
+async def delete_environment(environment_id: int, request: Request, session: Session = Depends(get_session),
                             admin: User = Depends(require_superuser)):
     env = _environment(session, environment_id)
-    usati = flows_using(session, env.id)
-    if usati:
-        raise HTTPException(status_code=409, detail={"code": "in_use", "flows": usati})
+    used = flows_using(session, env.id)
+    if used:
+        raise HTTPException(status_code=409, detail={"code": "in_use", "flows": used})
     from app.services.saved_scripts import scripts_using_environment
 
     scripts = scripts_using_environment(session, env.id)
@@ -550,7 +550,7 @@ async def cancella_ambiente(environment_id: int, request: Request, session: Sess
         except KubeError as e:
             if e.status != 404:
                 raise HTTPException(status_code=502, detail=f"The builds in progress could not be stopped: {e}")
-    nome = env.name
+    name = env.name
     for model in (ScriptEnvironmentVariable, ScriptEnvironmentGroup, ScriptEnvironmentVersion):
         for row in session.exec(select(model).where(model.environment_id == env.id)).all():  # type: ignore[attr-defined]
             session.delete(row)
@@ -558,7 +558,7 @@ async def cancella_ambiente(environment_id: int, request: Request, session: Sess
     session.delete(env)
     session.commit()
     audit.record_audit(session, actor=admin, action=audit.SCRIPTING_ENV_DELETE, request=request,
-                       target_type="script_environment", target_id=environment_id, target_label=nome)
+                       target_type="script_environment", target_id=environment_id, target_label=name)
 
 
 # ── variables ────────────────────────────────────────────────────────────────
@@ -573,20 +573,20 @@ def _variable_name(name: str) -> str:
 
 
 @router.put("/environments/{environment_id}/variables/{name}", response_model=EnvironmentOut,
-            dependencies=[Depends(_niente_token)])
-def scrivi_variabile(environment_id: int, name: str, body: VariableSet, request: Request,
+            dependencies=[Depends(_no_token)])
+def write_variable(environment_id: int, name: str, body: VariableSet, request: Request,
                      session: Session = Depends(get_session), admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     env = _environment(session, environment_id)
     name = _variable_name(name)
     var = session.exec(select(ScriptEnvironmentVariable).where(
         ScriptEnvironmentVariable.environment_id == env.id, ScriptEnvironmentVariable.name == name)).first()
-    nuova = var is None
+    new_one = var is None
     if body.from_tabularia:
         # the marked exception: the value is the name of one of Tabularia's own variables
         if body.value is None or not VARIABLE_NAME.match(body.value.strip()):
             raise HTTPException(status_code=422, detail="Give the name of the Tabularia variable to hand over")
-    if body.value is None and (nuova or not var.secret or not body.secret or var.from_tabularia != body.from_tabularia):
+    if body.value is None and (new_one or not var.secret or not body.secret or var.from_tabularia != body.from_tabularia):
         raise HTTPException(status_code=422, detail="The variable needs a value")
     var = var or ScriptEnvironmentVariable(environment_id=env.id, name=name)
     var.from_tabularia = body.from_tabularia
@@ -601,7 +601,7 @@ def scrivi_variabile(environment_id: int, name: str, body: VariableSet, request:
     env.updated_at, env.updated_by = now_utc(), admin.email
     session.add(env)
     session.commit()
-    detail = {"name": name, "secret": var.secret, "from_tabularia": var.from_tabularia, "new": nuova}
+    detail = {"name": name, "secret": var.secret, "from_tabularia": var.from_tabularia, "new": new_one}
     if var.from_tabularia:
         detail["tabularia_variable"] = var.value  # a name, not a value
     audit.record_audit(session, actor=admin, action=audit.SCRIPTING_VARIABLE_SET, request=request,
@@ -610,8 +610,8 @@ def scrivi_variabile(environment_id: int, name: str, body: VariableSet, request:
 
 
 @router.delete("/environments/{environment_id}/variables/{name}", response_model=EnvironmentOut,
-               dependencies=[Depends(_niente_token)])
-def cancella_variabile(environment_id: int, name: str, request: Request, session: Session = Depends(get_session),
+               dependencies=[Depends(_no_token)])
+def delete_variable(environment_id: int, name: str, request: Request, session: Session = Depends(get_session),
                        admin: User = Depends(require_superuser)):
     env = _environment(session, environment_id)
     var = session.exec(select(ScriptEnvironmentVariable).where(
@@ -658,7 +658,7 @@ def _language(language: str) -> str:
 
 
 @router.get("/packages", response_model=list[PackageHit])
-async def cerca_pacchetti(language: str, q: str = "", _admin: User = Depends(require_superuser)):
+async def search_packages(language: str, q: str = "", _admin: User = Depends(require_superuser)):
     """The packages of PyPI or CRAN (or their mirrors) whose name holds `q`."""
     try:
         return await script_packages.search(_language(language), q[:200])
@@ -667,7 +667,7 @@ async def cerca_pacchetti(language: str, q: str = "", _admin: User = Depends(req
 
 
 @router.get("/packages/{language}/{name}", response_model=PackageVersionsOut)
-async def versioni_pacchetto(language: str, name: str, python: Optional[str] = None,
+async def package_versions(language: str, name: str, python: Optional[str] = None,
                              _admin: User = Depends(require_superuser)):
     """The versions of a package, newest first; for Python, with `python=3.12`, whether
     each has a wheel for that Python."""
@@ -714,7 +714,7 @@ class EditorScripting(BaseModel):
 
 
 @editor_router.get("", response_model=EditorScripting)
-def editor_ambienti(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def editor_environments(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """The environments this person may write Script nodes with (an administrator:
     all of them), with what a script finds in its environment."""
     from app.services.script_nodes import can_use
@@ -743,7 +743,7 @@ def editor_ambienti(session: Session = Depends(get_session), user: User = Depend
 
 
 @editor_router.get("/environments/{environment_id}/completions")
-def editor_completamenti(environment_id: int, session: Session = Depends(get_session),
+def editor_completions(environment_id: int, session: Session = Depends(get_session),
                          user: User = Depends(get_current_user)) -> dict:
     """{module: [public names]} of the version in use: what the code editor offers
     after `import polars as pl` and `pl.`, or `dplyr::`."""
@@ -784,7 +784,7 @@ class LintOut(BaseModel):
 
 
 @editor_router.post("/lint", response_model=LintOut)
-def editor_controllo(body: LintIn, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def editor_check(body: LintIn, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """What Ruff finds in one Python file of a Script node, for the editor to underline,
     and the imports the environment does not have (services/script_lint.py). Nothing
     for R, and nothing when SCRIPTS__LINT is off."""
@@ -823,7 +823,7 @@ _trials: set = set()
 
 
 @editor_router.post("/flows/{flow_id}/nodes/{node_id}/run", response_model=TrialOut, status_code=202)
-async def prova_nodo(flow_id: int, node_id: str, request: Request, session: Session = Depends(get_session),
+async def trial_node(flow_id: int, node_id: str, request: Request, session: Session = Depends(get_session),
                      user: User = Depends(get_current_user)):
     """Runs a Script or Container node of the SAVED flow: the chain before it on the
     sources' development sample, the node as saved, the nodes after it not run. Its
@@ -894,7 +894,7 @@ async def prova_nodo(flow_id: int, node_id: str, request: Request, session: Sess
 
 
 @editor_router.get("/flows/{flow_id}/outputs")
-def output_dei_nodi(flow_id: int, session: Session = Depends(get_session),
+def node_outputs(flow_id: int, session: Session = Depends(get_session),
                     user: User = Depends(get_current_user)) -> dict:
     """Per Script or Container node of the flow: its latest run, and the output of its
     latest successful one (a run of the flow or a trial), which the editor previews the

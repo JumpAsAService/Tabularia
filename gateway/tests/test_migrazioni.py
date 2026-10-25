@@ -38,41 +38,41 @@ def database_temporaneo():
     if base is None:
         pytest.skip("serve un Postgres (DB__*)")
     amministrazione = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
-    nome = f"zzmig_{uuid.uuid4().hex[:10]}"
+    name = f"zzmig_{uuid.uuid4().hex[:10]}"
     try:
         with amministrazione.connect() as c:
-            c.execute(text(f'CREATE DATABASE "{nome}"'))
+            c.execute(text(f'CREATE DATABASE "{name}"'))
     except Exception as e:  # noqa: BLE001 — niente Postgres raggiungibile: si salta
         pytest.skip(f"Postgres non raggiungibile ({e.__class__.__name__})")
-    eng = create_engine(base.set(database=nome))
+    eng = create_engine(base.set(database=name))
     try:
         yield eng
     finally:
         eng.dispose()
         with amministrazione.connect() as c:
-            c.execute(text(f'DROP DATABASE IF EXISTS "{nome}" WITH (FORCE)'))
+            c.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
         amministrazione.dispose()
 
 
 def test_un_database_nuovo_migrato_e_uguale_ai_modelli(database_temporaneo):
-    esito = m.migra(database_temporaneo)
-    assert esito == {"prima": None, "dopo": m.testa(), "adottato": False}
+    outcome = m.migra(database_temporaneo)
+    assert outcome == {"prima": None, "dopo": m.head(), "adottato": False}
     with database_temporaneo.connect() as c:
-        assert m.differenze(c) == []
-        assert m.revisione(c) == m.testa()
+        assert m.differences(c) == []
+        assert m.revision(c) == m.head()
     # di nuovo: niente da fare
-    assert m.migra(database_temporaneo) == {"prima": m.testa(), "dopo": m.testa(), "adottato": False}
+    assert m.migra(database_temporaneo) == {"prima": m.head(), "dopo": m.head(), "adottato": False}
 
 
 def test_un_database_di_prima_di_alembic_si_adotta_e_diventa_uguale_ai_modelli(database_temporaneo):
     with database_temporaneo.begin() as c:
         c.exec_driver_sql(open(FIXTURE).read())
     with database_temporaneo.connect() as c:
-        assert m.revisione(c) is None and m.differenze(c)          # la deriva del vecchio meccanismo c'è
-    esito = m.migra(database_temporaneo)
-    assert esito["adottato"] and esito["prima"] is None and esito["dopo"] == m.testa()
+        assert m.revision(c) is None and m.differences(c)          # la deriva del vecchio meccanismo c'è
+    outcome = m.migra(database_temporaneo)
+    assert outcome["adottato"] and outcome["prima"] is None and outcome["dopo"] == m.head()
     with database_temporaneo.connect() as c:
-        assert m.differenze(c) == []
+        assert m.differences(c) == []
         insp = inspect(c)
         assert not insp.has_table("schema_state")                   # l'impronta del vecchio meccanismo se ne va
         fk = {f["name"] for f in insp.get_foreign_keys("flows")}
@@ -86,7 +86,7 @@ def test_una_differenza_coi_modelli_ferma_il_passo_senza_mezze_modifiche(databas
     with database_temporaneo.begin() as c:
         c.execute(text("ALTER TABLE users ADD COLUMN zz_a_mano INTEGER"))      # toccato a mano, o un modello senza revisione
     with database_temporaneo.connect() as c:
-        assert any("zz_a_mano" in str(d) for d in m.differenze(c))
+        assert any("zz_a_mano" in str(d) for d in m.differences(c))
     with pytest.raises(RuntimeError, match="differs from the models"):
         m.migra(database_temporaneo)
     # un database di prima di Alembic che non torna: l'adozione si annulla tutta.
@@ -103,19 +103,19 @@ def test_una_differenza_coi_modelli_ferma_il_passo_senza_mezze_modifiche(databas
     with pytest.raises(RuntimeError, match="differs from the models"):
         m.migra(database_temporaneo)
     with database_temporaneo.connect() as c:
-        assert m.revisione(c) is None and not inspect(c).has_table("alembic_version")
+        assert m.revision(c) is None and not inspect(c).has_table("alembic_version")
         # niente a metà: nemmeno le tabelle delle revisioni dopo la base
         assert not inspect(c).has_table("user_sessions")
 
 
 def test_senza_migrazione_automatica_il_gateway_si_ferma_solo_se_il_database_e_indietro(database_temporaneo):
-    with pytest.raises(m.DatabaseIndietro, match="python -m app.db.migra"):
-        m.controlla_revisione(database_temporaneo)                 # vuoto: indietro
+    with pytest.raises(m.DatabaseBehind, match="python -m app.db.migra"):
+        m.check_revision(database_temporaneo)                 # vuoto: indietro
     m.migra(database_temporaneo)
-    assert m.controlla_revisione(database_temporaneo) == m.testa()
+    assert m.check_revision(database_temporaneo) == m.head()
     with database_temporaneo.begin() as c:                          # una revisione che questo codice non conosce: più nuova
         c.execute(text("UPDATE alembic_version SET version_num = '9999'"))
-    assert m.controlla_revisione(database_temporaneo) == "9999"
+    assert m.check_revision(database_temporaneo) == "9999"
 
 
 def test_le_revisioni_sono_una_catena_sola_numerata():
@@ -135,4 +135,4 @@ def test_un_database_piu_nuovo_del_codice_non_ferma_il_passo(database_temporaneo
     with database_temporaneo.begin() as c:
         c.execute(text("UPDATE alembic_version SET version_num = '9999'"))
     assert m.migra(database_temporaneo) == {"prima": "9999", "dopo": "9999", "adottato": False}
-    assert m.controlla_revisione(database_temporaneo) == "9999"
+    assert m.check_revision(database_temporaneo) == "9999"

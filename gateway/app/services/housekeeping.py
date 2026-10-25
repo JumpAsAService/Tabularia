@@ -31,54 +31,54 @@ from app.services import run_log_retention
 logger = logging.getLogger(__name__)
 
 EVERY_SECONDS = 3600
-LOTTO = 1000
-MAX_LOTTI = 200
+BATCH = 1000
+MAX_BATCHES = 200
 
 
-def _adesso() -> datetime:
+def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC columns
 
 
-def _a_lotti(session: Session, sql: str, **params) -> int:
-    """Runs a DELETE … WHERE id IN (… LIMIT :lotto) batch after batch."""
-    tolti = 0
-    for _ in range(MAX_LOTTI):
-        n = session.exec(text(sql).bindparams(lotto=LOTTO, **params)).rowcount or 0
+def _in_batches(session: Session, sql: str, **params) -> int:
+    """Runs a DELETE … WHERE id IN (… LIMIT :batch) batch after batch."""
+    removed_items = 0
+    for _ in range(MAX_BATCHES):
+        n = session.exec(text(sql).bindparams(batch=BATCH, **params)).rowcount or 0
         session.commit()
-        tolti += n
-        if n < LOTTO:
+        removed_items += n
+        if n < BATCH:
             break
-    return tolti
+    return removed_items
 
 
 def contract_results(session: Session, kept: int) -> int:
     if kept <= 0:
         return 0
-    return _a_lotti(session, """
+    return _in_batches(session, """
         DELETE FROM data_contract_results WHERE id IN (
             SELECT id FROM (
                 SELECT id, notify, ROW_NUMBER() OVER (PARTITION BY datasource_id ORDER BY id DESC) AS n
                 FROM data_contract_results) t
             WHERE t.n > :kept AND (t.notify IS NULL OR t.notify NOT IN ('pending', 'sending'))
-            LIMIT :lotto)""", kept=kept)
+            LIMIT :batch)""", kept=kept)
 
 
 def flow_versions(session: Session, kept: int) -> int:
     if kept <= 0:
         return 0
     # the highest version is the flow's current one: always among those kept
-    return _a_lotti(session, """
+    return _in_batches(session, """
         DELETE FROM flow_versions WHERE id IN (
             SELECT id FROM (
                 SELECT id, ROW_NUMBER() OVER (PARTITION BY flow_id ORDER BY version DESC) AS n
                 FROM flow_versions) t
-            WHERE t.n > :kept LIMIT :lotto)""", kept=kept)
+            WHERE t.n > :kept LIMIT :batch)""", kept=kept)
 
 
 def script_versions(session: Session, kept: int) -> int:
     if kept <= 0:
         return 0
-    return _a_lotti(session, """
+    return _in_batches(session, """
         DELETE FROM saved_script_versions WHERE id IN (
             SELECT t.id FROM (
                 SELECT id, script_id, version,
@@ -86,18 +86,18 @@ def script_versions(session: Session, kept: int) -> int:
                 FROM saved_script_versions) t
             WHERE t.n > :kept AND NOT EXISTS (
                 SELECT 1 FROM saved_scripts s WHERE s.id = t.script_id AND s.current_version = t.version)
-            LIMIT :lotto)""", kept=kept)
+            LIMIT :batch)""", kept=kept)
 
 
-def ai_chats(session: Session, days: int, ora: datetime | None = None) -> int:
+def ai_chats(session: Session, days: int, at: datetime | None = None) -> int:
     if days <= 0:
         return 0
-    taglio = (ora or _adesso()) - timedelta(days=days)
-    tolte = 0
-    for _ in range(MAX_LOTTI):
+    cutoff = (at or _now()) - timedelta(days=days)
+    removed_ones = 0
+    for _ in range(MAX_BATCHES):
         ids = [i for (i,) in session.execute(
-            text("SELECT id FROM ai_chats WHERE updated_at < :taglio LIMIT :lotto"),
-            {"taglio": taglio, "lotto": LOTTO}).all()]
+            text("SELECT id FROM ai_chats WHERE updated_at < :cutoff LIMIT :batch"),
+            {"cutoff": cutoff, "batch": BATCH}).all()]
         if not ids:
             break
         session.execute(text("DELETE FROM ai_chat_turns WHERE chat_id IN :ids").bindparams(
@@ -105,10 +105,10 @@ def ai_chats(session: Session, days: int, ora: datetime | None = None) -> int:
         session.execute(text("DELETE FROM ai_chats WHERE id IN :ids").bindparams(
             bindparam("ids", expanding=True)), {"ids": ids})
         session.commit()
-        tolte += len(ids)
-        if len(ids) < LOTTO:
+        removed_ones += len(ids)
+        if len(ids) < BATCH:
             break
-    return tolte
+    return removed_ones
 
 
 def vacuum(session: Session, tables: list[str]) -> None:
@@ -121,17 +121,17 @@ def vacuum(session: Session, tables: list[str]) -> None:
             conn.exec_driver_sql(f"VACUUM (ANALYZE) {table}")  # names of this module, never input
 
 
-def one_pass(session: Session, ora: datetime | None = None) -> dict[str, int]:
+def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
     """Trims every kind once; returns how many rows each touched, and vacuums those.
     A kind that fails (a deadlock with another replica's pass, a lost connection) is
     logged and left to the next pass: the others are trimmed all the same."""
     o = get_settings().orchestrator
     steps = {
-        "runs": lambda: run_log_retention.svuota(session, o.log_retention_days, ora=ora),
+        "runs": lambda: run_log_retention.empty_out(session, o.log_retention_days, at=at),
         "data_contract_results": lambda: contract_results(session, o.contract_results_kept),
         "flow_versions": lambda: flow_versions(session, o.versions_kept),
         "saved_script_versions": lambda: script_versions(session, o.versions_kept),
-        "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, ora=ora),
+        "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
     }
     done: dict[str, int] = {}
     for table, step in steps.items():
@@ -148,7 +148,7 @@ def one_pass(session: Session, ora: datetime | None = None) -> dict[str, int]:
     return done
 
 
-def _giro() -> dict[str, int]:
+def _round() -> dict[str, int]:
     from app.db.session import engine
 
     with Session(engine) as session:
@@ -162,7 +162,7 @@ async def housekeeping_loop(stop: asyncio.Event) -> None:
                 o.contract_results_kept, o.versions_kept, o.ai_chat_retention_days, EVERY_SECONDS)
     while not stop.is_set():
         try:
-            done = await asyncio.to_thread(_giro)
+            done = await asyncio.to_thread(_round)
             if any(done.values()):
                 logger.info("housekeeping: %s", ", ".join(f"{t} {n}" for t, n in done.items() if n))
         except Exception:  # noqa: BLE001 — the cleaning must never stop the gateway

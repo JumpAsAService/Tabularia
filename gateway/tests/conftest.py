@@ -295,11 +295,11 @@ def make_user(session, **kw):
     return u
 
 
-def token_di(session, user, request=None, metodo="password"):
+def token_di(session, user, request=None, method="password"):
     """Un token valido per `user`: apre una sessione vera, come fa il login."""
     from app.services import sessions
 
-    return sessions.apri(session, user, request, metodo)[1]
+    return sessions.open_session(session, user, request, method)[1]
 
 
 def make_project(session, **kw):

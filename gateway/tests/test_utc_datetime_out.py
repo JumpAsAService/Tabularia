@@ -73,7 +73,7 @@ async def test_a_run_reloaded_from_the_db_comes_out_with_the_offset(session):
     js = RunOut(id=run.id, status=run.status, launched_by=None, output_key=run.output_key, rows_written=None,
                 error=None, publish_name=None, datasource_id=None,
                 started_at=run.started_at, finished_at=run.finished_at).model_dump(mode="json")
-    for campo in ("started_at", "finished_at"):
-        parsed = datetime.fromisoformat(js[campo])
-        assert parsed.utcoffset() == timedelta(0), (campo, js[campo])
+    for field in ("started_at", "finished_at"):
+        parsed = datetime.fromisoformat(js[field])
+        assert parsed.utcoffset() == timedelta(0), (field, js[field])
     assert datetime.fromisoformat(js["started_at"]).replace(tzinfo=None) == run.started_at

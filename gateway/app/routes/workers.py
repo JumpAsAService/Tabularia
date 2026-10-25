@@ -17,19 +17,19 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, StrictInt
 from sqlmodel import Session
 
-from app.core.engine_client import CONTROLLO, get_engine_client
-from app.core.routing import RottaCheRilascia
+from app.core.engine_client import CHECK, get_engine_client
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import require_observer, require_superuser
 from app.models import User, WorkerScaling
 from app.schemas.models import UtcDateTime
 from app.services import api_tokens, audit
 from app.services import kube_scaling as kube
-from app.services import regolazioni_motore as rm
+from app.services import engine_panel_settings as rm
 from app.services.masking import mask_email
 from app.services.permissions import is_admin
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/workers", tags=["workers"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/workers", tags=["workers"])
 
 Kind = Literal["run", "preview"]
 QUEUE = {"run": "celery", "preview": "preview"}
@@ -110,17 +110,17 @@ class ScalingIn(BaseModel):
     max_replicas: StrictInt = Field(ge=1, le=1000)
 
 
-def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
+def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
     """After authentication, which records whether the request came with a token."""
-    from app.routes.api_tokens import nega_se_da_token
+    from app.routes.api_tokens import deny_if_from_token
 
-    nega_se_da_token(request, api_tokens.NIENTE_WORKER_DA_TOKEN)
+    deny_if_from_token(request, api_tokens.NO_WORKER_FROM_TOKEN)
 
 
 async def _engine() -> tuple[dict, dict]:
     try:
-        cat = await rm.catalogo()
-        r = await get_engine_client().get("/workers", timeout=CONTROLLO)
+        cat = await rm.catalog()
+        r = await get_engine_client().get("/workers", timeout=CHECK)
         r.raise_for_status()
         return cat, r.json()
     except httpx.HTTPStatusError as e:
@@ -148,12 +148,12 @@ async def _scaling(kind: str, row: Optional[WorkerScaling], full: bool) -> Scali
     return out
 
 
-async def _stato(session: Session, who: User, request: Request) -> WorkersOut:
+async def _state(session: Session, who: User, request: Request) -> WorkersOut:
     cat, live = await _engine()
     full = is_admin(session, who)
-    from_token = bool(api_tokens.nome_corrente(request))
+    from_token = bool(api_tokens.current_name(request))
     items = {v["key"]: v for v in cat.get("items", [])}
-    saved = rm.salvate(session)
+    saved = rm.saved(session)
     workers = live.get("workers")
     groups = []
     for kind in ("run", "preview"):
@@ -164,7 +164,7 @@ async def _stato(session: Session, who: User, request: Request) -> WorkersOut:
             kind=kind, queue=QUEUE[kind], queued=(live.get("queued") or {}).get(QUEUE[kind]),
             concurrency=ConcurrencyOut(
                 key=key, min=item.get("min", 1), max=item.get("max", 32),
-                value=row.value if row is not None and rm.dal_pannello() else None,
+                value=row.value if row is not None and rm.from_panel() else None,
                 applied=item.get("value"),
                 updated_at=row.updated_at if row is not None else None,
                 updated_by=(by if full else mask_email(by)) if by else None,
@@ -174,15 +174,15 @@ async def _stato(session: Session, who: User, request: Request) -> WorkersOut:
         ))
     return WorkersOut(
         groups=groups, workers_known=workers is not None,
-        concurrency_editable=full and rm.dal_pannello() and not from_token,
+        concurrency_editable=full and rm.from_panel() and not from_token,
         scaling_editable=full and kube.enabled() and not from_token,
-        panel_enabled=rm.dal_pannello(), tick_seconds=live.get("tick_seconds") or 10,
+        panel_enabled=rm.from_panel(), tick_seconds=live.get("tick_seconds") or 10,
     )
 
 
 @router.get("", response_model=WorkersOut)
-async def leggi(request: Request, session: Session = Depends(get_session), who: User = Depends(require_observer)):
-    return await _stato(session, who, request)
+async def read(request: Request, session: Session = Depends(get_session), who: User = Depends(require_observer)):
+    return await _state(session, who, request)
 
 
 def _scaling_on() -> None:
@@ -192,7 +192,7 @@ def _scaling_on() -> None:
             "with adminScaling.enabled in the Helm chart (KUBERNETES__SCALING=true)"))
 
 
-@router.put("/{kind}/scaling", response_model=WorkersOut, dependencies=[Depends(_niente_token)])
+@router.put("/{kind}/scaling", response_model=WorkersOut, dependencies=[Depends(_no_token)])
 async def scala(
     kind: Kind, body: ScalingIn, request: Request,
     session: Session = Depends(get_session), admin: User = Depends(require_superuser),
@@ -203,7 +203,7 @@ async def scala(
     problem = kube.check(kube.target(kind), body.min_replicas, body.max_replicas)
     if problem:
         return JSONResponse(status_code=422, content={"detail": {"errors": [problem]}})
-    if not await rm.blocca(session, chiave=kube.LUCCHETTO):
+    if not await rm.lock(session, key=kube.LOCK):
         raise HTTPException(status_code=409, detail="Another change to the scaling is in progress: try again in a moment")
     try:
         before = await kube.read(kind)
@@ -221,18 +221,18 @@ async def scala(
         detail={"from": {"min": before.get("min"), "max": before.get("max")},
                 "to": {"min": body.min_replicas, "max": body.max_replicas}},
     )
-    return await _stato(session, admin, request)
+    return await _state(session, admin, request)
 
 
-@router.delete("/{kind}/scaling", response_model=WorkersOut, dependencies=[Depends(_niente_token)])
-async def restituisci(
+@router.delete("/{kind}/scaling", response_model=WorkersOut, dependencies=[Depends(_no_token)])
+async def give_back(
     kind: Kind, request: Request,
     session: Session = Depends(get_session), admin: User = Depends(require_superuser),
 ):
     """Stops keeping the panel's bounds: the cluster keeps the current ones until the
     next deployment of the chart puts its own back."""
     _scaling_on()
-    if not await rm.blocca(session, chiave=kube.LUCCHETTO):
+    if not await rm.lock(session, key=kube.LOCK):
         raise HTTPException(status_code=409, detail="Another change to the scaling is in progress: try again in a moment")
     row = session.get(WorkerScaling, kind)
     if row is not None:
@@ -243,4 +243,4 @@ async def restituisci(
                            target_type="workers", target_label=kind, detail=detail)
     else:
         session.commit()  # releases the lock
-    return await _stato(session, admin, request)
+    return await _state(session, admin, request)

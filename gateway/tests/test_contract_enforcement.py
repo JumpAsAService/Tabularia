@@ -33,8 +33,8 @@ AVVISO = {"outcome": "warning", "version": 1, "rows": 9, "errors": 0, "warnings"
 PULITO = {"outcome": "passed", "version": 1, "rows": 9, "errors": 0, "warnings": 0, "rules": []}
 
 
-def _risultato(referto=None, righe=9):
-    r = {"bucket": "data-prep", "rows_written": righe, "columns": [{"name": "id", "dtype": "Int64"}]}
+def _risultato(referto=None, rows=9):
+    r = {"bucket": "data-prep", "rows_written": rows, "columns": [{"name": "id", "dtype": "Int64"}]}
     return {**r, "contract": referto} if referto is not None else r
 
 
@@ -46,8 +46,8 @@ def ds(session):
     return d
 
 
-def _refresh(session, fake_engine, ds, referto, task="t-1", chiave="datasets/1/nuovo.parquet"):
-    run = make_run(session, kind="ingest", status="STARTED", task_id=task, datasource_id=ds.id, output_key=chiave)
+def _refresh(session, fake_engine, ds, referto, task="t-1", key="datasets/1/nuovo.parquet"):
+    run = make_run(session, kind="ingest", status="STARTED", task_id=task, datasource_id=ds.id, output_key=key)
     fake_engine.set_task(task, "SUCCESS", result=_risultato(referto))
     return run
 
@@ -168,24 +168,24 @@ def pubblicata(session):
     d = make_datasource(session, name="vendite", kind="flow", project_id=p.id, key="datasets/5/buono.parquet", rows=50, flow_id=flusso.id)
     contracts.save(session, d, DOC, True, None)
     session.commit()
-    corpo = RunCreate(bucket="data-prep", input_key="datasets/x.parquet", operations=[],
+    body = RunCreate(bucket="data-prep", input_key="datasets/x.parquet", operations=[],
                       publish=PublishSpec(name="vendite", project_id=p.id, overwrite=True))
-    return capo, flusso, d, corpo
+    return capo, flusso, d, body
 
 
 async def test_il_contratto_parte_con_il_flusso_che_sovrascrive_la_datasource(session, fake_engine, pubblicata):
-    capo, flusso, d, corpo = pubblicata
-    await _launch_flow_run(session, capo, flusso, corpo)
+    capo, flusso, d, body = pubblicata
+    await _launch_flow_run(session, capo, flusso, body)
     assert fake_engine.transforms[-1]["contract"]["version"] == 1
     # un nome nuovo crea una datasource: non c'è ancora nessun contratto da rispettare
-    nuova = RunCreate(bucket="data-prep", input_key="datasets/x.parquet", operations=[], publish=PublishSpec(name="mai-vista", project_id=d.project_id))
-    await _launch_flow_run(session, capo, flusso, nuova)
+    new_one = RunCreate(bucket="data-prep", input_key="datasets/x.parquet", operations=[], publish=PublishSpec(name="mai-vista", project_id=d.project_id))
+    await _launch_flow_run(session, capo, flusso, new_one)
     assert "contract" not in fake_engine.transforms[-1]
 
 
 async def test_un_flusso_che_viola_una_regola_bloccante_non_sovrascrive(session, fake_engine, pubblicata):
-    capo, flusso, d, corpo = pubblicata
-    run = await _launch_flow_run(session, capo, flusso, corpo)
+    capo, flusso, d, body = pubblicata
+    run = await _launch_flow_run(session, capo, flusso, body)
     fake_engine.set_task(run.task_id, "SUCCESS", result=_risultato(ROTTO))
     run = await _reconcile(session, run)
     session.refresh(d)
@@ -198,8 +198,8 @@ async def test_un_flusso_che_viola_una_regola_bloccante_non_sovrascrive(session,
 
 
 async def test_un_flusso_con_soli_avvisi_pubblica(session, fake_engine, pubblicata):
-    capo, flusso, d, corpo = pubblicata
-    run = await _launch_flow_run(session, capo, flusso, corpo)
+    capo, flusso, d, body = pubblicata
+    run = await _launch_flow_run(session, capo, flusso, body)
     fake_engine.set_task(run.task_id, "SUCCESS", result=_risultato(AVVISO))
     run = await _reconcile(session, run)
     session.refresh(d)
@@ -230,16 +230,16 @@ def _con_freschezza(session, ore=24, severita="warning"):
     return d, c
 
 
-@pytest.mark.parametrize("severita, esito", [("warning", "warning"), ("error", "failed")])
-def test_dati_troppo_vecchi_cambiano_lo_stato_una_volta_sola(session, severita, esito):
+@pytest.mark.parametrize("severita, outcome", [("warning", "warning"), ("error", "failed")])
+def test_dati_troppo_vecchi_cambiano_lo_stato_una_volta_sola(session, severita, outcome):
     d, c = _con_freschezza(session, 24, severita)
     presto = datetime(2026, 10, 1, 20, 0, 0, tzinfo=timezone.utc)
     assert contracts.sweep_freshness(session, presto) == 0 and c.status == "passed"
     tardi = presto + timedelta(hours=20)                       # 32 ore dopo l'ultimo refresh
     assert contracts.sweep_freshness(session, tardi) == 1
     session.refresh(c)
-    regola = json.loads(c.last_report)["rules"][0]
-    assert (c.status, regola["passed"], regola["observed"]) == (esito, False, 32.0)
+    rule = json.loads(c.last_report)["rules"][0]
+    assert (c.status, rule["passed"], rule["observed"]) == (outcome, False, 32.0)
     assert json.loads(c.last_report)["rules"][1]["passed"] is True     # le altre regole restano com'erano
     # ai giri successivi lo stato è già quello: niente referti a ripetizione
     assert contracts.sweep_freshness(session, tardi + timedelta(hours=5)) == 0

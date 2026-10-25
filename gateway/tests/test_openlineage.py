@@ -24,12 +24,12 @@ class _Cattura(Transport):
     kind = "cattura"
 
     def __init__(self):
-        self.eventi = []
+        self.events = []
 
     def emit(self, event):
         from openlineage.client.serde import Serde
 
-        self.eventi.append(json.loads(Serde.to_json(event)))
+        self.events.append(json.loads(Serde.to_json(event)))
 
 
 @pytest.fixture(autouse=True)
@@ -51,27 +51,27 @@ def cattura(monkeypatch):
 @pytest.fixture
 def scena(session):
     capo = make_user(session, email="capo@x.it", is_superuser=True)
-    radice = make_project(session, name="Sample", owner_id=capo.id)
-    cartella = make_project(session, name="Flows", owner_id=capo.id, parent_id=radice.id)
-    pg = Connection(name="gestionale", db_type="postgresql", project_id=cartella.id, owner_id=capo.id, host="db.x.it", port=None, database="erp", db_schema="")
+    root = make_project(session, name="Sample", owner_id=capo.id)
+    folder = make_project(session, name="Flows", owner_id=capo.id, parent_id=root.id)
+    pg = Connection(name="gestionale", db_type="postgresql", project_id=folder.id, owner_id=capo.id, host="db.x.it", port=None, database="erp", db_schema="")
     session.add(pg)
     session.commit()
-    ordini = make_datasource(session, name="orders", project_id=cartella.id, key="datasets/41/v3.parquet", rows=12, kind="database",
+    ordini = make_datasource(session, name="orders", project_id=folder.id, key="datasets/41/v3.parquet", rows=12, kind="database",
                              connection_id=pg.id, source_type="table", source_ref="vendite.ordini", columns=json.dumps([{"name": "id", "dtype": "Int64"}, {"name": "canale", "dtype": "String"}]))
-    clienti = make_datasource(session, name="customers", project_id=cartella.id, key="datasets/43/v1.parquet", rows=3, kind="database",
+    clienti = make_datasource(session, name="customers", project_id=folder.id, key="datasets/43/v1.parquet", rows=3, kind="database",
                               connection_id=pg.id, source_type="sql", source_ref="SELECT c.id, r.nome FROM crm.clienti c JOIN crm.regioni r ON r.id = c.regione_id WHERE c.attivo")
-    definizione = {"nodes": [
+    definition = {"nodes": [
         {"id": "s1", "type": "source", "data": {"datasourceId": ordini.id}},
         {"id": "s2", "type": "source", "data": {"datasourceId": clienti.id}},
         {"id": "s3", "type": "source", "data": {"datasourceId": ordini.id}},
-        {"id": "o1", "type": "output", "data": {"destType": "datasource", "name": "Margin", "projectId": cartella.id, "overwrite": True}},
+        {"id": "o1", "type": "output", "data": {"destType": "datasource", "name": "Margin", "projectId": folder.id, "overwrite": True}},
         {"id": "o2", "type": "output", "data": {"destType": "database", "connectionId": pg.id, "table": "report.margini", "mode": "replace"}},
         {"id": "o3", "type": "output", "data": {"destType": "email", "connectionId": 99}},
     ], "edges": []}
-    flow = make_flow(session, name="Margin by Category", project_id=cartella.id, definition=json.dumps(definizione), description="Margine per categoria")
+    flow = make_flow(session, name="Margin by Category", project_id=folder.id, definition=json.dumps(definition), description="Margine per categoria")
     lettore = make_user(session, email="lettore@x.it")
-    make_permission(session, user_id=lettore.id, project_id=cartella.id, capability=Capability.VIEW)
-    return SimpleNamespace(capo=capo, cartella=cartella, pg=pg, ordini=ordini, clienti=clienti, flow=flow, lettore=lettore)
+    make_permission(session, user_id=lettore.id, project_id=folder.id, capability=Capability.VIEW)
+    return SimpleNamespace(capo=capo, folder=folder, pg=pg, ordini=ordini, clienti=clienti, flow=flow, lettore=lettore)
 
 
 # ── nomi secondo le convenzioni ──────────────────────────────────────────────
@@ -120,10 +120,10 @@ def test_il_lineage_statico_del_flusso_legge_la_definizione(session, scena):
 
 
 def test_l_export_e_di_chi_legge_e_l_invio_vuole_un_collector(session, scena, cattura, monkeypatch):
-    eventi = lineage_routes.flow_openlineage(scena.flow.id, scena.lettore, session)
-    assert eventi[0]["job"]["name"] == "Sample/Flows/Margin by Category"
+    events = lineage_routes.flow_openlineage(scena.flow.id, scena.lettore, session)
+    assert events[0]["job"]["name"] == "Sample/Flows/Margin by Category"
     assert lineage_routes.emit_flow_openlineage(scena.flow.id, scena.lettore, session) == {"events": 1}
-    assert cattura.eventi[-1]["job"]["name"] == "Sample/Flows/Margin by Category"
+    assert cattura.events[-1]["job"]["name"] == "Sample/Flows/Margin by Category"
     monkeypatch.setattr(get_settings().openlineage, "url", "")
     from fastapi import HTTPException
 
@@ -143,26 +143,26 @@ def _t(min):
 
 def test_un_run_di_output_racconta_cosa_ha_scritto_e_da_chi_dipende(session, scena):
     orch = make_run(session, kind="orchestration", flow_id=scena.flow.id, status="SUCCESS", task_id="", started_at=_t(0), finished_at=_t(5))
-    pubblicata = make_datasource(session, name="Margin", project_id=scena.cartella.id, key="datasets/70/v1.parquet", rows=185, kind="flow", flow_id=scena.flow.id)
+    pubblicata = make_datasource(session, name="Margin", project_id=scena.folder.id, key="datasets/70/v1.parquet", rows=185, kind="flow", flow_id=scena.flow.id)
     figlio = make_run(session, kind="flow", flow_id=scena.flow.id, parent_run_id=orch.id, status="SUCCESS", task_id="t1", rows_written=185,
-                      publish_name="Margin", publish_project_id=scena.cartella.id, datasource_id=pubblicata.id, started_at=_t(1), finished_at=_t(2))
-    tabella = make_run(session, kind="flow", flow_id=scena.flow.id, parent_run_id=orch.id, status="FAILURE", task_id="t2", error="tabella bloccata",
+                      publish_name="Margin", publish_project_id=scena.folder.id, datasource_id=pubblicata.id, started_at=_t(1), finished_at=_t(2))
+    table = make_run(session, kind="flow", flow_id=scena.flow.id, parent_run_id=orch.id, status="FAILURE", task_id="t2", error="tabella bloccata",
                        destination=json.dumps({"type": "database", "connection_id": scena.pg.id, "table": "report.margini", "mode": "replace"}), started_at=_t(2), finished_at=_t(3))
 
-    start, fine = ol.to_json(ol.run_events(session, figlio))
-    assert (start["eventType"], fine["eventType"]) == ("START", "COMPLETE")
-    assert start["eventTime"] == "2026-10-07T08:01:00.000Z" and fine["eventTime"] == "2026-10-07T08:02:00.000Z"
-    assert fine["job"]["name"] == "Sample/Flows/Margin by Category.datasource Margin"
-    assert fine["run"]["runId"] == ol.run_uuid(figlio.id)
-    assert fine["run"]["facets"]["parent"]["run"]["runId"] == ol.run_uuid(orch.id)
-    assert fine["run"]["facets"]["parent"]["job"]["name"] == "Sample/Flows/Margin by Category"
-    assert [i["name"] for i in fine["inputs"]] == ["/Sample/Flows/orders", "/Sample/Flows/customers"]
-    (out,) = fine["outputs"]
+    start, end = ol.to_json(ol.run_events(session, figlio))
+    assert (start["eventType"], end["eventType"]) == ("START", "COMPLETE")
+    assert start["eventTime"] == "2026-10-07T08:01:00.000Z" and end["eventTime"] == "2026-10-07T08:02:00.000Z"
+    assert end["job"]["name"] == "Sample/Flows/Margin by Category.datasource Margin"
+    assert end["run"]["runId"] == ol.run_uuid(figlio.id)
+    assert end["run"]["facets"]["parent"]["run"]["runId"] == ol.run_uuid(orch.id)
+    assert end["run"]["facets"]["parent"]["job"]["name"] == "Sample/Flows/Margin by Category"
+    assert [i["name"] for i in end["inputs"]] == ["/Sample/Flows/orders", "/Sample/Flows/customers"]
+    (out,) = end["outputs"]
     assert out["name"] == "/Sample/Flows/Margin" and out["outputFacets"]["outputStatistics"]["rowCount"] == 185
     assert out["facets"]["tabularia"]["datasourceId"] == pubblicata.id
     assert [o["name"] for o in start["outputs"]] == [out["name"]] and start["outputs"][0]["outputFacets"] == {}   # dichiarati, senza statistiche
 
-    _, fallito = ol.to_json(ol.run_events(session, tabella))
+    _, fallito = ol.to_json(ol.run_events(session, table))
     assert fallito["eventType"] == "FAIL" and fallito["run"]["facets"]["errorMessage"]["message"] == "tabella bloccata"
     assert fallito["outputs"][0]["name"] == "erp.report.margini"
 
@@ -173,11 +173,11 @@ def test_un_run_di_output_racconta_cosa_ha_scritto_e_da_chi_dipende(session, sce
 
 def test_il_refresh_di_una_datasource_e_un_job_dalla_tabella_al_parquet(session, scena):
     run = make_run(session, kind="ingest", datasource_id=scena.ordini.id, status="SUCCESS", task_id="t3", rows_written=12, started_at=_t(0), finished_at=_t(1))
-    _, fine = ol.to_json(ol.run_events(session, run))
-    assert fine["job"]["name"] == "Sample/Flows/orders (refresh)" and fine["job"]["facets"]["jobType"]["jobType"] == "REFRESH"
-    assert fine["run"]["facets"]["tabularia"]["runId"] == run.id and "parent" not in fine["run"]["facets"]
-    assert [(i["namespace"], i["name"]) for i in fine["inputs"]] == [("postgres://db.x.it:5432", "erp.vendite.ordini")]
-    assert fine["outputs"][0]["name"] == "/Sample/Flows/orders" and fine["outputs"][0]["outputFacets"]["outputStatistics"]["rowCount"] == 12
+    _, end = ol.to_json(ol.run_events(session, run))
+    assert end["job"]["name"] == "Sample/Flows/orders (refresh)" and end["job"]["facets"]["jobType"]["jobType"] == "REFRESH"
+    assert end["run"]["facets"]["tabularia"]["runId"] == run.id and "parent" not in end["run"]["facets"]
+    assert [(i["namespace"], i["name"]) for i in end["inputs"]] == [("postgres://db.x.it:5432", "erp.vendite.ordini")]
+    assert end["outputs"][0]["name"] == "/Sample/Flows/orders" and end["outputs"][0]["outputFacets"]["outputStatistics"]["rowCount"] == 12
 
 
 # ── spento / acceso ──────────────────────────────────────────────────────────
@@ -189,12 +189,12 @@ def test_spento_non_fa_niente_acceso_manda_dopo_la_chiusura(session, scena, catt
     assert ol.enabled() is False
     ol.run_closed(session, run)
     ol.wait_idle()
-    assert cattura.eventi == []
+    assert cattura.events == []
     monkeypatch.setattr(get_settings().openlineage, "url", "http://collector:5000")
     assert ol.enabled() is True
     ol.run_closed(session, run)
     ol.wait_idle()
-    assert [e["eventType"] for e in cattura.eventi] == ["START", "COMPLETE"]
+    assert [e["eventType"] for e in cattura.events] == ["START", "COMPLETE"]
 
 
 def test_un_collector_che_rifiuta_non_tocca_il_run(session, scena, monkeypatch):
@@ -232,136 +232,136 @@ def test_il_client_http_si_costruisce_con_e_senza_chiave(monkeypatch):
 
 # ── tutti i tipi di run e di dataset ─────────────────────────────────────────
 def test_un_flusso_annidato_ha_per_padre_l_orchestrazione_della_radice(session, scena):
-    radice = make_flow(session, name="Radice", project_id=scena.cartella.id, definition=json.dumps({"nodes": [{"id": "r", "type": "runflow", "data": {"flowId": scena.flow.id}}], "edges": []}))
-    orch = make_run(session, kind="orchestration", flow_id=radice.id, status="SUCCESS", task_id="", started_at=_t(0), finished_at=_t(9))
+    root = make_flow(session, name="Radice", project_id=scena.folder.id, definition=json.dumps({"nodes": [{"id": "r", "type": "runflow", "data": {"flowId": scena.flow.id}}], "edges": []}))
+    orch = make_run(session, kind="orchestration", flow_id=root.id, status="SUCCESS", task_id="", started_at=_t(0), finished_at=_t(9))
     # dentro un runflow il figlio porta il parent_run_id della RADICE, ma il suo flow_id è quello del sotto-flusso
     figlio = make_run(session, kind="flow", flow_id=scena.flow.id, parent_run_id=orch.id, status="SUCCESS", task_id="t9",
                       destination=json.dumps({"type": "database", "connection_id": scena.pg.id, "table": "report.x", "mode": "append"}), started_at=_t(1), finished_at=_t(2))
-    _, fine = ol.to_json(ol.run_events(session, figlio))
-    assert fine["job"]["name"] == "Sample/Flows/Margin by Category.table report.x"
+    _, end = ol.to_json(ol.run_events(session, figlio))
+    assert end["job"]["name"] == "Sample/Flows/Margin by Category.table report.x"
     # niente ParentRunFacet: Marquez lo rinominerebbe «Radice.Margin….table…», un job diverso da
     # quello che lo stesso Output ha quando il sotto-flusso gira da solo; il legame sta nel facet tabularia
-    assert "parent" not in fine["run"]["facets"]
-    assert fine["run"]["facets"]["tabularia"]["parentRunId"] == ol.run_uuid(orch.id)
-    assert (fine["run"]["facets"]["tabularia"]["runId"], fine["run"]["facets"]["tabularia"]["kind"]) == (figlio.id, "flow")
-    assert fine["outputs"][0]["facets"]["lifecycleStateChange"]["lifecycleStateChange"] == "ALTER"   # append
+    assert "parent" not in end["run"]["facets"]
+    assert end["run"]["facets"]["tabularia"]["parentRunId"] == ol.run_uuid(orch.id)
+    assert (end["run"]["facets"]["tabularia"]["runId"], end["run"]["facets"]["tabularia"]["kind"]) == (figlio.id, "flow")
+    assert end["outputs"][0]["facets"]["lifecycleStateChange"]["lifecycleStateChange"] == "ALTER"   # append
 
 
 def test_un_refresh_da_query_sql_legge_le_tabelle_della_query(session, scena):
     run = make_run(session, kind="ingest", datasource_id=scena.clienti.id, status="SUCCESS", task_id="t6", rows_written=3, started_at=_t(0), finished_at=_t(1))
-    _, fine = ol.to_json(ol.run_events(session, run))
-    assert sorted(i["name"] for i in fine["inputs"]) == ["erp.crm.clienti", "erp.crm.regioni"]
-    assert fine["job"]["facets"]["sql"]["query"].startswith("SELECT c.id")
-    assert fine["outputs"][0]["name"] == "/Sample/Flows/customers"
+    _, end = ol.to_json(ol.run_events(session, run))
+    assert sorted(i["name"] for i in end["inputs"]) == ["erp.crm.clienti", "erp.crm.regioni"]
+    assert end["job"]["facets"]["sql"]["query"].startswith("SELECT c.id")
+    assert end["outputs"][0]["name"] == "/Sample/Flows/customers"
 
 
 def test_un_refresh_da_sharepoint_e_un_file_del_sito(session, scena):
-    sp = Connection(name="intranet", db_type="sharepoint", project_id=scena.cartella.id, owner_id=scena.capo.id, host="https://acme.sharepoint.com/sites/vendite", port=None)
+    sp = Connection(name="intranet", db_type="sharepoint", project_id=scena.folder.id, owner_id=scena.capo.id, host="https://acme.sharepoint.com/sites/vendite", port=None)
     session.add(sp)
     session.commit()
-    ds = make_datasource(session, name="budget", project_id=scena.cartella.id, key="datasets/9/v1.parquet", rows=10, kind="database",
+    ds = make_datasource(session, name="budget", project_id=scena.folder.id, key="datasets/9/v1.parquet", rows=10, kind="database",
                          connection_id=sp.id, source_type="sharepoint", source_ref=json.dumps({"path": "Documenti/budget 2026.xlsx", "sheet": "Q1"}))
     run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t7", rows_written=10)
-    _, fine = ol.to_json(ol.run_events(session, run))
-    (i,) = fine["inputs"]
+    _, end = ol.to_json(ol.run_events(session, run))
+    (i,) = end["inputs"]
     assert (i["namespace"], i["name"]) == ("sharepoint://acme.sharepoint.com/sites/vendite", "/Documenti/budget 2026.xlsx#Q1")
 
 
 def test_an_sftp_refresh_reads_files_of_the_server_and_an_sftp_output_writes_one(session, scena):
-    ftp = Connection(name="drop", db_type="sftp", project_id=scena.cartella.id, owner_id=scena.capo.id, host="sftp.example.com", port=2222)
+    ftp = Connection(name="drop", db_type="sftp", project_id=scena.folder.id, owner_id=scena.capo.id, host="sftp.example.com", port=2222)
     session.add(ftp)
     session.commit()
-    ds = make_datasource(session, name="vendite", project_id=scena.cartella.id, key="datasets/19/v1.parquet", rows=10, kind="database",
+    ds = make_datasource(session, name="vendite", project_id=scena.folder.id, key="datasets/19/v1.parquet", rows=10, kind="database",
                          connection_id=ftp.id, source_type="sftp", source_ref=json.dumps({"folder": "/in", "pattern": "vendite_*.csv"}))
     run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t17", rows_written=10)
-    _, fine = ol.to_json(ol.run_events(session, run))
-    (i,) = fine["inputs"]
+    _, end = ol.to_json(ol.run_events(session, run))
+    (i,) = end["inputs"]
     assert (i["namespace"], i["name"]) == ("sftp://sftp.example.com:2222", "/in/vendite_*.csv")
 
     out = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t18", rows_written=5,
                    destination=json.dumps({"type": "sftp", "connection_id": ftp.id, "host": "sftp.example.com:2222", "folder": "/out",
                                            "file_name": "v_{date}", "format": "csv", "path": "/out/v_2026-10-17.csv"}))
-    _, fine = ol.to_json(ol.run_events(session, out))
-    assert fine["job"]["name"].endswith(".file /out/v_{date}")
+    _, end = ol.to_json(ol.run_events(session, out))
+    assert end["job"]["name"].endswith(".file /out/v_{date}")
     # ONE dataset per Output, whatever file each run writes: the name is the template,
     # the file this run wrote is its version
-    (o,) = fine["outputs"]
+    (o,) = end["outputs"]
     assert (o["namespace"], o["name"]) == ("sftp://sftp.example.com:2222", "/out/v_{date}")
     assert o["facets"]["datasetVersion"]["datasetVersion"] == "/out/v_2026-10-17.csv"
     assert o["outputFacets"]["outputStatistics"]["rowCount"] == 5
     # the flow's declared outputs name the same dataset
-    flow = make_flow(session, name="Sftp out", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    flow = make_flow(session, name="Sftp out", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         {"id": "o", "type": "output", "data": {"destType": "sftp", "connectionId": ftp.id, "sftpFolder": "/out",
                                                 "sftpFileName": "v_{date}", "sftpFormat": "csv"}}], "edges": []}))
     assert [(d.namespace, d.name) for d in ol.flow_outputs(session, flow)] == [("sftp://sftp.example.com:2222", "/out/v_{date}")]
 
 
 def test_an_s3_folder_refresh_reads_the_bucket_folder_and_glob_and_a_dated_key_is_one_dataset(session, scena):
-    lake = Connection(name="lake", db_type="s3", project_id=scena.cartella.id, owner_id=scena.capo.id,
+    lake = Connection(name="lake", db_type="s3", project_id=scena.folder.id, owner_id=scena.capo.id,
                       host="http://minio:9000", database="lake")
     session.add(lake)
     session.commit()
-    ds = make_datasource(session, name="vendite s3", project_id=scena.cartella.id, key="datasets/21/v1.parquet", rows=10,
+    ds = make_datasource(session, name="vendite s3", project_id=scena.folder.id, key="datasets/21/v1.parquet", rows=10,
                          kind="database", connection_id=lake.id, source_type="s3",
                          source_ref=json.dumps({"bucket": "", "folder": "in/{day}", "pattern": "*.csv"}))
     run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t21", rows_written=10)
-    _, fine = ol.to_json(ol.run_events(session, run))
-    (i,) = fine["inputs"]
+    _, end = ol.to_json(ol.run_events(session, run))
+    (i,) = end["inputs"]
     assert (i["namespace"], i["name"]) == ("s3://lake", "/in/{day}/*.csv")
     out = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t22", rows_written=5,
                    destination=json.dumps({"type": "s3", "connection_id": lake.id, "endpoint": "http://minio:9000",
                                            "bucket": "lake", "key": "exp/{date}.csv", "format": "csv",
                                            "written_key": "exp/2026-10-18.csv"}))
-    _, fine = ol.to_json(ol.run_events(session, out))
-    (o,) = fine["outputs"]
+    _, end = ol.to_json(ol.run_events(session, out))
+    (o,) = end["outputs"]
     assert (o["namespace"], o["name"]) == ("s3://lake", "/exp/{date}.csv")
     assert o["facets"]["datasetVersion"]["datasetVersion"] == "exp/2026-10-18.csv"
 
 
 def test_an_api_refresh_reads_the_api_path_without_query_nor_secrets(session, scena):
-    api = Connection(name="broker", db_type="api", project_id=scena.cartella.id, owner_id=scena.capo.id,
+    api = Connection(name="broker", db_type="api", project_id=scena.folder.id, owner_id=scena.capo.id,
                      host="https://api.frankfurter.dev/v1", password_encrypted="enc",
                      extra=json.dumps({"auth": "api_key", "key_name": "apikey", "key_in": "query"}))
     session.add(api)
     session.commit()
     ref = {"method": "GET", "path": "/{today-30}..", "query": [{"name": "base", "value": "EUR"}]}
-    ds = make_datasource(session, name="fx", project_id=scena.cartella.id, key="datasets/20/v1.parquet", rows=10, kind="database",
+    ds = make_datasource(session, name="fx", project_id=scena.folder.id, key="datasets/20/v1.parquet", rows=10, kind="database",
                          connection_id=api.id, source_type="api", source_ref=json.dumps(ref))
     run = make_run(session, kind="ingest", datasource_id=ds.id, status="SUCCESS", task_id="t20", rows_written=10)
-    _, fine = ol.to_json(ol.run_events(session, run))
-    (i,) = fine["inputs"]
+    _, end = ol.to_json(ol.run_events(session, run))
+    (i,) = end["inputs"]
     assert (i["namespace"], i["name"]) == ("https://api.frankfurter.dev", "/v1/{today-30}..")
-    assert "apikey" not in json.dumps(fine) and "EUR" not in json.dumps(fine["inputs"])
+    assert "apikey" not in json.dumps(end) and "EUR" not in json.dumps(end["inputs"])
 
 
 def test_output_su_s3_copia_specchio_ed_email(session, scena):
     s3 = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t8", rows_written=5,
                   destination=json.dumps({"type": "s3", "connection_id": 77, "db_type": "s3", "endpoint": "https://storage.googleapis.com", "bucket": "lake", "key": "exports/margini.parquet", "format": "parquet"}))
-    _, fine = ol.to_json(ol.run_events(session, s3))
-    assert fine["job"]["name"].endswith(".file exports/margini.parquet")
-    assert (fine["outputs"][0]["namespace"], fine["outputs"][0]["name"]) == ("gs://lake", "/exports/margini.parquet")
-    assert fine["outputs"][0]["outputFacets"]["outputStatistics"]["rowCount"] == 5
+    _, end = ol.to_json(ol.run_events(session, s3))
+    assert end["job"]["name"].endswith(".file exports/margini.parquet")
+    assert (end["outputs"][0]["namespace"], end["outputs"][0]["name"]) == ("gs://lake", "/exports/margini.parquet")
+    assert end["outputs"][0]["outputFacets"]["outputStatistics"]["rowCount"] == 5
 
-    pubblicata = make_datasource(session, name="Margin", project_id=scena.cartella.id, key="datasets/70/v1.parquet", rows=185, kind="flow", flow_id=scena.flow.id)
-    specchio = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t10", rows_written=185, publish_name="Margin", publish_project_id=scena.cartella.id,
+    pubblicata = make_datasource(session, name="Margin", project_id=scena.folder.id, key="datasets/70/v1.parquet", rows=185, kind="flow", flow_id=scena.flow.id)
+    specchio = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t10", rows_written=185, publish_name="Margin", publish_project_id=scena.folder.id,
                         datasource_id=pubblicata.id, mirror=json.dumps({"connection_id": 5, "endpoint": "s3.fr-par.scw.cloud", "bucket": "mirror", "key": "margin/latest.parquet", "format": "parquet", "ok": True}))
-    _, fine = ol.to_json(ol.run_events(session, specchio))
-    assert [(o["namespace"], o["name"]) for o in fine["outputs"]] == [("tabularia://tabularia", "/Sample/Flows/Margin"), ("s3://mirror", "/margin/latest.parquet")]
+    _, end = ol.to_json(ol.run_events(session, specchio))
+    assert [(o["namespace"], o["name"]) for o in end["outputs"]] == [("tabularia://tabularia", "/Sample/Flows/Margin"), ("s3://mirror", "/margin/latest.parquet")]
 
     email = make_run(session, kind="flow", flow_id=scena.flow.id, status="SUCCESS", task_id="t11", email=json.dumps({"to": ["a@x.it"], "sent": True}))
-    _, fine = ol.to_json(ol.run_events(session, email))
-    assert fine["job"]["name"].endswith(".email") and fine["outputs"] == []      # un'email non è un dataset
+    _, end = ol.to_json(ol.run_events(session, email))
+    assert end["job"]["name"].endswith(".email") and end["outputs"] == []      # un'email non è un dataset
 
 
 def test_un_orchestrazione_fallita_porta_il_messaggio_e_un_file_caricato_e_un_input(session, scena):
     caricato = {"nodes": [{"id": "s", "type": "source", "data": {"bucket": "tabularia", "parquetKey": "uploads/u1/vendite.parquet", "filename": "vendite.csv"}},
-                          {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Vendite", "projectId": scena.cartella.id}}], "edges": []}
-    flow = make_flow(session, name="Da file", project_id=scena.cartella.id, definition=json.dumps(caricato))
+                          {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Vendite", "projectId": scena.folder.id}}], "edges": []}
+    flow = make_flow(session, name="Da file", project_id=scena.folder.id, definition=json.dumps(caricato))
     orch = make_run(session, kind="orchestration", flow_id=flow.id, status="FAILURE", task_id="", error="output: run 9 FAILURE — colonna mancante", started_at=_t(0), finished_at=_t(1))
-    start, fine = ol.to_json(ol.run_events(session, orch))
-    assert fine["eventType"] == "FAIL" and fine["run"]["facets"]["errorMessage"]["message"].startswith("output: run 9")
-    assert [(i["namespace"], i["name"]) for i in fine["inputs"]] == [("s3://tabularia", "/uploads/u1/vendite.parquet")]
-    assert fine["outputs"] == []     # nessun figlio riuscito: niente scritto
+    start, end = ol.to_json(ol.run_events(session, orch))
+    assert end["eventType"] == "FAIL" and end["run"]["facets"]["errorMessage"]["message"].startswith("output: run 9")
+    assert [(i["namespace"], i["name"]) for i in end["inputs"]] == [("s3://tabularia", "/uploads/u1/vendite.parquet")]
+    assert end["outputs"] == []     # nessun figlio riuscito: niente scritto
 
 
 def test_il_collector_di_datahub_vuole_un_altro_endpoint(monkeypatch):
@@ -379,27 +379,27 @@ def test_il_collector_di_datahub_vuole_un_altro_endpoint(monkeypatch):
 def test_un_collector_che_non_risponde_non_rallenta_la_chiusura_e_la_coda_non_cresce_all_infinito(session, scena, monkeypatch):
     import threading, time
 
-    blocco = threading.Event()
+    block = threading.Event()
 
     class _Lento(Transport):
         kind = "lento"
 
         def emit(self, event):
-            blocco.wait(5)      # un collector che non risponde (per il tempo del test)
+            block.wait(5)      # un collector che non risponde (per il tempo del test)
 
     ol.set_client(OpenLineageClient(transport=_Lento()))
     monkeypatch.setattr(get_settings().openlineage, "url", "http://collector:5000")
     monkeypatch.setattr(ol, "QUEUE_MAX", 3)
-    monkeypatch.setattr(ol, "_coda", None)
+    monkeypatch.setattr(ol, "_queue", None)
     monkeypatch.setattr(ol, "_worker", None)
-    monkeypatch.setattr(ol, "_scartati", 0)
+    monkeypatch.setattr(ol, "_dropped", 0)
     run = make_run(session, kind="ingest", datasource_id=scena.ordini.id, status="SUCCESS", task_id="t12")
     t0 = time.monotonic()
     for _ in range(6):
         ol.run_closed(session, run)
     assert time.monotonic() - t0 < 1.0            # chi chiude il run non aspetta mai il collector
-    assert ol.pending() <= 3 and ol._scartati >= 2  # oltre il tetto si scarta, con un avviso
-    blocco.set()
+    assert ol.pending() <= 3 and ol._dropped >= 2  # oltre il tetto si scarta, con un avviso
+    block.set()
     ol.wait_idle(timeout=3)
     ol.set_client(None)
 
@@ -411,7 +411,7 @@ def test_la_configurazione_standard_della_libreria_vale_anche_senza_le_nostre_va
     cfg = tmp_path / "openlineage.yml"
     cfg.write_text("transport:\n  type: console\n")
     monkeypatch.setenv("OPENLINEAGE_CONFIG", str(cfg))
-    assert ol.enabled() is True and "libreria" in ol.describe()
+    assert ol.enabled() is True and "library" in ol.describe()
     assert ol._get_client().transport.kind == "console"
     ol.set_client(None)
 
@@ -419,10 +419,10 @@ def test_la_configurazione_standard_della_libreria_vale_anche_senza_le_nostre_va
 def test_i_nomi_oracle_seguono_la_convenzione_e_la_regola_delle_maiuscole():
     # namespace oracle://host:porta, nome servizio.SCHEMA.TABELLA; senza virgolette
     # maiuscolo (come l'import), fra virgolette com'è
-    ora = Connection(name="contabilita", db_type="oracle", host="ora.x.it", port=None, database="ORCLPDB1", db_schema="", username="fin", project_id=1)
-    assert ol.table_dataset_name(ora, "ledger") == "ORCLPDB1.FIN.LEDGER"
-    assert ol.table_dataset_name(ora, 'hr."conti 2024"') == "ORCLPDB1.HR.conti 2024"
-    d = ol.table_dataset(ora, "hr.employees")
+    at = Connection(name="contabilita", db_type="oracle", host="ora.x.it", port=None, database="ORCLPDB1", db_schema="", username="fin", project_id=1)
+    assert ol.table_dataset_name(at, "ledger") == "ORCLPDB1.FIN.LEDGER"
+    assert ol.table_dataset_name(at, 'hr."conti 2024"') == "ORCLPDB1.HR.conti 2024"
+    d = ol.table_dataset(at, "hr.employees")
     assert (d.namespace, d.name) == ("oracle://ora.x.it:1521", "ORCLPDB1.HR.EMPLOYEES")
 
 

@@ -10,9 +10,9 @@ def _now() -> datetime:
 
 class Flow(SQLModel, table=True):
     """
-    Un flusso salvato (il DAG dell'editor). Vive dentro un progetto/cartella e
-    ne eredita i permessi: VIEW per vederlo/aprirlo, EDIT per salvarlo/spostarlo/
-    eliminarlo. `definition` è il JSON serializzato del canvas (nodi+archi).
+    A saved flow (the editor's DAG). It lives inside a project/folder and inherits its
+    permissions: VIEW to see/open it, EDIT to save/move/delete it. `definition` is the
+    canvas's serialized JSON (nodes+edges).
     """
     __tablename__ = "flows"
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -22,25 +22,24 @@ class Flow(SQLModel, table=True):
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
     definition: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
-    # motore di SVILUPPO (persistito): quello dell'editor — preview, run manuali,
-    # run-now. Scelto alla creazione, cambiabile dopo.
+    # DEVELOPMENT engine (persisted): the editor's — previews, manual runs, run-now. Chosen
+    # at creation, changeable afterwards.
     engine: str = Field(default="polars")
-    # motore di PRODUZIONE: usato dai run SCHEDULATI (e da run-now in modalità
-    # produzione). None = lo stesso dello sviluppo. Disaccoppia "cosa uso mentre
-    # progetto" (es. Polars, veloce in locale) da "cosa usa il DAG in produzione"
-    # (es. un ClickHouse esterno).
+    # PRODUCTION engine: used by the SCHEDULED runs (and by run-now in production mode).
+    # None = the same as development. It decouples "what I use while designing" (e.g.
+    # Polars, fast locally) from "what the DAG uses in production" (e.g. an external
+    # ClickHouse).
     production_engine: Optional[str] = None
 
-    # esecuzione SCHEDULATA (cron): lo scheduler del gateway ri-risolve la
-    # definizione CORRENTE e lancia i nodi Output con l'autorità di
-    # `run_scheduled_by`. schedule=None → disabilitato.
+    # SCHEDULED run (cron): the gateway's scheduler resolves the CURRENT definition again
+    # and launches the Output nodes with the authority of `run_scheduled_by`.
+    # schedule=None → disabled.
     run_schedule: Optional[str] = None
     run_scheduled_by: Optional[int] = Field(default=None, foreign_key="users.id")
     next_run_at: Optional[datetime] = Field(default=None, index=True)
-    # Avviso quando un'esecuzione PROGRAMMATA fallisce: «metti in schedule e
-    # dimentica» funziona solo se qualcosa ti sveglia. Gli indirizzi sono un
-    # elenco separato da virgole; vuoto o senza connessione = nessun avviso.
-    # Le esecuzioni manuali non avvisano: chi le lancia sta guardando.
+    # A notice when a SCHEDULED run fails: «schedule it and forget it» works only if
+    # something wakes you up. The addresses are a comma-separated list; empty or without a
+    # connection = no notice. Manual runs do not notify: whoever launches them is watching.
     notify_emails: Optional[str] = None
     notify_connection_id: Optional[int] = Field(default=None, foreign_key="connections.id")
 

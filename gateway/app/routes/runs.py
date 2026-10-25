@@ -1,13 +1,13 @@
-"""Esecuzioni dei flussi (run history) e pubblicazione dell'output.
+"""The flows' runs (run history) and the publishing of the output.
 
-Chi può cosa (ereditato lungo l'albero dei progetti):
-- lanciare un run: capability RUN sul progetto del flusso;
-- pubblicare l'output come datasource: in più EDIT sulla cartella di destinazione;
-- vedere la cronologia: VIEW.
+Who may do what (inherited down the project tree):
+- launch a run: the RUN capability on the flow's project;
+- publish the output as a datasource: EDIT on the destination folder as well;
+- see the history: VIEW.
 
-Il gateway NON fa polling in background: lo stato dei run non terminali viene
-riconciliato con l'engine ogni volta che qualcuno li legge (lazy). Così un run
-lanciato e dimenticato si aggiorna alla prima visita della cronologia.
+The gateway does NOT poll in the background: the state of the non-terminal runs is
+reconciled with the engine each time someone reads them (lazily). So a run launched
+and forgotten updates at the first visit to the history.
 """
 import json
 import logging
@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.engine_client import CONTROLLO, get_engine_client
+from app.core.engine_client import CHECK, get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -44,11 +44,11 @@ from app.schemas.models import (
     RunSearchOut,
 )
 from app.services.blobgc import schedule_blob_deletion
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["runs"])
+router = APIRouter(route_class=ReleasingRoute, tags=["runs"])
 
 
 def _get_flow(session: Session, flow_id: int) -> Flow:
@@ -69,21 +69,20 @@ def _datasource_name_taken(session: Session, project_id: int, name: str) -> bool
 
 
 def snapshot_key(datasource_id: int | None) -> str:
-    """Chiave del parquet di una datasource: una CARTELLA per datasource, col
-    timestamp nel nome del file.
+    """The key of a datasource's parquet: a FOLDER per datasource, with the timestamp in
+    the file's name.
 
-    Serve all'OPERATIVITÀ, non alla correttezza: si vede a colpo d'occhio a quale
-    datasource appartiene ogni parquet, la pulizia degli orfani può elencare per
-    prefisso invece di scandire tutto, e diventano possibili le regole di ciclo di
-    vita per singola datasource. L'ordine degli aggiornamenti NON si legge da qui
-    (lo dice `Datasource.snapshot_run_id`): il timestamp è quello di SCRITTURA e in
-    una corsa premierebbe il run partito prima e finito dopo, cioè il dato stantio.
+    It serves OPERATIONS, not correctness: one sees at a glance which datasource each
+    parquet belongs to, the orphans' cleanup can list by prefix instead of scanning
+    everything, and per-datasource lifecycle rules become possible. The order of the
+    updates is NOT read from here (`Datasource.snapshot_run_id` says it): the timestamp
+    is the WRITING one, and in a race it would reward the run that started first and
+    finished later, that is the stale data.
 
-    `datasource_id` è ignoto alla PRIMA pubblicazione di un output (la datasource
-    nasce dopo il run): in quel caso il file va in `datasets/new/` e dalla
-    sovrascrittura successiva finisce nella cartella della sua datasource. Le
-    chiavi vecchie (`datasets/<uuid>.parquet`) restano valide: sono solo stringhe,
-    nessuno le interpreta.
+    `datasource_id` is unknown at an output's FIRST publish (the datasource is born
+    after the run): then the file goes in `datasets/new/`, and from the next overwrite
+    on it ends up in its datasource's folder. The old keys (`datasets/<uuid>.parquet`)
+    stay valid: they are only strings, nobody interprets them.
     """
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"datasets/{datasource_id or 'new'}/{stamp}-{uuid.uuid4().hex[:8]}.parquet"
@@ -107,30 +106,30 @@ async def launch_email_test(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Prova a vuoto del nodo email: genera l'allegato VERO e lo manda a CHI LO
-    CHIEDE, per vedere com'è fatto prima di spedirlo a qualcun altro.
+    """A dry run of the email node: makes the REAL attachment and sends it to WHOEVER ASKS,
+    to see what it looks like before sending it to someone else.
 
-    Il destinatario lo impone il server (`user.email`): il client non può
-    sceglierlo, altrimenti questa rotta sarebbe il modo più comodo per aggirare i
-    domini ammessi. Tutto il resto del percorso è identico a un run normale —
-    stessa RBAC (RUN sul flusso, CONNECT sulla connessione), stesso audit — così
-    la prova verifica davvero ciò che accadrà, non una sua imitazione.
+    The server sets the recipient (`user.email`): the client cannot choose it, or this
+    route would be the handiest way around the allowed domains. The rest of the path is
+    the same as a normal run — the same RBAC (RUN on the flow, CONNECT on the
+    connection), the same audit — so the trial really checks what will happen, not an
+    imitation of it.
 
-    Pubblicazione, destinazione e copia vengono scartate: una prova non deve
-    scrivere niente da nessuna parte.
+    Publishing, destination and copy are dropped: a trial must not write anything
+    anywhere.
     """
     flow = _get_flow(session, flow_id)
     if not body.email:
         raise HTTPException(status_code=422, detail="This test needs an Output node of type email")
     if not (user.email or "").strip():
         raise HTTPException(status_code=422, detail="Your account has no email address")
-    solo_email = body.model_copy(update={"publish": None, "destination": None, "mirror": None})
-    return await _launch_flow_run(session, user, flow, solo_email, dry_run_to=user.email.strip())
+    email_only = body.model_copy(update={"publish": None, "destination": None, "mirror": None})
+    return await _launch_flow_run(session, user, flow, email_only, dry_run_to=user.email.strip())
 
 
 def resolve_run_engine(flow: Flow, engine_mode: str) -> str:
-    """Motore con cui eseguire un run del flusso: in "production" quello di
-    produzione se impostato, altrimenti (o in "development") quello di sviluppo."""
+    """The engine to run a flow's run with: in "production" the production one when set,
+    otherwise (or in "development") the development one."""
     if engine_mode == "production" and flow.production_engine:
         return flow.production_engine
     return flow.engine
@@ -143,41 +142,40 @@ async def _launch_flow_run(
     dry_run_to: str | None = None,
     script_destination: tuple[dict, str] | None = None,
 ) -> Run:
-    """Nucleo del lancio di un run di flusso, riusabile fuori dal contesto HTTP
-    (es. lo scheduler). Applica tutta la RBAC — RUN sul flusso, EDIT per il
-    publish, CONNECT per le destinazioni — con l'autorità di `user`.
+    """The core of launching a flow run, reusable outside the HTTP context (e.g. the
+    scheduler). It applies the whole RBAC — RUN on the flow, EDIT for the publish,
+    CONNECT for the destinations — with the authority of `user`.
 
-    `trigger_type`: "manual" (un utente lo lancia) o "schedule" (avviato dallo
-    scheduler nell'ambito di un'orchestrazione schedulata).
-    `parent_run_id`: valorizzato se è un output lanciato DENTRO un'orchestrazione
-    (figlio) — così il calendario non lo conta come esecuzione a sé.
-    `engine_mode`: "development" = motore dell'editor (`flow.engine`);
-    "production" = `flow.production_engine` (se impostato) — è ciò che usa lo
-    scheduler, così il DAG in produzione può girare su un motore diverso da
-    quello con cui è stato progettato.
+    `trigger_type`: "manual" (a user launches it) or "schedule" (started by the
+    scheduler within a scheduled orchestration).
+    `parent_run_id`: set when it is an output launched INSIDE an orchestration (a
+    child) — so the calendar does not count it as a run of its own.
+    `engine_mode`: "development" = the editor's engine (`flow.engine`); "production" =
+    `flow.production_engine` (when set) — what the scheduler uses, so the DAG in
+    production can run on an engine other than the one it was designed with.
 
     `script_destination`: (engine payload, summary) of a Script node's input, built by
     services/script_runs.py — the scripts bucket, never from the client."""
     ensure_can(session, user, flow.project_id, Capability.RUN)
     engine_name = resolve_run_engine(flow, engine_mode)
 
-    # PRODUZIONE = tutti i record: qualunque campione di sviluppo (operazioni
-    # marcate `_dev_sample`, anche annidate) viene rimosso. Il resolver del
-    # gateway in produzione non le inietta mai: questa è difesa in profondità
-    # (es. un client che manda una catena costruita dall'editor).
+    # PRODUCTION = every record: any development sample (operations marked `_dev_sample`,
+    # nested ones too) is removed. The gateway's resolver never injects them in
+    # production: this is defence in depth (e.g. a client sending a chain the editor
+    # built).
     if engine_mode != "development":
         from app.services.flow_resolver import strip_dev_sample_ops
 
         body.operations, removed = strip_dev_sample_ops(body.operations)
         if removed:
-            logger.warning("run in produzione del flusso %s: rimossi %d campioni di sviluppo", flow.id, removed)
+            logger.warning("production run of flow %s: %d development samples removed", flow.id, removed)
 
-    # input_key e operazioni: la sorgente (e ogni sorgente annidata: right di
-    # join/union, driver/body dei foreach) deve stare NEL bucket dell'engine e
-    # sotto un prefisso gestito (pinning), E ogni chiave gestita dev'essere
-    # leggibile dall'utente (RBAC data plane). Senza il pinning, `bucket`/
-    # `input_key` client-controlled farebbero leggere all'engine (credenziali che
-    # leggono tutto) qualsiasi oggetto — stesso vincolo del proxy preview/transform.
+    # input_key and operations: the source (and every nested source: the right of
+    # join/union, driver/body of the foreach) must be IN the engine's bucket and under a
+    # managed prefix (pinning), AND every managed key must be readable by the user (data
+    # plane RBAC). Without the pinning, a client-controlled `bucket`/`input_key` would make
+    # the engine (with credentials that read everything) read any object — the same
+    # constraint as the preview/transform proxy.
     from app.services.objects import (
         collect_storage_keys,
         ensure_can_read_keys,
@@ -195,22 +193,22 @@ async def _launch_flow_run(
     ensure_reads_pinned(session, user, read_payload, engine_bucket)
     ensure_can_read_keys(session, user, collect_storage_keys(read_payload))
 
-    # publish con chiavi di ordinamento: ordina il RISULTATO prima di scriverlo,
-    # così il parquet è fisicamente ordinato (pruning a valle). L'op `sort` è
-    # standard su ogni engine; le stesse chiavi finiscono anche sulla datasource.
+    # publish with sort keys: sorts the RESULT before writing it, so the parquet is
+    # physically sorted (pruning downstream). The `sort` op is standard on every engine;
+    # the same keys end up on the datasource too.
     publish_keys = [k.strip() for k in body.publish.sort_keys if k and k.strip()] if body.publish else []
     if publish_keys:
-        # `ignore_missing`: una chiave sparita dalla catena non deve far fallire
-        # il run (la copia materializzata la ignora già allo stesso modo)
+        # `ignore_missing`: a key gone from the chain must not fail the run (the materialized
+        # copy ignores it the same way already)
         body.operations = list(body.operations) + [
             {"type": "sort", "params": {"by": publish_keys, "ignore_missing": True}}
         ]
 
-    # cartella di destinazione del parquet: quella della datasource sovrascritta,
-    # quando la si conosce già al lancio (vedi `snapshot_key`)
+    # the parquet's destination folder: the overwritten datasource's, when it is known at
+    # launch already (see `snapshot_key`)
     publish_target_id: int | None = None
     if body.publish:
-        # pubblicare scrive contenuto nella cartella di destinazione → EDIT
+        # publishing writes content in the destination folder → EDIT
         if session.get(Project, body.publish.project_id) is None:
             raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.publish.project_id, Capability.EDIT)
@@ -224,18 +222,18 @@ async def _launch_flow_run(
                     status_code=409,
                     detail=f"There is already a datasource '{body.publish.name}' in this folder",
                 )
-            # sovrascrivere una snapshot di database (con schedule/connessione) la
-            # snaturerebbe: consentito solo su datasource prodotte da un flusso
+            # overwriting a database snapshot (with schedule/connection) would distort it: allowed
+            # only on datasources a flow produced
             if existing.kind != "flow":
                 raise HTTPException(
                     status_code=409,
                     detail=f"'{body.publish.name}' is a datasource of kind «{existing.kind}»: "
                     "a flow cannot overwrite it, choose another name",
                 )
-            publish_target_id = existing.id  # la sovrascrittura riusa la sua cartella
+            publish_target_id = existing.id  # the overwrite reuses its folder
 
-    # destinazione dell'output (nodo Output): la connessione è referenziata per
-    # id, il payload con la secret (cifrata) lo costruisce il gateway — mai il client
+    # the output's destination (Output node): the connection is referenced by id, the
+    # gateway builds the payload with the (encrypted) secret — never the client
     destination_payload = None
     destination_summary = None
     if script_destination is not None:
@@ -324,8 +322,8 @@ async def _launch_flow_run(
                     status_code=422, detail="The chosen connection is S3: use an S3 destination"
                 )
             if conn.db_type in NOT_DATABASES:
-                # non sono database: senza questo controllo l'errore arriverebbe
-                # dal driver, a run già partito, e parlerebbe d'altro
+                # they are not databases: without this check the error would come from the driver,
+                # with the run started already, and would talk about something else
                 raise HTTPException(
                     status_code=422, detail=f"A {conn.db_type} connection cannot receive a table: a database connection is needed"
                 )
@@ -353,9 +351,9 @@ async def _launch_flow_run(
                 }
             )
 
-    # copia su S3 esterno IN AGGIUNTA alla datasource: stessa risoluzione della
-    # destinazione (connessione per id, secret cifrata dal gateway, capability
-    # CONNECT) — cambia solo che l'esito non è vincolante per il run.
+    # a copy to an external S3 AS WELL AS the datasource: the same resolution as the
+    # destination (connection by id, secret encrypted by the gateway, CONNECT capability)
+    # — the only change is that its outcome does not bind the run.
     mirror_payload = None
     mirror_summary = None
     if body.mirror:
@@ -393,14 +391,14 @@ async def _launch_flow_run(
                 **(_template_context(flow, body.mirror.timezone) if _templated(mkey) else {}),
                 "bucket": mbucket,
                 "key": mkey,
-                # sempre parquet (copia byte a byte dello snapshot interno) e mai
-                # partizionato: la copia è UN oggetto sovrascritto, al percorso
-                # concordato con chi la legge
+                # always parquet (a byte-for-byte copy of the internal snapshot) and never
+                # partitioned: the copy is ONE object overwritten, at the path agreed with whoever
+                # reads it
                 "format": "parquet",
                 "partition_by": [],
             },
         }
-        # "pending" finché il worker non riporta l'esito (vedi _reconcile)
+        # "pending" until the worker reports the outcome (see _reconcile)
         mirror_summary = json.dumps(
             {
                 "connection_id": mconn.id,
@@ -412,12 +410,12 @@ async def _launch_flow_run(
             }
         )
 
-    # invio dell'output come allegato email. Stessa risoluzione di destinazione e
-    # copia (connessione per id, secret cifrata dal gateway, CONNECT), più il
-    # controllo che qui è il vero confine di sicurezza: i destinatari sono testo
-    # libero nella definizione del flusso, e l'unica barriera all'invio verso un
-    # indirizzo arbitrario sono i domini ammessi della connessione. Va applicata
-    # QUI: il worker riceve destinatari già risolti e non può più distinguerli.
+    # sending the output as an email attachment. The same resolution as destination and
+    # copy (connection by id, secret encrypted by the gateway, CONNECT), plus the check
+    # that is the real security boundary here: the recipients are free text in the flow's
+    # definition, and the only barrier to sending to an arbitrary address is the
+    # connection's allowed domains. It must be applied HERE: the worker receives resolved
+    # recipients and can no longer tell them apart.
     email_payload = None
     email_summary = None
     if body.email:
@@ -429,29 +427,28 @@ async def _launch_flow_run(
             raise HTTPException(status_code=422, detail="The chosen connection is not SMTP")
 
         if dry_run_to:
-            # PROVA A VUOTO: il destinatario è l'identità autenticata, imposta dal
-            # server e non scelta dal client. Qui i domini ammessi NON si
-            # applicano di proposito: mandare a sé stessi non è esfiltrazione, e
-            # con i domini ristretti (tipicamente a quelli dei clienti) il
-            # pulsante di prova non funzionerebbe mai.
+            # DRY RUN: the recipient is the authenticated identity, set by the server and not
+            # chosen by the client. The allowed domains do NOT apply here on purpose: sending to
+            # oneself is not exfiltration, and with narrowed domains (typically the customers')
+            # the trial button would never work.
             to_finale, cc_finale = [dry_run_to], []
-            destinatari = [dry_run_to]
+            recipients = [dry_run_to]
         else:
             to_finale = [a.strip() for a in body.email.to if a.strip()]
             cc_finale = [a.strip() for a in body.email.cc if a.strip()]
-            destinatari = [*to_finale, *cc_finale]
-            if not destinatari:
+            recipients = [*to_finale, *cc_finale]
+            if not recipients:
                 raise HTTPException(status_code=422, detail="The email has no recipients")
 
-            ammessi = allowed_email_domains(econn)
-            if ammessi:
-                fuori = [a for a in destinatari if a.rsplit("@", 1)[-1].lower() not in ammessi]
-                if fuori:
+            allowed = allowed_email_domains(econn)
+            if allowed:
+                outside = [a for a in recipients if a.rsplit("@", 1)[-1].lower() not in allowed]
+                if outside:
                     raise HTTPException(
                         status_code=422,
                         detail=(
                             f"Recipients outside the domains this connection allows "
-                            f"({', '.join(ammessi)}): {', '.join(fuori)}"
+                            f"({', '.join(allowed)}): {', '.join(outside)}"
                         ),
                     )
 
@@ -461,7 +458,7 @@ async def _launch_flow_run(
         email_templated = _templated(body.email.subject) or _templated(body.email.attachment_name)
         email_payload = {
             "connection": engine_connection_payload(econn),
-            # una prova non deve mai far fallire nulla: è un controllo, non un passo
+            # a trial must never fail anything: it is a check, not a step
             "stop_on_failure": False if dry_run_to else body.email.stop_on_failure,
             "target": {
                 "to": to_finale,
@@ -478,30 +475,30 @@ async def _launch_flow_run(
             {
                 "connection_id": econn.id,
                 "host": econn.host,
-                "to": destinatari,
+                "to": recipients,
                 "subject": body.email.subject,
                 "attachment": body.email.attachment_name or "report",
                 "format": body.email.attachment_format,
-                "ok": None,  # "pending" finché il worker non riporta l'esito
+                "ok": None,  # "pending" until the worker reports the outcome
             }
         )
-        # Audit al LANCIO, non alla riconciliazione: chi ha chiesto di spedire,
-        # cosa e a chi è il fatto che serve a un'indagine, ed esiste anche se
-        # l'invio poi fallisce. L'esito tecnico vive sulla riga del run.
+        # Audit at LAUNCH, not at reconciliation: who asked to send, what and to whom is the
+        # fact an investigation needs, and it exists even when the send fails later. The
+        # technical outcome lives on the run's row.
         audit.record_audit(
             session, actor=user, action=audit.EMAIL_SEND, target_type="flow",
             target_id=flow.id, target_label=flow.name,
             detail={
                 "connection_id": econn.id,
                 "host": econn.host,
-                "to": destinatari,
+                "to": recipients,
                 "subject": body.email.subject,
                 "format": body.email.attachment_format,
                 "trigger": "dry_run" if dry_run_to else trigger_type,
             },
         )
 
-    # l'output pubblicato vive in datasets/ (area sorgenti); gli altri in out/
+    # the published output lives in datasets/ (the sources' area); the others in out/
     output_key = (
         snapshot_key(publish_target_id) if body.publish else f"out/{uuid.uuid4().hex}.parquet"
     )
@@ -611,7 +608,7 @@ async def _check_output_templates(templates: dict[str, tuple[str, str]], tz: str
     payload = {"kind": "output", "templates": wanted, "timezone": (tz or "").strip() or "UTC",
                "targets": {name: templates[name][1] for name in wanted}, "flow": flow_name}
     try:
-        resp = await get_engine_client().post("/placeholders/preview", json=payload, timeout=CONTROLLO)
+        resp = await get_engine_client().post("/placeholders/preview", json=payload, timeout=CHECK)
     except Exception as e:  # noqa: BLE001 — the run will check them
         logger.warning("output templates not checked before the run: %s", type(e).__name__)
         return
@@ -633,7 +630,7 @@ async def _submit_transform(body: RunCreate, output_key: str, destination_payloa
     client = get_engine_client()
     resp = await client.post(
         "/tasks/transform-data",
-        timeout=CONTROLLO,
+        timeout=CHECK,
         json={
             "bucket": body.bucket,
             "input_key": body.input_key,
@@ -642,9 +639,9 @@ async def _submit_transform(body: RunCreate, output_key: str, destination_payloa
             "destination": destination_payload,
             "mirror": mirror_payload,
             "email": email_payload,
-            "engine": engine_name,  # motore di sviluppo o di produzione (vedi engine_mode)
-            # il data contract della datasource che si sta per sovrascrivere: il
-            # worker lo valuta sull'output, e il referto decide se pubblicarlo
+            "engine": engine_name,  # development or production engine (see engine_mode)
+            # the data contract of the datasource about to be overwritten: the worker evaluates
+            # it on the output, and the report decides whether to publish it
             **({"contract": contract} if (contract := contract_service.payload(session, publish_target_id)) else {}),
         },
     )
@@ -712,27 +709,27 @@ async def launch_ingest_run(
     session: Session, user: User, ds: Datasource, conn: Connection,
     trigger_type: str = "manual", parent_run_id: int | None = None,
 ) -> Run:
-    """Accoda sull'engine l'ingest di una datasource database e registra il run.
+    """Queues on the engine the ingest of a database datasource and records the run.
 
-    Ogni refresh scrive un parquet NUOVO: la datasource passa a puntarci solo a
-    SUCCESS (snapshot swap in `_finalize_ingest`), così chi legge lo snapshot
-    corrente non viene mai disturbato da un refresh in corso.
+    Every refresh writes a NEW parquet: the datasource points at it only at SUCCESS
+    (snapshot swap in `_finalize_ingest`), so whoever reads the current snapshot is
+    never disturbed by a refresh in progress.
     """
     bucket = get_settings().engine.bucket
     output_key = snapshot_key(ds.id)
     client = get_engine_client()
-    # il data contract della datasource, se ne ha uno acceso: il worker lo valuta
-    # sui dati appena letti e il referto decide se lo snapshot viene scambiato
-    documento = contract_service.payload(session, ds.id)
-    contratto = {"contract": documento} if documento else {}
+    # the datasource's data contract, when it has one turned on: the worker evaluates it
+    # on the data just read and the report decides whether the snapshot is swapped
+    document = contract_service.payload(session, ds.id)
+    contract = {"contract": document} if document else {}
     if conn.db_type == "sharepoint":
-        # stesso giro dei database (run, snapshot swap, refresh, scheduler): cambia
-        # solo CHI porta i dati. `source_ref` è il JSON {path, sheet} (+ the
+        # the same round as the databases (run, snapshot swap, refresh, scheduler): only WHO
+        # brings the data changes. `source_ref` is the JSON {path, sheet} (+ the
         # placeholders' zone, variables, refresh mode when the datasource has them).
         ref = json.loads(ds.source_ref or "{}")
         resp = await client.post(
             "/sharepoint/ingest",
-            timeout=CONTROLLO,
+            timeout=CHECK,
             json={
                 "connection": engine_connection_payload(conn),
                 # format and csv only when saved: one saved before CSV reads Excel only
@@ -741,7 +738,7 @@ async def launch_ingest_run(
                 "bucket": bucket,
                 "output_key": output_key,
                 **_refresh_context(session, ds, ref, ("path",)),
-                **contratto,
+                **contract,
             },
         )
     elif conn.db_type == "api":
@@ -752,7 +749,7 @@ async def launch_ingest_run(
         last = _last_successful_refresh(session, ds.id)
         resp = await client.post(
             "/http-api/ingest",
-            timeout=CONTROLLO,
+            timeout=CHECK,
             json={
                 "connection": engine_connection_payload(conn),
                 "source": ref,
@@ -760,7 +757,7 @@ async def launch_ingest_run(
                 "output_key": output_key,
                 **({"last_refresh": last} if last else {}),
                 **({"previous": {"bucket": ds.bucket, "key": ds.key}} if ref.get("mode") == "append" and ds.key else {}),
-                **contratto,
+                **contract,
             },
         )
     elif conn.db_type == "sftp":
@@ -768,7 +765,7 @@ async def launch_ingest_run(
         ref = json.loads(ds.source_ref or "{}")
         resp = await client.post(
             "/sftp/ingest",
-            timeout=CONTROLLO,
+            timeout=CHECK,
             json={
                 "connection": engine_connection_payload(conn),
                 "source": {**{k: ref[k] for k in ("folder", "pattern", "format", "sheet", "csv") if k in ref},
@@ -776,7 +773,7 @@ async def launch_ingest_run(
                 "bucket": bucket,
                 "output_key": output_key,
                 **_refresh_context(session, ds, ref, ("folder", "pattern")),
-                **contratto,
+                **contract,
             },
         )
     elif conn.db_type == "s3":
@@ -785,7 +782,7 @@ async def launch_ingest_run(
         ref = json.loads(ds.source_ref or "{}")
         resp = await client.post(
             "/s3/ingest",
-            timeout=CONTROLLO,
+            timeout=CHECK,
             json={
                 "connection": engine_connection_payload(conn),
                 "source": {**{k: ref[k] for k in ("bucket", "folder", "pattern", "format", "sheet", "csv") if k in ref},
@@ -793,19 +790,19 @@ async def launch_ingest_run(
                 "bucket": bucket,
                 "output_key": output_key,
                 **_refresh_context(session, ds, ref, ("folder", "pattern")),
-                **contratto,
+                **contract,
             },
         )
     else:
         resp = await client.post(
             "/db/ingest",
-            timeout=CONTROLLO,
+            timeout=CHECK,
             json={
                 "connection": engine_connection_payload(conn),
                 "source": {"mode": ds.source_type, "ref": ds.source_ref, "sort_keys": json.loads(ds.sort_keys or "[]")},
                 "bucket": bucket,
                 "output_key": output_key,
-                **contratto,
+                **contract,
             },
         )
     if resp.status_code >= 400:
@@ -822,7 +819,7 @@ async def launch_ingest_run(
         launched_by=user.id,
         trigger_type=trigger_type,
         parent_run_id=parent_run_id,
-        input_key=f"{conn.db_type}://{conn.host}/{conn.database}",  # descrittivo
+        input_key=f"{conn.db_type}://{conn.host}/{conn.database}",  # descriptive
         output_bucket=bucket,
         output_key=output_key,
     )
@@ -832,18 +829,17 @@ async def launch_ingest_run(
     return run
 
 
-# oltre questa età un run non terminale è perso: Celery risponde PENDING anche
-# per task id che NON conosce più (risultato scaduto, Redis svuotato, worker
-# morto) → senza cutoff il run resterebbe zombie per sempre. Configurabile via
-# ENGINE__RUN_STALE_TIMEOUT_SECONDS.
+# past this age a non-terminal run is lost: Celery answers PENDING even for task ids
+# it NO longer knows (result expired, Redis emptied, worker dead) → without a cutoff
+# the run would stay a zombie forever. Set through ENGINE__RUN_STALE_TIMEOUT_SECONDS.
 def stale_after_seconds() -> int:
     """ENGINE__RUN_STALE_TIMEOUT_SECONDS, read at each use (Administration → Settings)."""
     return get_settings().engine.run_stale_timeout_seconds
-SIDE_EFFECT_ATTEMPTS = 3  # tentativi IMMEDIATI dell'effetto post-claim prima di rimandare
+SIDE_EFFECT_ATTEMPTS = 3  # IMMEDIATE attempts of the post-claim effect before putting it off
 
-# firme di un OOM-kill: il worker ha superato il limite di memoria del container
-# e il kernel ha ucciso il processo (segnale 9). Il messaggio grezzo di Celery
-# (WorkerLostError / SIGKILL) è criptico → lo traduciamo in qualcosa di chiaro.
+# the signatures of an OOM kill: the worker went over the container's memory limit
+# and the kernel killed the process (signal 9). Celery's raw message
+# (WorkerLostError / SIGKILL) is cryptic → we translate it into something clear.
 _OOM_SIGNS = ("signal 9", "sigkill", "workerlosterror", "memoryerror", "out of memory")
 _OOM_MESSAGE = (
     "The run was stopped: its worker process was killed, most often because it ran out of available "
@@ -856,9 +852,9 @@ _OOM_MESSAGE = (
 _ENGINE_TOLD = ("The worker running it stopped before the end",)
 
 
-# Messaggi già tradotti dal backend col testo del SERVER del database
-# (backend/app/ingest/db_errors.py, MESSAGE_PREFIXES): un «out of memory» lì è
-# del database, non del worker, e non va sostituito col messaggio da OOM.
+# Messages the backend already translated with the database SERVER's text
+# (backend/app/ingest/db_errors.py, MESSAGE_PREFIXES): an «out of memory» there is the
+# database's, not the worker's, and must not be replaced with the OOM message.
 _DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:", "SFTP:",
                         "API:")
 
@@ -899,8 +895,8 @@ def _notes_of(result: dict) -> str | None:
 
 
 def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
-    """Traduce i fallimenti da OOM (worker ucciso dal limite di memoria) in un
-    messaggio chiaro; il traceback grezzo resta in `error_detail`."""
+    """Translates the OOM failures (a worker killed by the memory limit) into a clear
+    message; the raw traceback stays in `error_detail`."""
     if error and error.startswith(_DB_MESSAGE_PREFIXES + _ENGINE_TOLD):
         return error
     blob = f"{error or ''}\n{error_detail or ''}".lower()
@@ -909,55 +905,55 @@ def _friendly_error(error: str | None, error_detail: str | None) -> str | None:
     return error
 
 
-# L'avanzamento dei run in corso che l'engine riporta (fase, righe, file): vive
-# per la sola richiesta, in `session.info`, non in tabella — cambia ogni due
-# secondi e nessuno lo rilegge. _reconcile lo mette, run_out lo usa.
-_AVANZAMENTO = "avanzamento_run"
+# The progress the engine reports for running runs (phase, rows, files): it lives for
+# the request only, in `session.info`, not in a table — it changes every two seconds
+# and nobody reads it again. _reconcile puts it there, run_out uses it.
+_PROGRESS = "avanzamento_run"
 
 
 def run_out(session: Session, run: Run) -> RunOut:
-    """Il run per il browser; se non è terminato, con l'avanzamento: la fase
-    (quella dell'engine, oppure in coda / in esecuzione quando non la dice), i
-    conteggi e i secondi trascorsi."""
+    """The run for the browser; when not finished, with its progress: the phase (the
+    engine's, or queued / running when it does not say), the counts and the seconds
+    elapsed."""
     out = RunOut.model_validate(run.model_dump())
     if run.status in TERMINAL_STATES:
         return out
     if run.status == "PENDING":
-        fase: dict = {"phase": "queued", "seconds": int(_age_seconds(run.started_at))}
+        phase: dict = {"phase": "queued", "seconds": int(_age_seconds(run.started_at))}
     else:
-        dall_engine = session.info.get(_AVANZAMENTO, {}).get(run.id) or {}
-        fase = {k: dall_engine[k] for k in ("phase", "rows", "file", "files", "call", "calls", "pages") if k in dall_engine}
-        fase.setdefault("phase", "running")
-        fase["seconds"] = int(_age_seconds(run.engine_started_at or run.started_at))
+        from_engine = session.info.get(_PROGRESS, {}).get(run.id) or {}
+        phase = {k: from_engine[k] for k in ("phase", "rows", "file", "files", "call", "calls", "pages") if k in from_engine}
+        phase.setdefault("phase", "running")
+        phase["seconds"] = int(_age_seconds(run.engine_started_at or run.started_at))
     try:
-        return out.model_copy(update={"progress": RunProgress(**fase)})
-    except ValueError:  # un engine che manda altro: si mostra senza avanzamento
+        return out.model_copy(update={"progress": RunProgress(**phase)})
+    except ValueError:  # an engine that sends something else: shown without progress
         return out
 
 
 def _age_seconds(dt: datetime | None) -> float:
     if dt is None:
         return 0.0
-    if dt.tzinfo is None:  # Postgres restituisce naive → è UTC per costruzione
+    if dt.tzinfo is None:  # Postgres returns naive → it is UTC by construction
         dt = dt.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - dt).total_seconds()
 
 
 async def _revoke_task(run: Run) -> None:
-    """Ferma DAVVERO il task sull'engine (revoke + terminate: lo stesso comando del
-    pannello Queue).
+    """Stops the task on the engine FOR REAL (revoke + terminate: the same command as the
+    Queue panel).
 
-    Best-effort: se l'engine non risponde il run viene comunque marcato fallito.
-    Ma senza questo tentativo lo stato direbbe il falso — il task continuerebbe a
-    girare, e a scrivere, mentre la cronologia lo dà per fallito.
+    Best effort: when the engine does not answer, the run is marked failed anyway. But
+    without this attempt the state would lie — the task would keep running, and
+    writing, while the history calls it failed.
     """
     if not run.task_id:
         return
     try:
-        await get_engine_client().delete(f"/tasks/{run.task_id}", timeout=CONTROLLO)
-        logger.info("run %s scaduto: task %s revocato sull'engine", run.id, run.task_id)
+        await get_engine_client().delete(f"/tasks/{run.task_id}", timeout=CHECK)
+        logger.info("run %s expired: task %s revoked on the engine", run.id, run.task_id)
     except Exception as e:
-        logger.warning("run %s: revoca del task %s non riuscita: %s", run.id, run.task_id, e)
+        logger.warning("run %s: revoking task %s failed: %s", run.id, run.task_id, e)
 
 
 def _email_not_sent(summary: str | None) -> str | None:
@@ -978,8 +974,8 @@ def _email_not_sent(summary: str | None) -> str | None:
 
 
 def _contract_target_id(session: Session, run: Run) -> int | None:
-    """La datasource su cui i dati di questo run andrebbero a finire: quella che
-    un refresh aggiorna, o quella che un flusso sta per sovrascrivere."""
+    """The datasource this run's data would end up in: the one a refresh updates, or the
+    one a flow is about to overwrite."""
     if run.datasource_id is not None:
         return run.datasource_id
     if run.publish_name and run.publish_project_id:
@@ -989,12 +985,12 @@ def _contract_target_id(session: Session, run: Run) -> int | None:
 
 
 def _refuse_snapshot(session: Session, run: Run, report: dict) -> None:
-    """Il data contract ha rifiutato i dati di questo run (una regola bloccante è
-    violata): NON si scambia lo snapshot. La datasource resta com'è — stessa
-    chiave, stesse righe — e chi la legge continua a vedere gli ultimi dati
-    buoni. Il parquet rifiutato va in cancellazione differita, e il referto resta
-    nello storico. NON committa: lo fa `_reconcile`, insieme al claim del run."""
-    schedule_blob_deletion(session, run.output_bucket, run.output_key, reason=f"run {run.id} rifiutato dal data contract")
+    """The data contract refused this run's data (a blocking rule is violated): the
+    snapshot is NOT swapped. The datasource stays as it is — the same key, the same
+    rows — and whoever reads it keeps seeing the last good data. The refused parquet
+    goes to deferred deletion, and the report stays in the history. Does NOT commit:
+    `_reconcile` does, together with the run's claim."""
+    schedule_blob_deletion(session, run.output_bucket, run.output_key, reason=f"run {run.id} refused by the data contract")
     ds_id = _contract_target_id(session, run)
     contract = contract_service.get(session, ds_id) if ds_id is not None else None
     if contract is not None:
@@ -1002,14 +998,14 @@ def _refuse_snapshot(session: Session, run: Run, report: dict) -> None:
             session, contract, report, trigger="refresh" if run.kind == "ingest" else "publish",
             run_id=run.id, snapshot_key=run.output_key, blocked=True,
         )
-    logger.warning("run %s: dati rifiutati dal data contract della datasource %s", run.id, ds_id)
+    logger.warning("run %s: data refused by the data contract of datasource %s", run.id, ds_id)
 
 
 def _record_contract(session: Session, run: Run, report: dict | None, trigger: str) -> None:
-    """I dati sono stati pubblicati: il referto che li accompagnava diventa lo
-    stato del contratto. Solo se lo scambio è avvenuto davvero — un run superato
-    da uno più recente non pubblica niente, e il suo referto non parla dei dati
-    che la datasource sta servendo. NON committa."""
+    """The data was published: the report that came with it becomes the contract's state.
+    Only when the swap really happened — a run overtaken by a newer one publishes
+    nothing, and its report does not speak of the data the datasource is serving. Does
+    NOT commit."""
     if report is None or run.datasource_id is None:
         return
     ds = session.get(Datasource, run.datasource_id)
@@ -1021,12 +1017,12 @@ def _record_contract(session: Session, run: Run, report: dict | None, trigger: s
 
 
 def _is_stale_swap(ds: Datasource, run: Run) -> bool:
-    """True se `run` è più VECCHIO del run che ha prodotto lo snapshot corrente.
+    """True when `run` is OLDER than the run that produced the current snapshot.
 
-    Gli id dei run sono monotoni e assegnati al lancio, quindi ordinano per istante
-    di LETTURA della sorgente: un id più basso ha letto prima, e i suoi dati sono
-    più stantii anche se ha finito dopo. Senza baseline (`snapshot_run_id` nullo,
-    snapshot anteriore a questo campo) si accetta.
+    Run ids are monotonic and assigned at launch, so they order by the instant the
+    source was READ: a lower id read earlier, and its data is staler even when it
+    finished later. Without a baseline (`snapshot_run_id` null, a snapshot older than
+    this field) it is accepted.
     """
     return ds.snapshot_run_id is not None and run.id is not None and run.id < ds.snapshot_run_id
 
@@ -1038,28 +1034,28 @@ QUEUE_TIMED_OUT = (
 
 
 async def close_if_queued_too_long(session: Session, run: Run) -> Run:
-    """Un'esecuzione in coda da più di `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS` non
-    parte più: la si chiude come fallita. Altrimenti un lancio fatto mentre non
-    c'era nessun orchestratore partirebbe ore dopo, quando qualcuno ne riaccende
-    uno — e nel frattempo terrebbe occupato il flusso per lo scheduler.
+    """A run queued for longer than `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS` does not start
+    any more: it is closed as failed. Otherwise a launch made while there was no
+    orchestrator would start hours later, when someone turns one back on — and in the
+    meantime it would keep the flow busy for the scheduler.
 
-    Lo fa chiunque la guardi (anche un processo che risponde soltanto: è così che
-    chi ha lanciato vede l'esito anche a orchestratori spenti) e l'orchestratore
-    prima di prendere dalla coda. UPDATE condizionato: la chiude uno solo."""
-    creata = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
-    if (datetime.now(timezone.utc) - creata).total_seconds() <= get_settings().orchestrator.queue_timeout_seconds:
+    Whoever looks at it does it (a process that only answers too: that is how whoever
+    launched sees the outcome even with the orchestrators off), and the orchestrator
+    before taking from the queue. A conditional UPDATE: only one closes it."""
+    created = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
+    if (datetime.now(timezone.utc) - created).total_seconds() <= get_settings().orchestrator.queue_timeout_seconds:
         return run
-    chiusa = session.exec(
+    closed = session.exec(
         update(Run)
         .where(Run.id == run.id, Run.status == "PENDING")
         .values(status="FAILURE", error=QUEUE_TIMED_OUT, finished_at=datetime.now(timezone.utc))
     )
-    if chiusa.rowcount == 1:
+    if closed.rowcount == 1:
         session.refresh(run)
-        webhooks.accoda_per_run(session, run)  # nella stessa transazione della chiusura
+        webhooks.enqueue_for_run(session, run)  # in the same transaction as the closing
     session.commit()
     session.refresh(run)
-    if chiusa.rowcount == 1:
+    if closed.rowcount == 1:
         from app.services.notifier import notify_failure
 
         await notify_failure(session, run)
@@ -1087,19 +1083,19 @@ def _let_go(session: Session) -> None:
 
 
 async def _reconcile(session: Session, run: Run) -> Run:
-    """Allinea un run non terminale allo stato del task sull'engine.
+    """Aligns a non-terminal run with the state of the task on the engine.
 
-    La transizione a uno stato TERMINALE è un claim ATOMICO (UPDATE condizionato
-    sul non essere già terminale): tra letture concorrenti dello stesso run —
-    il polling dell'editor + la cronologia aperta, o due tab — ne vince una
-    sola, quindi la pubblicazione non può avvenire due volte.
-    Errori di rete verso l'engine non rompono la lettura: si riprova alla prossima.
+    The transition to a TERMINAL state is an ATOMIC claim (an UPDATE conditional on not
+    being terminal already): among concurrent reads of the same run — the editor's
+    polling + the open history, or two tabs — only one wins, so the publishing cannot
+    happen twice. Network errors towards the engine do not break the read: it tries
+    again at the next one.
     """
     if run.status in TERMINAL_STATES:
         return run
     if run.kind == "orchestration":
-        # non è un task engine: lo stato lo gestisce l'orchestratore. Qui si fa
-        # una cosa sola: accorgersi che è rimasta in coda oltre il tempo massimo
+        # not an engine task: the orchestrator handles its state. One thing only is done
+        # here: noticing that it stayed queued past the maximum time
         if run.status == "PENDING":
             return await close_if_queued_too_long(session, run)
         return run
@@ -1117,34 +1113,34 @@ async def _reconcile(session: Session, run: Run) -> Run:
     _let_go(session)
     client = get_engine_client()
     try:
-        resp = await client.get(f"/tasks/{task_id}", timeout=CONTROLLO)
+        resp = await client.get(f"/tasks/{task_id}", timeout=CHECK)
         data = resp.json()
-    except Exception as e:  # engine irraggiungibile → riconcilieremo dopo
-        logger.warning("riconciliazione run %s rimandata: %s", run.id, e)
+    except Exception as e:  # engine unreachable → we will reconcile later
+        logger.warning("reconciling run %s put off: %s", run.id, e)
         return run
 
     new_status = data.get("status", run.status)
     if isinstance(data.get("progress"), dict):
-        session.info.setdefault(_AVANZAMENTO, {})[run.id] = data["progress"]
+        session.info.setdefault(_PROGRESS, {})[run.id] = data["progress"]
     result = data.get("result") or {}
     error = data.get("error")
-    error_detail = data.get("error_detail")  # traceback completo dell'engine
+    error_detail = data.get("error_detail")  # the engine's whole traceback
 
-    # job fermato dall'admin (pannello Queue): Celery lo riporta REVOKED → per noi
-    # è un fallimento terminale, non uno stato da ri-pollare fino allo stale-timeout
+    # a job the admin stopped (Queue panel): Celery reports it REVOKED → for us a terminal
+    # failure, not a state to poll again until the stale timeout
     if new_status == "REVOKED":
         new_status = "FAILURE"
         error = error or "Job stopped (revoked by an administrator)"
         error_detail = None
 
-    # il cronometro parte dall'esecuzione REALE, non dalla nascita della riga:
-    # `started_at` include l'attesa in coda, e con i worker occupati un run appena
-    # partito verrebbe dichiarato scaduto mentre sta scrivendo.
+    # the stopwatch starts from the REAL execution, not from the row's birth: `started_at`
+    # includes the wait in the queue, and with busy workers a run just started would be
+    # declared expired while it is writing.
     _age = _age_seconds(run.engine_started_at or run.started_at)
     if new_status not in TERMINAL_STATES and _age > stale_after_seconds():
-        # il task NON si ferma da solo: senza revoca continuerebbe a girare — e a
-        # SCRIVERE — mentre il run risulta fallito. Su un Output in append questo
-        # porta l'utente a rilanciare e ad accodare le stesse righe due volte.
+        # the task does NOT stop by itself: without a revoke it would keep running — and
+        # WRITING — while the run shows as failed. On an Output in append this leads the user
+        # to launch again and append the same rows twice.
         await _revoke_task(run)
         new_status = "FAILURE"
         _mins = stale_after_seconds() // 60
@@ -1159,29 +1155,29 @@ async def _reconcile(session: Session, run: Run) -> Run:
         return run
 
     if new_status not in TERMINAL_STATES:  # es. PENDING → STARTED
-        # UPDATE condizionato, non l'oggetto: fra la domanda all'engine e qui un
-        # altro processo può aver già chiuso il run, e riscriverlo STARTED lo
-        # riaprirebbe (il giro dopo lo richiuderebbe, rifacendo la pubblicazione)
-        valori: dict = {"status": new_status}
+        # a conditional UPDATE, not the object: between the question to the engine and here
+        # another process may have closed the run already, and writing it STARTED again would
+        # reopen it (the next round would close it again, redoing the publishing)
+        new_values: dict = {"status": new_status}
         if new_status == "STARTED" and run.engine_started_at is None:
-            valori["engine_started_at"] = datetime.now(timezone.utc)  # inizio reale
-        session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**valori))
+            new_values["engine_started_at"] = datetime.now(timezone.utc)  # the real start
+        session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**new_values))
         session.commit()
         session.refresh(run)
         return run
 
-    # claim atomico della transizione terminale + effetto collaterale (swap dello
-    # snapshot / publish della datasource) nella STESSA transazione: un solo commit
-    # in fondo. Se l'effetto fallisce si fa rollback e il run NON diventa terminale,
-    # così il prossimo _reconcile ritenta — invece di restare SUCCESS con lo swap/
-    # publish perso per sempre.
-    # Data contract: il worker ha valutato i dati appena scritti (se la datasource
-    # di destinazione ne ha uno). Con una regola BLOCCANTE violata il task è
-    # riuscito ma il run no: i dati non vengono pubblicati.
+    # atomic claim of the terminal transition + side effect (the snapshot's swap / the
+    # datasource's publish) in the SAME transaction: one commit at the end. When the
+    # effect fails it rolls back and the run does NOT become terminal, so the next
+    # _reconcile tries again — instead of staying SUCCESS with the swap/publish lost
+    # forever.
+    # Data contract: the worker evaluated the data just written (when the destination
+    # datasource has one). With a BLOCKING rule violated the task succeeded but the run
+    # did not: the data is not published.
     contract_report = result.get("contract") if new_status == "SUCCESS" and isinstance(result.get("contract"), dict) else None
     if contract_report is not None and contract_service.payload(session, _contract_target_id(session, run)) is None:
-        # il contratto è stato tolto o spento mentre il run girava: il referto
-        # parla di una promessa che non c'è più, e non decide niente
+        # the contract was removed or turned off while the run was going: the report speaks of
+        # a promise that is no longer there, and decides nothing
         contract_report = None
     refused = contract_report is not None and contract_report.get("outcome") == "failed"
 
@@ -1198,9 +1194,9 @@ async def _reconcile(session: Session, run: Run) -> Run:
             values["email"] = not_sent
     elif new_status == "SUCCESS":
         values["rows_written"] = result.get("rows_written")
-        # esito della copia best-effort: il run resta SUCCESS anche se è fallita,
-        # ma l'errore va registrato qui dentro — nello STESSO claim atomico —
-        # o resterebbe solo nei log del worker, invisibile in cronologia
+        # the outcome of the best-effort copy: the run stays SUCCESS even when it failed, but
+        # the error must be recorded in here — in the SAME atomic claim — or it would stay
+        # only in the worker's logs, invisible in the history
         if result.get("mirror") is not None:
             values["mirror"] = json.dumps(result.get("mirror"))[:2000]
         if result.get("email") is not None:
@@ -1217,15 +1213,15 @@ async def _reconcile(session: Session, run: Run) -> Run:
         not_sent = _email_not_sent(run.email)
         if not_sent:
             values["email"] = not_sent
-    # con qualche tentativo IMMEDIATO: un errore transitorio (lock, hiccup del DB)
-    # si risolve nello stesso giro invece di aspettare la prossima lettura; se
-    # persiste, dopo i tentativi il run resta non terminale e si ritenta più tardi.
+    # with a few IMMEDIATE attempts: a transient error (a lock, a DB hiccup) is solved in
+    # the same round instead of waiting for the next read; when it persists, after the
+    # attempts the run stays non-terminal and is tried again later.
     for attempt in range(1, SIDE_EFFECT_ATTEMPTS + 1):
         claimed = session.exec(
             update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES)).values(**values)
         )
         if claimed.rowcount == 0:
-            session.rollback()  # un'altra richiesta ha già chiuso questo run
+            session.rollback()  # another request closed this run already
             session.refresh(run)
             return run
         try:
@@ -1242,22 +1238,22 @@ async def _reconcile(session: Session, run: Run) -> Run:
             ):
                 _publish_datasource(session, run, result)
                 _record_contract(session, run, contract_report, "publish")
-            # le consegne dei webhook nascono nella stessa transazione: chiuso il
-            # run, l'avviso c'è (riletto qui per avere stato e fine nuovi)
+            # the webhooks' deliveries are born in the same transaction: with the run closed, the
+            # notice is there (read again here to have the new state and end)
             session.refresh(run)
-            webhooks.accoda_per_run(session, run)
-            session.commit()  # claim + effetto: atomici
+            webhooks.enqueue_for_run(session, run)
+            session.commit()  # claim + effect: atomic
             session.refresh(run)
-            openlineage.run_closed(session, run)  # dopo il commit: racconta un fatto già scritto
+            openlineage.run_closed(session, run)  # after the commit: tells a fact written already
             return run
         except Exception:
-            session.rollback()  # il run torna non terminale
+            session.rollback()  # the run goes back to non-terminal
             session.refresh(run)
             logger.warning(
-                "run %s: effetto post-claim fallito (tentativo %d/%d)", run.id, attempt, SIDE_EFFECT_ATTEMPTS
+                "run %s: post-claim effect failed (attempt %d/%d)", run.id, attempt, SIDE_EFFECT_ATTEMPTS
             )
     logger.error(
-        "run %s: effetto post-claim non riuscito dopo %d tentativi, sarà ritentato alla prossima lettura",
+        "run %s: post-claim effect failed after %d attempts, it will be tried again at the next read",
         run.id,
         SIDE_EFFECT_ATTEMPTS,
     )
@@ -1326,10 +1322,10 @@ def _close_if_never_queued(session: Session, run: Run) -> Run:
 
 
 def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
-    """Il refresh è riuscito: swap dello snapshot (solo il vincitore del claim
-    arriva qui). NON committa — lo fa `_reconcile`, così lo swap e il claim del
-    run sono nella stessa transazione (o entrambi, o nessuno). Lo snapshot
-    precedente è marcato per la cancellazione DIFFERITA.
+    """The refresh succeeded: the snapshot's swap (only the winner of the claim gets here).
+    Does NOT commit — `_reconcile` does, so the swap and the run's claim are in the same
+    transaction (both, or neither). The previous snapshot is marked for DEFERRED
+    deletion.
 
     The datasource is read FOR UPDATE: two reconciles closing two imports of it at
     once would otherwise both read the snapshot of before, and the older one, if it
@@ -1339,24 +1335,24 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
         .with_for_update().execution_options(populate_existing=True)
     ).first() if run.datasource_id else None
     if ds is None:
-        # datasource sparita durante il refresh: il nuovo blob è orfano (nessun
-        # lettore lo referenzia) → cancellazione differita, uniforme.
+        # the datasource disappeared during the refresh: the new blob is orphaned (no reader
+        # references it) → deferred deletion, the same as always.
         schedule_blob_deletion(
-            session, run.output_bucket, run.output_key, reason="datasource sparita durante il refresh"
+            session, run.output_bucket, run.output_key, reason="datasource gone during the refresh"
         )
         return
 
-    # un run più VECCHIO di quello che ha prodotto lo snapshot corrente ha letto la
-    # sorgente prima: i suoi dati sono più stantii e non devono rimpiazzare i più
-    # freschi solo perché ha finito dopo. Il suo parquet resta orfano → differita.
+    # a run OLDER than the one that produced the current snapshot read the source
+    # earlier: its data is staler and must not replace the fresher just because it
+    # finished later. Its parquet stays orphaned → deferred.
     if _is_stale_swap(ds, run):
         logger.warning(
-            "run %s: swap rifiutato, la datasource %s ha già lo snapshot del run %s (più recente)",
+            "run %s: swap refused, datasource %s has the snapshot of run %s already (newer)",
             run.id, ds.id, ds.snapshot_run_id,
         )
         schedule_blob_deletion(
             session, run.output_bucket, run.output_key,
-            reason=f"refresh {run.id} superato dal run {ds.snapshot_run_id}",
+            reason=f"refresh {run.id} overtaken by run {ds.snapshot_run_id}",
         )
         session.flush()
         return
@@ -1371,8 +1367,8 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     ds.updated_at = now
     ds.snapshot_run_id = run.id
     session.add(ds)
-    # lo snapshot precedente può essere ancora in lettura da un run/preview che ne
-    # ha già risolto la chiave: cancellazione DIFFERITA (grace).
+    # the previous snapshot may still be read by a run/preview that resolved its key
+    # already: DEFERRED deletion (grace).
     if old_key and old_key != ds.key:
         schedule_blob_deletion(
             session, old_bucket, old_key, reason=f"snapshot datasource {ds.id} superato"
@@ -1381,32 +1377,32 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
 
 
 def _publish_datasource(session: Session, run: Run, result: dict) -> None:
-    """Crea — o SOVRASCRIVE, se `run.publish_overwrite` — la datasource promessa dal
-    run (solo il vincitore del claim arriva qui). Il blob eventualmente rimpiazzato
-    da una sovrascrittura è marcato per la cancellazione differita.
+    """Creates — or OVERWRITES, when `run.publish_overwrite` — the datasource the run
+    promised (only the winner of the claim gets here). A blob an overwrite replaces is
+    marked for deferred deletion.
 
-    Il vincolo UNIQUE (project, name) resta la rete di sicurezza: alla CREAZIONE,
-    su conflitto si riprova UNA volta con un suffisso; se fallisce anche così (o il
-    progetto è stato eliminato) l'output non viene pubblicato — il suo parquet,
-    ora orfano, viene marcato per la cancellazione (niente blob perso).
+    The UNIQUE constraint (project, name) stays the safety net: at CREATION, on a
+    conflict it tries ONCE more with a suffix; when that fails too (or the project was
+    deleted) the output is not published — its parquet, orphaned now, is marked for
+    deletion (no blob lost).
     """
     columns = json.dumps(result.get("columns") or [])
 
-    # sovrascrittura: rimpiazza in-place la datasource omonima (kind="flow"),
-    # mantenendone id e nome — così i flussi che la usano come sorgente non si
-    # rompono. Se non esiste (o non è kind=flow) si ricade nella creazione.
+    # overwrite: replaces in place the datasource with the same name (kind="flow"),
+    # keeping its id and name — so the flows that use it as a source do not break. When
+    # it does not exist (or is not kind=flow) it falls back to creation.
     if run.publish_overwrite:
         existing = _find_datasource(session, run.publish_project_id, run.publish_name)
         if existing is not None and existing.kind == "flow":
-            # come per il refresh: chi ha letto PRIMA non sovrascrive chi ha letto DOPO
+            # as for the refresh: whoever read EARLIER does not overwrite whoever read LATER
             if _is_stale_swap(existing, run):
                 logger.warning(
-                    "run %s: publish rifiutato, la datasource %s ha già lo snapshot del run %s",
+                    "run %s: publish refused, datasource %s has the snapshot of run %s already",
                     run.id, existing.id, existing.snapshot_run_id,
                 )
                 schedule_blob_deletion(
                     session, run.output_bucket, run.output_key,
-                    reason=f"publish {run.id} superato dal run {existing.snapshot_run_id}",
+                    reason=f"publish {run.id} overtaken by run {existing.snapshot_run_id}",
                 )
                 session.flush()
                 return
@@ -1423,13 +1419,13 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             run.datasource_id = existing.id
             session.add(existing)
             session.add(run)
-            # il parquet rimpiazzato può essere ancora in lettura: cancellazione
-            # DIFFERITA (grace), nella stessa transazione dell'overwrite.
+            # the replaced parquet may still be read: DEFERRED deletion (grace), in the same
+            # transaction as the overwrite.
             if old_key and old_key != run.output_key:
                 schedule_blob_deletion(
                     session, old_bucket, old_key, reason=f"datasource {existing.id} sovrascritta"
                 )
-            session.flush()  # NON committa: lo fa _reconcile (atomico col claim)
+            session.flush()  # does NOT commit: _reconcile does (atomic with the claim)
             return
 
     def _make(name: str) -> Datasource:
@@ -1445,31 +1441,31 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             sort_keys=run.publish_sort_keys,
             kind="flow",
             flow_id=run.flow_id,
-            snapshot_run_id=run.id,  # baseline per i publish successivi
+            snapshot_run_id=run.id,  # baseline for the next publishes
         )
 
     first = run.publish_name
     if _datasource_name_taken(session, run.publish_project_id, first):
-        first = f"{run.publish_name} ({run.task_id[:8]})"  # conflitto sopravvenuto
+        first = f"{run.publish_name} ({run.task_id[:8]})"  # a conflict that came up meanwhile
     for candidate in dict.fromkeys([first, f"{run.publish_name} ({run.task_id[:8]})"]):
         ds = _make(candidate)
         try:
-            # SAVEPOINT: isola il tentativo. Su conflitto UNIQUE si annulla SOLO il
-            # savepoint (non l'intera transazione, che porta anche il claim) e si
-            # prova il nome successivo.
+            # SAVEPOINT: isolates the attempt. On a UNIQUE conflict ONLY the savepoint is undone
+            # (not the whole transaction, which carries the claim too) and the next name is
+            # tried.
             with session.begin_nested():
                 session.add(ds)
-                session.flush()  # emette l'INSERT ora → IntegrityError qui se preso
+                session.flush()  # issues the INSERT now → IntegrityError here when taken
         except IntegrityError:
             continue
         run.datasource_id = ds.id
         session.add(run)
-        session.flush()  # NON committa: lo fa _reconcile (atomico col claim)
+        session.flush()  # does NOT commit: _reconcile does (atomic with the claim)
         return
-    # esauriti i tentativi: l'output non è pubblicato → il suo parquet è orfano.
-    # Lo si marca per la cancellazione differita invece di lasciarlo perso.
+    # attempts used up: the output is not published → its parquet is orphaned. It is
+    # marked for deferred deletion instead of being left lost.
     logger.error(
-        "run %s: datasource '%s' non pubblicata (conflitti ripetuti o progetto eliminato)",
+        "run %s: datasource '%s' not published (repeated conflicts or project deleted)",
         run.id,
         run.publish_name,
     )
@@ -1496,20 +1492,20 @@ async def list_runs(
     return [run_out(session, await _reconcile(session, r)) for r in runs]
 
 
-# NB: registrato PRIMA di /runs/{run_id} così "activity" non è preso per un id
+# NB: registered BEFORE /runs/{run_id} so that "activity" is not taken for an id
 @router.get("/runs/activity", response_model=RunActivityOut)
 def runs_activity(
-    days: int = Query(180, ge=1, le=730, description="ampiezza della finestra giornaliera"),
-    day: str | None = Query(None, description="YYYY-MM-DD (locale): ritorna il dettaglio ORARIO del giorno"),
+    days: int = Query(180, ge=1, le=730, description="width of the daily window"),
+    day: str | None = Query(None, description="YYYY-MM-DD (local): returns the day's HOURLY detail"),
     tz_offset: int = Query(0, description="getTimezoneOffset() del client, in minuti (local = utc - offset)"),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Attività delle esecuzioni per il calendar plot della pagina Flows: conteggi
-    per GIORNO (heatmap) o, con `day`, per ORA (drill-down). Ogni run è un evento;
-    il breakdown distingue esito (successi/falliti) e origine (manuali/schedulati).
-    RBAC come la ricerca: solo i run nei progetti leggibili (o lanciati dall'utente).
-    I bucket sono in ora LOCALE del client, ricavata da `tz_offset`."""
+    """The runs' activity for the calendar plot of the Flows page: counts by DAY (heatmap)
+    or, with `day`, by HOUR (drill-down). Each run is an event; the breakdown tells the
+    outcome (successes/failures) and the origin (manual/scheduled) apart. RBAC as the
+    search: only the runs in readable projects (or launched by the user). The buckets
+    are in the client's LOCAL time, worked out from `tz_offset`."""
     off = timedelta(minutes=tz_offset)  # local = utc - off ; utc = local + off
     now_local = datetime.now(timezone.utc).replace(tzinfo=None) - off
 
@@ -1524,10 +1520,10 @@ def runs_activity(
         end_local, granularity = today0 + timedelta(days=1), "day"
         start_local = end_local - timedelta(days=days)
 
-    start_utc, end_utc = start_local + off, end_local + off  # confini UTC della finestra locale
+    start_utc, end_utc = start_local + off, end_local + off  # the UTC bounds of the local window
 
-    # solo esecuzioni di ALTO LIVELLO: gli output/refresh figli di
-    # un'orchestrazione sono la stessa esecuzione contata più volte
+    # TOP-LEVEL runs only: the outputs/refreshes that are children of an orchestration are
+    # the same run counted several times
     conds = [Run.started_at >= start_utc, Run.started_at < end_utc, Run.parent_run_id.is_(None)]
     if not perm_service.is_admin(session, user):
         readable = perm_service.readable_project_ids(session, user)
@@ -1593,7 +1589,7 @@ async def get_run(
             if ds is not None:
                 ensure_can(session, user, ds.project_id, Capability.VIEW)
             elif not (perm_service.is_admin(session, user) or run.launched_by == user.id):
-                # datasource eliminata: la cronologia orfana resta visibile solo a chi l'ha lanciata
+                # datasource deleted: the orphaned history stays visible only to whoever launched it
                 raise HTTPException(status_code=404, detail="Run not found")
         elif run.flow_group_id is not None:
             # a flow group's run: read with VIEW on the group's folder
@@ -1645,17 +1641,17 @@ def _usable_envs(session: Session, user: User) -> set[int]:
 
 @router.get("/runs", response_model=Page[RunSearchOut])
 def search_runs(
-    status: str | None = Query(None, description="filtra per stato, es. FAILURE"),
-    q: str | None = Query(None, description="testo cercato su flusso/sorgente/autore/errore, sull'INTERO dataset"),
+    status: str | None = Query(None, description="filter by state, e.g. FAILURE"),
+    q: str | None = Query(None, description="text searched in flow/source/author/error, over the WHOLE dataset"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Ricerca globale PAGINATA delle esecuzioni nei progetti LEGGIBILI dell'utente
-    (tutti se superuser), con filtro per stato e ricerca testuale su error/
-    error_detail (sul dataset intero, non solo sulla pagina). Sola lettura: mostra
-    lo stato storico, NON riconcilia (una ricerca non deve avere effetti)."""
+    """GLOBAL, PAGINATED search of the runs in the user's READABLE projects (all of them
+    for a superuser), with a filter by state and a text search on error/error_detail
+    (over the whole dataset, not only the page). Read only: it shows the historical
+    state, it does NOT reconcile (a search must have no effects)."""
     conds = []
     if not perm_service.is_admin(session, user):
         readable = perm_service.readable_project_ids(session, user)
@@ -1675,9 +1671,9 @@ def search_runs(
         conds.append(Run.status == status)
     if q:
         like = f"%{q}%"
-        # ricerca su più campi (non solo l'errore, altrimenti i run riusciti — che
-        # non hanno testo d'errore — non comparirebbero MAI): nome flusso, sorgente,
-        # autore ed eventuale motivo dell'errore.
+        # search over several fields (not only the error, or the successful runs — which have
+        # no error text — would NEVER show up): flow name, source, author and the error's
+        # reason if any.
         conds.append(
             or_(
                 Run.error.ilike(like),
@@ -1717,7 +1713,7 @@ def search_runs(
         item.source_name = ds.name if ds else None
         item.group_name = group.name if group else None
         item.script_name = script.name if script else None
-        # chi l'ha avviato: per gli schedulati mostreremo "schedule" lato client
+        # who started it: for the scheduled ones the client shows "schedule"
         item.launched_by_name = (launcher.full_name or launcher.email) if launcher else None
         out.append(item)
     return Page(items=out, total=total)

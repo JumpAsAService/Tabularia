@@ -1,12 +1,12 @@
 """${message}
 
-Revisione ${up_revision}${", dopo " + down_revision if down_revision else ", la prima"} — ${create_date}
-Solo in avanti, e compatibile col codice della versione precedente (expand/contract):
-vedi docs/database-migrations.md.
+Revision ${up_revision}${", after " + down_revision if down_revision else ", the first"} — ${create_date}
+Forward only, and compatible with the previous version's code (expand/contract):
+see docs/database-migrations.md.
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel  # noqa: F401 — i tipi di SQLModel (AutoString) nelle colonne generate
+import sqlmodel  # noqa: F401 — SQLModel's types (AutoString) in the generated columns
 ${imports if imports else ""}
 
 revision = ${repr(up_revision)}
@@ -20,5 +20,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # solo in avanti (scelta del progetto): si corregge con una revisione nuova
-    raise NotImplementedError("le migrazioni del gateway vanno solo in avanti")
+    # forward only (the project's choice): corrected with a new revision
+    raise NotImplementedError("the gateway's migrations go forward only")

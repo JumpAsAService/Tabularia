@@ -45,17 +45,17 @@ def _richiesta(body: dict | None = None, method: str = "POST", path: str = "/x")
 def engine_che_guarda(session, monkeypatch):
     """Un engine finto che, quando viene chiamato, annota se la sessione del
     gateway ha una transazione aperta in quel momento."""
-    visto: list[tuple[str, bool]] = []
+    seen: list[tuple[str, bool]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        visto.append((request.url.path, session.in_transaction()))
+        seen.append((request.url.path, session.in_transaction()))
         if request.url.path == "/engines":
             return httpx.Response(200, json=[{"id": "polars", "available": True}])
         return httpx.Response(200, json={"dataset_id": "d1", "parquet_key": "datasets/d1.parquet", "raw_key": "raw/d1"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://engine")
     monkeypatch.setattr("app.core.engine_client._client", client)
-    return visto
+    return seen
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ def _bucket() -> str:
     return get_settings().engine.bucket
 
 
-def _corpo(**extra) -> dict:
+def _body(**extra) -> dict:
     return {"bucket": _bucket(), "input_key": "datasets/prova.parquet", "operations": [], "limit": 10, **extra}
 
 
@@ -80,17 +80,17 @@ def _come_dopo_l_autenticazione(session, user) -> None:
 
 
 async def test_l_anteprima_non_tiene_la_connessione_mentre_aspetta(session, admin, engine_che_guarda):
-    await proxy.preview(_richiesta(_corpo()), user=admin, session=session)
+    await proxy.preview(_richiesta(_body()), user=admin, session=session)
     assert engine_che_guarda == [("/tasks/preview", False)]
 
 
 async def test_l_export_non_tiene_la_connessione_mentre_aspetta(session, admin, engine_che_guarda):
-    await proxy.export(_richiesta(_corpo(format="csv", filename="x")), user=admin, session=session)
+    await proxy.export(_richiesta(_body(format="csv", filename="x")), user=admin, session=session)
     assert engine_che_guarda == [("/tasks/export", False)]
 
 
 async def test_il_run_senza_flusso_non_tiene_la_connessione_mentre_aspetta(session, admin, engine_che_guarda):
-    await proxy.transform(_richiesta(_corpo()), user=admin, session=session)
+    await proxy.transform(_richiesta(_body()), user=admin, session=session)
     assert engine_che_guarda == [("/tasks/transform-data", False)]
 
 
@@ -106,11 +106,11 @@ async def test_l_upload_non_tiene_la_connessione_e_registra_comunque_il_propriet
     assert [(u.dataset_id, u.owner_id) for u in caricati] == [("d1", admin.id)]
 
 
-@pytest.mark.parametrize("rotta, percorso", [("operations", "/tasks/operations"), ("engines", "/engines")])
-async def test_le_rotte_brevi_rilasciano_anche_loro(session, admin, engine_che_guarda, rotta, percorso):
+@pytest.mark.parametrize("route, path", [("operations", "/tasks/operations"), ("engines", "/engines")])
+async def test_le_rotte_brevi_rilasciano_anche_loro(session, admin, engine_che_guarda, route, path):
     _come_dopo_l_autenticazione(session, admin)
-    await getattr(proxy, rotta)(_richiesta(method="GET"), session=session)
-    assert engine_che_guarda == [(percorso, False)]
+    await getattr(proxy, route)(_richiesta(method="GET"), session=session)
+    assert engine_che_guarda == [(path, False)]
 
 
 async def test_lo_stato_di_un_task_non_tiene_la_connessione(session, admin, engine_che_guarda):
@@ -122,7 +122,7 @@ async def test_lo_stato_di_un_task_non_tiene_la_connessione(session, admin, engi
 async def test_l_utente_resta_utilizzabile_dopo_il_rilascio(session, admin, engine_che_guarda):
     """Rilasciare non deve lasciare oggetti inservibili a chi viene dopo: le
     rotte usano ancora l'utente (proprietario dell'upload, audit)."""
-    await proxy.preview(_richiesta(_corpo()), user=admin, session=session)
+    await proxy.preview(_richiesta(_body()), user=admin, session=session)
     assert admin.email == "capo@x.local" and admin.id is not None
 
 
@@ -137,8 +137,8 @@ async def test_anche_se_un_commit_precedente_aveva_fatto_scadere_l_utente(sessio
     assert admin.id is not None and admin.email == "capo@x.local"
 
 
-@pytest.mark.parametrize("rotta", ["preview", "export", "transform"])
-async def test_i_controlli_sul_database_non_girano_sul_ciclo_degli_eventi(session, admin, engine_che_guarda, monkeypatch, rotta):
+@pytest.mark.parametrize("route", ["preview", "export", "transform"])
+async def test_i_controlli_sul_database_non_girano_sul_ciclo_degli_eventi(session, admin, engine_che_guarda, monkeypatch, route):
     """Le query sono sincrone: sul ciclo degli eventi lo bloccherebbero, e con il
     pool esaurito lo fermerebbero ad aspettare una connessione che può liberarsi
     solo se LUI va avanti. Osservato dal vivo: gateway immobile per 30 secondi.
@@ -146,17 +146,17 @@ async def test_i_controlli_sul_database_non_girano_sul_ciclo_degli_eventi(sessio
     import threading
 
     ciclo = threading.get_ident()
-    dove: list[int] = []
+    where: list[int] = []
     vero = proxy.ensure_reads_pinned
 
     def spia(*a, **k):
-        dove.append(threading.get_ident())
+        where.append(threading.get_ident())
         return vero(*a, **k)
 
     monkeypatch.setattr(proxy, "ensure_reads_pinned", spia)
-    corpo = _corpo(format="csv", filename="x") if rotta == "export" else _corpo()
-    await getattr(proxy, rotta)(_richiesta(corpo), user=admin, session=session)
-    assert dove and all(t != ciclo for t in dove)
+    body = _body(format="csv", filename="x") if route == "export" else _body()
+    await getattr(proxy, route)(_richiesta(body), user=admin, session=session)
+    assert where and all(t != ciclo for t in where)
 
 
 def test_l_autenticazione_del_proxy_non_lascia_la_connessione_in_mano(session, admin):
@@ -168,7 +168,7 @@ def test_l_autenticazione_del_proxy_non_lascia_la_connessione_in_mano(session, a
     from tests.conftest import token_di
 
     token = token_di(session, admin)
-    utente = proxy._utente(_richiesta(method="GET"), token=token, session=session)
+    utente = proxy._user(_richiesta(method="GET"), token=token, session=session)
     assert not session.in_transaction()
     assert (utente.id, utente.email, utente.is_superuser) == (admin.id, "capo@x.local", True)
 
@@ -178,7 +178,7 @@ def test_ogni_rotta_del_proxy_passa_da_quella_autenticazione():
     senza che niente lo dica: l'autenticazione è del router, tutta intera."""
     from app.deps.auth import get_current_user
 
-    for rotta in proxy.router.routes:
-        chiamate = {d.call for d in rotta.dependant.dependencies}
-        assert proxy._utente in chiamate, rotta.path
-        assert get_current_user not in chiamate, rotta.path
+    for route in proxy.router.routes:
+        chiamate = {d.call for d in route.dependant.dependencies}
+        assert proxy._user in chiamate, route.path
+        assert get_current_user not in chiamate, route.path

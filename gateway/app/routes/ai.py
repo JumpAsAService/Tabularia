@@ -1,14 +1,14 @@
-"""Assistente AI: stato, modelli (pannello admin) e la chat in streaming.
+"""AI assistant: state, models (admin panel) and the streaming chat.
 
-- `GET  /ai/status`            per tutti: l'assistente e' acceso? con quali modelli?
-- `GET  /ai/models`            superuser: catalogo del provider + scelta dell'admin
-- `PUT  /ai/models/{id}`       superuser: abilita/disabilita un modello (audit)
-- `POST /ai/chat`              per tutti: un turno di conversazione, in SSE
+- `GET  /ai/status`            for everyone: is the assistant on? with which models?
+- `GET  /ai/models`            superuser: the provider's catalog + the admin's choice
+- `PUT  /ai/models/{id}`       superuser: enables/disables a model (audit)
+- `POST /ai/chat`              for everyone: one conversation turn, over SSE
 
-La conversazione NON e' salvata sul server: la storia torna al client a fine
-turno (`done.history`) e il client la rimanda al turno dopo. Una storia
-contraffatta puo' solo confondere la conversazione di chi la manda: ogni
-strumento ricontrolla i permessi a ogni chiamata.
+The conversation is NOT saved on the server: the history goes back to the client at
+the end of the turn (`done.history`) and the client sends it back at the next turn.
+A forged history can only confuse the conversation of whoever sends it: every tool
+checks the permissions again at every call.
 """
 from __future__ import annotations
 
@@ -39,19 +39,19 @@ from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_scrip
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import allowed_engines
 from app.services.permissions import readable_project_ids
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
-router = APIRouter(route_class=RottaCheRilascia, prefix="/ai", tags=["ai"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/ai", tags=["ai"])
 
 
 def _new_session() -> Session:
-    """Sessione DB per gli strumenti dell'agente (una per chiamata): lo stream
-    vive piu' a lungo della sessione della richiesta. I test la sostituiscono."""
+    """DB session for the agent's tools (one per call): the stream lives longer than the
+    request's session. The tests replace it."""
     return Session(db_engine)
 
 
-# ── stato e modelli ──────────────────────────────────────────────────────────
+# ── state and models ─────────────────────────────────────────────────────────
 class AiStatusOut(BaseModel):
     enabled: bool
     models: list[str] = []
@@ -71,8 +71,8 @@ def ai_status(user: User = Depends(get_current_user), session: Session = Depends
 class AiModelOut(BaseModel):
     model_id: str
     enabled: bool
-    chat: bool  # False = embedding/audio/reranker: non abilitabile per la chat
-    available: bool  # False = abilitato in passato, ma il provider non lo elenca piu'
+    chat: bool  # False = embedding/audio/reranker: cannot be enabled for the chat
+    available: bool  # False = enabled in the past, but the provider no longer lists it
 
 
 class AiModelUpdate(BaseModel):
@@ -84,7 +84,7 @@ async def list_ai_models(user: User = Depends(require_observer), session: Sessio
     offered = await provider_models()
     chosen = {m.model_id: m.enabled for m in session.exec(select(AiModel)).all()}
     out = [AiModelOut(model_id=m, enabled=bool(chosen.get(m)), chat=is_chat_model(m), available=True) for m in offered]
-    # abilitati in passato e spariti dal catalogo: visibili, cosi' si possono spegnere
+    # enabled in the past and gone from the catalog: visible, so they can be turned off
     out += [AiModelOut(model_id=m, enabled=e, chat=is_chat_model(m), available=False)
             for m, e in sorted(chosen.items()) if m not in offered and e]
     return out
@@ -124,27 +124,26 @@ async def set_ai_model(
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     model: str = Field(min_length=1, max_length=200)
-    # La conversazione da proseguire. La storia la tiene il SERVER: il client
-    # non la manda piu' (e quindi non puo' piu' contraffarla — audit A8).
-    # Assente = nuova conversazione.
+    # The conversation to continue. The SERVER keeps the history: the client no longer
+    # sends it (and so can no longer forge it — audit A8). Missing = a new conversation.
     chat_id: Optional[int] = None
     engine: Optional[str] = Field(default=None, max_length=40)
     locale: str = Field(default="en", max_length=10)
-    # datasource messe a fuoco nella pagina: contesto per l'assistente, non un permesso
+    # datasources in focus on the page: context for the assistant, not a permission
     focus: list[int] = Field(default_factory=list, max_length=8)
 
 
 async def pick_engine(session: Session, requested: Optional[str]) -> Optional[str]:
-    """Il motore delle query dell'assistente: uno DISPONIBILE sull'engine e
-    CONSENTITO dall'amministratore. Se il client ne chiede uno che non lo e',
-    l'errore dice quali si possono scegliere; se non ne chiede, si prende il
-    primo utilizzabile (Polars, se c'e')."""
+    """The engine of the assistant's queries: one AVAILABLE on the engine and ALLOWED by
+    the administrator. When the client asks for one that is not, the error says which
+    may be chosen; when it does not ask, the first usable one is taken (Polars, if
+    there)."""
     allowed = allowed_engines(session)
     try:
         resp = await get_engine_client().get("/engines", timeout=15)
         resp.raise_for_status()
         usable = [e["id"] for e in resp.json() if e.get("available") and e.get("id") in allowed]
-    except Exception:  # noqa: BLE001 — catalogo non leggibile: ci si fida della sola politica
+    except Exception:  # noqa: BLE001 — catalog not readable: trust the policy alone
         usable = sorted(allowed)
     if requested:
         if requested not in usable:
@@ -160,13 +159,13 @@ def _sse(event: str, data: dict[str, Any]) -> bytes:
 
 
 def _tool_result_payload(part: Any) -> dict[str, Any]:
-    """Cio' che la chat mostra di un risultato: l'esito, e la TABELLA quando lo
-    strumento ne ha restituita una (i numeri veri, non la trascrizione del modello)."""
+    """What the chat shows of a result: the outcome, and the TABLE when the tool returned
+    one (the true numbers, not the model's transcription)."""
     content = getattr(part, "content", None)
     ok = type(part).__name__ != "RetryPromptPart"
     out: dict[str, Any] = {"id": getattr(part, "tool_call_id", None), "name": getattr(part, "tool_name", None), "ok": ok}
-    # una TABELLA e' il risultato di una query: `rows` e' una lista. (Anche
-    # describe_datasource ha `rows`, ma li' e' il numero di righe.)
+    # a TABLE is the result of a query: `rows` is a list. (describe_datasource has `rows`
+    # too, but there it is the number of rows.)
     if isinstance(content, dict) and isinstance(content.get("rows"), list) and isinstance(content.get("columns"), list) and "row_count" in content:
         out["table"] = {k: content.get(k) for k in ("datasource", "columns", "rows", "row_count", "truncated")}
         if isinstance(content.get("chart"), dict):
@@ -187,30 +186,29 @@ def _tool_result_payload(part: Any) -> dict[str, Any]:
     return out
 
 
-# ── conversazioni salvate ────────────────────────────────────────────────────
+# ── saved conversations ──────────────────────────────────────────────────────
 @router.get("/chats")
 def list_chats(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Le conversazioni di CHI CHIEDE, dalla piu' recente. Mai quelle di altri.
+    """The conversations of WHOEVER ASKS, newest first. Never those of others.
 
-    Per un OSSERVATORE l'elenco è vuoto per costruzione — le sue conversazioni
-    non si salvano — ma lo si dice qui a voce alta: se un domani qualcosa
-    scrivesse una chat a suo nome, non verrebbe comunque servita a chiunque
-    entri con l'account condiviso."""
+    For an OBSERVER the list is empty by construction — their conversations are not
+    saved — but it is said out loud here: if one day something wrote a chat in their
+    name, it would not be served to anyone signing in with the shared account anyway."""
     if is_observer_only(session, user):
         return []
-    return ai_chats.elenco(session, user, get_settings().ai.max_chats_listed)
+    return ai_chats.listing(session, user, get_settings().ai.max_chats_listed)
 
 
 @router.get("/chats/{chat_id}")
 def get_chat(chat_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Una conversazione intera, pronta da rimettere a schermo: domande,
-    risposte, passi e costo di ogni turno."""
-    return ai_chats.dettaglio(session, user, chat_id)
+    """A whole conversation, ready to put back on screen: questions, answers, steps and the
+    cost of each turn."""
+    return ai_chats.detail(session, user, chat_id)
 
 
 @router.delete("/chats/{chat_id}", status_code=204)
 def delete_chat(chat_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    ai_chats.elimina(session, user, chat_id)
+    ai_chats.remove(session, user, chat_id)
 
 
 @router.get("/chats/{chat_id}/turns/{seq}/steps/{step_id}/export")
@@ -220,25 +218,25 @@ async def export_step(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Scarica il risultato COMPLETO di una query dell'assistente.
+    """Downloads the COMPLETE result of an assistant query.
 
-    La chat mostra al massimo `AI__MAX_RESULT_ROWS` righe; il file le contiene
-    tutte, perche' la query viene rieseguita dal motore sul percorso di export
-    normale — streaming, tetto di formato, audit. La SQL si rilegge dal turno
-    salvato: il client manda solo l'id del passo, mai una query."""
+    The chat shows at most `AI__MAX_RESULT_ROWS` rows; the file holds them all, because
+    the engine runs the query again on the normal export path — streaming, format cap,
+    audit. The SQL is read again from the saved turn: the client sends only the step's
+    id, never a query."""
     if fmt not in ("csv", "xlsx"):
         raise HTTPException(status_code=422, detail="Unsupported format: use csv or xlsx")
-    datasource_id, sql = ai_chats.query_del_passo(session, user, chat_id, seq, step_id)
-    # i permessi si ricontrollano ADESSO: la conversazione puo' essere vecchia
-    # e chi l'ha scritta puo' aver perso l'accesso nel frattempo
+    datasource_id, sql = ai_chats.step_query(session, user, chat_id, seq, step_id)
+    # the permissions are checked NOW: the conversation may be old and whoever wrote it may
+    # have lost access meanwhile
     ds = session.get(Datasource, datasource_id)
     if ds is None or ds.project_id not in readable_project_ids(session, user):
         raise HTTPException(status_code=404, detail="Datasource not available")
-    nome = re.sub(r"[^A-Za-z0-9._-]+", "_", ds.name)[:60] or "risultato"
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", ds.name)[:60] or "result"
     payload = {
         "bucket": ds.bucket, "input_key": ds.key,
         "operations": [{"type": "sql", "params": {"query": sql}}],
-        "format": fmt, "filename": f"{nome}.{fmt}",
+        "format": fmt, "filename": f"{name}.{fmt}",
     }
     engine = await pick_engine(session, None)
     if engine:
@@ -252,14 +250,14 @@ async def export_step(
     req = client.build_request("POST", "/tasks/export", json=payload, timeout=600)
     resp = await client.send(req, stream=True)
     if resp.status_code >= 400:
-        testo = (await resp.aread()).decode(errors="replace")[:500]
+        text = (await resp.aread()).decode(errors="replace")[:500]
         await resp.aclose()
-        raise HTTPException(status_code=resp.status_code, detail=f"Export failed: {testo}")
+        raise HTTPException(status_code=resp.status_code, detail=f"Export failed: {text}")
     return StreamingResponse(
         resp.aiter_bytes(),
         status_code=resp.status_code,
         media_type=resp.headers.get("content-type"),
-        headers={"Content-Disposition": resp.headers.get("content-disposition", f'attachment; filename="{nome}.{fmt}"')},
+        headers={"Content-Disposition": resp.headers.get("content-disposition", f'attachment; filename="{name}.{fmt}"')},
         background=BackgroundTask(resp.aclose),
     )
 
@@ -272,8 +270,8 @@ def _check_spending(session: Session, user: User) -> None:
     so is the key that pays."""
     cfg = get_settings().ai
     if cfg.max_cost_per_day_total_usd:
-        speso_tutti = ai_chats.speso_oggi_tutti(session)
-        if speso_tutti >= Decimal(str(cfg.max_cost_per_day_total_usd)):
+        spent_all = ai_chats.spent_today_all(session)
+        if spent_all >= Decimal(str(cfg.max_cost_per_day_total_usd)):
             raise HTTPException(
                 status_code=429,
                 detail=(
@@ -283,13 +281,13 @@ def _check_spending(session: Session, user: User) -> None:
                 ),
             )
     if cfg.max_cost_per_day_usd:
-        speso = ai_chats.speso_oggi(session, user)
-        if speso >= Decimal(str(cfg.max_cost_per_day_usd)):
+        spent = ai_chats.spent_today(session, user)
+        if spent >= Decimal(str(cfg.max_cost_per_day_usd)):
             raise HTTPException(
                 status_code=429,
                 detail=(
                     f"You have reached today's spending cap for the assistant "
-                    f"({speso:.4f} $ of {cfg.max_cost_per_day_usd} $). Try again tomorrow."
+                    f"({spent:.4f} $ of {cfg.max_cost_per_day_usd} $). Try again tomorrow."
                 ),
             )
 
@@ -325,10 +323,10 @@ async def _turn_stream(
         if not accounted and spent.requests:
             try:
                 with _new_session() as s:
-                    ai_chats.registra_spesa(s, user_id=user.id, model_id=model_id, input_tokens=spent.input_tokens,
+                    ai_chats.record_spend(s, user_id=user.id, model_id=model_id, input_tokens=spent.input_tokens,
                                             output_tokens=spent.output_tokens, cost=ai_pricing.cost_of(spent, model_id))
             except Exception:  # noqa: BLE001 — the user already has the error: the ledger must not hide it
-                logger.exception("assistente: spesa del turno interrotto non registrata")
+                logger.exception("assistant: cost of the interrupted turn not recorded")
         try:
             return extra_done() if extra_done is not None else {}
         except Exception:  # noqa: BLE001
@@ -339,8 +337,8 @@ async def _turn_stream(
             message, message_history=history, deps=deps, model=model, usage=spent,
             usage_limits=UsageLimits(
                 request_limit=request_limit or cfg.max_requests,
-                # i giri non limitano i token: senza questi due, una storia
-                # gonfiata fa spendere quanto vuole (audit A8)
+                # the rounds do not cap the tokens: without these two, an inflated history spends as
+                # much as it likes (audit A8)
                 cost_limit=Decimal(str(cfg.max_cost_per_turn_usd)) if cfg.max_cost_per_turn_usd else None,
                 input_tokens_limit=cfg.max_input_tokens_per_turn,
             ),
@@ -355,81 +353,78 @@ async def _turn_stream(
                 elif isinstance(ev, FunctionToolCallEvent):
                     try:
                         args = ev.part.args_as_dict()
-                    except Exception:  # noqa: BLE001 — argomenti malformati: li vedra' lo strumento
+                    except Exception:  # noqa: BLE001 — malformed arguments: the tool will see them
                         args = {}
                     yield _sse("tool_call", {"id": ev.part.tool_call_id, "name": ev.part.tool_name, "args": args})
                 elif isinstance(ev, FunctionToolResultEvent):
                     yield _sse("tool_result", _tool_result_payload(ev.part))
                 elif isinstance(ev, AgentRunResultEvent):
                     usage = ev.result.usage
-                    usage = usage() if callable(usage) else usage  # metodo nella 1.x, proprieta' nella 2.x
-                    # pydantic-ai prezza sotto il PROVIDER: col nostro
-                    # endpoint compatibile OpenAI molti modelli non si
-                    # trovano. Il ripiego cerca per nome (vedi ai_pricing).
-                    costo = ai_pricing.cost_of(usage, model_id)
-                    # i messaggi NUOVI di questo turno: la storia precedente
-                    # e' gia' salvata e non va riscritta
+                    usage = usage() if callable(usage) else usage  # a method in 1.x, a property in 2.x
+                    # pydantic-ai prices under the PROVIDER: with our OpenAI-compatible endpoint many
+                    # models are not found. The fallback looks by name (see ai_pricing).
+                    cost = ai_pricing.cost_of(usage, model_id)
+                    # this turn's NEW messages: the earlier history is saved already and must not be
+                    # written again
                     try:
-                        nuovi = ev.result.new_messages()
-                    except AttributeError:  # pragma: no cover — pydantic-ai piu' vecchia
-                        nuovi = ev.result.all_messages()[len(history):]
-                    turno = None
+                        new_items = ev.result.new_messages()
+                    except AttributeError:  # pragma: no cover — older pydantic-ai
+                        new_items = ev.result.all_messages()[len(history):]
+                    turn = None
                     accounted = True  # from here the turn is saved, or its spending recorded
                     try:
-                        # sessione PROPRIA: quella della richiesta e' gia'
-                        # chiusa, lo stream vive piu' a lungo
-                        with _new_session() as s_salva:
+                        # an OWN session: the request's is closed already, the stream lives longer
+                        with _new_session() as s_save:
                             if ephemeral:
-                                ai_chats.registra_spesa(
-                                    s_salva, user_id=user.id, model_id=model_id,
+                                ai_chats.record_spend(
+                                    s_save, user_id=user.id, model_id=model_id,
                                     input_tokens=usage.input_tokens,
-                                    output_tokens=usage.output_tokens, cost=costo,
+                                    output_tokens=usage.output_tokens, cost=cost,
                                 )
-                                raise _NienteDaSalvare
+                                raise _NothingToSave
                             if chat_id is None:
-                                chat_id = ai_chats.crea(s_salva, user, message, model_id, engine, kind=kind, flow_id=flow_id).id
-                            turno = ai_chats.salva_turno(
-                                s_salva, chat_id, domanda=message,
-                                messaggi=ModelMessagesTypeAdapter.dump_python(nuovi, mode="json"),
+                                chat_id = ai_chats.create(s_save, user, message, model_id, engine, kind=kind, flow_id=flow_id).id
+                            turn = ai_chats.save_turn(
+                                s_save, chat_id, question=message,
+                                messages=ModelMessagesTypeAdapter.dump_python(new_items, mode="json"),
                                 model_id=model_id, input_tokens=usage.input_tokens,
-                                output_tokens=usage.output_tokens, requests=usage.requests, cost=costo,
+                                output_tokens=usage.output_tokens, requests=usage.requests, cost=cost,
                             )
-                            riepilogo = ai_chats.riepilogo(s_salva, s_salva.get(AiChat, chat_id))
-                    except _NienteDaSalvare:
-                        riepilogo = None  # osservatore: non c'è nulla da riepilogare
-                    except Exception:  # noqa: BLE001 — la risposta e' gia' stata data: non si perde per un errore di salvataggio
-                        logger.exception("assistente: turno non salvato (chat %s)", chat_id)
-                        riepilogo = None
+                            summary = ai_chats.summary(s_save, s_save.get(AiChat, chat_id))
+                    except _NothingToSave:
+                        summary = None  # observer: there is nothing to summarize
+                    except Exception:  # noqa: BLE001 — the answer was given already: it is not lost to a saving error
+                        logger.exception("assistant: turn not saved (chat %s)", chat_id)
+                        summary = None
                     yield _sse("done", {
                         "chat_id": chat_id,
-                        "seq": turno.seq if turno is not None else None,
+                        "seq": turn.seq if turn is not None else None,
                         "usage": {
                             "requests": usage.requests, "input_tokens": usage.input_tokens,
                             "output_tokens": usage.output_tokens,
-                            "cost_usd": str(costo) if costo is not None else None,
+                            "cost_usd": str(cost) if cost is not None else None,
                         },
-                        "chat_total": riepilogo,
+                        "chat_total": summary,
                         **(extra_done() if extra_done is not None else {}),
                     })
-                    # Il titolo lo scrive il modello, ma DOPO aver chiuso il
-                    # turno: farlo prima avrebbe tenuto la riga di stato
-                    # accesa su «scrive la risposta» mentre scriveva il
-                    # titolo. Il suo costo viene sommato al turno. (The flow
-                    # editor shows no list of conversations: no title there.)
-                    if turno is not None and turno.seq == 0 and kind == "assistant":
-                        _in_volo.add(asyncio.create_task(
-                            _nomina_chat(chat_id, turno.id, model_id, message, locale)
+                    # The model writes the title, but AFTER closing the turn: doing it earlier would have
+                    # kept the status line on «writing the answer» while it was writing the title. Its
+                    # cost is added to the turn. (The flow editor shows no list of conversations: no
+                    # title there.)
+                    if turn is not None and turn.seq == 0 and kind == "assistant":
+                        _in_flight.add(asyncio.create_task(
+                            _name_chat(chat_id, turn.id, model_id, message, locale)
                         ))
     except UsageLimitExceeded as e:
-        # stesso evento per passi, token e costo: all'utente serve sapere che
-        # la domanda era troppo grande, non quale contatore l'ha fermata
-        logger.info("assistente: tetto d'uso raggiunto (chat %s): %s", chat_id, e)
+        # the same event for steps, tokens and cost: the user needs to know the question was
+        # too big, not which counter stopped it
+        logger.info("assistant: usage cap reached (chat %s): %s", chat_id, e)
         yield _sse("error", {"code": "too_many_steps", "message": "The question went beyond the limits set for a single turn. Try narrowing it down.", **unfinished()})
     except ModelHTTPError as e:
-        logger.warning("assistente: il provider ha risposto %s per %s", e.status_code, model_id)
+        logger.warning("assistant: the provider answered %s for %s", e.status_code, model_id)
         yield _sse("error", {"code": "provider", "message": f"The AI provider refused the request ({e.status_code}).", **unfinished()})
-    except Exception:  # noqa: BLE001 — lo stream e' gia' partito: l'errore va DENTRO lo stream
-        logger.exception("assistente: errore durante la conversazione")
+    except Exception:  # noqa: BLE001 — the stream has started already: the error goes INSIDE the stream
+        logger.exception("assistant: error during the conversation")
         yield _sse("error", {"code": "internal", "message": "Unexpected error in the assistant.", **unfinished()})
 
 
@@ -448,23 +443,22 @@ async def chat(
     if body.model not in enabled_model_ids(session):
         raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
     engine = await pick_engine(session, body.engine)
-    # Conversazione NUOVA: la riga si crea quando il turno è finito (vedi
-    # ai_chats.crea), così una richiesta interrotta non lascia una chat vuota.
+    # A NEW conversation: the row is created when the turn is over (see ai_chats.crea), so
+    # an interrupted request leaves no empty chat.
     _check_spending(session, user)
-    # OSSERVATORE: la conversazione non si salva da nessuna parte. È un account
-    # condiviso su un'installazione aperta — una demo pubblica — e le domande di
-    # uno sconosciuto non devono restare né essere leggibili dal visitatore
-    # successivo. Resta solo la contabilità, senza testo, perché il tetto di
-    # spesa deve continuare a vedere quanto costa chi entra da lì.
-    effimero = is_observer_only(session, user)
-    chat = (ai_chats.apri(session, user, body.chat_id, body.model, engine)
-            if body.chat_id and not effimero else None)
+    # OBSERVER: the conversation is saved nowhere. It is a shared account on an open
+    # installation — a public demo — and a stranger's questions must neither stay nor be
+    # readable by the next visitor. Only the accounting remains, without text, because
+    # the spending cap must keep seeing what whoever comes in from there costs.
+    ephemeral = is_observer_only(session, user)
+    chat = (ai_chats.open_session(session, user, body.chat_id, body.model, engine)
+            if body.chat_id and not ephemeral else None)
     chat_id = chat.id if chat is not None else None
-    history = ai_chats.storia(session, chat, cfg.max_history_messages) if chat is not None else []
+    history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
 
-    # senza chat non c'è chiave di slot: due visitatori dell'ospite condiviso
-    # si annullerebbero le anteprime a vicenda
-    slot_key = uuid4().hex[:12] if effimero else None
+    # without a chat there is no slot key: two visitors of the shared guest would cancel
+    # each other's previews
+    slot_key = uuid4().hex[:12] if ephemeral else None
     deps = ai_agent.ChatDeps(
         user=user, session_factory=_new_session, engine=engine, model_id=body.model,
         slot_key=slot_key,
@@ -474,7 +468,7 @@ async def chat(
     stream = _turn_stream(
         agent=ai_agent.agent, message=body.message, history=history, deps=deps,
         model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=engine,
-        ephemeral=effimero, chat_id=chat_id, locale=body.locale,
+        ephemeral=ephemeral, chat_id=chat_id, locale=body.locale,
     )
     return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
 
@@ -523,12 +517,12 @@ async def flow_assist(
     engine = body.engine if flow is not None and body.engine and body.engine == flow.engine else await pick_engine(session, body.engine)
     _check_spending(session, user)
     draft = ai_flow_agent.parse_definition(body.definition, body.counters)
-    chat = ai_chats.apri(session, user, body.chat_id, body.model, engine, kind="flow") if body.chat_id else None
+    chat = ai_chats.open_session(session, user, body.chat_id, body.model, engine, kind="flow") if body.chat_id else None
     if chat is not None:
         # a conversation started on a new flow follows it once saved; another flow's is not continued here
         ai_chats.follow_flow(session, chat, flow.id if flow is not None else None)
     chat_id = chat.id if chat is not None else None
-    history = ai_chats.storia(session, chat, cfg.max_history_messages) if chat is not None else []
+    history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
     deps = ai_flow_agent.FlowDeps(
         user=user, session_factory=_new_session, engine=engine, model_id=body.model, locale=body.locale,
         request=request, chat_id=chat_id, draft=draft,
@@ -620,9 +614,9 @@ async def script_assist(
         error = ai_script_agent.error_excerpt(body.run_log, env.language)
         if not error and body.run_exit_code is not None:
             error = f"(no error message in the log; the process ended with exit code {body.run_exit_code})"
-    chat = ai_chats.apri(session, user, body.chat_id, body.model, None, kind="script") if body.chat_id else None
+    chat = ai_chats.open_session(session, user, body.chat_id, body.model, None, kind="script") if body.chat_id else None
     chat_id = chat.id if chat is not None else None
-    history = ai_chats.storia(session, chat, cfg.max_history_messages) if chat is not None else []
+    history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
     deps = ai_script_agent.ScriptDeps(
         user=user, session_factory=_new_session, engine=None, model_id=body.model, locale=body.locale,
         request=request, chat_id=chat_id, language=env.language,
@@ -648,30 +642,30 @@ def latest_flow_chat(flow_id: int, user: User = Depends(get_current_user), sessi
     if is_observer_only(session, user):
         return None
     chat = ai_chats.latest_flow_chat(session, user, flow_id)
-    return ai_chats.dettaglio(session, user, chat.id) if chat is not None else None
+    return ai_chats.detail(session, user, chat.id) if chat is not None else None
 
 
-# I task di sfondo vanno tenuti per riferimento: asyncio ne conserva solo una
-# reference debole, e senza questo il titolo sparirebbe a meta' a discrezione
-# del garbage collector.
-_in_volo: set = set()
+# Background tasks must be kept by reference: asyncio keeps only a weak reference to
+# them, and without this the title would vanish halfway at the garbage collector's
+# discretion.
+_in_flight: set = set()
 
 
-class _NienteDaSalvare(Exception):
-    """Non è un errore: dice solo che per questo turno non c'è conversazione da
-    scrivere (osservatore). Serve a uscire dal blocco di salvataggio senza
-    passare per il `except` che logga un guasto."""
+class _NothingToSave(Exception):
+    """Not an error: it only says there is no conversation to write for this turn
+    (observer). It serves to leave the saving block without going through the `except`
+    that logs a fault."""
 
 
-async def _nomina_chat(chat_id: int, turno_id: int, model_id: str, domanda: str, locale: str) -> None:
-    """Dà un nome alla conversazione appena nata, fuori dal turno dell'utente."""
+async def _name_chat(chat_id: int, turn_id: int, model_id: str, question: str, locale: str) -> None:
+    """Names the conversation just born, outside the user's turn."""
     try:
-        titolo, uso = await ai_agent.suggest_title(model_id, domanda, locale)
+        title, uso = await ai_agent.suggest_title(model_id, question, locale)
         with _new_session() as session:
-            if titolo:
-                ai_chats.rinomina(session, chat_id, titolo)
-            ai_chats.aggiungi_costo(session, turno_id, ai_pricing.cost_of(uso, model_id) if uso else None)
-    except Exception:  # noqa: BLE001 — accessorio: la conversazione resta col titolo di ripiego
-        logger.info("assistente: chat %s non rinominata", chat_id, exc_info=True)
+            if title:
+                ai_chats.rename(session, chat_id, title)
+            ai_chats.add_cost(session, turn_id, ai_pricing.cost_of(uso, model_id) if uso else None)
+    except Exception:  # noqa: BLE001 — an extra: the conversation keeps the fallback title
+        logger.info("assistant: chat %s not renamed", chat_id, exc_info=True)
     finally:
-        _in_volo.discard(asyncio.current_task())
+        _in_flight.discard(asyncio.current_task())

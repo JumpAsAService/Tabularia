@@ -42,22 +42,22 @@ def _spia(engine):
     """Conta le connessioni uscite dal pool e non rese, e i comandi mandati al database."""
     from sqlalchemy import event
 
-    stato = SimpleNamespace(in_mano=0, prese=0, comandi=[])
+    state = SimpleNamespace(in_mano=0, taken=0, comandi=[])
 
     @event.listens_for(engine, "checkout")
-    def _presa(*_):
-        stato.in_mano += 1
-        stato.prese += 1
+    def _taken(*_):
+        state.in_mano += 1
+        state.taken += 1
 
     @event.listens_for(engine, "checkin")
-    def _resa(*_):
-        stato.in_mano -= 1
+    def _returned(*_):
+        state.in_mano -= 1
 
     @event.listens_for(engine, "before_cursor_execute")
     def _comando(conn, cursor, statement, *_):
-        stato.comandi.append(statement)
+        state.comandi.append(statement)
 
-    return stato
+    return state
 
 
 def test_l_autenticazione_non_esce_con_una_connessione_in_mano(db_engine, session):
@@ -69,7 +69,7 @@ def test_l_autenticazione_non_esce_con_una_connessione_in_mano(db_engine, sessio
     token = token_di(session, u)
     spia = _spia(db_engine)
     utente = auth.get_current_user(_richiesta(), token=token, session=session)
-    assert spia.prese == 1 and spia.in_mano == 0
+    assert spia.taken == 1 and spia.in_mano == 0
     # l'utente resta agganciato alla sessione: chi lo legge dopo lo ritrova
     assert utente in session
     assert utente.email == "a@x.local" and utente.id == u.id
@@ -171,16 +171,16 @@ async def test_la_sessione_della_richiesta_si_chiude_sul_ciclo_degli_eventi(db_e
     assert inspect.isasyncgenfunction(db_session.get_session)
     monkeypatch.setattr(db_session, "engine", db_engine)
     gen = db_session.get_session()
-    sessione = await gen.__anext__()
+    user_session = await gen.__anext__()
     from sqlmodel import select
 
     from app.models import User
 
-    sessione.exec(select(User)).all()
-    assert sessione.in_transaction()
+    user_session.exec(select(User)).all()
+    assert user_session.in_transaction()
     with pytest.raises(StopAsyncIteration):
         await gen.__anext__()
-    assert not sessione.in_transaction()
+    assert not user_session.in_transaction()
 
 
 # ── La rotta sincrona rilascia prima di uscire dal suo thread ────────────────
@@ -189,17 +189,17 @@ async def test_la_sessione_della_richiesta_si_chiude_sul_ciclo_degli_eventi(db_e
 # quel thread. Misurato dopo aver corretto l'autenticazione: 60 insieme a posto,
 # 100 insieme → 37 errori e 30 secondi di blocco.
 def test_a_fine_rotta_la_connessione_e_resa_e_il_risultato_resta_leggibile(session):
-    from app.db.session import a_fine_rotta
+    from app.db.session import at_end_of_route
     from app.models import Project
 
-    @a_fine_rotta
-    def rotta(session):
+    @at_end_of_route
+    def route(session):
         p = Project(name="cartella")
         session.add(p)
         session.commit()  # l'oggetto è «scaduto»: leggerlo dopo richiede il database
         return p
 
-    p = rotta(session=session)
+    p = route(session=session)
     assert not session.in_transaction()
     # FastAPI lo leggerà nel thread successivo: deve bastare ciò che è in memoria
     assert p.name == "cartella" and p.id is not None
@@ -207,33 +207,33 @@ def test_a_fine_rotta_la_connessione_e_resa_e_il_risultato_resta_leggibile(sessi
 
 
 def test_vale_anche_per_liste_e_dizionari_di_oggetti(session):
-    from app.db.session import a_fine_rotta
+    from app.db.session import at_end_of_route
     from app.models import Project
 
-    @a_fine_rotta
-    def rotta(session):
+    @at_end_of_route
+    def route(session):
         a, b = Project(name="a"), Project(name="b")
         session.add(a); session.add(b)
         session.commit()
         return {"items": [a, b], "total": 2}
 
-    r = rotta(session=session)
+    r = route(session=session)
     assert [x.name for x in r["items"]] == ["a", "b"] and not session.in_transaction()
 
 
 def test_un_errore_nella_rotta_rilascia_lo_stesso(session):
     from sqlmodel import select
 
-    from app.db.session import a_fine_rotta
+    from app.db.session import at_end_of_route
     from app.models import Project
 
-    @a_fine_rotta
-    def rotta(session):
+    @at_end_of_route
+    def route(session):
         session.exec(select(Project)).all()
         raise HTTPException(status_code=404, detail="non c'è")
 
     with pytest.raises(HTTPException):
-        rotta(session=session)
+        route(session=session)
     assert not session.in_transaction()
 
 
@@ -250,7 +250,7 @@ def test_ogni_router_del_gateway_rilascia_a_fine_rotta():
 
     import app.main  # noqa: F401 — carica tutti i router
     import app.routes as pacchetto
-    from app.core.routing import RottaCheRilascia
+    from app.core.routing import ReleasingRoute
 
     sincrone = asincrone = 0
     for info in pkgutil.iter_modules(pacchetto.__path__):
@@ -258,17 +258,17 @@ def test_ogni_router_del_gateway_rilascia_a_fine_rotta():
         router = getattr(modulo, "router", None)
         if not isinstance(router, APIRouter):
             continue
-        assert router.route_class is RottaCheRilascia, info.name
-        for rotta in router.routes:
-            if not isinstance(rotta, APIRoute):
+        assert router.route_class is ReleasingRoute, info.name
+        for route in router.routes:
+            if not isinstance(route, APIRoute):
                 continue
-            avvolta = getattr(rotta.endpoint, "rilascia_a_fine_rotta", False)
-            if asyncio.iscoroutinefunction(rotta.endpoint):
+            wrapped = getattr(route.endpoint, "release_at_end_of_route", False)
+            if asyncio.iscoroutinefunction(route.endpoint):
                 asincrone += 1
-                assert not avvolta, rotta.path
+                assert not wrapped, route.path
             else:
                 sincrone += 1
-                assert avvolta, rotta.path
+                assert wrapped, route.path
     assert sincrone > 50 and asincrone > 10
 
 
@@ -286,7 +286,7 @@ def test_il_pool_e_a_misura_dei_thread():
 
 
 def test_le_letture_dell_utente_hanno_connessioni_loro_sempre_in_autocommit(db_engine):
-    letture = db_session.engine_di_lettura(db_session.engine)
+    letture = db_session.read_engine(db_session.engine)
     assert letture is not db_session.engine and letture.pool is not db_session.engine.pool
     assert letture.url == db_session.engine.url
     assert letture.dialect._on_connect_isolation_level == "AUTOCOMMIT"
@@ -294,15 +294,15 @@ def test_le_letture_dell_utente_hanno_connessioni_loro_sempre_in_autocommit(db_e
     assert 2 <= letture.pool.size() <= db_session.engine.pool.size() // 2
     assert letture.pool._max_overflow == 0
     # un engine qualunque (quello dei test): stesso pool, autocommit per l'occasione
-    assert db_session.engine_di_lettura(db_engine).pool is db_engine.pool
+    assert db_session.read_engine(db_engine).pool is db_engine.pool
 
 
-def _engine_su_file(tmp_path, ferma_da_s):
+def _engine_su_file(tmp_path, idle_for_s):
     from sqlalchemy import QueuePool
     from sqlmodel import create_engine
 
     eng = create_engine(f"sqlite:///{tmp_path}/ping.db", poolclass=QueuePool)
-    db_session.ping_solo_se_ferma(eng, ferma_da_s=ferma_da_s)
+    db_session.ping_only_if_idle(eng, idle_for_s=idle_for_s)
     ping = []
     vero = eng.dialect.do_ping
     eng.dialect.do_ping = lambda c: (ping.append(c), vero(c))[1]
@@ -310,7 +310,7 @@ def _engine_su_file(tmp_path, ferma_da_s):
 
 
 def test_una_connessione_appena_usata_non_viene_provata(tmp_path):
-    eng, ping = _engine_su_file(tmp_path, ferma_da_s=60)
+    eng, ping = _engine_su_file(tmp_path, idle_for_s=60)
     for _ in range(5):
         with eng.connect() as c:
             c.exec_driver_sql("select 1")
@@ -318,7 +318,7 @@ def test_una_connessione_appena_usata_non_viene_provata(tmp_path):
 
 
 def test_una_connessione_rimasta_ferma_viene_provata(tmp_path):
-    eng, ping = _engine_su_file(tmp_path, ferma_da_s=0)
+    eng, ping = _engine_su_file(tmp_path, idle_for_s=0)
     for _ in range(3):
         with eng.connect() as c:
             c.exec_driver_sql("select 1")
@@ -328,13 +328,13 @@ def test_una_connessione_rimasta_ferma_viene_provata(tmp_path):
 def test_se_la_connessione_ferma_e_morta_chi_la_chiede_ne_riceve_una_nuova(tmp_path):
     from sqlalchemy import event
 
-    eng, _ = _engine_su_file(tmp_path, ferma_da_s=0)
-    aperte = []
-    event.listen(eng, "connect", lambda dbapi, record: aperte.append(dbapi))
+    eng, _ = _engine_su_file(tmp_path, idle_for_s=0)
+    open_ones = []
+    event.listen(eng, "connect", lambda dbapi, record: open_ones.append(dbapi))
     with eng.connect() as c:
         c.exec_driver_sql("select 1")
-    assert len(aperte) == 1
-    morte = {id(aperte[0])}
+    assert len(open_ones) == 1
+    morte = {id(open_ones[0])}
 
     def do_ping(dbapi_conn):  # la prima connessione non risponde più
         if id(dbapi_conn) in morte:
@@ -344,7 +344,7 @@ def test_se_la_connessione_ferma_e_morta_chi_la_chiede_ne_riceve_una_nuova(tmp_p
     eng.dialect.do_ping = do_ping
     with eng.connect() as c:
         assert c.exec_driver_sql("select 41 + 1").scalar() == 42
-    assert len(aperte) == 2
+    assert len(open_ones) == 2
 
 
 def test_l_elenco_delle_cartelle_legge_l_albero_una_volta_sola(db_engine, session):
@@ -352,20 +352,20 @@ def test_l_elenco_delle_cartelle_legge_l_albero_una_volta_sola(db_engine, sessio
     from app.services import permissions
 
     u = make_user(session, email="e@x.local")
-    radice = Project(name="radice", owner_id=u.id)
-    altra = Project(name="altra", owner_id=u.id)
-    session.add(radice); session.add(altra); session.commit()
-    figlia = Project(name="figlia", parent_id=radice.id, owner_id=u.id)
+    root = Project(name="radice", owner_id=u.id)
+    other_one = Project(name="altra", owner_id=u.id)
+    session.add(root); session.add(other_one); session.commit()
+    figlia = Project(name="figlia", parent_id=root.id, owner_id=u.id)
     session.add(figlia); session.commit()
     session.add(Permission(project_id=figlia.id, user_id=u.id, capability="view")); session.commit()
 
-    attese = permissions.visible_project_ids(session, u)
-    assert attese == {radice.id, figlia.id}  # la figlia, e la radice per arrivarci
+    waits = permissions.visible_project_ids(session, u)
+    assert waits == {root.id, figlia.id}  # la figlia, e la radice per arrivarci
     session.commit()
     session.info[permissions.REQUEST_SESSION] = True  # as get_session marks every request's session
     spia = _spia(db_engine)
-    viste = permissions.visible_projects(session, u)
-    assert {p.id for p in viste} == attese
+    views = permissions.visible_projects(session, u)
+    assert {p.id for p in views} == waits
     # the tree once as (id, parent) pairs, then whole rows of the visible folders only
     letture = [c for c in spia.comandi if "FROM projects" in c]
     assert len(letture) == 2 and "projects.name" not in letture[0] and "WHERE projects.id IN" in letture[1]

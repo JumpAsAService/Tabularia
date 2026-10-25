@@ -1,21 +1,20 @@
 # syntax=docker/dockerfile:1.9
 #
-# Immagine UNICA del gateway (control plane), per sviluppo e produzione:
-# leggera, utente non root, pronta per un filesystem in sola lettura. Sviluppo
-# e produzione usano lo stesso file e le stesse regole: cambia solo cosa viene
-# installato.
+# The gateway's SINGLE image (control plane), for development and production: light,
+# a non-root user, ready for a read-only filesystem. Development and production use the
+# same file and the same rules: only what is installed changes.
 #
-# Opzione di build, spenta di default, cioè l'immagine di produzione:
-#   WITH_DEV=true   include le dipendenze di sviluppo (pytest).
-# Il docker-compose di sviluppo la accende.
+# A build option, off by default, that is the production image:
+#   WITH_DEV=true   includes the development dependencies (pytest).
+# The development docker-compose turns it on.
 #
-# Il gateway non scrive file su disco: /tmp resta comunque l'unica directory
-# scrivibile, per le librerie che creano file temporanei.
+# The gateway writes no files on disk: /tmp stays the only writable directory anyway,
+# for the libraries that create temporary files.
 #
-# La stessa immagine fa due mestieri, scelti con APP__ROLE: `api` risponde alle
-# richieste (quante repliche si vuole), `orchestrator` fa il lavoro di fondo —
-# schedulazioni, esecuzione dei flussi, pulizie — anche lui in più copie. `all`,
-# il predefinito, li fa entrambi in un processo solo. Vedi docs/deploy/kubernetes.md.
+# The same image does two jobs, chosen with APP__ROLE: `api` answers the requests (as
+# many replicas as wanted), `orchestrator` does the background work — schedules,
+# running the flows, cleanups — in several copies too. `all`, the default, does both in
+# one process. See docs/deploy/kubernetes.md.
 
 ########################
 #   Stage 1: builder   #
@@ -31,10 +30,10 @@ WORKDIR /build
 
 ARG WITH_DEV=false
 
-# Solo le dipendenze, dal lockfile; il progetto non è un pacchetto installabile.
-# Il virtualenv sta in /opt/venv e NON in /app, così il bind mount dei sorgenti
-# in sviluppo non lo nasconde. Le suite di test dei pacchetti di terzi non
-# servono a runtime e vengono rimosse.
+# Only the dependencies, from the lockfile; the project is not an installable package.
+# The virtualenv sits in /opt/venv and NOT in /app, so the sources' bind mount in
+# development does not hide it. The third-party packages' test suites are not needed
+# at runtime and are removed.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -91,7 +90,7 @@ RUN groupadd --system --gid 10001 app \
 # mounted here starts with the services' owner and nobody else's permissions
  && mkdir -p /var/lib/tabularia/keys && chown 10001:10001 /var/lib/tabularia/keys && chmod 700 /var/lib/tabularia/keys
 
-# HOME=/tmp: l'utente non ha home, e qualche libreria vuole scrivere cache lì.
+# HOME=/tmp: the user has no home, and some libraries want to write caches there.
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -104,7 +103,7 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 
-# Solo il codice dell'applicazione: niente test, niente file di sviluppo.
+# Only the application's code: no tests, no development files.
 COPY --chown=10001:10001 app ./app
 
 USER 10001:10001

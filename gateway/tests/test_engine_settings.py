@@ -20,7 +20,7 @@ from app.core.config import get_settings
 from app.db.session import get_session
 from app.models import AuditLog, EngineSetting
 from app.routes import engine_settings as routes
-from app.services import regolazioni_motore as rm
+from app.services import engine_panel_settings as rm
 from tests.conftest import make_user
 
 CSRF = {"X-Tabularia-Csrf": "1"}
@@ -31,18 +31,18 @@ class MotoreFinto:
     """Il motore per quel che serve qui: due voci, i loro controlli, e quello che applica."""
 
     def __init__(self):
-        self.valori: dict = {}
+        self.values: dict = {}
         self.ricevute: list[dict] = []
         self.giu = False
 
-    def _catalogo(self, massimo):
+    def _catalogo(self, maximum):
         return {
             "items": [
                 {"key": "export.max_rows", "category": "export", "unit": "rows", "min": 0, "max": 100_000_000,
-                 "env_var": "EXPORT__MAX_ROWS", "env_value": 5_000_000, "value": self.valori.get("export.max_rows")},
+                 "env_var": "EXPORT__MAX_ROWS", "env_value": 5_000_000, "value": self.values.get("export.max_rows")},
                 {"key": "celery.task_time_limit", "category": "execution", "unit": "seconds", "min": 60,
-                 "max": massimo, "env_var": "CELERY__TASK_TIME_LIMIT", "env_value": 3600,
-                 "value": self.valori.get("celery.task_time_limit")},
+                 "max": maximum, "env_var": "CELERY__TASK_TIME_LIMIT", "env_value": 3600,
+                 "value": self.values.get("celery.task_time_limit")},
             ],
             "unavailable": ["bigquery"], "refresh_seconds": 10.0, "discarded": [],
         }
@@ -53,21 +53,21 @@ class MotoreFinto:
         assert req.url.path == "/settings"
         if req.method == "GET":
             return httpx.Response(200, json=self._catalogo(int(req.url.params["max_task_time_limit"])))
-        corpo = json.loads(req.content)
-        self.ricevute.append(corpo)
-        errori = []
-        for k, v in corpo["values"].items():
+        body = json.loads(req.content)
+        self.ricevute.append(body)
+        errors = []
+        for k, v in body["values"].items():
             if k in ("export.max_rows", "celery.task_time_limit") and (isinstance(v, bool) or not isinstance(v, int)):
-                errori.append({"key": k, "code": "integer"})  # the engine checks the type (core/panel_settings.py)
+                errors.append({"key": k, "code": "integer"})  # the engine checks the type (core/panel_settings.py)
                 continue
             if k == "export.max_rows" and v < 0:
-                errori.append({"key": k, "code": "min", "limit": 0})
-            if k == "celery.task_time_limit" and v > corpo["max_task_time_limit"]:
-                errori.append({"key": k, "code": "max", "limit": corpo["max_task_time_limit"]})
-        if errori:
-            return httpx.Response(422, json={"detail": {"errors": errori}})
-        self.valori = dict(corpo["values"])
-        return httpx.Response(200, json=self._catalogo(corpo["max_task_time_limit"]))
+                errors.append({"key": k, "code": "min", "limit": 0})
+            if k == "celery.task_time_limit" and v > body["max_task_time_limit"]:
+                errors.append({"key": k, "code": "max", "limit": body["max_task_time_limit"]})
+        if errors:
+            return httpx.Response(422, json={"detail": {"errors": errors}})
+        self.values = dict(body["values"])
+        return httpx.Response(200, json=self._catalogo(body["max_task_time_limit"]))
 
 
 @pytest.fixture
@@ -99,24 +99,24 @@ def _entra(app, session, email, **kw) -> TestClient:
     return c
 
 
-def _voce(stato, chiave):
-    return next(v for v in stato["items"] if v["key"] == chiave)
+def _voce(state, key):
+    return next(v for v in state["items"] if v["key"] == key)
 
 
 def test_l_amministratore_cambia_e_torna_al_valore_dell_ambiente(app, session, motore):
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    stato = capo.get("/admin/engine-settings").json()
-    assert stato["editable"] and stato["panel_enabled"] and stato["unavailable"] == ["bigquery"]
-    assert _voce(stato, "export.max_rows") | {"value": None, "applied": None, "env_value": 5_000_000} == _voce(stato, "export.max_rows")
+    state = capo.get("/admin/engine-settings").json()
+    assert state["editable"] and state["panel_enabled"] and state["unavailable"] == ["bigquery"]
+    assert _voce(state, "export.max_rows") | {"value": None, "applied": None, "env_value": 5_000_000} == _voce(state, "export.max_rows")
 
-    stato = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 1_000_000}}, headers=CSRF).json()
-    v = _voce(stato, "export.max_rows")
+    state = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 1_000_000}}, headers=CSRF).json()
+    v = _voce(state, "export.max_rows")
     assert (v["value"], v["applied"], v["updated_by"]) == (1_000_000, 1_000_000, "capo@x.local")
     assert session.get(EngineSetting, "export.max_rows").value == 1_000_000
     assert motore.ricevute[-1]["values"] == {"export.max_rows": 1_000_000}
 
-    stato = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": None}}, headers=CSRF).json()
-    assert _voce(stato, "export.max_rows")["value"] is None and motore.valori == {}
+    state = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": None}}, headers=CSRF).json()
+    assert _voce(state, "export.max_rows")["value"] is None and motore.values == {}
     session.expire_all()
     assert session.exec(select(EngineSetting)).all() == []
 
@@ -125,8 +125,8 @@ def test_l_audit_dice_da_cosa_a_cosa(app, session):
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF)
-    voci = session.exec(select(AuditLog).where(AuditLog.action == "engine_settings.update").order_by(AuditLog.id)).all()
-    assert [json.loads(v.detail)["changes"]["export.max_rows"] for v in voci] == [
+    items = session.exec(select(AuditLog).where(AuditLog.action == "engine_settings.update").order_by(AuditLog.id)).all()
+    assert [json.loads(v.detail)["changes"]["export.max_rows"] for v in items] == [
         {"from": None, "to": 10}, {"from": 10, "to": 20}]
     # niente di cambiato, niente audit
     capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF)
@@ -139,7 +139,7 @@ def test_si_salva_solo_quello_che_il_motore_accetta(app, session, motore):
     r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": -1}}, headers=CSRF)
     assert r.status_code == 422 and r.json()["detail"]["errors"][0] == {"key": "export.max_rows", "code": "min", "limit": 0}
     session.expire_all()
-    assert session.get(EngineSetting, "export.max_rows").value == 10 and motore.valori == {"export.max_rows": 10}
+    assert session.get(EngineSetting, "export.max_rows").value == 10 and motore.values == {"export.max_rows": 10}
 
 
 def test_motore_giu_niente_cambiato(app, session, motore):
@@ -166,9 +166,9 @@ def test_l_osservatore_vede_e_non_cambia(app, session):
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    stato = occhio.get("/admin/engine-settings").json()
-    v = _voce(stato, "export.max_rows")
-    assert not stato["editable"] and v["value"] == 10 and v["updated_by"] != "capo@x.local"
+    state = occhio.get("/admin/engine-settings").json()
+    v = _voce(state, "export.max_rows")
+    assert not state["editable"] and v["value"] == 10 and v["updated_by"] != "capo@x.local"
     assert occhio.put("/admin/engine-settings", json={"values": {"export.max_rows": 1}}, headers=CSRF).status_code == 403
     chiunque = _entra(app, session, "anna@x.local")
     assert chiunque.get("/admin/engine-settings").status_code == 403
@@ -189,10 +189,10 @@ def test_col_pannello_spento_dall_ambiente_si_vedono_e_non_valgono(app, session,
     capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     monkeypatch.setenv("ENGINE__SETTINGS_PANEL", "false")
     get_settings.cache_clear()
-    stato = capo.get("/admin/engine-settings").json()
-    assert not stato["editable"] and not stato["panel_enabled"] and _voce(stato, "export.max_rows")["value"] is None
+    state = capo.get("/admin/engine-settings").json()
+    assert not state["editable"] and not state["panel_enabled"] and _voce(state, "export.max_rows")["value"] is None
     assert capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF).status_code == 403
-    assert rm.in_vigore(session) == {}  # il giro periodico spedisce «nessuna»
+    assert rm.in_force(session) == {}  # il giro periodico spedisce «nessuna»
 
 
 @pytest.mark.anyio
@@ -206,8 +206,8 @@ async def test_il_giro_rispedisce_e_scarta_quella_che_non_vale_piu(session, moto
     session.commit()
     monkeypatch.setenv("ENGINE__RUN_STALE_TIMEOUT_SECONDS", "3900")
     get_settings.cache_clear()
-    await rm.spingi_scartando(rm.in_vigore(session))
-    assert motore.valori == {"export.max_rows": 10}
+    await rm.push_discarding(rm.in_force(session))
+    assert motore.values == {"export.max_rows": 10}
 
 
 @pytest.mark.anyio
@@ -217,9 +217,9 @@ async def test_il_giro_periodico_rispedisce_le_salvate(db_engine, session, motor
 
     session.add(EngineSetting(key="export.max_rows", value=77, updated_at=datetime(2026, 10, 12)))
     session.commit()
-    motore.valori = {}
-    assert await rm.un_giro(db_engine) is True
-    assert motore.valori == {"export.max_rows": 77}
+    motore.values = {}
+    assert await rm.one_round(db_engine) is True
+    assert motore.values == {"export.max_rows": 77}
 
 
 def test_un_motore_di_prima_lo_dice_invece_di_non_risponde(app, session, motore, monkeypatch):
@@ -245,23 +245,23 @@ def motore_che_rifiuta(motore, monkeypatch):
 
     def gestisci(req):
         if req.method == "PUT":
-            corpo = json.loads(req.content)
-            cattive = [k for k in corpo["values"] if k in motore.rifiuta]
-            if cattive:
-                motore.ricevute.append(corpo)
-                return httpx.Response(422, json={"detail": {"errors": [{"key": k, "code": "below"} for k in cattive]}})
+            body = json.loads(req.content)
+            bad_ones = [k for k in body["values"] if k in motore.rifiuta]
+            if bad_ones:
+                motore.ricevute.append(body)
+                return httpx.Response(422, json={"detail": {"errors": [{"key": k, "code": "below"} for k in bad_ones]}})
         return vero(req)
     monkeypatch.setattr("app.core.engine_client._client",
                         httpx.AsyncClient(transport=httpx.MockTransport(gestisci), base_url="http://engine"))
     return motore
 
 
-@pytest.mark.parametrize("valore", [True, False, "100000", 1.5, 100000.0, [1], {"a": 1}])
-def test_solo_numeri_interi(app, session, motore, valore):
+@pytest.mark.parametrize("value", [True, False, "100000", 1.5, 100000.0, [1], {"a": 1}])
+def test_solo_numeri_interi(app, session, motore, value):
     """`true` diventava 1 (e `false` 0, «nessun tetto» per BigQuery) prima che il motore lo vedesse."""
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": valore}}, headers=CSRF)
-    assert r.status_code == 422 and motore.valori == {}
+    r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": value}}, headers=CSRF)
+    assert r.status_code == 422 and motore.values == {}
 
 
 def test_niente_chiavi_sconosciute_ne_corpi_enormi(app, session, motore):
@@ -289,8 +289,8 @@ async def test_il_giro_scarta_finche_il_motore_accetta(db_engine, session, motor
         session.add(EngineSetting(key=k, value=v, updated_at=datetime(2026, 10, 12)))
     session.commit()
     motore_che_rifiuta.rifiuta = {"celery.task_time_limit"}
-    assert await rm.un_giro(db_engine)
-    assert motore_che_rifiuta.valori == {"export.max_rows": 4777}
+    assert await rm.one_round(db_engine)
+    assert motore_che_rifiuta.values == {"export.max_rows": 4777}
 
 
 def test_una_salvata_che_non_vale_piu_non_blocca_le_altre(app, session, motore_che_rifiuta):
@@ -304,7 +304,7 @@ def test_una_salvata_che_non_vale_piu_non_blocca_le_altre(app, session, motore_c
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     assert r.status_code == 200, r.text
-    assert motore_che_rifiuta.valori == {"export.max_rows": 10}
+    assert motore_che_rifiuta.values == {"export.max_rows": 10}
     assert motore_che_rifiuta.ricevute[-1]["changed"] == ["export.max_rows"]
     v = _voce(r.json(), "celery.task_time_limit")
     assert v["value"] == 3250 and v["applied"] is None  # salvata, non applicata: il pannello lo dice

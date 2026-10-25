@@ -27,15 +27,15 @@ def test_what_pydantic_ai_reports_wins():
 
 def test_a_model_unknown_to_the_provider_is_priced_by_name():
     # il caso reale: `glm-5.2` non esiste presso OpenAI, ma il listino lo conosce
-    costo = cost_of(_Usage(), "glm-5.2")
-    assert costo is not None and costo > 0
+    cost = cost_of(_Usage(), "glm-5.2")
+    assert cost is not None and cost > 0
 
 
 def test_a_version_suffix_does_not_prevent_pricing():
     # i fornitori appiccicano la data: `…-instruct-2506`
-    pieno = cost_of(_Usage(), "mistral-small-3.2-24b-instruct-2506")
+    full = cost_of(_Usage(), "mistral-small-3.2-24b-instruct-2506")
     corto = cost_of(_Usage(), "mistral-small-3.2-24b-instruct")
-    assert pieno is not None and pieno == corto
+    assert full is not None and full == corto
 
 
 def test_an_unknown_model_gives_none_not_zero():
@@ -52,5 +52,5 @@ def test_pricing_never_raises(monkeypatch):
     """Un listino rotto non deve travolgere una risposta gia' data all'utente."""
     import app.services.ai_pricing as m
 
-    monkeypatch.setattr(m, "_per_nome", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(m, "_by_name", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     assert m.cost_of(_Usage(), "glm-5.2") is None

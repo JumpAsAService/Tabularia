@@ -1,15 +1,15 @@
-"""Risoluzione dei permessi con ereditarietà lungo l'albero dei progetti.
+"""Resolving the permissions with inheritance down the project tree.
 
-Regole (primo taglio, allow-only):
-- il superuser può tutto;
-- un permesso su un progetto vale anche per TUTTI i suoi discendenti (eredità
-  verso il basso);
-- un soggetto è un utente o uno dei suoi gruppi;
-- la gerarchia delle capability è gestita da `grant_satisfies` (VIEW<RUN<EDIT<MANAGE).
+Rules (first cut, allow-only):
+- the superuser can do everything;
+- a permission on a project holds for ALL its descendants too (inheritance
+  downwards);
+- a subject is a user or one of their groups;
+- the capability hierarchy is handled by `grant_satisfies` (VIEW<RUN<EDIT<MANAGE).
 
-Volutamente semplice e leggibile: niente CTE ricorsive. L'albero si legge come
-coppie (id, padre) e si percorre in Python; dentro una richiesta le risposte si
-riusano (vedi «Per-request reuse»).
+Simple and readable on purpose: no recursive CTEs. The tree is read as (id, parent)
+pairs and walked in Python; within a request the answers are reused (see
+«Per-request reuse»).
 """
 from collections.abc import Callable, Mapping
 from typing import Optional, TypeVar
@@ -58,36 +58,35 @@ def user_group_ids(session: Session, user: User) -> set[int]:
 
 
 def admin_group_names(session: Session, user: User) -> list[str]:
-    """Gruppi di amministratori a cui l'utente appartiene (ordinati per nome)."""
-    righe = session.exec(
+    """The administrators' groups the user belongs to (sorted by name)."""
+    rows = session.exec(
         select(Group.name)
         .where(UserGroupLink.group_id == Group.id)
         .where(UserGroupLink.user_id == user.id)
-        .where(Group.is_admin == True)  # noqa: E712 — espressione SQL, non un confronto Python
+        .where(Group.is_admin == True)  # noqa: E712 — an SQL expression, not a Python comparison
     ).all()
-    return sorted(righe)
+    return sorted(rows)
 
 
 def is_admin(session: Session, user: User) -> bool:
-    """Admin EFFETTIVO: flag personale oppure appartenenza a un gruppo admin.
+    """EFFECTIVE admin: personal flag or membership of an admin group.
 
-    È l'unica domanda che il resto del gateway deve fare: leggere
-    `user.is_superuser` da solo ignorerebbe i gruppi. Non si scrive mai il
-    risultato sull'oggetto `user` — è una riga ORM e il primo commit della
-    richiesta (basta `last_seen`) renderebbe permanente un privilegio che deve
-    sparire quando si esce dal gruppo."""
+    It is the only question the rest of the gateway must ask: reading `user.is_superuser`
+    alone would ignore the groups. The result is never written on the `user` object — it
+    is an ORM row and the request's first commit (`last_seen` is enough) would make
+    permanent a privilege that must disappear when one leaves the group."""
     if user.is_superuser:
         return True
     return _memo(session, ("admin", user.id), lambda: bool(admin_group_names(session, user)))
 
 
 def ensure_still_admin(session: Session, current: User) -> None:
-    """Da chiamare DOPO le modifiche e PRIMA del commit: se chi sta agendo non
-    sarebbe più un admin attivo, annulla tutto con un 409.
+    """To call AFTER the changes and BEFORE the commit: when whoever is acting would no
+    longer be an active admin, it cancels everything with a 409.
 
-    Una guardia sola copre ogni strada (togliersi il flag, disattivarsi, togliere
-    il flag al proprio gruppo, uscirne, eliminarlo) e garantisce anche che resti
-    sempre almeno un admin: chi agisce lo è, e lo resta."""
+    One guard covers every way (removing one's own flag, disabling oneself, removing the
+    flag from one's own group, leaving it, deleting it) and also ensures there is always
+    at least one admin left: whoever acts is one, and stays one."""
     from fastapi import HTTPException
 
     session.flush()
@@ -100,22 +99,22 @@ def ensure_still_admin(session: Session, current: User) -> None:
 
 
 def observer_group_names(session: Session, user: User) -> list[str]:
-    """Gruppi di osservatori a cui l'utente appartiene."""
-    righe = session.exec(
+    """The observers' groups the user belongs to."""
+    rows = session.exec(
         select(Group.name)
         .where(UserGroupLink.group_id == Group.id)
         .where(UserGroupLink.user_id == user.id)
         .where(Group.is_observer == True)  # noqa: E712
     ).all()
-    return sorted(righe)
+    return sorted(rows)
 
 
 def is_observer(session: Session, user: User) -> bool:
-    """Può LEGGERE i pannelli di amministrazione.
+    """Can READ the administration panels.
 
-    Un amministratore lo è per definizione: chi comanda vede. Come per
-    `is_admin`, il risultato non si scrive mai sull'oggetto utente — si ricalcola
-    a ogni richiesta, così togliere il ruolo ha effetto subito."""
+    An administrator is one by definition: whoever is in charge sees. As for `is_admin`,
+    the result is never written on the user object — it is recomputed at every request,
+    so removing the role takes effect at once."""
     if is_admin(session, user):
         return True
     if user.is_observer:
@@ -124,14 +123,14 @@ def is_observer(session: Session, user: User) -> bool:
 
 
 def is_observer_only(session: Session, user: User) -> bool:
-    """Osservatore e NIENT'ALTRO: legge i pannelli, non amministra.
+    """Observer and NOTHING ELSE: reads the panels, does not administer.
 
-    Serve a una domanda sola, e non è una domanda di autorizzazione: di chi NON
-    teniamo l'indirizzo IP. Un amministratore è osservatore per definizione, ma
-    di lui l'IP si tiene — è chi può cambiare le cose, ed è la traccia che serve
-    quando qualcosa va storto. Un osservatore invece guarda e basta: il suo
-    indirizzo non risponde a nessuna domanda che ci porremmo davvero, e un dato
-    che non serve è meglio non averlo (scelta dell'utente, 2026-09-30)."""
+    It serves one question only, and it is not an authorization question: whose IP
+    address we do NOT keep. An administrator is an observer by definition, but their IP
+    is kept — they are who can change things, and it is the trace needed when something
+    goes wrong. An observer instead only looks: their address answers no question we
+    would really ask, and data that is not needed is better not had (the user's choice,
+    2026-09-30)."""
     return is_observer(session, user) and not is_admin(session, user)
 
 
@@ -147,7 +146,7 @@ def folder_parents(session: Session) -> dict[int, Optional[int]]:
 
 
 def ancestor_ids(parents: Mapping[int, Optional[int]], project_id: int) -> list[int]:
-    """Catena progetto→root, incluso se stesso. Robusta a cicli accidentali."""
+    """The project→root chain, itself included. Robust to accidental cycles."""
     chain: list[int] = []
     seen: set[int] = set()
     cur = project_id
@@ -159,7 +158,7 @@ def ancestor_ids(parents: Mapping[int, Optional[int]], project_id: int) -> list[
 
 
 def descendant_ids(parents: Mapping[int, Optional[int]], roots: set[int]) -> set[int]:
-    """Tutti i discendenti (inclusi i root) dei progetti dati."""
+    """All the descendants (the roots included) of the given projects."""
     children: dict[int, list[int]] = {}
     for pid, parent in parents.items():
         if parent is not None:
@@ -203,7 +202,7 @@ def _granted(session: Session, user: User, needed: Capability) -> frozenset[int]
         parents = folder_parents(session)
         roots = {pid for pid, cap in _subject_grants(session, user)
                  if pid in parents and grant_satisfies(cap, needed.value)}
-        return frozenset(descendant_ids(parents, roots))  # eredità verso il basso
+        return frozenset(descendant_ids(parents, roots))  # inheritance downwards
 
     return _memo(session, ("granted", user.id, needed.value), compute)
 
@@ -215,44 +214,43 @@ def _granted_project_ids(session: Session, user: User, needed: Capability) -> se
 
 
 def readable_project_ids(session: Session, user: User) -> set[int]:
-    """Progetti di cui l'utente può LEGGERE il contenuto (VIEW o superiore).
+    """The projects whose content the user can READ (VIEW or above).
 
-    Differenza fondamentale con `visible_project_ids`: quella aggiunge gli
-    antenati per rendere navigabile l'albero (ne mostra solo il NOME), ma il
-    contenuto degli antenati NON è leggibile. Per filtrare contenuti
-    (datasource, flussi, run) usare SEMPRE questa.
+    The fundamental difference from `visible_project_ids`: that one adds the ancestors to
+    make the tree navigable (it shows only their NAME), but the ancestors' content is NOT
+    readable. To filter content (datasources, flows, runs) ALWAYS use this one.
     """
     return _granted_project_ids(session, user, Capability.VIEW)
 
 
 def runnable_project_ids(session: Session, user: User) -> set[int]:
-    """Progetti dove l'utente può ESEGUIRE (RUN o superiore).
+    """The projects where the user can RUN (RUN or above).
 
-    Leggere e far girare non sono la stessa cosa: chi ha solo VIEW guarda
-    anteprime, chi ha RUN mette al lavoro i worker e scrive risultati. Il piano
-    dati deve chiederselo con lo stesso rigore del percorso ufficiale dei run."""
+    Reading and running are not the same thing: whoever has only VIEW looks at previews,
+    whoever has RUN puts the workers to work and writes results. The data plane must ask
+    it with the same rigour as the official run path."""
     return _granted_project_ids(session, user, Capability.RUN)
 
 
 def connectable_project_ids(session: Session, user: User) -> set[int]:
-    """Progetti dove l'utente può usare/gestire le CONNESSIONI dati (CONNECT,
-    ortogonale a VIEW: chi ha solo VIEW non vede le connessioni)."""
+    """The projects where the user can use/manage the data CONNECTIONS (CONNECT, orthogonal
+    to VIEW: whoever has only VIEW does not see the connections)."""
     return _granted_project_ids(session, user, Capability.CONNECT)
 
 
 def visible_project_ids(session: Session, user: User) -> set[int]:
-    """Progetti che l'utente può vedere NELL'ALBERO: i leggibili più i loro
-    antenati (solo per rendere navigabile il percorso fino alla radice — il
-    CONTENUTO degli antenati non è leggibile: vedi `readable_project_ids`)."""
+    """The projects the user can see IN THE TREE: the readable ones plus their ancestors
+    (only to make the path to the root navigable — the ancestors' CONTENT is not
+    readable: see `readable_project_ids`)."""
     parents = folder_parents(session)
     visible = readable_project_ids(session, user)
     for pid in list(visible):
-        visible.update(ancestor_ids(parents, pid))  # mostra il percorso
+        visible.update(ancestor_ids(parents, pid))  # shows the path
     return visible
 
 
 def visible_projects(session: Session, user: User) -> list[Project]:
-    """Le cartelle di `visible_project_ids`, come righe intere: solo quelle."""
+    """The folders of `visible_project_ids`, as whole rows: only those."""
     visible = visible_project_ids(session, user)
     if not visible:
         return []
@@ -260,16 +258,16 @@ def visible_projects(session: Session, user: User) -> list[Project]:
 
 
 def can_upload(session: Session, user: User) -> bool:
-    """Può caricare un file chi ha EDIT da qualche parte.
+    """Whoever has EDIT somewhere may upload a file.
 
-    L'upload non appartiene a una cartella — il file arriva prima di sapere dove
-    finirà — quindi non c'è un progetto su cui chiedere il permesso, e per questo
-    la rotta finora chiedeva solo di essere autenticati: qualunque account, anche
-    di sola lettura, poteva scrivere nel bucket dell'installazione.
+    The upload does not belong to a folder — the file arrives before knowing where it
+    will end up — so there is no project to ask the permission on, and that is why the
+    route so far asked only to be authenticated: any account, read-only ones too, could
+    write into the installation's bucket.
 
-    La domanda giusta non è «dove», è «questa persona crea contenuti o soltanto
-    li guarda». Chi ha EDIT su almeno una cartella sta costruendo qualcosa e avrà
-    dove metterlo; chi ha solo VIEW non ha un posto dove quel file possa andare.
+    The right question is not «where», it is «does this person create content or only
+    look at it». Whoever has EDIT on at least one folder is building something and will
+    have somewhere to put it; whoever has only VIEW has no place that file could go.
     """
     if is_admin(session, user):
         return True

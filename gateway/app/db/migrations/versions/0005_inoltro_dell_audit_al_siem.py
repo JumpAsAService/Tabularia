@@ -1,15 +1,15 @@
-"""inoltro dell'audit al SIEM — dove va il registro di audit (Splunk) e fin dove è arrivato
+"""forwarding the audit to the SIEM — where the audit log goes (Splunk) and how far it got
 
-Solo un'aggiunta: la tabella `siem_destinations`, vuota (inoltro spento, come
-prima). Il codice della versione precedente non la conosce e non la tocca.
+Only an addition: the `siem_destinations` table, empty (forwarding off, as before).
+The previous version's code does not know it and does not touch it.
 
-Revisione 0005, dopo 0004 — 2026-10-12 15:44:15.578444
-Solo in avanti, e compatibile col codice della versione precedente (expand/contract):
-vedi docs/database-migrations.md.
+Revision 0005, after 0004 — 2026-10-12 15:44:15.578444
+Forward only, and compatible with the previous version's code (expand/contract):
+see docs/database-migrations.md.
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel  # noqa: F401 — i tipi di SQLModel (AutoString) nelle colonne generate
+import sqlmodel  # noqa: F401 — SQLModel's types (AutoString) in the generated columns
 
 
 revision = '0005'
@@ -46,5 +46,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # solo in avanti (scelta del progetto): si corregge con una revisione nuova
-    raise NotImplementedError("le migrazioni del gateway vanno solo in avanti")
+    # forward only (the project's choice): corrected with a new revision
+    raise NotImplementedError("the gateway's migrations go forward only")

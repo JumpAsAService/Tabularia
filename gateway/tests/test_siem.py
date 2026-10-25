@@ -29,18 +29,18 @@ class SplunkFinto:
     come Splunk ({"text": "Success", "code": 0} o un errore)."""
 
     def __init__(self):
-        self.richieste: list[httpx.Request] = []
-        self.eventi: list[dict] = []
-        self.risposte: list[tuple[int, dict]] = []  # in fila; vuota = successo
+        self.requests: list[httpx.Request] = []
+        self.events: list[dict] = []
+        self.answers: list[tuple[int, dict]] = []  # in fila; vuota = successo
 
     def gestisci(self, req: httpx.Request) -> httpx.Response:
-        self.richieste.append(req)
+        self.requests.append(req)
         if req.headers.get("Authorization") != f"Splunk {TOKEN}":
             return httpx.Response(403, json={"text": "Invalid token", "code": 4})
-        if self.risposte:
-            codice, corpo = self.risposte.pop(0)
-            return httpx.Response(codice, json=corpo)
-        self.eventi += [json.loads(r) for r in req.content.decode().split("\n") if r]
+        if self.answers:
+            code, body = self.answers.pop(0)
+            return httpx.Response(code, json=body)
+        self.events += [json.loads(r) for r in req.content.decode().split("\n") if r]
         return httpx.Response(200, json={"text": "Success", "code": 0})
 
     def client(self):
@@ -54,24 +54,24 @@ def splunk(monkeypatch):
     async def risolvi(url):  # niente DNS nei test
         u = httpx.URL(url)
         return u, u.raw_host.decode(), "10.20.30.40"
-    monkeypatch.setattr(webhooks, "_risolvi", risolvi)
-    vero = siem.spedisci
+    monkeypatch.setattr(webhooks, "_resolve", risolvi)
+    vero = siem.send
 
-    async def spedisci(d, eventi, client=None):
-        return await vero(d, eventi, client or s.client())
-    monkeypatch.setattr(siem, "spedisci", spedisci)
+    async def send(d, events, client=None):
+        return await vero(d, events, client or s.client())
+    monkeypatch.setattr(siem, "send", send)
     return s
 
 
-def _destinazione(session, **kw):
+def _destination(session, **kw):
     d = SiemDestination(id=1, enabled=True, url="https://splunk.interno:8088", token_enc=encrypt_secret(TOKEN), **kw)
     session.add(d)
     session.commit()
     return d
 
 
-def _voce(session, azione="flow.create", secondi_fa=60, **kw) -> int:
-    v = AuditLog(ts=datetime.now(timezone.utc) - timedelta(seconds=secondi_fa), action=azione,
+def _voce(session, action="flow.create", secondi_fa=60, **kw) -> int:
+    v = AuditLog(ts=datetime.now(timezone.utc) - timedelta(seconds=secondi_fa), action=action,
                  actor_label=kw.pop("actor_label", "anna@x.local"), **kw)
     session.add(v)
     session.commit()
@@ -90,7 +90,7 @@ def test_una_voce_diventa_un_evento_hec_coi_nomi_che_splunk_si_aspetta(session):
     v = AuditLog(id=7, ts=datetime(2026, 10, 12, 8, 30, 0), action="auth.login", outcome="failure",
                  actor_label="anna@x.local", actor_id=3, ip="10.1.2.3", user_agent="Firefox",
                  target_type="user", target_id=3, target_label="anna@x.local", detail=json.dumps({"reason": "password"}))
-    e = siem.evento(v, d)
+    e = siem.event(v, d)
     assert e["time"] == datetime(2026, 10, 12, 8, 30, tzinfo=timezone.utc).timestamp()
     assert (e["index"], e["host"], e["source"], e["sourcetype"]) == ("sicurezza", "tabularia-prod", "tabularia", "tabularia:audit")
     assert e["event"] == {
@@ -100,7 +100,7 @@ def test_una_voce_diventa_un_evento_hec_coi_nomi_che_splunk_si_aspetta(session):
         "detail": {"reason": "password"}, "app": "tabularia",
     }
     # niente indice: quello di default del token; niente campi vuoti
-    e = siem.evento(AuditLog(id=8, ts=datetime(2026, 10, 12), action="x", actor_label="y"), SiemDestination())
+    e = siem.event(AuditLog(id=8, ts=datetime(2026, 10, 12), action="x", actor_label="y"), SiemDestination())
     assert "index" not in e and "src" not in e["event"] and "detail" not in e["event"]
 
 
@@ -119,62 +119,62 @@ def test_l_indirizzo_si_puo_incollare_in_ogni_forma(scritto, atteso):
 
 @pytest.mark.anyio
 async def test_le_voci_partono_in_ordine_col_token_e_il_cursore_avanza(db_engine, session, splunk):
-    _destinazione(session)
+    _destination(session)
     ids = [_voce(session, f"azione.{i}") for i in range(3)]
-    assert await siem.un_giro(db_engine) == 3
-    assert [e["event"]["id"] for e in splunk.eventi] == ids
-    req = splunk.richieste[0]
+    assert await siem.one_round(db_engine) == 3
+    assert [e["event"]["id"] for e in splunk.events] == ids
+    req = splunk.requests[0]
     assert req.url.host == "10.20.30.40" and req.headers["Host"] == "splunk.interno:8088"  # all'indirizzo verificato
     assert req.url.path == "/services/collector/event" and req.headers["X-Splunk-Request-Channel"]
     d = _dest(session)
     assert (d.cursor_id, d.sent_total, d.failures) == (ids[-1], 3, 0) and d.last_ok_at
-    assert await siem.un_giro(db_engine) == 0  # niente due volte
+    assert await siem.one_round(db_engine) == 0  # niente due volte
 
 
 @pytest.mark.anyio
 async def test_le_voci_appena_scritte_aspettano_qualche_secondo(db_engine, session, splunk):
     """Gli id si assegnano prima del commit: una voce più giovane del ritardo
     potrebbe avere davanti un id più basso non ancora scritto."""
-    _destinazione(session)
+    _destination(session)
     vecchia = _voce(session, secondi_fa=60)
     _voce(session, secondi_fa=1)
-    await siem.un_giro(db_engine)
-    assert [e["event"]["id"] for e in splunk.eventi] == [vecchia]
+    await siem.one_round(db_engine)
+    assert [e["event"]["id"] for e in splunk.events] == [vecchia]
 
 
 @pytest.mark.anyio
 async def test_splunk_giu_non_si_salta_niente_e_si_aspetta_sempre_di_piu(db_engine, session, splunk):
-    _destinazione(session)
+    _destination(session)
     ids = [_voce(session) for _ in range(2)]
-    splunk.risposte = [(503, {"text": "Server is busy", "code": 9})]
-    assert await siem.un_giro(db_engine) == 0
+    splunk.answers = [(503, {"text": "Server is busy", "code": 9})]
+    assert await siem.one_round(db_engine) == 0
     d = _dest(session)
     assert d.cursor_id == 0 and d.failures == 1 and "Server is busy" in d.last_error
-    assert d.next_attempt_at > siem.adesso()
-    assert await siem.un_giro(db_engine) == 0  # prima del prossimo tentativo non si riprova
-    d.next_attempt_at = siem.adesso() - timedelta(seconds=1)
+    assert d.next_attempt_at > siem.now()
+    assert await siem.one_round(db_engine) == 0  # prima del prossimo tentativo non si riprova
+    d.next_attempt_at = siem.now() - timedelta(seconds=1)
     session.add(d)
     session.commit()
-    assert await siem.un_giro(db_engine) == 2
-    assert [e["event"]["id"] for e in splunk.eventi] == ids  # le stesse, nessuna persa
+    assert await siem.one_round(db_engine) == 2
+    assert [e["event"]["id"] for e in splunk.events] == ids  # le stesse, nessuna persa
     d = _dest(session)
     assert d.failures == 0 and d.next_attempt_at is None  # l'errore di prima resta come storia, con la sua ora
 
 
 def test_le_attese_crescono_fino_al_tetto():
-    assert [siem.attesa(n) for n in (1, 2, 3, 4)] == [5, 10, 20, 40]
-    assert siem.attesa(30) == siem.ATTESA_MAX
+    assert [siem.wait(n) for n in (1, 2, 3, 4)] == [5, 10, 20, 40]
+    assert siem.wait(30) == siem.MAX_WAIT
 
 
 @pytest.mark.anyio
 async def test_un_token_sbagliato_lo_dice_e_ritenta(db_engine, session, splunk):
-    _destinazione(session)
+    _destination(session)
     d = _dest(session)
     d.token_enc = encrypt_secret("sbagliato")
     session.add(d)
     session.commit()
     _voce(session)
-    await siem.un_giro(db_engine)
+    await siem.one_round(db_engine)
     d = _dest(session)
     assert d.cursor_id == 0 and "Invalid token" in d.last_error and "403" in d.last_error
 
@@ -182,22 +182,22 @@ async def test_un_token_sbagliato_lo_dice_e_ritenta(db_engine, session, splunk):
 @pytest.mark.anyio
 async def test_un_lotto_non_supera_il_tetto_in_byte(db_engine, session, splunk, monkeypatch):
     monkeypatch.setattr(siem, "MAX_BYTE", 3000)
-    _destinazione(session)
+    _destination(session)
     ids = [_voce(session, detail=json.dumps({"x": "a" * 1000})) for _ in range(6)]
-    assert await siem.un_giro(db_engine) == 6
-    assert len(splunk.richieste) > 1 and all(len(r.content) <= 3000 for r in splunk.richieste)
-    assert [e["event"]["id"] for e in splunk.eventi] == ids
+    assert await siem.one_round(db_engine) == 6
+    assert len(splunk.requests) > 1 and all(len(r.content) <= 3000 for r in splunk.requests)
+    assert [e["event"]["id"] for e in splunk.events] == ids
 
 
 @pytest.mark.anyio
 async def test_spento_non_parte_niente(db_engine, session, splunk):
-    _destinazione(session)
+    _destination(session)
     d = _dest(session)
     d.enabled = False
     session.add(d)
     session.commit()
     _voce(session)
-    assert await siem.un_giro(db_engine) == 0 and splunk.richieste == []
+    assert await siem.one_round(db_engine) == 0 and splunk.requests == []
 
 
 # ── il pannello ──────────────────────────────────────────────────────────────
@@ -236,8 +236,8 @@ def test_si_accende_con_indirizzo_e_token_e_parte_da_adesso(app, session, splunk
     d = _dest(session)
     assert d.cursor_id >= vecchia  # lo storico di prima resta nel pannello Audit
     assert d.token_enc and TOKEN not in d.token_enc  # cifrato
-    voce = session.exec(select(AuditLog).where(AuditLog.action == "siem.update")).one()
-    assert json.loads(voce.detail)["changes"]["token"] == "changed" and TOKEN not in voce.detail
+    item = session.exec(select(AuditLog).where(AuditLog.action == "siem.update")).one()
+    assert json.loads(item.detail)["changes"]["token"] == "changed" and TOKEN not in item.detail
 
 
 def test_spento_e_riacceso_riprende_da_dove_era(app, session, splunk):
@@ -255,7 +255,7 @@ def test_la_prova_dice_cosa_ha_risposto_splunk(app, session, splunk):
     capo.put("/admin/siem", json={"url": "https://s:8088", "token": TOKEN}, headers=CSRF)
     r = capo.post("/admin/siem/test", headers=CSRF).json()
     assert r == {"ok": True, "status_code": 200, "message": "Success"}
-    assert splunk.eventi[-1]["event"]["action"] == "siem.test" and splunk.eventi[-1]["event"]["test"] is True
+    assert splunk.events[-1]["event"]["action"] == "siem.test" and splunk.events[-1]["event"]["test"] is True
     capo.put("/admin/siem", json={"token": "sbagliato"}, headers=CSRF)
     r = capo.post("/admin/siem/test", headers=CSRF).json()
     assert not r["ok"] and r["status_code"] == 403 and "Invalid token" in r["message"]

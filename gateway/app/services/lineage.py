@@ -1,15 +1,15 @@
-"""Lineage cross-flow: costruisce il grafo di provenienza/impatto tra flussi,
-datasource, connessioni e destinazioni esterne (tabelle DB, oggetti S3).
+"""Cross-flow lineage: builds the provenance/impact graph among flows, datasources,
+connections and external destinations (DB tables, S3 objects).
 
-Il grafo è DERIVATO on-demand, senza tabella dedicata: metà degli archi è già
-persistita in `datasources` (flow_id = prodotta-da, connection_id = ingerita-da),
-l'altra metà si legge dalle `definition` dei flussi (source node → datasource
-letta; output node → destinazione scritta; runflow → orchestrazione). È lo
-stesso attraversamento dello scheduler, raccolto come grafo invece che eseguito.
+The graph is DERIVED on demand, without a dedicated table: half of the edges are
+persisted in `datasources` already (flow_id = produced-by, connection_id =
+ingested-by), the other half is read from the flows' `definition` (source node →
+datasource read; output node → destination written; runflow → orchestration). It is
+the same walk as the scheduler's, collected as a graph instead of run.
 
-Tutto è filtrato per RBAC: si considerano solo gli oggetti nei progetti LEGGIBILI
-dall'utente. Un riferimento verso un oggetto non leggibile/rimosso diventa un
-nodo `restricted` (l'arco non resta pendente, ma non si rivela il contenuto).
+Everything is filtered by RBAC: only the objects in the projects the user can READ are
+considered. A reference towards an object not readable/removed becomes a
+`restricted` node (the edge does not dangle, but the content is not revealed).
 """
 from __future__ import annotations
 
@@ -28,13 +28,13 @@ from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
 
-# tipi di arco (direzione = verso di flusso del dato/controllo)
-EDGE_READ = "read"          # datasource → flusso (consumo)
-EDGE_PUBLISH = "publish"    # flusso → datasource (produzione)
-EDGE_INGEST = "ingest"      # connessione → datasource (snapshot DB)
-EDGE_WRITE = "write"        # flusso → sink esterno (tabella DB / S3)
-EDGE_REFRESH = "refresh"    # flusso → datasource (rinfresco, controllo)
-EDGE_ORCHESTRATE = "orchestrate"  # flusso → flusso (nodo "Esegui flusso")
+# edge kinds (direction = the way the data/control flows)
+EDGE_READ = "read"          # datasource → flow (consumption)
+EDGE_PUBLISH = "publish"    # flow → datasource (production)
+EDGE_INGEST = "ingest"      # connection → datasource (DB snapshot)
+EDGE_WRITE = "write"        # flow → external sink (DB table / S3)
+EDGE_REFRESH = "refresh"    # flow → datasource (refresh, control)
+EDGE_ORCHESTRATE = "orchestrate"  # flow → flow ("Run flow" node)
 
 
 def _fid(i: int) -> str:
@@ -60,7 +60,7 @@ class _Graph:
         self._edge_seen: set[tuple[str, str, str]] = set()
 
     def add_node(self, node_id: str, **attrs) -> None:
-        # non sovrascrivere un nodo "reale" con un placeholder restricted
+        # do not overwrite a "real" node with a restricted placeholder
         if node_id in self.nodes:
             if not attrs.get("restricted"):
                 self.nodes[node_id].update({k: v for k, v in attrs.items() if v is not None})
@@ -76,8 +76,8 @@ class _Graph:
 
 
 def _restricted_ds(g: _Graph, ds_id: int, unknown: set[int]) -> str:
-    """Datasource riferita ma fuori dai progetti leggibili (o rimossa). Il motivo
-    (rimossa vs non accessibile) è risolto a fine costruzione con una query."""
+    """A datasource referenced but outside the readable projects (or removed). The reason
+    (removed vs not accessible) is resolved at the end of the build with one query."""
     unknown.add(ds_id)
     nid = _dsid(ds_id)
     g.add_node(nid, type="datasource", label=f"Datasource #{ds_id}", restricted=True, kind=None,
@@ -93,7 +93,7 @@ def _restricted_flow(g: _Graph, flow_id: int, unknown: set[int]) -> str:
 
 
 def build_full_graph(session: Session, user: User) -> _Graph:
-    """Grafo completo sugli oggetti nei progetti leggibili dall'utente."""
+    """The whole graph over the objects in the projects the user can read."""
     g = _Graph()
     readable = perm_service.readable_project_ids(session, user)
     if not readable:
@@ -107,7 +107,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
     ds_by_id = {d.id: d for d in datasources}
     conn_by_id = {c.id: c for c in connections}
 
-    # ── nodi base ────────────────────────────────────────────────────────────
+    # ── base nodes ───────────────────────────────────────────────────────────
     for c in connections:
         g.add_node(_cid(c.id), type="connection", label=c.name, project_id=c.project_id,
                    meta={"db_type": c.db_type, "database": c.database})
@@ -115,8 +115,8 @@ def build_full_graph(session: Session, user: User) -> _Graph:
         g.add_node(_dsid(d.id), type="datasource", label=d.name, project_id=d.project_id,
                    kind=d.kind, meta={"rows": d.rows,
                                       "refreshed_at": d.refreshed_at.isoformat() if d.refreshed_at else None})
-    # ultimo run per flusso (per salute/impatto): più recente in assoluto +
-    # ultimo SUCCESS (base per la staleness). Two aggregate queries on the index
+    # the last run per flow (for health/impact): the newest of all + the last SUCCESS
+    # (the basis for staleness). Two aggregate queries on the index
     # (flow_id, started_at): loading every run as a row took seconds and hundreds
     # of megabytes once a year of history had piled up.
     last_run = run_history.latest_flow_runs(session, flow_ids)
@@ -137,21 +137,21 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                          "last_run_status": (lr[0] if lr else None),
                          "never_run": lr is None})
 
-    # ── archi persistiti dalla tabella datasources ───────────────────────────
+    # ── edges persisted from the datasources table ───────────────────────────
     for d in datasources:
         if d.flow_id and d.flow_id in flow_ids:
-            g.add_edge(_fid(d.flow_id), _dsid(d.id), EDGE_PUBLISH)   # flusso → produce datasource
+            g.add_edge(_fid(d.flow_id), _dsid(d.id), EDGE_PUBLISH)   # flow → produces datasource
         if d.connection_id and d.connection_id in conn_by_id:
-            g.add_edge(_cid(d.connection_id), _dsid(d.id), EDGE_INGEST)  # connessione → snapshot
+            g.add_edge(_cid(d.connection_id), _dsid(d.id), EDGE_INGEST)  # connection → snapshot
 
-    # ── archi dedotti dalle definition dei flussi ────────────────────────────
-    unknown_ds: set[int] = set()    # datasource riferite ma non leggibili/rimosse
-    unknown_flow: set[int] = set()  # flussi riferiti ma non leggibili/rimossi
+    # ── edges deduced from the flows' definitions ────────────────────────────
+    unknown_ds: set[int] = set()    # datasources referenced but not readable/removed
+    unknown_flow: set[int] = set()  # flows referenced but not readable/removed
     for f in flows:
         try:
             definition = json.loads(f.definition or "{}")
         except json.JSONDecodeError:
-            logger.warning("lineage: definition non valida per flusso %s", f.id)
+            logger.warning("lineage: invalid definition for flow %s", f.id)
             continue
         for node in definition.get("nodes") or []:
             t = node.get("type")
@@ -162,7 +162,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 if ds_id is None:
                     continue
                 target = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id, unknown_ds)
-                g.add_edge(target, _fid(f.id), EDGE_READ)            # datasource → flusso
+                g.add_edge(target, _fid(f.id), EDGE_READ)            # datasource → flow
 
             elif t == "refresh":
                 ds_id = d.get("datasourceId")
@@ -213,8 +213,8 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                                      "folder": folder,
                                      "format": d.get("sftpFormat") or "csv"})
                     g.add_edge(_fid(f.id), sink, EDGE_WRITE)
-                # dest == "datasource": la produzione è già coperta dall'arco
-                # PUBLISH persistito (datasources.flow_id) quando il flusso è girato
+                # dest == "datasource": the production is covered already by the persisted PUBLISH
+                # edge (datasources.flow_id) when the flow has run
 
     # ── saved scripts (docs/specs/saved-scripts.md): the ones this person sees, the
     # datasources they declare as inputs, the one they publish, the flows that run
@@ -252,9 +252,9 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 if sid in script_ids:
                     g.add_edge(_fid(f.id), _sid(sid), EDGE_ORCHESTRATE)  # flow → script it runs
 
-    # ── motivo dei riferimenti non risolti: rimosso vs non accessibile ─────────
-    # una sola query per tipo controlla l'ESISTENZA (non il contenuto: non si
-    # rivela nulla di un oggetto in un progetto non leggibile oltre "esiste").
+    # ── the reason of the unresolved references: removed vs not accessible ─────────
+    # one query per kind checks the EXISTENCE (not the content: nothing of an object in a
+    # project that is not readable is revealed beyond "it exists").
     if unknown_ds:
         existing = set(session.exec(select(Datasource.id).where(Datasource.id.in_(unknown_ds))).all())
         for i in unknown_ds:
@@ -264,8 +264,8 @@ def build_full_graph(session: Session, user: User) -> _Graph:
         for i in unknown_flow:
             g.nodes[_fid(i)]["meta"]["reason"] = "inaccessible" if i in existing else "removed"
 
-    # ── staleness DIRETTA: un flusso legge una datasource DB rinfrescata DOPO il
-    # suo ultimo run riuscito (i suoi output sono su dati superati) ─────────────
+    # ── DIRECT staleness: a flow reads a DB datasource refreshed AFTER its last
+    # successful run (its outputs are on overtaken data) ─────────────────────────
     for e in g.edges:
         if e["kind"] != EDGE_READ or not e["source"].startswith("ds:"):
             continue
@@ -277,10 +277,10 @@ def build_full_graph(session: Session, user: User) -> _Graph:
             node = g.nodes.get(e["target"])
             if node:
                 node["meta"]["stale"] = True
-                node["meta"]["stale_reason"] = "source"  # causa diretta
+                node["meta"]["stale_reason"] = "source"  # direct cause
 
-    # ── staleness a CASCATA: chi sta a valle di un nodo stale (lungo il flusso
-    # dei DATI: read/publish/write) eredita il sospetto ────────────────────────
+    # ── CASCADING staleness: whoever is downstream of a stale node (along the flow
+    # of the DATA: read/publish/write) inherits the suspicion ─────────────────────
     down: dict[str, list[str]] = {}
     for e in g.edges:
         if e["kind"] in (EDGE_READ, EDGE_PUBLISH, EDGE_WRITE):
@@ -296,7 +296,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 continue
             if not node["meta"].get("stale"):
                 node["meta"]["stale"] = True
-                node["meta"]["stale_reason"] = "upstream"  # ereditata
+                node["meta"]["stale_reason"] = "upstream"  # inherited
             if nxt not in visited:
                 visited.add(nxt)
                 queue.append(nxt)
@@ -305,13 +305,13 @@ def build_full_graph(session: Session, user: User) -> _Graph:
 
 
 def subgraph(g: _Graph, center: str, direction: str = "both", depth: int = 3) -> _Graph:
-    """Estrae il sottografo raggiungibile dal nodo `center` entro `depth` salti,
-    seguendo gli archi a monte (upstream), a valle (downstream) o entrambi."""
+    """Extracts the subgraph reachable from the `center` node within `depth` hops,
+    following the edges upstream, downstream or both."""
     out = _Graph()
     if center not in g.nodes:
         return out
 
-    # adiacenze per direzione
+    # adjacencies by direction
     downstream: dict[str, list[tuple[str, dict]]] = {}
     upstream: dict[str, list[tuple[str, dict]]] = {}
     for e in g.edges:
@@ -320,7 +320,7 @@ def subgraph(g: _Graph, center: str, direction: str = "both", depth: int = 3) ->
 
     keep_nodes: set[str] = {center}
     keep_edges: list[dict] = []
-    # BFS: ogni voce è (nodo, salti_rimasti)
+    # BFS: each item is (node, hops_left)
     q: deque[tuple[str, int]] = deque([(center, depth)])
     visited: set[tuple[str, int]] = set()
     go_down = direction in ("both", "downstream")

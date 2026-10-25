@@ -1,5 +1,5 @@
-"""Dependency di autenticazione: prende il token (intestazione o cookie), valida
-il JWT, carica l'utente e la sua sessione con una lettura sola."""
+"""The authentication dependency: takes the token (header or cookie), validates the
+JWT, loads the user and their session with one read."""
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -11,18 +11,18 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from app.core.security import decode_access_token
-from app.db.session import engine_di_lettura, get_session
+from app.db.session import read_engine, get_session
 from app.models import ApiToken, Group, User, UserGroupLink, UserSession
 from app.services import api_tokens, audit, sessions
 
 logger = logging.getLogger(__name__)
 
-# throttling del last_seen: si aggiorna al massimo una volta ogni N secondi per
-# sessione, così non c'è una scrittura DB a ogni richiesta autenticata.
-_LAST_SEEN_THROTTLE = sessions.ATTIVITA_OGNI
+# last_seen throttling: it updates at most once every N seconds per session, so there
+# is no DB write at every authenticated request.
+_LAST_SEEN_THROTTLE = sessions.ACTIVITY_EVERY
 
-# metodi che non cambiano niente: col solo cookie non chiedono l'intestazione anti-CSRF
-_METODI_SICURI = {"GET", "HEAD", "OPTIONS"}
+# methods that change nothing: with the cookie alone they do not ask for the anti-CSRF header
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 _credentials_error = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -31,53 +31,52 @@ _credentials_error = HTTPException(
 )
 
 
-class _TokenDellaRichiesta(OAuth2PasswordBearer):
-    """Il token arriva in due modi: nell'intestazione `Authorization` (script, API,
-    il reverse proxy che chiede se lasciar passare verso Grafana) o nel cookie
-    `HttpOnly` che il gateway scrive al browser all'accesso. L'intestazione, se
-    c'è, vince.
+class _RequestToken(OAuth2PasswordBearer):
+    """The token arrives in two ways: in the `Authorization` header (scripts, API, the
+    reverse proxy asking whether to let through to Grafana) or in the `HttpOnly` cookie
+    the gateway writes to the browser at sign-in. The header, when there, wins.
 
-    Col solo cookie, una richiesta che modifica qualcosa deve portare anche
-    `X-Tabularia-Csrf`: il cookie il browser lo allega da sé anche a una richiesta
-    partita da un altro sito, l'intestazione no (vedi services/sessions.py)."""
+    With the cookie alone, a request that changes something must carry
+    `X-Tabularia-Csrf` too: the browser attaches the cookie by itself even to a request
+    started from another site, the header it does not (see services/sessions.py)."""
 
     async def __call__(self, request: Request) -> str:  # type: ignore[override]
-        dall_intestazione = await super().__call__(request)
-        if dall_intestazione:
-            return dall_intestazione
-        dal_cookie = request.cookies.get(sessions.COOKIE)
-        if not dal_cookie:
+        from_header = await super().__call__(request)
+        if from_header:
+            return from_header
+        from_cookie = request.cookies.get(sessions.COOKIE)
+        if not from_cookie:
             raise _credentials_error
-        if request.method not in _METODI_SICURI and not request.headers.get(sessions.CSRF_HEADER):
+        if request.method not in _SAFE_METHODS and not request.headers.get(sessions.CSRF_HEADER):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="The request is missing the X-Tabularia-Csrf header",
             )
-        request.state.token_dal_cookie = True  # se non vale, il 401 cancella il cookie
-        return dal_cookie
+        request.state.token_from_cookie = True  # if it does not hold, the 401 deletes the cookie
+        return from_cookie
 
 
-# tokenUrl solo informativo (Swagger): il login vero è POST /auth/login (JSON).
-oauth2_scheme = _TokenDellaRichiesta(tokenUrl="auth/login", auto_error=False)
+# tokenUrl informative only (Swagger): the real login is POST /auth/login (JSON).
+oauth2_scheme = _RequestToken(tokenUrl="auth/login", auto_error=False)
 
 
-def _respinto(request: Request) -> HTTPException:
-    """Il 401. Se il token respinto era quello del cookie, la risposta lo cancella:
-    un cookie che non vale più farebbe credere al server dell'interfaccia che ci
-    sia ancora una sessione, a ogni pagina caricata da capo. Se veniva
-    dall'intestazione no: il cookie del browser può essere buono (un token di
-    script scaduto provato da /docs non deve far uscire dall'interfaccia)."""
-    stato = getattr(request, "state", None)
-    if not getattr(stato, "token_dal_cookie", False):
+def _refused(request: Request) -> HTTPException:
+    """The 401. When the refused token was the cookie's, the answer deletes it: a cookie no
+    longer valid would make the interface's server believe there is still a session, at
+    every page loaded from scratch. When it came from the header, no: the browser's
+    cookie may be good (a script's expired token tried from /docs must not sign out of
+    the interface)."""
+    state = getattr(request, "state", None)
+    if not getattr(state, "token_from_cookie", False):
         return _credentials_error
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=_credentials_error.detail,
-        headers={"WWW-Authenticate": "Bearer", "Set-Cookie": sessions.intestazione_che_cancella(request)},
+        headers={"WWW-Authenticate": "Bearer", "Set-Cookie": sessions.deleting_header(request)},
     )
 
 
-def _vecchio(t: datetime | None, now: datetime) -> bool:
+def _old(t: datetime | None, now: datetime) -> bool:
     if t is None:
         return True
     if t.tzinfo is None:
@@ -85,149 +84,146 @@ def _vecchio(t: datetime | None, now: datetime) -> bool:
     return now - t >= _LAST_SEEN_THROTTLE
 
 
-def _touch_last_seen(session: Session, user: User, aperta: UserSession, request: Request) -> None:
-    """Aggiorna l'ultima attività (throttled) della sessione e dell'utente: la
-    prima decide il timeout per inattività, la seconda la colonna «visto» della
-    pagina Admin.
+def _touch_last_seen(session: Session, user: User, open_: UserSession, request: Request) -> None:
+    """Updates the last activity (throttled) of the session and the user: the first decides
+    the idle timeout, the second the «seen» column of the Admin page.
 
-    L'indirizzo sta solo nella SESSIONE, e se ne va con lei. `users.last_seen_ip`
-    non si scrive più: nessuno lo leggeva, e nessuno l'avrebbe mai cancellato.
-    Di un OSSERVATORE l'indirizzo non si tiene nemmeno lì: si aggiorna solo il
-    momento, che è quel che serve a dire «c'è qualcuno collegato adesso». Vedi
-    `permissions.is_observer_only` per il perché."""
+    The address sits only in the SESSION, and goes with it. `users.last_seen_ip` is no
+    longer written: nobody read it, and nobody would ever have deleted it. Of an
+    OBSERVER the address is not kept even there: only the moment is updated, which is
+    what is needed to say «someone is connected now». See
+    `permissions.is_observer_only` for why."""
     from app.services.permissions import is_observer_only
 
     now = datetime.now(timezone.utc)
-    if not (_vecchio(user.last_seen_at, now) or _vecchio(aperta.last_seen_at, now)):
+    if not (_old(user.last_seen_at, now) or _old(open_.last_seen_at, now)):
         return
     try:
         if is_observer_only(session, user):
-            # anche cancellare quello che c'era: il ruolo può essere stato dato
-            # dopo, e un indirizzo raccolto prima resterebbe lì fino alla scadenza
-            aperta.ip = None
-            aperta.user_agent = None
+            # also delete what was there: the role may have been given later, and an address
+            # collected earlier would stay there until expiry
+            open_.ip = None
+            open_.user_agent = None
         else:
-            aperta.ip = audit.client_ip(request)
+            open_.ip = audit.client_ip(request)
         user.last_seen_at = now
-        aperta.last_seen_at = now.replace(tzinfo=None)
+        open_.last_seen_at = now.replace(tzinfo=None)
         session.add(user)
-        session.add(aperta)
+        session.add(open_)
         session.commit()
-    except Exception:  # non deve mai rompere la richiesta
-        logger.debug("last_seen non aggiornato per utente %s", user.id, exc_info=True)
+    except Exception:  # it must never break the request
+        logger.debug("last_seen not updated for user %s", user.id, exc_info=True)
         session.rollback()
 
 
-def _fine_passo(session: Session) -> None:
-    """Chiude la transazione di lettura prima di uscire da una dipendenza.
+def _end_of_step(session: Session) -> None:
+    """Closes the read transaction before leaving a dependency.
 
-    Ogni dipendenza sincrona gira in un thread suo, e la rotta in un altro. Se
-    questa uscisse con la transazione aperta, la richiesta si terrebbe una
-    connessione del pool mentre aspetta un thread per il passo successivo — e
-    sotto una raffica quei thread sono tutti occupati da richieste che
-    aspettano una connessione. Misurato: 60 richieste insieme → gateway fermo
-    30 secondi e più di metà in errore.
+    Every synchronous dependency runs in a thread of its own, and the route in another.
+    If this one left with the transaction open, the request would keep a pool
+    connection while waiting for a thread for the next step — and under a burst those
+    threads are all busy with requests waiting for a connection. Measured: 60 requests
+    together → gateway stuck 30 seconds and more than half in error.
 
-    `rollback` e non `commit`: qui si è solo letto, e un commit potrebbe rendere
-    permanente qualcosa che un chiamante avesse appoggiato sull'oggetto. Gli
-    oggetti restano agganciati alla sessione: chi li legge nel passo dopo li
-    ricarica, con una connessione presa e resa lì.
+    `rollback` and not `commit`: here there was only reading, and a commit could make
+    permanent something a caller had put on the object. The objects stay attached to
+    the session: whoever reads them in the next step reloads them, with a connection
+    taken and handed back there.
     """
     session.rollback()
 
 
-def _una_lettura(session: Session, q):
-    """Esegue `q` (utente + una riga sua) con una connessione presa e resa qui,
-    fuori da ogni transazione.
+def _one_read(session: Session, q):
+    """Runs `q` (user + one row of theirs) with a connection taken and handed back here,
+    outside any transaction.
 
-    È la lettura che OGNI richiesta fa. Dentro la sessione della richiesta
-    costava quattro giri verso Postgres (ping, BEGIN, la SELECT, il ROLLBACK di
-    fine passo) e il rollback faceva scadere l'utente, che la rotta rileggeva un
-    attimo dopo. Così è un giro solo: una SELECT per chiave in autocommit vede
-    esattamente quello che vedrebbe in una transazione appena aperta (vedi
-    `engine_di_lettura`). Gli oggetti passano poi alla sessione della richiesta già
-    caricati (`merge(load=False)` non tocca il database), e la rotta trova
-    l'utente lì come l'ha sempre trovato."""
+    It is the read EVERY request makes. Inside the request's session it cost four round
+    trips to Postgres (ping, BEGIN, the SELECT, the ROLLBACK at the end of the step) and
+    the rollback expired the user, whom the route read again a moment later. This way it
+    is one round trip: a SELECT by key in autocommit sees exactly what it would see in a
+    transaction just opened (see `read_engine`). The objects then pass to the
+    request's session loaded already (`merge(load=False)` does not touch the database),
+    and the route finds the user there as it always did."""
     bind = session.get_bind()
-    if not isinstance(bind, Engine):  # sessione legata a una connessione già aperta
+    if not isinstance(bind, Engine):  # a session bound to a connection open already
         return session.exec(q).first()
-    with Session(engine_di_lettura(bind)) as lettura:
-        riga = lettura.exec(q).first()
-        if riga is None:
+    with Session(read_engine(bind)) as reading:
+        row = reading.exec(q).first()
+        if row is None:
             return None
-        user, altro, *valori = riga  # valori: colonne semplici calcolate nella stessa SELECT
-        lettura.expunge(user)
-        lettura.expunge(altro)
-    return (session.merge(user, load=False), session.merge(altro, load=False), *valori)
+        user, other, *values = row  # values: plain columns computed in the same SELECT
+        reading.expunge(user)
+        reading.expunge(other)
+    return (session.merge(user, load=False), session.merge(other, load=False), *values)
 
 
-def _carica_utente(session: Session, user_id: int, sid: str) -> tuple[User, UserSession] | None:
-    """L'utente E la sua sessione, in una SELECT sola con la sessione in JOIN."""
-    return _una_lettura(session, (
+def _load_user(session: Session, user_id: int, sid: str) -> tuple[User, UserSession] | None:
+    """The user AND their session, in one SELECT with the session joined."""
+    return _one_read(session, (
         select(User, UserSession)
         .join(UserSession, UserSession.user_id == User.id)
-        # scaduta o ferma da troppo = come se non ci fosse (vedi sessions.valida)
-        .where(User.id == user_id, UserSession.id == sid, sessions.valida())
+        # expired or still for too long = as if it were not there (see sessions.valida)
+        .where(User.id == user_id, UserSession.id == sid, sessions.validate())
     ))
 
 
-def _utente_del_token(request: Request, token: str, session: Session) -> User:
-    """Un token API (`tab_…`): l'utente e il token in una SELECT sola, per impronta.
-    Solo dall'intestazione `Authorization`: un token API messo nel cookie della
-    sessione non vale (il cookie è del browser, il token degli script)."""
-    stato = getattr(request, "state", None)
-    if getattr(stato, "token_dal_cookie", False):
-        raise _respinto(request)
-    def in_un_gruppo(flag):
+def _token_user(request: Request, token: str, session: Session) -> User:
+    """An API token (`tab_…`): the user and the token in one SELECT, by fingerprint.
+    Only from the `Authorization` header: an API token put in the session's cookie does
+    not hold (the cookie is the browser's, the token the scripts')."""
+    state = getattr(request, "state", None)
+    if getattr(state, "token_from_cookie", False):
+        raise _refused(request)
+    def in_a_group(flag):
         return exists().where(UserGroupLink.user_id == User.id, UserGroupLink.group_id == Group.id, flag == True)  # noqa: E712
 
-    trovati = _una_lettura(session, (
-        # i ruoli dai gruppi nella stessa SELECT: servono a sapere se è SOLO osservatore
-        select(User, ApiToken, in_un_gruppo(Group.is_admin).label("admin_g"), in_un_gruppo(Group.is_observer).label("occhio_g"))
+    found = _one_read(session, (
+        # the roles from the groups in the same SELECT: needed to know whether they are ONLY an observer
+        select(User, ApiToken, in_a_group(Group.is_admin).label("admin_g"), in_a_group(Group.is_observer).label("observer_g"))
         .join(ApiToken, ApiToken.user_id == User.id)
-        .where(ApiToken.token_hash == api_tokens.impronta(token), ApiToken.expires_at > api_tokens.adesso())
+        .where(ApiToken.token_hash == api_tokens.fingerprint(token), ApiToken.expires_at > api_tokens.now())
     ))
-    if trovati is None:  # mai esistito, revocato o scaduto
-        raise _respinto(request)
-    user, riga, admin_g, occhio_g = trovati
+    if found is None:  # never existed, revoked or expired
+        raise _refused(request)
+    user, row, admin_g, observer_g = found
     if not user.is_active:
-        raise _respinto(request)
+        raise _refused(request)
     from app.core.config import get_settings
 
     if not user.is_service and not get_settings().auth.personal_tokens:
-        raise _respinto(request)  # token personali spenti: anche quelli già dati
-    if not user.is_service and (user.is_observer or occhio_g) and not (user.is_superuser or admin_g):
-        # solo osservatore: niente token personali, per qualunque strada ci sia
-        # arrivato (flag, gruppi, un ruolo di amministratore perso, l'SSO). Quando
-        # lo diventa gli si ritirano; questo copre le strade che non lo fanno
-        raise _respinto(request)
-    api_tokens.controlla_livello(riga, request)
-    if stato is not None:
-        stato.api_token = riga.name  # per l'audit: «fatto con il token …»
-    _touch_token(session, user, riga, request)
+        raise _refused(request)  # personal tokens turned off: the ones given already too
+    if not user.is_service and (user.is_observer or observer_g) and not (user.is_superuser or admin_g):
+        # observer only: no personal tokens, whatever way they got there (flag, groups, an
+        # administrator role lost, SSO). When they become one, their tokens are withdrawn;
+        # this covers the ways that do not
+        raise _refused(request)
+    api_tokens.check_level(row, request)
+    if state is not None:
+        state.api_token = row.name  # per l'audit: «fatto con il token …»
+    _touch_token(session, user, row, request)
     return user
 
 
-def _touch_token(session: Session, user: User, riga: ApiToken, request: Request) -> None:
-    """Ultimo uso del token (throttled), e l'attività dell'utente come per le
-    sessioni. Di un osservatore l'indirizzo non si tiene."""
+def _touch_token(session: Session, user: User, row: ApiToken, request: Request) -> None:
+    """The token's last use (throttled), and the user's activity as for the sessions. Of an
+    observer the address is not kept."""
     from app.services.permissions import is_observer_only
 
     now = datetime.now(timezone.utc)
-    if not (_vecchio(riga.last_used_at, now) or _vecchio(user.last_seen_at, now)):
+    if not (_old(row.last_used_at, now) or _old(user.last_seen_at, now)):
         return
     try:
         if is_observer_only(session, user):
-            riga.last_used_ip = None
+            row.last_used_ip = None
         else:
-            riga.last_used_ip = (audit.client_ip(request) or "")[:64] or None
-        riga.last_used_at = now.replace(tzinfo=None)
+            row.last_used_ip = (audit.client_ip(request) or "")[:64] or None
+        row.last_used_at = now.replace(tzinfo=None)
         user.last_seen_at = now
-        session.add(riga)
+        session.add(row)
         session.add(user)
         session.commit()
-    except Exception:  # non deve mai rompere la richiesta
-        logger.debug("ultimo uso del token non aggiornato (utente %s)", user.id, exc_info=True)
+    except Exception:  # it must never break the request
+        logger.debug("token's last use not updated (user %s)", user.id, exc_info=True)
         session.rollback()
 
 
@@ -236,57 +232,56 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
-    if api_tokens.e_un_token(token):
-        return _utente_del_token(request, token, session)
+    if api_tokens.is_a_token(token):
+        return _token_user(request, token, session)
     try:
         payload = decode_access_token(token)
         user_id = int(payload["sub"])
-        # un token senza sessione è di prima delle sessioni: non si può revocare,
-        # quindi non vale (all'aggiornamento si rientra una volta)
+        # a token without a session is from before the sessions: it cannot be revoked, so it
+        # does not hold (after the update one signs in once)
         sid = str(payload["sid"])
     except (jwt.PyJWTError, KeyError, ValueError, TypeError):
-        raise _respinto(request)
-    trovati = _carica_utente(session, user_id, sid)
-    if trovati is None:  # utente sparito, sessione chiusa, scaduta o ferma
-        raise _respinto(request)
-    user, aperta = trovati
+        raise _refused(request)
+    found = _load_user(session, user_id, sid)
+    if found is None:  # user gone, session closed, expired or still
+        raise _refused(request)
+    user, open_ = found
     if not user.is_active:
-        raise _respinto(request)
-    stato = getattr(request, "state", None)
-    if stato is not None:
-        stato.sid = sid  # per chi chiude la sessione corrente (vedi sessions.sid_corrente)
-    # Niente `_fine_passo` qui: la sessione della richiesta non ha preso
-    # connessioni (la lettura ne ha usata una sua, già resa) e `_touch_last_seen`,
-    # la volta al minuto che scrive, chiude da sé con commit o rollback. Un
-    # rollback in più farebbe solo scadere l'utente appena caricato.
-    _touch_last_seen(session, user, aperta, request)
+        raise _refused(request)
+    state = getattr(request, "state", None)
+    if state is not None:
+        state.sid = sid  # for whoever closes the current session (see sessions.sid_corrente)
+    # No `_end_of_step` here: the request's session took no connections (the read used one
+    # of its own, handed back already) and `_touch_last_seen`, the once a minute it
+    # writes, closes by itself with commit or rollback. One more rollback would only expire
+    # the user just loaded.
+    _touch_last_seen(session, user, open_, request)
     return user
 
 
 def require_superuser(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ) -> User:
-    # admin EFFETTIVO: flag personale o gruppo di amministratori
+    # EFFECTIVE admin: personal flag or administrators' group
     from app.services.permissions import is_admin
 
     if not is_admin(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
-    _fine_passo(session)
+    _end_of_step(session)
     return user
 
 
 def require_observer(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ) -> User:
-    """Per LEGGERE un pannello di amministrazione: amministratore od osservatore.
+    """To READ an administration panel: administrator or observer.
 
-    Le rotte di scrittura restano su `require_superuser`. La separazione è per
-    METODO e non per pannello: un pannello «di sola lettura» che contenga una
-    rotta di scrittura sarebbe un buco silenzioso, mentre così ogni POST, PUT e
-    DELETE resta chiuso per costruzione."""
+    The writing routes stay on `require_superuser`. The split is by METHOD and not by
+    panel: a «read-only» panel holding a writing route would be a silent hole, while
+    this way every POST, PUT and DELETE stays closed by construction."""
     from app.services.permissions import is_observer
 
     if not is_observer(session, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrative read access required")
-    _fine_passo(session)
+    _end_of_step(session)
     return user

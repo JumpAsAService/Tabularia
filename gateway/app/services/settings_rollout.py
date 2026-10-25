@@ -48,10 +48,10 @@ ORDER = ("worker", "preview-worker", "beat", "engine", "gateway", "orchestrator"
 # as an API only (APP__ROLE=api), with the orchestrator in a service of its own
 COMPOSE = {"worker": "worker", "preview-worker": "preview-worker", "beat": "beat", "engine": "backend",
            "gateway": "gateway", "orchestrator": "gateway"}
-PASSO_OGNI = 5.0
-LUCCHETTO = 7_402_121
+STEP_EVERY = 5.0
+LOCK = 7_402_121
 # a pod on its way out for longer than this (its node lost) no longer holds the rollout
-USCITA_MASSIMA = 15 * 60
+MAX_OUTPUT = 15 * 60
 
 
 def compose_service(component: str) -> str:
@@ -60,7 +60,7 @@ def compose_service(component: str) -> str:
     return COMPOSE[component]
 
 
-def _ora() -> datetime:
+def _oracle() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -82,7 +82,7 @@ def mode() -> str:
 
 def mark_changed(session: Session, components: Iterable[str]) -> None:
     """In the transaction of the save: these components run an old value until they start again."""
-    now = _ora()
+    now = _oracle()
     for c in set(components):
         if c not in ORDER:
             continue
@@ -110,7 +110,7 @@ def _leaving(pod: dict) -> bool:
         since = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None)
     except ValueError:
         return True
-    return (_ora() - since).total_seconds() < USCITA_MASSIMA
+    return (_oracle() - since).total_seconds() < MAX_OUTPUT
 
 
 def _ready(pod: dict) -> bool:
@@ -172,16 +172,16 @@ async def evict(name: str) -> bool:
 # ── the state, for the panel ─────────────────────────────────────────────────
 
 async def status(session: Session) -> dict[str, Any]:
-    from app.services.regolazioni_motore import dal_pannello
+    from app.services.engine_panel_settings import from_panel
 
     m = mode()
-    panel = dal_pannello()
+    panel = from_panel()
     rows = {r.component: r for r in session.exec(select(SettingsRollout)).all()}
     # the six components' pods read together, not one after the other
-    letti: dict[str, Any] = {}
+    read_ones: dict[str, Any] = {}
     if panel and m == "kubernetes":
-        risposte = await asyncio.gather(*(pods(c) for c in ORDER), return_exceptions=True)
-        letti = dict(zip(ORDER, risposte))
+        answers = await asyncio.gather(*(pods(c) for c in ORDER), return_exceptions=True)
+        read_ones = dict(zip(ORDER, answers))
     items = []
     for c in ORDER:
         r = rows.get(c)
@@ -192,7 +192,7 @@ async def status(session: Session) -> dict[str, Any]:
             # ENGINE__SETTINGS_PANEL=false: the saved values do not apply, nothing to restart for
             item["pending"] = False
         elif m == "kubernetes":
-            pl = letti.get(c)
+            pl = read_ones.get(c)
             if isinstance(pl, BaseException):
                 if not isinstance(pl, KubeError):
                     raise pl
@@ -218,7 +218,7 @@ async def status(session: Session) -> dict[str, Any]:
 
 def request(session: Session, components: Iterable[str], who: str) -> list[str]:
     """Kubernetes: the orchestrator restarts them. Compose: the administrator restarted them."""
-    now = _ora()
+    now = _oracle()
     done = []
     for c in ORDER:
         if c not in set(components):
@@ -241,14 +241,14 @@ def cancel(session: Session, component: str) -> bool:
 
 # ── the rollout, in the orchestrator ─────────────────────────────────────────
 
-async def un_passo(bind: Engine) -> Optional[str]:
+async def one_step(bind: Engine) -> Optional[str]:
     """One step of the rollouts asked for: evicts one pod, or closes a finished request,
     or waits. Returns what it did (for the log and the tests)."""
-    from app.services.regolazioni_motore import blocca
+    from app.services.engine_panel_settings import lock
 
     me = os.environ.get("HOSTNAME", "")
     with Session(bind) as session:
-        if not await blocca(session, attesa=0, chiave=LUCCHETTO):
+        if not await lock(session, wait=0, key=LOCK):
             return None
         rows = {r.component: r for r in session.exec(
             select(SettingsRollout).where(SettingsRollout.requested_at.is_not(None))).all()}
@@ -299,10 +299,10 @@ async def rollout_loop(stop: asyncio.Event) -> None:
 
     while not stop.is_set():
         try:
-            await un_passo(engine)
+            await one_step(engine)
         except Exception as e:  # noqa: BLE001 — the API or the database down: at the next step
-            logger.warning("settings: rollout step failed (%s), again in %ss", e, PASSO_OGNI)
+            logger.warning("settings: rollout step failed (%s), again in %ss", e, STEP_EVERY)
         try:
-            await asyncio.wait_for(stop.wait(), timeout=PASSO_OGNI)
+            await asyncio.wait_for(stop.wait(), timeout=STEP_EVERY)
         except asyncio.TimeoutError:
             pass

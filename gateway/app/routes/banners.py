@@ -1,9 +1,9 @@
-"""Banner di avvertimento mostrati nell'Explore.
+"""Warning banners shown in the Explore.
 
-Lettura: OGNI utente autenticato — i banner esistono proprio per essere visti, e
-la stessa lista alimenta sia l'Explore sia l'elenco della pagina Admin.
-Scrittura: solo superuser. Mettere o togliere un banner cambia ciò che vede
-l'intera installazione, quindi ogni modifica finisce nell'audit log.
+Read: EVERY authenticated user — banners exist precisely to be seen, and the same list
+feeds both the Explore and the Admin page's list.
+Write: superuser only. Putting up or taking down a banner changes what the whole
+installation sees, so every change ends up in the audit log.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
@@ -13,14 +13,14 @@ from app.deps.auth import get_current_user, require_superuser
 from app.models import Banner, User
 from app.schemas.models import BannerCreate, BannerOut
 from app.services import audit
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/banners", tags=["banners"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/banners", tags=["banners"])
 
 
 @router.get("", response_model=list[BannerOut], dependencies=[Depends(get_current_user)])
 def list_banners(session: Session = Depends(get_session)):
-    """Tutti i banner, dal più recente al più vecchio."""
+    """All the banners, newest to oldest."""
     return session.exec(select(Banner).order_by(Banner.id.desc())).all()  # type: ignore[union-attr]
 
 
@@ -56,10 +56,10 @@ def delete_banner(
     banner = session.get(Banner, banner_id)
     if banner is None:
         raise HTTPException(status_code=404, detail="Banner not found")
-    etichetta = banner.message[:80]
+    label = banner.message[:80]
     session.delete(banner)
     session.commit()
     audit.record_audit(
         session, actor=user, action=audit.BANNER_DELETE, target_type="banner",
-        target_id=banner_id, target_label=etichetta, request=request,
+        target_id=banner_id, target_label=label, request=request,
     )

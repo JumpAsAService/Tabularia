@@ -243,23 +243,23 @@ async def test_chat_streams_text_tool_calls_the_result_table_and_the_history(ses
     table = events[1][1]["table"]
     assert events[1][1]["ok"] is True and table["rows"] == [{"paese": "IT", "n": 3}] and table["datasource"] == "ordini"
     assert "".join(d["delta"] for n, d in events if n == "text") == "In Italia sono 3 ordini."
-    fine = events[-1][1]
-    assert fine["usage"]["requests"] == 2
+    end = events[-1][1]
+    assert end["usage"]["requests"] == 2
     # la conversazione e' SALVATA sul server e il client riceve solo il suo id
-    chat_id = fine["chat_id"]
-    assert chat_id and "history" not in fine
-    salvata = ai_chats.dettaglio(session, user, chat_id)
+    chat_id = end["chat_id"]
+    assert chat_id and "history" not in end
+    salvata = ai_chats.detail(session, user, chat_id)
     assert salvata["turns"] == 1
-    turno = salvata["messages"][0]
-    assert turno["answer"] == "In Italia sono 3 ordini."
-    assert [p["name"] for p in turno["steps"]] == ["query_datasource"]
+    turn = salvata["messages"][0]
+    assert turn["answer"] == "In Italia sono 3 ordini."
+    assert [p["name"] for p in turn["steps"]] == ["query_datasource"]
     assert salvata["title"].startswith("quanti ordini in Italia?")
 
     # turno successivo sulla STESSA chat: la storia la rilegge il server
     again = ai_routes.ChatRequest(message=f"e in Francia? (datasource {visible.id})", model="gpt-oss-120b", chat_id=chat_id, locale="it")
-    dopo = await _events(await ai_routes.chat(again, request=None, user=user, session=session))
-    assert dopo[-1][1]["chat_id"] == chat_id
-    assert ai_chats.dettaglio(session, user, chat_id)["turns"] == 2  # si accoda, non si sovrascrive
+    after = await _events(await ai_routes.chat(again, request=None, user=user, session=session))
+    assert after[-1][1]["chat_id"] == chat_id
+    assert ai_chats.detail(session, user, chat_id)["turns"] == 2  # si accoda, non si sovrascrive
 
 
 @pytest.mark.anyio
@@ -376,13 +376,13 @@ async def test_a_join_resolves_the_second_datasource_under_the_same_permissions(
     """Il lato destro arriva come ID e passa dagli stessi permessi: il modello
     non nomina mai un bucket né una chiave."""
     _, user, visible, hidden = _catalog(session)
-    altra = make_datasource(session, name="clienti", project_id=visible.project_id, key="datasets/9/c.parquet")
+    other_one = make_datasource(session, name="clienti", project_id=visible.project_id, key="datasets/9/c.parquet")
     fake_engine.preview_response = (200, {"columns": [{"name": "n", "dtype": "Int64"}], "rows": [{"n": 7}],
                                           "row_count": 1, "truncated": False})
 
     out = await ai_agent.query_datasource(
         _ctx(session, user), visible.id, "SELECT count(*) AS n FROM self",
-        join_datasource_id=altra.id, join_left_on="cliente_id", join_right_on="id",
+        join_datasource_id=other_one.id, join_left_on="cliente_id", join_right_on="id",
     )
     ops = fake_engine.previews[-1]["operations"]
     assert ops[0]["type"] == "join"
@@ -407,12 +407,12 @@ async def test_you_cannot_join_a_datasource_you_cannot_read(session, ai_on, fake
 @pytest.mark.anyio
 async def test_mismatched_keys_are_refused_with_a_reason(session, ai_on, fake_engine):
     _, user, visible, _ = _catalog(session)
-    altra = make_datasource(session, name="clienti", project_id=visible.project_id)
+    other_one = make_datasource(session, name="clienti", project_id=visible.project_id)
     for left, right in (("a,b", "x"), ("", "x"), ("a", "")):
         with pytest.raises(ModelRetry):
             await ai_agent.query_datasource(
                 _ctx(session, user), visible.id, "SELECT 1 AS n FROM self",
-                join_datasource_id=altra.id, join_left_on=left, join_right_on=right,
+                join_datasource_id=other_one.id, join_left_on=left, join_right_on=right,
             )
 
 

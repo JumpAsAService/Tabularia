@@ -98,34 +98,34 @@ FOREACH = {"nodes": [_src("s", "datasets/a.parquet"), _src("d", "datasets/driver
            "edges": [_e("s", "pre"), _e("pre", "fe"), _e("d", "fe", "right"), _e("b1", "b2"),
                      _e("fe", "post"), _e("post", "fuori")]}
 
-CICLO = {"nodes": [_src("s", "datasets/a.parquet"), _op("a", "limit", {"n": 1}), _op("b", "limit", {"n": 2}), _out("o")],
+CYCLE = {"nodes": [_src("s", "datasets/a.parquet"), _op("a", "limit", {"n": 1}), _op("b", "limit", {"n": 2}), _out("o")],
          "edges": [_e("a", "b"), _e("b", "a"), _e("b", "o")]}
 
 SENZA_SORGENTE = {"nodes": [_op("a", "limit", {"n": 1}), _out("o")], "edges": [_e("a", "o")]}
 
-GRAFI = {"lineare": LINEARE, "join_union": JOIN_UNION, "catalogo": CATALOGO, "foreach": FOREACH, "ciclo": CICLO, "senza_sorgente": SENZA_SORGENTE}
+GRAFI = {"lineare": LINEARE, "join_union": JOIN_UNION, "catalogo": CATALOGO, "foreach": FOREACH, "ciclo": CYCLE, "senza_sorgente": SENZA_SORGENTE}
 
 
 @pytest.mark.parametrize("modo", ["production", "development"])
-@pytest.mark.parametrize("nome", list(GRAFI))
-def test_la_catena_e_identica_a_quella_di_prima(nome, modo, monkeypatch):
+@pytest.mark.parametrize("name", list(GRAFI))
+def test_la_catena_e_identica_a_quella_di_prima(name, modo, monkeypatch):
     monkeypatch.setattr(fr, "default_sample_rows", lambda: 1000)
-    g = GRAFI[nome]
+    g = GRAFI[name]
     for target in [n["id"] for n in g["nodes"]]:
-        nuova = _Resolver(g["nodes"], g["edges"], _resolve_ds, modo).chain(target)
+        new_one = _Resolver(g["nodes"], g["edges"], _resolve_ds, modo).chain(target)
         vecchia = _vecchia_chain(_Resolver(g["nodes"], g["edges"], _resolve_ds, modo), target)
-        assert nuova == vecchia, (nome, modo, target)
+        assert new_one == vecchia, (name, modo, target)
 
 
 @pytest.mark.parametrize("modo", ["production", "development"])
-@pytest.mark.parametrize("nome", list(GRAFI))
-def test_gli_id_sono_allineati_alle_operazioni(nome, modo, monkeypatch):
+@pytest.mark.parametrize("name", list(GRAFI))
+def test_gli_id_sono_allineati_alle_operazioni(name, modo, monkeypatch):
     monkeypatch.setattr(fr, "default_sample_rows", lambda: 1000)
-    g = GRAFI[nome]
+    g = GRAFI[name]
     by_id = {n["id"]: n for n in g["nodes"]}
     for target in [n["id"] for n in g["nodes"]]:
         src, ops, ids = _Resolver(g["nodes"], g["edges"], _resolve_ds, modo).chain_with_ids(target)
-        assert len(ops) == len(ids), (nome, target)
+        assert len(ops) == len(ids), (name, target)
         for op, nid in zip(ops, ids):
             if nid.endswith("#head"):
                 assert by_id[nid[:-5]]["type"] == "source" and op["type"] in ("filter", "limit", "sample")
@@ -140,16 +140,16 @@ def test_il_campione_di_sviluppo_e_i_filtri_a_monte_portano_l_id_della_sorgente(
     assert ids == ["s#head", "l"] and ops[0]["type"] == "limit"
     src, ops, ids = _Resolver(JOIN_UNION["nodes"], JOIN_UNION["edges"], _resolve_ds, "production").chain_with_ids("o")
     assert ids == ["s#head", "j", "un"] and [o["type"] for o in ops] == ["filter", "join", "union"]
-    destra = ops[1]["params"]["right"]
-    assert destra["source"]["key"] == "datasets/b.parquet" and [o["type"] for o in destra["operations"]] == ["filter", "select"]
+    right = ops[1]["params"]["right"]
+    assert right["source"]["key"] == "datasets/b.parquet" and [o["type"] for o in right["operations"]] == ["filter", "select"]
 
 
 def test_un_nodo_dentro_un_contenitore_porta_l_id_del_contenitore():
     # la preview di un nodo del corpo: il contenitore fino a quel nodo
     src, ops, ids = _Resolver(FOREACH["nodes"], FOREACH["edges"], _resolve_ds, "production").chain_with_ids("b2")
     assert ids == ["pre", "fe"] and [o["type"] for o in ops] == ["select", "foreach"]
-    corpo = ops[1]["params"]["body"]
-    assert [o["type"] for o in corpo] == ["filter", "sort"] and ops[1]["params"]["driver"]["source"]["key"] == "datasets/driver.parquet"
+    body = ops[1]["params"]["body"]
+    assert [o["type"] for o in body] == ["filter", "sort"] and ops[1]["params"]["driver"]["source"]["key"] == "datasets/driver.parquet"
     src, ops, ids = _Resolver(FOREACH["nodes"], FOREACH["edges"], _resolve_ds, "production").chain_with_ids("b1")
     assert ids == ["pre", "fe"] and [o["type"] for o in ops[1]["params"]["body"]] == ["filter"]
     src, ops, ids = _Resolver(FOREACH["nodes"], FOREACH["edges"], _resolve_ds, "production").chain_with_ids("fuori")
@@ -157,12 +157,12 @@ def test_un_nodo_dentro_un_contenitore_porta_l_id_del_contenitore():
 
 
 def test_resolve_output_chains_da_gli_stessi_corpi_dei_run_di_produzione():
-    for nome in ("lineare", "join_union", "catalogo", "foreach"):
-        g = GRAFI[nome]
-        catene = resolve_output_chains(g, _resolve_ds, BUCKET)
+    for name in ("lineare", "join_union", "catalogo", "foreach"):
+        g = GRAFI[name]
+        chains = resolve_output_chains(g, _resolve_ds, BUCKET)
         corpi = build_output_run_requests(g, _resolve_ds, BUCKET, "production")
-        assert [c["body"] for c in catene] == corpi, nome
-        assert all(len(c["op_ids"]) == len(c["body"]["operations"]) for c in catene)
+        assert [c["body"] for c in chains] == corpi, name
+        assert all(len(c["op_ids"]) == len(c["body"]["operations"]) for c in chains)
 
 
 def test_resolve_output_chains_rifiuta_come_prima():

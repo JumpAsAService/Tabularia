@@ -1,29 +1,28 @@
-"""Quali motori di esecuzione l'installazione consente di SCEGLIERE.
+"""Which run engines the installation allows to CHOOSE.
 
-Un'azienda che standardizza la flotta (es. «qui si usa solo ClickHouse») ha
-bisogno di dirlo una volta sola, non flusso per flusso. Questo modulo è la
-fonte unica della risposta: lo consultano la validazione dei flussi
-(routes/flows.py) e il catalogo servito al selettore (routes/proxy.py), così
-non possono divergere.
+A company standardizing the fleet (e.g. «here only ClickHouse is used») needs to say
+it once only, not flow by flow. This module is the single source of the answer: the
+flows' validation (routes/flows.py) and the catalog served to the selector
+(routes/proxy.py) consult it, so they cannot diverge.
 
-Regola: si memorizzano i motori VIETATI. Tabella vuota = tutto consentito,
-cioè il comportamento storico.
+Rule: the FORBIDDEN engines are stored. An empty table = everything allowed, that is
+the historical behaviour.
 """
 from sqlmodel import Session, select
 
 from app.models import DisabledEngine
 
-# Motori noti al gateway, sincronizzati col catalogo dell'engine. Vivono qui e
-# non in routes/flows.py perché servono a due rotte diverse: tenerli in una
-# delle due obbligherebbe l'altra a importare da un modulo di rotte.
+# Engines known to the gateway, in sync with the engine's catalog. They live here and
+# not in routes/flows.py because two different routes need them: keeping them in one of
+# the two would force the other to import from a routes module.
 KNOWN_ENGINES: tuple[str, ...] = ("polars", "duckdb", "chdb", "clickhouse", "bigquery")
 
 
 def disabled_engines(session: Session) -> set[str]:
-    """Gli id dei motori disabilitati dall'amministratore (spesso l'insieme vuoto)."""
+    """The ids of the engines the administrator disabled (often the empty set)."""
     return {r.engine_id for r in session.exec(select(DisabledEngine)).all()}
 
 
 def allowed_engines(session: Session) -> set[str]:
-    """I motori che si possono ancora scegliere per un flusso."""
+    """The engines that may still be chosen for a flow."""
     return set(KNOWN_ENGINES) - disabled_engines(session)

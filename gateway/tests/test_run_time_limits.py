@@ -28,11 +28,11 @@ def test_without_celery_configured_the_historical_value_stands(monkeypatch):
     assert EngineSettings().run_stale_timeout_seconds == 3900
 
 
-@pytest.mark.parametrize("limite", ["600", "3600", "86400"])
-def test_the_threshold_always_stays_above_the_kill_time(monkeypatch, limite):
+@pytest.mark.parametrize("limit", ["600", "3600", "86400"])
+def test_the_threshold_always_stays_above_the_kill_time(monkeypatch, limit):
     """L'invariante, qualunque sia il limite scelto."""
-    monkeypatch.setenv("CELERY__TASK_TIME_LIMIT", limite)
-    assert EngineSettings().run_stale_timeout_seconds > int(limite)
+    monkeypatch.setenv("CELERY__TASK_TIME_LIMIT", limit)
+    assert EngineSettings().run_stale_timeout_seconds > int(limit)
 
 
 def test_an_explicit_threshold_still_wins(monkeypatch):

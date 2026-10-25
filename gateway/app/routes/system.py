@@ -1,13 +1,13 @@
-"""Stato di sistema esposto all'UI: al momento la RAM dell'host.
+"""System state exposed to the UI: the host's RAM for now.
 
-La fonte è **node-exporter letto direttamente** (valore istantaneo), non
-VictoriaMetrics: VM ha uno scrape ogni 15s e qui serve un dato realtime — è
-l'indicatore che l'utente guarda mentre costruisce/esegue un flusso per capire
-se sta per saturare la memoria.
+The source is **node-exporter read directly** (an instant value), not VictoriaMetrics:
+VM scrapes every 15 s and here real-time data is needed — it is the indicator the user
+looks at while building/running a flow to understand whether the memory is about to
+saturate.
 
-Il payload di node-exporter è ~85 KB: lo si rilegge al massimo ogni
-`monitoring.cache_seconds` e tutti i client che pollano condividono la stessa
-lettura (un lock evita la corsa di più fetch simultanee).
+node-exporter's payload is ~85 KB: it is read again at most every
+`monitoring.cache_seconds` and all the polling clients share the same read (a lock
+avoids the race of several simultaneous fetches).
 """
 from __future__ import annotations
 
@@ -22,28 +22,28 @@ from pydantic import BaseModel
 from app.core.config import get_settings
 from app.deps.auth import get_current_user
 from app.models import User
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
-router = APIRouter(route_class=RottaCheRilascia, tags=["system"])
+router = APIRouter(route_class=ReleasingRoute, tags=["system"])
 
 _TOTAL = "node_memory_MemTotal_bytes"
 _AVAILABLE = "node_memory_MemAvailable_bytes"
 
-_cache: tuple[float, "MemoryOut"] | None = None  # (timestamp, valore)
+_cache: tuple[float, "MemoryOut"] | None = None  # (timestamp, value)
 _lock = asyncio.Lock()
 
 
 class AppInfoOut(BaseModel):
-    """Info di deployment utili all'UI. `timezone` è il fuso in cui vengono
-    interpretate le espressioni cron degli schedule (vedi services/schedule.py)."""
+    """Deployment info useful to the UI. `timezone` is the zone the schedules' cron
+    expressions are read in (see services/schedule.py)."""
 
     name: str
     version: str
-    codename: str = ""  # il nome della release (es. «Appio»)
+    codename: str = ""  # the release's name (e.g. «Appio»)
     timezone: str
-    # campione automatico di sviluppo (righe; 0 = spento): l'editor lo mostra
-    # sul nodo sorgente e lo applica alle preview, speculare al resolver
+    # the automatic development sample (rows; 0 = off): the editor shows it on the source
+    # node and applies it to the previews, the mirror of the resolver
     preview_default_sample_rows: int = 0
 
 
@@ -58,8 +58,8 @@ def app_info(user: User = Depends(get_current_user)):
 
 
 class MemoryOut(BaseModel):
-    """RAM dell'host. `available` è MemAvailable (non MemFree): tiene conto di
-    cache/buffer riclamabili, quindi è la memoria realmente allocabile."""
+    """The host's RAM. `available` is MemAvailable (not MemFree): it accounts for the
+    reclaimable cache/buffers, so it is the memory really allocatable."""
 
     total_bytes: float
     available_bytes: float
@@ -78,7 +78,7 @@ def _parse(body: str) -> MemoryOut:
                     pass
     total, available = values.get(_TOTAL), values.get(_AVAILABLE)
     if not total or available is None:
-        raise ValueError("metriche di memoria assenti nella risposta di node-exporter")
+        raise ValueError("memory metrics missing from node-exporter's answer")
     used = max(0.0, total - available)
     return MemoryOut(
         total_bytes=total,
@@ -104,16 +104,16 @@ async def _read_memory() -> MemoryOut:
 
 @router.get("/system/memory", response_model=MemoryOut)
 async def system_memory(user: User = Depends(get_current_user)) -> MemoryOut:
-    """RAM dell'host in tempo reale (usata/disponibile). Serve l'autenticazione,
-    ma nessuna capability: è un indicatore di salute, non un dato di progetto.
+    """The host's RAM in real time (used/available). Authentication is needed, but no
+    capability: it is a health indicator, not project data.
 
-    Senza un node-exporter (MONITORING__NODE_EXPORTER_URL vuoto, come in una
-    installazione Kubernetes che non ne ha) il badge è spento: 404 subito, senza
-    tentare la chiamata né scrivere un avviso ogni volta che un browser chiede."""
+    Without a node-exporter (MONITORING__NODE_EXPORTER_URL empty, as in a Kubernetes
+    installation that has none) the badge is off: 404 at once, without trying the call
+    nor writing a warning every time a browser asks."""
     if not get_settings().monitoring.node_exporter_url.strip():
         raise HTTPException(status_code=404, detail="memory badge not configured")
     try:
         return await _read_memory()
-    except Exception as e:  # node-exporter giù/irraggiungibile → l'UI nasconde il badge
+    except Exception as e:  # node-exporter down/unreachable → the UI hides the badge
         logger.warning("system/memory non disponibile: %s", e)
         raise HTTPException(status_code=503, detail="Memory metrics are not available")

@@ -30,37 +30,37 @@ ROTTO = {"outcome": "failed", "rows": 50, "errors": 1, "warnings": 0, "rules": [
 @pytest.fixture
 def scena(session, monkeypatch):
     capo = make_user(session, email="capo@x.it", is_superuser=True)
-    cartella = make_project(session, name="dati", owner_id=capo.id)
+    folder = make_project(session, name="dati", owner_id=capo.id)
     altrove = make_project(session, name="posta", owner_id=capo.id)
-    autore = make_user(session, email="autore@x.it")
-    make_permission(session, user_id=autore.id, project_id=cartella.id, capability=Capability.EDIT)
+    author = make_user(session, email="autore@x.it")
+    make_permission(session, user_id=author.id, project_id=folder.id, capability=Capability.EDIT)
     lettore = make_user(session, email="lettore@x.it")
-    make_permission(session, user_id=lettore.id, project_id=cartella.id, capability=Capability.VIEW)
+    make_permission(session, user_id=lettore.id, project_id=folder.id, capability=Capability.VIEW)
     smtp = Connection(name="posta", db_type="smtp", project_id=altrove.id, owner_id=capo.id, host="smtp.x.it", port=587,
                       username="u", extra='{"from_address": "tabularia@x.it", "allowed_domains": ["x.it"]}')
     session.add(smtp)
     session.commit()
-    ds = make_datasource(session, name="ordini", project_id=cartella.id, key="datasets/1/v1.parquet", rows=3)
+    ds = make_datasource(session, name="ordini", project_id=folder.id, key="datasets/1/v1.parquet", rows=3)
     c = contracts.save(session, ds, contracts.validate_document({"rules": REGOLE}), True, capo.id, notify=("alice@x.it, bruno@x.it", smtp.id))
     contracts.record_result(session, c, BENE, trigger="save")
     session.commit()
 
-    inviati = []
+    sent = []
 
     class _Client:
-        risposta = 200
+        answer = 200
 
         async def post(self, url, json=None, timeout=None):
-            inviati.append({"url": url, **(json or {})})
-            return SimpleNamespace(status_code=self.risposta, text="no")
+            sent.append({"url": url, **(json or {})})
+            return SimpleNamespace(status_code=self.answer, text="no")
 
     monkeypatch.setattr(contract_notifier, "get_engine_client", lambda: _Client())
     # le rotte che aspettano l'engine chiudono la sessione prima di aspettare: gli
     # oggetti della scena si staccano già caricati (vedi test_contracts.scena)
-    for o in (capo, autore, lettore, smtp, ds, cartella):
+    for o in (capo, author, lettore, smtp, ds, folder):
         session.refresh(o)
     session.expunge_all()
-    return SimpleNamespace(ds=ds, capo=capo, autore=autore, lettore=lettore, smtp=smtp, inviati=inviati, client=_Client)
+    return SimpleNamespace(ds=ds, capo=capo, author=author, lettore=lettore, smtp=smtp, sent=sent, client=_Client)
 
 
 def _referto(session, scena, report, trigger="refresh", **k):
@@ -81,22 +81,22 @@ def _stati(session):
 def test_un_aggiornamento_rifiutato_avvisa_e_dice_quale_regola(session, scena):
     _referto(session, scena, ROTTO, blocked=True, run_id=41)
     assert _consegna(session) == 1
-    (m,) = scena.inviati
+    (m,) = scena.sent
     assert m["url"] == "/db/notify" and m["to"] == ["alice@x.it", "bruno@x.it"]
     # alice and bruno are not users: English (see test_email_language.py for the others)
     assert m["subject"] == "[Tabularia] Data contract of «ordini»: update refused"
     assert "was NOT published" in m["body"] and "run #41" in m["body"]
     assert "[blocking] row_count: observed 50" in m["body"]
     assert _stati(session) == [None, "sent"]
-    (voce,) = session.exec(select(AuditLog).where(AuditLog.action == "email.send")).all()
-    assert voce.target_type == "datasource" and '"contract_state"' in voce.detail and '"refused"' in voce.detail
+    (item,) = session.exec(select(AuditLog).where(AuditLog.action == "email.send")).all()
+    assert item.target_type == "datasource" and '"contract_state"' in item.detail and '"refused"' in item.detail
 
 
 def test_non_ripete_finche_lo_stato_resta_quello(session, scena):
     _referto(session, scena, ROTTO, blocked=True)
     _referto(session, scena, ROTTO, blocked=True)      # la notte dopo: rifiutato di nuovo
     _referto(session, scena, ROTTO, blocked=True)
-    assert _consegna(session) == 1 and len(scena.inviati) == 1
+    assert _consegna(session) == 1 and len(scena.sent) == 1
     assert _stati(session) == [None, "sent", None, None]
 
 
@@ -106,14 +106,14 @@ def test_avvisa_quando_torna_a_posto_e_quando_si_guasta_di_nuovo(session, scena)
     _referto(session, scena, AVVISO)
     _referto(session, scena, AVVISO)
     assert _consegna(session) == 3
-    assert [m["subject"].rsplit(": ", 1)[1] for m in scena.inviati] == ["update refused", "met again", "rules not met (warning)"]
-    assert "[warning] not_null on id: 2 rows" in scena.inviati[2]["body"]
+    assert [m["subject"].rsplit(": ", 1)[1] for m in scena.sent] == ["update refused", "met again", "rules not met (warning)"]
+    assert "[warning] not_null on id: 2 rows" in scena.sent[2]["body"]
 
 
 def test_chi_salva_o_verifica_a_mano_non_riceve_niente(session, scena):
     _referto(session, scena, ROTTO, trigger="save")
     _referto(session, scena, AVVISO, trigger="manual")
-    assert _consegna(session) == 0 and scena.inviati == [] and _stati(session) == [None, None, None]
+    assert _consegna(session) == 0 and scena.sent == [] and _stati(session) == [None, None, None]
 
 
 def test_la_prima_verifica_andata_bene_non_e_una_notizia(session, scena):
@@ -128,8 +128,8 @@ def test_la_prima_verifica_andata_bene_non_e_una_notizia(session, scena):
 def test_la_freschezza_che_scade_avvisa_senza_che_arrivi_niente(session, scena):
     _referto(session, scena, {**ROTTO, "rules": [{"id": "r9", "kind": "freshness", "severity": "error", "passed": False, "observed": 30.5, "expected": 24}]}, trigger="freshness")
     assert _consegna(session) == 1
-    assert "contract broken" in scena.inviati[0]["subject"] and "freshness (the time" in scena.inviati[0]["body"]
-    assert "[blocking] freshness: observed 30.5" in scena.inviati[0]["body"]
+    assert "contract broken" in scena.sent[0]["subject"] and "freshness (the time" in scena.sent[0]["body"]
+    assert "[blocking] freshness: observed 30.5" in scena.sent[0]["body"]
 
 
 def test_senza_destinatari_o_senza_connessione_non_si_segna_niente(session, scena):
@@ -144,21 +144,21 @@ def test_senza_destinatari_o_senza_connessione_non_si_segna_niente(session, scen
 # ── la consegna ──────────────────────────────────────────────────────────────
 def test_un_avviso_gia_preso_da_un_altro_processo_non_parte_due_volte(session, scena):
     r = _referto(session, scena, ROTTO, blocked=True)
-    assert contract_notifier._segna(session, r.id, "pending", "sending")      # un altro processo lo ha preso
-    assert _consegna(session) == 0 and scena.inviati == []
+    assert contract_notifier._mark(session, r.id, "pending", "sending")      # un altro processo lo ha preso
+    assert _consegna(session) == 0 and scena.sent == []
 
 
 def test_se_la_posta_rifiuta_resta_scritto_e_non_si_riprova_all_infinito(session, scena):
-    scena.client.risposta = 502
+    scena.client.answer = 502
     _referto(session, scena, ROTTO, blocked=True)
     assert _consegna(session) == 0 and _stati(session) == [None, "failed"]
-    assert _consegna(session) == 0 and len(scena.inviati) == 1
+    assert _consegna(session) == 0 and len(scena.sent) == 1
 
 
 def test_un_avviso_rotto_non_ferma_gli_altri(session, scena, monkeypatch):
     _referto(session, scena, ROTTO, blocked=True)
     _referto(session, scena, BENE)
-    vero, chiamate = contract_notifier._manda, []
+    vero, chiamate = contract_notifier._send, []
 
     async def _a_volte(session, rid):
         chiamate.append(rid)
@@ -166,7 +166,7 @@ def test_un_avviso_rotto_non_ferma_gli_altri(session, scena, monkeypatch):
             raise RuntimeError("posta giù")
         return await vero(session, rid)
 
-    monkeypatch.setattr(contract_notifier, "_manda", _a_volte)
+    monkeypatch.setattr(contract_notifier, "_send", _a_volte)
     assert _consegna(session) == 1 and _stati(session) == [None, "failed", "sent"]
 
 
@@ -183,7 +183,7 @@ def test_connessione_o_contratto_spariti_l_avviso_si_salta(session, scena):
     _referto(session, scena, ROTTO, blocked=True)
     session.delete(session.get(Connection, scena.smtp.id))
     session.commit()
-    assert _consegna(session) == 0 and _stati(session) == [None, "skipped"] and scena.inviati == []
+    assert _consegna(session) == 0 and _stati(session) == [None, "skipped"] and scena.sent == []
 
 
 # ── chi può chiedere di essere avvisato ──────────────────────────────────────
@@ -212,16 +212,16 @@ async def test_scegliere_una_connessione_chiede_connect_tenerla_no(session, scen
     session.add(c)
     session.commit()
     with pytest.raises(HTTPException) as e:      # l'autore modifica il contratto, ma quella posta non è sua
-        await _salva(session, scena.autore, scena.ds, notify_connection_id=scena.smtp.id)
+        await _salva(session, scena.author, scena.ds, notify_connection_id=scena.smtp.id)
     assert e.value.status_code == 403
     await _salva(session, scena.capo, scena.ds, notify_connection_id=scena.smtp.id)
-    out = await _salva(session, scena.autore, scena.ds, notify_emails="alice@x.it, bruno@x.it", notify_connection_id=scena.smtp.id)   # rimanda tutto com'è
+    out = await _salva(session, scena.author, scena.ds, notify_emails="alice@x.it, bruno@x.it", notify_connection_id=scena.smtp.id)   # rimanda tutto com'è
     assert out.notify_connection_id == scena.smtp.id
     with pytest.raises(HTTPException) as e:      # ma non decide a chi spedisce la posta di un altro
-        await _salva(session, scena.autore, scena.ds, notify_emails="alice@x.it, nuovo@x.it", notify_connection_id=scena.smtp.id)
+        await _salva(session, scena.author, scena.ds, notify_emails="alice@x.it, nuovo@x.it", notify_connection_id=scena.smtp.id)
     assert e.value.status_code == 403
     assert contracts.get(session, scena.ds.id).notify_emails == "alice@x.it, bruno@x.it"
-    out = await _salva(session, scena.autore, scena.ds, notify_connection_id=0)                                           # spegnerla sì
+    out = await _salva(session, scena.author, scena.ds, notify_connection_id=0)                                           # spegnerla sì
     assert out.notify_connection_id is None
 
 
@@ -229,6 +229,6 @@ async def test_scegliere_una_connessione_chiede_connect_tenerla_no(session, scen
 async def test_chi_non_manda_i_campi_non_li_cambia_e_chi_legge_non_li_vede(session, scena, fake_engine):
     out = await _salva(session, scena.capo, scena.ds)
     assert (out.notify_emails, out.notify_connection_id) == ("alice@x.it, bruno@x.it", scena.smtp.id)
-    visto = routes.get_contract(scena.ds.id, scena.lettore, session)
-    assert (visto.notify_emails, visto.notify_connection_id, visto.editable) == ("", None, False)
-    assert routes.get_contract(scena.ds.id, scena.autore, session).notify_emails == "alice@x.it, bruno@x.it"
+    seen = routes.get_contract(scena.ds.id, scena.lettore, session)
+    assert (seen.notify_emails, seen.notify_connection_id, seen.editable) == ("", None, False)
+    assert routes.get_contract(scena.ds.id, scena.author, session).notify_emails == "alice@x.it, bruno@x.it"

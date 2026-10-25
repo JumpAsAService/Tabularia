@@ -1,29 +1,30 @@
-"""Risoluzione lato server della definizione di un flusso in richieste di run.
+"""Server-side resolution of a flow's definition into run requests.
 
-È il gemello Python di `resolveChain`/`executeOutputRuns` del frontend: serve
-allo SCHEDULER, che gira senza browser. Per ogni nodo Output produce il corpo
-di un run (bucket, input_key, operations, publish|destination), risalendo la
-catena e iniettando i rami destri di join/union e il driver/corpo dei foreach.
+It is the Python twin of the frontend's `resolveChain`/`executeOutputRuns`: the
+SCHEDULER needs it, which runs without a browser. For every Output node it makes a
+run's body (bucket, input_key, operations, publish|destination), walking up the
+chain and injecting the right branches of join/union and the driver/body of the
+foreach.
 
-Differenza cruciale con il frontend (Opzione A dello scheduling): le sorgenti
-datasource NON usano la chiave congelata nella definizione, ma vengono
-RI-RISOLTE allo snapshot corrente via `resolve_ds` (un refresh cancella il blob
-vecchio: una chiave congelata darebbe 404). Così il run schedulato usa sempre i
-dati correnti e segue le modifiche al flusso.
+The crucial difference from the frontend (the scheduling's Option A): datasource
+sources do NOT use the key frozen in the definition, they are RESOLVED AGAIN to the
+current snapshot through `resolve_ds` (a refresh deletes the old blob: a frozen key
+would give 404). So the scheduled run always uses the current data and follows the
+changes to the flow.
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Optional
 
-# (bucket, key) dello snapshot corrente di una datasource, o None se assente
+# (bucket, key) of a datasource's current snapshot, or None when missing
 DsResolver = Callable[[int], Optional[tuple[str, str]]]
 # the nodes that run outside Tabularia's engine and hand their output to the nodes after them
 STEP_NODE_TYPES = ("script", "container")
 
 
 class FlowResolveError(ValueError):
-    """La definizione non è eseguibile (output scollegato, sorgente mancante…).
+    """The definition cannot run (output disconnected, source missing…).
     `code` and `params` (optional) let a caller say it in the reader's language:
     "no_outputs", "output_no_source" {output}, "flow_loop" {node}."""
 
@@ -33,13 +34,12 @@ class FlowResolveError(ValueError):
         self.params = params
 
 
-# ── Filtri A MONTE sulle sorgenti ────────────────────────────────────────────
-# Un nodo sorgente può portare `data.filters` = [{column, operator, value}, …]:
-# condizioni in AND applicate SUBITO DOPO la lettura della sorgente, PRIMA di
-# ogni altra operazione (campione di sviluppo compreso). A differenza del
-# campione sono parte del flusso: valgono in sviluppo E in produzione, e
-# arrivano anche nell'export dbt. Diventano normali operazioni `filter` IR
-# (nessun marcatore: `strip_dev_sample_ops` non le tocca).
+# ── UPSTREAM filters on the sources ──────────────────────────────────────────
+# A source node may carry `data.filters` = [{column, operator, value}, …]: conditions
+# in AND applied RIGHT AFTER reading the source, BEFORE any other operation
+# (development sample included). Unlike the sample they are part of the flow: they
+# hold in development AND in production, and reach the dbt export too. They become
+# normal IR `filter` operations (no marker: `strip_dev_sample_ops` leaves them).
 SOURCE_FILTER_OPERATORS = frozenset({
     "eq", "ne", "gt", "ge", "lt", "le", "in", "not_in",
     "between", "contains", "starts_with", "ends_with", "is_null", "is_not_null",
@@ -48,10 +48,9 @@ _NO_VALUE_OPERATORS = frozenset({"is_null", "is_not_null"})
 
 
 def source_filter_operations(data: dict) -> list[dict]:
-    """Operazioni IR `filter` delle condizioni a monte di un nodo sorgente.
-    Le condizioni incomplete (senza colonna, operatore ignoto, valore mancante
-    dove serve) vengono IGNORATE, come fa l'editor: una riga appena aggiunta
-    non deve rompere il run."""
+    """The IR `filter` operations of a source node's upstream conditions. The incomplete
+    conditions (without a column, an unknown operator, a value missing where needed) are
+    IGNORED, as the editor does: a row just added must not break the run."""
     filters = (data or {}).get("filters")
     if not isinstance(filters, list):
         return []
@@ -77,41 +76,39 @@ def source_filter_operations(data: dict) -> list[dict]:
     return ops
 
 
-# ── Campione di SVILUPPO sulle sorgenti ──────────────────────────────────────
-# Un nodo sorgente può portare `data.sample` = {mode: "first"|"random", rows|percent}:
-# in modalità "development" (editor, run-now di prova) diventa un'operazione
-# iniettata SUBITO DOPO la sorgente; in "production" (scheduler, run-now
-# ?mode=production) NON viene mai iniettata: i flussi di produzione girano su
-# TUTTI i record. L'operazione porta il marcatore `_dev_sample` così
-# `strip_dev_sample_ops` può rimuoverla per difesa in profondità.
+# ── DEVELOPMENT sample on the sources ────────────────────────────────────────
+# A source node may carry `data.sample` = {mode: "first"|"random", rows|percent}: in
+# "development" mode (editor, trial run-now) it becomes an operation injected RIGHT
+# AFTER the source; in "production" (scheduler, run-now ?mode=production) it is never
+# injected: the production flows run on ALL the records. The operation carries the
+# `_dev_sample` marker so `strip_dev_sample_ops` can remove it for defence in depth.
 #
-# Campione AUTOMATICO (PREVIEW__DEFAULT_SAMPLE_ROWS > 0): un nodo SENZA
-# `data.sample` viene campionato alle prime N righe come se l'avesse chiesto;
-# `{mode: "off"}` e' lo spegnimento ESPLICITO da parte dell'utente e vale
-# «tutte le righe» anche con il default acceso. Speculare a `devSampleOperation`
-# in frontend/composables/useFlowModel.ts.
+# AUTOMATIC sample (PREVIEW__DEFAULT_SAMPLE_ROWS > 0): a node WITHOUT `data.sample` is
+# sampled to the first N rows as if it had asked; `{mode: "off"}` is the user's
+# EXPLICIT turning off and means «all rows» even with the default on. The mirror of
+# `devSampleOperation` in frontend/composables/useFlowModel.ts.
 DEV_SAMPLE_MARK = "_dev_sample"
 MAX_SAMPLE_ROWS = 100_000_000
 
 
 def default_sample_rows() -> int:
-    """Il campione automatico configurato (0 = spento), letto a ogni chiamata
-    perche' i test lo cambiano con monkeypatch sulle settings."""
+    """The configured automatic sample (0 = off), read at every call because the tests
+    change it with monkeypatch on the settings."""
     from app.core.config import get_settings
 
     return min(int(get_settings().preview.default_sample_rows or 0), MAX_SAMPLE_ROWS)
 
 
 def dev_sample_operation(data: dict, default_rows: int = 0) -> Optional[dict]:
-    """Operazione IR del campione di un nodo sorgente, o None se non campionato.
-    `default_rows` > 0 = campione automatico per i nodi senza `sample`."""
+    """The IR operation of a source node's sample, or None when not sampled.
+    `default_rows` > 0 = automatic sample for the nodes without `sample`."""
     sample = (data or {}).get("sample")
     if not isinstance(sample, dict):
         if default_rows > 0:
             return {"type": "limit", "params": {"n": min(int(default_rows), MAX_SAMPLE_ROWS), DEV_SAMPLE_MARK: True}}
         return None
     mode = sample.get("mode")
-    if mode == "off":  # spento dall'utente: vince sul default
+    if mode == "off":  # turned off by the user: wins over the default
         return None
     if mode == "first":
         try:
@@ -133,8 +130,8 @@ def dev_sample_operation(data: dict, default_rows: int = 0) -> Optional[dict]:
 
 
 def strip_dev_sample_ops(operations: list[dict]) -> tuple[list[dict], int]:
-    """Rimuove OVUNQUE (anche in right/driver/body annidati) le operazioni
-    marcate `_dev_sample`. Torna (operazioni pulite, numero rimosse)."""
+    """Removes EVERYWHERE (nested right/driver/body too) the operations marked
+    `_dev_sample`. Returns (clean operations, number removed)."""
     removed = 0
 
     def clean_ops(ops: Any) -> list[dict]:
@@ -166,7 +163,7 @@ def strip_dev_sample_ops(operations: list[dict]) -> tuple[list[dict], int]:
     return clean_ops(operations), removed
 
 
-# handle degli archi di SEQUENZA (orchestrazione), da NON confondere con i dati
+# handles of the SEQUENCE edges (orchestration), NOT to be confused with the data
 SEQ_TARGET_HANDLE = "seq-in"
 SEQ_SOURCE_HANDLE = "seq-out"
 
@@ -176,8 +173,8 @@ def _is_seq_edge(e: dict) -> bool:
 
 
 def _incoming(edges: list[dict]) -> dict[str, dict[str, str]]:
-    """target -> {left, right} in base al targetHandle degli archi DATI (gli archi
-    di sequenza, verticali, non fanno parte della pipeline dati)."""
+    """target -> {left, right} by the targetHandle of the DATA edges (the sequence edges,
+    vertical, are not part of the data pipeline)."""
     m: dict[str, dict[str, str]] = {}
     for e in edges:
         if _is_seq_edge(e):
@@ -189,15 +186,15 @@ def _incoming(edges: list[dict]) -> dict[str, dict[str, str]]:
 
 
 def _resolve_source(node: dict, resolve_ds: DsResolver) -> Optional[tuple[str, str]]:
-    """Nodo sorgente → (bucket, key). Datasource del catalogo → snapshot CORRENTE
-    (ri-risolto per id); upload → chiave del file (permanente)."""
+    """Source node → (bucket, key). A catalog datasource → the CURRENT snapshot (resolved
+    again by id); upload → the file's key (permanent)."""
     data = node.get("data") or {}
     ds_id = data.get("datasourceId")
     if ds_id is not None:
         resolved = resolve_ds(ds_id)
         if resolved and resolved[1]:
             return resolved
-        return None  # datasource sparita o senza snapshot → sorgente non risolvibile
+        return None  # datasource gone or without a snapshot → the source cannot be resolved
     key = data.get("parquetKey")
     if key:
         return (data.get("bucket"), key)
@@ -215,9 +212,9 @@ class _Resolver:
         self.edges = edges
         self.inc = _incoming(edges)
         self.resolve_ds = resolve_ds
-        # SOLO "development" inietta i campioni; qualsiasi altro valore = produzione
+        # ONLY "development" injects the samples; any other value = production
         self.dev_sampling = engine_mode == "development"
-        # il campione automatico si legge solo se serve: in produzione e' irrilevante
+        # the automatic sample is read only when needed: in production it does not matter
         self.default_sample_rows = default_sample_rows() if self.dev_sampling else 0
         # the calls in progress: the resolver is deterministic, so meeting the same call
         # again inside itself means the edges close a loop (e.g. a join's right input fed
@@ -238,15 +235,15 @@ class _Resolver:
             self._in_progress.discard(call)
 
     def chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
-        """Catena che termina in target_id: (sorgente risolta, operazioni IR)."""
+        """The chain ending in target_id: (resolved source, IR operations)."""
         source, ops, _ids = self.chain_with_ids(target_id)
         return source, ops
 
     def chain_with_ids(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict], list[str]]:
-        """Come `chain`, più l'id del nodo di OGNI operazione, allineato: serve a chi
-        deve riconoscere i passi condivisi fra più uscite (l'export dbt). Le
-        operazioni iniettate dal nodo sorgente (filtri a monte, campione) portano
-        l'id del nodo sorgente con il suffisso `#head`."""
+        """As `chain`, plus the node id of EVERY operation, aligned: whoever must recognize the
+        steps shared among several outputs needs it (the dbt export). The operations the
+        source node injects (upstream filters, sample) carry the source node's id with the
+        `#head` suffix."""
         with self._once(("chain", target_id), target_id):
             return self._chain_with_ids(target_id)
 
@@ -262,7 +259,7 @@ class _Resolver:
         seen: set[str] = set()
         source: Optional[tuple[str, str]] = None
         source_id: Optional[str] = None
-        head_ops: list[dict] = []  # operazioni del nodo sorgente: filtri a monte, poi campione
+        head_ops: list[dict] = []  # the source node's operations: upstream filters, then the sample
         cur: Optional[str] = target_id
         while cur and cur not in seen:
             seen.add(cur)
@@ -277,9 +274,9 @@ class _Resolver:
                 source = _resolve_source(node, self.resolve_ds)
                 source_id = cur
                 data = node.get("data") or {}
-                # filtri a monte: SEMPRE (sviluppo e produzione)
+                # upstream filters: ALWAYS (development and production)
                 head_ops = source_filter_operations(data)
-                # campione: SOLO in sviluppo, e sui dati già filtrati
+                # sample: ONLY in development, and on the data filtered already
                 if self.dev_sampling:
                     sample_op = dev_sample_operation(data, self.default_sample_rows)
                     if sample_op is not None:
@@ -339,7 +336,7 @@ class _Resolver:
                 and (e.get("targetHandle") or "left") == "left"
             ):
                 nxt[e["source"]] = e["target"]
-        # figlio d'ingresso: senza un input sinistro INTERNO al container
+        # an entry child: without a left input INSIDE the container
         cur = next(
             (c["id"] for c in children if self.inc.get(c["id"], {}).get("left") not in child_ids),
             None,
@@ -371,9 +368,9 @@ def _output_name(node: dict) -> str:
     """What the user calls an Output: the datasource, table or file it writes."""
     d = node.get("data") or {}
     dt = d.get("destType") or "datasource"
-    nome = (d.get("table") if dt == "database" else d.get("s3Key") if dt == "s3"
+    name = (d.get("table") if dt == "database" else d.get("s3Key") if dt == "s3"
             else d.get("sftpFileName") if dt == "sftp" else d.get("name"))
-    return str(nome or "").strip() or str(node.get("id") or "")
+    return str(name or "").strip() or str(node.get("id") or "")
 
 
 def _no_source(node: dict) -> FlowResolveError:
@@ -385,7 +382,7 @@ def _no_source(node: dict) -> FlowResolveError:
 
 
 def _output_body(node: dict, source: tuple[str, str], operations: list[dict], default_bucket: str) -> dict:
-    """Corpo-run (shape di RunCreate) di UN nodo Output già risolto."""
+    """The run body (RunCreate's shape) of ONE Output node resolved already."""
     bucket, key = source
     body: dict[str, Any] = {
         "bucket": bucket or default_bucket,
@@ -395,9 +392,9 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
     d = node.get("data") or {}
     dest_type = d.get("destType") or "datasource"
     if dest_type == "email":
-        # I destinatari sono testo libero nella definizione del flusso: il
-        # gateway li valida contro i domini ammessi della connessione prima di
-        # costruire il payload (vedi routes/runs.py). Qui si trasportano soltanto.
+        # The recipients are free text in the flow's definition: the gateway validates them
+        # against the connection's allowed domains before building the payload (see
+        # routes/runs.py). Here they are only carried.
         body["email"] = {
             "connection_id": d.get("connectionId"),
             "to": d.get("emailTo") or [],
@@ -407,8 +404,8 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
             "body_is_html": bool(d.get("emailHtml")),
             "attachment_name": (d.get("attachmentName") or "").strip(),
             "attachment_format": d.get("attachmentFormat") or "xlsx",
-            # scelta dell'utente: un invio fallito interrompe la sequenza invece
-            # di essere solo raccolto fra gli errori (vedi services/orchestrator)
+            # the user's choice: a failed send stops the sequence instead of being only collected
+            # among the errors (see services/orchestrator)
             "stop_on_failure": d.get("stopOnFailure") is not False,
         }
     elif dest_type == "database":
@@ -446,8 +443,8 @@ def _output_body(node: dict, source: tuple[str, str], operations: list[dict], de
             "overwrite": bool(d.get("overwrite")),
             "sort_keys": d.get("sortKeys") or [],
         }
-        # copia su S3 esterno IN AGGIUNTA alla datasource: `destination` resta
-        # libero, così il suo fallimento non è vincolante (vedi RunMirrorSpec)
+        # a copy to an external S3 AS WELL AS the datasource: `destination` stays free, so its
+        # failure does not bind (see RunMirrorSpec)
         if d.get("mirrorEnabled") and d.get("mirrorConnectionId"):
             body["mirror"] = {
                 "connection_id": d.get("mirrorConnectionId"),
@@ -468,12 +465,12 @@ def resolve_output_request(
     definition: dict, node: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production",
     script_outputs: Optional[dict[str, tuple[str, str]]] = None,
 ) -> dict:
-    """Risolve UN nodo Output → corpo-run. Solleva FlowResolveError se la sua
-    catena dati non ha una sorgente risolvibile.
+    """Resolves ONE Output node → run body. Raises FlowResolveError when its data chain has
+    no resolvable source.
 
-    `engine_mode`: default "production" (nessun campione, tutti i record); solo
-    "development" inietta i campioni di sviluppo dei nodi sorgente. I filtri a
-    monte (`data.filters`) delle sorgenti sono iniettati in OGNI modalità."""
+    `engine_mode`: default "production" (no sample, every record); only "development"
+    injects the source nodes' development samples. The sources' upstream filters
+    (`data.filters`) are injected in EVERY mode."""
     resolver = _Resolver(definition.get("nodes") or [], definition.get("edges") or [], resolve_ds, engine_mode,
                          script_outputs)
     source, operations = resolver.chain(node["id"])
@@ -514,10 +511,10 @@ def resolve_script_input(
 
 def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_bucket: str,
                           node_ids: Optional[Iterable[str]] = None) -> list[dict]:
-    """Per OGNI nodo Output (modalità produzione, senza campioni): il corpo-run, il
-    nodo stesso e gli id dei nodi delle sue operazioni — ciò che serve all'export
-    dbt per riconoscere i passi condivisi. Un Output senza sorgente risolvibile
-    solleva FlowResolveError, come `resolve_output_request`. With `node_ids`, only
+    """For EVERY Output node (production mode, without samples): the run body, the node
+    itself and the node ids of its operations — what the dbt export needs to recognize
+    the shared steps. An Output without a resolvable source raises FlowResolveError, as
+    `resolve_output_request` does. With `node_ids`, only
     those Outputs: a broken draft elsewhere in the flow does not matter."""
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
@@ -539,7 +536,7 @@ def resolve_output_chains(definition: dict, resolve_ds: DsResolver, default_buck
 def build_output_run_requests(
     definition: dict, resolve_ds: DsResolver, default_bucket: str, engine_mode: str = "production"
 ) -> list[dict]:
-    """Un corpo-run per ogni nodo Output del flusso (senza ordine di sequenza)."""
+    """One run body per Output node of the flow (without sequence order)."""
     nodes = definition.get("nodes") or []
     outputs = [n for n in nodes if n.get("type") == "output"]
     if not outputs:
@@ -547,7 +544,7 @@ def build_output_run_requests(
     return [resolve_output_request(definition, n, resolve_ds, default_bucket, engine_mode) for n in outputs]
 
 
-# ordine di esecuzione dei nodi non collegati in sequenza (default sensato)
+# the run order of the nodes not connected in sequence (a sensible default)
 _ACTION_TYPES = ("refresh", "script", "container", "output", "runflow")
 _DEFAULT_PRIORITY = {"refresh": 0, "script": 1, "container": 1, "output": 1, "runflow": 2}
 
@@ -576,11 +573,11 @@ def _scripts_upstream(node_id: str, nodes: dict[str, dict], edges: list[dict]) -
 
 
 def sequence_order(definition: dict) -> list[dict]:
-    """Ordina gli 'action node' (refresh/output/runflow) secondo gli archi di
-    SEQUENZA (topological sort, Kahn). I nodi non collegati escono nell'ordine
-    di default (refresh → output → runflow, poi ordine di dichiarazione), così i
-    flussi senza archi di sequenza mantengono il comportamento sensato di prima.
-    Cicli: i nodi coinvolti finiscono in coda nell'ordine di default (best effort).
+    """Sorts the 'action nodes' (refresh/output/runflow) by the SEQUENCE edges (topological
+    sort, Kahn). The unconnected nodes come out in the default order (refresh → output →
+    runflow, then declaration order), so flows without sequence edges keep the sensible
+    behaviour of before. Cycles: the nodes involved end up at the back in the default
+    order (best effort).
     """
     nodes = definition.get("nodes") or []
     edges = definition.get("edges") or []
@@ -619,7 +616,7 @@ def sequence_order(definition: dict) -> list[dict]:
                 newly.append(m)
         if newly:
             ready = sorted(ready + newly, key=rank)
-    # eventuali nodi in ciclo: appesi in coda, ordine di default
+    # any nodes in a cycle: appended at the back, default order
     for nid in sorted((nid for nid in by_id if nid not in seen), key=rank):
         out.append(by_id[nid])
     return out

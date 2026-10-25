@@ -1,9 +1,9 @@
-"""Informativa sulla privacy: la legge chiunque sia autenticato, la scrive l'admin.
+"""Privacy notice: anyone authenticated reads it, the admin writes it.
 
-Il testo di partenza NON è un modulo generico riempito di «ove applicabile»:
-descrive quello che questa installazione raccoglie davvero, ruolo per ruolo. Chi
-la adotta resta libero di riscriverla — è lui il titolare — ma parte da qualcosa
-di vero invece che da un segnaposto.
+The starting text is NOT a generic form filled with «where applicable»: it describes
+what this installation really collects, role by role. Whoever adopts it stays free to
+rewrite it — they are the controller — but starts from something true instead of from
+a placeholder.
 """
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -12,19 +12,19 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.db.session import get_session
 from app.deps.auth import require_superuser
-from app.models import PrivacyNotice, User  # noqa: F401 — User serve alla PUT
+from app.models import PrivacyNotice, User  # noqa: F401 — the PUT needs User
 from app.models.privacy import _now
 from app.schemas.models import UtcDateTime
 from app.services import audit
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["privacy"])
+router = APIRouter(route_class=ReleasingRoute, tags=["privacy"])
 
-SOMMARIO_PREDEFINITO = (
+DEFAULT_SUMMARY = (
     "What this installation records about you — and what it deliberately does not."
 )
 
-TESTO_PREDEFINITO = """\
+DEFAULT_TEXT = """\
 ## What we record about your account
 
 - The email address and the name entered when the account was created.
@@ -59,39 +59,39 @@ Set a contact here for access, correction and erasure requests.
 """
 
 
-def _durata(minuti: int) -> str:
-    """La finestra di conservazione detta come la direbbe una persona."""
-    if minuti <= 0:
+def _duration(minutes: int) -> str:
+    """The retention window said as a person would say it."""
+    if minutes <= 0:
         return "none — entries are kept until an administrator removes them"
-    if minuti % 1440 == 0:
-        giorni = minuti // 1440
-        return f"{giorni} day" if giorni == 1 else f"{giorni} days"
-    if minuti % 60 == 0:
-        ore = minuti // 60
+    if minutes % 1440 == 0:
+        days = minutes // 1440
+        return f"{days} day" if days == 1 else f"{days} days"
+    if minutes % 60 == 0:
+        ore = minutes // 60
         return f"{ore} hour" if ore == 1 else f"{ore} hours"
-    return f"{minuti} minute" if minuti == 1 else f"{minuti} minutes"
+    return f"{minutes} minute" if minutes == 1 else f"{minutes} minutes"
 
 
-def rendi(testo: str) -> str:
-    """Sostituisce i segnaposto col valore VERO della configurazione.
+def hand_back(text: str) -> str:
+    """Replaces the placeholders with the configuration's TRUE value.
 
-    Serve a una cosa sola: che l'informativa non possa mentire. Se domani
-    qualcuno cambia `AUDIT__RETENTION_MINUTES` e si dimentica di riscrivere il
-    testo, il testo si aggiorna da solo — perché il numero non è scritto lì
-    dentro, è letto da dove la decisione vive davvero.
+    It serves one thing only: that the notice cannot lie. If tomorrow someone changes
+    `AUDIT__RETENTION_MINUTES` and forgets to rewrite the text, the text updates by
+    itself — because the number is not written in there, it is read from where the
+    decision really lives.
 
-    Un segnaposto sconosciuto resta com'è invece di far saltare la pagina: chi
-    scrive un'informativa non deve rischiare di romperla con una graffa.
+    An unknown placeholder stays as it is instead of breaking the page: whoever writes a
+    notice must not risk breaking it with a brace.
     """
-    return testo.replace("{audit_retention}", _durata(get_settings().audit.retention_minutes))
+    return text.replace("{audit_retention}", _duration(get_settings().audit.retention_minutes))
 
 
 class PrivacyOut(BaseModel):
     enabled: bool
-    # con i segnaposto già sostituiti: è ciò che si mostra
+    # with the placeholders replaced already: it is what is shown
     summary: str
     body: str
-    # come li ha scritti l'amministratore: è ciò che si modifica
+    # as the administrator wrote them: it is what is edited
     summary_template: str
     body_template: str
     url: str
@@ -108,33 +108,33 @@ class PrivacyUpdate(BaseModel):
 def _out(n: PrivacyNotice) -> "PrivacyOut":
     return PrivacyOut(
         enabled=n.enabled,
-        summary=rendi(n.summary), body=rendi(n.body),
+        summary=hand_back(n.summary), body=hand_back(n.body),
         summary_template=n.summary, body_template=n.body,
         url=n.url, updated_at=n.updated_at,
     )
 
 
-def _leggi(session: Session) -> PrivacyNotice:
-    """La riga singola, creata alla prima lettura col testo di partenza."""
-    nota = session.exec(select(PrivacyNotice)).first()
-    if nota is None:
-        nota = PrivacyNotice(id=1, enabled=True, summary=SOMMARIO_PREDEFINITO,
-                             body=TESTO_PREDEFINITO, url="")
-        session.add(nota)
+def _read(session: Session) -> PrivacyNotice:
+    """The single row, created at the first read with the starting text."""
+    note = session.exec(select(PrivacyNotice)).first()
+    if note is None:
+        note = PrivacyNotice(id=1, enabled=True, summary=DEFAULT_SUMMARY,
+                             body=DEFAULT_TEXT, url="")
+        session.add(note)
         session.commit()
-        session.refresh(nota)
-    return nota
+        session.refresh(note)
+    return note
 
 
 @router.get("/privacy-notice", response_model=PrivacyOut)
 def get_privacy(session: Session = Depends(get_session)):
-    """PUBBLICA, senza autenticazione, ed è il punto: l'informativa si legge
-    PRIMA di entrare. Dirla solo a chi è già dentro significherebbe informare
-    qualcuno dopo avergli preso i dati.
+    """PUBLIC, without authentication, and that is the point: the notice is read BEFORE
+    signing in. Saying it only to whoever is in already would mean informing someone after
+    taking their data.
 
-    Non espone niente che non sia destinato a essere letto da chiunque: è un
-    testo che l'organizzazione pubblica di proposito."""
-    return _out(_leggi(session))
+    It exposes nothing not meant to be read by anyone: it is a text the organization
+    publishes on purpose."""
+    return _out(_read(session))
 
 
 @router.put("/privacy-notice", response_model=PrivacyOut)
@@ -143,18 +143,18 @@ def update_privacy(
     current: User = Depends(require_superuser),
     session: Session = Depends(get_session),
 ):
-    n = _leggi(session)
-    for campo in ("enabled", "summary", "body", "url"):
-        valore = getattr(body, campo)
-        if valore is not None:
-            setattr(n, campo, valore)
+    n = _read(session)
+    for field in ("enabled", "summary", "body", "url"):
+        value = getattr(body, field)
+        if value is not None:
+            setattr(n, field, value)
     n.updated_at = _now()
     n.updated_by = current.id
     session.add(n)
     session.commit()
     session.refresh(n)
-    # cambiare l'informativa cambia ciò che l'installazione DICHIARA a tutti:
-    # è una modifica che deve lasciare traccia come le altre
+    # changing the notice changes what the installation DECLARES to everyone: it is a change
+    # that must leave a trace like the others
     audit.record_audit(session, actor=current, action=audit.PRIVACY_UPDATE,
                        target_type="privacy_notice", target_id=n.id,
                        detail={"enabled": n.enabled})

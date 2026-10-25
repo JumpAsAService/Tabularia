@@ -1,11 +1,10 @@
-"""A chi può scrivere un avviso automatico: gli indirizzi e la connessione SMTP.
+"""Whom an automatic notice may write to: the addresses and the SMTP connection.
 
-Le stesse barriere per ogni avviso (un flusso programmato che fallisce, un data
-contract che cambia stato): gli indirizzi devono essere indirizzi; la connessione
-SMTP si usa solo con CONNECT sulla sua cartella — altrimenti chi può modificare
-un oggetto farebbe spedire dal server di posta di qualcun altro; e se la
-connessione limita i domini a cui spedisce, l'avviso non è una scorciatoia per
-aggirarla.
+The same barriers for every notice (a scheduled flow that fails, a data contract that
+changes state): the addresses must be addresses; the SMTP connection is used only with
+CONNECT on its folder — otherwise whoever can change an object would make someone
+else's mail server send; and when the connection limits the domains it sends to, the
+notice is not a shortcut around it.
 """
 from __future__ import annotations
 
@@ -18,12 +17,12 @@ from app.models.permission import Capability
 
 
 def parse_recipients(text: str | None) -> list[str]:
-    """Gli indirizzi di un elenco separato da virgole (o punti e virgola)."""
-    indirizzi = [a.strip() for a in (text or "").replace(";", ",").split(",") if a.strip()]
-    for a in indirizzi:
+    """The addresses of a list separated by commas (or semicolons)."""
+    addresses = [a.strip() for a in (text or "").replace(";", ",").split(",") if a.strip()]
+    for a in addresses:
         if "@" not in a or a.startswith("@") or a.endswith("@"):
             raise HTTPException(status_code=422, detail=f"Invalid address: {a}")
-    return indirizzi
+    return addresses
 
 
 def smtp_connection(session: Session, user: User, connection_id: int) -> Connection:
@@ -35,12 +34,12 @@ def smtp_connection(session: Session, user: User, connection_id: int) -> Connect
 
 
 def ensure_deliverable(conn: Connection | None, recipients: list[str]) -> None:
-    from app.routes.connections import allowed_email_domains  # routes → services: import tardivo
+    from app.routes.connections import allowed_email_domains  # routes → services: late import
 
-    ammessi = allowed_email_domains(conn) if conn else []
-    fuori = [a for a in recipients if a.rsplit("@", 1)[-1].lower() not in ammessi] if ammessi else []
-    if fuori:
+    allowed = allowed_email_domains(conn) if conn else []
+    outside = [a for a in recipients if a.rsplit("@", 1)[-1].lower() not in allowed] if allowed else []
+    if outside:
         raise HTTPException(
             status_code=422,
-            detail=f"This connection can only send to {', '.join(ammessi)}: {', '.join(fuori)} is not allowed",
+            detail=f"This connection can only send to {', '.join(allowed)}: {', '.join(outside)} is not allowed",
         )

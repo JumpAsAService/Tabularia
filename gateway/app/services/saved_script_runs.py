@@ -2,7 +2,7 @@
 group. See docs/specs/saved-scripts.md («Inputs», «Output», «Runs»).
 
 The run is queued as a flow's: a kind="orchestration" row with `saved_script_id`,
-claimed by an orchestrator, which hands it here from `orchestrator.esegui`, with the
+claimed by an orchestrator, which hands it here from `orchestrator.run_it`, with the
 heartbeat and the closing of orphans every orchestration has. Under it a
 kind="script" run, as a Script node's, holds the attempts, the log, the exit code
 and the output.

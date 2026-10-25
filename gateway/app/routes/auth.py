@@ -15,53 +15,53 @@ from app.core.passwords import password_problem
 from app.services import audit, first_run, login_throttle, sessions
 from app.services.permissions import is_admin, is_observer, is_observer_only, user_group_ids
 from app.schemas.models import LoginRequest, Token, MeOut, UtcDateTime
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/auth", tags=["auth"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/auth", tags=["auth"])
 
 # The hash of a password nobody knows, checked when the account has none of its
 # own, so that every refused sign-in costs the same bcrypt time.
-_NESSUNO = hash_password(secrets.token_urlsafe(24))
+_NOBODY = hash_password(secrets.token_urlsafe(24))
 
 
 @router.post("/login", response_model=Token)
 def login(body: LoginRequest, request: Request, response: Response, session: Session = Depends(get_session)):
-    """Apre una sessione. Il token torna nel corpo, per gli script e le API che lo
-    mettono nell'intestazione `Authorization`, e in un cookie `HttpOnly` per il
-    browser, che così non lo tiene mai dove il JavaScript lo legge."""
-    # Freno sui tentativi ripetuti, prima di tutto il resto: a chi è frenato si
-    # risponde con una lettura per chiave, senza arrivare a bcrypt (vedi
+    """Opens a session. The token comes back in the body, for the scripts and APIs that put
+    it in the `Authorization` header, and in an `HttpOnly` cookie for the browser, which
+    so never keeps it where JavaScript reads it."""
+    # A brake on repeated attempts, before everything else: whoever is braked gets an
+    # answer after one read by key, without reaching bcrypt (see
     # services/login_throttle.py).
     ip = audit.client_ip(request)  # as the server resolved it, never a header taken at its word
-    attesa = login_throttle.attesa_richiesta(session, ip, body.email)
-    if attesa > 0:
+    wait = login_throttle.request_wait(session, ip, body.email)
+    if wait > 0:
         audit.record_audit(
             session, actor=None, actor_label=body.email, action=audit.LOGIN_FAILED,
             outcome="failure", detail={"reason": "troppi tentativi"}, request=request,
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many sign-in attempts. Try again in {int(attesa) + 1} seconds.",
-            headers={"Retry-After": str(int(attesa) + 1)},
+            detail=f"Too many sign-in attempts. Try again in {int(wait) + 1} seconds.",
+            headers={"Retry-After": str(int(wait) + 1)},
         )
     user = session.exec(select(User).where(User.email == body.email)).first()
-    # l'hash contro cui si controlla la password: la sessione nascerà solo se è
-    # ancora quello (vedi sessions.apri)
-    verificata = user.hashed_password if user is not None else None
-    # utente solo-SSO (nessuna password locale): entra solo dall'IdP; un account di
-    # servizio entra solo con un token. bcrypt runs in every case, against a hash
+    # the hash the password is checked against: the session will be born only if it is
+    # still that one (see sessions.apri)
+    verified = user.hashed_password if user is not None else None
+    # an SSO-only user (no local password): signs in from the IdP only; a service
+    # account signs in with a token only. bcrypt runs in every case, against a hash
     # nobody knows when there is no password to check: answering an unknown email
     # after one SELECT (~35 ms) and a real one after bcrypt (~300 ms) told which
     # emails have a password account.
-    utilizzabile = user is not None and not user.is_service and bool(verificata)
-    giusta = verify_password(body.password, verificata if utilizzabile else _NESSUNO)
-    if not (utilizzabile and giusta):
-        # login fallito: si registra chi ci ha provato e da dove (email tentata)
+    usable = user is not None and not user.is_service and bool(verified)
+    right_one = verify_password(body.password, verified if usable else _NOBODY)
+    if not (usable and right_one):
+        # failed login: who tried and from where is recorded (the email tried)
         audit.record_audit(
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
             outcome="failure", detail={"reason": "credenziali errate"}, request=request,
         )
-        login_throttle.registra_errore(session, ip, body.email)
+        login_throttle.record_failure(session, ip, body.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     if not user.is_active:
         audit.record_audit(
@@ -69,21 +69,21 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
             detail={"reason": "utente disattivato"}, request=request,
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This user has been deactivated")
-    login_throttle.registra_successo(session, ip, body.email)
-    sessions.chiudi_quella_del_cookie(session, request)
+    login_throttle.record_success(session, ip, body.email)
+    sessions.close_the_cookies_session(session, request)
     try:
-        riga, token = sessions.apri(session, user, request, "password", password_verificata=verificata)
-    except sessions.AccessoSuperato:
-        # la password è cambiata (o l'account è stato disattivato) mentre si controllava
+        row, token = sessions.open_session(session, user, request, "password", verified_password=verified)
+    except sessions.SignInSuperseded:
+        # the password changed (or the account was disabled) while checking
         audit.record_audit(
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
             outcome="failure", detail={"reason": "password cambiata durante l'accesso"}, request=request,
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
-    sessions.scrivi_cookie(response, request, token, riga)
-    # All'interfaccia (che manda l'intestazione anti-CSRF) il token nel corpo non
-    # serve, e la pagina lo potrebbe leggere: le basta il cookie HttpOnly.
+    sessions.write_cookie(response, request, token, row)
+    # The interface (which sends the anti-CSRF header) does not need the token in the body,
+    # and the page could read it: the HttpOnly cookie is enough for it.
     if request.headers.get(sessions.CSRF_HEADER):
         return Token(access_token="")
     return Token(access_token=token)
@@ -133,9 +133,9 @@ def setup(body: SetupRequest, request: Request, response: Response, session: Ses
     session.refresh(user)
     audit.record_audit(session, actor=user, action=audit.FIRST_RUN_SETUP, target_type="user",
                        target_id=user.id, target_label=user.email, request=request)
-    riga, token = sessions.apri(session, user, request, "password", password_verificata=user.hashed_password)
+    row, token = sessions.open_session(session, user, request, "password", verified_password=user.hashed_password)
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
-    sessions.scrivi_cookie(response, request, token, riga)
+    sessions.write_cookie(response, request, token, row)
     if request.headers.get(sessions.CSRF_HEADER):
         return Token(access_token="")
     return Token(access_token=token)
@@ -157,26 +157,26 @@ def bootstrap(body: BootstrapRequest, request: Request, session: Session = Depen
     if admin is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="No administrator yet: create it at the sign-in page first.")
-    _riga, token = sessions.apri(session, admin, request, "bootstrap")
+    _row, token = sessions.open_session(session, admin, request, "bootstrap")
     audit.record_audit(session, actor=admin, action=audit.BOOTSTRAP_LOGIN, request=request)
     return Token(access_token=token)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(request: Request, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Chiude la sessione con cui arriva la richiesta: da qui il suo token non vale
-    più, ovunque sia stato copiato."""
-    sid = sessions.sid_corrente(request)
+    """Closes the session the request comes with: from here its token no longer holds,
+    wherever it was copied."""
+    sid = sessions.current_sid(request)
     if sid:
-        sessions.chiudi(session, sid, user.id)
+        sessions.close(session, sid, user.id)
     audit.record_audit(session, actor=user, action=audit.LOGOUT, request=request)
-    risposta = Response(status_code=status.HTTP_204_NO_CONTENT)
-    sessions.cancella_cookie(risposta, request)
-    return risposta
+    answer = Response(status_code=status.HTTP_204_NO_CONTENT)
+    sessions.delete_cookie(answer, request)
+    return answer
 
 
 class SessionOut(BaseModel):
-    """Una sessione aperta, come la vede chi la possiede."""
+    """An open session, as its owner sees it."""
     id: str
     created_at: UtcDateTime
     last_seen_at: UtcDateTime
@@ -184,25 +184,25 @@ class SessionOut(BaseModel):
     ip: Optional[str]
     user_agent: Optional[str]
     method: str
-    current: bool  # quella da cui arriva la domanda
+    current: bool  # the one the question comes from
 
 
-def _session_out(s: UserSession, corrente: Optional[str]) -> SessionOut:
+def _session_out(s: UserSession, current: Optional[str]) -> SessionOut:
     return SessionOut(
         id=s.id, created_at=s.created_at, last_seen_at=s.last_seen_at, expires_at=s.expires_at,
-        ip=s.ip, user_agent=s.user_agent, method=s.method, current=s.id == corrente,
+        ip=s.ip, user_agent=s.user_agent, method=s.method, current=s.id == current,
     )
 
 
-# quante sessioni si elencano al massimo (uno script che entra a ogni giro ne
-# apre una per volta: valgono 12 ore)
-ELENCO_MASSIMO = 200
+# how many sessions are listed at most (a script signing in at every round opens one at
+# a time: they hold 12 hours)
+MAX_LISTING = 200
 
 
-def _condiviso(session: Session, user: User) -> bool:
-    """Un OSSERVATORE e basta. È il ruolo dell'ospite di una demo pubblica, un
-    account che entra in tanti: le sessioni degli altri non sono sue da vedere né
-    da chiudere, e chiuderle butterebbe fuori tutti i visitatori."""
+def _shared(session: Session, user: User) -> bool:
+    """An OBSERVER and nothing else. It is the role of a public demo's guest, an account many
+    sign in with: the others' sessions are not theirs to see nor to close, and closing
+    them would throw out all the visitors."""
     from app.services.permissions import is_observer_only
 
     return is_observer_only(session, user)
@@ -210,43 +210,43 @@ def _condiviso(session: Session, user: User) -> bool:
 
 @router.get("/sessions", response_model=list[SessionOut])
 def my_sessions(request: Request, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Dove si è collegati adesso: un browser, un altro computer, uno script.
-    All'osservatore solo la sua (vedi `_condiviso`)."""
-    corrente = sessions.sid_corrente(request)
-    if _condiviso(session, user):
-        propria = session.get(UserSession, corrente) if corrente else None
-        return [_session_out(propria, corrente)] if propria is not None else []
-    return [_session_out(s, corrente) for s in sessions.aperte(session, user.id, limite=ELENCO_MASSIMO)]
+    """Where one is connected now: a browser, another computer, a script. The observer only
+    their own (see `_shared`)."""
+    current = sessions.current_sid(request)
+    if _shared(session, user):
+        own = session.get(UserSession, current) if current else None
+        return [_session_out(own, current)] if own is not None else []
+    return [_session_out(s, current) for s in sessions.open_ones(session, user.id, limit=MAX_LISTING)]
 
 
 @router.delete("/sessions/{sid}", status_code=status.HTTP_204_NO_CONTENT)
 def close_my_session(
     sid: str, request: Request, user: User = Depends(get_current_user), session: Session = Depends(get_session),
 ):
-    """Chiude una delle proprie sessioni. Quelle degli altri non si vedono: 404.
-    L'osservatore chiude solo quella da cui chiede, cioè esce."""
-    if sid != sessions.sid_corrente(request) and _condiviso(session, user):
+    """Closes one of one's own sessions. The others' are not seen: 404. The observer closes
+    only the one they ask from, that is they sign out."""
+    if sid != sessions.current_sid(request) and _shared(session, user):
         raise HTTPException(status_code=403, detail="Observers can only close their own session")
-    if not sessions.chiudi(session, sid, user.id):
+    if not sessions.close(session, sid, user.id):
         raise HTTPException(status_code=404, detail="Session not found")
     audit.record_audit(
         session, actor=user, action=audit.SESSION_REVOKE, request=request,
         target_type="user", target_id=user.id, target_label=user.email,
-        detail={"sessions": 1, "current": sid == sessions.sid_corrente(request)},
+        detail={"sessions": 1, "current": sid == sessions.current_sid(request)},
     )
-    risposta = Response(status_code=status.HTTP_204_NO_CONTENT)
-    if sid == sessions.sid_corrente(request):
-        sessions.cancella_cookie(risposta, request)
-    return risposta
+    answer = Response(status_code=status.HTTP_204_NO_CONTENT)
+    if sid == sessions.current_sid(request):
+        sessions.delete_cookie(answer, request)
+    return answer
 
 
 @router.post("/sessions/close-others", status_code=status.HTTP_204_NO_CONTENT)
 def close_other_sessions(request: Request, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """«Esci dagli altri dispositivi»: resta aperta solo questa. Non per
-    l'osservatore (vedi `_condiviso`)."""
-    if _condiviso(session, user):
+    """«Sign out of the other devices»: only this one stays open. Not for the observer (see
+    `_shared`)."""
+    if _shared(session, user):
         raise HTTPException(status_code=403, detail="Observers can only close their own session")
-    n = sessions.chiudi_tutte(session, user.id, tranne=sessions.sid_corrente(request))
+    n = sessions.close_all(session, user.id, except_=sessions.current_sid(request))
     if n:
         audit.record_audit(
             session, actor=user, action=audit.SESSION_REVOKE, request=request,
@@ -266,8 +266,8 @@ def me(user: User = Depends(get_current_user), session: Session = Depends(get_se
         email=user.email,
         full_name=user.full_name,
         is_active=user.is_active,
-        # EFFETTIVO: flag personale o gruppo di amministratori. È ciò con cui il
-        # frontend decide se mostrare l'amministrazione.
+        # EFFECTIVE: personal flag or administrators' group. It is what the frontend decides
+        # whether to show the administration with.
         is_superuser=is_admin(session, user),
         is_observer=is_observer(session, user),
         groups=list(names),
@@ -275,19 +275,18 @@ def me(user: User = Depends(get_current_user), session: Session = Depends(get_se
         sso_only=user.hashed_password is None,
         # the language the emails to this user speak (PUT /users/me/locale)
         locale=user.locale,
-        # la pagina esce da sé dopo questi minuti senza che nessuno la tocchi
+        # the page signs out by itself after these minutes without anyone touching it
         session_idle_minutes=get_settings().auth.session_idle_minutes,
-        # niente token personali per l'osservatore (vedi routes/api_tokens.py)
+        # no personal tokens for the observer (see routes/api_tokens.py)
         personal_tokens=get_settings().auth.personal_tokens and not is_observer_only(session, user),
         api_token_max_days=get_settings().auth.api_token_max_days,
     )
 
 
 @router.get("/observer", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_observer)], include_in_schema=False)
-def puo_osservare() -> None:
-    """«Può vedere il monitoraggio?» — sì (204) per amministratori e osservatori,
-    401/403 per gli altri. La chiama il reverse proxy (`forward_auth`) prima di
-    lasciar passare una richiesta verso Grafana, che di suo è anonimo perché
-    l'iframe non può condividere la sessione dell'app. Nessun corpo, nessuna
-    query oltre a quelle della guardia: viene chiamata a ogni richiesta."""
+def can_observe() -> None:
+    """«May they see the monitoring?» — yes (204) for administrators and observers, 401/403
+    for the others. The reverse proxy calls it (`forward_auth`) before letting a request
+    through to Grafana, which is anonymous by itself because the iframe cannot share the
+    app's session. No body, no query beyond the guard's: it is called at every request."""
     return None

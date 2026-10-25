@@ -97,10 +97,10 @@ def test_la_rotta_per_il_proxy_e_chiusa_dalla_guardia_degli_osservatori():
     from app.deps.auth import require_observer
     from app.routes import auth as auth_routes
 
-    rotta = next(r for r in auth_routes.router.routes if r.path == "/auth/observer")
-    assert rotta.methods == {"GET"} and rotta.status_code == 204
-    assert require_observer in [d.call for d in rotta.dependant.dependencies]
-    assert auth_routes.puo_osservare() is None
+    route = next(r for r in auth_routes.router.routes if r.path == "/auth/observer")
+    assert route.methods == {"GET"} and route.status_code == 204
+    assert require_observer in [d.call for d in route.dependant.dependencies]
+    assert auth_routes.can_observe() is None
 
 
 
@@ -132,5 +132,5 @@ def test_la_rotta_risponde_solo_a_chi_puo_osservare(session):
     assert client.get("/auth/observer", headers={"Authorization": "Bearer non-un-token"}).status_code == 401
     assert client.get("/auth/observer", headers=portatore(normale)).status_code == 403
     for chi in (osservatore, admin):
-        risposta = client.get("/auth/observer", headers=portatore(chi))
-        assert risposta.status_code == 204 and risposta.content == b""
+        answer = client.get("/auth/observer", headers=portatore(chi))
+        assert answer.status_code == 204 and answer.content == b""

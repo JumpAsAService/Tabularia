@@ -44,11 +44,11 @@ def _sostituisci(monkeypatch, lanciati: list[str]):
         return {"bucket": "b", "input_key": "k.parquet", "operations": []}
 
     async def finto_launch(session, user, flow, body, **kw):
-        tipo = lanciati[-1]
+        kind = lanciati[-1]
         run = Run(flow_id=flow.id, status="RUNNING", kind="flow")
         run.id = len(lanciati)
-        run.status = "FAILED" if tipo == "email" else "SUCCESS"
-        run.error = "SMTP non raggiungibile" if tipo == "email" else None
+        run.status = "FAILED" if kind == "email" else "SUCCESS"
+        run.error = "SMTP non raggiungibile" if kind == "email" else None
         return run
 
     async def finto_wait(session, run):
@@ -91,10 +91,10 @@ async def test_without_the_option_the_sequence_goes_on(session, monkeypatch):
     _sostituisci(monkeypatch, lanciati)
     utente = make_user(session, email="c@x.local", is_superuser=True)
 
-    errori = await orch.orchestrate(session, utente, _flusso(session, stop_on_failure=False))
+    errors = await orch.orchestrate(session, utente, _flusso(session, stop_on_failure=False))
 
     assert lanciati == ["email", "datasource"], lanciati
-    assert any("email" in x or "FAILED" in x for x in errori), errori
+    assert any("email" in x or "FAILED" in x for x in errors), errors
 
 
 async def test_an_email_refused_at_launch_stops_the_sequence_too(session, monkeypatch):
@@ -135,5 +135,5 @@ async def test_an_email_refused_at_launch_without_the_option_is_collected(sessio
 
     monkeypatch.setattr(orch, "_launch_flow_run", rifiuta)
     utente = make_user(session, email="e@x.local", is_superuser=True)
-    errori = await orch.orchestrate(session, utente, _flusso(session, stop_on_failure=False))
-    assert lanciati == ["email", "datasource"] and any("bad subject" in x for x in errori), errori
+    errors = await orch.orchestrate(session, utente, _flusso(session, stop_on_failure=False))
+    assert lanciati == ["email", "datasource"] and any("bad subject" in x for x in errors), errors

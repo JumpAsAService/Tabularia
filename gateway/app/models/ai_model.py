@@ -1,9 +1,9 @@
-"""Modelli AI che l'amministratore consente di usare nell'assistente.
+"""The AI models the administrator allows to use in the assistant.
 
-Regola opposta a quella dei motori: si memorizzano i modelli ABILITATI.
-Tabella vuota = nessun modello = assistente non utilizzabile. Un modello costa
-a ogni messaggio e il catalogo del provider cambia da solo: un modello nuovo
-non deve diventare usabile senza che qualcuno l'abbia deciso.
+The opposite rule from the engines': the ENABLED models are stored. An empty table =
+no model = the assistant cannot be used. A model costs at every message and the
+provider's catalog changes by itself: a new model must not become usable without
+someone having decided it.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -18,7 +18,7 @@ def _now() -> datetime:
 class AiModel(SQLModel, table=True):
     __tablename__ = "ai_models"
 
-    # l'id del modello presso il provider ("gpt-oss-120b", …) E' la chiave
+    # the model's id at the provider ("gpt-oss-120b", …) IS the key
     model_id: str = Field(primary_key=True)
     enabled: bool = True
     updated_at: datetime = Field(default_factory=_now)

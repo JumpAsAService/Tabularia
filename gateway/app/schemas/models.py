@@ -1,17 +1,17 @@
-"""Schemi di request/response del gateway. Separati dai modelli DB per non
-esporre mai `hashed_password` e per validare gli input."""
+"""The gateway's request/response schemas. Kept apart from the DB models so that
+`hashed_password` never goes out, and to validate the input."""
 from datetime import datetime, timezone
 from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
 from pydantic import AfterValidator, BaseModel, PlainSerializer, Field, field_validator, model_validator
 
-# ── Datetime in uscita: sempre con l'offset ───────────────────────────────────
-# Le colonne TIMESTAMP del DB sono naive e per convenzione in UTC (vedi
-# scheduler.py). Serializzate cosi' com'erano, arrivavano al browser SENZA
-# offset ("2026-09-16T20:57:02") e `new Date()` le leggeva come ora LOCALE:
-# ogni orario dei run appariva spostato dell'offset del client (a Roma, due ore
-# prima) — nel Gantt un run appena partito sembrava durare due ore. Qui si
-# esplicita cio' che il DB sottintende: +00:00. Solo in JSON: in Python restano
-# datetime, per non cambiare confronti e test.
+# ── Outgoing datetimes: always with the offset ────────────────────────────────
+# The DB's TIMESTAMP columns are naive and in UTC by convention (see scheduler.py).
+# Serialized as they were, they reached the browser WITHOUT an offset
+# ("2026-09-16T20:57:02") and `new Date()` read them as LOCAL time: every run time
+# showed shifted by the client's offset (in Rome, two hours earlier) — in the Gantt a
+# run just started seemed to last two hours. Here what the DB implies is made
+# explicit: +00:00. Only in JSON: in Python they stay datetimes, so comparisons and
+# tests do not change.
 def _utc_iso(d: datetime) -> str:
     return (d if d.tzinfo is not None else d.replace(tzinfo=timezone.utc)).isoformat()
 
@@ -24,16 +24,16 @@ T = TypeVar("T")
 
 
 class Page(BaseModel, Generic[T]):
-    """Una pagina di risultati: gli elementi + il totale che combacia col filtro
-    (per mostrare 'X–Y di Z' e navigare). Il filtro `q` gira SEMPRE sul dataset
-    intero lato server, non sulla pagina corrente."""
+    """A page of results: the items + the total that matches the filter (to show 'X–Y of
+    Z' and navigate). The `q` filter ALWAYS runs over the whole dataset on the server,
+    not over the current page."""
     items: list[T]
     total: int
 
 
-# Nota: l'email è un semplice `str`, non `EmailStr`. È uno strumento interno: gli
-# admin usano spesso domini riservati (es. *.local, *.internal) che il validatore
-# di deliverability rifiuterebbe. Qui l'email è solo un identificativo di login.
+# Note: the email is a plain `str`, not `EmailStr`. It is an internal tool: admins
+# often use reserved domains (e.g. *.local, *.internal) the deliverability validator
+# would refuse. Here the email is only a login identifier.
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -54,40 +54,38 @@ class UserOut(BaseModel):
     full_name: str
     is_active: bool
     is_superuser: bool
-    # Campi informativi per la pagina Admin. TUTTI con un default: `MeOut` eredita
-    # da qui ed è costruito a mano in routes/auth.py, che passa solo i primi cinque.
+    # Informative fields for the Admin page. ALL with a default: `MeOut` inherits from
+    # here and is built by hand in routes/auth.py, which passes only the first five.
     created_at: Optional[UtcDateTime] = None
-    last_seen_at: Optional[UtcDateTime] = None  # ultima attività autenticata
-    sso_only: bool = False  # nessuna password locale: entra solo dall'IdP
+    last_seen_at: Optional[UtcDateTime] = None  # the last authenticated activity
+    sso_only: bool = False  # no local password: signs in from the IdP only
     groups: list[str] = []
-    # Gruppi di amministratori a cui appartiene: è admin anche se `is_superuser`
-    # (il flag PERSONALE, quello che l'interruttore modifica) è falso.
+    # The admin groups they belong to: they are admin even when `is_superuser` (the
+    # PERSONAL flag, the one the switch changes) is false.
     admin_groups: list[str] = []
-    # Osservatore: LEGGE i pannelli di amministrazione, non scrive nulla. Come
-    # sopra, qui il flag è quello PERSONALE e i gruppi sono l'altra via.
-    # Un amministratore è osservatore per definizione, senza che il flag sia
-    # acceso: chi legge questo campo sta guardando un interruttore, non un
-    # permesso — per il permesso c'è `permissions.is_observer`.
+    # Observer: READS the admin panels, writes nothing. As above, here the flag is the
+    # PERSONAL one and the groups are the other way. An administrator is an observer by
+    # definition, without the flag being on: whoever reads this field is looking at a
+    # switch, not a permission — for the permission there is `permissions.is_observer`.
     is_observer: bool = False
     observer_groups: list[str] = []
-    # account di servizio: un'integrazione, entra solo con un token API
+    # a service account: an integration, it signs in with an API token only
     is_service: bool = False
 
 
 class MeOut(UserOut):
-    """Sé stessi. Attenzione: a differenza di `UserOut`, qui `is_superuser` e
-    `is_observer` sono EFFETTIVI — `routes/auth.py` li calcola con
-    `permissions.is_admin`/`is_observer`, quindi tengono conto dei gruppi. È il
-    campo su cui il frontend decide che cosa mostrare, e deve rispondere alla
-    domanda «posso?», non «ho il flag?»."""
+    """Oneself. Beware: unlike `UserOut`, here `is_superuser` and `is_observer` are
+    EFFECTIVE — `routes/auth.py` computes them with `permissions.is_admin`/`is_observer`,
+    so they account for the groups. It is the field the frontend decides what to show
+    on, and it must answer «may I?», not «do I have the flag?»."""
 
     groups: list[str] = []
-    # AUTH__SESSION_IDLE_MINUTES: la pagina esce da sé dopo tanti minuti senza
-    # che nessuno la tocchi (0 = mai)
+    # AUTH__SESSION_IDLE_MINUTES: the page signs out by itself after that many minutes
+    # without anyone touching it (0 = never)
     session_idle_minutes: int = 0
-    # AUTH__PERSONAL_TOKENS: l'utente può crearsi token API per i suoi script
+    # AUTH__PERSONAL_TOKENS: users may create API tokens for their scripts
     personal_tokens: bool = False
-    # AUTH__API_TOKEN_MAX_DAYS: la scadenza più lontana che un token può avere
+    # AUTH__API_TOKEN_MAX_DAYS: the farthest expiry a token may have
     api_token_max_days: int = 365
     # the language last chosen in the interface (None = never): the emails follow it
     locale: Optional[str] = None
@@ -144,8 +142,8 @@ class GroupOut(BaseModel):
     description: str
     created_at: Optional[UtcDateTime] = None
     member_count: int = 0
-    is_admin: bool = False  # i membri sono amministratori
-    is_observer: bool = False  # i membri leggono i pannelli, senza scrivere
+    is_admin: bool = False  # the members are administrators
+    is_observer: bool = False  # the members read the panels, without writing
 
 
 class GroupCreate(BaseModel):
@@ -169,18 +167,18 @@ class BannerOut(BaseModel):
 
 
 class BannerCreate(BaseModel):
-    """Il livello decide solo icona e colore: un banner è sempre visibile a tutti."""
+    """The level decides only the icon and the colour: a banner is always visible to all."""
     message: str = Field(min_length=1, max_length=500)
     level: Literal["info", "warning", "danger"] = "warning"
 
 
-# ── Engine policy (motori che l'installazione consente) ───────────────────────
+# ── Engine policy (the engines the installation allows) ───────────────────────
 class EnginePolicyOut(BaseModel):
-    """Stato di un motore per l'installazione.
+    """The state of an engine for the installation.
 
-    `flows_using` è la lista di lavoro della migrazione: disabilitare un motore
-    non ferma i flussi che lo usano già, quindi il numero dice quanti restano
-    fuori standard — altrimenti la standardizzazione resterebbe cosmetica."""
+    `flows_using` is the migration's work list: disabling an engine does not stop the
+    flows that use it already, so the number says how many are still off standard —
+    otherwise the standardization would stay cosmetic."""
     engine_id: str
     allowed: bool
     flows_using: int = 0
@@ -190,10 +188,10 @@ class EnginePolicyUpdate(BaseModel):
     allowed: bool
 
 
-# ── Saved views (configurazioni del Viewer salvate in cartella) ───────────────
+# ── Saved views (Viewer configurations saved in a folder) ─────────────────────
 class SavedViewOut(BaseModel):
-    """`datasource_name` è risolto lato server: l'elenco di una cartella deve
-    poter dire SU COSA è la vista senza che il client risolva N id."""
+    """`datasource_name` is resolved on the server: a folder's listing must be able to say
+    WHAT the view is about without the client resolving N ids."""
     id: int
     name: str
     description: str = ""
@@ -201,8 +199,8 @@ class SavedViewOut(BaseModel):
     owner_id: Optional[int] = None
     datasource_id: int
     datasource_name: Optional[str] = None
-    # JSON opaco: la forma appartiene al Viewer, il gateway ne verifica solo la
-    # validità sintattica (vedi models/saved_view.py)
+    # opaque JSON: the shape belongs to the Viewer, the gateway checks only its syntax
+    # (see models/saved_view.py)
     spec: str = "{}"
     created_at: Optional[UtcDateTime] = None
     updated_at: Optional[UtcDateTime] = None
@@ -219,7 +217,7 @@ class SavedViewUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     spec: Optional[str] = None
-    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+    project_id: Optional[int] = None  # set = move to another folder
 
 
 # ── Flow groups (steps in order, cells of a step in parallel) ──────────────────
@@ -336,20 +334,20 @@ class FlowGroupDetail(FlowGroupOut):
     can_run: bool = False
 
 
-# ── Ricerca unificata (per nome, su tutti i tipi di risorsa) ──────────────────
+# ── Unified search (by name, over every kind of resource) ─────────────────────
 SearchKind = Literal["folder", "flow", "group", "datasource", "view", "script", "connection"]
 
 
 class SearchHit(BaseModel):
-    """Una risorsa trovata. `project_*` dice DOVE si trova: per una cartella è la
-    cartella che la contiene, per tutto il resto è la cartella che la ospita —
-    senza, un risultato con un nome comune non è distinguibile da un altro."""
+    """A resource found. `project_*` says WHERE it is: for a folder it is the folder that
+    contains it, for everything else the folder that hosts it — without it, a result
+    with a common name cannot be told from another."""
     kind: SearchKind
     id: int
     name: str
     project_id: Optional[int] = None
     project_name: Optional[str] = None
-    detail: str = ""  # riga di contesto, dipende dal tipo (es. db_type/host)
+    detail: str = ""  # a context line, depends on the kind (e.g. db_type/host)
     rows: Optional[int] = None  # datasource: its row count (the interface formats it)
     # a flow the person asking cannot open (images or scripts the panel did not grant
     # them): shown greyed out with this reason; None = it opens
@@ -357,8 +355,8 @@ class SearchHit(BaseModel):
 
 
 class SearchOut(BaseModel):
-    """`counts` alimenta il selettore per tipo con i numeri: si calcola comunque
-    per ordinare, quindi non costa una query in più."""
+    """`counts` feeds the kind selector with the numbers: it is computed anyway to sort,
+    so it does not cost one more query."""
     items: list[SearchHit]
     total: int
     counts: dict[str, int] = Field(default_factory=dict)
@@ -387,24 +385,24 @@ class ProjectUpdate(BaseModel):
 
 # ── Flows ─────────────────────────────────────────────────────────────────────
 class FlowOut(BaseModel):
-    """Voce di lista: senza `definition` (può pesare, serve solo all'editor)."""
+    """A list item: without `definition` (it can be heavy, only the editor needs it)."""
     id: int
     name: str
     description: str
     project_id: int
     owner_id: Optional[int]
-    owner_name: Optional[str] = None  # nome di chi ha creato il flusso (risolto)
-    engine: str = "polars"  # motore di SVILUPPO (editor, run manuali)
-    production_engine: Optional[str] = None  # motore dei run SCHEDULATI; null = come engine
-    run_schedule: Optional[str] = None  # cron; null = non schedulato
+    owner_name: Optional[str] = None  # the name of whoever created the flow (resolved)
+    engine: str = "polars"  # the DEVELOPMENT engine (editor, manual runs)
+    production_engine: Optional[str] = None  # the engine of the SCHEDULED runs; null = as engine
+    run_schedule: Optional[str] = None  # cron; null = not scheduled
     next_run_at: Optional[UtcDateTime] = None
-    # avviso quando un'esecuzione PROGRAMMATA fallisce (vedi services/notifier.py)
+    # a notice when a SCHEDULED run fails (see services/notifier.py)
     notify_emails: Optional[str] = None
     notify_connection_id: Optional[int] = None
     created_at: Optional[UtcDateTime] = None
     updated_at: Optional[UtcDateTime] = None
-    # stato dell'ULTIMO run (per l'indicatore nella lista, senza aprire l'expander):
-    # SUCCESS | FAILURE | STARTED | PENDING | null (mai eseguito)
+    # the state of the LAST run (for the indicator in the list, without opening the
+    # expander): SUCCESS | FAILURE | STARTED | PENDING | null (never run)
     last_run_status: Optional[str] = None
     last_run_at: Optional[UtcDateTime] = None
     # why the person asking cannot open it (it runs images of a container registry
@@ -420,17 +418,17 @@ class FlowCreate(BaseModel):
     name: str
     description: str = ""
     definition: str = "{}"
-    engine: str = "polars"  # scelto alla creazione
-    production_engine: Optional[str] = None  # facoltativo; null/"" = come engine
+    engine: str = "polars"  # chosen at creation
+    production_engine: Optional[str] = None  # optional; null/"" = as engine
 
 
 class FlowScheduleUpdate(BaseModel):
-    """Imposta/disabilita l'esecuzione schedulata del flusso. `cron` vuoto = off.
-    `production_engine`: omesso = invariato; "" = torna uguale allo sviluppo."""
+    """Sets/disables the flow's scheduled run. An empty `cron` = off.
+    `production_engine`: omitted = unchanged; "" = back to the same as development."""
     cron: Optional[str] = None
     production_engine: Optional[str] = None
-    # Avviso di fallimento: indirizzi separati da virgola e la connessione SMTP
-    # che li spedisce. `""` spegne l'avviso; omessi = invariati.
+    # Failure notice: addresses separated by commas and the SMTP connection that sends
+    # them. `""` turns the notice off; omitted = unchanged.
     notify_emails: Optional[str] = None
     notify_connection_id: Optional[int] = None
 
@@ -440,23 +438,23 @@ class FlowUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     definition: Optional[str] = None
-    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
-    engine: Optional[str] = None  # valorizzato = cambia il motore di sviluppo
-    production_engine: Optional[str] = None  # valorizzato = cambia il motore di produzione ("" = come sviluppo)
+    project_id: Optional[int] = None  # set = move to another folder
+    engine: Optional[str] = None  # set = change the development engine
+    production_engine: Optional[str] = None  # set = change the production engine ("" = as development)
 
 
 class FlowVersionOut(BaseModel):
-    """Una versione della definizione di un flusso (storico + promozione)."""
+    """A version of a flow's definition (history + promotion)."""
     version: int
     note: str
     created_at: Optional[UtcDateTime]
     created_by: Optional[int]
-    created_by_name: Optional[str] = None  # nome/email di chi ha rilasciato la versione
+    created_by_name: Optional[str] = None  # name/email of whoever released the version
     is_current: bool
 
 
 class FlowStatsOut(BaseModel):
-    """Statistiche d'esecuzione di un flusso (dalla cronologia dei run)."""
+    """A flow's run statistics (from the run history)."""
     run_count: int
     success_count: int
     failure_count: int
@@ -464,9 +462,9 @@ class FlowStatsOut(BaseModel):
     avg_duration_seconds: Optional[float]
 
 
-# ── Connections (connessioni a database esterni) ─────────────────────────────
+# ── Connections (connections to external databases) ───────────────────────────
 class ConnectionOut(BaseModel):
-    """La password NON esce mai dalle API: solo un flag che dice se è impostata."""
+    """The password NEVER leaves the API: only a flag saying whether it is set."""
     id: int
     name: str
     description: str
@@ -478,9 +476,9 @@ class ConnectionOut(BaseModel):
     username: str
     database: str
     db_schema: str
-    # opzioni specifiche del tipo (JSON). Oggi solo SMTP: mittente, modalità TLS
-    # e domini ammessi. Non contiene segreti, quindi può tornare al client —
-    # serve a ripopolare il form quando si modifica la connessione.
+    # the kind's own options (JSON). Today only SMTP: sender, TLS mode and allowed
+    # domains. It holds no secrets, so it may go back to the client — it serves to fill
+    # the form again when the connection is edited.
     extra: str = "{}"
     has_password: bool = False
     # SFTP: whether a private key is stored (never the key), and the host key
@@ -498,10 +496,10 @@ class ConnectionCreate(BaseModel):
     host: str
     port: Optional[int] = None
     username: str = ""
-    password: str = ""  # in chiaro solo nel body della richiesta; cifrata a riposo
+    password: str = ""  # in clear only in the request's body; encrypted at rest
     database: str = ""
     db_schema: str = ""
-    extra: str = "{}"  # opzioni del tipo (SMTP: from_address, tls, allowed_domains; SFTP: auth)
+    extra: str = "{}"  # the kind's options (SMTP: from_address, tls, allowed_domains; SFTP: auth)
     # SFTP with the key method: the private key (PEM or OpenSSH) and its passphrase,
     # in clear only in the request's body; stored encrypted, together
     private_key: str = Field(default="", max_length=32_000)
@@ -523,35 +521,35 @@ class ConnectionUpdate(BaseModel):
     host: Optional[str] = None
     port: Optional[int] = None
     username: Optional[str] = None
-    password: Optional[str] = None  # valorizzata = sostituisce quella cifrata
+    password: Optional[str] = None  # set = replaces the encrypted one
     database: Optional[str] = None
     db_schema: Optional[str] = None
     extra: Optional[str] = None
-    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
+    project_id: Optional[int] = None  # set = move to another folder
     # SFTP: set = replaces the stored key ("" removes it); a passphrase alone
     # keeps the stored key and replaces its passphrase
     private_key: Optional[str] = Field(default=None, max_length=32_000)
     private_key_passphrase: Optional[str] = Field(default=None, max_length=1_000)
 
 
-# ── Runs (esecuzioni dei flussi) ──────────────────────────────────────────────
+# ── Runs (the flows' runs) ────────────────────────────────────────────────────
 class PublishSpec(BaseModel):
-    """Richiesta di pubblicare l'output del run come datasource nominata."""
+    """A request to publish the run's output as a named datasource."""
     name: str
     project_id: int
     description: str = ""
-    # se una datasource con questo nome esiste già nella cartella: sovrascrivila
-    # (solo se è kind="flow") invece di fallire con 409
+    # when a datasource with this name exists in the folder already: overwrite it (only
+    # when it is kind="flow") instead of failing with 409
     overwrite: bool = False
-    # colonne per l'ORDER BY: il risultato viene ordinato prima di scriverlo
-    # (parquet ordinato → pruning a valle) e le chiavi restano sulla datasource
+    # columns for the ORDER BY: the result is sorted before being written (a sorted
+    # parquet → pruning downstream) and the keys stay on the datasource
     sort_keys: list[str] = Field(default_factory=list)
 
 
 class RunDestinationSpec(BaseModel):
-    """Destinazione dell'output (nodo Output del flusso): tabella di database,
-    oggetto/dataset su S3 o file su un server SFTP. La connessione è referenziata
-    per id, le credenziali non passano MAI dal client."""
+    """The output's destination (the flow's Output node): a database table, an
+    object/dataset on S3 or a file on an SFTP server. The connection is referenced by
+    id, the credentials NEVER pass through the client."""
     type: Literal["database", "s3", "sftp"] = "database"
     connection_id: int
     # type="database"
@@ -559,11 +557,11 @@ class RunDestinationSpec(BaseModel):
     mode: Literal["append", "replace"] = "append"
     post_sql: str = ""
     # type="s3"
-    bucket: str = ""  # vuoto = bucket di default della connessione
-    key: str = ""  # chiave del file, o prefisso se partizionato
+    bucket: str = ""  # empty = the connection's default bucket
+    key: str = ""  # the file's key, or the prefix when partitioned
     # s3: parquet | csv; sftp: csv | parquet | xlsx
     format: Literal["parquet", "csv", "xlsx"] = "parquet"
-    partition_by: list[str] = Field(default_factory=list)  # hive: colonna=valore/…
+    partition_by: list[str] = Field(default_factory=list)  # hive: column=value/…
     # type="sftp": the folder on the server (empty = the login directory) and the
     # file-name template ({date}, {datetime}, {run_id}, {flow})
     folder: str = Field(default="", max_length=1000)
@@ -573,39 +571,37 @@ class RunDestinationSpec(BaseModel):
 
 
 class RunMirrorSpec(BaseModel):
-    """Copia dell'output su uno storage S3 esterno, IN AGGIUNTA alla
-    pubblicazione come datasource (non al posto suo: per quella c'è
-    `RunDestinationSpec` con type="s3", dove la scrittura È il risultato).
+    """A copy of the output to an external S3 storage, AS WELL AS the publishing as a
+    datasource (not instead of it: for that there is `RunDestinationSpec` with
+    type="s3", where the writing IS the result).
 
     Written at the path of its key at every run: the same object overwritten, or —
     when the key holds placeholders (`copia/{date}.parquet`) — one per day or per
-    run. Niente partizioni. Best effort: a failed copy, or a key whose placeholders
+    run. No partitions. Best effort: a failed copy, or a key whose placeholders
     cannot be resolved (then the copy is skipped), never fails the run nor the
     publish; the outcome is recorded on the run.
-    La connessione è referenziata per id: le credenziali non passano dal client.
+    The connection is referenced by id: the credentials do not pass through the client.
 
-    SOLO parquet, e non è una svista: il formato non è scelto perché nome del
-    file e formato sarebbero indipendenti, e un CSV chiamato `.parquet` verrebbe
-    aperto come parquet da chi lo legge a valle. Togliere la scelta rende
-    l'errore impossibile invece di avvisare che è possibile."""
+    Parquet ONLY, and not by oversight: the format is not a choice because the file's
+    name and the format would be independent, and a CSV called `.parquet` would be
+    opened as parquet by whoever reads it downstream. Removing the choice makes the
+    mistake impossible instead of warning that it is possible."""
     connection_id: int
-    bucket: str = ""  # vuoto = bucket di default della connessione
-    key: str  # percorso completo dell'oggetto (sottocartella + nome file)
+    bucket: str = ""  # empty = the connection's default bucket
+    key: str  # the object's whole path (subfolder + file name)
     timezone: str = Field(default="", max_length=64)  # of the placeholders in the key; empty = UTC
 
 
 class RunEmailSpec(BaseModel):
-    """Invio dell'output come allegato email (nodo Output con destType="email").
+    """Sending the output as an email attachment (an Output node with destType="email").
 
-    I destinatari sono testo libero nella definizione del flusso, quindi questo è
-    l'unico tipo di destinazione che può mandare dati verso un indirizzo
-    arbitrario. Due conseguenze, entrambe applicate dal gateway e non dal client:
-    i destinatari vengono validati contro i domini ammessi della connessione, e
-    ogni invio finisce nell'audit.
+    The recipients are free text in the flow's definition, so this is the only kind of
+    destination that can send data to an arbitrary address. Two consequences, both
+    applied by the gateway and not by the client: the recipients are validated against
+    the connection's allowed domains, and every send ends up in the audit.
 
-    `stop_on_failure` (default acceso) fa interrompere la SEQUENZA del flusso, non
-    solo fallire il run: i passi a valle di una notifica spesso la danno per
-    avvenuta.
+    `stop_on_failure` (on by default) stops the flow's SEQUENCE, not only fails the run:
+    the steps downstream of a notification often take it for done.
     """
     connection_id: int
     to: list[str] = Field(default_factory=list)
@@ -626,21 +622,20 @@ class RunCreate(BaseModel):
     operations: list[dict] = Field(default_factory=list)
     publish: Optional[PublishSpec] = None
     destination: Optional[RunDestinationSpec] = None
-    # convive con `publish`: la datasource è il risultato, questa è la copia
+    # lives alongside `publish`: the datasource is the result, this is the copy
     mirror: Optional[RunMirrorSpec] = None
     email: Optional[RunEmailSpec] = None
 
 
 class RunProgress(BaseModel):
-    """A che punto è un run non ancora terminato, per chi lo guarda."""
-    # queued (in coda) · running (in esecuzione, l'engine non dice di più) ·
-    # waiting (il database non ha ancora mandato righe) · reading (righe in
-    # arrivo) · files (SharePoint, file `file` di `files`) · calls (API: call `call`
-    # of `calls`, `pages` and `rows` so far) · saving (il parquet va sullo storage) ·
-    # checking (il data contract)
+    """Where a run not finished yet stands, for whoever looks at it."""
+    # queued · running (the engine says no more) · waiting (the database has not sent
+    # rows yet) · reading (rows arriving) · files (SharePoint, file `file` of `files`) ·
+    # calls (API: call `call` of `calls`, `pages` and `rows` so far) · saving (the parquet
+    # goes to the storage) · checking (the data contract)
     phase: str
-    # secondi dall'inizio dell'esecuzione (in coda: dal lancio), contati dal
-    # gateway: l'orologio del browser può essere sbagliato
+    # seconds from the start of the run (queued: from the launch), counted by the gateway:
+    # the browser's clock may be wrong
     seconds: int
     rows: Optional[int] = None
     file: Optional[int] = None
@@ -659,15 +654,15 @@ class RunOut(BaseModel):
     status: str
     launched_by: Optional[int]
     trigger_type: str = "manual"  # "manual" | "schedule"
-    engine: Optional[str] = None  # engine con cui è stato eseguito
+    engine: Optional[str] = None  # the engine it ran with
     output_key: str
     rows_written: Optional[int]
     error: Optional[str]
-    error_detail: Optional[str] = None  # traceback completo (dettaglio del fallimento)
+    error_detail: Optional[str] = None  # the whole traceback (the failure's detail)
     publish_name: Optional[str]
     datasource_id: Optional[int]
     destination: Optional[str] = None  # JSON: {db_type, host, database, table, mode}
-    # JSON: {bucket, key, format, ok, error?} — copia best-effort su S3 esterno
+    # JSON: {bucket, key, format, ok, error?} — a best-effort copy to an external S3
     mirror: Optional[str] = None
     # JSON: {connection_id, host, to, subject, attachment, ok, error?} — invio email
     email: Optional[str] = None
@@ -681,24 +676,23 @@ class RunOut(BaseModel):
     parent_run_id: Optional[int] = None
     started_at: Optional[UtcDateTime]
     finished_at: Optional[UtcDateTime]
-    progress: Optional[RunProgress] = None  # solo per i run in corso (vedi runs.run_out)
+    progress: Optional[RunProgress] = None  # only for running runs (see runs.run_out)
 
 
 class RunSearchOut(RunOut):
-    """Un run nella ricerca globale delle esecuzioni: come RunOut + i nomi del
-    flusso / della datasource / di chi l'ha avviato, per mostrarli senza
-    risolverli lato client."""
+    """A run in the global run search: as RunOut + the names of the flow / the datasource
+    / whoever started it, to show them without resolving them on the client."""
     flow_name: Optional[str] = None
     source_name: Optional[str] = None
     group_name: Optional[str] = None
     script_name: Optional[str] = None
-    launched_by_name: Optional[str] = None  # None se schedulato o utente rimosso
+    launched_by_name: Optional[str] = None  # None when scheduled or the user was removed
 
 
 class ActivityBucket(BaseModel):
-    """Conteggi di un bucket del calendar plot: un giorno (key=YYYY-MM-DD) oppure
-    un'ora (key='00'..'23'). Ogni run è un evento; il breakdown distingue esito
-    (successi/falliti) e origine (manuali/schedulati)."""
+    """The counts of a bucket of the calendar plot: a day (key=YYYY-MM-DD) or an hour
+    (key='00'..'23'). Each run is an event; the breakdown tells the outcome
+    (successes/failures) and the origin (manual/scheduled) apart."""
     key: str
     total: int
     success: int
@@ -708,23 +702,23 @@ class ActivityBucket(BaseModel):
 
 
 class RunActivityOut(BaseModel):
-    """Attività delle esecuzioni per il calendar plot della pagina Flows: buckets
-    per GIORNO (heatmap) o per ORA (drill-down). I bucket sono in ora LOCALE del
-    client (passata via tz_offset); from_key/to_key delimitano la finestra."""
+    """The runs' activity for the calendar plot of the Flows page: buckets by DAY (heatmap)
+    or by HOUR (drill-down). The buckets are in the client's LOCAL time (passed via
+    tz_offset); from_key/to_key bound the window."""
     granularity: Literal["day", "hour"]
     from_key: str
     to_key: str
     buckets: list[ActivityBucket]
 
 
-# ── Datasources (dataset nominati nel catalogo) ───────────────────────────────
+# ── Datasources (named datasets in the catalog) ───────────────────────────────
 class ContractSummary(BaseModel):
-    """Lo stato del data contract di una datasource, per gli elenchi."""
+    """A datasource's data contract state, for the listings."""
     status: str  # pending | passed | warning | failed
     checked_at: Optional[UtcDateTime] = None
     errors: int = 0
     warnings: int = 0
-    blocked: bool = False  # l'ultimo aggiornamento è stato rifiutato
+    blocked: bool = False  # the last update was refused
     version: int = 1
 
 
@@ -737,17 +731,17 @@ class DatasourceOut(BaseModel):
     bucket: str
     key: str
     rows: Optional[int]
-    # [{name, dtype, description?}] — `description` presente solo se curata
+    # [{name, dtype, description?}] — `description` there only when curated
     columns: list[dict] = Field(default_factory=list)
-    # {nome colonna: descrizione} (anche per colonne non più nello schema)
+    # {column name: description} (also for columns no longer in the schema)
     column_descriptions: dict[str, str] = Field(default_factory=dict)
-    # Quanto è documentata: il conteggio serve a mostrare i progressi, il flag a
-    # dire che è finita. Calcolati dal server (services/documented.py) perché la
-    # regola deve valere identica nel catalogo, nell'assistente e nella ricerca.
+    # How documented it is: the count serves to show progress, the flag to say it is done.
+    # Computed by the server (services/documented.py) because the rule must hold the same
+    # in the catalog, the assistant and the search.
     described_columns: int = 0
     total_columns: int = 0
     ai_ready: bool = False
-    # colonne di ORDER BY con cui il parquet è ordinato (vuoto = nessun ordine)
+    # the ORDER BY columns the parquet is sorted by (empty = no order)
     sort_keys: list[str] = Field(default_factory=list)
     kind: str
     flow_id: Optional[int]
@@ -756,23 +750,23 @@ class DatasourceOut(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     refreshed_at: Optional[UtcDateTime] = None
-    # un ingest è in corso ORA (lo dice il server: vale anche per i refresh
-    # schedulati e dopo una ricarica della pagina). Solo negli elenchi.
+    # an ingest is running NOW (the server says it: it holds for scheduled refreshes too
+    # and after a page reload). Only in the listings.
     refreshing: bool = False
-    # refresh schedulato (cron); next_refresh_at = prossima esecuzione prevista
+    # scheduled refresh (cron); next_refresh_at = the next run expected
     refresh_schedule: Optional[str] = None
     next_refresh_at: Optional[UtcDateTime] = None
     updated_at: Optional[UtcDateTime] = None
-    # Il data contract, se ce n'è uno acceso: ciò che serve per l'icona di stato
-    # (vedi services/contracts.summary). None = nessun contratto.
+    # The data contract, when one is turned on: what the state icon needs (see
+    # services/contracts.summary). None = no contract.
     contract: Optional[ContractSummary] = None
 
 
 class DatasourceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    project_id: Optional[int] = None  # valorizzato = sposta in un'altra cartella
-    # valorizzato = SOSTITUISCE la mappa {colonna: descrizione}; voci vuote scartate
+    project_id: Optional[int] = None  # set = move to another folder
+    # set = REPLACES the {column: description} map; empty items dropped
     column_descriptions: Optional[dict[str, str]] = None
     # set = replaces the ORDER BY of the next imports ([] removes it). Database
     # datasources only: a flow sets them on its Output node, at every publish.
@@ -780,18 +774,18 @@ class DatasourceUpdate(BaseModel):
 
 
 class ScheduleUpdate(BaseModel):
-    """Imposta/aggiorna lo schedule del refresh. `cron` vuoto/None = disabilita."""
+    """Sets/updates the refresh's schedule. An empty/None `cron` = disable."""
     cron: Optional[str] = None
 
 
 class DbDatasourceCreate(BaseModel):
-    """Datasource da database: definizione della sorgente + primo ingest."""
+    """A datasource from a database: the source's definition + the first ingest."""
     name: str
     description: str = ""
     connection_id: int
     source_type: str  # table | sql
-    source_ref: str  # nome tabella oppure testo SQL
-    # colonne per l'ORDER BY dell'ingest (vuoto = nessun ordine, come prima)
+    source_ref: str  # table name or SQL text
+    # columns for the ingest's ORDER BY (empty = no order, as before)
     sort_keys: list[str] = Field(default_factory=list)
 
 
@@ -855,10 +849,10 @@ class SftpCsvOptions(BaseModel):
 
 
 class SharePointDatasourceCreate(FileTemplatesSpec):
-    """Datasource da file Excel e CSV su SharePoint: un percorso (anche con glob), the
-    format, the sheet of the workbooks and the reading options of the CSV. Più file
-    corrispondenti vengono impilati in una tabella sola. The path may hold placeholders
-    and variables (FileTemplatesSpec)."""
+    """A datasource from Excel and CSV files on SharePoint: a path (globs too), the format,
+    the sheet of the workbooks and the reading options of the CSV. Several matching
+    files are stacked into one table. The path may hold placeholders and variables
+    (FileTemplatesSpec)."""
     name: str
     description: str = ""
     connection_id: int

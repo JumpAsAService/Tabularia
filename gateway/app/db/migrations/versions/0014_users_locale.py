@@ -9,7 +9,7 @@ Revision 0014, after 0013 — 2026-10-18. Forward only: see docs/database-migrat
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel  # noqa: F401 — i tipi di SQLModel (AutoString) nelle colonne generate
+import sqlmodel  # noqa: F401 — SQLModel's types (AutoString) in the generated columns
 
 
 revision = '0014'
@@ -23,5 +23,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # solo in avanti (scelta del progetto): si corregge con una revisione nuova
-    raise NotImplementedError("le migrazioni del gateway vanno solo in avanti")
+    # forward only (the project's choice): corrected with a new revision
+    raise NotImplementedError("the gateway's migrations go forward only")

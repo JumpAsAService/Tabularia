@@ -4,13 +4,13 @@ administrators and observers."""
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import require_observer
 from app.services import cluster_view
 from app.services.kube_scaling import KubeError
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/cluster", tags=["cluster"],
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/cluster", tags=["cluster"],
                    dependencies=[Depends(require_observer)])
 
 

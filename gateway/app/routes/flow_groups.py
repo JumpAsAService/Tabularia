@@ -22,8 +22,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete as sa_delete, update as sa_update
 from sqlmodel import Session, select
 
-from app.core.lingua import lingua_della_richiesta
-from app.core.routing import RottaCheRilascia
+from app.core.language import request_language
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -49,7 +49,7 @@ from app.services.flow_groups import definition_of
 from app.services.pushmail import pushmail_errors
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["flow-groups"])
+router = APIRouter(route_class=ReleasingRoute, tags=["flow-groups"])
 
 
 def _get_group(session: Session, group_id: int) -> FlowGroup:
@@ -436,9 +436,9 @@ def run_flow_group_now(group_id: int, request: Request,
         raise HTTPException(status_code=404, detail="Flow group not found")  # deleted while waiting in line
     if orchestrator.group_running(session, group.id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail=_ALREADY_RUNNING.get(lingua_della_richiesta(request), _ALREADY_RUNNING["en"]))
+                            detail=_ALREADY_RUNNING.get(request_language(request), _ALREADY_RUNNING["en"]))
     run = orchestrator.create_group_run(session, user, group)
-    orchestrator.sveglia()
+    orchestrator.wake()
     audit.record_audit(
         session, actor=user, action=audit.FLOW_GROUP_RUN, target_type="flow_group",
         target_id=group.id, target_label=group.name, detail={"run_id": run.id, "trigger": "manual"}, request=request,

@@ -1,10 +1,10 @@
-"""Cancellazione DIFFERITA dei blob dello storage (grace period).
+"""DEFERRED deletion of the storage's blobs (grace period).
 
-Uno snapshot superato / un parquet rimpiazzato / il blob di una datasource
-eliminata non si cancellano subito: un run o una preview in corso potrebbero
-averne già risolto la chiave e stare per leggerli (è la corsa che causava il 404
-sotto lettura). Si registra la cancellazione con una grace OLTRE la vita massima
-di un run e lo sweep dello scheduler la esegue quando scade.
+An overtaken snapshot / a replaced parquet / the blob of a deleted datasource are not
+deleted at once: a run or a preview in progress may have resolved its key already and
+be about to read it (it is the race that caused the 404 while reading). The deletion
+is recorded with a grace BEYOND a run's maximum life and the scheduler's sweep runs it
+when it expires.
 """
 from __future__ import annotations
 
@@ -15,14 +15,14 @@ from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.core.engine_client import CONTROLLO, get_engine_client
+from app.core.engine_client import CHECK, get_engine_client
 from app.models.blob_deletion import PendingBlobDeletion
 
 logger = logging.getLogger(__name__)
 
-# Un task in coda che ha risolto la vecchia chiave viene fallito da _reconcile
-# dopo il timeout stale del run; oltre questa finestra nessun run legge più il
-# blob superato. Grace = quel tetto + margine (deve restare ≥ stale timeout).
+# A queued task that resolved the old key is failed by _reconcile after the run's stale
+# timeout; past this window no run reads the overtaken blob any more. Grace = that cap
+# + margin (it must stay ≥ the stale timeout).
 def blob_deletion_grace_seconds() -> int:
     """Read at each use: ENGINE__RUN_STALE_TIMEOUT_SECONDS can change from the panel."""
     return get_settings().engine.run_stale_timeout_seconds + 600
@@ -32,9 +32,9 @@ def schedule_blob_deletion(
     session: Session, bucket: str, key: str, reason: str = "",
     grace_seconds: int | None = None,
 ) -> None:
-    """Marca un blob per la cancellazione differita (dopo la grace). Aggiunge alla
-    sessione ma NON committa: il commit spetta al chiamante, così la marcatura è
-    atomica con lo swap / il publish che ha reso il blob obsoleto."""
+    """Marks a blob for deferred deletion (after the grace). Adds to the session but does
+    NOT commit: the commit is the caller's, so the marking is atomic with the swap / the
+    publish that made the blob obsolete."""
     if not key:
         return
     grace = grace_seconds if grace_seconds is not None else blob_deletion_grace_seconds()
@@ -49,38 +49,37 @@ def schedule_blob_deletion(
 
 
 async def sweep_blob_deletions(session: Session, now: datetime | None = None) -> int:
-    """Elimina i blob la cui grace è scaduta (chiamato dal tick dello scheduler).
-    Best-effort: se l'engine non conferma la cancellazione la riga resta e si
-    riprova al giro dopo; un 404 (già sparito) conta come fatto."""
+    """Deletes the blobs whose grace expired (called by the scheduler's tick). Best effort:
+    when the engine does not confirm the deletion the row stays and it retries at the
+    next round; a 404 (gone already) counts as done."""
     now = now or datetime.now(timezone.utc)
-    # valori semplici, non oggetti: dopo ogni commit qui sotto gli oggetti
-    # scadrebbero, e rileggere una riga che un altro processo ha già tolto è un errore
+    # plain values, not objects: after every commit below the objects would expire, and
+    # reading again a row another process removed already is an error
     due = [
         (r.id, r.bucket, r.key)
         for r in session.exec(select(PendingBlobDeletion).where(PendingBlobDeletion.delete_after <= now)).all()
     ]
-    session.rollback()  # lettura finita: niente transazione aperta durante le chiamate all'engine
+    session.rollback()  # reading done: no transaction open during the calls to the engine
     if not due:
         return 0
     client = get_engine_client()
     removed = 0
     for row_id, bucket, key in due:
         try:
-            resp = await client.delete("/files/object", params={"bucket": bucket, "key": key}, timeout=CONTROLLO)
-        except Exception as e:  # engine irraggiungibile → riprova al prossimo tick
+            resp = await client.delete("/files/object", params={"bucket": bucket, "key": key}, timeout=CHECK)
+        except Exception as e:  # engine unreachable → retry at the next tick
             logger.warning("sweep blob %s/%s rimandato: %s", bucket, key, e)
             continue
         if resp.status_code < 400 or resp.status_code == 404:
-            # Per id e non `session.delete(riga)`: con più processi che fanno la
-            # stessa passata la riga può averla già tolta un altro, e l'ORM lo
-            # tratterebbe come un errore (cancellare due volte lo stesso blob è
-            # innocuo: la seconda trova 404, che conta come fatto). E commit
-            # SUBITO: la DELETE tiene un lucchetto sulla riga finché non si
-            # conferma, e tenerlo per le chiamate all'engine che seguono fermerebbe
-            # un altro processo arrivato alla stessa riga per tutto quel tempo.
-            tolta = session.exec(delete(PendingBlobDeletion).where(PendingBlobDeletion.id == row_id))
+            # By id and not `session.delete(row)`: with several processes making the same pass the
+            # row may have been removed by another already, and the ORM would treat it as an error
+            # (deleting the same blob twice is harmless: the second finds 404, which counts as
+            # done). And commit AT ONCE: the DELETE holds a lock on the row until it is confirmed,
+            # and holding it for the engine calls that follow would stop another process arrived at
+            # the same row for all that time.
+            deleted = session.exec(delete(PendingBlobDeletion).where(PendingBlobDeletion.id == row_id))
             session.commit()
-            removed += tolta.rowcount or 0
+            removed += deleted.rowcount or 0
         else:
-            logger.warning("sweep blob %s/%s non eliminato (%s): riprovo", bucket, key, resp.status_code)
+            logger.warning("blob sweep %s/%s not deleted (%s): retrying", bucket, key, resp.status_code)
     return removed

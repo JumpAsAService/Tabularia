@@ -1,10 +1,10 @@
-"""Regolazioni del motore impostate dal pannello (Amministrazione → Impostazioni).
+"""Engine settings set from the panel (Administration → Settings).
 
-Una riga per parametro CAMBIATO: a tabella vuota valgono i valori dell'ambiente,
-come prima. È la fonte vera: il gateway le spedisce al motore, che le tiene in
-Valkey per i suoi processi, e le rispedisce a intervalli (vedi
-services/regolazioni_motore.py). Quali parametri e con che limiti lo decide il
-motore (backend/app/core/panel_settings.py).
+One row per CHANGED parameter: with an empty table the environment's values hold, as
+before. It is the true source: the gateway sends them to the engine, which keeps them
+in Valkey for its processes, and sends them again at intervals (see
+services/engine_panel_settings.py). Which parameters and with what limits the engine
+decides (backend/app/core/panel_settings.py).
 """
 from datetime import datetime
 from typing import Optional
@@ -16,13 +16,13 @@ from sqlmodel import Field, SQLModel
 class EngineSetting(SQLModel, table=True):
     __tablename__ = "engine_settings"
 
-    # "<sezione>.<campo>" delle impostazioni del motore, es. "ingest.parquet_row_group_rows"
+    # "<section>.<field>" of the engine settings, e.g. "ingest.parquet_row_group_rows"
     key: str = Field(primary_key=True, max_length=80)
-    # interi grandi: il tetto dei byte di BigQuery arriva a decine di TiB
+    # big integers: BigQuery's bytes cap reaches tens of TiB
     value: int = Field(sa_column=Column(BigInteger, nullable=False))
     # the value as JSON, for the settings that are not whole numbers (a decimal, true/false):
     # `value` keeps an integer for the previous version of the gateway during an upgrade
     value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     updated_at: datetime
-    # l'email di chi l'ha cambiato (resta anche se l'utente viene tolto; l'audit ha il resto)
+    # the email of whoever changed it (it stays even when the user is removed; the audit has the rest)
     updated_by: Optional[str] = Field(default=None, max_length=320)

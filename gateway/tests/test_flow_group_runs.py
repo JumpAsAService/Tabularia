@@ -26,7 +26,7 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def world(session, db_engine, monkeypatch):
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
     monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.01)
 
     async def no_side_effects(session, run):
@@ -66,7 +66,7 @@ class Fakes:
 
     async def orchestrate(self, session, user, flow, **kw):
         self.parents[flow.name] = kw["parent_run_id"]
-        assert kw["engine_mode"] == "production" and kw["custodita"] is True
+        assert kw["engine_mode"] == "production" and kw["guarded"] is True
         await self._step(flow.name)
         return ["boom"] if flow.name in self.fail else []
 
@@ -98,7 +98,7 @@ def _claimed_run(world, group: FlowGroup, user=None) -> int:
     s = world["session"]
     run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED",
               launched_by=(user or world["admin"]).id, trigger_type="manual",
-              claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(),
+              claimed_by=orch.INSTANCE, heartbeat_at=orch._now(),
               input_key="", output_bucket="", output_key="")
     s.add(run)
     s.commit()
@@ -115,7 +115,7 @@ async def test_cells_of_a_step_run_together_and_steps_in_order(world, db_engine,
     fakes = Fakes(monkeypatch, hold_until_all_started={"A", "B"})
     group = _group(world, ["A", "B"], ["C"])
     run_id = _claimed_run(world, group)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, cells = _read(db_engine, run_id)
     assert status == "SUCCESS", error
     assert set(fakes.started[:2]) == {"A", "B"} and fakes.started[2] == "C"
@@ -135,7 +135,7 @@ async def test_the_first_failed_step_stops_the_group(world, db_engine, monkeypat
     fakes = Fakes(monkeypatch, fail={"B"})
     group = _group(world, ["A", "B"], ["C"])
     run_id = _claimed_run(world, group)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, cells = _read(db_engine, run_id)
     assert status == "FAILURE" and error == "step 1: 1 of 2 cells failed"  # the details stay in the cells
     assert "C" not in fakes.started
@@ -146,7 +146,7 @@ async def test_the_first_failed_step_stops_the_group(world, db_engine, monkeypat
 async def test_a_refresh_cell_and_its_failure(world, db_engine, monkeypatch):
     fakes = Fakes(monkeypatch)
     run_id = _claimed_run(world, _group(world, ["R", "A"]))
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     assert _read(db_engine, run_id)[0] == "SUCCESS"
     assert fakes.parents[f"refresh:{world['ds'].id}"] == run_id
 
@@ -158,7 +158,7 @@ async def test_a_refresh_cell_and_its_failure(world, db_engine, monkeypatch):
         s.commit()
         s.refresh(g2)
     run2 = _claimed_run(world, g2)
-    await orch.esegui(run2)
+    await orch.run_it(run2)
     status, error, cells = _read(db_engine, run2)
     assert status == "FAILURE" and "the source did not answer" in cells[0][0]["error"]
 
@@ -167,7 +167,7 @@ async def test_a_flow_already_running_is_waited_for_not_duplicated(world, db_eng
     fakes = Fakes(monkeypatch)
     s = world["session"]
     live = Run(kind="orchestration", flow_id=world["flows"]["A"].id, task_id="", status="STARTED",
-               launched_by=world["admin"].id, claimed_by="someone-else", heartbeat_at=orch._adesso(),
+               launched_by=world["admin"].id, claimed_by="someone-else", heartbeat_at=orch._now(),
                engine_mode="production", input_key="", output_bucket="", output_key="")
     s.add(live)
     s.commit()
@@ -181,7 +181,7 @@ async def test_a_flow_already_running_is_waited_for_not_duplicated(world, db_eng
             s2.add(r)
             s2.commit()
 
-    await asyncio.gather(orch.esegui(run_id), finish_it_later())
+    await asyncio.gather(orch.run_it(run_id), finish_it_later())
     status, error, cells = _read(db_engine, run_id)
     assert status == "SUCCESS", error
     assert "A" not in fakes.started  # no duplicate run of A
@@ -192,7 +192,7 @@ async def test_a_run_in_progress_that_fails_fails_the_cell(world, db_engine, mon
     Fakes(monkeypatch)
     s = world["session"]
     live = Run(kind="orchestration", flow_id=world["flows"]["A"].id, task_id="", status="STARTED",
-               launched_by=world["admin"].id, claimed_by="someone-else", heartbeat_at=orch._adesso(),
+               launched_by=world["admin"].id, claimed_by="someone-else", heartbeat_at=orch._now(),
                engine_mode="production", input_key="", output_bucket="", output_key="")
     s.add(live)
     s.commit()
@@ -206,7 +206,7 @@ async def test_a_run_in_progress_that_fails_fails_the_cell(world, db_engine, mon
             s2.add(r)
             s2.commit()
 
-    await asyncio.gather(orch.esegui(run_id), fail_it_later())
+    await asyncio.gather(orch.run_it(run_id), fail_it_later())
     status, error, cells = _read(db_engine, run_id)
     assert status == "FAILURE" and "the warehouse is down" in cells[0][0]["error"]
 
@@ -217,17 +217,17 @@ async def test_while_the_group_runs_a_flow_its_slot_is_taken(world, db_engine, m
 
     async def look(session, user, flow, **kw):
         with Session(db_engine) as s:
-            seen.append(orch.flusso_in_corso(s, flow.id))  # what the flow's own schedule would see
-        with orch._vive_lock:
-            seen.append(kw["parent_run_id"] in orch._vive)  # kept alive by the heartbeat
+            seen.append(orch.flow_running(s, flow.id))  # what the flow's own schedule would see
+        with orch._alive_lock:
+            seen.append(kw["parent_run_id"] in orch._alive)  # kept alive by the heartbeat
         return []
 
     monkeypatch.setattr(orch, "orchestrate", look)
     run_id = _claimed_run(world, _group(world, ["A"]))
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     assert seen == [True, True]
-    with orch._vive_lock:
-        assert not any(i for i in orch._vive if i != run_id)  # released when done
+    with orch._alive_lock:
+        assert not any(i for i in orch._alive if i != run_id)  # released when done
     assert fakes.started == []
 
 
@@ -244,7 +244,7 @@ async def test_rights_are_checked_again_when_the_group_runs(world, db_engine, mo
     s.commit()
     s.refresh(g)
     run_id = _claimed_run(world, g, user=runner_user)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, cells = _read(db_engine, run_id)
     assert status == "FAILURE" and "'H': RUN missing on its folder" in cells[0][1]["error"]
     assert fakes.started == ["A"]
@@ -254,7 +254,7 @@ async def test_without_run_on_the_groups_folder_nothing_starts(world, db_engine,
     fakes = Fakes(monkeypatch)
     nobody = make_user(world["session"], email="nobody@x.local")
     run_id = _claimed_run(world, _group(world, ["A"]), user=nobody)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, _ = _read(db_engine, run_id)
     assert status == "FAILURE" and "RUN missing on the folder" in error and fakes.started == []
 
@@ -266,7 +266,7 @@ async def test_a_flow_deleted_since_fails_its_cell(world, db_engine, monkeypatch
     s.delete(s.get(type(world["flows"]["A"]), world["flows"]["A"].id))
     s.commit()
     run_id = _claimed_run(world, group)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, cells = _read(db_engine, run_id)
     assert status == "FAILURE" and "no longer exists" in cells[0][0]["error"]
 
@@ -274,7 +274,7 @@ async def test_a_flow_deleted_since_fails_its_cell(world, db_engine, monkeypatch
 async def test_empty_cells_and_rows_are_skipped_over(world, db_engine, monkeypatch):
     fakes = Fakes(monkeypatch)
     run_id = _claimed_run(world, _group(world, [None, "A", None], [None], ["B"]))
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, _, cells = _read(db_engine, run_id)
     assert status == "SUCCESS" and fakes.started == ["A", "B"]
     assert cells[0][0] is None and cells[1] == [None]
@@ -283,7 +283,7 @@ async def test_empty_cells_and_rows_are_skipped_over(world, db_engine, monkeypat
 def _live(world, flow, mode, started_at=None):
     s = world["session"]
     run = Run(kind="orchestration", flow_id=world["flows"][flow].id, task_id="", status="STARTED",
-              launched_by=world["admin"].id, claimed_by="someone-else", heartbeat_at=orch._adesso(),
+              launched_by=world["admin"].id, claimed_by="someone-else", heartbeat_at=orch._now(),
               engine_mode=mode, input_key="", output_bucket="", output_key="")
     if started_at is not None:
         run.started_at = started_at
@@ -309,7 +309,7 @@ async def test_a_development_run_in_progress_is_let_end_then_the_flow_runs(world
     fakes = Fakes(monkeypatch)
     live = _live(world, "A", "development")
     run_id = _claimed_run(world, _group(world, ["A"]))
-    await asyncio.gather(orch.esegui(run_id), _finish_later(db_engine, live))
+    await asyncio.gather(orch.run_it(run_id), _finish_later(db_engine, live))
     status, error, cells = _read(db_engine, run_id)
     assert status == "SUCCESS", error
     assert fakes.started == ["A"] and cells[0][0]["waited"] is False and cells[0][0]["run_id"] != live
@@ -319,9 +319,9 @@ async def test_a_run_started_before_its_step_does_not_count_for_it(world, db_eng
     """B in step 2 reads what step 1 writes: a run of B that started before step 1
     ended may have read the old data, so step 2 lets it end and runs B again."""
     fakes = Fakes(monkeypatch)
-    live = _live(world, "B", "production", started_at=orch._adesso() - timedelta(minutes=5))
+    live = _live(world, "B", "production", started_at=orch._now() - timedelta(minutes=5))
     run_id = _claimed_run(world, _group(world, ["A"], ["B"]))
-    await asyncio.gather(orch.esegui(run_id), _finish_later(db_engine, live, 0.1))
+    await asyncio.gather(orch.run_it(run_id), _finish_later(db_engine, live, 0.1))
     status, error, cells = _read(db_engine, run_id)
     assert status == "SUCCESS", error
     assert fakes.started == ["A", "B"] and cells[1][0]["waited"] is False
@@ -334,7 +334,7 @@ async def test_cells_share_the_process_budget(world, db_engine, monkeypatch):
     at_once: list[int] = []
 
     async def count(session, user, flow, **kw):
-        at_once.append(orch.celle_in_corso)
+        at_once.append(orch.running_cells)
         await asyncio.sleep(0.02)
         return []
 
@@ -344,9 +344,9 @@ async def test_cells_share_the_process_budget(world, db_engine, monkeypatch):
     more = [make_flow(s, name=f"P{i}", project_id=world["p"].id) for i in range(3)]
     world["flows"].update({f.name: f for f in more})
     run_id = _claimed_run(world, _group(world, ["A", "B", "C", "P0", "P1"]))
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     assert _read(db_engine, run_id)[0] == "SUCCESS"
-    assert len(at_once) == 5 and max(at_once) <= 2 and orch.celle_in_corso == 0
+    assert len(at_once) == 5 and max(at_once) <= 2 and orch.running_cells == 0
 
 
 async def test_an_unexpected_error_closes_the_flows_run_at_once(world, db_engine, monkeypatch):
@@ -360,7 +360,7 @@ async def test_an_unexpected_error_closes_the_flows_run_at_once(world, db_engine
     Fakes(monkeypatch)
     monkeypatch.setattr(orch, "orchestrate", refuses)
     run_id = _claimed_run(world, _group(world, ["A"]))
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, _, cells = _read(db_engine, run_id)
     assert status == "FAILURE" and "the engine refused the import" in cells[0][0]["error"]
     with Session(db_engine) as s:
@@ -392,7 +392,7 @@ async def test_a_group_taken_away_stops_every_cell(world, db_engine, monkeypatch
             s2.add(r)
             s2.commit()
 
-    await asyncio.wait_for(asyncio.gather(orch.esegui(run_id), take_it_away()), 5)
+    await asyncio.wait_for(asyncio.gather(orch.run_it(run_id), take_it_away()), 5)
     with Session(db_engine) as s:
         a_child = s.exec(select(Run).where(Run.parent_run_id == run_id, Run.flow_id == world["flows"]["A"].id)).one()
         group_run = s.get(Run, run_id)
@@ -419,7 +419,7 @@ async def test_a_launcher_deactivated_meanwhile_stops_the_next_steps(world, db_e
 
     monkeypatch.setattr(orch, "orchestrate", deactivate_after_a)
     run_id = _claimed_run(world, _group(world, ["A"], ["B"]), user=ops)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, _, cells = _read(db_engine, run_id)
     assert status == "FAILURE" and fakes.started == ["A"]
     assert cells[1][0]["error"] == runner.USER_GONE

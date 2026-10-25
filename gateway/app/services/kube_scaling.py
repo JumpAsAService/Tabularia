@@ -8,7 +8,7 @@ autoscalers, and nothing else (`adminScaling.enabled`). No client library: a few
 JSON requests over httpx.
 
 What the administrator sets is kept in the database (models/worker_scaling.py) and
-put back every `RIAPPLICA_OGNI` seconds: a `helm upgrade` restoring the chart's
+put back every `REAPPLY_EVERY` seconds: a `helm upgrade` restoring the chart's
 values is undone within a minute. With GitOps (Argo CD, Flux) those two fields must
 be ignored there, or the two keep undoing each other (see the chart's README).
 Removing the bounds from the panel hands them back to the chart.
@@ -37,9 +37,9 @@ from app.models import WorkerScaling
 logger = logging.getLogger(__name__)
 
 KINDS = ("run", "preview")
-RIAPPLICA_OGNI = 60.0
+REAPPLY_EVERY = 60.0
 # the advisory lock of these bounds (pg_advisory_xact_lock), apart from the engine settings'
-LUCCHETTO = 7_402_119
+LOCK = 7_402_119
 # for the tests: a transport standing in for the cluster
 _transport: Optional[httpx.AsyncBaseTransport] = None
 
@@ -188,15 +188,15 @@ async def apply(kind: str, lo: int, hi: int) -> None:
     await _call("PATCH", auto_path, _patch(t, lo, hi))
 
 
-async def un_giro(bind: Engine) -> int:
+async def one_round(bind: Engine) -> int:
     """Puts back the bounds set from the panel where the cluster has others (a helm
     upgrade, a hand edit). Skips if someone is saving: they apply them. Returns how
     many it put back."""
-    from app.services.regolazioni_motore import blocca
+    from app.services.engine_panel_settings import lock
 
     fixed = 0
     with Session(bind) as session:
-        if not await blocca(session, attesa=0, chiave=LUCCHETTO):
+        if not await lock(session, wait=0, key=LOCK):
             return 0
         for row in session.exec(select(WorkerScaling)).all():
             t = target(row.kind)
@@ -214,17 +214,17 @@ async def un_giro(bind: Engine) -> int:
     return fixed
 
 
-async def riapplica_loop(stop: asyncio.Event) -> None:
+async def reapply_loop(stop: asyncio.Event) -> None:
     if not enabled():
         return
     from app.db.session import engine
 
     while not stop.is_set():
         try:
-            await un_giro(engine)
+            await one_round(engine)
         except Exception as e:  # noqa: BLE001 — API server down or restarting: at the next round
-            logger.warning("workers: autoscaling bounds not checked (%s), again in %ss", e, RIAPPLICA_OGNI)
+            logger.warning("workers: autoscaling bounds not checked (%s), again in %ss", e, REAPPLY_EVERY)
         try:
-            await asyncio.wait_for(stop.wait(), timeout=RIAPPLICA_OGNI)
+            await asyncio.wait_for(stop.wait(), timeout=REAPPLY_EVERY)
         except asyncio.TimeoutError:
             pass

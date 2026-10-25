@@ -1,11 +1,11 @@
-"""Prestazioni (solo admin). Nessuna tabella nuova dietro questa pagina.
+"""Performance (admin only). No new table behind this page.
 
-- i RUN: la tabella `runs` sa già inizio, presa in carico dal worker, fine, righe
-  ed esito — gli aggregati si calcolano qui, al volo, sulla finestra richiesta;
-- le PREVIEW: contatori a dimensione fissa su Valkey, tenuti dal backend;
-- il WAREHOUSE: il `query_log` che ClickHouse conserva da sé.
-I grafici nel tempo stanno in Grafana (pagina Monitoring), che legge le stesse
-metriche da VictoriaMetrics.
+- the RUNS: the `runs` table knows start, pickup by the worker, end, rows and outcome
+  already — the aggregates are computed here, on the fly, over the requested window;
+- the PREVIEWS: fixed-size counters on Valkey, kept by the backend;
+- the WAREHOUSE: the `query_log` ClickHouse keeps by itself.
+The charts over time are in Grafana (the Monitoring page), which reads the same
+metrics from VictoriaMetrics.
 """
 from datetime import datetime, timedelta, timezone
 from statistics import median
@@ -17,12 +17,12 @@ from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import require_observer
 from app.models import Datasource, Flow, Run
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/performance", tags=["performance"], dependencies=[Depends(require_observer)])
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/performance", tags=["performance"], dependencies=[Depends(require_observer)])
 
-# tetto alle righe lette: la finestra è scelta dall'admin, ma un'installazione con
-# milioni di run non deve poter piantare il gateway con una pagina di statistiche
+# a cap on the rows read: the window is the admin's choice, but an installation with
+# millions of runs must not be able to stall the gateway with a statistics page
 MAX_RUNS = 20_000
 
 
@@ -39,11 +39,11 @@ def _utc(dt: datetime | None) -> datetime | None:
 
 @router.get("/runs")
 def runs_performance(days: int = Query(7, ge=1, le=90), session: Session = Depends(get_session)):
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)  # colonne naive-UTC
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)  # naive-UTC columns
     rows = session.exec(
         select(Run).where(Run.started_at >= since).order_by(Run.started_at.desc()).limit(MAX_RUNS)  # type: ignore[attr-defined]
     ).all()
-    # solo id e nome: le righe intere porterebbero anche il JSON del grafo
+    # only id and name: the whole rows would bring the graph's JSON along too
     flows = dict(session.exec(select(Flow.id, Flow.name)).all())
     sources = dict(session.exec(select(Datasource.id, Datasource.name)).all())
 
@@ -53,7 +53,7 @@ def runs_performance(days: int = Query(7, ge=1, le=90), session: Session = Depen
         ident = r.datasource_id if kind == "ingest" else r.flow_id
         g = groups.setdefault((kind, ident), {
             "kind": kind, "id": ident,
-            # un run sopravvive al suo flusso/datasource: il nome è None e la pagina lo dice
+            # a run survives its flow/datasource: the name is None and the page says so
             "name": (sources if kind == "ingest" else flows).get(ident),
             "runs": 0, "failures": 0, "durations": [], "waits": [], "rows": 0, "last_error": None, "last_run_at": None,
         })
@@ -65,12 +65,11 @@ def runs_performance(days: int = Query(7, ge=1, le=90), session: Session = Depen
             g["failures"] += 1
             g["last_error"] = g["last_error"] or (r.error or "")[:240]
         if r.status == "SUCCESS" and started and finished:
-            # tempo di ESECUZIONE: da quando il worker lo prende in carico. La coda si
-            # mostra a parte — sommarla farebbe sembrare lento un flusso veloce che
-            # ha solo aspettato il suo turno
+            # RUN time: from when the worker picks it up. The queue is shown apart — adding it would
+            # make a fast flow that only waited for its turn look slow
             g["durations"].append((finished - (taken or started)).total_seconds())
             g["rows"] += r.rows_written or 0
-        if started and taken:  # quanto ha aspettato un worker libero
+        if started and taken:  # how long it waited for a free worker
             g["waits"].append(max(0.0, (taken - started).total_seconds()))
 
     items = []

@@ -29,7 +29,7 @@ from app.routes.runs import (
 from app.services.objects import MANAGED_PREFIXES
 from app.services.orchestrator import (
     ORCHESTRATION_INTERRUPTED,
-    chiudi_orfane,
+    close_orphans,
 )
 from tests.conftest import make_datasource, make_run
 
@@ -206,7 +206,7 @@ def test_snapshot_keys_do_not_collide_within_the_same_second():
 # ── C3: orchestrazioni orfane chiuse ────────────────────────────────────────
 # Nate come controllo all'avvio del gateway (un processo solo). Con più processi
 # l'avvio di uno non dice niente sugli altri: è orfana l'orchestrazione il cui
-# BATTITO è fermo, e la chiude il primo orchestratore che se ne accorge. Il resto
+# HEARTBEAT è fermo, e la chiude il primo orchestratore che se ne accorge. Il resto
 # sta in test_orchestration_queue.py.
 @pytest.fixture
 def orch_db(db_engine, monkeypatch):
@@ -224,7 +224,7 @@ async def test_orphaned_orchestrations_are_closed(session, orch_db):
     stuck = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=1)
     session.commit()
 
-    assert await chiudi_orfane() == 1
+    assert await close_orphans() == 1
 
     session.expire_all()
     reloaded = session.get(Run, stuck.id)
@@ -239,7 +239,7 @@ async def test_orphan_sweep_leaves_finished_and_engine_backed_runs_alone(session
     flow_run = make_run(session, kind="flow", status="STARTED", task_id="t-live", flow_id=1)
     session.commit()
 
-    await chiudi_orfane()
+    await close_orphans()
 
     session.expire_all()
     assert session.get(Run, done.id).status == "SUCCESS"
@@ -250,8 +250,8 @@ async def test_orphan_sweep_is_idempotent(session, orch_db):
     make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=1)
     session.commit()
 
-    assert await chiudi_orfane() == 1
-    assert await chiudi_orfane() == 0  # un secondo giro, o un altro processo, non ha nulla da fare
+    assert await close_orphans() == 1
+    assert await close_orphans() == 0  # un secondo giro, o un altro processo, non ha nulla da fare
 
 
 # ── più processi che riconciliano insieme ───────────────────────────────────
@@ -264,14 +264,14 @@ async def test_a_stale_started_answer_does_not_reopen_a_closed_run(session, db_e
 
     run = make_run(session, kind="flow", status="PENDING", task_id="t-gara", flow_id=1)
     fake_engine.task_states["t-gara"] = {"status": "STARTED", "result": {}, "error": None}
-    with Session(db_engine) as altro:  # l'altro processo lo chiude nel frattempo
-        r = altro.get(Run, run.id)
+    with Session(db_engine) as other:  # l'altro processo lo chiude nel frattempo
+        r = other.get(Run, run.id)
         r.status = "SUCCESS"
-        altro.add(r); altro.commit()
+        other.add(r); other.commit()
     # questo processo ha ancora in mano l'oggetto letto prima (PENDING)
     assert run.status == "PENDING"
-    dopo = await _reconcile(session, run)
-    assert dopo.status == "SUCCESS"
+    after = await _reconcile(session, run)
+    assert after.status == "SUCCESS"
     session.expire_all()
     assert session.get(Run, run.id).status == "SUCCESS"
 
@@ -285,8 +285,8 @@ async def test_blob_sweep_tolerates_a_row_another_process_already_removed(sessio
     from app.services.blobgc import sweep_blob_deletions
 
     passato = datetime.now(timezone.utc) - timedelta(hours=1)
-    for chiave in ("a", "b"):
-        session.add(PendingBlobDeletion(bucket="data-prep", key=f"datasets/{chiave}.parquet", reason="t", delete_after=passato))
+    for key in ("a", "b"):
+        session.add(PendingBlobDeletion(bucket="data-prep", key=f"datasets/{key}.parquet", reason="t", delete_after=passato))
     session.commit()
 
     vero = fake_engine._handler
@@ -294,10 +294,10 @@ async def test_blob_sweep_tolerates_a_row_another_process_already_removed(sessio
     def un_altro_arriva_prima(request):
         # mentre questo processo chiama l'engine per la prima riga, un altro
         # finisce la sua passata e toglie tutte le righe
-        with Session(db_engine) as altro:
-            for riga in altro.exec(select(PendingBlobDeletion)).all():
-                altro.delete(riga)
-            altro.commit()
+        with Session(db_engine) as other:
+            for row in other.exec(select(PendingBlobDeletion)).all():
+                other.delete(row)
+            other.commit()
         return vero(request)
 
     import httpx

@@ -1,4 +1,4 @@
-"""Importa tutti i modelli così `SQLModel.metadata` li conosce a create_all()."""
+"""Imports every model so `SQLModel.metadata` knows them at create_all()."""
 from app.models.user import User, Group, UserGroupLink
 from app.models.user_session import UserSession
 from app.models.api_token import ApiToken

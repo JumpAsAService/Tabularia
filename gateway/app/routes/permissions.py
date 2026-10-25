@@ -1,4 +1,4 @@
-"""Concessione/revoca permessi su un progetto. Serve MANAGE sul progetto."""
+"""Granting/revoking permissions on a project. MANAGE on the project is needed."""
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 
@@ -9,9 +9,9 @@ from app.models import Project, Permission, User, Group
 from app.services import audit
 from app.models.permission import Capability
 from app.schemas.models import PermissionOut, PermissionCreate
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["permissions"])
+router = APIRouter(route_class=ReleasingRoute, tags=["permissions"])
 
 
 @router.get("/projects/{project_id}/permissions", response_model=list[PermissionOut])
@@ -41,7 +41,7 @@ def grant_permission(
     if body.group_id is not None and session.get(Group, body.group_id) is None:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    # niente duplicati esatti (stesso soggetto + stessa capability sullo stesso progetto)
+    # no exact duplicates (same subject + same capability on the same project)
     dup = session.exec(
         select(Permission).where(
             Permission.project_id == project_id,

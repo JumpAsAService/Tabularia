@@ -1,23 +1,22 @@
-"""Scheduler in-process del gateway: refresh delle datasource database E
-esecuzione dei flussi.
+"""The gateway's in-process scheduler: refresh of the database datasources AND running
+of the flows.
 
-A ogni tick lancia il lavoro scaduto con l'autorità di chi ha impostato lo
-schedule (capability catturate alla creazione). Per i FLUSSI la definizione
-viene RI-RISOLTA al fire-time (Opzione A): usa sempre gli snapshot correnti
-delle datasource e segue le modifiche al flusso.
+At every tick it launches the work due with the authority of whoever set the schedule
+(capabilities captured at creation). For FLOWS the definition is RESOLVED AGAIN at
+fire time (Option A): it always uses the datasources' current snapshots and follows
+the changes to the flow.
 
-Il tick riconcilia anche lo STATO dei run non terminali (oltre alla
-riconciliazione pigra on-poll del frontend): così un ingest/flusso completato
-lato engine viene applicato entro un tick anche se nessuno sta guardando —
-altrimenti un refresh finito resterebbe invisibile e la datasource punterebbe a
-dati vecchi.
+The tick also reconciles the STATE of the non-terminal runs (besides the frontend's
+lazy on-poll reconciliation): so an ingest/flow completed on the engine is applied
+within a tick even when nobody is looking — otherwise a finished refresh would stay
+invisible and the datasource would point at old data.
 
-PIÙ PROCESSI possono far girare questo scheduler insieme (`APP__ROLE`): ognuno
-vede gli stessi slot scaduti, e ne lancia il lavoro UNO solo. Chi vuole uno slot
-lo PRENDE prima di lanciare, spostando in avanti la prossima esecuzione con un
-UPDATE condizionato al valore che ha letto: se un altro l'ha già spostata, trova
-zero righe e lascia stare. Prima si prende e poi si lancia: se il processo muore
-in mezzo lo slot è perso (una volta in meno), mai eseguito due volte.
+SEVERAL PROCESSES may run this scheduler together (`APP__ROLE`): each sees the same
+due slots, and only ONE launches the work. Whoever wants a slot TAKES it before
+launching, moving the next run forward with an UPDATE conditional on the value it
+read: when another has moved it already, it finds zero rows and leaves it. Take
+first and launch after: when the process dies in between the slot is lost (one time
+less), never run twice.
 """
 from __future__ import annotations
 
@@ -45,7 +44,7 @@ TICK_SECONDS = 60
 
 
 # ── datasource: refresh schedulato ──────────────────────────────────────────
-def ricalcola_tutte(session: Session) -> int:
+def recompute_all(session: Session) -> int:
     """The schedules' time zone changed (Administration → Settings, APP__TIMEZONE): the
     next slot of every schedule again, read in the new zone. Without it each one would
     fire once more at the old zone's hour (a monthly one, a month later)."""
@@ -74,29 +73,28 @@ def _advance_ds(session: Session, ds: Datasource, now: datetime) -> None:
     session.commit()
 
 
-def _prendi_slot_ds(session: Session, ds: Datasource, now: datetime, visto: datetime | None = None) -> bool:
-    """Sposta in avanti il prossimo refresh SOLO SE è ancora quello letto: vero
-    per un processo solo, quello a cui tocca lo slot.
+def _take_ds_slot(session: Session, ds: Datasource, now: datetime, seen: datetime | None = None) -> bool:
+    """Moves the next refresh forward ONLY WHEN it is still the one read: true for one
+    process only, the one whose slot it is.
 
-    `visto` è il valore letto dalla query degli scaduti. Va passato da chi ha
-    fatto altro in mezzo: ogni commit della sessione fa scadere gli oggetti, e
-    rileggere `ds.next_refresh_at` qui darebbe il valore GIÀ spostato da un altro
-    processo — con cui il confronto riuscirebbe sempre. Per lo stesso motivo
-    l'UPDATE chiede anche che lo slot sia ancora scaduto: uno già preso sta nel
-    futuro."""
-    visto = ds.next_refresh_at if visto is None else visto
-    valori: dict = {}
+    `seen` is the value the due query read. Whoever did something else in between must
+    pass it: every commit of the session expires the objects, and reading
+    `ds.next_refresh_at` again here would give the value ALREADY moved by another
+    process — with which the comparison would always succeed. For the same reason the
+    UPDATE also asks that the slot is still due: one taken already is in the future."""
+    seen = ds.next_refresh_at if seen is None else seen
+    values: dict = {}
     try:
-        valori["next_refresh_at"] = next_fire(ds.refresh_schedule, now).replace(tzinfo=None)
+        values["next_refresh_at"] = next_fire(ds.refresh_schedule, now).replace(tzinfo=None)
     except Exception:
-        valori.update(refresh_schedule=None, next_refresh_at=None)
-    preso = session.exec(
+        values.update(refresh_schedule=None, next_refresh_at=None)
+    taken_one = session.exec(
         update(Datasource)
-        .where(Datasource.id == ds.id, Datasource.next_refresh_at == visto, Datasource.next_refresh_at <= now.replace(tzinfo=None))
-        .values(**valori)
+        .where(Datasource.id == ds.id, Datasource.next_refresh_at == seen, Datasource.next_refresh_at <= now.replace(tzinfo=None))
+        .values(**values)
     )
     session.commit()
-    return preso.rowcount == 1
+    return taken_one.rowcount == 1
 
 
 def _disable_ds(session: Session, ds: Datasource, reason: str) -> None:
@@ -108,39 +106,39 @@ def _disable_ds(session: Session, ds: Datasource, reason: str) -> None:
     session.commit()
 
 
-async def _fire_ds(session: Session, ds: Datasource, now: datetime, visto: datetime | None = None) -> None:
-    visto = ds.next_refresh_at if visto is None else visto  # prima di ogni commit: vedi _prendi_slot_ds
+async def _fire_ds(session: Session, ds: Datasource, now: datetime, seen: datetime | None = None) -> None:
+    seen = ds.next_refresh_at if seen is None else seen  # before every commit: see _take_ds_slot
     user = session.get(User, ds.refresh_scheduled_by) if ds.refresh_scheduled_by else None
     if user is None or not user.is_active:
-        _disable_ds(session, ds, "autore dello schedule assente o disattivato")
+        _disable_ds(session, ds, "the schedule's author is missing or disabled")
         return
     conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
     if conn is None:
-        _disable_ds(session, ds, "connessione inesistente")
+        _disable_ds(session, ds, "connection does not exist")
         return
-    # I permessi si riverificano AL FUOCO, non solo quando lo schedule viene
-    # creato: altrimenti togliere CONNECT a qualcuno non ferma il suo cron, e
-    # chi ha EDIT può spostarsi in casa una datasource schedulata da altri e
-    # farsi rifornire di dati con l'autorità della vittima (audit 2026-09-19,
-    # A7). È ciò che l'orchestratore fa già in `_refresh_and_wait`.
+    # The permissions are checked again AT FIRING, not only when the schedule is created:
+    # otherwise removing CONNECT from someone does not stop their cron, and whoever has
+    # EDIT can move a datasource scheduled by others into their own place and get data
+    # supplied with the victim's authority (audit 2026-09-19, A7). It is what the
+    # orchestrator does already in `_refresh_and_wait`.
     if not perm_service.has_capability(session, user, ds.project_id, Capability.RUN):
-        _disable_ds(session, ds, f"RUN mancante per {user.email} sulla cartella della datasource")
+        _disable_ds(session, ds, f"RUN missing for {user.email} on the datasource's folder")
         return
     if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
-        _disable_ds(session, ds, f"CONNECT mancante per {user.email} sulla cartella della connessione")
+        _disable_ds(session, ds, f"CONNECT missing for {user.email} on the connection's folder")
         return
-    ds_id, nome = ds.id, ds.name
-    if not _prendi_slot_ds(session, ds, now, visto):
-        return  # lo slot l'ha preso un altro processo
+    ds_id, name = ds.id, ds.name
+    if not _take_ds_slot(session, ds, now, seen):
+        return  # another process took the slot
     # in line with the manual refresh and the flows: one refresh at a time
     run = await start_refresh_if_free(session, user, ds, conn, trigger_type="schedule", launch=launch_ingest_run)
     if run is None:
-        logger.info("scheduler: datasource %s (%s) is already refreshing, scheduled slot skipped", ds_id, nome)
+        logger.info("scheduler: datasource %s (%s) is already refreshing, scheduled slot skipped", ds_id, name)
         return
-    logger.info("scheduler: refresh schedulato lanciato per datasource %s (%s)", ds_id, nome)
+    logger.info("scheduler: refresh schedulato lanciato per datasource %s (%s)", ds_id, name)
 
 
-# ── flussi: esecuzione schedulata ───────────────────────────────────────────
+# ── flows: scheduled run ────────────────────────────────────────────────────
 def _advance_flow(session: Session, flow: Flow, now: datetime) -> None:
     try:
         flow.next_run_at = next_fire(flow.run_schedule, now).replace(tzinfo=None)
@@ -152,7 +150,7 @@ def _advance_flow(session: Session, flow: Flow, now: datetime) -> None:
 
 
 def _disable_flow(session: Session, flow: Flow, reason: str) -> None:
-    logger.warning("scheduler: esecuzione flusso %s disabilitata (%s)", flow.id, reason)
+    logger.warning("scheduler: run of flow %s disabled (%s)", flow.id, reason)
     flow.run_schedule = None
     flow.run_scheduled_by = None
     flow.next_run_at = None
@@ -160,38 +158,38 @@ def _disable_flow(session: Session, flow: Flow, reason: str) -> None:
     session.commit()
 
 
-async def _fire_flow(session: Session, flow: Flow, now: datetime, visto: datetime | None = None) -> None:
-    visto = flow.next_run_at if visto is None else visto  # prima di ogni commit: vedi _prendi_slot_ds
+async def _fire_flow(session: Session, flow: Flow, now: datetime, seen: datetime | None = None) -> None:
+    seen = flow.next_run_at if seen is None else seen  # before every commit: see _take_ds_slot
     user = session.get(User, flow.run_scheduled_by) if flow.run_scheduled_by else None
     if user is None or not user.is_active:
-        _disable_flow(session, flow, "autore dello schedule assente o disattivato")
+        _disable_flow(session, flow, "the schedule's author is missing or disabled")
         return
-    flow_id, nome = flow.id, flow.name
-    valori: dict = {}
+    flow_id, name = flow.id, flow.name
+    values: dict = {}
     try:
-        valori["next_run_at"] = next_fire(flow.run_schedule, now).replace(tzinfo=None)
+        values["next_run_at"] = next_fire(flow.run_schedule, now).replace(tzinfo=None)
     except Exception:
-        valori.update(run_schedule=None, next_run_at=None)
-    preso = session.exec(
+        values.update(run_schedule=None, next_run_at=None)
+    taken_one = session.exec(
         update(Flow)
-        .where(Flow.id == flow_id, Flow.next_run_at == visto, Flow.next_run_at <= now.replace(tzinfo=None))
-        .values(**valori)
+        .where(Flow.id == flow_id, Flow.next_run_at == seen, Flow.next_run_at <= now.replace(tzinfo=None))
+        .values(**values)
     )
-    if preso.rowcount != 1:
-        session.rollback()  # lo slot l'ha preso un altro processo
+    if taken_one.rowcount != 1:
+        session.rollback()  # another process took the slot
         return
-    orchestrator.in_fila_per_il_flusso(session, flow_id)  # in fila con «Esegui ora»
-    if orchestrator.flusso_in_corso(session, flow_id):
+    orchestrator.in_line_for_the_flow(session, flow_id)  # in line with «Run now»
+    if orchestrator.flow_running(session, flow_id):
         session.commit()
-        logger.info("scheduler: flusso %s (%s) ancora in esecuzione, salto lo slot", flow_id, nome)
+        logger.info("scheduler: flow %s (%s) still running, skipping the slot", flow_id, name)
         return
-    # Lo slot preso e l'esecuzione in coda nella STESSA transazione: o entrambi o
-    # nessuno. La esegue un orchestratore (refresh → output → runflow), questo o
-    # un altro; i run schedulati sono "produzione": usano flow.production_engine.
+    # The slot taken and the run queued in the SAME transaction: both or neither. An
+    # orchestrator runs it (refresh → output → runflow), this one or another; the scheduled
+    # runs are "production": they use flow.production_engine.
     orchestrator.create_orchestration_run(session, user, flow, "schedule", "production", commit=False)
     session.commit()
-    orchestrator.sveglia()
-    logger.info("scheduler: esecuzione del flusso %s (%s) messa in coda", flow_id, nome)
+    orchestrator.wake()
+    logger.info("scheduler: run of flow %s (%s) queued", flow_id, name)
 
 
 # ── flow groups: scheduled runs ─────────────────────────────────────────────
@@ -214,11 +212,11 @@ def _disable_group(session: Session, group: FlowGroup, reason: str) -> None:
     session.commit()
 
 
-async def _fire_group(session: Session, group: FlowGroup, now: datetime, visto: datetime | None = None) -> None:
+async def _fire_group(session: Session, group: FlowGroup, now: datetime, seen: datetime | None = None) -> None:
     """As `_fire_flow`: take the slot, then queue the run in the same transaction.
     The author's rights are checked again here, as for datasources: a schedule must
     not outlive its author's RUN on the group's folder."""
-    visto = group.next_run_at if visto is None else visto
+    seen = group.next_run_at if seen is None else seen
     user = session.get(User, group.run_scheduled_by) if group.run_scheduled_by else None
     if user is None or not user.is_active:
         _disable_group(session, group, "the schedule's author is gone or deactivated")
@@ -234,7 +232,7 @@ async def _fire_group(session: Session, group: FlowGroup, now: datetime, visto: 
         values.update(run_schedule=None, next_run_at=None)
     taken = session.exec(
         update(FlowGroup)
-        .where(FlowGroup.id == group_id, FlowGroup.next_run_at == visto, FlowGroup.next_run_at <= now.replace(tzinfo=None))
+        .where(FlowGroup.id == group_id, FlowGroup.next_run_at == seen, FlowGroup.next_run_at <= now.replace(tzinfo=None))
         .values(**values)
     )
     if taken.rowcount != 1:
@@ -247,7 +245,7 @@ async def _fire_group(session: Session, group: FlowGroup, now: datetime, visto: 
         return
     orchestrator.create_group_run(session, user, group, "schedule", commit=False)
     session.commit()
-    orchestrator.sveglia()
+    orchestrator.wake()
     logger.info("scheduler: run of flow group %s (%s) queued", group_id, name)
 
 
@@ -269,12 +267,12 @@ def _disable_script(session: Session, script: SavedScript, reason: str) -> None:
     session.commit()
 
 
-async def _fire_script(session: Session, script: SavedScript, now: datetime, visto: datetime | None = None) -> None:
+async def _fire_script(session: Session, script: SavedScript, now: datetime, seen: datetime | None = None) -> None:
     """As `_fire_group`: the slot taken, the run queued in the same transaction; the
     author's rights checked again here and, in full, when the run starts."""
     from app.services import saved_script_runs, saved_scripts
 
-    visto = script.next_run_at if visto is None else visto
+    seen = script.next_run_at if seen is None else seen
     user = session.get(User, script.run_scheduled_by) if script.run_scheduled_by else None
     if user is None or not user.is_active:
         _disable_script(session, script, "the schedule's author is gone or deactivated")
@@ -291,7 +289,7 @@ async def _fire_script(session: Session, script: SavedScript, now: datetime, vis
         values.update(run_schedule=None, next_run_at=None)
     taken = session.exec(
         update(SavedScript)
-        .where(SavedScript.id == script_id, SavedScript.next_run_at == visto,
+        .where(SavedScript.id == script_id, SavedScript.next_run_at == seen,
                SavedScript.next_run_at <= now.replace(tzinfo=None))
         .values(**values)
     )
@@ -305,22 +303,22 @@ async def _fire_script(session: Session, script: SavedScript, now: datetime, vis
         return
     saved_script_runs.create_script_run(session, user, script, "schedule", commit=False)
     session.commit()
-    orchestrator.sveglia()
+    orchestrator.wake()
     logger.info("scheduler: run of saved script %s (%s) queued", script_id, name)
 
 
 # ── loop ────────────────────────────────────────────────────────────────────
 async def _tick() -> None:
     now = datetime.now(timezone.utc)
-    now_naive = now.replace(tzinfo=None)  # le colonne TIMESTAMP sono naive-UTC
+    now_naive = now.replace(tzinfo=None)  # the TIMESTAMP columns are naive-UTC
     with Session(engine) as session:
-        # Reconcile SERVER-SIDE dei run non terminali: un ingest/flusso completato
-        # lato engine va APPLICATO (swap parquet + schema della datasource) entro
-        # un tick anche se nessuno sta pollando dal frontend. Senza questo, un
-        # refresh finito mentre l'utente ha lasciato la vista resta invisibile e
-        # la datasource continua a puntare ai dati VECCHI (l'utente non sa cosa sta
-        # guardando). _reconcile salta i run già terminali e quelli senza task
-        # engine, e il claim a SUCCESS è atomico → sicuro anche col poll della UI.
+        # SERVER-SIDE reconcile of the non-terminal runs: an ingest/flow completed on the
+        # engine must be APPLIED (parquet swap + the datasource's schema) within a tick even
+        # when nobody is polling from the frontend. Without it, a refresh finished while the
+        # user left the view stays invisible and the datasource keeps pointing at the OLD data
+        # (the user does not know what they are looking at). _reconcile skips the runs
+        # terminal already and those without an engine task, and the claim to SUCCESS is
+        # atomic → safe with the UI's poll too.
         try:
             pending = session.exec(
                 select(Run).where(
@@ -334,7 +332,7 @@ async def _tick() -> None:
                 except Exception:
                     logger.exception("scheduler: reconcile del run %s fallito", r.id)
         except Exception:
-            logger.exception("scheduler: passata di reconcile dei run fallita")
+            logger.exception("scheduler: the runs' reconcile pass failed")
 
         due_ds = session.exec(
             select(Datasource).where(
@@ -343,12 +341,12 @@ async def _tick() -> None:
                 Datasource.next_refresh_at <= now_naive,
             )
         ).all()
-        # il valore dello slot si fissa ADESSO, com'è uscito dalla query: dopo il
-        # primo commit gli oggetti scadono e rileggerli darebbe quello già
-        # spostato da un altro processo
-        for ds, visto in [(ds, ds.next_refresh_at) for ds in due_ds]:
+        # the slot's value is fixed NOW, as it came out of the query: after the first commit
+        # the objects expire and reading them again would give the one already moved by
+        # another process
+        for ds, seen in [(ds, ds.next_refresh_at) for ds in due_ds]:
             try:
-                await _fire_ds(session, ds, now, visto)
+                await _fire_ds(session, ds, now, seen)
             except Exception:
                 logger.exception("scheduler: refresh datasource %s fallito", ds.id)
                 _advance_ds(session, ds, now)
@@ -360,11 +358,11 @@ async def _tick() -> None:
                 Flow.next_run_at <= now_naive,
             )
         ).all()
-        for flow, visto in [(flow, flow.next_run_at) for flow in due_flows]:
+        for flow, seen in [(flow, flow.next_run_at) for flow in due_flows]:
             try:
-                await _fire_flow(session, flow, now, visto)
+                await _fire_flow(session, flow, now, seen)
             except Exception:
-                logger.exception("scheduler: esecuzione flusso %s fallita", flow.id)
+                logger.exception("scheduler: run of flow %s failed", flow.id)
                 _advance_flow(session, flow, now)
 
         due_groups = session.exec(
@@ -374,9 +372,9 @@ async def _tick() -> None:
                 FlowGroup.next_run_at <= now_naive,
             )
         ).all()
-        for group, visto in [(g, g.next_run_at) for g in due_groups]:
+        for group, seen in [(g, g.next_run_at) for g in due_groups]:
             try:
-                await _fire_group(session, group, now, visto)
+                await _fire_group(session, group, now, seen)
             except Exception:
                 logger.exception("scheduler: run of flow group %s failed", group.id)
                 _advance_group(session, group, now)
@@ -391,59 +389,59 @@ async def _tick() -> None:
                     SavedScript.next_run_at <= now_naive,
                 )
             ).all()
-            for script, visto in [(x, x.next_run_at) for x in due_scripts]:
+            for script, seen in [(x, x.next_run_at) for x in due_scripts]:
                 try:
-                    await _fire_script(session, script, now, visto)
+                    await _fire_script(session, script, now, seen)
                 except Exception:
                     logger.exception("scheduler: run of saved script %s failed", script.id)
                     _advance_script(session, script, now)
 
-        # data contracts: la freschezza è l'unica regola che si rompe da sola,
-        # col passare del tempo — qui la si ricontrolla
+        # data contracts: freshness is the only rule that breaks by itself, as time goes by —
+        # here it is checked again
         try:
-            scaduti = contract_service.sweep_freshness(session, now)
-            if scaduti:
-                logger.info("scheduler: %d data contract hanno cambiato stato per la freschezza", scaduti)
+            expired_ones = contract_service.sweep_freshness(session, now)
+            if expired_ones:
+                logger.info("scheduler: %d data contracts changed state for freshness", expired_ones)
         except Exception:
-            logger.exception("scheduler: controllo della freschezza dei data contract fallito")
-        # …e chi ha chiesto di essere avvisato lo viene, quando uno stato cambia
-        from app.services import contract_notifier  # tardivo: passa dalle rotte delle connessioni
+            logger.exception("scheduler: the data contracts' freshness check failed")
+        # …and whoever asked to be notified is, when a state changes
+        from app.services import contract_notifier  # late: goes through the connections' routes
 
-        mandati = await contract_notifier.deliver_pending(session)
-        if mandati:
-            logger.info("scheduler: %d avvisi di data contract inviati", mandati)
+        sent_ones = await contract_notifier.deliver_pending(session)
+        if sent_ones:
+            logger.info("scheduler: %d data contract notices sent", sent_ones)
 
-        # stato di breve durata condiviso fra le repliche: via le righe scadute
+        # short-lived state shared among the replicas: away with the expired rows
         try:
-            login_throttle.pulisci(session)
-            flow_presence.pulisci(session)
-            # sessioni scadute o ferme da troppo: con loro se ne vanno gli indirizzi
-            sessions.pulisci(session)
-            # token API scaduti, e il registro delle consegne dei webhook oltre la finestra
-            api_tokens.pulisci(session)
-            webhooks.pulisci(session)
+            login_throttle.clean(session)
+            flow_presence.clean(session)
+            # sessions expired or still for too long: their addresses go with them
+            sessions.clean(session)
+            # expired API tokens, and the webhooks' delivery log past the window
+            api_tokens.clean(session)
+            webhooks.clean(session)
         except Exception:
-            logger.exception("scheduler: pulizia dello stato condiviso fallita")
+            logger.exception("scheduler: cleanup of the shared state failed")
 
-        # cancellazione differita dei blob la cui grace è scaduta (snapshot
-        # superati, parquet rimpiazzati, datasource eliminate)
+        # deferred deletion of the blobs whose grace expired (snapshots overtaken, parquets
+        # replaced, datasources deleted)
         try:
             removed = await sweep_blob_deletions(session, now)
             if removed:
-                logger.info("scheduler: %d blob obsoleti eliminati", removed)
+                logger.info("scheduler: %d obsolete blobs deleted", removed)
         except Exception:
-            logger.exception("scheduler: sweep dei blob differiti fallito")
+            logger.exception("scheduler: sweep of the deferred blobs failed")
 
 
 async def scheduler_loop(stop: asyncio.Event) -> None:
-    logger.info("scheduler avviato (tick %ss): refresh datasource + esecuzione flussi", TICK_SECONDS)
+    logger.info("scheduler started (tick %ss): datasource refresh + flow runs", TICK_SECONDS)
     while not stop.is_set():
         try:
             await _tick()
         except Exception:
-            logger.exception("scheduler: errore nel tick")
+            logger.exception("scheduler: error in the tick")
         try:
             await asyncio.wait_for(stop.wait(), timeout=TICK_SECONDS)
         except asyncio.TimeoutError:
             pass
-    logger.info("scheduler fermato")
+    logger.info("scheduler stopped")

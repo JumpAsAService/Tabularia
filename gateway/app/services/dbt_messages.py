@@ -6,10 +6,10 @@ request's language. An unknown code, or a missing parameter, does not break the
 answer: it falls back to the original text."""
 from __future__ import annotations
 
-from app.core.lingua import DEFAULT
+from app.core.language import DEFAULT
 
-# codice → lingua → frase. I parametri fra graffe.
-MESSAGGI: dict[str, dict[str, str]] = {
+# code → language → sentence. The parameters in braces.
+MESSAGES: dict[str, dict[str, str]] = {
     "internal": {
         "en": "The dbt export failed: {detail}",
         "it": "L'export dbt non è riuscito: {detail}",
@@ -207,7 +207,7 @@ MESSAGGI: dict[str, dict[str, str]] = {
         "fr": "{step} : les colonnes ne sont pas connues à ce point du flux (après un nœud sql), et cette cible en a besoin. Utilisez la cible fédérée, ou faites lister ses colonnes au nœud sql.",
     },
     "text_not_translatable": {
-        # followed by the advice for the text's dialect (CONSIGLI_DIALETTO)
+        # followed by the advice for the text's dialect (DIALECT_ADVICE)
         "en": "The step «{step}» is written for the {dialect} engine and cannot be translated for this target ({detail}).",
         "it": "Il passo «{step}» è scritto per il motore {dialect} e non si può tradurre per questo target ({detail}).",
         "de": "Der Schritt «{step}» ist für die Engine {dialect} geschrieben und kann für dieses Ziel nicht übersetzt werden ({detail}).",
@@ -453,8 +453,8 @@ MESSAGGI: dict[str, dict[str, str]] = {
 }
 
 
-# perché una traduzione proposta dall'AI non passa i controlli dell'engine
-MOTIVI_AI: dict[str, dict[str, str]] = {
+# why a translation the AI proposed does not pass the engine's checks
+AI_REASONS: dict[str, dict[str, str]] = {
     "unparsable": {"en": "it does not parse", "it": "non si legge", "de": "sie ist nicht lesbar", "es": "no se puede leer", "fr": "elle ne se lit pas"},
     "not_select": {"en": "it is not a single SELECT", "it": "non è una sola SELECT", "de": "sie ist kein einzelnes SELECT",
                    "es": "no es un único SELECT", "fr": "ce n'est pas un SELECT unique"},
@@ -486,7 +486,7 @@ MOTIVI_AI: dict[str, dict[str, str]] = {
 # text_not_translatable: what to do depends on the dialect the text is written in. Only
 # ClickHouse text has a target that runs it as it is; DuckDB, BigQuery and Polars text
 # goes through the same translation on every target.
-CONSIGLI_DIALETTO: dict[str, dict[str, str]] = {
+DIALECT_ADVICE: dict[str, dict[str, str]] = {
     "clickhouse": {
         "en": "Use the ClickHouse target, which runs ClickHouse text as it is, or rewrite the expression.",
         "it": "Usa il target ClickHouse, che esegue il testo ClickHouse così com'è, o riscrivi l'espressione.",
@@ -504,39 +504,39 @@ CONSIGLI_DIALETTO: dict[str, dict[str, str]] = {
 }
 
 
-def traduci(code: str | None, params: dict | None, lingua: str, testo_originale: str = "") -> str:
-    """La frase del codice nella lingua chiesta (o in inglese); senza codice, o con
-    un parametro che manca, il testo originale."""
-    modelli = MESSAGGI.get(code or "")
-    if not modelli:
-        return testo_originale or code or ""
+def translate(code: str | None, params: dict | None, language: str, original_text: str = "") -> str:
+    """The code's sentence in the requested language (or in English); without a code, or with
+    a missing parameter, the original text."""
+    models = MESSAGES.get(code or "")
+    if not models:
+        return original_text or code or ""
     p = dict(params or {})
     if code == "internal" and "detail" not in p:
-        p["detail"] = testo_originale
-    if code == "ai_translation_invalid" and p.get("reason") in MOTIVI_AI:
-        motivo = MOTIVI_AI[p["reason"]]
+        p["detail"] = original_text
+    if code == "ai_translation_invalid" and p.get("reason") in AI_REASONS:
+        reason = AI_REASONS[p["reason"]]
         try:
-            p["reason"] = (motivo.get(lingua) or motivo[DEFAULT]).format(**p)
+            p["reason"] = (reason.get(language) or reason[DEFAULT]).format(**p)
         except (KeyError, IndexError, ValueError):
-            p["reason"] = motivo[DEFAULT]
+            p["reason"] = reason[DEFAULT]
     try:
-        frase = (modelli.get(lingua) or modelli[DEFAULT]).format(**p)
+        sentence = (models.get(language) or models[DEFAULT]).format(**p)
     except (KeyError, IndexError, ValueError):
-        return testo_originale or modelli[DEFAULT]
+        return original_text or models[DEFAULT]
     if code == "text_not_translatable":
-        consiglio = CONSIGLI_DIALETTO.get(str(p.get("dialect") or "").lower()) or CONSIGLI_DIALETTO[""]
-        frase += " " + (consiglio.get(lingua) or consiglio[DEFAULT])
-    return frase
+        advice = DIALECT_ADVICE.get(str(p.get("dialect") or "").lower()) or DIALECT_ADVICE[""]
+        sentence += " " + (advice.get(language) or advice[DEFAULT])
+    return sentence
 
 
-def messaggio_dell_errore(e: Exception, lingua: str) -> str:
-    """Un `DbtExportError` (del gateway) nella lingua chiesta."""
-    return traduci(getattr(e, "code", None), getattr(e, "params", None), lingua, str(e))
+def error_message(e: Exception, language: str) -> str:
+    """A (gateway's) `DbtExportError` in the requested language."""
+    return translate(getattr(e, "code", None), getattr(e, "params", None), language, str(e))
 
 
-def messaggio_dell_engine(detail, lingua: str) -> str:
-    """Il `detail` di un 422 dell'engine: {code, params, message} o, da un engine
-    vecchio, un testo."""
+def engine_message(detail, language: str) -> str:
+    """The `detail` of an engine 422: {code, params, message} or, from an old engine, a
+    text."""
     if isinstance(detail, dict):
-        return traduci(detail.get("code"), detail.get("params"), lingua, str(detail.get("message") or ""))
+        return translate(detail.get("code"), detail.get("params"), language, str(detail.get("message") or ""))
     return str(detail)

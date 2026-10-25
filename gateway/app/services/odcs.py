@@ -1,24 +1,24 @@
-"""Il data contract nel formato aperto ODCS (Open Data Contract Standard, Bitol).
+"""The data contract in the open ODCS format (Open Data Contract Standard, Bitol).
 
-Solo esportazione: il documento di Tabularia resta la fonte, questo è ciò che si
-consegna a un catalogo o a un altro strumento. Versione dello standard: v3.0.2,
-quella dichiarata in `apiVersion` e contro il cui schema l'export è validato.
+Export only: Tabularia's document stays the source, this is what is handed to a
+catalog or another tool. The standard's version: v3.0.2, the one declared in
+`apiVersion` and against whose schema the export is validated.
 
-Che cosa diventa cosa:
-  column           → la proprietà nello schema, con il suo `logicalType`
-  not_null         → `required: true` (se bloccante) + controllo `nullValues`
-  unique           → `unique: true` (una colonna, se bloccante) + `duplicateCount`;
-                     su più colonne una query SQL
-  accepted_values  → una query SQL che conta i valori fuori elenco
-  range            → `logicalTypeOptions.minimum/maximum` + una query SQL
-  pattern          → `logicalTypeOptions.pattern` + un controllo descritto a parole
-  row_count        → controllo `rowCount`
-  freshness        → `slaProperties` (latency, in ore) + un controllo a parole
-  expression       → una query SQL che conta le righe dove la condizione non è vera
+What becomes what:
+  column           → the property in the schema, with its `logicalType`
+  not_null         → `required: true` (when blocking) + a `nullValues` check
+  unique           → `unique: true` (one column, when blocking) + `duplicateCount`;
+                     on several columns an SQL query
+  accepted_values  → an SQL query counting the values outside the list
+  range            → `logicalTypeOptions.minimum/maximum` + an SQL query
+  pattern          → `logicalTypeOptions.pattern` + a check described in words
+  row_count        → a `rowCount` check
+  freshness        → `slaProperties` (latency, in hours) + a check in words
+  expression       → an SQL query counting the rows where the condition is not true
 
-OGNI regola diventa anche una voce di `quality` con la sua severità e, nelle
-`customProperties`, l'id e il tipo che ha in Tabularia: niente si perde per strada
-e chi legge sa da quale regola nasce ogni controllo.
+EVERY rule also becomes a `quality` item with its severity and, in the
+`customProperties`, the id and the kind it has in Tabularia: nothing is lost on the
+way and whoever reads knows which rule each check comes from.
 """
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ from typing import Any
 
 ODCS_VERSION = "v3.0.2"
 
-# ciò che il contratto promette → il tipo logico di ODCS (la 3.0 non distingue
-# data e data-ora: il dettaglio resta nel physicalType)
+# what the contract promises → ODCS's logical type (3.0 does not tell date from
+# date-time: the detail stays in the physicalType)
 _LOGICAL = {"integer": "integer", "number": "number", "string": "string", "boolean": "boolean", "date": "date", "datetime": "date"}
 _DIMENSION = {
     "column": "conformity", "not_null": "completeness", "unique": "uniqueness", "accepted_values": "conformity",
@@ -40,7 +40,7 @@ _DIMENSION = {
 
 
 def _family(dtype: str | None) -> str | None:
-    """La famiglia di un tipo fisico (la stessa che usa l'engine: evaluator.family)."""
+    """A physical type's family (the same the engine uses: evaluator.family)."""
     d = dtype or ""
     if re.match(r"U?Int", d):
         return "integer"
@@ -73,30 +73,30 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def _check(regola: dict, /, **fields: Any) -> dict:
-    """Una voce di `quality`: ciò che la regola verifica, con la sua severità.
-    (`regola` è solo posizionale: fra i campi di ODCS ce n'è uno che si chiama `rule`.)"""
+def _check(rule: dict, /, **fields: Any) -> dict:
+    """A `quality` item: what the rule checks, with its severity.
+    (`rule` is positional only: among ODCS's fields there is one called `rule`.)"""
     return {
         **fields,
-        "dimension": _DIMENSION[regola["kind"]],
-        "severity": regola["severity"],
+        "dimension": _DIMENSION[rule["kind"]],
+        "severity": rule["severity"],
         "customProperties": [
-            {"property": "tabulariaRuleId", "value": regola.get("id", "")},
-            {"property": "tabulariaRuleKind", "value": regola["kind"]},
+            {"property": "tabulariaRuleId", "value": rule.get("id", "")},
+            {"property": "tabulariaRuleKind", "value": rule["kind"]},
         ],
     }
 
 
-def _zero_rows(regola: dict, name: str, where: str, description: str) -> dict:
-    return _check(regola, type="sql", name=name, description=description,
+def _zero_rows(rule: dict, name: str, where: str, description: str) -> dict:
+    return _check(rule, type="sql", name=name, description=description,
                   query=f"SELECT COUNT(*) FROM ${{table}} WHERE {where}", mustBe=0, unit="rows")
 
 
 def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[dict], column_descriptions: dict[str, str],
             document: dict, version: int, enabled: bool, created_at: datetime | None) -> dict:
-    """Il documento ODCS (un dizionario, nell'ordine in cui va scritto)."""
-    # prima le regole `column`: fissano il tipo logico, da cui dipende che cosa
-    # delle altre (estremi, formato) può stare nello schema
+    """The ODCS document (a dictionary, in the order it must be written)."""
+    # the `column` rules first: they fix the logical type, on which depends what of the
+    # others (bounds, format) may sit in the schema
     rules = sorted((r for r in document.get("rules", []) if isinstance(r, dict)), key=lambda r: r["kind"] != "column")
 
     props: dict[str, dict] = {}
@@ -114,7 +114,7 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
         props[c["name"]] = p
 
     def prop(col: str) -> dict:
-        # una regola può nominare una colonna che la datasource non ha (ancora, o più)
+        # a rule may name a column the datasource does not have (yet, or any more)
         return props.setdefault(col, {"name": col})
 
     table_quality: list[dict] = []
@@ -125,8 +125,8 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
             p = prop(col)
             if r.get("dtype"):
                 p["logicalType"] = _LOGICAL[r["dtype"]]
-            promessa = f"of type {r['dtype']}" if r.get("dtype") else "present"
-            p.setdefault("quality", []).append(_check(r, type="text", name=f"{col} is {promessa}",
+            promise = f"of type {r['dtype']}" if r.get("dtype") else "present"
+            p.setdefault("quality", []).append(_check(r, type="text", name=f"{col} is {promise}",
                                                       description=f"The column {col} exists" + (f" and its type is {r['dtype']}." if r.get("dtype") else ".")))
         elif kind == "not_null":
             p = prop(col)
@@ -141,33 +141,33 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
                     p["unique"] = True
                 p.setdefault("quality", []).append(_check(r, type="library", rule="duplicateCount", name=f"{cols[0]} is unique", mustBe=0, unit="rows"))
             else:
-                elenco = ", ".join(_ident(c) for c in cols)
+                listing = ", ".join(_ident(c) for c in cols)
                 table_quality.append(_check(
                     r, type="sql", name="unique combination of " + ", ".join(cols),
                     description="No two rows share the same values of " + ", ".join(cols) + " (nulls count as values).",
-                    query=f"SELECT COUNT(*) FROM (SELECT {elenco} FROM ${{table}} GROUP BY {elenco} HAVING COUNT(*) > 1) AS duplicated",
+                    query=f"SELECT COUNT(*) FROM (SELECT {listing} FROM ${{table}} GROUP BY {listing} HAVING COUNT(*) > 1) AS duplicated",
                     mustBe=0, unit="rows",
                 ))
         elif kind == "accepted_values":
-            valori = ", ".join(_literal(v) for v in r.get("values", []))
+            values = ", ".join(_literal(v) for v in r.get("values", []))
             prop(col).setdefault("quality", []).append(_zero_rows(
-                r, f"{col} has only accepted values", f"{_ident(col)} IS NOT NULL AND {_ident(col)} NOT IN ({valori})",
+                r, f"{col} has only accepted values", f"{_ident(col)} IS NOT NULL AND {_ident(col)} NOT IN ({values})",
                 "Every non-null value is one of: " + ", ".join(str(v) for v in r.get("values", [])) + "."))
         elif kind == "range":
             p, lo, hi = prop(col), r.get("min"), r.get("max")
-            # gli estremi stanno anche nello schema, dove il tipo logico li ammette
-            numerico = p.get("logicalType") in ("integer", "number")
-            if (numerico and all(v is None or _is_number(v) for v in (lo, hi))) or (
+            # the bounds sit in the schema too, where the logical type allows them
+            numeric = p.get("logicalType") in ("integer", "number")
+            if (numeric and all(v is None or _is_number(v) for v in (lo, hi))) or (
                     p.get("logicalType") == "date" and all(v is None or isinstance(v, str) for v in (lo, hi))):
-                opzioni = p.setdefault("logicalTypeOptions", {})
+                options = p.setdefault("logicalTypeOptions", {})
                 if lo is not None:
-                    opzioni["minimum"] = lo
+                    options["minimum"] = lo
                 if hi is not None:
-                    opzioni["maximum"] = hi
-            fuori = [f"{_ident(col)} < {_literal(lo)}"] if lo is not None else []
-            fuori += [f"{_ident(col)} > {_literal(hi)}"] if hi is not None else []
-            limiti = " and ".join(([f"at least {lo}"] if lo is not None else []) + ([f"at most {hi}"] if hi is not None else []))
-            p.setdefault("quality", []).append(_zero_rows(r, f"{col} is in range", " OR ".join(fuori), f"Every non-null value is {limiti}."))
+                    options["maximum"] = hi
+            outside = [f"{_ident(col)} < {_literal(lo)}"] if lo is not None else []
+            outside += [f"{_ident(col)} > {_literal(hi)}"] if hi is not None else []
+            limits = " and ".join(([f"at least {lo}"] if lo is not None else []) + ([f"at most {hi}"] if hi is not None else []))
+            p.setdefault("quality", []).append(_zero_rows(r, f"{col} is in range", " OR ".join(outside), f"Every non-null value is {limits}."))
         elif kind == "pattern":
             p = prop(col)
             if p.get("logicalType") == "string":
@@ -177,17 +177,17 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
                 description=f"Every non-null value matches the regular expression {r['regex']} in full."))
         elif kind == "row_count":
             lo, hi = r.get("min"), r.get("max")
-            limiti = {"mustBeBetween": [lo, hi]} if lo is not None and hi is not None else (
+            limits = {"mustBeBetween": [lo, hi]} if lo is not None and hi is not None else (
                 {"mustBeGreaterOrEqualTo": lo} if lo is not None else {"mustBeLessOrEqualTo": hi})
-            table_quality.append(_check(r, type="library", rule="rowCount", name="row count", **limiti, unit="rows"))
+            table_quality.append(_check(r, type="library", rule="rowCount", name="row count", **limits, unit="rows"))
         elif kind == "freshness":
-            ore = r["max_age_hours"]
-            voce: dict[str, Any] = {"property": "latency", "value": ore, "unit": "h"}
+            hours = r["max_age_hours"]
+            item: dict[str, Any] = {"property": "latency", "value": hours, "unit": "h"}
             if col:
-                voce["element"] = f"{name}.{col}"
-            sla.append(voce)
-            su = f"the newest value of {col}" if col else "the last update of the data"
-            table_quality.append(_check(r, type="text", name="freshness", description=f"At most {ore} hours have passed since {su}."))
+                item["element"] = f"{name}.{col}"
+            sla.append(item)
+            subject = f"the newest value of {col}" if col else "the last update of the data"
+            table_quality.append(_check(r, type="text", name="freshness", description=f"At most {hours} hours have passed since {subject}."))
         elif kind == "expression":
             table_quality.append(_check(
                 r, type="sql", name=r.get("name") or "condition",
@@ -195,12 +195,12 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
                 query=f"SELECT COUNT(*) FROM ${{table}} WHERE NOT COALESCE(({r['sql']}), FALSE)", mustBe=0, unit="rows",
             ))
 
-    oggetto: dict[str, Any] = {"name": name, "logicalType": "object", "physicalType": "table"}
+    obj: dict[str, Any] = {"name": name, "logicalType": "object", "physicalType": "table"}
     if description:
-        oggetto["description"] = description
-    oggetto["properties"] = list(props.values())
+        obj["description"] = description
+    obj["properties"] = list(props.values())
     if table_quality:
-        oggetto["quality"] = table_quality
+        obj["quality"] = table_quality
 
     out: dict[str, Any] = {
         "apiVersion": ODCS_VERSION,
@@ -210,10 +210,10 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
         "version": f"{version}.0.0",
         "status": "active" if enabled else "draft",
     }
-    testo = document.get("description") or description
-    if testo:
-        out["description"] = {"purpose": testo}
-    out["schema"] = [oggetto]
+    text = document.get("description") or description
+    if text:
+        out["description"] = {"purpose": text}
+    out["schema"] = [obj]
     if sla:
         out["slaProperties"] = sla
     out["customProperties"] = [
@@ -221,17 +221,17 @@ def to_odcs(*, datasource_id: int, name: str, description: str, columns: list[di
         {"property": "tabulariaContractVersion", "value": version},
     ]
     if created_at is not None:
-        quando = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
-        out["contractCreatedTs"] = quando.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        when = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+        out["contractCreatedTs"] = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return out
 
 
 # ── YAML ─────────────────────────────────────────────────────────────────────
-# Il gateway non porta una libreria YAML, e a questo documento ne serve un
-# sottoinsieme minuscolo: mappe e liste a blocchi, scalari. Ogni stringa esce fra
-# virgolette doppie con le sequenze di JSON, che YAML legge tali e quali: così
-# nessun testo dell'utente («yes», «1.0», «a: b», un a capo) può cambiare significato.
-_DA_SFUGGIRE = re.compile("[\u007f-\u009f  ﻿]")
+# The gateway carries no YAML library, and this document needs a tiny subset of one:
+# block maps and lists, scalars. Every string goes out in double quotes with JSON's
+# escapes, which YAML reads as they are: so no user text («yes», «1.0», «a: b», a line
+# break) can change meaning.
+_TO_ESCAPE = re.compile("[\u007f-\u009f  ﻿]")
 
 
 def _scalar(v: Any) -> str:
@@ -241,7 +241,7 @@ def _scalar(v: Any) -> str:
         return "true" if v else "false"
     if isinstance(v, (int, float)):
         return repr(v)
-    return _DA_SFUGGIRE.sub(lambda m: f"\\u{ord(m.group()):04x}", json.dumps(str(v), ensure_ascii=False))
+    return _TO_ESCAPE.sub(lambda m: f"\\u{ord(m.group()):04x}", json.dumps(str(v), ensure_ascii=False))
 
 
 def _is_scalar(v: Any) -> bool:
@@ -268,9 +268,9 @@ def _lines(v: Any, indent: int) -> list[str]:
         if _is_scalar(x):
             out.append(f"{pad}- {_scalar(x)}")
         else:
-            corpo = _lines(x, indent + 2)
-            out.append(f"{pad}- {corpo[0].lstrip()}")
-            out += corpo[1:]
+            body = _lines(x, indent + 2)
+            out.append(f"{pad}- {body[0].lstrip()}")
+            out += body[1:]
     return out
 
 

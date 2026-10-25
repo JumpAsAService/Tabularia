@@ -1,19 +1,18 @@
-"""Connessioni esterne: database (PostgreSQL/MySQL/MariaDB/ClickHouse/Trino)
-e object storage S3-compatibile (db_type="s3": AWS, MinIO, R2, Wasabi…).
+"""External connections: databases (PostgreSQL/MySQL/MariaDB/ClickHouse/Trino) and
+S3-compatible object storage (db_type="s3": AWS, MinIO, R2, Wasabi…).
 
-Per le connessioni S3 le colonne sono riusate con questo mapping:
-host = endpoint URL (vuoto = AWS), username = access key id,
-password_encrypted = secret access key, database = bucket di default,
+For the S3 connections the columns are reused with this mapping:
+host = endpoint URL (empty = AWS), username = access key id,
+password_encrypted = secret access key, database = default bucket,
 db_schema = region.
 
-Tutte le operazioni richiedono la capability CONNECT sul progetto della
-connessione (ortogonale a VIEW/EDIT: chi gestisce i dati di una cartella non
-usa credenziali DB per questo; MANAGE la include). La barriera di sicurezza è
-QUI: chi può usare una connessione legge tutto ciò che le sue credenziali
-leggono — consigliata un'utenza DB read-only.
+Every operation requires the CONNECT capability on the connection's project
+(orthogonal to VIEW/EDIT: whoever manages a folder's data does not use DB credentials
+for it; MANAGE includes it). The security barrier is HERE: whoever can use a
+connection reads everything its credentials read — a read-only DB user is advised.
 
-La password/secret è cifrata a riposo (Fernet) e non esce mai dalle API: verso
-l'engine viaggia ancora cifrata (`password_encrypted`, stessa chiave).
+The password/secret is encrypted at rest (Fernet) and never leaves the API: towards
+the engine it still travels encrypted (`password_encrypted`, the same key).
 
 SFTP (db_type="sftp"): host, port (22), username, and the password OR a private
 key with its passphrase (`private_key_encrypted`), chosen by `extra.auth`. The
@@ -39,7 +38,7 @@ from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.crypto import decrypt_secret, encrypt_secret
-from app.core.lingua import lingua_della_richiesta
+from app.core.language import request_language
 from app.core.engine_client import get_engine_client
 from app.db.session import get_session
 from app.deps.auth import get_current_user
@@ -54,23 +53,23 @@ from app.schemas.models import (
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["connections"])
+router = APIRouter(route_class=ReleasingRoute, tags=["connections"])
 
 SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp", "api"}
 # connection types that are not databases: no table to read, none to write
 NOT_DATABASES = ("smtp", "sharepoint", "sftp", "api")
-# SQL Server: come trattare il TLS (`extra.tls`); vuoto = verify
+# SQL Server: how to treat TLS (`extra.tls`); empty = verify
 _TLS_SQLSERVER = ("verify", "trust", "none")
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
-    # NON model_dump(): dopo un commit (es. record_audit) l'istanza è "expired" e
-    # model_dump torna {} → 500 con "11 validation errors". L'accesso per
-    # attributo ricarica i valori dal DB (sessione ancora aperta).
+    # NOT model_dump(): after a commit (e.g. record_audit) the instance is "expired" and
+    # model_dump returns {} → 500 with "11 validation errors". Attribute access reloads
+    # the values from the DB (session still open).
     fields = {f: getattr(conn, f) for f in ConnectionOut.model_fields if f not in ("has_password", "has_private_key")}
     return ConnectionOut(**fields, has_password=bool(conn.password_encrypted),
                          has_private_key=bool(conn.private_key_encrypted))
@@ -91,15 +90,15 @@ def _name_taken(session: Session, project_id: int, name: str, exclude_id: int | 
 
 
 def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
-    """Le opzioni del tipo sono testo opaco per il gateway, ma devono essere un
-    OGGETTO JSON: accettarne uno rotto sposterebbe l'errore da chi salva la
-    connessione a chi, giorni dopo, si chiede perché l'email non parte. Quelle che
-    l'engine legge davvero (il TLS di SQL Server) si controllano qui."""
+    """The kind's options are opaque text to the gateway, but they must be a JSON OBJECT:
+    accepting a broken one would move the error from whoever saves the connection to
+    whoever, days later, wonders why the email does not go. Those the engine really
+    reads (SQL Server's TLS) are checked here."""
     import json as _json
 
-    grezzo = (extra or "{}").strip() or "{}"
+    raw = (extra or "{}").strip() or "{}"
     try:
-        data = _json.loads(grezzo)
+        data = _json.loads(raw)
     except _json.JSONDecodeError:
         raise HTTPException(status_code=422, detail="The connection options are not valid JSON")
     if not isinstance(data, dict):
@@ -116,7 +115,7 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
         error = _api_option_error(data)
         if error:
             raise HTTPException(status_code=422, detail=f"API: {error}")
-    return grezzo
+    return raw
 
 
 _TLS_SMTP = ("starttls", "ssl", "none")
@@ -149,8 +148,8 @@ def _domain_list(raw) -> list[str] | None:
 
 
 def _db_options(db_type: str, extra: str | None) -> dict:
-    """Le opzioni del tipo che l'engine usa per collegarsi (oggi: il TLS di SQL
-    Server). Gli altri database non ne hanno: un oggetto vuoto."""
+    """The kind's options the engine uses to connect (today: SQL Server's TLS). The other
+    databases have none: an empty object."""
     if db_type != "sqlserver":
         return {}
     import json as _json
@@ -164,9 +163,9 @@ def _db_options(db_type: str, extra: str | None) -> dict:
 
 
 def smtp_options(conn: Connection) -> dict:
-    """Opzioni SMTP dalla colonna `extra` (JSON). Tollerante: una connessione
-    creata prima di questa colonna, o con JSON rotto, non deve far esplodere un
-    run — si ricade sui default."""
+    """SMTP options from the `extra` column (JSON). Tolerant: a connection created before
+    this column, or with broken JSON, must not blow up a run — it falls back to the
+    defaults."""
     import json as _json
 
     try:
@@ -177,9 +176,9 @@ def smtp_options(conn: Connection) -> dict:
 
 
 def allowed_email_domains(conn: Connection) -> list[str]:
-    """Domini a cui questa connessione può spedire. Elenco VUOTO = nessun limite
-    (chi non ne ha bisogno non se ne accorge); valorizzato = barriera vera contro
-    l'uso del nodo email come canale di uscita verso indirizzi arbitrari."""
+    """The domains this connection may send to. An EMPTY list = no limit (whoever does not
+    need it does not notice); set = a real barrier against using the email node as a way
+    out towards arbitrary addresses."""
     domains = _domain_list(smtp_options(conn).get("allowed_domains"))
     if domains is None:
         # a malformed restriction must not read as "no restriction": no email leaves
@@ -230,12 +229,12 @@ def engine_connection_payload(conn: Connection) -> dict:
 
 
 def _sharepoint_payload(host: str, username: str, secret_encrypted: str, database: str, extra: str | None) -> dict:
-    """SharePoint riusa le colonne esistenti, senza migrazioni: `host` = URL del
-    sito, `username` = client id dell'app registrata su Entra ID, il campo cifrato
-    = il suo secret, `database` = tenant id, `extra.library` = la raccolta documenti
-    (vuota = quella predefinita). Gli endpoint Microsoft NON sono configurabili da
-    qui: lasciarli scegliere a chi crea la connessione sarebbe un modo per far
-    chiamare al backend un indirizzo qualunque con un token in mano."""
+    """SharePoint reuses the existing columns, without migrations: `host` = the site's URL,
+    `username` = the client id of the app registered on Entra ID, the encrypted field =
+    its secret, `database` = tenant id, `extra.library` = the document library (empty =
+    the default one). The Microsoft endpoints are NOT configurable from here: letting
+    whoever creates the connection choose them would be a way to make the backend call
+    any address with a token in hand."""
     import json as _json
 
     try:
@@ -483,12 +482,12 @@ _DRIVER_NOT_INSTALLED = {
 }
 
 
-def _translated(table: dict, lingua: str, **values) -> str:
-    return table.get(lingua, table["en"]).format(**values)
+def _translated(table: dict, language: str, **values) -> str:
+    return table.get(language, table["en"]).format(**values)
 
 
 def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, db_schema: str) -> dict:
-    """Mapping colonne→campi S3 (vedi docstring del modulo)."""
+    """Columns→S3 fields mapping (see the module's docstring)."""
     return {
         "db_type": "s3",
         "endpoint_url": host or "",
@@ -499,9 +498,9 @@ def _s3_payload(host: str, username: str, secret_encrypted: str, database: str, 
     }
 
 
-async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: str = "en", **extra) -> dict:
+async def _engine_inspect(payload: dict, action: str, path: str = "", language: str = "en", **extra) -> dict:
     client = get_engine_client()
-    if "tenant_id" in payload:  # SharePoint ha le sue rotte sull'engine
+    if "tenant_id" in payload:  # SharePoint has its own routes on the engine
         resp = await client.post("/sharepoint/inspect", json={"connection": payload, "action": action, "path": path, **extra})
     elif payload.get("db_type") == "s3" and action in ("files", "validate"):
         # the «S3 folder» datasource; the connection test stays on /db/inspect
@@ -520,11 +519,11 @@ async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: st
         if isinstance(detail, dict) and detail.get("code") == "driver_not_installed":
             db_type = str(detail.get("db_type") or payload.get("db_type") or "")
             raise HTTPException(status_code=422, detail=_translated(
-                _DRIVER_NOT_INSTALLED, lingua, label=_DRIVER_LABELS.get(db_type, db_type),
+                _DRIVER_NOT_INSTALLED, language, label=_DRIVER_LABELS.get(db_type, db_type),
                 docs=_DRIVER_DOCS.get(db_type, SQLSERVER_DOCS_URL)))
         if isinstance(detail, dict) and detail.get("code") in ("host_key_changed", "host_key_unknown"):
             table = _HOST_KEY_CHANGED if detail["code"] == "host_key_changed" else _HOST_KEY_UNKNOWN
-            detail = _translated(table, lingua, host=detail.get("host") or payload.get("host", ""),
+            detail = _translated(table, language, host=detail.get("host") or payload.get("host", ""),
                                  expected=detail.get("expected") or "—", offered=detail.get("offered") or "—")
             raise HTTPException(status_code=409, detail=detail)
         raise HTTPException(status_code=resp.status_code, detail=str(detail)[:500])
@@ -534,7 +533,7 @@ async def _engine_inspect(payload: dict, action: str, path: str = "", lingua: st
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 @router.get("/connections", response_model=list[ConnectionOut])
 def list_all_connections(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Tutte le connessioni USABILI dall'utente (per il picker delle sorgenti DB)."""
+    """All the connections the user can USE (for the DB sources' picker)."""
     connectable = perm_service.connectable_project_ids(session, user)
     if not connectable:
         return []
@@ -546,14 +545,14 @@ def list_all_connections(user: User = Depends(get_current_user), session: Sessio
 
 @router.get("/connections/search", response_model=Page[ConnectionOut])
 def search_connections(
-    q: str | None = Query(None, description="cerca su nome/host/database, sull'INTERO dataset"),
+    q: str | None = Query(None, description="searches name/host/database, over the WHOLE dataset"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Connessioni usabili dall'utente, PAGINATE, con ricerca server-side sul
-    dataset intero. Per la pagina globale Connections."""
+    """The connections the user can use, PAGINATED, with a server-side search over the
+    whole dataset. For the global Connections page."""
     connectable = perm_service.connectable_project_ids(session, user)
     if not connectable:
         return Page(items=[], total=0)
@@ -769,7 +768,7 @@ def update_connection(
     if body.extra is not None:
         conn.extra = _valid_extra(body.extra, conn.db_type)
     if body.password is not None:
-        # stringa vuota = rimuovi la password; valorizzata = sostituisci
+        # empty string = remove the password; set = replace
         conn.password_encrypted = encrypt_secret(body.password) if body.password else ""
     if body.private_key is not None:
         conn.private_key_encrypted = _key_blob(body.private_key, body.private_key_passphrase or "") if body.private_key else ""
@@ -844,7 +843,7 @@ def delete_connection(
     )
 
 
-# ── Ispezione (via engine) ────────────────────────────────────────────────────
+# ── Inspection (through the engine) ───────────────────────────────────────────
 @router.post("/projects/{project_id}/connections/test")
 async def test_draft_connection(
     project_id: int,
@@ -853,8 +852,8 @@ async def test_draft_connection(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Prova una connessione PRIMA di salvarla (il form della UI), col solo segreto
-    scritto nel form. For SFTP in two steps (see `test_connection`): it shows the
+    """Tests a connection BEFORE saving it (the UI's form), with only the secret written in
+    the form. For SFTP in two steps (see `test_connection`): it shows the
     server's host key without sending credentials; with `expected_fingerprint` it
     tests the credentials against exactly that key. It stores nothing."""
     if session.get(Project, project_id) is None:
@@ -869,10 +868,10 @@ async def test_draft_connection(
         _check_sftp(body.host, body.port, body.username, sftp_auth(body.extra), bool(body.password), bool(body.private_key))
         key_blob = _key_blob(body.private_key, body.private_key_passphrase) if body.private_key else ""
         payload = _sftp_payload(body.host, body.port, body.username, secret, key_blob, body.extra)
-        lingua = lingua_della_richiesta(request)
-        result = await _engine_inspect(payload, "test", lingua=lingua, expected_fingerprint=body.expected_fingerprint.strip(),
+        language = request_language(request)
+        result = await _engine_inspect(payload, "test", language=language, expected_fingerprint=body.expected_fingerprint.strip(),
                                        expected_type=body.expected_type.strip())
-        _refuse_unoffered_key(result, body.expected_fingerprint.strip(), f"{body.host.strip()}:{body.port or 22}", lingua)
+        _refuse_unoffered_key(result, body.expected_fingerprint.strip(), f"{body.host.strip()}:{body.port or 22}", language)
         return result
     if body.db_type == "api":
         _valid_extra(body.extra, "api")
@@ -894,7 +893,7 @@ async def test_draft_connection(
             "db_schema": body.db_schema,
             "extra": _db_options(body.db_type, body.extra),
         }
-    return await _engine_inspect(payload, "test", lingua=lingua_della_richiesta(request))
+    return await _engine_inspect(payload, "test", language=request_language(request))
 
 
 class HostKeyAcceptance(BaseModel):
@@ -903,13 +902,13 @@ class HostKeyAcceptance(BaseModel):
     expected_type: str = ""
 
 
-def _refuse_unoffered_key(result: dict, expected: str, address: str, lingua: str) -> None:
+def _refuse_unoffered_key(result: dict, expected: str, address: str, language: str) -> None:
     """The user accepted a key the server does not offer (any more): nothing was
     sent to it, and nothing is accepted."""
     if expected and result.get("needs_acceptance"):
         offered = str((result.get("host_key") or {}).get("fingerprint") or "—")
         raise HTTPException(status_code=409, detail=_translated(
-            _HOST_KEY_NOT_THE_TESTED_ONE, lingua, host=address, offered=offered, expected=expected))
+            _HOST_KEY_NOT_THE_TESTED_ONE, language, host=address, offered=offered, expected=expected))
 
 
 @router.post("/connections/{conn_id}/test")
@@ -934,14 +933,14 @@ async def test_connection(
        line naming the previous one."""
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
-    lingua = lingua_della_richiesta(request)
+    language = request_language(request)
     if conn.db_type != "sftp":
-        return await _engine_inspect(engine_connection_payload(conn), "test", lingua=lingua)
+        return await _engine_inspect(engine_connection_payload(conn), "test", language=language)
     expected = (body.expected_fingerprint if body else "").strip()
     address = f"{conn.host}:{conn.port or 22}"
-    result = await _engine_inspect(engine_connection_payload(conn), "test", lingua=lingua, expected_fingerprint=expected,
+    result = await _engine_inspect(engine_connection_payload(conn), "test", language=language, expected_fingerprint=expected,
                                    expected_type=(body.expected_type if body else "").strip())
-    _refuse_unoffered_key(result, expected, address, lingua)
+    _refuse_unoffered_key(result, expected, address, language)
     if result.get("needs_acceptance") or not result.get("ok"):
         return result  # shown, not accepted: no credential was sent
     seen = result.get("host_key") or {}
@@ -982,7 +981,7 @@ async def list_sftp_files(
     if fields or any(c in body.folder + body.pattern for c in "{}"):
         # placeholders or variables: the engine expands them and lists the values without a file
         extra["source"] = {"folder": body.folder, "pattern": body.pattern, **fields}
-    return await _engine_inspect(engine_connection_payload(conn), "files", lingua=lingua_della_richiesta(request),
+    return await _engine_inspect(engine_connection_payload(conn), "files", language=request_language(request),
                                  **extra)
 
 
@@ -1012,8 +1011,8 @@ async def list_sharepoint_files(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """I file (Excel, CSV) che un percorso (anche con glob) prende su questo sito: il
-    riscontro mentre si configura la datasource, PRIMA di importare."""
+    """The files (Excel, CSV) a path (globs too) takes on this site: the feedback while the
+    datasource is configured, BEFORE importing."""
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     if conn.db_type != "sharepoint":
@@ -1070,4 +1069,4 @@ async def list_connection_tables(
 ):
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
-    return await _engine_inspect(engine_connection_payload(conn), "tables", lingua=lingua_della_richiesta(request))
+    return await _engine_inspect(engine_connection_payload(conn), "tables", language=request_language(request))

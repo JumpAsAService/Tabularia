@@ -5,20 +5,20 @@ calcolasse, divergerebbero alla prima modifica.
 """
 import pytest
 
-from app.services.documented import conta_descritte, is_ai_ready
+from app.services.documented import count_described, is_ai_ready
 
 COLONNE = [{"name": "paese", "dtype": "String"}, {"name": "totale", "dtype": "Float64"}]
 
 
 def test_a_description_counts_from_either_place():
     """Curata a mano o già dentro la colonna: vale comunque."""
-    assert conta_descritte(COLONNE, {"paese": "il paese", "totale": "in euro"}) == (2, 2)
+    assert count_described(COLONNE, {"paese": "il paese", "totale": "in euro"}) == (2, 2)
     dentro = [{"name": "paese", "description": "il paese"}, {"name": "totale"}]
-    assert conta_descritte(dentro, {}) == (1, 2)
+    assert count_described(dentro, {}) == (1, 2)
 
 
 def test_whitespace_is_not_a_description():
-    assert conta_descritte(COLONNE, {"paese": "   ", "totale": "\n"}) == (0, 2)
+    assert count_described(COLONNE, {"paese": "   ", "totale": "\n"}) == (0, 2)
 
 
 def test_ready_needs_the_table_and_every_field():

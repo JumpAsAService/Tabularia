@@ -348,13 +348,13 @@ def transform_data_task(
         try:
             m_conn = S3ConnectionSpec(**mirror["connection"])
             m_dest = S3DestinationSpec(**m_target)
-            logger.info(f"📎 Copia su s3 {m_conn.endpoint_url or 'aws'} key {m_dest.key}")
+            logger.info(f"📎 Copy to s3 {m_conn.endpoint_url or 'aws'} key {m_dest.key}")
             out["mirror"] = {
                 "ok": True,
                 **write_output_to_s3(conn=m_conn, dest=m_dest, bucket=bucket, key=output_key, now=moment),
             }
         except Exception as e:
-            logger.warning(f"⚠️ copia su S3 fallita (il run resta valido): {type(e).__name__}: {e}")
+            logger.warning(f"⚠️ copy to S3 failed (the run stays valid): {type(e).__name__}: {e}")
             out["mirror"] = {
                 "ok": False,
                 "bucket": m_target.get("bucket", ""),
@@ -398,7 +398,7 @@ def transform_data_task(
 
     logger.info(
         f"✅ Completed transform_data_task: {output_key} "
-        f"({result.rows_written} righe, {len(result.columns)} colonne)"
+        f"({result.rows_written} rows, {len(result.columns)} columns)"
     )
     return out
 
@@ -583,7 +583,7 @@ def ingest_database_task(
 
     logger.info(
         f"✅ Completed ingest_database_task: {output_key} "
-        f"({result['rows_written']} righe, {len(result['columns'])} colonne)"
+        f"({result['rows_written']} rows, {len(result['columns'])} columns)"
     )
     out = {
         "status": "success",

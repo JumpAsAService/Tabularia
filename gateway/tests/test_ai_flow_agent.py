@@ -127,7 +127,7 @@ async def test_a_turn_builds_on_the_canvas_checks_each_step_and_hands_the_canvas
     assert reopened["id"] == chat.id
     # reopened, each step still names the node it made
     assert [s.get("node") for s in reopened["messages"][0]["steps"] if s["name"] in ("add_source", "add_step")] == ["source", "op-1"]
-    assert ai_chats.elenco(session, world["editor"], 50) == []
+    assert ai_chats.listing(session, world["editor"], 50) == []
     audits = session.exec(select(AuditLog).where(AuditLog.action == "ai.query")).all()
     assert audits and json.loads(audits[-1].detail)["via"] == "flow editor"
 
@@ -143,7 +143,7 @@ async def test_the_next_turn_continues_the_same_conversation(session, world, fak
     first = await _turn(session, world, monkeypatch, world["editor"], ["Hello."])
     chat_id = first[-1][1]["chat_id"]
     again = await _turn(session, world, monkeypatch, world["editor"], ["Again."], chat_id=chat_id)
-    assert again[-1][1]["chat_id"] == chat_id and ai_chats.dettaglio(session, world["editor"], chat_id)["turns"] == 2
+    assert again[-1][1]["chat_id"] == chat_id and ai_chats.detail(session, world["editor"], chat_id)["turns"] == 2
     # the data assistant does not continue the editor's conversation
     with pytest.raises(HTTPException) as e:
         await ai_routes.chat(ai_routes.ChatRequest(message="hi", model="gpt-oss-120b", chat_id=chat_id),

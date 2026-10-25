@@ -22,15 +22,15 @@ def test_segreti_veri_passano():
     _produzione().check_production_safety()
 
 
-@pytest.mark.parametrize("segreto, motivo", [
+@pytest.mark.parametrize("secret, reason", [
     ("change-me-in-production", "development default"),
     ("a", "too short (1 characters"),
     ("x" * (JWT_SECRET_MIN - 1), f"too short ({JWT_SECRET_MIN - 1} characters"),
 ])
-def test_un_segreto_jwt_debole_ferma_la_partenza(segreto, motivo):
+def test_un_segreto_jwt_debole_ferma_la_partenza(secret, reason):
     with pytest.raises(RuntimeError, match="JWT__SECRET") as e:
-        _produzione(jwt={"secret": segreto}).check_production_safety()
-    assert motivo in str(e.value)
+        _produzione(jwt={"secret": secret}).check_production_safety()
+    assert reason in str(e.value)
 
 
 def test_al_minimo_passa():

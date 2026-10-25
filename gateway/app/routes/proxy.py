@@ -1,14 +1,14 @@
-"""Proxy verso l'engine interno, con RBAC per-oggetto sul data plane.
+"""Proxy towards the internal engine, with per-object RBAC on the data plane.
 
-Le rotte che referenziano oggetti dello storage (preview/transform/export)
-leggono il body JSON — piccolo: è l'IR del flusso — autorizzano OGNI chiave
-managed trovata (vedi services/objects.py) e solo poi inoltrano. L'upload
-registra la risposta dell'engine nel registro `uploads` (proprietario = chi
-ha caricato), che è ciò che rende possibili gli altri controlli.
+The routes that reference storage objects (preview/transform/export) read the JSON
+body — small: it is the flow's IR — authorize EVERY managed key found (see
+services/objects.py) and only then forward. The upload records the engine's answer
+in the `uploads` register (owner = whoever uploaded), which is what makes the other
+checks possible.
 
-Restano ad autenticazione semplice: /tasks/operations (soli metadati) e
-GET /tasks/{task_id} (stato di un task: gli id sono UUID non enumerabili) —
-debito documentato, accettabile.
+Left with plain authentication: /tasks/operations (metadata only) and
+GET /tasks/{task_id} (a task's state: the ids are non-enumerable UUIDs) — a
+documented debt, acceptable.
 """
 import json
 import re
@@ -31,16 +31,16 @@ from app.services import audit
 from app.services.engine_policy import disabled_engines
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_can_run_keys, ensure_reads_pinned
 from app.services.permissions import can_upload
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
 
-# header hop-by-hop da non ritrasmettere
-# `authorization` e `cookie` portano la sessione dell'utente: all'engine non servono
-# (si fida del gateway col token interno) e non devono arrivarci
+# hop-by-hop headers not to forward
+# `authorization` and `cookie` carry the user's session: the engine does not need them
+# (it trusts the gateway through the internal token) and they must not reach it
 _SKIP_REQUEST_HEADERS = {"host", "content-length", "authorization", "cookie", "x-tabularia-csrf", "connection"}
-# header di risposta da passare al browser (content-disposition = nome file download)
+# response headers to pass to the browser (content-disposition = the download's file name)
 _PASS_RESPONSE_HEADERS = {"content-type", "content-disposition", "content-length"}
 
 
@@ -49,66 +49,66 @@ def _request_headers(request: Request) -> dict[str, str]:
 
 
 def _release_db(session: Session | None, user: User | None = None) -> None:
-    """Rende al pool la connessione al database PRIMA di aspettare l'engine.
+    """Hands the database connection back to the pool BEFORE waiting for the engine.
 
-    L'autenticazione e i controlli sui permessi leggono dal database, e la
-    sessione tiene aperta quella transazione — cioè una connessione del pool —
-    finché la richiesta non finisce. Ma un'anteprima aspetta l'engine fino a due
-    minuti, un upload o un export per tutta la loro durata: il pool ha quindici
-    connessioni, e quindici attese lente insieme lasciavano senza database ogni
-    altra richiesta, accesso compreso (misurato: 4,8 secondi di attesa per una
-    richiesta qualunque, e le anteprime stesse in coda dietro al pool).
+    Authentication and the permission checks read from the database, and the session
+    keeps that transaction open — that is a pool connection — until the request ends.
+    But a preview waits for the engine up to two minutes, an upload or an export for
+    their whole length: the pool has fifteen connections, and fifteen slow waits
+    together left every other request without a database, sign-in included (measured:
+    4.8 seconds of wait for any request, and the previews themselves queued behind the
+    pool).
 
-    `close()` e non `commit()`: un commit farebbe scadere gli attributi
-    dell'utente, e chi li legge dopo — sul ciclo degli eventi — andrebbe a
-    riprendersi una connessione proprio lì dove non si deve aspettare (vedi
-    sotto). Con `close()` l'utente resta leggibile senza database; per questo
-    lo si carica qui, se un commit precedente (basta `last_seen`) l'aveva già
-    fatto scadere. La sessione resta usabile: chi la usa dopo la risposta
-    dell'engine ne apre una transazione nuova, breve. Non c'è niente in sospeso
-    da perdere: i controlli leggono soltanto e l'audit fa commit per conto suo.
+    `close()` and not `commit()`: a commit would expire the user's attributes, and
+    whoever reads them afterwards — on the event loop — would go and take a connection
+    again right where waiting must not happen (see below). With `close()` the user stays
+    readable without a database; that is why it is loaded here, if an earlier commit
+    (`last_seen` is enough) had expired it already. The session stays usable: whoever
+    uses it after the engine's answer opens a new, short transaction on it. There is
+    nothing pending to lose: the checks only read and the audit commits on its own.
     """
     if session is None:
         return
     if user is not None:
-        user.id  # noqa: B018 — ricarica ORA se scaduto, finché la sessione c'è
+        user.id  # noqa: B018 — reloads NOW if expired, while the session is there
     session.close()
 
 
-# ── Una connessione si prende e si rende NELLO STESSO passo ──────────────────
-# Queste rotte sono `async` (inoltrano in streaming), le query sono sincrone, e
-# FastAPI esegue ogni dipendenza sincrona in un thread suo. Da qui due stalli,
-# entrambi osservati dal vivo, entrambi lunghi quanto il timeout del pool (30 s):
+# ── A connection is taken and handed back IN THE SAME step ───────────────────
+# These routes are `async` (they forward streaming), the queries are synchronous, and
+# FastAPI runs every synchronous dependency in a thread of its own. Hence two stalls,
+# both seen live, both as long as the pool's timeout (30 s):
 #
-#  - query eseguite sul ciclo degli eventi: se il pool è esaurito il ciclo resta
-#    fermo ad aspettare una connessione che può liberarsi solo quando LUI
-#    riprende a far avanzare le altre richieste;
-#  - connessione tenuta fra un passo e l'altro: l'autenticazione la prende in
-#    un thread e la richiesta la tiene mentre aspetta un thread libero per i
-#    controlli; intanto i thread sono tutti occupati da richieste che aspettano
-#    una connessione. Con 60 anteprime insieme: gateway fermo 28 secondi.
+#  - queries run on the event loop: when the pool is exhausted the loop stays stuck
+#    waiting for a connection that can free up only when IT goes back to moving the
+#    other requests forward;
+#  - a connection held between one step and the next: authentication takes it in a
+#    thread and the request keeps it while waiting for a free thread for the checks;
+#    meanwhile the threads are all busy with requests waiting for a connection. With
+#    60 previews together: gateway stuck for 28 seconds.
 #
-# La regola che li toglie entrambi: ogni tratto che usa la sessione gira in un
-# thread (`run_in_threadpool`) e RILASCIA prima di uscirne. Così chi aspetta una
-# connessione aspetta solo thread che stanno lavorando e la renderanno da soli.
-def _utente(
+# The rule that removes both: every stretch that uses the session runs in a thread
+# (`run_in_threadpool`) and RELEASES before leaving it. So whoever waits for a
+# connection waits only for threads that are working and will hand it back by
+# themselves.
+def _user(
     request: Request, token: str = Depends(oauth2_scheme), session: Session = Depends(get_session),
 ) -> User:
-    """`get_current_user`, ma senza lasciare la connessione in mano alla
-    richiesta: autentica e rilascia nello stesso thread. L'utente che torna è
-    staccato dalla sessione e già caricato — si legge senza database."""
+    """`get_current_user`, but without leaving the connection in the request's hands: it
+    authenticates and releases in the same thread. The user returned is detached from
+    the session and loaded already — it reads without a database."""
     user = get_current_user(request, token, session)
     _release_db(session, user)
     return user
 
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["engine"], dependencies=[Depends(_utente)])
+router = APIRouter(route_class=ReleasingRoute, tags=["engine"], dependencies=[Depends(_user)])
 
 
-async def _libera(session: Session | None, user: User | None = None) -> None:
-    """Rete di sicurezza prima di un'attesa: se la sessione ha ancora una
-    transazione aperta, la chiude (in un thread). Di norma non ce n'è bisogno,
-    perché ogni tratto rilascia da sé."""
+async def _release(session: Session | None, user: User | None = None) -> None:
+    """A safety net before a wait: when the session still has an open transaction, it
+    closes it (in a thread). Normally there is no need, because every stretch releases
+    by itself."""
     if session is not None and session.in_transaction():
         await run_in_threadpool(_release_db, session, user)
 
@@ -117,14 +117,14 @@ async def _forward(
     request: Request, method: str, path: str, content: Any = None,
     session: Session | None = None, user: User | None = None, params: Any = None,
 ) -> StreamingResponse:
-    """Inoltra la richiesta all'engine in streaming in ENTRAMBE le direzioni:
-    il body della richiesta (upload GB-scale) e quello della risposta (download
-    csv/xlsx). Il gateway non bufferizza mai un file intero in RAM.
-    `content` valorizzato = body già letto (per le rotte che lo ispezionano).
-    `session` (e `user`): la sessione della richiesta, da rilasciare prima
-    dell'attesa (vedi `_release_db`) — ogni rotta la passa. `params`: the query
+    """Forwards the request to the engine streaming in BOTH directions: the request's body
+    (GB-scale upload) and the response's (csv/xlsx download). The gateway never buffers
+    a whole file in RAM.
+    `content` set = body read already (for the routes that inspect it).
+    `session` (and `user`): the request's session, to release before the wait (see
+    `_release_db`) — every route passes it. `params`: the query
     string to send instead of the browser's."""
-    await _libera(session, user)
+    await _release(session, user)
     client = get_engine_client()
     if content is None and method in ("POST", "PUT", "PATCH"):
         content = request.stream()
@@ -144,13 +144,13 @@ async def _forward(
     )
 
 
-# il body di queste rotte è l'IR di un flusso: piccolo per natura. Tetto per
-# evitare che un body gigante (multi-GB) faccia OOM il gateway con await body().
+# the body of these routes is a flow's IR: small by nature. A cap so that a giant body
+# (multi-GB) does not OOM the gateway with await body().
 MAX_JSON_BODY_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
 async def _read_json(request: Request) -> tuple[bytes, Any]:
-    # scarto subito se il Content-Length dichiarato supera il tetto…
+    # dropped at once when the declared Content-Length goes over the cap…
     declared = request.headers.get("content-length")
     if declared is not None:
         try:
@@ -158,8 +158,8 @@ async def _read_json(request: Request) -> tuple[bytes, Any]:
                 raise HTTPException(status_code=413, detail="The request body is too large (limit 8 MB)")
         except ValueError:
             pass
-    # …e comunque leggo a chunk con un tetto reale (il Content-Length può mentire
-    # o mancare, es. Transfer-Encoding: chunked)
+    # …and read in chunks with a real cap anyway (Content-Length may lie or be missing,
+    # e.g. Transfer-Encoding: chunked)
     chunks: list[bytes] = []
     size = 0
     async for chunk in request.stream():
@@ -169,18 +169,18 @@ async def _read_json(request: Request) -> tuple[bytes, Any]:
         chunks.append(chunk)
     raw = b"".join(chunks)
     try:
-        # NaN e Infinity: il parser di Python li accetta, l'engine poi non li sa
-        # riscrivere e rispondeva 500. Non sono JSON: si fermano qui
-        return raw, (json.loads(raw, parse_constant=_non_json) if raw else {})
-    except ValueError:  # JSONDecodeError compreso
+        # NaN and Infinity: Python's parser accepts them, the engine then cannot write them
+        # back and answered 500. They are not JSON: they stop here
+        return raw, (json.loads(raw, parse_constant=_not_json) if raw else {})
+    except ValueError:  # JSONDecodeError included
         raise HTTPException(status_code=422, detail="The request body is not valid JSON")
 
 
-def _non_json(costante: str):
-    raise ValueError(f"{costante} non è un valore JSON")
+def _not_json(constant: str):
+    raise ValueError(f"{constant} is not a JSON value")
 
 
-# ── Rotte dati inoltrate all'engine ───────────────────────────────────────────
+# ── Data routes forwarded to the engine ───────────────────────────────────────
 @router.get("/tasks/operations")
 async def operations(request: Request, session: Session = Depends(get_session)):
     return await _forward(request, "GET", "/tasks/operations", session=session)
@@ -188,25 +188,25 @@ async def operations(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/engines")
 async def engines(request: Request, session: Session = Depends(get_session)):
-    """Catalogo degli engine, con la politica dell'installazione già applicata.
+    """The engines' catalog, with the installation's policy applied already.
 
-    NON è un inoltro cieco, ed è l'unico punto in cui il catalogo dell'engine
-    viene riscritto: l'engine sa cosa è tecnicamente disponibile, il gateway sa
-    cosa l'amministratore consente. Un motore disabilitato torna `available:
-    false` con `disabled_by_admin: true`, perché il selettore deve poter dire
-    PERCHÉ — «non consentito qui» non è «non configurato», e mostrarli uguali
-    manderebbe l'utente a cercare una variabile d'ambiente che non c'entra.
+    It is NOT a blind forward, and it is the only point where the engine's catalog is
+    rewritten: the engine knows what is technically available, the gateway knows what
+    the administrator allows. A disabled engine comes back `available: false` with
+    `disabled_by_admin: true`, because the selector must be able to say WHY — «not
+    allowed here» is not «not configured», and showing them alike would send the user
+    looking for an environment variable that has nothing to do with it.
     """
-    await _libera(session)  # la policy si legge DOPO la risposta dell'engine
+    await _release(session)  # the policy is read AFTER the engine's answer
     client = get_engine_client()
     resp = await client.get("/engines")
-    if resp.status_code >= 400:  # errore dell'engine: si passa così com'è
+    if resp.status_code >= 400:  # an engine error: passed on as it is
         return Response(
             content=resp.content,
             status_code=resp.status_code,
             media_type=resp.headers.get("content-type"),
         )
-    catalogo = resp.json()
+    catalog = resp.json()
 
     def policy() -> set[str]:
         try:
@@ -214,26 +214,25 @@ async def engines(request: Request, session: Session = Depends(get_session)):
         finally:
             _release_db(session)
 
-    vietati = await run_in_threadpool(policy)
-    if vietati and isinstance(catalogo, list):
-        for e in catalogo:
-            if isinstance(e, dict) and e.get("id") in vietati:
+    forbidden = await run_in_threadpool(policy)
+    if forbidden and isinstance(catalog, list):
+        for e in catalog:
+            if isinstance(e, dict) and e.get("id") in forbidden:
                 e["available"] = False
                 e["disabled_by_admin"] = True
-    return catalogo
+    return catalog
 
 
 _SLOT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def scope_preview_slot(raw: bytes, payload: Any, user_id: int) -> bytes:
-    """Lo slot di una preview ("in questo pannello conta solo l'ultima") lo
-    dichiara il browser, ma una nuova preview sullo stesso slot BUTTA GIU' la
-    precedente: senza un recinto, chi indovinasse lo slot di un altro gli
-    annullerebbe le anteprime. Il gateway lo prefissa con l'utente autenticato,
-    quindi uno slot puo' colpire solo le preview di chi lo manda. Uno slot
-    malformato viene tolto (la preview gira, semplicemente senza slot); senza
-    slot il body passa INTATTO, byte per byte, come prima."""
+    """The browser declares a preview's slot ("only the last one counts in this panel"),
+    but a new preview on the same slot KNOCKS DOWN the previous one: without a fence,
+    whoever guessed someone else's slot would cancel their previews. The gateway prefixes
+    it with the authenticated user, so a slot can hit only the previews of whoever sends
+    it. A malformed slot is removed (the preview runs, simply without a slot); without a
+    slot the body passes UNTOUCHED, byte for byte, as before."""
     if not isinstance(payload, dict) or "slot" not in payload:
         return raw
     slot = payload.get("slot")
@@ -248,12 +247,12 @@ def scope_preview_slot(raw: bytes, payload: Any, user_id: int) -> bytes:
 @router.post("/tasks/preview")
 async def preview(
     request: Request,
-    user: User = Depends(_utente),
+    user: User = Depends(_user),
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
 
-    def controlli() -> int:
+    def checks() -> int:
         try:
             ensure_reads_pinned(session, user, payload, get_settings().engine.bucket)
             ensure_can_read_keys(session, user, collect_storage_keys(payload))
@@ -261,7 +260,7 @@ async def preview(
         finally:
             _release_db(session, user)
 
-    user_id = await run_in_threadpool(controlli)
+    user_id = await run_in_threadpool(checks)
     raw = scope_preview_slot(raw, payload, user_id)
     return await _forward(request, "POST", "/tasks/preview", content=raw, session=session, user=user)
 
@@ -269,7 +268,7 @@ async def preview(
 @router.post("/tasks/cache-status")
 async def cache_status(
     request: Request,
-    user: User = Depends(_utente),
+    user: User = Depends(_user),
     session: Session = Depends(get_session),
 ):
     """Which nodes of a flow have their result in the step cache (the editor's
@@ -277,62 +276,60 @@ async def cache_status(
     preview's: sources pinned to the engine's bucket and readable by the user."""
     raw, payload = await _read_json(request)
 
-    def controlli() -> None:
+    def checks() -> None:
         try:
             ensure_reads_pinned(session, user, payload, get_settings().engine.bucket)
             ensure_can_read_keys(session, user, collect_storage_keys(payload))
         finally:
             _release_db(session, user)
 
-    await run_in_threadpool(controlli)
+    await run_in_threadpool(checks)
     return await _forward(request, "POST", "/tasks/cache-status", content=raw, session=session, user=user)
 
 
 @router.post("/tasks/transform-data")
 async def transform(
     request: Request,
-    user: User = Depends(_utente),
+    user: User = Depends(_user),
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="The request body must be a JSON object")
-    # le destinazioni (database o S3) passano SOLO da /flows/{id}/runs: è il
-    # gateway a costruire il payload di connessione (RBAC CONNECT, secret mai
-    # dal client). "db_destination" è il nome storico: rifiutato anche quello.
-    # "mirror" (copia su S3 esterno) ed "email" (invio dell'output come allegato)
-    # appartengono alla STESSA classe: portano una connessione e una destinazione.
-    # Senza questo filtro un utente qualsiasi poteva inviarle qui con endpoint e
-    # secret IN CHIARO propri e farsi consegnare il parquet dal worker, saltando
-    # catalogo, CONNECT, cifratura e riga Run — cioè ogni controllo che il
-    # percorso /flows/{id}/runs applica. Per "email" salterebbe anche la
-    # validazione dei domini ammessi, cioè l'unica barriera all'invio di dati
-    # verso un indirizzo arbitrario.
+    # the destinations (database or S3) go ONLY through /flows/{id}/runs: the gateway
+    # builds the connection payload (RBAC CONNECT, secret never from the client).
+    # "db_destination" is the historical name: refused too. "mirror" (copy to an external
+    # S3) and "email" (sending the output as an attachment) belong to the SAME class: they
+    # carry a connection and a destination. Without this filter any user could send them
+    # here with their own endpoint and secret IN CLEAR and get the parquet delivered by
+    # the worker, skipping catalog, CONNECT, encryption and Run row — that is every check
+    # the /flows/{id}/runs path applies. For "email" it would skip the allowed domains'
+    # validation too, the only barrier to sending data towards an arbitrary address.
     #
-    # La famiglia si allunga: quando se ne aggiunge un membro va aggiunto QUI,
-    # nello stesso commit. È già successo di dimenticarsene.
+    # The family grows: when a member is added it must be added HERE, in the same commit.
+    # Forgetting it has happened already.
     if any(payload.get(k) for k in ("destination", "db_destination", "mirror", "email")):
         raise HTTPException(
             status_code=422,
             detail="Destinations are not allowed here: save the flow and use an Output node",
         )
     engine_bucket = get_settings().engine.bucket
-    # la chiave di OUTPUT la sceglie il SERVER (out/<uuid> write-once), mai il
-    # client: niente overwrite del blob di un altro utente né riuso della chiave
-    # che avvelenerebbe la step-cache (indicizzata sul path). Il client polla il
-    # task_id, non ha bisogno di conoscere/scegliere la chiave.
+    # the SERVER chooses the OUTPUT key (out/<uuid> write-once), never the client: no
+    # overwrite of another user's blob and no reuse of the key that would poison the step
+    # cache (indexed by path). The client polls the task_id, it does not need to know or
+    # choose the key.
     payload["output_key"] = f"out/{uuid4().hex}.parquet"
     payload["bucket"] = payload.get("bucket") or engine_bucket
 
-    def controlli() -> None:
-        # sorgenti vincolate al bucket dell'engine + prefissi gestiti (no letture arbitrarie)
+    def checks() -> None:
+        # sources bound to the engine's bucket + managed prefixes (no arbitrary reads)
         ensure_reads_pinned(session, user, payload, engine_bucket)
-        # autorizza le sole chiavi di LETTURA (l'output è generato dal server, non va autorizzato in lettura)
+        # authorizes the READ keys only (the output is generated by the server, it is not authorized for reading)
         read_payload = {k: v for k, v in payload.items() if k != "output_key"}
         keys = collect_storage_keys(read_payload)
         ensure_can_read_keys(session, user, keys)
-        # …e poi il permesso di ESEGUIRE: questo non è un'anteprima, è un run senza
-        # flusso salvato. Leggere non basta — vale la stessa soglia di /flows/{id}/runs
+        # …and then the permission to RUN: this is not a preview, it is a run without a saved
+        # flow. Reading is not enough — the same threshold as /flows/{id}/runs holds
         ensure_can_run_keys(session, user, keys)
         audit.record_audit(
             session, actor=user, action=audit.TRANSFORM_RUN,
@@ -343,7 +340,7 @@ async def transform(
         )
         _release_db(session, user)
 
-    await run_in_threadpool(controlli)
+    await run_in_threadpool(checks)
     return await _forward(
         request, "POST", "/tasks/transform-data", content=json.dumps(payload).encode(), session=session, user=user,
     )
@@ -374,7 +371,7 @@ def _authorize_export(request: Request, session: Session, user: User, payload: A
 @router.post("/tasks/export")
 async def export(
     request: Request,
-    user: User = Depends(_utente),
+    user: User = Depends(_user),
     session: Session = Depends(get_session),
 ):
     """The export for API callers: the file comes back in the response."""
@@ -397,7 +394,7 @@ def _export_owner(user: User) -> str:
 @router.post("/tasks/exports")
 async def start_export(
     request: Request,
-    user: User = Depends(_utente),
+    user: User = Depends(_user),
     session: Session = Depends(get_session),
 ):
     raw, payload = await _read_json(request)
@@ -409,14 +406,14 @@ async def start_export(
 
 
 @router.get("/tasks/exports/{task_id}")
-async def export_status(request: Request, task_id: str, user: User = Depends(_utente)):
+async def export_status(request: Request, task_id: str, user: User = Depends(_user)):
     if not _TASK_ID.match(task_id):
         raise HTTPException(status_code=404, detail="Export not found")
     return await _forward(request, "GET", f"/tasks/exports/{task_id}", params={"owner": _export_owner(user)})
 
 
 @router.get("/tasks/exports/{task_id}/file")
-async def export_file(request: Request, task_id: str, user: User = Depends(_utente)):
+async def export_file(request: Request, task_id: str, user: User = Depends(_user)):
     if not _TASK_ID.match(task_id):
         raise HTTPException(status_code=404, detail="Export not found")
     return await _forward(request, "GET", f"/tasks/exports/{task_id}/file", params={"owner": _export_owner(user)})
@@ -434,54 +431,54 @@ class _UploadTooLarge(Exception):
 @router.post("/files")
 async def upload(
     request: Request,
-    user: User = Depends(_utente),
+    user: User = Depends(_user),
     session: Session = Depends(get_session),
 ):
-    """Upload (streaming verso l'engine) + registrazione della proprietà.
+    """Upload (streaming towards the engine) + recording the ownership.
 
-    La risposta dell'engine è un piccolo JSON (IngestResult): si bufferizza per
-    registrare chi possiede il dataset appena creato — è la base del controllo
-    di lettura sugli upload non ancora dentro un flusso salvato.
+    The engine's answer is a small JSON (IngestResult): it is buffered to record who owns
+    the dataset just created — the basis of the read check on uploads not inside a saved
+    flow yet.
 
-    Serve EDIT da qualche parte: l'upload non ha una cartella su cui chiedere il
-    permesso, e senza questo controllo un account di sola lettura poteva scrivere
-    nel bucket dell'installazione (vedi permissions.can_upload).
+    EDIT somewhere is needed: the upload has no folder to ask the permission on, and
+    without this check a read-only account could write into the installation's bucket
+    (see permissions.can_upload).
     """
 
-    def controlli() -> int:
+    def checks() -> int:
         if not can_upload(session, user):
             raise HTTPException(
                 status_code=403,
                 detail="Uploading a file needs edit permission on at least one folder",
             )
-        proprietario = user.id
-        _release_db(session, user)  # l'upload può durare minuti: senza connessione in mano
-        return proprietario
+        owner = user.id
+        _release_db(session, user)  # the upload can last minutes: no connection in hand
+        return owner
 
-    limite = get_settings().upload.max_bytes
-    troppo = HTTPException(
+    limit = get_settings().upload.max_bytes
+    too_much = HTTPException(
         status_code=413,
-        detail=f"The file is too large: the limit is {describe_bytes(limite)} (UPLOAD__MAX_BYTES)",
+        detail=f"The file is too large: the limit is {describe_bytes(limit)} (UPLOAD__MAX_BYTES)",
     )
     # a declared size over the ceiling: refused before anything is read or sent
-    dichiarati = request.headers.get("content-length") or ""
-    if limite and dichiarati.isdigit() and int(dichiarati) > limite:
-        raise troppo
-    owner_id = await run_in_threadpool(controlli)
+    declared = request.headers.get("content-length") or ""
+    if limit and declared.isdigit() and int(declared) > limit:
+        raise too_much
+    owner_id = await run_in_threadpool(checks)
 
-    superato = False
+    overtaken = False
 
-    async def contato():
+    async def counted():
         """The body as it arrives, cut at the ceiling: a chunked upload declares no
         size, and a declared one could be a lie."""
-        nonlocal superato
-        ricevuti = 0
-        async for pezzo in request.stream():
-            ricevuti += len(pezzo)
-            if limite and ricevuti > limite:
-                superato = True
+        nonlocal overtaken
+        received = 0
+        async for piece in request.stream():
+            received += len(piece)
+            if limit and received > limit:
+                overtaken = True
                 raise _UploadTooLarge()
-            yield pezzo
+            yield piece
 
     client = get_engine_client()
     engine_req = client.build_request(
@@ -489,18 +486,18 @@ async def upload(
         "/files",
         params=request.query_params,
         headers=_request_headers(request),
-        content=contato(),
+        content=counted(),
     )
     try:
         engine_resp = await client.send(engine_req)
     except Exception:
         # the engine sees a body that stops short and throws its spooled copy away
-        if superato:
-            raise troppo from None
+        if overtaken:
+            raise too_much from None
         raise
 
     if engine_resp.status_code < 400:
-        def registra() -> None:
+        def record() -> None:
             try:
                 data = engine_resp.json()
                 session.add(
@@ -513,11 +510,11 @@ async def upload(
                     )
                 )
                 session.commit()
-            except Exception as e:  # la registrazione non deve rompere l'upload
-                logger.warning("upload non registrato nel registro uploads: %s", e)
+            except Exception as e:  # recording must not break the upload
+                logger.warning("upload not recorded in the uploads register: %s", e)
                 session.rollback()
 
-        await run_in_threadpool(registra)
+        await run_in_threadpool(record)
 
     return Response(
         content=engine_resp.content,

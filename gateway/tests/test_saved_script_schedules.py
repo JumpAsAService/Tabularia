@@ -82,7 +82,7 @@ async def test_a_scheduled_run_whose_author_lost_an_input_is_not_started(session
     ds = make_datasource(session, name="Orders", project_id=other.id, key="datasets/1/o.parquet")
     script = _script(session, env, mine.id, inputs=[{"datasource_id": ds.id, "alias": "ORDERS"}])
     head = saved_script_runs.create_script_run(session, user, script, "schedule")
-    await orch.esegui(head.id)
+    await orch.run_it(head.id)
     session.expire_all()
     head = session.get(Run, head.id)
     assert head.status == "FAILURE" and head.error.startswith("Scheduled run not started")
@@ -141,7 +141,7 @@ def test_only_a_script_one_sees_and_runs_goes_in_a_group_and_others_read_a_hidde
 @pytest.fixture
 def world(session, db_engine, monkeypatch):
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
 
     async def quiet(session, run):
         return None
@@ -174,12 +174,12 @@ async def test_a_script_cell_runs_in_its_step_and_its_failure_stops_the_group(wo
     session.add(group)
     session.commit()
     run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=admin.id,
-              trigger_type="manual", claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(), input_key="",
+              trigger_type="manual", claimed_by=orch.INSTANCE, heartbeat_at=orch._now(), input_key="",
               output_bucket="", output_key="")
     session.add(run)
     session.commit()
     run_id = run.id
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     with Session(db_engine) as s:
         head = s.get(Run, run_id)
         cells = json.loads(head.group_cells)

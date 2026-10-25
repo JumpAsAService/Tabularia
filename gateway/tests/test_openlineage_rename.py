@@ -66,25 +66,25 @@ def catalog(monkeypatch):
 # that is a connection of its own; the tests share ONE SQLite connection (StaticPool), so
 # the thread would read it while the request is still writing the audit entry: under load
 # the events came out wrong. Here the queued work waits for _settle(), which runs it
-# through the service thread's own loop (ol._lavoro), once the request is over.
+# through the service thread's own loop (ol._sender_loop), once the request is over.
 _DEFERRED: list = []
 
 
 @pytest.fixture(autouse=True)
 def _service_thread_after_the_request(monkeypatch):
     _DEFERRED.clear()
-    monkeypatch.setattr(ol, "_accoda", lambda run_id, eventi: _DEFERRED.append((run_id, eventi)) or True)
+    monkeypatch.setattr(ol, "_enqueue", lambda run_id, events: _DEFERRED.append((run_id, events)) or True)
     yield
     _DEFERRED.clear()
 
 
 def _settle():
-    coda = queue.Queue()
-    for voce in _DEFERRED:
-        coda.put(voce)
+    queue_ = queue.Queue()
+    for item in _DEFERRED:
+        queue_.put(item)
     _DEFERRED.clear()
-    coda.put(None)
-    ol._lavoro(coda)
+    queue_.put(None)
+    ol._sender_loop(queue_)
 
 
 @pytest.fixture

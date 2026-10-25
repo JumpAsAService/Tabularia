@@ -10,13 +10,12 @@ def _now() -> datetime:
 
 
 class AuditLog(SQLModel, table=True):
-    """Registro di audit: chi ha fatto cosa, quando, da dove.
+    """Audit log: who did what, when, from where.
 
-    Append-only: ogni evento significativo (login, CRUD flussi/datasource/
-    connessioni, run, download, cambi di permesso…) è una riga. Gli identificativi
-    dell'attore e del bersaglio sono SNAPSHOT testuali (`actor_label`,
-    `target_label`) oltre agli id, così l'audit resta leggibile anche se l'oggetto
-    referenziato viene poi rinominato o eliminato.
+    Append-only: every significant event (login, CRUD of flows/datasources/connections,
+    runs, downloads, permission changes…) is a row. The actor's and target's identifiers
+    are textual SNAPSHOTS (`actor_label`, `target_label`) besides the ids, so the audit
+    stays readable even when the referenced object is later renamed or deleted.
     """
     __tablename__ = "audit_logs"
 
@@ -24,7 +23,7 @@ class AuditLog(SQLModel, table=True):
     ts: datetime = Field(default_factory=_now, index=True)
 
     actor_id: Optional[int] = Field(default=None, foreign_key="users.id", index=True)
-    actor_label: str = ""  # email/nome al momento dell'azione (sopravvive alla cancellazione)
+    actor_label: str = ""  # email/name at the time of the action (survives the deletion)
 
     action: str = Field(index=True)  # es. auth.login, flow.create, export.download
     outcome: str = "success"         # success | failure
@@ -33,7 +32,7 @@ class AuditLog(SQLModel, table=True):
     target_id: Optional[int] = None
     target_label: Optional[str] = None
 
-    # contesto extra (JSON): formato export, righe, engine, cron, motivo errore…
+    # extra context (JSON): export format, rows, engine, cron, error reason…
     detail: Optional[str] = Field(default=None, sa_column=Column(Text))
     ip: Optional[str] = None
     user_agent: Optional[str] = Field(default=None, sa_column=Column(Text))

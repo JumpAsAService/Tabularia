@@ -31,48 +31,48 @@ def _edge(a, b, handle="left"):
 @pytest.fixture
 def scena(session):
     capo = make_user(session, email="capo@x.it", is_superuser=True)
-    cartella = make_project(session, name="Flows", owner_id=capo.id)
-    pg = Connection(name="gestionale", db_type="postgresql", project_id=cartella.id, owner_id=capo.id, host="db.x.it", port=None, database="erp", db_schema="")
-    ch = Connection(name="crm", db_type="clickhouse", project_id=cartella.id, owner_id=capo.id, host="ch.x.it", port=8123, database="analytics", db_schema="")
+    folder = make_project(session, name="Flows", owner_id=capo.id)
+    pg = Connection(name="gestionale", db_type="postgresql", project_id=folder.id, owner_id=capo.id, host="db.x.it", port=None, database="erp", db_schema="")
+    ch = Connection(name="crm", db_type="clickhouse", project_id=folder.id, owner_id=capo.id, host="ch.x.it", port=8123, database="analytics", db_schema="")
     session.add(pg); session.add(ch); session.commit()
-    ordini = make_datasource(session, name="orders", project_id=cartella.id, key="datasets/1/v3.parquet", kind="database", connection_id=pg.id,
+    ordini = make_datasource(session, name="orders", project_id=folder.id, key="datasets/1/v3.parquet", kind="database", connection_id=pg.id,
                              source_type="table", source_ref="vendite.ordini", description="Every order",
                              columns=json.dumps([{"name": "id", "dtype": "Int64"}, {"name": "canale", "dtype": "String"}, {"name": "importo", "dtype": "Float64"}]),
                              column_descriptions=json.dumps({"canale": "Sales channel"}))
-    clienti = make_datasource(session, name="customers", project_id=cartella.id, key="datasets/2/v1.parquet", kind="database", connection_id=pg.id,
+    clienti = make_datasource(session, name="customers", project_id=folder.id, key="datasets/2/v1.parquet", kind="database", connection_id=pg.id,
                               source_type="sql", source_ref="SELECT id, nome FROM crm.clienti WHERE attivo;",
                               columns=json.dumps([{"name": "id", "dtype": "Int64"}, {"name": "nome", "dtype": "String"}]))
-    return SimpleNamespace(capo=capo, cartella=cartella, pg=pg, ch=ch, ordini=ordini, clienti=clienti)
+    return SimpleNamespace(capo=capo, folder=folder, pg=pg, ch=ch, ordini=ordini, clienti=clienti)
 
 
 def _flusso_a_due_uscite(session, scena, **extra):
     """orders → filter → compute → [group_by → Output datasource «Margin»] e
     [→ Output tabella report.righe in append]: filter+compute sono condivisi."""
-    definizione = {"nodes": [
+    definition = {"nodes": [
         _nodo_src("src", scena.ordini.id),
         _op("f", "filter", {"column": "canale", "operator": "eq", "value": "web"}),
         _op("c", "compute", {"columns": [{"name": "netto", "expr": "importo * 0.8"}]}),
         _op("g", "group_by", {"by": ["canale"], "aggregations": [{"column": "netto", "func": "sum", "alias": "tot"}]}),
-        {"id": "o1", "type": "output", "data": {"destType": "datasource", "name": "Margin", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o1", "type": "output", "data": {"destType": "datasource", "name": "Margin", "projectId": scena.folder.id, "overwrite": True}},
         {"id": "o2", "type": "output", "data": {"destType": "database", "connectionId": scena.pg.id, "table": "report.righe", "mode": "append", "postSql": "ANALYZE report.righe"}},
         {"id": "o3", "type": "output", "data": {"destType": "email", "connectionId": 99, "emailTo": ["a@x.it"]}},
     ], "edges": [_edge("src", "f"), _edge("f", "c"), _edge("c", "g"), _edge("g", "o1"), _edge("c", "o2"), _edge("c", "o3")]}
-    return make_flow(session, name="Margin flow", project_id=scena.cartella.id, definition=json.dumps(definizione), description="The margin", **extra)
+    return make_flow(session, name="Margin flow", project_id=scena.folder.id, definition=json.dumps(definition), description="The margin", **extra)
 
 
 def test_due_uscite_condividono_i_passi_a_monte_in_un_modello_intermedio(session, scena):
     flow = _flusso_a_due_uscite(session, scena)
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
-    nomi = [m["name"] for m in p["models"]]
-    assert nomi == ["int_c", "margin", "righe"]                     # l'intermedio prima di chi lo usa; niente modello per l'email
+    names = [m["name"] for m in p["models"]]
+    assert names == ["int_c", "margin", "righe"]                     # l'intermedio prima di chi lo usa; niente modello per l'email
     inter = p["models"][0]
     assert inter["materialized"] == "ephemeral" and inter["source"] == {"key": scena.ordini.key}
     assert [o["type"] for o in inter["operations"]] == ["filter", "compute"]
-    margin, righe = p["models"][1], p["models"][2]
+    margin, rows = p["models"][1], p["models"][2]
     assert margin["source"] == {"model": "int_c"} and [o["type"] for o in margin["operations"]] == ["group_by"]
-    assert margin["materialized"] == "table" and margin["publishes"] == ("Margin", scena.cartella.id)
-    assert righe["source"] == {"model": "int_c"} and righe["operations"] == [] and righe["materialized"] == "incremental"
-    assert "schema" not in righe                                      # in federazione la tabella resta nel file DuckDB
+    assert margin["materialized"] == "table" and margin["publishes"] == ("Margin", scena.folder.id)
+    assert rows["source"] == {"model": "int_c"} and rows["operations"] == [] and rows["materialized"] == "incremental"
+    assert "schema" not in rows                                      # in federazione la tabella resta nel file DuckDB
     assert any("post-SQL" in n for n in p["notes"])
     assert p["mode"] == "duckdb" and p["attachments"][0]["alias"] == f"db_{scena.pg.id}"
     assert p["source_map"][scena.ordini.key]["columns"] == ["id", "canale", "importo"]
@@ -84,18 +84,18 @@ def test_due_uscite_condividono_i_passi_a_monte_in_un_modello_intermedio(session
 def test_in_nativo_la_tabella_di_destinazione_e_schema_e_alias_del_modello(session, scena):
     flow = _flusso_a_due_uscite(session, scena)
     p = d.build_export_payload(session, flow, "data-prep", "native")
-    righe = next(m for m in p["models"] if m["name"] == "righe")
-    assert righe["schema"] == "report" and righe["alias"] == "righe" and righe["materialized"] == "incremental"
+    rows = next(m for m in p["models"] if m["name"] == "righe")
+    assert rows["schema"] == "report" and rows["alias"] == "righe" and rows["materialized"] == "incremental"
     assert p["native"]["db_type"] == "postgresql" and p["native"]["conn"]["port"] == 5432
     assert p["source_map"][scena.ordini.key]["ident"] == "__s_0"
 
 
 def test_lo_schema_e_il_contratto_della_datasource_pubblicata_diventano_colonne_e_test(session, scena):
     flow = _flusso_a_due_uscite(session, scena)
-    pubblicata = make_datasource(session, name="Margin", project_id=scena.cartella.id, key="datasets/9/v1.parquet", kind="flow", flow_id=flow.id,
+    pubblicata = make_datasource(session, name="Margin", project_id=scena.folder.id, key="datasets/9/v1.parquet", kind="flow", flow_id=flow.id,
                                  columns=json.dumps([{"name": "canale", "dtype": "String"}, {"name": "tot", "dtype": "Float64"}]),
                                  column_descriptions=json.dumps({"tot": "Net revenue"}))
-    regole = [{"id": "r1", "kind": "not_null", "column": "canale", "severity": "error"},
+    rules = [{"id": "r1", "kind": "not_null", "column": "canale", "severity": "error"},
               {"id": "r0", "kind": "unique", "columns": ["canale"], "severity": "error"},
               {"id": "r7", "kind": "unique", "columns": ["canale", "tot"], "severity": "warning"},
               {"id": "r2", "kind": "accepted_values", "column": "canale", "values": ["web", "shop"], "severity": "warning"},
@@ -103,13 +103,13 @@ def test_lo_schema_e_il_contratto_della_datasource_pubblicata_diventano_colonne_
               {"id": "r4", "kind": "row_count", "min": 1, "max": 1000, "severity": "warning"},
               {"id": "r5", "kind": "freshness", "max_age_hours": 24, "severity": "error"},
               {"id": "r6", "kind": "column", "column": "tot", "dtype": "Float64", "severity": "error"}]
-    session.add(DataContract(datasource_id=pubblicata.id, document=json.dumps({"description": "what we promise", "rules": regole}), enabled=True))
+    session.add(DataContract(datasource_id=pubblicata.id, document=json.dumps({"description": "what we promise", "rules": rules}), enabled=True))
     session.commit()
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     margin = next(m for m in p["models"] if m["name"] == "margin")
-    colonne = {c["name"]: c for c in margin["columns"]}
-    assert colonne["canale"]["tests"] == [{"kind": "not_null", "severity": "error"}, {"kind": "unique", "severity": "error"}, {"kind": "accepted_values", "severity": "warn", "values": ["web", "shop"]}]
-    assert colonne["tot"]["description"] == "Net revenue Contract: declared as Float64."
+    columns = {c["name"]: c for c in margin["columns"]}
+    assert columns["canale"]["tests"] == [{"kind": "not_null", "severity": "error"}, {"kind": "unique", "severity": "error"}, {"kind": "accepted_values", "severity": "warn", "values": ["web", "shop"]}]
+    assert columns["tot"]["description"] == "Net revenue Contract: declared as Float64."
     assert margin["tests"] == [{"id": "r7", "kind": "unique_combination", "columns": ["canale", "tot"], "severity": "warn"},
                                {"id": "r3", "kind": "range", "column": "tot", "min": 0, "severity": "error"},
                                {"id": "r4", "kind": "row_count", "min": 1, "max": 1000, "severity": "warn"}]
@@ -119,7 +119,7 @@ def test_lo_schema_e_il_contratto_della_datasource_pubblicata_diventano_colonne_
 
 def test_un_contratto_spento_non_produce_test(session, scena):
     flow = _flusso_a_due_uscite(session, scena)
-    pubblicata = make_datasource(session, name="Margin", project_id=scena.cartella.id, key="datasets/9/v1.parquet", kind="flow", flow_id=flow.id,
+    pubblicata = make_datasource(session, name="Margin", project_id=scena.folder.id, key="datasets/9/v1.parquet", kind="flow", flow_id=flow.id,
                                  columns=json.dumps([{"name": "canale", "dtype": "String"}]))
     session.add(DataContract(datasource_id=pubblicata.id, document=json.dumps({"rules": [{"id": "r1", "kind": "not_null", "column": "canale", "severity": "error"}]}), enabled=False))
     session.commit()
@@ -128,10 +128,10 @@ def test_un_contratto_spento_non_produce_test(session, scena):
 
 
 def test_una_datasource_da_query_e_un_modello_ephemeral_con_la_query(session, scena):
-    definizione = {"nodes": [_nodo_src("s", scena.clienti.id), _op("l", "limit", {"n": 10}),
-                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Top", "projectId": scena.cartella.id}}],
+    definition = {"nodes": [_nodo_src("s", scena.clienti.id), _op("l", "limit", {"n": 10}),
+                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Top", "projectId": scena.folder.id}}],
                    "edges": [_edge("s", "l"), _edge("l", "o")]}
-    flow = make_flow(session, name="Top customers", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="Top customers", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     src, top = p["models"]
     assert src["name"] == "src_customers" and src["kind"] == "raw" and src["materialized"] == "ephemeral"
@@ -145,71 +145,71 @@ def test_una_datasource_da_query_e_un_modello_ephemeral_con_la_query(session, sc
 
 def test_l_uscita_di_un_altro_flusso_porta_dentro_i_suoi_modelli(session, scena):
     monte = _flusso_a_due_uscite(session, scena)
-    margin_ds = make_datasource(session, name="Margin", project_id=scena.cartella.id, key="datasets/9/v1.parquet", kind="flow", flow_id=monte.id,
+    margin_ds = make_datasource(session, name="Margin", project_id=scena.folder.id, key="datasets/9/v1.parquet", kind="flow", flow_id=monte.id,
                                 columns=json.dumps([{"name": "canale", "dtype": "String"}, {"name": "tot", "dtype": "Float64"}]))
-    definizione = {"nodes": [_nodo_src("s", margin_ds.id), _op("f", "filter", {"column": "tot", "operator": "gt", "value": 0}),
-                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Positive margin", "projectId": scena.cartella.id}}],
+    definition = {"nodes": [_nodo_src("s", margin_ds.id), _op("f", "filter", {"column": "tot", "operator": "gt", "value": 0}),
+                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Positive margin", "projectId": scena.folder.id}}],
                    "edges": [_edge("s", "f"), _edge("f", "o")]}
-    valle = make_flow(session, name="Downstream", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    valle = make_flow(session, name="Downstream", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, valle, "data-prep", "duckdb")
-    nomi = [m["name"] for m in p["models"]]
+    names = [m["name"] for m in p["models"]]
     # only the branch read here, upstream first (decision of 2026-10-16, finding #37): the model publishing
     # «Margin» with its own steps. The upstream flow's other output (the append into report.righe) stays
     # out, so the shared steps are no longer an intermediate model: exporting a flow never writes into
     # another flow's tables. This test asserted the old behaviour, all the upstream outputs.
-    assert nomi == ["margin", "positive_margin"]
+    assert names == ["margin", "positive_margin"]
     assert [o["type"] for o in p["models"][0]["operations"]] == ["filter", "compute", "group_by"]
     assert p["models"][-1]["source"] == {"model": "margin"}
     assert p["source_map"] and scena.ordini.key in p["source_map"]
 
 
 def test_un_ciclo_fra_flussi_e_rifiutato(session, scena):
-    a = make_flow(session, name="A", project_id=scena.cartella.id, definition="{}")
-    b_out = make_datasource(session, name="B out", project_id=scena.cartella.id, key="datasets/b.parquet", kind="flow", flow_id=None)
-    a_out = make_datasource(session, name="A out", project_id=scena.cartella.id, key="datasets/a.parquet", kind="flow", flow_id=a.id)
-    b = make_flow(session, name="B", project_id=scena.cartella.id, definition=json.dumps({"nodes": [_nodo_src("s", a_out.id), {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "B out", "projectId": scena.cartella.id}}], "edges": [_edge("s", "o")]}))
+    a = make_flow(session, name="A", project_id=scena.folder.id, definition="{}")
+    b_out = make_datasource(session, name="B out", project_id=scena.folder.id, key="datasets/b.parquet", kind="flow", flow_id=None)
+    a_out = make_datasource(session, name="A out", project_id=scena.folder.id, key="datasets/a.parquet", kind="flow", flow_id=a.id)
+    b = make_flow(session, name="B", project_id=scena.folder.id, definition=json.dumps({"nodes": [_nodo_src("s", a_out.id), {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "B out", "projectId": scena.folder.id}}], "edges": [_edge("s", "o")]}))
     b_out.flow_id = b.id; session.add(b_out)
-    a.definition = json.dumps({"nodes": [_nodo_src("s", b_out.id), {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "A out", "projectId": scena.cartella.id}}], "edges": [_edge("s", "o")]})
+    a.definition = json.dumps({"nodes": [_nodo_src("s", b_out.id), {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "A out", "projectId": scena.folder.id}}], "edges": [_edge("s", "o")]})
     session.add(a); session.commit()
     with pytest.raises(d.DbtExportError, match="cycle"):
         d.build_export_payload(session, a, "data-prep", "duckdb")
 
 
 def test_un_file_caricato_o_una_datasource_senza_origine_diventano_seed(session, scena):
-    importata = make_datasource(session, name="price list", project_id=scena.cartella.id, key="datasets/7/v1.parquet", kind="flow", flow_id=None,
+    importata = make_datasource(session, name="price list", project_id=scena.folder.id, key="datasets/7/v1.parquet", kind="flow", flow_id=None,
                                 columns=json.dumps([{"name": "sku", "dtype": "String"}]))
-    definizione = {"nodes": [
+    definition = {"nodes": [
         _nodo_src("s1", importata.id),
         {"id": "s2", "type": "source", "data": {"parquetKey": "datasets/5bcf7e.parquet", "bucket": "data-prep", "filename": "Listino 2026.csv"}},
         _op("j", "join", {"how": "inner", "on": "sku"}),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Joined", "projectId": scena.cartella.id}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Joined", "projectId": scena.folder.id}},
     ], "edges": [_edge("s1", "j"), _edge("s2", "j", "right"), _edge("j", "o")]}
-    flow = make_flow(session, name="Seeds", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="Seeds", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     assert [s["name"] for s in p["seeds"]] == ["seed_price_list", "seed_listino_2026"]   # il file caricato prende il nome del file, non della chiave
     assert p["seeds"][1] == {"name": "seed_listino_2026", "bucket": "data-prep", "key": "datasets/5bcf7e.parquet", "datasource_id": None,
                              "description": "File Listino 2026.csv, exported as a CSV seed: the data is a snapshot, not a live source.", "columns": []}
     assert p["models"][0]["source"] == {"seed": "seed_price_list"} and p["attachments"] == []
-    destra = p["models"][0]["operations"][0]["params"]["right"]
-    assert destra["source"] == {"seed": "seed_listino_2026"}            # anche nel ramo destro del join il file è il seed
+    right = p["models"][0]["operations"][0]["params"]["right"]
+    assert right["source"] == {"seed": "seed_listino_2026"}            # anche nel ramo destro del join il file è il seed
     with pytest.raises(d.DbtExportError, match="only files"):
         d.build_export_payload(session, flow, "data-prep", "native")
 
 
 def test_i_rifiuti_sono_chiari(session, scena):
-    crm = make_datasource(session, name="crm_activities", project_id=scena.cartella.id, key="datasets/5/v1.parquet", kind="database", connection_id=scena.ch.id,
+    crm = make_datasource(session, name="crm_activities", project_id=scena.folder.id, key="datasets/5/v1.parquet", kind="database", connection_id=scena.ch.id,
                           source_type="table", source_ref="crm.activities", columns="[]")
-    definizione = {"nodes": [_nodo_src("s1", scena.ordini.id), _nodo_src("s2", crm.id), _op("u", "union", {}),
-                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "All", "projectId": scena.cartella.id}}],
+    definition = {"nodes": [_nodo_src("s1", scena.ordini.id), _nodo_src("s2", crm.id), _op("u", "union", {}),
+                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "All", "projectId": scena.folder.id}}],
                    "edges": [_edge("s1", "u"), _edge("s2", "u", "right"), _edge("u", "o")]}
-    flow = make_flow(session, name="Mixed", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="Mixed", project_id=scena.folder.id, definition=json.dumps(definition))
     with pytest.raises(d.DbtExportError, match="cannot federate"):
         d.build_export_payload(session, flow, "data-prep", "duckdb")
     with pytest.raises(d.DbtExportError, match="SAME connection"):
         d.build_export_payload(session, flow, "data-prep", "native")
-    solo_email = make_flow(session, name="Mail", project_id=scena.cartella.id, definition=json.dumps({"nodes": [_nodo_src("s", scena.ordini.id), {"id": "o", "type": "output", "data": {"destType": "email", "connectionId": 1}}], "edges": [_edge("s", "o")]}))
+    email_only = make_flow(session, name="Mail", project_id=scena.folder.id, definition=json.dumps({"nodes": [_nodo_src("s", scena.ordini.id), {"id": "o", "type": "output", "data": {"destType": "email", "connectionId": 1}}], "edges": [_edge("s", "o")]}))
     with pytest.raises(d.DbtExportError, match="only email"):
-        d.build_export_payload(session, solo_email, "data-prep", "duckdb")
+        d.build_export_payload(session, email_only, "data-prep", "duckdb")
     with pytest.raises(d.DbtExportError, match="unknown target"):
         d.build_export_payload(session, flow, "data-prep", "bigquery")
 
@@ -234,37 +234,37 @@ async def test_l_export_dbt_e_solo_per_gli_amministratori(session, scena, fake_e
     editore = make_user(session, email="editore@x.it")
     osservatore = make_user(session, email="occhio@x.it", is_observer=True)
     for u, cap in ((lettore, "view"), (editore, "manage"), (osservatore, "view")):
-        make_permission(session, user_id=u.id, project_id=scena.cartella.id, capability=cap)
+        make_permission(session, user_id=u.id, project_id=scena.folder.id, capability=cap)
     for u in (lettore, editore, osservatore):
         with pytest.raises(HTTPException) as e:
             await flows_routes.export_flow_dbt(flow.id, _richiesta(), "duckdb", u, session)
         assert e.value.status_code == 403 and "administrators" in e.value.detail, u.email
 
     # admin personale e admin per gruppo (il team data): passano
-    risposta = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "duckdb", scena.capo, session)
-    assert risposta.status_code == 200 and risposta.media_type == "application/zip"
+    answer = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "duckdb", scena.capo, session)
+    assert answer.status_code == 200 and answer.media_type == "application/zip"
     team = Group(name="data team", is_admin=True); session.add(team); session.commit(); session.refresh(team)
-    dati = make_user(session, email="dati@x.it")
-    session.add(UserGroupLink(user_id=dati.id, group_id=team.id)); session.commit()
-    risposta = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "native", dati, session)
-    assert risposta.status_code == 200
-    risposta = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "clickhouse", dati, session)
-    assert risposta.status_code == 200
+    data = make_user(session, email="dati@x.it")
+    session.add(UserGroupLink(user_id=data.id, group_id=team.id)); session.commit()
+    answer = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "native", data, session)
+    assert answer.status_code == 200
+    answer = await flows_routes.export_flow_dbt(flow.id, _richiesta(), "clickhouse", data, session)
+    assert answer.status_code == 200
     with pytest.raises(HTTPException) as e:
         await flows_routes.export_flow_dbt(flow.id, _richiesta(), "clickhouse", osservatore, session)
     assert e.value.status_code == 403
 
 
 def test_una_datasource_sharepoint_diventa_un_seed_e_le_sorgenti_portano_i_tipi(session, scena):
-    sp = Connection(name="sp", db_type="sharepoint", project_id=scena.cartella.id, owner_id=scena.capo.id, host="contoso.sharepoint.com", database="", db_schema="")
+    sp = Connection(name="sp", db_type="sharepoint", project_id=scena.folder.id, owner_id=scena.capo.id, host="contoso.sharepoint.com", database="", db_schema="")
     session.add(sp); session.commit()
-    excel = make_datasource(session, name="budget 2026", project_id=scena.cartella.id, key="datasets/8/v1.parquet", kind="database", connection_id=sp.id,
+    excel = make_datasource(session, name="budget 2026", project_id=scena.folder.id, key="datasets/8/v1.parquet", kind="database", connection_id=sp.id,
                             source_type="sharepoint", source_ref=json.dumps({"path": "/Finanza/budget.xlsx", "sheet": "2026"}),
                             columns=json.dumps([{"name": "voce", "dtype": "String"}, {"name": "importo", "dtype": "Float64"}]))
-    definizione = {"nodes": [_nodo_src("s1", scena.ordini.id), _nodo_src("s2", excel.id), _op("u", "union", {}),
-                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Con budget", "projectId": scena.cartella.id}}],
+    definition = {"nodes": [_nodo_src("s1", scena.ordini.id), _nodo_src("s2", excel.id), _op("u", "union", {}),
+                             {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Con budget", "projectId": scena.folder.id}}],
                    "edges": [_edge("s1", "u"), _edge("s2", "u", "right"), _edge("u", "o")]}
-    flow = make_flow(session, name="Budget", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="Budget", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     assert [s["name"] for s in p["seeds"]] == ["seed_budget_2026"]                       # non una «tabella» fatta di JSON
     assert p["models"][0]["operations"][0]["params"]["right"]["source"] == {"seed": "seed_budget_2026"}
@@ -275,16 +275,16 @@ def test_una_datasource_sharepoint_diventa_un_seed_e_le_sorgenti_portano_i_tipi(
 def test_an_sftp_folder_becomes_a_seed_and_an_sftp_output_a_table(session, scena):
     """Files on a server, like SharePoint's: no database to read them from in dbt, so a
     seed. A file written to a server: in dbt a table, to export from the warehouse."""
-    ftp = Connection(name="drop", db_type="sftp", project_id=scena.cartella.id, owner_id=scena.capo.id, host="sftp.example.com", database="", db_schema="")
+    ftp = Connection(name="drop", db_type="sftp", project_id=scena.folder.id, owner_id=scena.capo.id, host="sftp.example.com", database="", db_schema="")
     session.add(ftp); session.commit()
-    files = make_datasource(session, name="vendite sftp", project_id=scena.cartella.id, key="datasets/81/v1.parquet", kind="database", connection_id=ftp.id,
+    files = make_datasource(session, name="vendite sftp", project_id=scena.folder.id, key="datasets/81/v1.parquet", kind="database", connection_id=ftp.id,
                             source_type="sftp", source_ref=json.dumps({"folder": "/in", "pattern": "vendite_*.csv"}),
                             columns=json.dumps([{"name": "id", "dtype": "Int64"}]))
-    definizione = {"nodes": [_nodo_src("s1", files.id),
+    definition = {"nodes": [_nodo_src("s1", files.id),
                              {"id": "o", "type": "output", "data": {"destType": "sftp", "connectionId": ftp.id, "sftpFolder": "/out",
                                                                      "sftpFileName": "export_{date}", "sftpFormat": "csv"}}],
                    "edges": [_edge("s1", "o")]}
-    flow = make_flow(session, name="Sftp", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="Sftp", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     assert [s["name"] for s in p["seeds"]] == ["seed_vendite_sftp"]
     (m,) = p["models"]
@@ -292,18 +292,18 @@ def test_an_sftp_folder_becomes_a_seed_and_an_sftp_output_a_table(session, scena
 
 
 def test_an_s3_folder_becomes_a_seed_and_a_dated_s3_key_a_model_named_by_its_text(session, scena):
-    lake = Connection(name="lake", db_type="s3", project_id=scena.cartella.id, owner_id=scena.capo.id,
+    lake = Connection(name="lake", db_type="s3", project_id=scena.folder.id, owner_id=scena.capo.id,
                       host="http://minio:9000", database="lake", db_schema="")
     session.add(lake); session.commit()
-    files = make_datasource(session, name="vendite s3", project_id=scena.cartella.id, key="datasets/83/v1.parquet",
+    files = make_datasource(session, name="vendite s3", project_id=scena.folder.id, key="datasets/83/v1.parquet",
                             kind="database", connection_id=lake.id, source_type="s3",
                             source_ref=json.dumps({"bucket": "", "folder": "in", "pattern": "*.csv"}),
                             columns=json.dumps([{"name": "id", "dtype": "Int64"}]))
-    definizione = {"nodes": [_nodo_src("s1", files.id),
+    definition = {"nodes": [_nodo_src("s1", files.id),
                              {"id": "o", "type": "output", "data": {"destType": "s3", "connectionId": lake.id,
                                                                      "s3Key": "exp/vendite_{date}.parquet"}}],
                    "edges": [_edge("s1", "o")]}
-    flow = make_flow(session, name="S3", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="S3", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     assert [s["name"] for s in p["seeds"]] == ["seed_vendite_s3"]
     (m,) = p["models"]
@@ -312,15 +312,15 @@ def test_an_s3_folder_becomes_a_seed_and_a_dated_s3_key_a_model_named_by_its_tex
 
 def test_an_api_datasource_becomes_a_seed(session, scena):
     """An API has no database to read from in dbt: the snapshot is a seed, as for files."""
-    broker = Connection(name="broker", db_type="api", project_id=scena.cartella.id, owner_id=scena.capo.id,
+    broker = Connection(name="broker", db_type="api", project_id=scena.folder.id, owner_id=scena.capo.id,
                         host="https://api.example.com/v1", database="", db_schema="")
     session.add(broker); session.commit()
-    fx = make_datasource(session, name="cambi bce", project_id=scena.cartella.id, key="datasets/82/v1.parquet", kind="database",
+    fx = make_datasource(session, name="cambi bce", project_id=scena.folder.id, key="datasets/82/v1.parquet", kind="database",
                          connection_id=broker.id, source_type="api", source_ref=json.dumps({"method": "GET", "path": "/rates"}),
                          columns=json.dumps([{"name": "_key", "dtype": "String"}, {"name": "USD", "dtype": "Float64"}]))
-    definizione = {"nodes": [_nodo_src("s1", fx.id), {"id": "o", "type": "output", "data": {"name": "out"}}],
+    definition = {"nodes": [_nodo_src("s1", fx.id), {"id": "o", "type": "output", "data": {"name": "out"}}],
                    "edges": [_edge("s1", "o")]}
-    flow = make_flow(session, name="Fx", project_id=scena.cartella.id, definition=json.dumps(definizione))
+    flow = make_flow(session, name="Fx", project_id=scena.folder.id, definition=json.dumps(definition))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     assert [s["name"] for s in p["seeds"]] == ["seed_cambi_bce"]
 
@@ -336,30 +336,30 @@ def test_ogni_modello_porta_da_dove_viene(session, scena):
     for v in (1, 2, 3):
         session.add(FlowVersion(flow_id=flow.id, version=v, definition=flow.definition))
     session.commit()
-    p = d.build_export_payload(session, flow, "data-prep", "duckdb", esportato_da="capo@x.it")
-    inter, margin, righe = p["models"]
+    p = d.build_export_payload(session, flow, "data-prep", "duckdb", exported_by="capo@x.it")
+    inter, margin, rows = p["models"]
     comune = {"flow": "Margin flow", "flow_id": flow.id, "flow_version": 3, "folder": "Flows", "owner": "anna@x.it"}
     assert p["exported_by"] == "capo@x.it"
-    for m in (inter, margin, righe):
+    for m in (inter, margin, rows):
         assert comune.items() <= m["meta"].items() and m["meta"]["version_saved_at"].endswith("UTC")
         assert not any(k.startswith("exported") for k in m["meta"])
         assert m["tags"] == ["tabularia", "margin_flow"]
     assert margin["meta"]["output"] == "output «Margin» (datasource)" and margin["meta"]["node"] == "o1"
-    assert righe["meta"]["output"] == "output table `report.righe` (append)" and righe["meta"]["node"] == "o2"
+    assert rows["meta"]["output"] == "output table `report.righe` (append)" and rows["meta"]["node"] == "o2"
     assert inter["meta"]["output"].startswith("shared steps up to the node") and "node" not in inter["meta"]
-    assert "_uscita" not in margin and "_uscita" not in righe
+    assert "_uscita" not in margin and "_uscita" not in rows
 
 
 def test_la_query_di_una_datasource_porta_la_datasource_e_il_flusso_a_monte_il_suo(session, scena):
-    a_monte = make_flow(session, name="Upstream", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    a_monte = make_flow(session, name="Upstream", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         _nodo_src("s", scena.clienti.id),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Clean customers", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Clean customers", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("s", "o")]}))
-    pubblicata = make_datasource(session, name="Clean customers", project_id=scena.cartella.id, key="datasets/9/v1.parquet", kind="flow", flow_id=a_monte.id,
+    pubblicata = make_datasource(session, name="Clean customers", project_id=scena.folder.id, key="datasets/9/v1.parquet", kind="flow", flow_id=a_monte.id,
                                  columns=json.dumps([{"name": "id", "dtype": "Int64"}]))
-    flow = make_flow(session, name="Downstream", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    flow = make_flow(session, name="Downstream", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         _nodo_src("s", pubblicata.id),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Final", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Final", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("s", "o")]}))
     p = d.build_export_payload(session, flow, "data-prep", "duckdb")
     per_nome = {m["name"]: m for m in p["models"]}
@@ -374,15 +374,15 @@ def test_il_target_clickhouse_accetta_piu_connessioni_e_porta_quello_che_serve_a
     """ClickHouse legge Postgres/MySQL dal vivo: le sorgenti possono stare su più
     connessioni (al contrario del nativo), le query vanno tradotte, e all'engine
     arrivano le connessioni per nominare i database federati — senza password."""
-    my = Connection(name="negozio", db_type="mysql", project_id=scena.cartella.id, owner_id=scena.capo.id, host="my.x.it", port=None, database="shop", db_schema="", username="web")
+    my = Connection(name="negozio", db_type="mysql", project_id=scena.folder.id, owner_id=scena.capo.id, host="my.x.it", port=None, database="shop", db_schema="", username="web")
     session.add(my); session.commit()
-    prodotti = make_datasource(session, name="products", project_id=scena.cartella.id, key="datasets/5/v1.parquet", kind="database", connection_id=my.id,
+    prodotti = make_datasource(session, name="products", project_id=scena.folder.id, key="datasets/5/v1.parquet", kind="database", connection_id=my.id,
                                source_type="table", source_ref="prodotti", columns=json.dumps([{"name": "id", "dtype": "Int64"}, {"name": "canale", "dtype": "String"}]))
-    flow = make_flow(session, name="Mix", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    flow = make_flow(session, name="Mix", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         _nodo_src("a", scena.ordini.id), _nodo_src("b", scena.clienti.id), _nodo_src("c", prodotti.id),
         _op("j", "join", {"how": "left", "on": ["id"]}),
         _op("u", "union", {"strategy": "by_name"}),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Mix out", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Mix out", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("a", "j"), _edge("b", "j", "right"), _edge("j", "u"), _edge("c", "u", "right"), _edge("u", "o")]}))
     with pytest.raises(d.DbtExportError, match="SAME connection"):
         d.build_export_payload(session, flow, "data-prep", "native")
@@ -392,8 +392,8 @@ def test_il_target_clickhouse_accetta_piu_connessioni_e_porta_quello_che_serve_a
     assert set(conns) == {scena.pg.id, my.id}
     assert conns[scena.pg.id]["port"] == 5432 and conns[my.id]["port"] == 3306 and conns[my.id]["pw_env"] == f"TABULARIA_DB_{my.id}_PASSWORD"
     assert not any("password" in k for c in conns.values() for k in c if k != "pw_env")
-    sorgenti = {(s["connection_id"], s["schema"]) for s in p["sources"]}
-    assert sorgenti == {(scena.pg.id, "vendite"), (my.id, "shop")}
+    sources = {(s["connection_id"], s["schema"]) for s in p["sources"]}
+    assert sources == {(scena.pg.id, "vendite"), (my.id, "shop")}
     query = next(m for m in p["models"] if m["kind"] == "raw")
     assert query["translate"] == {"connection_id": scena.pg.id, "label": "customers"} and query["raw_sql"].startswith("SELECT id, nome FROM crm.clienti")
     assert not any("as written" in n for n in p["notes"])
@@ -401,9 +401,9 @@ def test_il_target_clickhouse_accetta_piu_connessioni_e_porta_quello_che_serve_a
 
 
 def test_negli_altri_target_la_query_non_si_traduce(session, scena):
-    flow = make_flow(session, name="Q", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    flow = make_flow(session, name="Q", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         _nodo_src("b", scena.clienti.id),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Q out", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Q out", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("b", "o")]}))
     for target in ("duckdb", "native"):
         query = next(m for m in d.build_export_payload(session, flow, "data-prep", target)["models"] if m["kind"] == "raw")
@@ -420,8 +420,8 @@ def _senza_ora(payload):
 def test_le_opzioni_di_default_danno_lo_stesso_payload_del_download_senza_opzioni(session, scena):
     flow = _flusso_a_due_uscite(session, scena)
     for target in ("duckdb", "native", "clickhouse"):
-        senza = _senza_ora(d.build_export_payload(session, flow, "data-prep", target, esportato_da="a@x.it"))
-        con = _senza_ora(d.build_export_payload(session, flow, "data-prep", target, esportato_da="a@x.it", opzioni=d.OpzioniDbt(target=target)))
+        senza = _senza_ora(d.build_export_payload(session, flow, "data-prep", target, exported_by="a@x.it"))
+        con = _senza_ora(d.build_export_payload(session, flow, "data-prep", target, exported_by="a@x.it", options=d.DbtOptions(target=target)))
         senza.pop("layout", None); con.pop("layout", None)
         assert senza == con, target
 
@@ -429,16 +429,16 @@ def test_le_opzioni_di_default_danno_lo_stesso_payload_del_download_senza_opzion
 def test_prefisso_materializzazioni_test_email_schema_e_nomi_delle_sorgenti(session, scena):
     autrice = make_user(session, email="anna@x.it")
     flow = _flusso_a_due_uscite(session, scena, owner_id=autrice.id)
-    session.add(DataContract(datasource_id=make_datasource(session, name="Margin", project_id=scena.cartella.id, key="datasets/9/v1.parquet",
+    session.add(DataContract(datasource_id=make_datasource(session, name="Margin", project_id=scena.folder.id, key="datasets/9/v1.parquet",
                                                            kind="flow", flow_id=flow.id, columns=json.dumps([{"name": "canale", "dtype": "String"}])).id,
                              document=json.dumps({"rules": [{"id": "r1", "kind": "not_null", "column": "canale", "severity": "error"},
                                                             {"id": "r2", "kind": "column", "column": "canale", "dtype": "string", "severity": "error"}]}),
                              enabled=True))
     session.commit()
-    o = d.OpzioniDbt(target="native", prefix="tab_", schema="analisi", tests=False, emails=False,
+    o = d.DbtOptions(target="native", prefix="tab_", schema="analisi", tests=False, emails=False,
                      sources={f"{scena.pg.id}:vendite": {"name": "erp", "declared": True}},
                      materializations={f"{flow.id}:o1": "view", f"{flow.id}:o2": "table", "999:x": "view"})
-    p = d.build_export_payload(session, flow, "data-prep", esportato_da="capo@x.it", opzioni=o)
+    p = d.build_export_payload(session, flow, "data-prep", exported_by="capo@x.it", options=o)
     assert [m["name"] for m in p["models"]] == ["tab_int_c", "tab_margin", "tab_righe"]
     assert p["models"][1]["source"] == {"model": "tab_int_c"}
     assert p["models"][1]["materialized"] == "view" and p["models"][2]["materialized"] == "table"
@@ -458,33 +458,33 @@ def test_una_materializzazione_non_ammessa_e_rifiutata_e_le_forme_libere_pure(se
 
     flow = _flusso_a_due_uscite(session, scena)
     with pytest.raises(d.DbtExportError, match="incremental"):
-        d.build_export_payload(session, flow, "data-prep", opzioni=d.OpzioniDbt(materializations={f"{flow.id}:o1": "incremental"}))
+        d.build_export_payload(session, flow, "data-prep", options=d.DbtOptions(materializations={f"{flow.id}:o1": "incremental"}))
     for male in ({"prefix": "Tab-"}, {"folder": "../x"}, {"schema": "a b"}, {"sources": {"1:x": {"name": "x'); drop"}}},
                  {"materializations": {"1:o": "ephemeral"}}, {"target": "bigquery"}, {"sconosciuta": 1}):
         with pytest.raises(ValidationError):
-            d.OpzioniDbt(**male)
+            d.DbtOptions(**male)
 
 
 def test_il_piano_dice_al_dialogo_target_sorgenti_e_uscite(session, scena):
     flow = _flusso_a_due_uscite(session, scena)
     piano = d.piano_export(session, flow, "data-prep")
-    per_id = {t["id"]: t for t in piano["targets"]}
+    by_id = {t["id"]: t for t in piano["targets"]}
     assert [t["id"] for t in piano["targets"]] == ["clickhouse", "duckdb", "native"] and all(t["available"] for t in piano["targets"])
-    assert per_id["duckdb"]["sources"] == [{"key": f"{scena.pg.id}:vendite", "connection": "gestionale", "schema": "vendite",
+    assert by_id["duckdb"]["sources"] == [{"key": f"{scena.pg.id}:vendite", "connection": "gestionale", "schema": "vendite",
                                             "default_name": f"db_{scena.pg.id}_vendite", "tables": ["ordini"],
                                             "default_base": f"db_{scena.pg.id}_vendite"}]   # the base, for the dialog (#48)
-    assert per_id["native"]["sources"][0]["default_name"] == "src_vendite"
-    uscite = {u["key"]: u for u in piano["outputs"]}
-    assert uscite[f"{flow.id}:o1"]["materializations"] == ["table", "view"] and uscite[f"{flow.id}:o1"]["materialized"] == "table"
-    assert uscite[f"{flow.id}:o2"]["materializations"] == ["incremental", "table", "view"]
+    assert by_id["native"]["sources"][0]["default_name"] == "src_vendite"
+    outputs = {u["key"]: u for u in piano["outputs"]}
+    assert outputs[f"{flow.id}:o1"]["materializations"] == ["table", "view"] and outputs[f"{flow.id}:o1"]["materialized"] == "table"
+    assert outputs[f"{flow.id}:o2"]["materializations"] == ["incremental", "table", "view"]
     assert piano["default_folder"] == "margin_flow"
     # un pivot: nativo e ClickHouse non possono, e il piano dice perché
-    pivot = make_flow(session, name="Piv", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    pivot = make_flow(session, name="Piv", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         _nodo_src("s", scena.ordini.id), _op("p", "pivot", {"index": ["id"], "on": "canale", "values": "importo"}),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "P", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "P", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("s", "p"), _edge("p", "o")]}))
-    per_id = {t["id"]: t for t in d.piano_export(session, pivot, "data-prep")["targets"]}
-    assert per_id["duckdb"]["available"] and not per_id["native"]["available"] and "pivot" in per_id["clickhouse"]["reason"]
+    by_id = {t["id"]: t for t in d.piano_export(session, pivot, "data-prep")["targets"]}
+    assert by_id["duckdb"]["available"] and not by_id["native"]["available"] and "pivot" in by_id["clickhouse"]["reason"]
 
 
 @pytest.mark.anyio
@@ -496,16 +496,16 @@ async def test_il_post_con_le_opzioni_e_il_piano_sono_solo_per_gli_amministrator
 
     flow = _flusso_a_due_uscite(session, scena)
     lettore = make_user(session, email="lettore@x.it")
-    make_permission(session, user_id=lettore.id, project_id=scena.cartella.id, capability="manage")
-    for chiama in (lambda u: flows_routes.export_flow_dbt_con_opzioni(flow.id, d.OpzioniDbt(target="clickhouse"), _richiesta(), u, session),):
+    make_permission(session, user_id=lettore.id, project_id=scena.folder.id, capability="manage")
+    for chiama in (lambda u: flows_routes.export_flow_dbt_with_options(flow.id, d.DbtOptions(target="clickhouse"), _richiesta(), u, session),):
         with pytest.raises(HTTPException) as e:
             await chiama(lettore)
         assert e.value.status_code == 403
     with pytest.raises(HTTPException) as e:
         flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), lettore, session)
     assert e.value.status_code == 403
-    risposta = await flows_routes.export_flow_dbt_con_opzioni(flow.id, d.OpzioniDbt(target="clickhouse", package="folder", folder="mf"), _richiesta(), scena.capo, session)
-    assert risposta.status_code == 200 and risposta.media_type == "application/zip"
+    answer = await flows_routes.export_flow_dbt_with_options(flow.id, d.DbtOptions(target="clickhouse", package="folder", folder="mf"), _richiesta(), scena.capo, session)
+    assert answer.status_code == 200 and answer.media_type == "application/zip"
     assert fake_engine.dbt_exports[-1]["layout"] == {"package": "folder", "folder": "mf", "layers": False}
     assert fake_engine.dbt_exports[-1]["mode"] == "clickhouse"
     piano = flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)
@@ -513,42 +513,42 @@ async def test_il_post_con_le_opzioni_e_il_piano_sono_solo_per_gli_amministrator
 
 
 # ── gli errori nella lingua di chi li legge ────────────────────────────────────
-def _richiesta_in(lingua):
+def _richiesta_in(language):
     from starlette.requests import Request
 
-    return Request({"type": "http", "method": "GET", "path": "/", "headers": [(b"accept-language", lingua.encode())],
+    return Request({"type": "http", "method": "GET", "path": "/", "headers": [(b"accept-language", language.encode())],
                     "client": ("10.0.0.1", 1234), "query_string": b""})
 
 
 def test_la_lingua_della_richiesta():
-    from app.core.lingua import lingua_di
+    from app.core.language import language_of
 
-    assert lingua_di("it") == "it" and lingua_di("de-CH,de;q=0.9,en;q=0.8") == "de" and lingua_di("pt-BR,fr;q=0.7") == "fr"
-    assert lingua_di(None) == "en" and lingua_di("") == "en" and lingua_di("zh-CN,ja") == "en"
+    assert language_of("it") == "it" and language_of("de-CH,de;q=0.9,en;q=0.8") == "de" and language_of("pt-BR,fr;q=0.7") == "fr"
+    assert language_of(None) == "en" and language_of("") == "en" and language_of("zh-CN,ja") == "en"
 
 
 def test_ogni_messaggio_ha_le_cinque_lingue_con_gli_stessi_parametri():
     import string
 
-    from app.core.lingua import LINGUE
-    from app.services.messaggi_dbt import MESSAGGI
+    from app.core.language import LANGUAGES
+    from app.services.dbt_messages import MESSAGES
 
-    campi = lambda t: {f for _, f, _, _ in string.Formatter().parse(t) if f}
-    for code, per_lingua in MESSAGGI.items():
-        assert set(per_lingua) == set(LINGUE), code
-        assert len({frozenset(campi(t)) for t in per_lingua.values()}) == 1, code
+    fields = lambda t: {f for _, f, _, _ in string.Formatter().parse(t) if f}
+    for code, per_lingua in MESSAGES.items():
+        assert set(per_lingua) == set(LANGUAGES), code
+        assert len({frozenset(fields(t)) for t in per_lingua.values()}) == 1, code
 
 
 def test_traduzione_e_ripieghi():
-    from app.services.messaggi_dbt import messaggio_dell_engine, traduci
+    from app.services.dbt_messages import engine_message, translate
 
-    assert traduci("upstream_missing", {"source": "ordini"}, "de") == "Die Quelle «ordini» ist die Ausgabe eines Flows, den es nicht mehr gibt."
-    assert traduci("upstream_missing", {"source": "ordini"}, "pt") .startswith("The source «ordini»")         # lingua che non c'è: inglese
-    assert traduci("codice_nuovo", {}, "it", "testo dell'engine") == "testo dell'engine"                     # codice sconosciuto: il testo
-    assert traduci("upstream_missing", {}, "it", "originale") == "originale"                                 # parametro mancante: il testo
-    assert traduci("internal", {}, "fr", "boh") == "L'export dbt a échoué : boh"
-    assert messaggio_dell_engine({"code": "seed_too_large", "params": {"source": "s", "rows": "60,000", "max": "50,000"}, "message": "x"}, "es").startswith("La fuente «s» tiene 60,000 filas")
-    assert messaggio_dell_engine("un engine vecchio", "it") == "un engine vecchio"
+    assert translate("upstream_missing", {"source": "ordini"}, "de") == "Die Quelle «ordini» ist die Ausgabe eines Flows, den es nicht mehr gibt."
+    assert translate("upstream_missing", {"source": "ordini"}, "pt") .startswith("The source «ordini»")         # lingua che non c'è: inglese
+    assert translate("codice_nuovo", {}, "it", "testo dell'engine") == "testo dell'engine"                     # codice sconosciuto: il testo
+    assert translate("upstream_missing", {}, "it", "originale") == "originale"                                 # parametro mancante: il testo
+    assert translate("internal", {}, "fr", "boh") == "L'export dbt a échoué : boh"
+    assert engine_message({"code": "seed_too_large", "params": {"source": "s", "rows": "60,000", "max": "50,000"}, "message": "x"}, "es").startswith("La fuente «s» tiene 60,000 filas")
+    assert engine_message("un engine vecchio", "it") == "un engine vecchio"
 
 
 @pytest.mark.anyio
@@ -558,22 +558,22 @@ async def test_i_rifiuti_e_il_piano_parlano_la_lingua_dell_interfaccia(session, 
     from app.routes import flows as flows_routes
 
     # un rifiuto del gateway: il nativo con sorgenti su due connessioni
-    my = Connection(name="negozio", db_type="mysql", project_id=scena.cartella.id, owner_id=scena.capo.id, host="my.x.it", database="shop", db_schema="")
+    my = Connection(name="negozio", db_type="mysql", project_id=scena.folder.id, owner_id=scena.capo.id, host="my.x.it", database="shop", db_schema="")
     session.add(my); session.commit()
-    prodotti = make_datasource(session, name="products", project_id=scena.cartella.id, key="datasets/5/v1.parquet", kind="database", connection_id=my.id,
+    prodotti = make_datasource(session, name="products", project_id=scena.folder.id, key="datasets/5/v1.parquet", kind="database", connection_id=my.id,
                                source_type="table", source_ref="prodotti", columns=json.dumps([{"name": "id", "dtype": "Int64"}]))
-    flow = make_flow(session, name="Mix", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
+    flow = make_flow(session, name="Mix", project_id=scena.folder.id, definition=json.dumps({"nodes": [
         _nodo_src("a", scena.ordini.id), _nodo_src("c", prodotti.id), _op("u", "union", {"strategy": "by_name"}),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Mix out", "projectId": scena.cartella.id, "overwrite": True}},
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Mix out", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("a", "u"), _edge("c", "u", "right"), _edge("u", "o")]}))
     attesi = {"it": "Il target nativo vuole tutte le sorgenti sulla STESSA connessione", "de": "Das native Ziel braucht alle Quellen auf DERSELBEN Verbindung",
               "en": "The native target needs every source on the SAME connection"}
-    for lingua, inizio in attesi.items():
+    for language, start in attesi.items():
         with pytest.raises(HTTPException) as e:
-            await flows_routes.export_flow_dbt(flow.id, _richiesta_in(lingua), "native", scena.capo, session)
-        assert e.value.status_code == 422 and e.value.detail.startswith(inizio), (lingua, e.value.detail)
-        piano = flows_routes.export_flow_dbt_plan(flow.id, _richiesta_in(lingua), scena.capo, session)
-        assert next(t for t in piano["targets"] if t["id"] == "native")["reason"].startswith(inizio)
+            await flows_routes.export_flow_dbt(flow.id, _richiesta_in(language), "native", scena.capo, session)
+        assert e.value.status_code == 422 and e.value.detail.startswith(start), (language, e.value.detail)
+        piano = flows_routes.export_flow_dbt_plan(flow.id, _richiesta_in(language), scena.capo, session)
+        assert next(t for t in piano["targets"] if t["id"] == "native")["reason"].startswith(start)
     # un rifiuto dell'engine: arriva come codice e parametri, il gateway lo traduce
     fake_engine.dbt_export_response = (422, {"detail": {"code": "other_clickhouse", "params": {"connection": "crm", "host": "ch2"}, "message": "testo italiano"}})
     with pytest.raises(HTTPException) as e:
@@ -591,29 +591,29 @@ def ai_finta(monkeypatch):
 
     from app.services import ai_agent, dbt_ai
 
-    stato = SimpleNamespace(chiamate=0, prompt=[], sql="SELECT id, canale FROM __s_0", errore=None, campioni=[])
+    state = SimpleNamespace(chiamate=0, prompt=[], sql="SELECT id, canale FROM __s_0", error=None, samples=[])
 
     def rispondi(messages, info):
-        stato.chiamate += 1
-        if stato.errore:
-            raise RuntimeError(stato.errore)
-        testo = next(p.content for m in messages for p in getattr(m, "parts", []) if type(p).__name__ == "UserPromptPart")
-        stato.prompt.append(testo)
+        state.chiamate += 1
+        if state.error:
+            raise RuntimeError(state.error)
+        text = next(p.content for m in messages for p in getattr(m, "parts", []) if type(p).__name__ == "UserPromptPart")
+        state.prompt.append(text)
         strumento = info.output_tools[0].name
-        if "items" in strumento or testo.startswith("{"):
-            voci = json.loads(testo)["items"]
+        if "items" in strumento or text.startswith("{"):
+            items = json.loads(text)["items"]
             return ModelResponse(parts=[ToolCallPart(tool_name=strumento, args={"items": [
-                {"key": v["key"], "description": f"About {v.get('column') or v.get('name')} {{{{ evil }}}}"} for v in voci]})])
-        return ModelResponse(parts=[ToolCallPart(tool_name=strumento, args={"sql": stato.sql})])
+                {"key": v["key"], "description": f"About {v.get('column') or v.get('name')} {{{{ evil }}}}"} for v in items]})])
+        return ModelResponse(parts=[ToolCallPart(tool_name=strumento, args={"sql": state.sql})])
 
-    async def campioni(bucket, key):
-        stato.campioni.append(key)
+    async def samples(bucket, key):
+        state.samples.append(key)
         return {"id": ["1", "2", "3"], "importo": ["9.5"]}
 
     monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(rispondi))
-    monkeypatch.setattr(dbt_ai, "modello_ai", lambda session: "finto-1")
-    monkeypatch.setattr(dbt_ai, "_campioni", campioni)
-    return stato
+    monkeypatch.setattr(dbt_ai, "ai_model", lambda session: "finto-1")
+    monkeypatch.setattr(dbt_ai, "_samples", samples)
+    return state
 
 
 @pytest.mark.anyio
@@ -625,22 +625,22 @@ async def test_le_descrizioni_dell_ai_vanno_dove_mancano_e_si_ricordano_per_vers
     session.add(FlowVersion(flow_id=flow.id, version=1, definition=flow.definition)); session.commit()
 
     async def esporta():
-        payload, progetto = d._costruisci(session, flow, "data-prep", "duckdb", "capo@x.it", d.OpzioniDbt(ai_descriptions=True))
-        await dbt_ai.descrivi(session, scena.capo, flow, sorted(progetto.flussi_visti), payload)
+        payload, project = d._build(session, flow, "data-prep", "duckdb", "capo@x.it", d.DbtOptions(ai_descriptions=True))
+        await dbt_ai.describe(session, scena.capo, flow, sorted(project.flows_seen), payload)
         return payload
 
     p = await esporta()
-    colonne = {c["name"]: c["description"] for c in p["sources"][0]["tables"][0]["columns"]}
-    assert colonne["canale"] == "Sales channel"                                   # quella scritta da una persona resta
-    assert colonne["id"].startswith("(AI) About id") and "{{" not in colonne["id"] and "{ {" in colonne["id"]
+    columns = {c["name"]: c["description"] for c in p["sources"][0]["tables"][0]["columns"]}
+    assert columns["canale"] == "Sales channel"                                   # quella scritta da una persona resta
+    assert columns["id"].startswith("(AI) About id") and "{{" not in columns["id"] and "{ {" in columns["id"]
     assert p["ai"]["model"] == "finto-1" and p["ai"]["summaries"][0]["flow"] == "Margin flow"
     assert all("(AI) About Margin flow" in m["description"] for m in p["models"] if m["kind"] == "output")
-    voci = json.loads(ai_finta.prompt[0])["items"]
-    assert next(v for v in voci if v.get("column") == "id")["samples"] == ["1", "2", "3"]   # al più 3 valori per colonna
-    assert not any(v.get("column") == "canale" for v in voci)                               # già descritta: non si chiede
+    items = json.loads(ai_finta.prompt[0])["items"]
+    assert next(v for v in items if v.get("column") == "id")["samples"] == ["1", "2", "3"]   # al più 3 valori per colonna
+    assert not any(v.get("column") == "canale" for v in items)                               # già descritta: non si chiede
     assert ai_finta.chiamate == 1 and session.exec(select(AiSpend)).all()
-    righe = session.exec(select(DbtAiText).where(DbtAiText.flow_id == flow.id)).all()
-    assert {r.kind for r in righe} == {"describe"} and {r.flow_version for r in righe} == {1}
+    rows = session.exec(select(DbtAiText).where(DbtAiText.flow_id == flow.id)).all()
+    assert {r.kind for r in rows} == {"describe"} and {r.flow_version for r in rows} == {1}
 
     # la stessa versione: nessuna chiamata, le stesse parole
     p2 = await esporta()
@@ -656,19 +656,19 @@ async def test_tetto_raggiunto_e_provider_che_non_risponde_fermano_l_export(sess
     from app.services import ai_chats, dbt_ai
 
     flow = _flusso_a_due_uscite(session, scena)
-    payload, progetto = d._costruisci(session, flow, "data-prep", "duckdb", None, d.OpzioniDbt(ai_descriptions=True))
-    ai_finta.errore = "503 upstream"
+    payload, project = d._build(session, flow, "data-prep", "duckdb", None, d.DbtOptions(ai_descriptions=True))
+    ai_finta.error = "503 upstream"
     with pytest.raises(d.DbtExportError) as e:
-        await dbt_ai.descrivi(session, scena.capo, flow, [flow.id], payload)
+        await dbt_ai.describe(session, scena.capo, flow, [flow.id], payload)
     assert e.value.code == "ai_failed" and "503" in e.value.params["detail"]
     monkeypatch.setattr(dbt_ai.get_settings().ai, "max_cost_per_day_usd", 0.01)
-    monkeypatch.setattr(ai_chats, "speso_oggi", lambda s, u: Decimal("1"))
+    monkeypatch.setattr(ai_chats, "spent_today", lambda s, u: Decimal("1"))
     with pytest.raises(d.DbtExportError) as e:
-        await dbt_ai.descrivi(session, scena.capo, flow, [flow.id], payload)
+        await dbt_ai.describe(session, scena.capo, flow, [flow.id], payload)
     assert e.value.code == "ai_cap_reached"
-    monkeypatch.setattr(dbt_ai, "modello_ai", lambda s: None)
+    monkeypatch.setattr(dbt_ai, "ai_model", lambda s: None)
     with pytest.raises(d.DbtExportError) as e:
-        await dbt_ai.descrivi(session, scena.capo, flow, [flow.id], payload)
+        await dbt_ai.describe(session, scena.capo, flow, [flow.id], payload)
     assert e.value.code == "ai_unavailable"
 
 
@@ -678,24 +678,24 @@ async def test_la_traduzione_dell_ai_entra_quando_l_engine_non_traduce_e_si_rico
     from app.routes import flows as flows_routes
 
     flow = _flusso_a_due_uscite(session, scena)
-    rifiuto = (422, {"detail": {"code": "translation_failed", "message": "x", "params": {
+    refusal = (422, {"detail": {"code": "translation_failed", "message": "x", "params": {
         "dialect": "clickhouse", "detail": "boh", "model": "margin", "sql": "SELECT id, canale FROM __s_0 QUALIFY strano",
         "source_dialect": "duckdb", "target_dialect": "clickhouse", "columns": ["id", "canale"]}}})
-    fake_engine.dbt_export_script = [rifiuto, None]
-    opz = d.OpzioniDbt(target="clickhouse", ai_translations=True)
-    risposta = await flows_routes.export_flow_dbt_con_opzioni(flow.id, opz, _richiesta(), scena.capo, session)
-    assert risposta.status_code == 200 and ai_finta.chiamate == 1
+    fake_engine.dbt_export_script = [refusal, None]
+    opz = d.DbtOptions(target="clickhouse", ai_translations=True)
+    answer = await flows_routes.export_flow_dbt_with_options(flow.id, opz, _richiesta(), scena.capo, session)
+    assert answer.status_code == 200 and ai_finta.chiamate == 1
     assert fake_engine.dbt_exports[-1]["overrides"] == {"margin": "SELECT id, canale FROM __s_0"}
     assert session.exec(select(DbtAiText).where(DbtAiText.kind == "translate")).first().text == "SELECT id, canale FROM __s_0"
     # di nuovo: la proposta ricordata, nessuna chiamata
-    fake_engine.dbt_export_script = [rifiuto, None]
-    await flows_routes.export_flow_dbt_con_opzioni(flow.id, opz, _richiesta(), scena.capo, session)
+    fake_engine.dbt_export_script = [refusal, None]
+    await flows_routes.export_flow_dbt_with_options(flow.id, opz, _richiesta(), scena.capo, session)
     assert ai_finta.chiamate == 1
     # senza l'opzione: il rifiuto arriva com'era
-    fake_engine.dbt_export_script = [rifiuto]
+    fake_engine.dbt_export_script = [refusal]
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as e:
-        await flows_routes.export_flow_dbt_con_opzioni(flow.id, d.OpzioniDbt(target="clickhouse"), _richiesta(), scena.capo, session)
+        await flows_routes.export_flow_dbt_with_options(flow.id, d.DbtOptions(target="clickhouse"), _richiesta(), scena.capo, session)
     assert e.value.status_code == 422 and "translation to clickhouse failed" in e.value.detail.lower()
 
 
@@ -707,25 +707,25 @@ async def test_una_proposta_scartata_dall_engine_si_dimentica_e_il_motivo_e_nell
     from app.routes import flows as flows_routes
 
     flow = _flusso_a_due_uscite(session, scena)
-    rifiuto = (422, {"detail": {"code": "translation_failed", "message": "x", "params": {
+    refusal = (422, {"detail": {"code": "translation_failed", "message": "x", "params": {
         "dialect": "clickhouse", "detail": "boh", "model": "margin", "sql": "SELECT 1", "source_dialect": "duckdb",
         "target_dialect": "clickhouse", "columns": ["id"]}}})
-    scartata = (422, {"detail": {"code": "ai_translation_invalid", "message": "x", "params": {
+    discarded = (422, {"detail": {"code": "ai_translation_invalid", "message": "x", "params": {
         "model": "margin", "reason": "columns", "got": "a", "expected": "id"}}})
     # scartata due volte: il rifiuto, nella lingua di chi esporta; la seconda richiesta all'AI porta il motivo
-    fake_engine.dbt_export_script = [rifiuto, scartata, scartata]
+    fake_engine.dbt_export_script = [refusal, discarded, discarded]
     with pytest.raises(HTTPException) as e:
-        await flows_routes.export_flow_dbt_con_opzioni(flow.id, d.OpzioniDbt(target="clickhouse", ai_translations=True),
+        await flows_routes.export_flow_dbt_with_options(flow.id, d.DbtOptions(target="clickhouse", ai_translations=True),
                                                        _richiesta_in("it"), scena.capo, session)
     assert e.value.detail == ("La traduzione dell'AI di «margin» non passa i controlli: le sue colonne sono a invece di id. "
                               "Esporta con un altro target, o senza la traduzione dell'AI.")
     assert ai_finta.chiamate == 2 and "Your previous translation was rejected: The AI's translation" in ai_finta.prompt[-1]
     assert session.exec(select(DbtAiText).where(DbtAiText.kind == "translate")).first() is None
     # scartata una volta: il secondo tentativo passa
-    fake_engine.dbt_export_script = [rifiuto, scartata, None]
-    risposta = await flows_routes.export_flow_dbt_con_opzioni(flow.id, d.OpzioniDbt(target="clickhouse", ai_translations=True),
+    fake_engine.dbt_export_script = [refusal, discarded, None]
+    answer = await flows_routes.export_flow_dbt_with_options(flow.id, d.DbtOptions(target="clickhouse", ai_translations=True),
                                                               _richiesta_in("it"), scena.capo, session)
-    assert risposta.status_code == 200 and ai_finta.chiamate == 4
+    assert answer.status_code == 200 and ai_finta.chiamate == 4
 
 
 def test_il_piano_dice_se_l_ai_c_e(session, scena, monkeypatch):
@@ -734,9 +734,9 @@ def test_il_piano_dice_se_l_ai_c_e(session, scena, monkeypatch):
 
     flow = _flusso_a_due_uscite(session, scena)
     nulla = {"descriptions": False, "translations": False, "models": []}   # what is kept for the version (#55 #59)
-    monkeypatch.setattr(dbt_ai, "modello_ai", lambda s: None)
+    monkeypatch.setattr(dbt_ai, "ai_model", lambda s: None)
     assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": False, "model": None, "stored": nulla}
-    monkeypatch.setattr(dbt_ai, "modello_ai", lambda s: "m-1")
+    monkeypatch.setattr(dbt_ai, "ai_model", lambda s: "m-1")
     assert flows_routes.export_flow_dbt_plan(flow.id, _richiesta(), scena.capo, session)["ai"] == {"available": True, "model": "m-1", "stored": nulla}
 
 
@@ -749,16 +749,16 @@ def test_un_flusso_che_legge_da_oracle_o_sql_server_e_rifiutato_con_un_motivo(se
     The federated and the native targets now say that no dbt target reads the database
     (source_not_exportable), instead of pointing to targets that refuse it too (review
     of the #49 fix): this test asserted not_federable and no_native_adapter."""
-    ora = Connection(name="contabilita", db_type=db_type, project_id=scena.cartella.id, owner_id=scena.capo.id,
+    at = Connection(name="contabilita", db_type=db_type, project_id=scena.folder.id, owner_id=scena.capo.id,
                      host="ora.x.it", port=None, database="ORCLPDB1", db_schema="", username="fin")
-    session.add(ora); session.commit()
-    righe = make_datasource(session, name="ledger", project_id=scena.cartella.id, key="datasets/9/v1.parquet", kind="database", connection_id=ora.id,
+    session.add(at); session.commit()
+    rows = make_datasource(session, name="ledger", project_id=scena.folder.id, key="datasets/9/v1.parquet", kind="database", connection_id=at.id,
                             source_type="table", source_ref="FIN.LEDGER", columns=json.dumps([{"name": "ID", "dtype": "Int64"}]))
-    flow = make_flow(session, name="Ledger", project_id=scena.cartella.id, definition=json.dumps({"nodes": [
-        _nodo_src("a", righe.id),
-        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Ledger out", "projectId": scena.cartella.id, "overwrite": True}},
+    flow = make_flow(session, name="Ledger", project_id=scena.folder.id, definition=json.dumps({"nodes": [
+        _nodo_src("a", rows.id),
+        {"id": "o", "type": "output", "data": {"destType": "datasource", "name": "Ledger out", "projectId": scena.folder.id, "overwrite": True}},
     ], "edges": [_edge("a", "o")]}))
-    for target, codice in (("duckdb", "source_not_exportable"), ("native", "source_not_exportable"), ("clickhouse", "clickhouse_cannot_read")):
+    for target, code in (("duckdb", "source_not_exportable"), ("native", "source_not_exportable"), ("clickhouse", "clickhouse_cannot_read")):
         with pytest.raises(d.DbtExportError) as e:
             d.build_export_payload(session, flow, "data-prep", target)
-        assert e.value.code == codice
+        assert e.value.code == code

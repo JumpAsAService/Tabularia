@@ -1,16 +1,15 @@
-"""Viste salvate: configurazioni del Viewer messe nel catalogo, in una cartella.
+"""Saved views: Viewer configurations put in the catalog, in a folder.
 
-Permessi, identici a quelli dei flussi perché l'oggetto è della stessa natura:
-- elenco e apertura: **VIEW** sulla cartella della vista;
-- creazione, modifica, spostamento, eliminazione: **EDIT**;
-- lo spostamento richiede EDIT sia sull'origine sia sulla destinazione.
+Permissions, the same as the flows' because the object is of the same nature:
+- list and open: **VIEW** on the view's folder;
+- create, change, move, delete: **EDIT**;
+- moving requires EDIT on both the origin and the destination.
 
-La vista contiene solo un riferimento alla datasource e la configurazione: i
-dati non passano mai di qui. L'RBAC sulla LETTURA del dato resta quella del data
-plane (il Viewer chiama la preview, che autorizza le chiavi di storage), quindi
-salvare una vista non concede l'accesso a nulla. Si verifica comunque VIEW sulla
-datasource al momento del salvataggio, per fallire subito e con un messaggio
-chiaro invece che più tardi, davanti a chi apre la vista.
+The view holds only a reference to the datasource and the configuration: the data
+never goes through here. The RBAC on READING the data stays the data plane's (the
+Viewer calls the preview, which authorizes the storage keys), so saving a view grants
+access to nothing. VIEW on the datasource is checked anyway at save time, to fail at
+once and with a clear message instead of later, in front of whoever opens the view.
 """
 import json
 from datetime import datetime, timezone
@@ -27,9 +26,9 @@ from app.schemas.models import SavedViewCreate, SavedViewOut, SavedViewUpdate
 from app.services import audit
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["saved-views"])
+router = APIRouter(route_class=ReleasingRoute, tags=["saved-views"])
 
 
 def _get_view(session: Session, view_id: int) -> SavedView:
@@ -47,9 +46,9 @@ def _name_taken(session: Session, project_id: int, name: str, exclude_id: int | 
 
 
 def _valid_spec(spec: str) -> str:
-    """La configurazione è testo opaco, ma dev'essere JSON: salvarne una
-    malformata trasformerebbe un errore di salvataggio in una vista che non si
-    apre più, cioè in un problema di chi la apre invece che di chi l'ha rotta."""
+    """The configuration is opaque text, but it must be JSON: saving a malformed one would
+    turn a saving error into a view that no longer opens, that is into a problem of
+    whoever opens it instead of whoever broke it."""
     try:
         json.loads(spec or "{}")
     except json.JSONDecodeError:
@@ -68,7 +67,7 @@ def _to_out(session: Session, view: SavedView, ds_names: dict[int, str] | None =
 
 
 def _with_datasource_names(session: Session, views: list[SavedView]) -> list[SavedViewOut]:
-    """Risolve i nomi delle datasource con UNA query per l'intero elenco."""
+    """Resolves the datasources' names with ONE query for the whole list."""
     ids = {v.datasource_id for v in views}
     names: dict[int, str] = {}
     if ids:
@@ -83,7 +82,7 @@ def _with_datasource_names(session: Session, views: list[SavedView]) -> list[Sav
 def list_all_saved_views(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ):
-    """Tutte le viste nelle cartelle LEGGIBILI (per il picker del Viewer)."""
+    """All the views in the READABLE folders (for the Viewer's picker)."""
     readable = perm_service.readable_project_ids(session, user)
     if not readable:
         return []
@@ -138,7 +137,7 @@ def create_saved_view(
     ds = session.get(Datasource, body.datasource_id)
     if ds is None:
         raise HTTPException(status_code=404, detail="Datasource not found")
-    # fallire QUI, con un messaggio chiaro, invece che davanti a chi apre la vista
+    # fail HERE, with a clear message, instead of in front of whoever opens the view
     ensure_can(session, user, ds.project_id, Capability.VIEW)
 
     name = body.name.strip()

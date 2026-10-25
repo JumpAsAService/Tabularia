@@ -1,14 +1,14 @@
-"""Rotte SSO OIDC (opzionali): `/auth/sso/config`, `/auth/sso/login`, `/auth/sso/callback`.
+"""OIDC SSO routes (optional): `/auth/sso/config`, `/auth/sso/login`, `/auth/sso/callback`.
 
-Se l'SSO non è configurato le rotte esistono comunque ma rispondono "spento":
-`/auth/sso/config` torna `{"enabled": false}` e il frontend non mostra il
-pulsante. Il login locale non viene toccato in nessun caso (break-glass se l'IdP
-è irraggiungibile).
+When SSO is not configured the routes exist anyway but answer "off":
+`/auth/sso/config` returns `{"enabled": false}` and the frontend does not show the
+button. The local login is never touched (break-glass when the IdP cannot be
+reached).
 
-Consegna della sessione al browser: lo stesso cookie `HttpOnly` del login locale,
-scritto sulla risposta che rimanda a `OIDC__POST_LOGIN_URL`. Il token non passa
-mai dall'URL né dal JavaScript; la pagina di callback chiede solo «chi sono?».
-Un errore torna invece nel frammento (`#error=<codice>`), che non contiene segreti.
+Handing the session to the browser: the same `HttpOnly` cookie as the local login,
+written on the response that redirects to `OIDC__POST_LOGIN_URL`. The token never goes
+through the URL nor through JavaScript; the callback page asks only «who am I?». An
+error comes back in the fragment instead (`#error=<code>`), which holds no secrets.
 """
 import logging
 import secrets
@@ -21,18 +21,18 @@ from sqlmodel import Session
 from app.core.config import get_settings
 from app.db.session import get_session
 from app.services import audit, sessions, sso
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/auth/sso", tags=["auth"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/auth/sso", tags=["auth"])
 
 
 def _cookie_path() -> str:
-    """Il percorso del cookie di transazione COME LO VEDE IL BROWSER: dietro un
-    proxy che pubblica il gateway sotto un prefisso (APP__ROOT_PATH) le rotte
-    del flusso stanno sotto quel prefisso, e un cookie scritto senza non
-    tornerebbe mai indietro. Scrittura e cancellazione devono coincidere."""
+    """The transaction cookie's path AS THE BROWSER SEES IT: behind a proxy that publishes
+    the gateway under a prefix (APP__ROOT_PATH) the flow's routes are under that prefix,
+    and a cookie written without it would never come back. Writing and deleting must
+    match."""
     return f"{get_settings().app.root_path}/auth/sso"
 
 
@@ -69,8 +69,8 @@ def _why_missing(request: Request) -> str:
 
 def _fail(session: Session, request: Request, err: sso.SsoError, email: str | None = None,
           state: str = "") -> RedirectResponse:
-    """Log completo lato server, codice generico all'utente."""
-    logger.warning("SSO fallito (%s): %s", err.code, err)
+    """The whole log on the server, a generic code to the user."""
+    logger.warning("SSO failed (%s): %s", err.code, err)
     audit.record_audit(
         session, actor_label=email or "sso", action=audit.SSO_LOGIN_FAILED, outcome="failure",
         detail={"reason": err.code}, request=request,
@@ -83,14 +83,14 @@ def _fail(session: Session, request: Request, err: sso.SsoError, email: str | No
 
 @router.get("/config")
 def sso_config():
-    """Pubblica (pre-login): dice al frontend se mostrare il pulsante SSO."""
+    """Public (pre-login): tells the frontend whether to show the SSO button."""
     return sso.public_config()
 
 
 @router.get("/login")
 def sso_login(request: Request):
-    """Avvia l'authorization code flow: genera state/nonce/PKCE, li mette in un
-    cookie firmato di breve vita e manda l'utente sull'IdP."""
+    """Starts the authorization code flow: generates state/nonce/PKCE, puts them in a signed,
+    short-lived cookie and sends the user to the IdP."""
     cfg = get_settings().oidc
     if not cfg.enabled:
         return _redirect_with("error=sso_disabled")
@@ -99,7 +99,7 @@ def sso_login(request: Request):
     try:
         url = sso.build_authorize_url(cfg, state, nonce, challenge)
     except sso.SsoError as e:
-        logger.warning("SSO: authorize non costruibile (%s): %s", e.code, e)
+        logger.warning("SSO: authorize cannot be built (%s): %s", e.code, e)
         return _redirect_with(f"error={e.code}")
     seen, expected = _seen_from(request), _expected()
     if seen.split("://", 1)[-1] != expected.split("://", 1)[-1]:
@@ -112,13 +112,13 @@ def sso_login(request: Request):
         sso.tx_cookie_name(state),     # one per sign-in: a second one does not overwrite it
         sso.issue_tx_token(state, nonce, verifier),
         max_age=cfg.login_tx_ttl_seconds,
-        httponly=True,                 # mai leggibile da JavaScript
-        samesite="lax",                # il ritorno dall'IdP è una navigazione GET
+        httponly=True,                 # never readable by JavaScript
+        samesite="lax",                # the return from the IdP is a GET navigation
         # as the session's cookie: Secure when the browser is on https. Deciding it from
         # the redirect URI lost the cookie of a sign-in started on http (the browser
         # refuses a Secure cookie there), and the callback said tx_missing
         secure=sessions._in_https(request),
-        path=_cookie_path(),           # inviato solo alle rotte del flusso
+        path=_cookie_path(),           # sent only to the flow's routes
     )
     return response
 
@@ -132,16 +132,16 @@ def sso_callback(
     error_description: str = "",
     session: Session = Depends(get_session),
 ):
-    """Ritorno dall'IdP: valida, provisiona, sincronizza i gruppi e apre una
-    sessione INTERNA (la stessa del login locale)."""
+    """Return from the IdP: validates, provisions, synchronizes the groups and opens an
+    INTERNAL session (the same as the local login's)."""
     cfg = get_settings().oidc
     if not cfg.enabled:
         return _redirect_with("error=sso_disabled")
     if error:
-        logger.warning("SSO: l'IdP ha rifiutato il login: %s (%s)", error, error_description)
+        logger.warning("SSO: the IdP refused the login: %s (%s)", error, error_description)
         return _fail(session, request, sso.SsoError(f"IdP: {error} {error_description}", "idp_denied"), state=state)
     if not code:
-        return _fail(session, request, sso.SsoError("callback senza authorization code", "no_code"), state=state)
+        return _fail(session, request, sso.SsoError("callback without authorization code", "no_code"), state=state)
 
     # this sign-in's cookie; the single cookie of the previous version, for a sign-in
     # started on it during an upgrade
@@ -154,8 +154,8 @@ def sso_callback(
         user, detail = sso.login_user(session, code, tx, cfg)
     except sso.SsoError as e:
         return _fail(session, request, e, state=state)
-    except Exception as e:  # imprevisto: non deve mai esporre lo stack all'utente
-        logger.exception("SSO: errore imprevisto nel callback")
+    except Exception as e:  # unexpected: must never expose the stack to the user
+        logger.exception("SSO: unexpected error in the callback")
         return _fail(session, request, sso.SsoError(str(e), "sso_failed"), state=state)
 
     audit.record_audit(
@@ -163,14 +163,14 @@ def sso_callback(
         detail={k: v for k, v in detail.items() if v not in ((), [], False)} or None,
         request=request,
     )
-    sessions.chiudi_quella_del_cookie(session, request)
+    sessions.close_the_cookies_session(session, request)
     try:
-        riga, token = sessions.apri(session, user, request, "sso")
-    except sessions.AccessoSuperato:  # disattivato mentre tornava dall'IdP
-        return _fail(session, request, sso.SsoError("utente disattivato durante l'accesso", "sso_failed"), user.email,
+        row, token = sessions.open_session(session, user, request, "sso")
+    except sessions.SignInSuperseded:  # disabled while coming back from the IdP
+        return _fail(session, request, sso.SsoError("user disabled during the sign-in", "sso_failed"), user.email,
                      state=state)
     response = RedirectResponse(get_settings().oidc.post_login_url, status_code=status.HTTP_303_SEE_OTHER)
-    sessions.scrivi_cookie(response, request, token, riga)
+    sessions.write_cookie(response, request, token, row)
     response.delete_cookie(sso.tx_cookie_name(state), path=_cookie_path())
     response.delete_cookie(sso.TX_COOKIE, path=_cookie_path())
     return response

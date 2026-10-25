@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.core.crypto import decrypt_secret, encrypt_secret
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import require_observer, require_superuser
 from app.models import ContainerRegistry, ContainerRegistryAccess, ContainerRegistryVariable, Group, User
@@ -33,9 +33,9 @@ from app.services.permissions import is_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/registries", tags=["registries"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/registries", tags=["registries"])
 # for the flow editor: only what the person asking may use
-editor_router = APIRouter(route_class=RottaCheRilascia, prefix="/registries", tags=["registries"])
+editor_router = APIRouter(route_class=ReleasingRoute, prefix="/registries", tags=["registries"])
 
 VARIABLE_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 # set by Tabularia in every container: an administrator cannot define them
@@ -154,14 +154,14 @@ def disabled_reason() -> Optional[str]:
     return None if get_settings().containers.enabled else "kubernetes"
 
 
-def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
+def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
     """After authentication (the dependency above), before the body is read."""
-    from app.routes.api_tokens import nega_se_da_token
+    from app.routes.api_tokens import deny_if_from_token
 
-    nega_se_da_token(request, api_tokens.NIENTE_REGISTRY_DA_TOKEN)
+    deny_if_from_token(request, api_tokens.NO_REGISTRY_FROM_TOKEN)
 
 
-def _acceso() -> None:
+def _is_on() -> None:
     if disabled_reason():
         raise HTTPException(status_code=409, detail="Container registries need Kubernetes (CONTAINERS__ENABLED)")
 
@@ -310,22 +310,22 @@ def _first_exact(r: ContainerRegistry) -> Optional[str]:
 
 # ── the registries ────────────────────────────────────────────────────────────
 @router.get("", response_model=RegistriesOut)
-def elenco(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
+def listing(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
     rows = session.exec(select(ContainerRegistry).order_by(func.lower(ContainerRegistry.name))).all()
     return RegistriesOut(disabled_reason=disabled_reason(),
-                         editable=is_admin(session, chi) and not api_tokens.nome_corrente(request),
+                         editable=is_admin(session, chi) and not api_tokens.current_name(request),
                          registries=[_out(session, r) for r in rows])
 
 
 @router.get("/{registry_id}", response_model=RegistryOut)
-def leggi(registry_id: int, session: Session = Depends(get_session), _chi: User = Depends(require_observer)):
+def read(registry_id: int, session: Session = Depends(get_session), _viewer: User = Depends(require_observer)):
     return _out(session, _registry(session, registry_id))
 
 
-@router.post("", response_model=RegistryOut, status_code=201, dependencies=[Depends(_niente_token)])
-def crea(body: RegistryCreate, request: Request, session: Session = Depends(get_session),
+@router.post("", response_model=RegistryOut, status_code=201, dependencies=[Depends(_no_token)])
+def create(body: RegistryCreate, request: Request, session: Session = Depends(get_session),
          admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     host = _host(body.host)
     protocol, tls, ca_cert = _trust(body.protocol, body.tls, body.ca_cert)
     r = ContainerRegistry(
@@ -347,16 +347,16 @@ def crea(body: RegistryCreate, request: Request, session: Session = Depends(get_
     return _out(session, r)
 
 
-@router.put("/{registry_id}", response_model=RegistryOut, dependencies=[Depends(_niente_token)])
-def modifica(registry_id: int, body: RegistryUpdate, request: Request, session: Session = Depends(get_session),
+@router.put("/{registry_id}", response_model=RegistryOut, dependencies=[Depends(_no_token)])
+def update(registry_id: int, body: RegistryUpdate, request: Request, session: Session = Depends(get_session),
              admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     r = _registry(session, registry_id)
-    cambi: dict = {}
+    changes: dict = {}
 
     def change(field: str, value) -> None:
         if getattr(r, field) != value:
-            cambi[field] = {"from": getattr(r, field), "to": value}
+            changes[field] = {"from": getattr(r, field), "to": value}
             setattr(r, field, value)
 
     if body.name is not None:
@@ -372,16 +372,16 @@ def modifica(registry_id: int, body: RegistryUpdate, request: Request, session: 
         change("tls", tls)
         if ca_cert != r.ca_cert:  # a certificate is long: the audit says it changed
             r.ca_cert = ca_cert
-            cambi["ca_cert"] = "changed" if ca_cert else "removed"
+            changes["ca_cert"] = "changed" if ca_cert else "removed"
     if body.username is not None:
         change("username", body.username.strip())
     if body.password is not None:
         r.password_enc = encrypt_secret(body.password) if body.password else None
-        cambi["password"] = "changed" if body.password else "removed"
+        changes["password"] = "changed" if body.password else "removed"
     if body.repositories is not None:
         allowed = _repositories(r.host, body.repositories)
         if allowed != r.repositories:
-            cambi["repositories"] = {"from": repositories_of(r), "to": [x for x in allowed.splitlines() if x]}
+            changes["repositories"] = {"from": repositories_of(r), "to": [x for x in allowed.splitlines() if x]}
             r.repositories = allowed
     if body.enabled is not None:
         change("enabled", body.enabled)
@@ -390,22 +390,22 @@ def modifica(registry_id: int, body: RegistryUpdate, request: Request, session: 
         _set_access(session, r, body.access, admin.email)
         after = _access_audit(_access(session, r.id))
         if before != after:
-            cambi["access"] = {"from": before, "to": after}
-    if not cambi:
+            changes["access"] = {"from": before, "to": after}
+    if not changes:
         return _out(session, r)
-    if {"host", "protocol", "tls", "ca_cert", "username", "password"} & cambi.keys():
+    if {"host", "protocol", "tls", "ca_cert", "username", "password"} & changes.keys():
         r.last_test_at, r.last_test_ok, r.last_test_message = None, None, ""  # the old test no longer says anything
     r.updated_at, r.updated_by = now_utc(), admin.email
     session.add(r)
     session.commit()
     session.refresh(r)
     audit.record_audit(session, actor=admin, action=audit.REGISTRY_UPDATE, request=request,
-                       target_type="container_registry", target_id=r.id, target_label=r.name, detail=cambi)
+                       target_type="container_registry", target_id=r.id, target_label=r.name, detail=changes)
     return _out(session, r)
 
 
-@router.delete("/{registry_id}", status_code=204, dependencies=[Depends(_niente_token)])
-async def cancella(registry_id: int, request: Request, session: Session = Depends(get_session),
+@router.delete("/{registry_id}", status_code=204, dependencies=[Depends(_no_token)])
+async def delete(registry_id: int, request: Request, session: Session = Depends(get_session),
                    admin: User = Depends(require_superuser)):
     r = _registry(session, registry_id)
     if not disabled_reason():
@@ -413,7 +413,7 @@ async def cancella(registry_id: int, request: Request, session: Session = Depend
             await container_cluster.remove_pull_secrets(r.id)
         except KubeError as e:
             logger.warning("registry %s: pull Secrets not removed (%s)", r.id, e)
-    nome = r.name
+    name = r.name
     for row in session.exec(select(ContainerRegistryAccess).where(ContainerRegistryAccess.registry_id == r.id)).all():
         session.delete(row)
     for row in _variables(session, r.id):
@@ -422,15 +422,15 @@ async def cancella(registry_id: int, request: Request, session: Session = Depend
     session.delete(r)
     session.commit()
     audit.record_audit(session, actor=admin, action=audit.REGISTRY_DELETE, request=request,
-                       target_type="container_registry", target_id=registry_id, target_label=nome)
+                       target_type="container_registry", target_id=registry_id, target_label=name)
 
 
-@router.post("/{registry_id}/test", response_model=TestOut, dependencies=[Depends(_niente_token)])
-async def prova(registry_id: int, request: Request, session: Session = Depends(get_session),
+@router.post("/{registry_id}/test", response_model=TestOut, dependencies=[Depends(_no_token)])
+async def trial(registry_id: int, request: Request, session: Session = Depends(get_session),
                 admin: User = Depends(require_superuser)):
     """The address, the certificate, the credentials and, with an allowlist that names a
     repository, the right to read it. Kept on the registry, so the list says whether it works."""
-    _acceso()
+    _is_on()
     r = _registry(session, registry_id)
     repository = _first_exact(r)
     try:
@@ -452,12 +452,12 @@ async def prova(registry_id: int, request: Request, session: Session = Depends(g
     return out
 
 
-@router.post("/{registry_id}/cluster-test", response_model=ClusterTestOut, dependencies=[Depends(_niente_token)])
-async def prova_nel_cluster(registry_id: int, body: ClusterTestIn, request: Request,
+@router.post("/{registry_id}/cluster-test", response_model=ClusterTestOut, dependencies=[Depends(_no_token)])
+async def trial_in_cluster(registry_id: int, body: ClusterTestIn, request: Request,
                             session: Session = Depends(get_session), admin: User = Depends(require_superuser)):
     """Can a node of the cluster download this image? A Pod with the image and a command
     that does not exist: the node downloads it, nothing of it runs (container_cluster.py)."""
-    _acceso()
+    _is_on()
     if not container_cluster.namespaces():
         raise HTTPException(status_code=409, detail="The containers' namespace is not set (containers.enabled in the "
                                                     "Helm chart sets CONTAINERS__NAMESPACE)")
@@ -476,9 +476,9 @@ async def prova_nel_cluster(registry_id: int, body: ClusterTestIn, request: Requ
 
 @router.get("/{registry_id}/tags", response_model=TagsOut)
 async def tag(registry_id: int, repository: str = Query(max_length=255), session: Session = Depends(get_session),
-              _chi: User = Depends(require_observer)):
+              _viewer: User = Depends(require_observer)):
     """The tags of an allowed repository."""
-    _acceso()
+    _is_on()
     r = _registry(session, registry_id)
     name = cr.repository_name(r.host, repository)
     if not cr.allowed(repositories_of(r), name):
@@ -500,16 +500,16 @@ def _variable_name(name: str) -> str:
     return name
 
 
-@router.put("/{registry_id}/variables/{name}", response_model=RegistryOut, dependencies=[Depends(_niente_token)])
-def scrivi_variabile(registry_id: int, name: str, body: VariableSet, request: Request,
+@router.put("/{registry_id}/variables/{name}", response_model=RegistryOut, dependencies=[Depends(_no_token)])
+def write_variable(registry_id: int, name: str, body: VariableSet, request: Request,
                      session: Session = Depends(get_session), admin: User = Depends(require_superuser)):
-    _acceso()
+    _is_on()
     r = _registry(session, registry_id)
     name = _variable_name(name)
     var = session.exec(select(ContainerRegistryVariable).where(
         ContainerRegistryVariable.registry_id == r.id, ContainerRegistryVariable.name == name)).first()
-    nuova = var is None
-    if body.value is None and (nuova or not var.secret or not body.secret):
+    new_one = var is None
+    if body.value is None and (new_one or not var.secret or not body.secret):
         raise HTTPException(status_code=422, detail="The variable needs a value")
     var = var or ContainerRegistryVariable(registry_id=r.id, name=name)
     var.secret = body.secret
@@ -522,12 +522,12 @@ def scrivi_variabile(registry_id: int, name: str, body: VariableSet, request: Re
     session.commit()
     audit.record_audit(session, actor=admin, action=audit.REGISTRY_VARIABLE_SET, request=request,
                        target_type="container_registry", target_id=r.id, target_label=r.name,
-                       detail={"name": name, "secret": var.secret, "new": nuova})
+                       detail={"name": name, "secret": var.secret, "new": new_one})
     return _out(session, r)
 
 
-@router.delete("/{registry_id}/variables/{name}", response_model=RegistryOut, dependencies=[Depends(_niente_token)])
-def cancella_variabile(registry_id: int, name: str, request: Request, session: Session = Depends(get_session),
+@router.delete("/{registry_id}/variables/{name}", response_model=RegistryOut, dependencies=[Depends(_no_token)])
+def delete_variable(registry_id: int, name: str, request: Request, session: Session = Depends(get_session),
                        admin: User = Depends(require_superuser)):
     r = _registry(session, registry_id)
     var = session.exec(select(ContainerRegistryVariable).where(
@@ -575,7 +575,7 @@ class EditorRegistries(BaseModel):
 
 
 @editor_router.get("", response_model=EditorRegistries)
-def editor_elenco(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def editor_listing(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """The registries this person may choose in a Container node, and which repositories."""
     from app.models import ScriptStorage
     from app.services.container_runs import storage_ready
@@ -600,7 +600,7 @@ async def editor_tag(registry_id: int, repository: str = Query(max_length=255),
                      session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """The tags of a repository this person may use; nothing about the others, not even
     whether they exist."""
-    _acceso()
+    _is_on()
     r = session.get(ContainerRegistry, registry_id)
     if r is None or not r.enabled or not registry_access.can_use(session, user, r):
         raise HTTPException(status_code=404, detail="Container registry not found")
@@ -639,7 +639,7 @@ async def editor_image(registry_id: int, repository: str = Query(max_length=255)
                        session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """The configuration of an image this person may use: what the Container node shows
     and offers to fill in. Nothing about the others, not even whether they exist."""
-    _acceso()
+    _is_on()
     r = session.get(ContainerRegistry, registry_id)
     if r is None or not r.enabled or not registry_access.can_use(session, user, r):
         raise HTTPException(status_code=404, detail="Container registry not found")

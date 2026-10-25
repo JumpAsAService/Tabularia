@@ -10,10 +10,10 @@ from app.models import AuditLog
 from app.routes.audit import _to_out
 
 
-def _out(detail: dict, pieno: bool = False):
+def _out(detail: dict, full: bool = False):
     e = AuditLog(id=1, action="connection.create", actor_label="anna@x.it", detail=json.dumps(detail),
                  ip="203.0.113.7", user_agent="Firefox")
-    return _to_out(e, pieno=pieno).detail
+    return _to_out(e, full=full).detail
 
 
 def test_hosts_and_endpoints_are_hidden():
@@ -39,5 +39,5 @@ def test_a_token_prefix_is_still_hidden():
 
 
 def test_an_administrator_sees_everything():
-    d = _out({"host": "pg-finance.internal:6432", "members": ["mario@cliente.com"]}, pieno=True)
+    d = _out({"host": "pg-finance.internal:6432", "members": ["mario@cliente.com"]}, full=True)
     assert d == {"host": "pg-finance.internal:6432", "members": ["mario@cliente.com"]}

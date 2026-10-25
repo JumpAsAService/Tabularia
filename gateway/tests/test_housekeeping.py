@@ -64,7 +64,7 @@ def test_old_conversations_go_with_their_turns_the_ledger_stays(session):
                      AiSpend(user_id=user.id)])
     session.commit()
     old_id, recent_id = old.id, recent.id
-    assert housekeeping.ai_chats(session, 90, ora=NOW) == 1
+    assert housekeeping.ai_chats(session, 90, at=NOW) == 1
     session.expire_all()
     assert session.get(AiChat, old_id) is None and session.get(AiChat, recent_id) is not None
     assert [t.chat_id for t in session.exec(select(AiChatTurn)).all()] == [recent_id]
@@ -75,7 +75,7 @@ def test_one_pass_says_what_it_touched(session):
     for _ in range(3):
         _report(session, 1)
     session.commit()
-    done = housekeeping.one_pass(session, ora=NOW)
+    done = housekeeping.one_pass(session, at=NOW)
     assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "ai_chats": 0}
 
 
@@ -88,8 +88,8 @@ def test_a_kind_that_fails_does_not_stop_the_others(session, monkeypatch):
     def deadlock(*_a, **_k):
         raise RuntimeError("deadlock detected")
 
-    monkeypatch.setattr(housekeeping.run_log_retention, "svuota", deadlock)
-    done = housekeeping.one_pass(session, ora=NOW)
+    monkeypatch.setattr(housekeeping.run_log_retention, "empty_out", deadlock)
+    done = housekeeping.one_pass(session, at=NOW)
     assert done["runs"] == 0 and done["data_contract_results"] == 2
 
 
@@ -100,6 +100,6 @@ def test_a_conversation_opened_again_is_not_taken_away_while_it_answers(session)
     old = AiChat(user_id=user.id, updated_at=datetime.utcnow() - timedelta(days=120))
     session.add(old)
     session.commit()
-    ai_chats.apri(session, user, old.id, "model", None)  # the question arrives on an old conversation
+    ai_chats.open_session(session, user, old.id, "model", None)  # the question arrives on an old conversation
     assert housekeeping.ai_chats(session, 90) == 0
     assert session.get(AiChat, old.id) is not None

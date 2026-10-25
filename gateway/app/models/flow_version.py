@@ -10,16 +10,16 @@ def _now() -> datetime:
 
 
 class FlowVersion(SQLModel, table=True):
-    """Uno snapshot della definizione di un flusso. Ogni salvataggio che cambia la
-    definizione ne crea uno (auto-versione): così si può vedere lo storico e
-    PROMUOVERE una versione vecchia (che diventa la nuova corrente)."""
+    """A snapshot of a flow's definition. Every save that changes the definition creates one
+    (auto-version): so the history can be seen and an old version PROMOTED (it becomes the
+    new current one)."""
 
     __tablename__ = "flow_versions"
     __table_args__ = (UniqueConstraint("flow_id", "version", name="uq_flowversion"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     flow_id: int = Field(foreign_key="flows.id", index=True)
-    version: int  # progressivo per flusso (1, 2, 3, …); il massimo è la corrente
+    version: int  # progressive per flow (1, 2, 3, …); the highest is the current one
     definition: str = Field(sa_column=Column(Text, nullable=False))
     note: str = ""  # a stable English code the interface translates: "created", "edited", "promoted from v2"
     created_at: datetime = Field(default_factory=_now)

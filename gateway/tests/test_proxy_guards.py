@@ -59,13 +59,13 @@ def _richiesta(body: dict) -> Request:
     return Request(scope, receive)
 
 
-@pytest.mark.parametrize("campo", ["destination", "db_destination", "mirror", "email"])
-async def test_destinazioni_rifiutate_dal_proxy(campo):
+@pytest.mark.parametrize("field", ["destination", "db_destination", "mirror", "email"])
+async def test_destinazioni_rifiutate_dal_proxy(field):
     body = {
         "bucket": "data-prep",
         "input_key": "datasets/x.parquet",
         "operations": [],
-        campo: _CONNESSIONE_OSTILE,
+        field: _CONNESSIONE_OSTILE,
     }
     with pytest.raises(HTTPException) as e:
         # session=None basta: la guardia solleva PRIMA di toccare il database

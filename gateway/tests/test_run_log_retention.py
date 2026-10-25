@@ -33,7 +33,7 @@ def test_old_runs_lose_their_logs_and_keep_the_rest(session):
     silent = _run(session, "container", 50, log="")
     old_flow = _run(session, "flow", 60, error_detail="Traceback (most recent call last): ...")
     recent = _run(session, "container", 5, log="still here\n", error_detail="detail")
-    assert run_log_retention.svuota(session, 30, ora=NOW) == 4
+    assert run_log_retention.empty_out(session, 30, at=NOW) == 4
     assert json.loads(session.get(Run, silent).script)["log_expired"] is False  # it printed nothing: it still says so
     session.expire_all()
     for run_id in (old_script, old_container):
@@ -44,12 +44,12 @@ def test_old_runs_lose_their_logs_and_keep_the_rest(session):
     assert session.get(Run, old_flow).error_detail is None and session.get(Run, old_flow).error
     fresh = session.get(Run, recent)
     assert json.loads(fresh.script)["log"] == "still here\n" and fresh.error_detail == "detail"
-    assert run_log_retention.svuota(session, 30, ora=NOW) == 0  # nothing left to empty
+    assert run_log_retention.empty_out(session, 30, at=NOW) == 0  # nothing left to empty
 
 
 def test_zero_keeps_every_log(session):
     _run(session, "script", 400, log="ancient\n", error_detail="x")
-    assert run_log_retention.svuota(session, 0, ora=NOW) == 0
+    assert run_log_retention.empty_out(session, 0, at=NOW) == 0
     run = session.exec(select(Run)).one()
     assert json.loads(run.script)["log"] == "ancient\n" and run.error_detail == "x"
 
@@ -59,7 +59,7 @@ def test_a_run_still_going_keeps_its_log(session):
             started_at=NOW - timedelta(days=90), script=json.dumps({"log": "running for long\n"}))
     session.add(r)
     session.commit()
-    assert run_log_retention.svuota(session, 30, ora=NOW) == 0
+    assert run_log_retention.empty_out(session, 30, at=NOW) == 0
 
 
 def test_the_editor_says_the_log_of_the_latest_run_expired(session):
@@ -72,6 +72,6 @@ def test_the_editor_says_the_log_of_the_latest_run_expired(session):
     run.flow_id = flow.id
     session.add(run)
     session.commit()
-    run_log_retention.svuota(session, 30, ora=NOW)
+    run_log_retention.empty_out(session, 30, at=NOW)
     last = script_runs.latest_outputs(session, flow.id, ["n1"])["n1"]["last"]
     assert last["log"] == "" and last["log_expired"] is True

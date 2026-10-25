@@ -15,13 +15,13 @@ from app.core.passwords import (
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-# Come nell'engine: blocchi annidati BaseModel *puri*, il caricamento (env) avviene
-# sul `Settings` top-level con delimitatore `__`, così l'env vince sempre.
-# Esempi: DB__HOST=postgres, JWT__SECRET=..., ENGINE__BASE_URL=http://backend:8000
+# As in the engine: nested *pure* BaseModel blocks, the loading (env) happens on the
+# top-level `Settings` with the `__` delimiter, so the env always wins.
+# Examples: DB__HOST=postgres, JWT__SECRET=..., ENGINE__BASE_URL=http://backend:8000
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Postgres (metadati: utenti, gruppi, progetti, permessi)
+# Postgres (metadata: users, groups, projects, permissions)
 # ─────────────────────────────────────────────────────────────────────────────
 class DbSettings(BaseModel):
     host: str = "localhost"
@@ -29,21 +29,21 @@ class DbSettings(BaseModel):
     user: str = "tabularia"
     password: SecretStr = SecretStr("tabularia")
     name: str = "tabularia"
-    # override completo: se valorizzato, ignora host/port/... sopra
+    # a full override: when set, ignores host/port/... above
     url: Optional[str] = None
-    # Connessioni tenute aperte verso Postgres. Vuoto = una per thread
-    # (APP__GATEWAY_THREADS), che è quante ne servono: ogni thread ne usa al
-    # massimo una alla volta. Più basso, quelle che mancano vengono aperte e
-    # chiuse a ogni richiesta. env: DB__POOL_SIZE
+    # Connections kept open towards Postgres. Empty = one per thread
+    # (APP__GATEWAY_THREADS), which is as many as needed: each thread uses at most one at a
+    # time. Lower, the missing ones are opened and closed at every request.
+    # env: DB__POOL_SIZE
     pool_size: Optional[int] = Field(default=None, ge=1)
-    # Quante in più nei momenti di punta (lavori di fondo compresi): queste sì
-    # si chiudono appena rese. Pool + margine deve stare sotto il
-    # `max_connections` di Postgres (100 di serie). env: DB__MAX_OVERFLOW
+    # How many more at peak times (background work included): these are closed as soon as
+    # they are handed back. Pool + overflow must stay under Postgres's `max_connections`
+    # (100 out of the box). env: DB__MAX_OVERFLOW
     max_overflow: int = Field(default=10, ge=0)
-    # Migrazioni dello schema (Alembic): true = il gateway migra da sé all'avvio
-    # (sviluppo); false = le applica un passo separato (`python -m app.db.migra`:
-    # init container di Helm, servizio del compose) e il gateway controlla
-    # soltanto che il database non sia indietro. env: DB__AUTO_MIGRATE
+    # Schema migrations (Alembic): true = the gateway migrates by itself at start
+    # (development); false = a separate step applies them (`python -m app.db.migra`: Helm's
+    # init container, the compose service) and the gateway only checks that the database
+    # is not behind. env: DB__AUTO_MIGRATE
     auto_migrate: bool = False
 
     @computed_field
@@ -57,23 +57,23 @@ class DbSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# JWT (firma dei token di accesso)
+# JWT (signing the access tokens)
 # ─────────────────────────────────────────────────────────────────────────────
-# lunghezza minima del segreto JWT in produzione (`openssl rand -hex 32` ne dà 64)
+# the minimum length of the JWT secret in production (`openssl rand -hex 32` gives 64)
 JWT_SECRET_MIN = 32
 
 
 class JwtSettings(BaseModel):
-    # CAMBIALO in produzione (env JWT__SECRET). Default solo per dev.
+    # CHANGE IT in production (env JWT__SECRET). A default for dev only.
     secret: SecretStr = SecretStr("change-me-in-production")
     algorithm: str = "HS256"
-    # la durata MASSIMA di una sessione: oltre, si rientra anche se si è attivi
+    # the MAXIMUM length of a session: past it, one signs in again even while active
     access_ttl_minutes: int = 12 * 60  # 12h
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Admin seedato allo startup (come Grafana/MinIO: credenziali da env, cambiabili
-# velocemente in produzione)
+# Admin seeded at startup (as Grafana/MinIO do: credentials from the env, quick to
+# change in production)
 # ─────────────────────────────────────────────────────────────────────────────
 # The bootstrap administrator's password follows the rule of every password
 # (core/passwords.py): the same list, the same length, the same function. Only the
@@ -106,34 +106,33 @@ class AuthSettings(BaseModel):
     # which answers on 127.0.0.1 only). Ignored with APP__ENV_NAME=production, and once
     # any account exists; AUTH__ADMIN_PASSWORD, when set, still creates the administrator.
     first_run_setup: bool = False
-    # env: AUTH__SESSION_IDLE_MINUTES — dopo quanti minuti senza attività una
-    # sessione si chiude. 0 = mai (conta solo la durata massima, JWT__ACCESS_TTL_MINUTES).
-    # Vale due volte: il gateway rifiuta una sessione rimasta ferma più a lungo, e
-    # la pagina aperta esce da sé quando nessuno la tocca da altrettanto.
+    # env: AUTH__SESSION_IDLE_MINUTES — after how many minutes without activity a session
+    # closes. 0 = never (only the maximum length counts, JWT__ACCESS_TTL_MINUTES). It holds
+    # twice: the gateway refuses a session left still for longer, and the open page signs
+    # out by itself when nobody has touched it for as long.
     session_idle_minutes: int = Field(default=0, ge=0)
-    # env: AUTH__COOKIE_DOMAIN — il dominio del cookie della sessione. Vuoto (il
-    # default) = l'host del gateway, giusto quando interfaccia e gateway stanno sullo
-    # stesso host (il gateway sotto /api). Con l'interfaccia su un altro host dello
-    # stesso dominio (app.example.com e api.example.com) va il dominio comune,
-    # `example.com`: il server dell'interfaccia deve vedere il cookie per sapere se
-    # c'è una sessione. Due domini diversi non funzionano: il browser non manda il
-    # cookie da un sito all'altro.
+    # env: AUTH__COOKIE_DOMAIN — the domain of the session's cookie. Empty (the default) =
+    # the gateway's host, right when interface and gateway are on the same host (the
+    # gateway under /api). With the interface on another host of the same domain
+    # (app.example.com and api.example.com) the common domain goes here, `example.com`:
+    # the interface's server must see the cookie to know whether there is a session. Two
+    # different domains do not work: the browser does not send the cookie from one site
+    # to the other.
     cookie_domain: Optional[str] = None
-    # env: AUTH__PERSONAL_TOKENS — ogni utente può crearsi token API per i suoi
-    # script (valgono con i SUOI permessi). Spento, i token li hanno solo gli
-    # account di servizio, creati dall'amministratore.
+    # env: AUTH__PERSONAL_TOKENS — every user may create API tokens for their scripts
+    # (they hold with THEIR permissions). Off, only the service accounts the administrator
+    # creates have tokens.
     personal_tokens: bool = True
-    # env: AUTH__API_TOKEN_MAX_DAYS — la scadenza più lontana di un token API.
-    # Ogni token ne ha una: una credenziale senza scadenza è una credenziale che
-    # nessuno ricorda di aver dato.
+    # env: AUTH__API_TOKEN_MAX_DAYS — the farthest expiry of an API token. Every token has
+    # one: a credential without expiry is a credential nobody remembers giving.
     api_token_max_days: int = Field(default=365, ge=1, le=3650)
 
 
 def _celery_hard_limit_seconds() -> int:
-    """Il limite duro di Celery COME LO VEDE L'ENGINE: stessa variabile, stesso
-    `.env`, entrambi i container la ricevono. Il gateway non importa la
-    configurazione dell'engine (processi e immagini diverse), quindi l'accordo fra
-    i due passa da qui."""
+    """Celery's hard limit AS THE ENGINE SEES IT: the same variable, the same `.env`, both
+    containers receive it. The gateway does not import the engine's configuration
+    (different processes and images), so the agreement between the two goes through
+    here."""
     raw = os.getenv("CELERY__TASK_TIME_LIMIT", "3600")
     try:
         return int(raw)
@@ -144,35 +143,34 @@ def _celery_hard_limit_seconds() -> int:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Engine interno (data plane): il gateway ci fa da proxy, non è esposto pubblicamente
+# Internal engine (data plane): the gateway proxies it, it is not exposed publicly
 # ─────────────────────────────────────────────────────────────────────────────
 class EngineSettings(BaseModel):
     base_url: str = "http://localhost:8000"
-    # bucket dello storage dell'engine: il gateway lo usa solo come STRINGA nei
-    # payload (non tocca mai lo storage). Deve combaciare con STORAGE__BUCKET.
+    # the engine storage's bucket: the gateway uses it only as a STRING in the payloads
+    # (it never touches the storage). It must match STORAGE__BUCKET.
     bucket: str = "data-prep"
-    # env: ENGINE__RUN_STALE_TIMEOUT_SECONDS — oltre questa età un run non terminale
-    # è considerato in TIMEOUT (risultato perso o task troppo lungo) e marcato
-    # FAILURE.
+    # env: ENGINE__RUN_STALE_TIMEOUT_SECONDS — past this age a non-terminal run is
+    # considered in TIMEOUT (result lost or task too long) and marked FAILURE.
     #
-    # Il default NON è più un numero fisso: è DERIVATO dal limite duro di Celery
-    # più cinque minuti di margine. Prima i due valori erano scritti a mano nei
-    # due servizi (`3600 + 300` qui, `3600` là), e alzare solo quello dell'engine
-    # lasciava il gateway a dichiarare perso un run ancora vivo — oppure, alzando
-    # solo questo, si aspettava di più per scoprire che Celery l'aveva già ucciso.
+    # The default is NO longer a fixed number: it is DERIVED from Celery's hard limit plus
+    # five minutes of margin. Before, the two values were written by hand in the two
+    # services (`3600 + 300` here, `3600` there), and raising only the engine's left the
+    # gateway declaring lost a run still alive — or, raising only this one, it waited
+    # longer to find out Celery had killed it already.
     #
-    # L'invariante da preservare: questa soglia deve restare MAGGIORE del limite
-    # duro, perché il gateway rinuncia solo DOPO che Celery ha ucciso il task. È
-    # anche ciò che rende sicuro non abilitare `task_acks_late` sull'engine.
-    # Valorizzare ENGINE__RUN_STALE_TIMEOUT_SECONDS ha comunque la precedenza
-    # (l'env batte il default), per chi vuole un margine diverso.
+    # The invariant to keep: this threshold must stay GREATER than the hard limit, because
+    # the gateway gives up only AFTER Celery has killed the task. It is also what makes it
+    # safe not to enable `task_acks_late` on the engine. Setting
+    # ENGINE__RUN_STALE_TIMEOUT_SECONDS takes precedence anyway (the env beats the
+    # default), for whoever wants another margin.
     run_stale_timeout_seconds: int = Field(
         default_factory=lambda: _celery_hard_limit_seconds() + 300
     )
-    # env: ENGINE__SETTINGS_PANEL — l'amministratore regola alcuni parametri del
-    # motore da Amministrazione → Impostazioni (row group, timeout, tetti, cache…;
-    # vedi services/regolazioni_motore.py). false = solo l'ambiente: il pannello li
-    # mostra senza poterli cambiare, e quelli salvati prima smettono di valere.
+    # env: ENGINE__SETTINGS_PANEL — the administrator tunes some engine parameters from
+    # Administration → Settings (row group, timeouts, caps, cache…; see
+    # services/engine_panel_settings.py). false = the environment only: the panel shows them
+    # without being able to change them, and those saved earlier stop holding.
     settings_panel: bool = True
     # env: ENGINE__DBT_EXPORT_TIMEOUT_SECONDS — seconds the gateway waits for the engine to
     # build ONE dbt export (each call: the first, and the one after every AI translation it
@@ -187,25 +185,25 @@ class EngineSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SSO OIDC (OPZIONALE): Keycloak, Microsoft Entra ID (MSAL), Auth0, Okta…
+# SSO OIDC (OPTIONAL): Keycloak, Microsoft Entra ID (MSAL), Auth0, Okta…
 #
-# Disattivato finché `issuer` e `client_id` non sono valorizzati: senza, il
-# login locale resta l'unico e il frontend non mostra nemmeno il pulsante.
-# Il gateway si auto-configura da {issuer}/.well-known/openid-configuration.
-# L'IdP NON sostituisce il JWT interno: dopo la validazione del token OIDC si
-# emette il solito token Tabularia, così RBAC e audit restano identici.
+# Off until `issuer` and `client_id` are set: without them, the local login stays
+# the only one and the frontend does not even show the button.
+# The gateway configures itself from {issuer}/.well-known/openid-configuration.
+# The IdP does NOT replace the internal JWT: after the OIDC token is validated the
+# usual Tabularia token is issued, so RBAC and audit stay the same.
 # ─────────────────────────────────────────────────────────────────────────────
 class OidcSettings(BaseModel):
     # env: OIDC__ISSUER — es. https://keycloak.example.com/realms/tabularia
     #   Entra ID: https://login.microsoftonline.com/<tenant-id>/v2.0
     issuer: str = ""
-    # env: OIDC__CLIENT_ID / OIDC__CLIENT_SECRET (client confidenziale)
+    # env: OIDC__CLIENT_ID / OIDC__CLIENT_SECRET (confidential client)
     client_id: str = ""
     client_secret: SecretStr = SecretStr("")
-    # env: OIDC__REDIRECT_URI — deve combaciare ESATTAMENTE con quella registrata
-    # sull'IdP; punta al gateway: https://gateway.example.com/auth/sso/callback
+    # env: OIDC__REDIRECT_URI — must match EXACTLY the one registered on the IdP; it
+    # points at the gateway: https://gateway.example.com/auth/sso/callback
     redirect_uri: str = ""
-    # env: OIDC__SCOPES — separati da spazio
+    # env: OIDC__SCOPES — separated by spaces
     scopes: str = "openid profile email"
     # env: OIDC__GROUPS_CLAIM — where the groups are: 'groups' (Keycloak's group mapper),
     # 'roles' (Entra ID app roles), or a path into the token: 'realm_access.roles',
@@ -213,32 +211,32 @@ class OidcSettings(BaseModel):
     # comma-separated, are joined. A path missing from the id_token is looked up in the
     # access token, then in userinfo (services/sso.py `more_group_claims`)
     groups_claim: str = "groups"
-    # env: OIDC__GROUP_ALLOWLIST — nomi separati da virgola; vuoto = tutti
+    # env: OIDC__GROUP_ALLOWLIST — names separated by commas; empty = all
     group_allowlist: str = ""
-    # env: OIDC__AUTO_CREATE_GROUPS — crea i gruppi Tabularia mancanti al login.
-    # False (default) = mappa solo su gruppi già curati dall'admin (più igienico)
+    # env: OIDC__AUTO_CREATE_GROUPS — creates the missing Tabularia groups at login.
+    # False (default) = maps only onto groups the admin curates already (cleaner)
     auto_create_groups: bool = False
-    # env: OIDC__AUTHORITATIVE — True: l'IdP possiede l'appartenenza (toglie i
-    # gruppi non presenti nella claim). False: l'SSO aggiunge soltanto.
+    # env: OIDC__AUTHORITATIVE — True: the IdP owns the membership (removes the groups not
+    # in the claim). False: the SSO only adds.
     authoritative: bool = True
-    # env: OIDC__SUPERUSER_GROUP — appartenervi concede is_superuser (vuoto = mai)
+    # env: OIDC__SUPERUSER_GROUP — belonging to it grants is_superuser (empty = never)
     superuser_group: str = ""
-    # ── Chi può ENTRARE (diverso da: quali gruppi riceve) ────────────────────
-    # Senza questi due, chiunque l'IdP autentichi ottiene un account attivo: se
-    # l'issuer è la directory aziendale, è tutta l'azienda. Entrambi spenti di
-    # default, per non cambiare il comportamento di chi già usa l'SSO.
-    # env: OIDC__ALLOWED_EMAIL_DOMAINS — domini ammessi, separati da virgola
+    # ── Who may SIGN IN (other than: which groups they get) ──────────────────
+    # Without these two, anyone the IdP authenticates gets an active account: when the
+    # issuer is the company directory, that is the whole company. Both off by default, so
+    # as not to change the behaviour for whoever uses SSO already.
+    # env: OIDC__ALLOWED_EMAIL_DOMAINS — allowed domains, separated by commas
     allowed_email_domains: str = ""
-    # env: OIDC__REQUIRE_ALLOWLISTED_GROUP — entra solo chi appartiene ad almeno
-    # un gruppo di `group_allowlist` (o al gruppo che concede l'admin)
+    # env: OIDC__REQUIRE_ALLOWLISTED_GROUP — only whoever belongs to at least one group of
+    # `group_allowlist` (or to the group that grants admin) signs in
     require_allowlisted_group: bool = False
-    # env: OIDC__POST_LOGIN_URL — pagina del FRONTEND che riceve il token
+    # env: OIDC__POST_LOGIN_URL — the FRONTEND page that receives the token
     post_login_url: str = "http://localhost:3000/auth/callback"
-    # env: OIDC__BUTTON_LABEL — etichetta del pulsante nella pagina di login
+    # env: OIDC__BUTTON_LABEL — the button's label on the login page
     button_label: str = "Single sign-on"
-    # env: OIDC__DISCOVERY_TTL_SECONDS — cache del documento di discovery
+    # env: OIDC__DISCOVERY_TTL_SECONDS — cache of the discovery document
     discovery_ttl_seconds: int = 3600
-    # env: OIDC__TIMEOUT_SECONDS — timeout delle chiamate all'IdP
+    # env: OIDC__TIMEOUT_SECONDS — the timeout of the calls to the IdP
     timeout_seconds: float = 10.0
     # env: OIDC__CA_FILE — a PEM file of the certificate authorities to trust for the
     # identity provider, besides the public ones: a company Keycloak whose certificate
@@ -248,14 +246,14 @@ class OidcSettings(BaseModel):
     # trusted authority signed it. Whoever can stand between the gateway and the provider
     # can then sign in as anyone: prefer OIDC__CA_FILE. Logged at every start
     verify_tls: bool = True
-    # env: OIDC__LOGIN_TX_TTL_SECONDS — validità della transazione di login
-    # (cookie con state/nonce/PKCE): quanto può durare la schermata dell'IdP
+    # env: OIDC__LOGIN_TX_TTL_SECONDS — how long the login transaction holds (cookie with
+    # state/nonce/PKCE): how long the IdP's screen may last
     login_tx_ttl_seconds: int = 600
 
     @computed_field
     @property
     def enabled(self) -> bool:
-        """SSO attivo solo se configurato: nessun default nascosto."""
+        """SSO on only when configured: no hidden default."""
         return bool(self.issuer and self.client_id)
 
     @property
@@ -280,12 +278,12 @@ class OidcSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Security: chiave Fernet condivisa con l'engine per le credenziali delle
-# connessioni DB (cifrate a riposo e nei payload verso l'engine)
+# Security: the Fernet key shared with the engine for the DB connections'
+# credentials (encrypted at rest and in the payloads towards the engine)
 # ─────────────────────────────────────────────────────────────────────────────
 class SecuritySettings(BaseModel):
-    # env: SECURITY__FERNET_KEY (stessa variabile letta dall'engine). OBBLIGATORIA
-    # in ogni ambiente: senza, il servizio non parte (check_required_secrets).
+    # env: SECURITY__FERNET_KEY (the same variable the engine reads). REQUIRED in every
+    # environment: without it, the service does not start (check_required_secrets).
     fernet_key: str = ""
     # env: SECURITY__KEYS_DIR — a directory the services share (one machine, Compose)
     # where the secrets left empty are created at the first start and read afterwards:
@@ -297,14 +295,14 @@ class SecuritySettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Monitoraggio: node-exporter è la fonte della RAM dell'host mostrata in UI.
-# Lo si legge DIRETTAMENTE (valore istantaneo) e non da VictoriaMetrics, che
-# ha una granularità di scrape di 15s: qui serve un dato realtime.
+# Monitoring: node-exporter is the source of the host's RAM shown in the UI.
+# It is read DIRECTLY (instant value) and not from VictoriaMetrics, which has a
+# 15 s scrape granularity: here real-time data is needed.
 # ─────────────────────────────────────────────────────────────────────────────
 class MonitoringSettings(BaseModel):
     node_exporter_url: str = "http://node-exporter:9100/metrics"
     timeout_seconds: float = 3.0
-    # più browser che pollano condividono una sola fetch (il payload è ~85 KB)
+    # several polling browsers share one fetch (the payload is ~85 KB)
     cache_seconds: float = 3.0
 
 
@@ -313,42 +311,41 @@ class MonitoringSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
     name: str = "Tabularia"
-    version: str = "1.2.2"  # la release: esposta da /system/info e nel menu dell'app
-    # il nome della release. Appio Claudio Cieco, censore del 312 a.C.: riscrisse
-    # le liste dei cittadini e costrui' il primo acquedotto — chi conta, classifica
-    # e ripulisce i registri, e la prima pipeline. Un data-prep ante litteram.
+    version: str = "1.2.2"  # the release: exposed by /system/info and in the app's menu
+    # the release's name. Appius Claudius Caecus, censor in 312 BC: he rewrote the lists
+    # of the citizens and built the first aqueduct — whoever counts, classifies and
+    # cleans the registers, and the first pipeline. A data prep before its time.
     codename: str = "Appio"
     env_name: str = "development"
-    # Cosa fa QUESTO processo. Il gateway ha due mestieri: rispondere alle
-    # richieste, e portare avanti il lavoro di fondo (schedulazioni, esecuzione
-    # dei flussi, pulizie). `all` li fa entrambi, come è sempre stato: un processo
-    # solo. Per avere più repliche si separano: `api` risponde e basta, quante
-    # copie si vuole; `orchestrator` fa solo il lavoro di fondo, anche lui in più
-    # copie (il lavoro se lo dividono dal database, senza doppioni).
+    # What THIS process does. The gateway has two jobs: answering the requests, and
+    # carrying on the background work (schedules, running the flows, cleanups). `all` does
+    # both, as it always has: one process. To have more replicas they are split: `api`
+    # only answers, as many copies as wanted; `orchestrator` does only the background
+    # work, in several copies too (they share the work through the database, without
+    # duplicates).
     # env: APP__ROLE
     role: Literal["all", "api", "orchestrator"] = "all"
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
-    # Prefisso sotto cui un reverse proxy pubblica il gateway, TOGLIENDOLO prima
-    # di inoltrare (es. `/api`, quando un solo host serve interfaccia e API).
-    # Le rotte non cambiano: serve a ciò che il proxy non può
-    # correggere, cioè i percorsi che il gateway scrive per il browser — il
-    # cookie della transazione SSO, gli indirizzi di /docs e i reindirizzamenti
-    # (vedi redirect_slashes). Vuoto = pubblicato alla radice, come in sviluppo.
+    # The prefix under which a reverse proxy publishes the gateway, REMOVING it before
+    # forwarding (e.g. `/api`, when one host serves interface and API). The routes do not
+    # change: it serves what the proxy cannot fix, that is the paths the gateway writes for
+    # the browser — the SSO transaction's cookie, the addresses of /docs and the redirects
+    # (see redirect_slashes). Empty = published at the root, as in development.
     # env: APP__ROOT_PATH
     root_path: str = ""
 
     @field_validator("cors_origins")
     @classmethod
     def _no_wildcard_origin(cls, v: list[str]) -> list[str]:
-        # La sessione del browser è un cookie, e CORS è con le credenziali: con "*"
-        # Starlette rispecchia QUALUNQUE origine, e qualunque sito visitato potrebbe
-        # usare la sessione di chi lo visita (intestazione anti-CSRF compresa).
-        for origine in v:
-            if origine.strip() in ("*", "null"):
+        # The browser's session is a cookie, and CORS is with credentials: with "*" Starlette
+        # mirrors ANY origin, and any site visited could use the visitor's session (anti-CSRF
+        # header included).
+        for origin in v:
+            if origin.strip() in ("*", "null"):
                 raise ValueError(
-                    f"APP__CORS_ORIGINS cannot contain '{origine.strip()}': list the addresses "
+                    f"APP__CORS_ORIGINS cannot contain '{origin.strip()}': list the addresses "
                     "of the interface (e.g. [\"https://app.example.com\"]), or leave it empty with a single host"
                 )
         return v
@@ -366,25 +363,24 @@ class AppSettings(BaseModel):
             )
         return v
 
-    # Quanti thread servono insieme le rotte e le dipendenze sincrone. Python
-    # esegue un thread alla volta: oltre un certo numero i thread non lavorano di
-    # più, si contendono l'interprete. Il nome è diverso da quello dell'engine
-    # (APP__ENGINE_API_THREADS) perché i due servizi leggono lo stesso file
-    # d'ambiente e vogliono valori opposti. env: APP__GATEWAY_THREADS
+    # How many threads serve the routes and the synchronous dependencies together. Python
+    # runs one thread at a time: past a certain number the threads do not work more, they
+    # fight over the interpreter. The name differs from the engine's
+    # (APP__ENGINE_API_THREADS) because the two services read the same environment file
+    # and want opposite values. env: APP__GATEWAY_THREADS
     gateway_threads: int = Field(default=40, ge=4)
 
     @property
     def redirect_slashes(self) -> bool:
-        """Il reindirizzamento automatico «barra finale» di FastAPI costruisce
-        l'indirizzo SENZA il prefisso: sotto un proxy che lo toglie porterebbe
-        fuori dall'API (`/api/users/` → `/users`, una pagina del frontend).
-        Quindi è acceso solo alla radice; sotto un prefisso, una barra di troppo
-        è un 404."""
+        """FastAPI's automatic «trailing slash» redirect builds the address WITHOUT the
+        prefix: under a proxy that removes it, it would lead out of the API (`/api/users/` →
+        `/users`, a frontend page). So it is on only at the root; under a prefix, one slash
+        too many is a 404."""
         return not self.root_path
-    # fuso orario del DEPLOYMENT per lo SCHEDULING: le espressioni cron sono
-    # interpretate in questo fuso (orario a PARETE locale, DST incluso) e poi
-    # convertite in UTC per lo storage. NON tocca la visualizzazione dei timestamp
-    # (quella resta nel fuso del browser di chi guarda). Nome IANA, es. Europe/Rome.
+    # the DEPLOYMENT's time zone for SCHEDULING: the cron expressions are read in this zone
+    # (local WALL time, DST included) and then converted to UTC for storage. It does NOT
+    # touch how timestamps are shown (that stays in the viewer's browser zone). An IANA
+    # name, e.g. Europe/Rome.
     timezone: str = "UTC"
 
     @field_validator("timezone")
@@ -403,60 +399,59 @@ class AppSettings(BaseModel):
 
 
 class PreviewSettings(BaseModel):
-    """Campione AUTOMATICO di sviluppo. Con `default_sample_rows` > 0 ogni nodo
-    sorgente che non ha un campione impostato viene letto SOLO per le prime N
-    righe nelle preview dell'editor e nei run di prova (engine_mode
-    "development"): l'utente lo spegne sul nodo scegliendo «tutte le righe»,
-    o lo sostituisce con un campione suo. La produzione non e' mai toccata.
-    Serve quando ogni lettura costa (object storage remoto, warehouse a
-    consumo). 0 = nessun campione automatico. env: PREVIEW__DEFAULT_SAMPLE_ROWS"""
+    """The AUTOMATIC development sample. With `default_sample_rows` > 0 every source node
+    without a sample of its own is read ONLY for the first N rows in the editor's
+    previews and in the trial runs (engine_mode "development"): the user turns it off on
+    the node choosing «all rows», or replaces it with a sample of their own. Production
+    is never touched. It helps when every read costs (remote object storage, pay-per-use
+    warehouse). 0 = no automatic sample. env: PREVIEW__DEFAULT_SAMPLE_ROWS"""
 
     default_sample_rows: int = Field(default=0, ge=0)
 
 
 class AiSettings(BaseModel):
-    """Assistente AI (chat sui dati). Parla con un endpoint compatibile OpenAI
-    (Scaleway Generative APIs, o qualunque altro): bastano l'URL e la chiave.
-    Spento finche' `base_url` o `secret_key` sono vuoti. Quali MODELLI si
-    possono usare lo decide l'amministratore dal pannello (tabella ai_models):
-    nessun modello e' abilitato finche' non lo abilita lui.
+    """AI assistant (chat over the data). It talks to an OpenAI-compatible endpoint
+    (Scaleway Generative APIs, or any other): the URL and the key are enough. Off while
+    `base_url` or `secret_key` are empty. Which MODELS may be used the administrator
+    decides from the panel (the ai_models table): no model is enabled until they enable
+    it.
 
     env: AI__BASE_URL, AI__ACCESS_KEY, AI__SECRET_KEY, AI__DEFAULT_MODEL,
     AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES"""
 
     base_url: str = ""
-    # l'id della chiave (Scaleway lo chiama access key): il protocollo OpenAI
-    # autentica con il solo secret, questo resta per riconoscere la chiave in uso
+    # the key's id (Scaleway calls it access key): the OpenAI protocol authenticates with
+    # the secret alone, this stays to recognize the key in use
     access_key: str = ""
     secret_key: SecretStr = SecretStr("")
-    # proposto per primo nel selettore, se abilitato dall'amministratore
+    # offered first in the selector, when the administrator enabled it
     default_model: str = ""
-    # righe massime che una query dell'assistente restituisce (al modello e alla chat)
+    # the maximum rows an assistant query returns (to the model and to the chat)
     max_result_rows: int = Field(default=200, ge=1, le=2000)
-    # giri del modello per messaggio: il tetto al ciclo di chiamate agli strumenti
+    # the model's rounds per message: the cap on the loop of tool calls
     max_requests: int = Field(default=12, ge=1, le=50)
     # the same for the flow editor's assistant, whose turns take a model round-trip per
     # step it builds and checks (env: AI__MAX_FLOW_REQUESTS)
     max_flow_requests: int = Field(default=30, ge=1, le=80)
-    # messaggi di storia che il client puo' rimandare a ogni turno
+    # the history messages the client may send back at every turn
     max_history_messages: int = Field(default=60, ge=0, le=400)
-    # Tetti per TURNO, applicati da pydantic-ai stesso (`UsageLimits`). Senza,
-    # un utente qualsiasi puo' far spendere quanto vuole al proprietario della
-    # chiave: il limite sui giri non limita i token (audit 2026-09-19, A8).
+    # Caps per TURN, applied by pydantic-ai itself (`UsageLimits`). Without them, any user
+    # can make the key's owner spend as much as they like: the cap on the rounds does not
+    # cap the tokens (audit 2026-09-19, A8).
     # env: AI__MAX_COST_PER_TURN_USD, AI__MAX_INPUT_TOKENS_PER_TURN
     max_cost_per_turn_usd: float = Field(default=0.50, ge=0)
-    # Tetto GIORNALIERO per utente, in dollari. Il tetto per turno da solo non
-    # basta: mille turni sotto soglia costano comunque mille volte. Serve
-    # soprattutto su un'installazione aperta a sconosciuti (una demo pubblica),
-    # dove ogni domanda passa dalla chiave di chi ospita.
-    # 0 = nessun tetto (comportamento precedente).
+    # A DAILY cap per user, in dollars. The per-turn cap alone is not enough: a thousand
+    # turns under the threshold still cost a thousand times. It matters above all on an
+    # installation open to strangers (a public demo), where every question goes through
+    # the host's key.
+    # 0 = no cap (the earlier behaviour).
     # env: AI__MAX_COST_PER_DAY_USD
     max_cost_per_day_usd: float = Field(default=0, ge=0)
-    # Tetto GIORNALIERO dell'INTERA installazione, in dollari. Quello per utente
-    # non basta dove l'account è condiviso: su una demo pubblica tutti entrano
-    # con lo stesso ospite, e il conto è uno solo. Raggiunto il tetto
-    # l'assistente si dichiara non disponibile fino al giorno dopo.
-    # 0 = nessun tetto.
+    # A DAILY cap for the WHOLE installation, in dollars. The per-user one is not enough
+    # where the account is shared: on a public demo everyone signs in as the same guest,
+    # and the bill is one. With the cap reached the assistant says it is unavailable until
+    # the next day.
+    # 0 = no cap.
     # env: AI__MAX_COST_PER_DAY_TOTAL_USD
     max_cost_per_day_total_usd: float = Field(default=0, ge=0)
     max_input_tokens_per_turn: int = Field(default=400_000, ge=1000)
@@ -465,8 +460,8 @@ class AiSettings(BaseModel):
     # (Helm values: proxy-read-timeout): the AI gives up first, with the reason, and leaves
     # the engine time to build the zip. env: AI__DBT_EXPORT_TIMEOUT_SECONDS
     dbt_export_timeout_seconds: float = Field(default=180, gt=0, le=3600)
-    # quante chat tenere per utente (le piu' vecchie non vengono cancellate da
-    # sole: e' solo il tetto dell'elenco)
+    # how many chats to keep per user (the oldest are not deleted by themselves: it is
+    # only the listing's cap)
     max_chats_listed: int = Field(default=100, ge=1, le=500)
 
     @field_validator("secret_key", mode="before")
@@ -480,29 +475,28 @@ class AiSettings(BaseModel):
 
 
 class WebhookSettings(BaseModel):
-    """Chiamate verso sistemi esterni alla fine di un'esecuzione (vedi services/webhooks.py)."""
+    """Calls to external systems at the end of a run (see services/webhooks.py)."""
 
-    # env: WEBHOOKS__RETENTION_DAYS — per quanti giorni si tiene il registro delle
-    # consegne (riuscite o no); poi lo pulisce lo scheduler
+    # env: WEBHOOKS__RETENTION_DAYS — how many days the deliveries' log is kept
+    # (successful or not); then the scheduler cleans it
     retention_days: int = Field(default=30, ge=1)
-    # env: WEBHOOKS__TIMEOUT_SECONDS — quanto si aspetta la risposta del ricevente
+    # env: WEBHOOKS__TIMEOUT_SECONDS — how long the receiver's answer is waited for
     timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
 
 class AuditSettings(BaseModel):
-    """Per quanto si tiene il registro delle azioni.
+    """How long the action log is kept.
 
-    Il default è ZERO, cioè PER SEMPRE: è il comportamento che le installazioni
-    esistenti hanno oggi, e cancellare un registro di sicurezza non può essere
-    una cosa che succede a qualcuno senza che l'abbia chiesta. Chi apre
-    un'installazione a sconosciuti — una demo pubblica — la accende e si tiene
-    meno dati da custodire.
+    The default is ZERO, that is FOREVER: it is the behaviour existing installations
+    have today, and deleting a security log cannot be something that happens to someone
+    without their asking. Whoever opens an installation to strangers — a public demo —
+    turns it on and keeps less data to look after.
 
-    Si misura in MINUTI apposta: su una demo la finestra utile è un'ora, non un
-    anno, e un'unità grossa avrebbe costretto a scrivere frazioni.
+    It is measured in MINUTES on purpose: on a demo the useful window is an hour, not a
+    year, and a coarse unit would have forced writing fractions.
     """
 
-    # env: AUDIT__RETENTION_MINUTES — 0 = nessuna cancellazione
+    # env: AUDIT__RETENTION_MINUTES — 0 = no deletion
     retention_minutes: int = Field(default=0, ge=0)
     # env: AUDIT__IP_RETENTION_DAYS — days a client address and browser string are
     # kept (audit rows, API tokens, sessions); past them they are emptied and the
@@ -532,10 +526,10 @@ def describe_bytes(n: int) -> str:
 
 
 class SchedulingSettings(BaseModel):
-    # capacità di esecuzione simultanea usata SOLO per evidenziare le fasce critiche
-    # nell'heatmap del carico schedule: dovrebbe rispecchiare la concorrenza del
-    # worker 'celery' (CELERY__WORKER_CONCURRENCY sull'engine). Job schedulati nello
-    # stesso minuto oltre questa soglia finiscono in coda → fascia critica.
+    # the concurrent run capacity used ONLY to highlight the critical slots in the
+    # schedule load heatmap: it should mirror the concurrency of the 'celery' worker
+    # (CELERY__WORKER_CONCURRENCY on the engine). Jobs scheduled in the same minute past
+    # this threshold end up queued → a critical slot.
     worker_capacity: int = 2
 
 
@@ -569,11 +563,11 @@ class BackupSettings(BaseModel):
 
 
 class OrchestratorSettings(BaseModel):
-    """Attese massime di un flusso sui nodi che devono COMPLETARSI prima dei passi
-    a valle (così l'ordine è reale, non cosmetico). Oltre il tetto il flusso aborta
-    invece di leggere dati stantii — alza i valori se hai refresh/output molto
-    lunghi (tabelle enormi o rete lenta)."""
-    # env: ORCHESTRATOR__REFRESH_WAIT_SECONDS — tetto d'attesa di un nodo Refresh
+    """A flow's maximum waits on the nodes that must COMPLETE before the steps downstream
+    (so the order is real, not cosmetic). Past the cap the flow aborts instead of
+    reading stale data — raise the values when you have very long refreshes/outputs
+    (huge tables or a slow network)."""
+    # env: ORCHESTRATOR__REFRESH_WAIT_SECONDS — the wait cap of a Refresh node
     refresh_wait_seconds: int = 600
     # env: ORCHESTRATOR__LOG_RETENTION_DAYS — after how many days a run's logs (a Script or
     # Container node's output, the engine's traceback) are emptied; 0 keeps them for ever
@@ -590,41 +584,40 @@ class OrchestratorSettings(BaseModel):
     ai_chat_retention_days: int = Field(default=90, ge=0)
     # An Output node has no wait cap of its own: the flow waits until it ends, and
     # its life is bounded by ENGINE__RUN_STALE_TIMEOUT_SECONDS (see orchestrator._wait_run).
-    # env: ORCHESTRATOR__POLL_INTERVAL_SECONDS — cadenza di polling durante l'attesa
+    # env: ORCHESTRATOR__POLL_INTERVAL_SECONDS — polling cadence while waiting
     poll_interval_seconds: float = 3.0
-    # ── Coda delle orchestrazioni ────────────────────────────────────────────
-    # Un'esecuzione di flusso nasce come riga «in coda» e la prende un processo
-    # che fa da orchestratore (APP__ROLE): possono essere più d'uno.
-    # env: ORCHESTRATOR__QUEUE_POLL_SECONDS — ogni quanto si guarda la coda
+    # ── The orchestrations' queue ────────────────────────────────────────────
+    # A flow run is born as a «queued» row and a process acting as orchestrator
+    # (APP__ROLE) takes it: there may be more than one.
+    # env: ORCHESTRATOR__QUEUE_POLL_SECONDS — how often the queue is looked at
     queue_poll_seconds: float = Field(default=1.0, gt=0)
-    # env: ORCHESTRATOR__MAX_CONCURRENT — orchestrazioni portate avanti insieme
-    # da UN processo; le altre restano in coda. Ognuna usa una connessione a
-    # Postgres mentre interroga l'engine: va tenuto sotto la misura del pool
-    # (DB__POOL_SIZE), o un engine lento le esaurisce.
+    # env: ORCHESTRATOR__MAX_CONCURRENT — orchestrations ONE process carries on together;
+    # the others stay queued. Each uses a Postgres connection while it asks the engine: it
+    # must be kept under the pool's size (DB__POOL_SIZE), or a slow engine exhausts them.
     # The cells of flow groups count in the same bound: past it, they wait.
     max_concurrent: int = Field(default=20, ge=1)
-    # env: ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS — un'esecuzione rimasta in coda
-    # più di così (nessun orchestratore acceso, o tutti pieni) non viene più
-    # eseguita: si chiude come fallita. Senza, un lancio fatto a orchestratori
-    # spenti partirebbe ore dopo, quando nessuno se lo aspetta più.
+    # env: ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS — a run left queued longer than this (no
+    # orchestrator on, or all of them full) is no longer run: it is closed as failed.
+    # Without it, a launch made with the orchestrators off would start hours later, when
+    # nobody expects it any more.
     queue_timeout_seconds: float = Field(default=900.0, gt=0)
-    # env: ORCHESTRATOR__HEARTBEAT_SECONDS — ogni quanto chi esegue dice «ci sono»
+    # env: ORCHESTRATOR__HEARTBEAT_SECONDS — how often whoever runs says «here»
     heartbeat_seconds: float = Field(default=10.0, gt=0)
-    # env: ORCHESTRATOR__DEAD_AFTER_SECONDS — silenzio oltre il quale
-    # un'orchestrazione è data per persa (il processo è morto) e viene chiusa.
-    # Gli orologi delle macchine devono essere allineati entro questo margine.
+    # env: ORCHESTRATOR__DEAD_AFTER_SECONDS — the silence past which an orchestration is
+    # taken for lost (the process died) and closed. The machines' clocks must agree within
+    # this margin.
     dead_after_seconds: float = Field(default=60.0, gt=0)
 
 
 class OpenLineageSettings(BaseModel):
-    """Lineage verso un catalogo esterno nello standard OpenLineage (Marquez,
-    DataHub, Astro…). Spento se non c'è né `url` né `file`. Vale anche la
-    configurazione standard della libreria (OPENLINEAGE_URL / OPENLINEAGE_CONFIG)."""
-    url: str = ""              # endpoint HTTP del collector, es. http://marquez:5000
+    """Lineage to an external catalog in the OpenLineage standard (Marquez, DataHub,
+    Astro…). Off when there is neither `url` nor `file`. The library's standard
+    configuration holds too (OPENLINEAGE_URL / OPENLINEAGE_CONFIG)."""
+    url: str = ""              # the collector's HTTP endpoint, e.g. http://marquez:5000
     endpoint: str = "api/v1/lineage"
-    api_key: str = ""          # Bearer token, se il collector lo chiede
-    file: str = ""             # in alternativa o in aggiunta: JSON Lines su disco
-    namespace: str = "tabularia"   # il namespace dei job di questa installazione
+    api_key: str = ""          # Bearer token, when the collector asks for one
+    file: str = ""             # as an alternative or as well: JSON Lines on disk
+    namespace: str = "tabularia"   # the namespace of this installation's jobs
     timeout_seconds: float = Field(default=10.0, gt=0)
 
 
@@ -782,8 +775,8 @@ class ContainersSettings(BaseModel):
 
 class Settings(BaseSettings):
     """
-    Configurazione del gateway. Priorità: init > env > default.
-    Campi annidati col delimitatore `__` (es. DB__HOST → db.host).
+    The gateway's configuration. Priority: init > env > default.
+    Nested fields with the `__` delimiter (e.g. DB__HOST → db.host).
     """
     model_config = SettingsConfigDict(env_nested_delimiter="__", extra="ignore")
 
@@ -825,10 +818,10 @@ class Settings(BaseSettings):
         return self
 
     def check_required_secrets(self) -> None:
-        """La chiave Fernet è OBBLIGATORIA in ogni ambiente, anche in sviluppo:
-        senza, le credenziali delle connessioni non si possono cifrare né
-        decifrare e le API fallirebbero al primo uso. Meglio non partire, con
-        un messaggio chiaro. Chiamata allo startup (API, worker, beat)."""
+        """The Fernet key is REQUIRED in every environment, development too: without it, the
+        connections' credentials can be neither encrypted nor decrypted and the API would
+        fail at first use. Better not to start, with a clear message. Called at startup
+        (API, worker, beat)."""
         from cryptography.fernet import Fernet
 
         hint = (f"{FERNET_KEY_HINT}, and set it in infrastructure/.env (the same in gateway and engine), "
@@ -838,13 +831,13 @@ class Settings(BaseSettings):
             raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")
         try:
             Fernet(key)
-        except Exception as e:  # base64 malformato, lunghezza sbagliata…
+        except Exception as e:  # malformed base64, wrong length…
             raise RuntimeError(f"SECURITY__FERNET_KEY is not valid ({e}): {hint}") from e
 
     def check_sso_config(self) -> None:
-        """Se l'SSO è acceso deve essere COMPLETO: una configurazione a metà
-        (senza segreto o senza redirect URI) fallirebbe solo al primo login, con
-        l'utente davanti. Chiamata allo startup. SSO spento = nessun vincolo."""
+        """When SSO is on it must be COMPLETE: a half configuration (without a secret or a
+        redirect URI) would fail only at the first login, with the user in front of it.
+        Called at startup. SSO off = no constraint."""
         cfg = self.oidc
         if not cfg.enabled:
             return
@@ -877,23 +870,23 @@ class Settings(BaseSettings):
                 raise RuntimeError(f"OIDC__CA_FILE {cfg.ca_file} is not a readable PEM file of certificates: {e}") from e
 
     def check_production_safety(self) -> None:
-        """Rifiuta di partire in produzione con i default di sviluppo.
+        """Refuses to start in production with the development defaults.
 
-        I default nel codice (jwt secret, password admin/db) esistono solo per
-        far partire lo stack in dev senza attrito: in produzione DEVONO essere
-        sovrascritti via env. Chiamata allo startup (lifespan).
+        The defaults in the code (jwt secret, admin/db password) exist only to start the
+        stack in dev without friction: in production they MUST be overridden through the
+        env. Called at startup (lifespan).
         """
         if not self.is_production():
             return
         problems = []
-        segreto = self.jwt.secret.get_secret_value()
-        if segreto == "change-me-in-production":
+        secret = self.jwt.secret.get_secret_value()
+        if secret == "change-me-in-production":
             problems.append("JWT__SECRET is the development default (generate one: openssl rand -hex 32)")
-        elif len(segreto) < JWT_SECRET_MIN:
-            # firma ogni sessione (HS256): uno corto si indovina offline da un
-            # solo token, e chi lo indovina si firma da sé un token da admin
+        elif len(secret) < JWT_SECRET_MIN:
+            # signs every session (HS256): a short one is guessed offline from a single token, and
+            # whoever guesses it signs themselves an admin token
             problems.append(
-                f"JWT__SECRET is too short ({len(segreto)} characters, at least "
+                f"JWT__SECRET is too short ({len(secret)} characters, at least "
                 f"{JWT_SECRET_MIN} are needed; generate one: openssl rand -hex 32)"
             )
         # empty or published; the length is checked when the administrator is created

@@ -21,8 +21,8 @@ def _chi(session):
     return make_user(session, email="capo-lettore@x.local", is_superuser=True)
 
 
-def _gruppo(session, nome: str) -> Group:
-    g = Group(name=nome)
+def _gruppo(session, name: str) -> Group:
+    g = Group(name=name)
     session.add(g)
     session.commit()
     session.refresh(g)
@@ -50,26 +50,26 @@ def test_list_users_exposes_dates_and_memberships(session):
     _iscrivi(session, u.id, g1.id)
     _iscrivi(session, u.id, g2.id)
 
-    riga = next(x for x in list_users(session=session, chi_chiede=_chi(session)) if x.id == u.id)
-    assert riga.created_at is not None
-    assert riga.groups == ["analytics", "finanza"]  # ordinati, non a caso
-    assert riga.sso_only is False  # ha una password locale
+    row = next(x for x in list_users(session=session, asker=_chi(session)) if x.id == u.id)
+    assert row.created_at is not None
+    assert row.groups == ["analytics", "finanza"]  # ordinati, non a caso
+    assert row.sso_only is False  # ha una password locale
 
 
 def test_user_without_local_password_is_flagged_sso_only(session):
     solo_sso = make_user(session, email="idp@x.local", hashed_password=None)
-    riga = next(x for x in list_users(session=session, chi_chiede=_chi(session)) if x.id == solo_sso.id)
-    assert riga.sso_only is True
+    row = next(x for x in list_users(session=session, asker=_chi(session)) if x.id == solo_sso.id)
+    assert row.sso_only is True
 
 
 def test_last_seen_is_reported(session):
-    quando = datetime(2026, 9, 13, 10, 30, tzinfo=timezone.utc)
-    u = make_user(session, email="visto@x.local", last_seen_at=quando)
+    when = datetime(2026, 9, 13, 10, 30, tzinfo=timezone.utc)
+    u = make_user(session, email="visto@x.local", last_seen_at=when)
     mai = make_user(session, email="mai@x.local")
 
-    righe = {x.id: x for x in list_users(session=session, chi_chiede=_chi(session))}
-    assert righe[u.id].last_seen_at is not None
-    assert righe[mai.id].last_seen_at is None  # non è mai entrato
+    rows = {x.id: x for x in list_users(session=session, asker=_chi(session))}
+    assert rows[u.id].last_seen_at is not None
+    assert rows[mai.id].last_seen_at is None  # non è mai entrato
 
 
 def test_created_user_starts_without_groups(session):

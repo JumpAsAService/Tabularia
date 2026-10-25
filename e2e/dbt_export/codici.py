@@ -12,10 +12,10 @@ FILE = [f"{R}/backend/app/engine/dbt_export.py", f"{R}/backend/app/api/routes/db
         f"{R}/gateway/app/services/dbt_export.py", f"{R}/gateway/app/services/dbt_ai.py"]
 LINGUE = ("en", "it", "de", "es", "fr")
 
-spec = importlib.util.spec_from_file_location("lingua", f"{R}/gateway/app/core/lingua.py")
+spec = importlib.util.spec_from_file_location("lingua", f"{R}/gateway/app/core/language.py")
 lingua = importlib.util.module_from_spec(spec); spec.loader.exec_module(lingua)
-sys.modules["app.core.lingua"] = lingua
-spec = importlib.util.spec_from_file_location("messaggi", f"{R}/gateway/app/services/messaggi_dbt.py")
+sys.modules["app.core.language"] = lingua
+spec = importlib.util.spec_from_file_location("messaggi", f"{R}/gateway/app/services/dbt_messages.py")
 messaggi = importlib.util.module_from_spec(spec); spec.loader.exec_module(messaggi)
 
 
@@ -71,7 +71,7 @@ def verifica(catalogo: dict, chiave: str, dove: list, cosa: str, facoltativi: se
 
 
 for codice, dove in sorted(usati.items()):
-    # «internal» gets its {detail} from the English text when the raise has none (messaggi_dbt.traduci)
+    # «internal» gets its {detail} from the English text when the raise has none (dbt_messages.translate)
     verifica(messaggi.MESSAGGI, codice, dove, "codice", {"detail"} if codice == "internal" else set())
 for motivo, dove in sorted(motivi.items()):
     verifica(messaggi.MOTIVI_AI, motivo, dove, "motivo AI")

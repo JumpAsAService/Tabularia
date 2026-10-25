@@ -1,6 +1,6 @@
-"""Lineage cross-flow: grafo di provenienza/impatto tra flussi, datasource,
-connessioni e destinazioni esterne. Derivato on-demand e filtrato per RBAC
-(progetti leggibili). Vedi app/services/lineage.py per il modello del grafo.
+"""Cross-flow lineage: the provenance/impact graph among flows, datasources, connections
+and external destinations. Derived on demand and filtered by RBAC (readable
+projects). See app/services/lineage.py for the graph's model.
 """
 import logging
 from typing import Literal, Optional
@@ -16,11 +16,11 @@ from app.models import Flow, User
 from app.models.permission import Capability
 from app.services import lineage as lineage_service
 from app.services import openlineage
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["lineage"])
+router = APIRouter(route_class=ReleasingRoute, tags=["lineage"])
 
 
 class LineageNode(BaseModel):
@@ -29,7 +29,7 @@ class LineageNode(BaseModel):
     label: str
     project_id: Optional[int] = None
     kind: Optional[str] = None      # datasource: flow | database
-    restricted: bool = False        # riferito ma fuori dai progetti leggibili / rimosso
+    restricted: bool = False        # referenced but outside the readable projects / removed
     meta: dict = {}
 
 
@@ -55,9 +55,9 @@ def _serialize(g: lineage_service._Graph, center: Optional[str]) -> LineageGraph
 
 @router.get("/flows/{flow_id}/openlineage")
 def flow_openlineage(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> list[dict]:
-    """Il lineage del flusso nello standard OpenLineage: un `JobEvent` con ciò che
-    legge e scrive, ricostruito dalla definizione (senza eseguire). Da scaricare
-    come file o da dare a un collector."""
+    """The flow's lineage in the OpenLineage standard: a `JobEvent` with what it reads and
+    writes, rebuilt from the definition (without running). To download as a file or to
+    give to a collector."""
     flow = session.get(Flow, flow_id)
     if flow is None:
         raise HTTPException(status_code=404, detail="Flow not found")
@@ -67,8 +67,8 @@ def flow_openlineage(flow_id: int, user: User = Depends(get_current_user), sessi
 
 @router.post("/flows/{flow_id}/openlineage", status_code=status.HTTP_202_ACCEPTED)
 def emit_flow_openlineage(flow_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> dict:
-    """Manda al collector configurato il lineage statico del flusso (per popolare
-    un catalogo con i flussi che esistono già, senza aspettare che girino)."""
+    """Sends the flow's static lineage to the configured collector (to fill a catalog with
+    the flows that exist already, without waiting for them to run)."""
     flow = session.get(Flow, flow_id)
     if flow is None:
         raise HTTPException(status_code=404, detail="Flow not found")
@@ -76,24 +76,24 @@ def emit_flow_openlineage(flow_id: int, user: User = Depends(get_current_user), 
     if not openlineage.enabled():
         raise HTTPException(status_code=409, detail="OpenLineage is not configured (OPENLINEAGE__URL or OPENLINEAGE__FILE)")
     try:
-        inviati = openlineage.emit_flow(session, flow)
-    except Exception as e:  # noqa: BLE001 — chi lo chiede a mano vuole sapere perché non è andata
+        sent = openlineage.emit_flow(session, flow)
+    except Exception as e:  # noqa: BLE001 — whoever asks for it by hand wants to know why it did not go
         raise HTTPException(status_code=502, detail=f"The OpenLineage collector rejected the events: {str(e)[:300]}")
-    return {"events": inviati}
+    return {"events": sent}
 
 
 @router.get("/lineage", response_model=LineageGraph)
 def get_lineage(
-    type: Optional[Literal["flow", "datasource", "connection", "script"]] = Query(None, description="tipo dell'oggetto centrale"),
-    id: Optional[int] = Query(None, description="id dell'oggetto centrale"),
+    type: Optional[Literal["flow", "datasource", "connection", "script"]] = Query(None, description="kind of the central object"),
+    id: Optional[int] = Query(None, description="id of the central object"),
     direction: Literal["both", "upstream", "downstream"] = "both",
     depth: int = Query(3, ge=1, le=8),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Grafo di lineage. Senza `type`+`id` restituisce il grafo COMPLETO sugli
-    oggetti leggibili; con essi, il sottografo centrato entro `depth` salti nella
-    direzione richiesta (a monte / a valle / entrambe)."""
+    """The lineage graph. Without `type`+`id` it returns the WHOLE graph over the readable
+    objects; with them, the subgraph centred within `depth` hops in the requested
+    direction (upstream / downstream / both)."""
     full = lineage_service.build_full_graph(session, user)
 
     if type is None or id is None:
@@ -101,7 +101,7 @@ def get_lineage(
 
     center = {"flow": "flow", "datasource": "ds", "connection": "conn", "script": "script"}[type] + f":{id}"
     if center not in full.nodes:
-        # l'oggetto non è leggibile o non esiste: 404 (non riveliamo l'esistenza
-        # di oggetti fuori dai progetti dell'utente)
+        # the object is not readable or does not exist: 404 (we do not reveal the existence of
+        # objects outside the user's projects)
         raise HTTPException(status_code=404, detail="Object not found or not accessible")
     return _serialize(lineage_service.subgraph(full, center, direction, depth), center)

@@ -1,9 +1,9 @@
-"""Registrazione degli eventi di audit.
+"""Recording the audit events.
 
-`record_audit(...)` scrive UNA riga append-only. È volutamente difensivo: un
-errore nella scrittura dell'audit NON deve mai far fallire l'azione dell'utente
-(si logga e si prosegue). L'IP/User-Agent si estraggono dalla `Request` quando
-disponibile (X-Forwarded-For per il caso dietro reverse proxy).
+`record_audit(...)` writes ONE append-only row. It is defensive on purpose: an error
+writing the audit must NEVER fail the user's action (it is logged and it goes on).
+IP/User-Agent are taken from the `Request` when available (X-Forwarded-For for the
+case behind a reverse proxy).
 """
 from __future__ import annotations
 
@@ -18,26 +18,26 @@ from app.models import AuditLog, User
 
 logger = logging.getLogger(__name__)
 
-# ── azioni note (stringhe stabili: usate anche come filtro nell'UI) ───────────
+# ── known actions (stable strings: used as a filter in the UI too) ───────────
 LOGIN = "auth.login"
 LOGIN_FAILED = "auth.login_failed"
-SSO_LOGIN = "auth.sso_login"            # login via IdP esterno (OIDC)
+SSO_LOGIN = "auth.sso_login"            # login through an external IdP (OIDC)
 SSO_LOGIN_FAILED = "auth.sso_login_failed"
 LOGOUT = "auth.logout"
 # the try-it stack's first administrator, created in the browser (services/first_run.py)
 FIRST_RUN_SETUP = "auth.first_run_setup"
 # the sample-data container signing in with the start-up token (services/first_run.py)
 BOOTSTRAP_LOGIN = "auth.bootstrap_login"
-# sessioni chiuse da chi le possiede (le sue) o da un amministratore (di altri)
+# sessions closed by their owner (their own) or by an administrator (others')
 SESSION_REVOKE = "auth.session_revoke"
 # a password set: one's own (settings menu) or another user's (administrator)
 PASSWORD_CHANGE = "auth.password_change"
-# token API e account di servizio (vedi services/api_tokens.py)
+# API tokens and service accounts (see services/api_tokens.py)
 TOKEN_CREATE = "token.create"
 TOKEN_REVOKE = "token.revoke"
 SERVICE_ACCOUNT_CREATE = "service_account.create"
 SERVICE_ACCOUNT_DELETE = "service_account.delete"
-# webhook (vedi services/webhooks.py)
+# webhooks (see services/webhooks.py)
 WEBHOOK_CREATE = "webhook.create"
 WEBHOOK_UPDATE = "webhook.update"
 WEBHOOK_DELETE = "webhook.delete"
@@ -60,31 +60,32 @@ CONN_DELETE = "connection.delete"
 # accepted in place of the previous one — what proves the server is the right one
 CONN_HOST_KEY_ACCEPT = "connection.host_key_accept"
 EXPORT_DOWNLOAD = "export.download"
-# esecuzione DIRETTA dal piano dati (editor, senza flusso salvato): è un run
-# come gli altri e lascia la stessa traccia
+# a DIRECT run from the data plane (editor, without a saved flow): it is a run like the
+# others and leaves the same trace
 TRANSFORM_RUN = "transform.run"
-# Privilegi di amministratore: concessi/tolti a una persona o a un gruppo intero
+# Administrator privileges: granted/removed to a person or a whole group
 USER_PROMOTE = "user.promote"
 USER_DEMOTE = "user.demote"
 GROUP_PROMOTE = "group.promote"
 GROUP_DEMOTE = "group.demote"
-# Entrare/uscire da un gruppo ADMIN cambia i privilegi quanto una promozione
+# Joining/leaving an ADMIN group changes the privileges as much as a promotion
 ADMIN_GROUP_JOIN = "group.admin_join"
 ADMIN_GROUP_LEAVE = "group.admin_leave"
-# Osservatore: legge i pannelli di amministrazione senza poterci scrivere. Vale
-# la traccia quanto una promozione — apre l'audit, le sessioni e l'elenco utenti
+# Observer: reads the administration panels without being able to write in them. It is
+# worth the trace as much as a promotion — it opens the audit, the sessions and the
+# users' list
 OBSERVER_GRANT = "user.observer_grant"
 OBSERVER_REVOKE = "user.observer_revoke"
 GROUP_OBSERVER_GRANT = "group.observer_grant"
 GROUP_OBSERVER_REVOKE = "group.observer_revoke"
 PERM_GRANT = "permission.grant"
 PERM_REVOKE = "permission.revoke"
-# informativa sulla privacy: cambia ciò che l'installazione DICHIARA a tutti
+# privacy notice: changes what the installation DECLARES to everyone
 PRIVACY_UPDATE = "privacy.update"
-# banner dell'Explore: cambiano ciò che vede TUTTA l'installazione
+# the Explore's banners: they change what the WHOLE installation sees
 BANNER_CREATE = "banner.create"
 BANNER_DELETE = "banner.delete"
-# motori consentiti: cambiano ciò che TUTTA l'installazione può scegliere
+# allowed engines: they change what the WHOLE installation can choose
 ENGINE_ALLOW = "engine.allow"
 ENGINE_SETTINGS_UPDATE = "engine_settings.update"
 # the gateway's settings from Administration → Settings (app/core/overrides.py)
@@ -126,16 +127,16 @@ CONTAINER_TRIAL = "container.trial"
 REGISTRY_VARIABLE_SET = "registry.variable_set"
 REGISTRY_VARIABLE_DELETE = "registry.variable_delete"
 ENGINE_DISALLOW = "engine.disallow"
-# assistente AI: quali modelli si possono usare, e ogni query che l'assistente
-# esegue sui dati per conto di un utente (e' un accesso ai dati come un export)
+# AI assistant: which models may be used, and every query the assistant runs on the
+# data on a user's behalf (it is a data access as an export is)
 AI_MODEL_ENABLE = "ai.model_enable"
 AI_MODEL_DISABLE = "ai.model_disable"
 AI_QUERY = "ai.query"
-# viste salvate (configurazioni del Viewer dentro una cartella). Prefisso
-# "saved_view" e non "view": `VIEW` è già il nome di una capability.
-# invio email dell'output di un run: è l'UNICA destinazione che manda dati fuori
-# verso un indirizzo scritto a mano nel flusso, quindi va tracciata a parte —
-# i domini ammessi dicono DOVE può uscire un dato, l'audit dice COSA è uscito
+# saved views (Viewer configurations inside a folder). Prefix "saved_view" and not
+# "view": `VIEW` is the name of a capability already.
+# sending a run's output by email: it is the ONLY destination that sends data out
+# towards an address written by hand in the flow, so it is tracked apart — the allowed
+# domains say WHERE data may go out, the audit says WHAT went out
 EMAIL_SEND = "email.send"
 # saved scripts: Python or R code kept in a folder (routes/scripts.py)
 SCRIPT_CREATE = "script.create"
@@ -191,31 +192,31 @@ def record_audit(
     detail: Optional[dict[str, Any]] = None,
     request: Optional[Request] = None,
 ) -> None:
-    """Scrive un evento di audit. Non solleva mai: un fallimento qui non deve
-    rompere l'azione dell'utente.
+    """Writes an audit event. It never raises: a failure here must not break the user's
+    action.
 
-    Di un OSSERVATORE non si scrivono né l'indirizzo IP né lo user-agent: resta
-    CHE COSA è stato fatto e da chi, che è il senso del registro, e spariscono
-    da dove e con che cosa. Vedi `permissions.is_observer_only`.
+    Of an OBSERVER neither the IP address nor the user agent is written: WHAT was done and
+    by whom stays, which is the point of the log, and from where and with what disappear.
+    See `permissions.is_observer_only`.
 
-    La regola guarda l'ATTORE, quindi non copre il login FALLITO, dove attore
-    non ce n'è — e lì l'indirizzo si TIENE apposta: è il segnale su cui poggiano
-    i controlli contro i tentativi di forzatura (scelta dell'utente,
-    2026-09-30). Il test `test_a_failed_login_still_records_the_address` lo
-    fissa, così resta una scelta e non una svista."""
+    The rule looks at the ACTOR, so it does not cover the FAILED login, where there is no
+    actor — and there the address is KEPT on purpose: it is the signal the checks against
+    brute-force attempts rest on (the user's choice, 2026-09-30). The test
+    `test_a_failed_login_still_records_the_address` pins it, so it stays a choice and not
+    an oversight."""
     try:
-        minimizza = False
+        minimize = False
         if actor is not None:
             try:
                 from app.services.permissions import is_observer_only
 
-                minimizza = is_observer_only(session, actor)
-            except Exception:  # pragma: no cover — nel dubbio si scrive l'evento
-                logger.debug("ruolo non risolvibile per l'audit", exc_info=True)
-        # fatto con un token API: si dice con quale (il nome, mai il segreto)
-        from app.services.api_tokens import nome_corrente
+                minimize = is_observer_only(session, actor)
+            except Exception:  # pragma: no cover — when in doubt the event is written
+                logger.debug("role cannot be resolved for the audit", exc_info=True)
+        # done with an API token: say which (the name, never the secret)
+        from app.services.api_tokens import current_name
 
-        via = nome_corrente(request)
+        via = current_name(request)
         if via:
             detail = {**(detail or {}), "token": via}
         entry = AuditLog(
@@ -227,11 +228,11 @@ def record_audit(
             target_id=target_id,
             target_label=target_label,
             detail=json.dumps(detail, default=str, ensure_ascii=False) if detail else None,
-            ip=None if minimizza else client_ip(request),
-            user_agent=None if minimizza else (request.headers.get("user-agent") if request else None),
+            ip=None if minimize else client_ip(request),
+            user_agent=None if minimize else (request.headers.get("user-agent") if request else None),
         )
         session.add(entry)
         session.commit()
-    except Exception:  # pragma: no cover — l'audit non deve mai propagare errori
-        logger.exception("record_audit: impossibile scrivere l'evento %s", action)
+    except Exception:  # pragma: no cover — the audit must never propagate errors
+        logger.exception("record_audit: cannot write event %s", action)
         session.rollback()

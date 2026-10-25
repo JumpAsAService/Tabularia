@@ -506,13 +506,13 @@ def test_callback_ok_apre_la_sessione_interna_e_scrive_l_audit(session, monkeypa
     # il token non passa dall'URL: né nel frammento né altrove
     assert res.headers["location"] == "https://app.example/auth/callback"
     cookies = res.headers.getlist("set-cookie")
-    sessione = next(c for c in cookies if c.startswith("tab_token="))
-    assert "HttpOnly" in sessione and "Path=/" in sessione and "SameSite=lax" in sessione
+    user_session = next(c for c in cookies if c.startswith("tab_token="))
+    assert "HttpOnly" in user_session and "Path=/" in user_session and "SameSite=lax" in user_session
     # è il TOKEN INTERNO di Tabularia, con una sessione aperta come quella del login locale
-    payload = decode_access_token(sessione.split(";")[0].split("=", 1)[1])
+    payload = decode_access_token(user_session.split(";")[0].split("=", 1)[1])
     assert int(payload["sub"]) == user.id
-    riga = session.get(UserSession, payload["sid"])
-    assert riga is not None and riga.user_id == user.id and riga.method == "sso"
+    row = session.get(UserSession, payload["sid"])
+    assert row is not None and row.user_id == user.id and row.method == "sso"
     # il cookie di transazione è a uso singolo
     transazione = next(c for c in cookies if c.startswith("tab_sso_tx="))
     assert 'tab_sso_tx=""' in transazione or "Max-Age=0" in transazione

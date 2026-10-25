@@ -29,8 +29,8 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def world(session, db_engine, monkeypatch):
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
-    monkeypatch.setattr(orch, "_vive", set())
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
+    monkeypatch.setattr(orch, "_alive", set())
     monkeypatch.setattr(scheduler, "engine", db_engine)
     admin = make_user(session, email="admin@x.local", is_superuser=True)
     p = make_project(session, name="Pipelines")
@@ -150,10 +150,10 @@ def test_the_runs_newest_first_with_the_state_of_each_cell(session, world):
 
 def test_a_group_run_sends_no_flow_webhook():
     run = Run(kind="orchestration", flow_group_id=3, status="SUCCESS", task_id="", input_key="", output_bucket="", output_key="")
-    assert webhooks.evento_del_run(run) is None
+    assert webhooks.run_event(run) is None
     run.flow_group_id = None
     run.flow_id = 4
-    assert webhooks.evento_del_run(run) == "flow.run.succeeded"  # a flow's orchestration still does
+    assert webhooks.run_event(run) == "flow.run.succeeded"  # a flow's orchestration still does
 
 
 # ── the scheduler ────────────────────────────────────────────────────────────
@@ -185,7 +185,7 @@ async def test_a_slot_while_the_group_still_runs_is_skipped(session, world):
     group = _due(session, world)
     was = group.next_run_at
     make_run(session, kind="orchestration", status="STARTED", task_id="", flow_group_id=group.id,
-             claimed_by="x", heartbeat_at=orch._adesso())
+             claimed_by="x", heartbeat_at=orch._now())
     await scheduler._fire_group(session, group, datetime.now(timezone.utc))
     assert len(_group_runs(session, group.id)) == 1  # only the one already there
     assert session.get(FlowGroup, group.id).next_run_at > was  # the slot is used up

@@ -1,11 +1,11 @@
-"""Carico previsionale degli schedule: proietta i cron attivi (flussi + refresh
-datasource) sui prossimi N giorni per svelare le fasce orarie critiche.
+"""The schedules' forecast load: projects the active crons (flows + datasource
+refreshes) over the next N days to reveal the critical time slots.
 
-A differenza del calendar plot dei run PASSATI, qui si guarda al FUTURO: si
-espande ogni cron con `croniter` nel fuso del deployment (APP__TIMEZONE), si
-aggregano i fire in una griglia giorno-settimana × ora, e si rilevano le
-COLLISIONI (più job nello stesso minuto) confrontandole con la capacità dei
-worker. Tutto filtrato per RBAC (progetti leggibili).
+Unlike the calendar plot of the PAST runs, here one looks at the FUTURE: every cron is
+expanded with `croniter` in the deployment's zone (APP__TIMEZONE), the fires are
+aggregated into a weekday × hour grid, and the COLLISIONS (several jobs in the same
+minute) are detected comparing them with the workers' capacity. All filtered by RBAC
+(readable projects).
 """
 from __future__ import annotations
 
@@ -22,9 +22,9 @@ from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
 
-# guardia anti-cron patologico (es. "* * * * *" = 1/min): evita liste enormi
+# a guard against pathological crons (e.g. "* * * * *" = 1/min): avoids huge lists
 MAX_FIRINGS_PER_SCHEDULE = 5000
-MAX_COLLISIONS = 30  # fasce critiche restituite (le peggiori)
+MAX_COLLISIONS = 30  # critical slots returned (the worst)
 
 
 def compute_schedule_load(session: Session, user: User, days: int) -> dict:
@@ -41,7 +41,7 @@ def compute_schedule_load(session: Session, user: User, days: int) -> dict:
     if not readable:
         return empty
 
-    # schedule attivi nei progetti leggibili: flussi + refresh datasource
+    # active schedules in the readable projects: flows + datasource refreshes
     schedules: list[tuple[str, int, str, str]] = []  # (kind, id, name, cron)
     for f in session.exec(
         select(Flow).where(Flow.project_id.in_(readable), Flow.run_schedule.is_not(None))  # type: ignore[union-attr]
@@ -56,14 +56,14 @@ def compute_schedule_load(session: Session, user: User, days: int) -> dict:
         return empty
 
     grid: dict[tuple[int, int], int] = defaultdict(int)           # (weekday, hour) → n. fire
-    minute_map: dict[str, list[dict]] = defaultdict(list)         # minuto ISO → [{kind,name}]
+    minute_map: dict[str, list[dict]] = defaultdict(list)         # ISO minute → [{kind,name}]
     total_firings = 0
 
     for kind, sid, name, cron in schedules:
         try:
-            itr = croniter(cron, now)  # base tz-aware → get_next resta nel fuso locale
+            itr = croniter(cron, now)  # tz-aware base → get_next stays in the local zone
         except Exception:
-            logger.warning("schedule_load: cron non valido su %s %s: %r", kind, sid, cron)
+            logger.warning("schedule_load: invalid cron on %s %s: %r", kind, sid, cron)
             continue
         n = 0
         while n < MAX_FIRINGS_PER_SCHEDULE:
@@ -76,7 +76,7 @@ def compute_schedule_load(session: Session, user: User, days: int) -> dict:
             total_firings += 1
             n += 1
 
-    # picco di simultaneità per cella + collisioni (oltre la capacità)
+    # the concurrency peak per cell + collisions (beyond the capacity)
     cell_peak: dict[tuple[int, int], int] = defaultdict(int)
     collisions: list[dict] = []
     for minute_iso, jobs in minute_map.items():

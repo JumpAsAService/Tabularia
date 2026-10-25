@@ -49,8 +49,8 @@ def test_promote_and_demote_user_is_audited(session):
     out = user_routes.update_user(anna.id, UserUpdate(is_superuser=False), session=session, current=root)
     assert out.is_superuser is False and not perm.is_admin(session, anna)
     assert _actions(session) == [audit.USER_PROMOTE, audit.USER_DEMOTE]
-    riga = session.exec(select(AuditLog)).first()
-    assert riga.target_label == "anna@x.it" and riga.actor_id == root.id
+    row = session.exec(select(AuditLog)).first()
+    assert row.target_label == "anna@x.it" and row.actor_id == root.id
 
 
 def test_patch_without_flag_change_writes_no_audit(session):
@@ -102,18 +102,18 @@ def test_group_elevation_makes_every_member_admin(session):
 def test_group_admin_gets_the_same_powers_as_a_personal_admin(session):
     root, anna = _root(session), make_user(session, email="anna@x.it")
     _group(session, is_admin=True, members=[anna])
-    progetto = Project(name="Riservato", owner_id=root.id)
-    session.add(progetto)
+    project = Project(name="Riservato", owner_id=root.id)
+    session.add(project)
     session.commit()
-    assert perm.has_capability(session, anna, progetto.id, "manage")
-    assert progetto.id in perm.readable_project_ids(session, anna)
+    assert perm.has_capability(session, anna, project.id, "manage")
+    assert project.id in perm.readable_project_ids(session, anna)
     # data plane: niente pinning, come per il superuser
     ensure_reads_pinned(session, anna, {"bucket": "altro", "input_key": "x/y.parquet"}, "data-prep")
     # /auth/me dice al frontend di aprire l'amministrazione
     assert auth_routes.me(user=anna, session=session).is_superuser is True
     # nell'elenco utenti il flag PERSONALE resta falso, con l'origine in chiaro
-    riga = next(u for u in user_routes.list_users(session=session, chi_chiede=root) if u.email == "anna@x.it")
-    assert riga.is_superuser is False and riga.admin_groups == ["Amministratori"]
+    row = next(u for u in user_routes.list_users(session=session, asker=root) if u.email == "anna@x.it")
+    assert row.is_superuser is False and row.admin_groups == ["Amministratori"]
 
 
 def test_inactive_member_of_admin_group_is_still_locked_out_by_login(session):
@@ -140,13 +140,13 @@ def test_membership_changes_of_an_admin_group_are_audited(session):
 def test_admin_by_group_cannot_lock_themselves_out(session):
     anna = make_user(session, email="anna@x.it")
     g = _group(session, is_admin=True, members=[anna])
-    for azione in (
+    for action in (
         lambda: group_routes.update_group(g.id, GroupUpdate(is_admin=False), session=session, current=anna),
         lambda: group_routes.delete_group(g.id, session=session, current=anna),
         lambda: user_routes.remove_from_group(anna.id, g.id, session=session, current=anna),
     ):
         with pytest.raises(HTTPException) as e:
-            azione()
+            action()
         assert e.value.status_code == 409
         session.refresh(g)
         assert g.is_admin and perm.is_admin(session, anna)
@@ -213,10 +213,10 @@ def test_a_folder_cannot_be_moved_into_its_own_subtree(session):
     figlio = Project(name="Figlio", owner_id=root.id, parent_id=padre.id)
     session.add(figlio); session.commit(); session.refresh(figlio)
 
-    for destinazione in (padre.id, figlio.id):
+    for destination in (padre.id, figlio.id):
         with pytest.raises(HTTPException) as e:
             project_routes.update_project(
-                padre.id, ProjectUpdate(parent_id=destinazione), user=root, session=session
+                padre.id, ProjectUpdate(parent_id=destination), user=root, session=session
             )
         assert e.value.status_code == 422
     session.refresh(padre)

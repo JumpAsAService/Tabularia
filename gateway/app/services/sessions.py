@@ -1,20 +1,20 @@
-"""Sessioni: aprirle, riconoscerle, chiuderle.
+"""Sessions: opening, recognizing and closing them.
 
-Ogni accesso riuscito (password o SSO) apre una riga in `user_sessions` e riceve
-un token che ne porta l'id. Il browser lo tiene in un cookie `HttpOnly`, che il
-JavaScript della pagina non può leggere: uno script iniettato non se lo porta
-via. Gli script e le API lo usano come prima, nell'intestazione `Authorization`.
+Every successful sign-in (password or SSO) opens a row in `user_sessions` and gets a
+token carrying its id. The browser keeps it in an `HttpOnly` cookie, which the page's
+JavaScript cannot read: an injected script does not take it away. Scripts and APIs
+use it as before, in the `Authorization` header.
 
-Chiudere una sessione è cancellarne la riga: il token, ancora firmato e non
-scaduto, smette di valere alla richiesta dopo. Lo fanno l'uscita, la revoca
-(propria o dell'amministratore), il cambio di password, la disattivazione
-dell'account, e la pulizia periodica di quelle scadute o ferme da troppo.
+Closing a session is deleting its row: the token, still signed and not expired, stops
+holding at the next request. Signing out does it, and the revocation (own or the
+administrator's), the password change, disabling the account, and the periodic
+cleanup of those expired or still for too long.
 
-Il cookie va con `SameSite=Lax` e, quando la pagina è in HTTPS, `Secure`. Contro
-le richieste fatte da altri siti c'è in più l'intestazione `X-Tabularia-Csrf`:
-una richiesta che modifica qualcosa e si presenta col solo cookie deve averla
-(vedi deps/auth.py). Un modulo HTML di un altro sito non la può aggiungere, e
-una fetch da un'origine che CORS non ammette non passa la verifica preliminare.
+The cookie goes with `SameSite=Lax` and, when the page is on HTTPS, `Secure`. Against
+the requests made by other sites there is the `X-Tabularia-Csrf` header as well: a
+request that changes something and comes with the cookie alone must have it (see
+deps/auth.py). An HTML form of another site cannot add it, and a fetch from an origin
+CORS does not allow does not pass the preflight.
 """
 from __future__ import annotations
 
@@ -34,80 +34,79 @@ from app.models import User, UserSession
 COOKIE = "tab_token"
 CSRF_HEADER = "x-tabularia-csrf"
 
-# l'ultima attività di una sessione si scrive al più una volta al minuto: è anche
-# la precisione del timeout per inattività
-ATTIVITA_OGNI = timedelta(seconds=60)
+# a session's last activity is written at most once a minute: it is also the precision
+# of the idle timeout
+ACTIVITY_EVERY = timedelta(seconds=60)
 
 
-def adesso() -> datetime:
+def now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-class AccessoSuperato(Exception):
-    """La password verificata non è più quella dell'account (o l'account è stato
-    disattivato) mentre l'accesso era in corso."""
+class SignInSuperseded(Exception):
+    """The verified password is no longer the account's (or the account was disabled) while
+    the sign-in was going on."""
 
 
-def apri(
-    session: Session, user: User, request: Optional[Request], metodo: str,
-    password_verificata: Optional[str] = None,
+def open_session(
+    session: Session, user: User, request: Optional[Request], method: str,
+    verified_password: Optional[str] = None,
 ) -> tuple[UserSession, str]:
-    """Apre una sessione per `user` e torna la riga e il suo token.
+    """Opens a session for `user` and returns the row and its token.
 
-    `password_verificata` è l'hash contro cui il login ha controllato la password.
-    Fra quel controllo (bcrypt, un quarto di secondo) e questa riga un
-    amministratore può cambiare la password e chiudere le sessioni: la riga
-    dell'utente si legge qui BLOCCATA (FOR SHARE) e la sessione nasce solo se la
-    password è ancora quella. Il blocco mette in fila i due: o il cambio aspetta
-    che questa sessione esista (e la chiude), o questa vede la password nuova e
-    non nasce. Altrimenti chi conosceva la vecchia, provando a ripetizione,
-    potrebbe restare dentro fino alla scadenza."""
+    `verified_password` is the hash the login checked the password against. Between
+    that check (bcrypt, a quarter of a second) and this row an administrator may change
+    the password and close the sessions: the user's row is read here LOCKED (FOR SHARE)
+    and the session is born only if the password is still that one. The lock lines the
+    two up: either the change waits for this session to exist (and closes it), or this
+    one sees the new password and is not born. Otherwise whoever knew the old one,
+    trying over and over, could stay in until expiry."""
     from app.services import audit
     from app.services.permissions import is_observer_only
 
-    adesso_in_db = session.exec(
+    now_in_db = session.exec(
         select(User.hashed_password, User.is_active).where(User.id == user.id).with_for_update(read=True)
     ).first()
-    if adesso_in_db is None or not adesso_in_db[1] or (
-        password_verificata is not None and adesso_in_db[0] != password_verificata
+    if now_in_db is None or not now_in_db[1] or (
+        verified_password is not None and now_in_db[0] != verified_password
     ):
         session.rollback()
-        raise AccessoSuperato()
-    ora = adesso()
-    # di un OSSERVATORE non si tiene da dove e con che cosa entra, come nell'audit
-    minimizza = is_observer_only(session, user)
-    agente = (request.headers.get("user-agent") or "")[:512] if request is not None else ""
-    riga = UserSession(
+        raise SignInSuperseded()
+    at = now()
+    # of an OBSERVER where they come in from and with what is not kept, as in the audit
+    minimize = is_observer_only(session, user)
+    agent = (request.headers.get("user-agent") or "")[:512] if request is not None else ""
+    row = UserSession(
         id=secrets.token_urlsafe(24),
         user_id=user.id,
-        created_at=ora,
-        last_seen_at=ora,
-        expires_at=ora + timedelta(minutes=get_settings().jwt.access_ttl_minutes),
-        ip=None if minimizza else audit.client_ip(request),
-        user_agent=None if minimizza else (agente or None),
-        method=metodo,
+        created_at=at,
+        last_seen_at=at,
+        expires_at=at + timedelta(minutes=get_settings().jwt.access_ttl_minutes),
+        ip=None if minimize else audit.client_ip(request),
+        user_agent=None if minimize else (agent or None),
+        method=method,
     )
-    session.add(riga)
+    session.add(row)
     session.commit()
-    session.refresh(riga)
-    return riga, create_access_token(user.id, riga.id, riga.expires_at)
+    session.refresh(row)
+    return row, create_access_token(user.id, row.id, row.expires_at)
 
 
-def valida(ora: Optional[datetime] = None):
-    """LA regola, in SQL, per chi controlla un token, chi elenca e chi pulisce:
-    entro la durata massima e, col timeout per inattività, usata di recente. Al
-    timeout si aggiunge il minuto con cui si scrive l'attività: una sessione usata
-    trenta secondi fa non deve sembrare ferma da più del dovuto."""
-    ora = ora or adesso()
-    condizione = UserSession.expires_at > ora
-    minuti = get_settings().auth.session_idle_minutes
-    if minuti > 0:
-        condizione = and_(condizione, UserSession.last_seen_at >= ora - timedelta(minutes=minuti) - ATTIVITA_OGNI)
-    return condizione
+def validate(at: Optional[datetime] = None):
+    """THE rule, in SQL, for whoever checks a token, lists or cleans: within the maximum
+    length and, with the idle timeout, used recently. The minute the activity is written
+    with is added to the timeout: a session used thirty seconds ago must not look still
+    for longer than it is."""
+    at = at or now()
+    condition = UserSession.expires_at > at
+    minutes = get_settings().auth.session_idle_minutes
+    if minutes > 0:
+        condition = and_(condition, UserSession.last_seen_at >= at - timedelta(minutes=minutes) - ACTIVITY_EVERY)
+    return condition
 
 
-def chiudi(session: Session, sid: str, user_id: Optional[int] = None) -> bool:
-    """Chiude una sessione (di `user_id`, se dato). Torna se c'era."""
+def close(session: Session, sid: str, user_id: Optional[int] = None) -> bool:
+    """Closes a session (of `user_id`, when given). Returns whether it was there."""
     q = delete(UserSession).where(UserSession.id == sid)
     if user_id is not None:
         q = q.where(UserSession.user_id == user_id)
@@ -116,102 +115,100 @@ def chiudi(session: Session, sid: str, user_id: Optional[int] = None) -> bool:
     return n > 0
 
 
-def chiudi_tutte(session: Session, user_id: int, tranne: Optional[str] = None, commit: bool = True) -> int:
-    """Chiude tutte le sessioni di un utente, tranne eventualmente una. Torna quante.
-    `commit=False` la lascia nella transazione di chi chiama: una password nuova e la
-    chiusura delle sessioni vanno insieme, o nessuna delle due."""
+def close_all(session: Session, user_id: int, except_: Optional[str] = None, commit: bool = True) -> int:
+    """Closes all of a user's sessions, except possibly one. Returns how many.
+    `commit=False` leaves it in the caller's transaction: a new password and closing the
+    sessions go together, or neither."""
     q = delete(UserSession).where(UserSession.user_id == user_id)
-    if tranne:
-        q = q.where(UserSession.id != tranne)
+    if except_:
+        q = q.where(UserSession.id != except_)
     n = session.exec(q).rowcount or 0
     if commit:
         session.commit()
     return n
 
 
-def aperte(session: Session, user_id: Optional[int] = None, limite: Optional[int] = None) -> list[UserSession]:
-    """Le sessioni ancora valide (di un utente, o di tutti), dalla più recente.
-    `limite`: su una demo pubblica ogni accesso dell'ospite è una riga."""
-    q = select(UserSession).where(valida()).order_by(UserSession.last_seen_at.desc())
+def open_ones(session: Session, user_id: Optional[int] = None, limit: Optional[int] = None) -> list[UserSession]:
+    """The sessions still valid (of a user, or of everyone), newest first.
+    `limit`: on a public demo every guest sign-in is a row."""
+    q = select(UserSession).where(validate()).order_by(UserSession.last_seen_at.desc())
     if user_id is not None:
         q = q.where(UserSession.user_id == user_id)
-    if limite is not None:
-        q = q.limit(limite)
+    if limit is not None:
+        q = q.limit(limit)
     return list(session.exec(q).all())
 
 
-def quante_aperte(session: Session) -> int:
-    return session.exec(select(func.count()).select_from(UserSession).where(valida())).one()
+def how_many_open(session: Session) -> int:
+    return session.exec(select(func.count()).select_from(UserSession).where(validate())).one()
 
 
-def pulisci(session: Session) -> int:
-    """Toglie le sessioni scadute o ferme da troppo (lo chiama lo scheduler):
-    con loro se ne vanno gli indirizzi."""
-    n = session.exec(delete(UserSession).where(not_(valida()))).rowcount or 0
+def clean(session: Session) -> int:
+    """Removes the sessions expired or still for too long (the scheduler calls it): their
+    addresses go with them."""
+    n = session.exec(delete(UserSession).where(not_(validate()))).rowcount or 0
     session.commit()
     return n
 
 
-def chiudi_quella_del_cookie(session: Session, request: Request) -> None:
-    """Un accesso nuovo dallo stesso browser prende il posto del cookie di prima:
-    la sessione a cui apparteneva si chiude, invece di restare fino alla scadenza
-    come un «altro dispositivo» che non c'è più."""
-    vecchio = (getattr(request, "cookies", None) or {}).get(COOKIE)
-    if not vecchio:
+def close_the_cookies_session(session: Session, request: Request) -> None:
+    """A new sign-in from the same browser takes the place of the cookie of before: the
+    session it belonged to closes, instead of staying until expiry like an «other device»
+    that is no longer there."""
+    old = (getattr(request, "cookies", None) or {}).get(COOKIE)
+    if not old:
         return
     from app.core.security import decode_access_token
 
     try:
-        sid = str(decode_access_token(vecchio)["sid"])
-    except Exception:  # scaduto, manomesso, di prima delle sessioni: niente da chiudere
+        sid = str(decode_access_token(old)["sid"])
+    except Exception:  # expired, tampered with, from before the sessions: nothing to close
         return
-    chiudi(session, sid)
+    close(session, sid)
 
 
-def maniglia(sid: str) -> str:
-    """Un nome stabile per una sessione, da mostrare a chi non la può chiudere
-    (l'osservatore): distingue le righe senza consegnare l'id vero."""
+def handle(sid: str) -> str:
+    """A stable name for a session, to show to whoever cannot close it (the observer): it
+    tells the rows apart without handing over the real id."""
     return "h-" + hashlib.sha256(sid.encode()).hexdigest()[:16]
 
 
-def sid_corrente(request: Request) -> Optional[str]:
-    """L'id della sessione con cui è arrivata la richiesta (lo mette lì
-    `get_current_user`)."""
-    stato = getattr(request, "state", None)
-    return getattr(stato, "sid", None) if stato is not None else None
+def current_sid(request: Request) -> Optional[str]:
+    """The id of the session the request came with (`get_current_user` puts it there)."""
+    state = getattr(request, "state", None)
+    return getattr(state, "sid", None) if state is not None else None
 
 
-# ── il cookie ────────────────────────────────────────────────────────────────
+# ── the cookie ──────────────────────────────────────────────────────────────
 
 def _in_https(request: Request) -> bool:
-    """Dietro un proxy che termina il TLS il gateway riceve http: conta quel che il
-    proxy dichiara. Chi falsificasse l'intestazione toglierebbe `Secure` solo al
-    proprio cookie."""
+    """Behind a proxy that terminates TLS the gateway receives http: what the proxy declares
+    counts. Whoever forged the header would remove `Secure` only from their own cookie."""
     if getattr(getattr(request, "url", None), "scheme", "") == "https":
         return True
     return request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower() == "https"
 
 
-def scrivi_cookie(response: Response, request: Request, token: str, riga: UserSession) -> None:
-    """Percorso `/`: lo deve vedere anche il server dell'interfaccia, che decide
-    se mandare alla pagina di accesso (per lo stesso motivo, con l'interfaccia su
-    un altro host, AUTH__COOKIE_DOMAIN). Dura quanto la sessione."""
-    secondi = max(0, int((riga.expires_at - adesso()).total_seconds()))
+def write_cookie(response: Response, request: Request, token: str, row: UserSession) -> None:
+    """Path `/`: the interface's server must see it too, which decides whether to send to
+    the sign-in page (for the same reason, with the interface on another host,
+    AUTH__COOKIE_DOMAIN). It lasts as long as the session."""
+    seconds = max(0, int((row.expires_at - now()).total_seconds()))
     response.set_cookie(
-        COOKIE, token, max_age=secondi, path="/", domain=get_settings().auth.cookie_domain or None,
+        COOKIE, token, max_age=seconds, path="/", domain=get_settings().auth.cookie_domain or None,
         httponly=True, samesite="lax", secure=_in_https(request),
     )
 
 
-def cancella_cookie(response: Response, request: Request) -> None:
+def delete_cookie(response: Response, request: Request) -> None:
     response.delete_cookie(
         COOKIE, path="/", domain=get_settings().auth.cookie_domain or None,
         httponly=True, samesite="lax", secure=_in_https(request),
     )
 
 
-def intestazione_che_cancella(request: Request) -> str:
-    """Lo stesso `Set-Cookie` di `cancella_cookie`, da mettere in un'eccezione."""
+def deleting_header(request: Request) -> str:
+    """The same `Set-Cookie` as `delete_cookie`, to put in an exception."""
     r = Response()
-    cancella_cookie(r, request)
+    delete_cookie(r, request)
     return r.headers["set-cookie"]

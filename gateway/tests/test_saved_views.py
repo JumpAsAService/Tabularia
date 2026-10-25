@@ -54,10 +54,10 @@ def _cartella_con_datasource(session):
     return p, ds
 
 
-def _crea(session, user, project_id, ds_id, nome="vista", spec=SPEC):
+def _crea(session, user, project_id, ds_id, name="vista", spec=SPEC):
     return create_saved_view(
         project_id,
-        SavedViewCreate(name=nome, datasource_id=ds_id, spec=spec),
+        SavedViewCreate(name=name, datasource_id=ds_id, spec=spec),
         request=None, user=user, session=session,
     )
 
@@ -81,8 +81,8 @@ def test_the_list_resolves_the_datasource_name(session):
     p, ds = _cartella_con_datasource(session)
     _crea(session, admin, p.id, ds.id)
 
-    elenco = list_project_saved_views(p.id, user=admin, session=session)
-    assert [v.datasource_name for v in elenco] == ["ordini"]
+    listing = list_project_saved_views(p.id, user=admin, session=session)
+    assert [v.datasource_name for v in listing] == ["ordini"]
 
 
 def test_a_missing_datasource_is_refused(session):
@@ -107,13 +107,13 @@ def test_view_lets_you_read_but_not_write(session):
     assert get_saved_view(vista.id, user=lettore, session=session).name == "vista"
 
     # ma non scrive
-    for azione in (
-        lambda: _crea(session, lettore, p.id, ds.id, nome="mia"),
+    for action in (
+        lambda: _crea(session, lettore, p.id, ds.id, name="mia"),
         lambda: update_saved_view(vista.id, SavedViewUpdate(name="altra"), request=None, user=lettore, session=session),
         lambda: delete_saved_view(vista.id, request=None, user=lettore, session=session),
     ):
         with pytest.raises(HTTPException) as e:
-            azione()
+            action()
         assert e.value.status_code == 403
 
 
@@ -132,21 +132,21 @@ def test_without_any_permission_you_do_not_even_see_it(session):
 def test_the_name_is_unique_within_the_folder(session):
     admin = _admin(session)
     p, ds = _cartella_con_datasource(session)
-    _crea(session, admin, p.id, ds.id, nome="margine")
+    _crea(session, admin, p.id, ds.id, name="margine")
     with pytest.raises(HTTPException) as e:
-        _crea(session, admin, p.id, ds.id, nome="margine")
+        _crea(session, admin, p.id, ds.id, name="margine")
     assert e.value.status_code == 409
 
     # ma lo stesso nome in un'ALTRA cartella va bene
-    altra = make_project(session, name="acquisti")
-    assert _crea(session, admin, altra.id, ds.id, nome="margine").name == "margine"
+    other_one = make_project(session, name="acquisti")
+    assert _crea(session, admin, other_one.id, ds.id, name="margine").name == "margine"
 
 
 def test_a_blank_name_is_refused(session):
     admin = _admin(session)
     p, ds = _cartella_con_datasource(session)
     with pytest.raises(HTTPException) as e:
-        _crea(session, admin, p.id, ds.id, nome="   ")
+        _crea(session, admin, p.id, ds.id, name="   ")
     assert e.value.status_code == 422
 
 

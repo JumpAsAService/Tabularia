@@ -9,13 +9,13 @@ def _now() -> datetime:
 
 
 class PendingBlobDeletion(SQLModel, table=True):
-    """Blob dello storage da eliminare in DIFFERITA.
+    """Storage blobs to delete DEFERRED.
 
-    Uno snapshot superato da un refresh, un parquet rimpiazzato da un overwrite,
-    o il blob di una datasource eliminata NON vanno cancellati subito: un run o
-    una preview in corso potrebbero averne risolto la chiave e stare ancora per
-    leggerli. Si registrano qui con `delete_after` = ora + grace (oltre la vita
-    massima di un run) e lo sweep dello scheduler li elimina quando scade.
+    A snapshot overtaken by a refresh, a parquet replaced by an overwrite, or the blob of
+    a deleted datasource must NOT be deleted at once: a run or a preview in progress may
+    have resolved its key and still be about to read them. They are recorded here with
+    `delete_after` = now + grace (beyond a run's maximum life) and the scheduler's sweep
+    deletes them when it expires.
     """
 
     __tablename__ = "pending_blob_deletions"

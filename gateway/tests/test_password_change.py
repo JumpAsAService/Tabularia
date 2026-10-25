@@ -181,7 +181,7 @@ def test_the_change_is_in_the_audit(app, session):
 def test_wrong_attempts_are_throttled_like_sign_in(app, session):
     uid = _user(session)
     client = _sign_in(app)
-    for _ in range(login_throttle.SOGLIA):
+    for _ in range(login_throttle.THRESHOLD):
         assert _change(client, current="wrong-guess").status_code == 400
     # from now on even the right one waits: a stolen session cannot guess on
     r = _change(client)
@@ -189,17 +189,17 @@ def test_wrong_attempts_are_throttled_like_sign_in(app, session):
     assert verify_password(PASSWORD, _hash(session, uid))
     failed = session.exec(select(AuditLog).where(AuditLog.action == "auth.password_change",
                                                  AuditLog.outcome == "failure")).all()
-    assert len(failed) == login_throttle.SOGLIA + 1
+    assert len(failed) == login_throttle.THRESHOLD + 1
 
 
 def test_a_successful_change_clears_the_count(app, session):
     _user(session)
     client = _sign_in(app)
-    for _ in range(login_throttle.SOGLIA - 1):
+    for _ in range(login_throttle.THRESHOLD - 1):
         _change(client, current="wrong-guess")
     assert _change(client).status_code == 204
     # the counter starts again from zero
-    for _ in range(login_throttle.SOGLIA - 1):
+    for _ in range(login_throttle.THRESHOLD - 1):
         assert _change(client, current="wrong-guess", new="another-password").status_code == 400
     assert _change(client, current=NEW, new="another-password").status_code == 204
 
@@ -209,7 +209,7 @@ def test_the_throttle_does_not_lock_the_sign_in(app, session):
     does not lock the owner out of signing in."""
     _user(session)
     client = _sign_in(app)
-    for _ in range(login_throttle.SOGLIA + 1):
+    for _ in range(login_throttle.THRESHOLD + 1):
         _change(client, current="wrong-guess")
     assert TestClient(app).post("/auth/login", json={"email": "a@x.local", "password": PASSWORD}).status_code == 200
 
@@ -230,7 +230,7 @@ def test_an_sso_only_account_has_no_password_to_change(app, session):
     from app.services import sessions
 
     uid = _user(session, hashed_password=None)
-    token = sessions.apri(session, session.get(User, uid), None, "sso")[1]
+    token = sessions.open_session(session, session.get(User, uid), None, "sso")[1]
     bearer = {"Authorization": f"Bearer {token}"}
     me = TestClient(app).get("/auth/me", headers=bearer).json()
     assert me["sso_only"] is True

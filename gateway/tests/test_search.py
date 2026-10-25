@@ -85,19 +85,19 @@ def test_folders_use_the_navigable_set_but_content_uses_the_readable_one(session
     CONTENUTO non è leggibile. È la distinzione fra `visible_project_ids` e
     `readable_project_ids`, e qui dev'essere rispettata."""
     lettore = make_user(session, email="l@x.local")
-    radice = make_project(session, name="report radice")
-    figlia = make_project(session, name="report figlia", parent_id=radice.id)
+    root = make_project(session, name="report radice")
+    figlia = make_project(session, name="report figlia", parent_id=root.id)
     make_permission(session, user_id=lettore.id, project_id=figlia.id, capability=Capability.VIEW.value)
 
-    make_flow(session, name="report della radice", project_id=radice.id)   # NON leggibile
+    make_flow(session, name="report della radice", project_id=root.id)   # NON leggibile
     make_flow(session, name="report della figlia", project_id=figlia.id)   # leggibile
 
     res = _cerca(session, lettore, "report")
     cartelle = {h.name for h in res.items if h.kind == "folder"}
-    flussi = {h.name for h in res.items if h.kind == "flow"}
+    flows = {h.name for h in res.items if h.kind == "flow"}
 
     assert cartelle == {"report radice", "report figlia"}  # l'antenato è navigabile
-    assert flussi == {"report della figlia"}               # ma il suo contenuto no
+    assert flows == {"report della figlia"}               # ma il suo contenuto no
 
 
 def test_view_alone_does_not_reveal_connections(session):
@@ -114,12 +114,12 @@ def test_view_alone_does_not_reveal_connections(session):
 
 
 def test_connect_reveals_them(session):
-    operatore = make_user(session, email="o@x.local")
+    operator = make_user(session, email="o@x.local")
     p = make_project(session, name="p")
-    make_permission(session, user_id=operatore.id, project_id=p.id, capability=Capability.CONNECT.value)
+    make_permission(session, user_id=operator.id, project_id=p.id, capability=Capability.CONNECT.value)
     _connessione(session, "warehouse", p.id)
 
-    res = _cerca(session, operatore, "warehouse")
+    res = _cerca(session, operator, "warehouse")
     assert [h.kind for h in res.items] == ["connection"]
 
 
@@ -153,8 +153,8 @@ def test_the_window_is_limited_while_the_total_is_not(session):
 
     res = _cerca(session, admin, "riga", limit=3, offset=0)
     assert res.total == 10 and len(res.items) == 3
-    coda = _cerca(session, admin, "riga", limit=3, offset=9)
-    assert len(coda.items) == 1 and coda.items[0].name == "riga 09"
+    queue_ = _cerca(session, admin, "riga", limit=3, offset=9)
+    assert len(queue_.items) == 1 and queue_.items[0].name == "riga 09"
 
 
 # ── 3. rilevanza e metacaratteri ────────────────────────────────────────────

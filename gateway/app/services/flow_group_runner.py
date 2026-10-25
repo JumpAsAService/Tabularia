@@ -2,7 +2,7 @@
 
 A group run is a kind="orchestration" row with `flow_group_id` set: it is queued,
 claimed, given a heartbeat and closed as an orphan exactly like a flow's
-orchestration (services/orchestrator.py), which hands it here from `esegui`.
+orchestration (services/orchestrator.py), which hands it here from `run_it`.
 
 - A **flow** cell takes the flow's live slot first: a child orchestration row for
   the flow, claimed by this process and kept alive by its heartbeat, under which
@@ -134,7 +134,7 @@ async def run_group(run_id: int) -> None:
     taken_away = False
     try:
         stopped = await _run_steps(run_id, user_id, trigger, cells, steps)
-    except* orch.Spodestata as group_error:
+    except* orch.NoLongerOurs as group_error:
         # the group is no longer ours (another process closed it): leave it be
         logger.warning("flow group %r, stopping: %s", name, group_error.exceptions[0])
         taken_away = True
@@ -158,9 +158,9 @@ async def _run_steps(run_id: int, user_id: int, trigger: str, cells: _Cells,
         if not todo:
             continue
         with Session(orch.engine) as session:
-            orch._ancora_mia(session, run_id)
+            orch._still_mine(session, run_id)
         # what a flow's run in progress must have started after, to count for this step
-        since = orch._adesso() if n else None
+        since = orch._now() if n else None
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(_run_cell(run_id, user_id, trigger, cells, n, col, cell, since))
                      for col, cell in todo]
@@ -174,9 +174,9 @@ async def _run_steps(run_id: int, user_id: int, trigger: str, cells: _Cells,
 async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step: int, col: int,
                     cell: FlowGroupCell, since: datetime | None) -> str | None:
     """Runs one cell and records its state; returns why it failed, or None."""
-    while orch.celle_in_corso >= orch.concorrenza():
+    while orch.running_cells >= orch.concurrency():
         await asyncio.sleep(CELL_SLOT_WAIT_S)  # the process's budget is full: the cell stays waiting
-    orch.celle_in_corso += 1
+    orch.running_cells += 1
     try:
         await cells.set(step, col, state=RUNNING)
         try:
@@ -190,7 +190,7 @@ async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step
                 error = await _pushmail_cell(run_id, user_id, trigger, cell, cells, step, col)
             else:
                 error = await _refresh_cell(run_id, user_id, trigger, cell.id, cells, step, col)
-        except (orch.Spodestata, asyncio.CancelledError):
+        except (orch.NoLongerOurs, asyncio.CancelledError):
             raise
         except Exception as e:  # one cell's bug must not leave the group hanging
             logger.exception("flow group run %s: cell %d/%d failed", run_id, step + 1, col + 1)
@@ -198,7 +198,7 @@ async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step
         await cells.set(step, col, state=FAILED if error else SUCCEEDED, error=error)
         return error
     finally:
-        orch.celle_in_corso -= 1
+        orch.running_cells -= 1
 
 
 def _counts(live_mode: str | None, live_started: datetime | None, since: datetime | None) -> bool:
@@ -224,7 +224,7 @@ async def _flow_cell(run_id: int, user_id: int, trigger: str, flow_id: int, cell
             child = Run(
                 kind="orchestration", flow_id=flow.id, task_id="", status="STARTED", launched_by=user.id,
                 trigger_type=trigger, engine_mode=ENGINE_MODE, parent_run_id=run_id,
-                claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(),
+                claimed_by=orch.INSTANCE, heartbeat_at=orch._now(),
                 input_key="", output_bucket="", output_key="",
             )
             s.add(child)
@@ -248,20 +248,20 @@ async def _flow_cell(run_id: int, user_id: int, trigger: str, flow_id: int, cell
 
         child_id = child.id
         await cells.set(step, col, run_id=child_id, waited=False)
-        with orch._vive_lock:
-            orch._vive.add(child_id)  # the heartbeat keeps it alive, a crash closes it as orphan
+        with orch._alive_lock:
+            orch._alive.add(child_id)  # the heartbeat keeps it alive, a crash closes it as orphan
         try:
             try:
                 errors = await orch.orchestrate(
                     s, user, flow, trigger_type=trigger, parent_run_id=child_id,
-                    engine_mode=ENGINE_MODE, custodita=True,
+                    engine_mode=ENGINE_MODE, guarded=True,
                 )
-            except orch.Spodestata:
+            except orch.NoLongerOurs:
                 return f"'{name}': interrupted"
             except (FlowResolveError, orch.OrchestrationError) as e:
                 errors = [str(e)]
             except asyncio.CancelledError:
-                await orch.interrompi(child_id)
+                await orch.interrupt(child_id)
                 raise
             except Exception as e:
                 # anything else (the engine answering an error, the network): the
@@ -271,8 +271,8 @@ async def _flow_cell(run_id: int, user_id: int, trigger: str, flow_id: int, cell
             await orch._finalize_orch_run(child_id, "FAILURE" if errors else "SUCCESS", "; ".join(errors) if errors else None)
             return f"'{name}': " + "; ".join(errors) if errors else None
         finally:
-            with orch._vive_lock:
-                orch._vive.discard(child_id)
+            with orch._alive_lock:
+                orch._alive.discard(child_id)
 
 
 async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, cells: _Cells, step: int, col: int,
@@ -292,7 +292,7 @@ async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, 
             child = Run(
                 kind="orchestration", saved_script_id=script.id, task_id="", status="STARTED", launched_by=user.id,
                 trigger_type=trigger, engine_mode=ENGINE_MODE, parent_run_id=run_id,
-                claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(),
+                claimed_by=orch.INSTANCE, heartbeat_at=orch._now(),
                 input_key="", output_bucket="", output_key="",
             )
             s.add(child)
@@ -316,8 +316,8 @@ async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, 
 
         child_id = child.id
         await cells.set(step, col, run_id=child_id, waited=False)
-        with orch._vive_lock:
-            orch._vive.add(child_id)  # the heartbeat keeps it alive, a crash closes it as orphan
+        with orch._alive_lock:
+            orch._alive.add(child_id)  # the heartbeat keeps it alive, a crash closes it as orphan
         try:
             try:
                 await saved_script_runs.execute(s, user, script, parent_run_id=child_id, trigger_type=trigger)
@@ -325,7 +325,7 @@ async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, 
             except ScriptFailed as e:
                 error = str(e)
             except asyncio.CancelledError:
-                await orch.interrompi(child_id)
+                await orch.interrupt(child_id)
                 raise
             except Exception as e:
                 logger.exception("flow group run %s: saved script %s failed", run_id, script_id)
@@ -333,8 +333,8 @@ async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, 
             await orch._finalize_orch_run(child_id, "FAILURE" if error else "SUCCESS", error)
             return f"'{name}': {error}" if error else None
         finally:
-            with orch._vive_lock:
-                orch._vive.discard(child_id)
+            with orch._alive_lock:
+                orch._alive.discard(child_id)
 
 
 async def _container_cell(run_id: int, user_id: int, trigger: str, cell: FlowGroupCell, cells: _Cells,
@@ -467,7 +467,7 @@ async def _wait_for(s: Session, run_id: int, live_id: int, name: str, cells: _Ce
             if not take_outcome or status == "SUCCESS":
                 return None
             return f"'{name}': the run already in progress failed" + (f" ({error})" if error else "")
-        orch._ancora_mia(s, run_id)  # stop waiting once the group is no longer ours
+        orch._still_mine(s, run_id)  # stop waiting once the group is no longer ours
         s.commit()  # do not hold a pooled connection through the sleep
         await asyncio.sleep(pause)
 

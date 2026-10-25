@@ -48,18 +48,18 @@ def test_a_flow_out_of_reach_in_the_lineage_is_not_labelled_in_italian(session):
 
 def test_an_empty_question_leaves_the_title_to_the_interface(session):
     anna = make_user(session, email="anna@x.it")
-    chat = ai_chats.crea(session, anna, "   ", "m", None)
+    chat = ai_chats.create(session, anna, "   ", "m", None)
     assert chat.title == ""
     # the first real question names it, as before; an old Italian default too
-    ai_chats.salva_turno(session, chat.id, domanda="Orders in March?", messaggi=[], model_id="m",
+    ai_chats.save_turn(session, chat.id, question="Orders in March?", messages=[], model_id="m",
                          input_tokens=1, output_tokens=1, requests=1, cost=None)
     session.refresh(chat)
     assert chat.title == "Orders in March?"
-    old = ai_chats.crea(session, anna, "", "m", None)
+    old = ai_chats.create(session, anna, "", "m", None)
     old.title = "Nuova conversazione"
     session.add(old)
     session.commit()
-    ai_chats.salva_turno(session, old.id, domanda="Revenue by region", messaggi=[], model_id="m",
+    ai_chats.save_turn(session, old.id, question="Revenue by region", messages=[], model_id="m",
                          input_tokens=1, output_tokens=1, requests=1, cost=None)
     session.refresh(old)
     assert old.title == "Revenue by region"

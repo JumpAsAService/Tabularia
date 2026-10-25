@@ -1,47 +1,47 @@
-"""Webhook: Tabularia chiama un indirizzo esterno quando un'esecuzione finisce.
+"""Webhooks: Tabularia calls an external address when a run ends.
 
-Eventi (`EVENTI`): un flusso finito bene o male (sia dalla coda degli
-orchestratori sia lanciato direttamente), il refresh di una datasource finito bene
-o male, e `ping` per provare l'indirizzo.
+Events (`EVENTS`): a flow ended well or badly (both from the orchestrators' queue and
+launched directly), a datasource's refresh ended well or badly, and `ping` to try
+the address.
 
-Consegna:
-- la consegna (`WebhookDelivery`) nasce nella STESSA transazione che chiude il run
-  (`accoda_per_run`, chiamata da chi chiude): se il processo muore subito dopo, la
-  consegna c'è già. Il corpo si costruisce leggendo con una connessione sua: un
-  guasto qui si logga e basta, non impedisce mai di chiudere un run;
-- la spedisce `consegna_loop`, negli orchestratori: riempie i posti liberi
-  (`PARALLELE`) con le consegne dovute appena se ne libera uno (e comunque ogni
-  `CICLO` secondi), senza aspettare quelle già in volo, e al più `PER_WEBHOOK` per
-  lo stesso webhook: un ricevente che non risponde, con una coda lunga, non
-  trattiene le consegne degli altri, e una coda lunga verso un ricevente veloce si
-  svuota alla velocità del ricevente. Più
-  processi la prendono con un UPDATE condizionato (una sola vince); se chi l'ha
-  presa muore a metà, dopo `RIPRESA` torna in coda. Quindi ALMENO UNA consegna:
-  il ricevente scarta i doppioni con l'id (`X-Tabularia-Delivery`, e `id` nel corpo);
-- un errore o una risposta non 2xx ritenta dopo `ATTESE`, poi la si dà per fallita;
-- ogni consegna è firmata: `X-Tabularia-Signature: t=<secondi>,v1=<hex>`, dove
-  v1 = HMAC-SHA256(segreto, "<t>.<corpo>"). Il ricevente rifà il conto e controlla
-  che t sia recente (docs/api.md ha l'esempio).
+Delivery:
+- the delivery (`WebhookDelivery`) is born in the SAME transaction that closes the
+  run (`enqueue_for_run`, called by whoever closes): when the process dies right
+  after, the delivery is there already. The body is built reading with a connection
+  of its own: a fault here is logged and that is all, it never prevents closing a
+  run;
+- `delivery_loop` sends it, in the orchestrators: it fills the free slots
+  (`PARALLEL`) with the due deliveries as soon as one frees up (and every `CYCLE`
+  seconds anyway), without waiting for those in flight already, and at most
+  `PER_WEBHOOK` for the same webhook: a receiver that does not answer, with a long
+  queue, does not hold back the others' deliveries, and a long queue towards a fast
+  receiver empties at the receiver's speed. Several processes take it with a
+  conditional UPDATE (only one wins); when whoever took it dies halfway, after
+  `RECLAIM_AFTER` it goes back in the queue. So AT LEAST ONCE delivery: the receiver drops
+  duplicates by id (`X-Tabularia-Delivery`, and `id` in the body);
+- an error or a non-2xx answer retries after `WAITS`, then it is taken as failed;
+- every delivery is signed: `X-Tabularia-Signature: t=<seconds>,v1=<hex>`, where
+  v1 = HMAC-SHA256(secret, "<t>.<body>"). The receiver redoes the sum and checks that
+  t is recent (docs/api.md has the example).
 
-Indirizzi: http o https. Non si chiamano indirizzi di loopback, link-local
-(compreso il 169.254.169.254 dei metadati dei cloud), multicast, riservati, né gli
-altri indirizzi di metadati noti (`METADATI`). Il nome si risolve UNA volta, con la
-codifica dei nomi internazionali che usa httpx, e la connessione va all'indirizzo
-verificato (il nome resta nell'intestazione Host e nel TLS, dove il certificato si
-controlla sul nome): un DNS che cambia risposta fra il controllo e la connessione
-non porta altrove. Ogni consegna ha un client suo: un pool condiviso, che vede solo
-l'indirizzo, riuserebbe la connessione TLS verificata per un nome per la richiesta
-di un altro nome sullo stesso indirizzo (trovato provando dal vivo). Le CA sono
-quelle di certifi, o `SSL_CERT_FILE`/`SSL_CERT_DIR` per un ricevente con un
-certificato della CA interna. Niente proxy di sistema, niente rediretti. Le reti private sono ammesse, perché un'integrazione
-interna (Airflow nella stessa rete) è il caso normale. I webhook li crea solo un
-amministratore.
+Addresses: http or https. Loopback, link-local (169.254.169.254 of the clouds'
+metadata included), multicast and reserved addresses are not called, nor the other
+known metadata addresses (`METADATA_ADDRESSES`). The name is resolved ONCE, with the
+international names' encoding httpx uses, and the connection goes to the checked
+address (the name stays in the Host header and in TLS, where the certificate is
+checked against the name): a DNS that changes its answer between the check and the
+connection does not lead elsewhere. Every delivery has a client of its own: a shared
+pool, which sees only the address, would reuse the TLS connection checked for one
+name for the request of another name on the same address (found by trying it live).
+The CAs are certifi's, or `SSL_CERT_FILE`/`SSL_CERT_DIR` for a receiver with a
+certificate of the internal CA. No system proxy, no redirects. Private networks are
+allowed, because an internal integration (Airflow in the same network) is the normal
+case. Only an administrator creates webhooks.
 
-Spedizione: le letture e le scritture sul database stanno in un thread, fuori dal
-ciclo degli eventi e senza transazioni aperte durante la chiamata HTTP; ogni
-chiamata ha un tempo massimo complessivo, e della risposta si leggono al più
-`LETTI` byte. Una consegna non fa mai cadere le altre: qualunque errore diventa
-l'esito di quella consegna.
+Sending: the database reads and writes sit in a thread, off the event loop and
+without open transactions during the HTTP call; every call has an overall maximum
+time, and at most `READ_BYTES` bytes of the answer are read. A delivery never brings the
+others down: any error becomes that delivery's outcome.
 """
 from __future__ import annotations
 
@@ -74,28 +74,28 @@ from app.models import Datasource, Flow, Project, Run, Webhook, WebhookDelivery
 
 logger = logging.getLogger(__name__)
 
-EVENTI = (
+EVENTS = (
     "flow.run.succeeded",
     "flow.run.failed",
     "datasource.refresh.succeeded",
     "datasource.refresh.failed",
 )
 PING = "ping"
-CICLO = 2.0  # secondi fra un giro e l'altro della spedizione
-RIPRESA = timedelta(minutes=5)  # una consegna presa e mai chiusa torna in coda dopo
-# attesa prima del tentativo n+1: sei tentativi in tutto, l'ultimo dopo ~7 ore e mezzo
-ATTESE = (30, 120, 600, 3600, 21600)
-MAX_TENTATIVI = len(ATTESE) + 1
-LOTTO = 20
-PARALLELE = 16  # chiamate in volo insieme, per processo
-PER_WEBHOOK = 2  # …di cui al più tante verso lo stesso webhook
-LETTI = 4096  # byte della risposta che si leggono (per il registro)
-# indirizzi di metadati dei cloud fuori dal link-local, che le categorie di
-# ipaddress non riconoscono: Alibaba, AWS in IPv6, Azure (wireserver)
-METADATI = tuple(ipaddress.ip_network(n) for n in ("100.100.100.200/32", "fd00:ec2::254/128", "168.63.129.16/32"))
+CYCLE = 2.0  # seconds between one round of sending and the next
+RECLAIM_AFTER = timedelta(minutes=5)  # a delivery taken and never closed goes back in the queue after
+# the wait before attempt n+1: six attempts in all, the last after ~7 and a half hours
+WAITS = (30, 120, 600, 3600, 21600)
+MAX_ATTEMPTS = len(WAITS) + 1
+BATCH = 20
+PARALLEL = 16  # calls in flight together, per process
+PER_WEBHOOK = 2  # …of which at most this many towards the same webhook
+READ_BYTES = 4096  # bytes of the answer read (for the log)
+# the clouds' metadata addresses outside link-local, which ipaddress's categories do
+# not recognize: Alibaba, AWS in IPv6, Azure (wireserver)
+METADATA_ADDRESSES = tuple(ipaddress.ip_network(n) for n in ("100.100.100.200/32", "fd00:ec2::254/128", "168.63.129.16/32"))
 
 
-def adesso() -> datetime:
+def now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -107,42 +107,42 @@ def _iso(d: Optional[datetime]) -> Optional[str]:
     return d.isoformat().replace("+00:00", "Z")
 
 
-# ── l'abbonamento ───────────────────────────────────────────────────────────
+# ── the subscription ────────────────────────────────────────────────────────
 
-def nuovo_segreto() -> str:
+def new_secret() -> str:
     return "whsec_" + secrets.token_urlsafe(32)
 
 
-def cifra(segreto: str) -> str:
-    return encrypt_secret(segreto)
+def encrypt(secret: str) -> str:
+    return encrypt_secret(secret)
 
 
-def eventi_di(w: Webhook) -> list[str]:
+def events_of(w: Webhook) -> list[str]:
     try:
         return [e for e in json.loads(w.events or "[]") if isinstance(e, str)]
     except ValueError:
         return []
 
 
-def valida_url(url: str) -> str:
-    """Forma dell'indirizzo, al salvataggio. Dove punta lo si controlla a ogni
-    spedizione (`_risolvi`): un nome può cambiare indirizzo."""
+def validate_url(url: str) -> str:
+    """The address's form, at saving. Where it points is checked at every send
+    (`_resolve`): a name may change address."""
     url = (url or "").strip()
-    parti = urlsplit(url)
-    if parti.scheme not in ("http", "https") or not parti.hostname:
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
         raise ValueError("The address must be http:// or https:// with a host")
     if len(url) > 2000:
         raise ValueError("Address too long (at most 2000 characters)")
     try:
-        _leggi_host(httpx.URL(url))
-    except (httpx.InvalidURL, ValueError) as e:  # UnicodeError è un ValueError
+        _read_host(httpx.URL(url))
+    except (httpx.InvalidURL, ValueError) as e:  # UnicodeError is a ValueError
         raise ValueError(f"Invalid address: {e}") from None
     return url
 
 
-def _leggi_host(u: httpx.URL) -> str:
-    """L'host come lo usa httpx per connettersi, controllato come lo controllerà il
-    resolver (un'etichetta vuota o troppo lunga lo fa fallire), e la porta."""
+def _read_host(u: httpx.URL) -> str:
+    """The host as httpx uses it to connect, checked as the resolver will check it (an
+    empty or too long label makes it fail), and the port."""
     host = u.raw_host.decode("ascii")
     try:
         ipaddress.ip_address(host.strip("[]"))
@@ -153,153 +153,153 @@ def _leggi_host(u: httpx.URL) -> str:
     return host
 
 
-def _ip_vietato(ip: ipaddress._BaseAddress) -> bool:
-    if ip.version == 6 and ip.ipv4_mapped is not None:  # ::ffff:127.0.0.1 è 127.0.0.1
+def _forbidden_ip(ip: ipaddress._BaseAddress) -> bool:
+    if ip.version == 6 and ip.ipv4_mapped is not None:  # ::ffff:127.0.0.1 is 127.0.0.1
         ip = ip.ipv4_mapped
-    if ip.version == 6 and ip.sixtofour is not None and _ip_vietato(ip.sixtofour):  # 2002:7f00:1:: (6to4)
+    if ip.version == 6 and ip.sixtofour is not None and _forbidden_ip(ip.sixtofour):  # 2002:7f00:1:: (6to4)
         return True
     return (ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved
-            or any(ip in rete for rete in METADATI))
+            or any(ip in network for network in METADATA_ADDRESSES))
 
 
-class _Vietato(Exception):
-    """L'indirizzo non si chiama: ritentare non cambierebbe niente."""
+class _Forbidden(Exception):
+    """The address is not called: retrying would change nothing."""
 
 
-class _NonRisolto(Exception):
-    """Il nome non si risolve adesso (un DNS che riparte): si ritenta."""
+class _Unresolved(Exception):
+    """The name does not resolve now (a DNS restarting): it retries."""
 
 
-async def _risolvi(url: str) -> tuple[httpx.URL, str, str]:
-    """(url, host come lo usa httpx, l'indirizzo verificato a cui collegarsi).
-    Se uno qualunque degli indirizzi del nome è vietato, il nome è vietato: con
-    più indirizzi non si sa quale sceglierebbe il resolver la volta dopo."""
+async def _resolve(url: str) -> tuple[httpx.URL, str, str]:
+    """(url, host as httpx uses it, the checked address to connect to). When any of the
+    name's addresses is forbidden, the name is forbidden: with several addresses there
+    is no knowing which the resolver would pick next time."""
     try:
         u = httpx.URL(url)
-        host = _leggi_host(u)  # IDNA come lo codifica httpx per connettersi
-    except (httpx.InvalidURL, ValueError) as e:  # salvato prima del controllo, o cambiato httpx
-        raise _Vietato(f"invalid address: {e}") from None
+        host = _read_host(u)  # IDNA as httpx encodes it to connect
+    except (httpx.InvalidURL, ValueError) as e:  # saved before the check, or httpx changed
+        raise _Forbidden(f"invalid address: {e}") from None
     try:
-        indirizzi = [ipaddress.ip_address(host.strip("[]"))]
+        addresses = [ipaddress.ip_address(host.strip("[]"))]
     except ValueError:
         try:
             info = await asyncio.get_running_loop().getaddrinfo(host, u.port or (443 if u.scheme == "https" else 80),
                                                                 type=socket.SOCK_STREAM)
-        except UnicodeError as e:  # il nome non si codifica: non cambierà ritentando
-            raise _Vietato(f"invalid address: {e}") from None
+        except UnicodeError as e:  # the name does not encode: it will not change by retrying
+            raise _Forbidden(f"invalid address: {e}") from None
         except OSError as e:
-            raise _NonRisolto(f"name not resolved: {e}") from None
-        indirizzi = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in info]
-    if not indirizzi:
-        raise _NonRisolto("name without addresses")
-    for ip in indirizzi:
-        if _ip_vietato(ip):
-            raise _Vietato(f"address not allowed for a webhook: {ip}")
-    return u, host, str(indirizzi[0])
+            raise _Unresolved(f"name not resolved: {e}") from None
+        addresses = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in info]
+    if not addresses:
+        raise _Unresolved("name without addresses")
+    for ip in addresses:
+        if _forbidden_ip(ip):
+            raise _Forbidden(f"address not allowed for a webhook: {ip}")
+    return u, host, str(addresses[0])
 
 
-# ── gli eventi ──────────────────────────────────────────────────────────────
+# ── the events ───────────────────────────────────────────────────────────────
 
-def evento_del_run(run: Run) -> Optional[str]:
-    """Quale evento racconta la chiusura di questo run, se ne racconta uno. I run
-    dei singoli output di un'orchestrazione no: lo racconta l'orchestrazione."""
-    esito = {"SUCCESS": "succeeded", "FAILURE": "failed"}.get(run.status)
-    if esito is None:
+def run_event(run: Run) -> Optional[str]:
+    """Which event this run's closing tells, if it tells one. The runs of the single
+    outputs of an orchestration do not: the orchestration tells it."""
+    outcome = {"SUCCESS": "succeeded", "FAILURE": "failed"}.get(run.status)
+    if outcome is None:
         return None
     if getattr(run, "flow_group_id", None) is not None or getattr(run, "saved_script_id", None) is not None:
         # a flow group's own run, a saved script's: no event of their own yet; the
         # flows and the refreshes inside a group send theirs
         return None
     if run.kind == "orchestration" or (run.kind == "flow" and run.parent_run_id is None):
-        return f"flow.run.{esito}"
+        return f"flow.run.{outcome}"
     if run.kind == "ingest":
-        return f"datasource.refresh.{esito}"
+        return f"datasource.refresh.{outcome}"
     return None
 
 
-def _dati_del_run(lettura: Session, run: Run) -> tuple[dict, Optional[int]]:
-    """Il contenuto dell'evento, e la cartella da cui nasce (per i filtri)."""
-    durata = None
+def _run_data(reading: Session, run: Run) -> tuple[dict, Optional[int]]:
+    """The event's content, and the folder it comes from (for the filters)."""
+    duration = None
     if run.started_at and run.finished_at:
-        senza_fuso = lambda d: d.replace(tzinfo=None) if d.tzinfo else d  # noqa: E731 — dal DB tornano naive UTC
-        durata = round((senza_fuso(run.finished_at) - senza_fuso(run.started_at)).total_seconds(), 1)
-    dati: dict = {"run": {
+        without_zone = lambda d: d.replace(tzinfo=None) if d.tzinfo else d  # noqa: E731 — they come back naive UTC from the DB
+        duration = round((without_zone(run.finished_at) - without_zone(run.started_at)).total_seconds(), 1)
+    data: dict = {"run": {
         "id": run.id, "kind": run.kind, "status": run.status, "trigger": run.trigger_type,
         "started_at": _iso(run.started_at), "finished_at": _iso(run.finished_at),
-        "duration_seconds": durata, "rows_written": run.rows_written,
+        "duration_seconds": duration, "rows_written": run.rows_written,
         "error": (run.error or None) and run.error[:1000],
     }}
-    cartella = None
+    folder = None
     if run.flow_id is not None and run.kind != "ingest":
-        flow = lettura.get(Flow, run.flow_id)
+        flow = reading.get(Flow, run.flow_id)
         if flow is not None:
-            dati["flow"] = {"id": flow.id, "name": flow.name}
-            cartella = flow.project_id
+            data["flow"] = {"id": flow.id, "name": flow.name}
+            folder = flow.project_id
     if run.kind == "ingest" and run.datasource_id is not None:
-        ds = lettura.get(Datasource, run.datasource_id)
+        ds = reading.get(Datasource, run.datasource_id)
         if ds is not None:
-            dati["datasource"] = {"id": ds.id, "name": ds.name}
-            cartella = ds.project_id
-    if cartella is not None:
-        p = lettura.get(Project, cartella)
-        dati["folder"] = {"id": cartella, "name": p.name if p else None}
-    return dati, cartella
+            data["datasource"] = {"id": ds.id, "name": ds.name}
+            folder = ds.project_id
+    if folder is not None:
+        p = reading.get(Project, folder)
+        data["folder"] = {"id": folder, "name": p.name if p else None}
+    return data, folder
 
 
-def _corpo(evento: str, dati: dict) -> str:
+def _body(event: str, data: dict) -> str:
     return json.dumps(
-        {"id": str(uuid.uuid4()), "event": evento, "created_at": _iso(adesso()), "data": dati},
+        {"id": str(uuid.uuid4()), "event": event, "created_at": _iso(now()), "data": data},
         ensure_ascii=False, separators=(",", ":"),
     )
 
 
-def _nella_cartella(lettura: Session, w: Webhook, cartella: Optional[int]) -> bool:
+def _in_the_folder(reading: Session, w: Webhook, folder: Optional[int]) -> bool:
     if w.project_id is None:
         return True
-    if cartella is None:
+    if folder is None:
         return False
     from app.services.permissions import ancestor_ids, folder_parents
 
-    return w.project_id == cartella or w.project_id in ancestor_ids(folder_parents(lettura), cartella)
+    return w.project_id == folder or w.project_id in ancestor_ids(folder_parents(reading), folder)
 
 
-def accoda_per_run(session: Session, run: Run) -> int:
-    """Da chiamare PRIMA del commit che chiude il run, con `run` già riletto nella
-    stessa transazione (stato e fine nuovi): le consegne entrano in quel commit.
-    Non solleva: un webhook rotto non impedisce mai di chiudere un run."""
+def enqueue_for_run(session: Session, run: Run) -> int:
+    """To call BEFORE the commit that closes the run, with `run` read again in the same
+    transaction (new state and end): the deliveries go into that commit. It does not
+    raise: a broken webhook never prevents closing a run."""
     try:
-        evento = evento_del_run(run)
-        if evento is None:
+        event = run_event(run)
+        if event is None:
             return 0
-        from app.db.session import engine_di_lettura
+        from app.db.session import read_engine
 
         bind = session.get_bind()
-        lettura_engine = engine_di_lettura(bind) if isinstance(bind, Engine) else bind
-        with Session(lettura_engine) as lettura:
-            abbonati = [
-                w for w in lettura.exec(select(Webhook).where(Webhook.active == True)).all()  # noqa: E712
-                if evento in eventi_di(w)
+        engine_read = read_engine(bind) if isinstance(bind, Engine) else bind
+        with Session(engine_read) as reading:
+            subscribed = [
+                w for w in reading.exec(select(Webhook).where(Webhook.active == True)).all()  # noqa: E712
+                if event in events_of(w)
             ]
-            if not abbonati:
+            if not subscribed:
                 return 0
-            dati, cartella = _dati_del_run(lettura, run)
-            scelti = [w.id for w in abbonati if _nella_cartella(lettura, w, cartella)]
-        ora = adesso()
-        for wid in scelti:
+            data, folder = _run_data(reading, run)
+            chosen = [w.id for w in subscribed if _in_the_folder(reading, w, folder)]
+        at = now()
+        for wid in chosen:
             session.add(WebhookDelivery(
-                webhook_id=wid, event=evento, payload=_corpo(evento, dati), next_attempt_at=ora, created_at=ora,
+                webhook_id=wid, event=event, payload=_body(event, data), next_attempt_at=at, created_at=at,
             ))
-        return len(scelti)
+        return len(chosen)
     except Exception:  # noqa: BLE001
-        logger.exception("webhook: consegne del run %s non preparate", getattr(run, "id", "?"))
+        logger.exception("webhook: deliveries of run %s not prepared", getattr(run, "id", "?"))
         return 0
 
 
-def accoda_ping(session: Session, w: Webhook) -> WebhookDelivery:
-    ora = adesso()
+def enqueue_ping(session: Session, w: Webhook) -> WebhookDelivery:
+    at = now()
     d = WebhookDelivery(
-        webhook_id=w.id, event=PING, next_attempt_at=ora, created_at=ora,
-        payload=_corpo(PING, {"webhook": {"id": w.id, "name": w.name}, "message": "Tabularia webhook test"}),
+        webhook_id=w.id, event=PING, next_attempt_at=at, created_at=at,
+        payload=_body(PING, {"webhook": {"id": w.id, "name": w.name}, "message": "Tabularia webhook test"}),
     )
     session.add(d)
     session.commit()
@@ -307,89 +307,89 @@ def accoda_ping(session: Session, w: Webhook) -> WebhookDelivery:
     return d
 
 
-def rispedisci(session: Session, d: WebhookDelivery) -> WebhookDelivery:
-    """Una consegna nuova con lo stesso contenuto e un id nuovo (chi riceve scarta
-    i doppioni per id: una rispedizione voluta non deve sembrargli un doppione)."""
-    corpo = json.loads(d.payload)
-    corpo["id"] = str(uuid.uuid4())
-    ora = adesso()
-    nuova = WebhookDelivery(
-        webhook_id=d.webhook_id, event=d.event, next_attempt_at=ora, created_at=ora,
-        payload=json.dumps(corpo, ensure_ascii=False, separators=(",", ":")),
+def resend(session: Session, d: WebhookDelivery) -> WebhookDelivery:
+    """A new delivery with the same content and a new id (the receiver drops duplicates by
+    id: a wanted resend must not look like a duplicate to it)."""
+    body = json.loads(d.payload)
+    body["id"] = str(uuid.uuid4())
+    at = now()
+    new_one = WebhookDelivery(
+        webhook_id=d.webhook_id, event=d.event, next_attempt_at=at, created_at=at,
+        payload=json.dumps(body, ensure_ascii=False, separators=(",", ":")),
     )
-    session.add(nuova)
+    session.add(new_one)
     session.commit()
-    session.refresh(nuova)
-    return nuova
+    session.refresh(new_one)
+    return new_one
 
 
-# ── la spedizione ───────────────────────────────────────────────────────────
+# ── sending ──────────────────────────────────────────────────────────────────
 
-def firma(segreto: str, istante: int, corpo: str) -> str:
-    return hmac.new(segreto.encode(), f"{istante}.{corpo}".encode(), hashlib.sha256).hexdigest()
+def sign(secret: str, instant: int, body: str) -> str:
+    return hmac.new(secret.encode(), f"{instant}.{body}".encode(), hashlib.sha256).hexdigest()
 
 
-def intestazioni(segreto: str, evento: str, corpo: str, istante: Optional[int] = None) -> dict[str, str]:
-    istante = istante or int(time.time())
+def headers(secret: str, event: str, body: str, instant: Optional[int] = None) -> dict[str, str]:
+    instant = instant or int(time.time())
     return {
         "Content-Type": "application/json",
         "User-Agent": f"Tabularia-Webhooks/{get_settings().app.version}",
-        "X-Tabularia-Event": evento,
-        "X-Tabularia-Delivery": json.loads(corpo)["id"],
-        "X-Tabularia-Signature": f"t={istante},v1={firma(segreto, istante, corpo)}",
+        "X-Tabularia-Event": event,
+        "X-Tabularia-Delivery": json.loads(body)["id"],
+        "X-Tabularia-Signature": f"t={instant},v1={sign(secret, instant, body)}",
     }
 
 
 @dataclass
-class _Lavoro:
-    """Una consegna presa, con tutto quel che serve a spedirla: dopo la presa non
-    si tiene aperta nessuna transazione."""
+class _Job:
+    """A delivery taken, with all it needs to send it: after the take no transaction is
+    kept open."""
     id: int
     webhook: int
     url: str
-    segreto: str
-    evento: str
-    corpo: str
-    tentativi: int
-    presa: datetime
+    secret: str
+    event: str
+    body: str
+    attempts: int
+    taken_at: datetime
 
 
 @functools.lru_cache(maxsize=1)
-def _contesto_tls() -> ssl.SSLContext:
-    """Uno per processo: caricare le CA costa, e il contesto si condivide fra le
-    connessioni (il nome da verificare è di ciascuna). Legge SSL_CERT_FILE e
-    SSL_CERT_DIR se ci sono: un ricevente interno con la CA dell'azienda."""
+def _tls_context() -> ssl.SSLContext:
+    """One per process: loading the CAs costs, and the context is shared among the
+    connections (the name to check is each one's own). Reads SSL_CERT_FILE and
+    SSL_CERT_DIR when they are there: an internal receiver with the company's CA."""
     return httpx.create_ssl_context(trust_env=True)
 
 
 def _client() -> httpx.AsyncClient:
-    """Un client per UNA consegna: ci si collega all'indirizzo, non al nome, e un
-    pool condiviso riuserebbe per il nome b la connessione TLS verificata per il
-    nome a sullo stesso indirizzo — saltando il controllo del certificato di b."""
+    """A client for ONE delivery: it connects to the address, not to the name, and a
+    shared pool would reuse for name b the TLS connection checked for name a on the same
+    address — skipping the check of b's certificate."""
     return httpx.AsyncClient(
-        verify=_contesto_tls(), timeout=get_settings().webhooks.timeout_seconds, follow_redirects=False,
-        trust_env=False,  # niente proxy di sistema: l'indirizzo verificato è quello che si chiama
+        verify=_tls_context(), timeout=get_settings().webhooks.timeout_seconds, follow_redirects=False,
+        trust_env=False,  # no system proxy: the checked address is the one called
     )
 
 
-async def _spedisci(lavoro: _Lavoro, client: httpx.AsyncClient) -> tuple[bool, Optional[int], Optional[str]]:
-    """(riuscita, codice HTTP, errore). Solleva `_Vietato` per un indirizzo non
-    ammesso o non valido; per il resto non solleva."""
+async def _ship(job: _Job, client: httpx.AsyncClient) -> tuple[bool, Optional[int], Optional[str]]:
+    """(success, HTTP code, error). Raises `_Forbidden` for an address not allowed or not
+    valid; otherwise it does not raise."""
     try:
-        u, host, ip = await _risolvi(lavoro.url)
-    except _NonRisolto as e:
+        u, host, ip = await _resolve(job.url)
+    except _Unresolved as e:
         return False, None, str(e)[:500]
-    # all'indirizzo verificato: il nome non si risolve una seconda volta
-    destinazione = u.copy_with(host=ip)
-    intest = {**intestazioni(lavoro.segreto, lavoro.evento, lavoro.corpo), "Host": u.netloc.decode("ascii")}
-    estensioni = {"sni_hostname": host} if u.scheme == "https" else {}
+    # to the checked address: the name is not resolved a second time
+    destination = u.copy_with(host=ip)
+    hdrs = {**headers(job.secret, job.event, job.body), "Host": u.netloc.decode("ascii")}
+    extensions = {"sni_hostname": host} if u.scheme == "https" else {}
     try:
-        async with client.stream("POST", destinazione, content=lavoro.corpo.encode(), headers=intest,
-                                 extensions=estensioni) as r:
-            letti = b""
-            async for pezzo in r.aiter_bytes():
-                letti += pezzo
-                if len(letti) >= LETTI:
+        async with client.stream("POST", destination, content=job.body.encode(), headers=hdrs,
+                                 extensions=extensions) as r:
+            read_ones = b""
+            async for piece in r.aiter_bytes():
+                read_ones += piece
+                if len(read_ones) >= READ_BYTES:
                     break
     except httpx.HTTPError as e:
         return False, None, f"{type(e).__name__}: {e}"[:500]
@@ -397,204 +397,204 @@ async def _spedisci(lavoro: _Lavoro, client: httpx.AsyncClient) -> tuple[bool, O
         return False, None, f"{type(e).__name__}: {e}"[:500]
     if 200 <= r.status_code < 300:
         return True, r.status_code, None
-    return False, r.status_code, f"response {r.status_code}: {letti[:300].decode('utf-8', 'replace')}"
+    return False, r.status_code, f"response {r.status_code}: {read_ones[:300].decode('utf-8', 'replace')}"
 
 
-def _prendi_dovute(bind: Engine, limite: int, occupati: Optional[Counter] = None) -> list[_Lavoro]:
-    """Prende fino a `limite` consegne dovute (nel thread: database fuori dal ciclo
-    degli eventi), le più vecchie per prime ma al più `PER_WEBHOOK` per webhook,
-    contando quelle già in volo in questo processo (`occupati`). Ognuna è di chi la
-    prende per primo, e solo se è ancora dovuta."""
-    occupati = Counter(occupati or {})
-    lavori: list[_Lavoro] = []
+def _take_due(bind: Engine, limit: int, busy: Optional[Counter] = None) -> list[_Job]:
+    """Takes up to `limit` due deliveries (in the thread: the database off the event
+    loop), the oldest first but at most `PER_WEBHOOK` per webhook, counting those in
+    flight in this process already (`busy`). Each belongs to whoever takes it first,
+    and only while still due."""
+    busy = Counter(busy or {})
+    jobs: list[_Job] = []
     with Session(bind) as session:
-        ora = adesso()
-        # chi l'aveva presa è morto a metà: torna in coda
+        at = now()
+        # whoever had taken it died halfway: it goes back in the queue
         session.exec(
             update(WebhookDelivery)
-            .where(WebhookDelivery.status == "sending", WebhookDelivery.claimed_at < ora - RIPRESA)
+            .where(WebhookDelivery.status == "sending", WebhookDelivery.claimed_at < at - RECLAIM_AFTER)
             .values(status="pending")
         )
         session.commit()
-        # le prime PER_WEBHOOK dovute di ogni webhook: la coda lunga di un ricevente
-        # morto non nasconde le consegne degli altri dietro di sé
-        numerate = (
+        # the first PER_WEBHOOK due ones of each webhook: the long queue of a dead receiver
+        # does not hide the others' deliveries behind it
+        numbered = (
             select(
                 WebhookDelivery.id.label("id"), WebhookDelivery.webhook_id.label("webhook_id"),
-                WebhookDelivery.next_attempt_at.label("quando"),
+                WebhookDelivery.next_attempt_at.label("when"),
                 func.row_number().over(
                     partition_by=WebhookDelivery.webhook_id,
                     order_by=(WebhookDelivery.next_attempt_at, WebhookDelivery.id),
                 ).label("n"),
             )
-            .where(WebhookDelivery.status == "pending", WebhookDelivery.next_attempt_at <= ora)
+            .where(WebhookDelivery.status == "pending", WebhookDelivery.next_attempt_at <= at)
             .subquery()
         )
         candidate = session.exec(
-            select(numerate.c.id, numerate.c.webhook_id)
-            .where(numerate.c.n <= PER_WEBHOOK)
-            .order_by(numerate.c.quando, numerate.c.id)
-            .limit(limite + PER_WEBHOOK * len(occupati))
+            select(numbered.c.id, numbered.c.webhook_id)
+            .where(numbered.c.n <= PER_WEBHOOK)
+            .order_by(numbered.c.when, numbered.c.id)
+            .limit(limit + PER_WEBHOOK * len(busy))
         ).all()
         for did, wid in candidate:
-            if len(lavori) >= limite:
+            if len(jobs) >= limit:
                 break
-            if occupati[wid] >= PER_WEBHOOK:
+            if busy[wid] >= PER_WEBHOOK:
                 continue
-            presa = adesso()
-            preso = session.exec(
+            taken_at = now()
+            taken_one = session.exec(
                 update(WebhookDelivery)
                 .where(WebhookDelivery.id == did, WebhookDelivery.status == "pending",
-                       WebhookDelivery.next_attempt_at <= presa)
-                .values(status="sending", claimed_at=presa, attempts=WebhookDelivery.attempts + 1)
+                       WebhookDelivery.next_attempt_at <= taken_at)
+                .values(status="sending", claimed_at=taken_at, attempts=WebhookDelivery.attempts + 1)
             )
             session.commit()
-            if (preso.rowcount or 0) != 1:
-                continue  # un altro processo l'ha presa, o è stata rimandata
+            if (taken_one.rowcount or 0) != 1:
+                continue  # another process took it, or it was put off
             d = session.get(WebhookDelivery, did)
             w = session.get(Webhook, d.webhook_id)
             if w is None or not w.active:
-                _chiudi_consegna(session, did, presa, status="failed", last_error="webhook turned off or removed")
+                _close_delivery(session, did, taken_at, status="failed", last_error="webhook turned off or removed")
                 continue
-            lavori.append(_Lavoro(did, w.id, w.url, decrypt_secret(w.secret_enc), d.event, d.payload, d.attempts, presa))
-            occupati[wid] += 1
-            session.commit()  # fine della lettura: nessuna transazione aperta durante la chiamata
-    return lavori
+            jobs.append(_Job(did, w.id, w.url, decrypt_secret(w.secret_enc), d.event, d.payload, d.attempts, taken_at))
+            busy[wid] += 1
+            session.commit()  # end of the read: no transaction open during the call
+    return jobs
 
 
-def _chiudi_consegna(session: Session, did: int, presa: datetime, **valori) -> None:
-    """Scrive l'esito solo se la consegna è ancora di chi l'ha presa: un processo
-    in ritardo non sovrascrive quello di chi l'ha ripresa dopo."""
+def _close_delivery(session: Session, did: int, taken_at: datetime, **values) -> None:
+    """Writes the outcome only while the delivery still belongs to whoever took it: a late
+    process does not overwrite the one that took it again later."""
     session.exec(
         update(WebhookDelivery)
-        .where(WebhookDelivery.id == did, WebhookDelivery.status == "sending", WebhookDelivery.claimed_at == presa)
-        .values(**valori)
+        .where(WebhookDelivery.id == did, WebhookDelivery.status == "sending", WebhookDelivery.claimed_at == taken_at)
+        .values(**values)
     )
     session.commit()
 
 
-def _registra(bind: Engine, lavoro: _Lavoro, ok: bool, codice: Optional[int], errore: Optional[str], definitivo: bool) -> None:
-    valori: dict = {"last_status_code": codice, "last_error": errore}
+def _record(bind: Engine, job: _Job, ok: bool, code: Optional[int], error: Optional[str], final: bool) -> None:
+    values: dict = {"last_status_code": code, "last_error": error}
     if ok:
-        valori.update(status="delivered", delivered_at=adesso())
-    elif definitivo or lavoro.tentativi >= MAX_TENTATIVI:
-        valori.update(status="failed")
+        values.update(status="delivered", delivered_at=now())
+    elif final or job.attempts >= MAX_ATTEMPTS:
+        values.update(status="failed")
     else:
-        valori.update(status="pending", next_attempt_at=adesso() + timedelta(seconds=ATTESE[lavoro.tentativi - 1]))
+        values.update(status="pending", next_attempt_at=now() + timedelta(seconds=WAITS[job.attempts - 1]))
     with Session(bind) as session:
-        _chiudi_consegna(session, lavoro.id, lavoro.presa, **valori)
+        _close_delivery(session, job.id, job.taken_at, **values)
 
 
-async def _una(bind: Engine, lavoro: _Lavoro, client: Optional[httpx.AsyncClient] = None) -> None:
-    """Spedisce una consegna e ne scrive l'esito. Non solleva mai: un errore
-    imprevisto è l'esito di QUESTA consegna (ritentata, poi fallita), non la fine
-    del giro per tutte le altre."""
-    ok, codice, errore, definitivo = False, None, None, False
+async def _one_row(bind: Engine, job: _Job, client: Optional[httpx.AsyncClient] = None) -> None:
+    """Sends a delivery and writes its outcome. It never raises: an unexpected error is
+    THIS delivery's outcome (retried, then failed), not the end of the round for all the
+    others."""
+    ok, code, error, final = False, None, None, False
     c = client or _client()
     try:
-        ok, codice, errore = await asyncio.wait_for(
-            _spedisci(lavoro, c), timeout=get_settings().webhooks.timeout_seconds * 2,
+        ok, code, error = await asyncio.wait_for(
+            _ship(job, c), timeout=get_settings().webhooks.timeout_seconds * 2,
         )
-    except _Vietato as e:
-        errore, definitivo = str(e), True
+    except _Forbidden as e:
+        error, final = str(e), True
     except asyncio.TimeoutError:
-        # il tempo massimo è per la chiamata intera: un ricevente che risponde a
-        # gocce non tiene la consegna oltre RIPRESA (e non la fa spedire due volte)
-        errore = "no complete response in time"
+        # the maximum time is for the whole call: a receiver that answers drop by drop does
+        # not hold the delivery past RECLAIM_AFTER (and does not make it be sent twice)
+        error = "no complete response in time"
     except asyncio.CancelledError:
-        raise  # spegnimento: la consegna resta presa e torna in coda dopo RIPRESA
+        raise  # shutdown: the delivery stays taken and goes back in the queue after RECLAIM_AFTER
     except Exception as e:  # noqa: BLE001
-        logger.exception("webhook: consegna %s non spedita", lavoro.id)
-        errore = f"internal error: {type(e).__name__}"
+        logger.exception("webhook: delivery %s not sent", job.id)
+        error = f"internal error: {type(e).__name__}"
     finally:
         if client is None:
             await c.aclose()
     try:
-        await asyncio.to_thread(_registra, bind, lavoro, ok, codice, errore, definitivo)
+        await asyncio.to_thread(_record, bind, job, ok, code, error, final)
     except Exception:  # noqa: BLE001
-        logger.exception("webhook: esito della consegna %s non registrato", lavoro.id)
+        logger.exception("webhook: outcome of delivery %s not recorded", job.id)
 
 
-class _InVolo:
-    """Le consegne in volo di questo processo: ogni giro riempie solo i posti
-    liberi, senza aspettare che finiscano quelle partite prima."""
+class _InFlight:
+    """This process's deliveries in flight: each round fills only the free slots, without
+    waiting for those started earlier to finish."""
 
     def __init__(self, bind: Engine, client: Optional[httpx.AsyncClient] = None):
         self.bind, self.client = bind, client
-        self.compiti: dict[asyncio.Task, int] = {}  # compito → webhook
+        self.tasks: dict[asyncio.Task, int] = {}  # task → webhook
 
-    async def giro(self, limite: int = PARALLELE) -> int:
-        for t in [t for t in self.compiti if t.done()]:
-            self.compiti.pop(t, None)
-        liberi = min(limite, PARALLELE - len(self.compiti))
-        if liberi <= 0:
+    async def round_(self, limit: int = PARALLEL) -> int:
+        for t in [t for t in self.tasks if t.done()]:
+            self.tasks.pop(t, None)
+        free = min(limit, PARALLEL - len(self.tasks))
+        if free <= 0:
             return 0
         try:
-            lavori = await asyncio.to_thread(_prendi_dovute, self.bind, liberi, Counter(self.compiti.values()))
+            jobs = await asyncio.to_thread(_take_due, self.bind, free, Counter(self.tasks.values()))
         except Exception:  # noqa: BLE001
-            logger.exception("webhook: coda delle consegne non leggibile")
+            logger.exception("webhook: the deliveries' queue cannot be read")
             return 0
-        for x in lavori:
-            t = asyncio.create_task(_una(self.bind, x, self.client))
-            self.compiti[t] = x.webhook
-            t.add_done_callback(lambda fatto: self.compiti.pop(fatto, None))
-        return len(lavori)
+        for x in jobs:
+            t = asyncio.create_task(_one_row(self.bind, x, self.client))
+            self.tasks[t] = x.webhook
+            t.add_done_callback(lambda done: self.tasks.pop(done, None))
+        return len(jobs)
 
-    async def finisci(self, secondi: Optional[float] = None) -> None:
-        """Aspetta quelle in volo (al più `secondi`), poi ferma le altre: restano
-        prese e tornano in coda dopo RIPRESA."""
-        if not self.compiti:
+    async def finish(self, seconds: Optional[float] = None) -> None:
+        """Waits for those in flight (at most `seconds`), then stops the others: they stay
+        taken and go back in the queue after RECLAIM_AFTER."""
+        if not self.tasks:
             return
-        _, restanti = await asyncio.wait(list(self.compiti), timeout=secondi)
-        for t in restanti:
+        _, rest_ones = await asyncio.wait(list(self.tasks), timeout=seconds)
+        for t in rest_ones:
             t.cancel()
-        if restanti:
-            await asyncio.gather(*restanti, return_exceptions=True)
+        if rest_ones:
+            await asyncio.gather(*rest_ones, return_exceptions=True)
 
 
-async def consegna_dovute(bind: Engine, client: Optional[httpx.AsyncClient] = None, limite: int = LOTTO) -> int:
-    """Un giro solo, aspettando che finisca (per i test e per chi vuole spedire
-    adesso). Torna quante consegne ha provato. Non solleva."""
-    volo = _InVolo(bind, client)
+async def deliver_due(bind: Engine, client: Optional[httpx.AsyncClient] = None, limit: int = BATCH) -> int:
+    """One round only, waiting for it to end (for the tests and for whoever wants to send
+    now). Returns how many deliveries it tried. It does not raise."""
+    flight = _InFlight(bind, client)
     n = 0
-    while n < limite:
-        presi = await volo.giro(limite - n)
-        if not presi:
+    while n < limit:
+        taken_ones = await flight.round_(limit - n)
+        if not taken_ones:
             break
-        n += presi
-        if n < limite:
-            await volo.finisci()
-    await volo.finisci()
+        n += taken_ones
+        if n < limit:
+            await flight.finish()
+    await flight.finish()
     return n
 
 
-async def consegna_loop(stop: asyncio.Event) -> None:
+async def delivery_loop(stop: asyncio.Event) -> None:
     from app.db.session import engine
 
-    logger.info("webhook: spedizione avviata (ogni %ss)", CICLO)
-    volo = _InVolo(engine)
-    fermo = asyncio.create_task(stop.wait())
+    logger.info("webhook: sending started (every %ss)", CYCLE)
+    flight = _InFlight(engine)
+    still = asyncio.create_task(stop.wait())
     try:
         while not stop.is_set():
             try:
-                await volo.giro()
-            except Exception:  # noqa: BLE001 — la spedizione non deve mai fermare il gateway
-                logger.exception("webhook: giro di spedizione non riuscito")
-            # si riparte appena una consegna finisce (il suo posto è libero), o dopo
-            # CICLO per quelle diventate dovute nel frattempo, o allo spegnimento.
-            # Prima si aspettava sempre CICLO: con al più PER_WEBHOOK in volo per
-            # webhook, 300 consegne verso un ricevente veloce andavano a una al secondo
-            await asyncio.wait([fermo, *volo.compiti], timeout=CICLO, return_when=asyncio.FIRST_COMPLETED)
+                await flight.round_()
+            except Exception:  # noqa: BLE001 — sending must never stop the gateway
+                logger.exception("webhook: sending round failed")
+            # it starts again as soon as a delivery ends (its slot is free), or after CYCLE for
+            # those that became due meanwhile, or at shutdown. Before, it always waited CYCLE:
+            # with at most PER_WEBHOOK in flight per webhook, 300 deliveries towards a fast
+            # receiver went one per second
+            await asyncio.wait([still, *flight.tasks], timeout=CYCLE, return_when=asyncio.FIRST_COMPLETED)
     finally:
-        fermo.cancel()
-        await volo.finisci(5)
+        still.cancel()
+        await flight.finish(5)
 
 
-def pulisci(session: Session) -> int:
-    """Il registro delle consegne oltre WEBHOOKS__RETENTION_DAYS (lo chiama lo scheduler)."""
-    taglio = adesso() - timedelta(days=get_settings().webhooks.retention_days)
+def clean(session: Session) -> int:
+    """The deliveries' log past WEBHOOKS__RETENTION_DAYS (the scheduler calls it)."""
+    cutoff = now() - timedelta(days=get_settings().webhooks.retention_days)
     n = session.exec(
-        delete(WebhookDelivery).where(WebhookDelivery.created_at < taglio, WebhookDelivery.status.in_(("delivered", "failed")))
+        delete(WebhookDelivery).where(WebhookDelivery.created_at < cutoff, WebhookDelivery.status.in_(("delivered", "failed")))
     ).rowcount or 0
     session.commit()
     return n

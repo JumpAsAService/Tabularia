@@ -83,7 +83,7 @@ def test_expired_rows_are_swept(session):
 
     fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=100)
     fp.beat(session, 2, "tab-bbbb", 20, "b@x.it", "B", now=100 + fp.TTL_SECONDS)
-    assert fp.pulisci(session, now=100 + fp.TTL_SECONDS + 1) == 1
+    assert fp.clean(session, now=100 + fp.TTL_SECONDS + 1) == 1
     assert [r.instance for r in session.exec(select(FlowPresence)).all()] == ["tab-bbbb"]
 
 
@@ -97,15 +97,15 @@ def test_coming_back_after_expiring_starts_over(session):
 # ── la rotta: chi può vedere il flusso ─────────────────────────────────────────
 def test_the_route_answers_who_else_is_there(session):
     admin = make_user(session, email="admin@x.it", is_superuser=True)
-    altro = make_user(session, email="altro@x.it", is_superuser=True)
+    other = make_user(session, email="altro@x.it", is_superuser=True)
     p = make_project(session, name="p")
     flow = make_flow(session, name="f", project_id=p.id)
     assert flow_presence_beat(flow.id, PresenceBeat(instance="tab-aaaa"), admin, session).others == []
-    out = flow_presence_beat(flow.id, PresenceBeat(instance="tab-bbbb"), altro, session)
+    out = flow_presence_beat(flow.id, PresenceBeat(instance="tab-bbbb"), other, session)
     assert [o.email for o in out.others] == ["admin@x.it"]
     assert out.others[0].since.tzinfo is not None  # esce con l'offset, come ogni datetime
     flow_presence_leave(flow.id, "tab-aaaa", admin, session)
-    assert flow_presence_beat(flow.id, PresenceBeat(instance="tab-bbbb"), altro, session).others == []
+    assert flow_presence_beat(flow.id, PresenceBeat(instance="tab-bbbb"), other, session).others == []
 
 
 def test_someone_who_cannot_see_the_flow_learns_nothing(session):

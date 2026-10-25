@@ -25,10 +25,10 @@ from tests.test_migrazioni import database_temporaneo  # noqa: F401 — the fixt
 ORA = datetime(2026, 10, 18, 12, 0, 0)
 
 
-def _voce(session, giorni_fa: float, ip="203.0.113.7", agente="Firefox", **kw) -> AuditLog:
+def _voce(session, giorni_fa: float, ip="203.0.113.7", agent="Firefox", **kw) -> AuditLog:
     kw.setdefault("actor_label", "tizio@x.it")
     v = AuditLog(action="flow.run", outcome="success", ts=ORA - timedelta(days=giorni_fa),
-                 ip=ip, user_agent=agente, **kw)
+                 ip=ip, user_agent=agent, **kw)
     session.add(v)
     session.commit()
     session.refresh(v)
@@ -52,53 +52,53 @@ def test_addresses_are_kept_ninety_days_by_default(monkeypatch):
 
 def test_zero_keeps_them_for_ever(session):
     v = _voce(session, 4000)
-    assert ip_retention.cancella_indirizzi(session, 0, ora=ORA) == 0
+    assert ip_retention.delete_addresses(session, 0, at=ORA) == 0
     session.refresh(v)
     assert v.ip == "203.0.113.7" and v.user_agent == "Firefox"
 
 
 # ── the purge ──────────────────────────────────────────────────────────────────
 def test_only_rows_past_the_window_lose_their_address(session):
-    vecchia, limite, recente = _voce(session, 91), _voce(session, 90), _voce(session, 1)
-    assert ip_retention.cancella_indirizzi(session, 90, ora=ORA) >= 1
-    for v in (vecchia, limite, recente):
+    vecchia, limit, recente = _voce(session, 91), _voce(session, 90), _voce(session, 1)
+    assert ip_retention.delete_addresses(session, 90, at=ORA) >= 1
+    for v in (vecchia, limit, recente):
         session.refresh(v)
     assert (vecchia.ip, vecchia.user_agent) == (None, None)
     # the row itself stays: who did what, and when
     assert vecchia.action == "flow.run" and vecchia.actor_label == "tizio@x.it"
-    assert limite.ip == "203.0.113.7" and recente.ip == "203.0.113.7"
+    assert limit.ip == "203.0.113.7" and recente.ip == "203.0.113.7"
 
 
 def test_it_empties_a_backlog_bigger_than_one_batch(session, monkeypatch):
-    monkeypatch.setattr(ip_retention, "LOTTO", 7)
+    monkeypatch.setattr(ip_retention, "BATCH", 7)
     for _ in range(30):
         _voce(session, 200)
-    ip_retention.cancella_indirizzi(session, 90, ora=ORA)
+    ip_retention.delete_addresses(session, 90, at=ORA)
     assert session.exec(select(AuditLog).where(AuditLog.ip.is_not(None))).all() == []
 
 
 def test_tokens_and_sessions_lose_an_old_address(session):
     u = make_user(session, email="u@x.it")
-    vecchio, nuovo = _token(session, u, 120), _token(session, u, 2)
-    ferma = UserSession(id="s-old", user_id=u.id, created_at=ORA - timedelta(days=200),
+    old, new = _token(session, u, 120), _token(session, u, 2)
+    stop = UserSession(id="s-old", user_id=u.id, created_at=ORA - timedelta(days=200),
                         last_seen_at=ORA - timedelta(days=100), expires_at=ORA + timedelta(days=1),
                         ip="198.51.100.1", user_agent="Chrome")
     viva = UserSession(id="s-new", user_id=u.id, created_at=ORA - timedelta(hours=1),
                        last_seen_at=ORA, expires_at=ORA + timedelta(hours=11), ip="198.51.100.2", user_agent="Chrome")
-    session.add_all([ferma, viva])
+    session.add_all([stop, viva])
     session.commit()
-    ip_retention.cancella_indirizzi(session, 90, ora=ORA)
-    for x in (vecchio, nuovo, ferma, viva):
+    ip_retention.delete_addresses(session, 90, at=ORA)
+    for x in (old, new, stop, viva):
         session.refresh(x)
-    assert vecchio.last_used_ip is None and nuovo.last_used_ip == "203.0.113.8"
-    assert (ferma.ip, ferma.user_agent) == (None, None) and viva.ip == "198.51.100.2"
+    assert old.last_used_ip is None and new.last_used_ip == "203.0.113.8"
+    assert (stop.ip, stop.user_agent) == (None, None) and viva.ip == "198.51.100.2"
 
 
 def test_the_old_last_seen_address_of_users_goes(session):
     """`users.last_seen_ip` is no longer written (the address lives in the session):
     what an older release wrote there has no date of its own and nobody reads it."""
     u = make_user(session, email="u@x.it", last_seen_ip="192.0.2.4")
-    ip_retention.cancella_indirizzi(session, 90, ora=ORA)
+    ip_retention.delete_addresses(session, 90, at=ORA)
     session.refresh(u)
     assert u.last_seen_ip is None
 
@@ -110,7 +110,7 @@ def test_one_round_runs_the_address_purge_even_with_the_whole_log_kept(session, 
 
     v = _voce(session, 100)
     s = Settings(audit={"retention_minutes": 0, "ip_retention_days": 90})
-    audit_retention.un_giro(session, s, ora=ORA, indirizzi=True)
+    audit_retention.one_round(session, s, at=ORA, addresses=True)
     session.refresh(v)
     assert v.ip is None and len(session.exec(select(AuditLog)).all()) == 1
 
@@ -118,13 +118,13 @@ def test_one_round_runs_the_address_purge_even_with_the_whole_log_kept(session, 
 def test_the_loop_runs_when_only_the_address_purge_is_on():
     from app.services import audit_retention
 
-    assert audit_retention.da_fare(Settings(audit={"retention_minutes": 0, "ip_retention_days": 90}))
-    assert not audit_retention.da_fare(Settings(audit={"retention_minutes": 0, "ip_retention_days": 0}))
+    assert audit_retention.to_do(Settings(audit={"retention_minutes": 0, "ip_retention_days": 90}))
+    assert not audit_retention.to_do(Settings(audit={"retention_minutes": 0, "ip_retention_days": 0}))
 
 
 # ── deleting an account ────────────────────────────────────────────────────────
 def test_deleting_an_account_empties_its_addresses_at_once(session):
-    from app.routes.users import elimina_utente
+    from app.routes.users import remove_user
 
     admin = make_user(session, email="admin@x.it", is_superuser=True)
     lei = make_user(session, email="Anna.Bianchi@x.it")
@@ -135,7 +135,7 @@ def test_deleting_an_account_empties_its_addresses_at_once(session):
     session.add(LoginAttempt(ip="203.0.113.7", email="anna.bianchi@x.it", failures=2, last_at=ORA))
     session.commit()
 
-    elimina_utente(session, lei.id)
+    remove_user(session, lei.id)
 
     for v in (sua, tentativo, altrui):
         session.refresh(v)
@@ -148,11 +148,11 @@ def test_deleting_an_account_empties_its_addresses_at_once(session):
 
 
 def test_forgetting_an_account_on_a_database_that_enforces_foreign_keys(fk_session):
-    from app.routes.users import elimina_utente
+    from app.routes.users import remove_user
 
     lei = make_user(fk_session, email="anna@x.it")
     v = _voce(fk_session, 1, actor_id=lei.id, actor_label="anna@x.it")
-    elimina_utente(fk_session, lei.id)
+    remove_user(fk_session, lei.id)
     fk_session.refresh(v)
     assert v.ip is None and v.actor_id is None
 
@@ -162,7 +162,7 @@ def test_purge_and_forgetting_on_postgres(database_temporaneo):  # noqa: F811
     from sqlmodel import Session
 
     from app.db import migra as m
-    from app.routes.users import elimina_utente
+    from app.routes.users import remove_user
 
     m.migra(database_temporaneo)
     with Session(database_temporaneo) as s:
@@ -170,10 +170,10 @@ def test_purge_and_forgetting_on_postgres(database_temporaneo):  # noqa: F811
         vecchia = _voce(s, 120, actor_id=lei.id, actor_label="Lei@x.it")
         recente = _voce(s, 1)
         tentativo = _voce(s, 1, actor_label="lei@x.it")
-        ip_retention.cancella_indirizzi(s, 90, ora=ORA)
+        ip_retention.delete_addresses(s, 90, at=ORA)
         for v in (vecchia, recente):
             s.refresh(v)
         assert vecchia.ip is None and recente.ip == "203.0.113.7"
-        elimina_utente(s, lei.id)
+        remove_user(s, lei.id)
         s.refresh(tentativo)
         assert tentativo.ip is None and tentativo.actor_label == "lei@x.it"

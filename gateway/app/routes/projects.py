@@ -1,8 +1,8 @@
-"""Progetti/cartelle, con permessi ereditati lungo l'albero.
+"""Projects/folders, with permissions inherited down the tree.
 
-- lista: solo i progetti visibili all'utente (frontend costruisce l'albero);
-- creazione: MANAGE sul parent (root → solo superuser);
-- lettura: VIEW; modifica: EDIT; cancellazione: MANAGE (rifiutata se ha figli).
+- list: only the projects visible to the user (the frontend builds the tree);
+- creation: MANAGE on the parent (root → superuser only);
+- read: VIEW; change: EDIT; deletion: MANAGE (refused when it has children).
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
@@ -16,9 +16,9 @@ from app.services import audit, openlineage
 from app.services import permissions as perm_service
 from app.services.permissions import descendant_ids, folder_parents
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/projects", tags=["projects"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/projects", tags=["projects"])
 
 
 @router.get("", response_model=list[ProjectOut])
@@ -34,7 +34,7 @@ def create_project(
     request: Request = None,  # type: ignore[assignment]
 ):
     if body.parent_id is None:
-        # progetti root: solo il superuser può crearli (sono il livello di ingresso)
+        # root projects: only the superuser may create them (they are the entry level)
         if not perm_service.is_admin(session, user):
             raise HTTPException(status_code=403, detail="Only an admin can create top-level folders")
     else:
@@ -81,7 +81,7 @@ def update_project(
 ):
     project = _get_project(session, project_id)
     ensure_can(session, user, project_id, Capability.EDIT)
-    prima = {"name": project.name, "description": project.description, "parent_id": project.parent_id}
+    before = {"name": project.name, "description": project.description, "parent_id": project.parent_id}
     # the folder path is part of the names its flows and datasources have in an
     # external lineage catalog: renaming or moving it renames them all there
     moved = body.parent_id is not None and body.parent_id != project.parent_id
@@ -94,19 +94,18 @@ def update_project(
     if body.description is not None:
         project.description = body.description
     if body.parent_id is not None and body.parent_id != project.parent_id:
-        # Spostare = MANAGE su ENTRAMBI i capi. Su quello spostato perché i
-        # permessi si ereditano verso il basso: chi ha solo EDIT su una cartella
-        # e MANAGE sulla propria sandbox, spostandola dentro la sandbox si
-        # ritroverebbe MANAGE (e quindi CONNECT, che EDIT non concede mai) su
-        # tutto il sottoalbero — e potrebbe poi autoconcedersi un permesso
-        # esplicito che sopravvive al ripristino dell'albero.
-        # Audit 2026-09-19, A1: riprodotto, da 403 a 201.
+        # Moving = MANAGE on BOTH ends. On the moved one because permissions are inherited
+        # downwards: whoever has only EDIT on a folder and MANAGE on their own sandbox, moving
+        # it into the sandbox, would find themselves with MANAGE (and so CONNECT, which EDIT
+        # never grants) on the whole subtree — and could then grant themselves an explicit
+        # permission that survives restoring the tree.
+        # Audit 2026-09-19, A1: reproduced, from 403 to 201.
         ensure_can(session, user, project_id, Capability.MANAGE)
         if session.get(Project, body.parent_id) is None:
             raise HTTPException(status_code=404, detail="New parent folder not found")
-        # Niente cicli: non dentro sé stesso e nemmeno dentro un proprio
-        # DISCENDENTE, che staccherebbe il sottoalbero da ogni radice e
-        # toglierebbe l'accesso a chi l'aveva per eredità (A6/M6).
+        # No cycles: not inside itself and not inside one of its own DESCENDANTS either, which
+        # would detach the subtree from every root and take access away from whoever had it by
+        # inheritance (A6/M6).
         if body.parent_id == project_id or body.parent_id in descendant_ids(folder_parents(session), {project_id}):
             raise HTTPException(
                 status_code=422,
@@ -118,15 +117,15 @@ def update_project(
     session.commit()
     session.refresh(project)
     openlineage.renamed(session, lineage_names)
-    cambiati = {k: {"from": v, "to": getattr(project, k)} for k, v in prima.items()
+    changed_ones = {k: {"from": v, "to": getattr(project, k)} for k, v in before.items()
                 if k != "parent_id" and getattr(project, k) != v}
-    if cambiati:
+    if changed_ones:
         audit.record_audit(session, actor=user, action=audit.FOLDER_UPDATE, request=request, target_type="folder",
-                           target_id=project_id, target_label=project.name, detail=cambiati)
-    if project.parent_id != prima["parent_id"]:
+                           target_id=project_id, target_label=project.name, detail=changed_ones)
+    if project.parent_id != before["parent_id"]:
         audit.record_audit(session, actor=user, action=audit.FOLDER_MOVE, request=request, target_type="folder",
                            target_id=project_id, target_label=project.name,
-                           detail={"from_parent": prima["parent_id"], "to_parent": project.parent_id})
+                           detail={"from_parent": before["parent_id"], "to_parent": project.parent_id})
     session.refresh(project)
     return project
 
@@ -168,19 +167,19 @@ def delete_project(
 
     if session.exec(select(SavedScript).where(SavedScript.project_id == project_id)).first():
         raise HTTPException(status_code=409, detail="The folder contains scripts: move or delete them first")
-    # un webhook limitato a questa cartella: toglierla in silenzio lo allargherebbe
-    # a tutte, e la chiave esterna lo impedirebbe comunque con un 500
+    # a webhook limited to this folder: removing it silently would widen it to all, and the
+    # foreign key would prevent it anyway with a 500
     from app.models import Webhook
 
-    osservata = session.exec(select(Webhook).where(Webhook.project_id == project_id)).first()
-    if osservata:
+    observed = session.exec(select(Webhook).where(Webhook.project_id == project_id)).first()
+    if observed:
         raise HTTPException(
             status_code=409,
-            detail=f"The webhook «{osservata.name}» is limited to this folder: change its folder or delete it first",
+            detail=f"The webhook «{observed.name}» is limited to this folder: change its folder or delete it first",
         )
 
-    # run storici che avevano questo progetto come DESTINAZIONE di publish
-    # (vivono sotto flussi di altri progetti): staccali, la cronologia resta
+    # historical runs that had this project as publish DESTINATION (they live under flows
+    # of other projects): detach them, the history stays
     from sqlalchemy import update as sa_update
 
     from app.models import Run
@@ -189,8 +188,8 @@ def delete_project(
 
     for perm in session.exec(select(Permission).where(Permission.project_id == project_id)).all():
         session.delete(perm)
-    nome, genitore = project.name, project.parent_id
+    name, parent = project.name, project.parent_id
     session.delete(project)
     session.commit()
     audit.record_audit(session, actor=user, action=audit.FOLDER_DELETE, request=request, target_type="folder",
-                       target_id=project_id, target_label=nome, detail={"parent_id": genitore})
+                       target_id=project_id, target_label=name, detail={"parent_id": parent})

@@ -283,13 +283,13 @@ async def test_drifted_bounds_are_put_back_within_the_ceiling(db_engine, session
     session.add(WorkerScaling(kind="run", min_replicas=3, max_replicas=7, updated_at=datetime(2026, 10, 15)))
     session.commit()
     cluster.objects["horizontalpodautoscalers/tab-worker"]["spec"] = {"minReplicas": 2, "maxReplicas": 4}  # a helm upgrade
-    assert await kube.un_giro(db_engine) == 1
+    assert await kube.one_round(db_engine) == 1
     assert cluster.objects["horizontalpodautoscalers/tab-worker"]["spec"] == {"minReplicas": 3, "maxReplicas": 7}
-    assert await kube.un_giro(db_engine) == 0  # nothing to put back
+    assert await kube.one_round(db_engine) == 0  # nothing to put back
 
     monkeypatch.setenv("KUBERNETES__RUN_WORKER_MAX_REPLICAS", "5")  # the chart lowered the ceiling
     get_settings.cache_clear()
-    assert await kube.un_giro(db_engine) == 1
+    assert await kube.one_round(db_engine) == 1
     assert cluster.objects["horizontalpodautoscalers/tab-worker"]["spec"] == {"minReplicas": 3, "maxReplicas": 5}
 
 
@@ -297,4 +297,4 @@ async def test_drifted_bounds_are_put_back_within_the_ceiling(db_engine, session
 async def test_the_loop_does_nothing_off_kubernetes():
     import asyncio
 
-    await asyncio.wait_for(kube.riapplica_loop(asyncio.Event()), timeout=1)  # returns at once
+    await asyncio.wait_for(kube.reapply_loop(asyncio.Event()), timeout=1)  # returns at once

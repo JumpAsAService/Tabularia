@@ -11,11 +11,11 @@ from app.models import (
     AiModel, Banner, ContainerRegistry, ContainerRegistryAccess, Datasource, DisabledEngine, Flow, FlowGroup,
     FlowVersion, PrivacyNotice, SavedView, User,
 )
-from app.routes.users import elimina_utente
+from app.routes.users import remove_user
 from tests.conftest import make_datasource, make_flow, make_project, make_user
 
 # every foreign key to users, and what deleting the account does with it. A new
-# one makes the first test fail: handle it in `elimina_utente`, then list it here.
+# one makes the first test fail: handle it in `remove_user`, then list it here.
 REFERENCES = {
     ("ai_models", "updated_by"), ("api_tokens", "user_id"), ("api_tokens", "created_by"),
     ("audit_logs", "actor_id"), ("banners", "created_by"), ("connections", "owner_id"),
@@ -62,7 +62,7 @@ def test_an_account_referenced_everywhere_can_be_deleted(fk_session):
     s.commit()
     gone_id, flow_id, ds_id = gone.id, flow.id, ds.id
 
-    elimina_utente(s, gone_id)  # raised IntegrityError before
+    remove_user(s, gone_id)  # raised IntegrityError before
     s.expunge_all()
     assert s.get(User, gone_id) is None
     assert s.exec(select(FlowVersion.created_by)).all() == [None]

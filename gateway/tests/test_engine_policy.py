@@ -42,9 +42,9 @@ def _vieta(session, admin, engine_id: str):
 def test_by_default_every_engine_is_allowed(session):
     assert disabled_engines(session) == set()
     assert allowed_engines(session) == set(KNOWN_ENGINES)
-    stato = list_engine_policy(user=_admin(session), session=session)
-    assert {s.engine_id for s in stato} == set(KNOWN_ENGINES)
-    assert all(s.allowed for s in stato)
+    state = list_engine_policy(user=_admin(session), session=session)
+    assert {s.engine_id for s in state} == set(KNOWN_ENGINES)
+    assert all(s.allowed for s in state)
 
 
 def test_validation_without_a_session_ignores_the_policy(session):
@@ -59,10 +59,10 @@ def test_disabling_refuses_the_choice_everywhere(session):
     admin = _admin(session)
     _vieta(session, admin, "polars")
 
-    for scelta in (lambda: _validate_engine("polars", session),
+    for choice in (lambda: _validate_engine("polars", session),
                    lambda: _validate_production_engine("polars", session)):
         with pytest.raises(HTTPException) as e:
-            scelta()
+            choice()
         assert e.value.status_code == 422
         assert "administrator" in str(e.value.detail)
 
@@ -105,11 +105,11 @@ def test_flows_using_counts_both_development_and_production(session):
     make_flow(session, name="b", engine="duckdb", production_engine="polars")  # solo produzione
     make_flow(session, name="c", engine="clickhouse")                      # nessuno dei due
 
-    stato = {s.engine_id: s.flows_using for s in list_engine_policy(user=admin, session=session)}
-    assert stato["polars"] == 2       # contato per sviluppo E per produzione
-    assert stato["duckdb"] == 1
-    assert stato["clickhouse"] == 1
-    assert stato["chdb"] == 0
+    state = {s.engine_id: s.flows_using for s in list_engine_policy(user=admin, session=session)}
+    assert state["polars"] == 2       # contato per sviluppo E per produzione
+    assert state["duckdb"] == 1
+    assert state["clickhouse"] == 1
+    assert state["chdb"] == 0
 
 
 # ── 4. non si resta senza motori ────────────────────────────────────────────
@@ -142,8 +142,8 @@ def test_audit_records_how_many_flows_were_left_behind(session):
     make_flow(session, name="b", engine="chdb")
     _vieta(session, admin, "chdb")
 
-    riga = session.exec(select(AuditLog).where(AuditLog.action == audit.ENGINE_DISALLOW)).one()
-    assert '"flows_using": 2' in (riga.detail or "")
+    row = session.exec(select(AuditLog).where(AuditLog.action == audit.ENGINE_DISALLOW)).one()
+    assert '"flows_using": 2' in (row.detail or "")
 
 
 # ── 6. il catalogo servito al selettore ─────────────────────────────────────
@@ -153,24 +153,24 @@ def test_audit_records_how_many_flows_were_left_behind(session):
 # rimasta senza test, ed è da lì che era passato un difetto.
 @pytest.mark.anyio
 async def test_catalogue_marks_the_disallowed_engine(session, fake_engine):
-    from app.routes.proxy import engines as catalogo
+    from app.routes.proxy import engines as catalog
 
     _vieta(session, _admin(session), "polars")
-    per_id = {e["id"]: e for e in await catalogo(request=None, session=session)}
+    by_id = {e["id"]: e for e in await catalog(request=None, session=session)}
 
-    assert per_id["polars"]["available"] is False
-    assert per_id["polars"]["disabled_by_admin"] is True
+    assert by_id["polars"]["available"] is False
+    assert by_id["polars"]["disabled_by_admin"] is True
     # «non consentito qui» non deve contagiare gli altri, né confondersi con
     # «non configurato»: chi resta consentito non prende alcun marcatore
-    assert per_id["duckdb"]["available"] is True
-    assert "disabled_by_admin" not in per_id["duckdb"]
+    assert by_id["duckdb"]["available"] is True
+    assert "disabled_by_admin" not in by_id["duckdb"]
 
 
 @pytest.mark.anyio
 async def test_catalogue_is_untouched_when_nothing_is_disallowed(session, fake_engine):
     """Il caso normale: nessuna politica, nessuna riscrittura."""
-    from app.routes.proxy import engines as catalogo
+    from app.routes.proxy import engines as catalog
 
-    elenco = await catalogo(request=None, session=session)
-    assert all(e["available"] for e in elenco)
-    assert not any("disabled_by_admin" in e for e in elenco)
+    listing = await catalog(request=None, session=session)
+    assert all(e["available"] for e in listing)
+    assert not any("disabled_by_admin" in e for e in listing)

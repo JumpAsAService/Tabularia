@@ -1,13 +1,13 @@
-"""Schedule del refresh delle datasource database: espressione cron standard a
-5 campi (`minuto ora giorno-mese mese giorno-settimana`), es. `0 3 * * *`
-(ogni notte alle 3), `*/15 * * * *` (ogni 15 minuti), `0 * * * *` (ogni ora).
+"""The schedule of the database datasources' refresh: a standard 5-field cron expression
+(`minute hour day-of-month month day-of-week`), e.g. `0 3 * * *` (every night at 3),
+`*/15 * * * *` (every 15 minutes), `0 * * * *` (every hour).
 
-Parsing e calcolo del prossimo run via `croniter` (collaudata: gestisce range,
-step, liste e la semantica OR tra giorno-del-mese e giorno-della-settimana).
+Parsing and computing the next run through `croniter` (well tested: it handles
+ranges, steps, lists and the OR semantics between day-of-month and day-of-week).
 
-Le espressioni cron sono interpretate nel FUSO DEL DEPLOYMENT (APP__TIMEZONE):
-'0 3 * * *' = le 03:00 a PARETE locale (DST incluso), non le 03:00 UTC. Il
-risultato è però sempre restituito in UTC (storage e confronti in UTC).
+The cron expressions are read in the DEPLOYMENT's ZONE (APP__TIMEZONE): '0 3 * * *' =
+03:00 local WALL time (DST included), not 03:00 UTC. The result is always returned in
+UTC though (storage and comparisons in UTC).
 """
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ from app.core.config import get_settings
 
 
 class ScheduleError(ValueError):
-    """Espressione cron non valida (messaggio mostrabile all'utente)."""
+    """An invalid cron expression (a message that can be shown to the user)."""
 
 
 def validate_schedule(spec: str) -> str:
-    """Valida e normalizza l'espressione cron. Solleva ScheduleError."""
+    """Validates and normalizes the cron expression. Raises ScheduleError."""
     if not spec or not isinstance(spec, str) or not spec.strip():
         raise ScheduleError("Empty cron expression")
     spec = spec.strip()
@@ -37,16 +37,16 @@ def validate_schedule(spec: str) -> str:
 
 
 def next_fire(spec: str, after: datetime, tz: ZoneInfo | None = None) -> datetime:
-    """Prossimo istante di esecuzione STRETTAMENTE dopo `after`, restituito in UTC.
+    """The next run instant STRICTLY after `after`, returned in UTC.
 
-    Il cron è valutato nel fuso `tz` (default: APP__TIMEZONE) così l'orario è a
-    parete locale: '0 3 * * *' fira alle 03:00 locali anche attraverso il cambio
-    d'ora legale. `after` naive è assunto UTC (come i timestamp del DB)."""
+    The cron is evaluated in the `tz` zone (default: APP__TIMEZONE) so the time is local
+    wall time: '0 3 * * *' fires at 03:00 local even across the daylight saving change. A
+    naive `after` is taken as UTC (as the DB's timestamps)."""
     validate_schedule(spec)
     if tz is None:
         tz = get_settings().app.tzinfo()
     if after.tzinfo is None:
         after = after.replace(tzinfo=timezone.utc)
-    # base nel fuso locale → croniter calcola l'orario a parete in quel fuso
+    # base in the local zone → croniter computes the wall time in that zone
     nxt_local = croniter(spec, after.astimezone(tz)).get_next(datetime)
     return nxt_local.astimezone(timezone.utc)

@@ -60,10 +60,10 @@ def test_the_options_survive_the_round_trip_to_the_form(session, scena):
     """Senza questo, il form di modifica si riaprirebbe vuoto e il primo
     salvataggio cancellerebbe mittente, TLS e domini."""
     admin, p = scena
-    creata = _crea(session, admin, p.id, extra=OPZIONI)
-    assert json.loads(creata.extra) == OPZIONI
+    created = _crea(session, admin, p.id, extra=OPZIONI)
+    assert json.loads(created.extra) == OPZIONI
 
-    riletta = [c for c in list_all_connections(user=admin, session=session) if c.id == creata.id][0]
+    riletta = [c for c in list_all_connections(user=admin, session=session) if c.id == created.id][0]
     assert json.loads(riletta.extra) == OPZIONI
 
 
@@ -71,12 +71,12 @@ def test_the_saved_options_are_the_ones_that_limit_the_recipients(session, scena
     """Il punto della colonna: i domini scritti nel form devono essere quelli che
     il gateway applica al lancio, non una copia che vive altrove."""
     admin, p = scena
-    creata = _crea(session, admin, p.id, extra=OPZIONI)
+    created = _crea(session, admin, p.id, extra=OPZIONI)
 
-    riga = session.get(Connection, creata.id)
-    assert allowed_email_domains(riga) == ["azienda.it", "clienti.it"]
+    row = session.get(Connection, created.id)
+    assert allowed_email_domains(row) == ["azienda.it", "clienti.it"]
 
-    payload = engine_connection_payload(riga)
+    payload = engine_connection_payload(row)
     assert payload["from_address"] == "report@azienda.it"
     assert payload["from_name"] == "Report Tabularia"
     assert payload["tls"] == "ssl"
@@ -84,26 +84,26 @@ def test_the_saved_options_are_the_ones_that_limit_the_recipients(session, scena
 
 def test_editing_them_changes_what_the_send_will_do(session, scena):
     admin, p = scena
-    creata = _crea(session, admin, p.id, extra=OPZIONI)
+    created = _crea(session, admin, p.id, extra=OPZIONI)
 
-    nuove = dict(OPZIONI, allowed_domains=["altra.it"], tls="starttls")
+    new_ones = dict(OPZIONI, allowed_domains=["altra.it"], tls="starttls")
     aggiornata = update_connection(
-        creata.id, ConnectionUpdate(extra=json.dumps(nuove)), request=None, user=admin, session=session
+        created.id, ConnectionUpdate(extra=json.dumps(new_ones)), request=None, user=admin, session=session
     )
     assert json.loads(aggiornata.extra)["allowed_domains"] == ["altra.it"]
-    assert allowed_email_domains(session.get(Connection, creata.id)) == ["altra.it"]
+    assert allowed_email_domains(session.get(Connection, created.id)) == ["altra.it"]
 
 
 def test_a_rename_does_not_wipe_the_options(session, scena):
     """`extra` è opzionale in PATCH: ometterlo deve voler dire «non toccarlo»,
     altrimenti rinominare una connessione la disattiverebbe in silenzio."""
     admin, p = scena
-    creata = _crea(session, admin, p.id, extra=OPZIONI)
+    created = _crea(session, admin, p.id, extra=OPZIONI)
 
     update_connection(
-        creata.id, ConnectionUpdate(name="posta-rinominata"), request=None, user=admin, session=session
+        created.id, ConnectionUpdate(name="posta-rinominata"), request=None, user=admin, session=session
     )
-    assert allowed_email_domains(session.get(Connection, creata.id)) == ["azienda.it", "clienti.it"]
+    assert allowed_email_domains(session.get(Connection, created.id)) == ["azienda.it", "clienti.it"]
 
 
 # ── 2. il rifiuto avviene al salvataggio ────────────────────────────────────
@@ -130,11 +130,11 @@ def test_json_that_is_not_an_object_is_refused(session, scena):
 
 def test_broken_json_is_refused_on_update_too(session, scena):
     admin, p = scena
-    creata = _crea(session, admin, p.id, extra=OPZIONI)
+    created = _crea(session, admin, p.id, extra=OPZIONI)
     with pytest.raises(HTTPException) as e:
-        update_connection(creata.id, ConnectionUpdate(extra="{rotto"), request=None, user=admin, session=session)
+        update_connection(created.id, ConnectionUpdate(extra="{rotto"), request=None, user=admin, session=session)
     assert e.value.status_code == 422
-    assert allowed_email_domains(session.get(Connection, creata.id)) == ["azienda.it", "clienti.it"]
+    assert allowed_email_domains(session.get(Connection, created.id)) == ["azienda.it", "clienti.it"]
 
 
 # ── 3. gli altri tipi e i segreti ───────────────────────────────────────────
@@ -142,23 +142,23 @@ def test_a_connection_without_options_gets_an_empty_object(session, scena):
     """Gli altri tipi non usano `extra`: non devono vedersi né un null né un
     errore, e `smtp_options` deve poterlo leggere sempre."""
     admin, p = scena
-    creata = create_connection(
+    created = create_connection(
         p.id, ConnectionCreate(name="pg", db_type="postgresql", host="pg", database="shop"),
         request=None, user=admin, session=session,
     )
-    assert creata.extra == "{}"
-    assert allowed_email_domains(session.get(Connection, creata.id)) == []
+    assert created.extra == "{}"
+    assert allowed_email_domains(session.get(Connection, created.id)) == []
 
 
 def test_the_options_come_back_but_the_password_never_does(session, scena):
     """`extra` può tornare al client proprio perché non contiene segreti: se un
     giorno ne contenesse, questo test è il posto in cui accorgersene."""
     admin, p = scena
-    creata = _crea(session, admin, p.id, extra=OPZIONI)
-    campi = creata.model_dump()
-    assert "password" not in campi and "password_encrypted" not in campi
-    assert campi["has_password"] is True
-    assert "segreta" not in json.dumps(campi, default=str)  # default=str: c'è updated_at
+    created = _crea(session, admin, p.id, extra=OPZIONI)
+    fields = created.model_dump()
+    assert "password" not in fields and "password_encrypted" not in fields
+    assert fields["has_password"] is True
+    assert "segreta" not in json.dumps(fields, default=str)  # default=str: c'è updated_at
 
 
 # ── SQL Server: il TLS ──────────────────────────────────────────────────────
@@ -182,9 +182,9 @@ def test_sqlserver_un_tls_sconosciuto_si_rifiuta_al_salvataggio(session, scena):
     with pytest.raises(HTTPException) as e:
         _sqlserver(session, admin, p.id, extra={"tls": "forse"})
     assert e.value.status_code == 422 and "verify, trust or none" in e.value.detail
-    creata = _sqlserver(session, admin, p.id)
+    created = _sqlserver(session, admin, p.id)
     with pytest.raises(HTTPException):
-        update_connection(creata.id, ConnectionUpdate(extra=json.dumps({"tls": "forse"})), request=None, user=admin, session=session)
+        update_connection(created.id, ConnectionUpdate(extra=json.dumps({"tls": "forse"})), request=None, user=admin, session=session)
 
 
 @pytest.mark.anyio
@@ -194,13 +194,13 @@ async def test_sqlserver_la_prova_del_form_porta_il_tls(session, scena, monkeypa
     import app.routes.connections as rc
 
     admin, p = scena
-    visto = {}
+    seen = {}
 
     async def finto(payload, action, path="", **kw):  # kw: the language of the messages
-        visto.update(payload)
+        seen.update(payload)
         return {"ok": True}
 
     monkeypatch.setattr(rc, "_engine_inspect", finto)
     body = ConnectionCreate(name="x", db_type="sqlserver", host="h", username="u", password="p", database="d", extra=json.dumps({"tls": "trust"}))
     await rc.test_draft_connection(p.id, body, user=admin, session=session)
-    assert visto["extra"] == {"tls": "trust"}
+    assert seen["extra"] == {"tls": "trust"}

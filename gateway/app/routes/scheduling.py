@@ -1,6 +1,6 @@
-"""Carico previsionale degli schedule: heatmap giorno×ora dei cron attivi e
-rilevamento delle fasce critiche (collisioni oltre la capacità dei worker).
-Vedi app/services/schedule_load.py. Filtrato per RBAC (progetti leggibili).
+"""The schedules' forecast load: day×hour heatmap of the active crons and detection of
+the critical slots (collisions beyond the workers' capacity).
+See app/services/schedule_load.py. Filtered by RBAC (readable projects).
 """
 import logging
 
@@ -12,28 +12,28 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.models import User
 from app.services.schedule_load import compute_schedule_load
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["scheduling"])
+router = APIRouter(route_class=ReleasingRoute, tags=["scheduling"])
 
 
 class LoadCell(BaseModel):
-    weekday: int          # 0 = lunedì … 6 = domenica
+    weekday: int          # 0 = Monday … 6 = Sunday
     hour: int             # 0–23
-    count: int            # n. di fire schedulati nella cella (sui prossimi N giorni)
-    peak_concurrent: int  # massimo n. di job nello stesso minuto dentro la cella
-    critical: bool        # picco oltre la capacità dei worker
+    count: int            # number of scheduled fires in the cell (over the next N days)
+    peak_concurrent: int  # the maximum number of jobs in the same minute inside the cell
+    critical: bool        # a peak beyond the workers' capacity
 
 
 class Collision(BaseModel):
     weekday: int
     hour: int
     minute: int
-    count: int            # job che partono nello stesso minuto
-    queued: int           # quanti finiscono in coda (count - capacità)
-    schedules: list[str]  # nomi dei job coinvolti
+    count: int            # jobs starting in the same minute
+    queued: int           # how many end up queued (count - capacity)
+    schedules: list[str]  # the names of the jobs involved
 
 
 class ScheduleLoadOut(BaseModel):
@@ -48,11 +48,11 @@ class ScheduleLoadOut(BaseModel):
 
 @router.get("/schedule/load", response_model=ScheduleLoadOut)
 def schedule_load(
-    days: int = Query(7, ge=1, le=31, description="orizzonte di proiezione in giorni"),
+    days: int = Query(7, ge=1, le=31, description="projection horizon in days"),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Proietta gli schedule attivi (flussi + refresh datasource) sui prossimi
-    `days` giorni e restituisce la griglia giorno×ora del carico + le fasce
-    critiche (collisioni oltre la capacità dei worker)."""
+    """Projects the active schedules (flows + datasource refreshes) over the next `days`
+    days and returns the day×hour grid of the load + the critical slots (collisions
+    beyond the workers' capacity)."""
     return compute_schedule_load(session, user, days)

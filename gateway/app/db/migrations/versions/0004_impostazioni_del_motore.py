@@ -1,17 +1,16 @@
-"""impostazioni del motore — i parametri del motore cambiati dal pannello
+"""engine settings — the engine's parameters changed from the panel
 
-Solo un'aggiunta: la tabella `engine_settings`, vuota (valgono i valori
-dell'ambiente, come prima). Il codice della versione precedente non la conosce e
-non la tocca: un aggiornamento a rotazione non cambia niente finché nessuno salva
-un'impostazione dal pannello nuovo.
+Only an addition: the `engine_settings` table, empty (the environment's values hold,
+as before). The previous version's code does not know it and does not touch it: a
+rolling update changes nothing until someone saves a setting from the new panel.
 
-Revisione 0004, dopo 0003 — 2026-10-12 14:01:42.370161
-Solo in avanti, e compatibile col codice della versione precedente (expand/contract):
-vedi docs/database-migrations.md.
+Revision 0004, after 0003 — 2026-10-12 14:01:42.370161
+Forward only, and compatible with the previous version's code (expand/contract):
+see docs/database-migrations.md.
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel  # noqa: F401 — i tipi di SQLModel (AutoString) nelle colonne generate
+import sqlmodel  # noqa: F401 — SQLModel's types (AutoString) in the generated columns
 
 
 revision = '0004'
@@ -33,5 +32,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # solo in avanti (scelta del progetto): si corregge con una revisione nuova
-    raise NotImplementedError("le migrazioni del gateway vanno solo in avanti")
+    # forward only (the project's choice): corrected with a new revision
+    raise NotImplementedError("the gateway's migrations go forward only")

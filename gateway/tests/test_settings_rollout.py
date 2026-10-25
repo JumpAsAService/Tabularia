@@ -105,12 +105,12 @@ def _clean():
 
 
 class MotoreConRiavvio(MotoreFinto):
-    def _catalogo(self, massimo):
-        c = super()._catalogo(massimo)
+    def _catalogo(self, maximum):
+        c = super()._catalogo(maximum)
         c["items"].append({"key": "celery.max_tasks_per_child", "category": "execution", "unit": "tasks", "min": 1,
                            "max": 100_000, "kind": "int", "rollout": ["worker", "preview-worker"],
                            "env_var": "CELERY__MAX_TASKS_PER_CHILD", "env_value": 50,
-                           "value": self.valori.get("celery.max_tasks_per_child")})
+                           "value": self.values.get("celery.max_tasks_per_child")})
         return c
 
 
@@ -202,16 +202,16 @@ async def test_one_pod_at_a_time_the_oldest_first(session, db_engine, kube):
     kube.add("tab-worker-old", "worker", T0 - timedelta(days=2))
     session.add(SettingsRollout(component="worker", changed_at=T0, requested_at=T0))
     session.commit()
-    assert await sr.un_passo(db_engine) == "evicted worker: tab-worker-old"
+    assert await sr.one_step(db_engine) == "evicted worker: tab-worker-old"
     # on its way out: wait, nothing else is evicted
-    assert (await sr.un_passo(db_engine)).startswith("waiting worker")
+    assert (await sr.one_step(db_engine)).startswith("waiting worker")
     kube.replace("tab-worker-old", "tab-worker-c", T0 + timedelta(seconds=10))
     kube.add("tab-worker-d", "worker", T0 + timedelta(seconds=20), ready=False)  # a new one, not ready yet
-    assert await sr.un_passo(db_engine) == "waiting worker: tab-worker-d"
+    assert await sr.one_step(db_engine) == "waiting worker: tab-worker-d"
     kube.pods["tab-worker-d"]["status"]["conditions"][0]["status"] = "True"
-    assert await sr.un_passo(db_engine) == "evicted worker: tab-worker-new"
+    assert await sr.one_step(db_engine) == "evicted worker: tab-worker-new"
     kube.replace("tab-worker-new", "tab-worker-e", T0 + timedelta(seconds=30))
-    assert await sr.un_passo(db_engine) == "done worker"
+    assert await sr.one_step(db_engine) == "done worker"
     session.expire_all()
     assert session.get(SettingsRollout, "worker").requested_at is None
     assert kube.evicted == ["tab-worker-old", "tab-worker-new"]
@@ -224,15 +224,15 @@ async def test_the_components_go_in_order_and_the_orchestrator_evicts_itself_las
     for c in ("orchestrator", "engine"):
         session.add(SettingsRollout(component=c, changed_at=T0, requested_at=T0))
     session.commit()
-    assert await sr.un_passo(db_engine) == "evicted engine: tab-engine-a"   # the engine before the orchestrator
+    assert await sr.one_step(db_engine) == "evicted engine: tab-engine-a"   # the engine before the orchestrator
     kube.replace("tab-engine-a", "tab-engine-b", T0 + timedelta(seconds=5))
-    assert await sr.un_passo(db_engine) == "done engine"
-    assert await sr.un_passo(db_engine) == "evicted orchestrator: tab-orchestrator-b"  # not itself, though older
+    assert await sr.one_step(db_engine) == "done engine"
+    assert await sr.one_step(db_engine) == "evicted orchestrator: tab-orchestrator-b"  # not itself, though older
     kube.replace("tab-orchestrator-b", "tab-orchestrator-c", T0 + timedelta(seconds=10))
-    assert await sr.un_passo(db_engine) == "evicted orchestrator: tab-orchestrator-a"
+    assert await sr.one_step(db_engine) == "evicted orchestrator: tab-orchestrator-a"
     # the next orchestrator finds nothing left
     kube.replace("tab-orchestrator-a", "tab-orchestrator-d", T0 + timedelta(seconds=20))
-    assert await sr.un_passo(db_engine) == "done orchestrator"
+    assert await sr.one_step(db_engine) == "done orchestrator"
 
 
 async def test_a_disruption_budget_that_says_not_now_is_waited_for(session, db_engine, kube):
@@ -240,9 +240,9 @@ async def test_a_disruption_budget_that_says_not_now_is_waited_for(session, db_e
     session.add(SettingsRollout(component="engine", changed_at=T0, requested_at=T0))
     session.commit()
     kube.pdb_says_no = True
-    assert await sr.un_passo(db_engine) == "blocked engine: tab-engine-a"
+    assert await sr.one_step(db_engine) == "blocked engine: tab-engine-a"
     kube.pdb_says_no = False
-    assert await sr.un_passo(db_engine) == "evicted engine: tab-engine-a"
+    assert await sr.one_step(db_engine) == "evicted engine: tab-engine-a"
 
 
 async def test_a_new_pod_that_never_gets_ready_stops_the_rollout_there(session, db_engine, kube):
@@ -252,12 +252,12 @@ async def test_a_new_pod_that_never_gets_ready_stops_the_rollout_there(session, 
     kube.add("tab-gateway-b", "gateway", T0 - timedelta(days=1))
     session.add(SettingsRollout(component="gateway", changed_at=T0, requested_at=T0))
     session.commit()
-    assert (await sr.un_passo(db_engine)).startswith("evicted gateway")
+    assert (await sr.one_step(db_engine)).startswith("evicted gateway")
     first = kube.evicted[0]
     kube.replace(first, "tab-gateway-crash", T0 + timedelta(seconds=5))
     kube.pods["tab-gateway-crash"]["status"]["conditions"][0]["status"] = "False"
     for _ in range(3):
-        assert await sr.un_passo(db_engine) == "waiting gateway: tab-gateway-crash"
+        assert await sr.one_step(db_engine) == "waiting gateway: tab-gateway-crash"
     assert len(kube.evicted) == 1
     # the administrator puts the value back and asks again: the broken pod goes first
     session.expire_all()
@@ -265,7 +265,7 @@ async def test_a_new_pod_that_never_gets_ready_stops_the_rollout_there(session, 
     row.requested_at = T0 + timedelta(minutes=5)
     session.add(row)
     session.commit()
-    assert await sr.un_passo(db_engine) == "evicted gateway: tab-gateway-crash"
+    assert await sr.one_step(db_engine) == "evicted gateway: tab-gateway-crash"
 
 
 async def test_a_cancelled_rollout_stops(app, session, db_engine, kube):
@@ -276,7 +276,7 @@ async def test_a_cancelled_rollout_stops(app, session, db_engine, kube):
     state = capo.post("/admin/settings-rollout", json={"components": ["beat"]}, headers=CSRF).json()
     assert _component(state, "beat")["requested_at"] is not None
     capo.delete("/admin/settings-rollout/beat", headers=CSRF)
-    assert await sr.un_passo(db_engine) is None and kube.evicted == []
+    assert await sr.one_step(db_engine) is None and kube.evicted == []
     assert session.exec(select(AuditLog).where(AuditLog.action == "settings.rollout_cancel")).one()
 
 
@@ -296,13 +296,13 @@ async def test_the_last_pods_replacement_is_waited_for(session, db_engine, kube)
     for c in ("engine", "beat"):
         session.add(SettingsRollout(component=c, changed_at=T0, requested_at=T0))
     session.commit()
-    assert await sr.un_passo(db_engine) == "evicted beat: tab-beat-a"
+    assert await sr.one_step(db_engine) == "evicted beat: tab-beat-a"
     kube.replace("tab-beat-a", "tab-beat-b", T0 + timedelta(seconds=5))
     kube.pods["tab-beat-b"]["status"]["conditions"][0]["status"] = "False"
-    assert await sr.un_passo(db_engine) == "waiting beat: tab-beat-b"
+    assert await sr.one_step(db_engine) == "waiting beat: tab-beat-b"
     kube.pods["tab-beat-b"]["status"]["conditions"][0]["status"] = "True"
-    assert await sr.un_passo(db_engine) == "done beat"
-    assert await sr.un_passo(db_engine) == "evicted engine: tab-engine-a"
+    assert await sr.one_step(db_engine) == "done beat"
+    assert await sr.one_step(db_engine) == "evicted engine: tab-engine-a"
 
 
 async def test_a_pod_gone_with_its_node_does_not_hold_the_rollout(session, db_engine, kube):
@@ -310,7 +310,7 @@ async def test_a_pod_gone_with_its_node_does_not_hold_the_rollout(session, db_en
     kube.add("tab-worker-a", "worker", T0 - timedelta(days=1))
     session.add(SettingsRollout(component="worker", changed_at=T0, requested_at=T0))
     session.commit()
-    assert await sr.un_passo(db_engine) == "evicted worker: tab-worker-a"
+    assert await sr.one_step(db_engine) == "evicted worker: tab-worker-a"
 
 
 def test_on_kubernetes_without_the_token_it_is_not_compose(app, session, monkeypatch):

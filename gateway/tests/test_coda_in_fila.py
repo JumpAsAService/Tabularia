@@ -15,17 +15,17 @@ from tests.conftest import make_flow, make_project, make_user
 from tests.test_migrazioni import database_temporaneo  # noqa: F401 — la fixture
 
 
-def _lancia(eng, flow_id, utente_id, esiti, nome, tarda):
+def _lancia(eng, flow_id, user_id_, esiti, name, tarda):
     """Quello che fa «Esegui ora»: in fila, controllo, accodamento, commit."""
     with Session(eng) as s:
-        orch.in_fila_per_il_flusso(s, flow_id)
-        if orch.flusso_in_corso(s, flow_id):
-            esiti[nome] = 409
+        orch.in_line_for_the_flow(s, flow_id)
+        if orch.flow_running(s, flow_id):
+            esiti[name] = 409
             return
-        orch.create_orchestration_run(s, SimpleNamespace(id=utente_id), SimpleNamespace(id=flow_id), commit=False)
+        orch.create_orchestration_run(s, SimpleNamespace(id=user_id_), SimpleNamespace(id=flow_id), commit=False)
         time.sleep(tarda)  # il commit arriva tardi: è la finestra in cui l'altro guardava
         s.commit()
-        esiti[nome] = 202
+        esiti[name] = 202
 
 
 def test_due_lanci_insieme_sullo_stesso_flusso_ne_accodano_uno(database_temporaneo):  # noqa: F811

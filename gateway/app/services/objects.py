@@ -1,20 +1,19 @@
-"""RBAC sul data plane: chi può leggere quale oggetto dello storage.
+"""RBAC on the data plane: who may read which storage object.
 
-Le richieste inoltrate all'engine referenziano chiavi di storage (input_key,
-driver dei foreach, export…). Prima di inoltrare, OGNI chiave "managed" trovata
-nel payload deve risultare leggibile dall'utente secondo queste regole:
+The requests forwarded to the engine reference storage keys (input_key, foreach
+drivers, export…). Before forwarding, EVERY "managed" key found in the payload must be
+readable by the user under these rules:
 
-- upload propri (registro `uploads`): un upload appena fatto non vive in nessun
-  progetto → lo legge solo chi l'ha caricato;
-- datasource di catalogo: VIEW sul progetto della datasource;
-- input/output dei run: chi ha lanciato il run, oppure VIEW sul progetto del
-  flusso (la cronologia condivisa include i suoi output);
-- chiavi referenziate dalla `definition` di un flusso salvato: VIEW sul progetto
-  del flusso — condividere un flusso significa condividere i dati che
-  referenzia.
+- one's own uploads (the `uploads` register): a fresh upload lives in no project →
+  only whoever uploaded it reads it;
+- catalog datasources: VIEW on the datasource's project;
+- runs' inputs/outputs: whoever launched the run, or VIEW on the flow's project (the
+  shared history includes its outputs);
+- keys referenced by a saved flow's `definition`: VIEW on the flow's project — sharing
+  a flow means sharing the data it references.
 
-Fail-closed: una chiave managed che non rientra in nessuna regola → 403 (vale
-anche per `cache/`, che è interna all'engine e non deve mai arrivare dai client).
+Fail-closed: a managed key that falls under no rule → 403 (it holds for `cache/` too,
+which is internal to the engine and must never come from the clients).
 """
 from typing import Any, Iterable
 
@@ -25,19 +24,19 @@ from sqlalchemy import or_
 from app.models import Datasource, Flow, Run, Upload, User
 from app.services import permissions as perm_service
 
-# prefissi dello storage gestito (tutto il resto non è indirizzabile dai client)
+# the managed storage's prefixes (everything else cannot be addressed by the clients)
 MANAGED_PREFIXES = ("datasets/", "out/", "raw/", "cache/")
 
-# campi che indirizzano una sorgente in LETTURA (top-level `input_key`, e `key`
-# nelle sotto-sorgenti di join/union/foreach); l'output non è una lettura
+# fields that address a source for READING (top-level `input_key`, and `key` in the
+# sub-sources of join/union/foreach); the output is not a read
 _READ_KEY_FIELDS = ("key", "input_key")
 
 
 def collect_read_refs(payload: Any) -> tuple[set[str], set[str]]:
-    """Bucket e chiavi di LETTURA in posizione STRUTTURALE (campi key/input_key
-    e bucket), ovunque nel payload. Diverso da collect_storage_keys, che raccoglie
-    qualsiasi stringa con prefisso gestito: qui contano le POSIZIONI, così una
-    chiave fuori dai prefissi gestiti in un campo sorgente è visibile e rifiutabile."""
+    """Buckets and READ keys in a STRUCTURAL position (key/input_key and bucket fields),
+    anywhere in the payload. Unlike collect_storage_keys, which collects any string with
+    a managed prefix: here the POSITIONS count, so a key outside the managed prefixes in a
+    source field is visible and refusable."""
     buckets: set[str] = set()
     keys: set[str] = set()
 
@@ -59,9 +58,9 @@ def collect_read_refs(payload: Any) -> tuple[set[str], set[str]]:
 
 
 def ensure_reads_pinned(session: Session, user: User, payload: Any, engine_bucket: str) -> None:
-    """Ogni sorgente di un non-superuser deve stare NEL bucket dell'engine e sotto
-    un prefisso gestito. Senza questo, né gateway né engine vincolano bucket/chiave
-    e l'engine (credenziali che leggono tutto) servirebbe qualsiasi (bucket, key)."""
+    """Every source of a non-superuser must be IN the engine's bucket and under a managed
+    prefix. Without this, neither gateway nor engine bind bucket/key and the engine
+    (credentials that read everything) would serve any (bucket, key)."""
     if perm_service.is_admin(session, user):
         return
     buckets, keys = collect_read_refs(payload)
@@ -74,8 +73,8 @@ def ensure_reads_pinned(session: Session, user: User, payload: Any, engine_bucke
 
 
 def collect_storage_keys(payload: Any) -> set[str]:
-    """Tutte le stringhe che sembrano chiavi managed, ovunque nel payload
-    (anche nei parametri annidati delle operazioni, es. il driver dei foreach)."""
+    """All the strings that look like managed keys, anywhere in the payload (the operations'
+    nested parameters too, e.g. the foreach's driver)."""
     found: set[str] = set()
 
     def walk(node: Any) -> None:
@@ -114,9 +113,9 @@ def _can_read_key(session: Session, user: User, key: str, readable: set[int]) ->
             if flow and flow.project_id in readable:
                 return True
 
-    # LIKE sulla definition dei flussi leggibili: le chiavi sono UUID esadecimali,
-    # falsi positivi di fatto impossibili. Scala coi flussi salvati: se un giorno
-    # diventasse un collo di bottiglia → tabella di riferimenti chiave↔flusso.
+    # LIKE on the readable flows' definitions: the keys are hexadecimal UUIDs, false
+    # positives impossible in practice. It scales with the saved flows: if one day it became
+    # a bottleneck → a key↔flow reference table.
     if readable and session.exec(
         select(Flow.id).where(Flow.project_id.in_(readable), Flow.definition.contains(key))  # type: ignore[attr-defined]
     ).first():
@@ -126,17 +125,17 @@ def _can_read_key(session: Session, user: User, key: str, readable: set[int]) ->
 
 
 def ensure_can_run_keys(session: Session, user: User, keys: Iterable[str]) -> None:
-    """403 alla prima chiave managed su cui l'utente non può ESEGUIRE.
+    """403 at the first managed key the user cannot RUN on.
 
-    `/tasks/transform-data` fa lavorare i worker e scrive un parquet: è un run,
-    anche se non ha un flusso salvato dietro. Prima chiedeva solo di poter
-    LEGGERE le sorgenti, e un ospite di sola lettura (VIEW) eseguiva quello che
-    il percorso ufficiale `/flows/{id}/runs` gli nega con `Capability.RUN`
-    (audit 2026-09-30, trovato con le credenziali dell'ospite della demo).
+    `/tasks/transform-data` puts the workers to work and writes a parquet: it is a run,
+    even without a saved flow behind it. Before, it asked only to be able to READ the
+    sources, and a read-only guest (VIEW) ran what the official `/flows/{id}/runs` path
+    denies them with `Capability.RUN` (audit 2026-09-30, found with the demo guest's
+    credentials).
 
-    La risoluzione chiave→progetto è la stessa della lettura — datasource,
-    upload propri, run, definizioni dei flussi — cambia solo l'insieme dei
-    progetti: quelli con RUN, non quelli con VIEW."""
+    The key→project resolution is the same as for reading — datasources, own uploads,
+    runs, flows' definitions — only the set of projects changes: those with RUN, not
+    those with VIEW."""
     keys = set(keys)
     if not keys or perm_service.is_admin(session, user):
         return
@@ -150,7 +149,7 @@ def ensure_can_run_keys(session: Session, user: User, keys: Iterable[str]) -> No
 
 
 def ensure_can_read_keys(session: Session, user: User, keys: Iterable[str]) -> None:
-    """403 alla prima chiave managed non leggibile dall'utente."""
+    """403 at the first managed key the user cannot read."""
     keys = set(keys)
     if not keys or perm_service.is_admin(session, user):
         return

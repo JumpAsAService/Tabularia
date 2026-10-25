@@ -23,18 +23,18 @@ def test_it_is_readable_without_signing_in(session):
 def test_the_first_read_creates_it_with_a_text_that_is_actually_true(session):
     """Il testo di partenza non è un modulo da riempire: dice quello che il
     prodotto raccoglie davvero, ed è verificabile leggendo il codice."""
-    fuori = privacy_routes.get_privacy(session=session)
+    outside = privacy_routes.get_privacy(session=session)
 
-    assert fuori.enabled is True and fuori.summary
+    assert outside.enabled is True and outside.summary
     # le tre rinunce di cui il prodotto è responsabile
-    assert "We do not record your IP address" in fuori.body
-    assert "We do not record your browser" in fuori.body
-    assert "questions to the assistant are not saved" in fuori.body
+    assert "We do not record your IP address" in outside.body
+    assert "We do not record your browser" in outside.body
+    assert "questions to the assistant are not saved" in outside.body
     # e le due cose scomode, dette lo stesso
-    assert "sent to the model provider" in fuori.body
+    assert "sent to the model provider" in outside.body
     # la conservazione non è un numero copiato a mano: è letta dalla configurazione
-    assert "Automatic deletion of audit entries:" in fuori.body
-    assert "{audit_retention}" in fuori.body_template
+    assert "Automatic deletion of audit entries:" in outside.body
+    assert "{audit_retention}" in outside.body_template
 
 
 def test_it_is_one_row_not_a_list(session):
@@ -47,13 +47,13 @@ def test_an_administrator_rewrites_it_and_it_leaves_a_trace(session):
     """Cambiare l'informativa cambia ciò che l'installazione DICHIARA a tutti:
     è una modifica che deve restare a registro come le altre."""
     capo = make_user(session, email="capo@x.it", is_superuser=True)
-    fuori = privacy_routes.update_privacy(
+    outside = privacy_routes.update_privacy(
         PrivacyUpdate(summary="La nostra informativa", url="https://esempio.it/privacy"),
         current=capo, session=session,
     )
-    assert fuori.summary == "La nostra informativa"
-    assert fuori.url == "https://esempio.it/privacy"
-    assert fuori.body  # non tocco ciò che non mi passano
+    assert outside.summary == "La nostra informativa"
+    assert outside.url == "https://esempio.it/privacy"
+    assert outside.body  # non tocco ciò che non mi passano
 
     azioni = [a.action for a in session.exec(select(AuditLog)).all()]
     assert audit_svc.PRIVACY_UPDATE in azioni
@@ -89,29 +89,29 @@ def test_the_retention_window_is_filled_in_from_the_configuration(session, monke
 
     cfg = get_settings()
     monkeypatch.setattr(cfg.audit, "retention_minutes", 60, raising=False)
-    fuori = privacy_routes.get_privacy(session=session)
+    outside = privacy_routes.get_privacy(session=session)
 
-    assert "{audit_retention}" not in fuori.body        # sostituito nel testo mostrato
-    assert "1 hour" in fuori.body
-    assert "{audit_retention}" in fuori.body_template   # intatto in quello da modificare
+    assert "{audit_retention}" not in outside.body        # sostituito nel testo mostrato
+    assert "1 hour" in outside.body
+    assert "{audit_retention}" in outside.body_template   # intatto in quello da modificare
 
 
 def test_no_expiry_is_said_in_words_not_left_blank(session, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings().audit, "retention_minutes", 0, raising=False)
-    fuori = privacy_routes.get_privacy(session=session)
-    assert "none — entries are kept until an administrator removes them" in fuori.body
+    outside = privacy_routes.get_privacy(session=session)
+    assert "none — entries are kept until an administrator removes them" in outside.body
 
 
-@pytest.mark.parametrize("minuti,atteso", [
+@pytest.mark.parametrize("minutes,atteso", [
     (1, "1 minute"), (45, "45 minutes"), (60, "1 hour"), (120, "2 hours"),
     (1440, "1 day"), (43200, "30 days"), (90, "90 minutes"),
 ])
-def test_the_window_is_said_the_way_a_person_would(minuti, atteso):
-    from app.routes.privacy import _durata
+def test_the_window_is_said_the_way_a_person_would(minutes, atteso):
+    from app.routes.privacy import _duration
 
-    assert _durata(minuti) == atteso
+    assert _duration(minutes) == atteso
 
 
 def test_an_unknown_placeholder_is_left_alone(session, monkeypatch):
@@ -120,8 +120,8 @@ def test_an_unknown_placeholder_is_left_alone(session, monkeypatch):
 
     monkeypatch.setattr(get_settings().audit, "retention_minutes", 60, raising=False)
     capo = make_user(session, email="capo-par@x.it", is_superuser=True)
-    fuori = privacy_routes.update_privacy(
+    outside = privacy_routes.update_privacy(
         PrivacyUpdate(body="Conserviamo per {audit_retention}. Scrivi a {qualcosa}."),
         current=capo, session=session,
     )
-    assert fuori.body == "Conserviamo per 1 hour. Scrivi a {qualcosa}."
+    assert outside.body == "Conserviamo per 1 hour. Scrivi a {qualcosa}."

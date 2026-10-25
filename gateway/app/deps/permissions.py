@@ -1,4 +1,4 @@
-"""Helper per applicare i permessi sui progetti dentro le route."""
+"""Helpers to apply the projects' permissions inside the routes."""
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
@@ -8,7 +8,7 @@ from app.services import permissions as perm_service
 
 
 def ensure_can(session: Session, user: User, project_id: int, capability: Capability) -> None:
-    """Solleva 403 se l'utente non ha la capability sul progetto (o suoi antenati)."""
+    """Raises 403 when the user lacks the capability on the project (or its ancestors)."""
     if not perm_service.has_capability(session, user, project_id, capability):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

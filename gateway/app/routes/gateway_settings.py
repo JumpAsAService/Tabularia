@@ -20,23 +20,23 @@ from sqlmodel import Session, select
 
 from app.core import overrides as ov
 from app.core.config import get_settings, settings_from_env
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import require_observer, require_superuser
 from app.models import GatewaySetting, User
 from app.schemas.models import UtcDateTime
 from app.services import api_tokens, audit
-from app.services import regolazioni_motore as rm
+from app.services import engine_panel_settings as rm
 from app.services import settings_rollout as sr
 from app.services.masking import mask_email
 from app.services.permissions import is_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/gateway-settings", tags=["settings"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/admin/gateway-settings", tags=["settings"])
 
-# not the engine's (regolazioni_motore.LUCCHETTO): the two panels save independently
-LUCCHETTO = 7_402_120
+# not the engine's (engine_panel_settings.LUCCHETTO): the two panels save independently
+LOCK = 7_402_120
 
 
 class SettingOut(BaseModel):
@@ -69,23 +69,23 @@ class SettingsUpdate(BaseModel):
     values: dict[str, Any] = Field(max_length=80)
 
 
-def _niente_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
+def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
     """After authentication (the dependency above), before the body is read."""
-    from app.routes.api_tokens import nega_se_da_token
+    from app.routes.api_tokens import deny_if_from_token
 
-    nega_se_da_token(request, api_tokens.NIENTE_IMPOSTAZIONI_DA_TOKEN)
+    deny_if_from_token(request, api_tokens.NO_SETTINGS_FROM_TOKEN)
 
 
-def available(voce: ov.Voce) -> bool:
+def available(item: ov.Item) -> bool:
     """The groups of a feature this installation does not have are not shown."""
     s = get_settings()
-    if voce.when == "sso":
+    if item.when == "sso":
         return s.oidc.enabled
-    if voce.when == "kubernetes":
+    if item.when == "kubernetes":
         return Path(s.kubernetes.token_file).exists()
-    if voce.when == "scripts":
+    if item.when == "scripts":
         return s.scripts.enabled
-    if voce.when == "containers":
+    if item.when == "containers":
         return s.containers.enabled
     return True
 
@@ -105,16 +105,16 @@ def _decode(row: GatewaySetting) -> Any:
         return None
 
 
-def _stato(session: Session, chi: User, request: Request) -> SettingsOut:
+def _state(session: Session, chi: User, request: Request) -> SettingsOut:
     rows = _rows(session)
     # The rows just read can be newer than this process's copy, re-read every
-    # RILEGGI_OGNI seconds: another gateway replica saved them a moment ago. In force here
+    # REREAD_EVERY seconds: another gateway replica saved them a moment ago. In force here
     # at once, or the page showed them «not applied» until this replica read them too.
     ov.apply_rows({k: v for k, v in ((k, _decode(r)) for k, r in rows.items()) if v is not None})
     env, now = settings_from_env(), get_settings()
     full = is_admin(session, chi)
     items = []
-    for v in ov.VOCI:
+    for v in ov.ITEMS:
         if not available(v):
             continue
         r = rows.get(v.key)
@@ -123,19 +123,19 @@ def _stato(session: Session, chi: User, request: Request) -> SettingsOut:
             key=v.key, group=v.group, kind=v.kind, unit=v.unit, min=v.minimum, max=v.maximum,
             max_length=v.max_length if v.kind in ("str", "timezone", "cpu", "memory") else None,
             rollout=list(v.rollout), env_var=v.env_var, env_value=_json(ov.effective(env, v.key)),
-            value=_decode(r) if r is not None and rm.dal_pannello() else None,
+            value=_decode(r) if r is not None and rm.from_panel() else None,
             applied=_json(ov.effective(now, v.key)),
             started_with=_json(ov.started_with(v.key)) if v.rollout else None,
             updated_at=r.updated_at if r is not None else None,
             updated_by=(by if full else mask_email(by)) if by else None,
         ))
-    return SettingsOut(items=items, editable=full and rm.dal_pannello() and not api_tokens.nome_corrente(request),
-                       panel_enabled=rm.dal_pannello(), refresh_seconds=ov.RILEGGI_OGNI)
+    return SettingsOut(items=items, editable=full and rm.from_panel() and not api_tokens.current_name(request),
+                       panel_enabled=rm.from_panel(), refresh_seconds=ov.REREAD_EVERY)
 
 
 @router.get("", response_model=SettingsOut)
-def leggi(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
-    return _stato(session, chi, request)
+def read(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
+    return _state(session, chi, request)
 
 
 async def _stale_below_hard_limit(stale: int) -> Optional[dict]:
@@ -144,31 +144,31 @@ async def _stale_below_hard_limit(stale: int) -> Optional[dict]:
     closed as failed. The engine says which hard limit it applies."""
     key = "engine.run_stale_timeout_seconds"
     try:
-        cat = await rm.catalogo()
+        cat = await rm.catalog()
     except (httpx.HTTPError, ValueError):
         return {"key": key, "code": "engine_unreachable"}
     hard = next((i.get("value") if i.get("value") is not None else i.get("env_value")
                  for i in cat.get("items", []) if i.get("key") == "celery.task_time_limit"), None)
-    if hard is not None and stale < hard + rm.MARGINE:
-        return {"key": key, "code": "stale_below_hard_limit", "limit": hard + rm.MARGINE}
+    if hard is not None and stale < hard + rm.MARGIN:
+        return {"key": key, "code": "stale_below_hard_limit", "limit": hard + rm.MARGIN}
     return None
 
 
-@router.put("", response_model=SettingsOut, dependencies=[Depends(_niente_token)])
-async def scrivi(
+@router.put("", response_model=SettingsOut, dependencies=[Depends(_no_token)])
+async def write(
     body: SettingsUpdate, request: Request,
     session: Session = Depends(get_session), admin: User = Depends(require_superuser),
 ):
     """Changes the ones given, all or none: a 422 says which and why, with a code the
     panel translates. Saved, they apply at once in this process, within
-    `RILEGGI_OGNI` seconds in the others (the rollout ones: when they start again)."""
-    _niente_token(request)
-    if not rm.dal_pannello():
+    `REREAD_EVERY` seconds in the others (the rollout ones: when they start again)."""
+    _no_token(request)
+    if not rm.from_panel():
         raise HTTPException(status_code=403, detail="On this installation the settings can only be changed in the environment (ENGINE__SETTINGS_PANEL=false)")
-    if not await rm.blocca(session, chiave=LUCCHETTO):
+    if not await rm.lock(session, key=LOCK):
         raise HTTPException(status_code=409, detail="Another change to the settings is in progress: try again in a moment")
-    errors = [{"key": k, "code": "unknown" if k not in ov.PER_CHIAVE else "unavailable"}
-              for k in body.values if k not in ov.PER_CHIAVE or not available(ov.PER_CHIAVE[k])]
+    errors = [{"key": k, "code": "unknown" if k not in ov.PER_KEY else "unavailable"}
+              for k in body.values if k not in ov.PER_KEY or not available(ov.PER_KEY[k])]
     if errors:
         return JSONResponse(status_code=422, content={"detail": {"errors": errors}})
     env = settings_from_env()
@@ -201,9 +201,9 @@ async def scrivi(
     changes = {k: {"from": raw_before.get(k), "to": good.get(k)} for k in body.values
                if raw_before.get(k) != good.get(k) or (k in rows) != (k in good)}
     if not changes:
-        return _stato(session, admin, request)
+        return _state(session, admin, request)
     at = datetime.now(timezone.utc).replace(tzinfo=None)
-    sr.mark_changed(session, (c for k in changes for c in ov.PER_CHIAVE[k].rollout))
+    sr.mark_changed(session, (c for k in changes for c in ov.PER_KEY[k].rollout))
     for k in changes:
         if k in good:
             row = rows.get(k) or GatewaySetting(key=k, value="null", updated_at=at)
@@ -216,23 +216,23 @@ async def scrivi(
         session, actor=admin, action=audit.SETTINGS_UPDATE, request=request,
         target_type="settings", target_label="gateway", detail={"changes": changes},
     )
-    ov.reload(session.get_bind())  # this process at once; the others within RILEGGI_OGNI
+    ov.reload(session.get_bind())  # this process at once; the others within REREAD_EVERY
     if "app.timezone" in changes:
-        from app.services.scheduler import ricalcola_tutte
+        from app.services.scheduler import recompute_all
 
-        n = ricalcola_tutte(session)
+        n = recompute_all(session)
         logger.info("settings: the schedules' time zone changed, %d next slots computed again", n)
-    if set(changes) & set(rm.DAL_GATEWAY):
+    if set(changes) & set(rm.FROM_GATEWAY):
         try:  # the engine's barrier too, now rather than at the next round (rm.SPINGI_OGNI)
-            await rm.un_giro(session.get_bind())
+            await rm.one_round(session.get_bind())
         except Exception as e:  # noqa: BLE001 — engine down: the next round sends it
             logger.info("settings: the upload limit not sent to the engine yet (%s)", e)
-    return _stato(session, admin, request)
+    return _state(session, admin, request)
 
 
 # ── the rollout of what reads a changed setting only at start ────────────────
 
-rollout_router = APIRouter(route_class=RottaCheRilascia, prefix="/admin/settings-rollout", tags=["settings"])
+rollout_router = APIRouter(route_class=ReleasingRoute, prefix="/admin/settings-rollout", tags=["settings"])
 
 
 class RolloutComponent(BaseModel):
@@ -269,7 +269,7 @@ async def _rollout(session: Session, chi: User, request: Request) -> RolloutOut:
         if c["requested_by"] and not full:
             c["requested_by"] = mask_email(c["requested_by"])
     return RolloutOut(mode=st["mode"], components=st["components"], namespace=st["namespace"], release=st["release"],
-                      editable=full and rm.dal_pannello() and not api_tokens.nome_corrente(request))
+                      editable=full and rm.from_panel() and not api_tokens.current_name(request))
 
 
 @rollout_router.get("", response_model=RolloutOut)
@@ -277,15 +277,15 @@ async def rollout_state(request: Request, session: Session = Depends(get_session
     return await _rollout(session, chi, request)
 
 
-@rollout_router.post("", response_model=RolloutOut, dependencies=[Depends(_niente_token)])
+@rollout_router.post("", response_model=RolloutOut, dependencies=[Depends(_no_token)])
 async def rollout_start(
     body: RolloutRequest, request: Request,
     session: Session = Depends(get_session), admin: User = Depends(require_superuser),
 ):
     """Kubernetes: the orchestrator restarts their pods one at a time. Docker Compose, or
     Kubernetes without the chart's right: the administrator says they restarted them."""
-    _niente_token(request)
-    if not rm.dal_pannello():
+    _no_token(request)
+    if not rm.from_panel():
         raise HTTPException(status_code=403, detail="On this installation the settings can only be changed in the environment (ENGINE__SETTINGS_PANEL=false)")
     unknown = [c for c in body.components if c not in sr.ORDER]
     if unknown:
@@ -298,13 +298,13 @@ async def rollout_start(
     return await _rollout(session, admin, request)
 
 
-@rollout_router.delete("/{component}", response_model=RolloutOut, dependencies=[Depends(_niente_token)])
+@rollout_router.delete("/{component}", response_model=RolloutOut, dependencies=[Depends(_no_token)])
 async def rollout_cancel(
     component: str, request: Request,
     session: Session = Depends(get_session), admin: User = Depends(require_superuser),
 ):
     """Stops a rollout: the pods already restarted stay, the others keep the old value."""
-    _niente_token(request)
+    _no_token(request)
     if sr.cancel(session, component):
         session.commit()
         audit.record_audit(session, actor=admin, action=audit.SETTINGS_ROLLOUT_CANCEL, request=request,

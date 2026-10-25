@@ -9,12 +9,11 @@ def _now() -> datetime:
 
 class Upload(SQLModel, table=True):
     """
-    Registro dei file caricati via `POST /files`: chi ha caricato quale oggetto.
+    The register of the files uploaded through `POST /files`: who uploaded which object.
 
-    Serve al controllo RBAC sul data plane: un upload appena fatto non vive in
-    nessun progetto, quindi è leggibile SOLO dal proprietario; entra nella
-    sfera dei permessi di progetto quando un flusso salvato lo referenzia
-    (vedi services/objects.py).
+    It serves the RBAC check on the data plane: a fresh upload lives in no project, so it
+    is readable ONLY by its owner; it enters the sphere of the project permissions when a
+    saved flow references it (see services/objects.py).
     """
     __tablename__ = "uploads"
 

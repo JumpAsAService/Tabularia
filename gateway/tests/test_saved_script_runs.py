@@ -81,7 +81,7 @@ def engine(monkeypatch):
 def queue(session, monkeypatch):
     """The orchestrator's sessions on the test database."""
     monkeypatch.setattr(orch, "engine", session.get_bind())
-    monkeypatch.setattr(orch, "sveglia", lambda: None)
+    monkeypatch.setattr(orch, "wake", lambda: None)
     return session
 
 
@@ -110,7 +110,7 @@ def _usable(session, user):
 
 async def _run(session, user, script) -> Run:
     head = saved_script_runs.create_script_run(session, user, script)
-    await orch.esegui(head.id)
+    await orch.run_it(head.id)
     session.expire_all()
     return session.get(Run, head.id)
 
@@ -268,7 +268,7 @@ async def test_run_route_rights_one_live_run_and_the_history(app, session, clust
     run_id = r.json()["run_id"]
     assert boss.post(f"/scripts/{script_id}/run", headers=CSRF).status_code == 409  # one at a time
     assert boss.delete(f"/scripts/{script_id}", headers=CSRF).status_code == 409  # not while queued
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     session.expire_all()
     runs = viewer.get(f"/scripts/{script_id}/runs").json()
     assert [(x["run_id"], x["status"], x["output"], x["rows"]) for x in runs] == [(run_id, "SUCCESS", True, 3)]
@@ -304,7 +304,7 @@ async def test_the_runs_list_leaves_out_a_script_its_reader_may_not_see(app, ses
     script_id = _script(session, _environment(session).id, pid).id  # no group: only admins use it
     boss = _login(app, session, "boss@x.local", is_superuser=True)
     run_id = boss.post(f"/scripts/{script_id}/run", headers=CSRF).json()["run_id"]
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     session.expire_all()
     child_id = session.exec(select(Run.id).where(Run.kind == "script")).one()
     assert outsider.get(f"/scripts/{script_id}").status_code == 404

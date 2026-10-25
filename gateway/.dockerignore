@@ -3,7 +3,7 @@ __pycache__/
 .venv/
 .git/
 .pytest_cache/
-# segreti e configurazione locale: non devono MAI entrare in un'immagine
+# secrets and local configuration: they must NEVER get into an image
 .env
 .env.*
 *.pem

@@ -35,8 +35,8 @@ def scenario(session, monkeypatch):
         connection_id=conn.id, refresh_schedule="0 3 * * *", refresh_scheduled_by=alice.id,
         next_refresh_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1),
     )
-    for progetto, cap in ((cartella_dati, Capability.RUN), (cartella_conn, Capability.CONNECT)):
-        session.add(Permission(project_id=progetto.id, user_id=alice.id, capability=cap))
+    for project, cap in ((cartella_dati, Capability.RUN), (cartella_conn, Capability.CONNECT)):
+        session.add(Permission(project_id=project.id, user_id=alice.id, capability=cap))
     session.commit()
 
     lanciati = []

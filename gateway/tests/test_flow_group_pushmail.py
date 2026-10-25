@@ -25,7 +25,7 @@ SMTP_PASSWORD = "smtp-password-in-clear-0d1e"
 @pytest.fixture
 def world(session, db_engine, monkeypatch, fake_engine):
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
     monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.01)
 
     async def no_side_effects(session, run):
@@ -130,7 +130,7 @@ def _run(world, group_id, user=None) -> int:
     s = world["session"]
     run = Run(kind="orchestration", flow_group_id=group_id, task_id="", status="STARTED",
               launched_by=(user or world["admin"]).id, trigger_type="manual",
-              claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(), input_key="", output_bucket="", output_key="")
+              claimed_by=orch.INSTANCE, heartbeat_at=orch._now(), input_key="", output_bucket="", output_key="")
     s.add(run)
     s.commit()
     return run.id
@@ -149,7 +149,7 @@ async def test_the_cell_sends_through_the_engine_and_waits_for_the_outcome(world
         "status": "SUCCESS", "error": None,
         "result": {"rows_written": 502, "email": {"ok": True, "recipients": 2, "attachments": [{"name": "regioni.xlsx"}]}}}
     run_id = _run(world, out.id)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, cells, children = _state(db_engine, run_id)
     assert status == "SUCCESS", error
     (child,) = children
@@ -176,7 +176,7 @@ async def test_a_refused_send_fails_the_cell_and_the_group(world, db_engine):
     world["engine"].task_states["t-pushmail-1"] = {"status": "FAILURE", "result": None,
                                                    "error": "Sending was rejected by smtp.acme.example: too large"}
     run_id = _run(world, out.id)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, error, cells, (child,) = _state(db_engine, run_id)
     assert status == "FAILURE" and cells[0][0]["state"] == "failed"
     assert "too large" in cells[0][0]["error"] and child.status == "FAILURE"
@@ -189,7 +189,7 @@ async def test_a_datasource_without_data_fails_before_anything_is_sent(world, db
     s.add(world["regions"])
     s.commit()
     run_id = _run(world, out.id)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, _, cells, children = _state(db_engine, run_id)
     assert status == "FAILURE" and "no data yet in Regioni" in cells[0][0]["error"]
     assert world["engine"].pushmails == [] and children == []
@@ -206,7 +206,7 @@ async def test_rights_are_checked_again_when_it_runs(world, db_engine):
     s.delete(s.exec(select(Permission).where(Permission.user_id == editor.id, Permission.project_id == world["mail"].id)).one())
     s.commit()
     run_id = _run(world, out.id, user=editor)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, _, cells, _ = _state(db_engine, run_id)
     assert status == "FAILURE" and "needs CONNECT" in cells[0][0]["error"] and world["engine"].pushmails == []
 
@@ -217,7 +217,7 @@ async def test_the_note_is_written_in_the_language_of_who_runs_it(world, db_engi
     s.add(world["admin"])
     s.commit()
     out = _create(world, world["admin"], _cell(world))
-    await orch.esegui(_run(world, out.id))
+    await orch.run_it(_run(world, out.id))
     assert world["engine"].pushmails[0]["spec"]["lang"] == "it"
 
 
@@ -225,7 +225,7 @@ async def test_an_engine_that_refuses_the_email_fails_the_cell_at_once(world, db
     out = _create(world, world["admin"], _cell(world))
     world["engine"].pushmail_status = 422
     run_id = _run(world, out.id)
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     status, _, cells, (child,) = _state(db_engine, run_id)
     assert status == "FAILURE" and "did not take the email" in cells[0][0]["error"] and child.status == "FAILURE"
 
@@ -269,10 +269,10 @@ async def test_a_scheduled_group_whose_author_cannot_send_does_not_start(world, 
     s.add(group)
     s.commit()
     run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=author.id,
-              trigger_type="schedule", claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(),
+              trigger_type="schedule", claimed_by=orch.INSTANCE, heartbeat_at=orch._now(),
               input_key="", output_bucket="", output_key="")
     s.add(run)
     s.commit()
-    await orch.esegui(run.id)
+    await orch.run_it(run.id)
     status, error, _, children = _state(db_engine, run.id)
     assert status == "FAILURE" and "CONNECT" in (error or "") and children == [] and world["engine"].pushmails == []

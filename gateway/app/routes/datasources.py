@@ -1,11 +1,11 @@
-"""Datasource nominate: il catalogo dei dataset riusabili come sorgenti.
+"""Named datasources: the catalog of the datasets reusable as sources.
 
-Permessi ereditati dall'albero come flussi e progetti:
-- lista/uso: VIEW sul progetto della datasource;
-- rinomina/spostamento/eliminazione: EDIT (spostare richiede EDIT anche a destinazione).
+Permissions inherited down the tree as for flows and projects:
+- list/use: VIEW on the datasource's project;
+- rename/move/delete: EDIT (moving requires EDIT at the destination too).
 
-Il gateway non tocca MAI lo storage direttamente (le credenziali S3 vivono solo
-nell'engine): l'eliminazione del blob passa dall'endpoint interno dell'engine.
+The gateway NEVER touches the storage directly (the S3 credentials live only in the
+engine): deleting the blob goes through the engine's internal endpoint.
 """
 import json
 import logging
@@ -26,7 +26,7 @@ from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, Run, SavedView, User
 from app.services import audit, openlineage
 from app.services import contracts as contract_service
-from app.services.documented import conta_descritte, is_ai_ready
+from app.services.documented import count_described, is_ai_ready
 from app.models.permission import Capability
 from app.models.run import LIVE_INGEST, TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run, run_out, snapshot_key, start_refresh_if_free
@@ -48,16 +48,16 @@ from app.services.blobgc import schedule_blob_deletion
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.pagination import paginate
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["datasources"])
+router = APIRouter(route_class=ReleasingRoute, tags=["datasources"])
 
 
 MAX_COLUMN_DESCRIPTION = 2000
-# descrizione della DATASOURCE: cosa contiene, una riga = cosa, periodo,
-# avvertenze. La leggono le persone e l'assistente AI per scegliere la tabella.
+# the DATASOURCE's description: what it holds, one line = what, period, caveats. People
+# and the AI assistant read it to choose the table.
 MAX_DATASOURCE_DESCRIPTION = 4000
 MAX_SORT_KEY = 255
 
@@ -112,8 +112,8 @@ def _load_column_descriptions(ds: Datasource) -> dict[str, str]:
 
 
 def clean_column_descriptions(value: dict[str, str]) -> dict[str, str]:
-    """Normalizza la mappa {colonna: descrizione}: spazi tolti, voci vuote
-    scartate, lunghezza limitata (422 oltre)."""
+    """Normalizes the {column: description} map: spaces stripped, empty items dropped,
+    length limited (422 beyond)."""
     out: dict[str, str] = {}
     for col, text in value.items():
         col = str(col).strip()
@@ -130,11 +130,11 @@ def clean_column_descriptions(value: dict[str, str]) -> dict[str, str]:
 
 
 def _refreshing_ids(session: Session, rows: list[Datasource]) -> set[int]:
-    """Le datasource che hanno un ingest IN CORSO, con una sola query per tutto
-    l'elenco. Lo stato "sta importando" viveva solo nella memoria della pagina:
-    con un refresh da cinque minuti bastava cambiare scheda e tornare — o che il
-    refresh fosse partito dallo scheduler — per non vedere più niente. Lo dice il
-    server, così lo spinner sopravvive a ricariche e a refresh altrui."""
+    """The datasources with an ingest IN PROGRESS, with one query for the whole list. The
+    "importing" state lived only in the page's memory: with a five-minute refresh,
+    changing tab and coming back — or the refresh having been started by the scheduler —
+    was enough to see nothing any more. The server says it, so the spinner survives
+    reloads and other people's refreshes."""
     ids = [d.id for d in rows if d.id is not None]
     if not ids:
         return set()
@@ -149,13 +149,13 @@ def _to_out(ds: Datasource, refreshing: bool = False, contract: dict | None = No
     except json.JSONDecodeError:
         cols = []
     descs = _load_column_descriptions(ds)
-    # la descrizione viaggia anche dentro `columns` (comodo per editor/AI)
+    # the description travels inside `columns` too (handy for editor/AI)
     cols = [
         {**c, "description": descs[c["name"]]} if isinstance(c, dict) and c.get("name") in descs else c
         for c in cols
     ]
-    # accesso per attributo (non model_dump): un'istanza "expired" dopo il commit
-    # dell'audit darebbe un dict vuoto → 500 (vedi connections._to_out)
+    # attribute access (not model_dump): an instance "expired" after the audit's commit
+    # would give an empty dict → 500 (see connections._to_out)
     try:
         skeys = json.loads(ds.sort_keys or "[]")
     except json.JSONDecodeError:
@@ -165,26 +165,26 @@ def _to_out(ds: Datasource, refreshing: bool = False, contract: dict | None = No
     fields = {
         f: getattr(ds, f)
         for f in DatasourceOut.model_fields
-        # `refreshing` non è una colonna: è calcolato (vedi _refreshing_ids)
-        # i CALCOLATI non stanno sul modello: `getattr` qui esploderebbe
+        # `refreshing` is not a column: it is computed (see _refreshing_ids)
+        # the COMPUTED ones are not on the model: `getattr` here would blow up
         if f not in ("columns", "column_descriptions", "sort_keys", "refreshing",
                      "described_columns", "total_columns", "ai_ready", "contract")
     }
-    descritte, totali = conta_descritte(cols, descs)
+    described, totals = count_described(cols, descs)
     return DatasourceOut(
         **fields, columns=cols, column_descriptions=descs, sort_keys=skeys, refreshing=refreshing,
-        described_columns=descritte, total_columns=totali,
-        ai_ready=is_ai_ready(ds.description, descritte, totali),
+        described_columns=described, total_columns=totals,
+        ai_ready=is_ai_ready(ds.description, described, totals),
         contract=contract,
     )
 
 
 def _to_out_many(session: Session, rows: list[Datasource]) -> list[DatasourceOut]:
-    """Un elenco di datasource con ciò che si calcola per tutte insieme: chi sta
-    importando e lo stato del data contract — una query ciascuno, non una a riga."""
+    """A list of datasources with what is computed for all of them together: who is
+    importing and the data contract's state — one query each, not one per row."""
     busy = _refreshing_ids(session, rows)
-    stato = contract_service.summaries(session, [d.id for d in rows])
-    return [_to_out(d, d.id in busy, stato.get(d.id)) for d in rows]
+    state = contract_service.summaries(session, [d.id for d in rows])
+    return [_to_out(d, d.id in busy, state.get(d.id)) for d in rows]
 
 
 def _get_ds(session: Session, ds_id: int) -> Datasource:
@@ -196,10 +196,10 @@ def _get_ds(session: Session, ds_id: int) -> Datasource:
 
 @router.get("/datasources", response_model=list[DatasourceOut])
 def list_all_datasources(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Tutte le datasource nei progetti LEGGIBILI (per il picker delle sorgenti).
+    """All the datasources in the READABLE projects (for the sources' picker).
 
-    `readable_project_ids`, non `visible_project_ids`: gli antenati mostrati per
-    navigazione non danno accesso al loro contenuto.
+    `readable_project_ids`, not `visible_project_ids`: the ancestors shown for navigation
+    do not give access to their content.
     """
     readable = perm_service.readable_project_ids(session, user)
     if not readable:
@@ -212,14 +212,14 @@ def list_all_datasources(user: User = Depends(get_current_user), session: Sessio
 
 @router.get("/datasources/search", response_model=Page[DatasourceOut])
 def search_datasources(
-    q: str | None = Query(None, description="cerca su nome/descrizione, sull'INTERO dataset"),
+    q: str | None = Query(None, description="searches name/description, over the WHOLE dataset"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Datasource nei progetti leggibili, PAGINATE, con ricerca server-side sul
-    dataset intero (non solo sulla pagina). Per la pagina globale Datasources."""
+    """Datasources in the readable projects, PAGINATED, with a server-side search over the
+    whole dataset (not only the page). For the global Datasources page."""
     readable = perm_service.readable_project_ids(session, user)
     if not readable:
         return Page(items=[], total=0)
@@ -258,9 +258,9 @@ async def create_db_datasource(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Datasource da database: EDIT sulla cartella di destinazione + CONNECT
-    sulla cartella della connessione (la barriera sulle credenziali). Il primo
-    ingest parte subito; il parquet è uno snapshot, il refresh lo sostituisce.
+    """A datasource from a database: EDIT on the destination folder + CONNECT on the
+    connection's folder (the barrier on the credentials). The first ingest starts at
+    once; the parquet is a snapshot, the refresh replaces it.
     """
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -297,7 +297,7 @@ async def create_db_datasource(
         project_id=project_id,
         owner_id=user.id,
         bucket=get_settings().engine.bucket,
-        key="",  # nessuno snapshot finché il primo ingest non riesce
+        key="",  # no snapshot until the first ingest succeeds
         kind="database",
         connection_id=conn.id,
         source_type=body.source_type,
@@ -311,8 +311,8 @@ async def create_db_datasource(
     try:
         await launch_ingest_run(session, user, ds, conn)
     except Exception:
-        # engine giù (anche un ConnectError, non solo un HTTPException) o richiesta
-        # rifiutata: niente datasource a metà, creazione atomica
+        # engine down (a ConnectError too, not only an HTTPException) or request refused: no
+        # half datasource, an atomic creation
         session.delete(ds)
         session.commit()
         raise
@@ -338,12 +338,12 @@ async def create_sharepoint_datasource(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Datasource da file Excel su SharePoint (percorso anche con glob + foglio).
+    """A datasource from Excel files on SharePoint (path, globs too, + sheet).
 
-    È una datasource `kind="database"` a tutti gli effetti — refresh manuale e
-    schedulato, storico degli import, spinner, snapshot swap — con
-    `source_type="sharepoint"` e `source_ref` = JSON {path, sheet, format, csv}: cambia solo
-    CHI porta i dati (vedi launch_ingest_run)."""
+    It is a `kind="database"` datasource in every respect — manual and scheduled refresh,
+    import history, spinner, snapshot swap — with `source_type="sharepoint"` and
+    `source_ref` = JSON {path, sheet, format, csv}: only WHO brings the data changes (see
+    launch_ingest_run)."""
     if session.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
@@ -363,7 +363,7 @@ async def create_sharepoint_datasource(
     await validate_file_templates(conn, ref, ("path",))
     ds = Datasource(
         name=name, description=body.description, project_id=project_id, owner_id=user.id,
-        bucket=get_settings().engine.bucket, key="",  # nessuno snapshot finché il primo import non riesce
+        bucket=get_settings().engine.bucket, key="",  # no snapshot until the first import succeeds
         kind="database", connection_id=conn.id,
         source_type="sharepoint", source_ref=json.dumps(ref),
     )
@@ -373,7 +373,7 @@ async def create_sharepoint_datasource(
     try:
         await launch_ingest_run(session, user, ds, conn)
     except Exception:
-        session.delete(ds)  # engine giù (anche ConnectError) o rifiuto: niente datasource a metà
+        session.delete(ds)  # engine down (ConnectError too) or refusal: no half datasource
         session.commit()
         raise
     audit.record_audit(
@@ -689,8 +689,8 @@ async def refresh_datasource(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Ri-esegue la sorgente e sostituisce lo snapshot: RUN sulla cartella della
-    datasource + CONNECT su quella della connessione. Un refresh alla volta."""
+    """Runs the source again and replaces the snapshot: RUN on the datasource's folder +
+    CONNECT on the connection's. One refresh at a time."""
     ds = _get_ds(session, ds_id)
     if ds.kind != "database":
         raise HTTPException(status_code=422, detail="Only database datasources can be refreshed")
@@ -720,11 +720,11 @@ def set_schedule(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Imposta/disabilita il refresh schedulato (cron a 5 campi). `cron` vuoto =
-    disabilita. Serve RUN sulla datasource + CONNECT sulla connessione:
-    schedulare autorizza refresh RIPETUTI, quindi la stessa autorità del refresh
-    manuale. I refresh schedulati gireranno con l'autorità di CHI imposta lo
-    schedule (catturata qui in `refresh_scheduled_by`)."""
+    """Sets/disables the scheduled refresh (5-field cron). An empty `cron` = disable. RUN on
+    the datasource + CONNECT on the connection are needed: scheduling authorizes REPEATED
+    refreshes, so the same authority as the manual refresh. The scheduled refreshes will
+    run with the authority of WHOEVER sets the schedule (captured here in
+    `refresh_scheduled_by`)."""
     ds = _get_ds(session, ds_id)
     if ds.kind != "database":
         raise HTTPException(status_code=422, detail="Only database datasources can be scheduled")
@@ -745,7 +745,7 @@ def set_schedule(
         except ScheduleError as e:
             raise HTTPException(status_code=422, detail=str(e))
         ds.refresh_schedule = cron
-        ds.refresh_scheduled_by = user.id  # autorità dei refresh schedulati
+        ds.refresh_scheduled_by = user.id  # the scheduled refreshes' authority
         ds.next_refresh_at = next_fire(cron, datetime.now(timezone.utc))
     ds.updated_at = datetime.now(timezone.utc)
     session.add(ds)
@@ -765,7 +765,7 @@ async def list_datasource_runs(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Cronologia degli ingest (refresh) della datasource, riconciliata alla lettura."""
+    """The datasource's ingest (refresh) history, reconciled on reading."""
     def read() -> list[Run]:  # in a worker thread: the event loop never waits for the database
         ds = _get_ds(session, ds_id)
         ensure_can(session, user, ds.project_id, Capability.VIEW)
@@ -790,7 +790,7 @@ def update_datasource(
 ):
     ds = _get_ds(session, ds_id)
     ensure_can(session, user, ds.project_id, Capability.EDIT)
-    da_cartella, da_nome, schedule_prima = ds.project_id, ds.name, ds.refresh_schedule
+    from_folder, from_name, schedule_before = ds.project_id, ds.name, ds.refresh_schedule
     # the folder path is part of the datasource's name in an external lineage catalog
     lineage_names = openlineage.catalog_names(session, datasources=[ds]) if body.name is not None or body.project_id is not None else {}
 
@@ -800,9 +800,9 @@ def update_datasource(
             raise HTTPException(status_code=404, detail="Destination folder not found")
         ensure_can(session, user, body.project_id, Capability.EDIT)
         target_project = body.project_id
-        # Lo schedule porta con sé l'AUTORITÀ di chi l'ha creato: se la
-        # datasource cambia cartella, quell'autorità non vale più qui. Si
-        # spegne, e chi ha i permessi nella nuova posizione lo rimette.
+        # The schedule carries the AUTHORITY of whoever created it: when the datasource changes
+        # folder, that authority no longer holds here. It is turned off, and whoever has the
+        # permissions in the new place sets it again.
         if ds.refresh_schedule and ds.refresh_scheduled_by != user.id:
             ds.refresh_schedule = None
             ds.refresh_scheduled_by = None
@@ -838,15 +838,15 @@ def update_datasource(
     session.commit()
     session.refresh(ds)
     openlineage.renamed(session, lineage_names)
-    dettaglio = {}
-    if ds.project_id != da_cartella:
-        dettaglio.update(moved_to=ds.project_id, from_project=da_cartella,
-                         schedule_cleared=bool(schedule_prima) and not ds.refresh_schedule)
-    if ds.name != da_nome:
-        dettaglio["name"] = {"from": da_nome, "to": ds.name}
-    if dettaglio:
+    detail = {}
+    if ds.project_id != from_folder:
+        detail.update(moved_to=ds.project_id, from_project=from_folder,
+                         schedule_cleared=bool(schedule_before) and not ds.refresh_schedule)
+    if ds.name != from_name:
+        detail["name"] = {"from": from_name, "to": ds.name}
+    if detail:
         audit.record_audit(session, actor=user, action=audit.DS_UPDATE, request=request, target_type="datasource",
-                           target_id=ds.id, target_label=ds.name, detail=dettaglio)
+                           target_id=ds.id, target_label=ds.name, detail=detail)
         session.refresh(ds)
     return _to_out(ds)
 
@@ -858,15 +858,14 @@ def delete_datasource(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Elimina la voce di catalogo E (in differita) il blob parquet.
+    """Deletes the catalog item AND (deferred) the parquet blob.
 
-    Ordine deliberato: PRIMA il catalogo (staccando i run che la referenziano),
-    e nella STESSA transazione si marca il blob per la cancellazione DIFFERITA:
-    un run/preview in corso potrebbe averne già risolto la chiave e stare per
-    leggerlo, quindi non lo si cancella subito (evita il 404 sotto lettura). Lo
-    sweep dello scheduler lo elimina dopo la grace.
-    I flussi che la referenziano falliranno in preview con l'errore standard di
-    sorgente mancante — comportamento coerente con la cancellazione dei dataset.
+    A deliberate order: the catalog FIRST (detaching the runs that reference it), and in
+    the SAME transaction the blob is marked for DEFERRED deletion: a run/preview in
+    progress may have resolved its key already and be about to read it, so it is not
+    deleted at once (avoids the 404 while reading). The scheduler's sweep deletes it
+    after the grace. The flows referencing it will fail in preview with the standard
+    missing-source error — consistent with how datasets are deleted.
     """
     ds = _get_ds(session, ds_id)
     ensure_can(session, user, ds.project_id, Capability.EDIT)
@@ -877,14 +876,14 @@ def delete_datasource(
 
     ds_name, ds_kind = ds.name, ds.kind  # snapshot per l'audit
     bucket, key = ds.bucket, ds.key
-    # i run storici che l'hanno pubblicata (o aggiornata) restano, senza il riferimento
+    # the historical runs that published (or updated) it stay, without the reference
     for run in session.exec(select(Run).where(Run.datasource_id == ds.id)).all():
         run.datasource_id = None
         session.add(run)
     session.delete(ds)
-    contract_service.forget(session, ds_id)  # contratto, versioni e referti se ne vanno con lei
-    if key:  # datasource database mai ingerita: nessun blob da eliminare
-        schedule_blob_deletion(session, bucket, key, reason=f"datasource {ds_id} eliminata")
+    contract_service.forget(session, ds_id)  # contract, versions and reports go with it
+    if key:  # a database datasource never ingested: no blob to delete
+        schedule_blob_deletion(session, bucket, key, reason=f"datasource {ds_id} deleted")
     session.commit()
     audit.record_audit(
         session, actor=user, action=audit.DS_DELETE, target_type="datasource",

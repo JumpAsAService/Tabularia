@@ -1,8 +1,8 @@
-"""Seed idempotente allo startup: crea l'admin da variabili d'ambiente.
+"""Idempotent seed at startup: creates the admin from environment variables.
 
-Come Grafana/MinIO: le credenziali admin arrivano da env (AUTH__ADMIN_EMAIL /
-AUTH__ADMIN_PASSWORD) così in produzione si cambiano velocemente. Se l'utente
-admin esiste già NON viene toccato (nessun reset silenzioso della password).
+As Grafana/MinIO do: the admin credentials come from the env (AUTH__ADMIN_EMAIL /
+AUTH__ADMIN_PASSWORD) so in production they are changed quickly. When the admin user
+exists already it is NOT touched (no silent reset of the password).
 
 One exception, and one refusal, so that no installation comes up with a password
 everyone knows:
@@ -56,7 +56,7 @@ def seed_admin() -> None:
         if existing:
             published = _published_password_of(existing)
             if published is None:
-                logger.info("Admin '%s' già presente, nessun seed.", s.auth.admin_email)
+                logger.info("Admin '%s' present already, no seed.", s.auth.admin_email)
                 return
             if allowed:
                 logger.warning("The administrator '%s' has a published password; kept because "

@@ -44,7 +44,7 @@ from app.services.kube_scaling import KubeError
 logger = logging.getLogger(__name__)
 
 # the advisory lock of the builds (pg_advisory_xact_lock), apart from the others
-LUCCHETTO = 7_402_131
+LOCK = 7_402_131
 DIGEST_MARK = "TABULARIA_IMAGE_DIGEST="
 ARCH_MARK = "TABULARIA_IMAGE_ARCH="
 # `uname -m` of the build's node → the kubernetes.io/arch label of the nodes
@@ -419,7 +419,7 @@ def _fail(v: ScriptEnvironmentVersion, message: str, log: Optional[str] = None) 
     logger.info("scripting: environment %s version %s failed: %s", v.environment_id, v.number, message)
 
 
-async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
+async def advance(session: Session, v: ScriptEnvironmentVersion) -> None:
     """One step of a version, if its Job has moved; the caller commits."""
     s = get_settings().scripts
     env = session.get(ScriptEnvironment, v.environment_id)
@@ -520,13 +520,13 @@ async def avanza(session: Session, v: ScriptEnvironmentVersion) -> None:
     logger.info("scripting: environment %s version %s ready (%s)", env.id, v.number, v.image_ref)
 
 
-async def un_giro(bind: Engine) -> int:
+async def one_round(bind: Engine) -> int:
     """Moves forward every version in progress; returns how many changed state."""
-    from app.services.regolazioni_motore import blocca
+    from app.services.engine_panel_settings import lock
 
     changed = 0
     with Session(bind) as session:
-        if not await blocca(session, attesa=0, chiave=LUCCHETTO):
+        if not await lock(session, wait=0, key=LOCK):
             return 0
         versions = session.exec(select(ScriptEnvironmentVersion)
                                 .where(ScriptEnvironmentVersion.status.in_(IN_PROGRESS))  # type: ignore[attr-defined]
@@ -534,7 +534,7 @@ async def un_giro(bind: Engine) -> int:
         for v in versions:
             before = v.status
             try:
-                await avanza(session, v)
+                await advance(session, v)
             except KubeError as e:
                 if e.status in (0, 429) or e.status >= 500:
                     logger.warning("scripting: version %s of environment %s waits (%s)", v.number, v.environment_id, e)
@@ -561,7 +561,7 @@ async def build_loop(stop: asyncio.Event) -> None:
     while not stop.is_set():
         every = get_settings().scripts.poll_seconds  # changes from the panel at the next round
         try:
-            await un_giro(engine)
+            await one_round(engine)
         except Exception as e:  # noqa: BLE001 — database or cluster down: at the next round
             logger.warning("scripting: builds not checked (%s), again in %ss", e, every)
         try:

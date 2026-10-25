@@ -1,23 +1,22 @@
-"""La classe di rotta di ogni router del gateway.
+"""The route class of every gateway router.
 
-Una rotta SINCRONA gira in un thread; dopo di lei FastAPI valida la risposta in
-un altro. `RottaCheRilascia` fa sì che la rotta renda la connessione al database
-prima di uscire dal suo (vedi `db/session.a_fine_rotta` per il perché, misurato).
-Le rotte asincrone non passano da un thread per rotta e restano come sono.
+A SYNCHRONOUS route runs in a thread; after it FastAPI validates the answer in
+another. `ReleasingRoute` makes the route hand the database connection back before
+leaving its own (see `db/session.a_fine_rotta` for why, measured). The asynchronous
+routes do not go through a thread per route and stay as they are.
 
-Ogni `APIRouter` del gateway la dichiara (`route_class=RottaCheRilascia`); un
-test lo verifica, perché un router che se ne dimentica riapre lo stallo senza
-che niente lo dica.
+Every gateway `APIRouter` declares it (`route_class=ReleasingRoute`); a test checks
+it, because a router that forgets it reopens the stall without anything saying so.
 """
 import asyncio
 
 from fastapi.routing import APIRoute
 
-from app.db.session import a_fine_rotta
+from app.db.session import at_end_of_route
 
 
-class RottaCheRilascia(APIRoute):
+class ReleasingRoute(APIRoute):
     def __init__(self, path, endpoint, **kwargs):
         if not asyncio.iscoroutinefunction(endpoint):
-            endpoint = a_fine_rotta(endpoint)
+            endpoint = at_end_of_route(endpoint)
         super().__init__(path, endpoint, **kwargs)

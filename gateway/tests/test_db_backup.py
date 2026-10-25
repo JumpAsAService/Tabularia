@@ -123,7 +123,7 @@ def test_a_database_restored_from_a_backup_does_not_block_the_backups(session):
     r.running_since, r.alive_at, r.claimed_by = NOW - timedelta(minutes=10), NOW - timedelta(minutes=10), "gone:1:x"
     session.add(r)
     session.commit()
-    assert not db_backup.in_corso(_row(session), NOW)
+    assert not db_backup.running(_row(session), NOW)
     r = _row(session)
     r.requested_at = NOW
     session.add(r)
@@ -162,8 +162,8 @@ async def test_a_backup_is_stored_and_the_oldest_beyond_keep_go(session, store):
     assert store.objects[out["name"]].startswith(b"PGDMP")
     r = _row(session)
     assert r.last_name == out["name"] and r.last_size == 1005 and r.running_since is None and r.last_ok_at
-    voce = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).one()
-    assert voce.outcome == "success" and voce.actor_label == "capo@x.local"
+    item = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).one()
+    assert item.outcome == "success" and item.actor_label == "capo@x.local"
 
 
 @pytest.mark.anyio
@@ -181,8 +181,8 @@ async def test_a_failed_backup_says_why(session, store, monkeypatch):
     monkeypatch.setattr(db_backup, "_pg_dump", _works)
     out = await db_backup.make(keep=3)
     assert not out["ok"] and "AccessDenied" in _row(session).last_error
-    voci = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).all()
-    assert [v.outcome for v in voci] == ["failure", "failure"] and voci[0].actor_label == db_backup.SCHEDULE_ACTOR
+    items = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).all()
+    assert [v.outcome for v in items] == ["failure", "failure"] and items[0].actor_label == db_backup.SCHEDULE_ACTOR
 
 
 @pytest.mark.anyio
@@ -206,8 +206,8 @@ async def test_a_backup_stopped_with_its_process_says_so(session, store, monkeyp
         await task
     r = _row(session)
     assert "Stopped before the end" in r.last_error and r.running_since is None
-    voce = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).one()
-    assert voce.outcome == "failure"
+    item = session.exec(select(AuditLog).where(AuditLog.action == "backup.run")).one()
+    assert item.outcome == "failure"
 
 
 async def _works():
@@ -283,8 +283,8 @@ def test_a_download_streams_the_file_and_is_in_the_audit_log(app, session, store
     assert OLD[0] in r.headers["content-disposition"]
     assert capo.get("/admin/backups/notes.txt/download").status_code == 404
     assert capo.get(f"/admin/backups/{OLD[1]}/download").status_code == 404
-    voce = session.exec(select(AuditLog).where(AuditLog.action == "backup.download")).one()
-    assert voce.target_label == OLD[0]
+    item = session.exec(select(AuditLog).where(AuditLog.action == "backup.download")).one()
+    assert item.target_label == OLD[0]
 
 
 def test_off_kubernetes_the_backups_are_greyed_out(session, tmp_path, monkeypatch):

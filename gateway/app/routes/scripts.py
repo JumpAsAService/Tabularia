@@ -24,7 +24,7 @@ from sqlalchemy import update as sa_update
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
@@ -38,7 +38,7 @@ from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
-router = APIRouter(route_class=RottaCheRilascia, tags=["scripts"])
+router = APIRouter(route_class=ReleasingRoute, tags=["scripts"])
 
 
 class ScriptOut(BaseModel):
@@ -480,7 +480,7 @@ def run_script_now(script_id: int, request: Request, user: User = Depends(get_cu
     if saved_script_runs.script_running(session, script.id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_ALREADY_RUNNING)
     run = saved_script_runs.create_script_run(session, user, script)
-    orchestrator.sveglia()
+    orchestrator.wake()
     audit.record_audit(session, actor=user, action=audit.SCRIPT_RUN, target_type="saved_script", target_id=script.id,
                        target_label=script.name, detail={"run_id": run.id, "trigger": "manual",
                                                          "version": script.current_version}, request=request)

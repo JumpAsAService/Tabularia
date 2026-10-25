@@ -102,10 +102,10 @@ def test_the_users_list_is_masked_for_an_observer(session):
     make_user(session, email="alice.rossi@esempio.it", full_name="Alice Rossi")
 
     capo = make_user(session, email="c@x.it", is_superuser=True)
-    come_admin = user_routes.list_users(session=session, chi_chiede=capo)
+    come_admin = user_routes.list_users(session=session, asker=capo)
     assert any(u.email == "alice.rossi@esempio.it" and u.full_name == "Alice Rossi" for u in come_admin)
 
-    come_ospite = user_routes.list_users(session=session, chi_chiede=ospite)
+    come_ospite = user_routes.list_users(session=session, asker=ospite)
     emails = [u.email for u in come_ospite]
     assert "alice.rossi@esempio.it" not in emails
     assert "a***@esempio.it" in emails  # il dominio resta: dice dentro o fuori
@@ -121,13 +121,13 @@ def test_the_audit_keeps_what_happened_and_drops_who(session):
     ))
     session.commit()
 
-    voce = audit_routes.list_audit(**_filtri_vuoti(), session=session, chi_chiede=ospite).items[0]
-    assert voce.action == "flow.run"  # il senso del registro resta
-    assert voce.actor_label == "a***@esempio.it"
-    assert voce.ip is None
+    item = audit_routes.list_audit(**_filtri_vuoti(), session=session, asker=ospite).items[0]
+    assert item.action == "flow.run"  # il senso del registro resta
+    assert item.actor_label == "a***@esempio.it"
+    assert item.ip is None
 
     capo = make_user(session, email="capo2@x.it", is_superuser=True)
-    voce_admin = audit_routes.list_audit(**_filtri_vuoti(), session=session, chi_chiede=capo).items[0]
+    voce_admin = audit_routes.list_audit(**_filtri_vuoti(), session=session, asker=capo).items[0]
     assert voce_admin.actor_label == "alice@esempio.it" and voce_admin.ip == "10.0.0.7"
 
 
@@ -138,25 +138,25 @@ def test_the_active_sessions_hide_the_addresses(session):
 
     ospite = _osservatore(session)
     u = make_user(session, email="bruno@esempio.it")
-    sessions.apri(session, u, _Finta(), "password")
+    sessions.open_session(session, u, _Finta(), "password")
 
-    righe = audit_routes.active_sessions(request=SimpleNamespace(), limit=100, session=session, chi_chiede=ospite).items
-    mia = next(r for r in righe if r.user_id == u.id)
+    rows = audit_routes.active_sessions(request=SimpleNamespace(), limit=100, session=session, asker=ospite).items
+    mia = next(r for r in rows if r.user_id == u.id)
     assert mia.email == "b***@esempio.it" and mia.ip is None and mia.user_agent is None
     assert mia.online is True  # lo STATO resta visibile
 
 
 # ── il mascheramento in sé ───────────────────────────────────────────────────
 
-@pytest.mark.parametrize("dentro,fuori", [
+@pytest.mark.parametrize("dentro,outside", [
     ("alice.rossi@esempio.it", "a***@esempio.it"),
     ("x@y.z", "x***@y.z"),
     ("@senzalocale.it", "***@senzalocale.it"),
     ("scheduler", "***"),  # un'etichetta che non è un'email
     ("", ""),
 ])
-def test_how_an_address_is_masked(dentro, fuori):
-    assert mask_email(dentro) == fuori
+def test_how_an_address_is_masked(dentro, outside):
+    assert mask_email(dentro) == outside
 
 
 def test_the_same_address_always_gives_the_same_mask():
@@ -173,16 +173,16 @@ def test_an_administrator_can_grant_and_revoke_it(session):
     capo = make_user(session, email="capo3@x.it", is_superuser=True)
     ospite = make_user(session, email="ospite2@x.it")
 
-    fuori = user_routes.update_user(
+    outside = user_routes.update_user(
         ospite.id, UserUpdate(is_observer=True), request=None, session=session, current=capo,
     )
-    assert fuori.is_observer is True
+    assert outside.is_observer is True
     assert permissions.is_observer(session, session.get(User, ospite.id)) is True
 
-    fuori = user_routes.update_user(
+    outside = user_routes.update_user(
         ospite.id, UserUpdate(is_observer=False), request=None, session=session, current=capo,
     )
-    assert fuori.is_observer is False
+    assert outside.is_observer is False
     assert permissions.is_observer(session, session.get(User, ospite.id)) is False
 
 
@@ -206,11 +206,11 @@ def test_granting_it_leaves_a_trace(session):
 def test_it_can_be_granted_at_creation(session):
     """L'account dimostrativo si crea in un colpo, con la spunta nel form."""
     capo = make_user(session, email="capo5@x.it", is_superuser=True)
-    fuori = user_routes.create_user(
+    outside = user_routes.create_user(
         UserCreate(email="demo@x.it", password="segretissima", is_observer=True),
         request=None, session=session, current=capo,
     )
-    assert fuori.is_observer is True
+    assert outside.is_observer is True
     assert audit_svc.OBSERVER_GRANT in [a.action for a in session.exec(select(AuditLog)).all()]
 
 
@@ -226,10 +226,10 @@ def test_a_group_can_be_switched_to_observer(session):
     session.commit()
     assert permissions.is_observer(session, anna) is False
 
-    fuori = group_routes.update_group(
+    outside = group_routes.update_group(
         g.id, GroupUpdate(is_observer=True), request=None, session=session, current=capo,
     )
-    assert fuori.is_observer is True
+    assert outside.is_observer is True
     assert permissions.is_observer(session, session.get(User, anna.id)) is True
     assert audit_svc.GROUP_OBSERVER_GRANT in [a.action for a in session.exec(select(AuditLog)).all()]
 
@@ -246,9 +246,9 @@ def test_the_list_says_which_group_grants_it(session):
     session.commit()
     capo = make_user(session, email="capo7@x.it", is_superuser=True)
 
-    riga = next(u for u in user_routes.list_users(session=session, chi_chiede=capo) if u.id == anna.id)
-    assert riga.is_observer is False  # nessun flag personale
-    assert riga.observer_groups == ["Ospiti"]
+    row = next(u for u in user_routes.list_users(session=session, asker=capo) if u.id == anna.id)
+    assert row.is_observer is False  # nessun flag personale
+    assert row.observer_groups == ["Ospiti"]
 
 
 # ── l'indirizzo IP di un osservatore non si raccoglie proprio ────────────────
@@ -268,11 +268,11 @@ def test_an_observers_address_is_not_written_to_the_audit(session):
     ospite = _osservatore(session, email="ospite-ip@x.it")
     audit_svc.record_audit(session, actor=ospite, action="flow.run", request=_Finta())
 
-    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == ospite.id)).one()
-    assert voce.ip is None
-    assert voce.user_agent is None            # né browser né sistema operativo
-    assert voce.action == "flow.run"          # che cosa è stato fatto resta
-    assert voce.actor_label == ospite.email   # e chi, per un amministratore
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == ospite.id)).one()
+    assert item.ip is None
+    assert item.user_agent is None            # né browser né sistema operativo
+    assert item.action == "flow.run"          # che cosa è stato fatto resta
+    assert item.actor_label == ospite.email   # e chi, per un amministratore
 
 
 def test_an_administrators_address_is_still_written(session):
@@ -282,9 +282,9 @@ def test_an_administrators_address_is_still_written(session):
     capo = make_user(session, email="capo-ip@x.it", is_superuser=True)
     audit_svc.record_audit(session, actor=capo, action="flow.run", request=_Finta())
 
-    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == capo.id)).one()
-    assert voce.ip == "203.0.113.77"
-    assert voce.user_agent == "prova"
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == capo.id)).one()
+    assert item.ip == "203.0.113.77"
+    assert item.user_agent == "prova"
 
 
 def test_an_ordinary_user_is_still_traced(session):
@@ -295,8 +295,8 @@ def test_an_ordinary_user_is_still_traced(session):
     tizio = make_user(session, email="tizio-ip@x.it")
     audit_svc.record_audit(session, actor=tizio, action="datasource.create", request=_Finta())
 
-    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == tizio.id)).one()
-    assert voce.ip == "203.0.113.77"
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == tizio.id)).one()
+    assert item.ip == "203.0.113.77"
 
 
 def test_an_admin_by_group_keeps_being_traced(session):
@@ -313,8 +313,8 @@ def test_an_admin_by_group_keeps_being_traced(session):
     session.commit()
 
     audit_svc.record_audit(session, actor=anna, action="flow.run", request=_Finta())
-    voce = session.exec(select(AuditLog).where(AuditLog.actor_id == anna.id)).one()
-    assert voce.ip == "203.0.113.77"
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == anna.id)).one()
+    assert item.ip == "203.0.113.77"
 
 
 def test_last_seen_keeps_the_moment_and_drops_the_address(session):
@@ -324,12 +324,12 @@ def test_last_seen_keeps_the_moment_and_drops_the_address(session):
     from app.services import sessions
 
     ospite = _osservatore(session, email="ospite-seen@x.it")
-    aperta = sessions.apri(session, ospite, _Finta(), "password")[0]
-    _touch_last_seen(session, ospite, aperta, _Finta())
+    open_ = sessions.open_session(session, ospite, _Finta(), "password")[0]
+    _touch_last_seen(session, ospite, open_, _Finta())
     session.refresh(ospite)
-    session.refresh(aperta)
+    session.refresh(open_)
     assert ospite.last_seen_at is not None
-    assert ospite.last_seen_ip is None and aperta.ip is None and aperta.user_agent is None
+    assert ospite.last_seen_ip is None and open_.ip is None and open_.user_agent is None
 
 
 def test_an_address_collected_before_the_role_is_erased(session):
@@ -340,21 +340,21 @@ def test_an_address_collected_before_the_role_is_erased(session):
     from app.services import sessions
 
     u = make_user(session, email="prima-poi@x.it")
-    aperta = sessions.apri(session, u, _Finta(), "password")[0]
-    _touch_last_seen(session, u, aperta, _Finta())
+    open_ = sessions.open_session(session, u, _Finta(), "password")[0]
+    _touch_last_seen(session, u, open_, _Finta())
     session.refresh(u)
-    session.refresh(aperta)
+    session.refresh(open_)
     # l'indirizzo sta nella sessione, non più sull'utente
-    assert aperta.ip == "203.0.113.77" and u.last_seen_ip is None
+    assert open_.ip == "203.0.113.77" and u.last_seen_ip is None
 
     u.is_observer = True
     u.last_seen_at = None          # scavalca il freno del throttle
     session.add(u)
     session.commit()
-    _touch_last_seen(session, u, aperta, _Finta())
+    _touch_last_seen(session, u, open_, _Finta())
     session.refresh(u)
-    session.refresh(aperta)
-    assert u.last_seen_ip is None and aperta.ip is None and aperta.user_agent is None
+    session.refresh(open_)
+    assert u.last_seen_ip is None and open_.ip is None and open_.user_agent is None
 
 
 def test_a_failed_login_still_records_the_address(session):
@@ -364,5 +364,5 @@ def test_a_failed_login_still_records_the_address(session):
 
     audit_svc.record_audit(session, actor=None, actor_label="ospite-ip@x.it",
                            action=audit_svc.LOGIN_FAILED, outcome="failure", request=_Finta())
-    voce = session.exec(select(AuditLog).where(AuditLog.action == audit_svc.LOGIN_FAILED)).one()
-    assert voce.ip == "203.0.113.77"
+    item = session.exec(select(AuditLog).where(AuditLog.action == audit_svc.LOGIN_FAILED)).one()
+    assert item.ip == "203.0.113.77"

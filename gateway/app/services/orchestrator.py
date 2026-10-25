@@ -1,41 +1,41 @@
-"""Orchestrazione di un run di flusso: interpreta i NODI DI CONTROLLO del canvas
-(non sono operazioni dell'engine, come i nodi Output) nell'ordine definito dagli
-ARCHI DI SEQUENZA (topological sort, vedi `flow_resolver.sequence_order`); i nodi
-non collegati usano il default refresh → output → runflow.
+"""The orchestration of a flow run: interprets the canvas's CONTROL NODES (they are not
+engine operations, as the Output nodes are) in the order the SEQUENCE EDGES define
+(topological sort, see `flow_resolver.sequence_order`); the unconnected nodes use the
+default refresh → output → runflow.
 
-Tipi di action node:
-  - refresh   — aggiorna la datasource e ASPETTA che finisca (se fallisce, tutto
-                il run si ferma: meglio niente che dati stantii/parziali);
-  - output    — lancia un nodo Output di questo flusso (via flow_resolver) e ne
-                ATTENDE il completamento;
-  - runflow   — esegue un altro flusso salvato (guardia anti-ciclo/profondità),
-                attendendone gli output.
+Kinds of action node:
+  - refresh   — updates the datasource and WAITS for it to finish (when it fails, the
+                whole run stops: better nothing than stale/partial data);
+  - output    — launches an Output node of this flow (via flow_resolver) and WAITS for
+                it to complete;
+  - runflow   — runs another saved flow (a cycle/depth guard), waiting for its
+                outputs.
 
-Ogni passo attende la fine del precedente: così l'ordine è REALE (un output 'a
-valle' vede i dati che un refresh o un flusso 'a monte' hanno appena scritto),
-non solo un ordine di lancio.
+Every step waits for the end of the previous one: so the order is REAL (an output
+'downstream' sees the data a refresh or a flow 'upstream' has just written), not only
+a launch order.
 
-Traccia l'intera esecuzione in un 'run di orchestrazione' (kind=orchestration)
-osservabile in cronologia. Con l'autorità di `user`, RBAC ri-verificata a ogni
-passo (RUN/CONNECT per il refresh, RUN + EDIT/CONNECT per gli output).
+It tracks the whole run in an 'orchestration run' (kind=orchestration) visible in the
+history. With the authority of `user`, RBAC checked again at every step (RUN/CONNECT
+for the refresh, RUN + EDIT/CONNECT for the outputs).
 
-CHI la esegue. Lo scheduler e il run manuale (`POST /flows/{id}/run-now`) non la
-eseguono: la mettono IN CODA, cioè scrivono la riga del run in stato PENDING. La
-prende un processo che fa da orchestratore (`APP__ROLE` = all | orchestrator;
-possono essere più d'uno) e la porta a STARTED firmandola — un UPDATE
-condizionato, quindi la prende uno solo. Da lì:
+WHO runs it. The scheduler and the manual run (`POST /flows/{id}/run-now`) do not run
+it: they QUEUE it, that is they write the run's row in state PENDING. A process acting
+as orchestrator takes it (`APP__ROLE` = all | orchestrator; there may be more than
+one) and brings it to STARTED signing it — a conditional UPDATE, so only one takes it.
+From there:
 
-  - mentre la esegue ne aggiorna il BATTITO (`heartbeat_at`) — solo delle
-    esecuzioni che hanno davvero un task vivo in questo processo, non di tutte
-    quelle che ha firmato: una riga firmata il cui task è morto deve smettere
-    di battere, o resterebbe «in corso» per sempre;
-  - un indice unico sul database garantisce che di un flusso ne giri una sola;
-  - un'orchestrazione STARTED il cui battito è fermo è di un processo morto: il
-    primo orchestratore che se ne accorge la chiude dicendolo. NON la si
-    riprende: i passi già eseguiti hanno scritto, e rifarli duplicherebbe gli
-    Output in append;
-  - prima di ogni passo chi esegue controlla che la riga sia ancora sua: se nel
-    frattempo è stata chiusa (non riusciva a battere), si ferma.
+  - while running it, it updates its HEARTBEAT (`heartbeat_at`) — only of the runs
+    that really have a live task in this process, not of all those it signed: a
+    signed row whose task died must stop beating, or it would stay «running»
+    forever;
+  - a unique index on the database ensures only one of a flow runs at a time;
+  - a STARTED orchestration whose heartbeat stopped belongs to a dead process: the
+    first orchestrator that notices closes it saying so. It is NOT resumed: the
+    steps already run have written, and redoing them would duplicate the Outputs in
+    append;
+  - before every step whoever runs it checks the row is still theirs: when it was
+    closed meanwhile (it could not beat), it stops.
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.db.session import engine, engine_battito
+from app.db.session import engine, heartbeat_engine
 from app.models import Connection, Datasource, Flow, Run, User
 from app.models.permission import Capability
 from app.models.run import ORCHESTRATION_INTERRUPTED, STEP_INTERRUPTED, TERMINAL_STATES  # noqa: F401 — riesportata
@@ -68,43 +68,43 @@ from app.services.flow_resolver import FlowResolveError, resolve_output_request,
 
 logger = logging.getLogger(__name__)
 
-MAX_FLOW_DEPTH = 5  # guardia sui runflow annidati (oltre al set anti-ciclo)
+MAX_FLOW_DEPTH = 5  # a guard on nested runflows (besides the anti-cycle set)
 
-# Tetti d'attesa e ritmi della coda (ORCHESTRATOR__* nell'env, o Amministrazione →
-# Settings): l'orchestratore aspetta che refresh e output COMPLETINO prima dei passi a
-# valle, così l'ordine è reale; oltre il tetto il flusso aborta invece di leggere dati
-# stantii. Letti a ogni uso, non all'avvio: una modifica dal pannello vale entro pochi
-# secondi, anche per le esecuzioni già in corso.
+# The wait caps and the queue's rhythms (ORCHESTRATOR__* in the env, or Administration
+# → Settings): the orchestrator waits for refreshes and outputs to COMPLETE before the
+# steps downstream, so the order is real; past the cap the flow aborts instead of
+# reading stale data. Read at every use, not at start: a change from the panel holds
+# within a few seconds, for the runs already going too.
 def _orc():
     return get_settings().orchestrator
 
 
-def concorrenza() -> int:
+def concurrency() -> int:
     """ORCHESTRATOR__MAX_CONCURRENT, never beyond the connections this process's pool can
     give (each execution holds one while it asks the engine). The pool is sized when the
     process starts: raised together from the panel, the executions follow the pool only
     once the processes have restarted."""
-    voluta = _orc().max_concurrent
+    wanted = _orc().max_concurrent
     try:
         overflow = int(getattr(engine.pool, "_max_overflow", 0))
         if overflow < 0:  # no ceiling on the pool
-            return voluta
-        return max(1, min(voluta, engine.pool.size() + overflow))
+            return wanted
+        return max(1, min(wanted, engine.pool.size() + overflow))
     except Exception:  # noqa: BLE001 — a pool without a size (the tests' SQLite)
-        return voluta
+        return wanted
 
 
-ORPHAN_SWEEP_S = 15.0  # ogni quanto si cercano le orchestrazioni di processi morti
+ORPHAN_SWEEP_S = 15.0  # how often the orchestrations of dead processes are looked for
 
-# La firma di QUESTO processo sulle orchestrazioni che esegue. Cambia a ogni
-# avvio: un processo che riparte non eredita quelle del precedente.
-ISTANZA = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+# THIS process's signature on the orchestrations it runs. It changes at every start: a
+# process that starts again does not inherit those of the previous one.
+INSTANCE = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
 
 ALREADY_RUNNING = "flow already running"
 
 
-def _adesso() -> datetime:
-    """Le colonne TIMESTAMP sono naive-UTC: battito e confronto usano la stessa forma."""
+def _now() -> datetime:
+    """The TIMESTAMP columns are naive-UTC: the heartbeat and the comparison use the same form."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -112,33 +112,33 @@ class OrchestrationError(RuntimeError):
     pass
 
 
-class Spodestata(OrchestrationError):
-    """Il run non è più di questo processo: è stato chiuso da un altro (che non
-    ne vedeva più il battito) o non esiste più. I passi rimanenti non si
-    eseguono, e non c'è niente da registrare: l'esito è già scritto."""
+class NoLongerOurs(OrchestrationError):
+    """The run no longer belongs to this process: another closed it (it no longer saw its
+    heartbeat) or it no longer exists. The remaining steps do not run, and there is
+    nothing to record: the outcome is written already."""
 
 
-def _ancora_mia(session: Session, run_id: int) -> None:
-    riga = session.exec(select(Run.status, Run.claimed_by).where(Run.id == run_id)).first()
-    if riga is None or riga[0] != "STARTED" or riga[1] != ISTANZA:
-        raise Spodestata(f"orchestration {run_id} no longer belongs to this process")
+def _still_mine(session: Session, run_id: int) -> None:
+    row = session.exec(select(Run.status, Run.claimed_by).where(Run.id == run_id)).first()
+    if row is None or row[0] != "STARTED" or row[1] != INSTANCE:
+        raise NoLongerOurs(f"orchestration {run_id} no longer belongs to this process")
 
 
 class StopSequence(OrchestrationError):
-    """Interrompe la SEQUENZA, non solo il nodo: la solleva l'output email con
-    `stopOnFailure`. Serve un tipo suo perché il blocco che esegue gli output ha
-    un `except Exception` che raccoglie gli errori e prosegue — comportamento
-    voluto per gli altri output. Senza un tipo distinto, l'interruzione veniva
-    raccolta da quel medesimo except e la sequenza continuava lo stesso."""
+    """Stops the SEQUENCE, not only the node: the email output with `stopOnFailure` raises
+    it. It needs a type of its own because the block running the outputs has an
+    `except Exception` that collects the errors and goes on — the wanted behaviour for
+    the other outputs. Without a distinct type, the stop was collected by that very
+    except and the sequence went on all the same."""
 
 
 async def _refresh_and_wait(
     session: Session, user: User, ds_id: int, trigger_type: str = "manual", parent_run_id: int | None = None
 ) -> None:
-    """Aggiorna una datasource database e attende (bounded) il SUCCESS."""
+    """Updates a database datasource and waits (bounded) for SUCCESS."""
     ds = session.get(Datasource, ds_id)
     if ds is None or ds.kind != "database":
-        return  # non è una datasource DB (nulla da refreshare)
+        return  # not a DB datasource (nothing to refresh)
     if not perm_service.has_capability(session, user, ds.project_id, Capability.RUN):
         raise OrchestrationError(f"RUN missing for the refresh of datasource {ds_id}")
     conn = session.get(Connection, ds.connection_id) if ds.connection_id else None
@@ -147,7 +147,7 @@ async def _refresh_and_wait(
     if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
         raise OrchestrationError(f"CONNECT missing for the refresh of datasource {ds_id}")
 
-    # se c'è già un refresh in corso lo si attende, altrimenti se ne lancia uno — in
+    # when a refresh is running already it is waited for, otherwise one is launched — in
     # line with every other starter (see runs.start_refresh_if_free)
     run = None
     for _ in range(3):  # the running one may end between the two looks: then start ours
@@ -169,22 +169,22 @@ async def _refresh_and_wait(
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES or loop.time() >= deadline:
             break
-        # rilascia la connessione del pool durante l'attesa: mentre lo stato non
-        # cambia _reconcile non committa e la transazione della SELECT terrebbe
-        # occupata una connessione per tutto lo sleep → con più orchestrazioni
-        # lente in parallelo il pool si esaurisce e il gateway va giù.
+        # releases the pool's connection during the wait: while the state does not change
+        # _reconcile does not commit, and the SELECT's transaction would hold a connection for
+        # the whole sleep → with several slow orchestrations in parallel the pool runs out and
+        # the gateway goes down.
         session.commit()
         await asyncio.sleep(pause)
     if run.status != "SUCCESS":
         raise OrchestrationError(f"refresh of datasource {ds_id} failed ({run.status})")
-    logger.info("orchestrate: datasource %s aggiornata (refresh completato)", ds_id)
+    logger.info("orchestrate: datasource %s updated (refresh completed)", ds_id)
 
 
 async def _wait_run(session: Session, run: Run) -> Run:
-    """Attende che un run di output raggiunga uno stato terminale, così che i
-    passi successivi dell'ordine vedano davvero il risultato già scritto (senza
-    attesa, l'ordinamento sarebbe solo cosmetico: i passi corrono in parallelo e
-    un output 'a valle' leggerebbe dati non ancora prodotti).
+    """Waits for an output run to reach a terminal state, so that the next steps in the
+    order really see the result written already (without waiting, the ordering would be
+    only cosmetic: the steps run in parallel and an output 'downstream' would read data
+    not produced yet).
 
     No cap of its own: the run's life is already bounded, by the worker's hard time
     limit and by _reconcile, which revokes and fails a run older than
@@ -199,30 +199,29 @@ async def _wait_run(session: Session, run: Run) -> Run:
         run = await _reconcile(session, run)
         if run.status in TERMINAL_STATES:
             return run
-        # vedi _refresh_and_wait: libera la connessione del pool durante lo sleep
+        # see _refresh_and_wait: frees the pool's connection during the sleep
         session.commit()
         await asyncio.sleep(pause)
 
 
-async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None, engine_mode: str = "development", custodita: bool = False) -> list[str]:
-    """Esegue un flusso: gli 'action node' (refresh/output/runflow) nell'ordine
-    definito dagli archi di sequenza (topological sort), coi non collegati
-    nell'ordine di default refresh → output → runflow.
+async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, seen: set[int] | None = None, trigger_type: str = "manual", parent_run_id: int | None = None, engine_mode: str = "development", guarded: bool = False) -> list[str]:
+    """Runs a flow: the 'action nodes' (refresh/output/runflow) in the order the sequence
+    edges define (topological sort), with the unconnected ones in the default order
+    refresh → output → runflow.
 
-    Un refresh fallito SOLLEVA (interrompe tutto: meglio niente che dati stantii);
-    un output o un sotto-flusso in errore vengono raccolti e si prosegue. Torna la
-    lista degli errori non fatali (vuota = tutto ok) per marcare il run di
-    orchestrazione.
+    A failed refresh RAISES (stops everything: better nothing than stale data); an
+    output or a sub-flow in error is collected and it goes on. Returns the list of the
+    non-fatal errors (empty = all fine) to mark the orchestration run.
 
-    `engine_mode` ("development" | "production") decide il motore di ogni output
-    (vedi `_launch_flow_run`); i sotto-flussi (runflow) lo ereditano e ciascuno
-    risolve il PROPRIO motore di produzione.
+    `engine_mode` ("development" | "production") decides each output's engine (see
+    `_launch_flow_run`); the sub-flows (runflow) inherit it and each resolves ITS OWN
+    production engine.
 
-    `custodita`: prima di ogni passo si controlla che il run `parent_run_id` sia
-    ancora di questo processo (vedi `Spodestata`). Lo passa chi esegue dalla coda."""
+    `guarded`: before every step it checks the run `parent_run_id` still belongs to
+    this process (see `NoLongerOurs`). Whoever runs from the queue passes it."""
     seen = seen or set()
     if flow.id in seen or depth > MAX_FLOW_DEPTH:
-        logger.warning("orchestrate: ciclo o profondità eccessiva su flusso %s (depth %d)", flow.id, depth)
+        logger.warning("orchestrate: cycle or excessive depth on flow %s (depth %d)", flow.id, depth)
         return [f"flow {flow.id}: cycle or excessive depth"]
     seen = seen | {flow.id}
 
@@ -240,40 +239,38 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
     for node in sequence_order(definition):
         t = node.get("type")
         d = node.get("data") or {}
-        if custodita and parent_run_id is not None:
-            _ancora_mia(session, parent_run_id)
+        if guarded and parent_run_id is not None:
+            _still_mine(session, parent_run_id)
         if t == "refresh":
             ds_id = d.get("datasourceId")
             if ds_id:
-                await _refresh_and_wait(session, user, ds_id, trigger_type, parent_run_id)  # errore → propaga (aborta tutto)
+                await _refresh_and_wait(session, user, ds_id, trigger_type, parent_run_id)  # error → propagates (aborts everything)
         elif t == "output":
             try:
-                # engine_mode decide anche il CAMPIONE di sviluppo: solo "development"
-                # lo inietta; in produzione la catena legge tutti i record
+                # engine_mode decides the development SAMPLE too: only "development" injects it; in
+                # production the chain reads every record
                 req = resolve_output_request(definition, node, resolve_ds, default_bucket, engine_mode, script_outputs)
                 run = await _launch_flow_run(session, user, flow, RunCreate(**req), trigger_type=trigger_type, parent_run_id=parent_run_id, engine_mode=engine_mode)
-                run = await _wait_run(session, run)  # attende: l'ordine dev'essere reale
+                run = await _wait_run(session, run)  # waits: the order must be real
                 if run.status != "SUCCESS":
-                    # Un output email con `stopOnFailure` INTERROMPE la sequenza,
-                    # come fa il refresh. Gli altri output restano raccolti e si
-                    # prosegue: la differenza è voluta e vale solo per l'email,
-                    # perché i passi a valle di una notifica spesso la danno per
-                    # avvenuta (marcare "notificato" senza aver notificato è
-                    # peggio che fermarsi). L'opzione è sul nodo, non implicita.
+                    # An email output with `stopOnFailure` STOPS the sequence, as the refresh does. The
+                    # other outputs stay collected and it goes on: the difference is wanted and holds only
+                    # for the email, because the steps downstream of a notification often take it for
+                    # done (marking "notified" without having notified is worse than stopping). The
+                    # option is on the node, not implicit.
                     if d.get("destType") == "email" and d.get("stopOnFailure") is not False:
                         raise StopSequence(
                             f"email sending failed (run {run.id}): {run.error or run.status}. "
                             "The next steps of the flow were not run."
                         )
                     errors.append(f"output: run {run.id} {run.status} — {run.error or ''}".strip())
-            except (StopSequence, Spodestata):
-                # devono uscire: l'except qui sotto le raccoglierebbe come un
-                # errore qualunque e i passi a valle girerebbero comunque —
-                # dando per avvenuta una notifica che non è partita, o
-                # continuando un run che non è più nostro
+            except (StopSequence, NoLongerOurs):
+                # they must get out: the except below would collect them as any error and the steps
+                # downstream would run anyway — taking for done a notification that did not go, or
+                # carrying on a run that is no longer ours
                 raise
             except Exception as e:
-                logger.warning("orchestrate: flusso %s, output non eseguito: %s", flow.id, e)
+                logger.warning("orchestrate: flow %s, output not run: %s", flow.id, e)
                 if d.get("destType") == "email" and d.get("stopOnFailure") is not False:
                     # refused before its run existed (a template the engine rejects, a
                     # recipient outside the allowed domains): the email did not leave
@@ -316,12 +313,12 @@ async def orchestrate(session: Session, user: User, flow: Flow, depth: int = 0, 
                 continue
             sub = session.get(Flow, sub_id)
             if sub is None:
-                logger.warning("orchestrate: flusso %s riferisce un runflow inesistente %s", flow.id, sub_id)
+                logger.warning("orchestrate: flow %s refers to a missing runflow %s", flow.id, sub_id)
                 errors.append(f"runflow: flow {sub_id} does not exist")
                 continue
-            # i figli dei sotto-flussi riferiscono lo stesso run di orchestrazione
-            # di testa (non c'è un tracciante separato per i sotto-flussi)
-            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type, parent_run_id, engine_mode, custodita))
+            # the sub-flows' children refer to the same top orchestration run (there is no
+            # separate tracer for the sub-flows)
+            errors.extend(await orchestrate(session, user, sub, depth + 1, seen, trigger_type, parent_run_id, engine_mode, guarded))
     return errors
 
 
@@ -329,16 +326,15 @@ def create_orchestration_run(
     session: Session, user: User, flow: Flow, trigger_type: str = "manual",
     engine_mode: str = "development", commit: bool = True,
 ) -> Run:
-    """METTE IN CODA un'esecuzione del flusso: crea la riga 'run di orchestrazione'
-    (kind=orchestration) in stato PENDING. È il TRACCIANTE dell'intera esecuzione
-    (anche di flussi senza nodo Output, che altrimenti non lascerebbero traccia)
-    ed è insieme la voce di coda: la prende un orchestratore (`rivendica`). Non ha
-    un task Celery, `_reconcile` la salta.
+    """QUEUES a run of the flow: creates the 'orchestration run' row (kind=orchestration)
+    in state PENDING. It is the TRACER of the whole run (of flows without an Output node
+    too, which would leave no trace otherwise) and at the same time the queue's item: an
+    orchestrator takes it (`claim`). It has no Celery task, `_reconcile` skips it.
 
-    `user` è l'autorità con cui girerà; `engine_mode`: "production" dallo
-    scheduler e da run-now ?mode=production. `commit=False` per chi la scrive
-    nella stessa transazione di qualcos'altro (lo scheduler: lo slot preso e la
-    riga in coda o ci sono entrambi o nessuno)."""
+    `user` is the authority it will run with; `engine_mode`: "production" from the
+    scheduler and from run-now ?mode=production. `commit=False` for whoever writes it in
+    the same transaction as something else (the scheduler: the slot taken and the queued
+    row are both there or neither)."""
     run = Run(
         kind="orchestration",
         flow_id=flow.id,
@@ -358,8 +354,8 @@ def create_orchestration_run(
     return run
 
 
-# spazio di nomi dei lucchetti consultivi «coda del flusso» (il secondo numero è l'id)
-_LUCCHETTO_CODA = 74610001
+# the namespace of the «flow queue» advisory locks (the second number is the id)
+_QUEUE_LOCK = 74610001
 # the same for flow groups, in a namespace of their own (a group and a flow can share an id)
 _GROUP_QUEUE_LOCK = 74610004
 
@@ -381,7 +377,7 @@ def create_group_run(session: Session, user: User, group, trigger_type: str = "m
 
 
 def in_line_for_the_group(session: Session, group_id: int) -> None:
-    """As `in_fila_per_il_flusso`, for a flow group: two replicas, or a replica and
+    """As `in_line_for_the_flow`, for a flow group: two replicas, or a replica and
     the scheduler, cannot both see no run and both queue one."""
     if session.get_bind().dialect.name == "postgresql":
         session.connection().execute(
@@ -398,21 +394,21 @@ def group_running(session: Session, group_id: int) -> bool:
     ).first() is not None
 
 
-def in_fila_per_il_flusso(session: Session, flow_id: int) -> None:
-    """Mette in fila, fino alla fine della transazione, chi sta per guardare se il
-    flusso ha già un'esecuzione e per accodarne una: «Esegui ora» da più repliche
-    del gateway, e lo scheduler. Senza, due richieste insieme vedono entrambe la
-    coda vuota e accodano entrambe (dal vivo: 2 lanci su 20 passavano). Lucchetto
-    consultivo di Postgres legato alla transazione: lo rilascia il commit. Su
-    SQLite (i test) non serve: c'è un processo solo."""
+def in_line_for_the_flow(session: Session, flow_id: int) -> None:
+    """Lines up, until the end of the transaction, whoever is about to look whether the
+    flow has a run already and to queue one: «Run now» from several gateway replicas,
+    and the scheduler. Without it, two requests together both see the queue empty and
+    both queue (live: 2 launches in 20 got through). A Postgres advisory lock tied to
+    the transaction: the commit releases it. On SQLite (the tests) it is not needed:
+    there is one process only."""
     if session.get_bind().dialect.name == "postgresql":
         session.connection().execute(
-            text("SELECT pg_advisory_xact_lock(:spazio, :flusso)"), {"spazio": _LUCCHETTO_CODA, "flusso": flow_id}
+            text("SELECT pg_advisory_xact_lock(:namespace, :flow)"), {"namespace": _QUEUE_LOCK, "flow": flow_id}
         )
 
 
-def flusso_in_corso(session: Session, flow_id: int) -> bool:
-    """C'è già un'esecuzione del flusso, in corso o in coda."""
+def flow_running(session: Session, flow_id: int) -> bool:
+    """There is a run of the flow already, going or queued."""
     return session.exec(
         select(Run.id)
         .where(Run.kind == "orchestration", Run.flow_id == flow_id, Run.status.in_(("PENDING", "STARTED")))  # type: ignore[union-attr]
@@ -420,35 +416,35 @@ def flusso_in_corso(session: Session, flow_id: int) -> bool:
     ).first() is not None
 
 
-async def _finalize_orch_run(run_id: int, status: str, error: str | None = None, solo_in_coda: bool = False) -> None:
-    """Chiude il run di orchestrazione (sessione propria: gira nel task detached).
+async def _finalize_orch_run(run_id: int, status: str, error: str | None = None, only_if_queued: bool = False) -> None:
+    """Closes the orchestration run (its own session: it runs in the detached task).
 
-    UPDATE condizionato: chiude solo chi lo trova ancora aperto. Più processi
-    possono arrivarci insieme (chi esegue e chi lo dà per perso), e l'avviso di
-    fallimento deve partire una volta sola.
+    A conditional UPDATE: only whoever finds it still open closes it. Several processes
+    may get there together (whoever runs it and whoever takes it for lost), and the
+    failure notice must go out once only.
 
-    `solo_in_coda`: lo chiude solo se è ancora PENDING. Per il lancio respinto
-    perché il flusso girava già: fra il rifiuto e questa chiusura l'altra
-    esecuzione può essere finita e un altro processo può aver preso questa — che
-    a quel punto sta girando, e non va chiusa come «mai partita»."""
-    aperto = Run.status == "PENDING" if solo_in_coda else Run.status.not_in(TERMINAL_STATES)  # type: ignore[union-attr]
+    `only_if_queued`: closes it only while still PENDING. For the launch refused because
+    the flow was running already: between the refusal and this closing the other run
+    may have finished and another process may have taken this one — which is running by
+    then, and must not be closed as «never started»."""
+    opened_one = Run.status == "PENDING" if only_if_queued else Run.status.not_in(TERMINAL_STATES)  # type: ignore[union-attr]
     with Session(engine) as session:
-        chiuso = session.exec(
+        closed_one = session.exec(
             update(Run)
-            .where(Run.id == run_id, aperto)
+            .where(Run.id == run_id, opened_one)
             .values(status=status, error=error[:2000] if error else None, finished_at=datetime.now(timezone.utc))
         )
-        if chiuso.rowcount == 1:
-            # i webhook nella stessa transazione della chiusura (vedi services/webhooks.py)
+        if closed_one.rowcount == 1:
+            # the webhooks in the same transaction as the closing (see services/webhooks.py)
             from app.services import webhooks
 
-            webhooks.accoda_per_run(session, session.get(Run, run_id))
+            webhooks.enqueue_for_run(session, session.get(Run, run_id))
         session.commit()
-        if chiuso.rowcount != 1:
+        if closed_one.rowcount != 1:
             return
         run = session.get(Run, run_id)
-        # l'avviso parte DOPO il commit: si annuncia un fatto già scritto, e non
-        # tiene aperta la transazione per il tempo di una spedizione SMTP
+        # the notice goes out AFTER the commit: a fact written already is announced, and it
+        # does not hold the transaction open for the time of an SMTP send
         from app.services import openlineage
         from app.services.notifier import notify_failure
 
@@ -456,7 +452,7 @@ async def _finalize_orch_run(run_id: int, status: str, error: str | None = None,
         await notify_failure(session, run)
 
 
-async def ferma_passi(run_id: int) -> int:
+async def stop_steps(run_id: int) -> int:
     """The steps still open of an orchestration closed as interrupted are stopped: an
     Output or a refresh already with a worker went on writing while the flow, closed,
     could start again on top of it (the same rows twice in an append Output, two
@@ -466,22 +462,22 @@ async def ferma_passi(run_id: int) -> int:
     then); best effort, one step at a time: what fails is logged, the rest still go."""
     from app.services.script_runs import close_if_orphaned
 
-    fermati = 0
+    stopped = 0
     with Session(engine) as session:
-        aperti = session.exec(select(Run).where(
+        opened = session.exec(select(Run).where(
             Run.parent_run_id == run_id, Run.status.not_in(TERMINAL_STATES))).all()  # type: ignore[union-attr]
-        for run in aperti:
+        for run in opened:
             try:
                 if run.kind in ("script", "container"):
                     await close_if_orphaned(session, run)
                     continue
                 if run.kind == "orchestration":  # a flow of a flow group
-                    chiuso = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
+                    closed_one = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
                                           .values(status="FAILURE", error=ORCHESTRATION_INTERRUPTED,
                                                   finished_at=datetime.now(timezone.utc)))
                     session.commit()
-                    if chiuso.rowcount == 1:
-                        fermati += 1 + await ferma_passi(run.id)
+                    if closed_one.rowcount == 1:
+                        stopped += 1 + await stop_steps(run.id)
                     continue
                 # first what the engine says: a step that ended meanwhile keeps its outcome
                 # and its effects (a refresh's new parquet swapped in, an Output published),
@@ -491,80 +487,79 @@ async def ferma_passi(run_id: int) -> int:
                 if run.status in TERMINAL_STATES:
                     continue
                 await _revoke_task(run)
-                chiuso = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
+                closed_one = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
                                       .values(status="FAILURE", error=STEP_INTERRUPTED,
                                               finished_at=datetime.now(timezone.utc)))
                 session.commit()
-                fermati += chiuso.rowcount
+                stopped += closed_one.rowcount
             except Exception:  # noqa: BLE001 — one step must not keep the others running
                 session.rollback()
-                logger.exception("orchestrate: passo %s dell'orchestrazione interrotta %s non fermato", run.id, run_id)
-    if fermati:
-        logger.warning("orchestrate: %d passi dell'orchestrazione interrotta %s fermati", fermati, run_id)
-    return fermati
+                logger.exception("orchestrate: step %s of the interrupted orchestration %s not stopped", run.id, run_id)
+    if stopped:
+        logger.warning("orchestrate: %d steps of the interrupted orchestration %s stopped", stopped, run_id)
+    return stopped
 
 
-async def interrompi(run_id: int) -> None:
+async def interrupt(run_id: int) -> None:
     """Closes an orchestration whose process is stopping, then stops its steps."""
     await _finalize_orch_run(run_id, "FAILURE", ORCHESTRATION_INTERRUPTED)
-    await ferma_passi(run_id)
+    await stop_steps(run_id)
 
 
-# ── Prendere dalla coda ──────────────────────────────────────────────────────
-def rivendica(limite: int) -> tuple[list[int], list[int]]:
-    """Prende dalla coda fino a `limite` orchestrazioni e le firma come di questo
-    processo. Torna `(prese, respinte)`: le seconde sono lanci MANUALI di un
-    flusso che sta già girando, da chiudere come fallite.
+# ── Taking from the queue ─────────────────────────────────────────────────────
+def claim(limit: int) -> tuple[list[int], list[int]]:
+    """Takes from the queue up to `limit` orchestrations and signs them as this process's.
+    Returns `(prese, respinte)`: the latter are MANUAL launches of a flow that is running
+    already, to close as failed.
 
-    Ogni presa è un UPDATE condizionato sullo stato: se due processi provano la
-    stessa riga la ottiene uno solo, l'altro trova zero righe e passa oltre. Se
-    del flusso gira già un'esecuzione è l'indice unico a rifiutare l'UPDATE."""
-    prese: list[int] = []
-    respinte: list[int] = []
+    Every take is an UPDATE conditional on the state: when two processes try the same
+    row only one gets it, the other finds zero rows and moves on. When a run of the flow
+    is going already, the unique index refuses the UPDATE."""
+    taken: list[int] = []
+    refused: list[int] = []
     with Session(engine) as session:
-        candidati = session.exec(
+        candidates = session.exec(
             select(Run.id, Run.trigger_type)
             .where(Run.kind == "orchestration", Run.status == "PENDING")
             .order_by(Run.id)
-            .limit(limite + 20)  # qualcuna la prenderà un altro, o sarà respinta
+            .limit(limit + 20)  # another one will take some, or they will be refused
         ).all()
         session.rollback()
-        for run_id, trigger in candidati:
-            if len(prese) >= limite:
+        for run_id, trigger in candidates:
+            if len(taken) >= limit:
                 break
             try:
-                presa = session.exec(
+                taken_at = session.exec(
                     update(Run)
                     .where(Run.id == run_id, Run.status == "PENDING")
-                    .values(status="STARTED", claimed_by=ISTANZA, heartbeat_at=_adesso())
+                    .values(status="STARTED", claimed_by=INSTANCE, heartbeat_at=_now())
                 )
                 session.commit()
             except IntegrityError:
                 session.rollback()
                 if trigger == "schedule":
-                    # uno slot scattato mentre il giro precedente non era finito:
-                    # si salta senza lasciare traccia, come ha sempre fatto
+                    # a slot that fired while the previous round had not finished: skipped without
+                    # leaving a trace, as it always did
                     session.exec(delete(Run).where(Run.id == run_id, Run.status == "PENDING"))
                     session.commit()
-                    logger.info("orchestrate: run %s, flusso già in esecuzione: slot saltato", run_id)
+                    logger.info("orchestrate: run %s, flow already running: slot skipped", run_id)
                 else:
-                    respinte.append(run_id)
+                    refused.append(run_id)
                 continue
             except Exception:
-                # database caduto a metà: ci si ferma qui e si torna quello che
-                # si è già preso, così chi chiama lo esegue. Sollevare lo
-                # perderebbe: righe firmate senza nessuno che le porti avanti.
-                logger.exception("orchestrate: presa dalla coda interrotta al run %s", run_id)
+                # the database fell halfway: it stops here and returns what it has taken already, so
+                # the caller runs it. Raising would lose it: signed rows with nobody carrying them on.
+                logger.exception("orchestrate: taking from the queue interrupted at run %s", run_id)
                 session.rollback()
                 break
-            if presa.rowcount == 1:
-                prese.append(run_id)
-    return prese, respinte
+            if taken_at.rowcount == 1:
+                taken.append(run_id)
+    return taken, refused
 
 
-async def esegui(run_id: int) -> None:
-    """Porta in fondo un'orchestrazione che questo processo ha rivendicato, e ne
-    registra l'esito sul run."""
+async def run_it(run_id: int) -> None:
+    """Carries to the end an orchestration this process claimed, and records the outcome on
+    the run."""
     try:
         with Session(engine) as session:
             group_id, script_id = session.exec(
@@ -588,7 +583,7 @@ async def esegui(run_id: int) -> None:
             flow = session.get(Flow, run.flow_id) if run.flow_id else None
             user = session.get(User, run.launched_by) if run.launched_by else None
             if flow is None or user is None or not user.is_active:
-                logger.warning("orchestrate: run %s, flusso %s o utente %s non validi", run_id, run.flow_id, run.launched_by)
+                logger.warning("orchestrate: run %s, flow %s or user %s not valid", run_id, run.flow_id, run.launched_by)
                 await _finalize_orch_run(run_id, "FAILURE", "invalid flow or user")
                 return
             flow_id = flow.id
@@ -602,291 +597,290 @@ async def esegui(run_id: int) -> None:
                     await _finalize_orch_run(run_id, "FAILURE", schedule_authority.not_started(user, gaps))
                     return
             try:
-                # i run figli (output/refresh) riferiscono il run di orchestrazione:
-                # così il calendario conta solo quest'ultimo, non i doppioni figli
+                # the child runs (output/refresh) refer to the orchestration run: so the calendar
+                # counts only the latter, not the child duplicates
                 errors = await orchestrate(
                     session, user, flow, trigger_type=run.trigger_type, parent_run_id=run_id,
-                    engine_mode=run.engine_mode or "development", custodita=True,
+                    engine_mode=run.engine_mode or "development", guarded=True,
                 )
-            except Spodestata as e:
-                logger.warning("orchestrate: flusso %s, mi fermo: %s", flow_id, e)
+            except NoLongerOurs as e:
+                logger.warning("orchestrate: flow %s, stopping: %s", flow_id, e)
                 return
             except (FlowResolveError, OrchestrationError) as e:
-                logger.warning("orchestrate: flusso %s interrotto: %s", flow_id, e)
+                logger.warning("orchestrate: flow %s interrupted: %s", flow_id, e)
                 await _finalize_orch_run(run_id, "FAILURE", str(e))
                 return
             status = "FAILURE" if errors else "SUCCESS"
             await _finalize_orch_run(run_id, status, "; ".join(errors) if errors else None)
-            logger.info("orchestrate: flusso %s completato (%s)", flow_id, status)
+            logger.info("orchestrate: flow %s completed (%s)", flow_id, status)
     except asyncio.CancelledError:
-        # il processo si sta fermando: i passi rimanenti non verranno eseguiti.
-        # Lo si scrive subito, invece di lasciarlo scoprire a chi ne cercherà il battito,
-        # e si fermano quelli già partiti
-        await interrompi(run_id)
+        # the process is stopping: the remaining steps will not run. It is written at once,
+        # instead of leaving it for whoever looks for its heartbeat to find out, and the ones
+        # started already are stopped
+        await interrupt(run_id)
         raise
     except Exception:
         logger.exception("orchestrate: run %s fallito", run_id)
         await _finalize_orch_run(run_id, "FAILURE", "internal error during the orchestration")
 
 
-# ── Battito, e chi non batte più ─────────────────────────────────────────────
-def batti() -> int:
-    """Dice «ci sono» sulle orchestrazioni che questo processo sta eseguendo
-    DAVVERO: quelle con un task vivo (`_vive`), non tutte quelle che ha firmato.
+# ── Heartbeat, and who no longer beats ────────────────────────────────────────
+def beat() -> int:
+    """Says «here» on the orchestrations this process is REALLY running: those with a live
+    task (`_alive`), not all those it signed.
 
-    La differenza conta quando un task muore senza chiudere il suo run — il
-    database cade mentre scrive l'esito, o la presa dalla coda si interrompe a
-    metà. Se si battesse per firma, quella riga continuerebbe a risultare viva
-    finché il processo campa: nessuno la chiuderebbe, e l'indice unico terrebbe
-    il flusso bloccato. Così invece smette di battere e viene chiusa come orfana.
+    The difference counts when a task dies without closing its run — the database falls
+    while writing the outcome, or the take from the queue breaks off halfway. Beating by
+    signature, that row would keep showing alive as long as the process lives: nobody
+    would close it, and the unique index would keep the flow blocked. This way it stops
+    beating instead and is closed as orphaned.
 
-    Su una connessione sua (`engine_battito`), che il pool delle richieste non
-    può togliergli."""
-    with _vive_lock:
-        ids = list(_vive)
-    with Session(engine_battito) as session:
+    On a connection of its own (`heartbeat_engine`), which the requests' pool cannot take
+    away from it."""
+    with _alive_lock:
+        ids = list(_alive)
+    with Session(heartbeat_engine) as session:
         if not ids:
-            session.exec(text("SELECT 1"))  # the database answers: see battito_sano
+            session.exec(text("SELECT 1"))  # the database answers: see heartbeat_healthy
             return 0
-        vive = session.exec(
+        alive = session.exec(
             update(Run)
-            .where(Run.id.in_(ids), Run.kind == "orchestration", Run.status == "STARTED", Run.claimed_by == ISTANZA)  # type: ignore[union-attr]
-            .values(heartbeat_at=_adesso())
+            .where(Run.id.in_(ids), Run.kind == "orchestration", Run.status == "STARTED", Run.claimed_by == INSTANCE)  # type: ignore[union-attr]
+            .values(heartbeat_at=_now())
         )
         session.commit()
-        return vive.rowcount
+        return alive.rowcount
 
 
 # since when (time.monotonic) this process's beats have gone through, without a miss
-_battito_ok_dal: float | None = None
+_heartbeat_ok_since: float | None = None
 
 
-def battito_sano() -> bool:
+def heartbeat_healthy() -> bool:
     """This process has been beating for a whole `dead_after_seconds`. Right after the
     database comes back from an outage every heartbeat is old, the living ones too:
     the orphans' sweep waits until every live orchestrator has had the time to beat
     again, instead of closing (and now stopping the steps of) runs that are running."""
-    return _battito_ok_dal is not None and time.monotonic() - _battito_ok_dal >= _orc().dead_after_seconds
+    return _heartbeat_ok_since is not None and time.monotonic() - _heartbeat_ok_since >= _orc().dead_after_seconds
 
 
-def avvia_battito(ferma: threading.Event) -> threading.Thread:
-    """In un THREAD suo e non sul ciclo degli eventi: il battito dice che il
-    processo è vivo, e deve continuare anche mentre il ciclo è occupato. Se
-    battesse dal ciclo, un'attesa lunga lì dentro farebbe dare per morte
-    orchestrazioni che stanno girando."""
+def start_heartbeat(stop: threading.Event) -> threading.Thread:
+    """In a THREAD of its own and not on the event loop: the heartbeat says the process is
+    alive, and must go on while the loop is busy too. Beating from the loop, a long wait
+    in there would make running orchestrations be taken for dead."""
 
-    def gira() -> None:
+    def run_round() -> None:
         # a second at a time, reading the interval each time: a beat made shorter from the
         # panel applies at once, not after the long wait already started
-        ultimo = time.monotonic()
-        while not ferma.wait(1.0):
-            if time.monotonic() - ultimo < _orc().heartbeat_seconds:
+        last = time.monotonic()
+        while not stop.wait(1.0):
+            if time.monotonic() - last < _orc().heartbeat_seconds:
                 continue
-            ultimo = time.monotonic()
-            global _battito_ok_dal
+            last = time.monotonic()
+            global _heartbeat_ok_since
             try:
-                batti()
-                if _battito_ok_dal is None:
-                    _battito_ok_dal = time.monotonic()
+                beat()
+                if _heartbeat_ok_since is None:
+                    _heartbeat_ok_since = time.monotonic()
             except Exception:
-                _battito_ok_dal = None
-                logger.exception("orchestrate: battito non riuscito")
+                _heartbeat_ok_since = None
+                logger.exception("orchestrate: heartbeat failed")
 
-    t = threading.Thread(target=gira, name="battito-orchestrazioni", daemon=True)
+    t = threading.Thread(target=run_round, name="orchestration-heartbeat", daemon=True)
     t.start()
     return t
 
 
 # the dead-after threshold this process used before the last change, and since when
-_soglia_prima: tuple[float, float] | None = None
-_soglia_ultima: float | None = None
+_first_threshold: tuple[float, float] | None = None
+_last_threshold: float | None = None
 
 
-def soglia_morte() -> float:
+def death_threshold() -> float:
     """`dead_after_seconds`, but for a while after it is lowered from the panel the old
-    one: the other orchestrators read the change up to `RILEGGI_OGNI` seconds later, and
+    one: the other orchestrators read the change up to `REREAD_EVERY` seconds later, and
     meanwhile beat at the old pace. Their live runs are not orphans in that window."""
-    global _soglia_prima, _soglia_ultima
-    from app.core.overrides import RILEGGI_OGNI
+    global _first_threshold, _last_threshold
+    from app.core.overrides import REREAD_EVERY
 
-    ora, adesso = _orc().dead_after_seconds, time.monotonic()
-    if _soglia_ultima is not None and ora != _soglia_ultima:
-        _soglia_prima = (_soglia_ultima, adesso)
-    _soglia_ultima = ora
-    if _soglia_prima is not None and adesso - _soglia_prima[1] < _soglia_prima[0] + RILEGGI_OGNI:
-        return max(ora, _soglia_prima[0])
-    return ora
+    current, now = _orc().dead_after_seconds, time.monotonic()
+    if _last_threshold is not None and current != _last_threshold:
+        _first_threshold = (_last_threshold, now)
+    _last_threshold = current
+    if _first_threshold is not None and now - _first_threshold[1] < _first_threshold[0] + REREAD_EVERY:
+        return max(current, _first_threshold[0])
+    return current
 
 
-async def chiudi_orfane() -> int:
-    """Chiude le orchestrazioni STARTED il cui battito è fermo: il processo che le
-    eseguiva è morto (crash, riavvio, macchina persa) e nessuno le finirà.
-    `_reconcile` non le vede (non hanno un task sull'engine): senza questo
-    resterebbero STARTED per sempre, e il flusso non potrebbe più ripartire.
+async def close_orphans() -> int:
+    """Closes the STARTED orchestrations whose heartbeat stopped: the process running them
+    died (crash, restart, machine lost) and nobody will finish them. `_reconcile` does
+    not see them (they have no task on the engine): without this they would stay
+    STARTED forever, and the flow could never start again.
 
-    Vale anche per le righe senza battito, che sono di una versione precedente."""
-    taglio = _adesso() - timedelta(seconds=soglia_morte())
-    with _vive_lock:
-        mie_vive = list(_vive)
-    orfana = (
+    It holds for the rows without a heartbeat too, which come from an earlier version."""
+    cutoff = _now() - timedelta(seconds=death_threshold())
+    with _alive_lock:
+        mine_alive = list(_alive)
+    orphan = (
         (Run.kind == "orchestration")
         & (Run.status == "STARTED")
-        & or_(Run.heartbeat_at.is_(None), Run.heartbeat_at < taglio)  # type: ignore[union-attr]
+        & or_(Run.heartbeat_at.is_(None), Run.heartbeat_at < cutoff)  # type: ignore[union-attr]
         # what this very process is running is alive, whatever its beat says
-        & ~((Run.claimed_by == ISTANZA) & Run.id.in_(mie_vive or [-1]))  # type: ignore[union-attr]
+        & ~((Run.claimed_by == INSTANCE) & Run.id.in_(mine_alive or [-1]))  # type: ignore[union-attr]
     )
-    chiuse = 0
+    closed_ones = 0
     from app.services.notifier import notify_failure
 
     with Session(engine) as session:
-        for run_id in session.exec(select(Run.id).where(orfana)).all():
-            # di nuovo la condizione intera: fra la lettura e qui può averla
-            # chiusa un altro, o chi la esegue può aver ripreso a battere
-            chiusa = session.exec(
+        for run_id in session.exec(select(Run.id).where(orphan)).all():
+            # the whole condition again: between the read and here another may have closed it, or
+            # whoever runs it may have started beating again
+            closed = session.exec(
                 update(Run)
-                .where(Run.id == run_id, orfana)
+                .where(Run.id == run_id, orphan)
                 .values(status="FAILURE", error=ORCHESTRATION_INTERRUPTED, finished_at=datetime.now(timezone.utc))
             )
-            if chiusa.rowcount == 1:
+            if closed.rowcount == 1:
                 from app.services import webhooks
 
-                webhooks.accoda_per_run(session, session.get(Run, run_id))  # nella stessa transazione
+                webhooks.enqueue_for_run(session, session.get(Run, run_id))  # in the same transaction
             session.commit()
-            if chiusa.rowcount != 1:
+            if closed.rowcount != 1:
                 continue
-            chiuse += 1
-            await ferma_passi(run_id)
+            closed_ones += 1
+            await stop_steps(run_id)
             await notify_failure(session, session.get(Run, run_id))
-        # e quelle rimaste in coda oltre il tempo massimo: non partono più
-        vecchie = _adesso() - timedelta(seconds=_orc().queue_timeout_seconds)
+        # and those left queued past the maximum time: they no longer start
+        old_items = _now() - timedelta(seconds=_orc().queue_timeout_seconds)
         for run in session.exec(
-            select(Run).where(Run.kind == "orchestration", Run.status == "PENDING", Run.started_at < vecchie)
+            select(Run).where(Run.kind == "orchestration", Run.status == "PENDING", Run.started_at < old_items)
         ).all():
             await close_if_queued_too_long(session, run)
-    if chiuse:
-        logger.warning("orchestrate: %d orchestrazioni di un processo che non c'è più, chiuse", chiuse)
-    return chiuse
+    if closed_ones:
+        logger.warning("orchestrate: %d orchestrations of a process that is gone, closed", closed_ones)
+    return closed_ones
 
 
-def chiudi_le_mie(solo_le_precedenti: bool) -> list[int]:
-    """Chiude come interrotte le esecuzioni firmate da questo processo.
+def close_mine(only_earlier: bool) -> list[int]:
+    """Closes as interrupted the runs this process signed.
 
-    All'AVVIO (`solo_le_precedenti`): quelle di una sua incarnazione precedente —
-    stesso host e stesso pid, altra firma. È il container che riparte dopo un
-    crash o un kill: quel processo non c'è più di sicuro, e non serve aspettare
-    che il battito scada per saperlo (nel frattempo il flusso resterebbe
-    bloccato e uno slot schedulato andrebbe perso). Un processo su un altro host,
-    o con un altro pid, non si tocca: può essere vivo.
+    At START (`only_earlier`): those of an earlier incarnation of it — the same
+    host and the same pid, another signature. It is the container starting again after a
+    crash or a kill: that process is surely gone, and there is no need to wait for the
+    heartbeat to expire to know it (meanwhile the flow would stay blocked and a
+    scheduled slot would be lost). A process on another host, or with another pid, is
+    not touched: it may be alive.
 
-    Allo SPEGNIMENTO: tutte le sue. Quelle con un task le ha già chiuse il task;
-    restano le eventuali firmate e mai partite."""
-    mie = Run.claimed_by.startswith(ISTANZA.rsplit(":", 1)[0] + ":", autoescape=True) if solo_le_precedenti else Run.claimed_by == ISTANZA  # type: ignore[union-attr]
-    altra_firma = Run.claimed_by != ISTANZA if solo_le_precedenti else True
+    At SHUTDOWN: all of its own. Those with a task were closed by the task already;
+    what is left are any signed and never started."""
+    mine = Run.claimed_by.startswith(INSTANCE.rsplit(":", 1)[0] + ":", autoescape=True) if only_earlier else Run.claimed_by == INSTANCE  # type: ignore[union-attr]
+    other_signature = Run.claimed_by != INSTANCE if only_earlier else True
     from app.services import webhooks
 
     with Session(engine) as session:
-        chiuse = session.exec(
+        closed_ones = session.exec(
             update(Run)
-            .where(Run.kind == "orchestration", Run.status == "STARTED", mie, altra_firma)
+            .where(Run.kind == "orchestration", Run.status == "STARTED", mine, other_signature)
             .values(status="FAILURE", error=ORCHESTRATION_INTERRUPTED, finished_at=datetime.now(timezone.utc))
             .returning(Run.id)
         ).all()
-        for (run_id,) in chiuse:
-            webhooks.accoda_per_run(session, session.get(Run, run_id))  # nella stessa transazione
+        for (run_id,) in closed_ones:
+            webhooks.enqueue_for_run(session, session.get(Run, run_id))  # in the same transaction
         session.commit()
-        return [run_id for (run_id,) in chiuse]
+        return [run_id for (run_id,) in closed_ones]
 
 
-# ── Il lavoratore ────────────────────────────────────────────────────────────
-_in_corso: set[asyncio.Task] = set()
-# gli id dei run che hanno un task vivo qui: è ciò di cui si batte (vedi `batti`).
-# Lo legge il thread del battito, lo scrive il ciclo degli eventi.
-_vive: set[int] = set()
-_vive_lock = threading.Lock()
+# ── The worker ───────────────────────────────────────────────────────────────
+_running: set[asyncio.Task] = set()
+# the ids of the runs with a live task here: what the heartbeat is for (see `beat`).
+# The heartbeat thread reads it, the event loop writes it.
+_alive: set[int] = set()
+_alive_lock = threading.Lock()
 # the cells of flow groups running in this process: each holds a connection like an
 # orchestration, so they count in the same budget (see services/flow_group_runner.py)
-celle_in_corso = 0
-_sveglia: asyncio.Event | None = None
+running_cells = 0
+_wakeup: asyncio.Event | None = None
 
 
-def _avvia(run_id: int) -> asyncio.Task:
-    with _vive_lock:
-        _vive.add(run_id)
-    task = asyncio.create_task(esegui(run_id))
-    _in_corso.add(task)
+def _start(run_id: int) -> asyncio.Task:
+    with _alive_lock:
+        _alive.add(run_id)
+    task = asyncio.create_task(run_it(run_id))
+    _running.add(task)
 
-    def finito(t: asyncio.Task) -> None:
-        _in_corso.discard(t)
-        with _vive_lock:
-            _vive.discard(run_id)
+    def finished(t: asyncio.Task) -> None:
+        _running.discard(t)
+        with _alive_lock:
+            _alive.discard(run_id)
         if not t.cancelled() and t.exception() is not None:
-            # non è riuscito nemmeno a scrivere l'esito (database irraggiungibile):
-            # da adesso non batte più, e verrà chiuso come orfano
-            logger.error("orchestrate: run %s, il task è morto senza chiudere il run: %r", run_id, t.exception())
+            # it could not even write the outcome (database unreachable): from now on it no longer
+            # beats, and will be closed as orphaned
+            logger.error("orchestrate: run %s, the task died without closing the run: %r", run_id, t.exception())
 
-    task.add_done_callback(finito)
+    task.add_done_callback(finished)
     return task
 
 
-def sveglia() -> None:
-    """Chi ha appena messo in coda un'esecuzione lo dice al lavoratore di questo
-    processo, se c'è: la prende subito invece che al prossimo giro. In un
-    processo che risponde soltanto (`APP__ROLE=api`) non fa niente, e la riga la
-    trova un orchestratore entro `ORCHESTRATOR__QUEUE_POLL_SECONDS`."""
-    if _sveglia is not None:
-        _sveglia.set()
+def wake() -> None:
+    """Whoever just queued a run tells this process's worker, if there is one: it takes it
+    at once instead of at the next round. In a process that only answers
+    (`APP__ROLE=api`) it does nothing, and an orchestrator finds the row within
+    `ORCHESTRATOR__QUEUE_POLL_SECONDS`."""
+    if _wakeup is not None:
+        _wakeup.set()
 
 
-async def coda_loop(stop: asyncio.Event) -> None:
-    """Prende dalla coda ed esegue, finché il processo vive."""
-    global _sveglia
-    _sveglia = asyncio.Event()
-    ferma_battito = threading.Event()
-    avvia_battito(ferma_battito)
+async def queue_loop(stop: asyncio.Event) -> None:
+    """Takes from the queue and runs, as long as the process lives."""
+    global _wakeup
+    _wakeup = asyncio.Event()
+    stop_heartbeat = threading.Event()
+    start_heartbeat(stop_heartbeat)
     logger.info(
-        "orchestratore %s avviato: coda ogni %ss, fino a %d esecuzioni insieme",
-        ISTANZA, _orc().queue_poll_seconds, concorrenza(),
+        "orchestrator %s started: queue every %ss, up to %d runs together",
+        INSTANCE, _orc().queue_poll_seconds, concurrency(),
     )
-    ultima_ricerca = 0.0
+    last_search = 0.0
     try:
-        precedenti = await asyncio.to_thread(chiudi_le_mie, True)
-        if precedenti:
-            logger.warning("orchestratore: %d esecuzioni di un avvio precedente di questo processo, chiuse",
-                           len(precedenti))
-        for run_id in precedenti:
-            await ferma_passi(run_id)
+        previous_ones = await asyncio.to_thread(close_mine, True)
+        if previous_ones:
+            logger.warning("orchestrator: %d runs of an earlier start of this process, closed",
+                           len(previous_ones))
+        for run_id in previous_ones:
+            await stop_steps(run_id)
     except Exception:
-        logger.exception("orchestratore: chiusura delle esecuzioni precedenti non riuscita")
+        logger.exception("orchestrator: closing the earlier runs failed")
     try:
         while not stop.is_set():
-            _sveglia.clear()
+            _wakeup.clear()
             try:
-                liberi = concorrenza() - len(_in_corso) - celle_in_corso
-                if liberi > 0:
-                    prese, respinte = await asyncio.to_thread(rivendica, liberi)
-                    for run_id in prese:
-                        _avvia(run_id)
-                    for run_id in respinte:
-                        await _finalize_orch_run(run_id, "FAILURE", ALREADY_RUNNING, solo_in_coda=True)
-                if time.monotonic() - ultima_ricerca >= ORPHAN_SWEEP_S and battito_sano():
-                    ultima_ricerca = time.monotonic()
-                    await chiudi_orfane()
+                free = concurrency() - len(_running) - running_cells
+                if free > 0:
+                    taken, refused = await asyncio.to_thread(claim, free)
+                    for run_id in taken:
+                        _start(run_id)
+                    for run_id in refused:
+                        await _finalize_orch_run(run_id, "FAILURE", ALREADY_RUNNING, only_if_queued=True)
+                if time.monotonic() - last_search >= ORPHAN_SWEEP_S and heartbeat_healthy():
+                    last_search = time.monotonic()
+                    await close_orphans()
             except Exception:
-                logger.exception("orchestratore: errore nel giro della coda")
+                logger.exception("orchestrator: error in the queue's round")
             try:
-                await asyncio.wait_for(_sveglia.wait(), timeout=_orc().queue_poll_seconds)
+                await asyncio.wait_for(_wakeup.wait(), timeout=_orc().queue_poll_seconds)
             except asyncio.TimeoutError:
                 pass
     finally:
-        _sveglia = None
-        ferma_battito.set()
-        # il processo si ferma: le esecuzioni in corso non possono finire, e
-        # ciascuna lo scrive sul suo run (vedi `esegui`)
-        for task in list(_in_corso):
+        _wakeup = None
+        stop_heartbeat.set()
+        # the process is stopping: the running runs cannot finish, and each writes so on its
+        # run (see `run_it`)
+        for task in list(_running):
             task.cancel()
-        await asyncio.gather(*list(_in_corso), return_exceptions=True)
+        await asyncio.gather(*list(_running), return_exceptions=True)
         try:
-            chiudi_le_mie(False)  # firmate e mai partite: nessuno le eseguirà
+            close_mine(False)  # signed and never started: nobody will run them
         except Exception:
-            logger.exception("orchestratore: chiusura finale non riuscita")
-        logger.info("orchestratore %s fermato", ISTANZA)
+            logger.exception("orchestrator: final closing failed")
+        logger.info("orchestrator %s stopped", INSTANCE)

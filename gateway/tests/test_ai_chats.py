@@ -15,11 +15,11 @@ from app.services import ai_chats
 from tests.conftest import make_user
 
 
-def _turno(session, chat_id, seq, *, domanda="d", costo=None, inp=10, out=5):
+def _turno(session, chat_id, seq, *, question="d", cost=None, inp=10, out=5):
     t = AiChatTurn(
-        chat_id=chat_id, seq=seq, question=domanda, model_id="m",
+        chat_id=chat_id, seq=seq, question=question, model_id="m",
         messages='[{"parts": [{"part_kind": "text", "content": "risposta"}]}]',
-        input_tokens=inp, output_tokens=out, requests=1, cost_usd=costo,
+        input_tokens=inp, output_tokens=out, requests=1, cost_usd=cost,
     )
     session.add(t)
     session.commit()
@@ -30,7 +30,7 @@ def _turno(session, chat_id, seq, *, domanda="d", costo=None, inp=10, out=5):
 def due_utenti(session):
     anna = make_user(session, email="anna@x.it")
     bruno = make_user(session, email="bruno@x.it")
-    chat = ai_chats.crea(session, anna, "Quanti ordini a marzo?", "gpt-oss-120b", "polars")
+    chat = ai_chats.create(session, anna, "Quanti ordini a marzo?", "gpt-oss-120b", "polars")
     return anna, bruno, chat
 
 
@@ -41,7 +41,7 @@ def test_the_first_question_becomes_the_title(session, due_utenti):
 
 def test_a_very_long_question_is_truncated(session):
     anna = make_user(session, email="anna@x.it")
-    chat = ai_chats.crea(session, anna, "x" * 500, "m", None)
+    chat = ai_chats.create(session, anna, "x" * 500, "m", None)
     assert len(chat.title) == ai_chats.MAX_TITLE and chat.title.endswith("…")
 
 
@@ -49,58 +49,58 @@ def test_costs_are_summed_exactly(session, due_utenti):
     anna, _, chat = due_utenti
     # decimali piccoli: sommati in virgola mobile darebbero 0.000059999...
     for i, c in enumerate(["0.000017613", "0.000021", "0.000021387"]):
-        _turno(session, chat.id, i, costo=c)
-    assert ai_chats.riepilogo(session, chat)["cost_usd"] == "0.000060000"
+        _turno(session, chat.id, i, cost=c)
+    assert ai_chats.summary(session, chat)["cost_usd"] == "0.000060000"
 
 
 def test_an_unknown_cost_is_not_zero(session, due_utenti):
     anna, _, chat = due_utenti
-    _turno(session, chat.id, 0, costo=None)
-    assert ai_chats.riepilogo(session, chat)["cost_usd"] is None  # «non so», non «gratis»
-    _turno(session, chat.id, 1, costo="0.001")
-    assert ai_chats.riepilogo(session, chat)["cost_usd"] == "0.001"  # i noti si sommano lo stesso
+    _turno(session, chat.id, 0, cost=None)
+    assert ai_chats.summary(session, chat)["cost_usd"] is None  # «non so», non «gratis»
+    _turno(session, chat.id, 1, cost="0.001")
+    assert ai_chats.summary(session, chat)["cost_usd"] == "0.001"  # i noti si sommano lo stesso
 
 
 def test_the_listing_shows_only_your_own_chats(session, due_utenti):
     anna, bruno, chat = due_utenti
     _turno(session, chat.id, 0)
-    altrui = ai_chats.crea(session, bruno, "roba di Bruno", "m", None)
+    altrui = ai_chats.create(session, bruno, "roba di Bruno", "m", None)
     _turno(session, altrui.id, 0)
-    assert [c["id"] for c in ai_chats.elenco(session, anna, 50)] == [chat.id]
-    assert [c["title"] for c in ai_chats.elenco(session, bruno, 50)] == ["roba di Bruno"]
+    assert [c["id"] for c in ai_chats.listing(session, anna, 50)] == [chat.id]
+    assert [c["title"] for c in ai_chats.listing(session, bruno, 50)] == ["roba di Bruno"]
 
 
 def test_someone_elses_chat_is_indistinguishable_from_a_missing_one(session, due_utenti):
     anna, bruno, chat = due_utenti
-    messaggi = []
-    for azione in (lambda: ai_chats.dettaglio(session, bruno, chat.id),
-                   lambda: ai_chats.dettaglio(session, bruno, 999999),
-                   lambda: ai_chats.elimina(session, bruno, chat.id)):
+    messages = []
+    for action in (lambda: ai_chats.detail(session, bruno, chat.id),
+                   lambda: ai_chats.detail(session, bruno, 999999),
+                   lambda: ai_chats.remove(session, bruno, chat.id)):
         with pytest.raises(HTTPException) as e:
-            azione()
+            action()
         assert e.value.status_code == 404
-        messaggi.append(e.value.detail)
-    assert messaggi[0] == messaggi[1]  # stesso messaggio: nessun oracolo
+        messages.append(e.value.detail)
+    assert messages[0] == messages[1]  # stesso messaggio: nessun oracolo
     assert session.get(AiChat, chat.id) is not None  # e non è stata cancellata
 
 
 def test_deleting_a_chat_takes_its_turns_with_it(session, due_utenti):
     anna, _, chat = due_utenti
     _turno(session, chat.id, 0)
-    ai_chats.elimina(session, anna, chat.id)
+    ai_chats.remove(session, anna, chat.id)
     assert session.get(AiChat, chat.id) is None
     assert session.query(AiChatTurn).count() == 0
 
 
 def test_the_most_recently_used_chat_comes_first(session, due_utenti):
-    anna, _, prima = due_utenti
-    _turno(session, prima.id, 0)
-    seconda = ai_chats.crea(session, anna, "domanda nuova", "m", None)
+    anna, _, before = due_utenti
+    _turno(session, before.id, 0)
+    seconda = ai_chats.create(session, anna, "domanda nuova", "m", None)
     _turno(session, seconda.id, 0)
-    assert [c["id"] for c in ai_chats.elenco(session, anna, 50)] == [seconda.id, prima.id]
-    ai_chats.salva_turno(session, prima.id, domanda="ancora", messaggi=[], model_id="m",
+    assert [c["id"] for c in ai_chats.listing(session, anna, 50)] == [seconda.id, before.id]
+    ai_chats.save_turn(session, before.id, question="ancora", messages=[], model_id="m",
                          input_tokens=1, output_tokens=1, requests=1, cost=None)
-    assert [c["id"] for c in ai_chats.elenco(session, anna, 50)][0] == prima.id
+    assert [c["id"] for c in ai_chats.listing(session, anna, 50)][0] == before.id
 
 
 def test_a_corrupt_turn_does_not_break_reopening(session, due_utenti):
@@ -109,8 +109,8 @@ def test_a_corrupt_turn_does_not_break_reopening(session, due_utenti):
     t.messages = "{non è json"
     session.add(t)
     session.commit()
-    assert ai_chats.storia(session, chat, 60) == []  # salta il turno invece di esplodere
-    assert ai_chats.dettaglio(session, anna, chat.id)["messages"][0]["answer"] == ""
+    assert ai_chats.history(session, chat, 60) == []  # salta il turno invece di esplodere
+    assert ai_chats.detail(session, anna, chat.id)["messages"][0]["answer"] == ""
 
 
 def test_deleting_the_user_deletes_their_chats(session, due_utenti):
@@ -126,9 +126,9 @@ def test_deleting_the_user_deletes_their_chats(session, due_utenti):
 def test_a_conversation_without_turns_is_not_listed(session, due_utenti):
     """Una richiesta interrotta non deve lasciare una chat vuota nell'elenco."""
     anna, _, chat = due_utenti
-    assert ai_chats.elenco(session, anna, 50) == []
+    assert ai_chats.listing(session, anna, 50) == []
     _turno(session, chat.id, 0)
-    assert [c["id"] for c in ai_chats.elenco(session, anna, 50)] == [chat.id]
+    assert [c["id"] for c in ai_chats.listing(session, anna, 50)] == [chat.id]
 
 
 @pytest.mark.anyio
@@ -146,12 +146,12 @@ async def test_the_routes_are_scoped_to_the_caller(session, due_utenti):
 
 def _turno_con_query(session, chat_id, ds_id, sql="SELECT 1 AS n FROM self", step="call-1"):
     import json as _json
-    messaggi = [{"parts": [{
+    messages = [{"parts": [{
         "part_kind": "tool-call", "tool_name": "query_datasource", "tool_call_id": step,
         "args": _json.dumps({"datasource_id": ds_id, "sql": sql}),
     }]}]
     t = AiChatTurn(chat_id=chat_id, seq=0, question="d", model_id="m",
-                   messages=_json.dumps(messaggi), input_tokens=1, output_tokens=1, requests=1)
+                   messages=_json.dumps(messages), input_tokens=1, output_tokens=1, requests=1)
     session.add(t)
     session.commit()
     return t
@@ -160,14 +160,14 @@ def _turno_con_query(session, chat_id, ds_id, sql="SELECT 1 AS n FROM self", ste
 def test_the_query_is_read_back_from_the_turn_not_from_the_caller(session, due_utenti):
     anna, _, chat = due_utenti
     _turno_con_query(session, chat.id, 7, sql="SELECT paese FROM self")
-    assert ai_chats.query_del_passo(session, anna, chat.id, 0, "call-1") == (7, "SELECT paese FROM self")
+    assert ai_chats.step_query(session, anna, chat.id, 0, "call-1") == (7, "SELECT paese FROM self")
 
 
 def test_you_cannot_export_a_step_of_someone_elses_chat(session, due_utenti):
     anna, bruno, chat = due_utenti
     _turno_con_query(session, chat.id, 7)
     with pytest.raises(HTTPException) as e:
-        ai_chats.query_del_passo(session, bruno, chat.id, 0, "call-1")
+        ai_chats.step_query(session, bruno, chat.id, 0, "call-1")
     assert e.value.status_code == 404
 
 
@@ -175,13 +175,13 @@ def test_a_step_that_is_not_a_query_cannot_be_exported(session, due_utenti):
     import json as _json
 
     anna, _, chat = due_utenti
-    messaggi = [{"parts": [{"part_kind": "tool-call", "tool_name": "list_datasources",
+    messages = [{"parts": [{"part_kind": "tool-call", "tool_name": "list_datasources",
                             "tool_call_id": "c9", "args": "{}"}]}]
     session.add(AiChatTurn(chat_id=chat.id, seq=0, question="d", model_id="m",
-                           messages=_json.dumps(messaggi)))
+                           messages=_json.dumps(messages)))
     session.commit()
     with pytest.raises(HTTPException) as e:
-        ai_chats.query_del_passo(session, anna, chat.id, 0, "c9")
+        ai_chats.step_query(session, anna, chat.id, 0, "c9")
     assert e.value.status_code == 422
 
 
@@ -189,7 +189,7 @@ def test_an_unknown_step_is_not_found(session, due_utenti):
     anna, _, chat = due_utenti
     _turno_con_query(session, chat.id, 7)
     with pytest.raises(HTTPException) as e:
-        ai_chats.query_del_passo(session, anna, chat.id, 0, "non-esiste")
+        ai_chats.step_query(session, anna, chat.id, 0, "non-esiste")
     assert e.value.status_code == 404
 
 
@@ -198,7 +198,7 @@ def test_reopening_a_conversation_brings_back_the_evidence(session, due_utenti):
     import json as _json
 
     anna, _, chat = due_utenti
-    messaggi = [{"parts": [
+    messages = [{"parts": [
         {"part_kind": "tool-call", "tool_name": "query_datasource", "tool_call_id": "c1",
          "args": _json.dumps({"datasource_id": 7, "sql": "SELECT 1"})},
         {"part_kind": "tool-return", "tool_call_id": "c1", "content": {
@@ -207,12 +207,12 @@ def test_reopening_a_conversation_brings_back_the_evidence(session, due_utenti):
         {"part_kind": "text", "content": "Sono 3."},
     ]}]
     session.add(AiChatTurn(chat_id=chat.id, seq=0, question="quanti?", model_id="m",
-                           messages=_json.dumps(messaggi)))
+                           messages=_json.dumps(messages)))
     session.commit()
 
-    passo = ai_chats.dettaglio(session, anna, chat.id)["messages"][0]["steps"][0]
-    assert passo["table"]["rows"] == [{"n": 3}]
-    assert passo["chart"] == {"type": "bar", "x": "paese", "y": "n"}
+    step = ai_chats.detail(session, anna, chat.id)["messages"][0]["steps"][0]
+    assert step["table"]["rows"] == [{"n": 3}]
+    assert step["chart"] == {"type": "bar", "x": "paese", "y": "n"}
 
 
 # ── osservatore: la conversazione non si salva, il conto sì ──────────────────
@@ -228,7 +228,7 @@ def test_an_observer_gets_no_history_even_if_a_chat_exists(session):
     ospite.is_observer = True
     session.add(ospite)
     session.commit()
-    ai_chats.crea(session, ospite, "una domanda rimasta lì", "m", None)
+    ai_chats.create(session, ospite, "una domanda rimasta lì", "m", None)
 
     assert ai_routes.list_chats(user=ospite, session=session) == []
 
@@ -238,8 +238,8 @@ def test_an_ordinary_user_keeps_their_history(session):
     from app.services import ai_chats
 
     tizio = make_user(session, email="tizio-chat@x.it")
-    chat = ai_chats.crea(session, tizio, "d", "m", None)
-    ai_chats.salva_turno(session, chat.id, domanda="d", messaggi=[], model_id="m",
+    chat = ai_chats.create(session, tizio, "d", "m", None)
+    ai_chats.save_turn(session, chat.id, question="d", messages=[], model_id="m",
                          input_tokens=1, output_tokens=1, requests=1, cost=None)
     assert len(ai_routes.list_chats(user=tizio, session=session)) == 1
 
@@ -252,11 +252,11 @@ def test_the_bill_survives_without_a_conversation(session):
     from app.services import ai_chats
 
     ospite = make_user(session, email="ospite-conto@x.it")
-    ai_chats.registra_spesa(session, user_id=ospite.id, model_id="m",
+    ai_chats.record_spend(session, user_id=ospite.id, model_id="m",
                             input_tokens=100, output_tokens=20, cost=Decimal("0.02"))
 
     assert session.exec(select(AiChat).where(AiChat.user_id == ospite.id)).all() == []
-    riga = session.exec(select(AiSpend).where(AiSpend.user_id == ospite.id)).one()
-    assert riga.turn_id is None and riga.cost_usd == "0.02"
-    assert str(ai_chats.speso_oggi(session, ospite)) == "0.02"
-    assert str(ai_chats.speso_oggi_tutti(session)) == "0.02"
+    row = session.exec(select(AiSpend).where(AiSpend.user_id == ospite.id)).one()
+    assert row.turn_id is None and row.cost_usd == "0.02"
+    assert str(ai_chats.spent_today(session, ospite)) == "0.02"
+    assert str(ai_chats.spent_today_all(session)) == "0.02"

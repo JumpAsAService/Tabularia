@@ -70,10 +70,10 @@ def test_not_a_dict_is_refused():
 
 def test_every_entry_of_the_catalogue_names_a_real_setting():
     base = settings_from_env()
-    for voce in ov.VOCI:
-        assert hasattr(getattr(base, voce.section), voce.field), voce.key
-        if voce.rollout:
-            assert set(voce.rollout) <= {"gateway", "orchestrator"}
+    for item in ov.ITEMS:
+        assert hasattr(getattr(base, item.section), item.field), item.key
+        if item.rollout:
+            assert set(item.rollout) <= {"gateway", "orchestrator"}
 
 
 # ── constraints between two settings ─────────────────────────────────────────
@@ -276,9 +276,9 @@ def test_the_executions_follow_the_pool_the_process_started_with(monkeypatch):
 
     monkeypatch.setattr(orch, "engine", type("E", (), {"pool": Pool()})())
     ov.set_values({"orchestrator.max_concurrent": 50})
-    assert orch.concorrenza() == 7
+    assert orch.concurrency() == 7
     ov.set_values({"orchestrator.max_concurrent": 3})
-    assert orch.concorrenza() == 3
+    assert orch.concurrency() == 3
 
 
 def test_a_shorter_heartbeat_applies_without_waiting_for_the_old_one(monkeypatch):
@@ -288,10 +288,10 @@ def test_a_shorter_heartbeat_applies_without_waiting_for_the_old_one(monkeypatch
     from app.services import orchestrator as orch
 
     beats = []
-    monkeypatch.setattr(orch, "batti", lambda: beats.append(t.monotonic()))
+    monkeypatch.setattr(orch, "beat", lambda: beats.append(t.monotonic()))
     ov.set_values({"orchestrator.heartbeat_seconds": 60.0, "orchestrator.dead_after_seconds": 600.0})
     stop = threading.Event()
-    orch.avvia_battito(stop)
+    orch.start_heartbeat(stop)
     t.sleep(0.5)
     ov.set_values({"orchestrator.heartbeat_seconds": 2.0})
     t.sleep(3.6)

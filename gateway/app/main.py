@@ -13,19 +13,19 @@ from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
 
 from app.core.config import get_settings
 from app.core.engine_client import close_engine_client
-from app.db.migra import prepara_database
-from app.db.session import backfill_flow_versions, lucchetto_di_avvio
+from app.db.migra import prepare_database
+from app.db.session import backfill_flow_versions, startup_lock
 from app.db.seed import seed_admin
 from app.services import first_run
-from app.services.orchestrator import coda_loop
+from app.services.orchestrator import queue_loop
 from app.services.scheduler import scheduler_loop
 from app.services.audit_retention import retention_loop
 from app.services.housekeeping import housekeeping_loop
 from app.services.db_backup import backup_loop
-from app.services.webhooks import consegna_loop as webhooks_loop
-from app.services.regolazioni_motore import spingi_loop as regolazioni_loop
-from app.services.kube_scaling import riapplica_loop as scaling_loop
-from app.services.siem import inoltro_loop as siem_loop
+from app.services.webhooks import delivery_loop as webhooks_loop
+from app.services.engine_panel_settings import push_loop as engine_settings_loop
+from app.services.kube_scaling import reapply_loop as scaling_loop
+from app.services.siem import forwarding_loop as siem_loop
 from app.services.script_builds import build_loop as script_builds_loop
 from app.services.settings_rollout import rollout_loop as settings_rollout_loop
 from app.routes.auth import router as auth_router
@@ -70,34 +70,34 @@ from app.core import api_docs
 logging.basicConfig(level=logging.INFO)
 
 
-def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
-    """Il lavoro di fondo, per chi lo fa (`APP__ROLE`): un processo che risponde
-    soltanto (`api`) non ne avvia. Ogni voce regge più processi che la fanno
-    insieme, senza doppioni."""
+def start_background_work(stop: asyncio.Event) -> list[asyncio.Task]:
+    """The background work, for whoever does it (`APP__ROLE`): a process that only answers
+    (`api`) starts none. Every item holds with several processes doing it together,
+    without duplicates."""
     if get_settings().app.role == "api":
         return []
     return [
-        # schedulazioni: refresh delle datasource ed esecuzioni dei flussi
+        # schedules: datasource refreshes and flow runs
         asyncio.create_task(scheduler_loop(stop)),
-        # la coda delle esecuzioni dei flussi, e le orchestrazioni rimaste senza
-        # nessuno che le porti avanti (processo morto): si chiudono dicendolo
-        asyncio.create_task(coda_loop(stop)),
-        # scadenza del registro delle azioni: parte solo se è configurata
+        # the queue of the flows' runs, and the orchestrations left with nobody carrying them
+        # on (dead process): they are closed saying so
+        asyncio.create_task(queue_loop(stop)),
+        # expiry of the action log: starts only when configured
         asyncio.create_task(retention_loop(stop)),
         # the history that piles up in the database (runs' logs, contract reports,
         # versions, the assistant's old conversations), trimmed, then vacuumed
         asyncio.create_task(housekeeping_loop(stop)),
         # the database's backup into the object storage, on its schedule (Admin → Backups)
         asyncio.create_task(backup_loop(stop)),
-        # le consegne dei webhook, ogni paio di secondi (services/webhooks.py)
+        # the webhooks' deliveries, every couple of seconds (services/webhooks.py)
         asyncio.create_task(webhooks_loop(stop)),
-        # le impostazioni del motore dal pannello, rispedite al motore ogni minuto:
-        # se Valkey si svuota o il motore riparte, tornano da sole
-        asyncio.create_task(regolazioni_loop(stop)),
+        # the engine settings from the panel, sent to the engine again every minute: if Valkey
+        # empties or the engine restarts, they come back by themselves
+        asyncio.create_task(engine_settings_loop(stop)),
         # on Kubernetes, the workers' autoscaling bounds set from the panel, put back
         # every minute if the cluster has others (it returns at once elsewhere)
         asyncio.create_task(scaling_loop(stop)),
-        # il registro di audit verso il SIEM (Splunk), ogni pochi secondi, se acceso
+        # the audit log to the SIEM (Splunk), every few seconds, when on
         asyncio.create_task(siem_loop(stop)),
         # on Kubernetes, the images of the scripting environments: built, then checked
         # (it returns at once elsewhere)
@@ -110,22 +110,22 @@ def avvia_lavoro_di_fondo(stop: asyncio.Event) -> list[asyncio.Task]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # la chiave Fernet è obbligatoria SEMPRE; in produzione anche i default di
-    # sviluppo (jwt/admin/db) bloccano l'avvio
+    # the Fernet key is required ALWAYS; in production the development defaults
+    # (jwt/admin/db) block the start too
     get_settings().check_required_secrets()
-    get_settings().check_sso_config()  # SSO acceso ⇒ configurazione completa
+    get_settings().check_sso_config()  # SSO on ⇒ complete configuration
     get_settings().check_production_safety()
     import anyio.to_thread
 
     anyio.to_thread.current_default_thread_limiter().total_tokens = get_settings().app.gateway_threads
-    # lo schema: migrato (sviluppo, DB__AUTO_MIGRATE) o controllato (produzione: lo
-    # migra un passo separato) — vedi app/db/migra.py. Poi l'admin da env
-    # (idempotente). Uno alla volta: più processi possono partire insieme
-    prepara_database()
-    with lucchetto_di_avvio():
+    # the schema: migrated (development, DB__AUTO_MIGRATE) or checked (production: a
+    # separate step migrates it) — see app/db/migra.py. Then the admin from the env
+    # (idempotent). One at a time: several processes may start together
+    prepare_database()
+    with startup_lock():
         seed_admin()
         first_run.ensure_bootstrap_token()
-        backfill_flow_versions()  # v1 baseline ai flussi creati prima del versioning
+        backfill_flow_versions()  # v1 baseline for the flows created before versioning
     stop = asyncio.Event()
     # the panel's settings, read again every few seconds by every process, whatever its role.
     # Once now, the database being up: the first reading at import may have found it not
@@ -136,23 +136,23 @@ async def lifespan(app: FastAPI):
 
     await asyncio.to_thread(reload_overrides, db_engine)
 
-    rilettura = asyncio.create_task(overrides_loop(stop))
+    reread = asyncio.create_task(overrides_loop(stop))
     from app.services import openlineage
 
     logger.info(openlineage.describe())
-    fondo = avvia_lavoro_di_fondo(stop)
+    background = start_background_work(stop)
     try:
         yield
     finally:
         stop.set()
-        for task in [*fondo, rilettura]:
+        for task in [*background, reread]:
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
-        # gli eventi di lineage ancora in coda: al più 5 s, poi via (un rolling
-        # update non deve aspettare un collector lento)
+        # the lineage events still queued: at most 5 s, then off (a rolling update must not
+        # wait for a slow collector)
         await asyncio.to_thread(openlineage.wait_idle, 5.0)
         await close_engine_client()
 
@@ -164,8 +164,8 @@ from app.routes import cluster as cluster_routes
 
 logger = logging.getLogger(__name__)
 
-# La pagina /docs è la documentazione per chi integra: in inglese, come docs/api.md
-_DESCRIZIONE_API = (
+# The /docs page is the documentation for whoever integrates: in English, as docs/api.md
+_API_DESCRIPTION = (
     "The Tabularia API: everything the interface does goes through it.\n\n"
     "**Sign in** with an API token in the header `Authorization: Bearer tab_…` "
     "(Settings → API tokens, or a service account under Administration). Read-only "
@@ -175,7 +175,7 @@ _DESCRIZIONE_API = (
     "webhooks. The rest may change between minor versions. The guide, with recipes and "
     "webhook signature checks, is docs/api.md in the repository."
 )
-_GRUPPI = [
+_GROUPS = [
     {"name": "auth", "description": "Sign-in, the current account, sessions."},
     {"name": "api-tokens", "description": "API tokens: your own, and every token for administrators."},
     {"name": "service-accounts", "description": "Integrations that sign in only with a token (administrators)."},
@@ -186,12 +186,12 @@ _GRUPPI = [
 
 app = FastAPI(
     title=f"{settings.app.name} — Gateway",
-    description=_DESCRIZIONE_API,
-    openapi_tags=_GRUPPI,
+    description=_API_DESCRIPTION,
+    openapi_tags=_GROUPS,
     version=settings.app.version,
     lifespan=lifespan,
-    # dietro un proxy che toglie un prefisso: /docs e lo schema lo riportano,
-    # e il reindirizzamento per la barra finale (che lo perderebbe) si spegne
+    # behind a proxy that removes a prefix: /docs and the schema put it back, and the
+    # trailing-slash redirect (which would lose it) is turned off
     root_path=settings.app.root_path,
     redirect_slashes=settings.app.redirect_slashes,
     # /docs and /redoc with pinned, hash-checked scripts and a CSP (core/api_docs.py)
@@ -239,30 +239,30 @@ async def _service_down(request: Request, exc: httpx.TransportError):
 
 
 @app.exception_handler(RequestValidationError)
-async def _richiesta_non_valida(request: Request, exc: RequestValidationError):
-    """Il 422 di FastAPI, tranne quando il valore rifiutato non si scrive in JSON:
-    `NaN` e `Infinity` li accetta il parser, e rimandarli indietro nell'errore
-    faceva un 500 (anche sul login, senza essere entrati). Lì l'errore dice dove e
-    perché, senza ripetere il valore."""
+async def _invalid_request(request: Request, exc: RequestValidationError):
+    """FastAPI's 422, except when the refused value cannot be written in JSON: the parser
+    accepts `NaN` and `Infinity`, and sending them back in the error made a 500 (on the
+    login too, without being signed in). There the error says where and why, without
+    repeating the value."""
     try:
         return await request_validation_exception_handler(request, exc)
     except ValueError:
-        errori = [{k: v for k, v in e.items() if k not in ("input", "ctx")} for e in exc.errors()]
-        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errori)})
+        errors = [{k: v for k, v in e.items() if k not in ("input", "ctx")} for e in exc.errors()]
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 
 @app.get("/health", include_in_schema=False)
 async def health():
-    """Liveness: l'app sta servendo. Usato dall'healthcheck del container per
-    rendere VISIBILE un gateway wedged (app giù ma container ancora 'running').
+    """Liveness: the app is serving. Used by the container's healthcheck to make a wedged
+    gateway VISIBLE (app down but container still 'running').
     On the event loop, not in the threads that serve the requests: twelve slow
     requests (a database that answers late) made the probes fail and Kubernetes
     restart a busy gateway, with everything it was doing."""
     return {"status": "ok"}
 
 
-# Un processo che fa solo da orchestratore non serve l'API: non è raggiunto dal
-# proxy e risponde soltanto al controllo di salute.
+# A process that only acts as orchestrator does not serve the API: the proxy does not
+# reach it and it answers only the health check.
 if settings.app.role != "orchestrator":
     # control plane
     app.include_router(auth_router)
@@ -302,7 +302,7 @@ if settings.app.role != "orchestrator":
     app.include_router(audit_router)
     app.include_router(system_router)
     app.include_router(queue_router)
-    # data plane (proxy verso l'engine interno)
+    # data plane (proxy towards the internal engine)
     app.include_router(proxy_router)
     app.include_router(performance_routes.router)
     app.include_router(cluster_routes.router)

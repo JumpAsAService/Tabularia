@@ -94,9 +94,9 @@ async def test_copia_fallita_non_fa_fallire_il_run(session, fake_engine):
 
     assert run.status == "SUCCESS"  # il risultato primario NON è compromesso
     assert run.rows_written == 42
-    esito = json.loads(run.mirror)
-    assert esito["ok"] is False
-    assert "EndpointConnectionError" in esito["error"]
+    outcome = json.loads(run.mirror)
+    assert outcome["ok"] is False
+    assert "EndpointConnectionError" in outcome["error"]
 
 
 async def test_copia_riuscita_registrata(session, fake_engine):

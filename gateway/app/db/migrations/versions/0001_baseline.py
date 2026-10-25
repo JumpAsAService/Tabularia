@@ -1,15 +1,16 @@
-"""baseline — lo schema dell'ultima versione senza Alembic
+"""baseline — the schema of the last version without Alembic
 
-Un database nuovo nasce da qui. Un database di prima di Alembic NON passa da qui:
-`app.db.legacy.adotta` lo porta a questo stato e lo marca a 0001 (vedi app/db/migra.py).
+A new database is born from here. A database from before Alembic does NOT go through
+here: `app.db.legacy.adotta` brings it to this state and stamps it 0001 (see
+app/db/migra.py).
 
-Revisione 0001, la prima — 2026-10-10 20:37:43.252542
-Solo in avanti, e compatibile col codice della versione precedente (expand/contract):
-vedi docs/database-migrations.md.
+Revision 0001, the first — 2026-10-10 20:37:43.252542
+Forward only, and compatible with the previous version's code (expand/contract):
+see docs/database-migrations.md.
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel  # noqa: F401 — i tipi di SQLModel (AutoString) nelle colonne generate
+import sqlmodel  # noqa: F401 — SQLModel's types (AutoString) in the generated columns
 
 
 revision = '0001'
@@ -452,5 +453,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # solo in avanti (scelta del progetto): si corregge con una revisione nuova
-    raise NotImplementedError("le migrazioni del gateway vanno solo in avanti")
+    # forward only (the project's choice): corrected with a new revision
+    raise NotImplementedError("the gateway's migrations go forward only")

@@ -1,14 +1,14 @@
-"""Coda di esecuzione (Celery) — pannello di amministrazione.
+"""Run queue (Celery) — administration panel.
 
-Il gateway non parla direttamente con Celery: la coda vive nel data plane
-(engine + worker + broker Valkey). Qui si fa da proxy verso gli endpoint di
-ispezione/revoca dell'engine. L'engine interno non è esposto sull'host: l'unica
-via a questi comandi è questo router autenticato.
+The gateway does not talk to Celery directly: the queue lives in the data plane
+(engine + worker + Valkey broker). Here it proxies the engine's inspection/revocation
+endpoints. The internal engine is not exposed on the host: the only way to these
+commands is this authenticated router.
 
-La panoramica la LEGGE anche un osservatore; FERMARE un job resta
-dell'amministratore. Ciò che si vede è solo nome del task, id, worker e durata
-(vedi `_job` in backend/app/api/routes/tasks.py): gli argomenti dei task, che
-contengono percorsi e parametri, non escono dal data plane.
+An observer READS the overview too; STOPPING a job stays the administrator's. What is
+seen is only the task's name, id, worker and duration (see `_job` in
+backend/app/api/routes/tasks.py): the tasks' arguments, which hold paths and
+parameters, do not leave the data plane.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -20,14 +20,14 @@ from app.deps.auth import require_observer, require_superuser
 from app.models import User
 from app.services import audit
 from app.routes.proxy import _release_db
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/queue", tags=["queue"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/queue", tags=["queue"])
 
 
 @router.get("", dependencies=[Depends(require_observer)])
 async def queue_overview():
-    """Panoramica near-real-time: worker online, job in esecuzione, job in attesa."""
+    """Near-real-time overview: workers online, jobs running, jobs waiting."""
     client = get_engine_client()
     resp = await client.get("/tasks/queue")
     if resp.status_code >= 400:
@@ -42,8 +42,8 @@ async def stop_job(
     current: User = Depends(require_superuser),
     request: Request = None,  # type: ignore[assignment]
 ):
-    """Ferma (revoca + terminate) un job in esecuzione su un worker, o lo rimuove
-    dalla coda se ancora in attesa."""
+    """Stops (revoke + terminate) a job running on a worker, or removes it from the queue
+    when still waiting."""
     await run_in_threadpool(_release_db, session, current)
     client = get_engine_client()
     resp = await client.delete(f"/tasks/{task_id}")

@@ -1,9 +1,9 @@
-"""Data contracts: ciò che chi produce una datasource promette a chi la consuma.
+"""Data contracts: what whoever produces a datasource promises to whoever consumes it.
 
-Un contratto per datasource. Niente chiavi esterne verso `datasources`: le righe
-si tolgono a mano quando la datasource sparisce (`services.contracts.forget`),
-perché nei test SQLite non le fa rispettare e un vincolo dimenticato in una delle
-strade che eliminano una datasource romperebbe solo in produzione.
+One contract per datasource. No foreign keys towards `datasources`: the rows are
+removed by hand when the datasource goes (`services.contracts.forget`), because in the
+tests SQLite does not enforce them and a constraint forgotten in one of the ways that
+delete a datasource would break only in production.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -26,23 +26,23 @@ class DataContract(SQLModel, table=True):
     document: str = Field(sa_column=Column(Text, nullable=False))  # JSON {description, rules: [...]}
     enabled: bool = True
 
-    # Lo stato sui dati che la datasource serve ADESSO: pending (mai valutato su
-    # questi dati) | passed | warning | failed.
+    # The state on the data the datasource serves NOW: pending (never evaluated on this
+    # data) | passed | warning | failed.
     status: str = "pending"
     checked_at: Optional[datetime] = None
     errors: int = 0
     warnings: int = 0
-    # l'ultimo referto, per intero (JSON): è ciò che si mostra aprendo il contratto,
-    # e la base su cui la freschezza viene ricalcolata col passare del tempo
+    # the last report, whole (JSON): what is shown opening the contract, and the basis on
+    # which freshness is recomputed as time goes by
     last_report: Optional[str] = Field(default=None, sa_column=Column("last_report", Text))
-    # Un aggiornamento è stato RIFIUTATO da una regola bloccante: la datasource
-    # serve ancora lo snapshot precedente. Resta valorizzato finché un
-    # aggiornamento non riesce: i dati sono buoni ma non sono più quelli attuali.
+    # An update was REFUSED by a blocking rule: the datasource still serves the previous
+    # snapshot. It stays set until an update succeeds: the data is good but no longer the
+    # current data.
     blocked_at: Optional[datetime] = None
     blocked_run_id: Optional[int] = None
 
-    # Chi avvisare quando lo stato cambia: indirizzi separati da virgola e la
-    # connessione SMTP con cui spedire (come per l'avviso di fallimento dei flussi).
+    # Whom to notify when the state changes: addresses separated by commas and the SMTP
+    # connection to send with (as for the flows' failure notice).
     notify_emails: Optional[str] = None
     notify_connection_id: Optional[int] = None
 
@@ -53,7 +53,7 @@ class DataContract(SQLModel, table=True):
 
 
 class DataContractVersion(SQLModel, table=True):
-    """Ogni salvataggio del contratto: chi, quando, e il documento com'era."""
+    """Every save of the contract: who, when, and the document as it was."""
     __tablename__ = "data_contract_versions"
     __table_args__ = (UniqueConstraint("datasource_id", "version", name="uq_contract_version"),)
 
@@ -66,10 +66,10 @@ class DataContractVersion(SQLModel, table=True):
 
 
 class DataContractResult(SQLModel, table=True):
-    """Una valutazione del contratto: lo storico."""
+    """An evaluation of the contract: the history."""
     __tablename__ = "data_contract_results"
     __table_args__ = (
-        # la coda degli avvisi da mandare: solo le righe in attesa
+        # the queue of the notices to send: only the waiting rows
         Index("ix_contract_results_to_notify", "id",
               postgresql_where=text("notify = 'pending'"), sqlite_where=text("notify = 'pending'")),
     )
@@ -77,21 +77,21 @@ class DataContractResult(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     datasource_id: int = Field(index=True)
     contract_version: int
-    # che cosa l'ha fatta partire: refresh | publish (dati nuovi in arrivo),
-    # save | manual (sui dati correnti), freshness (il tempo che passa)
+    # what started it: refresh | publish (new data arriving), save | manual (on the current
+    # data), freshness (time passing)
     trigger: str
     run_id: Optional[int] = None
     snapshot_key: str = ""
     outcome: str  # passed | warning | failed
-    blocked: bool = False  # i dati nuovi NON sono stati pubblicati
+    blocked: bool = False  # the new data was NOT published
     errors: int = 0
     warnings: int = 0
     rows: Optional[int] = None
     report: str = Field(sa_column=Column(Text, nullable=False))  # JSON
-    # L'avviso da mandare per questa valutazione: None = nessuno (lo stato non è
-    # cambiato, o nessuno ha chiesto di essere avvisato) | pending → sending →
-    # sent | failed | skipped. Lo scrive chi registra il referto, lo consuma lo
-    # scheduler (services.contract_notifier): niente email dentro la transazione
-    # che pubblica i dati.
+    # The notice to send for this evaluation: None = none (the state did not change, or
+    # nobody asked to be notified) | pending → sending → sent | failed | skipped. Whoever
+    # records the report writes it, the scheduler consumes it
+    # (services.contract_notifier): no email inside the transaction that publishes the
+    # data.
     notify: Optional[str] = None
     evaluated_at: datetime = Field(default_factory=_now, index=True)

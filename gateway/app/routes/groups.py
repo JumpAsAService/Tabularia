@@ -1,4 +1,4 @@
-"""Gruppi. Lettura per ogni utente autenticato; scrittura solo superuser."""
+"""Groups. Read for every authenticated user; write for superusers only."""
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -9,15 +9,15 @@ from app.models import ContainerRegistryAccess, Group, Permission, ScriptEnviron
 from app.schemas.models import GroupOut, GroupCreate, GroupUpdate
 from app.services import audit
 from app.services.permissions import ensure_still_admin
-from app.core.routing import RottaCheRilascia
+from app.core.routing import ReleasingRoute
 
-router = APIRouter(route_class=RottaCheRilascia, prefix="/groups", tags=["groups"])
+router = APIRouter(route_class=ReleasingRoute, prefix="/groups", tags=["groups"])
 
 
 @router.get("", response_model=list[GroupOut], dependencies=[Depends(get_current_user)])
 def list_groups(session: Session = Depends(get_session)):
-    # quanti membri per gruppo, in UNA query (l'elenco admin lo mostra per ognuno)
-    conteggi = dict(
+    # how many members per group, in ONE query (the admin list shows it for each)
+    counts = dict(
         session.exec(
             select(UserGroupLink.group_id, func.count()).group_by(UserGroupLink.group_id)  # type: ignore[arg-type]
         ).all()
@@ -25,7 +25,7 @@ def list_groups(session: Session = Depends(get_session)):
     return [
         GroupOut(
             id=g.id, name=g.name, description=g.description,
-            created_at=g.created_at, member_count=conteggi.get(g.id, 0),
+            created_at=g.created_at, member_count=counts.get(g.id, 0),
             is_admin=g.is_admin, is_observer=g.is_observer,
         )
         for g in session.exec(select(Group)).all()
@@ -48,11 +48,11 @@ def create_group(
     audit.record_audit(session, actor=current, action=audit.GROUP_CREATE, request=request,
                        target_type="group", target_id=group.id, target_label=group.name)
     session.refresh(group)
-    # esplicito come in list_groups: così la rotta dice la verità anche a chi la
-    # chiama direttamente, senza passare dalla serializzazione di FastAPI
+    # explicit as in list_groups: so the route tells the truth even to whoever calls it
+    # directly, without going through FastAPI's serialization
     return GroupOut(
         id=group.id, name=group.name, description=group.description,
-        created_at=group.created_at, member_count=0,  # appena creato: nessun membro
+        created_at=group.created_at, member_count=0,  # just created: no members
     )
 
 
@@ -64,22 +64,22 @@ def update_group(
     session: Session = Depends(get_session),
     current: User = Depends(require_superuser),
 ):
-    """Descrizione e, soprattutto, i due flag: ADMIN (da quel momento ogni membro
-    del gruppo è amministratore, e smette di esserlo uscendone) e OSSERVATORE
-    (ogni membro legge i pannelli senza poterci scrivere). Sono indipendenti: un
-    gruppo admin non ha bisogno del secondo, perché chi amministra legge già."""
+    """Description and, above all, the two flags: ADMIN (from then on every member of the
+    group is an administrator, and stops being one by leaving it) and OBSERVER (every
+    member reads the panels without being able to write in them). They are independent: an
+    admin group does not need the second, because whoever administers reads already."""
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Group not found")
-    era_admin = group.is_admin
-    era_osservatore = group.is_observer
-    if (body.is_admin and not era_admin) or (body.is_observer and not era_osservatore):
-        # ogni membro riceverebbe il ruolo: una via d'ingresso che resterebbe dopo
-        # la revoca di un token trapelato
-        from app.routes.api_tokens import nega_se_da_token
+    was_admin = group.is_admin
+    was_observer = group.is_observer
+    if (body.is_admin and not was_admin) or (body.is_observer and not was_observer):
+        # every member would receive the role: a way in that would stay after a leaked token is
+        # revoked
+        from app.routes.api_tokens import deny_if_from_token
         from app.services import api_tokens
 
-        nega_se_da_token(request, api_tokens.NIENTE_RUOLI_DA_TOKEN)
+        deny_if_from_token(request, api_tokens.NO_ROLES_FROM_TOKEN)
     if body.description is not None:
         group.description = body.description
     if body.is_admin is not None:
@@ -87,36 +87,36 @@ def update_group(
     if body.is_observer is not None:
         group.is_observer = body.is_observer
     session.add(group)
-    if era_admin and not group.is_admin:
+    if was_admin and not group.is_admin:
         ensure_still_admin(session, current)
-    if group.is_observer and not era_osservatore:
+    if group.is_observer and not was_observer:
         from app.services import api_tokens
 
         session.flush()
-        membri_ids = session.exec(select(UserGroupLink.user_id).where(UserGroupLink.group_id == group_id)).all()
-        api_tokens.ritira_se_osservatore(session, membri_ids)
+        member_ids = session.exec(select(UserGroupLink.user_id).where(UserGroupLink.group_id == group_id)).all()
+        api_tokens.withdraw_if_observer(session, member_ids)
     session.commit()
     session.refresh(group)
-    membri = session.exec(
+    members = session.exec(
         select(func.count()).select_from(UserGroupLink).where(UserGroupLink.group_id == group_id)
     ).one()
-    if group.is_admin != era_admin:
+    if group.is_admin != was_admin:
         audit.record_audit(
             session, actor=current, request=request,
             action=audit.GROUP_PROMOTE if group.is_admin else audit.GROUP_DEMOTE,
             target_type="group", target_id=group.id, target_label=group.name,
-            detail={"members": membri},
+            detail={"members": members},
         )
-    if group.is_observer != era_osservatore:
+    if group.is_observer != was_observer:
         audit.record_audit(
             session, actor=current, request=request,
             action=audit.GROUP_OBSERVER_GRANT if group.is_observer else audit.GROUP_OBSERVER_REVOKE,
             target_type="group", target_id=group.id, target_label=group.name,
-            detail={"members": membri},
+            detail={"members": members},
         )
     return GroupOut(
         id=group.id, name=group.name, description=group.description,
-        created_at=group.created_at, member_count=membri,
+        created_at=group.created_at, member_count=members,
         is_admin=group.is_admin, is_observer=group.is_observer,
     )
 
@@ -131,11 +131,11 @@ def delete_group(
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Group not found")
-    era_admin, nome = group.is_admin, group.name
+    was_admin, name = group.is_admin, group.name
     for link in session.exec(select(UserGroupLink).where(UserGroupLink.group_id == group_id)).all():
         session.delete(link)
-    # anche i PERMESSI concessi al gruppo: la chiave esterna li protegge, e senza
-    # questo la cancellazione esplodeva in un 500
+    # the PERMISSIONS granted to the group too: the foreign key protects them, and without
+    # this the deletion blew up in a 500
     for perm in session.exec(select(Permission).where(Permission.group_id == group_id)).all():
         session.delete(perm)
     # and what the administration panel gives it: scripting environments, container
@@ -146,13 +146,13 @@ def delete_group(
         session.delete(row)
     session.flush()
     session.delete(group)
-    if era_admin:
+    if was_admin:
         ensure_still_admin(session, current)
     session.commit()
-    if era_admin:
-        # sparisce un gruppo di amministratori: i suoi membri perdono i privilegi
+    if was_admin:
+        # an administrators' group disappears: its members lose the privileges
         audit.record_audit(
             session, actor=current, action=audit.GROUP_DEMOTE, request=request,
-            target_type="group", target_id=group_id, target_label=nome,
+            target_type="group", target_id=group_id, target_label=name,
             detail={"deleted": True},
         )

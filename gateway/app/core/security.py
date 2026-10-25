@@ -1,4 +1,4 @@
-"""Hashing password (bcrypt) e token JWT. Volutamente minimale e leggibile."""
+"""Password hashing (bcrypt) and JWT tokens. Minimal and readable on purpose."""
 from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
@@ -15,19 +15,19 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
     except ValueError:
-        # hash malformato / non bcrypt
+        # malformed hash / not bcrypt
         return False
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 def create_access_token(subject: int | str, session_id: str, expires_at: datetime | None = None) -> str:
-    """Il token di una sessione (vedi services/sessions.py, che è chi lo chiede):
-    vale finché la riga `session_id` esiste, e mai oltre `expires_at`."""
+    """A session's token (see services/sessions.py, which is who asks for it): it holds as
+    long as the `session_id` row exists, and never past `expires_at`."""
     s = get_settings()
     now = datetime.now(timezone.utc)
     if expires_at is None:
         expires_at = now + timedelta(minutes=s.jwt.access_ttl_minutes)
-    elif expires_at.tzinfo is None:  # le colonne sono naive UTC
+    elif expires_at.tzinfo is None:  # the columns are naive UTC
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     payload = {"sub": str(subject), "sid": session_id, "iat": now, "exp": expires_at}
     return jwt.encode(payload, s.jwt.secret.get_secret_value(), algorithm=s.jwt.algorithm)
@@ -42,6 +42,6 @@ CLOCK_SKEW_SECONDS = 60
 
 
 def decode_access_token(token: str) -> dict:
-    """Solleva jwt.PyJWTError se il token è invalido/scaduto."""
+    """Raises jwt.PyJWTError when the token is invalid/expired."""
     s = get_settings()
     return jwt.decode(token, s.jwt.secret.get_secret_value(), algorithms=[s.jwt.algorithm], leeway=CLOCK_SKEW_SECONDS)

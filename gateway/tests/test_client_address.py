@@ -61,15 +61,15 @@ async def test_behind_a_trusted_proxy_the_server_has_already_resolved_it():
 
 def test_a_session_keeps_the_connection_address_not_the_header(session):
     user = make_user(session, email="u@x.it")
-    riga, _ = sessions.apri(session, user, _request("172.18.0.1", "6.6.6.6"), "password")
-    assert riga.ip == "172.18.0.1"
+    row, _ = sessions.open_session(session, user, _request("172.18.0.1", "6.6.6.6"), "password")
+    assert row.ip == "172.18.0.1"
 
 
 def test_the_audit_keeps_the_connection_address_not_the_header(session):
     user = make_user(session, email="u@x.it")
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=_request("172.18.0.1", "6.6.6.6"))
-    (voce,) = session.exec(select(AuditLog)).all()
-    assert voce.ip == "172.18.0.1"
+    (item,) = session.exec(select(AuditLog)).all()
+    assert item.ip == "172.18.0.1"
 
 
 def _login(session, email, client="172.18.0.1", forwarded=None, password="wrong"):
@@ -79,7 +79,7 @@ def _login(session, email, client="172.18.0.1", forwarded=None, password="wrong"
 
 def test_a_rotating_forwarded_for_does_not_reset_the_throttle(session):
     make_user(session, email="admin@x.it", hashed_password=hash_password("the-real-one"))
-    for i in range(login_throttle.SOGLIA):
+    for i in range(login_throttle.THRESHOLD):
         with pytest.raises(HTTPException) as e:
             _login(session, "admin@x.it", forwarded=f"10.9.9.{i}")
         assert e.value.status_code == 401
@@ -90,39 +90,39 @@ def test_a_rotating_forwarded_for_does_not_reset_the_throttle(session):
 
 # ── many accounts from one address (password spraying, enumeration) ─────────────
 def test_one_address_trying_many_accounts_is_slowed(session):
-    for i in range(login_throttle.SOGLIA_INDIRIZZO):
-        assert login_throttle.attesa_richiesta(session, "1.2.3.4", f"u{i}@x.it") == 0
-        login_throttle.registra_errore(session, "1.2.3.4", f"u{i}@x.it")
+    for i in range(login_throttle.ADDRESS_THRESHOLD):
+        assert login_throttle.request_wait(session, "1.2.3.4", f"u{i}@x.it") == 0
+        login_throttle.record_failure(session, "1.2.3.4", f"u{i}@x.it")
     # a new email, never tried: the address as a whole has had enough
-    assert login_throttle.attesa_richiesta(session, "1.2.3.4", "nuovo@x.it") > 0
+    assert login_throttle.request_wait(session, "1.2.3.4", "nuovo@x.it") > 0
     # another address (a colleague elsewhere) is not touched
-    assert login_throttle.attesa_richiesta(session, "9.9.9.9", "nuovo@x.it") == 0
+    assert login_throttle.request_wait(session, "9.9.9.9", "nuovo@x.it") == 0
 
 
 def test_a_few_mistakes_from_a_shared_office_address_do_not_lock_it(session):
-    for i in range(login_throttle.SOGLIA_INDIRIZZO - 1):
-        login_throttle.registra_errore(session, "1.2.3.4", f"u{i}@x.it")
-    assert login_throttle.attesa_richiesta(session, "1.2.3.4", "nuovo@x.it") == 0
+    for i in range(login_throttle.ADDRESS_THRESHOLD - 1):
+        login_throttle.record_failure(session, "1.2.3.4", f"u{i}@x.it")
+    assert login_throttle.request_wait(session, "1.2.3.4", "nuovo@x.it") == 0
 
 
 def test_signing_in_to_one_account_does_not_clear_the_address_count(session):
     """Otherwise one valid account would be enough to spray the others forever."""
-    for i in range(login_throttle.SOGLIA_INDIRIZZO):
-        login_throttle.registra_errore(session, "1.2.3.4", f"u{i}@x.it")
-    login_throttle.registra_successo(session, "1.2.3.4", "mio@x.it")
-    assert login_throttle.attesa_richiesta(session, "1.2.3.4", "altro@x.it") > 0
+    for i in range(login_throttle.ADDRESS_THRESHOLD):
+        login_throttle.record_failure(session, "1.2.3.4", f"u{i}@x.it")
+    login_throttle.record_success(session, "1.2.3.4", "mio@x.it")
+    assert login_throttle.request_wait(session, "1.2.3.4", "altro@x.it") > 0
 
 
 def test_the_cleanup_removes_the_address_counts_too(session):
     from datetime import timedelta
 
     for i in range(3):
-        login_throttle.registra_errore(session, "1.2.3.4", f"u{i}@x.it")
-    later = login_throttle._adesso() + timedelta(seconds=login_throttle.FINESTRA_SECONDI + 1)
+        login_throttle.record_failure(session, "1.2.3.4", f"u{i}@x.it")
+    later = login_throttle._now() + timedelta(seconds=login_throttle.WINDOW_SECONDS + 1)
     from unittest.mock import patch
 
-    with patch.object(login_throttle, "_adesso", return_value=later):
-        assert login_throttle.pulisci(session) == 4  # three (address, email) + the address
+    with patch.object(login_throttle, "_now", return_value=later):
+        assert login_throttle.clean(session) == 4  # three (address, email) + the address
 
 
 # ── the answer takes as long whether the account exists or not ─────────────────

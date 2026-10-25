@@ -23,11 +23,11 @@ def _run(session, ds_id, status, kind="ingest"):
 def test_only_datasources_with_a_live_ingest_are_flagged(session):
     u = make_user(session, email="a@x.it", is_superuser=True)
     p = make_project(session, name="p")
-    fermo, in_corso, finito, fallito = (_ds(session, n, p.id, u.id) for n in ("fermo", "in_corso", "finito", "fallito"))
-    _run(session, in_corso.id, "STARTED")
-    _run(session, finito.id, "SUCCESS")
+    still, running, finished, fallito = (_ds(session, n, p.id, u.id) for n in ("fermo", "in_corso", "finito", "fallito"))
+    _run(session, running.id, "STARTED")
+    _run(session, finished.id, "SUCCESS")
     _run(session, fallito.id, "FAILURE")
-    assert _refreshing_ids(session, [fermo, in_corso, finito, fallito]) == {in_corso.id}
+    assert _refreshing_ids(session, [still, running, finished, fallito]) == {running.id}
 
 
 def test_a_pending_ingest_counts_and_an_old_success_does_not_hide_it(session):

@@ -13,8 +13,8 @@ from app.services.objects import ensure_can_read_keys, ensure_can_run_keys
 from tests.conftest import make_project, make_user
 
 
-def _datasource(session, progetto, chiave="datasets/1/abc.parquet"):
-    ds = Datasource(name="d", project_id=progetto.id, bucket="b", key=chiave)
+def _datasource(session, project, key="datasets/1/abc.parquet"):
+    ds = Datasource(name="d", project_id=project.id, bucket="b", key=key)
     session.add(ds)
     session.commit()
     return ds
@@ -47,12 +47,12 @@ def test_run_on_the_project_is_enough(session):
 
 def test_run_elsewhere_does_not_carry_over(session):
     """RUN su un progetto non dà RUN sui dati di un altro."""
-    mio, altro = make_project(session, name="Mio"), make_project(session, name="Altro")
+    mio, other = make_project(session, name="Mio"), make_project(session, name="Altro")
     tizio = make_user(session, email="tizio2@x.it")
     session.add(Permission(project_id=mio.id, user_id=tizio.id, capability=Capability.RUN))
-    session.add(Permission(project_id=altro.id, user_id=tizio.id, capability=Capability.VIEW))
+    session.add(Permission(project_id=other.id, user_id=tizio.id, capability=Capability.VIEW))
     session.commit()
-    ds = _datasource(session, altro, "datasets/2/def.parquet")
+    ds = _datasource(session, other, "datasets/2/def.parquet")
     with pytest.raises(HTTPException):
         ensure_can_run_keys(session, tizio, {ds.key})
 

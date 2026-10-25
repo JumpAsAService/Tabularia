@@ -1,23 +1,23 @@
-"""Viste salvate: una configurazione NOMINATA del Viewer, dentro una cartella.
+"""Saved views: a NAMED configuration of the Viewer, inside a folder.
 
-Il Viewer costruisce al volo filtri, campi calcolati e pivot su una datasource e
-non salva nulla. Una vista salvata è quella stessa configurazione messa nel
-catalogo accanto a flussi, datasource e connessioni — quindi con nome, cartella
-e permessi ereditati dal progetto, come tutto il resto.
+The Viewer builds filters, computed fields and pivots on the fly on a datasource and
+saves nothing. A saved view is that same configuration put in the catalog next to
+flows, datasources and connections — so with a name, a folder and permissions
+inherited from the project, like everything else.
 
-Due proprietà scelte esplicitamente:
+Two properties chosen explicitly:
 
-- **la vista SEGUE il dato, non lo congela.** Si memorizza un riferimento alla
-  datasource e la configurazione, mai delle righe: riaprirla domani rilegge lo
-  snapshot corrente. È una lente, non una copia — e per questo non ha alcun
-  blob, nessuno snapshot da sostituire, niente da raccogliere per `blobgc`.
-- **è condivisa, non personale.** Sta in una cartella, quindi la vede chiunque
-  abbia VIEW su quella cartella; modificarla o cancellarla richiede EDIT, come
-  per i flussi. `owner_id` dice chi l'ha creata, non chi può vederla.
+- **the view FOLLOWS the data, it does not freeze it.** A reference to the datasource
+  and the configuration are stored, never rows: reopening it tomorrow reads the
+  current snapshot again. It is a lens, not a copy — and for that it has no blob, no
+  snapshot to replace, nothing for `blobgc` to collect.
+- **it is shared, not personal.** It sits in a folder, so anyone with VIEW on that
+  folder sees it; changing or deleting it requires EDIT, as for the flows.
+  `owner_id` says who created it, not who may see it.
 
-NB sul nome: nel codice resta `SavedView`, mai `View` — `VIEW` è già il nome di
-una capability (`Capability.VIEW`) e confonderli nei permessi sarebbe un invito
-all'errore. Nell'interfaccia si chiama semplicemente «vista».
+NB on the name: in the code it stays `SavedView`, never `View` — `VIEW` is the name of
+a capability already (`Capability.VIEW`) and mixing them up in the permissions would
+invite mistakes. In the interface it is simply called «view».
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -40,15 +40,14 @@ class SavedView(SQLModel, table=True):
     project_id: int = Field(foreign_key="projects.id", index=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
 
-    # la datasource su cui la vista si applica. Nessuna cancellazione a cascata:
-    # se la datasource sparisce la vista resta e lo dice aprendola, invece di
-    # svanire in silenzio dalla cartella di qualcun altro.
+    # the datasource the view applies to. No cascading deletion: when the datasource goes
+    # the view stays and says so when opened, instead of vanishing silently from someone
+    # else's folder.
     datasource_id: int = Field(foreign_key="datasources.id", index=True)
 
-    # Configurazione del Viewer in JSON: engine, filtri, campi calcolati, pivot.
-    # Testo opaco per il gateway — è il FRONTEND a possederne la forma, e il
-    # gateway si limita a verificare che sia JSON valido. Così aggiungere un
-    # controllo alla vista non richiede una migrazione qui.
+    # The Viewer's configuration in JSON: engine, filters, computed fields, pivot. Opaque
+    # text for the gateway — the FRONTEND owns its shape, and the gateway only checks it is
+    # valid JSON. So adding a control to the view requires no migration here.
     spec: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
     created_at: datetime = Field(default_factory=_now)

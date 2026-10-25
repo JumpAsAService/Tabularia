@@ -1,24 +1,24 @@
-"""L'ambiente di Alembic per lo schema del gateway: i modelli SQLModel sono la
-verità, la connessione la passa `app.db.migra` (dentro la sua transazione e il
-lucchetto di avvio). Vedi docs/database-migrations.md."""
+"""Alembic's environment for the gateway's schema: the SQLModel models are the truth,
+`app.db.migra` passes the connection (inside its transaction and the start lock).
+See docs/database-migrations.md."""
 from alembic import context
 from sqlmodel import SQLModel
 
-import app.models  # noqa: F401 — registra tutti i modelli su SQLModel.metadata
-from app.db.migra import OPZIONI_CONFRONTO
+import app.models  # noqa: F401 — registers every model on SQLModel.metadata
+from app.db.migra import COMPARE_OPTIONS
 
 
-def _esegui(connessione) -> None:
-    context.configure(connection=connessione, target_metadata=SQLModel.metadata, **OPZIONI_CONFRONTO)
+def _run_migrations(connection_) -> None:
+    context.configure(connection=connection_, target_metadata=SQLModel.metadata, **COMPARE_OPTIONS)
     with context.begin_transaction():
         context.run_migrations()
 
 
-connessione = context.config.attributes.get("connection")
-if connessione is not None:
-    _esegui(connessione)
-else:  # lanciato senza una connessione (non dovrebbe succedere: si passa da app.db.migra)
+connection_ = context.config.attributes.get("connection")
+if connection_ is not None:
+    _run_migrations(connection_)
+else:  # launched without a connection (it should not happen: it goes through app.db.migra)
     from app.db.session import engine
 
     with engine.begin() as conn:
-        _esegui(conn)
+        _run_migrations(conn)

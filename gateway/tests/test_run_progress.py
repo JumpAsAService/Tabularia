@@ -13,8 +13,8 @@ from tests.conftest import make_datasource, make_run, make_user
 pytestmark = pytest.mark.anyio
 
 
-def _fa(secondi: int) -> datetime:
-    return datetime.now(timezone.utc) - timedelta(seconds=secondi)
+def _fa(seconds: int) -> datetime:
+    return datetime.now(timezone.utc) - timedelta(seconds=seconds)
 
 
 async def test_in_coda_conta_dal_lancio(session, fake_engine):

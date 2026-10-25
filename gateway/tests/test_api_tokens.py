@@ -36,7 +36,7 @@ def app(session):
     return app
 
 
-def _utente(session, email, **kw) -> int:
+def _user(session, email, **kw) -> int:
     return make_user(session, email=email, hashed_password=hash_password(PASSWORD), **kw).id
 
 
@@ -51,8 +51,8 @@ def _bearer(token):
 
 
 def _crea(client, **kw):
-    corpo = {"name": "script", "scope": "read", "expires_in_days": 30, **kw}
-    r = client.post("/auth/tokens", json=corpo, headers=CSRF)
+    body = {"name": "script", "scope": "read", "expires_in_days": 30, **kw}
+    r = client.post("/auth/tokens", json=body, headers=CSRF)
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -60,58 +60,58 @@ def _crea(client, **kw):
 # ── il token ────────────────────────────────────────────────────────────────
 
 def test_il_segreto_si_vede_una_volta_e_nel_database_resta_l_impronta(app, session):
-    _utente(session, "a@x.local")
+    _user(session, "a@x.local")
     browser = _entra(app, "a@x.local")
     creato = _crea(browser, name="report notturno")
     assert creato["token"].startswith("tab_") and creato["prefix"] == creato["token"][:12]
-    riga = session.exec(select(ApiToken)).one()
-    assert riga.token_hash == api_tokens.impronta(creato["token"]) and creato["token"] not in riga.token_hash
-    elenco = browser.get("/auth/tokens").json()
-    assert [t["name"] for t in elenco] == ["report notturno"] and "token" not in elenco[0]
+    row = session.exec(select(ApiToken)).one()
+    assert row.token_hash == api_tokens.fingerprint(creato["token"]) and creato["token"] not in row.token_hash
+    listing = browser.get("/auth/tokens").json()
+    assert [t["name"] for t in listing] == ["report notturno"] and "token" not in listing[0]
 
 
 def test_un_token_vale_come_il_suo_utente(app, session):
-    _utente(session, "a@x.local", full_name="Anna")
+    _user(session, "a@x.local", full_name="Anna")
     token = _crea(_entra(app, "a@x.local"))["token"]
     r = TestClient(app).get("/auth/me", headers=_bearer(token))
     assert r.status_code == 200 and r.json()["email"] == "a@x.local"
 
 
 def test_di_sola_lettura_non_modifica_niente(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     browser = _entra(app, "capo@x.local")
-    lettura = _crea(browser, scope="read")["token"]
+    reading = _crea(browser, scope="read")["token"]
     scrittura = _crea(browser, name="scrive", scope="write")["token"]
     script = TestClient(app)
-    assert script.get("/projects", headers=_bearer(lettura)).status_code == 200
-    r = script.post("/projects", json={"name": "zz"}, headers={**_bearer(lettura), "Accept-Language": "it"})
+    assert script.get("/projects", headers=_bearer(reading)).status_code == 200
+    r = script.post("/projects", json={"name": "zz"}, headers={**_bearer(reading), "Accept-Language": "it"})
     assert r.status_code == 403 and "sola lettura" in r.json()["detail"]
     # nella lingua di chi chiede
-    r = script.post("/projects", json={"name": "zz"}, headers={**_bearer(lettura), "Accept-Language": "en"})
+    r = script.post("/projects", json={"name": "zz"}, headers={**_bearer(reading), "Accept-Language": "en"})
     assert "Read-only token" in r.json()["detail"]
     assert script.post("/projects", json={"name": "zz"}, headers=_bearer(scrittura)).status_code in (200, 201)
 
 
 def test_l_audit_dice_con_quale_token_si_e_fatto(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     browser = _entra(app, "capo@x.local")
     token = _crea(browser, name="airflow notte", scope="write")["token"]
-    vecchio = _crea(browser, name="da ritirare")
+    old = _crea(browser, name="da ritirare")
     # uno script che ritira una credenziale: un'azione che l'audit registra
-    assert TestClient(app).delete(f"/auth/tokens/{vecchio['id']}", headers=_bearer(token)).status_code == 204
-    voce = session.exec(select(AuditLog).where(AuditLog.action == "token.revoke")).one()
-    assert '"token": "airflow notte"' in voce.detail and '"name": "da ritirare"' in voce.detail
+    assert TestClient(app).delete(f"/auth/tokens/{old['id']}", headers=_bearer(token)).status_code == 204
+    item = session.exec(select(AuditLog).where(AuditLog.action == "token.revoke")).one()
+    assert '"token": "airflow notte"' in item.detail and '"name": "da ritirare"' in item.detail
     # il segreto non finisce mai nel registro
     assert not any(token in (v.detail or "") for v in session.exec(select(AuditLog)).all())
 
 
 def test_scaduto_revocato_o_inventato_non_vale(app, session):
-    uid = _utente(session, "a@x.local")
+    uid = _user(session, "a@x.local")
     browser = _entra(app, "a@x.local")
     scaduto, revocato = _crea(browser, name="uno")["token"], _crea(browser, name="due")
-    riga = session.exec(select(ApiToken).where(ApiToken.name == "uno")).one()
-    riga.expires_at = api_tokens.adesso()
-    session.add(riga)
+    row = session.exec(select(ApiToken).where(ApiToken.name == "uno")).one()
+    row.expires_at = api_tokens.now()
+    session.add(row)
     session.commit()
     assert browser.delete(f"/auth/tokens/{revocato['id']}", headers=CSRF).status_code == 204
     for t in (scaduto, revocato["token"], "tab_inventato"):
@@ -120,7 +120,7 @@ def test_scaduto_revocato_o_inventato_non_vale(app, session):
 
 
 def test_un_account_disattivato_ferma_i_suoi_token(app, session):
-    uid = _utente(session, "a@x.local")
+    uid = _user(session, "a@x.local")
     token = _crea(_entra(app, "a@x.local"))["token"]
     u = session.get(User, uid)
     u.is_active = False
@@ -131,7 +131,7 @@ def test_un_account_disattivato_ferma_i_suoi_token(app, session):
 
 def test_viaggia_solo_nell_intestazione(app, session):
     """Il cookie è della sessione del browser: un token API lì non vale."""
-    _utente(session, "a@x.local")
+    _user(session, "a@x.local")
     token = _crea(_entra(app, "a@x.local"))["token"]
     c = TestClient(app)
     c.cookies.set("tab_token", token)
@@ -139,7 +139,7 @@ def test_viaggia_solo_nell_intestazione(app, session):
 
 
 def test_un_token_non_crea_altri_token(app, session):
-    _utente(session, "a@x.local")
+    _user(session, "a@x.local")
     token = _crea(_entra(app, "a@x.local"), scope="write")["token"]
     r = TestClient(app).post("/auth/tokens", json={"name": "figlio", "scope": "write", "expires_in_days": 5}, headers=_bearer(token))
     assert r.status_code == 403
@@ -148,17 +148,17 @@ def test_un_token_non_crea_altri_token(app, session):
 def test_scadenza_obbligatoria_e_con_un_tetto(app, session, monkeypatch):
     monkeypatch.setenv("AUTH__API_TOKEN_MAX_DAYS", "90")
     get_settings.cache_clear()
-    _utente(session, "a@x.local")
+    _user(session, "a@x.local")
     browser = _entra(app, "a@x.local")
-    for giorni in (0, 91):
-        assert browser.post("/auth/tokens", json={"name": "x", "expires_in_days": giorni}, headers=CSRF).status_code == 422
+    for days in (0, 91):
+        assert browser.post("/auth/tokens", json={"name": "x", "expires_in_days": days}, headers=CSRF).status_code == 422
     assert browser.post("/auth/tokens", json={"name": "x", "expires_in_days": 90}, headers=CSRF).status_code == 201
 
 
 def test_i_token_personali_si_possono_spegnere(app, session, monkeypatch):
     monkeypatch.setenv("AUTH__PERSONAL_TOKENS", "false")
     get_settings.cache_clear()
-    _utente(session, "a@x.local")
+    _user(session, "a@x.local")
     r = _entra(app, "a@x.local").post("/auth/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF)
     assert r.status_code == 403
 
@@ -166,7 +166,7 @@ def test_i_token_personali_si_possono_spegnere(app, session, monkeypatch):
 def test_l_osservatore_non_ha_token_personali(app, session):
     """L'osservatore è l'ospite condiviso di una demo: un token gli sopravvivrebbe
     al cambio di password, e lo vedrebbero (e revocherebbero) tutti i visitatori."""
-    _utente(session, "occhio@x.local", is_observer=True)
+    _user(session, "occhio@x.local", is_observer=True)
     occhio = _entra(app, "occhio@x.local")
     assert occhio.post("/auth/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF).status_code == 403
     assert occhio.get("/auth/me").json()["personal_tokens"] is False
@@ -184,10 +184,10 @@ def test_l_autenticazione_col_token_e_una_lettura_sola(db_engine):
 
     with Session(db_engine) as s:
         u = make_user(s, email="c@x.local", last_seen_at=datetime.now(timezone.utc))
-        _, token = api_tokens.crea(s, u, "t", "read", 5, u)
-        riga = s.exec(select(ApiToken)).one()
-        riga.last_used_at = api_tokens.adesso()
-        s.add(riga)
+        _, token = api_tokens.create(s, u, "t", "read", 5, u)
+        row = s.exec(select(ApiToken)).one()
+        row.last_used_at = api_tokens.now()
+        s.add(row)
         s.commit()
     comandi = []
     event.listen(db_engine, "before_cursor_execute", lambda c, cur, st, *a: comandi.append(st))
@@ -201,7 +201,7 @@ def test_l_autenticazione_col_token_e_una_lettura_sola(db_engine):
 # ── gli account di servizio ─────────────────────────────────────────────────
 
 def test_l_amministratore_crea_un_account_di_servizio_e_i_suoi_token(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     capo = _entra(app, "capo@x.local")
     acc = capo.post("/service-accounts", json={"name": "Airflow produzione"}, headers=CSRF).json()
     assert acc["email"] == "airflow-produzione@service.invalid" and acc["tokens"] == 0
@@ -216,8 +216,8 @@ def test_l_amministratore_crea_un_account_di_servizio_e_i_suoi_token(app, sessio
 
 
 def test_l_osservatore_vede_gli_account_e_non_li_tocca(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
-    _utente(session, "occhio@x.local", is_observer=True)
+    _user(session, "capo@x.local", is_superuser=True)
+    _user(session, "occhio@x.local", is_observer=True)
     acc = _entra(app, "capo@x.local").post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
     occhio = _entra(app, "occhio@x.local")
     assert [a["name"] for a in occhio.get("/service-accounts").json()] == ["CI"]
@@ -227,14 +227,14 @@ def test_l_osservatore_vede_gli_account_e_non_li_tocca(app, session):
 
 def test_i_token_dell_amministratore_solo_per_account_di_servizio(app, session):
     """Un amministratore non si crea credenziali a nome di una persona."""
-    _utente(session, "capo@x.local", is_superuser=True)
-    anna = _utente(session, "anna@x.local")
+    _user(session, "capo@x.local", is_superuser=True)
+    anna = _user(session, "anna@x.local")
     r = _entra(app, "capo@x.local").post(f"/service-accounts/{anna}/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF)
     assert r.status_code == 404
 
 
 def test_togliere_l_account_toglie_i_token(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     capo = _entra(app, "capo@x.local")
     acc = capo.post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
     token = capo.post(f"/service-accounts/{acc['id']}/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF).json()["token"]
@@ -244,23 +244,23 @@ def test_togliere_l_account_toglie_i_token(app, session):
 
 
 def test_l_elenco_di_tutti_i_token_all_osservatore_e_mascherato(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
-    _utente(session, "occhio@x.local", is_observer=True)
-    _utente(session, "anna@x.local")
+    _user(session, "capo@x.local", is_superuser=True)
+    _user(session, "occhio@x.local", is_observer=True)
+    _user(session, "anna@x.local")
     _crea(_entra(app, "anna@x.local"), name="di anna")
-    pieno = _entra(app, "capo@x.local").get("/admin/api-tokens").json()
-    assert pieno[0]["user_email"] == "anna@x.local" and pieno[0]["prefix"].startswith("tab_")
+    full = _entra(app, "capo@x.local").get("/admin/api-tokens").json()
+    assert full[0]["user_email"] == "anna@x.local" and full[0]["prefix"].startswith("tab_")
     occhio = _entra(app, "occhio@x.local")
-    visto = occhio.get("/admin/api-tokens").json()
-    assert visto[0]["user_email"] != "anna@x.local" and visto[0]["prefix"] == "tab_…" and visto[0]["last_used_ip"] is None
-    assert occhio.delete(f"/admin/api-tokens/{visto[0]['id']}", headers=CSRF).status_code == 403
+    seen = occhio.get("/admin/api-tokens").json()
+    assert seen[0]["user_email"] != "anna@x.local" and seen[0]["prefix"] == "tab_…" and seen[0]["last_used_ip"] is None
+    assert occhio.delete(f"/admin/api-tokens/{seen[0]['id']}", headers=CSRF).status_code == 403
 
 
 # ── dalla revisione di sicurezza ─────────────────────────────────────────────
 
 def test_una_password_nuova_ritira_anche_i_token(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
-    anna = _utente(session, "anna@x.local")
+    _user(session, "capo@x.local", is_superuser=True)
+    anna = _user(session, "anna@x.local")
     token = _crea(_entra(app, "anna@x.local"))["token"]
     capo = _entra(app, "capo@x.local")
     assert capo.patch(f"/users/{anna}", json={"password": "un-altra-password"}, headers=CSRF).status_code == 200
@@ -268,8 +268,8 @@ def test_una_password_nuova_ritira_anche_i_token(app, session):
 
 
 def test_spegnere_i_token_personali_spegne_anche_quelli_dati(app, session, monkeypatch):
-    _utente(session, "capo@x.local", is_superuser=True)
-    _utente(session, "anna@x.local")
+    _user(session, "capo@x.local", is_superuser=True)
+    _user(session, "anna@x.local")
     personale = _crea(_entra(app, "anna@x.local"))["token"]
     capo = _entra(app, "capo@x.local")
     acc = capo.post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
@@ -281,7 +281,7 @@ def test_spegnere_i_token_personali_spegne_anche_quelli_dati(app, session, monke
 
 
 def test_un_account_di_servizio_non_ha_password(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     capo = _entra(app, "capo@x.local")
     acc = capo.post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
     assert capo.patch(f"/users/{acc['id']}", json={"password": "una-password-lunga"}, headers=CSRF).status_code == 422
@@ -296,7 +296,7 @@ def test_un_account_di_servizio_non_ha_password(app, session):
 def test_un_token_non_crea_utenti_ne_imposta_password(app, session):
     """Un token di amministratore trapelato non deve potersi lasciare dietro una
     credenziale che duri oltre la sua revoca."""
-    capo_id = _utente(session, "capo@x.local", is_superuser=True)
+    capo_id = _user(session, "capo@x.local", is_superuser=True)
     token = _crea(_entra(app, "capo@x.local"), scope="write")["token"]
     script = TestClient(app)
     assert script.post("/users", json={"email": "nuovo@x.local", "password": "una-password-lunga"}, headers=_bearer(token)).status_code == 403
@@ -304,13 +304,13 @@ def test_un_token_non_crea_utenti_ne_imposta_password(app, session):
 
 
 def test_l_osservatore_vede_i_token_di_un_account_mascherati(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
-    _utente(session, "occhio@x.local", is_observer=True)
+    _user(session, "capo@x.local", is_superuser=True)
+    _user(session, "occhio@x.local", is_observer=True)
     capo = _entra(app, "capo@x.local")
     acc = capo.post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
     capo.post(f"/service-accounts/{acc['id']}/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF)
-    visto = _entra(app, "occhio@x.local").get(f"/service-accounts/{acc['id']}/tokens").json()[0]
-    assert visto["prefix"] == "tab_…" and visto["last_used_ip"] is None
+    seen = _entra(app, "occhio@x.local").get(f"/service-accounts/{acc['id']}/tokens").json()[0]
+    assert seen["prefix"] == "tab_…" and seen["last_used_ip"] is None
 
 
 def test_un_token_di_sola_lettura_puo_esportare_e_fare_anteprime():
@@ -319,21 +319,21 @@ def test_un_token_di_sola_lettura_puo_esportare_e_fare_anteprime():
 
     from fastapi import HTTPException
 
-    riga = ApiToken(user_id=1, name="t", prefix="tab_x", token_hash="h", scope="read",
-                    created_at=api_tokens.adesso(), expires_at=api_tokens.adesso())
-    def richiesta(metodo, rotta):
-        return SimpleNamespace(method=metodo, scope={"route": SimpleNamespace(path=rotta)}, headers={})
-    for rotta in ("/tasks/export", "/tasks/preview"):
-        api_tokens.controlla_livello(riga, richiesta("POST", rotta))
-    for metodo, rotta in (("POST", "/tasks/transform-data"), ("POST", "/projects"), ("DELETE", "/tasks/export")):
+    row = ApiToken(user_id=1, name="t", prefix="tab_x", token_hash="h", scope="read",
+                    created_at=api_tokens.now(), expires_at=api_tokens.now())
+    def richiesta(method, route):
+        return SimpleNamespace(method=method, scope={"route": SimpleNamespace(path=route)}, headers={})
+    for route in ("/tasks/export", "/tasks/preview"):
+        api_tokens.check_level(row, richiesta("POST", route))
+    for method, route in (("POST", "/tasks/transform-data"), ("POST", "/projects"), ("DELETE", "/tasks/export")):
         with pytest.raises(HTTPException):
-            api_tokens.controlla_livello(riga, richiesta(metodo, rotta))
+            api_tokens.check_level(row, richiesta(method, route))
 
 
 def test_la_pagina_sa_la_scadenza_massima(app, session, monkeypatch):
     monkeypatch.setenv("AUTH__API_TOKEN_MAX_DAYS", "30")
     get_settings.cache_clear()
-    _utente(session, "a@x.local")
+    _user(session, "a@x.local")
     assert _entra(app, "a@x.local").get("/auth/me").json()["api_token_max_days"] == 30
 
 
@@ -350,7 +350,7 @@ def app_pieno(app):
 
 
 def _capo_col_token(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     return _crea(_entra(app, "capo@x.local"), scope="write", name="trapelato")["token"]
 
 
@@ -360,7 +360,7 @@ def test_un_token_trapelato_non_lascia_un_amministratore_in_piu(app_pieno, sessi
     from app.models import Group
 
     token = _capo_col_token(app_pieno, session)
-    complice = _utente(session, "complice@x.local")
+    complice = _user(session, "complice@x.local")
     admin = Group(name="Admin", is_admin=True)
     occhi = Group(name="Occhi", is_observer=True)
     normale = Group(name="Vendite")
@@ -370,7 +370,7 @@ def test_un_token_trapelato_non_lascia_un_amministratore_in_piu(app_pieno, sessi
     admin, occhi, normale = (type("G", (), {"id": g.id}) for g in (admin, occhi, normale))  # solo gli id: le righe si staccano
     script = TestClient(app_pieno)
     h = {**_bearer(token), "Accept-Language": "it"}
-    for metodo, percorso, corpo in (
+    for method, path, body in (
         ("PATCH", f"/users/{complice}", {"is_superuser": True}),
         ("PATCH", f"/users/{complice}", {"is_observer": True}),
         ("PATCH", f"/groups/{normale.id}", {"is_admin": True}),
@@ -378,8 +378,8 @@ def test_un_token_trapelato_non_lascia_un_amministratore_in_piu(app_pieno, sessi
         ("PUT", f"/users/{complice}/groups/{admin.id}", None),
         ("PUT", f"/users/{complice}/groups/{occhi.id}", None),
     ):
-        r = script.request(metodo, percorso, json=corpo, headers=h)
-        assert r.status_code == 403 and "amministratore" in r.json()["detail"], (percorso, corpo, r.text)
+        r = script.request(method, path, json=body, headers=h)
+        assert r.status_code == 403 and "amministratore" in r.json()["detail"], (path, body, r.text)
     session.expire_all()
     assert session.get(User, complice).is_superuser is False
     # quel che non concede ruoli resta possibile: gruppi normali, togliere un ruolo
@@ -388,7 +388,7 @@ def test_un_token_trapelato_non_lascia_un_amministratore_in_piu(app_pieno, sessi
 
 
 def test_disattivare_ritira_i_token_e_riattivare_non_li_riporta(app, session):
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     capo = _entra(app, "capo@x.local")
     acc = capo.post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
     token = capo.post(f"/service-accounts/{acc['id']}/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF).json()["token"]
@@ -400,7 +400,7 @@ def test_disattivare_ritira_i_token_e_riattivare_non_li_riporta(app, session):
 
 def test_un_token_non_riattiva_un_account(app, session):
     token = _capo_col_token(app, session)
-    ex = _utente(session, "ex@x.local", is_active=False)
+    ex = _user(session, "ex@x.local", is_active=False)
     r = TestClient(app).patch(f"/users/{ex}", json={"is_active": True}, headers=_bearer(token))
     assert r.status_code == 403
     session.expire_all()
@@ -410,9 +410,9 @@ def test_un_token_non_riattiva_un_account(app, session):
 def test_chi_diventa_osservatore_perde_i_token_personali(app_pieno, session):
     from app.models import Group, UserGroupLink
 
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     capo = _entra(app_pieno, "capo@x.local")
-    ids = {e: _utente(session, e) for e in ("a@x.local", "b@x.local", "c@x.local")}
+    ids = {e: _user(session, e) for e in ("a@x.local", "b@x.local", "c@x.local")}
     token = {e: _crea(_entra(app_pieno, e))["token"] for e in ids}
     acc = capo.post("/service-accounts", json={"name": "CI"}, headers=CSRF).json()
     t_servizio = capo.post(f"/service-accounts/{acc['id']}/tokens", json={"name": "x", "expires_in_days": 5}, headers=CSRF).json()["token"]
@@ -435,13 +435,13 @@ def test_chi_diventa_osservatore_perde_i_token_personali(app_pieno, session):
 def test_nan_e_infinity_sono_un_422_non_un_500(app, session):
     from fastapi.exceptions import RequestValidationError
 
-    from app.main import _richiesta_non_valida
+    from app.main import _invalid_request
 
-    app.add_exception_handler(RequestValidationError, _richiesta_non_valida)  # quello dell'app vera
-    _utente(session, "a@x.local")
+    app.add_exception_handler(RequestValidationError, _invalid_request)  # quello dell'app vera
+    _user(session, "a@x.local")
     browser = _entra(app, "a@x.local")
-    for valore in ("NaN", "Infinity", "-Infinity"):
-        r = browser.post("/auth/tokens", content='{"name": "x", "expires_in_days": %s}' % valore,
+    for value in ("NaN", "Infinity", "-Infinity"):
+        r = browser.post("/auth/tokens", content='{"name": "x", "expires_in_days": %s}' % value,
                          headers={**CSRF, "content-type": "application/json"})
         assert r.status_code == 422 and r.json()["detail"][0]["loc"] == ["body", "expires_in_days"], r.text
     r = TestClient(app).post("/auth/login", content='{"email": NaN, "password": "x"}', headers={"content-type": "application/json"})
@@ -449,18 +449,18 @@ def test_nan_e_infinity_sono_un_422_non_un_500(app, session):
 
 
 def test_all_osservatore_l_audit_non_dice_l_inizio_dei_token_ne_si_cerca_per_ip(app_pieno, session):
-    from app.models import AuditLog as Voce
+    from app.models import AuditLog as Item
 
-    _utente(session, "capo@x.local", is_superuser=True)
-    _utente(session, "occhio@x.local", is_observer=True)
+    _user(session, "capo@x.local", is_superuser=True)
+    _user(session, "occhio@x.local", is_observer=True)
     capo = _entra(app_pieno, "capo@x.local")
     _crea(capo, name="report")
-    session.add(Voce(ts=api_tokens.adesso(), actor_label="anna@x.local", action="flow.create", ip="203.0.113.7",
+    session.add(Item(ts=api_tokens.now(), actor_label="anna@x.local", action="flow.create", ip="203.0.113.7",
                      target_type="flow", target_label="Margini", outcome="success"))
     session.commit()
     occhio = _entra(app_pieno, "occhio@x.local")
-    voce = occhio.get("/audit", params={"action": "token.create"}).json()["items"][0]
-    assert voce["detail"]["prefix"] == "tab_…"
+    item = occhio.get("/audit", params={"action": "token.create"}).json()["items"][0]
+    assert item["detail"]["prefix"] == "tab_…"
     assert capo.get("/audit", params={"action": "token.create"}).json()["items"][0]["detail"]["prefix"].startswith("tab_")
     for q in ("203.0.113", "anna@"):
         assert occhio.get("/audit", params={"q": q}).json()["total"] == 0, q
@@ -474,10 +474,10 @@ def test_chi_resta_solo_osservatore_perdendo_l_amministrazione_non_usa_i_token_p
     il punto in cui il token si accetta, nella stessa SELECT."""
     from app.models import Group, UserGroupLink
 
-    _utente(session, "capo@x.local", is_superuser=True)
+    _user(session, "capo@x.local", is_superuser=True)
     capo = _entra(app_pieno, "capo@x.local")
-    a = _utente(session, "a@x.local", is_superuser=True, is_observer=True)
-    b = _utente(session, "b@x.local", is_observer=True)
+    a = _user(session, "a@x.local", is_superuser=True, is_observer=True)
+    b = _user(session, "b@x.local", is_observer=True)
     g = Group(name="Admin", is_admin=True)
     session.add(g)
     session.commit()
@@ -502,9 +502,9 @@ async def test_nan_nel_corpo_inoltrato_all_engine_e_un_422():
 
     from app.routes.proxy import _read_json
 
-    for corpo in (b'{"limit": NaN}', b'{"x": [Infinity]}', b'{"x": -Infinity}'):
-        async def receive(corpo=corpo):
-            return {"type": "http.request", "body": corpo, "more_body": False}
+    for body in (b'{"limit": NaN}', b'{"x": [Infinity]}', b'{"x": -Infinity}'):
+        async def receive(body=body):
+            return {"type": "http.request", "body": body, "more_body": False}
         with pytest.raises(HTTPException) as e:
             await _read_json(Request({"type": "http", "method": "POST", "headers": [], "path": "/"}, receive))
         assert e.value.status_code == 422

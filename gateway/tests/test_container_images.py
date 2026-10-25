@@ -141,7 +141,7 @@ def test_a_container_cell_needs_an_image_one_may_use_and_closes_the_group_to_oth
 
 async def test_a_container_cell_runs_under_the_groups_run(session, db_engine, cluster, registry, engine, monkeypatch):
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
 
     async def quiet(s, run):
         return None
@@ -153,12 +153,12 @@ async def test_a_container_cell_runs_under_the_groups_run(session, db_engine, cl
     session.add(group)
     session.commit()
     run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=admin.id,
-              trigger_type="manual", claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(), input_key="",
+              trigger_type="manual", claimed_by=orch.INSTANCE, heartbeat_at=orch._now(), input_key="",
               output_bucket="", output_key="")
     session.add(run)
     session.commit()
     run_id = run.id
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     with Session(db_engine) as s:
         head = s.get(Run, run_id)
         child = s.exec(select(Run).where(Run.kind == "container")).one()
@@ -176,7 +176,7 @@ async def test_parallel_container_cells_each_point_to_their_own_run(session, db_
                                                                      monkeypatch):
     # each cell linked to «the latest container run of the group»: a sister's, with parallel cells
     monkeypatch.setattr(orch, "engine", db_engine)
-    monkeypatch.setattr(orch, "engine_battito", db_engine)
+    monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
 
     async def quiet(s, run):
         return None
@@ -189,12 +189,12 @@ async def test_parallel_container_cells_each_point_to_their_own_run(session, db_
     session.add(group)
     session.commit()
     run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=admin.id,
-              trigger_type="manual", claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(), input_key="",
+              trigger_type="manual", claimed_by=orch.INSTANCE, heartbeat_at=orch._now(), input_key="",
               output_bucket="", output_key="")
     session.add(run)
     session.commit()
     run_id = run.id
-    await orch.esegui(run_id)
+    await orch.run_it(run_id)
     with Session(db_engine) as s:
         states = json.loads(s.get(Run, run_id).group_cells)[0]
         labels = {c.id: json.loads(c.script)["label"] for c in s.exec(select(Run).where(Run.kind == "container")).all()}

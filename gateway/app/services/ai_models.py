@@ -1,9 +1,9 @@
-"""Catalogo dei modelli del provider AI e scelta dell'amministratore.
+"""The AI provider's model catalog and the administrator's choice.
 
-Il provider (endpoint compatibile OpenAI) dice quali modelli ESISTONO
-(`GET {base_url}/models`); la tabella `ai_models` dice quali si possono USARE.
-Il catalogo viene tenuto in memoria per qualche minuto: cambia di rado, e ogni
-apertura della chat non deve costare una chiamata al provider.
+The provider (an OpenAI-compatible endpoint) says which models EXIST
+(`GET {base_url}/models`); the `ai_models` table says which may be USED. The catalog
+is kept in memory for a few minutes: it changes rarely, and every opening of the chat
+must not cost a call to the provider.
 """
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 _CACHE_SECONDS = 300
 _cache: tuple[float, list[str]] | None = None
 
-# Modelli che l'endpoint elenca ma che non sanno conversare: embedding, audio,
-# reranker. Restano visibili all'amministratore, ma non abilitabili per la chat.
+# Models the endpoint lists but that cannot converse: embedding, audio, reranker. They
+# stay visible to the administrator, but cannot be enabled for the chat.
 _NOT_CHAT = ("embedding", "embed-", "bge-", "whisper", "rerank", "tts", "speech", "transcri")
 
 
@@ -38,7 +38,7 @@ def ensure_configured() -> None:
 
 
 async def provider_models(force: bool = False) -> list[str]:
-    """Gli id dei modelli che il provider espone, in ordine alfabetico."""
+    """The ids of the models the provider exposes, in alphabetical order."""
     global _cache
     ensure_configured()
     if not force and _cache is not None and (time.monotonic() - _cache[0]) < _CACHE_SECONDS:
@@ -52,8 +52,8 @@ async def provider_models(force: bool = False) -> list[str]:
             )
             resp.raise_for_status()
             ids = sorted({str(m.get("id")) for m in resp.json().get("data", []) if m.get("id")})
-    except Exception as e:  # noqa: BLE001 — rete, chiave scaduta, endpoint sbagliato
-        logger.warning("catalogo dei modelli AI non leggibile: %s", e)
+    except Exception as e:  # noqa: BLE001 — network, expired key, wrong endpoint
+        logger.warning("AI model catalog not readable: %s", e)
         raise HTTPException(status_code=502, detail="The AI provider does not answer the list of models") from e
     _cache = (time.monotonic(), ids)
     return ids
@@ -65,6 +65,6 @@ def clear_cache() -> None:
 
 
 def enabled_model_ids(session: Session) -> list[str]:
-    """I modelli abilitati dall'amministratore (e adatti alla chat)."""
+    """The models the administrator enabled (and fit for the chat)."""
     rows = session.exec(select(AiModel).where(AiModel.enabled == True)).all()  # noqa: E712
     return sorted(r.model_id for r in rows if is_chat_model(r.model_id))

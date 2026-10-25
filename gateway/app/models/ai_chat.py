@@ -1,17 +1,16 @@
-"""Conversazioni dell'assistente, salvate nel database dei metadati.
+"""The assistant's conversations, saved in the metadata database.
 
-Prima la storia viveva SOLO nel browser: il client la rimandava a ogni turno e
-il server la accettava così com'era. Due conseguenze, entrambe risolte qui:
-chiudere la scheda buttava via la conversazione (e rifare la stessa domanda
-costa di nuovo), e una storia contraffatta arrivava intatta al modello —
-comprese parti di ruolo «system», cioè istruzioni (audit 2026-09-19, A8).
-Ora la storia la tiene il server e il client manda solo l'id della chat.
+Before, the history lived ONLY in the browser: the client sent it back at every turn
+and the server accepted it as it was. Two consequences, both solved here: closing the
+tab threw the conversation away (and asking the same question again costs again), and
+a forged history reached the model intact — «system» role parts included, that is
+instructions (audit 2026-09-19, A8). Now the server keeps the history and the client
+sends only the chat's id.
 
-Un TURNO = una domanda dell'utente e tutto ciò che ne è seguito (risposte
-intermedie, chiamate agli strumenti, risposta finale). È l'unità giusta anche
-per il costo: `pydantic-ai` riporta il costo dell'intero giro, non del singolo
-messaggio. Rigiocare una conversazione significa concatenare i messaggi dei
-turni in ordine di `seq`.
+A TURN = one user question and all that followed (intermediate answers, tool calls,
+final answer). It is the right unit for the cost too: `pydantic-ai` reports the cost
+of the whole round, not of the single message. Replaying a conversation means
+chaining the turns' messages in `seq` order.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -21,7 +20,7 @@ from sqlmodel import Field, SQLModel
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)  # naive-UTC, come il resto
+    return datetime.now(timezone.utc).replace(tzinfo=None)  # naive-UTC, as the rest
 
 
 class AiChat(SQLModel, table=True):
@@ -30,13 +29,13 @@ class AiChat(SQLModel, table=True):
     __table_args__ = (Index("ix_ai_chats_user_id_flow_id", "user_id", "flow_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    # niente FK verso users: una chat sopravvive alla cancellazione dell'account
-    # solo se lo decidiamo noi, e oggi NON lo vogliamo — vedi routes/users.py,
-    # che la cancella esplicitamente insieme all'utente
+    # no FK towards users: a chat survives the account's deletion only if we decide so, and
+    # today we do NOT want it — see routes/users.py, which deletes it explicitly together
+    # with the user
     user_id: int = Field(index=True)
-    # prima domanda accorciata: è il titolo che l'utente riconosce nell'elenco
+    # the first question shortened: the title the user recognizes in the list
     title: str = ""
-    # ultimi usati, per riaprire la chat com'era
+    # the last used, to reopen the chat as it was
     model_id: str = ""
     engine: Optional[str] = None
     # «assistant» (the data assistant's page) or «flow» (the flow editor's helper,
@@ -48,42 +47,41 @@ class AiChat(SQLModel, table=True):
 
 
 class AiChatTurn(SQLModel, table=True):
-    """Una domanda e la sua risposta, con quanto è costata."""
+    """A question and its answer, with what it cost."""
 
     __tablename__ = "ai_chat_turns"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     chat_id: int = Field(index=True, foreign_key="ai_chats.id")
-    seq: int = 0  # ordine di rigioco
+    seq: int = 0  # replay order
     question: str = ""
-    # i messaggi NUOVI di questo turno, serializzati da pydantic-ai
+    # this turn's NEW messages, serialized by pydantic-ai
     # (`ModelMessagesTypeAdapter.dump_python(..., mode="json")`)
     messages: str = "[]"
     model_id: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
     requests: int = 0
-    # Costo in dollari COME LO RIPORTA pydantic-ai (`RunUsage.cost`), che lo
-    # ricava dal listino del modello. Stringa e non float: è un decimale esatto
-    # e sommarlo in virgola mobile introdurrebbe errore. `None` = il costo non
-    # è determinabile per quel modello, che è diverso da «zero».
+    # The cost in dollars AS pydantic-ai REPORTS IT (`RunUsage.cost`), which works it out
+    # from the model's price list. A string and not a float: it is an exact decimal and
+    # summing it in floating point would bring in error. `None` = the cost cannot be worked
+    # out for that model, which is not the same as «zero».
     cost_usd: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
 
 
 class AiSpend(SQLModel, table=True):
-    """Quanto è costato ogni giro dell'assistente. Solo il conto, mai il testo.
+    """What each round of the assistant cost. Only the bill, never the text.
 
-    Sta separato dalle conversazioni per una ragione precisa: le chat di un
-    OSSERVATORE si cancellano quando se ne va (è un account condiviso su una
-    demo pubblica, e le domande di uno sconosciuto non devono restare né essere
-    leggibili dal visitatore successivo). Se il tetto di spesa leggesse da lì,
-    cancellare una chat azzererebbe il contatore e basterebbe aprirne una nuova
-    per ricominciare a spendere. Qui invece non cancella nessuno.
+    It is kept apart from the conversations for a precise reason: an OBSERVER's chats are
+    deleted when they leave (it is a shared account on a public demo, and a stranger's
+    questions must neither stay nor be readable by the next visitor). If the spending cap
+    read from there, deleting a chat would reset the counter and opening a new one would
+    be enough to start spending again. Here instead nobody deletes.
 
-    Non contiene domanda, risposta né strumenti: modello, token, costo e
-    momento. `turn_id` è solo una chiave per ritrovare la riga quando il costo
-    arriva dopo — resta anche quando il turno non c'è più.
+    It holds no question, answer or tools: model, tokens, cost and moment. `turn_id` is
+    only a key to find the row when the cost arrives later — it stays even when the turn
+    is no longer there.
     """
 
     __tablename__ = "ai_spend"
@@ -95,5 +93,5 @@ class AiSpend(SQLModel, table=True):
     model_id: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
-    # come in AiChatTurn: stringa decimale esatta, `None` = costo non determinabile
+    # as in AiChatTurn: an exact decimal string, `None` = cost cannot be worked out
     cost_usd: Optional[str] = None

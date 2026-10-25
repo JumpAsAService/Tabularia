@@ -9,9 +9,9 @@ def _now() -> datetime:
 
 class Project(SQLModel, table=True):
     """
-    Cartella. Albero via `parent_id` (self-reference); `parent_id`
-    None = progetto root. I permessi si applicano al progetto e vengono ereditati
-    dai discendenti (vedi services/permissions.py).
+    Folder. A tree through `parent_id` (self-reference); `parent_id` None = a root
+    project. The permissions apply to the project and are inherited by the descendants
+    (see services/permissions.py).
     """
     __tablename__ = "projects"
     id: Optional[int] = Field(default=None, primary_key=True)

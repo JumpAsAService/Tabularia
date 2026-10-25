@@ -49,21 +49,21 @@ def _errors(r):
 
 def test_the_administrator_changes_and_goes_back_to_the_environment(app, session):
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    stato = capo.get(URL).json()
-    assert stato["editable"] and stato["panel_enabled"] and stato["refresh_seconds"] == ov.RILEGGI_OGNI
-    v = _voce(stato, "orchestrator.max_concurrent")
+    state = capo.get(URL).json()
+    assert state["editable"] and state["panel_enabled"] and state["refresh_seconds"] == ov.REREAD_EVERY
+    v = _voce(state, "orchestrator.max_concurrent")
     assert (v["value"], v["applied"], v["env_value"], v["env_var"], v["rollout"]) == (None, 20, 20, "ORCHESTRATOR__MAX_CONCURRENT", [])
 
-    stato = capo.put(URL, json={"values": {"orchestrator.max_concurrent": 8, "app.timezone": "Europe/Rome"}}, headers=CSRF).json()
-    v = _voce(stato, "orchestrator.max_concurrent")
+    state = capo.put(URL, json={"values": {"orchestrator.max_concurrent": 8, "app.timezone": "Europe/Rome"}}, headers=CSRF).json()
+    v = _voce(state, "orchestrator.max_concurrent")
     assert (v["value"], v["applied"], v["updated_by"]) == (8, 8, "capo@x.local")
     assert get_settings().orchestrator.max_concurrent == 8 and get_settings().app.timezone == "Europe/Rome"
     assert json.loads(session.get(GatewaySetting, "orchestrator.max_concurrent").value) == 8
     entry = session.exec(select(AuditLog).where(AuditLog.action == "settings.update")).one()
     assert json.loads(entry.detail)["changes"]["orchestrator.max_concurrent"] == {"from": None, "to": 8}
 
-    stato = capo.put(URL, json={"values": {"orchestrator.max_concurrent": None}}, headers=CSRF).json()
-    assert _voce(stato, "orchestrator.max_concurrent")["value"] is None
+    state = capo.put(URL, json={"values": {"orchestrator.max_concurrent": None}}, headers=CSRF).json()
+    assert _voce(state, "orchestrator.max_concurrent")["value"] is None
     assert get_settings().orchestrator.max_concurrent == 20 and get_settings().app.timezone == "Europe/Rome"
     session.expire_all()
     assert [r.key for r in session.exec(select(GatewaySetting)).all()] == ["app.timezone"]
@@ -71,7 +71,7 @@ def test_the_administrator_changes_and_goes_back_to_the_environment(app, session
 
 def test_what_another_replica_saved_is_shown_applied_at_once(app, session):
     # two gateway replicas: one saves, the next page comes from the other, which reads the
-    # table only every RILEGGI_OGNI seconds and showed the value «not applied» meanwhile
+    # table only every REREAD_EVERY seconds and showed the value «not applied» meanwhile
     from datetime import datetime
 
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
@@ -112,8 +112,8 @@ def test_sso_settings_appear_when_sso_is_on(app, session, monkeypatch):
     monkeypatch.setenv("OIDC__CLIENT_ID", "tabularia")
     get_settings.cache_clear()
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    stato = capo.put(URL, json={"values": {"oidc.button_label": "Company account"}}, headers=CSRF).json()
-    assert _voce(stato, "oidc.button_label")["applied"] == "Company account"
+    state = capo.put(URL, json={"values": {"oidc.button_label": "Company account"}}, headers=CSRF).json()
+    assert _voce(state, "oidc.button_label")["applied"] == "Company account"
 
 
 def test_the_lost_run_threshold_stays_above_the_engine_hard_limit(app, session, motore):  # noqa: F811
@@ -146,8 +146,8 @@ def test_a_saved_value_that_no_longer_holds_does_not_block_the_others(app, sessi
 def test_a_rollout_setting_says_what_the_process_started_with(app, session):
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     ov.remember_start()
-    stato = capo.put(URL, json={"values": {"db.max_overflow": 30}}, headers=CSRF).json()
-    v = _voce(stato, "db.max_overflow")
+    state = capo.put(URL, json={"values": {"db.max_overflow": 30}}, headers=CSRF).json()
+    v = _voce(state, "db.max_overflow")
     assert v["rollout"] == ["gateway", "orchestrator"] and v["value"] == 30 and v["started_with"] == 10
 
 
@@ -155,9 +155,9 @@ def test_the_observer_reads_masked_and_does_not_write(app, session):
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     capo.put(URL, json={"values": {"ai.max_requests": 10}}, headers=CSRF)
     occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    stato = occhio.get(URL).json()
-    v = _voce(stato, "ai.max_requests")
-    assert not stato["editable"] and v["value"] == 10 and v["updated_by"] != "capo@x.local"
+    state = occhio.get(URL).json()
+    v = _voce(state, "ai.max_requests")
+    assert not state["editable"] and v["value"] == 10 and v["updated_by"] != "capo@x.local"
     assert occhio.put(URL, json={"values": {"ai.max_requests": 1}}, headers=CSRF).status_code == 403
     assert _entra(app, session, "anna@x.local").get(URL).status_code == 403
 
@@ -178,9 +178,9 @@ def test_with_the_panel_off_they_are_shown_and_not_applied(app, session, db_engi
     monkeypatch.setenv("ENGINE__SETTINGS_PANEL", "false")
     get_settings.cache_clear()
     ov.reload(db_engine)
-    stato = capo.get(URL).json()
-    assert not stato["editable"] and not stato["panel_enabled"]
-    assert _voce(stato, "ai.max_requests")["value"] is None and get_settings().ai.max_requests != 10
+    state = capo.get(URL).json()
+    assert not state["editable"] and not state["panel_enabled"]
+    assert _voce(state, "ai.max_requests")["value"] is None and get_settings().ai.max_requests != 10
     assert capo.put(URL, json={"values": {"ai.max_requests": 11}}, headers=CSRF).status_code == 403
 
 
@@ -198,7 +198,7 @@ def test_the_lost_run_threshold_back_to_the_environment_is_checked_too(app, sess
     """Back to the installation's value, it must still stay above the engine's limit."""
     capo = _entra(app, session, "capo@x.local", is_superuser=True)
     assert capo.put(URL, json={"values": {"engine.run_stale_timeout_seconds": 6000}}, headers=CSRF).status_code == 200
-    motore.valori["celery.task_time_limit"] = 5000  # the engine's limit raised meanwhile
+    motore.values["celery.task_time_limit"] = 5000  # the engine's limit raised meanwhile
     r = capo.put(URL, json={"values": {"engine.run_stale_timeout_seconds": None}}, headers=CSRF)
     assert _errors(r) == {"engine.run_stale_timeout_seconds": ("stale_below_hard_limit", 5300)}
 

@@ -1,20 +1,19 @@
-"""Freno sui tentativi di accesso ripetuti.
+"""A brake on repeated sign-in attempts.
 
-L'unico costo di un tentativo sbagliato era bcrypt: 25 tentativi in 6,7 secondi,
-misurati durante l'audit del 2026-09-19 (M5). Su un indirizzo pubblico — una
-demo, un link in un post — le credenziali finiscono in un commento e il resto lo
-fa uno script.
+The only cost of a wrong attempt was bcrypt: 25 attempts in 6.7 seconds, measured
+during the audit of 2026-09-19 (M5). On a public address — a demo, a link in a post —
+the credentials end up in a comment and a script does the rest.
 
-Il conteggio sta in una TABELLA (`login_attempts`), non in memoria: con più
-repliche del gateway un dizionario per processo conterebbe cinque errori per
-replica, e il freno si allenterebbe proprio quando l'installazione cresce. Costa
-una lettura per chiave a ogni accesso, che è raro. Per quello che deve fare —
-rendere inutile un dizionario, non resistere a una botnet — basta.
+The count sits in a TABLE (`login_attempts`), not in memory: with several gateway
+replicas a dictionary per process would count five errors per replica, and the brake
+would loosen exactly when the installation grows. It costs one read by key at every
+sign-in, which is rare. For what it must do — make a dictionary useless, not resist a
+botnet — it is enough.
 
-Si conta per **(indirizzo IP, email)** insieme: per solo IP, un ufficio dietro
-un NAT si bloccherebbe a vicenda; per sola email, basta cambiare account per
-ricominciare. L'accesso riuscito azzera, così chi sbaglia due volte e poi entra
-non si porta dietro niente.
+It counts by **(IP address, email)** together: by IP alone, an office behind a NAT
+would block itself; by email alone, changing account is enough to start again. A
+successful sign-in resets, so whoever gets it wrong twice and then signs in carries
+nothing along.
 
 A second, looser count is kept per address alone (any email): one address trying
 one password on many accounts (spraying), or probing which emails exist, never
@@ -38,92 +37,92 @@ from app.models.shared_state import LoginAttempt
 
 logger = logging.getLogger(__name__)
 
-# dopo quanti errori si comincia a rallentare, e per quanto
-SOGLIA = 5
-FINESTRA_SECONDI = 300.0
-BLOCCO_SECONDI = 60.0
-BLOCCO_MASSIMO = 900.0
+# after how many errors slowing down starts, and for how long
+THRESHOLD = 5
+WINDOW_SECONDS = 300.0
+BLOCK_SECONDS = 60.0
+MAX_BLOCK = 900.0
 # failures from one address, whatever the email, before that address slows down
-SOGLIA_INDIRIZZO = 30
+ADDRESS_THRESHOLD = 30
 # the email of the per-address row: emails are stripped, so no login can produce it
-TUTTE = " *"
+ALL = " *"
 
 
-def _chiave(ip: str | None, email: str) -> tuple[str, str]:
+def _key(ip: str | None, email: str) -> tuple[str, str]:
     return (ip or "?", (email or "").strip().lower())
 
 
-def _attesa(session: Session, chiave: tuple[str, str], soglia: int) -> float:
-    riga = session.get(LoginAttempt, chiave)
-    if riga is None:
+def _wait(session: Session, key: tuple[str, str], threshold: int) -> float:
+    row = session.get(LoginAttempt, key)
+    if row is None:
         return 0.0
-    falliti, da = riga.failures, (_adesso() - riga.last_at).total_seconds()
-    if falliti < soglia or da > FINESTRA_SECONDI:
+    failed, elapsed = row.failures, (_now() - row.last_at).total_seconds()
+    if failed < threshold or elapsed > WINDOW_SECONDS:
         return 0.0
-    # raddoppia a ogni errore oltre la soglia, con un tetto
-    blocco = min(BLOCCO_SECONDI * (2 ** (falliti - soglia)), BLOCCO_MASSIMO)
-    return max(0.0, blocco - da)
+    # doubles at every error past the threshold, with a cap
+    block = min(BLOCK_SECONDS * (2 ** (failed - threshold)), MAX_BLOCK)
+    return max(0.0, block - elapsed)
 
 
-def _adesso() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)  # colonne naive = UTC
+def _now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)  # naive columns = UTC
 
 
-def attesa_richiesta(session: Session, ip: str | None, email: str) -> float:
-    """Secondi da aspettare prima di poter riprovare. `0` = si può procedere."""
-    chiave = _chiave(ip, email)
+def request_wait(session: Session, ip: str | None, email: str) -> float:
+    """Seconds to wait before being able to try again. `0` = may go ahead."""
+    key = _key(ip, email)
     try:
-        return max(_attesa(session, chiave, SOGLIA), _attesa(session, (chiave[0], TUTTE), SOGLIA_INDIRIZZO))
+        return max(_wait(session, key, THRESHOLD), _wait(session, (key[0], ALL), ADDRESS_THRESHOLD))
     finally:
-        session.rollback()  # solo una lettura: non si tiene aperta la transazione
+        session.rollback()  # only a read: the transaction is not kept open
 
 
-def registra_errore(session: Session, ip: str | None, email: str) -> None:
-    """Un errore in più, per (indirizzo, email) e per l'indirizzo intero."""
-    chiave_ip, chiave_email = _chiave(ip, email)
-    _conta(session, chiave_ip, chiave_email)
-    _conta(session, chiave_ip, TUTTE)
+def record_failure(session: Session, ip: str | None, email: str) -> None:
+    """One more error, for (address, email) and for the whole address."""
+    ip_key, email_key = _key(ip, email)
+    _count(session, ip_key, email_key)
+    _count(session, ip_key, ALL)
 
 
-def _conta(session: Session, chiave_ip: str, chiave_email: str) -> None:
-    """L'incremento lo fa il database (`failures + 1`), così due repliche che
-    registrano insieme non se ne perdono uno."""
-    adesso = _adesso()
-    scaduta = adesso - timedelta(seconds=FINESTRA_SECONDI)
+def _count(session: Session, ip_key: str, email_key: str) -> None:
+    """The database does the increment (`failures + 1`), so two replicas recording together
+    do not lose one."""
+    now = _now()
+    expired = now - timedelta(seconds=WINDOW_SECONDS)
 
-    def incrementa() -> int:
-        esito = session.exec(
+    def increment() -> int:
+        outcome = session.exec(
             update(LoginAttempt)
-            .where(LoginAttempt.ip == chiave_ip, LoginAttempt.email == chiave_email)
+            .where(LoginAttempt.ip == ip_key, LoginAttempt.email == email_key)
             .values(
-                # oltre la finestra si ricomincia da capo
-                failures=case((LoginAttempt.last_at < scaduta, 1), else_=LoginAttempt.failures + 1),
-                last_at=adesso,
+                # past the window it starts from scratch
+                failures=case((LoginAttempt.last_at < expired, 1), else_=LoginAttempt.failures + 1),
+                last_at=now,
             )
         )
         session.commit()
-        return esito.rowcount
+        return outcome.rowcount
 
-    if incrementa():
+    if increment():
         return
     try:
-        session.add(LoginAttempt(ip=chiave_ip, email=chiave_email, failures=1, last_at=adesso))
+        session.add(LoginAttempt(ip=ip_key, email=email_key, failures=1, last_at=now))
         session.commit()
-    except IntegrityError:  # un'altra replica ha scritto il primo errore un attimo prima
+    except IntegrityError:  # another replica wrote the first error a moment before
         session.rollback()
-        incrementa()
+        increment()
 
 
-def registra_successo(session: Session, ip: str | None, email: str) -> None:
-    chiave_ip, chiave_email = _chiave(ip, email)
-    session.exec(delete(LoginAttempt).where(LoginAttempt.ip == chiave_ip, LoginAttempt.email == chiave_email))
+def record_success(session: Session, ip: str | None, email: str) -> None:
+    ip_key, email_key = _key(ip, email)
+    session.exec(delete(LoginAttempt).where(LoginAttempt.ip == ip_key, LoginAttempt.email == email_key))
     session.commit()
 
 
-def pulisci(session: Session) -> int:
-    """Toglie i conteggi che non frenano più nessuno (lo chiama lo scheduler)."""
-    tolte = session.exec(
-        delete(LoginAttempt).where(LoginAttempt.last_at < _adesso() - timedelta(seconds=FINESTRA_SECONDI))
+def clean(session: Session) -> int:
+    """Removes the counts that no longer brake anyone (the scheduler calls it)."""
+    removed_ones = session.exec(
+        delete(LoginAttempt).where(LoginAttempt.last_at < _now() - timedelta(seconds=WINDOW_SECONDS))
     )
     session.commit()
-    return tolte.rowcount or 0
+    return removed_ones.rowcount or 0
