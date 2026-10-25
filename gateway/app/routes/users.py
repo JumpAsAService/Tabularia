@@ -1,5 +1,6 @@
 """Users management and group membership. Superuser only."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.security import hash_password, verify_password
@@ -104,7 +105,13 @@ def create_user(
         is_observer=body.is_observer,
     )
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # two creations of the same email at once: both passed the check above, the unique
+        # index stops the second one, which gets the same answer as the check
+        session.rollback()
+        raise HTTPException(status_code=409, detail="This email is already registered") from None
     session.refresh(user)
     if user.is_superuser:
         audit.record_audit(

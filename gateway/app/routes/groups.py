@@ -1,6 +1,7 @@
 """Groups. Read for every authenticated user; write for superusers only."""
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.db.session import get_session
@@ -43,7 +44,11 @@ def create_group(
         raise HTTPException(status_code=409, detail="There is already a group with this name")
     group = Group(name=body.name, description=body.description)
     session.add(group)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:  # the same name created twice at once: the unique index stops the second
+        session.rollback()
+        raise HTTPException(status_code=409, detail="There is already a group with this name") from None
     session.refresh(group)
     audit.record_audit(session, actor=current, action=audit.GROUP_CREATE, request=request,
                        target_type="group", target_id=group.id, target_label=group.name)
