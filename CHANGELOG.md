@@ -3,7 +3,7 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## 1.2.2 «Appio» — 2026-10-22
+## 1.2.2 «Appio» — 2026-10-25
 
 - **Administration → Settings holds every setting an administrator may own**, about a
   hundred instead of fourteen, in a box per component (Gateway, Kubernetes, Engine) with
