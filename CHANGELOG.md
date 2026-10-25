@@ -44,6 +44,12 @@ exposes at `/system/info` and in the app's settings menu.
   said a backup was running, on a process long gone: «Back up now» was refused and the
   nightly one skipped until that claim aged past the longest a backup may take. A running
   backup now writes a heartbeat; a claim without one for two minutes is ignored.
+- **Fixed: a database password with «@», «/», «%» or a space stopped the gateway**: it
+  read the part after the «@» as the host. User and password are now escaped in the
+  address, for the backups' `pg_dump` too.
+- **The restore of a backup in the upgrade guide is all or nothing** (`--single-transaction
+  --exit-on-error`), and says what to look at before starting the release again: a restore
+  stopped half way left a database the release would have set up as a new installation.
 - **Fixed: with PostgreSQL not answering, the sign-in and every page answered a bare
   «Internal Server Error».** They now answer 503, «The database is not answering».
 - **An assistant for scripts**, beside the code of a Script node or a saved script
@@ -117,8 +123,9 @@ exposes at `/system/info` and in the app's settings menu.
   why; spaces around the headers go, as for the SFTP and S3 datasources.
 - **Fixed: a division by zero showed as an empty cell in the preview** (a missing value that
   «is null» did not find); it shows inf or NaN.
-- **Fixed: converting text to yes/no failed on Polars, and read «true» as empty on
-  ClickHouse**: true/t/1/yes/y and false/f/0/no/n on every engine, anything else empty.
+- **Fixed: converting text to yes/no failed on Polars, read «true» as empty on
+  ClickHouse, and «1» or «yes» as empty on BigQuery**: true/t/1/yes/y and false/f/0/no/n
+  on every engine, anything else empty.
 - **Fixed: Ctrl+S in the flow editor, with the cursor still in a field of the node's panel,
   saved the value from before the one just typed**, said «saved», and the change was lost at
   the next reload. The field now gives its value first.
@@ -142,7 +149,8 @@ exposes at `/system/info` and in the app's settings menu.
   The steps still open of an interrupted flow are now stopped with it: their engine tasks
   revoked, the Jobs of Script and Container nodes deleted. After a database outage the
   orphans' sweep waits until every live orchestrator has beaten again, and never closes
-  what its own process runs.
+  what its own process runs. A step the engine finished meanwhile keeps its outcome: a
+  refresh's new data is swapped in, an Output published.
 - **Fixed: a worker killed mid-run left its runs «running» for an hour,** then failed them
   with «Timeout… raise the limit». On cgroup v2 an OOM kills the whole container, and an
   evicted pod or a lost node write nothing either. The engine now tells such a task from
@@ -345,11 +353,11 @@ exposes at `/system/info` and in the app's settings menu.
   does not carry is read from the access token, where Keycloak puts the roles by default
   (signature, issuer, expiry and person checked), then from userinfo. Tried on minikube
   with Keycloak 26.
-- **Fixed: a groups claim set wrong took the administrators' rights and every group away
-  at the next SSO sign-in** (with `OIDC__AUTHORITATIVE`, the default). A token that carries
-  none of the configured group sources — a typo in Administration → Settings, a provider
-  that stopped sending them — now leaves administrator rights and memberships as they
-  are, and the audit of the sign-in names the missing claim.
+- **The audit of an SSO sign-in says when the token carried none of the group claims.**
+  Keycloak and Entra leave the claim out for a person in no group, so it counts as no
+  groups: administrator rights and memberships go (with `OIDC__AUTHORITATIVE`, the
+  default). A claim name set wrong in Administration → Settings looks the same, and now
+  the audit and the log name the missing claim; the local administrator can still sign in.
 - **Automatic backups of the database.** Every night at 03:00 an orchestrator runs
   `pg_dump` of Tabularia's database and streams it to the engine, which stores it in the
   object storage — by default Tabularia's bucket under `backups/postgres/`; a bucket of

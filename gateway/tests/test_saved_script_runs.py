@@ -85,14 +85,14 @@ def queue(session, monkeypatch):
     return session
 
 
-def _script(session, env, project_id, *, inputs=(), output=None, owner=None, code=CODE) -> SavedScript:
+def _script(session, env, project_id, *, inputs=(), output=None, owner=None, code=CODE, retries=0) -> SavedScript:
     env_id = env if isinstance(env, int) else env.id
     s = SavedScript(name="Totals", project_id=project_id, environment_id=env_id, owner_id=owner, current_version=1)
     session.add(s)
     session.commit()
     content = {"files": [{"path": "main.py", "content": code}], "entrypoint": "main.py", "inputs": list(inputs),
                "output": output or {"publish": False, "name": "", "project_id": None, "overwrite": True},
-               "timeout_seconds": 600, "retries": 0, "retry_delay_seconds": 60}
+               "timeout_seconds": 600, "retries": retries, "retry_delay_seconds": 0}
     session.add(SavedScriptVersion(script_id=s.id, version=1, content=json.dumps(content), note="created"))
     session.commit()
     return s
@@ -291,3 +291,40 @@ async def test_an_empty_script_cannot_run(app, session, cluster, engine):
     session.commit()
     boss = _login(app, session, "boss@x.local", is_superuser=True)
     assert boss.post(f"/scripts/{script_id}/run", headers=CSRF).status_code == 422
+
+
+async def test_the_runs_list_leaves_out_a_script_its_reader_may_not_see(app, session, cluster, engine):
+    # VIEW on the folder without the use of the environment: the script does not exist for
+    # them (GET /scripts/{id} and GET /runs/{id} are 404), and the runs list and the activity
+    # calendar leave its runs out too — their log is what the script printed
+    outsider = _login(app, session, "o@x.local")
+    o_user = session.exec(select(User).where(User.email == "o@x.local")).one()
+    pid = make_project(session, name="p").id
+    make_permission(session, user_id=o_user.id, project_id=pid, capability="view")
+    script_id = _script(session, _environment(session).id, pid).id  # no group: only admins use it
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    run_id = boss.post(f"/scripts/{script_id}/run", headers=CSRF).json()["run_id"]
+    await orch.esegui(run_id)
+    session.expire_all()
+    child_id = session.exec(select(Run.id).where(Run.kind == "script")).one()
+    assert outsider.get(f"/scripts/{script_id}").status_code == 404
+    assert outsider.get(f"/runs/{child_id}").status_code == 404
+    assert outsider.get("/runs").json()["total"] == 0
+    assert sum(b["total"] for b in outsider.get("/runs/activity").json()["buckets"]) == 0
+    assert sum(b["total"] for b in boss.get("/runs/activity").json()["buckets"]) >= 1
+    assert {i["id"] for i in boss.get("/runs").json()["items"]} >= {run_id, child_id}
+
+
+async def test_a_retry_starts_without_what_the_failed_attempt_wrote(session, cluster, engine, queue):
+    # attempt 1 writes TABULARIA_OUTPUT and fails; attempt 2 succeeds: its output, not the
+    # failed one's, is imported — the object is deleted between the two, as for a Script node
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    cluster.behave = lambda job: (("failed", "Traceback: boom", 1) if job["metadata"]["name"].endswith("-a1")
+                                  else ("succeeded", "done", 0))
+    script = _script(session, _environment(session), make_project(session, name="p").id, retries=1)
+    run = await _run(session, admin, script)
+    info = json.loads(_child(session).script)
+    assert run.status == "SUCCESS" and info["attempts"] == 2
+    out_key = _env_of(cluster.created[0][2])["TABULARIA_OUTPUT"].split("/", 3)[3]
+    # once between the attempts, once with the step's files at the end
+    assert sum(out_key in d["keys"] for d in engine.deletes) == 2

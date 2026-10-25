@@ -220,13 +220,21 @@ const editorState = ref<EditorScripting | null>(null)
 let editorLoading: Promise<EditorScripting | null> | null = null
 const completionsCache = new Map<string, Promise<Record<string, string[]>>>() // by environment and build
 
+// another person signs in in the same tab: nothing of the previous one's stays
+export function resetScriptingEditor() {
+  editorState.value = null
+  editorLoading = null
+  completionsCache.clear()
+}
+
 export function useScriptingEditor() {
   const { apiFetch } = useApiClient()
   function load(force = false): Promise<EditorScripting | null> {
     if (editorLoading && !force) return editorLoading
     editorLoading = apiFetch<EditorScripting>('/scripting')
       .then((s) => (editorState.value = s))
-      .catch(() => (editorState.value = null))
+      // a failure is not kept: the next load asks again (a gateway restarting)
+      .catch(() => { editorLoading = null; return (editorState.value = null) })
     return editorLoading
   }
   function completions(environmentId: number, version: number | null): Promise<Record<string, string[]>> {

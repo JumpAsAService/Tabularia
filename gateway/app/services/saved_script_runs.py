@@ -43,8 +43,8 @@ from app.models.permission import Capability
 from app.services import kube_jobs, saved_scripts, script_builds, script_nodes
 from app.services import permissions as perm_service
 from app.services.script_runs import (
-    LABEL_ORCHESTRATION, LABEL_SCRIPT_RUN, ScriptFailed, _attempt, _code_items, _detail, _now, _storage_env,
-    _variables, job_manifest, storage_payload,
+    LABEL_ORCHESTRATION, LABEL_SCRIPT_RUN, ScriptFailed, _attempt, _code_items, _delete_objects, _detail, _now,
+    _storage_env, _variables, job_manifest, run_still_open, storage_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,6 +292,11 @@ async def execute(session: Session, user: User, script: SavedScript, *, parent_r
             if attempt <= retries:
                 logger.info("saved script: run %s attempt %s failed (%s), again in %ss", child.id, attempt, reason, delay)
                 await asyncio.sleep(delay)
+                # as a Script node's retries (script_runs): a run closed meanwhile is not run
+                # again, and what the failed attempt wrote is not the next one's output
+                if not run_still_open(session, parent_run_id):
+                    raise ScriptFailed(f"the saved script «{script.name}» failed: {reason} (not run again: its run was closed)")
+                await _delete_objects(storage, [out_key])
         if not ok:
             raise ScriptFailed(f"the saved script «{script.name}» failed: {reason}")
 

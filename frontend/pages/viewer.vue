@@ -122,6 +122,12 @@ const error = ref('')
 const ROW_LIMIT = 500
 
 const colNames = computed(() => baseCols.value.map((c) => c.name))
+// the chart's columns: the computed fields too, before the query that adds them answers —
+// a saved view's chart on a computed field kept it, instead of resetting it
+const chartCols = computed<ColumnInfo[]>(() => {
+  const have = new Set(baseCols.value.map((c) => c.name))
+  return [...baseCols.value, ...computedFields.value.filter((f) => f.name && !have.has(f.name)).map((f) => ({ name: f.name, dtype: '' }))]
+})
 const isNum = (name: string) => /Int|Float|Decimal/i.test(baseCols.value.find((c) => c.name === name)?.dtype || '')
 
 function parseVal(v: string, col: string): any {
@@ -568,7 +574,7 @@ onMounted(async () => {
         </div>
 
         <div v-show="view === 'chart'" class="chartwrap">
-          <ChartPanel :columns="baseCols" :query="chartQuery" :settings="chart" @update:settings="chart = $event" />
+          <ChartPanel :columns="chartCols" :query="chartQuery" :settings="chart" @update:settings="chart = $event" />
         </div>
       </section>
     </div>

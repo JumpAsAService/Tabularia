@@ -601,7 +601,7 @@ text = "Identity-provider groups mapped onto Tabularia groups, separated by comm
 text = "`true`: create the Tabularia groups missing at sign-in. `false`: map only onto groups an administrator already made."
 
 [var.OIDC__AUTHORITATIVE]
-text = "`true`: the identity provider owns group membership (groups absent from the claim are removed). `false`: SSO only adds. A token that carries none of the group claims at all (a claim name set wrong) changes neither memberships nor administrator rights; the audit records it."
+text = "`true`: the identity provider owns group membership (groups absent from the claim are removed). `false`: SSO only adds. A token without any of the group claims counts as no groups (identity providers leave the claim out for a person in no group): check the claim name, the audit of each sign-in names a missing one."
 
 [var.OIDC__SUPERUSER_GROUP]
 text = "Members of this group are administrators. Empty = nobody becomes one through SSO."

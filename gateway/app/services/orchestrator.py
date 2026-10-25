@@ -474,7 +474,6 @@ async def ferma_passi(run_id: int) -> int:
             try:
                 if run.kind in ("script", "container"):
                     await close_if_orphaned(session, run)
-                    fermati += 1
                     continue
                 if run.kind == "orchestration":  # a flow of a flow group
                     chiuso = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))
@@ -483,6 +482,13 @@ async def ferma_passi(run_id: int) -> int:
                     session.commit()
                     if chiuso.rowcount == 1:
                         fermati += 1 + await ferma_passi(run.id)
+                    continue
+                # first what the engine says: a step that ended meanwhile keeps its outcome
+                # and its effects (a refresh's new parquet swapped in, an Output published),
+                # instead of being failed as stopped
+                run = await _reconcile(session, run)
+                session.commit()
+                if run.status in TERMINAL_STATES:
                     continue
                 await _revoke_task(run)
                 chiuso = session.exec(update(Run).where(Run.id == run.id, Run.status.not_in(TERMINAL_STATES))

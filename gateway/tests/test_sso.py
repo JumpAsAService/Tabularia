@@ -384,17 +384,20 @@ def test_superuser_group_concede_e_revoca(session):
     assert user.is_superuser is False and detail["superuser_changed"] is True
 
 
-def test_a_groups_claim_set_wrong_leaves_admins_and_groups_as_they_are(session):
-    # a typo in Administration → Settings («grups»): the token carries no group source at
-    # all, which is not the same as a person who left every group
+def test_a_token_without_the_groups_claim_is_no_groups_and_the_audit_says_so(session):
+    # Keycloak's group mapper writes no claim at all for a person in no group (Entra does the
+    # same with roles): an administrator taken out of every group must lose the rights.
+    # A claim name set wrong («grups») looks the same: the audit names it.
     make_group(session, "analytics")
     c = cfg(superuser_group="tabularia-admins", authoritative=True)
     user, _ = sso.provision_and_sync(session, claims("g@x.local", groups=["tabularia-admins", "analytics"]), c)
     assert user.is_superuser is True and group_names(session, user) == {"analytics"}
-    wrong = cfg(superuser_group="tabularia-admins", authoritative=True, groups_claim="grups")
-    user, detail = sso.provision_and_sync(session, claims("g@x.local", groups=["tabularia-admins", "analytics"]), wrong)
-    assert user.is_superuser is True and group_names(session, user) == {"analytics"}
-    assert detail["groups_claim_missing"] == "grups" and detail["groups_removed"] == []
+    user, detail = sso.provision_and_sync(session, claims("g@x.local"), c)  # no «groups» key
+    assert user.is_superuser is False and group_names(session, user) == set()
+    assert detail["groups_claim_missing"] == "groups" and detail["groups_removed"] == ["analytics"]
+    user, detail = sso.provision_and_sync(session, claims("g@x.local", groups=["analytics"]),
+                                          cfg(superuser_group="tabularia-admins", authoritative=True, groups_claim="grups"))
+    assert detail["groups_claim_missing"] == "grups"
 
 
 def test_utente_disattivato_non_entra_via_sso(session):

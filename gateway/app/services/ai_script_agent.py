@@ -30,36 +30,42 @@ MAX_COLUMNS = 400
 
 # ── what of a log may go to the model ────────────────────────────────────────
 _PY_TRACEBACK = "Traceback (most recent call last):"
-# an exception's last line, `KeyError: 'x'`, `pkg.mod.SomeError: …`: a name before «Error», so
-# that a line the script printed («Error rate: 5%») is not taken for one
-_PY_ERROR_LINE = re.compile(r"^(\w+\.)*\w+(Error|Exception)(: .*)?$", re.M)
+# an exception's line: `KeyError: 'x'`, `pkg.mod.SomeError: …`, `pyarrow.lib.ArrowInvalid: …` — a
+# dotted name, or a name ending as exceptions do, so that a line the script printed («Error
+# rate: 5%», «Totale: 5») is not taken for one
+_PY_ERROR_LINE = re.compile(r"^((\w+\.)+\w+|\w+(Error|Exception|Invalid|Interrupt|Exit))(: .*)?$")
+# without a traceback, Python writes only its syntax errors
+_PY_SYNTAX_LINE = re.compile(r"^(SyntaxError|IndentationError|TabError)(: .*)?$", re.M)
 # the marks under a frame's code line (Python 3.11+): «    ~~~^^^^^»
 _PY_MARKS = re.compile(r"^\s+[~^]+\s*$")
-_R_ERROR = re.compile(r"^(Error|Errore|Erreur|Fehler)\b.*$", re.M)
+_R_ERROR = re.compile(r"^(Error|Errore|Erreur|Fehler)\b")
+_R_HALTED = "Execution halted"
+_R_RLANG = ("! ", "✖ ", "ℹ ", "Caused by error")
 
 
 def error_excerpt(log: str, language: str) -> str:
     """The error of a failed run, without what the script printed. A Job's log mixes its
-    stdout into its stderr, and the printed rows may land in the middle of the traceback:
-    only the lines that are the error's by their shape go.
+    stdout into its stderr — the printed rows may land in the middle of a traceback — and
+    a script may print lines shaped like errors (`message("Errore nel cliente …")`): only
+    what the interpreter itself writes for an error goes.
     Python: from the last traceback, its frames (`  File …`, the code line under each and
-    its `^^^` marks) and the last exception line. Without a traceback, the last exception
-    line. R: the LAST «Error…» line (one the script printed before the real error stays
-    out), the line it continues on when it ends with «:», «Calls: …» and «Execution
-    halted». Empty when the log holds no recognisable error. The message itself may quote
-    a value, as errors do («could not convert 'abc'»)."""
-    log = (log or "").replace("\r\n", "\n")
-    excerpt = ""
+    its `^^^` marks) and the first exception line after the last frame. Without a
+    traceback, only a syntax error's line. R: the last «Error…» line before «Execution
+    halted» (what Rscript writes after an error at top level), the line it continues on
+    when it ends with «:», rlang's «! …» lines, «Calls: …» and «Execution halted»; without «Execution halted»
+    nothing. Empty when there is no such error: the model is then told the exit code. The
+    message itself may quote a value, as errors do («could not convert 'abc'»)."""
+    lines = (log or "").replace("\r\n", "\n").split("\n")
+    kept: list[str] = []
     if language == "python":
-        at = log.rfind(_PY_TRACEBACK)
-        tail = log[at:] if at != -1 else log
-        last = [m.group(0) for m in _PY_ERROR_LINE.finditer(tail)][-1:]
-        if at != -1:
-            kept, expect = [_PY_TRACEBACK], ""
-            for line in tail.split("\n")[1:]:
+        starts = [i for i, line in enumerate(lines) if line.startswith(_PY_TRACEBACK)]
+        if starts:
+            kept, expect, last_frame = [_PY_TRACEBACK], "", None
+            for i in range(starts[-1] + 1, len(lines)):
+                line = lines[i]
                 if line.startswith("  File "):
                     kept.append(line)
-                    expect = "code"
+                    expect, last_frame = "code", i
                 elif expect == "code" and line.startswith("    ") and line.strip():
                     kept.append(line)
                     expect = "marks"
@@ -68,22 +74,28 @@ def error_excerpt(log: str, language: str) -> str:
                     expect = ""
                 else:
                     expect = ""
-            excerpt = "\n".join(kept + last)
+            after = lines[last_frame + 1:] if last_frame is not None else lines[starts[-1] + 1:]
+            kept += [line for line in after if _PY_ERROR_LINE.match(line)][:1]
         else:
-            excerpt = "\n".join(last)
+            kept = [m.group(0) for m in _PY_SYNTAX_LINE.finditer("\n".join(lines))][-1:]
     else:
-        found = list(_R_ERROR.finditer(log))
-        if found:
-            lines = log[found[-1].start():].split("\n")
-            kept = [lines[0]]
-            rest = lines[1:]
-            if lines[0].rstrip().endswith(":") and rest and rest[0].startswith("  "):
+        halted = [i for i, line in enumerate(lines) if line.strip() == _R_HALTED]
+        errors = [i for i, line in enumerate(lines) if _R_ERROR.match(line) and halted and i < halted[-1]]
+        if errors:
+            at = errors[-1]
+            kept = [lines[at]]
+            rest = lines[at + 1:halted[-1]]
+            if lines[at].rstrip().endswith(":") and rest and rest[0].startswith("  "):
                 kept.append(rest.pop(0))  # «Error in f(x) :» wraps its message on the next line
+            # rlang's errors (the tidyverse) put the message on «! …», «✖ …», «ℹ …» lines
+            for line in rest:
+                if line.startswith("Backtrace:"):
+                    break
+                if line.startswith(_R_RLANG):
+                    kept.append(line)
             kept += [line for line in rest if line.startswith("Calls: ")][:1]
-            if any(line.strip() == "Execution halted" for line in rest):
-                kept.append("Execution halted")
-            excerpt = "\n".join(kept)
-    excerpt = excerpt.strip()
+            kept.append(_R_HALTED)
+    excerpt = "\n".join(kept).strip()
     return excerpt[-MAX_ERROR_CHARS:] if len(excerpt) > MAX_ERROR_CHARS else excerpt
 
 

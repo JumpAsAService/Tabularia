@@ -235,8 +235,10 @@ PUSHMAIL_MAX_RECIPIENTS = 50
 class PushmailAttachmentCell(BaseModel):
     """A datasource of a Pushmail cell: its file's name (a template with the Outputs'
     placeholders, `.xlsx` added) and the rows it may hold at most."""
-    datasourceId: int
-    fileName: str = Field(min_length=1, max_length=255)
+    # left empty while the cell is being set up: services/pushmail.py says what is missing,
+    # in words, instead of a bare validation error
+    datasourceId: Optional[int] = None
+    fileName: str = Field(default="", max_length=255)
     maxRows: int = Field(default=10_000, ge=1, le=PUSHMAIL_MAX_ROWS)
 
 

@@ -101,6 +101,9 @@ class FakeRedis:
     def exists(self, key):
         return 1 if key in getattr(self, "strings", {}) else 0
 
+    def expire(self, key, seconds):
+        return 1 if key in getattr(self, "strings", {}) else 0  # the time itself is not kept
+
     # ── contatori / chiavi ───────────────────────────────────────────────
     def incr(self, key):
         self.counters[key] += 1

@@ -390,8 +390,10 @@ def delete_script(script_id: int, request: Request, user: User = Depends(get_cur
         raise HTTPException(status_code=409, detail="The script is queued or running: delete it once it has finished")
     used = saved_scripts.references(session, script.id)
     if any(used.values()):
+        names = [f"flow «{n}»" for n in used["flows"]] + [f"flow group «{n}»" for n in used["groups"]]
         raise HTTPException(status_code=409, detail={
-            "message": "The script is used: remove it from these first", **used})
+            "message": f"The script is used by {', '.join(names[:10])}{' …' if len(names) > 10 else ''}: "
+                       "remove it from there first", **used})
     label = script.name
     # its runs stay in the history, no longer attached to it
     session.exec(sa_update(Run).where(Run.saved_script_id == script.id).values(saved_script_id=None))

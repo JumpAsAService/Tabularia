@@ -70,6 +70,13 @@ export function syncLocale(me: Me | null, code?: string) {
     .catch(() => { /* the next load tries again */ })
 }
 
+// what the tab keeps for the whole session and depends on who is signed in (the Scripting
+// tab, the registries of the Container nodes): dropped when the person changes
+function forgetPerUserCaches() {
+  resetScriptingEditor()
+  resetRegistriesEditor()
+}
+
 export function useAuth() {
   const base = useRuntimeConfig().public.apiBase as string
   const present = useSessionPresent()
@@ -141,7 +148,9 @@ export function useAuth() {
       return null
     }
     try {
-      user.value = await $fetch<Me>(`${base}/auth/me`, { credentials: 'include' })
+      const me = await $fetch<Me>(`${base}/auth/me`, { credentials: 'include' })
+      if (user.value?.id !== me.id) forgetPerUserCaches()
+      user.value = me
       // at sign-in (and on every load of the app) the gateway learns the language
       // of the interface: the emails it sends this user will speak it
       if (import.meta.client) syncLocale(user.value)
@@ -172,6 +181,7 @@ export function useAuth() {
     }
     present.value = false
     user.value = null
+    forgetPerUserCaches()
     await navigateTo(reason ? `/login?reason=${reason}` : '/login')
   }
 

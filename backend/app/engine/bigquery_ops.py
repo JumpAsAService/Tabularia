@@ -34,7 +34,7 @@ from app.engine.espressioni import espressione_vietata
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
-    temporal_value_error,
+    temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
 from app.engine.sql_guard import ensure_reads_only_input
 
@@ -167,8 +167,11 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
             return f"DATETIME({c}, 'UTC')"
         return f"SAFE_CAST({c} AS DATETIME)"
     if dt == "bool":
-        if is_text:
-            return f"SAFE_CAST(TRIM({c}) AS BOOL)"
+        if is_text:  # the words DuckDB takes, as the other engines (SAFE_CAST: true/false only)
+            w = f"LOWER(TRIM({c}))"
+            yes = ", ".join(f"'{x}'" for x in TEXT_TRUE)
+            no = ", ".join(f"'{x}'" for x in TEXT_FALSE)
+            return f"CASE WHEN {w} IN ({yes}) THEN TRUE WHEN {w} IN ({no}) THEN FALSE END"
         if base in _BQ_INTS or is_float:
             return f"SAFE_CAST(SAFE_CAST({c} AS INT64) AS BOOL)"
         return f"SAFE_CAST({c} AS BOOL)"

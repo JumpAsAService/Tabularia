@@ -57,39 +57,52 @@ def to_utf8(src: str, dst: str, encoding: str = "cp1252") -> None:
             fout.write(chunk)
 
 
-def _sample(path: str, encoding: str) -> list[str]:
+def _sample(path: str, encoding: str) -> tuple[list[str], bool]:
+    """The first lines, and whether the file goes on after them. Empty lines stay: one
+    may sit inside a quoted cell (Alt+Enter in Excel)."""
     lines: list[str] = []
     with open(path, "r", encoding="utf-8-sig" if encoding == "utf8" else encoding, errors="replace", newline="") as f:
         for line in f:
-            if line.strip():
-                lines.append(line)
             if len(lines) >= SAMPLE_LINES:
-                break
-    return lines
+                return lines, True
+            lines.append(line)
+    return lines, False
 
 
-def _fields(lines: list[str], sep: str) -> list[list[str]]:
+def _fields(lines: list[str], sep: str, cut: bool = False) -> list[list[str]]:
+    """The records of the sample, empty ones left out. `cut`: the sample stops mid-file,
+    and its last record may be a quoted cell cut in two — it is dropped."""
     try:
-        return list(csv.reader(io.StringIO("".join(lines)), delimiter=sep))
+        rows = list(csv.reader(io.StringIO("".join(lines)), delimiter=sep))
     except csv.Error:
         return []
+    if cut and rows:
+        rows = rows[:-1]
+    return [r for r in rows if any(c.strip() for c in r)]
 
 
 def sniff(path: str) -> CsvShape:
     encoding = "utf8" if is_utf8(path) else "cp1252"
-    lines = _sample(path, encoding)
+    lines, cut = _sample(path, encoding)
     separator = ","
     best = 0
     for sep in CANDIDATES:
-        rows = _fields(lines, sep)
-        widths = {len(r) for r in rows if r}
+        rows = _fields(lines, sep, cut)
+        widths = {len(r) for r in rows}
         if len(widths) == 1 and (n := widths.pop()) > 1 and n > best:
             separator, best = sep, n
     decimal_comma = False
     if separator != ",":
-        tokens = [t.strip() for r in _fields(lines[1:], separator) for t in r]
+        tokens = [t.strip() for r in _fields(lines, separator, cut)[1:] for t in r]
         comma = sum(bool(_COMMA_NUMBER.match(t)) for t in tokens)
-        thousands = sum(bool(_THOUSANDS.match(t)) for t in tokens) if separator == ";" else 0
-        dot = sum(bool(_DOT_NUMBER.match(t)) and not (separator == ";" and _THOUSANDS.match(t)) for t in tokens)
-        decimal_comma = (comma > 0 or thousands > 0) and dot == 0
+        if separator == ";":
+            # Excel writes «;» only in the languages with a decimal comma: it is on unless
+            # the sample shows dot decimals and nothing Italian. Off, «1.500» further down
+            # the file would be read 1.5 without a word
+            thousands = sum(bool(_THOUSANDS.match(t)) for t in tokens)
+            dot = sum(bool(_DOT_NUMBER.match(t)) and not _THOUSANDS.match(t) for t in tokens)
+            decimal_comma = not (dot > 0 and comma == 0 and thousands == 0)
+        else:
+            dot = sum(bool(_DOT_NUMBER.match(t)) for t in tokens)
+            decimal_comma = comma > 0 and dot == 0
     return CsvShape(separator=separator, decimal_comma=decimal_comma, encoding=encoding)

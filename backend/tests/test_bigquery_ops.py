@@ -72,6 +72,10 @@ def test_cast_is_safe_and_follows_the_standard():
     assert "DATE(`quando`, 'UTC')" in sql
     assert "SAFE_CAST(SAFE_CAST(`id` AS INT64) AS BOOL)" in sql
     assert op("cast", {"columns": {"prezzo": "int"}}).count("SAFE_CAST(TRUNC(`prezzo`) AS INT64)") == 1
+    # text to yes/no takes the same words as the other engines («1», «yes», «n»…), not true/false only
+    sql = op("cast", {"columns": {"nome": "bool"}})
+    assert "CASE WHEN LOWER(TRIM(`nome`)) IN ('true', 't', '1', 'yes', 'y') THEN TRUE" in sql
+    assert "WHEN LOWER(TRIM(`nome`)) IN ('false', 'f', '0', 'no', 'n') THEN FALSE END" in sql
     with pytest.raises(EngineError):
         op("cast", {"columns": {"id": "uuid"}})
 

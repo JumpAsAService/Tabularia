@@ -293,8 +293,13 @@ the file in the current folder as `tabularia-backup.dump`:
    ```bash
    kubectl exec --namespace tabularia-deps deploy/postgres -- dropdb --username tabularia --force tabularia
    kubectl exec --namespace tabularia-deps deploy/postgres -- createdb --username tabularia tabularia
-   kubectl exec --namespace tabularia-deps deploy/postgres -- pg_restore --username tabularia --dbname tabularia --no-owner /tmp/restore.dump
+   kubectl exec --namespace tabularia-deps deploy/postgres -- pg_restore --username tabularia --dbname tabularia \
+     --no-owner --no-privileges --single-transaction --exit-on-error /tmp/restore.dump
    ```
+
+   All or nothing: the first error stops it and leaves the database empty. If it prints
+   an error, or ends with *errors ignored on restore*, or its exit status is not 0, do not
+   start the release: an empty database would be set up again as a new installation.
 
 4. Start the release the backup belongs to: `helm rollback` to its revision (which also
    sets the number of pods back), or `helm upgrade` from that release's folder.

@@ -470,7 +470,7 @@ async function toggleMotore(m: EnginePolicy) {
           class="navitem"
           :class="{ on: sezione === s.id, spenta: 'off' in s && s.off }"
           :aria-disabled="'off' in s && s.off ? 'true' : undefined"
-          :title="'off' in s && s.off ? $t('scripting.kubernetesOnly') : undefined"
+          :title="'off' in s && s.off ? $t(s.id === 'backups' ? 'backups.kubernetesOnly' : 'scripting.kubernetesOnly') : undefined"
           @click="!('off' in s && s.off) && vaiA(s.id)"
         >
           <component :is="s.icon" :size="15" />

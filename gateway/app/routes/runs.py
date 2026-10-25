@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import case, func, literal_column, or_, text, update
+from sqlalchemy import and_, case, func, literal_column, or_, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -1536,7 +1536,10 @@ def runs_activity(
                 Flow.project_id.in_(readable),
                 Datasource.project_id.in_(readable),
                 FlowGroup.project_id.in_(readable),
-                SavedScript.project_id.in_(readable),
+                # a saved script's runs to whoever sees the script (saved_scripts.can_see): its
+                # folder AND its environment, as get_run
+                and_(SavedScript.project_id.in_(readable),
+                     SavedScript.environment_id.in_(_usable_envs(session, user) or [-1])),
                 Run.launched_by == user.id,
             )
         )
@@ -1621,10 +1624,23 @@ async def get_run(
         else:
             flow = _get_flow(session, run.flow_id)
             ensure_can(session, user, flow.project_id, Capability.VIEW)
+            if run.kind in ("script", "container"):
+                # its log is what the code printed: only to whoever may open the flow
+                # (its environments and saved scripts), as the flow itself
+                from app.services import flow_access
+
+                if flow_access.blocked(session, user, flow.definition):
+                    raise HTTPException(status_code=404, detail="Run not found")
         return run
 
     run = await run_in_threadpool(read)
     return run_out(session, await _reconcile(session, run))
+
+
+def _usable_envs(session: Session, user: User) -> set[int]:
+    from app.services import saved_scripts
+
+    return saved_scripts.usable_environment_ids(session, user) or set()
 
 
 @router.get("/runs", response_model=Page[RunSearchOut])
@@ -1648,7 +1664,10 @@ def search_runs(
                 Flow.project_id.in_(readable),
                 Datasource.project_id.in_(readable),
                 FlowGroup.project_id.in_(readable),
-                SavedScript.project_id.in_(readable),
+                # a saved script's runs to whoever sees the script (saved_scripts.can_see): its
+                # folder AND its environment, as get_run
+                and_(SavedScript.project_id.in_(readable),
+                     SavedScript.environment_id.in_(_usable_envs(session, user) or [-1])),
                 Run.launched_by == user.id,
             )
         )

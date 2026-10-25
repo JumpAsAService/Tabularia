@@ -32,7 +32,7 @@ async def _call(method: str, path: str, body: Optional[dict] = None, *, text: bo
     except OSError:
         token = ""
     if not token:
-        raise KubeError(0, "No service account token: is scripts.enabled or containers.enabled set in the Helm chart?")
+        raise KubeError(0, "No service account token: is scripts.enabled, containers.enabled, clusterView or settingsRollout set in the Helm chart?")
     # a Pod's log is plain text, but the API server refuses `Accept: text/plain` (406)
     headers = {"Authorization": f"Bearer {token}", "Accept": "*/*" if text else "application/json"}
     if body is not None:

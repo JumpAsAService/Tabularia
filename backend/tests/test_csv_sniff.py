@@ -72,6 +72,27 @@ def test_a_thousands_dot_with_semicolons_is_never_one_and_a_half(tmp_path):
     assert df["Quantità"].to_list() == [1500.0, 2300.0]
 
 
+def test_thousands_further_down_than_the_sample_are_still_thousands(tmp_path):
+    # small quantities in the first lines, «1.500» later: with «;» the decimal comma is on
+    head = "".join(f"Art{i};{i % 900}\n" for i in range(80))
+    df = _read(tmp_path, ("Articolo;Quantità\n" + head + "Speck;1.500\nBrie;12.000\n").encode())
+    assert df["Quantità"].to_list()[-2:] == [1500, 12000]
+    # a «2.1» elsewhere (a version) does not turn it off, and is not altered
+    df = _read(tmp_path, "articolo;versione;importo\nA;2.1;1.500\nB;3.0;2.300\n".encode())
+    assert df["importo"].to_list() == [1500, 2300] and df["versione"].to_list() == ["2.1", "3.0"]
+
+
+def test_a_cell_on_several_lines_at_the_end_of_the_sample(tmp_path):
+    # Alt+Enter in Excel: a quoted note on three lines every four records; the sample's
+    # last record cut in two must not change the separator
+    rows = "".join(f'{i};"riga uno\nriga due\n\nriga tre";{i},5\n' if i % 4 == 0 else f"{i};nota;{i},5\n"
+                   for i in range(60))
+    data = ("id;nota;importo\n" + rows).encode()
+    assert sniff_of(tmp_path, data)[:2] == (";", True)
+    df = _read(tmp_path, data)
+    assert df.height == 60 and df["importo"].to_list()[:2] == [0.5, 1.5]
+
+
 def test_codes_and_chosen_types_stay_text(tmp_path):
     p = tmp_path / "f.csv"
     p.write_bytes("Cap;Importo\n00144;10,5\n20121;3,25\n".encode())

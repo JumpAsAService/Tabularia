@@ -435,7 +435,21 @@ export function pagedQuery(p: { q?: string; limit: number; offset: number }): st
   return qs.toString()
 }
 
-// Estrae un messaggio d'errore leggibile da un errore di $fetch.
+// Estrae un messaggio d'errore leggibile da un errore di $fetch. A `detail` that is not text
+// is never shown as JSON: FastAPI's validation list gives its messages, with the last part of
+// where; an object (a 409 with what uses the thing) gives its `message`.
 export function errMessage(e: any): string {
-  return e?.data?.detail ?? e?.data?.message ?? e?.message ?? (clientTranslate?.('errors.unknown') || 'Unknown error')
+  const detail = e?.data?.detail
+  if (Array.isArray(detail)) {
+    const lines = detail.map((d: any) => {
+      const where = Array.isArray(d?.loc) ? d.loc.filter((x: unknown) => typeof x === 'string').slice(-1)[0] : ''
+      return typeof d?.msg === 'string' ? (where ? `${where}: ${d.msg}` : d.msg) : ''
+    }).filter(Boolean)
+    if (lines.length) return lines.join('; ')
+  } else if (detail && typeof detail === 'object') {
+    if (typeof detail.message === 'string') return detail.message
+  } else if (typeof detail === 'string' && detail) {
+    return detail
+  }
+  return e?.data?.message ?? e?.message ?? (clientTranslate?.('errors.unknown') || 'Unknown error')
 }

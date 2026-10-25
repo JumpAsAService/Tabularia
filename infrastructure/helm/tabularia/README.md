@@ -436,7 +436,12 @@ builds push to, a scripts bucket on a private endpoint, company databases), or s
 two values to `false` to keep the previous behaviour. The orchestrator moves to a
 service account of its own, `<release>-tabularia-orchestrator`, the only one that may create the
 image builds' Jobs: a build that starts while the old orchestrator pod is still
-running fails with *Forbidden*; **Build again** after the upgrade.
+running fails with *Forbidden*; **Build again** after the upgrade. With `clusterView` and
+`settingsRollout` on (the default), the gateway also moves to `<release>-tabularia-scaler`,
+even where scripts and containers stay off: an existing `serviceAccount.name` with
+`imagePullSecrets` or `serviceAccount.annotations` no longer applies to these two pods
+(set `image.pullSecrets` instead), and a cluster that forbids Roles in the namespace
+fails the upgrade (set the two values to `false`).
 
 **Coming from chart 1.x to 2.0** — values that changed meaning:
 

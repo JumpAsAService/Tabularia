@@ -70,6 +70,9 @@ def test_a_pushmail_cell_is_saved_and_labelled(world):
     ({"connectionId": None}, "choose an SMTP connection"),
     ({"attachments": []}, "choose at least one datasource"),
     ({"attachments": [{"datasourceId": 9999, "fileName": "x"}]}, "datasource 9999 not found"),
+    # a file added and left half done: said in words, not as a validation error
+    ({"attachments": [{"datasourceId": None, "fileName": ""}]}, "choose the datasource of file 1"),
+    ({"attachments": [{"datasourceId": None, "fileName": ""}]}, "give file 1 a name"),
 ])
 def test_what_is_refused_when_the_group_is_saved(world, change, message):
     with pytest.raises(HTTPException) as e:

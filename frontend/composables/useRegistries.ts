@@ -135,13 +135,20 @@ export interface EditorRegistries {
 const editorState = ref<EditorRegistries | null>(null)
 let editorLoading: Promise<EditorRegistries | null> | null = null
 
+// another person signs in in the same tab: nothing of the previous one's stays
+export function resetRegistriesEditor() {
+  editorState.value = null
+  editorLoading = null
+}
+
 export function useRegistriesEditor() {
   const { apiFetch } = useApiClient()
   function load(force = false): Promise<EditorRegistries | null> {
     if (editorLoading && !force) return editorLoading
     editorLoading = apiFetch<EditorRegistries>('/registries')
       .then((s) => (editorState.value = s))
-      .catch(() => (editorState.value = null))
+      // a failure is not kept: the next load asks again (a gateway restarting)
+      .catch(() => { editorLoading = null; return (editorState.value = null) })
     return editorLoading
   }
   const tags = (id: number, repository: string) =>

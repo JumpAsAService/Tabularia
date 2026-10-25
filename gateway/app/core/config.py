@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -50,8 +51,9 @@ class DbSettings(BaseModel):
     def dsn(self) -> str:
         if self.url:
             return self.url
-        pw = self.password.get_secret_value()
-        return f"postgresql://{self.user}:{pw}@{self.host}:{self.port}/{self.name}"
+        # escaped: a generated password often holds «@», «/», «%» or a space
+        user, pw = quote(self.user, safe=""), quote(self.password.get_secret_value(), safe="")
+        return f"postgresql://{user}:{pw}@{self.host}:{self.port}/{self.name}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

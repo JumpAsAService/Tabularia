@@ -50,3 +50,13 @@ async def test_the_probe_answers_on_the_event_loop():
     from app import main
 
     assert inspect.iscoroutinefunction(main.health)
+
+
+def test_a_generated_password_with_at_signs_and_spaces_reaches_postgres_whole():
+    # «p@ss w%rd» broke the address: the gateway looked for the host «ss w%rd@pg»
+    from sqlalchemy.engine import make_url
+
+    from app.core.config import DbSettings
+
+    url = make_url(DbSettings(user="tab ularia", password="p@ss w%rd/1", host="pg", name="tabularia").dsn)
+    assert (url.username, url.password, url.host, url.database) == ("tab ularia", "p@ss w%rd/1", "pg", "tabularia")

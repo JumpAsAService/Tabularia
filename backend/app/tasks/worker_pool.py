@@ -20,6 +20,7 @@ import atexit
 import json
 import logging
 import os
+import threading
 import time
 from typing import Any, Iterable
 
@@ -130,14 +131,21 @@ def forget(name: str) -> None:
     r.srem(REGISTRY, name)
 
 
-def draining(name: str, started_at: float, seconds: int) -> None:
-    """A worker in its warm shutdown: out of the panel's list, but its state stays for
-    as long as its tasks may still run (`seconds`), so `lost` does not call them lost
-    while Celery lets them finish. The process forgets it when it exits; killed before,
-    the state expires by itself."""
+def draining(name: str, started_at: float) -> None:
+    """A worker whose consumer stopped (a warm shutdown, the broker connection lost): out
+    of the panel's list, but its state stays — kept alive by `keep_alive` — so `lost` does
+    not call its tasks lost while Celery lets them finish."""
     r = regolazioni._client()
-    r.set(KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at, "draining": True}), ex=seconds)
+    r.set(KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at, "draining": True}), ex=TTL)
     r.srem(REGISTRY, name)
+
+
+def keep_alive(name: str, started_at: float) -> None:
+    """The state lasts `TTL` more seconds; written again, as draining, when it had gone
+    (Valkey restarted). The consumer's step writes the full state while it runs."""
+    r = regolazioni._client()
+    if not r.expire(KEY_PREFIX + name, TTL):
+        r.set(KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at, "draining": True}), ex=TTL)
 
 
 # a task the result backend says STARTED, whose worker is no longer there to finish it
@@ -204,9 +212,11 @@ def live_workers() -> list[dict]:
             r.srem(REGISTRY, name)
             continue
         try:
-            out.append(json.loads(raw))
+            data = json.loads(raw)
         except ValueError:
             continue
+        if not data.get("draining"):  # finishing its last tasks: no longer serving
+            out.append(data)
     return out
 
 
@@ -221,6 +231,7 @@ class PoolFromPanel(bootsteps.StartStopStep):
         self.started_with: int | None = None
         self.started_at = time.time()
         self.kind = "run"
+        self.alive: threading.Thread | None = None
 
     def start(self, c):
         # the consumer restarts its steps when the broker connection drops: the size
@@ -230,21 +241,40 @@ class PoolFromPanel(bootsteps.StartStopStep):
         self.kind = kind_of(c.app.amqp.queues.consume_from)
         self.tick(c)
         self.tref = c.timer.call_repeatedly(TICK, self.tick, (c,), priority=10)
+        self._keep_alive(c.hostname)
+
+    def _keep_alive(self, name: str) -> None:
+        """A thread of the main process keeps the state alive for as long as the process
+        lives, whatever its consumer does: on a warm shutdown Celery stops the consumer's
+        steps, then waits for the pool's tasks, and calls `shutdown` only after them. A
+        process killed (SIGKILL, OOM) takes the thread with it: the state expires in `TTL`
+        seconds and `lost` speaks. Forgotten when the process exits."""
+        if self.alive is not None:
+            return
+
+        def loop() -> None:
+            while True:
+                time.sleep(TICK)
+                try:
+                    keep_alive(name, self.started_at)
+                except Exception as e:  # noqa: BLE001 — Valkey down: written at the next turn
+                    logger.debug("workers: state not kept (%s)", e)
+
+        self.alive = threading.Thread(target=loop, name="worker-state", daemon=True)
+        self.alive.start()
+        atexit.register(_forget_quietly, name)
 
     def stop(self, c):
         if self.tref is not None:
             self.tref.cancel()
             self.tref = None
+        try:
+            draining(c.hostname, self.started_at)
+        except Exception:  # noqa: BLE001 — the thread writes it again
+            pass
 
     def shutdown(self, c):
-        # the consumer stops before the pool, which then waits for the running tasks:
-        # they may last up to the hard time limit
         self.stop(c)
-        try:
-            draining(c.hostname, self.started_at, int(c.app.conf.task_time_limit or 7200) + TTL)
-            atexit.register(_forget_quietly, c.hostname)
-        except Exception:  # noqa: BLE001 — it expires by itself
-            pass
 
     def tick(self, c):
         # never let a check stop the worker: the pool stays as it is, the state is

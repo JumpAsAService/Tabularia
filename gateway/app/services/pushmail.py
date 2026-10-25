@@ -59,7 +59,12 @@ def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable:
                           f"({', '.join(allowed)}): {', '.join(outside[:5])}")
     if not cfg.attachments:
         errors.append(f"pushmail «{name}»: choose at least one datasource")
-    ids = [a.datasourceId for a in cfg.attachments]
+    for n, a in enumerate(cfg.attachments, 1):
+        if a.datasourceId is None:
+            errors.append(f"pushmail «{name}»: choose the datasource of file {n}")
+        if not a.fileName.strip():
+            errors.append(f"pushmail «{name}»: give file {n} a name")
+    ids = [a.datasourceId for a in cfg.attachments if a.datasourceId is not None]
     if len(set(ids)) != len(ids):
         errors.append(f"pushmail «{name}»: the same datasource twice")
     found = {d.id: d for d in session.exec(select(Datasource).where(Datasource.id.in_(ids))).all()} if ids else {}

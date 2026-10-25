@@ -143,21 +143,27 @@ def test_the_step_resizes_and_reports_at_start_and_then_on_a_timer(regolazioni_i
 
 
 def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(regolazioni_isolate, monkeypatch):
-    # warm shutdown: the consumer stops first, then the pool waits for the running
-    # tasks (a rolling update, a drain, a scale-in): they are not lost meanwhile
-    at_exit = []
+    # Celery 5's warm shutdown (a rolling update, a drain, a scale-in): the consumer's steps
+    # stop, then the pool waits for the running tasks, and `shutdown` comes only after them.
+    # Meanwhile the main process's thread keeps the state alive: the tasks are not lost.
+    at_exit, threads = [], []
     monkeypatch.setattr(worker_pool.atexit, "register", lambda f, *a: at_exit.append((f, a)))
+    monkeypatch.setattr(worker_pool.threading, "Thread", lambda **kw: threads.append(kw) or type("T", (), {"start": lambda self: None})())
     monkeypatch.setattr(worker_pool, "CONFIRM_SECONDS", 0)
-    expiry, real_set = {}, regolazioni_isolate.set
-    monkeypatch.setattr(regolazioni_isolate, "set", lambda k, v, nx=False, ex=None: expiry.update({k: ex}) or real_set(k, v, nx, ex))
     c = Consumer()
     step = PoolFromPanel(None)
     step.start(c)
+    assert len(threads) == 1 and threads[0]["daemon"] is True
     meta = {"pid": 7, "hostname": "celery@w1", "since": step.started_at + 1}
-    step.shutdown(c)
+    step.stop(c)  # what Celery calls first
     assert live_workers() == []  # out of the panel at once
     assert worker_pool.lost("t", meta) == "" and worker_pool.lost("t", meta) == ""
-    assert expiry[worker_pool.KEY_PREFIX + "celery@w1"] == 3600 + worker_pool.TTL  # the hard time limit, and a margin
+    regolazioni_isolate.delete(worker_pool.KEY_PREFIX + "celery@w1")  # its TTL, had nobody written it
+    worker_pool.keep_alive("celery@w1", step.started_at)  # what the thread does every TICK
+    assert worker_pool.lost("t", meta) == "" and live_workers() == []
+    step.start(c)  # the consumer back (a broker connection restored): listed again, one thread still
+    assert [w["name"] for w in live_workers()] == ["celery@w1"] and len(threads) == 1
+    step.shutdown(c)
     for f, a in at_exit:  # the process exits once the pool is done
         f(*a)
     assert worker_pool.lost("t", meta) == worker_pool.LOST  # still running then: it went with the process

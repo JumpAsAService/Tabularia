@@ -391,9 +391,9 @@ def normalize_groups(claims: dict, cfg: OidcSettings, more: tuple[dict, ...] = (
 
 
 def groups_claim_found(claims: dict, cfg: OidcSettings, more: tuple[dict, ...] = ()) -> bool:
-    """Whether any configured group source is in the claims at all (an empty list counts:
-    the person is in no group). None found is a groups claim set wrong — a typo in the
-    panel, a provider that stopped sending it — not a person who left every group."""
+    """Whether any configured group source is in the claims at all. None found is either a
+    person in no group (Keycloak and Entra then leave the claim out) or a groups claim set
+    wrong: the sign-in treats both as no groups, and its audit says which claim was missing."""
     return any(claim_at(c, source) is not None for source in group_sources(cfg) for c in (claims, *more))
 
 
@@ -554,11 +554,13 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     # valuta PRIMA dell'allowlist, così non serve elencarlo anche lì
     superuser_before = user.is_superuser
     if not groups_known:
-        # no group source in the token: the claim is set wrong, the person has not left
-        # every group. Administration and memberships stay as they are; the audit says why.
-        logger.warning("SSO: none of the group claims (%s) is in the token of %s: groups left as they are",
+        # No group source in the token. Keycloak and Entra leave the claim out when the
+        # person is in no group, so it is read as no groups: the administrators' rights
+        # and the memberships go (closing is the safe side). A claim name set wrong looks
+        # the same: the log and the audit say so, and the local admin can sign in.
+        logger.warning("SSO: none of the group claims (%s) is in the token of %s: read as no groups",
                        cfg.groups_claim, email)
-    elif cfg.superuser_group:
+    if cfg.superuser_group:
         user.is_superuser = cfg.superuser_group in idp_groups
         idp_groups.discard(cfg.superuser_group)
         if user.is_superuser != superuser_before:
@@ -583,7 +585,7 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     for gid in wanted - current:
         session.add(UserGroupLink(user_id=user.id, group_id=gid))
     removed_ids: set[int] = set()
-    if cfg.authoritative and groups_known:
+    if cfg.authoritative:
         removed_ids = current - wanted
         for gid in removed_ids:
             link = session.exec(

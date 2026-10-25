@@ -48,6 +48,10 @@ const ccText = ref(props.config.cc.join(', '))
 watch(toText, (v) => emit('update', { to: splitAddresses(v) }))
 watch(ccText, (v) => emit('update', { cc: splitAddresses(v) }))
 
+function onRowsTyped(i: number, raw: string) {
+  const n = Number(raw)
+  if (Number.isInteger(n) && n >= 1 && n <= MAX_ROWS) setAttachment(i, { maxRows: n })
+}
 function setAttachment(i: number, patch: Partial<PushmailAttachment>) {
   const next = props.config.attachments.map((a, n) => (n === i ? { ...a, ...patch } : a))
   emit('update', { attachments: next })
@@ -140,7 +144,9 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
           </label>
           <label class="maxrows">
             <span>{{ t('pushmail.maxRowsLabel') }}</span>
+            <!-- kept as it is typed (Esc closes the panel without a change event), bounded on change -->
             <input :value="a.maxRows" type="number" min="1" :max="MAX_ROWS" step="1"
+                   @input="onRowsTyped(i, ($event.target as HTMLInputElement).value)"
                    @change="setAttachment(i, { maxRows: Math.min(MAX_ROWS, Math.max(1, Math.floor(Number(($event.target as HTMLInputElement).value) || 1))) })" />
           </label>
         </div>

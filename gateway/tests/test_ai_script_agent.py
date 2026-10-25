@@ -148,11 +148,36 @@ def test_r_takes_the_last_error_not_a_line_the_script_printed():
     log = "Errore: righe non valide\n  nome iban\n1 Mario IT60X054\nError in sum(x) : invalid type\nCalls: sum\nExecution halted\n"
     out = error_excerpt(log, "r")
     assert out == "Error in sum(x) : invalid type\nCalls: sum\nExecution halted"
-    # without «Execution halted» (quit(status = 1)), the error line alone
-    assert error_excerpt("Errore: x\n1 Mario IT60\n", "r") == "Errore: x"
+    # without «Execution halted» (quit(status = 1)) the «Errore» lines are the script's own:
+    # nothing goes, the model is told the exit code
+    assert error_excerpt("Errore: x\n1 Mario IT60\n", "r") == ""
 
 
-def test_without_a_traceback_the_last_error_line_only():
+def test_an_rlang_error_keeps_its_message():
+    log = ("  nome iban\n1 Mario IT60\nError in `mutate()`:\nℹ In argument: `x = log(y)`.\n"
+           "Caused by error in `log()`:\n! non-numeric argument to mathematical function\n"
+           "Backtrace:\n  1. dplyr::mutate(df, x = log(y))\nExecution halted\n")
+    assert error_excerpt(log, "r") == ("Error in `mutate()`:\nℹ In argument: `x = log(y)`.\nCaused by error in `log()`:\n"
+                                      "! non-numeric argument to mathematical function\nExecution halted")
+
+
+def test_lines_a_script_prints_shaped_like_errors_stay_out():
+    # R: a tryCatch per row that message()s the record, then quit(status = 1)
+    r = "Errore nel cliente Anna Bianchi (CF BNCNNA75B41F205X)\nError processing row 12 (Giulia Verdi, IBAN IT60X)\n"
+    assert error_excerpt(r, "r") == ""
+    # Python: a printed «ValidationError: …» then sys.exit(1), no traceback
+    assert error_excerpt("ValidationError: cliente Mario Rossi CF RSSMRA80\n", "python") == ""
+    # Python: a line printed after the traceback does not replace the exception
+    log = ("Traceback (most recent call last):\n  File \"m.py\", line 2, in <module>\n    d['n']\n"
+           "KeyError: 'n'\nValueError: cliente Mario Rossi\n")
+    assert error_excerpt(log, "python").endswith("KeyError: 'n'")
+    # a dotted exception name without «Error» (pyarrow) is the exception
+    log = ("Traceback (most recent call last):\n  File \"m.py\", line 3, in <module>\n    pq.read_table(p)\n"
+           "pyarrow.lib.ArrowInvalid: Parquet magic bytes not found\n")
+    assert error_excerpt(log, "python").endswith("pyarrow.lib.ArrowInvalid: Parquet magic bytes not found")
+
+
+def test_without_a_traceback_only_a_syntax_error():
     log = "row 1: IT 3.5\nError rate: 5%\nSyntaxError: invalid syntax\n"
     assert error_excerpt(log, "python") == "SyntaxError: invalid syntax"
     assert error_excerpt("IT 3.5\nFR 9.9\n", "python") == ""  # nothing that is an error: nothing goes

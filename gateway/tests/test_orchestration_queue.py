@@ -278,10 +278,32 @@ async def test_chi_chiude_l_orfana_ferma_i_suoi_passi(session, coda, fake_engine
                        parent_run_id=morta.id)
     finito = make_run(session, kind="flow", status="SUCCESS", task_id="t-prima", flow_id=flusso.id,
                       parent_run_id=morta.id)
+    fake_engine.set_task("t-out", "STARTED")  # still running on the engine
+    fake_engine.set_task("t-dopo", "PENDING")
     assert await orch.chiudi_orfane() == 1
     assert sorted(fake_engine.revoked) == ["t-dopo", "t-out"]
     assert _stato(session, out.id).status == _stato(session, in_coda.id).status == "FAILURE"
     assert _stato(session, finito.id).status == "SUCCESS"  # quel che è finito resta com'è
+
+
+async def test_a_step_the_engine_finished_meanwhile_keeps_its_outcome(session, coda, fake_engine):
+    # the gateway pod killed while a flow waited on a refresh: the worker ended it with
+    # success before the orphans' sweep. Its new parquet is swapped in, not failed as stopped
+    from app.models import Datasource
+    from tests.conftest import make_datasource
+
+    utente, cartella = coda
+    flusso = _flusso(session, utente, cartella)
+    ds = make_datasource(session, name="ordini", kind="database", key="datasets/1/v0.parquet", project_id=cartella.id)
+    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+                     claimed_by="morto", heartbeat_at=datetime(2020, 1, 1))
+    imp = make_run(session, kind="ingest", status="STARTED", task_id="t-imp", datasource_id=ds.id,
+                   output_key="datasets/1/new.parquet", parent_run_id=morta.id)
+    fake_engine.set_task("t-imp", "SUCCESS", result={"bucket": "data-prep", "rows_written": 5, "columns": []})
+    assert await orch.chiudi_orfane() == 1
+    assert _stato(session, imp.id).status == "SUCCESS" and fake_engine.revoked == []
+    session.expire_all()
+    assert session.get(Datasource, ds.id).key == "datasets/1/new.parquet"
 
 
 async def test_cio_che_questo_processo_esegue_non_e_orfano_anche_col_battito_vecchio(session, coda, fake_engine,
@@ -317,6 +339,7 @@ async def test_al_riavvio_le_esecuzioni_precedenti_fermano_i_loro_passi(session,
     prima = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
                      claimed_by=f"{ospite}:vecchia-firma", heartbeat_at=orch._adesso())
     out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=prima.id)
+    fake_engine.set_task("t-out", "STARTED")
     stop = asyncio.Event()
     stop.set()  # il ciclo fa solo l'avvio e si ferma
     monkeypatch.setattr(orch, "avvia_battito", lambda ev: None)
