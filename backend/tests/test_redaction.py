@@ -12,7 +12,7 @@ from app.core.redaction import MASK, redact_secrets
 
 
 @pytest.fixture
-def chiavi(monkeypatch):
+def key_names(monkeypatch):
     """Chiavi finte al posto di quelle vere, per tutta la durata del test."""
     cfg = get_settings()
     ak, sk = "AK_FINTA_ACCESS_KEY", "SK_FINTA_SEGRETISSIMA_9z"
@@ -21,20 +21,20 @@ def chiavi(monkeypatch):
     return ak, sk
 
 
-def test_the_storage_keys_are_masked(chiavi):
-    ak, sk = chiavi
-    errore = (
+def test_the_storage_keys_are_masked(key_names):
+    ak, sk = key_names
+    error = (
         f"Code: 62. DB::Exception: Syntax error: failed at position 16: "
         f"('https://s3.example/bucket/x.parquet', '{ak}', '{sk}', 'Parquet')"
     )
-    pulito = redact_secrets(errore)
-    assert sk not in pulito and ak not in pulito
-    assert MASK in pulito
+    clean = redact_secrets(error)
+    assert sk not in clean and ak not in clean
+    assert MASK in clean
     # il messaggio resta leggibile: si toglie il segreto, non il senso
-    assert "Syntax error" in pulito and "x.parquet" in pulito
+    assert "Syntax error" in clean and "x.parquet" in clean
 
 
-def test_a_message_without_secrets_is_untouched(chiavi):
+def test_a_message_without_secrets_is_untouched(key_names):
     msg = "ClickHouse: Unknown expression identifier `paese` (UNKNOWN_IDENTIFIER, code 47)."
     assert redact_secrets(msg) == msg
 
@@ -53,14 +53,14 @@ def test_redaction_never_raises(monkeypatch):
     assert r.redact_secrets("un messaggio") == "un messaggio"
 
 
-def test_the_database_error_path_redacts(chiavi, monkeypatch):
+def test_the_database_error_path_redacts(key_names, monkeypatch):
     """`describe_db_error` è il punto unico da cui escono i messaggi: deve redigere."""
     from app.ingest.db_errors import describe_db_error
 
-    _, sk = chiavi
+    _, sk = key_names
     exc = Exception(f"server response: Code: 62. DB::Exception: Syntax error near '{sk}' (SYNTAX_ERROR)")
-    fuori = describe_db_error(exc, "clickhouse", "host", 8443)
-    assert sk not in fuori
+    outside = describe_db_error(exc, "clickhouse", "host", 8443)
+    assert sk not in outside
 
 
 # ── testo delle query nel pannello Prestazioni ───────────────────────────────
@@ -73,20 +73,20 @@ def test_the_arguments_of_a_storage_function_are_emptied():
 
     q = ("SELECT count() FROM s3('https://s3.it-mil.scw.cloud/bucket/datasets/1/x.parquet', "
          "'AK_VISIBILE', '[HIDDEN]', 'Parquet') WHERE paese = 'IT'")
-    fuori = redact_storage_args(q)
-    assert "AK_VISIBILE" not in fuori and "bucket/datasets" not in fuori
-    assert "s3(…)" in fuori
+    outside = redact_storage_args(q)
+    assert "AK_VISIBILE" not in outside and "bucket/datasets" not in outside
+    assert "s3(…)" in outside
     # il senso della query resta leggibile: è il motivo per cui la si mostra
-    assert "SELECT count()" in fuori and "paese = 'IT'" in fuori
+    assert "SELECT count()" in outside and "paese = 'IT'" in outside
 
 
 def test_nested_parentheses_do_not_defeat_it():
     from app.core.redaction import redact_storage_args
 
     q = "SELECT * FROM s3('https://x/y', 'AK', 'SK', 'Parquet') JOIN url('http://z/w', 'CSV') USING (id)"
-    fuori = redact_storage_args(q)
-    assert "AK" not in fuori and "http://z/w" not in fuori
-    assert fuori.count("(…)") == 2
+    outside = redact_storage_args(q)
+    assert "AK" not in outside and "http://z/w" not in outside
+    assert outside.count("(…)") == 2
 
 
 def test_a_query_without_storage_functions_is_untouched():
@@ -106,10 +106,10 @@ def test_a_truncated_storage_call_is_redacted_to_the_end():
 
     tronca = ("INSERT INTO FUNCTION s3('https://s3.it-mil.scw.cloud/bucket/x.parquet', "
               "'SCWAWW2XAESEMPIO")
-    fuori = redact_storage_args(tronca)
-    assert "SCWAWW2XAESEMPIO" not in fuori
-    assert "s3.it-mil.scw.cloud" not in fuori and "bucket" not in fuori
-    assert fuori.startswith("INSERT INTO FUNCTION s3(")
+    outside = redact_storage_args(tronca)
+    assert "SCWAWW2XAESEMPIO" not in outside
+    assert "s3.it-mil.scw.cloud" not in outside and "bucket" not in outside
+    assert outside.startswith("INSERT INTO FUNCTION s3(")
 
 
 def test_a_storage_call_nested_two_levels_deep_is_redacted():
@@ -117,9 +117,9 @@ def test_a_storage_call_nested_two_levels_deep_is_redacted():
 
     q = ("SELECT * FROM (SELECT * FROM s3('https://x/y.parquet','K','S','Parquet') "
          "WHERE toYYYYMM(d) = 202601) t")
-    fuori = redact_storage_args(q)
-    assert "y.parquet" not in fuori and "'K'" not in fuori
-    assert "toYYYYMM(d) = 202601" in fuori  # il resto della query resta leggibile
+    outside = redact_storage_args(q)
+    assert "y.parquet" not in outside and "'K'" not in outside
+    assert "toYYYYMM(d) = 202601" in outside  # il resto della query resta leggibile
 
 
 def test_the_name_inside_a_string_is_not_a_call():
@@ -135,6 +135,6 @@ def test_several_calls_in_one_query_all_go():
     from app.core.redaction import redact_storage_args
 
     q = "SELECT * FROM s3('https://a/1.parquet','K','S') UNION ALL SELECT * FROM s3('https://b/2.parquet','K','S')"
-    fuori = redact_storage_args(q)
-    assert "1.parquet" not in fuori and "2.parquet" not in fuori
-    assert fuori.count("s3(…)") == 2
+    outside = redact_storage_args(q)
+    assert "1.parquet" not in outside and "2.parquet" not in outside
+    assert outside.count("s3(…)") == 2

@@ -12,21 +12,21 @@ import time as _time_mod
 logger = logging.getLogger(__name__)
 
 
-class _Avanzamento:
-    """L'avanzamento di un import per chi lo guarda: fase e conteggi come meta
-    dello stato STARTED nel backend dei risultati, che l'engine restituisce in
-    `/tasks/{id}` e il gateway passa al browser. Al più ogni INTERVALLO secondi
-    nella stessa fase, sempre al cambio di fase. Fuori da un worker (test,
-    chiamata diretta) non fa niente; un guasto qui non deve mai fermare l'import."""
+class _Progress:
+    """An import's progress for whoever watches it: phase and counts as the meta of the
+    STARTED state in the result backend, which the engine returns in `/tasks/{id}` and
+    the gateway passes to the browser. At most every INTERVAL seconds within a phase,
+    always at a change of phase. Outside a worker (tests, a direct call) it does
+    nothing; a fault here must never stop the import."""
 
-    INTERVALLO = 2.0
+    INTERVAL = 2.0
 
     def __init__(self) -> None:
         from celery import current_task
 
         self._task = current_task if current_task and current_task.request.id else None
-        self._fase: str | None = None
-        self._quando = 0.0
+        self._phase: str | None = None
+        self._when = 0.0
         # the worker and the start stay in the meta: the engine tells a lost task by them
         self._chi: dict = {}
         if self._task is not None:
@@ -34,17 +34,17 @@ class _Avanzamento:
 
             self._chi = task_started_meta(self._task.request)
 
-    def __call__(self, fase: str, **conti: int) -> None:
+    def __call__(self, phase: str, **counts: int) -> None:
         if self._task is None:
             return
         ora = _time_mod.monotonic()
-        if fase == self._fase and ora - self._quando < self.INTERVALLO:
+        if phase == self._phase and ora - self._when < self.INTERVAL:
             return
-        self._fase, self._quando = fase, ora
+        self._phase, self._when = phase, ora
         try:
-            self._task.update_state(state="STARTED", meta={**self._chi, "phase": fase, **conti})
+            self._task.update_state(state="STARTED", meta={**self._chi, "phase": phase, **counts})
         except Exception as e:  # noqa: BLE001
-            logger.warning("avanzamento non registrato: %s", e)
+            logger.warning("progress not recorded: %s", e)
 
 
 @celery_app.task(name="app.tasks.jobs.preview_task")
@@ -58,15 +58,15 @@ def preview_task(
     sort_keys: list[str] | None = None,
     principal: str | None = None,
 ) -> dict:
-    """Anteprima interattiva del flow (schema + prime N righe), eseguita su un
-    worker dedicato invece che nel processo API: così l'engine (Polars/DuckDB)
-    NON gira più in-process nel backend e la memoria delle preview è soggetta
-    allo stesso riciclo/tetto dei run.
+    """The flow's interactive preview (schema + first N rows), run on a dedicated worker
+    instead of in the API process: the engine (Polars/DuckDB) no longer runs in the
+    backend's process, and the previews' memory is under the same recycling and cap as
+    the runs.
 
-    Ritorna un dict TAGGATO (non solleva per gli errori attesi): col serializer
-    JSON le eccezioni non si propagano col loro tipo, quindi la route mappa lei
-    lo status HTTP leggendo `error`. Gli errori inattesi si propagano → 500."""
-    # import locale: le eccezioni engine servono solo qui
+    Returns a TAGGED dict (it does not raise for the expected errors): with the JSON
+    serializer exceptions do not travel with their type, so the route maps the HTTP
+    status itself, reading `error`. Unexpected errors propagate → 500."""
+    # a local import: the engine's exceptions are needed only here
     from app.engine.exceptions import (
         EngineError,
         OperationError,
@@ -77,8 +77,8 @@ def preview_task(
     import time as _time
 
     _t0 = _time.perf_counter()
-    # Le query di QUESTA preview portano l'id del task come etichetta: se la
-    # preview viene superata da una piu' recente, l'engine le uccide sul server.
+    # The queries of THIS preview carry the task's id as a label: when the preview is
+    # superseded by a newer one, the engine kills them on the server.
     from celery import current_task
     from app.engine.principal import query_principal
     from app.engine.query_tag import query_tag
@@ -86,14 +86,14 @@ def preview_task(
     _tid = getattr(getattr(current_task, "request", None), "id", None)
 
     def _stats(outcome: str) -> None:
-        # istogrammi + classifica delle più lente su Valkey (vedi preview_stats):
-        # nessuna tabella, nessuna lista in memoria
+        # histograms + a ranking of the slowest on Valkey (see preview_stats): no table,
+        # no list in memory
         from app.observability import preview_stats
 
-        fasi, fonte = preview_stats.take_phases()
+        phases, source_ = preview_stats.take_phases()
         preview_stats.record(
             engine=engine or "default", outcome=outcome, total_ms=(_time.perf_counter() - _t0) * 1000,
-            phases=fasi, dataset=input_key, ops=len(operations), source=fonte, cache=not no_cache,
+            phases=phases, dataset=input_key, ops=len(operations), source=source_, cache=not no_cache,
         )
 
     try:
@@ -109,22 +109,22 @@ def preview_task(
         _engine_ms = (_time.perf_counter() - _t0) * 1000
         payload = {"ok": True, "result": result.model_dump()}
         _stats("ok")
-        # step-cache differita (BigQuery): i passi da materializzare vanno a un
-        # task separato, cosi' QUESTA risposta non aspetta i CTAS
+        # deferred step cache (BigQuery): the steps to materialize go to a separate
+        # task, so THIS answer does not wait for the CTAS
         for src, pending_ops in getattr(engine_impl, "take_pending", lambda: [])():
             try:
                 materialize_step_task.apply_async(args=[engine, src.bucket, src.key, pending_ops], queue="preview",
                                                   priority=CACHE_COPY_PRIORITY)
-            except Exception as e:  # noqa: BLE001 — senza broker si perde solo la cache
-                logger.warning("materializzazione differita non accodata: %s", e)
-        # Il tempo DENTRO il worker, per ogni engine. Confrontalo con quello che
-        # misura il chiamante: la differenza e' attesa in coda + trasporto del
-        # risultato, non lavoro. Se `serializz` e' alto, pesa il payload (righe x
-        # colonne), non la query.
+            except Exception as e:  # noqa: BLE001 — without a broker only the cache is lost
+                logger.warning("deferred materialization not queued: %s", e)
+        # The time INSIDE the worker, for every engine. Compare it with what the caller
+        # measures: the difference is waiting in the queue + carrying the result, not
+        # work. When `serializz` is high, the payload weighs (rows x columns), not the
+        # query.
         _ser = _time.perf_counter()
         _n_rows, _n_cols = result.row_count, len(result.columns)
         logger.info(
-            "preview_task %.0f ms | engine=%s(%.0fms) serializz=%.0fms | righe=%d colonne=%d limit=%d ops=%d cache=%s chiavi=%d",
+            "preview_task %.0f ms | engine=%s(%.0fms) serialize=%.0fms | rows=%d columns=%d limit=%d ops=%d cache=%s keys=%d",
             (_time.perf_counter() - _t0) * 1000,
             engine or "default", _engine_ms,
             (_time.perf_counter() - _ser) * 1000,
@@ -134,16 +134,15 @@ def preview_task(
         )
         return payload
     except Exception as e:
-        # Superata da una preview piu' recente: NON e' un errore. Va riconosciuta
-        # prima di ogni altro ramo, perche' arriva travestita — EngineError se il
-        # task parlava con ClickHouse, HTTPClientError di botocore se parlava con
-        # S3 — e come "unexpected" riempiva i log di traceback per lavoro che
-        # nessuno aspettava piu'.
+        # Superseded by a newer preview: NOT an error. It must be told before any other
+        # branch, because it comes in disguise — EngineError when the task talked to
+        # ClickHouse, botocore's HTTPClientError when it talked to S3 — and as
+        # "unexpected" it filled the logs with tracebacks for work nobody waited for.
         from app.engine.query_tag import was_interrupted
 
         _stats("superseded" if was_interrupted(e) else "error")
         if was_interrupted(e):
-            logger.info("preview_task superata da una piu' recente (%.0f ms)", (_time.perf_counter() - _t0) * 1000)
+            logger.info("preview_task superseded by a newer one (%.0f ms)", (_time.perf_counter() - _t0) * 1000)
             return {"ok": False, "error": "superseded", "detail": "Preview superseded by a more recent request"}
         if isinstance(e, SourceNotFoundError):
             return {"ok": False, "error": "not_found", "detail": str(e)}
@@ -190,9 +189,9 @@ def _copy_turn(broker, token: str) -> str | None:
 
 @celery_app.task(name="app.tasks.jobs.materialize_step_task", ignore_result=True, bind=True)
 def materialize_step_task(self, engine: str, bucket: str, key: str, operations: list[dict]) -> dict:
-    """Materializza in cache (BigQuery: tabella nativa) l'output di una catena
-    di operazioni, FUORI dalla preview che l'ha chiesta. Best-effort: un errore
-    qui costa solo la cache, mai la preview."""
+    """Materializes a chain's output in the cache (BigQuery: a native table), OUTSIDE the
+    preview that asked for it. Best effort: an error here costs only the cache, never the
+    preview."""
     import uuid
 
     t0 = _time_mod.perf_counter()
@@ -233,29 +232,28 @@ def transform_data_task(
     contract: dict[str, Any] | None = None,
 ) -> dict:
     """
-    Esegue un flow di trasformazione (run completo) su un parquet dello storage.
+    Runs a transformation flow (a whole run) on a parquet of the storage.
 
-    `contract`: il data contract della datasource su cui l'output verrà
-    pubblicato. Lo si valuta sul parquet appena scritto e il referto torna col
-    risultato: è il gateway a decidere se pubblicare (vedi check_before_publish).
+    `contract`: the data contract of the datasource the output will be published to.
+    It is evaluated on the parquet just written and the report comes back with the
+    result: the gateway decides whether to publish (see check_before_publish).
 
-    Legge `input_key`, applica la catena di `operations` con l'engine Polars in
-    streaming e scrive il risultato in `output_key`. Se `destination` è
-    presente ({"type": "database"|"s3", "connection": …, "target": …}, secret
-    Fernet-cifrata come per l'ingest), il parquet appena scritto viene POI
-    riversato sulla destinazione: tabella di database oppure oggetto/dataset
-    hive-partizionato su S3. Il parquet resta comunque su storage
-    (cronologia/ispezione).
+    Reads `input_key`, applies the chain of `operations` with the Polars engine,
+    streaming, and writes the result to `output_key`. When `destination` is given
+    ({"type": "database"|"s3", "connection": …, "target": …}, the secret
+    Fernet-encrypted as for the ingest), the parquet just written is THEN poured into
+    the destination: a database table, or an object / hive-partitioned dataset on S3.
+    The parquet stays on the storage anyway (history, inspection).
 
     Args:
-        bucket: Nome del bucket S3
-        input_key: Chiave del parquet di input
-        operations: Lista di operazioni (IR: {"type": ..., "params": ...})
-        output_key: Chiave del parquet di output
-        destination: Destinazione opzionale (nodo Output): type database | s3 | sftp
+        bucket: the S3 bucket's name
+        input_key: the input parquet's key
+        operations: the operations (IR: {"type": ..., "params": ...})
+        output_key: the output parquet's key
+        destination: an optional destination (Output node): type database | s3 | sftp
 
     Returns:
-        Metadati del run (righe scritte, colonne di output, esito destinazione).
+        The run's metadata (rows written, output columns, the destination's outcome).
     """
     logger.info(f"🚀 Starting transform_data_task: {input_key} → {output_key}")
     logger.info(f"📋 Operations: {operations}")
@@ -283,11 +281,10 @@ def transform_data_task(
 
         out["contract"] = check_before_publish(bucket, output_key, contract)
         if out["contract"]["outcome"] == "failed":
-            # Una regola bloccante è violata: il gateway non pubblicherà questi
-            # dati. Niente di ciò che segue deve portarli fuori — la copia su S3
-            # e l'email consegnerebbero a qualcuno proprio ciò che il contratto
-            # ha rifiutato.
-            logger.warning("contratto violato su %s: output non consegnato", output_key)
+            # A blocking rule is violated: the gateway will not publish this data.
+            # Nothing that follows may take it out — the S3 copy and the email would
+            # hand someone exactly what the contract refused.
+            logger.warning("contract violated on %s: output not delivered", output_key)
             return out
 
     # one moment for every template of the run's outputs (file name, key, subject):
@@ -334,12 +331,12 @@ def transform_data_task(
                 conn=db_conn, dest=db_dest, bucket=bucket, key=output_key
             )
 
-    # Copia su S3 esterno, IN AGGIUNTA all'output: best-effort per scelta.
-    # Arriva DOPO la destinazione perché il risultato primario viene prima; un
-    # suo fallimento (credenziali scadute, bucket pieno, rete) non deve annullare
-    # un run riuscito né impedire la pubblicazione della datasource, che il
-    # gateway fa leggendo questo stesso risultato. L'esito torna in `out` e il
-    # gateway lo registra sul run, così l'errore resta visibile in cronologia.
+    # A copy to an external S3, IN ADDITION to the output: best effort by choice. It
+    # comes AFTER the destination because the primary result comes first; its failure
+    # (expired credentials, a full bucket, the network) must not undo a successful run
+    # nor stop the datasource being published, which the gateway does reading this
+    # same result. The outcome goes back in `out` and the gateway records it on the
+    # run, so the error stays visible in the history.
     if mirror:
         from app.ingest.s3_destination import (
             S3ConnectionSpec,
@@ -365,14 +362,14 @@ def transform_data_task(
                 "error": f"{type(e).__name__}: {e}"[:500],
             }
 
-    # Invio email dell'output come allegato (csv/xlsx). Arriva per ULTIMO: manda
-    # ciò che è stato prodotto, quindi tutto il resto dev'essere già finito.
+    # Emailing the output as an attachment (csv/xlsx). It comes LAST: it sends what was
+    # produced, so everything else must be done already.
     #
-    # A differenza della copia su S3 NON è best-effort per scelta dell'utente: un
-    # report che non parte è il risultato che non c'è, e un run verde mentre
-    # nessuno riceve nulla è peggio di un run rosso. `stop_on_failure` (default
-    # acceso) decide se l'errore faccia fallire il run; l'esito torna comunque in
-    # `out`, e il gateway lo registra sulla riga del run.
+    # Unlike the S3 copy it is NOT best effort, by the user's choice: a report that
+    # does not go out is the missing result, and a green run while nobody receives
+    # anything is worse than a red one. `stop_on_failure` (on by default) decides
+    # whether the error fails the run; the outcome goes back in `out` anyway, and the
+    # gateway records it on the run's row.
     if email:
         from app.ingest.email_destination import (
             EmailSpec,
@@ -381,11 +378,11 @@ def transform_data_task(
         )
 
         spec_raw = dict(email.get("target") or {})
-        ferma = bool(email.get("stop_on_failure", True))
+        stop = bool(email.get("stop_on_failure", True))
         try:
             e_conn = SmtpConnectionSpec(**email["connection"])
             e_spec = EmailSpec(**spec_raw)
-            logger.info("📧 Invio email via %s a %d destinatari", e_conn.host, len(e_spec.to))
+            logger.info("📧 Sending email through %s to %d recipients", e_conn.host, len(e_spec.to))
             out["email"] = send_output_email(conn=e_conn, spec=e_spec, bucket=bucket, key=output_key, now=moment)
         except Exception as e:
             out["email"] = {
@@ -394,10 +391,10 @@ def transform_data_task(
                 "attachment": spec_raw.get("attachment_name", ""),
                 "error": f"{type(e).__name__}: {e}"[:500],
             }
-            if ferma:
-                logger.error("❌ invio email fallito, il run fallisce: %s", e)
+            if stop:
+                logger.error("❌ sending the email failed, the run fails: %s", e)
                 raise
-            logger.warning("⚠️ invio email fallito (il run resta valido): %s", e)
+            logger.warning("⚠️ sending the email failed (the run stays valid): %s", e)
 
     logger.info(
         f"✅ Completed transform_data_task: {output_key} "
@@ -429,10 +426,10 @@ def ingest_sharepoint_task(
     last_refresh: str | None = None,
     previous: dict[str, Any] | None = None,
 ) -> dict:
-    """Scarica da SharePoint i file Excel che corrispondono al percorso (anche con
-    glob), li impila e scrive il parquet. Stessa forma di `ingest_database_task`:
-    il gateway tratta i due ingest allo stesso modo (run, snapshot swap, refresh).
-    Il secret dell'app arriva cifrato e si decifra solo per chiedere il token."""
+    """Downloads from SharePoint the Excel files that match the path (globs too), stacks
+    them and writes the parquet. The same shape as `ingest_database_task`: the gateway
+    treats the two ingests alike (run, snapshot swap, refresh). The app's secret arrives
+    encrypted and is decrypted only to ask for the token."""
     from app.ingest.sharepoint_source import (
         SharePointConnectionSpec,
         SharePointSourceSpec,
@@ -442,9 +439,9 @@ def ingest_sharepoint_task(
     conn = SharePointConnectionSpec(**connection)
     src = SharePointSourceSpec(**source)
     logger.info(f"🚀 Starting ingest_sharepoint_task: {conn.site_url} :: {src.path} [{src.sheet}] → {output_key}")
-    avanza = _Avanzamento()
+    advances = _Progress()
     result = ingest_sharepoint_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
-                                          progress=avanza, last_refresh=last_refresh, previous=previous)
+                                          progress=advances, last_refresh=last_refresh, previous=previous)
     logger.info(
         f"✅ Completed ingest_sharepoint_task: {output_key} "
         f"({result['rows_written']} righe da {len(result['files'])} file)"
@@ -452,7 +449,7 @@ def ingest_sharepoint_task(
     if contract:
         from app.contracts.service import check_before_publish
 
-        avanza("checking", rows=result["rows_written"])
+        advances("checking", rows=result["rows_written"])
 
         result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
@@ -477,14 +474,14 @@ def ingest_sftp_task(
     conn = SftpConnectionSpec(**connection)
     src = SftpSourceSpec(**source)
     logger.info(f"🚀 Starting ingest_sftp_task: {conn.address} :: {src.folder or '~'}/{src.pattern} → {output_key}")
-    avanza = _Avanzamento()
+    advances = _Progress()
     result = ingest_sftp_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
-                                    progress=avanza, last_refresh=last_refresh, previous=previous)
+                                    progress=advances, last_refresh=last_refresh, previous=previous)
     logger.info(f"✅ Completed ingest_sftp_task: {output_key} ({result['rows_written']} rows from {len(result['files'])} files)")
     if contract:
         from app.contracts.service import check_before_publish
 
-        avanza("checking", rows=result["rows_written"])
+        advances("checking", rows=result["rows_written"])
         result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
 
@@ -508,14 +505,14 @@ def ingest_s3_task(
     conn = S3ConnectionSpec(**connection)
     src = S3SourceSpec(**source)
     logger.info(f"🚀 Starting ingest_s3_task: {conn.endpoint_url or 'aws'} {src.bucket or conn.bucket}/{src.folder}/{src.pattern} → {output_key}")
-    avanza = _Avanzamento()
+    advances = _Progress()
     result = ingest_s3_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
-                                  progress=avanza, last_refresh=last_refresh, previous=previous)
+                                  progress=advances, last_refresh=last_refresh, previous=previous)
     logger.info(f"✅ Completed ingest_s3_task: {output_key} ({result['rows_written']} rows from {len(result['files'])} files)")
     if contract:
         from app.contracts.service import check_before_publish
 
-        avanza("checking", rows=result["rows_written"])
+        advances("checking", rows=result["rows_written"])
         result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
 
@@ -539,15 +536,15 @@ def ingest_api_task(
     conn = ApiConnectionSpec(**connection)
     src = ApiSourceSpec(**source)
     logger.info(f"🚀 Starting ingest_api_task: {src.method} {conn.base_url} {src.path} ({src.mode}) → {output_key}")
-    avanza = _Avanzamento()
+    advances = _Progress()
     result = ingest_api_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
-                                   progress=avanza, last_refresh=last_refresh, previous=previous)
+                                   progress=advances, last_refresh=last_refresh, previous=previous)
     logger.info(f"✅ Completed ingest_api_task: {output_key} ({result['rows_written']} rows, {result['calls']} calls, "
                 f"{result['pages']} pages)")
     if contract:
         from app.contracts.service import check_before_publish
 
-        avanza("checking", rows=result["rows_written"])
+        advances("checking", rows=result["rows_written"])
         result["contract"] = check_before_publish(bucket, output_key, contract)
     return result
 
@@ -561,27 +558,27 @@ def ingest_database_task(
     contract: dict[str, Any] | None = None,
 ) -> dict:
     """
-    Ingest da database: esegue la sorgente (tabella o SQL) e scrive il risultato
-    in parquet su storage, in streaming (batch Arrow → ParquetWriter).
+    Ingest from a database: runs the source (table or SQL) and writes the result as
+    parquet on the storage, streaming (Arrow batches → ParquetWriter).
 
-    `contract`: il data contract della datasource che si sta aggiornando,
-    valutato sul parquet appena scritto (vedi transform_data_task).
+    `contract`: the data contract of the datasource being refreshed, evaluated on the
+    parquet just written (see transform_data_task).
 
-    `connection.password_encrypted` è cifrata (Fernet, chiave condivisa col
-    gateway): la password in chiaro non transita mai nel broker.
+    `connection.password_encrypted` is encrypted (Fernet, the key shared with the
+    gateway): the clear password never goes through the broker.
     """
     from app.ingest.db_source import DbConnectionSpec, DbSourceSpec, ingest_db_to_parquet
 
     conn = DbConnectionSpec(**connection)
     logger.info(f"🚀 Starting ingest_database_task: {conn.db_type}@{conn.host} → {output_key}")
 
-    avanza = _Avanzamento()
+    advances = _Progress()
     result = ingest_db_to_parquet(
         conn=conn,
         source=DbSourceSpec(**source),
         bucket=bucket,
         key=output_key,
-        progress=avanza,
+        progress=advances,
     )
 
     logger.info(
@@ -599,7 +596,7 @@ def ingest_database_task(
     if contract:
         from app.contracts.service import check_before_publish
 
-        avanza("checking", rows=result["rows_written"])
+        advances("checking", rows=result["rows_written"])
         out["contract"] = check_before_publish(bucket, output_key, contract)
     return out
 
@@ -613,10 +610,10 @@ def convert_to_parquet_task(
     options: dict[str, Any],
 ) -> dict:
     """
-    Conversione async di un file grande (raw già su storage) in parquet.
+    Asynchronous conversion of a large file (raw already on the storage) to parquet.
 
-    Usata dall'ingest oltre la soglia dei 50MB; riusa la stessa logica di
-    conversione del path sincrono. Ritorna i metadati del dataset (schema, righe).
+    Used by the ingest above the 50 MB threshold; it reuses the synchronous path's
+    conversion. Returns the dataset's metadata (schema, rows).
     """
     logger.info(f"🚀 Starting convert_to_parquet_task: {raw_key} → {parquet_key}")
 
@@ -633,7 +630,7 @@ def convert_to_parquet_task(
     return {"status": "success", **info.model_dump()}
 
 
-# prefissi di storage di cui tracciamo la dimensione (per le metriche)
+# storage prefixes whose size is tracked (for the metrics)
 STORAGE_PREFIXES = ["raw/", "datasets/", "cache/", "out/"]
 STORAGE_BYTES_HASH = "dataprep:metrics:storage_bytes"
 STORAGE_OBJECTS_HASH = "dataprep:metrics:storage_objects"
@@ -642,9 +639,9 @@ STORAGE_OBJECTS_HASH = "dataprep:metrics:storage_objects"
 @celery_app.task(name="app.tasks.jobs.storage_stats_task")
 def storage_stats_task() -> dict:
     """
-    Campiona la dimensione dei prefissi di storage (cache/, datasets/, ...) e la
-    scrive su Valkey, da dove il collector delle metriche la espone. Schedulato
-    da Celery beat (intervallo: METRICS__STORAGE_STATS_INTERVAL_SECONDS).
+    Samples the size of the storage prefixes (cache/, datasets/, ...) and writes it to
+    Valkey, where the metrics collector exposes it. Scheduled by Celery beat (interval:
+    METRICS__STORAGE_STATS_INTERVAL_SECONDS).
     """
     settings = get_settings()
     storage = get_storage_service()
@@ -663,30 +660,30 @@ def storage_stats_task() -> dict:
 @celery_app.task(name="app.tasks.jobs.evict_cache_task")
 def evict_cache_task() -> dict:
     """
-    Eviction periodica della step cache: rimuove le voci non accedute da più di
-    `cache.ttl_seconds`. Schedulata da Celery beat (vedi celery_app.py).
+    Periodic eviction of the step cache: removes the entries not accessed for more than
+    `cache.ttl_seconds`. Scheduled by Celery beat (see celery_app.py).
     """
     settings = get_settings()
     removed = get_engine().cache.evict_expired(settings.cache.ttl_seconds)
-    # la cache nativa di BigQuery ha un indice suo (tabelle, non parquet): le
-    # tabelle scadono da sole sul servizio, qui si allinea l'indice
+    # BigQuery's native cache has an index of its own (tables, not parquet): the tables
+    # expire by themselves on the service, here the index is aligned
     from app.engine import _BIGQUERY_AVAILABLE
 
     if _BIGQUERY_AVAILABLE:
         try:
             removed += get_engine("bigquery").cache.evict_expired(settings.cache.ttl_seconds)
-        except Exception as e:  # noqa: BLE001 — lo sweep non deve fermarsi per un motore opzionale
+        except Exception as e:  # noqa: BLE001 — the sweep must not stop for an optional engine
             logger.warning("sweep della cache BigQuery non riuscito: %s", e)
     return {"removed": removed, "ttl_seconds": settings.cache.ttl_seconds}
 
 
 @celery_app.task(name="app.tasks.jobs.evict_matview_task")
 def evict_matview_task() -> dict:
-    """Drop periodico delle tabelle materializzate per il viewer sul ClickHouse
-    esterno (scadute per inutilizzo + orfane). Schedulato da Celery beat; si
-    auto-salta solo se l'engine non c'è o ClickHouse non è configurato — NON se
-    la materializzazione è spenta: i residui di quando era accesa (o di una
-    build uccisa a metà) vanno comunque rimossi."""
+    """Periodic drop of the viewer's materialized tables on the external ClickHouse
+    (expired unused + orphaned). Scheduled by Celery beat; it skips itself only when
+    the engine is missing or ClickHouse is not configured — NOT when the materialization
+    is off: what is left from when it was on (or from a build killed half way) must be
+    removed anyway."""
     from app.engine import _CLICKHOUSE_AVAILABLE
 
     settings = get_settings()

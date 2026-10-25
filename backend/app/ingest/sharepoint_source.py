@@ -1,23 +1,23 @@
-"""Sorgente SharePoint: file Excel (and CSV) di una raccolta documenti → parquet.
+"""SharePoint source: Excel (and CSV) files of a document library → parquet.
 
-Per il finance i dati veri vivono in Excel su SharePoint. Qui si definisce un
-SITO (la connessione) e, per ogni datasource, un PERCORSO — anche con glob — e
-un FOGLIO. Un percorso che corrisponde a più file li impila in una tabella sola.
+For finance the real data lives in Excel on SharePoint. Here one defines a SITE (the
+connection) and, for every datasource, a PATH — globs too — and a SHEET. A path that
+matches several files stacks them into one table.
 
-Contratto sul file, deliberatamente stretto: deve essere MACHINE READABLE —
-intestazione in prima riga, un nome per colonna, nessun doppione. Niente "salta
-N righe" né euristiche: un file con un titolo sopra la tabella si sistema alla
-fonte. La libreria di lettura, da sola, NON rifiuterebbe quei file: inventa
-`__UNNAMED__1` per una cella vuota e `id_1` per un doppione, e il dato sporco
-passerebbe in silenzio. Per questo l'intestazione grezza viene validata qui.
+The contract on the file is deliberately strict: it must be MACHINE READABLE — the
+header on the first row, one name per column, no duplicates. No "skip N rows" and no
+heuristics: a file with a title above the table is fixed at the source. The reading
+library alone would NOT refuse such files: it makes up `__UNNAMED__1` for an empty
+cell and `id_1` for a duplicate, and dirty data would pass silently. That is why the
+raw header is validated here.
 
-Accesso via Microsoft Graph con le credenziali di un'APPLICAZIONE registrata su
-Entra ID (client credentials). Il permesso giusto da chiedere all'IT è
-`Sites.Selected`: l'app vede solo i siti che le vengono concessi, non tutto
-SharePoint. Nessuna libreria Microsoft: bastano `requests` e quattro chiamate.
+Access through Microsoft Graph with the credentials of an APPLICATION registered on
+Entra ID (client credentials). The right permission to ask IT for is `Sites.Selected`:
+the app sees only the sites granted to it, not the whole of SharePoint. No Microsoft
+library: `requests` and four calls are enough.
 
-NON ancora provato contro un tenant reale (in sviluppo non ce n'è uno): i test
-girano contro un Graph finto che ne rispetta il contratto documentato.
+NOT tried against a real tenant yet (there is none in development): the tests run
+against a fake Graph that keeps to its documented contract.
 """
 from __future__ import annotations
 
@@ -48,22 +48,22 @@ CSV_EXTENSIONS = (".csv", ".tsv")
 # which files a datasource takes, by its format: «excel» for the ones saved before CSV
 # was read (a `Budget/*` of theirs must not start taking the CSV next to the workbooks)
 EXTENSIONS = {"excel": EXCEL_EXTENSIONS, "csv": CSV_EXTENSIONS, "auto": EXCEL_EXTENSIONS + CSV_EXTENSIONS}
-# colonne di provenienza aggiunte a ogni riga: al finance serve sapere da QUALE
-# file arriva un numero, e spesso mese o filiale stanno solo nel nome del file
+# provenance columns added to every row: finance needs to know which FILE a number
+# comes from, and month or branch are often only in the file's name
 FILE_COLUMN = "_file"
 MODIFIED_COLUMN = "_file_modified_at"
-# tetti di sicurezza: un glob sbagliato (`**/*`) non deve scaricare un sito intero
+# safety caps: a wrong glob (`**/*`) must not download a whole site
 MAX_FILES = 500
 MAX_FOLDERS = 2000
 MAX_TOTAL_BYTES = 2 * 1024**3
 
 
 class SharePointError(IngestError):
-    """Errore leggibile dall'utente (finisce nell'esito dell'ingest)."""
+    """An error the user can read (it ends in the ingest's outcome)."""
 
 
 class _NotFound(SharePointError):
-    """404 da Graph: distinto perché per una CARTELLA non è un errore (vedi children)."""
+    """A 404 from Graph: apart because for a FOLDER it is not an error (see children)."""
 
 
 class SharePointConnectionSpec(BaseModel):
@@ -71,10 +71,10 @@ class SharePointConnectionSpec(BaseModel):
     client_id: str
     client_secret_encrypted: str
     site_url: str  # es. https://contoso.sharepoint.com/sites/Finance
-    # raccolta documenti; vuoto = quella predefinita del sito ("Documenti")
+    # the document library; empty = the site's default one ("Documents")
     library: str = ""
-    # Vuoti = quelli del deployment (SHAREPOINT__GRAPH_BASE / SHAREPOINT__LOGIN_BASE,
-    # per i cloud sovrani). Il gateway non li valorizza mai: non li sceglie l'utente.
+    # Empty = the deployment's (SHAREPOINT__GRAPH_BASE / SHAREPOINT__LOGIN_BASE, for
+    # sovereign clouds). The gateway never sets them: the user does not choose them.
     graph_base: str = ""
     login_base: str = ""
 
@@ -85,7 +85,7 @@ class SharePointConnectionSpec(BaseModel):
 
 
 class SharePointSourceSpec(ft.FileTemplates):
-    # percorso nella raccolta, con glob: `Budget/2026/*.xlsx`, `**/chiusura_*.xlsx`;
+    # the path in the library, with globs: `Budget/2026/*.xlsx`, `**/closing_*.xlsx`;
     # with placeholders and the datasource's variables: `Chiusure/{month:yyyy-MM}.xlsx`
     path: str
     # auto = Excel and CSV, each by its extension; a datasource saved without it: Excel only
@@ -97,7 +97,7 @@ class SharePointSourceSpec(ft.FileTemplates):
 @dataclass
 class RemoteFile:
     id: str
-    path: str  # relativo alla radice della raccolta
+    path: str  # relative to the library's root
     size: int
     modified_at: str
     etag: str = ""
@@ -105,8 +105,8 @@ class RemoteFile:
 
 # ── Client Graph ────────────────────────────────────────────────────────────────
 class GraphClient:
-    """Le quattro chiamate che servono, con token in cache e rispetto del
-    throttling (429/503 + Retry-After: SharePoint lo usa davvero)."""
+    """The four calls needed, with the token cached and the throttling respected (429/503
+    + Retry-After: SharePoint really uses it)."""
 
     def __init__(self, conn: SharePointConnectionSpec, http: Callable[..., Any] | None = None, sleep=time.sleep):
         self.conn = conn
@@ -149,7 +149,7 @@ class GraphClient:
         for attempt in range(4):
             r = self._http("GET", url, headers={"Authorization": f"Bearer {self._access_token()}"}, timeout=120, stream=stream)
             if r.status_code in (429, 503) and attempt < 3:
-                # Retry-After puo' essere una data HTTP, non solo secondi
+                # Retry-After may be an HTTP date, not only seconds
                 try:
                     wait = float(r.headers.get("Retry-After", 2 ** attempt))
                 except (TypeError, ValueError):
@@ -177,7 +177,7 @@ class GraphClient:
             raise SharePointError(f"{what}: error {r.status_code} from Microsoft Graph ({_graph_message(r)})")
         return r.json()
 
-    # -- sito e raccolta --
+    # -- site and library --
     def drive_id(self) -> str:
         if self._drive_id:
             return self._drive_id
@@ -209,8 +209,8 @@ class GraphClient:
             try:
                 page = self._json(url, f"Folder '{folder or '/'}'")
             except _NotFound:
-                # una cartella che non c'è, per chi scrive un glob, è "nessun file
-                # corrisponde" — non un errore diverso da spiegare a parte
+                # a folder that is not there is, for whoever writes a glob, "no file
+                # matches" — not a different error to explain on its own
                 return []
             out.extend(page.get("value", []))
             url = page.get("@odata.nextLink", "")
@@ -230,7 +230,7 @@ class GraphClient:
                     f.write(chunk)
         finally:
             try:
-                r.close()  # lo stream va chiuso anche se la scrittura fallisce
+                r.close()  # the stream is closed even when the write fails
             except Exception:
                 pass
 
@@ -246,17 +246,16 @@ def _graph_message(r) -> str:
         return str(r.status_code)
 
 
-# ── Glob sulla raccolta ─────────────────────────────────────────────────────────
+# ── Globs on the library ─────────────────────────────────────────────────────────
 def _has_wildcard(s: str) -> bool:
     return any(c in s for c in "*?[")
 
 
 def find_files(client: GraphClient, pattern: str, extensions: tuple[str, ...] = EXCEL_EXTENSIONS) -> list[RemoteFile]:
-    """I file (Excel, or those of `extensions`) della raccolta che corrispondono a `pattern`. Segmento per
-    segmento: i tratti senza jolly si attraversano senza elencare, `*` elenca una
-    cartella, `**` scende a ogni profondità. Senza distinzione fra maiuscole e
-    minuscole, come SharePoint. Esclusi i file di blocco di Office (`~$…`), che
-    un `*.xlsx` prenderebbe mentre qualcuno ha il file aperto."""
+    """I file (Excel, or those of `extensions`) of the library that match `pattern`. Segment by segment:
+    the parts without wildcards are crossed without listing, `*` lists a folder, `**`
+    goes down to any depth. Case-insensitive, as SharePoint. Office's lock files
+    (`~$…`) are left out, which a `*.xlsx` would take while someone has the file open."""
     parts = [p for p in pattern.replace("\\", "/").strip("/").split("/") if p]
     if not parts:
         raise SharePointError("Empty path: enter a file or a glob, e.g. Budget/2026/*.xlsx")
@@ -275,22 +274,22 @@ def find_files(client: GraphClient, pattern: str, extensions: tuple[str, ...] = 
             return
         seg, tail = rest[0], rest[1:]
         if seg == "**":
-            walk(folder, tail)  # `**` vale anche zero cartelle
+            walk(folder, tail)  # `**` matches zero folders too
             for it in listing(folder):
                 if "folder" in it:
                     walk(f"{folder}/{it['name']}".strip("/"), rest)
             return
         if tail and not _has_wildcard(seg):
-            walk(f"{folder}/{seg}".strip("/"), tail)  # tratto fisso: nessun elenco
+            walk(f"{folder}/{seg}".strip("/"), tail)  # a fixed part: no listing
             return
         for it in listing(folder):
             name = str(it.get("name", ""))
             if not fnmatch.fnmatchcase(name.casefold(), seg.casefold()):
                 continue
-            # il percorso VERO (con le maiuscole di SharePoint), non quello scritto nel
-            # glob: `_file` non deve cambiare se qualcuno riscrive il percorso diversamente
-            # Graph lo restituisce percent-encoded ("Budget%202026"): decodificato,
-            # o children() lo codificherebbe due volte e la cartella darebbe 404
+            # the TRUE path (with SharePoint's case), not the one written in the glob:
+            # `_file` must not change when someone writes the path otherwise
+            # Graph returns it percent-encoded ("Budget%202026"): decoded, or children()
+            # would encode it twice and the folder would give 404
             parent = str((it.get("parentReference") or {}).get("path") or "")
             real = unquote(parent.split("root:", 1)[1]).strip("/") if "root:" in parent else folder
             path = f"{real}/{name}".strip("/")
@@ -309,7 +308,7 @@ def find_files(client: GraphClient, pattern: str, extensions: tuple[str, ...] = 
     return [found[k] for k in sorted(found, key=str.casefold)]
 
 
-# ── Lettura e validazione ───────────────────────────────────────────────────────
+# ── Reading and validating ───────────────────────────────────────────────────────
 def check_header(names: list, shown_as: str, where: str, error: type[IngestError] = SharePointError) -> None:
     """Refuses a header that is not machine readable: a column without a name, the
     same name twice (case-insensitive), a provenance column name. Shared by every
@@ -332,7 +331,7 @@ def check_header(names: list, shown_as: str, where: str, error: type[IngestError
 
 
 def read_sheet(local_path: str, sheet: str | None, shown_as: str, error: type[IngestError] = SharePointError) -> pl.DataFrame:
-    """Legge il foglio e RIFIUTA ciò che non è machine readable. `sheet=None` = the
+    """Reads the sheet and REFUSES what is not machine readable. `sheet=None` = the
     first sheet of the workbook."""
     where = f"sheet '{sheet}'" if sheet else "the first sheet"
     which = {"sheet_name": sheet} if sheet else {"sheet_id": 1}
@@ -348,8 +347,8 @@ def read_sheet(local_path: str, sheet: str | None, shown_as: str, error: type[In
         raise error(f"{shown_as}: {where} is empty")
     check_header(list(header.row(0)), shown_as, where, error)
     df = pl.read_excel(local_path, **which, raise_if_empty=False)
-    # i nomi validati sono quelli RIPULITI dagli spazi: le colonne devono chiamarsi
-    # cosi', o "Importo " in un file e "Importo" in un altro farebbero due colonne
+    # the validated names are those TRIMMED of spaces: the columns must be named so,
+    # or "Amount " in one file and "Amount" in another would make two columns
     return df.rename({c: c.strip() for c in df.columns if c != c.strip()})
 
 
@@ -397,11 +396,11 @@ def ingest_sharepoint_to_parquet(
     previous: dict | None = None,
     now=None,
 ) -> dict[str, Any]:
-    """`progress(fase, …)` per chi guarda l'import: «files» a ogni file (file, files,
-    rows letti finora), «saving» mentre il parquet va sullo storage. The path is
+    """`progress(phase, …)` for whoever watches the import: «files» at every file (file,
+    files, rows read so far), «saving» while the parquet goes to the storage. The path is
     expanded once per value of the variables (see file_templates); in append mode
     the rows are merged into the previous snapshot (`previous` = {bucket, key})."""
-    avanza = progress or (lambda *a, **k: None)
+    advances = progress or (lambda *a, **k: None)
     client = client or GraphClient(conn)
     g, exps = gather_files(client, source, now, last_refresh)
     files = g.files
@@ -416,20 +415,20 @@ def ingest_sharepoint_to_parquet(
 
     frames: list[pl.DataFrame] = []
     columns_by_file: dict[str, list[str]] = {}
-    letti = 0
+    read_values = 0
     with tempfile.TemporaryDirectory() as tmp:
         for i, f in enumerate(files):
-            avanza("files", file=i + 1, files=len(files), rows=letti)
+            advances("files", file=i + 1, files=len(files), rows=read_values)
             local = os.path.join(tmp, f"{i}{os.path.splitext(f.path)[1]}")
             client.download(f.id, local)
             df = read_one(local, f.path, source)
             os.remove(local)
             columns_by_file[f.path] = df.columns
-            letti += df.height
+            read_values += df.height
             if df.height == 0:
-                # solo intestazione (un template vuoto del mese): il lettore la tipizza
-                # tutta String, e nell'unione "rilassata" trascinerebbe a testo ogni
-                # colonna numerica degli altri file. Contato, non concatenato.
+                # a header only (an empty template of the month): the reader types it
+                # all String, and the "relaxed" union would drag every numeric column of
+                # the other files to text. Counted, not concatenated.
                 continue
             df = ft.with_params(df, g.params.get(f.path) or {}, f.path, SharePointError)
             frames.append(df.with_columns(
@@ -437,26 +436,26 @@ def ingest_sharepoint_to_parquet(
                 pl.lit(f.modified_at).str.to_datetime(strict=False, time_zone="UTC").dt.replace_time_zone(None).alias(MODIFIED_COLUMN),
             ))
 
-        # Schemi diversi fra i file: unione PER NOME, null dove manca. Non è un
-        # errore — un mese ha una colonna in più — ma va detto, perché un refuso
-        # in un'intestazione produce due colonne mezze vuote invece di una.
+        # Different schemas across the files: a union BY NAME, null where missing. Not
+        # an error — one month has an extra column — but it is said, because a typo in a
+        # header makes two half-empty columns instead of one.
         if not frames:
             raise SharePointError("All the matching files are empty (header only)")
         try:
             table = pl.concat(frames, how="diagonal_relaxed")
         except Exception as e:
             raise SharePointError(f"The files have columns with the same name but incompatible types: {e}") from e
-        # la provenienza sta in FONDO: con l'unione per nome una colonna che compare
-        # solo in un file successivo finirebbe dopo `_file`, in mezzo ai dati
+        # the provenance goes LAST: with a union by name, a column that appears only in
+        # a later file would land after `_file`, among the data
         prov = [FILE_COLUMN, MODIFIED_COLUMN]
         table = ft.provenance_last(table, prov)
         every = set.intersection(*(set(c) for c in columns_by_file.values()))
         drift = sorted({c for cols in columns_by_file.values() for c in cols} - every)
         if drift:
-            logger.warning("sharepoint %s: colonne non presenti in tutti i file: %s", source.path, drift)
+            logger.warning("sharepoint %s: columns not in every file: %s", source.path, drift)
         table, replaced, repeated = ft.finish(table, source, storage, previous, tmp, SharePointError, prov)
 
-        avanza("saving", rows=table.height)
+        advances("saving", rows=table.height)
         out = os.path.join(tmp, "out.parquet")
         table.write_parquet(out, compression="zstd", row_group_size=get_settings().ingest.parquet_row_group_rows)
         storage.upload_file(out, bucket, key)

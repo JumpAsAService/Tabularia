@@ -26,10 +26,10 @@ def _richiesto(server: str) -> bool:
     return server in {s.strip() for s in os.getenv("TABULARIA_TEST_REQUIRE", "").split(",")}
 
 
-def _manca(server: str, variabile: str):
+def _manca(server: str, variable: str):
     if _richiesto(server):
-        pytest.fail(f"{variabile} is not set, and this run requires {server} (TABULARIA_TEST_REQUIRE)")
-    pytest.skip(f"needs {variabile}")
+        pytest.fail(f"{variable} is not set, and this run requires {server} (TABULARIA_TEST_REQUIRE)")
+    pytest.skip(f"needs {variable}")
 
 
 # the ClickHouse tests that need no helper: skipped without the server, unless the run requires it
@@ -142,16 +142,16 @@ def test_le_regole_del_contratto_diventano_query_che_selezionano_le_violazioni()
 
 def test_un_test_singolare_si_traduce_in_postgres_col_ref_al_modello():
     sql = d.singular_test_sql({"kind": "pattern", "column": "cap", "regex": "^[0-9]{5}$"})
-    tradotto = d.transpile_model(sql, "postgres", {"__t": ["id", "cap"]})
-    tradotto = d.substitute_source_idents(tradotto, {"__t": "{{ ref('clienti') }}"})
+    translated_one = d.transpile_model(sql, "postgres", {"__t": ["id", "cap"]})
+    translated_one = d.substitute_source_idents(translated_one, {"__t": "{{ ref('clienti') }}"})
     # un test dbt seleziona le righe che violano: uno `*` va bene (lo si lascia al warehouse)
-    assert " ".join(tradotto.split()).startswith("SELECT * FROM {{ ref('clienti') }} AS \"__t\" WHERE")
-    assert "~" in tradotto or "REGEXP" in tradotto.upper()        # il regexp di Postgres
+    assert " ".join(translated_one.split()).startswith("SELECT * FROM {{ ref('clienti') }} AS \"__t\" WHERE")
+    assert "~" in translated_one or "REGEXP" in translated_one.upper()        # il regexp di Postgres
 
 
 # ── progetto ──────────────────────────────────────────────────────────────────
 def _progetto(**kw):
-    modelli = [
+    models = [
         {"name": "int_pulito", "sql": "select 1", "materialized": "ephemeral", "description": "Shared steps", "columns": []},
         {"name": "margine", "sql": "select 2", "materialized": "table", "description": "Output «margine»: the margin. Contract: what we promise",
          # the route writes unique and accepted_values as singular tests (#34, #35): only not_null is generic
@@ -161,7 +161,7 @@ def _progetto(**kw):
     ]
     sorgenti = [{"name": "db_1_vendite", "database": "db_1", "schema": "vendite",
                  "tables": [{"name": "ordini", "description": "Datasource «orders»", "columns": [{"name": "id", "description": "The order id"}]}]}]
-    base = dict(flow_name="Margin by Category", models=modelli, attachments=[{"alias": "db_1", "db_type": "postgresql", "pw_env": "TABULARIA_DB_1_PASSWORD",
+    base = dict(flow_name="Margin by Category", models=models, attachments=[{"alias": "db_1", "db_type": "postgresql", "pw_env": "TABULARIA_DB_1_PASSWORD",
                 "conn": {"host": "db", "port": 5432, "database": "shop", "username": "shop"}}], sources=sorgenti)
     base.update(kw)
     return d.build_dbt_project(**base)
@@ -190,13 +190,13 @@ def test_ogni_modello_dice_da_dove_viene():
     nell'app — in testa al file, in schema.yml (config.meta + tag) e nel README."""
     meta = {"flow": "Margin by Category", "flow_id": 7, "flow_version": 3, "version_saved_at": "2026-10-09 18:00 UTC", "folder": "Sales",
             "owner": "anna@example.com", "output": "output «margine» (datasource)", "node": "out-1"}
-    modelli = [
+    models = [
         {"name": "src_q", "sql": "select 0", "materialized": "ephemeral", "description": "", "columns": [],
          "meta": {"datasource": "Orders {{ x }}", "datasource_id": 4}, "tags": ["tabularia"]},
         {"name": "margine", "sql": "select 2", "materialized": "table", "description": "Out", "columns": [],
          "meta": meta, "tags": ["tabularia", "margin_by_category"]},
     ]
-    files = _progetto(models=modelli, esportato_da="admin@example.com")
+    files = _progetto(models=models, exported_by="admin@example.com")
     sql = files["models/margine.sql"]
     # solo fatti del flusso: riesportare la stessa versione dà lo stesso file
     assert sql.startswith("{{ config(materialized='table') }}\n\n-- Exported from Tabularia: flow «Margin by Category» (id 7, version 3 saved 2026-10-09 18:00 UTC), "
@@ -270,7 +270,7 @@ def test_il_cast_e_quello_del_motore_nel_federato_e_protetto_nel_nativo():
     assert "TRY_CAST" not in nat and "regexp_matches(trim(\"testo\")" in nat and 'CAST(trunc("numero") AS BIGINT)' in nat
     pg = d.transpile_model(nat, "postgres", {"__s_0": list(TIPI)})
     # the guard checks the value too (#17): an integer literal that fits a BIGINT, a number in its range
-    assert f"~ '{d._RE_INTERO}'" in pg and "TRY" not in pg and '>= -9223372036854775808 AND "source_source"."numero" < 9223372036854775808' in " ".join(pg.split())
+    assert f"~ '{d._RE_INTEGER}'" in pg and "TRY" not in pg and '>= -9223372036854775808 AND "source_source"."numero" < 9223372036854775808' in " ".join(pg.split())
 
 
 def test_il_compute_sostituisce_la_colonna_al_suo_posto():
@@ -378,15 +378,15 @@ def test_il_sql_federato_di_ogni_passo_gira_davvero_in_duckdb(ops):
         return "casi", ["id", "categoria", "valore", "altro"], {"id": "INTEGER", "categoria": "VARCHAR", "valore": "DOUBLE", "altro": "INTEGER"}, "casi"
 
     sql, cols, _ = d.compile_model_sql({"key": "x"}, ops, resolve)
-    righe = con.execute(sql).fetchall()
-    assert righe is not None
+    rows = con.execute(sql).fetchall()
+    assert rows is not None
     if cols:
         assert [c[0] for c in con.description] == cols
 
 
 def test_un_passo_non_si_chiama_mai_come_una_parola_riservata():
-    assert d._slug_passo("pivot") == "pivot_step" and d._slug_passo("Select") == "select_step"
-    assert d._slug_passo("filter_stato") == "filter_stato" and d._slug_passo("2024") == "s_2024"
+    assert d._step_slug("pivot") == "pivot_step" and d._step_slug("Select") == "select_step"
+    assert d._step_slug("filter_stato") == "filter_stato" and d._step_slug("2024") == "s_2024"
 
 
 # ── target ClickHouse: il ClickHouse del cliente legge Postgres/MySQL dal vivo ──────
@@ -397,11 +397,11 @@ _MY = {"id": 2, "name": "negozio", "db_type": "mysql", "host": "my.x.it", "port"
 def test_ogni_schema_di_postgres_o_mysql_e_un_database_federato():
     ch = d.TargetClickHouse([_PG, _MY, {"id": 3, "name": "crm", "db_type": "clickhouse", "host": "CH.local", "database": "analytics"}], "ch.local")
     # a schema that is not a plain lowercase name has a fingerprint of its exact name too (#68)
-    piu = d.nome_db_federato(1, "Vendite Più")
+    piu = d.federated_db_name(1, "Vendite Più")
     assert ch.database_per(1, "vendite") == "tab_src_1_vendite" and ch.database_per(1, "Vendite Più") == piu and piu.startswith("tab_src_1_vendite_pi_")
     assert ch.database_per(2, "shop") == "tab_src_2_shop"
     assert ch.database_per(3, "analytics") == "analytics"          # lo stesso server: le sue tabelle, così come sono
-    assert {f["name"]: f["engine"] for f in ch.federati.values()} == {"tab_src_1_vendite": "PostgreSQL", piu: "PostgreSQL", "tab_src_2_shop": "MySQL"}
+    assert {f["name"]: f["engine"] for f in ch.federated.values()} == {"tab_src_1_vendite": "PostgreSQL", piu: "PostgreSQL", "tab_src_2_shop": "MySQL"}
     sorgenti = ch.sources([{"name": "db_1_vendite", "database": None, "schema": "vendite", "connection_id": 1, "tables": []}])
     assert sorgenti[0]["schema"] == "tab_src_1_vendite" and sorgenti[0]["database"] is None
 
@@ -417,12 +417,12 @@ def test_un_altro_clickhouse_o_un_tipo_che_clickhouse_non_legge_sono_rifiutati()
 
 def test_la_query_di_una_datasource_si_traduce_sulle_tabelle_federate():
     ch = d.TargetClickHouse([_PG], "ch.local")
-    sql = ch.traduci_query("WITH a AS (SELECT * FROM crm.clienti WHERE attivo) SELECT a.id, o.totale::numeric FROM a JOIN ordini o ON o.cliente = a.id", 1, "clienti")
+    sql = ch.translate_query("WITH a AS (SELECT * FROM crm.clienti WHERE attivo) SELECT a.id, o.totale::numeric FROM a JOIN ordini o ON o.cliente = a.id", 1, "clienti")
     assert "tab_src_1_crm.clienti" in sql and "tab_src_1_public.ordini" in sql      # senza schema: public, come in Postgres
     assert "FROM a" in sql and "tab_src_1_public.a" not in sql                       # la CTE resta una CTE
-    assert set(ch.federati) == {"tab_src_1_crm", "tab_src_1_public"}
+    assert set(ch.federated) == {"tab_src_1_crm", "tab_src_1_public"}
     with pytest.raises(d.DbtExportError, match="cannot be translated"):
-        ch.traduci_query("SELECT FROM WHERE (", 1, "rotta")
+        ch.translate_query("SELECT FROM WHERE (", 1, "rotta")
 
 
 def test_il_progetto_clickhouse_ha_profilo_macro_e_readme():
@@ -430,7 +430,7 @@ def test_il_progetto_clickhouse_ha_profilo_macro_e_readme():
     sorgenti = ch.sources([{"name": "db_1_vendite", "database": None, "schema": "vendite", "connection_id": 1,
                             "tables": [{"name": "ordini", "description": "", "columns": []}]}])
     files = _progetto(sources=sorgenti, attachments=None, clickhouse={"host": "ch.local", "port": 8443, "secure": True, "target_schema": "dbt_tabularia",
-                                                                      "federati": list(ch.federati.values())})
+                                                                      "federati": list(ch.federated.values())})
     prof = files["profiles.yml"]
     assert "type: clickhouse" in prof and "env_var('CLICKHOUSE_HOST', 'ch.local')" in prof and "env_var('CLICKHOUSE_PORT', '8443')" in prof
     assert "env_var('CLICKHOUSE_PASSWORD')" in prof and "join_use_nulls: 1" in prof and "attach" not in prof
@@ -447,21 +447,21 @@ def test_il_progetto_clickhouse_ha_profilo_macro_e_readme():
 
 def test_un_valore_con_delimitatori_jinja_non_entra_nella_macro():
     # decision of 2026-10-16 (#2): a value with `{`, `%` or `#` is neutralised, no longer refused
-    assert d._letterale_ch("o'neil\\x") == "'o\\'neil\\\\x'"
+    assert d._ch_literal("o'neil\\x") == "'o\\'neil\\\\x'"
     for v in ("{{ evil }}", "sales#2", "a{%b", "100%"):
-        assert _render_like_dbt(d._letterale_ch(v)) == "'" + v + "'"
+        assert _render_like_dbt(d._ch_literal(v)) == "'" + v + "'"
 
 
 def test_l_export_clickhouse_traduce_la_query_e_porta_tutto_nei_database_federati():
     import io, zipfile
     from app.api.routes import dbt as rotta
 
-    def corpo(stream):
+    def body(stream):
         import asyncio
 
-        async def leggi():
+        async def read():
             return b"".join([c async for c in stream.body_iterator])
-        return asyncio.run(leggi())
+        return asyncio.run(read())
 
     req = rotta.ExportRequest(
         flow_name="Margini", mode="clickhouse", sources=[{"name": "db_1_vendite", "database": None, "schema": "vendite", "connection_id": 1,
@@ -476,7 +476,7 @@ def test_l_export_clickhouse_traduce_la_query_e_porta_tutto_nei_database_federat
                 {"type": "join", "params": {"how": "left", "left_on": ["cliente"], "right_on": ["id"], "right": {"source": {"model": "src_clienti"}}}}]},
         ],
     )
-    with zipfile.ZipFile(io.BytesIO(corpo(rotta.export_dbt(req)))) as z:
+    with zipfile.ZipFile(io.BytesIO(body(rotta.export_dbt(req)))) as z:
         files = {n: z.read(n).decode() for n in z.namelist()}
     assert "tab_src_1_crm.clienti" in files["models/src_clienti.sql"] and "Nullable(" in files["models/src_clienti.sql"]
     assert "{{ ref('src_clienti') }}" in files["models/margini.sql"] and "{{ source('db_1_vendite', 'ordini') }}" in files["models/margini.sql"]
@@ -494,17 +494,17 @@ def test_semi_e_anti_join_su_clickhouse_sono_quelli_del_motore():
         return "__s_0", ["k", "x"], {"k": "BIGINT", "x": "VARCHAR"}, "casi"
     for how in ("semi", "anti"):
         ops = [{"type": "join", "params": {"how": how, "on": ["k"], "right": {"source": {"key": "destra"}}}}]
-        sql_ch, cols, _ = d.compile_model_sql({"key": "casi"}, ops, resolve, native=True, dialetto="clickhouse")
+        sql_ch, cols, _ = d.compile_model_sql({"key": "casi"}, ops, resolve, native=True, dialect="clickhouse")
         assert f"LEFT {how.upper()} JOIN" in sql_ch and "EXISTS" not in sql_ch and cols == ["k", "x"]
-        tradotto = d.transpile_model(sql_ch, "clickhouse", {"__s_0": ["k", "x"], "__s_1": ["k", "v"]})
-        assert f"LEFT {how.upper()} JOIN" in tradotto
-        sql_pg, _, _ = d.compile_model_sql({"key": "casi"}, ops, resolve, native=True, dialetto="postgres")
+        translated_one = d.transpile_model(sql_ch, "clickhouse", {"__s_0": ["k", "x"], "__s_1": ["k", "v"]})
+        assert f"LEFT {how.upper()} JOIN" in translated_one
+        sql_pg, _, _ = d.compile_model_sql({"key": "casi"}, ops, resolve, native=True, dialect="postgres")
         assert "EXISTS" in sql_pg
 
 
 # ── opzioni del download: cartella per un progetto esistente, livelli, sorgenti già dichiarate ──
 def _con_tipi(**kw):
-    modelli = [
+    models = [
         {"name": "tab_src_q", "kind": "raw", "sql": "select 0", "materialized": "ephemeral", "description": "", "columns": []},
         {"name": "tab_int_pulito", "kind": "intermediate", "sql": "select 1", "materialized": "ephemeral", "description": "", "columns": []},
         {"name": "tab_margine", "kind": "output", "sql": "select 2", "materialized": "table", "description": "", "columns": [],
@@ -514,7 +514,7 @@ def _con_tipi(**kw):
     ]
     sorgenti = [{"name": "erp", "schema": "vendite", "database": "db_1", "declared": True, "tables": [{"name": "ordini"}, {"name": "clienti"}]},
                 {"name": "db_1_crm", "schema": "crm", "database": "db_1", "tables": [{"name": "contatti", "description": "", "columns": []}]}]
-    return _progetto(models=modelli, sources=sorgenti, **kw)
+    return _progetto(models=models, sources=sorgenti, **kw)
 
 
 def test_il_progetto_completo_coi_livelli_mette_i_modelli_per_strato():
@@ -547,9 +547,9 @@ def test_la_cartella_clickhouse_porta_la_macro_e_dice_join_use_nulls():
     ch = d.TargetClickHouse([_PG], "ch.local")
     sorgenti = ch.sources([{"name": "db_1_vendite", "schema": "vendite", "connection_id": 1, "tables": [{"name": "ordini"}]},
                            {"name": "loro", "schema": "crm", "connection_id": 1, "declared": True, "tables": [{"name": "contatti"}]}])
-    assert set(ch.federati) == {"tab_src_1_vendite"}                     # la dichiarata non crea un database federato
+    assert set(ch.federated) == {"tab_src_1_vendite"}                     # la dichiarata non crea un database federato
     files = _progetto(sources=sorgenti, attachments=None, layout={"package": "folder", "folder": "f"},
-                      clickhouse={"host": "ch.local", "port": 8443, "secure": True, "federati": list(ch.federati.values())})
+                      clickhouse={"host": "ch.local", "port": 8443, "secure": True, "federati": list(ch.federated.values())})
     assert "macros/f/create_tabularia_sources.sql" in files and "profiles.yml" not in files
     guida = files["INTEGRATION.md"]
     assert "join_use_nulls: 1" in guida and "dbt run-operation create_tabularia_sources --log-level-file none" in guida
@@ -580,9 +580,9 @@ def _zip(req):
 
     from app.api.routes import dbt as rotta
 
-    async def leggi(s):
+    async def read(s):
         return b"".join([c async for c in s.body_iterator])
-    return asyncio.run(leggi(rotta.export_dbt(req)))
+    return asyncio.run(read(rotta.export_dbt(req)))
 
 
 def test_lo_zip_e_lo_stesso_byte_per_byte_a_ogni_export():
@@ -590,12 +590,12 @@ def test_lo_zip_e_lo_stesso_byte_per_byte_a_ogni_export():
     nel repository del team mostra solo quello che è cambiato nel flusso."""
     import io, zipfile
 
-    primo, secondo = _zip(_richiesta_export()), _zip(_richiesta_export())
-    assert primo == secondo
-    with zipfile.ZipFile(io.BytesIO(primo)) as z:
-        voci = z.infolist()
-    assert [v.filename for v in voci] == sorted(v.filename for v in voci)
-    assert {v.date_time for v in voci} == {(1980, 1, 1, 0, 0, 0)}
+    first, secondo = _zip(_richiesta_export()), _zip(_richiesta_export())
+    assert first == secondo
+    with zipfile.ZipFile(io.BytesIO(first)) as z:
+        items = z.infolist()
+    assert [v.filename for v in items] == sorted(v.filename for v in items)
+    assert {v.date_time for v in items} == {(1980, 1, 1, 0, 0, 0)}
 
 
 def test_un_rifiuto_arriva_al_gateway_con_codice_e_parametri():
@@ -618,11 +618,11 @@ def test_std_e_var_su_clickhouse_danno_null_con_un_solo_valore():
     def resolve(_):
         return "__s_0", ["k", "v"], {"k": "VARCHAR", "v": "DOUBLE"}, "t"
     ops = [{"type": "group_by", "params": {"by": ["k"], "aggregations": [{"column": "v", "func": "std", "alias": "sd"}]}}]
-    sql_ch, _, _ = d.compile_model_sql({"key": "t"}, ops, resolve, native=True, dialetto="clickhouse")
+    sql_ch, _, _ = d.compile_model_sql({"key": "t"}, ops, resolve, native=True, dialect="clickhouse")
     assert 'CASE WHEN count("v") > 1 THEN stddev("v") END' in sql_ch
-    tradotto = d.transpile_model(sql_ch, "clickhouse", {"__s_0": ["k", "v"]})
-    assert "CASE WHEN COUNT(" in tradotto and "stddevSamp" in tradotto
-    sql_pg, _, _ = d.compile_model_sql({"key": "t"}, ops, resolve, native=True, dialetto="postgres")
+    translated_one = d.transpile_model(sql_ch, "clickhouse", {"__s_0": ["k", "v"]})
+    assert "CASE WHEN COUNT(" in translated_one and "stddevSamp" in translated_one
+    sql_pg, _, _ = d.compile_model_sql({"key": "t"}, ops, resolve, native=True, dialect="postgres")
     assert "CASE WHEN" not in sql_pg
 
 
@@ -631,12 +631,12 @@ _MACRO = {"__s_0": "{{ source('db_1_v', 'ordini') }}", "__m_0": "{{ ref('clienti
 
 
 def test_una_proposta_buona_si_usa_con_le_macro_al_posto_dei_segnaposto():
-    sql = d.usa_proposta("SELECT o.id, c.nome FROM __s_0 o LEFT JOIN __m_0 AS c ON o.cliente = c.id", "clickhouse", _MACRO, ["id", "nome"], "m")
+    sql = d.use_proposal("SELECT o.id, c.nome FROM __s_0 o LEFT JOIN __m_0 AS c ON o.cliente = c.id", "clickhouse", _MACRO, ["id", "nome"], "m")
     assert "{{ source('db_1_v', 'ordini') }}" in sql and "{{ ref('clienti') }}" in sql and "__TABULARIA" not in sql
     assert '"o"' in sql or "o." in sql      # l'alias scelto dall'AI resta
 
 
-@pytest.mark.parametrize("proposta,motivo", [
+@pytest.mark.parametrize("proposal,reason", [
     ("SELECT o.id FROM __s_0 o", "columns"),
     ("SELECT * FROM __s_0", "star"),
     ("SELECT id, nome FROM altra_tabella", "unknown_table"),
@@ -645,18 +645,18 @@ def test_una_proposta_buona_si_usa_con_le_macro_al_posto_dei_segnaposto():
     ("SELECT id, nome FROM __s_0; DROP TABLE x", "not_select"),
     ("SELEC id nome FRM", "unparsable"),
 ])
-def test_una_proposta_che_non_passa_i_controlli_e_rifiutata_col_suo_motivo(proposta, motivo):
+def test_una_proposta_che_non_passa_i_controlli_e_rifiutata_col_suo_motivo(proposal, reason):
     with pytest.raises(d.DbtExportError) as e:
-        d.usa_proposta(proposta, "clickhouse", _MACRO, ["id", "nome"], "m")
-    assert e.value.code == "ai_translation_invalid" and e.value.params["reason"] == motivo and e.value.params["model"] == "m"
+        d.use_proposal(proposal, "clickhouse", _MACRO, ["id", "nome"], "m")
+    assert e.value.code == "ai_translation_invalid" and e.value.params["reason"] == reason and e.value.params["model"] == "m"
 
 
 def test_la_query_di_una_datasource_tradotta_dall_ai_e_ripuntata_dal_codice():
     ch = d.TargetClickHouse([_PG], "ch.local")
-    sql = ch.traduci_query("SELECT impossibile", 1, "clienti", proposta="SELECT id, nome FROM crm.clienti WHERE attivo = 1", colonne=["id", "nome"])
-    assert "tab_src_1_crm.clienti" in sql and set(ch.federati) == {"tab_src_1_crm"}
+    sql = ch.translate_query("SELECT impossibile", 1, "clienti", proposal="SELECT id, nome FROM crm.clienti WHERE attivo = 1", columns=["id", "nome"])
+    assert "tab_src_1_crm.clienti" in sql and set(ch.federated) == {"tab_src_1_crm"}
     with pytest.raises(d.DbtExportError) as e:
-        ch.traduci_query("x", 1, "clienti", proposta="SELECT id FROM crm.clienti", colonne=["id", "nome"])
+        ch.translate_query("x", 1, "clienti", proposal="SELECT id FROM crm.clienti", columns=["id", "nome"])
     assert e.value.params["reason"] == "columns"
 
 
@@ -690,14 +690,14 @@ def test_il_modello_tradotto_dall_ai_lo_dice_e_il_readme_pure(monkeypatch):
 # ── il SQL ClickHouse letto da un parser ClickHouse vero (EXPLAIN AST) ─────────
 def test_il_controllo_di_sintassi_vede_quello_che_sqlglot_lascia_passare(monkeypatch):
     pytest.importorskip("chdb")
-    c = d.ControlloSintassiClickHouse()
-    errore = c.errore("SELECT id FROM tab_src_1_v.ordini WHERE canale SIMILAR TO 'w%'")
-    assert errore and errore.startswith("Syntax error") and "SIMILAR" in errore and "Expected one of" not in errore
-    assert c.errore('SELECT "__s_0"."id" AS "id" FROM "__s_0" AS "__s_0" WHERE match("__s_0"."x", \'a\')') is None
-    assert c.errore("SELECT 1 FROM t SAMPLE SYSTEM 50 PERCENT") is not None
-    spento = d.ControlloSintassiClickHouse()
+    c = d.ClickHouseSyntaxCheck()
+    error = c.error("SELECT id FROM tab_src_1_v.ordini WHERE canale SIMILAR TO 'w%'")
+    assert error and error.startswith("Syntax error") and "SIMILAR" in error and "Expected one of" not in error
+    assert c.error('SELECT "__s_0"."id" AS "id" FROM "__s_0" AS "__s_0" WHERE match("__s_0"."x", \'a\')') is None
+    assert c.error("SELECT 1 FROM t SAMPLE SYSTEM 50 PERCENT") is not None
+    spento = d.ClickHouseSyntaxCheck()
     spento._via = False                       # nessun parser raggiungibile: il controllo si salta
-    assert spento.errore("SELECT FROM WHERE") is None
+    assert spento.error("SELECT FROM WHERE") is None
 
 
 def test_un_nodo_sql_che_clickhouse_non_legge_e_un_non_tradotto_con_quello_che_serve_all_ai():
@@ -871,8 +871,8 @@ def test_jinja_in_a_value_is_neutralised_on_the_native_and_clickhouse_targets():
         req = _richiesta_export(mode=mode, source_map=smap, **extra,
                                 models=[{"name": "uno", "source": {"key": "k"}, "operations": _ops_with_jinja(sql_node=mode == "native")}])
         sql = _render_like_dbt(_files(req)["models/uno.sql"], {("source", "s", "ordini"): "s.ordini"})
-        for testo in (j["secret"], j["tag"], j["expr"], j["comment"]):
-            assert testo in sql, (mode, testo)
+        for text in (j["secret"], j["tag"], j["expr"], j["comment"]):
+            assert text in sql, (mode, text)
         assert "c{{a}}lc" in sql
 
 
@@ -881,9 +881,9 @@ def test_jinja_in_a_datasource_query_and_in_an_ai_proposal_is_neutralised():
             "raw_sql": "SELECT * FROM postgres_query('db_1', 'SELECT id FROM t WHERE c = ''{%'' OR d = ''{{ 1 }}''')"}]
     sql = _render_like_dbt(_files(_richiesta_export(models=raw, source_map={}))["models/src_q.sql"])
     assert "c = ''{%'' OR d = ''{{ 1 }}''" in sql
-    proposta = "SELECT id, x FROM __s_0 WHERE x = '{{ env_var(\"P\") }}' /* {% do run_query('DROP TABLE t') %} */"
-    tradotto = d.usa_proposta(proposta, "clickhouse", _MACRO, ["id", "x"], "m")
-    reso = _render_like_dbt(tradotto, {("source", "db_1_v", "ordini"): "v.ordini", ("ref", "clienti"): "clienti"})
+    proposal = "SELECT id, x FROM __s_0 WHERE x = '{{ env_var(\"P\") }}' /* {% do run_query('DROP TABLE t') %} */"
+    translated_one = d.use_proposal(proposal, "clickhouse", _MACRO, ["id", "x"], "m")
+    reso = _render_like_dbt(translated_one, {("source", "db_1_v", "ordini"): "v.ordini", ("ref", "clienti"): "clienti"})
     assert "'{{ env_var(\"P\") }}'" in reso and "v.ordini" in reso
 
 
@@ -924,8 +924,8 @@ def test_a_name_in_config_reads_the_same_with_dbt_s_static_parser_and_with_jinja
     config: dict = {}
     _render_like_dbt(riga, config=config)
     assert config["alias"] == nome and config["schema"] == nome, riga                     # what Jinja reads
-    for chiave in ("alias", "schema"):
-        arg = _config_args(riga[len("{{ config("):-len(") }}")])[chiave]
+    for key in ("alias", "schema"):
+        arg = _config_args(riga[len("{{ config("):-len(") }}")])[key]
         assert _static_parser_value(arg) in (None, nome), arg                            # what the static parser reads
 
 
@@ -941,9 +941,9 @@ def test_the_clickhouse_profile_gives_back_the_engine_s_host(host):
     (`\\'`: the profile did not load)."""
     import json
 
-    riga = next(r for r in d._profilo_clickhouse("p", {"host": host, "port": 8123}).splitlines() if r.startswith("      host: "))
-    valore = json.loads(riga[len("      host: "):])                     # a double-quoted YAML scalar is JSON
-    m = re.fullmatch(r"\{\{ env_var\('CLICKHOUSE_HOST', (" + _JSTR + r")\) \}\}", valore)
+    riga = next(r for r in d._clickhouse_profile("p", {"host": host, "port": 8123}).splitlines() if r.startswith("      host: "))
+    value = json.loads(riga[len("      host: "):])                     # a double-quoted YAML scalar is JSON
+    m = re.fullmatch(r"\{\{ env_var\('CLICKHOUSE_HOST', (" + _JSTR + r")\) \}\}", value)
     assert m and _jinja_value(m.group(1)) == host, riga
     if host == "ch.local":
         assert riga == "      host: \"{{ env_var('CLICKHOUSE_HOST', 'ch.local') }}\""
@@ -955,23 +955,23 @@ def test_jinja_in_the_yaml_values_is_neutralised():
     import json
 
     t = "Note {{ env_var('TABULARIA_DB_1_PASSWORD') }} {% if x %} {#"
-    modelli = [{"name": "uno", "sql": "select 1", "materialized": "table", "description": t, "meta": {"flow": t, "flow_id": 7},
+    models = [{"name": "uno", "sql": "select 1", "materialized": "table", "description": t, "meta": {"flow": t, "flow_id": 7},
                 "tags": ["tabularia"], "columns": [{"name": "c{{a}}lc", "description": t,
                                                    "tests": [{"kind": "not_null", "severity": "error"}]}]}]
     sorgenti = [{"name": "db_1_v", "database": "db_1", "schema": "v",
                  "tables": [{"name": "ordini", "description": t, "columns": [{"name": "n{%x", "description": t}]}]}]
-    files = _progetto(models=modelli, sources=sorgenti,
+    files = _progetto(models=models, sources=sorgenti,
                       seeds=[{"name": "seed_x", "csv": "a\n1\n", "description": t, "columns": [{"name": "a{#", "description": t}]}])
     for path in ("models/schema.yml", "models/sources.yml", "seeds/schema.yml"):
-        valori = [json.loads(v) for v in re.findall(r'"(?:[^"\\]|\\.)*"', files[path])]
-        resi = [_render_like_dbt(v) for v in valori]
+        values = [json.loads(v) for v in re.findall(r'"(?:[^"\\]|\\.)*"', files[path])]
+        resi = [_render_like_dbt(v) for v in values]
         assert t in resi, path
     assert "c{{a}}lc" in set(_render_like_dbt(json.loads(v)) for v in re.findall(r'"(?:[^"\\]|\\.)*"', files["models/schema.yml"]))
 
 
 def test_jinja_in_a_step_comment_never_opens_a_block():
-    for testo in ("{{{ 7*7 }}}", "{%%}", "{#{#", "a{{%b"):
-        assert not _OPENER.search(d._commento(testo)), testo
+    for text in ("{{{ 7*7 }}}", "{%%}", "{#{#", "a{{%b"):
+        assert not _OPENER.search(d._comment(text)), text
 
 
 # ── the federated source password stays out of the ATTACH path (#32) ──────────
@@ -1009,7 +1009,7 @@ def test_connection_values_in_the_profile_are_quoted_and_neutralised():
 
 
 # ── the AI proposal reads only the tables its model reads (#53) ────────────────
-@pytest.mark.parametrize("proposta,motivo", [
+@pytest.mark.parametrize("proposal,reason", [
     # a CTE never hides a QUALIFIED table: system.users is read for real
     ("WITH users AS (SELECT 1 AS x) SELECT name AS id, storage AS nome FROM system.users", "unknown_table"),
     # a CTE of an inner query is not visible outside it
@@ -1024,13 +1024,13 @@ def test_connection_values_in_the_profile_are_quoted_and_neutralised():
     ("SELECT getSetting('max_threads') AS id, nome FROM __s_0", "function_not_allowed"),
     ("SELECT id, nome FROM __s_0 SETTINGS max_execution_time = 1", "settings"),
 ])
-def test_an_ai_proposal_cannot_read_outside_its_model(proposta, motivo):
+def test_an_ai_proposal_cannot_read_outside_its_model(proposal, reason):
     with pytest.raises(d.DbtExportError) as e:
-        d.usa_proposta(proposta, "clickhouse", _MACRO, ["id", "nome"], "m")
-    assert e.value.code == "ai_translation_invalid" and e.value.params["reason"] == motivo, e.value.params
+        d.use_proposal(proposal, "clickhouse", _MACRO, ["id", "nome"], "m")
+    assert e.value.code == "ai_translation_invalid" and e.value.params["reason"] == reason, e.value.params
 
 
-@pytest.mark.parametrize("proposta,motivo", [
+@pytest.mark.parametrize("proposal,reason", [
     ("WITH pg_authid AS (SELECT 1 AS x) SELECT rolname AS id, rolpassword AS nome FROM pg_catalog.pg_authid", "unknown_table"),
     ("SELECT current_setting('server_version') AS id, nome FROM __s_0", "function_not_allowed"),
     ("SELECT pg_read_file('/etc/passwd') AS id, nome FROM __s_0", "function_not_allowed"),
@@ -1039,14 +1039,14 @@ def test_an_ai_proposal_cannot_read_outside_its_model(proposta, motivo):
     ("SELECT nextval('s') AS id, nome FROM __s_0", "function_not_allowed"),
     ("SELECT set_config('a', 'b', false) AS id, nome FROM __s_0", "function_not_allowed"),
 ])
-def test_an_ai_proposal_for_postgres_cannot_read_outside_its_model(proposta, motivo):
+def test_an_ai_proposal_for_postgres_cannot_read_outside_its_model(proposal, reason):
     with pytest.raises(d.DbtExportError) as e:
-        d.usa_proposta(proposta, "postgres", _MACRO, ["id", "nome"], "m")
-    assert e.value.params["reason"] == motivo, e.value.params
+        d.use_proposal(proposal, "postgres", _MACRO, ["id", "nome"], "m")
+    assert e.value.params["reason"] == reason, e.value.params
 
 
 def test_a_good_proposal_with_its_own_ctes_still_passes():
-    sql = d.usa_proposta("WITH a AS (SELECT id, nome FROM __s_0), b AS (SELECT id, nome FROM a) SELECT id, nome FROM b", "clickhouse",
+    sql = d.use_proposal("WITH a AS (SELECT id, nome FROM __s_0), b AS (SELECT id, nome FROM a) SELECT id, nome FROM b", "clickhouse",
                          _MACRO, ["id", "nome"], "m")
     assert "{{ source('db_1_v', 'ordini') }}" in sql
 
@@ -1054,14 +1054,14 @@ def test_a_good_proposal_with_its_own_ctes_still_passes():
 def test_an_ai_proposal_for_a_datasource_query_stays_on_its_connection():
     ch = d.TargetClickHouse([_PG], "ch.local")
     # a table behind an inner CTE of the same name is still a table of the connection: re-pointed
-    sql = ch.traduci_query("x", 1, "clienti", colonne=["id", "nome"],
-                           proposta="SELECT u.id AS id, u.nome AS nome FROM (WITH users AS (SELECT 1 AS a) SELECT a FROM users) AS q JOIN users AS u ON 1 = 1")
+    sql = ch.translate_query("x", 1, "clienti", columns=["id", "nome"],
+                           proposal="SELECT u.id AS id, u.nome AS nome FROM (WITH users AS (SELECT 1 AS a) SELECT a FROM users) AS q JOIN users AS u ON 1 = 1")
     assert "tab_src_1_public.users" in sql.replace("`", "").replace('"', "")
-    for proposta, motivo in (("SELECT id, nome FROM crm.clienti WHERE id IN system.one", "unknown_table"),
+    for proposal, reason in (("SELECT id, nome FROM crm.clienti WHERE id IN system.one", "unknown_table"),
                              ("SELECT dictGet('d', 'v', id) AS id, nome FROM crm.clienti", "function_not_allowed")):
         with pytest.raises(d.DbtExportError) as e:
-            ch.traduci_query("x", 1, "clienti", proposta=proposta, colonne=["id", "nome"])
-        assert e.value.params["reason"] == motivo
+            ch.translate_query("x", 1, "clienti", proposal=proposal, columns=["id", "nome"])
+        assert e.value.params["reason"] == reason
 
 
 def test_on_native_a_proposal_reads_only_the_sources_of_its_own_model():
@@ -1083,11 +1083,11 @@ def test_on_native_a_proposal_reads_only_the_sources_of_its_own_model():
 def test_names_that_yaml_reads_as_booleans_or_null_stay_strings():
     """PyYAML (YAML 1.1) reads on/yes/no/true/false/null as booleans or None: a flow «On»
     gave «Could not find profile named 'on'», an output «Yes» a schema.yml dbt refused."""
-    modelli = [{"name": "yes", "sql": "select 1", "materialized": "table", "description": "", "columns": []},
+    models = [{"name": "yes", "sql": "select 1", "materialized": "table", "description": "", "columns": []},
                {"name": "margine", "sql": "select 2", "materialized": "table", "description": "", "columns": []}]
     sorgenti = [{"name": "on", "database": "null", "schema": "no", "tables": [{"name": "yes", "description": "", "columns": []}, "true"]},
                 {"name": "db_1_vendite", "database": "db_1", "schema": "vendite", "tables": [{"name": "a: b#c", "description": "", "columns": []}]}]
-    files = _progetto(flow_name="On", models=modelli, sources=sorgenti, schema="off",
+    files = _progetto(flow_name="On", models=models, sources=sorgenti, schema="off",
                       seeds=[{"name": "Null", "csv": "a\n1\n", "description": "", "columns": []}])
     assert files["profiles.yml"].startswith('"on":\n') and '      schema: "off"\n' in files["profiles.yml"]
     assert "name: 'on'" in files["dbt_project.yml"] and "profile: 'on'" in files["dbt_project.yml"] and 'models:\n  "on":\n' in files["dbt_project.yml"]
@@ -1126,19 +1126,19 @@ def test_yaml_forbidden_characters_are_escaped_and_read_back_exactly():
     import json
 
     strani = ["Smith\x96Jones", "a\x7fb", "x\x85y", "l s", "p s", "z￾", "c\x01d", "eè–"]
-    modelli = [{"name": "uno", "sql": "select 1", "materialized": "table", "description": strani[0], "meta": {"flow": strani[1]},
+    models = [{"name": "uno", "sql": "select 1", "materialized": "table", "description": strani[0], "meta": {"flow": strani[1]},
                 "columns": [{"name": s, "description": s, "tests": [{"kind": "not_null", "severity": "error"}]} for s in strani]}]
     sorgenti = [{"name": "db_1_v", "database": "db_1", "schema": "v",
                  "tables": [{"name": "t", "description": strani[2], "columns": [{"name": s, "description": s} for s in strani]}]}]
-    files = _progetto(models=modelli, sources=sorgenti, attachments=[{"alias": "db_1", "db_type": "postgresql", "pw_env": "P",
+    files = _progetto(models=models, sources=sorgenti, attachments=[{"alias": "db_1", "db_type": "postgresql", "pw_env": "P",
                                                                        "conn": {"host": "h\x96", "port": 5432, "database": "d", "username": "u"}}],
                       seeds=[{"name": "seed_x", "csv": "a\n1\n", "description": strani[3], "columns": [{"name": s, "description": ""} for s in strani],
                               "column_types": {s: "VARCHAR" for s in strani}}])
     for path in ("models/schema.yml", "models/sources.yml", "seeds/schema.yml", "profiles.yml"):
         assert not _YAML_RAW_FORBIDDEN.search(files[path]), (path, _YAML_RAW_FORBIDDEN.search(files[path]))
-        valori = {json.loads(v) for v in re.findall(r'"(?:[^"\\]|\\.)*"', files[path])}
+        values = {json.loads(v) for v in re.findall(r'"(?:[^"\\]|\\.)*"', files[path])}
         if path != "profiles.yml":
-            assert set(strani) <= valori, (path, set(strani) - valori)
+            assert set(strani) <= values, (path, set(strani) - values)
     assert '"h\\u0096"' in files["profiles.yml"]
 
 
@@ -1206,16 +1206,16 @@ def _engine_snapshot(engine: str, sources: dict, main: str, ops: list):
         eng = DuckDBEngine(storage=storage, cache=cache)
     res = eng.preview(srcs[main], ops, limit=100_000, use_cache=False)
     cols = [c.name for c in res.columns]
-    righe = sorted((tuple(_norm(r.get(c)) for c in cols) for r in res.rows), key=lambda t: tuple(map(str, t)))
-    return cols, righe, [_famiglia_pl(c.dtype) for c in res.columns]
+    rows = sorted((tuple(_norm(r.get(c)) for c in cols) for r in res.rows), key=lambda t: tuple(map(str, t)))
+    return cols, rows, [_famiglia_pl(c.dtype) for c in res.columns]
 
 
-def _export_sql(sources: dict, main: str, ops: list, native: bool = False, dialetto=None, **kw):
+def _export_sql(sources: dict, main: str, ops: list, native: bool = False, dialect=None, **kw):
     def resolve(spec):
         nome = spec["key"].split("/")[-1].removesuffix(".parquet")
         df = sources[nome]
         return f"t_{nome}", list(df.columns), {c: d.duck_type(str(t)) for c, t in df.schema.items()}, nome
-    return d.compile_model_sql(_key(main), ops, resolve, native=native, dialetto=dialetto, **kw)
+    return d.compile_model_sql(_key(main), ops, resolve, native=native, dialect=dialect, **kw)
 
 
 def _duck_with(sources: dict):
@@ -1232,8 +1232,8 @@ def _export_snapshot(sources: dict, main: str, ops: list, **kw):
     sql, _, _ = _export_sql(sources, main, ops, **kw)
     rel = _duck_with(sources).sql(sql)
     cols, tipi = list(rel.columns), [str(t) for t in rel.types]
-    righe = sorted((tuple(_norm(v) for v in r) for r in rel.fetchall()), key=lambda t: tuple(map(str, t)))
-    return cols, righe, [_famiglia_duck(t) for t in tipi]
+    rows = sorted((tuple(_norm(v) for v in r) for r in rel.fetchall()), key=lambda t: tuple(map(str, t)))
+    return cols, rows, [_famiglia_duck(t) for t in tipi]
 
 
 def _parita(sources: dict, main: str, ops: list, engines=("polars", "duckdb")):
@@ -1259,18 +1259,18 @@ def _uguali(par: dict, tipi: bool = True):
 # #0 — a join or a compute after a pivot (columns the data decides) loses nothing
 def test_a_join_after_a_pivot_keeps_the_pivot_columns():
     src = {"clienti": _CLIENTI, "vendite": _VENDITE}
-    destra = [{"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("vendite"), "operations": [_PIVOT]}}}]
-    par = _parita(src, "clienti", destra)
+    right = [{"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("vendite"), "operations": [_PIVOT]}}}]
+    par = _parita(src, "clienti", right)
     assert par["polars"][0] == ["cliente", "nome", "2023", "2024"]
     _uguali(par, tipi=False)
-    sinistra = [_PIVOT, {"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("clienti")}}}]
-    par = _parita(src, "vendite", sinistra)
+    left = [_PIVOT, {"type": "join", "params": {"how": "left", "on": "cliente", "right": {"source": _key("clienti")}}}]
+    par = _parita(src, "vendite", left)
     assert par["polars"][0] == ["cliente", "2023", "2024", "nome"]
     _uguali(par, tipi=False)
     # keys with other names: the pivot's index comes back as cliente_right, like the engine
-    chiavi = [{"type": "join", "params": {"how": "full", "left_on": ["cliente"], "right_on": ["cliente"],
+    key_names = [{"type": "join", "params": {"how": "full", "left_on": ["cliente"], "right_on": ["cliente"],
                                           "right": {"source": _key("vendite"), "operations": [_PIVOT]}}}]
-    par = _parita(src, "clienti", chiavi)
+    par = _parita(src, "clienti", key_names)
     assert par["polars"][0] == ["cliente", "nome", "cliente_right", "2023", "2024"]
     _uguali(par, tipi=False)
     # the pivot on the LEFT, joined back on its index with left_on/right_on (what the editor writes as
@@ -1283,10 +1283,10 @@ def test_a_join_after_a_pivot_keeps_the_pivot_columns():
         assert par["polars"][0] == ["cliente", "2023", "2024", "cliente_right", "nome"], how
         _uguali(par, tipi=False)
     # and a column the flow makes after the pivot, or renames, is known too; a dropped one is gone
-    dopo = [_PIVOT, {"type": "compute", "params": {"columns": [{"name": "nome", "expr": "'x'"}]}},
+    after = [_PIVOT, {"type": "compute", "params": {"columns": [{"name": "nome", "expr": "'x'"}]}},
             {"type": "rename", "params": {"mapping": {"cliente": "id"}}},
             {"type": "join", "params": {"how": "left", "left_on": ["id"], "right_on": ["cliente"], "right": {"source": _key("clienti")}}}]
-    par = _parita(src, "vendite", dopo)
+    par = _parita(src, "vendite", after)
     assert par["polars"][0] == ["id", "2023", "2024", "nome", "cliente", "nome_right"]
     _uguali(par, tipi=False)
     tolto = [_PIVOT, {"type": "compute", "params": {"columns": [{"name": "nome", "expr": "'x'"}]}},
@@ -1337,8 +1337,8 @@ def test_steps_after_a_pivot_never_claim_to_know_only_some_of_its_columns():
     par = _parita(src, "vendite", [_PIVOT, {"type": "reorder", "params": {"columns": ["2024"]}}, join])
     assert par["polars"][0] == ["2024", "cliente", "2023", "nome"]
     _uguali(par, tipi=False)
-    altri = _pl.DataFrame({"cliente": [9], "extra": ["e"]})
-    src["altri"] = altri
+    others_ = _pl.DataFrame({"cliente": [9], "extra": ["e"]})
+    src["altri"] = others_
     union = {"type": "union", "params": {"right": {"source": _key("altri")}}}
     par = _parita(src, "vendite", [_PIVOT, union, join], engines=("duckdb",))
     assert par["duckdb"][0] == ["cliente", "2023", "2024", "extra", "nome"]
@@ -1356,7 +1356,7 @@ def test_cast_to_int_of_a_computed_number_truncates_like_the_engine():
     assert [r[3:] for r in par["polars"][1]] == [(10.0, None), (20.0, None), (5.0, 42.0), (-7.0, None)]
     _uguali(par)
     # native: the same guarded forms, written for the warehouse (no bare CAST of a double or a text)
-    nat, _, _ = _export_sql({"ordini": _ORDINI}, "ordini", ops, native=True, dialetto="postgres")
+    nat, _, _ = _export_sql({"ordini": _ORDINI}, "ordini", ops, native=True, dialect="postgres")
     assert 'CAST(trunc("x") AS BIGINT)' in nat and "regexp_matches(trim(\"t2\")" in nat
 
 
@@ -1364,9 +1364,9 @@ def test_cast_after_a_sql_node_or_a_union_of_two_types_uses_the_real_type():
     sql_op = [{"type": "sql", "params": {"query": "SELECT id, importo AS f, testo FROM self"}},
               {"type": "cast", "params": {"columns": {"f": "int"}}}]
     _uguali(_parita({"ordini": _ORDINI}, "ordini", sql_op))
-    altri = _pl.DataFrame({"id": [9], "importo": [1.5], "testo": ["7"]}).with_columns(_pl.col("testo").cast(_pl.String))
+    others_ = _pl.DataFrame({"id": [9], "importo": [1.5], "testo": ["7"]}).with_columns(_pl.col("testo").cast(_pl.String))
     union = [{"type": "union", "params": {"right": {"source": _key("altri")}}}, {"type": "cast", "params": {"columns": {"importo": "int"}}}]
-    _uguali(_parita({"ordini": _ORDINI, "altri": altri}, "ordini", union))
+    _uguali(_parita({"ordini": _ORDINI, "altri": others_}, "ordini", union))
 
 
 def test_a_cast_of_a_column_whose_type_nobody_knows_is_refused_not_guessed():
@@ -1392,14 +1392,14 @@ def _con_un_uuid(_):
     return "t_src", ["uid", "x", "s"], {"uid": None, "x": "DOUBLE", "s": "VARCHAR"}, "src"
 
 
-@pytest.mark.parametrize("dialetto", [None, "postgres", "clickhouse"])
-def test_a_column_of_an_unknown_type_leaves_the_probe_on_for_the_others(dialetto):
+@pytest.mark.parametrize("dialect", [None, "postgres", "clickhouse"])
+def test_a_column_of_an_unknown_type_leaves_the_probe_on_for_the_others(dialect):
     import duckdb
 
-    nat = dialetto is not None
+    nat = dialect is not None
     ops = [{"type": "compute", "params": {"columns": [{"name": "y", "expr": "x * 2"}, {"name": "u", "expr": "CAST(uid AS VARCHAR)"}]}},
            {"type": "cast", "params": {"columns": {"y": "int", "u": "str"}}}]
-    sql, cols, tipi = d.compile_model_sql({"key": "k"}, ops, _con_un_uuid, native=nat, dialetto=dialetto)
+    sql, cols, tipi = d.compile_model_sql({"key": "k"}, ops, _con_un_uuid, native=nat, dialect=dialect)
     assert cols == ["uid", "x", "s", "y", "u"] and tipi["y"] == "BIGINT" and tipi["uid"] is None
     if not nat:
         con = duckdb.connect()
@@ -1407,29 +1407,29 @@ def test_a_column_of_an_unknown_type_leaves_the_probe_on_for_the_others(dialetto
         assert con.sql(sql).fetchall() == [(__import__("uuid").UUID("5f0c6c2e-8a8f-4f39-9c7e-2f1b9d0a4e11"), 10.7, "a", 21, "5f0c6c2e-8a8f-4f39-9c7e-2f1b9d0a4e11")]
     # a sql node's expression without an alias gets DuckDB's name, as in the engine
     q = [{"type": "sql", "params": {"query": "SELECT x + 1, s FROM self"}}, {"type": "sort", "params": {"by": ["s"]}}]
-    _, cols, _ = d.compile_model_sql({"key": "k"}, q, _con_un_uuid, native=nat, dialetto=dialetto)
+    _, cols, _ = d.compile_model_sql({"key": "k"}, q, _con_un_uuid, native=nat, dialect=dialect)
     assert cols == ["(x + 1)", "s"]
     # what is made from the unknown column itself is not known: that cast, and only it, is refused
     with pytest.raises(d.DbtExportError) as e:
         d.compile_model_sql({"key": "k"}, [{"type": "compute", "params": {"columns": [{"name": "z", "expr": "coalesce(uid, uid)"}]}},
-                                           {"type": "cast", "params": {"columns": {"z": "str"}}}], _con_un_uuid, native=nat, dialetto=dialetto)
+                                           {"type": "cast", "params": {"columns": {"z": "str"}}}], _con_un_uuid, native=nat, dialect=dialect)
     assert e.value.code == "cast_type_unknown" and e.value.params == {"column": "z"}
 
 
-@pytest.mark.parametrize("testo", ["clickhouse", "bigquery"])
-def test_translated_text_that_reads_a_column_of_an_unknown_type_is_not_refused(testo):
+@pytest.mark.parametrize("text", ["clickhouse", "bigquery"])
+def test_translated_text_that_reads_a_column_of_an_unknown_type_is_not_refused(text):
     """The probe types such a column as a placeholder: text that reads it does not bind there,
     which says nothing about the warehouse (an array has a length) — not refused for that."""
     def resolve(_):
         return "t_src", ["id", "tags"], {"id": "BIGINT", "tags": None}, "src"
-    leggi = "has(tags, 'a')" if testo == "clickhouse" else "ARRAY_LENGTH(tags)"
-    ops = [{"type": "compute", "params": {"columns": [{"name": "n", "expr": leggi}]}},
-           {"type": "sql", "params": {"query": f"SELECT id, {leggi} AS m FROM self"}}]
-    _, cols, _ = d.compile_model_sql({"key": "k"}, ops, resolve, testo=testo)
+    read = "has(tags, 'a')" if text == "clickhouse" else "ARRAY_LENGTH(tags)"
+    ops = [{"type": "compute", "params": {"columns": [{"name": "n", "expr": read}]}},
+           {"type": "sql", "params": {"query": f"SELECT id, {read} AS m FROM self"}}]
+    _, cols, _ = d.compile_model_sql({"key": "k"}, ops, resolve, text=text)
     assert cols == ["id", "m"]
     # text that does not run in DuckDB for another reason is still refused
     with pytest.raises(d.DbtExportError) as e:
-        d.compile_model_sql({"key": "k"}, [{"type": "compute", "params": {"columns": [{"name": "n", "expr": "nonexistent_fn(id)"}]}}], resolve, testo=testo)
+        d.compile_model_sql({"key": "k"}, [{"type": "compute", "params": {"columns": [{"name": "n", "expr": "nonexistent_fn(id)"}]}}], resolve, text=text)
     assert e.value.code == "text_not_translatable"
 
 
@@ -1446,9 +1446,9 @@ def test_the_probe_of_a_long_wide_flow_takes_well_under_a_second_per_hundred_ste
         ops += [{"type": "compute", "params": {"columns": [{"name": f"c{k * 3 % 150}", "expr": f"c{k * 3 % 150} * 2"}]}},
                 {"type": "filter", "params": {"column": f"c{(k * 3 + 1) % 150}", "operator": "ne", "value": "x"}},
                 {"type": "cast", "params": {"columns": {f"c{k * 3 % 150}": "int"}}}]
-    inizio = time.monotonic()
+    start = time.monotonic()
     _, _, finali = d.compile_model_sql({"key": "k"}, ops, lambda _: ("t_src", cols, tipi, "src"))
-    assert time.monotonic() - inizio < 4, "the probe re-binds the whole chain at every step"
+    assert time.monotonic() - start < 4, "the probe re-binds the whole chain at every step"
     assert finali["c0"] == "BIGINT" and finali["c1"] == "VARCHAR"
 
 
@@ -1457,11 +1457,11 @@ def test_a_column_of_an_unknown_type_on_native_postgres_casts_the_others():
 
     ops = [{"type": "compute", "params": {"columns": [{"name": "y", "expr": "x * 2"}]}}, {"type": "cast", "params": {"columns": {"y": "int"}}}]
     info: dict = {}
-    raw, _, _ = d.compile_model_sql({"key": "k"}, ops, _con_un_uuid, native=True, dialetto="postgres", info=info)
-    pg = d.rimetti_testi(d.transpile_model(raw, "postgres", {"t_src": ["uid", "x", "s"]}), info)
-    valori = "(VALUES ('5f0c6c2e-8a8f-4f39-9c7e-2f1b9d0a4e11'::uuid, 10.7::float8, 'a')) AS \"t_src\"(\"uid\", \"x\", \"s\")"
+    raw, _, _ = d.compile_model_sql({"key": "k"}, ops, _con_un_uuid, native=True, dialect="postgres", info=info)
+    pg = d.put_back_texts(d.transpile_model(raw, "postgres", {"t_src": ["uid", "x", "s"]}), info)
+    values = "(VALUES ('5f0c6c2e-8a8f-4f39-9c7e-2f1b9d0a4e11'::uuid, 10.7::float8, 'a')) AS \"t_src\"(\"uid\", \"x\", \"s\")"
     u = uuid.UUID("5f0c6c2e-8a8f-4f39-9c7e-2f1b9d0a4e11")
-    [riga] = _su_postgres(pg.replace('"t_src" AS "t_src"', valori))
+    [riga] = _su_postgres(pg.replace('"t_src" AS "t_src"', values))
     assert riga[0] in (u, u.bytes) and riga[1:] == (10.7, "a", 21)   # the driver gives a uuid as its bytes
 
 
@@ -1471,34 +1471,34 @@ _PAGATI = _pl.DataFrame({"g": ["a", "a", "a", "b"], "pagato": [True, True, True,
                         ).with_columns(_pl.col("prezzo").cast(_pl.Decimal(4, 2)))
 
 
-def _attraverso_un_passo_condiviso(sources, main, primo, secondo):
+def _attraverso_un_passo_condiviso(sources, main, first, secondo):
     """Like the route: model A (a shared int_ step), then model B reading it with {model: A}
     and the column types the export recorded for A."""
     con = _duck_with(sources)
-    sql_a, cols_a, tipi_a = _export_sql(sources, main, primo)
+    sql_a, cols_a, tipi_a = _export_sql(sources, main, first)
     con.execute(f"CREATE VIEW int_a AS {sql_a}")
     sql_b, _, _ = d.compile_model_sql({"model": "int_a"}, secondo, lambda spec: ("int_a", cols_a, tipi_a, "int_a"))
     rel = con.sql(sql_b)
-    righe = sorted((tuple(_norm(v) for v in r) for r in rel.fetchall()), key=lambda t: tuple(map(str, t)))
-    return list(rel.columns), righe, [str(t) for t in rel.types]
+    rows = sorted((tuple(_norm(v) for v in r) for r in rel.fetchall()), key=lambda t: tuple(map(str, t)))
+    return list(rel.columns), rows, [str(t) for t in rel.types]
 
 
 def test_a_sum_of_booleans_read_through_a_shared_step_stays_a_count():
     gb = [{"type": "group_by", "params": {"by": ["g"], "aggregations": [{"column": "pagato", "func": "sum", "alias": "n_pagati"},
                                                                          {"column": "prezzo", "func": "sum", "alias": "tot"}]}}]
     fil = [{"type": "filter", "params": {"column": "g", "operator": "eq", "value": "a"}}]
-    cols, righe, tipi = _attraverso_un_passo_condiviso({"pagati": _PAGATI}, "pagati", gb, fil)
+    cols, rows, tipi = _attraverso_un_passo_condiviso({"pagati": _PAGATI}, "pagati", gb, fil)
     rif = _engine_snapshot("polars", {"pagati": _PAGATI}, "pagati", gb + fil)
-    assert (cols, righe) == (rif[0], rif[1]) == (["g", "n_pagati", "tot"], [("a", 3.0, 236.74)])
+    assert (cols, rows) == (rif[0], rif[1]) == (["g", "n_pagati", "tot"], [("a", 3.0, 236.74)])
     assert tipi == ["VARCHAR", "BIGINT", "DECIMAL(38,2)"]
 
 
 def test_the_median_and_mean_of_dates_read_through_a_shared_step_run():
     gb = [{"type": "group_by", "params": {"by": ["g"], "aggregations": [{"column": "giorno", "func": "median", "alias": "med"},
                                                                          {"column": "giorno", "func": "mean", "alias": "media"}]}}]
-    cols, righe, tipi = _attraverso_un_passo_condiviso({"pagati": _PAGATI}, "pagati", gb, [{"type": "limit", "params": {"n": 10}}])
+    cols, rows, tipi = _attraverso_un_passo_condiviso({"pagati": _PAGATI}, "pagati", gb, [{"type": "limit", "params": {"n": 10}}])
     rif = _engine_snapshot("duckdb", {"pagati": _PAGATI}, "pagati", gb)
-    assert (cols, righe) == (rif[0], rif[1]) and tipi == ["VARCHAR", "TIMESTAMP", "TIMESTAMP"]
+    assert (cols, rows) == (rif[0], rif[1]) and tipi == ["VARCHAR", "TIMESTAMP", "TIMESTAMP"]
 
 
 def test_integer_sums_after_a_compute_and_in_a_pivot_are_bigint_like_the_engine():
@@ -1556,17 +1556,17 @@ def test_the_publish_sort_on_a_sql_node_column_named_by_duckdb_is_kept():
     assert _duck_with({"casi": _CASI}).sql(sql).fetchall() == [("g2", 1), ("g1", 2)]
 
 
-@pytest.mark.parametrize("query,nomi", [("SELECT id, i + 1 FROM self", ["id", "(i + 1)"]),
+@pytest.mark.parametrize("query,names", [("SELECT id, i + 1 FROM self", ["id", "(i + 1)"]),
                                         ("SELECT *, upper(s) FROM self", ["id", "g", "i", "s", "upper(s)"]),
                                         ("SELECT g, count(*) FROM self GROUP BY g", ["g", "count_star()"])])
-def test_on_native_a_sql_node_publishes_the_names_duckdb_gives(query, nomi):
+def test_on_native_a_sql_node_publishes_the_names_duckdb_gives(query, names):
     """Not sqlglot's made-up `_col_1` (and with a `*` next to the expression, sqlglot's
     count did not even match the translated query's)."""
     ops = [{"type": "sql", "params": {"query": query}}, {"type": "rename", "params": {"mapping": {"id": "id"}}}]
-    nat, cols, _ = _export_sql({"casi": _CASI}, "casi", ops[:1] + ([] if "GROUP" in query else ops[1:]), native=True, dialetto="postgres")
-    assert cols == nomi
+    nat, cols, _ = _export_sql({"casi": _CASI}, "casi", ops[:1] + ([] if "GROUP" in query else ops[1:]), native=True, dialect="postgres")
+    assert cols == names
     pg = " ".join(d.transpile_model(nat, "postgres", {"t_casi": list(_CASI.columns)}).split())
-    assert "_col_" not in pg and f'AS "{nomi[-1]}"' in pg
+    assert "_col_" not in pg and f'AS "{names[-1]}"' in pg
 
 
 # #8 — first/last follow the sort before them, and exist on every target
@@ -1593,26 +1593,26 @@ def test_first_and_last_after_a_sort_follow_the_sort_in_the_federated_model():
     sql, _, _ = _export_sql(src, "storico", _PRIMO_ULTIMO)
     con = _duck_with(src)
     con.execute("SET threads = 8")
-    righe = sorted((tuple(_norm(v) for v in r) for r in con.sql(sql).fetchall()), key=lambda t: tuple(map(str, t)))
-    assert righe == rif[1]
+    rows = sorted((tuple(_norm(v) for v in r) for r in con.sql(sql).fetchall()), key=lambda t: tuple(map(str, t)))
+    assert rows == rif[1]
 
 
 def test_first_and_last_exist_on_postgres_and_clickhouse_and_keep_the_order():
     src = {"storico": _storico(1009)}
-    nat, _, _ = _export_sql(src, "storico", _PRIMO_ULTIMO, native=True, dialetto="postgres")
+    nat, _, _ = _export_sql(src, "storico", _PRIMO_ULTIMO, native=True, dialect="postgres")
     pg = _codice(d.transpile_model(nat, "postgres", {"t_storico": ["cliente", "data", "stato"]}))
     assert "FIRST(" not in pg.upper() and "LAST(" not in pg.upper() and pg.count("ARRAY_AGG(") == 3 and "ORDER BY" in pg
     info: dict = {}
-    ch_raw, _, _ = _export_sql(src, "storico", _PRIMO_ULTIMO, native=True, dialetto="clickhouse", info=info)
-    ch = d.rimetti_testi(d.transpile_model(ch_raw, "clickhouse", {"t_storico": ["cliente", "data", "stato"]}), info)
+    ch_raw, _, _ = _export_sql(src, "storico", _PRIMO_ULTIMO, native=True, dialect="clickhouse", info=info)
+    ch = d.put_back_texts(d.transpile_model(ch_raw, "clickhouse", {"t_storico": ["cliente", "data", "stato"]}), info)
     assert "FIRST(" not in _codice(ch).upper() and "arrayReverseSort(" in ch and "__tabularia_" not in ch
     # unordered (no sort before): still a function the warehouse has
     gb = _PRIMO_ULTIMO[2:]
-    nat, _, _ = _export_sql(src, "storico", gb, native=True, dialetto="postgres")
+    nat, _, _ = _export_sql(src, "storico", gb, native=True, dialect="postgres")
     assert "FIRST(" not in _codice(d.transpile_model(nat, "postgres", {"t_storico": ["cliente", "data", "stato"]})).upper()
     info = {}
-    ch_raw, _, _ = _export_sql(src, "storico", gb, native=True, dialetto="clickhouse", info=info)
-    ch = d.rimetti_testi(d.transpile_model(ch_raw, "clickhouse", {"t_storico": ["cliente", "data", "stato"]}), info)
+    ch_raw, _, _ = _export_sql(src, "storico", gb, native=True, dialect="clickhouse", info=info)
+    ch = d.put_back_texts(d.transpile_model(ch_raw, "clickhouse", {"t_storico": ["cliente", "data", "stato"]}), info)
     assert "any(" in ch and "anyLast(" in ch and "FIRST(" not in _codice(ch).upper()
 
 
@@ -1626,14 +1626,14 @@ def test_first_and_last_after_a_sort_run_on_clickhouse_like_polars():
     rif = _engine_snapshot("polars", {"t": df}, "t", [{"type": "sort", "params": {"by": ["data"]}}] + _PRIMO_ULTIMO[2:])
     ops = [{"type": "sort", "params": {"by": ["data"]}}] + _PRIMO_ULTIMO[2:]
     info: dict = {}
-    raw, cols, _ = _export_sql({"t": df}, "t", ops, native=True, dialetto="clickhouse", info=info)
-    ch = d.rimetti_testi(d.transpile_model(raw, "clickhouse", {"t_t": list(df.columns)}), info)
-    valori = ", ".join(f"({c}, {'NULL' if x is None else x}, {'NULL' if s is None else repr(s)})" for c, x, s in df.iter_rows())
-    ch = ch.replace('"t_t" AS "t_t"', f"(SELECT * FROM values('cliente Int64, data Nullable(Int64), stato Nullable(String)', {valori})) AS \"t_t\"")
+    raw, cols, _ = _export_sql({"t": df}, "t", ops, native=True, dialect="clickhouse", info=info)
+    ch = d.put_back_texts(d.transpile_model(raw, "clickhouse", {"t_t": list(df.columns)}), info)
+    values = ", ".join(f"({c}, {'NULL' if x is None else x}, {'NULL' if s is None else repr(s)})" for c, x, s in df.iter_rows())
+    ch = ch.replace('"t_t" AS "t_t"', f"(SELECT * FROM values('cliente Int64, data Nullable(Int64), stato Nullable(String)', {values})) AS \"t_t\"")
     cli = clickhouse_connect.get_client(host=os.environ["CLICKHOUSE_TEST_HOST"], port=int(os.getenv("CLICKHOUSE_TEST_PORT", "8123")),
                                         username=os.getenv("CLICKHOUSE_TEST_USER", "default"), password=os.getenv("CLICKHOUSE_TEST_PASSWORD", ""))
-    righe = sorted((tuple(_norm(v) for v in r) for r in cli.query(ch).result_rows), key=lambda t: tuple(map(str, t)))
-    assert righe == rif[1] == [(1.0, 1.0, "a", None), (2.0, None, "x", None)]
+    rows = sorted((tuple(_norm(v) for v in r) for r in cli.query(ch).result_rows), key=lambda t: tuple(map(str, t)))
+    assert rows == rif[1] == [(1.0, 1.0, "a", None), (2.0, None, "x", None)]
 
 
 # #9 — a filter Tabularia refuses (no value) is refused, not exported as `= NULL`
@@ -1663,13 +1663,13 @@ def test_a_drop_of_several_columns_is_the_same_under_every_hash_seed():
     import subprocess
     import sys
 
-    codice = ("from app.engine import dbt_export as d\n"
+    code = ("from app.engine import dbt_export as d\n"
               "r = lambda s: ('__s_0', ['id', 'canale', 'importo', 'stato', 'deposito', 'nota'], {})\n"
               "print(d.compile_model_sql({'key': 'k'}, [{'type': 'drop', 'params': {'columns': ['canale', 'importo', 'stato', 'deposito', 'canale']}}], r)[0])")
     uscite = set()
     for seme in ("1", "2", "3"):
         env = {**os.environ, "PYTHONHASHSEED": seme}
-        uscite.add(subprocess.run([sys.executable, "-c", codice], env=env, capture_output=True, text=True, check=True).stdout)
+        uscite.add(subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True).stdout)
     assert len(uscite) == 1
     assert 'EXCLUDE ("canale", "importo", "stato", "deposito")' in uscite.pop()
 
@@ -1717,10 +1717,10 @@ def test_an_error_of_the_exporter_on_a_complete_node_is_not_blamed_on_the_flow(o
 
     def guasto(*a, **k):
         raise TypeError("a bug of the exporter")
-    monkeypatch.setattr(d, "_lista", guasto)
+    monkeypatch.setattr(d, "_column_list", guasto)
     monkeypatch.setattr(d, "_predicate", guasto)
     monkeypatch.setattr(d, "_aggregato", guasto)
-    monkeypatch.setattr(d, "_espressione", guasto)
+    monkeypatch.setattr(d, "_expression", guasto)
     with pytest.raises(HTTPException) as e:
         _zip(_richiesta_export(models=[{"name": "uno", "source": {"key": "k"}, "operations": [op]}]))
     assert e.value.status_code == 422 and e.value.detail["code"] == "internal", e.value.detail
@@ -1737,8 +1737,8 @@ def test_a_text_that_looks_like_the_exporters_placeholder_stays_as_it_is():
                                          models=[{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": "clickhouse"}],
                                          source_map={"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", "columns": ["id", "s"],
                                                            "types": {"id": "Int64", "s": "String"}, "label": "ordini"}}))
-        modello = files["models/uno.sql"]
-        assert "'__tabularia_t1__()'" in modello and "upperUTF8(s)" in modello and modello.count("upperUTF8") == 1
+        model = files["models/uno.sql"]
+        assert "'__tabularia_t1__()'" in model and "upperUTF8(s)" in model and model.count("upperUTF8") == 1
     # and the zip stays the same, export after export
     assert _zip(_richiesta_export(mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "s"},
                                   models=[{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": "clickhouse"}],
@@ -1760,16 +1760,16 @@ def test_a_lone_surrogate_in_the_flows_text_does_not_break_the_zip():
         req = _richiesta_export(flow_description="prima \ud800 dopo", layout=layout,
                                 models=[{"name": "uno", "source": {"key": "k"}, "description": "modello \udfff", "operations": []}])
         with zipfile.ZipFile(io.BytesIO(_zip(req))) as z:
-            testi = {n: z.read(n).decode("utf-8") for n in z.namelist()}
-        leggimi = testi.get("README.md") or testi["INTEGRATION.md"]
+            texts = {n: z.read(n).decode("utf-8") for n in z.namelist()}
+        leggimi = texts.get("README.md") or texts["INTEGRATION.md"]
         assert "prima \ufffd dopo" in leggimi
-        for nome, testo in testi.items():
-            assert not re.search("[\ud800-\udfff]", testo), nome
+        for nome, text in texts.items():
+            assert not re.search("[\ud800-\udfff]", text), nome
 
 
 # #7 — compute and sql text is read in the dialect of the flow's engine
-def _modelli_con_dialetto(dialetto, ops):
-    return [{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": dialetto}]
+def _modelli_con_dialetto(dialect, ops):
+    return [{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": dialect}]
 
 
 def _tipi_k():
@@ -1788,9 +1788,9 @@ def test_polars_text_is_kept_and_listed_for_review_in_the_readme_and_the_model()
     ops = [{"type": "compute", "params": {"columns": [{"name": "x", "expr": "CAST(n AS INTEGER)"}]}},
            {"type": "sql", "params": {"query": "SELECT id, x FROM self"}}]
     files = _files(_richiesta_export(source_map=_tipi_k(), models=_modelli_con_dialetto("polars", ops)))
-    modello = files["models/uno.sql"]
-    assert "(CAST(n AS INTEGER)) AS \"x\"" in modello
-    assert "-- Written for the Polars engine, review: compute_x, custom_sql." in modello
+    model = files["models/uno.sql"]
+    assert "(CAST(n AS INTEGER)) AS \"x\"" in model
+    assert "-- Written for the Polars engine, review: compute_x, custom_sql." in model
     assert "`uno`" in files["README.md"] and "Polars engine" in files["README.md"]
     # a DuckDB flow's text needs no review
     files = _files(_richiesta_export(source_map=_tipi_k(), models=_modelli_con_dialetto("duckdb", ops)))
@@ -1801,10 +1801,10 @@ def test_clickhouse_text_is_translated_for_the_federated_target_and_runs():
     src = {"k": _pl.DataFrame({"id": [1, 2], "n": [2.5, -7.0], "d": [_dt.date(2024, 3, 9), _dt.date(2023, 12, 31)], "s": ["città", "x"]})}
     ops = [{"type": "compute", "params": {"columns": [{"name": "mese", "expr": "toStartOfMonth(d)"}, {"name": "u", "expr": "if(n > 0, 'pos', 'neg')"}]}},
            {"type": "sql", "params": {"query": "SELECT id, mese, u, countIf(n > 0) OVER () AS c FROM self"}}]
-    sql, cols, _ = _export_sql(src, "k", ops, testo="clickhouse")
+    sql, cols, _ = _export_sql(src, "k", ops, text="clickhouse")
     assert "toStartOfMonth" not in _codice(sql) and "countIf" not in _codice(sql)
-    righe = _duck_with(src).sql(sql).fetchall()
-    assert cols == ["id", "mese", "u", "c"] and sorted(r[:3] for r in righe) == [(1, _dt.datetime(2024, 3, 1), "pos"), (2, _dt.datetime(2023, 12, 1), "neg")]
+    rows = _duck_with(src).sql(sql).fetchall()
+    assert cols == ["id", "mese", "u", "c"] and sorted(r[:3] for r in rows) == [(1, _dt.datetime(2024, 3, 1), "pos"), (2, _dt.datetime(2023, 12, 1), "neg")]
     files = _files(_richiesta_export(source_map=_tipi_k(), models=_modelli_con_dialetto("clickhouse", ops)))
     assert "Translated from ClickHouse SQL by sqlglot, review: compute_mese, compute_u, custom_sql." in files["models/uno.sql"]
 
@@ -1827,10 +1827,10 @@ def test_clickhouse_text_is_used_as_it_is_on_the_clickhouse_target():
                             source_map={"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", "columns": ["id", "n", "d", "s"],
                                               "types": {"id": "Int64", "n": "Float64", "d": "Date", "s": "String"}, "label": "ordini"}},
                             models=_modelli_con_dialetto("clickhouse", ops))
-    modello = _files(req)["models/uno.sql"]
+    model = _files(req)["models/uno.sql"]
     # as the ClickHouse engine runs it: upper on characters (upperUTF8), not on bytes
-    assert "intDiv(id, 2)" in modello and "upperUTF8(s)" in modello and "toYear(d)" in modello and "__tabularia_" not in modello
-    assert "review" not in modello.lower()
+    assert "intDiv(id, 2)" in model and "upperUTF8(s)" in model and "toYear(d)" in model and "__tabularia_" not in model
+    assert "review" not in model.lower()
 
 
 def test_duckdb_text_keeps_its_unicode_semantics_on_clickhouse():
@@ -1843,10 +1843,10 @@ def test_duckdb_text_keeps_its_unicode_semantics_on_clickhouse():
                             source_map={"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", "columns": ["id", "s"],
                                               "types": {"id": "Int64", "s": "String"}, "label": "ordini"}},
                             models=_modelli_con_dialetto("duckdb", ops))
-    modello = _codice(_files(req)["models/uno.sql"])
+    model = _codice(_files(req)["models/uno.sql"])
     for f in ("upperUTF8(", "leftUTF8(", "reverseUTF8(", "lowerUTF8(", "substringUTF8("):
-        assert f in modello, f
-    assert not re.search(r"\b(UPPER|LOWER|REVERSE|SUBSTRING|LEFT)\(", modello)
+        assert f in model, f
+    assert not re.search(r"\b(UPPER|LOWER|REVERSE|SUBSTRING|LEFT)\(", model)
 
 
 def test_a_compute_with_a_trailing_comment_does_not_swallow_the_rest_of_the_line():
@@ -1854,14 +1854,14 @@ def test_a_compute_with_a_trailing_comment_does_not_swallow_the_rest_of_the_line
     ops = [{"type": "compute", "params": {"columns": [{"name": "doppio", "expr": "n * 2 -- double it"}]}}]
     sql, _, _ = _export_sql(src, "k", ops)
     assert sorted(_duck_with(src).sql(sql).fetchall()) == [(1, 1.0, 2.0), (2, 2.0, 4.0)]
-    nat, _, _ = _export_sql(src, "k", ops, native=True, dialetto="postgres")
+    nat, _, _ = _export_sql(src, "k", ops, native=True, dialect="postgres")
     assert "n * 2" in d.transpile_model(nat, "postgres", {"t_k": ["id", "n"]})
 
 
 def test_bigquery_text_is_translated_for_duckdb():
     src = {"k": _pl.DataFrame({"id": [1, 2], "t": ["7", "x"]})}
     ops = [{"type": "compute", "params": {"columns": [{"name": "v", "expr": "SAFE_CAST(t AS INT64)"}]}}]
-    sql, _, _ = _export_sql(src, "k", ops, testo="bigquery")
+    sql, _, _ = _export_sql(src, "k", ops, text="bigquery")
     assert sorted(_duck_with(src).sql(sql).fetchall()) == [(1, "7", 7), (2, "x", None)]
 
 
@@ -1887,17 +1887,17 @@ def _esporta(types: dict, ops: list, mode: str = "duckdb", cols: list | None = N
     columns Tabularia read with these dtypes (None: a type the export cannot read)."""
     cols = cols or list(types)
     if mode == "duckdb":
-        voce, extra = {"ref": "{{ source('db_1_v', 'ordini') }}"}, {}
+        item, extra = {"ref": "{{ source('db_1_v', 'ordini') }}"}, {}
     else:
-        voce = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}
+        item = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}
         extra = {"native": _PG_NATIVE} if mode == "native" else {"clickhouse": {"connections": [_PG], "target_schema": "dbt_tabularia"}}
-    return _files(_richiesta_export(mode=mode, **extra, source_map={"k": {**voce, "columns": cols, "types": types, "label": "ordini"}},
+    return _files(_richiesta_export(mode=mode, **extra, source_map={"k": {**item, "columns": cols, "types": types, "label": "ordini"}},
                                     models=[{"name": "uno", "source": {"key": "k"}, "operations": ops}]))
 
 
-def _modello(files: dict, sorgente: str = "ordini") -> str:
-    """The model as dbt renders it, with the source table replaced by `sorgente`."""
-    return _render_like_dbt(files["models/uno.sql"], {("source", "db_1_v", "ordini"): sorgente}, config={})
+def _modello(files: dict, source: str = "ordini") -> str:
+    """The model as dbt renders it, with the source table replaced by `source`."""
+    return _render_like_dbt(files["models/uno.sql"], {("source", "db_1_v", "ordini"): source}, config={})
 
 
 def _pg():
@@ -1925,9 +1925,9 @@ def test_a_required_live_server_that_is_missing_fails_the_test_instead_of_skippi
         _pg()
 
 
-def _su_postgres(sql: str, *prima: str) -> list:
+def _su_postgres(sql: str, *before: str) -> list:
     with _pg() as con, con.cursor() as cur:
-        for s in prima:
+        for s in before:
             cur.execute(s)
         cur.execute(sql)
         return cur.fetchall()
@@ -1946,8 +1946,8 @@ def test_a_timestamptz_source_does_not_depend_on_the_local_time_zone():
     con.execute("SET TimeZone = 'Europe/Rome'")
     con.execute("CREATE TABLE ordini AS SELECT * FROM (VALUES (1, TIMESTAMPTZ '2024-01-15 10:30:00+00'), "
                 "(2, TIMESTAMPTZ '2024-07-15 23:30:00+00')) t(id, ts)")
-    righe = con.execute(f"SELECT * FROM ({_modello(files)}) ORDER BY id").fetchall()
-    assert righe == [(1, _dt.datetime(2024, 1, 15, 10, 30), _dt.date(2024, 1, 15)), (2, _dt.datetime(2024, 7, 15, 23, 30), _dt.date(2024, 7, 15))]
+    rows = con.execute(f"SELECT * FROM ({_modello(files)}) ORDER BY id").fetchall()
+    assert rows == [(1, _dt.datetime(2024, 1, 15, 10, 30), _dt.date(2024, 1, 15)), (2, _dt.datetime(2024, 7, 15, 23, 30), _dt.date(2024, 7, 15))]
     # and the project's DuckDB works in UTC, as the engine does, for whatever the flow does with time zones
     assert "      settings:\n        TimeZone: UTC\n" in files["profiles.yml"]
     folder = _progetto(layout={"package": "folder", "folder": "f"})["INTEGRATION.md"]
@@ -1960,9 +1960,9 @@ def test_a_timestamptz_source_on_native_postgres_is_read_in_utc():
     assert "AT TIME ZONE 'UTC'" in sql
     # the ClickHouse target: a DateTime is already an instant, nothing to convert
     assert "AT TIME ZONE" not in _codice(_esporta({"id": "Int32", "ts": _UTC}, [], mode="clickhouse")["models/uno.sql"])
-    valori = "(SELECT * FROM (VALUES (1, timestamptz '2024-01-15 10:30:00+00'), (2, timestamptz '2024-07-15 23:30:00+00')) AS t(id, ts))"
-    righe = _su_postgres(f"SELECT * FROM ({_modello(files, valori)}) AS m ORDER BY id", "SET TIME ZONE 'Europe/Rome'")
-    assert righe == [(1, _dt.datetime(2024, 1, 15, 10, 30)), (2, _dt.datetime(2024, 7, 15, 23, 30))]
+    values = "(SELECT * FROM (VALUES (1, timestamptz '2024-01-15 10:30:00+00'), (2, timestamptz '2024-07-15 23:30:00+00')) AS t(id, ts))"
+    rows = _su_postgres(f"SELECT * FROM ({_modello(files, values)}) AS m ORDER BY id", "SET TIME ZONE 'Europe/Rome'")
+    assert rows == [(1, _dt.datetime(2024, 1, 15, 10, 30)), (2, _dt.datetime(2024, 7, 15, 23, 30))]
 
 
 def test_a_timestamptz_column_of_a_datasource_query_is_read_in_utc_too():
@@ -1972,9 +1972,9 @@ def test_a_timestamptz_column_of_a_datasource_query_is_read_in_utc_too():
     assert "CAST(\"ts\" AS TIMESTAMPTZ) AT TIME ZONE 'UTC' AS \"ts\"" in fed
     nat = _files(_richiesta_export(models=raw, source_map={}, mode="native", native=_PG_NATIVE))["models/src_q.sql"]
     assert "AT TIME ZONE 'UTC' AS \"ts\"" in nat
-    righe = _su_postgres(_render_like_dbt(nat, config={}).replace("FROM ordini", "FROM (VALUES (1, timestamptz '2024-07-15 23:30:00+00')) AS ordini(id, ts)"),
+    rows = _su_postgres(_render_like_dbt(nat, config={}).replace("FROM ordini", "FROM (VALUES (1, timestamptz '2024-07-15 23:30:00+00')) AS ordini(id, ts)"),
                          "SET TIME ZONE 'Europe/Rome'")
-    assert righe == [(1, _dt.datetime(2024, 7, 15, 23, 30))]
+    assert rows == [(1, _dt.datetime(2024, 7, 15, 23, 30))]
 
 
 # #17 — a native cast checks the VALUE: what the engine turns into NULL is NULL, never a failed
@@ -1987,7 +1987,7 @@ _ISTANTI_TXT = ["2024-01-05 10:30:00", "2024-01-05T10:30:00", "2024-01-05 10:30"
                 "2024-01-05 10:30:00.5", "2024-01-05", "x", None]
 _INTERI_TXT = ["99999999999999999999", "-9223372036854775808", "9223372036854775807", "9223372036854775808", "-9223372036854775809",
                "+5", "007", " 42 ", "1e3", "12.0", "-0", "", "0000000000000000000009223372036854775807", "x", None]
-_NUMERI = [1e20, -1e20, float("nan"), float("inf"), float("-inf"), 9.223372036854775807e18, -9.223372036854775808e18,
+_NUMBERS = [1e20, -1e20, float("nan"), float("inf"), float("-inf"), 9.223372036854775807e18, -9.223372036854775808e18,
            9.2233720368547748e18, 100.9, -2.7, 0.0, None]
 # the shapes both engines (Polars and DuckDB) convert, with the same value, beyond the canonical
 # ones: a month or a day of one digit, a year of fewer than four (year 24, not 2024), an instant
@@ -2019,14 +2019,14 @@ _DOPPI_SUBNORMALI_TXT = ["4.9e-324", "1e-310", "-2.5e-320"]
 _BOOLEANI_TXT = ["true", "TRUE", "True", "t", "T", "1", "yes", "YES", "y", "Y", " yes ", "false", "FALSE", "f", "F", "0", "no", "No",
                  "n", "N", "on", "off", "2", "tru", "ye", "-1", "01", "", "x", None]
 _CASI_CAST = [("VARCHAR", "date", _DATE_TXT), ("VARCHAR", "datetime", _ISTANTI_TXT), ("VARCHAR", "int", _INTERI_TXT),
-              ("DOUBLE", "int", _NUMERI), ("VARCHAR", "date", _DATE_TXT_BREVI), ("VARCHAR", "datetime", _ISTANTI_TXT_BREVI),
+              ("DOUBLE", "int", _NUMBERS), ("VARCHAR", "date", _DATE_TXT_BREVI), ("VARCHAR", "datetime", _ISTANTI_TXT_BREVI),
               ("VARCHAR", "datetime", _ISTANTI_TXT_DUCKDB), ("VARCHAR", "float", _DOPPI_TXT), ("VARCHAR", "bool", _BOOLEANI_TXT)]
 # what ClickHouse cannot hold (Date32 and DateTime64 span 1900-2299; a subnormal double): Postgres keeps it
 _CASI_CAST_OLTRE_CLICKHOUSE = [("VARCHAR", "date", _DATE_TXT_ANNI), ("VARCHAR", "datetime", _ISTANTI_TXT_ANNI),
                    ("VARCHAR", "float", _DOPPI_SUBNORMALI_TXT)]
 
 
-def _riferimento_cast(src: str, dt: str, valori: list) -> list:
+def _riferimento_cast(src: str, dt: str, values: list) -> list:
     """What the DuckDB engine (the federated target's own cast) gives."""
     import duckdb
 
@@ -2035,45 +2035,45 @@ def _riferimento_cast(src: str, dt: str, valori: list) -> list:
     con = duckdb.connect()
     con.execute("SET TimeZone = 'UTC'")
     con.execute(f"CREATE TABLE t_casi (i BIGINT, v {src})")
-    con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(valori)))
+    con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(values)))
     return con.execute(f"SELECT i, {_cast_expr('v', src, _DUCK_DTYPES[dt])} FROM t_casi ORDER BY i").fetchall()
 
 
-def _cast_nativo(src: str, dt: str, dialetto: str, info: dict | None = None) -> str:
+def _cast_nativo(src: str, dt: str, dialect: str, info: dict | None = None) -> str:
     def resolve(_):
         return "t_casi", ["i", "v"], {"i": "BIGINT", "v": src}, "casi"
     sql, _, _ = d.compile_model_sql({"key": "casi"}, [{"type": "cast", "params": {"columns": {"v": dt}}}], resolve,
-                                    native=True, dialetto=dialetto, info=info)
+                                    native=True, dialect=dialect, info=info)
     return sql
 
 
-def _cast_nativo_in_duckdb(src: str, dt: str, dialetto: str) -> str:
-    """The native cast with the text written for the warehouse (see `_Model.testo_nativo`) in its
+def _cast_nativo_in_duckdb(src: str, dt: str, dialect: str) -> str:
+    """The native cast with the text written for the warehouse (see `_Model.native_text`) in its
     DuckDB form, the one the probe reads."""
     info: dict = {}
-    sql = _cast_nativo(src, dt, dialetto, info)
-    return d.rimetti_testi(sql, {"segnaposti": info.get("per_sonda")})
+    sql = _cast_nativo(src, dt, dialect, info)
+    return d.put_back_texts(sql, {"segnaposti": info.get("per_sonda")})
 
 
-def _uguali_ai_valori(got: list, exp: list, valori: list, ctx: str):
+def _uguali_ai_valori(got: list, exp: list, values: list, ctx: str):
     for (i, a), (_, b) in zip(sorted(got), exp):
         uguali = (a == b) or (isinstance(a, float) and isinstance(b, float) and a != a and b != b)
-        assert uguali, f"{ctx}: {valori[i]!r} gives {a!r}, the engine {b!r}"
+        assert uguali, f"{ctx}: {values[i]!r} gives {a!r}, the engine {b!r}"
     assert len(got) == len(exp), ctx
 
 
-def _cast_in_duckdb(src: str, dt: str, valori: list, dialetti=("postgres", "clickhouse")):
+def _cast_in_duckdb(src: str, dt: str, values: list, dialetti=("postgres", "clickhouse")):
     """The native guards run in DuckDB, which fails a CAST of '2024-02-30' or of 1e20 to BIGINT
     as Postgres does: a value a guard lets through that the warehouse cannot convert fails here."""
     import duckdb
 
-    rif = _riferimento_cast(src, dt, valori)
+    rif = _riferimento_cast(src, dt, values)
     con = duckdb.connect()
     con.execute(f"CREATE TABLE t_casi (i BIGINT, v {src})")
-    con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(valori)))
-    for dialetto in dialetti:
-        got = con.execute(f"SELECT * FROM ({_cast_nativo_in_duckdb(src, dt, dialetto)}) ORDER BY i").fetchall()
-        _uguali_ai_valori(got, rif, valori, dialetto)
+    con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(values)))
+    for dialect in dialetti:
+        got = con.execute(f"SELECT * FROM ({_cast_nativo_in_duckdb(src, dt, dialect)}) ORDER BY i").fetchall()
+        _uguali_ai_valori(got, rif, values, dialect)
 
 
 _TIPO_PG = {"VARCHAR": "TEXT", "DOUBLE": "DOUBLE PRECISION", "BIGINT": "BIGINT", "BOOLEAN": "BOOLEAN"}
@@ -2089,13 +2089,13 @@ def _letterale_pg(v, src: str) -> str:
     return "'" + str(v).replace("'", "''") + "'"
 
 
-def _cast_su_postgres(src: str, dt: str, valori: list):
-    rif = _riferimento_cast(src, dt, valori)
+def _cast_su_postgres(src: str, dt: str, values: list):
+    rif = _riferimento_cast(src, dt, values)
     info: dict = {}
-    pg = d.rimetti_testi(d.transpile_model(_cast_nativo(src, dt, "postgres", info), "postgres", {"t_casi": ["i", "v"]}), info)
-    righe = ", ".join(f"({i}, {_letterale_pg(v, src)})" for i, v in enumerate(valori))
-    pg = pg.replace('"t_casi" AS "t_casi"', f'(VALUES {righe}) AS "t_casi"("i", "v")')
-    _uguali_ai_valori(_su_postgres(pg), rif, valori, "postgres")
+    pg = d.put_back_texts(d.transpile_model(_cast_nativo(src, dt, "postgres", info), "postgres", {"t_casi": ["i", "v"]}), info)
+    rows = ", ".join(f"({i}, {_letterale_pg(v, src)})" for i, v in enumerate(values))
+    pg = pg.replace('"t_casi" AS "t_casi"', f'(VALUES {rows}) AS "t_casi"("i", "v")')
+    _uguali_ai_valori(_su_postgres(pg), rif, values, "postgres")
 
 
 def _clickhouse():
@@ -2112,11 +2112,11 @@ def _clickhouse():
 _TIPO_CH = {"VARCHAR": "Nullable(String)", "DOUBLE": "Nullable(Float64)", "BIGINT": "Nullable(Int64)", "BOOLEAN": "Nullable(Bool)"}
 
 
-def _cast_su_clickhouse(src: str, dt: str, valori: list):
+def _cast_su_clickhouse(src: str, dt: str, values: list):
     cli = _clickhouse()
-    rif = _riferimento_cast(src, dt, valori)
+    rif = _riferimento_cast(src, dt, values)
     info: dict = {}
-    ch = d.rimetti_testi(d.transpile_model(_cast_nativo(src, dt, "clickhouse", info), "clickhouse", {"t_casi": ["i", "v"]}), info)
+    ch = d.put_back_texts(d.transpile_model(_cast_nativo(src, dt, "clickhouse", info), "clickhouse", {"t_casi": ["i", "v"]}), info)
 
     def lit(v):
         if v is None:
@@ -2128,43 +2128,43 @@ def _cast_su_clickhouse(src: str, dt: str, valori: list):
         if isinstance(v, int):
             return str(v)
         return "'" + str(v).replace("\\", "\\\\").replace("'", "\\'") + "'"
-    righe = ", ".join(f"({i}, {lit(v)})" for i, v in enumerate(valori))
-    ch = ch.replace('"t_casi" AS "t_casi"', f"(SELECT * FROM values('i Int64, v {_TIPO_CH[src]}', {righe})) AS \"t_casi\"")
-    _uguali_ai_valori([tuple(r) for r in cli.query(ch).result_rows], rif, valori, "clickhouse")
+    rows = ", ".join(f"({i}, {lit(v)})" for i, v in enumerate(values))
+    ch = ch.replace('"t_casi" AS "t_casi"', f"(SELECT * FROM values('i Int64, v {_TIPO_CH[src]}', {rows})) AS \"t_casi\"")
+    _uguali_ai_valori([tuple(r) for r in cli.query(ch).result_rows], rif, values, "clickhouse")
 
 
-@pytest.mark.parametrize("src,dt,valori", _CASI_CAST, ids=lambda x: x if isinstance(x, str) else None)
-def test_a_native_cast_never_fails_the_model_and_gives_the_engines_nulls(src, dt, valori):
-    _cast_in_duckdb(src, dt, valori)
+@pytest.mark.parametrize("src,dt,values", _CASI_CAST, ids=lambda x: x if isinstance(x, str) else None)
+def test_a_native_cast_never_fails_the_model_and_gives_the_engines_nulls(src, dt, values):
+    _cast_in_duckdb(src, dt, values)
 
 
-@pytest.mark.parametrize("src,dt,valori", _CASI_CAST, ids=lambda x: x if isinstance(x, str) else None)
-def test_a_native_cast_on_postgres_gives_what_the_engine_gives(src, dt, valori):
-    _cast_su_postgres(src, dt, valori)
+@pytest.mark.parametrize("src,dt,values", _CASI_CAST, ids=lambda x: x if isinstance(x, str) else None)
+def test_a_native_cast_on_postgres_gives_what_the_engine_gives(src, dt, values):
+    _cast_su_postgres(src, dt, values)
 
 
-@pytest.mark.parametrize("src,dt,valori", _CASI_CAST, ids=lambda x: x if isinstance(x, str) else None)
-def test_a_native_cast_on_clickhouse_gives_what_the_engine_gives(src, dt, valori):
-    _cast_su_clickhouse(src, dt, valori)
+@pytest.mark.parametrize("src,dt,values", _CASI_CAST, ids=lambda x: x if isinstance(x, str) else None)
+def test_a_native_cast_on_clickhouse_gives_what_the_engine_gives(src, dt, values):
+    _cast_su_clickhouse(src, dt, values)
 
 
-@pytest.mark.parametrize("src,dt,valori", _CASI_CAST_OLTRE_CLICKHOUSE, ids=lambda x: x if isinstance(x, str) else None)
-def test_a_native_cast_on_postgres_keeps_what_clickhouse_cannot_hold(src, dt, valori):
-    _cast_in_duckdb(src, dt, valori, dialetti=("postgres",))
-    _cast_su_postgres(src, dt, valori)
+@pytest.mark.parametrize("src,dt,values", _CASI_CAST_OLTRE_CLICKHOUSE, ids=lambda x: x if isinstance(x, str) else None)
+def test_a_native_cast_on_postgres_keeps_what_clickhouse_cannot_hold(src, dt, values):
+    _cast_in_duckdb(src, dt, values, dialetti=("postgres",))
+    _cast_su_postgres(src, dt, values)
 
 
-@pytest.mark.parametrize("src,dt,valori", [c for c in _CASI_CAST_OLTRE_CLICKHOUSE if c[1] != "float"],
+@pytest.mark.parametrize("src,dt,values", [c for c in _CASI_CAST_OLTRE_CLICKHOUSE if c[1] != "float"],
                          ids=lambda x: x if isinstance(x, str) else None)
-def test_a_native_cast_on_clickhouse_gives_null_for_a_year_it_cannot_hold(src, dt, valori):
+def test_a_native_cast_on_clickhouse_gives_null_for_a_year_it_cannot_hold(src, dt, values):
     """ClickHouse moved 1899-12-31 to 1900-01-01 and year 24 to 1900: a made-up value. NULL instead,
     as the ClickHouse engine gives; a year it can hold keeps its value. (A subnormal double is a
     limit of ClickHouse's float parsing, not of the export: not here.)"""
     cli = _clickhouse()
     info: dict = {}
-    ch = d.rimetti_testi(d.transpile_model(_cast_nativo(src, dt, "clickhouse", info), "clickhouse", {"t_casi": ["i", "v"]}), info)
-    righe = ", ".join(f"({i}, '{v}')" for i, v in enumerate(valori))
-    got = dict(cli.query(ch.replace('"t_casi" AS "t_casi"', f"(SELECT * FROM values('i Int64, v Nullable(String)', {righe})) AS \"t_casi\"")).result_rows)
+    ch = d.put_back_texts(d.transpile_model(_cast_nativo(src, dt, "clickhouse", info), "clickhouse", {"t_casi": ["i", "v"]}), info)
+    rows = ", ".join(f"({i}, '{v}')" for i, v in enumerate(values))
+    got = dict(cli.query(ch.replace('"t_casi" AS "t_casi"', f"(SELECT * FROM values('i Int64, v Nullable(String)', {rows})) AS \"t_casi\"")).result_rows)
     assert all(v is None for v in got.values()), got
     entro = ["1900-01-01", "2299-12-31"] if dt == "date" else ["1900-01-01 00:00:00", "2299-12-31 23:59:59"]
     _cast_su_clickhouse(src, dt, entro)
@@ -2181,7 +2181,7 @@ def _scritture_di_date_e_istanti() -> dict:
     return {"date": giorni, "datetime": istanti}
 
 
-def _cast_nativo_di(dove: str, dialetto: str, src: str, dt: str, valori: list) -> list:
+def _cast_nativo_di(dove: str, dialect: str, src: str, dt: str, values: list) -> list:
     """The values the native cast gives, run in DuckDB (the warehouse's SQL in its DuckDB form)
     or in the warehouse itself (`dove`)."""
     if dove == "duckdb":
@@ -2189,37 +2189,37 @@ def _cast_nativo_di(dove: str, dialetto: str, src: str, dt: str, valori: list) -
 
         con = duckdb.connect()
         con.execute(f"CREATE TABLE t_casi (i BIGINT, v {src})")
-        con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(valori)))
-        return [v for _, v in con.execute(f"SELECT * FROM ({_cast_nativo_in_duckdb(src, dt, dialetto)}) ORDER BY i").fetchall()]
+        con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(values)))
+        return [v for _, v in con.execute(f"SELECT * FROM ({_cast_nativo_in_duckdb(src, dt, dialect)}) ORDER BY i").fetchall()]
     info: dict = {}
-    sql = d.rimetti_testi(d.transpile_model(_cast_nativo(src, dt, dialetto, info), dialetto, {"t_casi": ["i", "v"]}), info)
-    if dialetto == "postgres":
-        righe = ", ".join(f"({i}, {_letterale_pg(v, src)})" for i, v in enumerate(valori))
-        return [v for _, v in sorted(_su_postgres(sql.replace('"t_casi" AS "t_casi"', f'(VALUES {righe}) AS "t_casi"("i", "v")')))]
+    sql = d.put_back_texts(d.transpile_model(_cast_nativo(src, dt, dialect, info), dialect, {"t_casi": ["i", "v"]}), info)
+    if dialect == "postgres":
+        rows = ", ".join(f"({i}, {_letterale_pg(v, src)})" for i, v in enumerate(values))
+        return [v for _, v in sorted(_su_postgres(sql.replace('"t_casi" AS "t_casi"', f'(VALUES {rows}) AS "t_casi"("i", "v")')))]
     cli = _clickhouse()
     lit = lambda v: "NULL" if v is None else "'" + str(v).replace("\\", "\\\\").replace("'", "\\'") + "'"   # noqa: E731
-    righe = ", ".join(f"({i}, {lit(v)})" for i, v in enumerate(valori))
-    sql = sql.replace('"t_casi" AS "t_casi"', f"(SELECT * FROM values('i Int64, v {_TIPO_CH[src]}', {righe})) AS \"t_casi\"")
+    rows = ", ".join(f"({i}, {lit(v)})" for i, v in enumerate(values))
+    sql = sql.replace('"t_casi" AS "t_casi"', f"(SELECT * FROM values('i Int64, v {_TIPO_CH[src]}', {rows})) AS \"t_casi\"")
     return [v for _, v in sorted(tuple(r) for r in cli.query(sql).result_rows)]
 
 
-@pytest.mark.parametrize("dove,dialetto", [("duckdb", "postgres"), ("duckdb", "clickhouse"), ("postgres", "postgres"), ("clickhouse", "clickhouse")])
+@pytest.mark.parametrize("dove,dialect", [("duckdb", "postgres"), ("duckdb", "clickhouse"), ("postgres", "postgres"), ("clickhouse", "clickhouse")])
 @pytest.mark.parametrize("dt", ["date", "datetime"])
-def test_a_native_cast_of_any_writing_gives_the_engines_value_or_null(dt, dove, dialetto):
+def test_a_native_cast_of_any_writing_gives_the_engines_value_or_null(dt, dove, dialect):
     """Over hundreds of writings: wherever the native cast gives a value it is the DuckDB engine's,
     and every value the two engines agree on is given (on ClickHouse, in the years it holds)."""
     from app.engine.operations import op_cast
 
-    valori = _scritture_di_date_e_istanti()[dt]
-    rif = [v for _, v in _riferimento_cast("VARCHAR", dt, valori)]
-    polars = op_cast(_pl.DataFrame({"v": valori}, schema={"v": _pl.String}).lazy(), {"columns": {"v": dt}}, None).collect()["v"].cast(_pl.String).to_list()
-    got = _cast_nativo_di(dove, dialetto, "VARCHAR", dt, valori)
-    assert len(got) == len(valori)
-    for v, n, r, p in zip(valori, got, rif, polars):
-        assert n is None or n == r, (dialetto, v, n, r)
-        entro = dialetto != "clickhouse" or (r is not None and 1900 <= r.year <= 2299)
+    values = _scritture_di_date_e_istanti()[dt]
+    rif = [v for _, v in _riferimento_cast("VARCHAR", dt, values)]
+    polars = op_cast(_pl.DataFrame({"v": values}, schema={"v": _pl.String}).lazy(), {"columns": {"v": dt}}, None).collect()["v"].cast(_pl.String).to_list()
+    got = _cast_nativo_di(dove, dialect, "VARCHAR", dt, values)
+    assert len(got) == len(values)
+    for v, n, r, p in zip(values, got, rif, polars):
+        assert n is None or n == r, (dialect, v, n, r)
+        entro = dialect != "clickhouse" or (r is not None and 1900 <= r.year <= 2299)
         if r is not None and p is not None and _norm(r) == _norm(_dt.datetime.fromisoformat(p) if dt == "datetime" else _dt.date.fromisoformat(p)) and entro:
-            assert n == r, (dialetto, v, "both engines give", r, "native", n)
+            assert n == r, (dialect, v, "both engines give", r, "native", n)
 
 
 def test_the_native_day_pattern_is_the_calendar():
@@ -2230,15 +2230,15 @@ def test_the_native_day_pattern_is_the_calendar():
     regola = re.compile(d._RE_DATA)
     for anno in range(0, 10001):
         for scritto in {str(anno), str(anno).zfill(4), str(anno).zfill(2), str(anno).zfill(3)}:
-            for mese, giorno in ((2, 29), (2, 28), (12, 31), (4, 31), (1, 1)):
-                atteso = 1 <= anno <= 9999 and len(scritto) <= 4 and giorno <= (calendar.monthrange(anno, mese)[1] if 1 <= anno <= 9999 else 0)
-                for m, g in {(str(mese), str(giorno)), (str(mese).zfill(2), str(giorno).zfill(2))}:
+            for mese, day in ((2, 29), (2, 28), (12, 31), (4, 31), (1, 1)):
+                atteso = 1 <= anno <= 9999 and len(scritto) <= 4 and day <= (calendar.monthrange(anno, mese)[1] if 1 <= anno <= 9999 else 0)
+                for m, g in {(str(mese), str(day)), (str(mese).zfill(2), str(day).zfill(2))}:
                     assert bool(regola.match(f"{scritto}-{m}-{g}")) == atteso, f"{scritto}-{m}-{g}"
     for mese in range(0, 14):
-        for giorno in range(0, 33):
-            atteso = 1 <= mese <= 12 and 1 <= giorno <= calendar.monthrange(2023, mese)[1] if 1 <= mese <= 12 else False
+        for day in range(0, 33):
+            atteso = 1 <= mese <= 12 and 1 <= day <= calendar.monthrange(2023, mese)[1] if 1 <= mese <= 12 else False
             for m in {str(mese), str(mese).zfill(2), str(mese).zfill(3)}:
-                for g in {str(giorno), str(giorno).zfill(2), str(giorno).zfill(3)}:
+                for g in {str(day), str(day).zfill(2), str(day).zfill(3)}:
                     assert bool(regola.match(f"2023-{m}-{g}")) == (atteso and len(m) <= 2 and len(g) <= 2), f"2023-{m}-{g}"
 
 
@@ -2247,10 +2247,10 @@ def test_the_new_cast_values_are_ones_both_engines_agree_on():
     the DuckDB engines (the reference of these tests is DuckDB's): never one engine's whim."""
     from app.engine.operations import op_cast
 
-    for dt, valori in (("date", _DATE_TXT_BREVI + _DATE_TXT_ANNI), ("datetime", _ISTANTI_TXT_BREVI + _ISTANTI_TXT_ANNI), ("float", _DOPPI_TXT + _DOPPI_SUBNORMALI_TXT)):
-        rif = [v for _, v in _riferimento_cast("VARCHAR", dt, valori)]
-        polars = op_cast(_pl.DataFrame({"v": valori}, schema={"v": _pl.String}).lazy(), {"columns": {"v": dt}}, None).collect()["v"].to_list()
-        for v, a, b in zip(valori, polars, rif):
+    for dt, values in (("date", _DATE_TXT_BREVI + _DATE_TXT_ANNI), ("datetime", _ISTANTI_TXT_BREVI + _ISTANTI_TXT_ANNI), ("float", _DOPPI_TXT + _DOPPI_SUBNORMALI_TXT)):
+        rif = [v for _, v in _riferimento_cast("VARCHAR", dt, values)]
+        polars = op_cast(_pl.DataFrame({"v": values}, schema={"v": _pl.String}).lazy(), {"columns": {"v": dt}}, None).collect()["v"].to_list()
+        for v, a, b in zip(values, polars, rif):
             assert a == b or (isinstance(a, float) and isinstance(b, float) and a != a and b != b), (dt, v, a, b)
 
 
@@ -2314,11 +2314,11 @@ def test_columns_that_differ_only_by_case_are_refused_on_the_federated_target():
         _esporta(tipi, [])
     assert e.value.detail["code"] == "columns_differ_only_by_case" and e.value.detail["params"]["columns"] == "Codice, codice"
     # a step can make the clash too: a compute, a rename, the right side of a join
-    passi = [[{"type": "compute", "params": {"columns": [{"name": "Importo", "expr": "importo * 2"}]}}],
+    steps = [[{"type": "compute", "params": {"columns": [{"name": "Importo", "expr": "importo * 2"}]}}],
              [{"type": "rename", "params": {"mapping": {"id": "IMPORTO"}}}],
              [{"type": "join", "params": {"how": "inner", "on": "id", "right": {"source": {"key": "k"}, "operations": [
                  {"type": "rename", "params": {"mapping": {"importo": "Importo"}}}]}}}]]
-    for ops in passi:
+    for ops in steps:
         with pytest.raises(HTTPException) as e:
             _esporta({"id": "Int32", "importo": "Float64"}, ops)
         assert e.value.detail["code"] == "columns_differ_only_by_case", ops
@@ -2333,8 +2333,8 @@ def test_columns_that_differ_only_by_case_are_refused_on_the_federated_target():
 def test_native_postgres_keeps_columns_that_differ_only_by_case():
     files = _esporta({"id": "Int32", "Codice": "String", "codice": "String"}, [{"type": "filter", "params": {"column": "codice", "operator": "eq", "value": "d4"}}],
                      mode="native")
-    valori = '(SELECT * FROM (VALUES (1, \'A1\', \'a1\'), (4, NULL, \'d4\')) AS t(id, "Codice", codice))'
-    assert _su_postgres(f"SELECT * FROM ({_modello(files, valori)}) AS m") == [(4, None, "d4")]
+    values = '(SELECT * FROM (VALUES (1, \'A1\', \'a1\'), (4, NULL, \'d4\')) AS t(id, "Codice", codice))'
+    assert _su_postgres(f"SELECT * FROM ({_modello(files, values)}) AS m") == [(4, None, "d4")]
 
 
 # #28 — an unsigned 64-bit column (ClickHouse hash keys, MySQL BIGINT UNSIGNED) keeps its values:
@@ -2366,20 +2366,20 @@ def test_an_unsigned_64_bit_column_keeps_its_values_on_clickhouse():
                    "(SELECT * FROM values('id UInt64, big UInt64', " + ", ".join(f"({v}, {v})" for v in _U64) + "))")
     cli = clickhouse_connect.get_client(host=os.environ["CLICKHOUSE_TEST_HOST"], port=int(os.getenv("CLICKHOUSE_TEST_PORT", "8123")),
                                         username=os.getenv("CLICKHOUSE_TEST_USER", "default"), password=os.getenv("CLICKHOUSE_TEST_PASSWORD", ""))
-    righe = sorted(cli.query(sql).result_rows)
+    rows = sorted(cli.query(sql).result_rows)
     # an id over 2^63 stays itself; cast to a signed integer it does not fit: NULL, as the engine (never -1)
-    assert righe == [(9223372036854775807, 9223372036854775807), (9223372036854775808, None), (18446744073709551615, None)]
+    assert rows == [(9223372036854775807, 9223372036854775807), (9223372036854775808, None), (18446744073709551615, None)]
 
 
 def test_an_unsigned_64_bit_column_on_native_postgres_is_a_numeric():
-    from app.api.routes.dbt import _tipo_nel_dialetto
+    from app.api.routes.dbt import _type_in_dialect
 
     # a seed's column type too
-    assert _tipo_nel_dialetto("UBIGINT", "postgres") == "DECIMAL(20, 0)" and _tipo_nel_dialetto("UBIGINT", "clickhouse") == "Nullable(UInt64)"
+    assert _type_in_dialect("UBIGINT", "postgres") == "DECIMAL(20, 0)" and _type_in_dialect("UBIGINT", "clickhouse") == "Nullable(UInt64)"
     files = _esporta({"id": "UInt64", "big": "UInt64"}, [{"type": "cast", "params": {"columns": {"big": "int"}}}], mode="native")
-    valori = "(SELECT * FROM (VALUES " + ", ".join(f"({v}::numeric, {v}::numeric)" for v in _U64) + ") AS t(id, big))"
-    righe = sorted((int(a), b) for a, b in _su_postgres(f"SELECT * FROM ({_modello(files, valori)}) AS m"))   # numeric: text from the driver
-    assert righe == [(1, 1), (9223372036854775807, 9223372036854775807), (9223372036854775808, None),
+    values = "(SELECT * FROM (VALUES " + ", ".join(f"({v}::numeric, {v}::numeric)" for v in _U64) + ") AS t(id, big))"
+    rows = sorted((int(a), b) for a, b in _su_postgres(f"SELECT * FROM ({_modello(files, values)}) AS m"))   # numeric: text from the driver
+    assert rows == [(1, 1), (9223372036854775807, 9223372036854775807), (9223372036854775808, None),
                                               (18446744073709551615, None)]
 
 
@@ -2398,8 +2398,8 @@ def test_a_float_cast_to_text_on_native_postgres_is_written_as_the_engine_writes
     con.executemany("INSERT INTO t_casi VALUES (?, ?)", list(enumerate(_DOPPI)))
     _uguali_ai_valori(con.execute(f"SELECT * FROM ({_cast_nativo('DOUBLE', 'str', 'postgres')}) ORDER BY i").fetchall(), rif, _DOPPI, "duckdb")
     pg = d.transpile_model(_cast_nativo("DOUBLE", "str", "postgres"), "postgres", {"t_casi": ["i", "v"]})
-    righe = ", ".join(f"({i}, {_letterale_pg(v, 'DOUBLE')})" for i, v in enumerate(_DOPPI))
-    pg = pg.replace('"t_casi" AS "t_casi"', f'(VALUES {righe}) AS "t_casi"("i", "v")')
+    rows = ", ".join(f"({i}, {_letterale_pg(v, 'DOUBLE')})" for i, v in enumerate(_DOPPI))
+    pg = pg.replace('"t_casi" AS "t_casi"', f'(VALUES {rows}) AS "t_casi"("i", "v")')
     _uguali_ai_valori(_su_postgres(pg), rif, _DOPPI, "postgres")
 
 
@@ -2412,13 +2412,13 @@ def test_a_float_cast_to_text_on_clickhouse_is_written_as_the_clickhouse_engine_
     from app.engine.chdb_ops import _cast_expr as cast_ch
 
     info: dict = {}
-    ch = d.rimetti_testi(d.transpile_model(_cast_nativo("DOUBLE", "str", "clickhouse", info), "clickhouse", {"t_casi": ["i", "v"]}), info)
+    ch = d.put_back_texts(d.transpile_model(_cast_nativo("DOUBLE", "str", "clickhouse", info), "clickhouse", {"t_casi": ["i", "v"]}), info)
     lit = lambda v: "NULL" if v is None else ("nan" if v != v else ("inf" if v == float("inf") else ("-inf" if v == float("-inf") else repr(v))))
-    valori = "(SELECT * FROM values('i Int64, v Nullable(Float64)', " + ", ".join(f"({i}, {lit(v)})" for i, v in enumerate(_DOPPI)) + "))"
+    values = "(SELECT * FROM values('i Int64, v Nullable(Float64)', " + ", ".join(f"({i}, {lit(v)})" for i, v in enumerate(_DOPPI)) + "))"
     cli = clickhouse_connect.get_client(host=os.environ["CLICKHOUSE_TEST_HOST"], port=int(os.getenv("CLICKHOUSE_TEST_PORT", "8123")),
                                         username=os.getenv("CLICKHOUSE_TEST_USER", "default"), password=os.getenv("CLICKHOUSE_TEST_PASSWORD", ""))
-    got = sorted(tuple(r) for r in cli.query(ch.replace('"t_casi" AS "t_casi"', f'{valori} AS "t_casi"')).result_rows)
-    rif = sorted(tuple(r) for r in cli.query(f"SELECT i, {cast_ch('v', 'Float64', 'str')} FROM {valori}").result_rows)
+    got = sorted(tuple(r) for r in cli.query(ch.replace('"t_casi" AS "t_casi"', f'{values} AS "t_casi"')).result_rows)
+    rif = sorted(tuple(r) for r in cli.query(f"SELECT i, {cast_ch('v', 'Float64', 'str')} FROM {values}").result_rows)
     assert dict(rif)[0] == "200.0"
     _uguali_ai_valori(got, rif, _DOPPI, "clickhouse")
 
@@ -2429,37 +2429,37 @@ _CASI_BOOL = [("BOOLEAN", "int", [True, False, None]), ("BOOLEAN", "float", [Tru
               ("BIGINT", "bool", [5, 0, -3, None]), ("DOUBLE", "bool", [2.5, 0.0, -0.0, float("nan"), float("inf"), None])]
 
 
-@pytest.mark.parametrize("src,dt,valori", _CASI_BOOL, ids=lambda x: x if isinstance(x, str) else None)
-def test_a_cast_between_boolean_and_number_runs_on_native_postgres(src, dt, valori):
-    _cast_in_duckdb(src, dt, valori)
-    _cast_su_postgres(src, dt, valori)
+@pytest.mark.parametrize("src,dt,values", _CASI_BOOL, ids=lambda x: x if isinstance(x, str) else None)
+def test_a_cast_between_boolean_and_number_runs_on_native_postgres(src, dt, values):
+    _cast_in_duckdb(src, dt, values)
+    _cast_su_postgres(src, dt, values)
 
 
-@pytest.mark.parametrize("src,dt,valori", _CASI_BOOL, ids=lambda x: x if isinstance(x, str) else None)
-def test_a_cast_between_boolean_and_number_runs_on_clickhouse(src, dt, valori):
-    _cast_su_clickhouse(src, dt, valori)
+@pytest.mark.parametrize("src,dt,values", _CASI_BOOL, ids=lambda x: x if isinstance(x, str) else None)
+def test_a_cast_between_boolean_and_number_runs_on_clickhouse(src, dt, values):
+    _cast_su_clickhouse(src, dt, values)
 
 
 def _nativo_su(dove: str, df, ops: list) -> list:
     """The native model of `ops` over `df` (as the source `t`), run on a real Postgres or ClickHouse:
     its rows, normalised and sorted as `_engine_snapshot` gives them."""
     info: dict = {}
-    raw, _, _ = _export_sql({"t": df}, "t", ops, native=True, dialetto=dove, info=info)
-    sql = d.rimetti_testi(d.transpile_model(raw, dove, {"t_t": list(df.columns)}), info)
+    raw, _, _ = _export_sql({"t": df}, "t", ops, native=True, dialect=dove, info=info)
+    sql = d.put_back_texts(d.transpile_model(raw, dove, {"t_t": list(df.columns)}), info)
     pg = {"BIGINT": "BIGINT", "DOUBLE": "DOUBLE PRECISION", "VARCHAR": "TEXT", "BOOLEAN": "BOOLEAN", "DATE": "DATE", "TIMESTAMP": "TIMESTAMP"}
     ch = {"BIGINT": "Int64", "DOUBLE": "Float64", "VARCHAR": "String", "BOOLEAN": "Bool", "DATE": "Date32", "TIMESTAMP": "DateTime64(6)"}
     tipi = {c: d.duck_type(str(t)) for c, t in df.schema.items()}
-    righe = df.rows()
+    rows = df.rows()
     if dove == "postgres":
         lit = lambda v, t: f"CAST(NULL AS {pg.get(t, t)})" if v is None else f"CAST('{v}' AS {pg.get(t, t)})"   # noqa: E731
-        valori = ", ".join("(" + ", ".join(lit(v, tipi[c]) for v, c in zip(r, df.columns)) + ")" for r in righe)
-        nomi = ", ".join(f'"{c}"' for c in df.columns)
-        out = _su_postgres(sql.replace('"t_t" AS "t_t"', f'(VALUES {valori}) AS "t_t"({nomi})'))
+        values = ", ".join("(" + ", ".join(lit(v, tipi[c]) for v, c in zip(r, df.columns)) + ")" for r in rows)
+        names = ", ".join(f'"{c}"' for c in df.columns)
+        out = _su_postgres(sql.replace('"t_t" AS "t_t"', f'(VALUES {values}) AS "t_t"({names})'))
     else:
         lit = lambda v: "NULL" if v is None else (str(v).lower() if isinstance(v, bool) else f"'{v}'")   # noqa: E731
         schema = ", ".join(f"{c} Nullable({ch.get(tipi[c], tipi[c])})" for c in df.columns)
-        valori = ", ".join("(" + ", ".join(lit(v) for v in r) + ")" for r in righe)
-        out = [tuple(r) for r in _clickhouse().query(sql.replace('"t_t" AS "t_t"', f"(SELECT * FROM values('{schema}', {valori})) AS \"t_t\"")).result_rows]
+        values = ", ".join("(" + ", ".join(lit(v) for v in r) + ")" for r in rows)
+        out = [tuple(r) for r in _clickhouse().query(sql.replace('"t_t" AS "t_t"', f"(SELECT * FROM values('{schema}', {values})) AS \"t_t\"")).result_rows]
     return sorted((tuple(_norm(v) for v in r) for r in out), key=lambda t: tuple(map(str, t)))
 
 
@@ -2543,9 +2543,9 @@ def test_min_and_max_of_a_boolean_run_on_native_postgres():
                                                                          {"column": "flag", "func": "max", "alias": "hi"}]}}]
     rif = _engine_snapshot("duckdb", {"t": _pl.DataFrame({"g": ["a", "a", "b", "c"], "flag": [True, False, True, None]})}, "t", gb)
     files = _esporta({"g": "String", "flag": "Boolean"}, gb, mode="native")
-    valori = "(SELECT * FROM (VALUES ('a', TRUE), ('a', FALSE), ('b', TRUE), ('c', CAST(NULL AS BOOLEAN))) AS t(g, flag))"
-    righe = sorted(_su_postgres(f"SELECT * FROM ({_modello(files, valori)}) AS m"), key=lambda r: r[0])
-    assert [tuple(_norm(v) for v in r) for r in righe] == rif[1] == [("a", False, True), ("b", True, True), ("c", None, None)]
+    values = "(SELECT * FROM (VALUES ('a', TRUE), ('a', FALSE), ('b', TRUE), ('c', CAST(NULL AS BOOLEAN))) AS t(g, flag))"
+    rows = sorted(_su_postgres(f"SELECT * FROM ({_modello(files, values)}) AS m"), key=lambda r: r[0])
+    assert [tuple(_norm(v) for v in r) for r in rows] == rif[1] == [("a", False, True), ("b", True, True), ("c", None, None)]
 
 
 # #15 — native Postgres compares and orders text by BYTES, like Tabularia (decision of 2026-10-16),
@@ -2577,9 +2577,9 @@ def test_native_postgres_orders_and_compares_text_by_bytes_like_tabularia(caso, 
     rif = _engine_snapshot("polars", {"t": _TESTI}, "t", ops)
     files = _esporta({c: str(t) for c, t in _TESTI.schema.items()}, ops, mode="native")
     nome = "nome" + (f' COLLATE "{collazione}"' if collazione else "")
-    righe = ", ".join(f"({i}, '{g}', {'NULL' if n is None else repr(n)})" for i, g, n in _TESTI.iter_rows())
-    valori = f"(SELECT id, g, {nome} AS nome FROM (VALUES {righe}) AS t(id, g, nome))"
-    got = sorted((tuple(_norm(v) for v in r) for r in _su_postgres(f"SELECT * FROM ({_modello(files, valori)}) AS m")),
+    rows = ", ".join(f"({i}, '{g}', {'NULL' if n is None else repr(n)})" for i, g, n in _TESTI.iter_rows())
+    values = f"(SELECT id, g, {nome} AS nome FROM (VALUES {rows}) AS t(id, g, nome))"
+    got = sorted((tuple(_norm(v) for v in r) for r in _su_postgres(f"SELECT * FROM ({_modello(files, values)}) AS m")),
                  key=lambda t: tuple(map(str, t)))
     assert got == rif[1], (caso, collazione)
 
@@ -2613,8 +2613,8 @@ def test_on_native_postgres_one_long_column_name_runs_and_the_readme_says_what_i
     files = _esporta({"id": "Int32"}, ops, mode="native")
     assert f"`{_LUNGO}2024`" in files["README.md"] and f"`{_LUNGO}`" in files["README.md"]
     assert "63" in files["README.md"]
-    righe = _su_postgres(f"SELECT * FROM ({_modello(files, '(SELECT * FROM (VALUES (3)) AS t(id))')}) AS m")
-    assert righe == [(3, 6)]
+    rows = _su_postgres(f"SELECT * FROM ({_modello(files, '(SELECT * FROM (VALUES (3)) AS t(id))')}) AS m")
+    assert rows == [(3, 6)]
     assert "63" not in _esporta({"id": "Int32"}, ops)["README.md"]
 
 
@@ -2630,13 +2630,13 @@ def _su_clickhouse(sql: str) -> list:
 # #24 — dates and times on ClickHouse: Date (1970-2149) and DateTime (whole seconds, 1970-2106) wrapped
 # a birth date of 1955, cut every timestamp's microseconds; TIME is an Int64 there, so a time was NULL
 def test_dates_and_times_on_clickhouse_have_the_types_of_the_engine():
-    from app.api.routes.dbt import _tipo_nel_dialetto
+    from app.api.routes.dbt import _type_in_dialect
 
     sql = " ".join(_codice(_esporta(_TEMPI, [], mode="clickhouse")["models/uno.sql"]).split())
     assert '"nato" AS Nullable(Date32))' in sql and '"visto" AS Nullable(DateTime64(6)))' in sql and '"ora" AS Nullable(String))' in sql
     assert "Nullable(DATE)" not in sql and "Nullable(DateTime)" not in sql and "TIME)" not in sql
     # a seed's column types, and a datasource query's projection
-    assert [_tipo_nel_dialetto(t, "clickhouse") for t in ("DATE", "TIMESTAMP", "TIME")] == ["Nullable(Date32)", "Nullable(DateTime64(6))", "Nullable(String)"]
+    assert [_type_in_dialect(t, "clickhouse") for t in ("DATE", "TIMESTAMP", "TIME")] == ["Nullable(Date32)", "Nullable(DateTime64(6))", "Nullable(String)"]
     raw = [{"name": "src_q", "kind": "raw", "materialized": "ephemeral", "raw_sql": "SELECT * FROM ordini",
             "columns": [{"name": c, "dtype": t} for c, t in _TEMPI.items()]}]
     q = _files(_richiesta_export(models=raw, source_map={}, mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "s"}))["models/src_q.sql"]
@@ -2650,20 +2650,20 @@ def test_dates_and_times_on_clickhouse_have_the_types_of_the_engine():
 
 
 def test_dates_and_times_on_clickhouse_keep_the_values_tabularia_publishes():
-    valori = ("(SELECT * FROM values('id Int32, nato Nullable(Date32), visto Nullable(DateTime64(6)), ora Nullable(String)', "
+    values = ("(SELECT * FROM values('id Int32, nato Nullable(Date32), visto Nullable(DateTime64(6)), ora Nullable(String)', "
               "(1, '1955-03-12', '2024-01-15 10:30:00.123456', '13:45:00'), (2, '2200-01-01', '1965-06-01 08:00:00', '08:15:30.5'), "
               "(3, NULL, '2200-01-01 00:00:00', NULL)))")
     ops = [{"type": "compute", "params": {"columns": [{"name": "anno", "expr": "year(nato)"}]}}]
-    righe = sorted(_su_clickhouse(_modello(_esporta(_TEMPI, ops, mode="clickhouse"), valori)))
-    assert righe == [(1, _dt.date(1955, 3, 12), _dt.datetime(2024, 1, 15, 10, 30, 0, 123456), "13:45:00", 1955),
+    rows = sorted(_su_clickhouse(_modello(_esporta(_TEMPI, ops, mode="clickhouse"), values)))
+    assert rows == [(1, _dt.date(1955, 3, 12), _dt.datetime(2024, 1, 15, 10, 30, 0, 123456), "13:45:00", 1955),
                      (2, _dt.date(2200, 1, 1), _dt.datetime(1965, 6, 1, 8, 0), "08:15:30.5", 2200),
                      (3, None, _dt.datetime(2200, 1, 1), None, None)]
     # a filter on an instant with a fraction of a second: it used to fail the model (TYPE_MISMATCH)
     ops = [{"type": "filter", "params": {"column": "visto", "operator": "eq", "value": "2024-01-15 10:30:00.123456"}}]
-    assert [r[0] for r in _su_clickhouse(_modello(_esporta(_TEMPI, ops, mode="clickhouse"), valori))] == [1]
+    assert [r[0] for r in _su_clickhouse(_modello(_esporta(_TEMPI, ops, mode="clickhouse"), values))] == [1]
     # the order of instants before 1970 and after 2106: the first is 1965's
     ops = [{"type": "sort", "params": {"by": ["visto"]}}, {"type": "limit", "params": {"n": 1}}]
-    assert [r[0] for r in _su_clickhouse(_modello(_esporta(_TEMPI, ops, mode="clickhouse"), valori))] == [2]
+    assert [r[0] for r in _su_clickhouse(_modello(_esporta(_TEMPI, ops, mode="clickhouse"), values))] == [2]
 
 
 # #25 — the sources on the ClickHouse target: a PostgreSQL/MySQL DATABASE engine types the columns by
@@ -2673,19 +2673,19 @@ def test_the_clickhouse_sources_are_tables_with_types_that_keep_every_value():
     ch = d.TargetClickHouse([_PG, _MY], "ch.local")
     ch.sources([{"name": "db_1_vendite", "schema": "vendite", "connection_id": 1, "tables": [{"name": "ordini"}, {"name": "clienti"}]},
                 {"name": "db_2_shop", "schema": "shop", "connection_id": 2, "tables": [{"name": "righe"}]}])
-    ch.traduci_query("SELECT c.id FROM crm.contatti AS c JOIN vendite.ordini AS o ON o.cliente = c.id", 1, "q")
-    macro = d._macro_sorgenti_clickhouse(list(ch.federati.values()))
+    ch.translate_query("SELECT c.id FROM crm.contatti AS c JOIN vendite.ordini AS o ON o.cliente = c.id", 1, "q")
+    macro = d._clickhouse_sources_macro(list(ch.federated.values()))
     assert not re.search(r"CREATE DATABASE[^\n]*ENGINE", macro)            # no database engine any more
-    for db, tabelle, motore, argomenti in (
+    for db, tabelle, engine_name, arguments in (
             ("tab_src_1_vendite", ["clienti", "ordini"], "PostgreSQL", "'db.x.it:5432', 'erp', '{t}', 'shop', '{{{{ pw_tab_src_1_vendite }}}}', 'vendite'"),
             ("tab_src_1_crm", ["contatti"], "PostgreSQL", "'db.x.it:5432', 'erp', '{t}', 'shop', '{{{{ pw_tab_src_1_crm }}}}', 'crm'"),
             ("tab_src_2_shop", ["righe"], "MySQL", "'my.x.it:3306', 'shop', '{t}', 'web', '{{{{ pw_tab_src_2_shop }}}}'")):
         assert f"CREATE DATABASE IF NOT EXISTS `{db}`" in macro
         for t in tabelle:
             # one table per source table (and per table a query reads), typed from what the source has
-            assert f"CREATE OR REPLACE TABLE `{db}`.`{t}` AS {motore.lower()}({argomenti.format(t=t)})" in macro
-            assert f"CREATE OR REPLACE TABLE `{db}`.`{t}` ({{{{ colonne | join(', ') }}}}) ENGINE = {motore}({argomenti.format(t=t)})" in macro
-            assert d._struttura_sql(db, t, motore) in macro
+            assert f"CREATE OR REPLACE TABLE `{db}`.`{t}` AS {engine_name.lower()}({arguments.format(t=t)})" in macro
+            assert f"CREATE OR REPLACE TABLE `{db}`.`{t}` ({{{{ columns | join(', ') }}}}) ENGINE = {engine_name}({arguments.format(t=t)})" in macro
+            assert d._structure_sql(db, t, engine_name) in macro
         # a database an earlier export made with the PostgreSQL/MySQL engine is replaced (it holds no data)
         assert f"name = '{db}' AND engine IN ('PostgreSQL', 'MySQL')" in macro
     assert macro.count("{% call statement(") == macro.count("{%- endcall %}")
@@ -2696,17 +2696,17 @@ def test_the_types_of_a_clickhouse_source_table_keep_dates_before_1970_and_big_n
     import uuid
 
     cli = _clickhouse()
-    tabella = f"zz_e4_{uuid.uuid4().hex[:8]}"
-    nomi = ["id", "nato", "nati", "date_list", "visto", "visto6", "n", "n2", "we`ird\\name", "pair"]
+    table = f"zz_e4_{uuid.uuid4().hex[:8]}"
+    names = ["id", "nato", "nati", "date_list", "visto", "visto6", "n", "n2", "we`ird\\name", "pair"]
     tipi = ["Int32", "Nullable(Date)", "Date", "Array(Nullable(Date))", "Nullable(DateTime)", "Nullable(DateTime64(6))",
             "Nullable(Decimal(38, 19))", "Nullable(Decimal(12, 2))", "Nullable(String)", "Tuple(a Date, b DateTime)"]
-    colonne = ", ".join(f"`{n.replace(chr(92), chr(92) * 2).replace('`', chr(92) + '`')}` {t}" for n, t in zip(nomi, tipi))
-    cli.command(f"CREATE TABLE tab.{tabella} ({colonne}) ENGINE = Memory")
+    columns = ", ".join(f"`{n.replace(chr(92), chr(92) * 2).replace('`', chr(92) + '`')}` {t}" for n, t in zip(names, tipi))
+    cli.command(f"CREATE TABLE tab.{table} ({columns}) ENGINE = Memory")
     try:
-        pg = [r[0] for r in cli.query(d._struttura_sql("tab", tabella, "PostgreSQL")).result_rows]
-        my = [r[0] for r in cli.query(d._struttura_sql("tab", tabella, "MySQL")).result_rows]
+        pg = [r[0] for r in cli.query(d._structure_sql("tab", table, "PostgreSQL")).result_rows]
+        my = [r[0] for r in cli.query(d._structure_sql("tab", table, "MySQL")).result_rows]
     finally:
-        cli.command(f"DROP TABLE tab.{tabella}")
+        cli.command(f"DROP TABLE tab.{table}")
     attesi = ["Int32", "Nullable(Date32)", "Date32", "Array(Nullable(Date32))", "Nullable(DateTime64(6))", "Nullable(DateTime64(6))",
               "Nullable(Float64)", "Nullable(Decimal(12, 2))", "Nullable(String)", "Tuple(a Date32, b DateTime64(6))"]
     quotati = ["`id`", "`nato`", "`nati`", "`date_list`", "`visto`", "`visto6`", "`n`", "`n2`", "`we\\`ird\\\\name`", "`pair`"]
@@ -2732,9 +2732,9 @@ _TESTO_UTF8 = [{"type": "compute", "params": {"columns": [
 def test_accented_text_on_clickhouse_gives_what_the_engines_give(ops):
     rif = _engine_snapshot("polars", {"k": _ACCENTI}, "k", ops)
     assert rif == _engine_snapshot("duckdb", {"k": _ACCENTI}, "k", ops)
-    valori = "(SELECT * FROM values('id Int64, s Nullable(String)', " + ", ".join(f"({i}, '{s}')" for i, s in _ACCENTI.iter_rows()) + "))"
-    righe = _su_clickhouse(_modello(_esporta({"id": "Int64", "s": "String"}, ops, mode="clickhouse"), valori))
-    assert sorted((tuple(_norm(v) for v in r) for r in righe), key=lambda t: tuple(map(str, t))) == rif[1]
+    values = "(SELECT * FROM values('id Int64, s Nullable(String)', " + ", ".join(f"({i}, '{s}')" for i, s in _ACCENTI.iter_rows()) + "))"
+    rows = _su_clickhouse(_modello(_esporta({"id": "Int64", "s": "String"}, ops, mode="clickhouse"), values))
+    assert sorted((tuple(_norm(v) for v in r) for r in rows), key=lambda t: tuple(map(str, t))) == rif[1]
 
 
 def test_the_position_of_a_text_on_clickhouse_counts_characters_as_duckdb_does():
@@ -2744,9 +2744,9 @@ def test_the_position_of_a_text_on_clickhouse_counts_characters_as_duckdb_does()
                                                       {"name": "dove3", "expr": "instr(s, 'tà')"}]}}]
     rif = _engine_snapshot("duckdb", {"k": _ACCENTI}, "k", ops)
     assert [r[2:] for r in rif[1]] == [(0.0, 0.0, 4.0), (0.0, 0.0, 9.0), (2.0, 2.0, 0.0), (0.0, 0.0, 0.0)]
-    valori = "(SELECT * FROM values('id Int64, s Nullable(String)', " + ", ".join(f"({i}, '{s}')" for i, s in _ACCENTI.iter_rows()) + "))"
-    righe = _su_clickhouse(_modello(_esporta({"id": "Int64", "s": "String"}, ops, mode="clickhouse"), valori))
-    assert sorted((tuple(_norm(v) for v in r) for r in righe), key=lambda t: tuple(map(str, t))) == rif[1]
+    values = "(SELECT * FROM values('id Int64, s Nullable(String)', " + ", ".join(f"({i}, '{s}')" for i, s in _ACCENTI.iter_rows()) + "))"
+    rows = _su_clickhouse(_modello(_esporta({"id": "Int64", "s": "String"}, ops, mode="clickhouse"), values))
+    assert sorted((tuple(_norm(v) for v in r) for r in rows), key=lambda t: tuple(map(str, t))) == rif[1]
 
 
 # #62 — dbt inlines an ephemeral model (a shared step, a datasource query) as a CTE of the model that
@@ -2763,22 +2763,22 @@ def _cte(sql: str) -> list:
     return re.findall(r"^\s*(?:WITH\s+)?[\"`]?(\w+)[\"`]? AS \(", sql, flags=re.M)
 
 
-def _con_l_effimero(files: dict, modello: str, effimero: str, sorgente: str) -> str:
+def _con_l_effimero(files: dict, model: str, effimero: str, source: str) -> str:
     """The model as dbt-clickhouse runs it: the ephemeral model's SQL inlined as the CTE
     `__dbt__cte__<name>` at the head of the model's own WITH."""
-    rel = {("source", "db_1_v", "ordini"): sorgente, ("ref", effimero): f"__dbt__cte__{effimero}"}
-    interno = _render_like_dbt(files[f"models/{effimero}.sql"], rel, config={})
-    esterno = _render_like_dbt(files[f"models/{modello}.sql"], rel, config={}).lstrip()
+    rel = {("source", "db_1_v", "ordini"): source, ("ref", effimero): f"__dbt__cte__{effimero}"}
+    inner = _render_like_dbt(files[f"models/{effimero}.sql"], rel, config={})
+    esterno = _render_like_dbt(files[f"models/{model}.sql"], rel, config={}).lstrip()
     assert esterno.startswith("WITH")
-    return f"WITH __dbt__cte__{effimero} AS (\n{interno}\n),\n" + esterno[len("WITH"):].lstrip()
+    return f"WITH __dbt__cte__{effimero} AS (\n{inner}\n),\n" + esterno[len("WITH"):].lstrip()
 
 
 def test_a_model_and_the_ephemeral_model_it_reads_never_share_a_cte_name():
     for mode in ("duckdb", "native", "clickhouse"):
         extra = {"native": _PG_NATIVE} if mode == "native" else ({"clickhouse": {"connections": [_PG], "target_schema": "s"}} if mode == "clickhouse" else {})
-        voce = {"ref": "{{ source('db_1_v', 'ordini') }}"} if mode == "duckdb" else {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}
+        item = {"ref": "{{ source('db_1_v', 'ordini') }}"} if mode == "duckdb" else {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}
         files = _files(_richiesta_export(mode=mode, **extra, models=_CONDIVISO, source_map={"k": {
-            **voce, "columns": ["id", "numero", "deposito"], "types": {"id": "Int64", "numero": "Int64", "deposito": "String"}, "label": "ordini"}}))
+            **item, "columns": ["id", "numero", "deposito"], "types": {"id": "Int64", "numero": "Int64", "deposito": "String"}, "label": "ordini"}}))
         interni, esterni = _cte(files["models/int_d1.sql"]), _cte(files["models/uno.sql"])
         assert interni and esterni and not set(interni) & set(esterni), (mode, interni, esterni)
 
@@ -2788,24 +2788,24 @@ def test_a_model_that_reads_an_ephemeral_model_runs_on_clickhouse_24():
     files = _files(_richiesta_export(mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "s"}, models=_CONDIVISO,
                                      source_map={"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", "columns": ["id", "numero", "deposito"],
                                                        "types": {"id": "Int64", "numero": "Int64", "deposito": "String"}, "label": "ordini"}}))
-    valori = "(SELECT * FROM values('id Int64, numero Int64, deposito String', (1, 10, 'a'), (2, 20, 'b'), (3, 30, 'c'), (4, 40, 'd')))"
-    assert sorted(_su_clickhouse(_con_l_effimero(files, "uno", "int_d1", valori))) == [(2,), (3,)]
+    values = "(SELECT * FROM values('id Int64, numero Int64, deposito String', (1, 10, 'a'), (2, 20, 'b'), (3, 30, 'c'), (4, 40, 'd')))"
+    assert sorted(_su_clickhouse(_con_l_effimero(files, "uno", "int_d1", values))) == [(2,), (3,)]
 
 
 # #27 — Postgres folds the names a query writes without quotes to lowercase; ClickHouse does not: the
 # query `SELECT Id, Nome FROM Catalogo.Prodotti` passed the export and failed at dbt run (UNKNOWN_TABLE)
 def test_a_postgres_query_reads_on_clickhouse_the_names_postgres_reads():
     ch = d.TargetClickHouse([_PG, _MY], "ch.local")
-    sql = " ".join(ch.traduci_query('WITH Attivi AS (SELECT Id, Nome, "Città" FROM Catalogo.Prodotti AS P WHERE P.Attivo) '
+    sql = " ".join(ch.translate_query('WITH Attivi AS (SELECT Id, Nome, "Città" FROM Catalogo.Prodotti AS P WHERE P.Attivo) '
                                     "SELECT A.Id, A.Nome, A.\"Città\", O.Totale AS Totale FROM Attivi AS A JOIN Ordini AS O ON O.Prodotto = A.Id",
                                     1, "q").split())
     assert "tab_src_1_catalogo.prodotti" in sql and "tab_src_1_public.ordini" in sql
     assert "SELECT id, nome, \"Città\" FROM" in sql and "o.totale AS totale" in sql and "FROM attivi AS a" in sql
     assert not re.search(r"\b(Id|Nome|Prodotti|Catalogo|Attivi|Totale)\b", sql)
     # the database is made for the schema Postgres has, `catalogo`: 'Catalogo' would be an empty one
-    assert ch.federati["tab_src_1_catalogo"]["schema"] == "catalogo" and ch.federati["tab_src_1_catalogo"]["tables"] == {"prodotti"}
+    assert ch.federated["tab_src_1_catalogo"]["schema"] == "catalogo" and ch.federated["tab_src_1_catalogo"]["tables"] == {"prodotti"}
     # MySQL keeps table names as written (they are case sensitive on its usual servers)
-    assert "tab_src_2_shop.Clienti" in ch.traduci_query("SELECT id FROM shop.Clienti", 2, "m")
+    assert "tab_src_2_shop.Clienti" in ch.translate_query("SELECT id FROM shop.Clienti", 2, "m")
 
 
 # #63 — without join_use_nulls ClickHouse fills the missing side of an outer join with 0 / '': the
@@ -2813,10 +2813,10 @@ def test_a_postgres_query_reads_on_clickhouse_the_names_postgres_reads():
 _NATIVO_CH = {"db_type": "clickhouse", "conn": {"host": "ch.x.it", "port": 8123, "database": "crm", "username": "u"}, "pw_env": "P"}
 
 
-def _impostazioni_del_profilo(profilo: str) -> dict:
+def _impostazioni_del_profilo(profile: str) -> dict:
     """The custom_settings of a dbt-clickhouse profile, as dbt-clickhouse sends them with every query."""
-    blocco = profilo.split("custom_settings:\n", 1)[1] if "custom_settings:\n" in profilo else ""
-    return dict(re.findall(r"^ {8}(\w+): (\S+)$", blocco, flags=re.M))
+    block = profile.split("custom_settings:\n", 1)[1] if "custom_settings:\n" in profile else ""
+    return dict(re.findall(r"^ {8}(\w+): (\S+)$", block, flags=re.M))
 
 
 def test_the_native_clickhouse_profile_gives_null_on_the_missing_side_of_an_outer_join():
@@ -2830,29 +2830,29 @@ def test_the_native_clickhouse_profile_gives_null_on_the_missing_side_of_an_oute
                                      source_map={_key(k)["key"]: {"ident": f"__s_{i}", "macro": "{{ source('crm', '%s') }}" % k, "columns": list(df.columns),
                                                      "types": {c: str(t) for c, t in df.schema.items()}, "label": k}
                                                  for i, (k, df) in enumerate((("clienti", clienti), ("ordini", ordini)))}))
-    impostazioni = _impostazioni_del_profilo(files["profiles.yml"])
-    assert impostazioni.get("join_use_nulls") == "1"
+    settings_ = _impostazioni_del_profilo(files["profiles.yml"])
+    assert settings_.get("join_use_nulls") == "1"
     sql = _render_like_dbt(files["models/uno.sql"], {("source", "crm", "clienti"): "(SELECT * FROM values('id Int64, nome String', (1, 'con ordini'), (2, 'senza ordini')))",
                                                      ("source", "crm", "ordini"): "(SELECT * FROM values('oid Int64, cliente_id Int64', (10, 1), (11, 1)))"}, config={})
-    righe = [tuple(r) for r in _clickhouse().query(sql, settings=impostazioni).result_rows]
-    assert sorted((tuple(_norm(v) for v in r) for r in righe), key=lambda t: tuple(map(str, t))) == rif[1]
+    rows = [tuple(r) for r in _clickhouse().query(sql, settings=settings_).result_rows]
+    assert sorted((tuple(_norm(v) for v in r) for r in rows), key=lambda t: tuple(map(str, t))) == rif[1]
     # the folder package says it to the team, as it does for the ClickHouse target
-    cartella = _progetto(attachments=None, layout={"package": "folder", "folder": "f"}, native={**_NATIVO_CH, "target_schema": "s"})
-    assert "join_use_nulls: 1" in cartella["INTEGRATION.md"]
+    folder = _progetto(attachments=None, layout={"package": "folder", "folder": "f"}, native={**_NATIVO_CH, "target_schema": "s"})
+    assert "join_use_nulls: 1" in folder["INTEGRATION.md"]
 
 
 # #21 — Tabularia reaches a ClickHouse connection on 8443 or 443 over TLS (clickhouse-connect does
 # so from the port); the native profile wrote `secure: false`, and dbt spoke plain HTTP to a TLS port
-@pytest.mark.parametrize("porta,tls", [(8443, True), (443, True), (8123, False), (9000, False)])
-def test_the_native_clickhouse_profile_uses_tls_where_tabularia_does(porta, tls):
+@pytest.mark.parametrize("port,tls", [(8443, True), (443, True), (8123, False), (9000, False)])
+def test_the_native_clickhouse_profile_uses_tls_where_tabularia_does(port, tls):
     from clickhouse_connect.driver import _parse_connection_params   # how Tabularia's client picks the scheme
 
-    schema = _parse_connection_params(host="h", username="", password="", port=porta, database="", interface=None, secure=False,
+    schema = _parse_connection_params(host="h", username="", password="", port=port, database="", interface=None, secure=False,
                                       dsn=None, kwargs={})[-1]
     assert (schema == "https") is tls
-    nativo = {**_NATIVO_CH, "conn": {**_NATIVO_CH["conn"], "port": porta}, "target_schema": "s"}
-    profilo = d._native_profile("p", nativo)
-    riga = next(r for r in profilo.splitlines() if r.strip().startswith("secure:"))
+    nativo = {**_NATIVO_CH, "conn": {**_NATIVO_CH["conn"], "port": port}, "target_schema": "s"}
+    profile = d._native_profile("p", nativo)
+    riga = next(r for r in profile.splitlines() if r.strip().startswith("secure:"))
     # the default is Tabularia's choice; CLICKHOUSE_SECURE changes it, as on the ClickHouse target
     assert riga == "      secure: \"{{ (env_var('CLICKHOUSE_SECURE', '" + str(tls).lower() + "') | lower in ['true', '1', 'yes']) | as_bool }}\""
     assert ("over TLS (`secure: true`)" in _progetto(attachments=None, native=nativo)["README.md"]) is tls
@@ -2871,16 +2871,16 @@ def _modelli_larghi(passi_intermedio: int, passi_uscita: int) -> list:
             {"name": "uno", "source": {"model": "int_largo"}, "operations": filtri(passi_uscita, passi_intermedio)}]
 
 
-def _esporta_largo(modelli: list):
-    return _richiesta_export(mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "s"}, models=modelli,
+def _esporta_largo(models: list):
+    return _richiesta_export(mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "s"}, models=models,
                              source_map={"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'larga') }}", "columns": _LARGHE,
                                                "types": {c: "Int64" for c in _LARGHE}, "label": "larga"}})
 
 
 def test_the_clickhouse_profiles_raise_max_query_size_and_the_check_uses_the_same_limit():
-    for profilo in (_progetto(attachments=None, clickhouse={"host": "h", "federati": []})["profiles.yml"],
+    for profile in (_progetto(attachments=None, clickhouse={"host": "h", "federati": []})["profiles.yml"],
                     d._native_profile("p", {**_NATIVO_CH, "target_schema": "s"})):
-        assert _impostazioni_del_profilo(profilo)["max_query_size"] == str(d.MAX_QUERY_SIZE)
+        assert _impostazioni_del_profilo(profile)["max_query_size"] == str(d.MAX_QUERY_SIZE)
     assert d.MAX_QUERY_SIZE > 262144
     # one model over ClickHouse's default 256 KiB: exported, it runs with the profile's setting
     files = _files(_esporta_largo([{**_modelli_larghi(0, 28)[1], "source": {"key": "k"}}]))
@@ -2909,9 +2909,9 @@ def test_the_size_of_a_clickhouse_model_is_counted_in_bytes(monkeypatch):
     from fastapi import HTTPException
 
     monkeypatch.setattr(d, "MAX_QUERY_SIZE", 100_000)
-    testo = "'" + "à" * 60_000 + "'"   # 60,000 characters, 120,000 bytes
+    text = "'" + "à" * 60_000 + "'"   # 60,000 characters, 120,000 bytes
     with pytest.raises(HTTPException) as e:
-        _esporta({"id": "Int64"}, [{"type": "compute", "params": {"columns": [{"name": "n", "expr": testo}]}}], mode="clickhouse")
+        _esporta({"id": "Int64"}, [{"type": "compute", "params": {"columns": [{"name": "n", "expr": text}]}}], mode="clickhouse")
     assert e.value.detail["code"] == "model_too_large" and int(e.value.detail["params"]["size"].replace(",", "")) > 120_000
     # the same text in ASCII is under the limit
     _esporta({"id": "Int64"}, [{"type": "compute", "params": {"columns": [{"name": "n", "expr": "'" + "a" * 60_000 + "'"}]}}], mode="clickhouse")
@@ -2926,18 +2926,18 @@ def test_a_column_with_a_double_quote_is_refused_where_dbt_clickhouse_cannot_cre
     tipi = {"id": "Int64", 'quote"col': "String"}
     for modo, extra in (("clickhouse", {"clickhouse": {"connections": [_PG], "target_schema": "s"}}),
                         ("native", {"native": {**_NATIVO_CH, "target_schema": "s"}})):
-        voce = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'q') }}", "columns": list(tipi), "types": tipi, "label": "q"}
+        item = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'q') }}", "columns": list(tipi), "types": tipi, "label": "q"}
         for materializzato in ("table", "incremental"):
             with pytest.raises(HTTPException) as e:
-                _zip(_richiesta_export(mode=modo, **extra, source_map={"k": voce},
+                _zip(_richiesta_export(mode=modo, **extra, source_map={"k": item},
                                        models=[{"name": "uno", "source": {"key": "k"}, "operations": [], "materialized": materializzato}]))
             assert e.value.detail["code"] == "column_name_unsupported", e.value.detail
             assert e.value.detail["params"] == {"model": "uno", "column": 'quote"col', "character": '"', "adapter": "dbt-clickhouse"}
         for materializzato in ("view", "ephemeral"):
-            _zip(_richiesta_export(mode=modo, **extra, source_map={"k": voce},
+            _zip(_richiesta_export(mode=modo, **extra, source_map={"k": item},
                                    models=[{"name": "uno", "source": {"key": "k"}, "operations": [], "materialized": materializzato}]))
     # the other adapters quote it
-    _zip(_richiesta_export(mode="native", native=_PG_NATIVE, source_map={"k": {**voce, "macro": "{{ source('db_1_v', 'q') }}"}},
+    _zip(_richiesta_export(mode="native", native=_PG_NATIVE, source_map={"k": {**item, "macro": "{{ source('db_1_v', 'q') }}"}},
                            models=[{"name": "uno", "source": {"key": "k"}, "operations": []}]))
 
 
@@ -2959,30 +2959,30 @@ def test_a_clickhouse_that_never_answers_does_not_hold_the_export_and_the_readme
     monkeypatch.setattr(cfg, "host", "127.0.0.1")
     monkeypatch.setattr(cfg, "port", muto.getsockname()[1])
     monkeypatch.setitem(sys.modules, "chdb", None)        # as in the production image
-    monkeypatch.setattr(d, "ATTESA_CONTROLLO", 1)
-    controllo, esito = d.ControlloSintassiClickHouse(), {}
+    monkeypatch.setattr(d, "CHECK_WAIT", 1)
+    check, outcome = d.ClickHouseSyntaxCheck(), {}
 
     def controlla():
-        inizio = time.monotonic()
-        esito["primo"] = controllo.errore("SELECT 1")
-        esito["secondi"] = time.monotonic() - inizio
-        esito["poi"] = controllo.errore("SELECT FROM WHERE (")
-        esito["dopo"] = time.monotonic() - inizio
+        start = time.monotonic()
+        outcome["primo"] = check.error("SELECT 1")
+        outcome["secondi"] = time.monotonic() - start
+        outcome["poi"] = check.error("SELECT FROM WHERE (")
+        outcome["dopo"] = time.monotonic() - start
     filo = threading.Thread(target=controlla, daemon=True)
     filo.start()
     filo.join(20)
     try:
         assert not filo.is_alive(), "the check is still waiting for ClickHouse"
-        assert esito["primo"] is None and esito["poi"] is None and esito["secondi"] < 10
-        assert esito["dopo"] - esito["secondi"] < 1        # off for the rest of the export: no second wait
-        assert controllo.saltato
-        controllo.chiudi()
+        assert outcome["primo"] is None and outcome["poi"] is None and outcome["secondi"] < 10
+        assert outcome["dopo"] - outcome["secondi"] < 1        # off for the rest of the export: no second wait
+        assert check.skipped
+        check.close()
         # the README says that the SQL was not read by a ClickHouse parser
-        inizio = time.monotonic()
+        start = time.monotonic()
         files = _files(_richiesta_export(mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "s"},
                                          source_map={"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", "columns": ["id", "x"],
                                                            "types": {"id": "Int64", "x": "String"}, "label": "ordini"}}))
-        assert time.monotonic() - inizio < 10
+        assert time.monotonic() - start < 10
         assert "not read by a ClickHouse parser" in files["README.md"]
     finally:
         muto.close()
@@ -2999,15 +2999,15 @@ def test_a_clickhouse_that_never_answers_does_not_hold_the_export_and_the_readme
 def test_every_source_schema_has_a_database_of_its_own_on_clickhouse():
     ch = d.TargetClickHouse([_PG, _MY], "ch.local")
     schemi = ("Sales", "sales", "sales-eu", "sales_eu", "vendite_città", "vendite_citt", "продажи", "склад", "default", "Vendite Più")
-    nomi = {s: ch.database_per(1, s, "orders") for s in schemi}
-    assert len(set(nomi.values())) == len(schemi)
-    assert {f["name"]: f["schema"] for f in ch.federati.values()} == {n: s for s, n in nomi.items()}
+    names = {s: ch.database_per(1, s, "orders") for s in schemi}
+    assert len(set(names.values())) == len(schemi)
+    assert {f["name"]: f["schema"] for f in ch.federated.values()} == {n: s for s, n in names.items()}
     # a schema that is already a plain lowercase name keeps the database it always had
-    assert nomi["sales"] == "tab_src_1_sales" and nomi["sales_eu"] == "tab_src_1_sales_eu" and nomi["default"] == "tab_src_1_default"
+    assert names["sales"] == "tab_src_1_sales" and names["sales_eu"] == "tab_src_1_sales_eu" and names["default"] == "tab_src_1_default"
     assert ch.database_per(2, "shop") == "tab_src_2_shop"
     # the others: the readable part and a short fingerprint of the exact name, the same at every export
-    assert re.fullmatch(r"tab_src_1_sales_[0-9a-f]{10}", nomi["Sales"]) and re.fullmatch(r"tab_src_1_default_[0-9a-f]{10}", nomi["продажи"])
-    assert nomi == {s: d.nome_db_federato(1, s) for s in schemi}
+    assert re.fullmatch(r"tab_src_1_sales_[0-9a-f]{10}", names["Sales"]) and re.fullmatch(r"tab_src_1_default_[0-9a-f]{10}", names["продажи"])
+    assert names == {s: d.federated_db_name(1, s) for s in schemi}
 
 
 # #25 #26 — a datasource query translated for the ClickHouse target: ClickHouse 24 hands a typed date
@@ -3015,7 +3015,7 @@ def test_every_source_schema_has_a_database_of_its_own_on_clickhouse():
 # found by the real dbt proof), and its upper/substring work on bytes as everywhere on ClickHouse
 def test_a_translated_query_compares_dates_by_their_text_and_keeps_characters_and_wide_types():
     ch = d.TargetClickHouse([_PG], "ch.local")
-    sql = " ".join(ch.traduci_query("SELECT id, upper(nome) AS u, substring(nome, 2, 3) AS s, CAST(visto AS date) AS giorno FROM zz.persone "
+    sql = " ".join(ch.translate_query("SELECT id, upper(nome) AS u, substring(nome, 2, 3) AS s, CAST(visto AS date) AS giorno FROM zz.persone "
                                     "WHERE nato < DATE '1970-01-01' AND visto >= '2024-01-01 10:00'::timestamp "
                                     "AND nato IN (DATE '1955-03-12', DATE '1969-12-31') AND nato BETWEEN DATE '1900-01-01' AND CAST('1970-01-01' AS date)",
                                     1, "q").split())
@@ -3024,7 +3024,7 @@ def test_a_translated_query_compares_dates_by_their_text_and_keeps_characters_an
     assert "upperUTF8(nome)" in sql and "substringUTF8(nome, 2, 3)" in sql and "CAST(visto AS Nullable(Date32))" in sql
     assert "Nullable(DATE)" not in sql and "Nullable(DateTime)" not in sql
     # a MySQL query too: its DATETIME is an instant to the microsecond, with no range of 1970-2106
-    my = d.TargetClickHouse([_MY], "ch.local").traduci_query("SELECT CAST(quando AS DATETIME) AS q, lower(nome) AS n FROM shop.t "
+    my = d.TargetClickHouse([_MY], "ch.local").translate_query("SELECT CAST(quando AS DATETIME) AS q, lower(nome) AS n FROM shop.t "
                                                              "WHERE quando >= TIMESTAMP '1960-01-01 00:00:00'", 2, "m")
     assert "Nullable(DateTime64(6))" in my and "lowerUTF8(nome)" in my and "quando >= '1960-01-01 00:00:00'" in " ".join(my.split())
 
@@ -3083,32 +3083,32 @@ def _relazione(df: "_pl.DataFrame", dove: str, con=None) -> str:
             return f"CAST(NULL AS {t})" if dove == "postgres" else "NULL"
         if isinstance(v, bool):
             return "TRUE" if v else "FALSE"
-        testo = str(v)
+        text = str(v)
         if dove == "postgres":
-            return "CAST('" + testo.replace("'", "''") + f"' AS {t})"
+            return "CAST('" + text.replace("'", "''") + f"' AS {t})"
         if isinstance(v, (int, float, _decimal.Decimal)):
-            return testo
-        return "'" + testo.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r") + "'"
-    righe = [", ".join(lit(v, tipi[c]) for c, v in r.items()) for r in df.to_dicts()]
+            return text
+        return "'" + text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r") + "'"
+    rows = [", ".join(lit(v, tipi[c]) for c, v in r.items()) for r in df.to_dicts()]
     if dove == "postgres":
-        nomi = ", ".join(d._qi(c) for c in df.columns)
-        return "(SELECT * FROM (VALUES " + ", ".join(f"({r})" for r in righe) + f") AS v({nomi}))"
+        names = ", ".join(d._qi(c) for c in df.columns)
+        return "(SELECT * FROM (VALUES " + ", ".join(f"({r})" for r in rows) + f") AS v({names}))"
     struttura = ", ".join(f"{c} {t}" for c, t in tipi.items())
-    return f"(SELECT * FROM values('{struttura}', " + ", ".join(f"({r})" for r in righe) + "))"
+    return f"(SELECT * FROM values('{struttura}', " + ", ".join(f"({r})" for r in rows) + "))"
 
 
 def _righe_dei_test(files: dict, df: "_pl.DataFrame", dove: str) -> dict:
     """Every singular test of the project → the rows it selects (dbt's failures) on `dove`,
-    over a model `uno` whose rows are `df`."""
+    over a model `one` whose rows are `df`."""
     import duckdb
 
     con = duckdb.connect() if dove == "duckdb" else None
     rel = _relazione(df, dove, con)
     out = {}
-    for path, testo in sorted(files.items()):
+    for path, text in sorted(files.items()):
         if not path.startswith("tests/"):
             continue
-        sql = _render_like_dbt(testo, {("ref", "uno"): rel}, config={})
+        sql = _render_like_dbt(text, {("ref", "uno"): rel}, config={})
         if dove == "duckdb":
             out[path] = len(con.execute(sql).fetchall())
         elif dove == "postgres":
@@ -3118,18 +3118,18 @@ def _righe_dei_test(files: dict, df: "_pl.DataFrame", dove: str) -> dict:
     return out
 
 
-def _esporta_contratto(df: "_pl.DataFrame", regole: list | None = None, colonne: list | None = None, mode: str = "duckdb") -> dict:
-    """The project the route writes for one model `uno` that publishes `df` as it is, with the
+def _esporta_contratto(df: "_pl.DataFrame", regole: list | None = None, columns: list | None = None, mode: str = "duckdb") -> dict:
+    """The project the route writes for one model `one` that publishes `df` as it is, with the
     contract's tests as the gateway sends them (singular rules; column tests)."""
     types = {c: str(t) for c, t in df.schema.items()}
     if mode == "duckdb":
-        voce, extra = {"ref": "{{ source('db_1_v', 'dati') }}"}, {}
+        item, extra = {"ref": "{{ source('db_1_v', 'dati') }}"}, {}
     else:
-        voce = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'dati') }}"}
+        item = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'dati') }}"}
         extra = {"native": _PG_NATIVE} if mode == "native" else {"clickhouse": {"connections": [_PG], "target_schema": "dbt_tabularia"}}
-    return _files(_richiesta_export(mode=mode, **extra, source_map={"k": {**voce, "columns": list(df.columns), "types": types, "label": "dati"}},
+    return _files(_richiesta_export(mode=mode, **extra, source_map={"k": {**item, "columns": list(df.columns), "types": types, "label": "dati"}},
                                     models=[{"name": "uno", "source": {"key": "k"}, "operations": [], "tests": list(regole or []),
-                                             "columns": list(colonne or [])}]))
+                                             "columns": list(columns or [])}]))
 
 
 _DOVE = {"duckdb": "duckdb", "native": "postgres", "clickhouse": "clickhouse"}
@@ -3177,13 +3177,13 @@ def test_the_regex_of_a_pattern_rule_reads_newlines_and_flags_as_tabularia_does(
     import duckdb
 
     attese = {r: _pl.Series(_TESTI_REGEX).str.contains(f"^(?:{r})$").to_list() for r in _REGEX}
-    dialetto = {"duckdb": None, "postgres": "postgres", "clickhouse": "clickhouse"}[dove]
-    sql = "SELECT " + ", ".join(f"regexp_matches({d._lit(v)}, {d._lit(d._regex_intera(r, dialetto))})" for r in _REGEX for v in _TESTI_REGEX)
+    dialect = {"duckdb": None, "postgres": "postgres", "clickhouse": "clickhouse"}[dove]
+    sql = "SELECT " + ", ".join(f"regexp_matches({d._lit(v)}, {d._lit(d._whole_regex(r, dialect))})" for r in _REGEX for v in _TESTI_REGEX)
     if dove == "duckdb":
         riga = duckdb.connect().execute(sql).fetchone()
     else:
-        tradotto = d.transpile_model(sql, dialetto, {})
-        riga = (_su_postgres(tradotto) if dove == "postgres" else _su_clickhouse(tradotto))[0]
+        translated_one = d.transpile_model(sql, dialect, {})
+        riga = (_su_postgres(translated_one) if dove == "postgres" else _su_clickhouse(translated_one))[0]
     avute = {r: [bool(x) for x in riga[i * len(_TESTI_REGEX):(i + 1) * len(_TESTI_REGEX)]] for i, r in enumerate(_REGEX)}
     assert avute == attese
 
@@ -3193,19 +3193,19 @@ def _test_generici(schema_yml: str) -> dict:
     generic tests dbt builds from it (only the forms the exporter writes)."""
     import json
 
-    out, modello, colonna = {}, None, None
+    out, model, column = {}, None, None
     for riga in schema_yml.splitlines():
         if riga.startswith("  - name: "):
-            modello = riga[len("  - name: "):].strip('"')
+            model = riga[len("  - name: "):].strip('"')
         elif riga.startswith("      - name: "):
-            colonna = json.loads(riga[len("      - name: "):])
-            out[(modello, colonna)] = {"quote": False, "tests": []}
+            column = json.loads(riga[len("      - name: "):])
+            out[(model, column)] = {"quote": False, "tests": []}
         elif riga == "        quote: true":
-            out[(modello, colonna)]["quote"] = True
+            out[(model, column)]["quote"] = True
         elif m := re.fullmatch(r"          - (\w+):", riga):
-            out[(modello, colonna)]["tests"].append([m.group(1), None])
+            out[(model, column)]["tests"].append([m.group(1), None])
         elif m := re.fullmatch(r"              config: \{severity: (\w+)\}", riga):
-            out[(modello, colonna)]["tests"][-1][1] = m.group(1)
+            out[(model, column)]["tests"][-1][1] = m.group(1)
     return {k: {"quote": v["quote"], "tests": [tuple(t) for t in v["tests"]]} for k, v in out.items() if v["tests"]}
 
 
@@ -3236,10 +3236,10 @@ _NOMI = _pl.DataFrame({"Nome Cliente": ["Anna", None, "Bruno"], "Canale": [None,
 
 @pytest.mark.parametrize("mode", ["duckdb", "native"])
 def test_a_not_null_rule_on_a_column_with_spaces_upper_case_or_a_reserved_word_runs(mode):
-    colonne = [{"name": c, "description": "", "tests": [{"kind": "not_null", "severity": "error"}]} for c in _NOMI.columns]
+    columns = [{"name": c, "description": "", "tests": [{"kind": "not_null", "severity": "error"}]} for c in _NOMI.columns]
     regole = [{"id": f"r{i}", "kind": "not_null", "column": c, "severity": "error"} for i, c in enumerate(_NOMI.columns)]
     attese = {x["column"]: x["violations"] for x in _valuta(_NOMI.lazy(), {"rules": regole})["rules"]}
-    files = _esporta_contratto(_NOMI, colonne=colonne, mode=mode)
+    files = _esporta_contratto(_NOMI, columns=columns, mode=mode)
     avute = {c: n for (c, _), n in _not_null_come_dbt(files, _NOMI.drop('il "codice"'), _DOVE[mode]).items() if c != 'il "codice"'}
     generici = _test_generici(files["models/schema.yml"])
     # a name with a double quote cannot be quoted by the adapter (it writes "…" as it is): a singular test
@@ -3271,13 +3271,13 @@ def test_an_accepted_values_rule_fails_in_dbt_exactly_where_tabularia_s_contract
               for i, (c, v) in enumerate(_REGOLE_AMMESSI, 1)]
     attese = [x["violations"] for x in _valuta(_AMMESSI.lazy(), {"rules": regole})["rules"]]
     assert attese == [0, 3, 0, 1, 3, 1, 1, 0, 1]
-    colonne = {}
+    columns = {}
     for c, v in _REGOLE_AMMESSI:
-        colonne.setdefault(c, {"name": c, "description": "", "tests": []})["tests"].append({"kind": "accepted_values", "severity": "warn", "values": v})
-    files = _esporta_contratto(_AMMESSI, colonne=list(colonne.values()), mode=mode)
-    righe = _righe_dei_test(files, _AMMESSI, _DOVE[mode])
-    nomi = ["citta", "citta_2", "n", "n_2", "n_3", "f", "ok", "ok_2", "giorno"]
-    assert righe == {f"tests/uno__accepted_values_{n}.sql": a for n, a in zip(nomi, attese)}
+        columns.setdefault(c, {"name": c, "description": "", "tests": []})["tests"].append({"kind": "accepted_values", "severity": "warn", "values": v})
+    files = _esporta_contratto(_AMMESSI, columns=list(columns.values()), mode=mode)
+    rows = _righe_dei_test(files, _AMMESSI, _DOVE[mode])
+    names = ["citta", "citta_2", "n", "n_2", "n_3", "f", "ok", "ok_2", "giorno"]
+    assert rows == {f"tests/uno__accepted_values_{n}.sql": a for n, a in zip(names, attese)}
     assert "accepted_values" not in files["models/schema.yml"]
     assert files["tests/uno__accepted_values_citta.sql"].startswith(
         "{{ config(severity='warn') }}\n-- Contract rule accepted_values on uno, column «citta»\n")
@@ -3286,12 +3286,12 @@ def test_an_accepted_values_rule_fails_in_dbt_exactly_where_tabularia_s_contract
 # #35 (decision 7) — a one-column unique rule: Tabularia counts two NULLs as a duplicate (NULLs
 # count as values), dbt's generic `unique` filters them out (`where col is not null`) and passed
 @pytest.mark.parametrize("mode", ["duckdb", "native", "clickhouse"])
-@pytest.mark.parametrize("valori,viola", [(["A1", None, None, "B2"], True), (["A1", None, "B2", "B2"], True), (["A1", None, "B2", "C3"], False)])
-def test_a_one_column_unique_rule_counts_two_nulls_as_a_duplicate_like_tabularia(mode, valori, viola):
-    df = _pl.DataFrame({"codice": valori, "n": [1, 2, 3, 4]})
-    esito = _valuta(df.lazy(), {"rules": [{"id": "r1", "kind": "unique", "columns": ["codice"], "severity": "error"}]})["rules"][0]
-    assert (esito["violations"] > 0) is viola
-    files = _esporta_contratto(df, colonne=[{"name": "codice", "description": "", "tests": [{"kind": "unique", "severity": "error"}]}], mode=mode)
+@pytest.mark.parametrize("values,viola", [(["A1", None, None, "B2"], True), (["A1", None, "B2", "B2"], True), (["A1", None, "B2", "C3"], False)])
+def test_a_one_column_unique_rule_counts_two_nulls_as_a_duplicate_like_tabularia(mode, values, viola):
+    df = _pl.DataFrame({"codice": values, "n": [1, 2, 3, 4]})
+    outcome = _valuta(df.lazy(), {"rules": [{"id": "r1", "kind": "unique", "columns": ["codice"], "severity": "error"}]})["rules"][0]
+    assert (outcome["violations"] > 0) is viola
+    files = _esporta_contratto(df, columns=[{"name": "codice", "description": "", "tests": [{"kind": "unique", "severity": "error"}]}], mode=mode)
     assert "unique" not in files["models/schema.yml"]
     assert {p: n > 0 for p, n in _righe_dei_test(files, df, _DOVE[mode]).items()} == {"tests/uno__unique_codice.sql": viola}
 
@@ -3301,15 +3301,15 @@ def test_a_one_column_unique_rule_counts_two_nulls_as_a_duplicate_like_tabularia
 def test_two_rules_of_one_kind_on_one_column_never_give_two_tests_with_the_same_name():
     df = _pl.DataFrame({"codice": ["a", None, "a", "c"], "Codice": ["x", "y", "x", None]})
     dup = lambda kind, **kw: [{"kind": kind, "severity": "warn", **kw}, {"kind": kind, "severity": "error", **kw}]   # noqa: E731
-    colonne = [{"name": "codice", "description": "", "tests": dup("not_null") + dup("unique") + dup("accepted_values", values=["a", "b"])},
+    columns = [{"name": "codice", "description": "", "tests": dup("not_null") + dup("unique") + dup("accepted_values", values=["a", "b"])},
                {"name": "Codice", "description": "", "tests": dup("not_null") + dup("unique")}]
-    files = _esporta_contratto(df, colonne=colonne, mode="native")
+    files = _esporta_contratto(df, columns=columns, mode="native")
     generici = _test_generici(files["models/schema.yml"])
     # the same check twice is one test, with the stricter severity: it fails where the error rule fails
     assert generici == {("uno", "codice"): {"quote": True, "tests": [("not_null", "error")]},
                         ("uno", "Codice"): {"quote": True, "tests": [("not_null", "error")]}}
-    singolari = {p: re.match(r"\{\{ config\(severity='(\w+)'\) \}\}", t).group(1) for p, t in files.items() if p.startswith("tests/")}
-    assert singolari == {"tests/uno__unique_codice.sql": "warn", "tests/uno__unique_codice_2.sql": "error",
+    singular = {p: re.match(r"\{\{ config\(severity='(\w+)'\) \}\}", t).group(1) for p, t in files.items() if p.startswith("tests/")}
+    assert singular == {"tests/uno__unique_codice.sql": "warn", "tests/uno__unique_codice_2.sql": "error",
                          "tests/uno__accepted_values_codice.sql": "warn", "tests/uno__accepted_values_codice_2.sql": "error",
                          "tests/uno__unique_codice_3.sql": "warn", "tests/uno__unique_codice_4.sql": "error"}
     assert "«Codice»" in files["tests/uno__unique_codice_3.sql"] and "«codice»" in files["tests/uno__unique_codice.sql"]
@@ -3353,34 +3353,34 @@ def _come_agate(csv_testo: str) -> list:
         f.write(csv_testo)
     try:
         with open(path, encoding="utf-8") as f:
-            righe = list(csv.reader(f))
+            rows = list(csv.reader(f))
     finally:
         os.remove(path)
-    return [[None if v.strip().lower() in ("", "null") else v for v in r] for r in righe[1:]]
+    return [[None if v.strip().lower() in ("", "null") else v for v in r] for r in rows[1:]]
 
 
 def _seed_caricato(files: dict, dove: str, con=None) -> str:
     """The seed table as the warehouse's dbt adapter loads it, as a relation of `dove`."""
     import csv, io, os, tempfile
 
-    testo = files["seeds/seed_dati.csv"]
+    text = files["seeds/seed_dati.csv"]
     if dove == "duckdb":
         # dbt-duckdb: COPY … FROM '<seed file>' (FORMAT CSV, HEADER TRUE, DELIMITER ',')
         fd, path = tempfile.mkstemp(suffix=".csv")
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(testo)
+            f.write(text)
         con.execute('CREATE TABLE "seed_dati" ("id" BIGINT, "v" VARCHAR, "w" VARCHAR, "n" BIGINT)')
         con.execute(f"""COPY "seed_dati" FROM '{path}' (FORMAT CSV, HEADER TRUE, DELIMITER ',')""")
         os.remove(path)
         return '"seed_dati"'
-    righe = _come_agate(testo)
+    rows = _come_agate(text)
     if dove == "postgres":
         lit = lambda v, t: f"CAST(NULL AS {t})" if v is None else "CAST('" + v.replace("'", "''") + f"' AS {t})"   # noqa: E731
         return ('(SELECT * FROM (VALUES ' + ", ".join(f"({lit(r[0], 'BIGINT')}, {lit(r[1], 'TEXT')}, {lit(r[2], 'TEXT')}, {lit(r[3], 'BIGINT')})"
-                                                      for r in righe) + ') AS v("id", "v", "w", "n"))')
+                                                      for r in rows) + ') AS v("id", "v", "w", "n"))')
     # dbt-clickhouse: the agate rows written back with csv.writer, then INSERT … FORMAT CSV
     buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerows(["" if v is None else v for v in r] for r in righe)
+    csv.writer(buf, lineterminator="\n").writerows(["" if v is None else v for v in r] for r in rows)
     cli = _clickhouse()
     cli.command('CREATE TEMPORARY TABLE "seed_dati" ("id" Nullable(Int64), "v" Nullable(String), "w" Nullable(String), "n" Nullable(Int64))')
     cli.command('INSERT INTO "seed_dati" FORMAT CSV\n' + buf.getvalue())
@@ -3398,12 +3398,12 @@ def test_a_seed_gives_the_models_every_text_tabularia_reads_even_the_ones_dbt_s_
     rel = _seed_caricato(files, dove, con)
     sql = _render_like_dbt(files["models/uno.sql"], {("ref", "seed_dati"): rel}, config={})
     if dove == "duckdb":
-        righe = con.execute(sql).fetchall()
+        rows = con.execute(sql).fetchall()
     elif dove == "postgres":
-        righe = _su_postgres(sql)
+        rows = _su_postgres(sql)
     else:
-        righe = [tuple(r) for r in con[0].query(sql).result_rows]
-    assert sorted(righe, key=lambda r: r[0]) == list(_SEED.iter_rows())
+        rows = [tuple(r) for r in con[0].query(sql).result_rows]
+    assert sorted(rows, key=lambda r: r[0]) == list(_SEED.iter_rows())
     # only the column that needs it is written another way; the README says so
     import csv, io
 
@@ -3427,18 +3427,18 @@ def test_already_declared_sources_are_ignored_outside_the_folder_package(mode, l
     sorgenti = [{"name": "db_1_vendite", "schema": "vendite", "connection_id": 1, "declared": True, "database": "db_1",
                  "tables": [{"name": "ordini", "description": "", "columns": []}]}]
     extra = {"clickhouse": {"connections": [_PG], "target_schema": "s"}} if mode == "clickhouse" else {}
-    voce = {"ident": "__s_0", "macro": "{{ source('db_1_vendite', 'ordini') }}"} if mode == "clickhouse" else {"ref": "{{ source('db_1_vendite', 'ordini') }}"}
+    item = {"ident": "__s_0", "macro": "{{ source('db_1_vendite', 'ordini') }}"} if mode == "clickhouse" else {"ref": "{{ source('db_1_vendite', 'ordini') }}"}
     files = _files(_richiesta_export(mode=mode, **extra, layout=layout, sources=sorgenti,
-                                     source_map={"k": {**voce, "columns": ["id"], "types": {"id": "Int64"}, "label": "ordini"}},
+                                     source_map={"k": {**item, "columns": ["id"], "types": {"id": "Int64"}, "label": "ordini"}},
                                      models=[{"name": "uno", "source": {"key": "k"}, "operations": []}]))
     assert "  - name: db_1_vendite\n" in files["models/sources.yml"] and "      - name: ordini\n" in files["models/sources.yml"]
     if mode == "clickhouse":
         # and the macro creates the ClickHouse database the source reads
         assert "tab_src_1_vendite" in files["macros/create_tabularia_sources.sql"]
-    cartella = _files(_richiesta_export(mode=mode, **extra, layout={"package": "folder", "folder": "f"}, sources=sorgenti,
-                                        source_map={"k": {**voce, "columns": ["id"], "types": {"id": "Int64"}, "label": "ordini"}},
+    folder = _files(_richiesta_export(mode=mode, **extra, layout={"package": "folder", "folder": "f"}, sources=sorgenti,
+                                        source_map={"k": {**item, "columns": ["id"], "types": {"id": "Int64"}, "label": "ordini"}},
                                         models=[{"name": "uno", "source": {"key": "k"}, "operations": []}]))
-    assert "models/f/sources.yml" not in cartella and "`db_1_vendite` is **declared in your project**" in cartella["INTEGRATION.md"]
+    assert "models/f/sources.yml" not in folder and "`db_1_vendite` is **declared in your project**" in folder["INTEGRATION.md"]
 
 
 # #81 — on the federated target the models land in DuckDB's `main` unless a schema is chosen
@@ -3447,17 +3447,17 @@ def test_already_declared_sources_are_ignored_outside_the_folder_package(mode, l
 @pytest.mark.parametrize("schema,dove", [(None, "main"), ("analisi", "analisi")])
 def test_the_readme_says_where_the_federated_models_land(schema, dove):
     files = _files(_richiesta_export(schema=schema))
-    profilo = files["profiles.yml"]
-    assert ("schema:" in profilo) is (schema is not None)
+    profile = files["profiles.yml"]
+    assert ("schema:" in profile) is (schema is not None)
     assert f"The models are built in `margini.duckdb`, in the schema `{dove}`" in files["README.md"]
 
 
 # #41 — the folder package goes into the team's project, where a tag like `sales` is common: the
 # documented `dbt build -s +tag:sales` also built their models tagged `sales` and all they read
 def test_the_folder_package_selects_only_what_came_from_tabularia():
-    modelli = [{"name": "sales_out", "kind": "output", "sql": "select * from {{ ref('seed_dati') }}", "materialized": "table",
+    models = [{"name": "sales_out", "kind": "output", "sql": "select * from {{ ref('seed_dati') }}", "materialized": "table",
                 "description": "", "columns": [], "meta": {"flow": "Sales", "flow_id": 3}, "tags": ["tabularia", "sales"]}]
-    files = _progetto(flow_name="Sales", models=modelli, layout={"package": "folder", "folder": "tabularia_sales"},
+    files = _progetto(flow_name="Sales", models=models, layout={"package": "folder", "folder": "tabularia_sales"},
                       seeds=[{"name": "seed_dati", "csv": "id\n1\n", "description": "", "columns": [], "column_types": {"id": "BIGINT"}}])
     guida = files["INTEGRATION.md"]
     # the flow's tag AND tabularia's: a model of theirs tagged `sales` (and what it reads) is not ours
@@ -3472,10 +3472,10 @@ def test_an_accepted_values_rule_tabularia_cannot_evaluate_is_refused_with_its_c
     from fastapi import HTTPException
 
     df = _pl.DataFrame({"ok": [True, False]})
-    esito = _valuta(df.lazy(), {"rules": [{"id": "r1", "kind": "accepted_values", "column": "ok", "values": ["yes"], "severity": "error"}]})
-    assert esito["rules"][0]["passed"] is False and "not a boolean" in esito["rules"][0]["error"]
+    outcome = _valuta(df.lazy(), {"rules": [{"id": "r1", "kind": "accepted_values", "column": "ok", "values": ["yes"], "severity": "error"}]})
+    assert outcome["rules"][0]["passed"] is False and "not a boolean" in outcome["rules"][0]["error"]
     with pytest.raises(HTTPException) as e:
-        _esporta_contratto(df, colonne=[{"name": "ok", "description": "", "tests": [{"kind": "accepted_values", "severity": "error", "values": ["yes"]}]}])
+        _esporta_contratto(df, columns=[{"name": "ok", "description": "", "tests": [{"kind": "accepted_values", "severity": "error", "values": ["yes"]}]}])
     assert e.value.status_code == 422 and e.value.detail["code"] == "contract_rule_invalid" and e.value.detail["params"] == {"rule": "accepted_values"}
 
 
@@ -3486,25 +3486,25 @@ def test_an_accepted_values_rule_tabularia_cannot_evaluate_is_refused_with_its_c
 _RIGHE = "a\n  b\r\n\tc\rd \u2028e"
 
 
-def _sql_di(testo: str, dialetto: str) -> str:
-    """`_RIGHE` as a string literal of the flow's text in `dialetto`, its bytes raw."""
-    return "'" + testo.replace("'", "''") + "'" if dialetto != "bigquery" else "'''" + testo + "'''"
+def _sql_di(text: str, dialect: str) -> str:
+    """`_RIGHE` as a string literal of the flow's text in `dialect`, its bytes raw."""
+    return "'" + text.replace("'", "''") + "'" if dialect != "bigquery" else "'''" + text + "'''"
 
 
-def _multiriga(target: str, dialetto: str, ops: list) -> str:
-    """The model `uno` over the source `ordini` (id, t) as the route writes it for `target`."""
+def _multiriga(target: str, dialect: str, ops: list) -> str:
+    """The model `one` over the source `ordini` (id, t) as the route writes it for `target`."""
     smap = {"columns": ["id", "t"], "types": {"id": "Int64", "t": "String"}, "label": "ordini"}
     if target == "duckdb":
         return _files(_richiesta_export(source_map={"k": {"ref": "{{ source('db_1_v', 'ordini') }}", **smap}},
-                                        models=[{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": dialetto}]))["models/uno.sql"]
-    voce = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", **smap}
+                                        models=[{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": dialect}]))["models/uno.sql"]
+    item = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}", **smap}
     extra = {"clickhouse": dict(mode="clickhouse", clickhouse={"connections": [_PG], "target_schema": "dbt_tabularia"}),
              "native-pg": dict(mode="native", native=_PG_NATIVE), "native-ch": dict(mode="native", native=_NATIVO_CH)}[target]
-    return _files(_richiesta_export(**extra, source_map={"k": voce},
-                                    models=[{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": dialetto}]))["models/uno.sql"]
+    return _files(_richiesta_export(**extra, source_map={"k": item},
+                                    models=[{"name": "uno", "source": {"key": "k"}, "operations": ops, "dialect": dialect}]))["models/uno.sql"]
 
 
-def _righe_multiriga(target: str, testo: str) -> list:
+def _righe_multiriga(target: str, text: str) -> list:
     """The rows of the model, rendered as dbt renders it, on the warehouse of `target`, over
     ordini = (1, _RIGHE), (2, 'x')."""
     if target == "duckdb":
@@ -3513,28 +3513,28 @@ def _righe_multiriga(target: str, testo: str) -> list:
         con = duckdb.connect()
         con.execute("CREATE TABLE ordini (id BIGINT, t VARCHAR)")
         con.execute("INSERT INTO ordini VALUES (1, ?), (2, 'x')", [_RIGHE])
-        return con.execute(f"SELECT * FROM ({_render_like_dbt(testo, {('source', 'db_1_v', 'ordini'): 'ordini'}, config={})}) ORDER BY id").fetchall()
+        return con.execute(f"SELECT * FROM ({_render_like_dbt(text, {('source', 'db_1_v', 'ordini'): 'ordini'}, config={})}) ORDER BY id").fetchall()
     if target == "native-pg":
         e = _RIGHE.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
         rel = f"(SELECT * FROM (VALUES (CAST(1 AS BIGINT), E'{e}'), (2, 'x')) AS v(id, t))"
-        return sorted(_su_postgres(_render_like_dbt(testo, {("source", "db_1_v", "ordini"): rel}, config={})))
+        return sorted(_su_postgres(_render_like_dbt(text, {("source", "db_1_v", "ordini"): rel}, config={})))
     e = _RIGHE.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
     rel = f"(SELECT * FROM values('id Nullable(Int64), t Nullable(String)', (1, '{e}'), (2, 'x')))"
-    return sorted(_su_clickhouse(_render_like_dbt(testo, {("source", "db_1_v", "ordini"): rel}, config={})))
+    return sorted(_su_clickhouse(_render_like_dbt(text, {("source", "db_1_v", "ordini"): rel}, config={})))
 
 
-@pytest.mark.parametrize("target,dialetto", [
+@pytest.mark.parametrize("target,dialect", [
     ("duckdb", "duckdb"), ("duckdb", "polars"), ("duckdb", "clickhouse"), ("duckdb", "bigquery"),
     ("native-pg", "duckdb"), ("native-pg", "clickhouse"),
     ("clickhouse", "duckdb"), ("clickhouse", "clickhouse"),
     ("native-ch", "duckdb"), ("native-ch", "clickhouse"),
 ])
-def test_a_text_on_several_lines_keeps_its_bytes_on_every_target(target, dialetto):
-    ops = [{"type": "compute", "params": {"columns": [{"name": "m", "expr": _sql_di(_RIGHE, dialetto)}]}},
+def test_a_text_on_several_lines_keeps_its_bytes_on_every_target(target, dialect):
+    ops = [{"type": "compute", "params": {"columns": [{"name": "m", "expr": _sql_di(_RIGHE, dialect)}]}},
            {"type": "filter", "params": {"column": "t", "operator": "eq", "value": _RIGHE}},
            {"type": "fill_null", "params": {"columns": {"m": _RIGHE}}},
-           {"type": "sql", "params": {"query": f"SELECT *, {_sql_di(_RIGHE, dialetto)} AS n FROM self"}}]
-    assert _righe_multiriga(target, _multiriga(target, dialetto, ops)) == [(1, _RIGHE, _RIGHE, _RIGHE)]
+           {"type": "sql", "params": {"query": f"SELECT *, {_sql_di(_RIGHE, dialect)} AS n FROM self"}}]
+    assert _righe_multiriga(target, _multiriga(target, dialect, ops)) == [(1, _RIGHE, _RIGHE, _RIGHE)]
 
 
 def test_a_name_on_several_lines_keeps_its_bytes():
@@ -3542,11 +3542,11 @@ def test_a_name_on_several_lines_keeps_its_bytes():
     import duckdb
 
     nome = "r\n  s\r\nt"
-    testo = _multiriga("duckdb", "duckdb", [{"type": "rename", "params": {"mapping": {"t": nome}}},
+    text = _multiriga("duckdb", "duckdb", [{"type": "rename", "params": {"mapping": {"t": nome}}},
                                             {"type": "filter", "params": {"column": nome, "operator": "eq", "value": "x"}}])
     con = duckdb.connect()
     con.execute("CREATE TABLE ordini AS SELECT * FROM (VALUES (1, 'y'), (2, 'x')) v(id, t)")
-    rel = con.sql(_render_like_dbt(testo, {("source", "db_1_v", "ordini"): "ordini"}, config={}))
+    rel = con.sql(_render_like_dbt(text, {("source", "db_1_v", "ordini"): "ordini"}, config={}))
     assert rel.columns == ["id", nome] and rel.fetchall() == [(2, "x")]
 
 
@@ -3563,10 +3563,10 @@ def test_a_yaml_value_ending_with_a_line_break_keeps_it():
         "name": "uno", "source": {"key": "k"}, "operations": [{"type": "rename", "params": {"mapping": {"t": nome}}}],
         "description": "two lines\n\n", "meta": {"flow": "a\r\n"},
         "columns": [{"name": nome, "description": "", "tests": [{"kind": "not_null", "severity": "error"}]}]}]))
-    righe = files["models/schema.yml"].splitlines()
-    valore = lambda prefisso: [_render_like_dbt(json.loads(r[len(prefisso):])) for r in righe if r.startswith(prefisso)]  # noqa: E731
-    assert valore("      - name: ") == [nome]
-    assert valore("    description: ") == ["two lines\n\n"] and valore("          flow: ") == ["a\r\n"]
+    rows = files["models/schema.yml"].splitlines()
+    value = lambda prefisso: [_render_like_dbt(json.loads(r[len(prefisso):])) for r in rows if r.startswith(prefisso)]  # noqa: E731
+    assert value("      - name: ") == [nome]
+    assert value("    description: ") == ["two lines\n\n"] and value("          flow: ") == ["a\r\n"]
     assert d._y("a\nb") == '"a\\nb"'   # a line break that does not end the value is written as before
 
 
@@ -3585,21 +3585,21 @@ def test_a_duckdb_escape_string_keeps_the_value_duckdb_gives_on_every_target(tar
 
     [(atteso,)] = duckdb.sql("SELECT " + _ESCAPE_DUCKDB).fetchall()
     assert atteso == "a\\ b\nc\t'dqAB 'e"
-    passo = ({"type": "compute", "params": {"columns": [{"name": "m", "expr": _ESCAPE_DUCKDB}]}} if dove == "compute"
+    step = ({"type": "compute", "params": {"columns": [{"name": "m", "expr": _ESCAPE_DUCKDB}]}} if dove == "compute"
              else {"type": "sql", "params": {"query": f"SELECT *, {_ESCAPE_DUCKDB} AS m FROM self"}})
-    ops = [{"type": "filter", "params": {"column": "t", "operator": "eq", "value": _RIGHE}}, passo]
+    ops = [{"type": "filter", "params": {"column": "t", "operator": "eq", "value": _RIGHE}}, step]
     assert _righe_multiriga(target, _multiriga(target, "duckdb", ops)) == [(1, _RIGHE, atteso)]
 
 
-@pytest.mark.parametrize("corpo", [
+@pytest.mark.parametrize("body", [
     "a\\\\b", "\\'", "''", "\\n\\t\\r\\b\\f", "\\v\\a\\q\\ \\\"", "\\101\\1018\\8", "\\x41\\x414\\x4\\x\\xZ",
     "\\\r\n\\\n", "città\\n", "-- no comment", "{{ x }}", "",
 ])
-def test_an_escape_string_is_written_as_the_standard_string_duckdb_reads_it_as(corpo):
+def test_an_escape_string_is_written_as_the_standard_string_duckdb_reads_it_as(body):
     import duckdb
 
-    sql = f"SELECT E'{corpo}' AS a, 'x\\y' AS b, $$E'z'$$ AS c -- E'w'"
-    scritto = d._stringhe_standard(sql)
+    sql = f"SELECT E'{body}' AS a, 'x\\y' AS b, $$E'z'$$ AS c -- E'w'"
+    scritto = d._standard_strings(sql)
     assert "E'" not in scritto.replace("$$E'z'$$", "").replace("-- E'w'", "")
     assert duckdb.sql(scritto).fetchall() == duckdb.sql(sql).fetchall()
 
@@ -3607,8 +3607,8 @@ def test_an_escape_string_is_written_as_the_standard_string_duckdb_reads_it_as(c
 def test_an_escape_string_duckdb_refuses_is_left_as_it_is():
     """A byte outside ASCII or a unicode escape: DuckDB refuses it (the flow does not run in
     Tabularia either), the export does not invent a value."""
-    for corpo in ("\\xe8", "\\0", "\\u0041"):
-        assert d._stringhe_standard(f"SELECT E'{corpo}'") == f"SELECT E'{corpo}'"
+    for body in ("\\xe8", "\\0", "\\u0041"):
+        assert d._standard_strings(f"SELECT E'{body}'") == f"SELECT E'{body}'"
 
 
 def test_the_steps_are_indented_as_before_when_no_text_spans_lines():
@@ -3625,20 +3625,20 @@ def test_the_steps_are_indented_as_before_when_no_text_spans_lines():
 # adapter writes the names unescaped into its own SQL — `"…"` (dbt-postgres, dbt-duckdb) or `…`
 # (dbt-clickhouse) around a relation, '…' in the queries that list relations and columns — and
 # dbt-postgres compares the schema with ILIKE, where a backslash escapes.
-def _con_nomi(mode: str, schema=None, alias=None, tabella="ordini", target_schema="dbt_tabularia", materialized="table",
+def _con_nomi(mode: str, schema=None, alias=None, table="ordini", target_schema="dbt_tabularia", materialized="table",
               schema_sorgente="v"):
-    voce = {"columns": ["id"], "types": {"id": "Int64"}, "label": tabella}
+    item = {"columns": ["id"], "types": {"id": "Int64"}, "label": table}
     sorgenti = [{"name": "db_1_v", "database": "d", "schema": schema_sorgente, "connection_id": 1,
-                 "tables": [{"name": tabella, "description": "", "columns": []}]}]
-    modello = {"name": "uno", "source": {"key": "k"}, "operations": [], "materialized": materialized, "schema": schema, "alias": alias}
+                 "tables": [{"name": table, "description": "", "columns": []}]}]
+    model = {"name": "uno", "source": {"key": "k"}, "operations": [], "materialized": materialized, "schema": schema, "alias": alias}
     if mode == "duckdb":
-        return _richiesta_export(sources=sorgenti, source_map={"k": {"ref": "{{ source('db_1_v', 'x') }}", **voce}}, models=[modello])
-    smap = {"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'x') }}", **voce}}
+        return _richiesta_export(sources=sorgenti, source_map={"k": {"ref": "{{ source('db_1_v', 'x') }}", **item}}, models=[model])
+    smap = {"k": {"ident": "__s_0", "macro": "{{ source('db_1_v', 'x') }}", **item}}
     if mode == "clickhouse":
-        return _richiesta_export(mode="clickhouse", sources=sorgenti, source_map=smap, models=[modello],
+        return _richiesta_export(mode="clickhouse", sources=sorgenti, source_map=smap, models=[model],
                                  clickhouse={"connections": [_PG], "target_schema": target_schema})
     native = {**(_PG_NATIVE if mode == "native-pg" else _NATIVO_CH), "target_schema": target_schema}
-    return _richiesta_export(mode="native", native=native, sources=sorgenti, source_map=smap, models=[modello])
+    return _richiesta_export(mode="native", native=native, sources=sorgenti, source_map=smap, models=[model])
 
 
 @pytest.mark.parametrize("mode,kw,nome,carattere,adapter", [
@@ -3648,24 +3648,24 @@ def _con_nomi(mode: str, schema=None, alias=None, tabella="ordini", target_schem
     ("native-pg", {"schema": "zz'q", "alias": "t"}, "zz'q", "'", "dbt-postgres"),
     ("native-pg", {"schema": "zz\\b", "alias": "t"}, "zz\\b", "\\", "dbt-postgres"),
     ("native-pg", {"target_schema": "a'b"}, "a'b", "'", "dbt-postgres"),
-    ("native-pg", {"tabella": 'or"dini'}, 'or"dini', '"', "dbt-postgres"),
+    ("native-pg", {"table": 'or"dini'}, 'or"dini', '"', "dbt-postgres"),
     ("native-ch", {"alias": "o'brien"}, "o'brien", "'", "dbt-clickhouse"),
     ("native-ch", {"schema": "zz'q", "alias": "t"}, "zz'q", "'", "dbt-clickhouse"),
     ("native-ch", {"alias": "a\\b"}, "a\\b", "\\", "dbt-clickhouse"),
     ("native-ch", {"alias": "a`b"}, "a`b", "`", "dbt-clickhouse"),
-    ("native-ch", {"tabella": "or`dini"}, "or`dini", "`", "dbt-clickhouse"),
-    ("clickhouse", {"tabella": "or\\dini"}, "or\\dini", "\\", "dbt-clickhouse"),
+    ("native-ch", {"table": "or`dini"}, "or`dini", "`", "dbt-clickhouse"),
+    ("clickhouse", {"table": "or\\dini"}, "or\\dini", "\\", "dbt-clickhouse"),
     ("clickhouse", {"target_schema": "a`b"}, "a`b", "`", "dbt-clickhouse"),
-    ("duckdb", {"tabella": 'or"dini'}, 'or"dini', '"', "dbt-duckdb"),
+    ("duckdb", {"table": 'or"dini'}, 'or"dini', '"', "dbt-duckdb"),
     # a quote in a SOURCE's schema or table: `dbt build` passes, but `dbt docs generate` writes them
     # between '…' in its catalog query (dbt 1.12.5: «upper('o'tab')» a syntax error on all three)
-    ("native-pg", {"tabella": "o'brien"}, "o'brien", "'", "dbt-postgres"),
+    ("native-pg", {"table": "o'brien"}, "o'brien", "'", "dbt-postgres"),
     ("native-pg", {"schema_sorgente": "zz'src"}, "zz'src", "'", "dbt-postgres"),
-    ("duckdb", {"tabella": "o'brien"}, "o'brien", "'", "dbt-duckdb"),
+    ("duckdb", {"table": "o'brien"}, "o'brien", "'", "dbt-duckdb"),
     ("duckdb", {"schema_sorgente": "zz'src"}, "zz'src", "'", "dbt-duckdb"),
-    ("native-ch", {"tabella": "o'brien"}, "o'brien", "'", "dbt-clickhouse"),
+    ("native-ch", {"table": "o'brien"}, "o'brien", "'", "dbt-clickhouse"),
     ("native-ch", {"schema_sorgente": "zz'src"}, "zz'src", "'", "dbt-clickhouse"),
-    ("clickhouse", {"tabella": "o'brien"}, "o'brien", "'", "dbt-clickhouse"),
+    ("clickhouse", {"table": "o'brien"}, "o'brien", "'", "dbt-clickhouse"),
 ])
 def test_a_name_the_adapter_cannot_write_is_refused_by_the_engine_too(mode, kw, nome, carattere, adapter):
     from fastapi import HTTPException
@@ -3678,8 +3678,8 @@ def test_a_name_the_adapter_cannot_write_is_refused_by_the_engine_too(mode, kw, 
 
 @pytest.mark.parametrize("mode,kw", [
     ("native-pg", {"alias": "a\\b"}), ("native-pg", {"alias": "a\\b", "materialized": "incremental"}),
-    ("native-pg", {"alias": "a }} b {{ c", "schema": "città"}), ("native-pg", {"tabella": "o\\brien", "schema_sorgente": "zz\\b"}),
-    ("native-ch", {"alias": 'x"y', "schema": 'zz"q'}), ("native-ch", {"tabella": 'o"brien'}),
+    ("native-pg", {"alias": "a }} b {{ c", "schema": "città"}), ("native-pg", {"table": "o\\brien", "schema_sorgente": "zz\\b"}),
+    ("native-ch", {"alias": 'x"y', "schema": 'zz"q'}), ("native-ch", {"table": 'o"brien'}),
 ])
 def test_the_names_the_adapter_builds_are_kept(mode, kw):
     """Built twice by real dbt 1.12.5, then `dbt docs generate`. A SOURCE's name is quoted by
@@ -3698,14 +3698,14 @@ def test_the_names_the_adapter_builds_are_kept(mode, kw):
 # route, 100 steps over 300 columns: see the follow-up report). A guard that the probe keeps them so.
 def test_the_probe_keeps_each_step_as_an_empty_table(monkeypatch):
     viste: list = []
-    chiudi = d._Sonda.chiudi
+    close = d._Probe.close
 
     def guarda(self):
         if self._con is not None:
             viste.extend(self._con.execute("SELECT table_name, 'BASE TABLE', estimated_size FROM duckdb_tables() "
                                            "UNION ALL SELECT view_name, 'VIEW', 0 FROM duckdb_views() WHERE NOT internal").fetchall())
-        chiudi(self)
-    monkeypatch.setattr(d._Sonda, "chiudi", guarda)
+        close(self)
+    monkeypatch.setattr(d._Probe, "close", guarda)
     cols = [f"c{i}" for i in range(30)]
     ops = [op for k in range(10) for op in (
         {"type": "compute", "params": {"columns": [{"name": f"k{k}", "expr": f'"c{k}" * 2'}]}},

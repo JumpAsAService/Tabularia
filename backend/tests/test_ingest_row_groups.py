@@ -35,10 +35,10 @@ def _driver(rows, batch_rows):
     return d
 
 
-def _scrivi(monkeypatch, n_righe, batch_rows, soglia):
+def _scrivi(monkeypatch, n_righe, batch_rows, threshold):
     rows = [(i, f"n{i}") for i in range(n_righe)]
     monkeypatch.setitem(db_source._DRIVERS, "postgresql", _driver(rows, batch_rows))
-    monkeypatch.setenv("INGEST__PARQUET_ROW_GROUP_ROWS", str(soglia))
+    monkeypatch.setenv("INGEST__PARQUET_ROW_GROUP_ROWS", str(threshold))
     db_source.get_settings.cache_clear()
     storage = FakeStorage()
     ingest_db_to_parquet(
@@ -52,21 +52,21 @@ def _scrivi(monkeypatch, n_righe, batch_rows, soglia):
 
 def test_many_small_driver_batches_become_few_row_groups(monkeypatch):
     """500 righe consegnate 10 alla volta = 50 batch, ma UN SOLO row group."""
-    md = _scrivi(monkeypatch, n_righe=500, batch_rows=10, soglia=1000)
+    md = _scrivi(monkeypatch, n_righe=500, batch_rows=10, threshold=1000)
     assert md.num_rows == 500
     assert md.num_row_groups == 1, f"un row group per batch e' tornato: {md.num_row_groups}"
 
 
 def test_the_threshold_decides_how_many_row_groups(monkeypatch):
     """Superata la soglia si chiude il blocco: 500 righe con soglia 100 -> 5."""
-    md = _scrivi(monkeypatch, n_righe=500, batch_rows=10, soglia=100)
+    md = _scrivi(monkeypatch, n_righe=500, batch_rows=10, threshold=100)
     assert md.num_rows == 500
     assert md.num_row_groups == 5, md.num_row_groups
 
 
 def test_the_last_partial_block_is_not_lost(monkeypatch):
     """Il resto sotto soglia deve comunque finire nel file."""
-    md = _scrivi(monkeypatch, n_righe=250, batch_rows=10, soglia=100)
+    md = _scrivi(monkeypatch, n_righe=250, batch_rows=10, threshold=100)
     assert md.num_rows == 250, "righe perse: manca lo scarico finale"
     assert md.num_row_groups == 3
 
@@ -81,7 +81,7 @@ def test_a_batch_bigger_than_the_threshold_is_split(monkeypatch):
     """Postgres consegna anche decine di migliaia di righe in un batch: con la soglia
     sotto (dal pannello, 10.000) usciva UN row group solo (trovato sul prodtest:
     25.000 righe, 1 blocco)."""
-    md = _scrivi(monkeypatch, n_righe=250, batch_rows=250, soglia=100)
+    md = _scrivi(monkeypatch, n_righe=250, batch_rows=250, threshold=100)
     assert md.num_rows == 250
     assert [md.row_group(i).num_rows for i in range(md.num_row_groups)] == [100, 100, 50]
 
@@ -89,5 +89,5 @@ def test_a_batch_bigger_than_the_threshold_is_split(monkeypatch):
 def test_no_tiny_row_group_after_each_block(monkeypatch):
     """Batch da 30 e soglia 100: il blocco si chiude a 120 righe. Si scrivono 100 e
     le 20 passano al blocco dopo, invece di un row group da 20 ogni volta."""
-    md = _scrivi(monkeypatch, n_righe=450, batch_rows=30, soglia=100)
+    md = _scrivi(monkeypatch, n_righe=450, batch_rows=30, threshold=100)
     assert [md.row_group(i).num_rows for i in range(md.num_row_groups)] == [100, 100, 100, 100, 50]

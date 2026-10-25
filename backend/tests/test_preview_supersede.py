@@ -99,9 +99,9 @@ def test_an_interruption_is_recognised_even_when_wrapped():
 
 def test_forget_client_drops_and_closes_the_cached_client():
     log: list = []
-    ce._CLIENTI_PER_THREAD.per_chiave = {("h", 1): (_FakeClient(log), 0.0)}
+    ce._CLIENTS_PER_THREAD.by_key = {("h", 1): (_FakeClient(log), 0.0)}
     _engine()._forget_client()
-    assert ce._CLIENTI_PER_THREAD.per_chiave == {} and log == ["close"]
+    assert ce._CLIENTS_PER_THREAD.by_key == {} and log == ["close"]
 
 
 # ── la route: lo slot ──────────────────────────────────────────────────────────
@@ -164,8 +164,8 @@ def test_a_new_preview_takes_down_the_one_holding_the_slot(monkeypatch):
     slots = _Slots(previous="vecchio-task"); celery = _wire(monkeypatch, _Result([OK]), slots)
     routes.preview_flow(_req(slot="u1:ed-preview"))
     assert celery.revoked == [("vecchio-task", {"terminate": True, "signal": "SIGUSR1"})]
-    nuovo = celery.sent[0]["task_id"]
-    assert slots.store["u1:ed-preview"] == nuovo and slots.released == [("u1:ed-preview", nuovo)]
+    new = celery.sent[0]["task_id"]
+    assert slots.store["u1:ed-preview"] == new and slots.released == [("u1:ed-preview", new)]
 
 
 def test_a_queued_preview_notices_it_was_superseded(monkeypatch):

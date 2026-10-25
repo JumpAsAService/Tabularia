@@ -13,7 +13,7 @@ from app.contracts.evaluator import evaluate, family, profile, propose
 ADESSO = datetime(2026, 10, 6, 12, 0, 0)
 
 
-def dati() -> pl.LazyFrame:
+def data() -> pl.LazyFrame:
     return pl.LazyFrame({
         "id": [1, 2, 3, 4, 5],
         "riga": [1, 2, 3, 1, 1],
@@ -28,8 +28,8 @@ def dati() -> pl.LazyFrame:
     })
 
 
-def uno(regola: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
-    referto = evaluate(lf if lf is not None else dati(), {"rules": [{"id": "r", "severity": "error", **regola}]}, now=ADESSO, **kw)
+def one(regola: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
+    referto = evaluate(lf if lf is not None else data(), {"rules": [{"id": "r", "severity": "error", **regola}]}, now=ADESSO, **kw)
     return referto["rules"][0]
 
 
@@ -85,35 +85,35 @@ def uno(regola: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
     ({"kind": "expression", "sql": "ordine * 2 >= riga"}, True),
 ])
 def test_ogni_regola_quando_regge_e_quando_no(regola, passa):
-    assert uno(regola)["passed"] is passa, uno(regola)
+    assert one(regola)["passed"] is passa, one(regola)
 
 
 def test_un_conteggio_dice_quante_righe_violano_e_ne_mostra_qualcuna():
-    r = uno({"kind": "accepted_values", "column": "stato", "values": ["aperto", "spedito"]})
+    r = one({"kind": "accepted_values", "column": "stato", "values": ["aperto", "spedito"]})
     assert (r["passed"], r["violations"], r["sample"]) == (False, 1, ["perso"])
-    r = uno({"kind": "unique", "columns": ["ordine"]})
+    r = one({"kind": "unique", "columns": ["ordine"]})
     assert r["violations"] == 3 and r["sample"] == [10]
-    r = uno({"kind": "range", "column": "quantita", "min": 0})
+    r = one({"kind": "range", "column": "quantita", "min": 0})
     assert r["violations"] == 1 and r["sample"] == [-3.0]   # il null non è fuori intervallo
-    r = uno({"kind": "not_null", "column": "stato"})
+    r = one({"kind": "not_null", "column": "stato"})
     assert r["violations"] == 1 and "sample" not in r        # di un null non c'è niente da mostrare
 
 
 def test_in_un_espressione_il_non_lo_so_non_e_un_si():
     """`spedito >= creato` con `spedito` null dà null: quella riga viola."""
-    r = uno({"kind": "expression", "sql": "spedito >= creato"})
+    r = one({"kind": "expression", "sql": "spedito >= creato"})
     assert r["violations"] == 2   # una data prima, e un null
 
 
 def test_gli_esempi_sono_pochi_e_tagliati():
     lungo = pl.LazyFrame({"t": [f"{'x' * 200}{i}" for i in range(50)]})
-    r = uno({"kind": "pattern", "column": "t", "regex": "y+"}, lungo)
+    r = one({"kind": "pattern", "column": "t", "regex": "y+"}, lungo)
     assert r["violations"] == 50 and len(r["sample"]) == 5 and all(len(s) <= 80 for s in r["sample"])
     assert "sample" not in evaluate(lungo, {"rules": [{"id": "r", "severity": "error", "kind": "pattern", "column": "t", "regex": "y+"}]}, samples=False)["rules"][0]
 
 
 # ── una regola che non si può valutare NON regge ─────────────────────────────
-@pytest.mark.parametrize("regola, perche", [
+@pytest.mark.parametrize("regola, why", [
     ({"kind": "not_null", "column": "non_esiste"}, "does not exist"),
     ({"kind": "not_null"}, "names no column"),
     ({"kind": "unique", "columns": ["id", "boh"]}, "does not exist"),
@@ -130,14 +130,14 @@ def test_gli_esempi_sono_pochi_e_tagliati():
     ({"kind": "freshness", "max_age_hours": 24, "column": "stato"}, "needs a date"),
     ({"kind": "regola_inventata"}, "unknown rule kind"),
 ])
-def test_una_regola_che_non_si_puo_valutare_non_regge_e_dice_perche(regola, perche):
-    r = uno(regola)
+def test_una_regola_che_non_si_puo_valutare_non_regge_e_dice_perche(regola, why):
+    r = one(regola)
     assert r["passed"] is False and r.get("error"), r
-    assert perche in r["error"], r["error"]
+    assert why in r["error"], r["error"]
 
 
 def test_una_regola_rotta_non_impedisce_di_valutare_le_altre():
-    referto = evaluate(dati(), {"rules": [
+    referto = evaluate(data(), {"rules": [
         {"id": "a", "kind": "expression", "sql": "boh > 1", "severity": "warning"},
         {"id": "b", "kind": "not_null", "column": "id", "severity": "error"},
         {"id": "c", "kind": "not_null", "column": "stato", "severity": "warning"},
@@ -148,7 +148,7 @@ def test_una_regola_rotta_non_impedisce_di_valutare_le_altre():
 
 # ── l'esito viene dalle severità ─────────────────────────────────────────────
 def _esito(*regole) -> str:
-    return evaluate(dati(), {"rules": [{"id": f"r{i}", **r} for i, r in enumerate(regole)]})["outcome"]
+    return evaluate(data(), {"rules": [{"id": f"r{i}", **r} for i, r in enumerate(regole)]})["outcome"]
 
 
 def test_due_severita_tre_esiti():
@@ -162,7 +162,7 @@ def test_due_severita_tre_esiti():
 
 
 def test_il_referto_conta_errori_e_avvisi():
-    r = evaluate(dati(), {"rules": [
+    r = evaluate(data(), {"rules": [
         {"id": "a", "kind": "not_null", "column": "stato", "severity": "error"},
         {"id": "b", "kind": "not_null", "column": "sku", "severity": "warning"},
         {"id": "c", "kind": "not_null", "column": "quantita", "severity": "warning"},
@@ -173,45 +173,45 @@ def test_il_referto_conta_errori_e_avvisi():
 
 @pytest.mark.parametrize("severita", [None, "info", "blocker", "", 3])
 def test_una_severita_che_non_e_avviso_ne_errore_non_passa_in_silenzio(severita):
-    r = evaluate(dati(), {"rules": [{"id": "a", "kind": "not_null", "column": "id", "severity": severita}]})
+    r = evaluate(data(), {"rules": [{"id": "a", "kind": "not_null", "column": "id", "severity": severita}]})
     assert r["rules"][0]["passed"] is False and "severity" in r["rules"][0]["error"] and r["outcome"] == "failed"
 
 
 # ── freschezza ───────────────────────────────────────────────────────────────
 def test_la_freschezza_dello_snapshot_guarda_quando_i_dati_sono_stati_prodotti():
-    assert uno({"kind": "freshness", "max_age_hours": 24})["passed"] is True          # appena scritti
-    r = uno({"kind": "freshness", "max_age_hours": 24}, snapshot_at=ADESSO - timedelta(hours=30))
+    assert one({"kind": "freshness", "max_age_hours": 24})["passed"] is True          # appena scritti
+    r = one({"kind": "freshness", "max_age_hours": 24}, snapshot_at=ADESSO - timedelta(hours=30))
     assert (r["passed"], r["observed"], r["expected"]) == (False, 30.0, 24)
-    assert uno({"kind": "freshness", "max_age_hours": 48}, snapshot_at=ADESSO - timedelta(hours=30))["passed"] is True
+    assert one({"kind": "freshness", "max_age_hours": 48}, snapshot_at=ADESSO - timedelta(hours=30))["passed"] is True
 
 
 def test_la_freschezza_di_una_colonna_guarda_il_valore_piu_recente():
-    r = uno({"kind": "freshness", "max_age_hours": 30, "column": "creato"})       # 5 ottobre 09:00 → 27 ore prima
+    r = one({"kind": "freshness", "max_age_hours": 30, "column": "creato"})       # 5 ottobre 09:00 → 27 ore prima
     assert (r["passed"], r["observed"]) == (True, 27.0)
-    assert uno({"kind": "freshness", "max_age_hours": 24, "column": "creato"})["passed"] is False
-    assert uno({"kind": "freshness", "max_age_hours": 24 * 6, "column": "giorno"})["passed"] is True
-    vuota = dati().filter(pl.col("id") < 0)
-    assert uno({"kind": "freshness", "max_age_hours": 24, "column": "creato"}, vuota)["passed"] is False
+    assert one({"kind": "freshness", "max_age_hours": 24, "column": "creato"})["passed"] is False
+    assert one({"kind": "freshness", "max_age_hours": 24 * 6, "column": "giorno"})["passed"] is True
+    empty = data().filter(pl.col("id") < 0)
+    assert one({"kind": "freshness", "max_age_hours": 24, "column": "creato"}, empty)["passed"] is False
 
 
 # ── casi limite ──────────────────────────────────────────────────────────────
 def test_una_tabella_vuota():
-    vuota = dati().filter(pl.col("id") < 0)
-    assert uno({"kind": "not_null", "column": "stato"}, vuota)["passed"] is True
-    assert uno({"kind": "unique", "columns": ["id"]}, vuota)["passed"] is True
-    assert uno({"kind": "row_count", "min": 1}, vuota) == {"id": "r", "kind": "row_count", "severity": "error", "passed": False, "observed": 0, "expected": {"min": 1, "max": None}}
-    r = uno({"kind": "not_null", "column": "stato"})
+    empty = data().filter(pl.col("id") < 0)
+    assert one({"kind": "not_null", "column": "stato"}, empty)["passed"] is True
+    assert one({"kind": "unique", "columns": ["id"]}, empty)["passed"] is True
+    assert one({"kind": "row_count", "min": 1}, empty) == {"id": "r", "kind": "row_count", "severity": "error", "passed": False, "observed": 0, "expected": {"min": 1, "max": None}}
+    r = one({"kind": "not_null", "column": "stato"})
     assert r["column"] == "stato"                       # il referto dice su che cosa era la regola
-    assert uno({"kind": "unique", "columns": ["ordine", "riga"]})["columns"] == ["ordine", "riga"]
-    assert evaluate(dati(), {"version": 7, "rules": []})["version"] == 7   # e di quale versione del contratto
-    assert uno({"kind": "column", "column": "id", "dtype": "integer"}, vuota)["passed"] is True
+    assert one({"kind": "unique", "columns": ["ordine", "riga"]})["columns"] == ["ordine", "riga"]
+    assert evaluate(data(), {"version": 7, "rules": []})["version"] == 7   # e di quale versione del contratto
+    assert one({"kind": "column", "column": "id", "dtype": "integer"}, empty)["passed"] is True
 
 
 def test_le_famiglie_dei_tipi():
     casi = {pl.Int8: "integer", pl.UInt64: "integer", pl.Float32: "number", pl.Decimal(10, 2): "number", pl.String: "string",
             pl.Boolean: "boolean", pl.Date: "date", pl.Datetime("ms"): "datetime", pl.Datetime("us", "UTC"): "datetime", pl.List(pl.Int8): "other"}
-    for tipo, attesa in casi.items():
-        assert family(tipo) == attesa, tipo
+    for kind, wait in casi.items():
+        assert family(kind) == wait, kind
 
 
 def test_due_milioni_di_righe_in_pochi_secondi(tmp_path):
@@ -233,7 +233,7 @@ def test_due_milioni_di_righe_in_pochi_secondi(tmp_path):
 
 # ── profilo e proposta ───────────────────────────────────────────────────────
 def test_il_profilo_dice_che_cosa_c_e_nei_dati():
-    p = profile(dati())
+    p = profile(data())
     per = {c["name"]: c for c in p["columns"]}
     assert p["rows"] == 5
     assert (per["id"]["family"], per["id"]["nulls"], per["id"]["distinct"], per["id"]["min"], per["id"]["max"]) == ("integer", 0, 5, 1, 5)

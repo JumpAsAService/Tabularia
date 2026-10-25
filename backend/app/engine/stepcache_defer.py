@@ -1,23 +1,21 @@
 """
-Materializzazione DIFFERITA della step-cache, comune a tutti i motori.
+DEFERRED materialization of the step cache, common to every engine.
 
-Prima ogni motore scriveva in cache l'output del passo a monte DENTRO la
-preview, prima di rispondere: su una tabella da 25 milioni di righe erano 40 s
-di attesa a ogni click, e il click successivo annullava la copia e la faceva
-ripartire da zero. Ora la preview risponde dopo la sua sola query e lascia i
-passi da materializzare in sospeso (`take_pending`): il task della preview li
-affida a `materialize_step_task`, che chiama `materialize()` fuori dalla
-richiesta, una volta sola (lucchetto su Valkey).
+Every engine used to write the upstream step's output to the cache INSIDE the preview,
+before answering: on a table of 25 million rows that was 40 s of waiting at every click,
+and the next click cancelled the copy and started it again from scratch. Now the preview
+answers after its own query alone and leaves the steps to materialize pending
+(`take_pending`): the preview's task hands them to `materialize_step_task`, which calls
+`materialize()` outside the request, once (a lock on Valkey).
 
-Tetto: un passo con piu' di `CACHE__MAX_STEP_ROWS` righe non viene messo in
-cache (conteggio LIMITATO, che si ferma appena supera il tetto): una copia
-grande quanto la sorgente non fa guadagnare nulla rispetto a rileggere il
-parquet originale, e costa gigabyte di scrittura. Il passo viene ricordato
-come «troppo grande» per non ricontarlo a ogni click.
+Cap: a step with more than `CACHE__MAX_STEP_ROWS` rows is not cached (a BOUNDED count,
+which stops as soon as it goes over): a copy as large as the source gains nothing over
+reading the original parquet, and costs gigabytes of writing. The step is remembered as
+«too large» so as not to count it again at every click.
 
-Ogni motore fornisce `_materialize_session(source)` (un contesto d'esecuzione
-proprio) e `_bounded_rows(ctx, obj, n)` (quante righe ha `obj`, contate al
-massimo fino a n+1), e chiama `_too_big(ctx, obj, final)` dentro `_materialize`.
+Every engine provides `_materialize_session(source)` (an execution context of its own)
+and `_bounded_rows(ctx, obj, n)` (how many rows `obj` has, counted up to n+1 at most),
+and calls `_too_big(ctx, obj, final)` inside `_materialize`.
 """
 from __future__ import annotations
 
@@ -36,12 +34,12 @@ def _coerce(operations) -> list[Operation]:
 
 
 def max_step_rows() -> int:
-    """Tetto di righe per un passo in cache (0 = nessun tetto)."""
+    """The row cap for a cached step (0 = no cap)."""
     return int(get_settings().cache.max_step_rows or 0)
 
 
 class DeferredStepCache:
-    """Mixin per gli engine: `cache` (StepCache) e `_source_id` vengono dall'engine."""
+    """A mixin for the engines: `cache` (StepCache) and `_source_id` come from the engine."""
 
     cache: StepCache
 
@@ -51,8 +49,8 @@ class DeferredStepCache:
         return self._pending
 
     def _defer_materialization(self, source: DataSource, ops: list[Operation]) -> None:
-        """Mette in sospeso la materializzazione di `ops` se non e' gia' in cache
-        (o gia' scartata perche' troppo grande)."""
+        """Leaves the materialization of `ops` pending unless it is cached already (or
+        discarded already as too large)."""
         if not ops:
             return
         final = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])[-1]  # type: ignore[attr-defined]
@@ -60,12 +58,12 @@ class DeferredStepCache:
             return
         pending = self._pending_list()
         if any(plan_hashes(self._source_id(s), o)[-1] == final for s, o in pending):  # type: ignore[attr-defined]
-            return  # gia' in sospeso
+            return  # pending already
         pending.append((source, [op.model_dump() for op in ops]))
 
     def _cache_state(self, source: DataSource, ops: list[Operation], use_cache: bool) -> tuple[str | None, int | None]:
-        """(stato, tetto) della cache del passo `ops`, per la risposta della
-        preview: e' cio' che l'editor mostra sul nodo. Nessuna query."""
+        """(state, cap) of the cache of step `ops`, for the preview's answer: what the editor
+        shows on the node. No query."""
         if not ops:
             return None, None
         cap = max_step_rows() or None
@@ -79,15 +77,15 @@ class DeferredStepCache:
         return "pending", cap
 
     def take_pending(self) -> list[tuple[DataSource, list[dict]]]:
-        """Le materializzazioni rimaste da fare (e le dimentica)."""
+        """The materializations left to do (and forgets them)."""
         out = list(self._pending_list())
         self._pending_list().clear()
         return out
 
     def materialize(self, source: DataSource, operations: list[dict[str, Any]]) -> bool:
-        """Materializza in cache l'output di `operations`, fuori dalla richiesta.
-        True se ha scritto qualcosa. Un lucchetto su Valkey evita che due click
-        sullo stesso passo lo scrivano due volte."""
+        """Materializes the output of `operations` in the cache, outside the request. True
+        when it wrote something. A lock on Valkey keeps two clicks on the same step from
+        writing it twice."""
         ops = _coerce(operations)
         if not ops:
             return False
@@ -95,7 +93,7 @@ class DeferredStepCache:
         if self.cache.has(final) or self.cache.is_skipped(final):
             return False
         if not self.cache.try_lock(final):
-            logger.info("step %s: materializzazione gia' in corso altrove", final[:12])
+            logger.info("step %s: materialization in progress elsewhere already", final[:12])
             return False
         try:
             with self._materialize_session(source) as ctx:  # type: ignore[attr-defined]
@@ -105,7 +103,7 @@ class DeferredStepCache:
         return self.cache.has(final)
 
     def _too_big(self, ctx, obj, final: str) -> bool:
-        """Il passo supera il tetto? Allora non va in cache, e lo si ricorda."""
+        """Is the step over the cap? Then it is not cached, and that is remembered."""
         cap = max_step_rows()
         if cap <= 0:
             return False
@@ -113,10 +111,10 @@ class DeferredStepCache:
         if n <= cap:
             return False
         self.cache.mark_skipped(final)
-        logger.info("step %s: oltre %d righe, non va in cache (si ricalcola dalla sorgente)", final[:12], cap)
+        logger.info("step %s: over %d rows, not cached (computed again from the source)", final[:12], cap)
         return True
 
     def _cache_output_allowed(self, rows_written: int) -> bool:
-        """L'output di un run finisce in cache solo se sta nel tetto."""
+        """A run's output is cached only when it fits under the cap."""
         cap = max_step_rows()
         return cap <= 0 or rows_written <= cap

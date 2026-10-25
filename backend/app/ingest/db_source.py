@@ -1,18 +1,17 @@
-"""Sorgenti database: esegue una query (o legge una tabella) e scrive il
-risultato in parquet SENZA mai materializzare tutto in memoria.
+"""Database sources: runs a query (or reads a table) and writes the result as
+parquet WITHOUT ever holding all of it in memory.
 
-Percorso dati: driver → batch Arrow → ParquetWriter su file temporaneo → upload
-su storage. La memoria resta O(dimensione batch); il disco fa da buffer, come
-per gli upload di file.
+Data path: driver → Arrow batches → ParquetWriter on a temporary file → upload to the
+storage. Memory stays O(batch size); the disk is the buffer, as for file uploads.
 
-Un driver per tipo di database, tutti con lo stesso protocollo (un generatore
-che produce PRIMA lo schema Arrow, POI i RecordBatch):
-- postgresql        → ADBC (Arrow nativo, streaming lato server)
-- clickhouse        → clickhouse-connect (query_arrow_stream, Arrow nativo)
-- mysql / mariadb   → PyMySQL con cursore unbuffered (fetchmany → Arrow)
-- trino             → client DBAPI ufficiale (paginazione naturale → Arrow)
-- oracle            → python-oracledb in modalità Thin (fetch_df_batches → Arrow)
-- sqlserver         → mssql-python, il driver di Microsoft (arrow_reader → Arrow)
+One driver per database type, all with the same protocol (a generator that yields
+FIRST the Arrow schema, THEN the RecordBatches):
+- postgresql        → ADBC (native Arrow, server-side streaming)
+- clickhouse        → clickhouse-connect (query_arrow_stream, native Arrow)
+- mysql / mariadb   → PyMySQL with an unbuffered cursor (fetchmany → Arrow)
+- trino             → the official DBAPI client (natural paging → Arrow)
+- oracle            → python-oracledb in Thin mode (fetch_df_batches → Arrow)
+- sqlserver         → mssql-python, Microsoft's driver (arrow_reader → Arrow)
 """
 from __future__ import annotations
 
@@ -36,14 +35,14 @@ from app.ingest.db_errors import describe_db_error
 
 logger = logging.getLogger(__name__)
 
-# righe per batch nel percorso DBAPI (Postgres/ClickHouse usano i batch nativi)
+# rows per batch on the DBAPI path (Postgres and ClickHouse use their native batches)
 BATCH_ROWS = 50_000
 
 DEFAULT_PORTS = {
     "postgresql": 5432,
     "mysql": 3306,
     "mariadb": 3306,
-    "clickhouse": 8123,  # porta HTTP (clickhouse-connect), non la nativa 9000
+    "clickhouse": 8123,  # the HTTP port (clickhouse-connect), not the native 9000
     "trino": 8080,
     "oracle": 1521,
     "sqlserver": 1433,
@@ -53,7 +52,7 @@ DbType = Literal["postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracl
 
 
 class DbSourceError(IngestError):
-    """Errore parlante da mostrare all'utente (connessione, query, tipi)."""
+    """A clear error to show the user (connection, query, types)."""
 
 
 # Database drivers that are not in the published images: the module each needs. The
@@ -102,13 +101,13 @@ class DbConnectionSpec(BaseModel):
     host: str
     port: int | None = None
     username: str = ""
-    # una delle due: `password_encrypted` (Fernet, come arriva dal gateway) o
-    # `password` in chiaro (solo per prove dirette sull'engine in sviluppo)
+    # one of the two: `password_encrypted` (Fernet, as it comes from the gateway) or
+    # `password` in clear (only for direct trials on the engine in development)
     password: str = ""
     password_encrypted: str = ""
-    database: str = ""   # Oracle: il SERVICE NAME (es. FREEPDB1, ORCLPDB1)
-    db_schema: str = ""  # schema Postgres / schema Trino / owner Oracle; vuoto = default
-    # opzioni del tipo, dal campo `extra` della connessione (SQL Server: {"tls": …})
+    database: str = ""   # Oracle: the SERVICE NAME (FREEPDB1, ORCLPDB1)
+    db_schema: str = ""  # Postgres schema / Trino schema / Oracle owner; empty = the default
+    # options of the type, from the connection's `extra` field (SQL Server: {"tls": …})
     extra: dict = {}
 
     @property
@@ -125,80 +124,79 @@ class DbConnectionSpec(BaseModel):
 
 class DbSourceSpec(BaseModel):
     mode: Literal["table", "sql"]
-    ref: str  # nome tabella (anche schema.tabella) oppure il testo SQL
-    # colonne per l'ORDER BY finale: il parquet esce ordinato → pruning a valle.
-    # Vuoto = nessun ordine (come prima). Sono nomi di colonna del RISULTATO.
+    ref: str  # the table's name (schema.table too) or the SQL text
+    # columns of the final ORDER BY: the parquet comes out sorted → pruning downstream.
+    # Empty = no order (as before). Column names of the RESULT.
     sort_keys: list[str] = []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Costruzione della query
+# Building the query
 # ─────────────────────────────────────────────────────────────────────────────
 _IDENT_QUOTE = {"postgresql": '"', "trino": '"', "mysql": "`", "mariadb": "`", "clickhouse": "`", "oracle": '"'}
 
 
-def _tsql_ident(parte: str) -> str:
-    """Un identificatore T-SQL fra parentesi quadre: `dbo` → `[dbo]`; uno già fra
-    quadre (`[Ordini 2024]`, come lo restituisce l'elenco) resta com'è."""
-    if len(parte) >= 2 and parte.startswith("[") and parte.endswith("]"):
-        interno = parte[1:-1]
-        if not interno or "]" in interno.replace("]]", ""):
-            raise DbSourceError(f"Invalid name: {parte}")
-        return parte
-    return "[" + parte.replace("]", "]]") + "]"
+def _tsql_ident(part: str) -> str:
+    """A T-SQL identifier in square brackets: `dbo` → `[dbo]`; one in brackets already
+    (`[Orders 2024]`, as the listing returns it) stays as it is."""
+    if len(part) >= 2 and part.startswith("[") and part.endswith("]"):
+        inner = part[1:-1]
+        if not inner or "]" in inner.replace("]]", ""):
+            raise DbSourceError(f"Invalid name: {part}")
+        return part
+    return "[" + part.replace("]", "]]") + "]"
 
 
 def _tsql_query(sql: str, conn: DbConnectionSpec, source: DbSourceSpec) -> str:
-    """La SQL dell'utente su SQL Server. Non si avvolge in `SELECT * FROM (…)`: in
-    T-SQL una tabella derivata non può contenere una CTE né un ORDER BY, e sono
-    frequenti. Si controlla invece che sia UNA sola query di lettura — un batch T-SQL
-    potrebbe portare dietro `; DELETE …` — e si manda così com'è. Con le chiavi di
-    ordinamento: si avvolge se si può, altrimenti (CTE) l'ORDER BY va in coda."""
+    """The user's SQL on SQL Server. Not wrapped in `SELECT * FROM (…)`: in T-SQL a
+    derived table may hold neither a CTE nor an ORDER BY, and both are frequent. It is
+    checked instead to be ONE read query — a T-SQL batch could carry a `; DELETE …` —
+    and sent as it is. With sort keys: wrapped when possible, otherwise (a CTE) the
+    ORDER BY goes at the end."""
     import sqlglot
     from sqlglot import exp
 
     try:
         statement = [s for s in sqlglot.parse(sql, read="tsql") if s is not None]
-    except Exception:  # noqa: BLE001 — sintassi che sqlglot non conosce: decide il server, nell'involucro
+    except Exception:  # noqa: BLE001 — syntax sqlglot does not know: the server decides, in the wrapper
         statement = None
     if statement is not None:
         if len(statement) != 1 or not isinstance(statement[0], exp.Query):
             raise DbSourceError("SQL Server: the SQL source must be a single SELECT (a WITH … SELECT is fine).")
-        if statement[0].find(exp.Into) is not None:  # per sqlglot è una SELECT, per SQL Server crea una tabella
+        if statement[0].find(exp.Into) is not None:  # a SELECT for sqlglot, a table creation for SQL Server
             raise DbSourceError("SQL Server: the SQL source must only read: SELECT … INTO creates a table, remove the INTO.")
     keys = [k.strip() for k in (source.sort_keys or []) if k and k.strip()]
     if not keys:
         return sql if statement is not None else f"SELECT * FROM ({sql}) AS _q"
-    ordine = " ORDER BY " + ", ".join(_tsql_ident(k) for k in keys)
+    order = " ORDER BY " + ", ".join(_tsql_ident(k) for k in keys)
     if statement is not None and statement[0].find(exp.With) is not None:
-        return sql + ordine
-    return f"SELECT * FROM ({sql}) AS _q" + ordine
+        return sql + order
+    return f"SELECT * FROM ({sql}) AS _q" + order
 
 
-def _oracle_ident(parte: str) -> str:
-    """Un identificatore Oracle, con la regola di Oracle: SENZA virgolette si
-    legge in maiuscolo (`hr.employees` è HR.EMPLOYEES, come in SQL Developer);
-    FRA virgolette resta com'è (`HR."conti 2024"`). L'elenco delle tabelle
-    restituisce i nomi già in questa forma, quindi scegliere dalla lista torna."""
-    if len(parte) >= 2 and parte.startswith('"') and parte.endswith('"'):
-        interno = parte[1:-1]
-        if not interno or '"' in interno:
-            raise DbSourceError(f"Invalid name: {parte}")
-        return f'"{interno}"'
-    if '"' in parte:
-        raise DbSourceError(f"Invalid name: {parte}")
-    return f'"{parte.upper()}"'
+def _oracle_ident(part: str) -> str:
+    """An Oracle identifier, with Oracle's rule: WITHOUT quotes it reads in uppercase
+    (`hr.employees` is HR.EMPLOYEES, as in SQL Developer); IN quotes it stays as it is
+    (`HR."accounts 2024"`). The table listing returns the names in this form already,
+    so picking from the list works."""
+    if len(part) >= 2 and part.startswith('"') and part.endswith('"'):
+        inner = part[1:-1]
+        if not inner or '"' in inner:
+            raise DbSourceError(f"Invalid name: {part}")
+        return f'"{inner}"'
+    if '"' in part:
+        raise DbSourceError(f"Invalid name: {part}")
+    return f'"{part.upper()}"'
 
 
 def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
-    """Query finale da eseguire sul database.
+    """The final query to run on the database.
 
-    - mode=sql: il testo dell'utente viene avvolto in `SELECT * FROM (…) AS _q`.
-      Non è una barriera di sicurezza (la barriera è la capability CONNECT e
-      un'utenza DB read-only): serve a rifiutare statement non-SELECT e a poter
-      aggiungere LIMIT senza toccare il testo.
-    - mode=table: identificatori quotati per dialetto; `schema.tabella` accettato,
-      altrimenti si antepone lo schema della connessione se impostato.
+    - mode=sql: the user's text is wrapped in `SELECT * FROM (…) AS _q`. Not a security
+      barrier (the barrier is the CONNECT capability and a read-only database user): it
+      refuses non-SELECT statements and lets a LIMIT be added without touching the text.
+    - mode=table: identifiers quoted per dialect; `schema.table` accepted, otherwise the
+      connection's schema goes in front when set.
     """
     if source.mode == "sql":
         sql = source.ref.strip().rstrip(";").strip()
@@ -206,7 +204,7 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
             raise DbSourceError("The SQL query is empty")
         if conn.db_type == "sqlserver":
             return _tsql_query(sql, conn, source)
-        # Oracle non vuole AS davanti all'alias di una tabella, né un alias con «_»
+        # Oracle wants no AS before a table's alias, nor an alias with «_»
         alias = " q" if conn.db_type == "oracle" else " AS _q"
         return _with_order_by(f"SELECT * FROM ({sql}){alias}", conn, source)
 
@@ -239,9 +237,9 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
 
 
 def _with_order_by(base: str, conn: DbConnectionSpec, source: DbSourceSpec) -> str:
-    """Appende `ORDER BY <chiavi>` (quotate per dialetto) se ci sono sort_keys.
-    Le chiavi sono nomi di colonna del risultato; il DB dà un errore parlante se
-    non esistono. Vuoto = query invariata."""
+    """Appends `ORDER BY <keys>` (quoted per dialect) when there are sort_keys. The keys
+    are column names of the result; the database gives a clear error when they do not
+    exist. Empty = the query unchanged."""
     keys = [k.strip() for k in (source.sort_keys or []) if k and k.strip()]
     if not keys:
         return base
@@ -271,25 +269,24 @@ def _batches_postgresql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
     with adbc_pg.connect(uri) as c:
         with c.cursor() as cur:
             cur.execute(query)
-            reader = cur.fetch_record_batch()  # RecordBatchReader: streaming vero
-            yield _schema_senza_estensioni(reader.schema)
+            reader = cur.fetch_record_batch()  # RecordBatchReader: true streaming
+            yield _schema_without_extensions(reader.schema)
             for batch in reader:
-                yield _batch_senza_estensioni(batch)
+                yield _batch_without_extensions(batch)
 
 
-# Il driver ADBC di Postgres restituisce i tipi che Arrow non ha (numeric, e gli
-# altri tipi «di casa» di Postgres) come ESTENSIONE opaca (`arrow.opaque`) sopra
-# un testo. Scritta così nel parquet, Polars la legge come testo ma il suo
-# lettore in streaming va in PANIC appena un filtro o un controllo dei NULL viene
-# spinto dentro la lettura di quella colonna — e il worker usciva a metà lavoro.
-# Si scrive senza involucro (trovato dall'oracolo dell'export dbt il 2026-10-10):
-# · `numeric` è un NUMERO (Float64): importi e prezzi si sommano, come quelli di un
-#   CSV o di un Excel (scelta dell'utente, 2026-10-10; prima erano testo e `sum` li
-#   rifiutava). Float64 e non decimal: il driver non dice precisione e scala, e i
-#   cinque motori calcolano i double allo stesso modo (ClickHouse tronca le divisioni
-#   fra decimali alla scala della colonna, gli altri no). NaN e ±Infinity restano tali.
-# · gli altri tipi opachi restano il loro testo.
-def _tipo_senza_estensione(t):
+# Postgres's ADBC driver returns the types Arrow lacks (numeric, and Postgres's other
+# «own» types) as an opaque EXTENSION (`arrow.opaque`) over a text. Written so in the
+# parquet, Polars reads it as text, but its streaming reader PANICs as soon as a filter
+# or a NULL check is pushed into the read of that column — and the worker quit half
+# way. It is written without the wrapper (found by the dbt export oracle, 2026-10-10):
+# · `numeric` is a NUMBER (Float64): amounts and prices add up, as those of a CSV or an
+#   Excel file (the user's choice, 2026-10-10; they were text and `sum` refused them).
+#   Float64 and not decimal: the driver gives no precision and scale, and the five
+#   engines compute doubles alike (ClickHouse truncates divisions between decimals to
+#   the column's scale, the others do not). NaN and ±Infinity stay so.
+# · the other opaque types stay their text.
+def _type_without_extension(t):
     if isinstance(t, pa.OpaqueType) and t.type_name == "numeric":
         return pa.float64()
     if isinstance(t, pa.BaseExtensionType):
@@ -298,31 +295,31 @@ def _tipo_senza_estensione(t):
     return t
 
 
-def _schema_senza_estensioni(schema):
+def _schema_without_extensions(schema):
     if not any(isinstance(f.type, pa.BaseExtensionType) for f in schema):
         return schema
-    return pa.schema([pa.field(f.name, _tipo_senza_estensione(f.type), nullable=f.nullable) for f in schema])
+    return pa.schema([pa.field(f.name, _type_without_extension(f.type), nullable=f.nullable) for f in schema])
 
 
-def _batch_senza_estensioni(batch):
+def _batch_without_extensions(batch):
     if not any(isinstance(f.type, pa.BaseExtensionType) for f in batch.schema):
         return batch
     cols = []
     for arr in batch.columns:
         if isinstance(arr.type, pa.BaseExtensionType):
-            arr = pc.cast(arr.storage, _tipo_senza_estensione(arr.type))
+            arr = pc.cast(arr.storage, _type_without_extension(arr.type))
         cols.append(arr)
-    return pa.RecordBatch.from_arrays(cols, schema=_schema_senza_estensioni(batch.schema))
+    return pa.RecordBatch.from_arrays(cols, schema=_schema_without_extensions(batch.schema))
 
 
-# ClickHouse esporta in Arrow i tipi temporali come INTERI grezzi (Date→uint16
-# giorni, Date32→int32, DateTime→uint32 secondi, DateTime64→int64 in `scale`
-# decimali): senza riconvertirli finirebbero numerici nel parquet (es. il datetime
-# 1714546800). A livello Arrow un uint32 è indistinguibile da un intero vero,
-# quindi usiamo i TIPI ClickHouse (nome della classe datatype, che ignora i
-# wrapper Nullable/LowCardinality) per sapere quali colonne convertire.
+# ClickHouse exports temporal types to Arrow as raw INTEGERS (Date→uint16 days,
+# Date32→int32, DateTime→uint32 seconds, DateTime64→int64 in `scale` decimals):
+# without converting them back they would land in the parquet as numbers (the datetime
+# 1714546800). At the Arrow level a uint32 cannot be told from a true integer, so the
+# ClickHouse TYPES (the datatype class name, which ignores the Nullable/LowCardinality
+# wrappers) say which columns to convert.
 def _clickhouse_temporal_targets(ch_types) -> dict:
-    """Indice colonna → (tipo Arrow di destinazione, scala DateTime64 | None)."""
+    """Column index → (target Arrow type, DateTime64 scale | None)."""
     targets: dict[int, tuple] = {}
     for i, t in enumerate(ch_types):
         cls = type(t).__name__
@@ -341,17 +338,17 @@ def _cast_ch_temporal(arr, target):
     """Reinterpreta l'intero grezzo di ClickHouse come date32/timestamp."""
     arrow_t, scale = target
     if pa.types.is_date(arrow_t):
-        return pc.cast(pc.cast(arr, pa.int32()), arrow_t)  # giorni dal 1970
+        return pc.cast(pc.cast(arr, pa.int32()), arrow_t)  # days since 1970
     raw = pc.cast(arr, pa.int64())
     if scale is not None and scale not in (0, 3, 6, 9):
-        # DateTime64 con precisione non standard → riscala all'unità scelta (us)
+        # DateTime64 with an unusual precision → rescaled to the chosen unit (us)
         raw = pc.multiply(raw, 10 ** (6 - scale)) if scale < 6 else pc.divide(raw, 10 ** (scale - 6))
         raw = pc.cast(raw, pa.int64())
     return pc.cast(raw, arrow_t)
 
 
 def _fix_clickhouse_temporals(batch, targets: dict):
-    """Riscrive il RecordBatch convertendo le colonne temporali intere."""
+    """Writes the RecordBatch again with the integer temporal columns converted."""
     if not targets:
         return batch
     cols, fields = [], []
@@ -375,18 +372,18 @@ def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | 
         password=conn.resolve_password(),
         database=conn.database or "default",
         connect_timeout=10,
-        # None = il default della libreria (300 s): prova ed elenco tabelle
+        # None = the library's default (300 s): connection test and table listing
         **({"send_receive_timeout": read_timeout} if read_timeout else {}),
     )
     try:
-        # tipi ClickHouse da uno schema LIMIT 0: individuano le colonne temporali
-        # (che l'export Arrow rende interi grezzi) da riconvertire.
+        # ClickHouse types from a LIMIT 0 schema: they find the temporal columns (which
+        # the Arrow export makes raw integers) to convert back.
         targets = _clickhouse_temporal_targets(
             client.query(f"SELECT * FROM ({query}) AS _s LIMIT 0").column_types
         )
         sent_schema = False
         with client.query_arrow_stream(query) as stream:
-            for chunk in stream:  # a seconda della versione: Table o RecordBatch
+            for chunk in stream:  # depending on the version: Table or RecordBatch
                 batches = chunk.to_batches() if isinstance(chunk, pa.Table) else [chunk]
                 for batch in batches:
                     batch = _fix_clickhouse_temporals(batch, targets)
@@ -395,7 +392,7 @@ def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | 
                         sent_schema = True
                     yield batch
         if not sent_schema:
-            # risultato vuoto: schema da LIMIT 0, con i tipi temporali corretti
+            # an empty result: the schema from LIMIT 0, with the temporal types right
             empty = client.query_arrow(f"SELECT * FROM ({query}) AS _s LIMIT 0")
             yield pa.schema([
                 pa.field(f.name, targets[i][0], nullable=f.nullable) if i in targets else f
@@ -415,7 +412,7 @@ def _batches_mysql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         user=conn.username,
         password=conn.resolve_password(),
         database=conn.database or None,
-        cursorclass=pymysql.cursors.SSCursor,  # unbuffered: il server streama
+        cursorclass=pymysql.cursors.SSCursor,  # unbuffered: the server streams
         connect_timeout=10,
         charset="utf8mb4",
     )
@@ -439,7 +436,7 @@ def _batches_trino(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         "schema": conn.db_schema or "default",
     }
     if password:
-        # il client Trino rifiuta la basic auth su http: con password si va in https
+        # the Trino client refuses basic auth over http: with a password, https
         kwargs["http_scheme"] = "https"
         kwargs["auth"] = trino.auth.BasicAuthentication(conn.username, password)
     c = trino.dbapi.connect(**kwargs)
@@ -452,24 +449,24 @@ def _batches_trino(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
 
 
 # ── Oracle ──────────────────────────────────────────────────────────────────
-# python-oracledb in modalità Thin: puro Python, nessun Oracle Instant Client
-# nell'immagine. `fetch_df_batches` legge dal server un blocco di righe alla volta
-# e lo consegna come data frame Arrow (PyCapsule): niente righe Python di mezzo.
-# Prima si DESCRIVE la query (WHERE 1 = 0), per due cose che vanno decise prima
-# di leggere: i timestamp con fuso, che il driver consegnerebbe senza fuso (si
-# portano in UTC sul server, lo standard dei motori sono istanti UTC naive), e i
-# tipi che non arrivano in Arrow o in Parquet, rifiutati nominando le colonne.
-_ORACLE_CON_FUSO = {"DB_TYPE_TIMESTAMP_TZ", "DB_TYPE_TIMESTAMP_LTZ"}
-_ORACLE_RIFIUTATI = {
+# python-oracledb in Thin mode: pure Python, no Oracle Instant Client in the image.
+# `fetch_df_batches` reads one block of rows at a time from the server and hands it
+# over as an Arrow data frame (PyCapsule): no Python rows in between.
+# The query is DESCRIBED first (WHERE 1 = 0), for two things to decide before reading:
+# the timestamps with a time zone, which the driver would hand over without it (they
+# are brought to UTC on the server; the engines' standard is naive UTC instants), and
+# the types that do not reach Arrow or Parquet, refused naming the columns.
+_ORACLE_WITH_ZONE = {"DB_TYPE_TIMESTAMP_TZ", "DB_TYPE_TIMESTAMP_LTZ"}
+_ORACLE_REFUSED = {
     "DB_TYPE_INTERVAL_DS", "DB_TYPE_INTERVAL_YM", "DB_TYPE_OBJECT", "DB_TYPE_XMLTYPE",
     "DB_TYPE_BFILE", "DB_TYPE_CURSOR",
 }
-# il nostro ORDER BY finale (solo identificatori quotati, a livello esterno: la SQL
-# dell'utente sta sempre fra parentesi), da rimettere fuori dall'involucro
+# our final ORDER BY (quoted identifiers only, at the outer level: the user's SQL is
+# always in parentheses), to put back outside the wrapper
 _ORDER_BY_FINALE = re.compile(r'^(.*) ORDER BY ((?:"[^"]+")(?:, "[^"]+")*)$', re.S)
 
 
-def _oracle_tipo(t) -> str:
+def _oracle_type(t) -> str:
     return getattr(t, "name", str(t))
 
 
@@ -488,19 +485,19 @@ def _oracle_connect(conn: DbConnectionSpec):
     )
 
 
-def _oracle_tipo_arrow(colonna) -> pa.DataType:
-    """Il tipo Arrow di una colonna dalla sola descrizione: serve quando il risultato
-    è vuoto e non c'è un batch da cui prenderlo. Stessa mappa del driver."""
-    nome, precisione, scala = _oracle_tipo(colonna[1]), colonna[4], colonna[5]
+def _oracle_arrow_type(column) -> pa.DataType:
+    """A column's Arrow type from the description alone: for an empty result, with no
+    batch to take it from. The driver's own map."""
+    nome, precision, scala = _oracle_type(column[1]), column[4], column[5]
     if nome == "DB_TYPE_NUMBER":
-        return pa.int64() if scala == 0 and precisione and 0 < precisione <= 18 else pa.float64()
+        return pa.int64() if scala == 0 and precision and 0 < precision <= 18 else pa.float64()
     if nome == "DB_TYPE_BINARY_FLOAT":
         return pa.float32()
     if nome == "DB_TYPE_BINARY_DOUBLE":
         return pa.float64()
     if nome == "DB_TYPE_BINARY_INTEGER":
         return pa.int64()
-    if nome in ("DB_TYPE_DATE", "DB_TYPE_TIMESTAMP") or nome in _ORACLE_CON_FUSO:
+    if nome in ("DB_TYPE_DATE", "DB_TYPE_TIMESTAMP") or nome in _ORACLE_WITH_ZONE:
         return pa.timestamp("us")
     if nome == "DB_TYPE_BOOLEAN":
         return pa.bool_()
@@ -511,17 +508,17 @@ def _oracle_tipo_arrow(colonna) -> pa.DataType:
     return pa.string()
 
 
-def _oracle_normalizza(tabella: pa.Table) -> pa.Table:
-    """DATE arriva in secondi, TIMESTAMP(0..3) in secondi o millisecondi: tutto in
-    microsecondi come gli altri driver (i nanosecondi di TIMESTAMP(7..9) restano)."""
-    campi = []
-    for f in tabella.schema:
+def _oracle_normalize(table: pa.Table) -> pa.Table:
+    """DATE comes in seconds, TIMESTAMP(0..3) in seconds or milliseconds: all in
+    microseconds as the other drivers (TIMESTAMP(7..9)'s nanoseconds stay)."""
+    fields = []
+    for f in table.schema:
         if pa.types.is_timestamp(f.type) and f.type.unit in ("s", "ms"):
-            campi.append(pa.field(f.name, pa.timestamp("us"), f.nullable))
+            fields.append(pa.field(f.name, pa.timestamp("us"), f.nullable))
         else:
-            campi.append(f)
-    schema = pa.schema(campi)
-    return tabella if schema.equals(tabella.schema) else tabella.cast(schema)
+            fields.append(f)
+    schema = pa.schema(fields)
+    return table if schema.equals(table.schema) else table.cast(schema)
 
 
 def _batches_oracle(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
@@ -529,61 +526,61 @@ def _batches_oracle(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
     try:
         with c.cursor() as cur:
             cur.execute(f"SELECT * FROM ({query}) d WHERE 1 = 0")
-            descrizione = list(cur.description or [])
-        nomi = [d[0] for d in descrizione]
-        if len(set(nomi)) != len(nomi):
+            description = list(cur.description or [])
+        names = [d[0] for d in description]
+        if len(set(names)) != len(names):
             raise DbSourceError("Oracle: the query returns columns with the same name: give them distinct aliases (e.g. a.id AS a_id).")
-        rifiutate = [f"{d[0]} ({_oracle_tipo(d[1]).removeprefix('DB_TYPE_')})" for d in descrizione if _oracle_tipo(d[1]) in _ORACLE_RIFIUTATI]
-        if rifiutate:
+        refused = [f"{d[0]} ({_oracle_type(d[1]).removeprefix('DB_TYPE_')})" for d in description if _oracle_type(d[1]) in _ORACLE_REFUSED]
+        if refused:
             raise DbSourceError(
-                "Oracle: these columns have a type that cannot be imported: " + ", ".join(rifiutate)
+                "Oracle: these columns have a type that cannot be imported: " + ", ".join(refused)
                 + ". Convert them in a SQL source, e.g. TO_CHAR(col) or CAST(col AS VARCHAR2(4000))."
             )
         finale = query
-        con_fuso = {d[0] for d in descrizione if _oracle_tipo(d[1]) in _ORACLE_CON_FUSO}
-        if con_fuso:
-            base, ordine = query, None
+        with_zone = {d[0] for d in description if _oracle_type(d[1]) in _ORACLE_WITH_ZONE}
+        if with_zone:
+            base, order = query, None
             m = _ORDER_BY_FINALE.match(query)
             if m:
-                base, ordine = m.group(1), m.group(2)
-            colonne = ", ".join(
-                f'SYS_EXTRACT_UTC(o."{n}") AS "{n}"' if n in con_fuso else f'o."{n}"' for n in nomi
+                base, order = m.group(1), m.group(2)
+            columns = ", ".join(
+                f'SYS_EXTRACT_UTC(o."{n}") AS "{n}"' if n in with_zone else f'o."{n}"' for n in names
             )
-            finale = f"SELECT {colonne} FROM ({base}) o" + (f" ORDER BY {ordine}" if ordine else "")
+            finale = f"SELECT {columns} FROM ({base}) o" + (f" ORDER BY {order}" if order else "")
 
-        primo = True
-        for blocco in c.fetch_df_batches(statement=finale, size=BATCH_ROWS):
-            tabella = _oracle_normalizza(pa.table(blocco))
-            if tabella.num_rows == 0 and not primo:
+        first = True
+        for block in c.fetch_df_batches(statement=finale, size=BATCH_ROWS):
+            table = _oracle_normalize(pa.table(block))
+            if table.num_rows == 0 and not first:
                 continue
-            if primo:
-                yield tabella.schema
-                primo = False
-            yield from tabella.to_batches()
-        if primo:  # nessuna riga: lo schema dalla sola descrizione
-            yield pa.schema([pa.field(d[0], _oracle_tipo_arrow(d)) for d in descrizione])
+            if first:
+                yield table.schema
+                first = False
+            yield from table.to_batches()
+        if first:  # no rows: the schema from the description alone
+            yield pa.schema([pa.field(d[0], _oracle_arrow_type(d)) for d in description])
     finally:
         c.close()
 
 
 # ── SQL Server ──────────────────────────────────────────────────────────────
-# mssql-python, il driver ufficiale di Microsoft: porta con sé lo strato ODBC (DDBC),
-# niente driver da installare. It is OPTIONAL (the `sqlserver` extra): the published
-# images do not have it, see OPTIONAL_DRIVERS. `arrow_reader` converte il risultato in Arrow nel suo
-# C++ e lo consegna un blocco alla volta. I tipi si allineano agli altri driver:
-# decimali interi fino a 18 cifre → Int64, gli altri decimali e money → Float64
-# (come NUMBER di Oracle e numeric di Postgres); datetimeoffset arriva già in UTC e
-# perde solo il fuso (lo standard dei motori: istanti UTC naive).
+# mssql-python, Microsoft's official driver: it brings its ODBC layer (DDBC) along,
+# no driver to install. It is OPTIONAL (the `sqlserver` extra): the published
+# images do not have it, see OPTIONAL_DRIVERS. `arrow_reader` converts the result to
+# Arrow in its C++ and hands it over one block at a time. The types match the other
+# drivers: integer decimals up to 18 digits → Int64, the other decimals and money →
+# Float64 (as Oracle's NUMBER and Postgres's numeric); datetimeoffset comes in UTC
+# already and loses only the zone (the engines' standard: naive UTC instants).
 _TLS_SQLSERVER = {
-    "verify": "Encrypt=yes;TrustServerCertificate=no",   # default: cifrato, certificato verificato
-    "trust": "Encrypt=yes;TrustServerCertificate=yes",   # certificato autofirmato del server
+    "verify": "Encrypt=yes;TrustServerCertificate=no",   # default: encrypted, certificate verified
+    "trust": "Encrypt=yes;TrustServerCertificate=yes",   # the server's self-signed certificate
     "none": "Encrypt=no",
 }
 
 
-def _odbc_valore(v: str) -> str:
-    """Un valore di stringa di connessione ODBC: fra graffe, con le graffe chiuse
-    raddoppiate, così `;` `=` e `}` in una password non rompono niente."""
+def _odbc_value(v: str) -> str:
+    """A value of an ODBC connection string: in braces, the closing braces doubled, so
+    `;` `=` and `}` in a password break nothing."""
     return "{" + str(v).replace("}", "}}") + "}"
 
 
@@ -600,16 +597,16 @@ def _sqlserver_connect(conn: DbConnectionSpec):
     tls = (conn.extra or {}).get("tls") or "verify"
     if tls not in _TLS_SQLSERVER:
         raise DbSourceError(f"SQL Server: unknown TLS option {tls!r} (verify, trust, none).")
-    # un'istanza con nome (`host\\SQLEXPRESS`) si raggiunge senza porta (SQL Browser)
+    # a named instance (`host\\SQLEXPRESS`) is reached without a port (SQL Browser)
     server = conn.host if ("\\" in conn.host and not conn.port) else f"{conn.host},{conn.port_or_default}"
-    parti = [f"Server={_odbc_valore(server)}", f"UID={_odbc_valore(conn.username)}", f"PWD={_odbc_valore(conn.resolve_password())}"]
+    parts = [f"Server={_odbc_value(server)}", f"UID={_odbc_value(conn.username)}", f"PWD={_odbc_value(conn.resolve_password())}"]
     if conn.database:
-        parti.append(f"Database={_odbc_valore(conn.database)}")
-    stringa = ";".join(parti) + ";" + _TLS_SQLSERVER[tls]
-    return mssql_python.connect(stringa, attrs_before={mssql_python.SQL_ATTR_LOGIN_TIMEOUT: 10})
+        parts.append(f"Database={_odbc_value(conn.database)}")
+    string = ";".join(parts) + ";" + _TLS_SQLSERVER[tls]
+    return mssql_python.connect(string, attrs_before={mssql_python.SQL_ATTR_LOGIN_TIMEOUT: 10})
 
 
-def _sqlserver_tipo(t: pa.DataType) -> pa.DataType:
+def _sqlserver_type(t: pa.DataType) -> pa.DataType:
     if pa.types.is_decimal(t):
         return pa.int64() if t.scale == 0 and t.precision <= 18 else pa.float64()
     if pa.types.is_timestamp(t) and t.tz is not None:
@@ -618,7 +615,7 @@ def _sqlserver_tipo(t: pa.DataType) -> pa.DataType:
 
 
 def _sqlserver_schema(schema: pa.Schema) -> pa.Schema:
-    return pa.schema([pa.field(f.name, _sqlserver_tipo(f.type), f.nullable) for f in schema])
+    return pa.schema([pa.field(f.name, _sqlserver_type(f.type), f.nullable) for f in schema])
 
 
 def _batches_sqlserver(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
@@ -626,8 +623,8 @@ def _batches_sqlserver(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
     try:
         cur = c.cursor()
         cur.execute(query)
-        nomi = [d[0] for d in (cur.description or [])]
-        if len(set(nomi)) != len(nomi):
+        names = [d[0] for d in (cur.description or [])]
+        if len(set(names)) != len(names):
             raise DbSourceError("SQL Server: the query returns columns with the same name: give them distinct aliases (e.g. a.id AS a_id).")
         with cur.arrow_reader(batch_size=BATCH_ROWS) as reader:
             schema = _sqlserver_schema(reader.schema)
@@ -641,7 +638,7 @@ def _batches_sqlserver(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
 _DRIVERS = {
     "postgresql": _batches_postgresql,
     "mysql": _batches_mysql,
-    "mariadb": _batches_mysql,  # protocollo condiviso: stesso driver
+    "mariadb": _batches_mysql,  # shared protocol: the same driver
     "clickhouse": _batches_clickhouse,
     "trino": _batches_trino,
     "oracle": _batches_oracle,
@@ -650,8 +647,8 @@ _DRIVERS = {
 
 
 def _open_batches(conn: DbConnectionSpec, query: str, read_timeout: int | None = None) -> Iterator[Any]:
-    # fra i driver delle sorgenti solo clickhouse-connect ha un tempo massimo di
-    # lettura suo (vedi IngestSettings.db_read_timeout_seconds)
+    # of the sources' drivers only clickhouse-connect has a read timeout of its own
+    # (see IngestSettings.db_read_timeout_seconds)
     driver = _DRIVERS[conn.db_type]
     if read_timeout and conn.db_type == "clickhouse":
         return driver(conn, query, read_timeout=read_timeout)
@@ -659,12 +656,12 @@ def _open_batches(conn: DbConnectionSpec, query: str, read_timeout: int | None =
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Percorso DBAPI generico: righe Python → batch Arrow
+# The generic DBAPI path: Python rows → Arrow batches
 # ─────────────────────────────────────────────────────────────────────────────
 def _dbapi_batches(cursor, batch_rows: int = BATCH_ROWS) -> Iterator[Any]:
-    """fetchmany → RecordBatch. Lo schema viene inferito dal PRIMO batch e poi
-    imposto a tutti i successivi (il ParquetWriter non può cambiare schema in
-    corsa): valori incompatibili più avanti producono un errore parlante."""
+    """fetchmany → RecordBatch. The schema is inferred from the FIRST batch and then
+    imposed on all the next (the ParquetWriter cannot change schema on the way):
+    incompatible values further on give a clear error."""
     names = [d[0] for d in (cursor.description or [])]
     if len(set(names)) != len(names):
         raise DbSourceError(
@@ -673,7 +670,7 @@ def _dbapi_batches(cursor, batch_rows: int = BATCH_ROWS) -> Iterator[Any]:
 
     rows = cursor.fetchmany(batch_rows)
     if not rows:
-        # nessuna riga: il DBAPI non dà i tipi in modo affidabile → tutte stringhe
+        # no rows: DBAPI does not give the types reliably → all strings
         yield pa.schema([pa.field(n, pa.string()) for n in names])
         return
 
@@ -737,8 +734,8 @@ def _rows_to_table(rows, names: list[str], schema: pa.Schema | None) -> pa.Table
 
 
 def _null_types_to_string(schema: pa.Schema) -> pa.Schema:
-    """Colonne tutte-NULL nel primo batch → string (il tipo null non regge
-    valori veri nei batch successivi)."""
+    """Columns all NULL in the first batch → string (the null type cannot hold real
+    values in the next batches)."""
     fields = [
         pa.field(f.name, pa.string()) if pa.types.is_null(f.type) else f for f in schema
     ]
@@ -746,13 +743,13 @@ def _null_types_to_string(schema: pa.Schema) -> pa.Schema:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Entry point: ingest completo verso parquet su storage
+# Entry point: the whole ingest to parquet on the storage
 # ─────────────────────────────────────────────────────────────────────────────
 def _guarded(gen: Iterator[Any], conn: DbConnectionSpec) -> Iterator[Any]:
-    """Itera il generatore del driver traducendo i suoi errori nel messaggio del
-    SERVER (vedi db_errors). Riguarda solo le chiamate al driver: un errore di
-    scrittura del parquet o dello storage resta quello originale. La causa
-    originale resta agganciata (`from e`) e finisce nel traceback del run."""
+    """Iterates the driver's generator, turning its errors into the SERVER's message (see
+    db_errors). Only the calls to the driver: an error writing the parquet or the
+    storage stays the original. The original cause stays attached (`from e`) and ends
+    in the run's traceback."""
     while True:
         try:
             item = next(gen)
@@ -773,12 +770,12 @@ def ingest_db_to_parquet(
     storage=None,
     progress: Callable[..., None] | None = None,
 ) -> dict:
-    """Esegue la sorgente e scrive `bucket/key` (parquet). Ritorna righe e schema.
+    """Runs the source and writes `bucket/key` (parquet). Returns the rows and the schema.
 
-    `progress(fase, rows=…)`, per chi guarda l'import: «waiting» finché il database
-    non manda la prima riga (connessione, calcolo, ordinamento), «reading» a ogni
-    batch col conto delle righe, «saving» mentre il parquet va sullo storage."""
-    avanza = progress or (lambda *a, **k: None)
+    `progress(phase, rows=…)`, for whoever watches the import: «waiting» until the
+    database sends the first row (connection, computing, sorting), «reading» at every
+    batch with the row count, «saving» while the parquet goes to the storage."""
+    advances = progress or (lambda *a, **k: None)
     if storage is None:
         from app.utils import get_storage_service
 
@@ -787,58 +784,58 @@ def ingest_db_to_parquet(
     query = build_query(conn, source)
     logger.info("db-ingest %s@%s → %s (%s)", conn.db_type, conn.host, key, query[:200])
 
-    # errori del driver → messaggio del server del database, non l'eccezione Python
+    # the driver's errors → the database server's message, not the Python exception
     gen = _guarded(_open_batches(conn, query, get_settings().ingest.db_read_timeout_seconds), conn)
-    avanza("waiting")
+    advances("waiting")
     try:
         schema = next(gen)
-    except StopIteration:  # nessun driver arriva qui, ma il contratto va difeso
+    except StopIteration:  # no driver gets here, but the contract is defended
         raise DbSourceError("The driver returned no schema")
 
     fd, tmp = tempfile.mkstemp(suffix=".parquet", prefix="db_ingest_")
     os.close(fd)
     try:
         rows = 0
-        # I batch del driver sono piccoli (~8k righe) e `write_batch` scrive UN
-        # ROW GROUP PER BATCH: cosi' un parquet da 25M righe finiva con 3.063 row
-        # group e un footer di 16,6 MB. Con blocchi tanto piccoli il motore non
-        # puo' leggere solo le colonne che servono — sarebbero migliaia di
-        # richieste da poche decine di KB — e finisce per scaricare tutto il file.
-        # Qui i batch si ACCUMULANO fino alla soglia e si scrivono insieme.
-        # Il blocco si scrive di ESATTAMENTE `soglia` righe e il resto passa al
-        # blocco dopo: un batch del driver piu' grande della soglia (Postgres ne
-        # consegna anche decine di migliaia insieme) usciva come un row group
-        # solo, e uno appena sopra lasciava ogni volta un row group minuscolo.
-        soglia = max(1, get_settings().ingest.parquet_row_group_rows)
+        # The driver's batches are small (~8k rows) and `write_batch` writes ONE ROW
+        # GROUP PER BATCH: a parquet of 25M rows ended with 3,063 row groups and a
+        # 16.6 MB footer. With blocks that small the engine cannot read only the
+        # columns it needs — thousands of requests of a few tens of KB — and ends up
+        # downloading the whole file. Here the batches BUILD UP to the threshold and
+        # are written together.
+        # A block is written with EXACTLY `threshold` rows and the rest goes to the next:
+        # a driver batch larger than the threshold (Postgres hands over tens of
+        # thousands at once) came out as one row group, and one just above left a tiny
+        # row group every time.
+        threshold = max(1, get_settings().ingest.parquet_row_group_rows)
         with pq.ParquetWriter(tmp, schema, compression="zstd") as writer:
-            blocco: list = []
-            in_blocco = 0
+            block: list = []
+            in_block = 0
 
-            def _scarica(fine: bool = False) -> None:
-                nonlocal blocco, in_blocco
-                if not blocco:
+            def _download(fine: bool = False) -> None:
+                nonlocal block, in_block
+                if not block:
                     return
-                tabella = pa.Table.from_batches(blocco, schema)
-                while tabella.num_rows >= soglia or (fine and tabella.num_rows):
-                    n = min(soglia, tabella.num_rows)
-                    writer.write_table(tabella.slice(0, n), row_group_size=n)
-                    tabella = tabella.slice(n)
-                blocco, in_blocco = tabella.to_batches(), tabella.num_rows
+                table = pa.Table.from_batches(block, schema)
+                while table.num_rows >= threshold or (fine and table.num_rows):
+                    n = min(threshold, table.num_rows)
+                    writer.write_table(table.slice(0, n), row_group_size=n)
+                    table = table.slice(n)
+                block, in_block = table.to_batches(), table.num_rows
 
             for batch in gen:
-                blocco.append(batch)
-                in_blocco += batch.num_rows
+                block.append(batch)
+                in_block += batch.num_rows
                 rows += batch.num_rows
-                avanza("reading", rows=rows)
-                if in_blocco >= soglia:
-                    _scarica()
-            _scarica(fine=True)  # l'ultimo blocco, quasi sempre piu' corto della soglia
+                advances("reading", rows=rows)
+                if in_block >= threshold:
+                    _download()
+            _download(fine=True)  # the last block, nearly always shorter than the threshold
 
-        avanza("saving", rows=rows)
+        advances("saving", rows=rows)
         storage.create_bucket(bucket)
         storage.upload_file(tmp, bucket, key)
 
-        # dtype come stringhe Polars: coerenti col resto del catalogo/frontend
+        # dtypes as Polars strings: consistent with the rest of the catalog and the frontend
         scan_schema = pl.scan_parquet(tmp).collect_schema()
         columns = [{"name": n, "dtype": str(t)} for n, t in scan_schema.items()]
     finally:
@@ -847,12 +844,12 @@ def ingest_db_to_parquet(
         except OSError:
             pass
 
-    logger.info("db-ingest completato: %s (%d righe, %d colonne)", key, rows, len(columns))
+    logger.info("db-ingest done: %s (%d rows, %d columns)", key, rows, len(columns))
     return {"rows_written": rows, "columns": columns}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Ispezione: test di connessione e lista tabelle (per la UI)
+# Inspection: connection test and table listing (for the UI)
 # ─────────────────────────────────────────────────────────────────────────────
 _TABLES_QUERY = {
     "postgresql": (
@@ -873,9 +870,8 @@ _TABLES_QUERY = {
         "SELECT table_name AS t FROM information_schema.tables "
         "WHERE table_schema = current_schema ORDER BY 1"
     ),
-    # tabelle e viste degli schemi non di sistema (Oracle 12c+: oracle_maintained),
-    # nella forma che build_query rilegge: maiuscolo semplice nudo, il resto fra
-    # virgolette
+    # tables and views of the non-system schemas (Oracle 12c+: oracle_maintained), in
+    # the form build_query reads back: a plain uppercase name bare, the rest quoted
     "oracle": (
         "SELECT CASE WHEN REGEXP_LIKE(owner, '^[A-Z][A-Z0-9_$#]*$') THEN owner ELSE '\"' || owner || '\"' END"
         " || '.' || CASE WHEN REGEXP_LIKE(nome, '^[A-Z][A-Z0-9_$#]*$') THEN nome ELSE '\"' || nome || '\"' END AS t"
@@ -883,8 +879,8 @@ _TABLES_QUERY = {
         " UNION ALL SELECT owner, view_name FROM all_views)"
         " WHERE owner IN (SELECT username FROM all_users WHERE oracle_maintained = 'N') ORDER BY 1"
     ),
-    # tabelle e viste del database della connessione; un nome con caratteri speciali
-    # torna fra parentesi quadre, la forma che build_query rilegge
+    # tables and views of the connection's database; a name with special characters
+    # comes back in square brackets, the form build_query reads back
     "sqlserver": (
         "SELECT CASE WHEN TABLE_SCHEMA LIKE '%[^A-Za-z0-9_]%' THEN QUOTENAME(TABLE_SCHEMA) ELSE TABLE_SCHEMA END"
         " + '.' + CASE WHEN TABLE_NAME LIKE '%[^A-Za-z0-9_]%' OR TABLE_NAME LIKE '[0-9]%' THEN QUOTENAME(TABLE_NAME) ELSE TABLE_NAME END AS t"
@@ -904,8 +900,8 @@ def _collect_first_column(conn: DbConnectionSpec, query: str) -> list[str]:
 
 
 def test_connection(conn: DbConnectionSpec) -> None:
-    """Apre la connessione ed esegue una query banale sullo stesso percorso
-    dell'ingest: se non solleva, la connessione è utilizzabile."""
+    """Opens the connection and runs a trivial query on the ingest's own path: if it does
+    not raise, the connection is usable."""
     _collect_first_column(conn, "SELECT 1 AS ok FROM DUAL" if conn.db_type == "oracle" else "SELECT 1 AS ok")
 
 

@@ -504,8 +504,8 @@ def test_std_var_di_un_solo_valore_sono_null_e_non_nan(storage, ordini, name):
     assert dettaglio["sd"] is None and dettaglio["vr"] is None, f"[{name}] {dettaglio}"
     piv = [{"type": "pivot", "params": {"index": ["canale"], "on": ["attivo"], "values": "importo", "func": "std"}}]
     res = run(name, storage, ordini, piv)
-    grezzi = [v for r in res.rows for k, v in r.items() if k != "canale"]
-    assert not any(isinstance(v, float) and math.isnan(v) for v in grezzi), f"[{name}] {res.rows}"
+    raw_values = [v for r in res.rows for k, v in r.items() if k != "canale"]
+    assert not any(isinstance(v, float) and math.isnan(v) for v in raw_values), f"[{name}] {res.rows}"
 
 
 @pytest.mark.parametrize("name", ENGINES)
@@ -884,8 +884,8 @@ def test_run_output_matches_preview_and_keeps_types(storage, ordini, clienti, na
 def test_join_left_missing_side_of_a_column_computed_on_the_right_is_null(storage, ordini, clienti, name):
     # a column born on the right (a constant) is not Nullable on ClickHouse: without
     # join_use_nulls the unmatched rows got '' instead of NULL
-    destra = {"source": clienti, "operations": [{"type": "compute", "params": {"columns": [{"name": "etichetta", "expr": "'fissa'"}]}}]}
-    res = run(name, storage, ordini, [{"type": "join", "params": {"right": destra, "how": "left", "on": ["cliente"]}}])
+    right = {"source": clienti, "operations": [{"type": "compute", "params": {"columns": [{"name": "etichetta", "expr": "'fissa'"}]}}]}
+    res = run(name, storage, ordini, [{"type": "join", "params": {"right": right, "how": "left", "on": ["cliente"]}}])
     by = {r["id"]: r for r in _rows(res)}
     assert by[1]["etichetta"] == "fissa"
     assert by[4]["etichetta"] is None and by[6]["etichetta"] is None and by[8]["etichetta"] is None

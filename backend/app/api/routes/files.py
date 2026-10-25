@@ -1,10 +1,10 @@
 """
-Upload e ingest di file.
+Uploading and ingesting files.
 
-`POST /files` accetta un file (CSV/TSV/JSON/NDJSON/Excel/parquet), lo salva come
-raw e lo converte in parquet. Sotto i 50MB la conversione è sincrona e la
-risposta contiene già schema e numero righe; oltre, torna un `task_id` da pollare
-su `GET /tasks/{task_id}`.
+`POST /files` takes a file (CSV/TSV/JSON/NDJSON/Excel/parquet), saves it as raw and
+converts it to parquet. Under 50 MB the conversion is synchronous and the answer holds
+the schema and the row count already; beyond, it returns a `task_id` to poll on
+`GET /tasks/{task_id}`.
 """
 import json
 import logging
@@ -45,11 +45,11 @@ def _parse_dtype_overrides(raw: Optional[str]) -> dict[str, str]:
 
 @router.post("", response_model=IngestResult)
 def upload_file(
-    file: UploadFile = File(..., description="File da ingerire"),
-    format: Optional[FileFormat] = Form(None, description="Forza il formato (default: da estensione)"),
-    separator: Optional[str] = Form(None, description="Separatore CSV (assente = letto dal file)"),
+    file: UploadFile = File(..., description="The file to ingest"),
+    format: Optional[FileFormat] = Form(None, description="Forces the format (default: from the extension)"),
+    separator: Optional[str] = Form(None, description="CSV separator (absent = read from the file)"),
     has_header: bool = Form(True, description="Il CSV ha l'header?"),
-    sheet: Optional[str] = Form(None, description="Foglio Excel (default: primo)"),
+    sheet: Optional[str] = Form(None, description="Excel sheet (default: the first)"),
     dtype_overrides: Optional[str] = Form(None, description='JSON {colonna: dtype}, es. {"id":"int"}'),
 ):
     options = IngestOptions(
@@ -60,7 +60,7 @@ def upload_file(
         sheet=sheet,
     )
 
-    # streaming dell'upload su file temporaneo (niente caricamento in RAM). Starlette's
+    # the upload streamed to a temporary file (nothing loaded in RAM). Starlette's
     # spool is an unnamed file (O_TMPFILE with O_EXCL: it cannot be linked to a name), so
     # the upload stands twice in /tmp while it is converted: the chart's tmpSizeLimit says so
     fd, tmp_path = tempfile.mkstemp(prefix="upload_")
@@ -105,12 +105,11 @@ def copy_object(bucket: str, source_key: str, target_key: str):
 
 @router.delete("/object", status_code=204)
 def delete_object(bucket: str, key: str):
-    """Elimina un oggetto dallo storage (idempotente, come S3).
+    """Deletes an object from the storage (idempotent, as S3).
 
-    Endpoint INTERNO usato dal gateway per il cleanup dei blob (es. eliminazione
-    di una datasource): le credenziali S3 vivono solo nell'engine, il control
-    plane non tocca mai lo storage direttamente. Limitato per sicurezza ai
-    prefissi dei dati gestiti.
+    An INTERNAL endpoint the gateway uses to clean up blobs (deleting a datasource): the
+    S3 credentials live only in the engine, the control plane never touches the storage
+    directly. Restricted, for safety, to the prefixes of the managed data.
     """
     allowed = ("datasets/", "out/", "raw/")
     if not key.startswith(allowed):

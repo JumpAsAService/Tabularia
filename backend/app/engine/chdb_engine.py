@@ -1,18 +1,18 @@
 """
-Engine basato su chDB (ClickHouse embedded) — alternativa OUT-OF-CORE a Polars,
-con dialetto SQL ClickHouse. Come DuckDB spilla su disco: aggregazioni/join/sort
-molto grandi non fanno esplodere la RAM.
+An engine on chDB (embedded ClickHouse) — an OUT-OF-CORE alternative to Polars, with
+ClickHouse's SQL dialect. Like DuckDB it spills to disk: very large aggregations, joins
+and sorts do not blow up the RAM.
 
-A differenza di DuckDB (relation lazy) chDB è puro SQL: la catena di operazioni è
-composta come una singola SELECT annidata (`chdb_ops`), che ClickHouse ottimizza
-ed esegue in streaming. Materializzano solo `preview` (LIMIT n via ArrowStream) e
-`run` (`INTO OUTFILE … FORMAT Parquet`, streaming su disco). Sources and cached
+Unlike DuckDB (lazy relations) chDB is pure SQL: the chain of operations is composed as
+one nested SELECT (`chdb_ops`), which ClickHouse optimizes and runs streaming. Only
+`preview` (LIMIT n through ArrowStream) and `run` (`INTO OUTFILE … FORMAT Parquet`,
+streaming to disk) materialize. Sources and cached
 steps are read in place with `s3()`, only the parts a query needs (see
 storage_direct); without that, the file is downloaded and read with `file()`.
 
-Out-of-core: la sessione abilita gli spill (external group-by/sort, grace-hash
-join) sotto un tetto `max_memory_usage`, così un'operazione gigante spilla invece
-di andare in OOM. Step-cache incrementale identica a DuckDB/Polars.
+Out of core: the session enables spills (external group-by/sort, grace-hash join)
+under a `max_memory_usage` cap, so a giant operation spills instead of going OOM. An
+incremental step cache like DuckDB's and Polars'.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import pyarrow as pa
 from botocore.exceptions import ClientError
 from chdb import session as chdb_session
 
-from app.core.regolazioni import valore_all_avvio
+from app.core.panel_settings import value_at_start
 from app.engine import storage_direct
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
@@ -41,19 +41,19 @@ logger = logging.getLogger(__name__)
 
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
-# ── budget memoria (env, con default prudenti sotto il cap per-figlio del worker) ──
+# ── memory budget (environment, with careful defaults under the worker's per-child cap) ──
 # the environment's, or the panel's when the process started (core/regolazioni.py)
-_MAX_MEMORY = int(valore_all_avvio("CHDB_MAX_MEMORY_USAGE"))       # ~1.4 GB by default
-_EXT_GROUP_BY = int(valore_all_avvio("CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY"))
-_EXT_SORT = int(valore_all_avvio("CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT"))
-_MAX_BYTES_IN_JOIN = int(valore_all_avvio("CHDB_MAX_BYTES_IN_JOIN"))
+_MAX_MEMORY = int(value_at_start("CHDB_MAX_MEMORY_USAGE"))       # ~1.4 GB by default
+_EXT_GROUP_BY = int(value_at_start("CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY"))
+_EXT_SORT = int(value_at_start("CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT"))
+_MAX_BYTES_IN_JOIN = int(value_at_start("CHDB_MAX_BYTES_IN_JOIN"))
 
 
 class ChdbContext:
-    """Stato di esecuzione di una catena chDB: sessione, storage, file temporanei
-    e generatore di nomi univoci. La catena è una stringa SQL (SELECT annidate);
-    le operazioni multi-input (join/union) usano `build_right` per il lato destro,
-    e l'introspezione (`columns_of`) per costruire le SELECT."""
+    """The state of a running chDB chain: session, storage, temporary files and a
+    generator of unique names. The chain is a SQL string (nested SELECTs); the
+    multi-input operations (join/union) use `build_right` for the right side, and the
+    introspection (`columns_of`) to build the SELECTs."""
 
     def __init__(self, session, storage, tmp: list[str], preview_limit: int | None = None, direct: bool = False):
         self.session = session
@@ -73,9 +73,9 @@ class ChdbContext:
         self.tmp.append(path)
         return path
 
-    # ── query di servizio ────────────────────────────────────────────────
+    # ── service queries ────────────────────────────────────────────────
     def _rows_json(self, sql: str) -> list[list]:
-        """Esegue una query e ritorna le righe come liste Python (tipi preservati)."""
+        """Runs a query and returns the rows as Python lists (types kept)."""
         try:
             raw = self.session.query(sql, "JSONCompact").bytes()
         except Exception as e:  # errore SQL/binder
@@ -85,11 +85,11 @@ class ChdbContext:
         return json.loads(bytes(raw)).get("data", [])
 
     def columns_of(self, sql: str) -> list[str]:
-        """Nomi colonna del frammento SQL (via DESCRIBE)."""
+        """The column names of the SQL fragment (through DESCRIBE)."""
         return [row[0] for row in self._rows_json(f"DESCRIBE ({sql})")]
 
     def schema_of(self, sql: str) -> list[tuple[str, str]]:
-        """(nome, tipo ClickHouse) delle colonne del frammento SQL."""
+        """(name, ClickHouse type) of the SQL fragment's columns."""
         return [(row[0], row[1]) for row in self._rows_json(f"DESCRIBE ({sql})")]
 
     def scalar(self, sql: str) -> int:
@@ -103,13 +103,13 @@ class ChdbContext:
         return [r[0] for r in rows]
 
     def distinct_rows(self, base_sql: str, cols: list[str]) -> list[list]:
-        """Combinazioni distinte di più colonne (per il pivot multi-colonna)."""
+        """Distinct combinations of several columns (for the multi-column pivot)."""
         from app.engine.chdb_ops import _qi
 
         sel = ", ".join(_qi(c) for c in cols)
         return self._rows_json(f"SELECT DISTINCT {sel} FROM {base_sql} ORDER BY {sel}")
 
-    # ── sorgenti e catena ────────────────────────────────────────────────
+    # ── sources and chain ────────────────────────────────────────────────
     def scan(self, source: DataSource) -> str:
         url = storage_direct.chdb_url(source.bucket, source.key) if self.direct else None
         try:
@@ -141,8 +141,8 @@ class ChdbContext:
         return sql
 
     def build_right(self, ref: dict) -> str:
-        """Lato destro di join/union: sotto-flow {source, operations} o sorgente
-        semplice {bucket, key}."""
+        """The right side of a join or union: a sub-flow {source, operations} or a plain
+        source {bucket, key}."""
         if "source" in ref:
             sql = self.scan(DataSource(**ref["source"]))
             return self.apply(sql, ref.get("operations") or [])
@@ -155,7 +155,7 @@ from app.engine.stepcache_defer import DeferredStepCache
 
 
 class ChdbEngine(DeferredStepCache, Engine):
-    # tag che namespacea la step-cache: engine diversi non condividono i blob
+    # the tag that namespaces the step cache: different engines do not share the blobs
     engine_name = "chdb"
 
     def __init__(self, storage=None, cache=None):
@@ -171,8 +171,8 @@ class ChdbEngine(DeferredStepCache, Engine):
         self.direct = isinstance(storage, StorageService) and storage_direct.chdb_available()
 
     def _new_session(self) -> tuple[Any, str]:
-        """Crea una sessione chDB out-of-core in una dir temporanea (spill su disco).
-        Ritorna (session, state_dir) — la dir va rimossa a fine uso."""
+        """Creates an out-of-core chDB session in a temporary directory (spilling to disk).
+        Returns (session, state_dir) — the directory is removed after use."""
         state_dir = tempfile.mkdtemp(prefix="chdb_state_")
         sess = chdb_session.Session(state_dir)
         for stmt in (
@@ -193,7 +193,7 @@ class ChdbEngine(DeferredStepCache, Engine):
 
     # ── Cache incrementale (mirror di DuckDB/Polars) ──────────────────────
     def _sql_from_cache(self, ctx: ChdbContext, source, operations, hashes, record=False, use_cache=True) -> str:
-        # use_cache=False: parte dalla sorgente, niente cache (Viewer, query ad-hoc)
+        # use_cache=False: starts from the source, no cache (Viewer, ad hoc queries)
         start = self.cache.nearest(hashes) if use_cache else 0
         if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
@@ -203,7 +203,7 @@ class ChdbEngine(DeferredStepCache, Engine):
             self.cache.touch(hashes[start - 1])
             cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
             sql = ctx.scan(cached)
-            logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
+            logger.info("cache hit: starting again from step %d/%d", start, len(operations))
         return ctx.apply(sql, operations[start:], index_offset=start)
 
     def _materialize(self, ctx: ChdbContext, source, operations) -> None:
@@ -235,11 +235,11 @@ class ChdbEngine(DeferredStepCache, Engine):
         return ctx.scalar(f"SELECT count() FROM (SELECT 1 FROM ({sql}) LIMIT {n + 1})")
 
     def _write_outfile(self, ctx: ChdbContext, sql: str) -> str:
-        """Scrive il risultato di `sql` in un parquet temporaneo, IN STREAMING
-        (INTO OUTFILE, out-of-core). Ritorna il path."""
+        """Writes the result of `sql` to a temporary parquet, STREAMING (INTO OUTFILE, out of
+        core). Returns the path."""
         path = ctx.tempfile()
         if os.path.exists(path):
-            os.remove(path)  # INTO OUTFILE rifiuta un file esistente
+            os.remove(path)  # INTO OUTFILE refuses an existing file
         try:
             ctx.session.query(f"SELECT * FROM ({temporal_safe_sql(ctx, sql)}) INTO OUTFILE '{path}' FORMAT Parquet")
         except EngineError:
@@ -276,7 +276,7 @@ class ChdbEngine(DeferredStepCache, Engine):
             ctx = ChdbContext(sess, self.storage, tmp, preview_limit=limit + 1, direct=self.direct)
             if use_cache:
                 self._defer_materialization(source, ops[:-1])
-            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # DOPO la risposta, in un task a parte
+            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # AFTER the answer, in a task of its own
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             try:

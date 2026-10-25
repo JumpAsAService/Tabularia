@@ -4,33 +4,33 @@ import sys
 
 from celery import Celery, Task
 from celery.signals import before_task_publish, worker_init, worker_process_init, worker_ready
-from app.core import regolazioni
-from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_dall_ambiente
+from app.core import panel_settings
+from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_from_env
 from app.tasks.worker_pool import PoolFromPanel
 
 logger = logging.getLogger(__name__)
 
-# la configurazione del worker viene dall'AMBIENTE: è quella che vale all'avvio e,
-# per i limiti di tempo, la riserva per un messaggio che non li porta (vedi
-# `_limiti_di_tempo_in_vigore` più sotto, dove contano le regolazioni del pannello)
-settings = settings_dall_ambiente()
+# the worker's configuration comes from the ENVIRONMENT: the one in force at start-up
+# and, for the time limits, the fallback for a message that does not carry them (see
+# `_time_limits_in_force` below, where the panel's values count)
+settings = settings_from_env()
 # a worker or beat (not the engine's API, which is how the values arrive) waits for the
 # gateway's values when Valkey has none yet, rather than freezing the environment's
 if os.path.basename(sys.argv[0]).startswith("celery") and {"worker", "beat"} & set(sys.argv[1:]):
-    regolazioni.attendi_al_primo_avvio()
+    panel_settings.wait_at_first_start()
 # what is read only when a process starts, with the panel's values of that moment
 # (memory and recycling of the children, the beat's intervals): core/regolazioni.py
-avvio = regolazioni.all_avvio(settings)
-# la chiave Fernet è obbligatoria in ogni ambiente: il worker che dovrà
-# decifrare le credenziali non deve nemmeno partire senza
+start_values = panel_settings.at_start(settings)
+# the Fernet key is required everywhere: the worker that will decrypt the
+# credentials must not even start without it
 settings.check_required_secrets()
 
-class _TaskCheNonUccideIlWorker(Task):
-    """Rete di sicurezza per OGNI task (run, anteprime, contratti, export): un panic
-    di Polars (PanicException, figlia di BaseException e non di Exception) che
-    sfugge al motore farebbe uscire il processo figlio di Celery a metà lavoro
-    (WorkerLostError: il run fallisce senza un perché e il worker si riavvia). Qui
-    diventa un errore del task come gli altri, col suo messaggio."""
+class _TaskThatSparesTheWorker(Task):
+    """A safety net for EVERY task (runs, previews, contracts, exports): a Polars panic
+    (PanicException, a child of BaseException and not of Exception) escaping the engine
+    would make Celery's child process quit half way (WorkerLostError: the run fails with
+    no why and the worker restarts). Here it becomes a task error as the others, with its
+    message."""
 
     def __call__(self, *args, **kwargs):
         from polars.exceptions import PanicException
@@ -57,7 +57,7 @@ celery_app = Celery(
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
     include=["app.tasks.jobs", "app.tasks.contract_jobs"],
-    task_cls=_TaskCheNonUccideIlWorker,
+    task_cls=_TaskThatSparesTheWorker,
 )
 
 celery_app.conf.update(
@@ -66,41 +66,40 @@ celery_app.conf.update(
     timezone=settings.celery.timezone,
     enable_utc=settings.celery.enable_utc,
     task_track_started=True,
-    # Durata massima di un task: al limite SOFT arriva un'eccezione (chiusura
-    # ordinata), al limite DURO il worker uccide il processo. Erano due letterali
-    # in un blocco per il resto interamente configurabile. Il gateway ci accorda
-    # la sua soglia di staleness (ENGINE__RUN_STALE_TIMEOUT_SECONDS), che deve
-    # restare MAGGIORE del limite duro: vedi la nota su task_acks_late più sotto.
+    # The longest a task may last: at the SOFT limit an exception arrives (an orderly
+    # close), at the HARD limit the worker kills the process. They were two literals in
+    # an otherwise configurable block. The gateway tunes its staleness threshold to it
+    # (ENGINE__RUN_STALE_TIMEOUT_SECONDS), which must stay GREATER than the hard limit:
+    # see the note on task_acks_late below.
     task_time_limit=settings.celery.task_time_limit,
     task_soft_time_limit=settings.celery.task_soft_time_limit,
     worker_concurrency=settings.celery.worker_concurrency,
-    # Distribuzione EQUA su più worker: senza questo (default 4) ogni figlio
-    # "prenota" fino a 4 task in coda, così un worker occupato accaparra job che
-    # un worker appena aggiunto potrebbe prendere → l'altro resta a secco. Con 1
-    # ciascun figlio riserva un solo task oltre a quello in esecuzione. Cruciale
-    # per i run lunghi quando si scala la pool.
+    # FAIR distribution over several workers: without it (default 4) every child
+    # "books" up to 4 queued tasks, so a busy worker hoards jobs a worker just added
+    # could take → the other stays dry. With 1 each child reserves a single task beyond
+    # the one running. Crucial for long runs when the pool is scaled.
     worker_prefetch_multiplier=1,
-    # NB: task_acks_late resta al default (False): l'ack avviene alla ricezione,
-    # non a fine task. Non lo abilitiamo perché un redelivery dopo un crash
-    # rieseguirebbe il task, e gli Output in append raddoppierebbero le righe
-    # (task NON idempotenti). Un run perso viene ripreso a mano / marcato FAILURE
-    # dal timeout di staleness. Abilitare acks_late solo dopo aver reso i task idempotenti.
-    # riciclo del processo figlio: rilascia all'OS la memoria che glibc malloc
-    # trattiene dopo le allocazioni native di Polars/Arrow (RSS a scalini che non
-    # rientra). Ricicla dopo N task E oltre un tetto di RSS.
-    worker_max_tasks_per_child=avvio.celery.max_tasks_per_child,
-    # derivato dal limite cgroup/concurrency (o override esplicito via env)
-    worker_max_memory_per_child=resolve_max_memory_per_child_kb(avvio.celery),
-    # eventi task per celery-exporter (metriche: task attivi, durate, esiti)
+    # NB: task_acks_late stays at its default (False): the ack comes on receipt, not at
+    # the end of the task. Not enabled because a redelivery after a crash would run the
+    # task again, and the append Outputs would double their rows (tasks NOT
+    # idempotent). A lost run is taken up by hand / marked FAILURE by the staleness
+    # timeout. Enable acks_late only once the tasks are idempotent.
+    # recycling the child process: gives the OS back the memory glibc malloc holds
+    # after Polars/Arrow's native allocations (an RSS growing in steps that never comes
+    # down). Recycled after N tasks AND above an RSS ceiling.
+    worker_max_tasks_per_child=start_values.celery.max_tasks_per_child,
+    # derived from the cgroup limit and the concurrency (or set explicitly from the environment)
+    worker_max_memory_per_child=resolve_max_memory_per_child_kb(start_values.celery),
+    # task events for celery-exporter (metrics: active tasks, durations, outcomes)
     worker_send_task_events=True,
     task_send_sent_event=True,
-    # code separate: i run pesanti sulla coda di default, le ANTEPRIME su una
-    # coda dedicata servita da un worker suo (interattivo, bassa latenza) così
-    # non restano bloccate dietro un run lungo che occupa gli slot del pool.
+    # separate queues: the heavy runs on the default queue, the PREVIEWS on a dedicated
+    # queue served by a worker of its own (interactive, low latency), so they do not
+    # get stuck behind a long run holding the pool's slots.
     task_default_queue="celery",
     task_routes={
         "app.tasks.jobs.preview_task": {"queue": "preview"},
-        # le verifiche di un contratto chieste a mano sono interattive come un'anteprima
+        # a contract's checks asked for by hand are as interactive as a preview
         "app.tasks.contract_jobs.*": {"queue": "preview"},
     },
 )
@@ -108,25 +107,25 @@ celery_app.conf.update(
 # every worker sizes its pool from Admin → Workers and reports its state there
 celery_app.steps["consumer"].add(PoolFromPanel)
 
-# Eviction periodica della step cache (Celery beat). Intervallo configurabile
-# via CACHE__SWEEP_INTERVAL_SECONDS.
+# Periodic eviction of the step cache (Celery beat). The interval is set with
+# CACHE__SWEEP_INTERVAL_SECONDS.
 celery_app.conf.beat_schedule = {
     "evict-step-cache": {
         "task": "app.tasks.jobs.evict_cache_task",
-        "schedule": float(avvio.cache.sweep_interval_seconds),
+        "schedule": float(start_values.cache.sweep_interval_seconds),
     },
-    # campiona la dimensione dei prefissi di storage per le metriche
+    # samples the size of the storage prefixes for the metrics
     "storage-stats": {
         "task": "app.tasks.jobs.storage_stats_task",
-        "schedule": float(avvio.metrics.storage_stats_interval_seconds),
+        "schedule": float(start_values.metrics.storage_stats_interval_seconds),
     },
-    # drop delle copie materializzate per il viewer (ClickHouse esterno) non più
-    # usate; il task si auto-salta se la feature è spenta
+    # drops the viewer's materialized copies (external ClickHouse) no longer used; the
+    # task skips itself when the feature is off
     "evict-matviews": {
         "task": "app.tasks.jobs.evict_matview_task",
-        # ogni 5 minuti, fisso: la durata delle copie si regola dal pannello mentre
-        # beat legge la sua configurazione una volta sola (con quella dell'ambiente,
-        # 30 min, si passava ogni 15 e una copia da 1 minuto restava 15)
+        # every 5 minutes, fixed: the copies' lifetime is set from the panel while beat
+        # reads its configuration once (with the environment's, 30 min, it passed every
+        # 15 and a copy of 1 minute lasted 15)
         "schedule": 300.0,
     },
     # export files nobody came to take (each one goes as soon as it is sent)
@@ -147,11 +146,11 @@ def broker_lists(queue: str) -> list[str]:
 
 
 @before_task_publish.connect
-def _limiti_di_tempo_in_vigore(headers=None, **_):
-    """La durata massima di un task viaggia nel suo messaggio: quella in vigore
-    QUANDO viene spedito, che l'amministratore regola dal pannello senza riavviare
-    i worker (Celery usa quella del messaggio, e la propria configurazione solo se
-    manca). Un task che ne dichiara di sue le tiene."""
+def _time_limits_in_force(headers=None, **_):
+    """A task's longest duration travels in its message: the one in force WHEN it is sent,
+    which the administrator sets from the panel without restarting the workers (Celery
+    uses the message's, and its own configuration only when that is missing). A task
+    declaring its own keeps them."""
     if not isinstance(headers, dict):
         return
     if any(x is not None for x in (headers.get("timelimit") or (None, None))):
@@ -187,17 +186,17 @@ def _own_temporary_directory(**_):
 
 @worker_ready.connect
 def _ensure_storage_bucket(sender=None, **_):
-    """All'avvio del worker garantisce che il bucket dello storage esista.
+    """At the worker's start, makes sure the storage's bucket exists.
 
-    I task di manutenzione schedulati da beat (storage_stats, evict) girano anche
-    prima di qualsiasi upload: su un deploy fresco (o dopo un reset dello storage)
-    il bucket non esisterebbe ancora → NoSuchBucket in loop. `create_bucket` è
-    idempotente. Import lazy per evitare cicli con app.utils."""
+    The upkeep tasks beat schedules (storage_stats, evict) run even before any upload: on
+    a fresh deploy (or after a reset of the storage) the bucket would not exist yet →
+    NoSuchBucket in a loop. `create_bucket` is idempotent. A lazy import to avoid cycles
+    with app.utils."""
     from app.utils import get_storage_service
 
     bucket = get_settings().storage.bucket
     try:
         get_storage_service().create_bucket(bucket)
         logger.info("storage: bucket '%s' pronto", bucket)
-    except Exception:  # non deve mai impedire l'avvio del worker
-        logger.warning("storage: impossibile garantire il bucket '%s' all'avvio", bucket, exc_info=True)
+    except Exception:  # must never stop the worker from starting
+        logger.warning("storage: cannot make sure of the bucket '%s' at start-up", bucket, exc_info=True)

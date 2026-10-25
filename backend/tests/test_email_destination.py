@@ -37,7 +37,7 @@ class _FintoServer:
         self.host, self.port = host, port
         self.starttls_chiamato = False
         self.login_con: tuple | None = None
-        self.messaggio = None
+        self.message = None
         self.to_addrs: list[str] = []
         _FintoServer.ultimo = self
 
@@ -54,7 +54,7 @@ class _FintoServer:
         self.login_con = (user, pwd)
 
     def send_message(self, msg, to_addrs=None):
-        self.messaggio = msg
+        self.message = msg
         self.to_addrs = list(to_addrs or [])
 
 
@@ -91,8 +91,8 @@ def test_the_extension_is_added_once():
 def test_the_name_cannot_become_a_path():
     """Un nome con separatori finirebbe per proporre un percorso al client di
     posta di chi riceve."""
-    fuori = _filename(EmailSpec(attachment_name="../../etc/passwd", attachment_format="csv"))
-    assert "/" not in fuori and "\\" not in fuori
+    outside = _filename(EmailSpec(attachment_name="../../etc/passwd", attachment_format="csv"))
+    assert "/" not in outside and "\\" not in outside
 
 
 def test_an_empty_name_falls_back():
@@ -109,7 +109,7 @@ def test_an_html_body_travels_multipart_with_a_text_alternative(smtp, allegato):
     spec = EmailSpec(to=["capo@azienda.it"], subject="Report", body="<b>ciao</b>", body_is_html=True)
     send_output_email(conn, spec, "data-prep", "out/x.parquet")
 
-    msg = smtp.ultimo.messaggio
+    msg = smtp.ultimo.message
     tipi = {p.get_content_type() for p in msg.walk()}
     assert "text/plain" in tipi and "text/html" in tipi
 
@@ -117,7 +117,7 @@ def test_an_html_body_travels_multipart_with_a_text_alternative(smtp, allegato):
 def test_a_plain_body_stays_plain(smtp, allegato):
     conn = _conn()
     send_output_email(conn, EmailSpec(to=["capo@azienda.it"], body="ciao"), "b", "k")
-    tipi = {p.get_content_type() for p in smtp.ultimo.messaggio.walk()}
+    tipi = {p.get_content_type() for p in smtp.ultimo.message.walk()}
     assert "text/html" not in tipi
 
 
@@ -130,25 +130,25 @@ def test_cc_recipients_actually_receive(smtp, allegato):
     send_output_email(conn, spec, "b", "k")
 
     assert set(smtp.ultimo.to_addrs) == {"capo@azienda.it", "cfo@azienda.it"}
-    assert "cfo@azienda.it" in smtp.ultimo.messaggio["Cc"]
+    assert "cfo@azienda.it" in smtp.ultimo.message["Cc"]
 
 
 def test_the_display_name_is_used_when_present(smtp, allegato):
     send_output_email(_conn(from_name="Report Vendite"), EmailSpec(to=["a@b.it"]), "b", "k")
-    assert smtp.ultimo.messaggio["From"] == "Report Vendite <report@azienda.it>"
+    assert smtp.ultimo.message["From"] == "Report Vendite <report@azienda.it>"
 
 
 def test_the_subject_falls_back_to_the_attachment_name(smtp, allegato):
     spec = EmailSpec(to=["a@b.it"], subject="", attachment_name="vendite", attachment_format="csv")
     send_output_email(_conn(), spec, "b", "k")
-    assert smtp.ultimo.messaggio["Subject"] == "vendite.csv"
+    assert smtp.ultimo.message["Subject"] == "vendite.csv"
 
 
 def test_the_attachment_is_there_with_its_name(smtp, allegato):
     spec = EmailSpec(to=["a@b.it"], attachment_name="vendite", attachment_format="csv")
     send_output_email(_conn(), spec, "b", "k")
-    nomi = [p.get_filename() for p in smtp.ultimo.messaggio.walk() if p.get_filename()]
-    assert nomi == ["vendite.csv"]
+    names = [p.get_filename() for p in smtp.ultimo.message.walk() if p.get_filename()]
+    assert names == ["vendite.csv"]
 
 
 # ── guardie ─────────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ def test_an_oversized_attachment_stops_before_sending(smtp, monkeypatch):
     # il tetto sta DENTRO build_attachment: qui si verifica che un allegato oltre
     # misura non venga comunque spedito in silenzio
     send_output_email(_conn(), EmailSpec(to=["a@b.it"]), "b", "k")
-    assert len(smtp.ultimo.messaggio.get_payload()[-1].get_payload(decode=True)) > MAX_ATTACHMENT_BYTES
+    assert len(smtp.ultimo.message.get_payload()[-1].get_payload(decode=True)) > MAX_ATTACHMENT_BYTES
 
 
 # ── trasporto ───────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ def test_subject_and_attachment_name_resolve_their_placeholders(smtp, allegato):
     spec = EmailSpec(to=["a@b.it"], subject="Report {flow} {today:dd/MM/yyyy} #{run_id}", attachment_name="sales_{date}",
                      attachment_format="csv", timezone="Asia/Tokyo", run_id=7, flow="Vendite/Italia")
     send_output_email(_conn(), spec, "b", "k", now=datetime(2026, 10, 17, 22, 30, tzinfo=timezone.utc))
-    msg = smtp.ultimo.messaggio
+    msg = smtp.ultimo.message
     assert msg["Subject"] == "Report Vendite/Italia 18/10/2026 #7"
     assert [p.get_filename() for p in msg.walk() if p.get_filename()] == ["sales_2026-10-18.csv"]
 
@@ -210,7 +210,7 @@ def test_subject_and_attachment_name_resolve_their_placeholders(smtp, allegato):
 def test_a_name_without_placeholders_is_sent_as_before(smtp, allegato):
     spec = EmailSpec(to=["a@b.it"], subject="Vendite: settimana", attachment_name="vendite", attachment_format="csv")
     send_output_email(_conn(), spec, "b", "k")
-    assert smtp.ultimo.messaggio["Subject"] == "Vendite: settimana"
+    assert smtp.ultimo.message["Subject"] == "Vendite: settimana"
 
 
 def test_a_value_with_a_slash_cannot_make_the_attachment_a_path(smtp, allegato):
@@ -236,10 +236,10 @@ def test_a_templated_attachment_name_over_255_bytes_is_refused(smtp, allegato):
 
 def test_a_long_attachment_name_without_braces_is_sent_as_before(smtp, allegato):
     send_output_email(_conn(), EmailSpec(to=["a@b.it"], attachment_name="x" * 260, attachment_format="csv"), "b", "k")
-    assert [p.get_filename() for p in smtp.ultimo.messaggio.walk() if p.get_filename()] == ["x" * 260 + ".csv"]
+    assert [p.get_filename() for p in smtp.ultimo.message.walk() if p.get_filename()] == ["x" * 260 + ".csv"]
 
 
 def test_a_templated_subject_leaves_a_plain_long_attachment_name_alone(smtp, allegato):
     send_output_email(_conn(), EmailSpec(to=["a@b.it"], subject="R {today}", attachment_name="x" * 260,
                                          attachment_format="csv"), "b", "k")
-    assert [p.get_filename() for p in smtp.ultimo.messaggio.walk() if p.get_filename()] == ["x" * 260 + ".csv"]
+    assert [p.get_filename() for p in smtp.ultimo.message.walk() if p.get_filename()] == ["x" * 260 + ".csv"]

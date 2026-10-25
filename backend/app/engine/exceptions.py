@@ -1,9 +1,9 @@
-"""Eccezioni dell'engine."""
+"""The engine's exceptions."""
 from __future__ import annotations
 
 
 class EngineError(Exception):
-    """Errore generico dell'engine."""
+    """A generic engine error."""
 
 
 class UnknownOperationError(EngineError):
@@ -13,8 +13,8 @@ class UnknownOperationError(EngineError):
 
 
 class SourceNotFoundError(EngineError):
-    """Un parquet di input non esiste più nello storage (blob rimosso o chiave
-    stantia in un flow salvato). Da tradurre in 404, non in 500."""
+    """An input parquet no longer exists on the storage (a removed blob or a stale key in a
+    saved flow). To be turned into a 404, not a 500."""
 
     def __init__(self, bucket: str, key: str):
         self.bucket = bucket
@@ -26,7 +26,7 @@ class SourceNotFoundError(EngineError):
 
 
 class OperationError(EngineError):
-    """Errore durante l'applicazione di una specifica operazione del flow."""
+    """An error while applying one of the flow's operations."""
 
     def __init__(self, op_type: str, index: int, message: str):
         self.op_type = op_type

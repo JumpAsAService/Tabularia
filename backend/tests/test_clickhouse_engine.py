@@ -164,8 +164,8 @@ def test_join(storage, src, anagrafica):
     ops = [{"type": "join", "params": {"right": anagrafica.model_dump(), "on": ["paese"], "how": "left"}}]
     res = _engine(storage).preview(src, ops, limit=10)
     assert res.row_count == 4
-    nomi = {r["paese"]: r["nome"] for r in res.rows}
-    assert nomi["IT"] == "Italia" and nomi["FR"] is None
+    names = {r["paese"]: r["nome"] for r in res.rows}
+    assert names["IT"] == "Italia" and names["FR"] is None
 
 
 def test_compute_and_rename(storage, src):

@@ -39,20 +39,20 @@ class _EngineFinto:
 
 
 @pytest.fixture
-def sorgente(storage):
+def source(storage):
     df = pl.DataFrame({"paese": ["IT", "IT", "FR", "DE"], "vendite": [1.0, 2.0, 3.0, 4.0]})
     return upload_df(storage, df, "out/mirror_test.parquet")
 
 
 @pytest.fixture
-def task_pronto(monkeypatch, storage, sorgente):
+def task_pronto(monkeypatch, storage, source):
     """Aggancia engine e storage finti al task, senza rete."""
     import app.tasks.jobs as jobs
     import app.utils as utils
 
-    monkeypatch.setattr(jobs, "get_engine", lambda name=None: _EngineFinto(sorgente.key))
+    monkeypatch.setattr(jobs, "get_engine", lambda name=None: _EngineFinto(source.key))
     monkeypatch.setattr(utils, "get_storage_service", lambda: storage)
-    return sorgente
+    return source
 
 
 @pytest.fixture
@@ -70,14 +70,14 @@ def _mirror(key: str) -> dict:
     }
 
 
-def test_copia_fallita_il_task_resta_riuscito(task_pronto, sorgente):
+def test_copia_fallita_il_task_resta_riuscito(task_pronto, source):
     """Chiave vuota → `write_output_to_s3` solleva. Il task NON deve propagare:
     deve concludersi con successo e riportare l'errore nel risultato."""
     out = transform_data_task(
         bucket=BUCKET,
-        input_key=sorgente.key,
+        input_key=source.key,
         operations=[],
-        output_key=sorgente.key,
+        output_key=source.key,
         mirror=_mirror(""),  # percorso vuoto: errore parlante dentro la scrittura
     )
 
@@ -87,12 +87,12 @@ def test_copia_fallita_il_task_resta_riuscito(task_pronto, sorgente):
     assert out["mirror"]["error"]  # l'errore è riportato, non ingoiato
 
 
-def test_copia_riuscita_riportata(task_pronto, sorgente, recorder):
+def test_copia_riuscita_riportata(task_pronto, source, recorder):
     out = transform_data_task(
         bucket=BUCKET,
-        input_key=sorgente.key,
+        input_key=source.key,
         operations=[],
-        output_key=sorgente.key,
+        output_key=source.key,
         mirror=_mirror("published/vendite/latest.parquet"),
     )
 
@@ -101,8 +101,8 @@ def test_copia_riuscita_riportata(task_pronto, sorgente, recorder):
     assert recorder.uploads == [("lake", "published/vendite/latest.parquet")]
 
 
-def test_senza_copia_nessuna_chiave_nel_risultato(task_pronto, sorgente):
+def test_senza_copia_nessuna_chiave_nel_risultato(task_pronto, source):
     out = transform_data_task(
-        bucket=BUCKET, input_key=sorgente.key, operations=[], output_key=sorgente.key
+        bucket=BUCKET, input_key=source.key, operations=[], output_key=source.key
     )
     assert out["status"] == "success" and "mirror" not in out

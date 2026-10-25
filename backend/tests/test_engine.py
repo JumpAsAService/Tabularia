@@ -140,13 +140,13 @@ def test_export_csv_oltre_il_tetto_righe_si_ferma_e_suggerisce_un_output(engine,
         os.unlink(path)
 
 
-@pytest.mark.parametrize("max_rows, limit, righe", [(6, None, 6), (None, None, 6), (5, 3, 3), (5, 5, 5)])
-def test_export_csv_al_tetto_o_sotto_passa(engine, vendite, max_rows, limit, righe):
+@pytest.mark.parametrize("max_rows, limit, rows", [(6, None, 6), (None, None, 6), (5, 3, 3), (5, 5, 5)])
+def test_export_csv_al_tetto_o_sotto_passa(engine, vendite, max_rows, limit, rows):
     # al tetto esatto passa; senza tetto passa tutto; un limit sotto il tetto basta a sé
     path = _tmp(".csv")
     try:
         engine.export(vendite, [], fmt="csv", out_path=path, limit=limit, max_rows=max_rows)
-        assert pl.read_csv(path).height == righe
+        assert pl.read_csv(path).height == rows
     finally:
         os.unlink(path)
 

@@ -1,4 +1,4 @@
-"""Mappatura dtype (stringa -> tipo Polars), condivisa da engine e ingest."""
+"""The dtype mapping (string -> Polars type), shared by the engines and the ingest."""
 from __future__ import annotations
 
 from typing import Any

@@ -67,9 +67,9 @@ def _importa(storage, source, **kw):
 
 def test_connessione_ed_elenco(tabelle):
     prova_connessione(_conn())
-    nomi = list_tables(_conn())
-    utente = _conn().username.upper()
-    assert f"{utente}.{P}_TIPI" in nomi and f'{utente}."{P.lower()} conti"' in nomi
+    names = list_tables(_conn())
+    user = _conn().username.upper()
+    assert f"{user}.{P}_TIPI" in names and f'{user}."{P.lower()} conti"' in names
 
 
 def test_tipi_e_valori(tabelle, storage):

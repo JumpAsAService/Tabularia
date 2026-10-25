@@ -1,12 +1,12 @@
 """
-Servizio di ingest: normalizza qualsiasi input in parquet al confine del sistema.
+The ingest service: normalizes any input to parquet at the system's boundary.
 
-Layout su storage:
-    raw/<dataset_id><ext>        -> file originale (per ri-conversione/audit)
-    datasets/<dataset_id>.parquet -> parquet interno usato dall'engine
+Layout on the storage:
+    raw/<dataset_id><ext>        -> the original file (to convert again, for the audit)
+    datasets/<dataset_id>.parquet -> the internal parquet the engine uses
 
-Soglia: file <= 50MB convertiti sincronamente (feedback immediato); oltre,
-conversione delegata a un task Celery (ritorna un task_id da pollare).
+Threshold: files <= 50 MB are converted synchronously (immediate feedback); beyond, the
+conversion goes to a Celery task (returns a task_id to poll).
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ DATASET_PREFIX = "datasets"
 
 
 class IngestService:
-    # oltre questa dimensione la conversione va in background (Celery)
+    # beyond this size the conversion goes to the background (Celery)
     SYNC_THRESHOLD_BYTES = 50 * 1024 * 1024
 
     def __init__(self, storage=None):
@@ -44,7 +44,7 @@ class IngestService:
         self._bucket_ready = False
 
     def _ensure_bucket(self) -> None:
-        """Crea il bucket se manca (idempotente, una volta per processo)."""
+        """Creates the bucket when missing (idempotent, once per process)."""
         if self._bucket_ready:
             return
         self.storage.create_bucket(self.bucket)
@@ -58,10 +58,10 @@ class IngestService:
         options: IngestOptions | None = None,
     ) -> IngestResult:
         """
-        Ingerisce un file già presente su disco locale (streamato dall'upload).
+        Ingests a file already on the local disk (streamed by the upload).
 
-        Salva sempre il raw; poi converte in parquet — sincrono se sotto soglia,
-        altrimenti accoda un task Celery.
+        Always saves the raw file; then converts it to parquet — synchronously under the
+        threshold, otherwise queueing a Celery task.
         """
         options = options or IngestOptions()
         fmt = options.format or detect_format(filename)
@@ -74,7 +74,7 @@ class IngestService:
 
         self._ensure_bucket()
         self.storage.upload_file(local_path, self.bucket, raw_key)
-        logger.info("Raw caricato: %s (%d byte, formato=%s)", raw_key, size, fmt.value)
+        logger.info("Raw uploaded: %s (%d bytes, format=%s)", raw_key, size, fmt.value)
 
         # a workbook: its sheets go back with the answer, and without a choice the first
         # visible one is read (also by the background conversion, which gets the options)
@@ -102,7 +102,7 @@ class IngestService:
                 **workbook,
             )
 
-        # oltre soglia -> background (import ritardato per evitare cicli)
+        # over the threshold -> background (a late import, to avoid cycles)
         from app.tasks.jobs import convert_to_parquet_task
 
         task = convert_to_parquet_task.delay(
@@ -112,7 +112,7 @@ class IngestService:
             fmt=fmt.value,
             options=options.model_dump(mode="json"),
         )
-        logger.info("File grande (%d byte) -> conversione async, task=%s", size, task.id)
+        logger.info("Large file (%d bytes) -> asynchronous conversion, task=%s", size, task.id)
         return IngestResult(
             dataset_id=dataset_id,
             status="processing",
@@ -135,10 +135,10 @@ class IngestService:
         local_raw: str | None = None,
     ) -> DatasetInfo:
         """
-        Converte il raw (già su storage) in parquet e ne carica il risultato.
+        Converts the raw file (on the storage already) to parquet and uploads the result.
 
-        Riusato sia dal path sincrono (con `local_raw` già a disposizione) sia
-        dal task Celery (che scarica il raw). Ritorna schema + numero righe.
+        Reused by the synchronous path (with `local_raw` at hand) and by the Celery task
+        (which downloads the raw file). Returns the schema + the row count.
         """
         temps: list[str] = []
         try:
@@ -166,7 +166,7 @@ class IngestService:
                 except OSError:
                     pass
 
-        logger.info("Convertito %s -> %s (%d righe)", raw_key, parquet_key, rows)
+        logger.info("Converted %s -> %s (%d rows)", raw_key, parquet_key, rows)
         return DatasetInfo(
             dataset_id=dataset_id,
             parquet_key=parquet_key,

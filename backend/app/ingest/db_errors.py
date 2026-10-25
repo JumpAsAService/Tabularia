@@ -1,40 +1,39 @@
-"""Messaggi d'errore PARLANTI dai driver dei database.
+"""CLEAR error messages from the database drivers.
 
-All'utente arriva il messaggio del SERVER, quello che si leggerebbe nel log del
-database, non l'eccezione Python di trasporto. Esempio reale dal playground
-ClickHouse: al posto di
+The user gets the SERVER's message, the one the database's log would show, not the
+transport's Python exception. A real example from the ClickHouse playground: instead of
 
     ('Connection broken: IncompleteRead(198 bytes read)', ...)
 
-si mostra
+one shows
 
     ClickHouse: Limit for result exceeded, max rows: 1.00 million, current rows:
     1.02 million (TOO_MANY_ROWS_OR_BYTES, code 396). This is a limit set by the
     server: reduce the data with a filter or a LIMIT.
 
-I testi per l'utente sono SEMPRE in inglese (richiesta esplicita, 2026-09-12):
-un test di guardia in tests/test_db_errors.py fallisce se tornano in italiano.
+The texts for the user are ALWAYS in English (an explicit request, 2026-09-12): a guard
+test in tests/test_db_errors.py fails if they come back in Italian.
 
-Le forme gestite sono state catturate dai driver veri il 2026-09-12 e sono
-riprodotte verbatim in tests/test_db_errors.py:
+The forms handled were captured from the real drivers on 2026-09-12 and are reproduced
+verbatim in tests/test_db_errors.py:
 
-- ClickHouse (clickhouse-connect): `Code: N. DB::Exception: … (NOME)` dopo
-  `server response:`. Se lo stream è già partito, lo stesso testo arriva nei
-  byte parziali di IncompleteRead, incorniciato da `__exception__`.
-- PostgreSQL (ADBC/libpq): la riga `ERROR:` o `FATAL:`, fra il prefisso del
-  driver, l'eco della query e `SQLSTATE`.
-- MySQL/MariaDB (PyMySQL): args = (codice, messaggio).
-- Trino: `TrinoQueryError.message` ed `.error_name`.
-- Oracle (python-oracledb, Thin): `ORA-NNNNN: messaggio` del server; i `DPY-6NNN`
-  («cannot connect») portano dentro la causa di rete o un ORA del listener.
-- SQL Server (mssql-python): `.ddbc_error` col testo del server dietro i prefissi
-  `[Microsoft][SQL Server]`; la rete arriva come codice Winsock (`TCP Provider:
-  Error code 0x2AFA`), il TLS come errore OpenSSL dell'`SSL Provider`.
-- Rete, per tutti: DNS, connessione rifiutata, timeout, TLS, riconosciuti dal
-  testo della catena di eccezioni.
+- ClickHouse (clickhouse-connect): `Code: N. DB::Exception: … (NAME)` after
+  `server response:`. When the stream has started already, the same text arrives in the
+  partial bytes of IncompleteRead, framed by `__exception__`.
+- PostgreSQL (ADBC/libpq): the `ERROR:` or `FATAL:` line, between the driver's prefix,
+  the echo of the query and `SQLSTATE`.
+- MySQL/MariaDB (PyMySQL): args = (code, message).
+- Trino: `TrinoQueryError.message` and `.error_name`.
+- Oracle (python-oracledb, Thin): the server's `ORA-NNNNN: message`; the `DPY-6NNN`
+  («cannot connect») carry the network cause or a listener's ORA inside.
+- SQL Server (mssql-python): `.ddbc_error` with the server's text behind the
+  `[Microsoft][SQL Server]` prefixes; the network arrives as a Winsock code (`TCP
+  Provider: Error code 0x2AFA`), TLS as an OpenSSL error of the `SSL Provider`.
+- Network, for all: DNS, connection refused, timeout, TLS, recognized from the text of
+  the exception chain.
 
-Il traceback completo non si perde: chi solleva usa `raise … from e`, quindi la
-causa originale resta nel `error_detail` del run.
+The whole traceback is not lost: whoever raises uses `raise … from e`, so the original
+cause stays in the run's `error_detail`.
 """
 from __future__ import annotations
 
@@ -56,15 +55,15 @@ LABELS = {
     "s3": "S3",
 }
 
-# Prefissi dei messaggi prodotti qui. Il gateway li usa per NON scambiare un
-# errore del server del database, per esempio «out of memory» di Postgres, per
-# un crash del worker. Tenere allineato con gateway/app/routes/runs.py.
+# Prefixes of the messages made here. The gateway uses them NOT to take a database
+# server's error, such as Postgres's «out of memory», for a worker crash. Keep in line
+# with gateway/app/routes/runs.py.
 MESSAGE_PREFIXES = tuple(f"{v}:" for v in LABELS.values()) + ("Database:",)
 
-# il gateway tronca il dettaglio di /db/inspect a 500 caratteri
+# the gateway cuts the detail of /db/inspect to 500 characters
 MAX_LEN = 500
 
-# testi per l'utente: in INGLESE
+# texts for the user: in ENGLISH
 _LIMIT_HINT = "This is a limit set by the server: reduce the data with a filter or a LIMIT."
 _TIMEOUT_HINT = (
     "The query exceeded the time allowed by the server: reduce the data "
@@ -77,7 +76,7 @@ _SERVER_MEMORY_HINT = "The database server ran out of memory for this query: red
 _NET_HINT = "The server is unreachable: check host, port and network."
 _SERVICE_HINT = "Check the service name in the connection's Database field."
 
-# ClickHouse: codice → suggerimento (nomi da ErrorCodes.cpp)
+# ClickHouse: code → hint (names from ErrorCodes.cpp)
 _CH_HINTS = {
     158: _LIMIT_HINT,           # TOO_MANY_ROWS
     307: _LIMIT_HINT,           # TOO_MANY_BYTES
@@ -92,7 +91,7 @@ _CH_HINTS = {
     497: _PERM_HINT,            # ACCESS_DENIED
     164: _READONLY_HINT,        # READONLY
 }
-# PostgreSQL: SQLSTATE → suggerimento
+# PostgreSQL: SQLSTATE → hint
 _PG_HINTS = {
     "28P01": _AUTH_HINT,          # invalid_password
     "28000": _AUTH_HINT,          # invalid_authorization_specification
@@ -101,14 +100,14 @@ _PG_HINTS = {
     "53200": _SERVER_MEMORY_HINT, # out_of_memory
     "25006": _READONLY_HINT,      # read_only_sql_transaction
 }
-# MySQL/MariaDB: codice → suggerimento
+# MySQL/MariaDB: code → hint
 _MYSQL_HINTS = {
     1045: _AUTH_HINT, 1044: _PERM_HINT, 1142: _PERM_HINT, 1143: _PERM_HINT,
     3024: _TIMEOUT_HINT, 1290: _READONLY_HINT,
     2003: _NET_HINT, 2005: _NET_HINT, 2006: _NET_HINT, 2013: _NET_HINT,
 }
 
-# Oracle: codice → suggerimento
+# Oracle: code → hint
 _ORACLE_HINTS = {
     "ORA-01017": _AUTH_HINT,          # invalid username/password
     "ORA-28000": _AUTH_HINT,          # account locked
@@ -120,12 +119,12 @@ _ORACLE_HINTS = {
     "ORA-04031": _SERVER_MEMORY_HINT, # shared pool
     "ORA-16000": _READONLY_HINT,      # read-only database
     "ORA-12514": _SERVICE_HINT,       # service not registered with the listener
-    "DPY-6001": _SERVICE_HINT,        # idem, in modalità Thin
+    "DPY-6001": _SERVICE_HINT,        # the same, in Thin mode
 }
 # SQL Server
 _SQLSERVER_PREFIX_RE = re.compile(r"^(?:\[[^\]]+\])+\s*")
 _SQLSERVER_TCP_RE = re.compile(r"TCP Provider: Error code (0x[0-9A-Fa-f]+)")
-# codici Winsock → la stessa causa che il riconoscitore di rete sa dire
+# Winsock codes → the same cause the network recognizer can tell
 _SQLSERVER_TCP = {"0X2AF9": "Name or service not known", "0X2AFA": "Name or service not known",
                   "0X274D": "Connection refused", "0X2749": "Connection refused", "0X2751": "Connection refused",
                   "0X274C": "timed out"}
@@ -146,14 +145,14 @@ _CH_EXC_RE = re.compile(r"Code:\s*(\d+)\.\s*DB::Exception:\s*")
 _CH_NAME_RE = re.compile(r"\(([A-Z][A-Z0-9_]{2,})\)")
 _CH_TRAILERS = (
     re.compile(r"\s*\((?:for url|version)\b[^)]*\)\s*$"),  # (for url …) / (version …)
-    re.compile(r"\s*\([A-Z][A-Z0-9_]{2,}\)\s*$"),          # (NOME_ERRORE)
+    re.compile(r"\s*\([A-Z][A-Z0-9_]{2,}\)\s*$"),          # (ERROR_NAME)
 )
 _PG_LINE_RE = re.compile(r"\b(ERROR|FATAL):\s+(.+)")
 _SQLSTATE_RE = re.compile(r"SQLSTATE:\s*([0-9A-Z]{5})")
 _ADBC_PREFIX_RE = re.compile(r"^[A-Z_]+:\s*(?:\[[\w-]+\]\s*)?(?:Failed to [^:]*:\s*)?")
 
-# connessione stabilita e query accettata, ma nessun byte entro il tempo massimo
-# di lettura (urllib3: «Read timed out. (read timeout=300)»): NON è la rete
+# connection made and query accepted, but no byte within the read timeout
+# (urllib3: «Read timed out. (read timeout=300)»): NOT the network
 _READ_TIMEOUT_RE = re.compile(r"Read timed out\.?(?:\s*\(read timeout=(\d+(?:\.\d+)?)\))?", re.I)
 
 _NET_PATTERNS = (
@@ -174,8 +173,8 @@ def _label(db_type: Optional[str]) -> Optional[str]:
 
 
 def _chain(exc: BaseException) -> list[BaseException]:
-    """L'eccezione e tutte le sue cause: __cause__, __context__ ed eccezioni in args
-    (urllib3.ProtocolError porta l'IncompleteRead negli args)."""
+    """The exception and all its causes: __cause__, __context__ and exceptions in args
+    (urllib3.ProtocolError carries the IncompleteRead in its args)."""
     out: list[BaseException] = []
     seen: set[int] = set()
     queue: list[Optional[BaseException]] = [exc]
@@ -219,8 +218,8 @@ def _clickhouse(texts: list[str]) -> Optional[tuple[str, Optional[str]]]:
             continue
         code = int(m.group(1))
         rest = t[m.end():].split("__exception__")[0]
-        # il nome dell'errore è l'ULTIMO token maiuscolo fra parentesi: nei
-        # messaggi di sintassi compaiono anche frammenti come «(SELEC)»
+        # the error's name is the LAST uppercase token in parentheses: syntax messages
+        # also hold fragments such as «(SELEC)»
         names = [n for n in _CH_NAME_RE.findall(rest)]
         name = names[-1] if names else None
         first = rest.strip().splitlines()[0] if rest.strip() else ""
@@ -242,28 +241,27 @@ def _trino(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
 
 
 def _oracle(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
-    """Il messaggio del server Oracle. Un ORA vince su un DPY. Un «DPY-6005: cannot
-    connect» non dice niente da solo: il perché sta nelle righe dopo — una causa di
-    rete (lasciata al riconoscitore di rete, che la dice meglio) o un altro DPY,
-    come «DPY-6001: Service … is not registered with the listener», il più interno,
-    che si mostra."""
+    """The Oracle server's message. An ORA wins over a DPY. A «DPY-6005: cannot connect»
+    says nothing by itself: the why is in the lines after — a network cause (left to the
+    network recognizer, which says it better) or another DPY, such as «DPY-6001: Service
+    … is not registered with the listener», the innermost, which is shown."""
     for e in chain:
         if not (type(e).__module__ or "").startswith("oracledb"):
             continue
         err = e.args[0] if e.args else None
-        testo = getattr(err, "message", None) or str(e)
-        codici = _ORACLE_CODE_RE.findall(testo)
-        if not codici:
+        text = getattr(err, "message", None) or str(e)
+        codes = _ORACLE_CODE_RE.findall(text)
+        if not codes:
             return None
-        ora = [(c, m) for c, m in codici if c.startswith("ORA-")]
+        ora = [(c, m) for c, m in codes if c.startswith("ORA-")]
         if ora:
-            codice, messaggio = ora[0]
+            code, message = ora[0]
         elif any(p.search(t) for t in _texts(chain) for _, p in _NET_PATTERNS):
             return None
         else:
-            codice, messaggio = codici[-1]
-        messaggio = re.sub(r"\s*\(CONNECTION_ID=[^)]*\)", "", messaggio).strip().rstrip(".")
-        return f"{messaggio} ({codice}).", _ORACLE_HINTS.get(codice)
+            code, message = codes[-1]
+        message = re.sub(r"\s*\(CONNECTION_ID=[^)]*\)", "", message).strip().rstrip(".")
+        return f"{message} ({code}).", _ORACLE_HINTS.get(code)
     return None
 
 
@@ -271,8 +269,8 @@ def _sqlserver(chain: list[BaseException], texts: list[str], host: Optional[str]
     for t in texts:
         m = _SQLSERVER_ARROW_RE.search(t)
         if m:
-            tipo = _SQLSERVER_TIPI.get(m.group(2), f"ODBC type {m.group(2)}")
-            return (f"column {m.group(1)} has a type that cannot be imported ({tipo}).",
+            kind = _SQLSERVER_TIPI.get(m.group(2), f"ODBC type {m.group(2)}")
+            return (f"column {m.group(1)} has a type that cannot be imported ({kind}).",
                     "Convert it in a SQL source, e.g. CAST(col AS NVARCHAR(4000)).")
     for e in chain:
         if not (type(e).__module__ or "").startswith("mssql_python"):
@@ -280,21 +278,21 @@ def _sqlserver(chain: list[BaseException], texts: list[str], host: Optional[str]
         ddbc = str(getattr(e, "ddbc_error", None) or "").strip()
         driver = str(getattr(e, "driver_error", None) or "").strip()
         if "certificate verify failed" in ddbc:
-            causa = ddbc.split("::", 1)[-1].rstrip("]").strip().replace("failed:", "failed: ")
+            cause = ddbc.split("::", 1)[-1].rstrip("]").strip().replace("failed:", "failed: ")
             dove = f"{host}:{port}" if host and port else (host or "the server")
-            return f"the TLS certificate of {dove} cannot be verified ({causa}).", _SQLSERVER_TLS_HINT
+            return f"the TLS certificate of {dove} cannot be verified ({cause}).", _SQLSERVER_TLS_HINT
         m = _SQLSERVER_TCP_RE.search(ddbc)
         if m and m.group(1).upper() in _SQLSERVER_TCP:
             return _network([_SQLSERVER_TCP[m.group(1).upper()]], host, port), None
-        testo = _SQLSERVER_PREFIX_RE.sub("", ddbc) or driver
-        if not testo:
+        text = _SQLSERVER_PREFIX_RE.sub("", ddbc) or driver
+        if not text:
             return None
-        testo = testo.rstrip(".")
-        if "Login failed for user" in testo:
-            return f"{testo}.", _SQLSERVER_LOGIN_HINT
-        if "permission was denied" in testo:
-            return f"{testo}.", _PERM_HINT
-        return f"{testo}.", None
+        text = text.rstrip(".")
+        if "Login failed for user" in text:
+            return f"{text}.", _SQLSERVER_LOGIN_HINT
+        if "permission was denied" in text:
+            return f"{text}.", _PERM_HINT
+        return f"{text}.", None
     return None
 
 
@@ -318,8 +316,8 @@ def _postgres(chain: list[BaseException], texts: list[str]) -> Optional[tuple[st
         if state is None:
             sm = _SQLSTATE_RE.search(t)
             state = sm.group(1) if sm else None
-        # il FATAL di autenticazione arriva da libpq SENZA sqlstate: il codice
-        # serve solo per scegliere il suggerimento, non si mostra
+        # the authentication FATAL comes from libpq WITHOUT a sqlstate: the code only
+        # picks the hint, it is not shown
         hint_state = state or ("28P01" if "password authentication failed" in message else None)
         text = f"{message} (SQLSTATE {state})." if state else f"{message}."
         return text, _PG_HINTS.get(hint_state or "")
@@ -330,10 +328,10 @@ def _network(texts: list[str], host: Optional[str], port: Optional[int]) -> Opti
     blob = "\n".join(texts)
     where = f"{host}:{port}" if host and port else host
     target = where or "the server"
-    lento = _READ_TIMEOUT_RE.search(blob)
-    if lento:
-        quanto = f"{float(lento.group(1)):g} seconds" if lento.group(1) else "the time limit"
-        return (f"{target} accepted the query but sent no data for {quanto}: the database was still "
+    slow = _READ_TIMEOUT_RE.search(blob)
+    if slow:
+        how_much = f"{float(slow.group(1)):g} seconds" if slow.group(1) else "the time limit"
+        return (f"{target} accepted the query but sent no data for {how_much}: the database was still "
                 "computing the result, as happens with large sorts and heavy queries.")
     for kind, rx in _NET_PATTERNS:
         if not rx.search(blob):
@@ -364,10 +362,10 @@ def describe_db_error(
     host: Optional[str] = None,
     port: Optional[int] = None,
 ) -> str:
-    """Messaggio leggibile per l'utente, col testo del server del database.
+    """A readable message for the user, with the database server's text.
 
-    Gli errori già parlanti (IngestError) passano invariati. Non solleva mai:
-    un guasto qui non deve nascondere l'errore originale.
+    The errors that are clear already (IngestError) pass unchanged. It never raises: a
+    fault here must not hide the original error.
     """
     if isinstance(exc, IngestError):
         return str(exc)
@@ -395,8 +393,8 @@ def describe_db_error(
             text, hint = (_network(texts, host, port) or _fallback(exc)), None
         prefix = label or inferred or "Database"
         message = f"{prefix}: {text}" + (f" {hint}" if hint else "")
-    except Exception:  # pragma: no cover — il traduttore non deve mai propagare
+    except Exception:  # pragma: no cover — the translator must never propagate
         message = f"{label or 'Database'}: {type(exc).__name__}: {exc}"
-    # i segreti non escono MAI verso l'utente: si redige PRIMA di troncare,
-    # altrimenti un taglio a metà chiave lascerebbe visibile il resto
+    # secrets NEVER go out to the user: redacted BEFORE cutting, otherwise a cut half way
+    # through a key would leave the rest visible
     return (redact_secrets(message) or message)[:MAX_LEN]

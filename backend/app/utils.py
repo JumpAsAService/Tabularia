@@ -9,9 +9,9 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Endpoint su cui la cancellazione batch (POST ?delete, fino a 1000 chiavi) NON
-# esiste: l'API XML di Google Cloud Storage non la implementa, S3/MinIO/Scaleway
-# si'. Si scopre al primo errore e non si riprova piu' per quel processo.
+# Endpoints where the batch delete (POST ?delete, up to 1000 keys) does NOT exist:
+# Google Cloud Storage's XML API does not implement it, S3/MinIO/Scaleway do. Found at
+# the first error and not tried again in that process.
 _batch_delete_unsupported: set[str] = set()
 _GONE = {"NoSuchKey", "404", "NotFound"}
 
@@ -22,10 +22,10 @@ def _is_gone(e: ClientError) -> bool:
 
 
 def delete_keys(client, bucket: str, keys: list[str]) -> tuple[int, list[dict]]:
-    """Cancella piu' chiavi: batch dove c'e', una alla volta dove manca (GCS).
-    Semantica S3 ovunque: cancellare una chiave che non esiste NON e' un errore
-    (GCS risponde 404 alla DELETE singola, S3 no). Torna (cancellate, errori
-    per chiave nel formato del batch: [{Key, Code, Message}])."""
+    """Deletes several keys: in batches where available, one at a time where not (GCS).
+    S3 semantics everywhere: deleting a key that does not exist is NOT an error (GCS
+    answers 404 to a single DELETE, S3 does not). Returns (deleted, per-key errors in the
+    batch's format: [{Key, Code, Message}])."""
     keys = [k for k in keys if k]
     if not keys:
         return 0, []
@@ -35,17 +35,17 @@ def delete_keys(client, bucket: str, keys: list[str]) -> tuple[int, list[dict]]:
     start = 0
     if endpoint not in _batch_delete_unsupported:
         try:
-            for i in range(0, len(keys), 1000):  # limite del batch S3
+            for i in range(0, len(keys), 1000):  # the S3 batch's limit
                 resp = client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in keys[i : i + 1000]]}) or {}
                 deleted += len(resp.get("Deleted", []))
                 errors.extend(resp.get("Errors", []))
                 start = i + 1000
             return deleted, errors
         except ClientError as e:
-            # il batch in se' non e' passato (non un errore per chiave): da qui
-            # in poi per questo endpoint si va una chiave alla volta
+            # the batch itself did not go through (not a per-key error): from here on
+            # this endpoint goes one key at a time
             _batch_delete_unsupported.add(endpoint)
-            logger.info("cancellazione batch non disponibile su %s (%s): passo alle DELETE singole",
+            logger.info("batch delete not available on %s (%s): single DELETEs from now on",
                         endpoint or "?", e.response.get("Error", {}).get("Code", "?"))
     for k in keys[start:]:
         try:
@@ -53,13 +53,13 @@ def delete_keys(client, bucket: str, keys: list[str]) -> tuple[int, list[dict]]:
             deleted += 1
         except ClientError as e:
             if _is_gone(e):
-                deleted += 1  # gia' assente: per noi e' cancellata
+                deleted += 1  # missing already: deleted as far as we are concerned
                 continue
             err = e.response.get("Error", {})
             errors.append({"Key": k, "Code": str(err.get("Code", "")), "Message": str(err.get("Message", ""))})
             if len(errors) == 1 and k == keys[start]:
-                # anche la singola fallisce subito (es. AccessDenied): inutile
-                # insistere su centinaia di chiavi, l'errore e' lo stesso
+                # the single one fails at once too (AccessDenied): no use insisting on
+                # hundreds of keys, the error is the same
                 raise
     return deleted, errors
 
@@ -91,9 +91,9 @@ def transfer_config(size_bytes: int | None, **kw):
 
 class StorageService:
     """
-    Servizio per interagire con lo storage S3-compatible (Rclone/MinIO).
-    
-    Il bucket è passato come argomento ai metodi per maggiore flessibilità.
+    A service to work with the S3-compatible storage (Rclone/MinIO).
+
+    The bucket is passed to the methods as an argument, for flexibility.
     """
 
     def __init__(self):
@@ -108,11 +108,11 @@ class StorageService:
             region_name=settings.storage.region,
             config=Config(
                 signature_version="s3v4",
-                s3={"addressing_style": "path"},  # Importante per Rclone!
-                # boto3 >= 1.36 aggiunge di default checksum CRC a blocchi
-                # (aws-chunked) a ogni PUT: Google Cloud Storage li rifiuta con
-                # SignatureDoesNotMatch. "when_required" = solo dove l'API li
-                # esige; su AWS/MinIO/Scaleway non cambia nulla.
+                s3={"addressing_style": "path"},  # Important for Rclone!
+                # boto3 >= 1.36 adds chunked CRC checksums (aws-chunked) to every PUT by
+                # default: Google Cloud Storage refuses them with SignatureDoesNotMatch.
+                # "when_required" = only where the API demands them; nothing changes on
+                # AWS/MinIO/Scaleway.
                 request_checksum_calculation="when_required",
                 response_checksum_validation="when_required",
             ),
@@ -120,21 +120,21 @@ class StorageService:
 
     def create_bucket(self, bucket: str, location: str | None = None) -> dict:
         """
-        Crea un bucket S3.
-        
+        Creates an S3 bucket.
+
         Args:
-            bucket: Nome del bucket da creare
-            location: Region per il bucket (opzionale, usa default se None)
-        
+            bucket: the name of the bucket to create
+            location: the bucket's region (optional, the default when None)
+
         Returns:
-            Dict con informazioni sul bucket creato
+            A dict describing the bucket created
         """
         try:
-            # Verifica se esiste già
+            # Whether it exists already
             self.client.head_bucket(Bucket=bucket)
             return {"bucket": bucket, "exists": True, "created": False}
         except self.client.exceptions.ClientError:
-            # Bucket non esiste, crealo
+            # The bucket does not exist: create it
             if location:
                 self.client.create_bucket(
                     Bucket=bucket,
@@ -146,13 +146,13 @@ class StorageService:
 
     def bucket_exists(self, bucket: str) -> bool:
         """
-        Verifica se un bucket esiste.
-        
+        Whether a bucket exists.
+
         Args:
-            bucket: Nome del bucket da verificare
-        
+            bucket: the name of the bucket to check
+
         Returns:
-            True se il bucket esiste, False altrimenti
+            True when the bucket exists, False otherwise
         """
         try:
             self.client.head_bucket(Bucket=bucket)
@@ -162,30 +162,30 @@ class StorageService:
 
     def upload_file(self, file_path: str, bucket: str, object_key: str) -> dict:
         """
-        Upload di un file.
-        
+        Uploads a file.
+
         Args:
-            file_path: Percorso locale del file
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto nel bucket
-        
+            file_path: the file's local path
+            bucket: the S3 bucket's name
+            object_key: the key of the object in the bucket
+
         Returns:
-            Dict con informazioni sull'upload
+            A dict describing the upload
         """
         self.client.upload_file(file_path, bucket, object_key, Config=transfer_config(os.path.getsize(file_path)))
         return {"bucket": bucket, "key": object_key, "status": "uploaded"}
 
     def upload_fileobj(self, file_obj, bucket: str, object_key: str) -> dict:
         """
-        Upload di un file-like object (es. BytesIO).
-        
+        Uploads a file-like object (a BytesIO).
+
         Args:
-            file_obj: File-like object da uploadare
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto nel bucket
-        
+            file_obj: the file-like object to upload
+            bucket: the S3 bucket's name
+            object_key: the key of the object in the bucket
+
         Returns:
-            Dict con informazioni sull'upload
+            A dict describing the upload
         """
         size = None
         try:  # a file or a buffer says its size; a stream does not
@@ -199,44 +199,44 @@ class StorageService:
 
     def download_file(self, bucket: str, object_key: str, file_path: str) -> dict:
         """
-        Download di un file.
-        
+        Downloads a file.
+
         Args:
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto nel bucket
-            file_path: Percorso locale dove salvare il file
-        
+            bucket: the S3 bucket's name
+            object_key: the key of the object in the bucket
+            file_path: the local path to save the file to
+
         Returns:
-            Dict con informazioni sul download
+            A dict describing the download
         """
         self.client.download_file(bucket, object_key, file_path)
         return {"bucket": bucket, "key": object_key, "status": "downloaded"}
 
     def download_fileobj(self, bucket: str, object_key: str, file_obj) -> dict:
         """
-        Download di un file in un file-like object.
-        
+        Downloads a file into a file-like object.
+
         Args:
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto nel bucket
-            file_obj: File-like object dove scrivere i dati
-        
+            bucket: the S3 bucket's name
+            object_key: the key of the object in the bucket
+            file_obj: the file-like object to write the data to
+
         Returns:
-            Dict con informazioni sul download
+            A dict describing the download
         """
         self.client.download_fileobj(bucket, object_key, file_obj)
         return {"bucket": bucket, "key": object_key, "status": "downloaded"}
 
     def list_objects(self, bucket: str, prefix: str = "") -> list[dict]:
         """
-        Lista oggetti nel bucket.
-        
+        Lists the objects in the bucket.
+
         Args:
-            bucket: Nome del bucket S3
-            prefix: Prefisso per filtrare gli oggetti (opzionale)
-        
+            bucket: the S3 bucket's name
+            prefix: a prefix filtering the objects (optional)
+
         Returns:
-            Lista di dict con informazioni sugli oggetti
+            A list of dicts describing the objects
         """
         response = self.client.list_objects_v2(
             Bucket=bucket,
@@ -246,8 +246,8 @@ class StorageService:
 
     def prefix_stats(self, bucket: str, prefix: str) -> tuple[int, int]:
         """
-        Somma byte e conteggio oggetti sotto un prefisso (con paginazione, così
-        conta oltre i 1000 oggetti). Ritorna (byte_totali, numero_oggetti).
+        Total bytes and number of objects under a prefix (paginated, so it counts beyond
+        1000 objects). Returns (total_bytes, object_count).
         """
         paginator = self.client.get_paginator("list_objects_v2")
         total_bytes = 0
@@ -260,19 +260,19 @@ class StorageService:
 
     def delete_object(self, bucket: str, object_key: str) -> dict:
         """
-        Elimina un oggetto.
-        
+        Deletes an object.
+
         Args:
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto da eliminare
-        
+            bucket: the S3 bucket's name
+            object_key: the key of the object to delete
+
         Returns:
-            Dict con informazioni sull'eliminazione
+            A dict describing the deletion
         """
         try:
             self.client.delete_object(Bucket=bucket, Key=object_key)
         except ClientError as e:
-            if not _is_gone(e):  # GCS: 404 su una chiave assente; S3 no. Idempotente ovunque
+            if not _is_gone(e):  # GCS: 404 on a missing key; S3 not. Idempotent everywhere
                 raise
         return {"bucket": bucket, "key": object_key, "status": "deleted"}
 
@@ -287,28 +287,28 @@ class StorageService:
 
     def delete_objects(self, bucket: str, object_keys: list[str]) -> dict:
         """
-        Elimina multiple oggetti in una volta.
-        
+        Deletes several objects at once.
+
         Args:
-            bucket: Nome del bucket S3
-            object_keys: Lista di chiavi/oggetti da eliminare
-        
+            bucket: the S3 bucket's name
+            object_keys: the keys of the objects to delete
+
         Returns:
-            Dict con informazioni sull'eliminazione
+            A dict describing the deletion
         """
         deleted, errors = delete_keys(self.client, bucket, list(object_keys))
         return {"bucket": bucket, "deleted": deleted, "errors": errors}
 
     def get_object(self, bucket: str, object_key: str) -> dict:
         """
-        Ottieni un oggetto (metadati + contenuto).
-        
+        Gets an object (metadata + content).
+
         Args:
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto da ottenere
-        
+            bucket: the S3 bucket's name
+            object_key: the key of the object to get
+
         Returns:
-            Dict con metadati e contenuto dell'oggetto
+            A dict with the object's metadata and content
         """
         response = self.client.get_object(Bucket=bucket, Key=object_key)
         return {
@@ -326,16 +326,16 @@ class StorageService:
         self, bucket: str, object_key: str, expiration: int = 3600, operation: str = "get_object"
     ) -> str:
         """
-        Genera URL pre-firmato per download/upload.
-        
+        Makes a presigned URL for a download or an upload.
+
         Args:
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto
-            expiration: Tempo di validità in secondi (default: 1 ora)
-            operation: Operazione ("get_object" o "put_object")
-        
+            bucket: the S3 bucket's name
+            object_key: the object's key
+            expiration: how long it is valid, in seconds (default: 1 hour)
+            operation: the operation ("get_object" or "put_object")
+
         Returns:
-            URL pre-firmato
+            The presigned URL
         """
         return self.client.generate_presigned_url(
             operation,
@@ -344,17 +344,17 @@ class StorageService:
         )
 
     def bucket_location(self, bucket: str) -> str:
-        """Regione del bucket come la riporta lo storage (GCS: 'europe-west8',
-        'EU'; S3: 'eu-west-1'; MinIO: ''). Vuota se non determinabile."""
+        """The bucket's region as the storage reports it (GCS: 'europe-west8', 'EU'; S3:
+        'eu-west-1'; MinIO: ''). Empty when it cannot be told."""
         try:
             loc = self.client.get_bucket_location(Bucket=bucket).get("LocationConstraint")
-        except Exception:  # noqa: BLE001 — informativo: chi chiama decide il fallback
+        except Exception:  # noqa: BLE001 — informative: the caller decides the fallback
             return ""
         return str(loc or "")
 
     def object_exists(self, bucket: str, object_key: str) -> bool:
-        """True se l'oggetto esiste (HEAD, nessun download). 404/NoSuchKey → False;
-        ogni altro errore (credenziali, rete) viene propagato."""
+        """True when the object exists (HEAD, no download). 404/NoSuchKey → False; any other
+        error (credentials, network) is propagated."""
         from botocore.exceptions import ClientError
 
         try:
@@ -369,14 +369,14 @@ class StorageService:
 
     def head_object(self, bucket: str, object_key: str) -> dict:
         """
-        Ottieni metadati di un oggetto senza scaricarlo.
-        
+        Gets an object's metadata without downloading it.
+
         Args:
-            bucket: Nome del bucket S3
-            object_key: Chiave/oggetto
-        
+            bucket: the S3 bucket's name
+            object_key: the object's key
+
         Returns:
-            Dict con metadati dell'oggetto
+            A dict with the object's metadata
         """
         response = self.client.head_object(Bucket=bucket, Key=object_key)
         return {
@@ -397,10 +397,10 @@ _storage_service: StorageService | None = None
 
 def get_storage_service() -> StorageService:
     """
-    Restituisce istanza singleton del servizio storage.
-    
+    Returns the storage service's singleton instance.
+
     Returns:
-        Istanza di StorageService
+        The StorageService instance
     """
     global _storage_service
     if _storage_service is None:

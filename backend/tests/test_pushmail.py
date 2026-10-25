@@ -24,7 +24,7 @@ def sent(monkeypatch, storage):
     engine = PolarsEngine(storage=storage, cache=StepCache(storage, redis_client=FakeRedis()))
     monkeypatch.setattr("app.engine.get_engine", lambda name: engine)
     out: list = []
-    monkeypatch.setattr(pm, "_spedisci", lambda conn, msg, to: out.append((msg, to)))
+    monkeypatch.setattr(pm, "_send", lambda conn, msg, to: out.append((msg, to)))
     return out
 
 

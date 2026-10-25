@@ -26,7 +26,7 @@ from typing import Any, Iterable
 
 from celery import bootsteps
 
-from app.core import regolazioni
+from app.core import panel_settings
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,10 @@ def target_size(kind: str, started_with: int) -> int:
 def per_process_kb(processes: int) -> int:
     """The memory ceiling after which a process is recycled, for a pool of this size:
     the container's share per process (config.resolve_max_memory_per_child_kb)."""
-    from app.core.config import resolve_max_memory_per_child_kb, settings_dall_ambiente
+    from app.core.config import resolve_max_memory_per_child_kb, settings_from_env
 
     # with the panel's values this process started with, as Celery's own configuration
-    celery = regolazioni.all_avvio(settings_dall_ambiente()).celery
+    celery = panel_settings.at_start(settings_from_env()).celery
     return resolve_max_memory_per_child_kb(celery.model_copy(update={"worker_concurrency": max(1, processes)}))
 
 
@@ -91,9 +91,9 @@ def resize(consumer: Any, target: int) -> int:
 def state(consumer: Any, kind: str, started_with: int, started_at: float) -> dict:
     from celery.worker import state as worker_state
 
-    from app.core.config import cgroup_mem_limit_bytes, cgroup_mem_used_bytes, settings_dall_ambiente
+    from app.core.config import cgroup_mem_limit_bytes, cgroup_mem_used_bytes, settings_from_env
 
-    celery = regolazioni.all_avvio(settings_dall_ambiente()).celery
+    celery = panel_settings.at_start(settings_from_env()).celery
     busy = len(worker_state.active_requests)
     inner = getattr(consumer.pool, "_pool", None)
     per_process = getattr(inner, "_max_memory_per_child", None)
@@ -120,13 +120,13 @@ def state(consumer: Any, kind: str, started_with: int, started_at: float) -> dic
 
 
 def report(data: dict) -> None:
-    r = regolazioni._client()
+    r = panel_settings._client()
     r.set(KEY_PREFIX + data["name"], json.dumps(data), ex=TTL)
     r.sadd(REGISTRY, data["name"])
 
 
 def forget(name: str) -> None:
-    r = regolazioni._client()
+    r = panel_settings._client()
     r.delete(KEY_PREFIX + name)
     r.srem(REGISTRY, name)
 
@@ -135,7 +135,7 @@ def draining(name: str, started_at: float) -> None:
     """A worker whose consumer stopped (a warm shutdown, the broker connection lost): out
     of the panel's list, but its state stays — kept alive by `keep_alive` — so `lost` does
     not call its tasks lost while Celery lets them finish."""
-    r = regolazioni._client()
+    r = panel_settings._client()
     r.set(KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at, "draining": True}), ex=TTL)
     r.srem(REGISTRY, name)
 
@@ -143,7 +143,7 @@ def draining(name: str, started_at: float) -> None:
 def keep_alive(name: str, started_at: float) -> None:
     """The state lasts `TTL` more seconds; written again, as draining, when it had gone
     (Valkey restarted). The consumer's step writes the full state while it runs."""
-    r = regolazioni._client()
+    r = panel_settings._client()
     if not r.expire(KEY_PREFIX + name, TTL):
         r.set(KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at, "draining": True}), ex=TTL)
 
@@ -173,7 +173,7 @@ def lost(task_id: str, meta: Any) -> str:
         return ""
     since = meta.get("since")
     try:
-        r = regolazioni._client()
+        r = panel_settings._client()
         raw = r.get(KEY_PREFIX + meta["hostname"])
         if raw is not None:
             r.delete(SUSPECT_PREFIX + task_id)  # back after a blip: the next absence starts afresh
@@ -204,7 +204,7 @@ def task_started_meta(request: Any) -> dict:
 
 def live_workers() -> list[dict]:
     """The workers that reported within `TTL` seconds, by name."""
-    r = regolazioni._client()
+    r = panel_settings._client()
     out = []
     for name in sorted(r.smembers(REGISTRY) or ()):
         raw = r.get(KEY_PREFIX + name)

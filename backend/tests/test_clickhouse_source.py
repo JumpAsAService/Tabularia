@@ -71,9 +71,9 @@ def test_il_messaggio_distingue_il_server_che_calcola_dalla_rete():
     from app.ingest.db_errors import describe_db_error
 
     # testo vero di clickhouse-connect 1.4 (urllib3 ReadTimeoutError)
-    lento = OperationalError("Error HTTPConnectionPool(host='chtest', port=8123): Read timed out. (read timeout=300) "
+    slow = OperationalError("Error HTTPConnectionPool(host='chtest', port=8123): Read timed out. (read timeout=300) "
                              "executing HTTP request attempt 1 (http://chtest:8123)")
-    assert describe_db_error(lento, "clickhouse", "chtest", 8123) == (
+    assert describe_db_error(slow, "clickhouse", "chtest", 8123) == (
         "ClickHouse: chtest:8123 accepted the query but sent no data for 300 seconds: the database was still "
         "computing the result, as happens with large sorts and heavy queries."
     )
@@ -101,9 +101,9 @@ def _vero() -> DbConnectionSpec:
 @dal_vivo
 def test_un_server_che_tace_oltre_il_limite_e_un_server_che_calcola(storage, monkeypatch):
     # sleep(3): tre secondi senza un byte, come un ordinamento lungo in piccolo
-    sorgente = DbSourceSpec(mode="sql", ref="SELECT sleep(3) AS s")
+    source = DbSourceSpec(mode="sql", ref="SELECT sleep(3) AS s")
     monkeypatch.setattr(config.get_settings().ingest, "db_read_timeout_seconds", 2)
     with pytest.raises(DbSourceError, match=r"accepted the query but sent no data for 2 seconds"):
-        ingest_db_to_parquet(_vero(), sorgente, "b", "k.parquet", storage=storage)
+        ingest_db_to_parquet(_vero(), source, "b", "k.parquet", storage=storage)
     monkeypatch.setattr(config.get_settings().ingest, "db_read_timeout_seconds", 10)
-    assert ingest_db_to_parquet(_vero(), sorgente, "b", "k.parquet", storage=storage)["rows_written"] == 1
+    assert ingest_db_to_parquet(_vero(), source, "b", "k.parquet", storage=storage)["rows_written"] == 1

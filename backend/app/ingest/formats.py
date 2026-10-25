@@ -1,4 +1,4 @@
-"""Formati di input supportati e rilevamento da estensione."""
+"""The input formats supported, and their detection from the extension."""
 from __future__ import annotations
 
 from enum import Enum
@@ -27,7 +27,7 @@ _EXT_MAP: dict[str, FileFormat] = {
     ".pq": FileFormat.parquet,
 }
 
-# estensione "canonica" con cui salvare il raw per ciascun formato
+# the "canonical" extension to save the raw file with, per format
 _CANONICAL_EXT: dict[FileFormat, str] = {
     FileFormat.csv: ".csv",
     FileFormat.tsv: ".tsv",

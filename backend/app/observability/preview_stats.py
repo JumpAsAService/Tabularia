@@ -1,16 +1,16 @@
-"""Prestazioni delle preview, senza tabelle e senza RAM di processo.
+"""The previews' performance, without tables and without process RAM.
 
-Una riga per preview sarebbe una tabella da migliaia di righe al giorno, con
-retention e indici da gestire; una lista in memoria si perderebbe a ogni riciclo
-dei worker (ogni 50 task) e ogni processo vedrebbe solo le sue. Qui invece:
+A row per preview would be a table of thousands of rows a day, with retention and
+indexes to manage; a list in memory would be lost at every recycling of the workers
+(every 50 tasks) and every process would see only its own. Here instead:
 
-- ISTOGRAMMI su Valkey: contatori per secchio di durata, per motore ed esito.
-  Poche centinaia di chiavi, FISSE qualunque sia il traffico. Il collector li
-  espone a VictoriaMetrics, che ne tiene lo storico (mesi) e i percentili.
-- le N PIU' LENTE delle ultime 24 ore, in un sorted set a dimensione limitata:
-  l'unica cosa che un istogramma non può dire è QUALE dataset era lento.
+- HISTOGRAMS on Valkey: counters per duration bucket, by engine and outcome. A few
+  hundred keys, FIXED whatever the traffic. The collector exposes them to
+  VictoriaMetrics, which keeps their history (months) and the percentiles.
+- the N SLOWEST of the last 24 hours, in a sorted set of bounded size: the one thing a
+  histogram cannot say is WHICH dataset was slow.
 
-Tutto best-effort: misurare non deve mai far fallire ciò che misura.
+All best effort: measuring must never fail what it measures.
 """
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# limiti superiori dei secchi, in millisecondi (l'ultimo è +Inf)
+# the buckets' upper bounds, in milliseconds (the last is +Inf)
 BUCKETS_MS = (100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000, 120000)
 OUTCOMES = ("ok", "superseded", "error")
 PHASES = ("client", "stepcache", "sql", "query", "decode")
 SLOWEST_KEEP = 50
 SLOWEST_WINDOW_SECONDS = 24 * 3600
-# sotto questa durata una preview non entra nella classifica: non è "lenta"
+# below this duration a preview does not enter the ranking: it is not "slow"
 SLOWEST_MIN_MS = 1000
 
 HIST_KEY = "dataprep:metrics:preview:hist"      # hash  "<engine>|<outcome>|<le>" → n
@@ -50,10 +50,10 @@ def _r() -> redis.Redis:
     return _client
 
 
-# ── fasi: l'engine le dichiara, il task le raccoglie ────────────────────────────
+# ── phases: the engine declares them, the task collects them ────────────────────────────
 def set_phases(phases: dict[str, float], source: str = "") -> None:
-    """Chiamata dall'engine a fine preview. Thread-local: un worker Celery esegue
-    un task per volta per processo, e l'API è multi-thread."""
+    """Called by the engine at the end of a preview. Thread-local: a Celery worker runs one
+    task at a time per process, and the API is multi-threaded."""
     _local.phases = dict(phases)
     _local.source = source
 
@@ -75,8 +75,8 @@ KNOWN_ENGINES = ("polars", "duckdb", "chdb", "clickhouse", "bigquery")
 
 
 def _engine_label(engine: str | None) -> str:
-    """Solo nomi noti: il motore arriva dalla richiesta dell'utente, e un nome
-    libero creerebbe chiavi (e serie Prometheus) senza limite."""
+    """Known names only: the engine comes from the user's request, and a free name would
+    make keys (and Prometheus series) without limit."""
     e = (engine or "polars").strip().lower()
     return e if e in KNOWN_ENGINES else "unknown"
 
@@ -99,8 +99,8 @@ def record(*, engine: str, outcome: str, total_ms: float, phases: dict[str, floa
                 "source": source, "cache": cache,
                 "phases": {k: round(v) for k, v in (phases or {}).items() if k in PHASES and v >= 1},
             }
-            # prima via le voci SCADUTE, o una giornata di grandi lente vecchie
-            # terrebbe fuori quelle di oggi (il set e' piccolo: leggerlo costa niente)
+            # the EXPIRED entries first, or a day of big old slow ones would keep today's
+            # out (the set is small: reading it costs nothing)
             try:
                 stale = [m for m in _r().zrevrange(SLOWEST_KEY, 0, -1)
                          if now - (json.loads(m).get("at", 0)) > SLOWEST_WINDOW_SECONDS]
@@ -109,17 +109,17 @@ def record(*, engine: str, outcome: str, total_ms: float, phases: dict[str, floa
             except Exception:
                 pass
             p.zadd(SLOWEST_KEY, {json.dumps(entry, sort_keys=True): total_ms})
-            # dimensione LIMITATA: restano solo le più lente
+            # a BOUNDED size: only the slowest stay
             p.zremrangebyrank(SLOWEST_KEY, 0, -(SLOWEST_KEEP * 4) - 1)
             p.expire(SLOWEST_KEY, SLOWEST_WINDOW_SECONDS * 2)
         p.execute()
-    except Exception as e:  # Valkey giù, o qualunque altra cosa: la preview è già riuscita
+    except Exception as e:  # Valkey down, or anything else: the preview succeeded already
         logger.debug("preview_stats.record ignorato: %s", e)
 
 
 def slowest(limit: int = SLOWEST_KEEP, now: float | None = None) -> list[dict]:
-    """Le più lente delle ultime 24 ore. Le voci scadute si tolgono qui, in
-    lettura: il set resta piccolo senza un job di pulizia."""
+    """The slowest of the last 24 hours. The expired entries are removed here, on reading:
+    the set stays small without a cleanup job."""
     now = time.time() if now is None else now
     try:
         raw = _r().zrevrange(SLOWEST_KEY, 0, -1)

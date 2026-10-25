@@ -1,11 +1,11 @@
-"""Sorgente SharePoint (endpoint INTERNI, raggiunti solo dal gateway).
+"""The SharePoint source (INTERNAL endpoints, reached by the gateway only).
 
-- POST /sharepoint/inspect: sincrono — prova della connessione (token + sito +
-  raccolta) oppure l'elenco dei file che un percorso/glob prende, per dare
-  riscontro immediato mentre l'utente configura la datasource.
-- POST /sharepoint/ingest: accoda il task; si polla su GET /tasks/{task_id}.
+- POST /sharepoint/inspect: synchronous — a test of the connection (token + site +
+  library) or the list of the files a path or glob takes, for immediate feedback while
+  the user sets the datasource up.
+- POST /sharepoint/ingest: queues the task; polled on GET /tasks/{task_id}.
 
-Il secret dell'app arriva cifrato (Fernet condiviso col gateway).
+The app's secret arrives encrypted (the Fernet key shared with the gateway).
 """
 import logging
 from typing import Literal
@@ -43,7 +43,7 @@ class SharePointIngestRequest(BaseModel):
     source: SharePointSourceSpec
     bucket: str = ""
     output_key: str
-    contract: dict | None = None  # data contract della datasource che si aggiorna
+    contract: dict | None = None  # the data contract of the datasource being refreshed
     last_refresh: str | None = None  # the start of the last successful refresh, for {last_refresh}
     previous: dict | None = None  # append mode: the current snapshot {bucket, key}
 
@@ -56,7 +56,7 @@ def inspect(request: SharePointInspectRequest):
             return validate_source(source, last_refresh=request.last_refresh)
         client = GraphClient(request.connection)
         if request.action == "test":
-            client.drive_id()  # token + sito + raccolta: tutto ciò che può andare storto
+            client.drive_id()  # token + site + library: everything that can go wrong
             return {"ok": True}
         g, _ = gather_files(client, source, last_refresh=request.last_refresh)
         # the sheets of the first file, to choose the sheet from a list
@@ -72,7 +72,7 @@ def inspect(request: SharePointInspectRequest):
         }
     except SharePointError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:  # rete, DNS, TLS: messaggio breve, niente traceback all'utente
+    except Exception as e:  # network, DNS, TLS: a short message, no traceback to the user
         logger.exception("sharepoint inspect")
         raise HTTPException(status_code=502, detail=f"Microsoft Graph is not reachable: {type(e).__name__}")
 
@@ -86,7 +86,7 @@ def ingest(request: SharePointIngestRequest):
         source=request.source.model_dump(),
         bucket=request.bucket or get_settings().storage.bucket,
         output_key=request.output_key,
-        # solo se c'è: un worker non ancora aggiornato non conosce il parametro
+        # only when there is one: a worker not upgraded yet does not know the parameter
         **{k: v for k, v in (("contract", request.contract), ("last_refresh", request.last_refresh),
                              ("previous", request.previous)) if v},
     )

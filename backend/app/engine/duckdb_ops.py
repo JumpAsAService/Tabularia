@@ -1,17 +1,17 @@
 """
-Registry delle operazioni per l'engine DuckDB (parallelo a `operations.py` di
-Polars). Ogni operazione mappa una relazione DuckDB (LAZY: è un piano, non dati
-materializzati) in un'altra, generando SQL con `rel.query(alias, "SELECT … FROM alias")`.
+The registry of the DuckDB engine's operations (parallel to Polars' `operations.py`).
+Every operation maps a DuckDB relation (LAZY: a plan, not materialized data) into
+another, generating SQL with `rel.query(alias, "SELECT … FROM alias")`.
 
-Firma: `(rel, params, alias, ctx)`. `alias` è un nome di tabella UNICO per step
-(riusarlo in `.query()` concatenate manda DuckDB in ricorsione infinita). `ctx`
-serve alle operazioni MULTI-INPUT (join/union) per costruire il lato destro
-(scan della sorgente annidata + sotto-catena).
+Signature: `(rel, params, alias, ctx)`. `alias` is a table name UNIQUE per step (reusing
+it in chained `.query()` sends DuckDB into endless recursion). `ctx` serves the
+MULTI-INPUT operations (join/union) to build the right side (a scan of the nested source
++ a sub-chain).
 
-Sicurezza: le operazioni strutturali usano solo nomi di colonna / operatori /
-valori (nessun SQL libero). `compute` accetta espressioni SQL scalari ma VIETA
-sottoquery e funzioni di lettura file → niente accesso al filesystem. `sql`
-(query intera) e `foreach` (control-flow) non sono ancora supportate.
+Security: the structural operations use only column names / operators / values (no free
+SQL). `compute` takes scalar SQL expressions but FORBIDS subqueries and file-reading
+functions → no access to the filesystem. `sql` (a whole query) and `foreach` (control
+flow) are not supported yet.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import pyarrow.parquet as _pq
 
 from app.engine import duckdb_budget
 from app.engine.context import MAX_CROSS_JOIN_ROWS
-from app.engine.espressioni import espressione_vietata
+from app.engine.expressions import forbidden_expression
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
     MAX_FOREACH_ITERATIONS,
@@ -68,12 +68,12 @@ def get_duck_operation(name: str) -> DuckOpFn:
 
 # ── helper SQL ────────────────────────────────────────────────────────────────
 def _qi(name: str) -> str:
-    """Quota un identificatore (nome colonna) per SQL."""
+    """Quotes an identifier (a column name) for SQL."""
     return '"' + str(name).replace('"', '""') + '"'
 
 
 def _lit(v: Any) -> str:
-    """Letterale SQL da un valore Python (già parsato dal frontend)."""
+    """A SQL literal from a Python value (parsed by the frontend already)."""
     if v is None:
         return "NULL"
     if isinstance(v, bool):
@@ -99,7 +99,7 @@ _DUCK_DTYPES = {
 }
 
 
-# ── colonne ───────────────────────────────────────────────────────────────────
+# ── columns ───────────────────────────────────────────────────────────────────
 @_register("select")
 def op_select(rel, params, a, ctx):
     cols = ", ".join(_qi(c) for c in _require(params, "columns"))
@@ -108,7 +108,7 @@ def op_select(rel, params, a, ctx):
 
 @_register("reorder")
 def op_reorder(rel, params, a, ctx):
-    # colonne elencate prima (nell'ordine), poi tutte le altre (EXCLUDE degli elencati)
+    # the listed columns first (in order), then all the others (EXCLUDE the listed ones)
     order = _require(params, "columns")
     q = ", ".join(_qi(c) for c in order)
     return rel.query(a, f"SELECT {q}, * EXCLUDE ({q}) FROM {a}")
@@ -128,9 +128,9 @@ def op_rename(rel, params, a, ctx):
 
 
 def _cast_expr(q: str, src: str, duck_t: str) -> str:
-    """Stesso STANDARD del cast di Polars (vedi operations.op_cast): fallito →
-    NULL; testo con spazi tagliati; testo → intero solo se intero letterale;
-    numero → intero per troncamento."""
+    """The same STANDARD as Polars' cast (see operations.op_cast): failed → NULL; text with
+    its spaces trimmed; text → integer only for an integer literal; number → integer by
+    truncation."""
     src = src.upper()
     is_text = src.startswith(("VARCHAR", "STRING", "TEXT", "CHAR"))
     is_num = src in _DK_FLOATS or src.startswith("DECIMAL")
@@ -156,7 +156,7 @@ def op_cast(rel, params, a, ctx):
     return rel.query(a, f"SELECT * REPLACE ({', '.join(repls)}) FROM {a}")
 
 
-# ── filtri ────────────────────────────────────────────────────────────────────
+# ── filters ────────────────────────────────────────────────────────────────────
 def _predicate(column: str, operator: str, value: Any) -> str:
     c = _qi(column)
     if operator == "is_null":
@@ -192,14 +192,14 @@ def op_filter(rel, params, a, ctx):
     return rel.query(a, f"SELECT * FROM {a} WHERE {_predicate(column, operator, params.get('value'))}")
 
 
-# ── riordino / righe ──────────────────────────────────────────────────────────
+# ── ordering / rows ──────────────────────────────────────────────────────────
 @_register("sort")
 def op_sort(rel, params, a, ctx):
     # the keys and a direction each (operations.sort_keys: `ignore_missing` too)
     keys = sort_keys(params, rel.columns)
     if not keys:
         return rel
-    # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
+    # cross-engine standard: NULL always last (see operations.op_sort)
     order = ", ".join(f"{_qi(c)} {'DESC' if d else 'ASC'} NULLS LAST" for c, d in keys)
     return rel.query(a, f"SELECT * FROM {a} ORDER BY {order}")
 
@@ -211,7 +211,7 @@ def op_limit(rel, params, a, ctx):
 
 @_register("sample")
 def op_sample(rel, params, a, ctx):
-    # campione casuale riproducibile: bernoulli con seme (una passata, streaming)
+    # a reproducible random sample: bernoulli with a seed (one pass, streaming)
     threshold, seed = sample_threshold(params)
     pct = threshold / SAMPLE_BUCKETS * 100
     return rel.query(a, f"SELECT * FROM {a} USING SAMPLE {pct:.4f} PERCENT (bernoulli, {seed})")
@@ -293,9 +293,8 @@ def op_group_by(rel, params, a, ctx):
 
 
 def _recast_hugeint(ctx, rel):
-    """sum di interi → HUGEINT (int128, che Arrow/Polars leggono come DECIMAL e
-    la preview come float: 2^53+1 perderebbe precisione): riportato a BIGINT
-    come negli altri engine."""
+    """A sum of integers → HUGEINT (int128, which Arrow/Polars read as DECIMAL and the preview
+    as float: 2^53+1 would lose precision): back to BIGINT as in the other engines."""
     if not any(str(t).upper() == "HUGEINT" for t in rel.types):
         return rel
     name = ctx.register(rel)
@@ -306,7 +305,7 @@ def _recast_hugeint(ctx, rel):
     return ctx.con.sql(f"SELECT {casts} FROM {name}")
 
 
-# ── compute (espressioni SQL scalari, SENZA sottoquery né lettura file) ────────
+# ── compute (scalar SQL expressions, WITHOUT subqueries or file reads) ───────
 # the expression is parsed, not searched for words: EXTRACT(YEAR FROM d) is scalar
 # (see app/engine/espressioni.py, whose blacklist covers read_*, parquet_scan, scan_*)
 @_register("compute")
@@ -319,23 +318,23 @@ def op_compute(rel, params, a, ctx):
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
             raise EngineError("compute: name and expression are required")
-        if espressione_vietata(expr, "duckdb"):
+        if forbidden_expression(expr, "duckdb"):
             raise EngineError(
                 f"compute: the expression of '{name}' is not allowed (no subqueries, "
                 "FROM or file reading functions — scalar expressions only)."
             )
         step = f"{a}_{i}"
         if name in rel.columns:
-            # colonna esistente: sovrascritta NELLA SUA POSIZIONE (come Polars)
+            # an existing column: overwritten IN ITS PLACE (as Polars)
             rel = rel.query(step, f"SELECT * REPLACE (({expr}) AS {_qi(name)}) FROM {step}")
         else:
             rel = rel.query(step, f"SELECT *, ({expr}) AS {_qi(name)} FROM {step}")
     return rel
 
 
-# ── join / union (leggono il lato destro dalla sorgente annidata) ─────────────
+# ── join / union (they read the right side from the nested source) ─────────────
 def _join_condition(ln: str, rn: str, params: dict) -> tuple[str, str]:
-    """Torna (clausola SQL, kind) dove kind='using' o 'on'."""
+    """Returns (SQL clause, kind) where kind='using' or 'on'."""
     if "on" in params and params["on"]:
         keys = ", ".join(_qi(c) for c in _as_list(params["on"]))
         return f"USING ({keys})", "using"
@@ -348,10 +347,9 @@ def _join_condition(ln: str, rn: str, params: dict) -> tuple[str, str]:
 
 
 def _join_select(ln: str, lcols, rn: str, rcols, skip_right: set, coalesce_keys: set = frozenset()) -> str:
-    """Colonne del risultato: tutte da sinistra + quelle di destra (chiavi USING
-    escluse), con suffisso _right sulle omonime — come Polars. Nei full/right
-    join le chiavi USING sono COALESCE(sinistra, destra): valorizzate anche
-    nelle righe che esistono solo a destra."""
+    """The result's columns: all the left's + the right's (USING keys excluded), with the
+    _right suffix on the same names — as Polars. In full/right joins the USING keys are
+    COALESCE(left, right): filled in the rows that exist only on the right too."""
     lset = set(lcols)
     parts = [
         f"COALESCE({ln}.{_qi(c)}, {rn}.{_qi(c)}) AS {_qi(c)}" if c in coalesce_keys else f"{ln}.{_qi(c)}"
@@ -391,7 +389,7 @@ def op_join(rel, params, a, ctx):
         return ctx.con.sql(f"SELECT {ln}.* FROM {ln} {how.upper()} JOIN {rn} {clause}")
     if how not in _JOIN_KW:
         raise EngineError(f"join: unsupported join type '{how}'")
-    # con USING le chiavi (stesse su entrambi) restano una sola volta
+    # with USING the keys (the same on both sides) appear once
     skip_right = set(_as_list(params["on"])) if kind == "using" else set()
     sel = _join_select(ln, lcols, rn, rcols, skip_right, skip_right if how in ("full", "right") else set())
     return ctx.con.sql(f"SELECT {sel} FROM {ln} {_JOIN_KW[how]} {rn} {clause}")
@@ -401,25 +399,25 @@ def op_join(rel, params, a, ctx):
 def op_union(rel, params, a, ctx):
     right = ctx.build_right(_require(params, "right"))
     ln, rn = ctx.register(rel), ctx.register(right)
-    # relaxed = allinea per nome (colonne mancanti → null); strict = stesse colonne e tipi,
-    # in qualunque ordine, unite per nome (posizionale scambiava le colonne in silenzio)
+    # relaxed = aligned by name (missing columns → null); strict = the same columns and
+    # types, in any order, joined by name (by position the columns were swapped silently)
     if params.get("strategy") == "strict":
         check_strict_union(list(zip(rel.columns, map(str, rel.types))), list(zip(right.columns, map(str, right.types))))
     return ctx.con.sql(f"SELECT * FROM {ln} UNION ALL BY NAME SELECT * FROM {rn}")
 
 
-# ── pivot / unpivot (righe↔colonne) ───────────────────────────────────────────
+# ── pivot / unpivot (rows↔columns) ───────────────────────────────────────────
 @_register("pivot")
 def op_pivot(rel, params, a, ctx):
     index = _as_list(_require(params, "index"))
-    on = _as_list(_require(params, "on"))  # più colonne = combinazioni
+    on = _as_list(_require(params, "on"))  # several columns = combinations
     values = _require(params, "values")
     func = params.get("func", "sum")
     if func not in _AGG:
         raise EngineError(f"pivot: unsupported aggregation function '{func}'")
     name = ctx.register(rel)
-    # etichetta standard cross-engine (vedi operations.pivot_label): valore come
-    # testo, NULL → 'null', più colonne unite da "_" (solo combinazioni presenti)
+    # the cross-engine label (see operations.pivot_label): the value as text,
+    # NULL → 'null', several columns joined by "_" (only the combinations present)
     on_sql = f" || '{PIVOT_LABEL_SEP}' || ".join(f"coalesce(CAST({_qi(c)} AS VARCHAR), 'null')" for c in on)
     n_cols = ctx.con.sql(
         f"SELECT count(*) FROM (SELECT DISTINCT {on_sql} FROM {name})"
@@ -433,7 +431,7 @@ def op_pivot(rel, params, a, ctx):
     piv = ctx.con.sql(
         f"PIVOT {_source_for(name, [func])} ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {idx_sql}"
     )
-    # sum di interi → HUGEINT (decimale per Polars): riportato a BIGINT come gli altri engine
+    # a sum of integers → HUGEINT (a decimal for Polars): back to BIGINT as the other engines
     return _recast_hugeint(ctx, piv)
 
 
@@ -442,7 +440,7 @@ _DK_FLOATS = {"FLOAT", "DOUBLE", "REAL"}
 
 
 def unpivot_value_type(types: list[str]) -> str:
-    """Supertipo del valore sciolto (stessa regola di Polars/ClickHouse)."""
+    """The unpivoted value's supertype (the same rule as Polars/ClickHouse)."""
     bases = [t.upper() for t in types]
     if all(b in _DK_INTS for b in bases):
         return "BIGINT"
@@ -466,15 +464,15 @@ def op_unpivot(rel, params, a, ctx):
     missing = [c for c in melt if c not in types]
     if missing:
         raise EngineError(f"unpivot: columns not found: {', '.join(missing)}")
-    # come Polars: restano SOLO le colonne indice; le sciolte vanno al supertipo
-    # comune (UNPIVOT vuole tipi unificabili)
+    # as Polars: ONLY the index columns stay; the unpivoted ones go to the common
+    # supertype (UNPIVOT wants types that unify)
     vtype = unpivot_value_type([types[c] for c in melt])
     keep = [c for c in rel.columns if c in set(index)]
     sel = ", ".join([_qi(c) for c in keep] + [f"CAST({_qi(c)} AS {vtype}) AS {_qi(c)}" for c in melt])
     on_sql = ", ".join(_qi(c) for c in melt)
     name = ctx.register(rel)
-    # forma SQL-standard: l'unica che accetta INCLUDE NULLS (la sintassi
-    # `UNPIVOT … ON … INTO` scarta le righe con valore NULL, Polars/ClickHouse no)
+    # the SQL-standard form: the only one that takes INCLUDE NULLS (the syntax
+    # `UNPIVOT … ON … INTO` drops the rows with a NULL value, Polars/ClickHouse do not)
     return ctx.con.sql(
         f"SELECT * FROM (SELECT {sel} FROM {name}) "
         f"UNPIVOT INCLUDE NULLS ({_qi(val)} FOR {_qi(var)} IN ({on_sql}))"
@@ -484,20 +482,20 @@ def op_unpivot(rel, params, a, ctx):
 # ── Execute SQL (query intera in SANDBOX) ─────────────────────────────────────
 @_register("sql")
 def op_sql(rel, params, a, ctx):
-    """Esegue una query SQL DuckDB sul frame in ingresso (tabella `self`, alias
-    `input`) in una connessione SANDBOX isolata.
+    """Runs a DuckDB SQL query on the incoming frame (table `self`, alias `input`) in an
+    isolated SANDBOX connection.
 
-    Sicurezza: l'input viene caricato in una tabella, poi si disabilita ogni
-    accesso esterno (`enable_external_access=false` + `lock_configuration=true`):
-    read_csv/read_parquet/attach/copy/install/httpfs sono bloccati e non
-    riabilitabili. Il risultato NON viene scritto da DuckDB (bloccato dal
-    sandbox) ma da Python (pyarrow) in STREAMING → resta out-of-core."""
+    Security: the input is loaded into a table, then every external access is switched
+    off (`enable_external_access=false` + `lock_configuration=true`):
+    read_csv/read_parquet/attach/copy/install/httpfs are blocked and cannot be turned
+    back on. The result is NOT written by DuckDB (blocked by the sandbox) but by Python
+    (pyarrow), STREAMING → it stays out of core."""
     query = str(_require(params, "query")).strip()
     if not query:
         raise EngineError("sql: the query is empty")
 
     in_tmp = ctx.tempfile()
-    rel.write_parquet(in_tmp)  # materializza l'input (streaming su disco)
+    rel.write_parquet(in_tmp)  # materializes the input (streaming to disk)
 
     # A database on disk, not in memory, with this process's budget and its own
     # spill directory: `self` holds the whole upstream, and in memory it took about
@@ -509,11 +507,11 @@ def op_sql(rel, params, a, ctx):
         duckdb_budget.apply(sbx)
         sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
         sbx.execute("CREATE VIEW input AS SELECT * FROM self")
-        sbx.execute("SET enable_external_access=false")  # niente file/rete/attach/install
-        sbx.execute("SET lock_configuration=true")  # e non riabilitabile dalla query
+        sbx.execute("SET enable_external_access=false")  # no files, network, attach or install
+        sbx.execute("SET lock_configuration=true")  # and the query cannot turn it back on
         try:
             result = sbx.sql(query)
-            if ctx.limit_output:  # in anteprima, ultimo nodo: non calcolare l'intero risultato
+            if ctx.limit_output:  # in a preview, last node: do not compute the whole result
                 result = result.limit(ctx.limit_output)
             reader = result.to_arrow_reader(1_000_000)  # streaming Arrow
             out_tmp = ctx.tempfile()
@@ -536,10 +534,10 @@ def op_sql(rel, params, a, ctx):
 # ── foreach (ciclo con placeholder, stile container SSIS) ─────────────────────
 @_register("foreach")
 def op_foreach(rel, params, a, ctx):
-    """Esegue il corpo per ogni iterazione e APPENDE i risultati (UNION ALL BY
-    NAME). Le iterazioni vengono da `items` (lista statica di dict) o da un
-    `driver` (sub-flow: ogni riga = un'iterazione, le colonne = i placeholder
-    `{{chiave}}`). Riusa la sostituzione/sicurezza engine-agnostica di Polars."""
+    """Runs the body for every iteration and APPENDS the results (UNION ALL BY NAME). The
+    iterations come from `items` (a static list of dicts) or from a `driver` (a
+    sub-flow: every row = an iteration, the columns = the `{{key}}` placeholders). It
+    reuses Polars' engine-agnostic substitution and safety."""
     body = _require(params, "body")
     items = params.get("items")
     if not items and "driver" in params:
@@ -557,7 +555,7 @@ def op_foreach(rel, params, a, ctx):
         raise EngineError(f"foreach: {len(items)} iterations, over the limit of {MAX_FOREACH_ITERATIONS}")
     if not body:
         raise EngineError("foreach has an empty body: drag some operations into the container")
-    _reject_dynamic_source_keys(body)  # una sorgente non può avere il percorso dai dati
+    _reject_dynamic_source_keys(body)  # a source cannot take its path from the data
 
     ctx.foreach_iterations += len(items)
     if ctx.foreach_iterations > MAX_FOREACH_TOTAL:

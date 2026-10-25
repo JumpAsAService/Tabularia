@@ -27,7 +27,7 @@ from app.ingest.email_destination import (
     EmailDestinationError,
     SmtpConnectionSpec,
     _html_to_text,
-    _spedisci,
+    _send,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,7 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
     for name, data in files:
         msg.add_attachment(data, maintype=XLSX_MIME[0], subtype=XLSX_MIME[1], filename=name)
 
-    _spedisci(conn, msg, recipients)
+    _send(conn, msg, recipients)
     logger.info("📧 pushmail to %d recipients, %d files (%d bytes)", len(recipients), len(files), size)
     return {
         "ok": True,

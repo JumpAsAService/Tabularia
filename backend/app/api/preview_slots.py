@@ -1,15 +1,14 @@
-"""Slot delle preview: in ogni slot conta solo l'ULTIMA richiesta.
+"""Preview slots: in every slot only the LAST request counts.
 
-L'utente che disegna un flusso clicca un nodo dopo l'altro; ogni click lancia
-una o piu' preview e quelle dei nodi gia' abbandonati restavano in coda davanti
-all'unica che interessa. Il client dichiara a quale slot appartiene la preview
-("questo editor, pannello anteprima"): una nuova preview sullo stesso slot
-butta giu' la precedente, in modo ESPLICITO. Non ci si affida alla propagazione
-della disconnessione HTTP: fra browser e worker ci sono ingress, gateway e una
-route sincrona, e nessuno dei tre la garantisce.
+Whoever draws a flow clicks one node after another; every click starts one or more
+previews, and those of the nodes left behind stayed queued in front of the only one
+that matters. The client says which slot the preview belongs to ("this editor, the
+preview panel"): a new preview on the same slot knocks down the previous one,
+EXPLICITLY. The HTTP disconnection is not relied upon to propagate: between browser and
+worker there are ingress, gateway and a synchronous route, and none guarantees it.
 
-Tutto fail-open: se Valkey non risponde, la preview gira come se lo slot non ci
-fosse. Un registro di cortesia non deve poter rompere l'anteprima.
+All fail-open: when Valkey does not answer, the preview runs as if there were no slot.
+A courtesy registry must not be able to break the preview.
 """
 import logging
 
@@ -19,7 +18,7 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 _PREFIX = "dataprep:preview:slot:"
-# compare-and-delete: si libera lo slot solo se e' ancora NOSTRO
+# compare-and-delete: the slot is freed only while it is still OURS
 _RELEASE = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
 _client: redis.Redis | None = None
 
@@ -32,12 +31,12 @@ def _r() -> redis.Redis:
 
 
 def claim(slot: str, task_id: str, ttl_seconds: int) -> str | None:
-    """Prende lo slot per `task_id` e restituisce chi lo occupava (o None).
-    Atomico (SET … GET): due richieste simultanee non si perdono a vicenda."""
+    """Takes the slot for `task_id` and returns who held it (or None). Atomic (SET … GET):
+    two simultaneous requests do not lose each other."""
     try:
         return _r().set(_PREFIX + slot, task_id, ex=ttl_seconds, get=True)
     except Exception as e:
-        logger.warning("slot preview non disponibile (%s): procedo senza", e)
+        logger.warning("preview slot not available (%s): going on without it", e)
         return None
 
 

@@ -14,7 +14,7 @@ What comes from the code, so it cannot drift:
     infrastructure/.env.example, and the names the Helm chart sets, with the values.yaml
     key each one comes from;
   - which settings an administrator can also change from the panel, and which of them
-    apply only when their components restart (`Voce(…)` in backend/app/core/regolazioni.py
+    apply only when their components restart (`Item(…)` in backend/app/core/panel_settings.py
     and gateway/app/core/overrides.py).
 
 What is written by hand, in config_reference.toml next to this file: the one-line
@@ -47,7 +47,7 @@ BACKEND_CONFIG = "backend/app/core/config.py"
 GATEWAY_CONFIG = "gateway/app/core/config.py"
 BACKEND_APP = "backend/app"
 GATEWAY_APP = "gateway/app"
-PANEL = "backend/app/core/regolazioni.py"
+PANEL = "backend/app/core/panel_settings.py"
 GATEWAY_PANEL = "gateway/app/core/overrides.py"
 COMPOSE = "infrastructure/docker-compose.yml"
 ENV_EXAMPLE = "infrastructure/.env.example"
@@ -248,8 +248,8 @@ def direct_reads(app_dir: Path, reader: str, variables: dict[str, Variable]) -> 
 
 def panel_settings(path: Path) -> dict[str, tuple]:
     """Variable → (its category in the panel, the components that read it only when they
-    start): `Voce("ingest.parquet_row_group_rows", "import", …)`, with `rollout=` and, for a
-    variable that is not a settings field, `ambiente="CHDB_MAX_MEMORY_USAGE"`."""
+    start): `Item("ingest.parquet_row_group_rows", "import", …)`, with `rollout=` and, for a
+    variable that is not a settings field, `env_name="CHDB_MAX_MEMORY_USAGE"`."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     # module constants used as `rollout=` (GW, WORKERS): their tuples of names
     tuples = {}
@@ -259,27 +259,27 @@ def panel_settings(path: Path) -> dict[str, tuple]:
             tuples[node.targets[0].id] = [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
     keys = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _name(node.func) == "Voce" and len(node.args) > 1 \
+        if isinstance(node, ast.Call) and _name(node.func) in ("Item", "Voce") and len(node.args) > 1 \
                 and isinstance(node.args[0], ast.Constant) and isinstance(node.args[1], ast.Constant):
             kw = {k.arg: k.value for k in node.keywords}
             name = node.args[0].value.replace(".", "__").upper()
-            if isinstance(kw.get("ambiente"), ast.Constant) and kw["ambiente"].value:
-                name = kw["ambiente"].value
+            if isinstance(kw.get("env_name"), ast.Constant) and kw["env_name"].value:
+                name = kw["env_name"].value
             restart = []
             if isinstance(kw.get("rollout"), ast.Name):
                 restart = tuples.get(kw["rollout"].id, [])
             elif isinstance(kw.get("rollout"), ast.Tuple):
                 restart = [e.value for e in kw["rollout"].elts if isinstance(e, ast.Constant)]
             read = None
-            if isinstance(kw.get("ambiente"), ast.Constant) and kw["ambiente"].value:
-                tipo = kw["tipo"].value if isinstance(kw.get("tipo"), ast.Constant) else "int"
-                default = kw["predefinito"].value if isinstance(kw.get("predefinito"), ast.Constant) else MISSING
-                if isinstance(kw.get("predefinito"), ast.BinOp):  # 512 * 1024**2
+            if isinstance(kw.get("env_name"), ast.Constant) and kw["env_name"].value:
+                kind = kw["kind"].value if isinstance(kw.get("kind"), ast.Constant) else "int"
+                default = kw["default"].value if isinstance(kw.get("default"), ast.Constant) else MISSING
+                if isinstance(kw.get("default"), ast.BinOp):  # 512 * 1024**2
                     try:
-                        default = eval(compile(ast.Expression(kw["predefinito"]), "<predefinito>", "eval"), {})
+                        default = eval(compile(ast.Expression(kw["default"]), "<default>", "eval"), {})
                     except Exception:  # noqa: BLE001 — shown as written
                         default = MISSING
-                read = ({"float": "number"}.get(tipo, "integer"), default)
+                read = ({"float": "number"}.get(kind, "integer"), default)
             keys[name] = (node.args[1].value, ", ".join(restart), read)
     return keys
 

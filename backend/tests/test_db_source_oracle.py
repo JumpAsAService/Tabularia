@@ -49,7 +49,7 @@ class _Tipo:
         self.name = name
 
 
-@pytest.mark.parametrize("tipo, precisione, scala, atteso", [
+@pytest.mark.parametrize("kind, precision, scala, atteso", [
     ("DB_TYPE_NUMBER", 10, 0, pa.int64()),
     ("DB_TYPE_NUMBER", 18, 0, pa.int64()),
     ("DB_TYPE_NUMBER", 19, 0, pa.float64()),     # oltre 18 cifre: Float64, come il driver
@@ -62,8 +62,8 @@ class _Tipo:
     ("DB_TYPE_BLOB", None, None, pa.large_binary()),
     ("DB_TYPE_BOOLEAN", None, None, pa.bool_()),
 ])
-def test_tipo_arrow_dalla_descrizione_per_un_risultato_vuoto(tipo, precisione, scala, atteso):
-    assert ds._oracle_tipo_arrow(("C", _Tipo(tipo), None, None, precisione, scala, True)) == atteso
+def test_tipo_arrow_dalla_descrizione_per_un_risultato_vuoto(kind, precision, scala, atteso):
+    assert ds._oracle_arrow_type(("C", _Tipo(kind), None, None, precision, scala, True)) == atteso
 
 
 def test_date_e_timestamp_in_microsecondi_i_nanosecondi_restano():
@@ -71,7 +71,7 @@ def test_date_e_timestamp_in_microsecondi_i_nanosecondi_restano():
         "giorno": pa.array([0], pa.timestamp("s")), "ts3": pa.array([0], pa.timestamp("ms")),
         "ts9": pa.array([0], pa.timestamp("ns")), "n": pa.array([1], pa.int64()),
     })
-    assert [f.type for f in ds._oracle_normalizza(t).schema] == [pa.timestamp("us"), pa.timestamp("us"), pa.timestamp("ns"), pa.int64()]
+    assert [f.type for f in ds._oracle_normalize(t).schema] == [pa.timestamp("us"), pa.timestamp("us"), pa.timestamp("ns"), pa.int64()]
 
 
 def test_porta_ed_elenco_tabelle():

@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from app.api import exports
 from app.api.models import ExportRequest, ExportStart
 from app.api.routes import tasks
-from app.core import regolazioni
+from app.core import panel_settings
 from app.core.config import get_settings
 from app.engine.exceptions import EngineError
 from app.tasks import jobs
@@ -180,7 +180,7 @@ def test_a_failed_export_says_why_and_leaves_no_file(worker, storage, vendite):
     missing = _start(_body(vendite, input_key="datasets/gone.parquet", owner="u1"))
     assert tasks.export_status(missing, owner="u1")["code"] == 404
 
-    regolazioni.scrivi({"export.max_rows": 1})
+    panel_settings.write({"export.max_rows": 1})
     over = _start(_body(vendite, owner="u1"))
     status = tasks.export_status(over, owner="u1")
     assert status["status"] == "failed" and status["code"] == 400 and "CSV" in status["detail"]

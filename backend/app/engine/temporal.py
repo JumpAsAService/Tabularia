@@ -1,19 +1,19 @@
-"""STANDARD TEMPORALE CROSS-ENGINE: un datetime è NAIVE e rappresenta un istante UTC.
+"""THE CROSS-ENGINE TEMPORAL STANDARD: a datetime is NAIVE and stands for a UTC instant.
 
-È la convenzione già usata dall'ingest dei database (ADBC: "NAIVE = istante
-UTC") e quella naturale di Polars/DuckDB. ClickHouse (chDB e server esterno)
-invece esporta OGNI DateTime64 come timestamp CON fuso (tz=UTC): Arrow lo
-espone come tz-aware e Parquet lo scrive `isAdjustedToUTC=true`. Se lasciato
-così, la stessa colonna sarebbe naive su un engine e "+00:00" su un altro, e
-un filtro con stringa ISO su Polars confronterebbe naive con tz-aware.
+The convention the databases' ingest uses already (ADBC: "NAIVE = UTC instant") and the
+natural one of Polars/DuckDB. ClickHouse (chDB and the external server) instead exports
+EVERY DateTime64 as a timestamp WITH a zone (tz=UTC): Arrow exposes it tz-aware and
+Parquet writes it `isAdjustedToUTC=true`. Left so, the same column would be naive on one
+engine and "+00:00" on another, and a filter with an ISO string on Polars would compare
+naive with tz-aware.
 
-Qui le due direzioni della normalizzazione:
-- in USCITA dagli engine ClickHouse: `naive_utc` sui DataFrame di preview e
-  `rewrite_parquet_naive_utc` sui parquet scritti localmente;
-- in INGRESSO per tutti: i lettori (Polars `scan`, DuckDB `scan`) tolgono il
-  fuso a eventuali parquet scritti con fuso (es. run del ClickHouse esterno in
-  modalità s3, dove scrive il server e non possiamo riscrivere il file).
-Il valore non cambia mai: è sempre l'istante UTC, senza etichetta di fuso.
+Here the two directions of the normalization:
+- OUT of the ClickHouse engines: `naive_utc` on the previews' DataFrames and
+  `rewrite_parquet_naive_utc` on the parquet written locally;
+- IN for everyone: the readers (Polars `scan`, DuckDB `scan`) drop the zone of any
+  parquet written with one (runs of the external ClickHouse with s3, where the server
+  writes and the file cannot be written again).
+The value never changes: it is always the UTC instant, without a zone label.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import pyarrow.parquet as pq
 
 
 def naive_utc(df: pl.DataFrame) -> pl.DataFrame:
-    """Toglie il fuso alle colonne Datetime tz-aware (valore = istante UTC)."""
+    """Drops the zone of the tz-aware Datetime columns (value = the UTC instant)."""
     exprs = [
         pl.col(n).dt.convert_time_zone("UTC").dt.replace_time_zone(None)
         for n, t in df.schema.items()
@@ -35,7 +35,7 @@ def naive_utc(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def naive_utc_lazy(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """Come `naive_utc`, ma lazy (usato allo scan delle sorgenti)."""
+    """As `naive_utc`, but lazy (used at the sources' scan)."""
     exprs = [
         pl.col(n).dt.convert_time_zone("UTC").dt.replace_time_zone(None)
         for n, t in lf.collect_schema().items()
@@ -45,16 +45,16 @@ def naive_utc_lazy(lf: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def parquet_has_tz(path: str) -> bool:
-    """True se il parquet ha almeno una colonna timestamp con fuso (solo metadati)."""
+    """True when the parquet has at least one timestamp column with a zone (metadata only)."""
     schema = pq.read_schema(path)
     return any(pa.types.is_timestamp(f.type) and f.type.tz for f in schema)
 
 
 def rewrite_parquet_naive_utc(path: str) -> bool:
-    """Riscrive IN LOCO un parquet togliendo il fuso alle colonne timestamp,
-    un row group alla volta (streaming, memoria limitata). Il valore intero
-    sotto è già l'epoch UTC: il cast Arrow tz-aware → naive lo lascia intatto.
-    Ritorna True se ha riscritto qualcosa."""
+    """Rewrites a parquet IN PLACE dropping the zone of the timestamp columns, one row group
+    at a time (streaming, bounded memory). The integer underneath is the UTC epoch
+    already: the Arrow cast tz-aware → naive leaves it untouched. Returns True when it
+    rewrote something."""
     if not parquet_has_tz(path):
         return False
     pf = pq.ParquetFile(path)

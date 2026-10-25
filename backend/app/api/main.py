@@ -19,31 +19,31 @@ from app.api.routes.s3_source import router as s3_source_router
 from app.api.routes.observability import router as observability_router
 from app.api.routes.dbt import router as dbt_router
 from app.api.routes.contracts import router as contracts_router
-from app.api.routes.regolazioni import router as regolazioni_router
+from app.api.routes.panel_settings import router as regolazioni_router
 from app.api.routes.workers import router as workers_router
 from app.api.routes.scripts import router as scripts_router
 from app.api.routes.backups import router as backups_router
-from app.api.solo_dal_gateway import SoloDalGateway
+from app.api.gateway_only import GatewayOnly
 
 
-# la chiave Fernet è obbligatoria in ogni ambiente: senza, meglio non partire
+# the Fernet key is required everywhere: without it, better not to start
 get_settings().check_required_secrets()
 
 
-def allarga_i_thread() -> int:
-    """Porta a `APP__ENGINE_API_THREADS` il numero di richieste sincrone servite insieme
-    (vedi `AppSettings.engine_api_threads`). Va chiamata dentro il ciclo degli eventi:
-    il limite appartiene a lui."""
+def widen_threads() -> int:
+    """Brings the number of synchronous requests served at once to `APP__ENGINE_API_THREADS`
+    (see `AppSettings.engine_api_threads`). To call inside the event loop: the limit
+    belongs to it."""
     import anyio.to_thread
 
-    limite = anyio.to_thread.current_default_thread_limiter()
-    limite.total_tokens = get_settings().app.engine_api_threads
-    return int(limite.total_tokens)
+    limit = anyio.to_thread.current_default_thread_limiter()
+    limit.total_tokens = get_settings().app.engine_api_threads
+    return int(limit.total_tokens)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    allarga_i_thread()
+    widen_threads()
     from app.core import tempdirs
 
     tempdirs.use_process_dir()  # dbt seeds, uploads: a killed API process leaves nothing for good
@@ -68,11 +68,11 @@ app.add_middleware(
 # the ceiling of a file upload, before Starlette spools the file to disk
 app.add_middleware(UploadLimit)
 
-# Solo il gateway: tutto tranne /healthcheck e /metrics vuole il suo token
-app.add_middleware(SoloDalGateway)
+# The gateway only: everything but /healthcheck and /metrics wants its token
+app.add_middleware(GatewayOnly)
 
-# Metriche Prometheus: request/latency automatiche + collector custom della cache,
-# esposte su GET /metrics (scrape-ate da VictoriaMetrics).
+# Prometheus metrics: automatic request/latency + the cache's custom collector,
+# exposed on GET /metrics (scraped by VictoriaMetrics).
 Instrumentator().instrument(app).expose(app)
 register_app_metrics()
 
@@ -95,7 +95,7 @@ app.include_router(backups_router)
 
 @app.get("/engines")
 def list_engines():
-    """Catalogo degli engine per il picker del frontend (id, label, disponibilità)."""
+    """The engines' catalog for the frontend's picker (id, label, availability)."""
     from app.engine import ENGINE_CATALOG
 
     return ENGINE_CATALOG

@@ -1,28 +1,28 @@
 """
-Engine "ClickHouse esterno": le trasformazioni girano su un server ClickHouse
-REMOTO (cloud managed, es. Scaleway/ClickHouse Cloud, o self-hosted) invece che
-nel processo worker. Opzionale: si attiva impostando `CLICKHOUSE_EXTERNAL__HOST`.
+The "external ClickHouse" engine: the transformations run on a REMOTE ClickHouse
+server (managed cloud such as Scaleway or ClickHouse Cloud, or self-hosted) instead
+of in the worker process. Optional: on when `CLICKHOUSE_EXTERNAL__HOST` is set.
 
-Riusa INTEGRALMENTE i builder SQL di chDB (`chdb_ops`: stesso dialetto, stesse
-16+ operazioni): la catena di step è un'unica SELECT annidata che il server
-ottimizza ed esegue. Cambia solo il TRASPORTO dei dati, scelto in configurazione:
+It reuses chDB's SQL builders ENTIRELY (`chdb_ops`: the same dialect, the same 16+
+operations): the chain of steps is one nested SELECT the server optimizes and runs.
+Only the TRANSPORT of the data changes, chosen in the configuration:
 
-- `s3` (produzione): il server legge le sorgenti e scrive i risultati DIRETTAMENTE
-  sull'object storage con la table function `s3()` → nessun dato transita dal
-  worker, che manda solo SQL. Richiede che lo storage sia raggiungibile dal
-  server (tipico: ClickHouse + Object Storage dello stesso cloud, o MinIO
-  esposto). Le credenziali S3 viaggiano nella query, salvo `s3_named_collection`.
-- `push` (fallback universale): il worker carica la sorgente in una tabella di
-  staging (`MergeTree`, per row-group Arrow) e riscarica il risultato in streaming
-  (`FORMAT Parquet` via HTTP). Funziona con qualsiasi ClickHouse, anche se non
-  vede lo storage, ma i dati passano dal worker.
+- `s3` (production): the server reads the sources and writes the results DIRECTLY on
+  the object storage with the `s3()` table function → no data goes through the
+  worker, which sends only SQL. The storage must be reachable from the server
+  (typically ClickHouse and object storage of the same cloud, or an exposed MinIO).
+  The S3 credentials travel in the query, unless `s3_named_collection`.
+- `push` (the universal fallback): the worker loads the source into a staging table
+  (`MergeTree`, by Arrow row group) and streams the result back (`FORMAT Parquet`
+  over HTTP). Works with any ClickHouse, even one that cannot see the storage, but
+  the data goes through the worker.
 
-Preview = `LIMIT n` in formato Parquet (piccolo, in RAM). Run = materializzazione
-sul server (s3) o streaming su file (push). Step-cache incrementale identica a
-chDB/DuckDB/Polars, namespacata con il tag `clickhouse`.
+Preview = `LIMIT n` as Parquet (small, in RAM). Run = materialized on the server
+(s3) or streamed to a file (push). An incremental step cache like chDB's, DuckDB's
+and Polars', namespaced with the tag `clickhouse`.
 
-Fork-safe: clickhouse-connect è HTTP puro (niente thread nativi), quindi può
-essere registrato eager nel padre Celery — a differenza di chDB.
+Fork-safe: clickhouse-connect is pure HTTP (no native threads), so it can be
+registered eagerly in Celery's parent — unlike chDB.
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from botocore.exceptions import ClientError
 
-from app.core import regolazioni
+from app.core import panel_settings
 from app.core.config import ClickHouseExternalSettings, get_settings
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
 from app.engine.cache import StepCache, plan_hashes
@@ -58,31 +58,31 @@ logger = logging.getLogger(__name__)
 
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
-# impostazioni per le query che PRODUCONO parquet (preview e materializzazioni):
-# senza `string_as_string` ClickHouse scrive le stringhe come BYTE_ARRAY senza
-# tipo logico → Polars le leggerebbe come Binary.
+# settings of the queries that PRODUCE parquet (previews and materializations):
+# without `string_as_string` ClickHouse writes strings as BYTE_ARRAY without a
+# logical type → Polars would read them as Binary.
 _PARQUET_OUT = {"output_format_parquet_string_as_string": 1,
                 # writing to the storage: parts double in size every 100 (ClickHouse's
                 # default is every 500, which stops at ~24 GB on a storage that takes at
                 # most 1,000 parts, as Scaleway's does)
                 "s3_upload_part_size_multiply_parts_count_threshold": 100}
 
-# operazioni che impongono una SCANSIONE piena (ClickHouse legge molte/tutte le
-# righe): lì l'oversubscription dei thread paga. Le altre (filtro/proiezione con
-# LIMIT) si fermano presto e con troppi thread rallenterebbero: restano al default.
+# operations that force a full SCAN (ClickHouse reads many or all of the rows):
+# there oversubscribing the threads pays. The others (filter, projection with a
+# LIMIT) stop early and would slow down with too many threads: they keep the default.
 _SCAN_HEAVY = frozenset({"group_by", "pivot", "unpivot", "sort", "join", "union", "unique", "sql"})
 
-# La copia gira DENTRO la richiesta di preview, che l'API abbandona a 120s
-# (PREVIEW_TIMEOUT_SECONDS) revocando il task: il worker viene terminato con un
-# segnale, il `except` che droppa la tabella temporanea NON gira e resta un
-# orfano. Con un tetto più basso la copia fallisce da sola, in modo pulito:
-# cleanup eseguito, backoff registrato, preview servita da s3().
+# The copy runs WITHIN the preview request, which the API abandons after 120 s
+# (PREVIEW_TIMEOUT_SECONDS), revoking the task: the worker is ended with a signal,
+# the `except` that drops the temporary table does NOT run and an orphan stays. With
+# a lower cap the copy fails by itself, cleanly: cleanup done, backoff recorded,
+# preview served from s3().
 _MATERIALIZE_MAX_SECONDS = 60
 
-# un client ClickHouse per thread (vedi _client): l'handshake costa piu' della query
-_CLIENTI_PER_THREAD = threading.local()
-# quanto puo' restare inattivo un client prima di rivalidarlo (secondi)
-_VALIDA_CLIENT_DOPO = 30.0
+# one ClickHouse client per thread (see _client): the handshake costs more than the query
+_CLIENTS_PER_THREAD = threading.local()
+# how long a client may stay idle before it is validated again (seconds)
+_VALIDATE_CLIENT_AFTER = 30.0
 
 
 def _needs_scan_tuning(ops) -> bool:
@@ -90,8 +90,8 @@ def _needs_scan_tuning(ops) -> bool:
 
 
 def _effective_scan_threads(target: int, server_threads: int) -> int:
-    """Thread da imporre a una scansione: `target`, ma solo se ALZA rispetto al
-    default del server (= n. core). 0 = non toccare (spento, o server già capiente)."""
+    """Threads to impose on a scan: `target`, but only when it RAISES the server's default
+    (= its cores). 0 = leave it alone (off, or a server large enough already)."""
     if target <= 0:
         return 0
     if server_threads and target <= server_threads:
@@ -100,53 +100,52 @@ def _effective_scan_threads(target: int, server_threads: int) -> int:
 
 
 def _clean_error(e: Exception, host: str | None = None, port: int | None = None) -> str:
-    """Messaggio del server ClickHouse (vedi app.ingest.db_errors): il testo di
-    `DB::Exception` senza rumore HTTP, anche quando lo stream si interrompe a metà.
-    Già etichettato «ClickHouse: …»: non va incastrato in un'altra frase che
-    ripeta il nome del database."""
+    """The ClickHouse server's message (see app.ingest.db_errors): the text of
+    `DB::Exception` without the HTTP noise, even when the stream breaks half way.
+    Labelled «ClickHouse: …» already: not to be set into another sentence that
+    repeats the database's name."""
     from app.ingest.db_errors import describe_db_error
 
     return describe_db_error(e, "clickhouse", host, port)
 
 
-# Esiti POSITIVI del controllo di esistenza, per processo: (bucket, key) -> scadenza.
-# Un HEAD verso l'object storage costa ~11 ms — un sesto di una preview veloce —
-# e si paga per OGNI sorgente di OGNI preview (i lati join compresi), sempre sulla
-# stessa chiave. Le chiavi sono immutabili (ogni refresh ne crea una nuova), quindi
-# un file che esiste non cambia sotto di noi. Si cachea SOLO il positivo: un file
-# assente puo' comparire da un momento all'altro, e ricordarselo assente farebbe
-# fallire una sorgente appena caricata.
-_ESISTENZA_TTL = 60.0
-_ESISTENZA: dict[tuple[str, str], float] = {}
+# POSITIVE outcomes of the existence check, per process: (bucket, key) -> expiry.
+# A HEAD to the object storage costs ~11 ms — a sixth of a fast preview — paid for
+# EVERY source of EVERY preview (the join sides too), always on the same key. Keys
+# are immutable (every refresh makes a new one), so a file that exists does not
+# change under us. ONLY the positive is cached: a missing file may appear at any
+# moment, and remembering it missing would fail a source just loaded.
+_EXISTS_TTL = 60.0
+_EXISTS: dict[tuple[str, str], float] = {}
 
 
 def _source_exists(storage, source: DataSource) -> bool:
-    """Esistenza dell'oggetto senza scaricarlo (HEAD); i doppioni di test espongono
-    `exists`. L'esito positivo resta valido per qualche decina di secondi."""
-    chiave = (source.bucket, source.key)
-    scadenza = _ESISTENZA.get(chiave)
-    adesso = time.monotonic()
-    if scadenza is not None and scadenza > adesso:
+    """Whether the object exists, without downloading it (HEAD); the test doubles have
+    `exists`. A positive outcome stays valid for some tens of seconds."""
+    key = (source.bucket, source.key)
+    expiry = _EXISTS.get(key)
+    now = time.monotonic()
+    if expiry is not None and expiry > now:
         return True
-    if scadenza is not None:
-        _ESISTENZA.pop(chiave, None)
-        if len(_ESISTENZA) > 4096:  # potatura: non deve crescere all'infinito
-            for k, v in list(_ESISTENZA.items()):
-                if v <= adesso:
-                    _ESISTENZA.pop(k, None)
+    if expiry is not None:
+        _EXISTS.pop(key, None)
+        if len(_EXISTS) > 4096:  # pruning: it must not grow for ever
+            for k, v in list(_EXISTS.items()):
+                if v <= now:
+                    _EXISTS.pop(k, None)
 
-    def _ricorda(esito: bool) -> bool:
-        if esito:
-            _ESISTENZA[chiave] = time.monotonic() + _ESISTENZA_TTL
-        return esito
+    def _remember(outcome: bool) -> bool:
+        if outcome:
+            _EXISTS[key] = time.monotonic() + _EXISTS_TTL
+        return outcome
 
     head = getattr(storage, "head_object", None)
     if head is None:
         exists = getattr(storage, "exists", None)
-        return True if exists is None else _ricorda(bool(exists(source.bucket, source.key)))
+        return True if exists is None else _remember(bool(exists(source.bucket, source.key)))
     try:
         head(source.bucket, source.key)
-        return _ricorda(True)
+        return _remember(True)
     except ClientError as e:
         code = str(e.response.get("Error", {}).get("Code", ""))
         if code in _NOT_FOUND_CODES:
@@ -154,7 +153,7 @@ def _source_exists(storage, source: DataSource) -> bool:
         raise
 
 
-# ── tipi Arrow → ClickHouse (per le tabelle di staging in modalità push) ──────
+# ── Arrow types → ClickHouse (for the staging tables of the push mode) ───────
 def _ch_type(t: pa.DataType) -> str:
     if pa.types.is_boolean(t):
         return "Bool"
@@ -200,10 +199,9 @@ def _is_unknown_table(e: BaseException) -> bool:
     return False
 
 class ClickHouseContext:
-    """Stato di esecuzione di una catena sul server: client, storage, trasporto,
-    tabelle di staging e file temporanei da ripulire. Espone la stessa interfaccia
-    di `ChdbContext` (columns_of/scalar/distinct_*/build_right) così `chdb_ops`
-    funziona invariato."""
+    """The state of a chain running on the server: client, storage, transport, staging
+    tables and temporary files to clean up. It has the same interface as `ChdbContext`
+    (columns_of/scalar/distinct_*/build_right), so `chdb_ops` works unchanged."""
 
     def __init__(self, client, storage, cfg: ClickHouseExternalSettings, tmp: list[str],
                  preview_limit: int | None = None, matviews=None, allow_matview: bool = False,
@@ -212,25 +210,25 @@ class ClickHouseContext:
         self.storage = storage
         self.cfg = cfg
         self.tmp = tmp
-        self.staging: list[str] = []  # tabelle di staging (push) da droppare
+        self.staging: list[str] = []  # staging tables (push) to drop
         self._n = 0
         self.preview_limit = preview_limit
-        # materializzazione della sorgente radice: attiva solo nel viewer (preview)
+        # materializing the root source: on in the viewer only (previews)
         self.matviews = matviews
         self.allow_matview = allow_matview
-        # colonne di ORDER BY che la copia materializzata deve ereditare
+        # the ORDER BY columns the materialized copy must inherit
         self.sort_keys = [k.strip() for k in (sort_keys or []) if k and k.strip()]
-        # da dove e' stata letta la sorgente RADICE: la copia MergeTree copre
-        # un caso stretto (radice del viewer, sopra soglia, use_cache=False,
-        # transport s3), quindi il caso NORMALE resta s3(). Senza questo, un
-        # `query=5000ms` nei log non si sa se e' una scansione del parquet o
-        # una lettura dalla copia: diagnosi opposte.
-        self.fonte_radice = "?"
+        # where the ROOT source was read from: the MergeTree copy covers a narrow
+        # case (the viewer's root, above the threshold, use_cache=False, transport
+        # s3), so the NORMAL case stays s3(). Without this, a `query=5000ms` in the
+        # logs could be a scan of the parquet or a read of the copy: opposite
+        # diagnoses.
+        self.root_source = "?"
         # the missing side of an outer join is NULL, as in every engine (a column that is
         # not Nullable, e.g. computed on the right, would otherwise be 0 / '')
         self.settings: dict[str, Any] = {"join_use_nulls": 1}
-        # etichetta del lavoro in corso (vedi query_tag.py): permette di uccidere
-        # sul server le query di una preview interrotta
+        # the label of the work in progress (see query_tag.py): lets the queries of
+        # an interrupted preview be killed on the server
         _tag = current_query_tag()
         if _tag:
             self.settings["log_comment"] = _tag
@@ -246,7 +244,7 @@ class ClickHouseContext:
         self.tmp.append(path)
         return path
 
-    # ── query di servizio ────────────────────────────────────────────────
+    # ── service queries ────────────────────────────────────────────────────
     def _rows(self, sql: str) -> list[list]:
         try:
             return [list(r) for r in self.client.query(sql, settings=self.settings).result_rows]
@@ -262,20 +260,20 @@ class ClickHouseContext:
             raise EngineError(_clean_error(e)) from e
 
     def parquet_safe(self, sql: str) -> str:
-        """Date/DateTime → Date32/DateTime64 prima di ogni uscita in Parquet
-        (altrimenti escono come interi): vedi `chdb_ops.temporal_safe_sql`."""
+        """Date/DateTime → Date32/DateTime64 before any Parquet output (they come out as
+        integers otherwise): see `chdb_ops.temporal_safe_sql`."""
         return temporal_safe_sql(self, sql)
 
     def parquet_bytes(self, sql: str) -> bytes:
-        """Esegue `sql` e ritorna il risultato come parquet (in RAM: solo per
-        risultati piccoli, es. preview)."""
+        """Runs `sql` and returns the result as parquet (in RAM: for small results only,
+        such as previews)."""
         try:
             return self.client.raw_query(self.parquet_safe(sql), fmt="Parquet", settings={**self.settings, **_PARQUET_OUT})
         except Exception as e:
             raise EngineError(_clean_error(e)) from e
 
     def parquet_to_file(self, sql: str, path: str) -> None:
-        """Esegue `sql` e scrive il parquet su file IN STREAMING (HTTP chunked)."""
+        """Runs `sql` and writes the parquet to a file, STREAMING (HTTP chunked)."""
         try:
             with self.client.raw_stream(self.parquet_safe(sql), fmt="Parquet", settings={**self.settings, **_PARQUET_OUT}) as stream, \
                     open(path, "wb") as fh:
@@ -302,9 +300,9 @@ class ClickHouseContext:
         sel = ", ".join(_qi(c) for c in cols)
         return self._rows(f"SELECT DISTINCT {sel} FROM {base_sql} ORDER BY {sel}")
 
-    # ── trasporto s3: table function sullo storage ───────────────────────
+    # ── transport s3: table function on the storage ──────────────────────
     def s3_fn(self, source: DataSource) -> str:
-        """`s3(...)` che punta all'oggetto `source` (lettura E scrittura)."""
+        """`s3(...)` pointing at the object `source` (read AND write)."""
         endpoint = (self.cfg.s3_endpoint or get_settings().storage.endpoint).rstrip("/")
         url = f"{endpoint}/{source.bucket}/{source.key}"
         if self.cfg.s3_named_collection:
@@ -312,7 +310,7 @@ class ClickHouseContext:
         st = get_settings().storage
         return f"s3({_lit(url)}, {_lit(st.access_key)}, {_lit(st.secret_key.get_secret_value())}, 'Parquet')"
 
-    # ── trasporto push: tabella di staging ───────────────────────────────
+    # ── transport push: staging table ──────────────────────────────────────
     def _push(self, source: DataSource) -> str:
         path = self.tempfile()
         try:
@@ -341,22 +339,22 @@ class ClickHouseContext:
             ) from e
         return f"SELECT * FROM {qualified}"
 
-    # ── sorgenti e catena ────────────────────────────────────────────────
+    # ── sources and chain ────────────────────────────────────────────────
     def scan(self, source: DataSource, root: bool = False) -> str:
         if self.cfg.transport == "push":
             return self._push(source)
         if not _source_exists(self.storage, source):
             raise SourceNotFoundError(source.bucket, source.key)
-        # solo la SORGENTE radice del viewer (non i blob di cache, non i lati
-        # join): se è grande, si legge dalla copia MergeTree invece che da s3()
+        # only the viewer's root SOURCE (not the cache blobs, not the join sides):
+        # when it is large, it is read from the MergeTree copy instead of s3()
         if root and self.allow_matview and self.matviews is not None:
             table = self.matviews.resolve(self, source, self.sort_keys)
             if table:
                 if root:
-                    self.fonte_radice = "matview"
+                    self.root_source = "matview"
                 return f"SELECT * FROM {table}"
         if root:
-            self.fonte_radice = "s3" if self.cfg.transport != "push" else "push"
+            self.root_source = "s3" if self.cfg.transport != "push" else "push"
         return f"SELECT * FROM {self.s3_fn(source)}"
 
     def apply(self, sql: str, ops, index_offset: int = 0) -> str:
@@ -378,10 +376,10 @@ class ClickHouseContext:
             return self.apply(sql, ref.get("operations") or [])
         return self.scan(DataSource(**ref))
 
-    # ── operazioni per la materializzazione (la politica sta in matview.py) ────
+    # ── operations of the materialization (the policy is in matview.py) ───────
     def matview_count(self, source: DataSource) -> int:
-        """Righe della sorgente senza leggerne i dati: ClickHouse conta dai
-        metadati del parquet (footer), non scansiona."""
+        """The source's rows without reading its data: ClickHouse counts from the parquet's
+        metadata (footer), it does not scan."""
         return self.scalar(f"SELECT count() FROM {self.s3_fn(source)}")
 
     def matview_exists(self, db: str, table: str) -> bool:
@@ -390,24 +388,24 @@ class ClickHouseContext:
         ) > 0
 
     def matview_build(self, db: str, table: str, source: DataSource, sort_keys=None) -> None:
-        """CREATE + INSERT + RENAME. Il database gestito di Scaleway è `Replicated`
-        e rifiuta `CREATE AS SELECT`, quindi DDL esplicita (da DESCRIBE) e INSERT
-        separato. Il RENAME rende la tabella visibile solo a INSERT COMPLETO: chi
-        guarda `matview_exists` non vede mai una copia a metà. Se un altro worker
-        l'ha già creata nel frattempo, la sua è valida quanto la mia."""
+        """CREATE + INSERT + RENAME. Scaleway's managed database is `Replicated` and refuses
+        `CREATE AS SELECT`, hence explicit DDL (from DESCRIBE) and a separate INSERT. The
+        RENAME makes the table visible only once the INSERT is COMPLETE: whoever looks at
+        `matview_exists` never sees a copy half made. If another worker made it
+        meanwhile, theirs is as good as this one."""
         s3 = self.s3_fn(source)
         cols = self.schema_of(f"SELECT * FROM {s3}")
         if not cols:
             raise EngineError("materialization: the source schema is empty")
         ddl = ", ".join(f"{_qi(name)} {typ}" for name, typ in cols)
-        # ORDER BY solo sulle chiavi che esistono davvero nello schema (una chiave
-        # sbagliata non deve far fallire la copia); nessuna → tuple() come prima
+        # ORDER BY only on the keys that really exist in the schema (a wrong key must
+        # not fail the copy); none → tuple() as before
         present = {name for name, _ in cols}
         keys = [k for k in (sort_keys or []) if k in present]
         order = f"({', '.join(_qi(k) for k in keys)})" if keys else "tuple()"
-        # le colonne del parquet sono Nullable: una sorting key nullable è
-        # rifiutata (code 44) senza questo setting → senza, l'ORDER BY non
-        # partirebbe MAI. Irrilevante con tuple().
+        # the parquet's columns are Nullable: a nullable sorting key is refused
+        # (code 44) without this setting → without it the ORDER BY would NEVER work.
+        # Irrelevant with tuple().
         opts = " SETTINGS allow_nullable_key = 1" if keys else ""
         final = f"{_qi(db)}.{_qi(table)}"
         tmp = f"{_qi(db)}.{_qi(table + '_tmp_' + uuid.uuid4().hex[:8])}"
@@ -440,8 +438,8 @@ class ClickHouseContext:
         for table in self.staging:
             try:
                 self.client.command(f"DROP TABLE IF EXISTS {table}")
-            except Exception:  # best effort: il server potrebbe essere già irraggiungibile
-                logger.warning("impossibile eliminare la tabella di staging %s", table)
+            except Exception:  # best effort: the server may be unreachable already
+                logger.warning("cannot drop the staging table %s", table)
         self.staging.clear()
         for p in self.tmp:
             try:
@@ -451,7 +449,7 @@ class ClickHouseContext:
         self.tmp.clear()
 
 
-_was_interrupted = was_interrupted  # definita in query_tag: la usa anche il task
+_was_interrupted = was_interrupted  # defined in query_tag: the task uses it too
 
 
 from contextlib import contextmanager
@@ -475,31 +473,31 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 "external ClickHouse engine not configured: set CLICKHOUSE_EXTERNAL__HOST (and the credentials)."
             )
         self.matviews = MatViewStore(self.cache.redis, self._cfg)
-        self._server_threads: int | None = None  # core del server (letto una volta)
+        self._server_threads: int | None = None  # the server's cores (read once)
 
-    # il motore vive quanto il processo: la sua sezione delle impostazioni passa a
-    # ogni uso dalle regolazioni del pannello (thread di scansione, tetto di
-    # esecuzione, materializzazione), che così valgono senza ricrearlo
+    # the engine lives as long as the process: its section of the settings is read at
+    # every use with the panel's values (scan threads, execution cap,
+    # materialization), which so apply without making it again
     @property
     def cfg(self) -> ClickHouseExternalSettings:
-        return regolazioni.sovrapposte(self._cfg, "clickhouse_external")
+        return panel_settings.overlapping(self._cfg, "clickhouse_external")
 
     @cfg.setter
-    def cfg(self, valore: ClickHouseExternalSettings) -> None:
-        self._cfg = valore
+    def cfg(self, value: ClickHouseExternalSettings) -> None:
+        self._cfg = value
 
     def _credentials(self) -> tuple[str, str]:
-        """Le query dell'assistente AI girano con l'utenza dedicata, se c'è
-        (vedi engine/principal.py). Il client è in cache PER UTENTE (la chiave
-        lo contiene): le due identità non si scambiano mai la connessione."""
+        """The AI assistant's queries run with the dedicated user, when there is one (see
+        engine/principal.py). The client is cached PER USER (the key holds it): the two
+        identities never swap connections."""
         if self._as_ai():
             return self.cfg.ai_username, self.cfg.ai_password.get_secret_value()
         return self.cfg.username or "default", self.cfg.password.get_secret_value()
 
     def _as_ai(self) -> bool:
-        """True se QUESTA query gira con l'utenza dell'assistente. Solo col
-        trasporto `s3`: in `push` la preview crea tabelle di appoggio sul server,
-        e un'utenza di sola lettura non può — lì resta l'utenza principale."""
+        """True when THIS query runs with the assistant's user. With the `s3` transport only:
+        with `push` the preview creates staging tables on the server, which a read-only
+        user cannot — there the main user stays."""
         return bool(
             current_principal() == AI
             and self.cfg.transport == "s3"
@@ -508,99 +506,98 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         )
 
     def _client(self):
-        """Client RIUSATO per thread. Crearlo costa tre round-trip (version+
-        timezone, l'intera system.settings ~424 KiB, un ping): nei log valeva
-        113-130 ms, PIU' della query stessa. Su rete remota e' il costo fisso
-        piu' grande di una preview, pagato a ogni richiesta.
+        """A client REUSED per thread. Making one costs three round trips (version and
+        time zone, the whole system.settings ~424 KiB, a ping): in the logs 113-130 ms,
+        MORE than the query itself. On a remote network it is a preview's largest fixed
+        cost, paid at every request.
 
-        Per thread e non globale: i worker Celery sono processi separati (nessuna
-        condivisione), ma l'API FastAPI e' multi-thread e due thread sullo stesso
-        client si pesterebbero i piedi.
+        Per thread and not global: the Celery workers are separate processes (nothing
+        shared), but the FastAPI API is multi-threaded, and two threads on one client
+        would trip over each other.
 
-        Prima del riuso si valida con un `SELECT 1` (~10 ms): senza, una
-        connessione morta — server riavviato, rete caduta, idle chiuso dal
-        bilanciatore — resterebbe in cache e farebbe fallire OGNI preview
-        successiva. Dieci millisecondi per non barattare velocita' con fragilita'.
+        Before being reused it is validated with a `SELECT 1` (~10 ms): without it, a
+        dead connection — server restarted, network down, idle closed by the load
+        balancer — would stay cached and fail EVERY following preview. Ten
+        milliseconds so as not to trade speed for fragility.
         """
         import clickhouse_connect
 
-        utente, password = self._credentials()
+        user, password = self._credentials()
         # the connect timeout too: it changes from the panel, and a client keeps the one it
         # was made with
-        chiave = (self.cfg.host, self.cfg.port, self.cfg.database or "default",
-                  utente, bool(self.cfg.secure), self.cfg.connect_timeout)
-        cache = getattr(_CLIENTI_PER_THREAD, "per_chiave", None)
+        key = (self.cfg.host, self.cfg.port, self.cfg.database or "default",
+                  user, bool(self.cfg.secure), self.cfg.connect_timeout)
+        cache = getattr(_CLIENTS_PER_THREAD, "by_key", None)
         if cache is None:
-            cache = _CLIENTI_PER_THREAD.per_chiave = {}
+            cache = _CLIENTS_PER_THREAD.by_key = {}
 
-        esistente, ultimo_uso = cache.get(chiave, (None, 0.0))
-        if esistente is not None:
-            # La validazione costa un round-trip (~11 ms): su preview consecutive
-            # sarebbe la voce piu' grande dopo la query, spesa per chiedere "sei
-            # vivo?" a una connessione usata due secondi fa. Si valida solo dopo
-            # una pausa, quando un bilanciatore o il server possono davvero aver
-            # chiuso la connessione da sotto.
-            if time.monotonic() - ultimo_uso < _VALIDA_CLIENT_DOPO:
-                cache[chiave] = (esistente, time.monotonic())
-                return esistente
+        existing, last_use = cache.get(key, (None, 0.0))
+        if existing is not None:
+            # Validating costs a round trip (~11 ms): on consecutive previews it would
+            # be the largest item after the query, spent asking "are you alive?" of a
+            # connection used two seconds ago. It is validated only after a pause,
+            # when a load balancer or the server may really have closed it underneath.
+            if time.monotonic() - last_use < _VALIDATE_CLIENT_AFTER:
+                cache[key] = (existing, time.monotonic())
+                return existing
             try:
-                esistente.command("SELECT 1")
-                cache[chiave] = (esistente, time.monotonic())
-                return esistente
+                existing.command("SELECT 1")
+                cache[key] = (existing, time.monotonic())
+                return existing
             except Exception as e:
-                cache.pop(chiave, None)
-                if was_interrupted(e):  # preview superata durante la validazione
+                cache.pop(key, None)
+                if was_interrupted(e):  # preview superseded during the validation
                     try:
-                        esistente.close()
+                        existing.close()
                     except Exception:
                         pass
                     raise
                 try:
-                    esistente.close()
+                    existing.close()
                 except Exception:
-                    pass  # gia' morto: buttarlo e basta
+                    pass  # dead already: just drop it
 
         try:
             c = clickhouse_connect.get_client(
                 host=self.cfg.host,
                 port=self.cfg.port,
-                username=utente,
+                username=user,
                 password=password,
                 database=self.cfg.database or "default",
                 secure=self.cfg.secure,
                 connect_timeout=self.cfg.connect_timeout,
-                # NIENTE sessione: l'engine non usa tabelle temporanee ne' SET, e
-                # una sessione e' un lucchetto — finche' una query interrotta gira
-                # ancora sul server, ogni altra query dello stesso client fallisce
-                # con "Session … is locked by a concurrent client". Con il client
-                # riusato per thread, una preview annullata avvelenava il processo.
+                # NO session: the engine uses neither temporary tables nor SET, and a
+                # session is a lock — while an interrupted query still runs on the
+                # server, every other query of the same client fails with "Session …
+                # is locked by a concurrent client". With the client reused per
+                # thread, a cancelled preview poisoned the process.
                 autogenerate_session_id=False,
             )
         except Exception as e:
             raise EngineError(_clean_error(e, self.cfg.host, self.cfg.port)) from e
-        cache[chiave] = (c, time.monotonic())
+        cache[key] = (c, time.monotonic())
         return c
 
     def _forget_client(self) -> None:
-        """Butta il client in cache di questo thread. Dopo un'interruzione a
-        meta' risposta la connessione e' in uno stato ignoto: meglio pagare un
-        handshake che servire la prossima preview con un socket a meta' lettura."""
-        cache = getattr(_CLIENTI_PER_THREAD, "per_chiave", None) or {}
-        for chiave, (c, _) in list(cache.items()):
-            cache.pop(chiave, None)
+        """Drops this thread's cached client. After an interruption half way through an
+        answer the connection is in an unknown state: better to pay a handshake than
+        serve the next preview with a socket half read."""
+        cache = getattr(_CLIENTS_PER_THREAD, "by_key", None) or {}
+        for key, (c, _) in list(cache.items()):
+            cache.pop(key, None)
             try:
                 c.close()
             except Exception:
                 pass
 
     def kill_tagged(self, tag: str) -> None:
-        """Uccide sul server le query con questa etichetta. Best-effort e con un
-        client NUOVO (quello del lavoro interrotto non e' affidabile). ASYNC: non
-        si aspetta la fine, basta che il server smetta di lavorarci."""
+        """Kills the queries with this label on the server. Best effort, with a NEW client
+        (the interrupted work's one is not reliable). ASYNC: the end is not awaited, it
+        is enough that the server stops working on them."""
         if not is_safe_tag(tag):
             return
         try:
-            import clickhouse_connect  # import locale, come in _client(): dipendenza opzionale
+            import clickhouse_connect  # a local import, as in _client(): an optional dependency
 
             c = clickhouse_connect.get_client(
                 host=self.cfg.host, port=self.cfg.port, username=self.cfg.username or "default",
@@ -612,33 +609,33 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 c.command(f"KILL QUERY WHERE Settings['log_comment'] = '{tag}' ASYNC")
             finally:
                 c.close()
-        except Exception as e:  # non deve mai far fallire chi sta pulendo
-            logger.warning("KILL QUERY per %s non riuscita: %s", tag, _clean_error(e))
+        except Exception as e:  # must never fail whoever is cleaning up
+            logger.warning("KILL QUERY for %s failed: %s", tag, _clean_error(e))
 
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"
 
     def _scan_max_threads(self, ctx) -> int:
-        """max_threads da imporre a una scansione, o 0 per non toccare. Legge i
-        core del server una volta per processo; su errore lascia perdere."""
-        # solo con transport s3: in push il server non tocca l'object storage,
-        # non c'è latenza di rete da nascondere e l'oversubscription danneggia
+        """max_threads to impose on a scan, or 0 to leave it alone. Reads the server's cores
+        once per process; on an error it gives up."""
+        # with transport s3 only: with push the server does not touch the object
+        # storage, there is no network latency to hide, and oversubscribing hurts
         if self.cfg.transport != "s3" or self.cfg.parquet_scan_max_threads <= 0:
             return 0
         if self._server_threads is None:
             try:
-                # il valore può essere "8" oppure "auto(8)": int() da solo
-                # fallirebbe, azzerando il guard «non abbassare un server grande»
+                # the value may be "8" or "auto(8)": int() alone would fail, voiding
+                # the «do not lower a large server» guard
                 raw = str(ctx._rows("SELECT value FROM system.settings WHERE name = 'max_threads'")[0][0])
                 digits = re.search(r"\d+", raw)
                 self._server_threads = int(digits.group()) if digits else 0
             except Exception as e:
-                if was_interrupted(e):  # non e' il server: e' la preview superata
+                if was_interrupted(e):  # not the server: the superseded preview
                     raise
                 self._server_threads = 0
         return _effective_scan_threads(self.cfg.parquet_scan_max_threads, self._server_threads)
 
-    # ── Cache incrementale (mirror di chDB) ───────────────────────────────
+    # ── Incremental cache (chDB's mirror) ────────────────────────────────
     def _sql_from_cache(self, ctx, source, operations, hashes, record=False, use_cache=True) -> str:
         start = self.cache.nearest(hashes) if use_cache else 0
         if record and operations and use_cache:
@@ -649,7 +646,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             self.cache.touch(hashes[start - 1])
             cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
             sql = ctx.scan(cached)
-            logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
+            logger.info("cache hit: starting again from step %d/%d", start, len(operations))
         return ctx.apply(sql, operations[start:], index_offset=start)
 
     def _materialize(self, ctx, source, operations) -> None:
@@ -681,10 +678,10 @@ class ClickHouseEngine(DeferredStepCache, Engine):
     def _bounded_rows(self, ctx, sql: str, n: int) -> int:
         return ctx.scalar(f"SELECT count() FROM (SELECT 1 FROM ({sql}) LIMIT {n + 1})")
 
-    # ── scrittura dei risultati ───────────────────────────────────────────
+    # ── writing the results ──────────────────────────────────────────────
     def _write(self, ctx: ClickHouseContext, sql: str, dest: DataSource) -> str | None:
-        """Materializza `sql` nell'oggetto `dest`. In modalità s3 scrive il server
-        (ritorna None); in push scarica su file locale, lo carica e ritorna il path."""
+        """Materializes `sql` into the object `dest`. With s3 the server writes it (returns
+        None); with push it is downloaded to a local file, uploaded, and its path returned."""
         if ctx.cfg.transport == "s3":
             ctx.command(
                 f"INSERT INTO FUNCTION {ctx.s3_fn(dest)} SELECT * FROM ({ctx.parquet_safe(sql)})",
@@ -693,24 +690,24 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             return None
         path = ctx.tempfile()
         ctx.parquet_to_file(f"SELECT * FROM ({sql})", path)
-        # standard cross-engine: datetime NAIVE (istante UTC). In modalità s3 il
-        # file lo scrive il server (timestamp con fuso UTC): lo normalizzano i
-        # lettori di ogni engine allo scan (vedi app.engine.temporal).
+        # the cross-engine standard: NAIVE datetimes (UTC instants). With s3 the server
+        # writes the file (timestamps with the UTC zone): every engine's readers
+        # normalize them at the scan (see app.engine.temporal).
         rewrite_parquet_naive_utc(path)
         self.storage.upload_file(path, dest.bucket, dest.key)
         return path
 
     def _copy(self, ctx: ClickHouseContext, src: DataSource, dest: DataSource) -> None:
-        """Copia server-side tra due oggetti (solo s3): rilegge il parquet appena
-        scritto invece di rieseguire la catena."""
+        """A server-side copy between two objects (s3 only): reads the parquet just written
+        instead of running the chain again."""
         ctx.command(
             f"INSERT INTO FUNCTION {ctx.s3_fn(dest)} SELECT * FROM {ctx.s3_fn(src)}",
             settings={**_PARQUET_OUT, "s3_truncate_on_insert": 1, "s3_create_new_file_on_insert": 0},
         )
 
     def _describe_object(self, ctx: ClickHouseContext, obj: DataSource, local_path: str | None) -> tuple[int, list]:
-        """(righe, colonne) di un parquet scritto: dal file locale se c'è, altrimenti
-        dal server (count via metadati parquet + schema da LIMIT 1)."""
+        """(rows, columns) of a written parquet: from the local file when there is one,
+        otherwise from the server (count from the parquet's metadata + schema from LIMIT 1)."""
         if local_path is not None:
             lf = pl.scan_parquet(local_path)
             n = lf.select(pl.len()).collect(engine="streaming").item()
@@ -729,31 +726,31 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
     ) -> PreviewResult:
-        # Cronometro per FASI: quando una preview "ci mette troppo" serve sapere
-        # QUALE pezzo, non il totale. Le fasi sono disgiunte; cio' che manca
-        # rispetto al tempo visto dal chiamante e' coda o trasporto.
+        # A stopwatch by PHASE: when a preview "takes too long" one needs to know WHICH
+        # part, not the total. The phases are disjoint; what is missing from the time
+        # the caller sees is queue or transport.
         _t0 = time.perf_counter()
-        _fasi: dict[str, float] = {}
+        _phases: dict[str, float] = {}
 
-        def _fase(nome, da):
+        def _phase(nome, da):
             ora = time.perf_counter()
-            _fasi[nome] = (ora - da) * 1000
+            _phases[nome] = (ora - da) * 1000
             return ora
 
         ops = _coerce_ops(operations)
         _t = _t0
         client = self._client()
-        _t = _fase("client", _t)
-        # `allow_matview` SOLO per le query esplorative del viewer (use_cache=False).
-        # L'editor usa la step-cache: lì la copia (a) è sincrona dentro la richiesta
-        # e fa "appendere" la preview, (b) nascerebbe con un'identità diversa (senza
-        # sort_keys) duplicando l'intero dataset, e (c) i blob di step-cache scritti
-        # LEGGENDO dalla copia finirebbero nello stesso namespace di hash usato dai
-        # run, che la copia non ce l'hanno.
+        _t = _phase("client", _t)
+        # `allow_matview` ONLY for the viewer's exploratory queries (use_cache=False).
+        # The editor uses the step cache: there the copy (a) is synchronous within the
+        # request and makes the preview "hang", (b) would be made with another identity
+        # (without sort_keys), duplicating the whole dataset, and (c) the step-cache
+        # blobs written READING from the copy would land in the same hash namespace the
+        # runs use, which do not have the copy.
         ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
                                 matviews=self.matviews,
-                                # la copia materializzata si CREA sul server: l'utenza
-                                # `ai` è di sola lettura, quindi legge dal parquet
+                                # the materialized copy is CREATED on the server: the
+                                # `ai` user is read-only, so it reads the parquet
                                 allow_matview=not use_cache and not self._as_ai(),
                                 sort_keys=sort_keys)
         if _needs_scan_tuning(ops):
@@ -762,17 +759,17 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 ctx.settings["max_threads"] = threads
         try:
             if use_cache:
-                self._defer_materialization(source, ops[:-1])  # DOPO la risposta, in un task a parte
-                _t = _fase("stepcache", _t)
+                self._defer_materialization(source, ops[:-1])  # AFTER the answer, in a task of its own
+                _t = _phase("stepcache", _t)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            # include la risoluzione della copia materializzata: se qui il tempo
-            # e' alto, la copia si sta CREANDO adesso (prima volta o dopo un drop)
+            # includes resolving the materialized copy: when this time is high, the
+            # copy is being CREATED now (the first time, or after a drop)
             sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
-            _t = _fase("sql", _t)
+            _t = _phase("sql", _t)
             try:
                 raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
             except EngineError as e:
-                if ctx.fonte_radice != "matview" or not _is_unknown_table(e):
+                if ctx.root_source != "matview" or not _is_unknown_table(e):
                     raise
                 # the copy went away under the query (dropped by its TTL, or by
                 # hand): read the parquet as if it had never been made
@@ -781,7 +778,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 ctx.allow_matview = False
                 sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
                 raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
-            _t = _fase("query", _t)
+            _t = _phase("query", _t)
             # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
             df = naive_utc(pl.read_parquet(io.BytesIO(raw))) if raw else pl.DataFrame()
             truncated = df.height > limit
@@ -795,25 +792,25 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 row_count=df.height,
                 truncated=truncated,
             )
-            _fase("decode", _t)
-            preview_stats.set_phases(_fasi, ctx.fonte_radice)  # le raccoglie preview_task
+            _phase("decode", _t)
+            preview_stats.set_phases(_phases, ctx.root_source)  # preview_task collects them
             logger.info(
-                "preview clickhouse %.0f ms | %s | righe=%d colonne=%d limit=%d ops=%d cache=%s scaricati=%.0fKB fonte=%s",
+                "preview clickhouse %.0f ms | %s | rows=%d columns=%d limit=%d ops=%d cache=%s downloaded=%.0fKB source=%s",
                 (time.perf_counter() - _t0) * 1000,
-                " ".join("%s=%.0fms" % kv for kv in _fasi.items()),
+                " ".join("%s=%.0fms" % kv for kv in _phases.items()),
                 res.row_count, len(res.columns), limit, len(ops),
                 "on" if use_cache else "off",
                 (len(raw) / 1024) if raw else 0,
-                ctx.fonte_radice,
+                ctx.root_source,
             )
             return res
         except BaseException as e:
-            # Preview INTERROTTA (superata da una piu' recente: il worker riceve
-            # SIGUSR1 e qui arriva SoftTimeLimitExceeded, di solito avvolta in un
-            # EngineError da _rows). Due pulizie che nessun altro puo' fare:
-            # il server sta ANCORA eseguendo la query, e la connessione e' rimasta
-            # a meta' risposta. Misurato: senza, il server lavorava a vuoto e le
-            # preview successive di questo processo fallivano.
+            # An INTERRUPTED preview (superseded by a newer one: the worker gets
+            # SIGUSR1 and SoftTimeLimitExceeded arrives here, usually wrapped in an
+            # EngineError by _rows). Two cleanups nobody else can do: the server is
+            # STILL running the query, and the connection stayed half way through an
+            # answer. Measured: without them the server worked for nothing and the
+            # next previews of this process failed.
             if _was_interrupted(e):
                 self._forget_client()
                 tag = ctx.settings.get("log_comment")
@@ -822,9 +819,9 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             raise
         finally:
             ctx.cleanup()
-            # NIENTE client.close(): e' condiviso col prossimo task di questo
-            # thread. Muore col processo (i figli Celery si riciclano), e se la
-            # connessione cade la validazione in _client() la sostituisce.
+            # NO client.close(): it is shared with this thread's next task. It dies
+            # with the process (the Celery children are recycled), and if the
+            # connection drops the validation in _client() replaces it.
 
     # ── Run ───────────────────────────────────────────────────────────────
     def run(
@@ -847,9 +844,9 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             if use_cache and ops and not self.cache.has(hashes[-1]):
                 cache_dest = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[-1]))
 
-            # una sola esecuzione della catena, sulla destinazione; la copia in
-            # cache viene DOPO, e solo se l'output sta nel tetto (un output da
-            # gigabyte non vale una seconda scrittura)
+            # the chain runs once, on the destination; the cache copy comes AFTER, and
+            # only if the output fits under the cap (a gigabyte output is not worth a
+            # second write)
             local = self._write(ctx, sql, destination)
             rows_written, columns = self._describe_object(ctx, destination, local)
             if cache_dest is not None and self._cache_output_allowed(rows_written):
@@ -861,16 +858,15 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             return RunResult(destination=destination, rows_written=rows_written, columns=columns)
         finally:
             ctx.cleanup()
-            # NIENTE client.close(): e' condiviso col prossimo task di questo
-            # thread. Muore col processo (i figli Celery si riciclano), e se la
-            # connessione cade la validazione in _client() la sostituisce.
+            # NO client.close(): it is shared with this thread's next task. It dies
+            # with the process (the Celery children are recycled), and if the
+            # connection drops the validation in _client() replaces it.
 
-    # ── Manutenzione delle copie del viewer (chiamata dal task beat) ───────────
+    # ── Upkeep of the viewer's copies (called by the beat task) ───────────────
     def evict_matviews(self) -> int:
-        """Droppa le tabelle materializzate scadute e le orfane. No-op solo se
-        ClickHouse non è configurato (o il trasporto è push): con la
-        materializzazione SPENTA lo sweep deve girare lo stesso, per rimuovere
-        ciò che è rimasto da quando era accesa."""
+        """Drops the expired and orphaned materialized tables. A no-op only when ClickHouse
+        is not configured (or the transport is push): with the materialization OFF the
+        sweep must run all the same, to remove what is left from when it was on."""
         if not self.cfg.matview_sweep_enabled:
             return 0
         client = self._client()
@@ -878,4 +874,4 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         try:
             return self.matviews.evict(ctx, self.cfg.materialize_ttl_seconds)
         finally:
-            ctx.cleanup()  # il client resta al thread (vedi _client)
+            ctx.cleanup()  # the client stays with the thread (see _client)

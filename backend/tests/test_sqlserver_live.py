@@ -70,8 +70,8 @@ def _importa(storage, source, **kw):
 
 def test_connessione_ed_elenco(tabelle):
     prova_connessione(_conn())
-    nomi = list_tables(_conn())
-    assert f"dbo.{P}_tipi" in nomi and f"dbo.[{P} conti]" in nomi
+    names = list_tables(_conn())
+    assert f"dbo.{P}_tipi" in names and f"dbo.[{P} conti]" in names
 
 
 def test_tipi_e_valori(tabelle, storage):

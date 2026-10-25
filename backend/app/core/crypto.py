@@ -1,10 +1,9 @@
-"""Cifratura simmetrica (Fernet) per le credenziali delle connessioni database.
+"""Symmetric encryption (Fernet) for the database connections' credentials.
 
-La chiave è CONDIVISA tra gateway ed engine (env SECURITY__FERNET_KEY in
-entrambi): il gateway cifra la password a riposo nel suo Postgres e la manda
-già cifrata nelle richieste di ingest; l'engine la decifra solo nel worker, al
-momento di aprire la connessione. Così la password in chiaro non transita mai
-nel broker Celery né resta nei payload su Valkey.
+The key is SHARED by gateway and engine (env SECURITY__FERNET_KEY in both): the gateway
+encrypts the password at rest in its Postgres and sends it encrypted in the ingest
+requests; the engine decrypts it only in the worker, when the connection opens. So the
+clear password never goes through the Celery broker nor stays in the payloads on Valkey.
 """
 import hashlib
 import hmac
@@ -17,11 +16,11 @@ from app.core.config import FERNET_KEY_HINT, get_settings
 
 @lru_cache
 def _fernet() -> Fernet:
-    # Fail-closed: senza chiave si RIFIUTA di operare, invece di ripiegare in
-    # silenzio su una chiave nota nel repo (che renderebbe i segreti cifrati
-    # equivalenti a testo in chiaro). Vale in ogni ambiente, non solo in prod:
-    # lo startup (Settings.check_required_secrets) la pretende già, questo è
-    # il secondo lucchetto. Impostala in infrastructure/.env (uguale ovunque).
+    # Fail closed: without a key it REFUSES to work, instead of falling back silently on
+    # a key known in the repo (which would make the encrypted secrets as good as clear
+    # text). Everywhere, not only in production: the start-up
+    # (Settings.check_required_secrets) demands it already, this is the second lock.
+    # Set it in infrastructure/.env (the same everywhere).
     key = get_settings().security.fernet_key
     if not key:
         raise RuntimeError(
@@ -40,21 +39,21 @@ def decrypt_secret(token: str) -> str:
     return _fernet().decrypt(token.encode()).decode()
 
 
-# ── Il gateway si presenta all'engine ────────────────────────────────────────
-# L'API dell'engine non ha utenti suoi: risponde a chi la raggiunge, con le chiavi
-# del bucket. La rete la chiude (compose: rete interna; Helm: NetworkPolicy), e
-# questo è il secondo lucchetto (audit 2026-10-08, A4): ogni richiesta del
-# gateway porta un token che solo chi ha la chiave Fernet sa calcolare. Derivato,
-# non configurato: gateway ed engine la condividono già, quindi non c'è un
-# segreto in più da generare, distribuire o sbagliare. L'etichetta lo separa
-# dagli altri usi della chiave. DEVE restare identica nel gateway e nell'engine.
-INTESTAZIONE_INTERNA = "X-Tabularia-Internal"
-_ETICHETTA_INTERNA = b"tabularia: gateway -> engine API"
+# ── The gateway introduces itself to the engine ──────────────────────────────
+# The engine API has no users of its own: it answers whoever reaches it, with the
+# bucket's keys. The network closes it (compose: an internal network; Helm:
+# NetworkPolicy), and this is the second lock (audit 2026-10-08, A4): every request of
+# the gateway carries a token only whoever has the Fernet key can compute. Derived, not
+# configured: gateway and engine share the key already, so there is no extra secret to
+# generate, distribute or get wrong. The label sets it apart from the key's other uses.
+# It MUST stay identical in the gateway and the engine.
+INTERNAL_HEADER = "X-Tabularia-Internal"
+_INTERNAL_LABEL = b"tabularia: gateway -> engine API"
 
 
 @lru_cache
-def token_interno() -> str:
-    chiave = get_settings().security.fernet_key
-    if not chiave:
+def internal_token() -> str:
+    key = get_settings().security.fernet_key
+    if not key:
         raise RuntimeError("SECURITY__FERNET_KEY is not set: it is also needed for the token between gateway and engine")
-    return hmac.new(chiave.encode(), _ETICHETTA_INTERNA, hashlib.sha256).hexdigest()
+    return hmac.new(key.encode(), _INTERNAL_LABEL, hashlib.sha256).hexdigest()

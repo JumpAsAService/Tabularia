@@ -56,14 +56,14 @@ def test_a_tiny_share_still_leaves_a_floor(monkeypatch):
 def test_the_panels_pool_size_is_the_share(monkeypatch, regolazioni_isolate, argv, key):
     """Admin → Workers grows a pool started with 2 processes to 6: every connection gets a
     sixth, not a half (six halves of the container: the kernel killed it whole)."""
-    from app.core import regolazioni
+    from app.core import panel_settings
 
     _share(monkeypatch)
     monkeypatch.setattr(duckdb_budget.sys, "argv", argv)
     monkeypatch.setattr(config.get_settings().celery, "worker_concurrency", 2)
     assert duckdb_budget.budget() == (1536 - duckdb_budget.PROCESS_OVERHEAD_MB, 4)
-    regolazioni.scrivi({key: 6})
-    regolazioni.dimentica()
+    panel_settings.write({key: 6})
+    panel_settings.forget()
     assert duckdb_budget.budget() == (512 - duckdb_budget.PROCESS_OVERHEAD_MB, 1)
 
 

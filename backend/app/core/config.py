@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Optional
 
 
-# Nota: i blocchi annidati sono BaseModel *puri*. Tutto il caricamento (env +
-# TOML) avviene sul `Settings` top-level tramite `env_nested_delimiter="__"`,
-# così l'env vince sempre sul TOML per ogni campo (es. REDIS__HOST batte il
-# valore di config.toml). Vedi la nota sulle priorità in `Settings`.
+# Note: the nested blocks are *plain* BaseModels. All the loading (environment +
+# TOML) happens on the top-level `Settings` through `env_nested_delimiter="__"`,
+# so the environment always wins over the TOML, field by field (REDIS__HOST beats
+# the value of config.toml). See the note on priorities in `Settings`.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ class RedisSettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Storage Configuration (qualsiasi endpoint S3-compatibile: MinIO, AWS, R2…)
+# Storage Configuration (any S3-compatible endpoint: MinIO, AWS, R2…)
 # ─────────────────────────────────────────────────────────────────────────────
 class StorageSettings(BaseModel):
     endpoint: str = Field(default="http://localhost:9002", description="Storage endpoint")
@@ -48,8 +48,8 @@ class StorageSettings(BaseModel):
     @field_validator("secret_key", mode="before")
     @classmethod
     def _ensure_secret(cls, v: object) -> SecretStr:
-        # pydantic-settings non riavvolge in SecretStr i valori che arrivano dal
-        # TOML (restano str): forziamo la coercizione da qualunque sorgente.
+        # pydantic-settings does not wrap the values coming from the TOML in
+        # SecretStr (they stay str): coerce them, whatever the source.
         return v if isinstance(v, SecretStr) else SecretStr(str(v))
 
 
@@ -88,50 +88,48 @@ class CelerySettings(BaseModel):
     broker_url: Optional[str] = None
     result_backend: Optional[str] = None
     worker_concurrency: int = 2
-    # env: CELERY__TASK_TIME_LIMIT / CELERY__TASK_SOFT_TIME_LIMIT — durata massima
-    # di un task. Al limite SOFT il task riceve un'eccezione e può chiudere in
-    # ordine (file temporanei, connessioni); al limite DURO il worker gli uccide
-    # il processo.
+    # env: CELERY__TASK_TIME_LIMIT / CELERY__TASK_SOFT_TIME_LIMIT — the longest a
+    # task may last. At the SOFT limit the task gets an exception and can close in
+    # order (temporary files, connections); at the HARD limit the worker kills its
+    # process.
     #
-    # ACCOPPIATI AL GATEWAY: `ENGINE__RUN_STALE_TIMEOUT_SECONDS` deve restare
-    # MAGGIORE di `task_time_limit`, perché il gateway dichiara perso un run solo
-    # dopo che Celery lo ha già ucciso — è l'invariante su cui poggia la scelta di
-    # non abilitare `task_acks_late` (vedi celery_app.py). Alzare uno solo dei due
-    # non allunga la durata consentita ai run: cambia solo quanto si aspetta prima
-    # di vederli fallire.
+    # TIED TO THE GATEWAY: `ENGINE__RUN_STALE_TIMEOUT_SECONDS` must stay GREATER
+    # than `task_time_limit`, because the gateway calls a run lost only after Celery
+    # has already killed it — the invariant behind not enabling `task_acks_late`
+    # (see celery_app.py). Raising only one of the two does not lengthen the time a
+    # run is allowed: it only changes how long one waits before seeing it fail.
     task_time_limit: int = 3600
     task_soft_time_limit: int = 3300
     task_serializer: str = "json"
     result_serializer: str = "json"
     timezone: str = "UTC"
     enable_utc: bool = True
-    # env: CELERY__MAX_TASKS_PER_CHILD — dopo quanti task il processo figlio
-    # prefork viene riciclato. I task Polars/Arrow allocano via glibc malloc, che
-    # NON restituisce all'OS la memoria liberata (frammentazione delle arene): il
-    # figlio riciclato rilascia tutto → l'RSS non cresce a scalini. Tenuto alto
-    # perché i task periodici leggeri (storage-stats ogni 60s, eviction) non
-    # riciclino il figlio di continuo: il vero cap è la memoria qui sotto. Def 50.
+    # env: CELERY__MAX_TASKS_PER_CHILD — after how many tasks a prefork child
+    # process is recycled. The Polars/Arrow tasks allocate through glibc malloc,
+    # which does NOT give freed memory back to the OS (fragmented arenas): a
+    # recycled child releases everything → the RSS does not grow in steps. Kept
+    # high so that the light periodic tasks (storage stats every 60 s, eviction) do
+    # not recycle the child all the time: the real cap is the memory below. Def 50.
     max_tasks_per_child: int = 50
-    # env: CELERY__MAX_MEMORY_PER_CHILD_KB — tetto RSS (KB) oltre il quale il
-    # figlio viene riciclato a FINE task (rilascio netto della memoria residua).
-    # None (default) = DERIVATO automaticamente dal limite di memoria del container
-    # (cgroup) e dalla concurrency, così resta coerente qualunque sia
-    # WORKER_MEM_LIMIT in produzione — vedi resolve_max_memory_per_child_kb().
-    # Impostalo solo per forzare un valore fisso.
+    # env: CELERY__MAX_MEMORY_PER_CHILD_KB — RSS ceiling (KB) above which the
+    # child is recycled at the END of its task (a clean release of what is left).
+    # None (default) = DERIVED from the container's memory limit (cgroup) and the
+    # concurrency, so it stays right whatever WORKER_MEM_LIMIT is in production —
+    # see resolve_max_memory_per_child_kb(). Set it only to force a fixed value.
     max_memory_per_child_kb: Optional[int] = None
-    # frazione del limite container riservata ai figli worker (il resto è margine
-    # per processo principale, beat, page cache): per-figlio = limite*frac/concurrency
+    # share of the container's limit kept for the worker's children (the rest is a
+    # margin for the main process, beat, page cache): per child = limit*frac/concurrency
     max_memory_headroom_frac: float = 0.75
-    # fallback quando il limite cgroup non è leggibile/illimitato (KB, ~1.5 GB)
+    # fallback when the cgroup limit is unreadable or unlimited (KB, ~1.5 GB)
     max_memory_per_child_fallback_kb: int = 1_500_000
-    # pavimento: mai riciclare sotto questa soglia (evita riciclo troppo frequente)
+    # floor: never recycle below this (avoids recycling too often)
     max_memory_per_child_floor_kb: int = 512_000
 
 
 def cgroup_mem_limit_bytes() -> Optional[int]:
-    """Limite di memoria del container letto dal cgroup (il tetto che il kernel
-    impone davvero, qualunque sia il modo in cui è stato configurato). None se
-    illimitato o non leggibile (es. fuori da un container)."""
+    """The container's memory limit read from the cgroup (the ceiling the kernel
+    really enforces, however it was configured). None when unlimited or unreadable
+    (outside a container)."""
     for path in ("/sys/fs/cgroup/memory.max",                    # cgroup v2
                  "/sys/fs/cgroup/memory/memory.limit_in_bytes"):  # cgroup v1
         try:
@@ -144,7 +142,7 @@ def cgroup_mem_limit_bytes() -> Optional[int]:
             val = int(raw)
         except ValueError:
             continue
-        # v1 "illimitato" è un intero enorme (~2^63): trattalo come nessun limite
+        # v1's "unlimited" is a huge integer (~2^63): no limit
         if val <= 0 or val >= (1 << 62):
             return None
         return val
@@ -177,11 +175,11 @@ class WorkersSettings(BaseModel):
 
 
 def resolve_max_memory_per_child_kb(celery: CelerySettings) -> int:
-    """Tetto RSS per figlio worker (KB). Se non forzato via env, lo deriva dal
-    limite cgroup e dalla concurrency: `limite * frac / concurrency`. Così due (o
-    N) figli residenti restano sotto il limite del container con un margine, e il
-    valore si adatta da solo se in produzione WORKER_MEM_LIMIT/concurrency cambiano."""
-    if celery.max_memory_per_child_kb:  # override esplicito
+    """RSS ceiling per worker child (KB). Unless forced from the environment, derived
+    from the cgroup limit and the concurrency: `limit * frac / concurrency`. Two (or
+    N) resident children then stay under the container's limit with a margin, and the
+    value follows WORKER_MEM_LIMIT and the concurrency by itself."""
+    if celery.max_memory_per_child_kb:  # set explicitly
         return celery.max_memory_per_child_kb
     limit = cgroup_mem_limit_bytes()
     if not limit:
@@ -192,38 +190,37 @@ def resolve_max_memory_per_child_kb(celery: CelerySettings) -> int:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Cache Configuration (step cache dell'engine)
+# Cache Configuration (the engine's step cache)
 # ─────────────────────────────────────────────────────────────────────────────
 class CacheSettings(BaseModel):
-    # env: CACHE__TTL_SECONDS — dopo quanto tempo dall'ultimo accesso una voce
-    # di cache viene rimossa (blob parquet + indice Valkey). Default 1 giorno.
+    # env: CACHE__TTL_SECONDS — how long after its last access a cache entry is
+    # removed (parquet blob + Valkey index). Default 1 day.
     ttl_seconds: int = 1 * 24 * 3600
-    # env: CACHE__SWEEP_INTERVAL_SECONDS — ogni quanto gira l'eviction. Default 1h.
+    # env: CACHE__SWEEP_INTERVAL_SECONDS — how often the eviction runs. Default 1 h.
     sweep_interval_seconds: int = 3600
-    # env: CACHE__MAX_STEP_ROWS — un passo con piu' righe di cosi' NON viene
-    # messo in cache: una copia grande quanto la sorgente non fa guadagnare
-    # nulla rispetto a rileggere il parquet originale e costa gigabyte di
-    # scrittura (25M righe = 2,4 GB e 40 s sul ClickHouse esterno). Il passo
-    # viene ricalcolato dalla sorgente. 0 = nessun tetto.
+    # env: CACHE__MAX_STEP_ROWS — a step with more rows than this is NOT cached: a
+    # copy as large as the source gains nothing over reading the original parquet
+    # again, and costs gigabytes of writing (25M rows = 2.4 GB and 40 s on the
+    # external ClickHouse). The step is computed again from the source. 0 = no cap.
     max_step_rows: int = 1_000_000
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Metrics Configuration (osservabilità)
+# Metrics Configuration (observability)
 # ─────────────────────────────────────────────────────────────────────────────
 class MetricsSettings(BaseModel):
-    # env: METRICS__STORAGE_STATS_INTERVAL_SECONDS — ogni quanto campionare la
-    # dimensione dei prefissi di storage (cache/, datasets/, ...). Default 60s.
+    # env: METRICS__STORAGE_STATS_INTERVAL_SECONDS — how often the size of the
+    # storage prefixes (cache/, datasets/, ...) is sampled. Default 60 s.
     storage_stats_interval_seconds: int = 60
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Security (segreti condivisi col gateway)
+# Security (secrets shared with the gateway)
 # ─────────────────────────────────────────────────────────────────────────────
 class SecuritySettings(BaseModel):
-    # env: SECURITY__FERNET_KEY — chiave condivisa gateway↔engine con cui le
-    # credenziali delle connessioni DB viaggiano/riposano cifrate. OBBLIGATORIA in
-    # ogni ambiente: senza, API e worker non partono (check_required_secrets).
+    # env: SECURITY__FERNET_KEY — the key gateway and engine share, with which the
+    # connections' credentials travel and rest encrypted. REQUIRED everywhere:
+    # without it the API and the workers do not start (check_required_secrets).
     fernet_key: str = ""
     # env: SECURITY__KEYS_DIR — a directory the services share (one machine, Compose)
     # where the secrets left empty are created at the first start and read afterwards:
@@ -235,80 +232,79 @@ class SecuritySettings(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ClickHouse esterno (engine opzionale: un server ClickHouse remoto/cloud)
+# External ClickHouse (an optional engine: a remote or cloud ClickHouse server)
 # ─────────────────────────────────────────────────────────────────────────────
 class ClickHouseExternalSettings(BaseModel):
-    """Engine `clickhouse`: le trasformazioni girano su un server ClickHouse
-    esterno (es. Scaleway/ClickHouse Cloud/self-hosted) invece che nel worker.
-    Stesso dialetto e stesse operazioni di chDB; cambia solo DOVE gira e come i
-    dati arrivano al server (vedi `transport`). Disattivato finché `host` è vuoto.
+    """Engine `clickhouse`: the transformations run on an external ClickHouse
+    server (Scaleway, ClickHouse Cloud, self-hosted) instead of in the worker. The
+    same dialect and operations as chDB; only WHERE it runs changes, and how the
+    data reaches the server (see `transport`). Off while `host` is empty.
 
     env: CLICKHOUSE_EXTERNAL__HOST, __PORT, __USERNAME, __PASSWORD, __DATABASE,
     __SECURE, __TRANSPORT, __S3_ENDPOINT, __S3_NAMED_COLLECTION, …"""
 
-    host: str = ""  # vuoto = engine non disponibile
-    # porta HTTP(S) di ClickHouse (clickhouse-connect): 8123 in chiaro, 8443 TLS
+    host: str = ""  # empty = engine not available
+    # ClickHouse's HTTP(S) port (clickhouse-connect): 8123 in clear, 8443 TLS
     port: int = 8123
     username: str = "default"
     password: SecretStr = SecretStr("")
-    # Utenza DEDICATA alle query dell'assistente AI (env: CLICKHOUSE_EXTERNAL__
-    # AI_USERNAME / __AI_PASSWORD). Seconda barriera dopo la lista bianca del
-    # nodo sql: sola lettura, niente `system`. Attiva solo con ENTRAMBE
-    # valorizzate; altrimenti l'assistente usa l'utenza qui sopra, come prima.
-    # I grant che le servono: docs/engines/clickhouse-ai-user.md
+    # A user DEDICATED to the AI assistant's queries (env: CLICKHOUSE_EXTERNAL__
+    # AI_USERNAME / __AI_PASSWORD). A second barrier after the sql node's allowlist:
+    # read only, no `system`. Used only with BOTH set; otherwise the assistant uses
+    # the user above, as before. The grants it needs: docs/engines/clickhouse-ai-user.md
     ai_username: str = ""
     ai_password: SecretStr = SecretStr("")
-    # database di lavoro: DEVE esistere; in modalità `push` ospita le tabelle di
-    # staging temporanee (l'utente ha bisogno di CREATE/INSERT/DROP su questo db)
+    # the working database: it MUST exist; with `push` it holds the temporary
+    # staging tables (the user needs CREATE/INSERT/DROP on it)
     database: str = "default"
-    secure: bool = False  # TLS (i cloud managed lo richiedono: porta 8443)
+    secure: bool = False  # TLS (managed clouds require it: port 8443)
     connect_timeout: int = 10
-    # Come il server raggiunge i dati:
-    # - "s3":   ClickHouse legge/scrive i parquet DIRETTAMENTE sull'object storage
-    #           con la table function s3() → nessun dato passa dal worker (scelta
-    #           di produzione: es. ClickHouse + Object Storage dello stesso cloud).
-    #           Richiede che lo storage sia raggiungibile dal server.
-    # - "push": il worker carica la sorgente in una tabella di staging e riscarica
-    #           il risultato in streaming → funziona con qualsiasi ClickHouse (anche
-    #           se non vede lo storage), ma i dati transitano dal worker.
+    # How the server reaches the data:
+    # - "s3":   ClickHouse reads and writes the parquet files DIRECTLY on the object
+    #           storage with the s3() table function → no data goes through the
+    #           worker (the production choice: ClickHouse and object storage of the
+    #           same cloud). The storage must be reachable from the server.
+    # - "push": the worker loads the source into a staging table and streams the
+    #           result back → works with any ClickHouse (even one that cannot see
+    #           the storage), but the data goes through the worker.
     transport: str = "s3"
-    # Endpoint dello storage COME LO VEDE ClickHouse (path-style: <endpoint>/<bucket>/<chiave>).
-    # Vuoto = STORAGE__ENDPOINT (giusto solo se il server è sulla stessa rete,
-    # es. http://minio:9000 in Docker); in cloud va l'URL pubblico, es.
-    # https://s3.fr-par.scw.cloud. Solo per transport=s3.
+    # The storage endpoint AS CLICKHOUSE SEES IT (path style: <endpoint>/<bucket>/<key>).
+    # Empty = STORAGE__ENDPOINT (right only when the server is on the same network,
+    # http://minio:9000 in Docker); on a cloud, the public URL, such as
+    # https://s3.fr-par.scw.cloud. For transport=s3 only.
     s3_endpoint: str = ""
-    # Named collection definita SUL SERVER con le credenziali dello storage: se
-    # impostata, le chiavi S3 non viaggiano nelle query (né finiscono nel query_log).
-    # Es. `CREATE NAMED COLLECTION tabularia_s3 AS access_key_id='…', secret_access_key='…'`.
+    # A named collection defined ON THE SERVER with the storage's credentials: when
+    # set, the S3 keys do not travel in the queries (nor end up in the query_log).
+    # `CREATE NAMED COLLECTION tabularia_s3 AS access_key_id='…', secret_access_key='…'`.
     s3_named_collection: str = ""
-    # tetto di esecuzione per singola query (secondi, 0 = nessuno); le preview
-    # interattive lo hanno comunque dal timeout lato API
+    # the longest one query may run (seconds, 0 = no limit); the interactive
+    # previews have one anyway, from the API's timeout
     max_execution_time: int = 0
-    # ── Materializzazione per il viewer (solo transport s3) ───────────────────
-    # env: __MATERIALIZE_MIN_ROWS — sopra questa soglia di righe un dataset letto
-    # dal viewer viene COPIATO una volta in una MergeTree sul server, e le query
-    # successive leggono da lì invece di rileggere il parquet con s3(): sulle
-    # scansioni piene (grafici, pivot, ordinamenti) è 2–6× più veloce. 0 =
-    # disattivato. Best-effort: se la copia non riesce si resta su s3().
-    # SPENTA di default (0). La copia e' SINCRONA dentro la richiesta: su una
-    # tabella da 25M righe x 50 colonne non stava nel tetto di 60 s, andava in
-    # timeout, e ogni Apply del viewer pagava un minuto per poi leggere comunque
-    # da s3(). Con parquet scritti a row group grandi (INGEST__PARQUET_ROW_GROUP_ROWS)
-    # la lettura diretta e' gia' rapida: un'aggregazione da 18,7 s e' scesa a
-    # 0,64 s senza alcuna copia. Chi la vuole la accende con un valore > 0.
+    # ── Materialization for the viewer (transport s3 only) ────────────────────
+    # env: __MATERIALIZE_MIN_ROWS — above this many rows, a dataset read by the
+    # viewer is COPIED once into a MergeTree on the server, and the next queries
+    # read it there instead of reading the parquet again with s3(): on full scans
+    # (charts, pivots, sorts) 2–6× faster. 0 = off. Best effort: if the copy fails
+    # the queries stay on s3().
+    # OFF by default (0). The copy is SYNCHRONOUS within the request: a table of
+    # 25M rows x 50 columns did not fit in the 60 s cap, timed out, and every Apply
+    # of the viewer paid a minute only to read from s3() anyway. With parquet files
+    # written in large row groups (INGEST__PARQUET_ROW_GROUP_ROWS) reading in place
+    # is fast already: an aggregation went from 18.7 s to 0.64 s without any copy.
+    # Whoever wants it turns it on with a value > 0.
     materialize_min_rows: int = 0
-    # env: __MATERIALIZE_DATABASE — database dove creare quelle tabelle; vuoto =
-    # lo stesso `database`. Un db dedicato tiene le copie effimere separate.
+    # env: __MATERIALIZE_DATABASE — the database for those tables; empty = the same
+    # `database`. A dedicated one keeps the short-lived copies apart.
     materialize_database: str = ""
-    # env: __MATERIALIZE_TTL_SECONDS — dopo quanti secondi di INUTILIZZO la copia
-    # viene droppata (il conteggio riparte a ogni accesso).
+    # env: __MATERIALIZE_TTL_SECONDS — after how many seconds UNUSED a copy is
+    # dropped (the count starts again at every access).
     materialize_ttl_seconds: int = 1800
-    # env: __PARQUET_SCAN_MAX_THREADS — sulle query di SCANSIONE (aggregazioni,
-    # pivot, sort, join) impone almeno questi thread. Il default di ClickHouse è
-    # il numero di core, troppo basso quando leggere da S3 è I/O-bound (i thread
-    # aspettano la rete): l'oversubscription nasconde la latenza. NON tocca le
-    # query con LIMIT (la vista tabella), che con troppi thread rallentano; non
-    # scende mai sotto i core del server. 0 = non toccare max_threads.
+    # env: __PARQUET_SCAN_MAX_THREADS — on the SCAN queries (aggregations, pivots,
+    # sorts, joins) at least this many threads. ClickHouse's default is the number of
+    # cores, too low when reading from S3 is I/O-bound (the threads wait on the
+    # network): oversubscription hides the latency. Does NOT touch the queries with
+    # a LIMIT (the table view), which slow down with too many threads; never below
+    # the server's cores. 0 = leave max_threads alone.
     parquet_scan_max_threads: int = 8
 
     @field_validator("password", mode="before")
@@ -330,16 +326,16 @@ class ClickHouseExternalSettings(BaseModel):
 
     @property
     def materialize_enabled(self) -> bool:
-        # solo con transport s3: in push la sorgente è GIÀ una MergeTree di staging
+        # with transport s3 only: with push the source is ALREADY a staging MergeTree
         return self.enabled and self.transport == "s3" and self.materialize_min_rows > 0
 
     @property
     def matview_sweep_enabled(self) -> bool:
-        """Lo SWEEP delle copie (scadute + orfane) non dipende dal fatto che se ne
-        creino di nuove: spegnere la materializzazione (min_rows=0) spegneva anche
-        lo spazzino, e una tabella temporanea da 5,77 GiB lasciata da una build
-        uccisa a metà restava sul server per sempre. Basta che ClickHouse sia
-        configurato e che il trasporto sia s3 (in push non esistono copie)."""
+        """The SWEEP of the copies (expired and orphaned) does not depend on new ones
+        being made: turning the materialization off (min_rows=0) turned the sweeper
+        off too, and a 5.77 GiB temporary table left by a build killed half way stayed
+        on the server for ever. ClickHouse configured and the s3 transport are enough
+        (with push there are no copies)."""
         return self.enabled and self.transport == "s3"
 
     @property
@@ -351,11 +347,11 @@ class ClickHouseExternalSettings(BaseModel):
 # App Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 class SharePointSettings(BaseModel):
-    """Endpoint Microsoft per la sorgente SharePoint. Scelta di DEPLOYMENT, non di
-    chi crea la connessione (a lui non è concesso: sarebbe un modo per far
-    chiamare al backend un indirizzo qualunque con un token in mano). Servono a
-    chi sta su un cloud sovrano — `https://graph.microsoft.us/v1.0` +
-    `https://login.microsoftonline.us`, o 21Vianet — e ai test di integrazione."""
+    """Microsoft endpoints of the SharePoint source. A DEPLOYMENT choice, not one of
+    whoever creates the connection (not allowed to them: it would be a way to make
+    the backend call any address with a token in hand). For a sovereign cloud —
+    `https://graph.microsoft.us/v1.0` + `https://login.microsoftonline.us`, or
+    21Vianet — and for the integration tests."""
 
     graph_base: str = "https://graph.microsoft.com/v1.0"
     login_base: str = "https://login.microsoftonline.com"
@@ -453,32 +449,32 @@ class PlaceholderSettings(BaseModel):
 
 
 class BigQuerySettings(BaseModel):
-    """Engine `bigquery`: le trasformazioni girano su Google BigQuery, che legge i
-    parquet DIRETTAMENTE dal bucket come tabelle esterne temporanee (gs://…) e
-    restituisce il risultato al worker (Storage Read API). Richiede che lo
-    storage sia Google Cloud Storage (STORAGE__ENDPOINT=https://storage.googleapis.com)
-    e un service account con «BigQuery Job User» sul progetto e lettura sul
-    bucket. Disattivato finche' `project` o le credenziali sono vuoti.
+    """Engine `bigquery`: the transformations run on Google BigQuery, which reads the
+    parquet files DIRECTLY from the bucket as temporary external tables (gs://…) and
+    returns the result to the worker (Storage Read API). The storage must be Google
+    Cloud Storage (STORAGE__ENDPOINT=https://storage.googleapis.com), with a service
+    account that is «BigQuery Job User» on the project and reads the bucket. Off
+    while `project` or the credentials are empty.
 
-    env: BIGQUERY__PROJECT, __CREDENTIALS_FILE (path della chiave JSON) oppure
-    __CREDENTIALS_B64 (la stessa chiave in base64, una riga di .env),
+    env: BIGQUERY__PROJECT, __CREDENTIALS_FILE (path of the JSON key) or
+    __CREDENTIALS_B64 (the same key in base64, one line of .env),
     __LOCATION, __MAXIMUM_BYTES_BILLED"""
 
     project: str = ""
     credentials_file: str = ""
     credentials_b64: SecretStr = SecretStr("")
-    # regione dei job: DEVE combaciare con quella del bucket (o essere la
-    # multi-regione che lo contiene, es. EU). Vuota = letta dal bucket.
+    # the jobs' region: it MUST match the bucket's (or be the multi-region that
+    # holds it, such as EU). Empty = read from the bucket.
     location: str = ""
-    # tetto di byte FATTURABILI per singola query: BigQuery rifiuta PRIMA di
-    # eseguire una query che lo supererebbe. 20 GiB = circa 0,12 $ a query
-    # (6,25 $/TiB). 0 = nessun tetto.
+    # cap on the BILLABLE bytes of one query: BigQuery refuses BEFORE running a
+    # query that would go over it. 20 GiB = about $0.12 a query ($6.25/TiB).
+    # 0 = no cap.
     maximum_bytes_billed: int = 20 * 1024**3
-    # Step-cache NATIVA: l'output dei passi intermedi dell'editor viene scritto
-    # in tabelle di questo dataset (creato dal motore se manca; serve «BigQuery
-    # Data Editor» sul progetto, o il dataset gia' creato con quel ruolo su di
-    # esso) con scadenza = CACHE__TTL_SECONDS; le preview successive leggono la
-    # tabella nativa invece di rileggere il parquet. Vuoto = nessuna cache.
+    # NATIVE step cache: the output of the editor's intermediate steps is written to
+    # tables of this dataset (created by the engine when missing; it needs «BigQuery
+    # Data Editor» on the project, or the dataset made already with that role on it)
+    # expiring after CACHE__TTL_SECONDS; the next previews read the native table
+    # instead of the parquet. Empty = no cache.
     cache_dataset: str = "tabularia_cache"
 
     @field_validator("credentials_b64", mode="before")
@@ -491,7 +487,7 @@ class BigQuerySettings(BaseModel):
         return bool(self.project.strip()) and bool(self.credentials_file.strip() or self.credentials_b64.get_secret_value().strip())
 
     def credentials_info(self) -> dict:
-        """La chiave JSON del service account come dict (file o base64)."""
+        """The service account's JSON key as a dict (from the file or the base64)."""
         import base64
         import json
 
@@ -506,44 +502,41 @@ class BigQuerySettings(BaseModel):
 
 
 class IngestSettings(BaseModel):
-    """Scrittura dei parquet prodotti dall'ingest."""
+    """How the parquet files the ingest makes are written."""
 
-    # Righe per ROW GROUP del parquet. Il writer ne scriveva uno per ogni batch
-    # del driver (~8k righe): su 25M righe x 50 colonne faceva 3.063 row group e
-    # 153.000 pezzi di colonna, con un footer di 16,6 MB. Con blocchi cosi'
-    # piccoli leggere due colonne su cinquanta richiederebbe migliaia di richieste
-    # da poche decine di KB, quindi il motore scarica tutto il file: il pruning
-    # per colonna che il formato promette non conviene mai. Un milione di righe
-    # riporta i blocchi a poche decine.
-    # ATTENZIONE alla memoria: il blocco si accumula in RAM prima di essere
-    # scritto (~570 MB per 1M righe x 50 colonne larghe), quindi alzarlo troppo
-    # fa morire di OOM l'ingest invece di renderlo piu' veloce.
-    # il minimo e' basso di proposito: un valore piccolo e' inefficiente, non
-    # scorretto, e serve a poter esercitare la soglia nei test senza generare
-    # milioni di righe
+    # Rows per ROW GROUP of the parquet. The writer made one for each batch of the
+    # driver (~8k rows): 25M rows x 50 columns made 3,063 row groups and 153,000
+    # column chunks, with a 16.6 MB footer. With blocks that small, reading two
+    # columns of fifty would take thousands of requests of a few tens of KB, so the
+    # engine downloads the whole file: the column pruning the format promises never
+    # pays. A million rows brings the blocks down to a few tens.
+    # MIND THE MEMORY: a block builds up in RAM before it is written (~570 MB for 1M
+    # rows x 50 wide columns), so raising it too far kills the ingest with an OOM
+    # instead of making it faster.
+    # The minimum is low on purpose: a small value is inefficient, not wrong, and
+    # lets the tests reach the threshold without generating millions of rows
     parquet_row_group_rows: int = Field(default=1_000_000, ge=1, le=20_000_000)
-    # Quanto si aspetta, senza ricevere nulla, la risposta di ClickHouse durante un
-    # import o una scrittura (env: INGEST__DB_READ_TIMEOUT_SECONDS). ClickHouse non
-    # manda niente finché non ha la prima riga: con le chiavi di ordinamento su
-    # colonne fuori dalla chiave della tabella deve leggere e ordinare TUTTO prima
-    # (50M righe, 3,4 GB, un thread: 14 s di silenzio; cresce con la tabella). Il
-    # client tiene viva la connessione con le intestazioni di avanzamento, ma non
-    # con un'utenza `readonly=1` (non può chiederle) né dietro un proxy che le
-    # trattiene: lì il default di clickhouse-connect, 300 s, faceva fallire gli
-    # import delle tabelle grandi dopo cinque minuti. Gli altri driver delle
-    # sorgenti non hanno un limite loro. Resta SOTTO `CELERY__TASK_SOFT_TIME_LIMIT`,
-    # così chi aspetta legge questo errore e non quello del task ucciso. La prova
-    # della connessione e l'elenco delle tabelle tengono i 300 s: rispondono subito.
+    # How long ClickHouse's answer is awaited, receiving nothing, during an import or
+    # a write (env: INGEST__DB_READ_TIMEOUT_SECONDS). ClickHouse sends nothing until
+    # it has the first row: with sort keys on columns outside the table's key it must
+    # read and sort EVERYTHING first (50M rows, 3.4 GB, one thread: 14 s of silence,
+    # growing with the table). The client keeps the connection alive with progress
+    # headers, but not with a `readonly=1` user (it cannot ask for them) nor behind a
+    # proxy that holds them back: there clickhouse-connect's default, 300 s, failed
+    # the imports of large tables after five minutes. The other sources' drivers have
+    # no limit of their own. Kept BELOW `CELERY__TASK_SOFT_TIME_LIMIT`, so whoever
+    # waits reads this error and not the killed task's. The connection test and the
+    # table list keep 300 s: they answer at once.
     db_read_timeout_seconds: int = Field(default=3000, ge=10)
 
 
 class ExportSettings(BaseModel):
-    """Download diretto di un risultato (CSV/Excel) dall'editor, dal viewer e dalla chat."""
+    """Downloading a result (CSV/Excel) from the editor, the viewer and the chat."""
 
-    # Righe massime di un export CSV. L'engine lo scrive in streaming, ma il
-    # browser lo raccoglie tutto in memoria prima di salvarlo (fetch → Blob): oltre
-    # qualche milione di righe la scheda muore. Più grande si scrive con un nodo
-    # Output (datasource, tabella, bucket). 0 = nessun tetto. env: EXPORT__MAX_ROWS
+    # The most rows of a CSV export. The engine writes it as a stream, but the browser
+    # gathers it all in memory before saving it (fetch → Blob): beyond a few million
+    # rows the tab dies. Larger ones are written with an Output node (datasource,
+    # table, bucket). 0 = no cap. env: EXPORT__MAX_ROWS
     max_rows: int = Field(default=5_000_000, ge=0)
 
 
@@ -568,19 +561,19 @@ class UploadSettings(BaseModel):
 
 
 class AppSettings(BaseModel):
-    # NB: nessun codice del backend legge `env_name` — il guard di produzione
-    # vive solo nel gateway. Resta qui perché la configurazione condivisa la
-    # imposta su tutti i pod, e senza il campo pydantic la ignorerebbe soltanto.
+    # NB: no code of the backend reads `env_name` — the production guard lives in
+    # the gateway only. It stays because the shared configuration sets it on every
+    # pod, and without the field pydantic would merely ignore it.
     env_name: str = "development"
-    # origini permesse per il CORS (il frontend Nuxt gira su :3000)
+    # origins allowed by CORS (the Nuxt frontend runs on :3000)
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
-    # Quante richieste sincrone l'API dell'engine serve insieme. Ogni anteprima in
-    # corso occupa un thread per tutta la sua durata (aspetta il worker
-    # controllando il risultato ogni quarto di secondo): con il default della
-    # libreria, 40, la quarantunesima resta in coda anche se i worker sono liberi.
-    # Sono thread che dormono, costano poco. env: APP__ENGINE_API_THREADS
+    # How many synchronous requests the engine API serves at once. Every preview in
+    # progress holds a thread for as long as it lasts (it waits for the worker,
+    # checking the result every quarter of a second): with the library's default,
+    # 40, the forty-first waits in line even with the workers idle. Sleeping
+    # threads, cheap. env: APP__ENGINE_API_THREADS
     engine_api_threads: int = Field(default=200, ge=40)
 
 
@@ -600,16 +593,16 @@ class Settings(BaseSettings):
     """
     Main configuration class that composes all service settings.
     
-    Priority order (dalla più alta alla più bassa):
-    1. Init (argomenti al costruttore)
-    2. Variabili d'ambiente (per docker/produzione) — es. `REDIS__HOST=redis`
-    3. secrets.toml (secret locali)
-    4. config.toml (default locali committabili)
-    5. Default delle classi
+    Priority order (highest first):
+    1. Init (constructor arguments)
+    2. Environment variables (Docker, production) — `REDIS__HOST=redis`
+    3. secrets.toml (local secrets)
+    4. config.toml (local defaults that may be committed)
+    5. The classes' defaults
 
-    I campi annidati usano il delimitatore `__`: `REDIS__HOST` → `redis.host`,
-    `STORAGE__ENDPOINT` → `storage.endpoint`, ecc. Così l'env sovrascrive sempre
-    il TOML per singolo campo (deep-merge), come da priorità sopra.
+    Nested fields use the `__` delimiter: `REDIS__HOST` → `redis.host`,
+    `STORAGE__ENDPOINT` → `storage.endpoint`, and so on. The environment then
+    overrides the TOML field by field (a deep merge), as the priorities above say.
     """
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",
@@ -669,10 +662,10 @@ class Settings(BaseSettings):
         return self
 
     def check_required_secrets(self) -> None:
-        """La chiave Fernet è OBBLIGATORIA in ogni ambiente, anche in sviluppo:
-        senza, le credenziali delle connessioni non si possono cifrare né
-        decifrare e le API fallirebbero al primo uso. Meglio non partire, con
-        un messaggio chiaro. Chiamata allo startup (API, worker, beat)."""
+        """The Fernet key is REQUIRED everywhere, in development too: without it the
+        connections' credentials can be neither encrypted nor decrypted, and the API
+        would fail at the first use. Better not to start, with a clear message.
+        Called at start-up (API, workers, beat)."""
         from cryptography.fernet import Fernet
 
         hint = (f"{FERNET_KEY_HINT}, and set it in infrastructure/.env (the same in gateway and engine), "
@@ -682,7 +675,7 @@ class Settings(BaseSettings):
             raise RuntimeError(f"SECURITY__FERNET_KEY is not set: {hint}")
         try:
             Fernet(key)
-        except Exception as e:  # base64 malformato, lunghezza sbagliata…
+        except Exception as e:  # malformed base64, wrong length…
             raise RuntimeError(f"SECURITY__FERNET_KEY is not valid ({e}): {hint}") from e
 
 
@@ -690,35 +683,35 @@ class Settings(BaseSettings):
 # Singleton instance
 # ─────────────────────────────────────────────────────────────────────────────
 @lru_cache
-def settings_dall_ambiente() -> Settings:
-    """Le impostazioni dell'ambiente (variabili, `.env`), lette una volta per
-    processo: l'infrastruttura (indirizzi, credenziali) e i valori di partenza di
-    tutto il resto."""
+def settings_from_env() -> Settings:
+    """The settings of the environment (variables, `.env`), read once per process:
+    the infrastructure (addresses, credentials) and the starting values of all the
+    rest."""
     return Settings()
 
 
 def get_settings() -> Settings:
-    """Le impostazioni in vigore: l'ambiente, con sopra le regolazioni che
-    l'amministratore ha cambiato dal pannello (vedi core/regolazioni.py). Finché
-    non ce ne sono è lo stesso oggetto di `settings_dall_ambiente()`.
+    """The settings in force: the environment's, with the values an administrator
+    changed from the panel on top (see core/regolazioni.py). While there are none,
+    the same object as `settings_from_env()`.
 
     Usage:
         settings = get_settings()
         settings.redis.url
         settings.storage.bucket
     """
-    from app.core import regolazioni
+    from app.core import panel_settings
 
-    return regolazioni.applicate(settings_dall_ambiente())
-
-
-def _svuota_cache() -> None:
-    """Come `lru_cache.cache_clear()`, che i test chiamano dopo aver cambiato l'ambiente."""
-    from app.core import regolazioni
-
-    settings_dall_ambiente.cache_clear()
-    regolazioni.dimentica()
+    return panel_settings.applied(settings_from_env())
 
 
-get_settings.cache_clear = _svuota_cache  # type: ignore[attr-defined]
+def _clear_cache() -> None:
+    """As `lru_cache.cache_clear()`, which the tests call after changing the environment."""
+    from app.core import panel_settings
+
+    settings_from_env.cache_clear()
+    panel_settings.forget()
+
+
+get_settings.cache_clear = _clear_cache  # type: ignore[attr-defined]
 

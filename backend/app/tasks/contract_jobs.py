@@ -1,9 +1,9 @@
-"""Task dei data contracts chiesti a mano (verifica adesso, proposta dai dati).
+"""The tasks of the data contracts asked for by hand (check now, propose from the data).
 
-Girano sulla coda delle anteprime: sono interattivi come un'anteprima, e come
-un'anteprima non devono mettersi in fila dietro un run lungo. La valutazione che
-accompagna un refresh o una pubblicazione NON passa da qui: avviene dentro il
-task che scrive i dati (vedi `check_before_publish`)."""
+They run on the previews' queue: they are as interactive as a preview, and like a preview
+they must not queue behind a long run. The evaluation that comes with a refresh or a
+publication does NOT go through here: it happens inside the task that writes the data
+(see `check_before_publish`)."""
 from datetime import datetime
 from typing import Any
 

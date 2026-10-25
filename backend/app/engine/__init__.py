@@ -1,12 +1,12 @@
 """
-Engine di trasformazione dati.
+The data transformation engines.
 
-Punto d'ingresso unico: `get_engine(name)` restituisce l'implementazione scelta
-(oggi Polars; DuckDB in arrivo). Route e task devono usare SOLO l'interfaccia
-`Engine` e i modelli di dominio esportati qui, mai Polars direttamente.
+The one entry point: `get_engine(name)` returns the chosen implementation. Routes and
+tasks must use ONLY the `Engine` interface and the domain models exported here, never an
+engine directly.
 
-L'engine è scelto PER FLUSSO (persistito su `Flow.engine` nel gateway e passato
-in preview/run). `ENGINE_CATALOG` alimenta il picker del frontend.
+The engine is chosen PER FLOW (stored in `Flow.engine` in the gateway and passed to
+preview/run). `ENGINE_CATALOG` feeds the frontend's picker.
 """
 from functools import lru_cache
 from typing import Callable
@@ -54,14 +54,14 @@ __all__ = [
 
 DEFAULT_ENGINE = "polars"
 
-# implementazioni registrate: name → factory (classe engine o callable → istanza,
-# vedi chDB pigro più sotto).
+# registered implementations: name → factory (an engine class or a callable → instance,
+# see the lazy chDB below).
 _ENGINES: dict[str, Callable[[], Engine]] = {
     "polars": PolarsEngine,
 }
 
-# DuckDB richiede il pacchetto `duckdb`: import guardato così, se manca,
-# l'engine risulta non disponibile senza rompere Polars.
+# DuckDB needs the `duckdb` package: a guarded import, so that when it is missing the
+# engine is unavailable without breaking Polars.
 try:
     from app.engine.duckdb_engine import DuckDBEngine
 
@@ -70,12 +70,12 @@ try:
 except Exception:  # pragma: no cover
     _DUCKDB_AVAILABLE = False
 
-# chDB (ClickHouse embedded) è FORK-UNSAFE: importarlo/inizializzarlo avvia i
-# thread nativi di ClickHouse, e se ciò avviene nel processo PADRE di Celery
-# (prefork) i figli forkati ereditano lock rotti → deadlock su QUALSIASI task.
-# Quindi NON lo importiamo qui: controlliamo solo la disponibilità con find_spec
-# (non esegue il modulo, niente thread) e lo carichiamo PIGRO dentro get_engine,
-# così l'init di chDB avviene nel FIGLIO dopo il fork (fork-safe, per-processo).
+# chDB (embedded ClickHouse) is FORK-UNSAFE: importing or initializing it starts
+# ClickHouse's native threads, and if that happens in Celery's PARENT process
+# (prefork) the forked children inherit broken locks → a deadlock on ANY task. So it is
+# NOT imported here: only its availability is checked with find_spec (which does not
+# run the module, no threads), and it is loaded LAZILY inside get_engine, so chDB's
+# init happens in the CHILD after the fork (fork-safe, per process).
 import importlib.util
 
 _CHDB_AVAILABLE = importlib.util.find_spec("chdb") is not None
@@ -88,11 +88,11 @@ def _make_chdb_engine() -> Engine:
 
 
 if _CHDB_AVAILABLE:
-    _ENGINES["chdb"] = _make_chdb_engine  # factory pigra (callable → istanza)
+    _ENGINES["chdb"] = _make_chdb_engine  # a lazy factory (callable → instance)
 
-# ClickHouse ESTERNO (server remoto/cloud): opzionale, attivo solo se configurato
-# (CLICKHOUSE_EXTERNAL__HOST). clickhouse-connect è HTTP puro → fork-safe, ma
-# l'import resta pigro per non pagare il costo dove l'engine non serve.
+# EXTERNAL ClickHouse (a remote or cloud server): optional, on only when configured
+# (CLICKHOUSE_EXTERNAL__HOST). clickhouse-connect is pure HTTP → fork-safe, but the
+# import stays lazy so as not to pay for it where the engine is not used.
 from app.core.config import get_settings as _get_settings
 
 _CLICKHOUSE_CFG = _get_settings().clickhouse_external
@@ -108,9 +108,9 @@ def _make_clickhouse_engine() -> Engine:
 if _CLICKHOUSE_AVAILABLE:
     _ENGINES["clickhouse"] = _make_clickhouse_engine
 
-# BigQuery (serverless Google): opzionale, attivo solo se configurato
-# (BIGQUERY__PROJECT + credenziali) e se il pacchetto e' installato. Client
-# HTTP/gRPC puro, import pigro come per ClickHouse.
+# BigQuery (Google, serverless): optional, on only when configured (BIGQUERY__PROJECT
+# + credentials) and the package is installed. A pure HTTP/gRPC client, a lazy import
+# as for ClickHouse.
 _BIGQUERY_CFG = _get_settings().bigquery
 _BIGQUERY_AVAILABLE = _BIGQUERY_CFG.enabled and importlib.util.find_spec("google.cloud.bigquery") is not None
 
@@ -124,8 +124,8 @@ def _make_bigquery_engine() -> Engine:
 if _BIGQUERY_AVAILABLE:
     _ENGINES["bigquery"] = _make_bigquery_engine
 
-# metadati per il picker del frontend (creazione flusso). `available=False` =
-# opzione mostrata ma non ancora selezionabile.
+# metadata for the frontend's picker (creating a flow). `available=False` = an option
+# shown but not selectable yet.
 ENGINE_CATALOG = [
     {
         "id": "polars",
@@ -144,8 +144,8 @@ ENGINE_CATALOG = [
         "id": "chdb",
         "label": "chDB (ClickHouse)",
         "available": _CHDB_AVAILABLE,
-        # opzionale: l'immagine di produzione leggera non lo include (WITH_CHDB);
-        # se manca, il selettore lo mostra «non configurato», non «in arrivo»
+        # optional: the light production image does not include it (WITH_CHDB); when it
+        # is missing the picker shows it «not configured», not «coming»
         "optional": True,
         "description": (
             "Out-of-core SQL engine with ClickHouse dialect (spills to disk). "
@@ -159,7 +159,7 @@ ENGINE_CATALOG = [
         "id": "clickhouse",
         "label": "ClickHouse (external)",
         "available": _CLICKHOUSE_AVAILABLE,
-        # opzionale: se non disponibile è perché NON È CONFIGURATO (non "in arrivo")
+        # optional: when not available it is because it is NOT CONFIGURED (not "coming")
         "optional": True,
         "description": (
             f"External ClickHouse server ({_CLICKHOUSE_CFG.host}:{_CLICKHOUSE_CFG.port}, transport {_CLICKHOUSE_CFG.transport}): "
@@ -186,16 +186,16 @@ ENGINE_CATALOG = [
 
 @lru_cache
 def get_engine(name: str | None = None) -> Engine:
-    """Restituisce l'istanza (cached per nome) dell'engine scelto. `None` = default.
+    """Returns the chosen engine's instance (cached by name). `None` = the default.
 
-    Le chiamate senza argomento (es. eviction cache) usano il default e restano
-    valide; preview/run passano il nome dal flusso."""
+    The calls without an argument (the cache eviction) use the default and stay valid;
+    preview/run pass the name from the flow."""
     key = (name or DEFAULT_ENGINE).lower()
     factory = _ENGINES.get(key)
     if factory is None:
-        # engine NOTO ma assente in questo deployment (es. chDB escluso
-        # dall'immagine leggera, ClickHouse esterno non configurato): messaggio
-        # per l'utente, in inglese, che non lo chiama «sconosciuto»
+        # an engine KNOWN but missing in this deployment (chDB left out of the light
+        # image, the external ClickHouse not configured): a message for the user, in
+        # English, that does not call it «unknown»
         known = next((e for e in ENGINE_CATALOG if e["id"] == key), None)
         if known is not None:
             raise EngineError(

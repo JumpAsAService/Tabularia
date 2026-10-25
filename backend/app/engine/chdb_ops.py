@@ -1,18 +1,18 @@
 """
-Registry delle operazioni per l'engine chDB (ClickHouse embedded), parallelo a
-`duckdb_ops.py`. A differenza di DuckDB (oggetti relation lazy) chDB è PURO SQL:
-ogni operazione riceve la SELECT dello step precedente e ne restituisce una nuova
-che la avvolge in subquery — `SELECT … FROM (prev)`. La catena resta un unico
-piano che ClickHouse ottimizza ed esegue in streaming (spill su disco).
+The registry of the chDB engine's operations (embedded ClickHouse), parallel to
+`duckdb_ops.py`. Unlike DuckDB (lazy relation objects) chDB is PURE SQL: every operation
+receives the previous step's SELECT and returns a new one that wraps it in a subquery —
+`SELECT … FROM (prev)`. The chain stays one plan that ClickHouse optimizes and runs
+streaming (spilling to disk).
 
-Firma: `(sql, params, ctx)`. `ctx` serve per l'introspezione delle colonne
-(`ctx.columns_of`) e per le operazioni MULTI-INPUT (join/union) che leggono il
-lato destro (`ctx.build_right`).
+Signature: `(sql, params, ctx)`. `ctx` serves the column introspection
+(`ctx.columns_of`) and the MULTI-INPUT operations (join/union) that read the right side
+(`ctx.build_right`).
 
-Sicurezza: le operazioni strutturali usano solo nomi colonna / operatori /
-valori (niente SQL libero). `compute` accetta espressioni scalari ma VIETA
-subquery e table function di lettura (file/url/s3/…) → niente filesystem/rete.
-`sql` (query intera) e `foreach` non sono ancora supportate su chDB.
+Security: the structural operations use only column names / operators / values (no free
+SQL). `compute` takes scalar expressions but FORBIDS subqueries and reading table
+functions (file/url/s3/…) → no filesystem, no network. `sql` (a whole query) and
+`foreach` are not supported on chDB yet.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import re
 from typing import Any, Callable
 
 from app.engine.context import MAX_CROSS_JOIN_ROWS
-from app.engine.espressioni import espressione_vietata
+from app.engine.expressions import forbidden_expression
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
@@ -53,12 +53,12 @@ def get_chdb_operation(name: str) -> ChdbOpFn:
 
 # ── helper SQL (dialetto ClickHouse) ──────────────────────────────────────────
 def _qi(name: str) -> str:
-    """Quota un identificatore ClickHouse con i backtick."""
+    """Quotes a ClickHouse identifier with backticks."""
     return "`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`"
 
 
 def _lit(v: Any) -> str:
-    """Letterale SQL da un valore Python (già parsato dal frontend)."""
+    """A SQL literal from a Python value (parsed by the frontend already)."""
     if v is None:
         return "NULL"
     if isinstance(v, bool):
@@ -79,11 +79,11 @@ def _as_list(v) -> list:
 
 
 def _sub(sql: str) -> str:
-    """Avvolge una SELECT come sorgente di subquery."""
+    """Wraps a SELECT as a subquery source."""
     return f"({sql})"
 
 
-# cast "try": funzioni *OrNull di ClickHouse (NULL invece di errore)
+# a "try" cast: ClickHouse's *OrNull functions (NULL instead of an error)
 _CH_CAST = {
     "int": "toInt64OrNull(toString({c}))",
     "float": "toFloat64OrNull(toString({c}))",
@@ -94,7 +94,7 @@ _CH_CAST = {
 }
 
 
-# ── colonne ───────────────────────────────────────────────────────────────────
+# ── columns ───────────────────────────────────────────────────────────────────
 @_register("select")
 def op_select(sql, params, ctx):
     cols = ", ".join(_qi(c) for c in _require(params, "columns"))
@@ -103,7 +103,7 @@ def op_select(sql, params, ctx):
 
 @_register("reorder")
 def op_reorder(sql, params, ctx):
-    # colonne elencate prima (nell'ordine), poi le altre (EXCEPT degli elencati)
+    # the listed columns first (in order), then the others (EXCEPT the listed ones)
     order = _require(params, "columns")
     cols = ", ".join(_qi(c) for c in order)
     return f"SELECT {cols}, * EXCEPT ({cols}) FROM {_sub(sql)}"
@@ -118,7 +118,7 @@ def op_drop(sql, params, ctx):
 @_register("rename")
 def op_rename(sql, params, ctx):
     mapping = _require(params, "mapping")
-    # ClickHouse non ha `* RENAME`: ricostruiamo la lista mantenendo l'ordine
+    # ClickHouse has no `* RENAME`: the list is rebuilt keeping the order
     cols = ctx.columns_of(sql)
     parts = [
         f"{_qi(c)} AS {_qi(mapping[c])}" if c in mapping else _qi(c) for c in cols
@@ -127,10 +127,10 @@ def op_rename(sql, params, ctx):
 
 
 def _cast_expr(c: str, base: str, dt: str) -> str:
-    """Stesso STANDARD del cast di Polars/DuckDB (vedi operations.op_cast):
-    fallito → NULL; testo con spazi tagliati; testo → intero solo se intero
-    letterale; numero → intero per troncamento; float → testo con ".0" sui
-    valori interi (ClickHouse stamperebbe 200.0 come "200")."""
+    """The same STANDARD as Polars'/DuckDB's cast (see operations.op_cast): failed → NULL;
+    text with its spaces trimmed; text → integer only for an integer literal; number →
+    integer by truncation; float → text with ".0" on whole values (ClickHouse would print
+    200.0 as "200")."""
     is_text = base == "String" or base.startswith("FixedString")
     is_num = base in _CH_FLOATS or base.startswith("Decimal")
     if dt == "int":
@@ -150,8 +150,8 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
         return f"CAST({c} AS Nullable(String))"
     if dt == "date":
         if is_text:
-            # ClickHouse è permissivo ("2024-02-30" → 1° marzo): valido solo se
-            # la data riletta coincide col testo, come Polars/DuckDB
+            # ClickHouse is lenient ("2024-02-30" → 1 March): valid only when the date
+            # read back matches the text, as Polars/DuckDB
             return f"if(toString(toDate32OrNull(trimBoth({c}))) = trimBoth({c}), toDate32OrNull(trimBoth({c})), NULL)"
         return f"toDate32OrNull(toString({c}))"
     if dt == "datetime":
@@ -179,7 +179,7 @@ def op_cast(sql, params, ctx):
     return f"SELECT * REPLACE ({', '.join(repls)}) FROM {_sub(sql)}"
 
 
-# ── filtri ────────────────────────────────────────────────────────────────────
+# ── filters ────────────────────────────────────────────────────────────────────
 def _predicate(column: str, operator: str, value: Any) -> str:
     c = _qi(column)
     if operator == "is_null":
@@ -248,14 +248,14 @@ def _datetime_literal(v: str) -> str:
     return d.strftime("%Y-%m-%d %H:%M:%S") + (f".{d.microsecond:06d}" if d.microsecond else "")
 
 
-# ── riordino / righe ──────────────────────────────────────────────────────────
+# ── ordering / rows ──────────────────────────────────────────────────────────
 @_register("sort")
 def op_sort(sql, params, ctx):
     # the keys and a direction each (operations.sort_keys: `ignore_missing` too)
     keys = sort_keys(params, ctx.columns_of(sql) if params.get("ignore_missing") else None)
     if not keys:
         return sql
-    # standard cross-engine: NULL sempre in coda (vedi operations.op_sort)
+    # cross-engine standard: NULL always last (see operations.op_sort)
     order = ", ".join(f"{_qi(c)} {'DESC' if d else 'ASC'} NULLS LAST" for c, d in keys)
     return f"SELECT * FROM {_sub(sql)} ORDER BY {order}"
 
@@ -267,7 +267,7 @@ def op_limit(sql, params, ctx):
 
 @_register("sample")
 def op_sample(sql, params, ctx):
-    # campione casuale deterministico: hash del contenuto della riga (+ seme)
+    # a deterministic random sample: hash of the row's content (+ seed)
     threshold, seed = sample_threshold(params)
     return f"SELECT * FROM {_sub(sql)} WHERE cityHash64({seed}, *) % {SAMPLE_BUCKETS} < {threshold}"
 
@@ -304,14 +304,14 @@ _AGG = {
 
 
 def _aggregato(func: str, col_sql: str, cond: str | None = None) -> str:
-    """L'aggregazione in SQL ClickHouse (col combinatore -If se c'è una condizione).
-    std/var campionarie: NULL con meno di due valori, come Polars, DuckDB e BigQuery
-    (ClickHouse dà NaN, che «riempi i NULL» a valle non sostituisce)."""
+    """The aggregation in ClickHouse SQL (with the -If combinator when there is a condition).
+    Sample std/var: NULL with fewer than two values, as Polars, DuckDB and BigQuery
+    (ClickHouse gives NaN, which «fill the NULLs» downstream does not replace)."""
     suff, extra = ("If", f", {cond}") if cond else ("", "")
-    espr = f"{_AGG[func]}{suff}({col_sql}{extra})"
+    expr_ = f"{_AGG[func]}{suff}({col_sql}{extra})"
     if func in ("std", "var"):
-        return f"if(count{suff}({col_sql}{extra}) > 1, {espr}, NULL)"
-    return espr
+        return f"if(count{suff}({col_sql}{extra}) > 1, {expr_}, NULL)"
+    return expr_
 
 
 @_register("group_by")
@@ -330,8 +330,8 @@ def op_group_by(sql, params, ctx):
     return f"SELECT {', '.join(parts)} FROM {_sub(sql)} GROUP BY {by_sql}"
 
 
-# ── compute (espressioni scalari, SENZA subquery né lettura file/rete) ─────────
-# il controllo è in app/engine/espressioni.py (analizza l'espressione, non cerca parole)
+# ── compute (scalar expressions, WITHOUT subqueries or file/network reads) ────
+# the check is in app/engine/espressioni.py (it parses the expression, it does not match words)
 
 
 @_register("compute")
@@ -345,7 +345,7 @@ def op_compute(sql, params, ctx):
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
             raise EngineError("compute: name and expression are required")
-        if espressione_vietata(expr, "clickhouse"):
+        if forbidden_expression(expr, "clickhouse"):
             raise EngineError(
                 f"compute: the expression of '{name}' is not allowed (no subqueries, "
                 "tables, table functions or functions that read data outside the row — "
@@ -353,7 +353,7 @@ def op_compute(sql, params, ctx):
             )
         expr = _utf8_functions(expr)
         if name in existing:
-            # colonna esistente: sovrascritta NELLA SUA POSIZIONE (come Polars/DuckDB)
+            # an existing column: overwritten IN ITS PLACE (as Polars/DuckDB)
             sql = f"SELECT * REPLACE (({expr}) AS {_qi(name)}) FROM {_sub(sql)}"
         else:
             sql = f"SELECT *, ({expr}) AS {_qi(name)} FROM {_sub(sql)}"
@@ -361,9 +361,9 @@ def op_compute(sql, params, ctx):
     return sql
 
 
-# In ClickHouse upper/lower/length/substring/reverse lavorano sui BYTE: "Città"
-# → "CITTà", length = 6. Le varianti *UTF8 danno lo stesso risultato di
-# Polars/DuckDB (caratteri): la stessa espressione del compute vale ovunque.
+# In ClickHouse upper/lower/length/substring/reverse work on BYTES: "Città" →
+# "CITTà", length = 6. The *UTF8 variants give the same result as Polars/DuckDB
+# (characters): the same compute expression holds everywhere.
 _CH_UTF8_FUNCS = {
     "upper": "upperUTF8", "ucase": "upperUTF8", "lower": "lowerUTF8", "lcase": "lowerUTF8",
     "length": "lengthUTF8", "char_length": "lengthUTF8", "character_length": "lengthUTF8",
@@ -377,10 +377,10 @@ def _utf8_functions(expr: str) -> str:
     return _CH_UTF8_RE.sub(lambda m: _CH_UTF8_FUNCS[m.group(1).lower()] + "(", expr)
 
 
-# ── Execute SQL (query libera sull'input, dialetto ClickHouse) ────────────────
-# Table function di ACCESSO ESTERNO / ESECUZIONE: vietate. Non limitano lo SQL
-# analitico (SELECT/JOIN/GROUP BY/window/subquery/CTE restano liberi) — bloccano
-# solo lettura file / SSRF / RCE sul server, che romperebbero l'RBAC per tutti.
+# ── Execute SQL (a free query on the input, ClickHouse dialect) ───────────────
+# Table functions of EXTERNAL ACCESS / EXECUTION: forbidden. They do not limit the
+# analytical SQL (SELECT/JOIN/GROUP BY/window/subquery/CTE stay free) — they only block
+# file reads / SSRF / RCE on the server, which would break the RBAC for everyone.
 _SQL_FORBIDDEN_FUNCS = re.compile(
     r"\b(?:file|url|s3|s3Cluster|fileCluster|urlCluster|hdfs|hdfsCluster|"
     r"remote|remoteSecure|cluster|clusterAllReplicas|"
@@ -388,7 +388,7 @@ _SQL_FORBIDDEN_FUNCS = re.compile(
     r"azureBlobStorage|gcs|deltaLake|iceberg|hudi|executable|dictionary)\s*\(",
     re.IGNORECASE,
 )
-# statement/keyword pericolosi (DDL/DML, scrittura file, cambio settings, system)
+# dangerous statements and keywords (DDL/DML, file writes, settings changes, system)
 _SQL_FORBIDDEN_KW = re.compile(
     r"\b(?:insert|attach|detach|create|alter|drop|truncate|optimize|rename|"
     r"grant|revoke|system|use|kill|set|into\s+outfile|into\s+dumpfile)\b",
@@ -398,21 +398,21 @@ _SQL_FORBIDDEN_KW = re.compile(
 
 @_register("sql")
 def op_sql(sql, params, ctx):
-    """Query SQL libera (dialetto ClickHouse) sull'input del nodo, esposto come
-    CTE `self` (alias `input`) — stessa convenzione di Polars/DuckDB. Composabile
-    come ogni altra op (resta una SELECT annidabile).
+    """A free SQL query (ClickHouse dialect) on the node's input, exposed as the CTE `self`
+    (alias `input`) — the same convention as Polars/DuckDB. Composable as any other op
+    (it stays a nestable SELECT).
 
-    Sicurezza: lo SQL analitico è libero, ma sono vietate le table function di
-    accesso esterno/esecuzione (file/url/s3/remote/executable/…), i commenti e gli
-    statement multipli — così non si trasforma in lettura file/SSRF/RCE sul server.
+    Security: the analytical SQL is free, but the table functions of external access or
+    execution (file/url/s3/remote/executable/…), comments and multiple statements are
+    forbidden — so it cannot turn into a file read, SSRF or RCE on the server.
     """
     query = str(_require(params, "query")).strip().rstrip(";").strip()
     if not query:
         raise EngineError("sql: the query is empty")
-    # il nodo TRASFORMA il suo input: dev'essere referenziato come `self` o `input`
+    # the node TRANSFORMS its input: it must be referred to as `self` or `input`
     if not re.search(r"\bfrom\s+(?:self|input)\b", query, re.IGNORECASE):
         raise EngineError("sql: the query must read from the node's input — use `FROM self` (or `FROM input`).")
-    # niente commenti (offuscherebbero i controlli) né più istruzioni
+    # no comments (they would hide from the checks) and no more than one statement
     if "--" in query or "/*" in query:
         raise EngineError("sql: comments (-- and /* */) are not allowed in the SQL node.")
     if ";" in query:
@@ -422,23 +422,23 @@ def op_sql(sql, params, ctx):
             "sql: the query may only read the input. Table functions with external "
             "access (file/url/s3/remote/…), execution (executable) and DDL/DML are not allowed."
         )
-    # lista BIANCA delle tabelle: la lista nera qui sopra resta come prima linea,
-    # ma da sola non bastava (`merge()`, `information_schema`: vedi sql_guard)
+    # an ALLOWLIST of the tables: the denylist above stays as the first line, but alone
+    # it was not enough (`merge()`, `information_schema`: see sql_guard)
     ensure_reads_only_input(query, "clickhouse")
-    # espone l'input come `self` (e alias `input`); resta una SELECT annidabile.
-    # Una query col SUO `WITH` riceve le nostre CTE in testa al suo elenco: due WITH di
-    # fila non sono SQL valido (trovato dall'oracolo dell'export dbt il 2026-10-10:
-    # su ClickHouse un nodo sql con WITH falliva con SYNTAX_ERROR, su Polars no)
-    nostre = f"input AS ({sql}), self AS (SELECT * FROM input)"
-    proprio = re.match(r"(?is)^\s*with\s+", query)
-    if proprio:
-        return f"WITH {nostre}, {query[proprio.end():]}"
-    return f"WITH {nostre} {query}"
+    # exposes the input as `self` (and the alias `input`); it stays a nestable SELECT.
+    # A query with ITS OWN `WITH` gets our CTEs at the head of its list: two WITHs in a
+    # row are not valid SQL (found by the dbt export oracle, 2026-10-10: on ClickHouse a
+    # sql node with WITH failed with SYNTAX_ERROR, on Polars it did not)
+    ours = f"input AS ({sql}), self AS (SELECT * FROM input)"
+    own = re.match(r"(?is)^\s*with\s+", query)
+    if own:
+        return f"WITH {ours}, {query[own.end():]}"
+    return f"WITH {ours} {query}"
 
 
-# ── join / union (leggono il lato destro dalla sorgente annidata) ─────────────
+# ── join / union (they read the right side from the nested source) ─────────────
 def _join_condition(params: dict) -> tuple[str, str]:
-    """Torna (clausola SQL, kind) dove kind='using' o 'on'."""
+    """Returns (SQL clause, kind) where kind='using' or 'on'."""
     if "on" in params and params["on"]:
         keys = ", ".join(_qi(c) for c in _as_list(params["on"]))
         return f"USING ({keys})", "using"
@@ -451,10 +451,9 @@ def _join_condition(params: dict) -> tuple[str, str]:
 
 
 def _join_select(lcols, rcols, skip_right: set, coalesce_keys: set = frozenset()) -> str:
-    """Colonne del risultato: tutte da sinistra + quelle di destra (chiavi USING
-    escluse), con suffisso _right sulle omonime — come Polars/DuckDB. Nei
-    full/right join le chiavi USING sono coalesce(sinistra, destra): valorizzate
-    anche nelle righe che esistono solo a destra."""
+    """The result's columns: all the left's + the right's (USING keys excluded), with the
+    _right suffix on the same names — as Polars/DuckDB. In full/right joins the USING keys
+    are coalesce(left, right): filled in the rows that exist only on the right too."""
     lset = set(lcols)
     parts = [
         f"coalesce(l.{_qi(c)}, r.{_qi(c)}) AS {_qi(c)}" if c in coalesce_keys else f"l.{_qi(c)}"
@@ -504,14 +503,14 @@ def op_join(sql, params, ctx):
 def op_union(sql, params, ctx):
     right = ctx.build_right(_require(params, "right"))
     if params.get("strategy") == "strict":
-        # stesse colonne e tipi, in qualunque ordine: unite per NOME (posizionale le
-        # scambiava in silenzio)
+        # the same columns and types, in any order: joined by NAME (by position they
+        # were swapped silently)
         left_s, right_s = ctx.schema_of(sql), ctx.schema_of(right)
         check_strict_union([(n, _bare_type(t)) for n, t in left_s], [(n, _bare_type(t)) for n, t in right_s])
         cols = ", ".join(_qi(n) for n, _ in left_s)
         return f"SELECT {cols} FROM {_sub(sql)} UNION ALL SELECT {cols} FROM {_sub(right)}"
-    # relaxed: allinea per NOME (ClickHouse non ha UNION ALL BY NAME) → per ogni
-    # colonna dell'unione, ciascun lato la seleziona o NULL se assente
+    # relaxed: aligned by NAME (ClickHouse has no UNION ALL BY NAME) → for every column
+    # of the union, each side selects it, or NULL when it lacks it
     lcols, rcols = ctx.columns_of(sql), ctx.columns_of(right)
     allcols = lcols + [c for c in rcols if c not in set(lcols)]
     lset, rset = set(lcols), set(rcols)
@@ -530,14 +529,14 @@ def _bare_type(t: str) -> str:
         t = m.group(1)
 
 
-# ── pivot / unpivot (righe↔colonne) ───────────────────────────────────────────
-# Stesso standard cross-engine di operations.py (`pivot_label`): nomi colonna,
-# semantica NULL e tipi coincidono con Polars/DuckDB, così un flusso progettato
-# su un engine gira identico su ClickHouse in produzione.
+# ── pivot / unpivot (rows↔columns) ────────────────────────────────────────────
+# The same cross-engine standard as operations.py (`pivot_label`): column names, NULL
+# semantics and types match Polars/DuckDB, so a flow designed on one engine runs the
+# same on ClickHouse in production.
 @_register("pivot")
 def op_pivot(sql, params, ctx):
     index = _as_list(_require(params, "index"))
-    on = _as_list(_require(params, "on"))  # più colonne = combinazioni
+    on = _as_list(_require(params, "on"))  # several columns = combinations
     values = _require(params, "values")
     func = params.get("func", "sum")
     if func not in _AGG:
@@ -550,9 +549,9 @@ def op_pivot(sql, params, ctx):
             f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
             f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
-    combos = ctx.distinct_rows(base, on)  # ClickHouse non ha PIVOT: colonne condizionali
-    # ordine delle colonne nuove = ordine TESTUALE delle etichette (come Polars e
-    # DuckDB, che ordinano la chiave stringa): "10" < "2", "null" tra "false" e "true"
+    combos = ctx.distinct_rows(base, on)  # ClickHouse has no PIVOT: conditional columns
+    # the new columns' order = the labels' TEXT order (as Polars and DuckDB, which sort
+    # the string key): "10" < "2", "null" between "false" and "true"
     combos = sorted(combos, key=lambda combo: tuple(pivot_label(v) for v in combo))
     idx_sql = ", ".join(_qi(c) for c in index)
     cols = [idx_sql] if idx_sql else []
@@ -561,8 +560,8 @@ def op_pivot(sql, params, ctx):
             f"{_qi(c)} IS NULL" if v is None else f"{_qi(c)} = {_lit(v)}" for c, v in zip(on, combo)
         )
         colname = PIVOT_LABEL_SEP.join(pivot_label(v) for v in combo)
-        # combinatore -If: aggrega solo le righe della combinazione; nessuna riga
-        # (o soli NULL) → NULL, tranne count/n_unique → 0 (Int64 come altrove)
+        # the -If combinator: aggregates only the combination's rows; no rows (or only
+        # NULLs) → NULL, except count/n_unique → 0 (Int64 as elsewhere)
         expr = _aggregato(func, _qi(values), cond)
         if func in ("count", "n_unique"):
             expr = f"toInt64({expr})"
@@ -570,18 +569,18 @@ def op_pivot(sql, params, ctx):
     return f"SELECT {', '.join(cols)} FROM {base} GROUP BY {idx_sql}"
 
 
-# tipi ClickHouse → famiglia, per il supertipo del valore in unpivot
+# ClickHouse types → family, for the value's supertype in unpivot
 _CH_INTS = {f"Int{b}" for b in (8, 16, 32, 64, 128, 256)} | {f"UInt{b}" for b in (8, 16, 32, 64, 128, 256)}
 _CH_FLOATS = {"Float32", "Float64"}
 
 
 def temporal_safe_sql(ctx, sql: str) -> str:
-    """ClickHouse esporta `Date` come UInt16 e `DateTime` (32 bit) come UInt32 —
-    INTERI — in Arrow/Parquet (19727 al posto di 2024-01-05, 1704450600 al
-    posto di 2024-01-05 10:30:00): ogni colonna di quei tipi, prodotta da
-    cast/compute/funzioni di data, viene promossa a Date32/DateTime64, che
-    escono come DATE/TIMESTAMP veri. Va applicato a ogni SQL FINALE (preview,
-    run, cache): le sorgenti lette da parquet sono già Date32/DateTime64."""
+    """ClickHouse exports `Date` as UInt16 and `DateTime` (32 bit) as UInt32 — INTEGERS — to
+    Arrow/Parquet (19727 instead of 2024-01-05, 1704450600 instead of 2024-01-05
+    10:30:00): every column of those types, made by casts, computes or date functions, is
+    promoted to Date32/DateTime64, which come out as true DATE/TIMESTAMP. To apply to every
+    FINAL SQL (preview, run, cache): the sources read from parquet are Date32/DateTime64
+    already."""
     repls = []
     for name, t in ctx.schema_of(sql):
         base = _ch_base_type(t)
@@ -595,7 +594,7 @@ def temporal_safe_sql(ctx, sql: str) -> str:
 
 
 def _ch_base_type(t: str) -> str:
-    """Toglie i wrapper Nullable(...) / LowCardinality(...)."""
+    """Removes the Nullable(...) / LowCardinality(...) wrappers."""
     t = t.strip()
     for w in ("Nullable(", "LowCardinality("):
         while t.startswith(w) and t.endswith(")"):
@@ -604,9 +603,8 @@ def _ch_base_type(t: str) -> str:
 
 
 def unpivot_value_type(types: list[str]) -> str:
-    """Supertipo del valore sciolto (stessa regola di Polars/DuckDB): tutti
-    interi → Int64; tutti numerici → Float64; tutti dello stesso tipo → quello;
-    altrimenti String."""
+    """The unpivoted value's supertype (the same rule as Polars/DuckDB): all integers →
+    Int64; all numeric → Float64; all of one type → that one; otherwise String."""
     bases = [_ch_base_type(t) for t in types]
     if all(b in _CH_INTS for b in bases):
         return "Int64"
@@ -623,7 +621,7 @@ def op_unpivot(sql, params, ctx):
     index = params.get("index") or []
     var = params.get("variable_name") or "variable"
     val = params.get("value_name") or "value"
-    schema = dict(ctx.schema_of(sql))  # nome → tipo ClickHouse
+    schema = dict(ctx.schema_of(sql))  # name → ClickHouse type
     allcols = list(schema)
     melt = on if on else [c for c in allcols if c not in set(index)]
     if not melt:
@@ -631,15 +629,15 @@ def op_unpivot(sql, params, ctx):
     missing = [c for c in melt if c not in schema]
     if missing:
         raise EngineError(f"unpivot: columns not found: {', '.join(missing)}")
-    # come Polars: restano SOLO le colonne indice (le altre non sciolte si perdono)
+    # as Polars: ONLY the index columns stay (the other columns not unpivoted are lost)
     keep = [c for c in allcols if c in set(index)]
     keep_sql = "".join(f"{_qi(c)}, " for c in keep)
-    # arrayJoin su tuple (nome, valore al supertipo comune): una riga per colonna
+    # arrayJoin over tuples (name, value at the common supertype): one row per column
     vtype = unpivot_value_type([schema[c] for c in melt])
 
     def _val(c: str) -> str:
         if vtype == "String" and _ch_base_type(schema[c]) in _CH_FLOATS:
-            # ClickHouse stampa 7.0 come "7": allineato a Polars/DuckDB ("7.0")
+            # ClickHouse prints 7.0 as "7": aligned to Polars/DuckDB ("7.0")
             q = _qi(c)
             return (f"if({q} = trunc({q}) AND abs({q}) < 1e15, "
                     f"concat(toString(toInt64({q})), '.0'), toString({q}))")

@@ -1,5 +1,5 @@
-"""I data contracts sul parquet che sta nello storage: valutare, profilare, e la
-decisione che conta — se i dati appena scritti si possono pubblicare."""
+"""The data contracts on the parquet in the storage: evaluating, profiling, and the
+decision that counts — whether the data just written can be published."""
 from __future__ import annotations
 
 import logging
@@ -23,31 +23,31 @@ def _scan(bucket: str, key: str, workdir: str) -> pl.LazyFrame:
 
 
 def evaluate_key(bucket: str, key: str, document: dict, snapshot_at: datetime | None = None) -> dict:
-    """Il referto del contratto sul parquet `bucket/key`."""
+    """The contract's report on the parquet `bucket/key`."""
     with tempfile.TemporaryDirectory(prefix="contract-") as tmp:
         return evaluate(_scan(bucket, key, tmp), document, snapshot_at=snapshot_at)
 
 
 def profile_key(bucket: str, key: str) -> dict:
-    """Il profilo dei dati e il contratto che se ne può proporre."""
+    """The data's profile and the contract one can propose from it."""
     with tempfile.TemporaryDirectory(prefix="contract-") as tmp:
         prof = profile(_scan(bucket, key, tmp))
     return {"profile": prof, "proposal": propose(prof)}
 
 
 def check_before_publish(bucket: str, key: str, contract: dict) -> dict:
-    """Valuta i dati APPENA SCRITTI, prima che il gateway li pubblichi.
+    """Evaluates the data JUST WRITTEN, before the gateway publishes it.
 
-    Torna il referto; chi decide è il gateway, che con un esito `failed` non
-    scambia lo snapshot. Se la valutazione stessa non riesce (lo storage non
-    risponde, il parquet non si legge) non si può sapere se il contratto regge:
-    con anche una sola regola bloccante NON si pubblica — un contratto non passa
-    perché non lo si è potuto controllare — mentre un contratto di soli avvisi,
-    che per definizione non ferma niente, pubblica e lo dice."""
+    Returns the report; the gateway decides, and with a `failed` outcome it does not swap
+    the snapshot. When the evaluation itself fails (the storage does not answer, the
+    parquet cannot be read) one cannot know whether the contract holds: with even one
+    blocking rule it does NOT publish — a contract never passes because it could not be
+    checked — while a contract of warnings only, which by definition stops nothing,
+    publishes and says so."""
     try:
         return evaluate_key(bucket, key, contract)
     except Exception as e:  # noqa: BLE001
-        logger.exception("contratto non valutabile su %s/%s", bucket, key)
+        logger.exception("contract cannot be evaluated on %s/%s", bucket, key)
         blocking = any(r.get("severity") != "warning" for r in (contract.get("rules") or []) if isinstance(r, dict))
         return {
             "outcome": "failed" if blocking else "warning",

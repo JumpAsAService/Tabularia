@@ -21,7 +21,7 @@ from app.engine.base import Operation
 from app.engine.cache import StepCache, plan_hashes
 import logging
 from app.core.config import get_settings
-from app.core.regolazioni import valore_all_avvio
+from app.core.panel_settings import value_at_start
 from app.core.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
@@ -35,19 +35,19 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.post("/transform-data", response_model=TaskResponse)
 def submit_transform_data_task(request: TransformDataRequest):
     """
-    Submit un task per trasformare dati con operazioni multiple.
+    Submits a task that transforms data with several operations.
     """
     logger.info(f"📩 Submitting transform_data_task: {request.input_key}")
     
     operations = [op.model_dump() for op in request.operations]
 
-    # I kwarg OPZIONALI si inviano solo se valorizzati. Celery serializza per
-    # nome: un'API aggiornata che manda un parametro che il worker ancora vecchio
-    # non ha in firma lo fa morire di TypeError PRIMA di iniziare — ogni run
-    # fallito per tutta la finestra di un aggiornamento progressivo. È già
-    # successo con `mirror`, poi con `sort_keys` su preview_task; qui valeva per
-    # `mirror`, `email` e `engine` insieme. Omettere un kwarg con default è
-    # sempre sicuro, quindi il worker vecchio regge finché la feature non si usa.
+    # OPTIONAL kwargs are sent only when set. Celery serializes by name: an upgraded
+    # API that sends a parameter the still-old worker lacks in its signature makes it
+    # die of TypeError BEFORE starting — every run failed for the whole window of a
+    # rolling upgrade. It happened with `mirror`, then with `sort_keys` on
+    # preview_task; here it held for `mirror`, `email` and `engine` together. Leaving
+    # out a kwarg with a default is always safe, so the old worker holds until the
+    # feature is used.
     extra = {
         k: v
         for k, v in (
@@ -75,20 +75,20 @@ def submit_transform_data_task(request: TransformDataRequest):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Engine: preview sincrona + metadati (definite PRIMA di /{task_id} per non
-# essere catturate dalla route dinamica)
+# Engine: synchronous preview + metadata (defined BEFORE /{task_id} so the dynamic
+# route does not catch them)
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get("/operations", response_model=list[str])
 def list_operations():
-    """Elenca le operazioni supportate dall'engine (per costruire il flow)."""
+    """Lists the operations the engine supports (to build the flow)."""
     return available_operations()
 
 
-# timeout dell'attesa del risultato dell'anteprima (secondi); override via env
-PREVIEW_TIMEOUT_SECONDS = float(valore_all_avvio("PREVIEW_TIMEOUT_SECONDS"))  # env, or the panel's at start
-# mappa il tag d'errore del task allo status HTTP
+# timeout of the wait for the preview's result (seconds); overridden from the environment
+PREVIEW_TIMEOUT_SECONDS = float(value_at_start("PREVIEW_TIMEOUT_SECONDS"))  # env, or the panel's at start
+# maps the task's error tag to the HTTP status
 _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "superseded": 409}
-# ogni quanto l'attesa controlla di non essere stata superata
+# how often the wait checks it has not been superseded
 _PREVIEW_POLL_SECONDS = 0.25
 _SUPERSEDED = "Preview superseded by a more recent request"
 # how long the synchronous export waits for a worker to pick it up, on top of the
@@ -99,12 +99,12 @@ EXPORT_QUEUE_WAIT_SECONDS = 600
 @router.post("/preview", response_model=PreviewResult)
 def preview_flow(request: PreviewRequest):
     """
-    Esegue il flow su un campione e ne ritorna schema + prime N righe.
+    Runs the flow on a sample and returns the schema + the first N rows.
 
-    L'esecuzione avviene su un WORKER dedicato (coda `preview`), non nel processo
-    API: l'engine non gira più in-process nel backend, che resta leggero. La
-    risposta resta SINCRONA (submit + attesa del risultato) → il frontend non
-    cambia. Su timeout la preview viene revocata per non intasare il worker.
+    It runs on a dedicated WORKER (queue `preview`), not in the API process: the engine
+    no longer runs in the backend's process, which stays light. The answer stays
+    SYNCHRONOUS (submit + wait for the result) → the frontend does not change. On a
+    timeout the preview is revoked so as not to clog the worker.
     """
     operations = [op.model_dump() for op in request.operations]
     kwargs = {
@@ -115,16 +115,15 @@ def preview_flow(request: PreviewRequest):
         "engine": request.engine,
         "no_cache": request.no_cache,
     }
-    # AGGIUNTO SOLO SE VALORIZZATO. Durante un aggiornamento progressivo l'API
-    # nuova può parlare con un worker VECCHIO: un kwarg che quel worker non
-    # conosce fa fallire OGNI preview (TypeError → 500). Omettendolo quando è
-    # vuoto — il caso normale, e tutte le preview dell'editor — le preview
-    # continuano a funzionare per tutta la finestra di rollout.
+    # ADDED ONLY WHEN SET. During a rolling upgrade the new API may talk to an OLD
+    # worker: a kwarg that worker does not know fails EVERY preview (TypeError → 500).
+    # Leaving it out when empty — the usual case, and all the editor's previews — keeps
+    # the previews working through the whole rollout window.
     if request.sort_keys:
         kwargs["sort_keys"] = request.sort_keys
-    if request.principal:  # stessa regola: solo se valorizzato (le preview dell'editor non lo mandano)
+    if request.principal:  # the same rule: only when set (the editor's previews do not send it)
         kwargs["principal"] = request.principal
-    # id deciso QUI: serve prima dell'invio per prenotare lo slot
+    # the id decided HERE: it is needed before sending, to book the slot
     task_id = str(uuid.uuid4())
     previous = None
     if request.slot:
@@ -133,10 +132,10 @@ def preview_flow(request: PreviewRequest):
         "app.tasks.jobs.preview_task", kwargs=kwargs, queue="preview", task_id=task_id,
     )
     if previous and previous != task_id:
-        # Butta giu' la preview che occupava lo slot. In coda: il worker la scarta
-        # all'arrivo. In esecuzione: SIGUSR1 = SoftTimeLimitExceeded DENTRO il
-        # task — il processo sopravvive (niente ricarica da 1,5 s) e l'engine
-        # ripulisce (client, query sul server). Il SIGTERM lo ucciderebbe.
+        # Knocks down the preview that held the slot. Queued: the worker discards it on
+        # arrival. Running: SIGUSR1 = SoftTimeLimitExceeded INSIDE the task — the process
+        # survives (no 1.5 s reload) and the engine cleans up (client, query on the
+        # server). SIGTERM would kill it.
         celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
 
     deadline = time.monotonic() + PREVIEW_TIMEOUT_SECONDS
@@ -146,20 +145,20 @@ def preview_flow(request: PreviewRequest):
                 payload = async_result.get(timeout=_PREVIEW_POLL_SECONDS)
                 break
             except CeleryTimeoutError:
-                # Superata mentre aspettavo? Una preview ancora IN CODA non viene
-                # marcata revocata finche' il worker non la raggiunge: senza questo
-                # controllo il thread dell'API resterebbe qui fino ad allora.
+                # Superseded while waiting? A preview still QUEUED is not marked revoked
+                # until the worker reaches it: without this check the API's thread would
+                # stay here until then.
                 if request.slot and preview_slots.owner(request.slot) not in (None, task_id):
                     raise HTTPException(status_code=409, detail=_SUPERSEDED)
                 if time.monotonic() >= deadline:
-                    async_result.revoke(terminate=True)  # ferma la preview in corso
+                    async_result.revoke(terminate=True)  # stops the preview in progress
                     raise HTTPException(
                         status_code=504, detail="Preview timed out: the worker did not answer in time"
                     )
             except TaskRevokedError:
                 raise HTTPException(status_code=409, detail=_SUPERSEDED)
     finally:
-        async_result.forget()  # non accumulare risultati nel backend
+        async_result.forget()  # do not pile up results in the backend
         if request.slot:
             preview_slots.release(request.slot, task_id)
 
@@ -224,8 +223,8 @@ def _failed(payload: dict) -> HTTPException:
 @router.post("/export")
 def export_flow(request: ExportRequest):
     """
-    Esegue il flow (anche parziale, fino a un nodo intermedio) e restituisce il
-    risultato come file scaricabile: csv, o xlsx col tetto righe del formato (~1M).
+    Runs the flow (partially too, up to an intermediate node) and returns the result as a
+    downloadable file: csv, or xlsx with the format's row cap (~1M).
 
     The file is written by a worker (see `export_task`) and this call waits for it,
     then streams it and deletes it: same contract as ever for API callers. The
@@ -262,21 +261,21 @@ def start_export(request: ExportStart):
 
 # an exception Celery could not rebuild from its JSON (botocore's want keyword arguments)
 # comes back as «<class 'botocore.exceptions.EndpointConnectionError'>(['Could not …'])»
-_NON_RICOSTRUITA = re.compile(r"^<class '(?:[\w.]+\.)?(\w+)'>\((?:\[|\()?['\"]?(.*?)['\"]?,?(?:\]|\))?\)$", re.S)
+_NOT_REBUILT = re.compile(r"^<class '(?:[\w.]+\.)?(\w+)'>\((?:\[|\()?['\"]?(.*?)['\"]?,?(?:\]|\))?\)$", re.S)
 # the storage not answering: what an administrator reads instead of botocore's names
 _STORAGE_GIU = {"EndpointConnectionError", "ConnectTimeoutError", "ConnectionClosedError", "ReadTimeoutError"}
 
 
-def leggibile(info: object) -> str:
+def readable(info: object) -> str:
     """The reason of a failed task, as people read it."""
-    testo = str(info)
-    m = _NON_RICOSTRUITA.match(testo.strip())
+    text = str(info)
+    m = _NOT_REBUILT.match(text.strip())
     if not m:
-        return testo
-    nome, messaggio = m.group(1), m.group(2).strip()
+        return text
+    nome, message = m.group(1), m.group(2).strip()
     if nome in _STORAGE_GIU:
-        return f"The object storage is not answering: {messaggio}"
-    return f"{nome}: {messaggio}" if messaggio else nome
+        return f"The object storage is not answering: {message}"
+    return f"{nome}: {message}" if message else nome
 
 
 @router.get("/exports/{task_id}")
@@ -292,11 +291,11 @@ def export_status(task_id: str, owner: str | None = None):
         error = _failed(payload)
         return {"status": "failed", "code": error.status_code, "detail": error.detail}
     if result.state in ("FAILURE", "REVOKED"):
-        return {"status": "failed", "code": 500, "detail": redact_secrets(leggibile(result.info))}
+        return {"status": "failed", "code": 500, "detail": redact_secrets(readable(result.info))}
     if result.state == "STARTED":
-        perso = worker_pool.lost(task_id, result.info)
-        if perso:
-            return {"status": "failed", "code": 503, "detail": perso}
+        lost = worker_pool.lost(task_id, result.info)
+        if lost:
+            return {"status": "failed", "code": 503, "detail": lost}
     return {"status": "running"}
 
 
@@ -321,20 +320,20 @@ def _inspect_together(*commands: str) -> list[dict]:
         return list(pool.map(ask, commands))
 
 
-# NB: definita PRIMA di /{task_id} per non essere catturata dalla route dinamica
+# NB: defined BEFORE /{task_id} so the dynamic route does not catch it
 @router.get("/queue")
 def queue_overview():
-    """Panoramica near-real-time della coda Celery per il pannello admin: worker
-    ONLINE (numero dinamico, quanti ce ne sono in quel momento), job IN
-    ESECUZIONE su ciascun worker, e job IN ATTESA (prefetchati dai worker +
-    backlog reale nel broker che l'inspect non vede).
+    """A near-real-time overview of the Celery queue for the admin panel: the workers
+    ONLINE (a dynamic number, as many as there are at that moment), the jobs RUNNING on
+    each worker, and the jobs WAITING (prefetched by the workers + the real backlog in the
+    broker that inspect does not see).
     """
     active, reserved, stats, active_queues = _inspect_together("active", "reserved", "stats", "active_queues")
     now = time.time()
 
     def _job(worker: str, t: dict, state: str) -> dict:
-        # time_start del task è epoch-secondi (task_track_started); se non è
-        # plausibile come epoch non calcoliamo il runtime (evita numeri assurdi)
+        # the task's time_start is epoch seconds (task_track_started); when it is not a
+        # plausible epoch the runtime is not computed (no absurd numbers)
         ts = t.get("time_start")
         runtime = round(now - ts, 1) if isinstance(ts, (int, float)) and ts > 1e9 else None
         return {
@@ -348,7 +347,7 @@ def queue_overview():
     running = [_job(w, t, "running") for w, ts in active.items() for t in ts]
     reserved_jobs = [_job(w, t, "reserved") for w, ts in reserved.items() for t in ts]
 
-    # worker online: unione delle chiavi viste da stats/active/reserved/queues
+    # workers online: the union of the keys seen by stats/active/reserved/queues
     names = set(stats) | set(active) | set(reserved) | set(active_queues)
     workers = []
     for name in sorted(names):
@@ -362,9 +361,9 @@ def queue_overview():
             "reserved": len(reserved.get(name) or []),
         })
 
-    # backlog nel broker (task accodati ma non ancora consegnati a un worker):
-    # LLEN delle code Redis/Valkey — l'inspect NON li vede. Client redis diretto
-    # sul broker URL (più robusto del canale kombu dentro il processo uvicorn).
+    # backlog in the broker (tasks queued but not yet handed to a worker): LLEN of the
+    # Redis/Valkey queues — inspect does NOT see them. A direct redis client on the
+    # broker URL (sturdier than the kombu channel inside the uvicorn process).
     queue_names = {q.get("name") for qs in active_queues.values() for q in qs} or {"celery"}
     broker: dict[str, int] = {}
     try:
@@ -386,17 +385,17 @@ def queue_overview():
         "running": running,
         "reserved": reserved_jobs,
         "queues": [{"name": k, "messages": v} for k, v in sorted(broker.items())],
-        "queued": queued,                              # nel broker, non ancora presi
+        "queued": queued,                              # in the broker, not taken yet
         "reserved_count": len(reserved_jobs),
         "running_count": len(running),
-        "waiting": queued + len(reserved_jobs),        # totale "in attesa"
+        "waiting": queued + len(reserved_jobs),        # total "waiting"
     }
 
 
 @router.get("/{task_id}", response_model=TaskStatusResponse)
 def get_task_status(task_id: str):
     """
-    Ottieni lo stato di un task.
+    Gets a task's state.
     """
     result = AsyncResult(task_id, app=celery_app)
     
@@ -408,22 +407,22 @@ def get_task_status(task_id: str):
     if result.status == "SUCCESS":
         response.result = result.result
     elif result.status == "FAILURE":
-        response.error = redact_secrets(leggibile(result.info))
-        # traceback completo: la causa vera (stack Polars, SQL, batch) che
-        # `str(info)` da solo perde — salvato dal gateway in Run.error_detail
-        # il traceback contiene il SQL costruito dall'engine, che senza named
-        # collection porta le chiavi dello storage (audit 2026-09-19, A2)
+        response.error = redact_secrets(readable(result.info))
+        # the whole traceback: the true cause (Polars stack, SQL, batch) that `str(info)`
+        # alone loses — stored by the gateway in Run.error_detail
+        # the traceback holds the SQL the engine built, which without a named collection
+        # carries the storage's keys (audit 2026-09-19, A2)
         response.error_detail = redact_secrets(result.traceback)
     elif result.status == "PENDING":
         response.message = "Task is pending"
     elif result.status == "STARTED":
         response.message = "Task is running"
-        # meta di STARTED: {pid, hostname, since} del worker, più l'avanzamento di un import
+        # the STARTED meta: the worker's {pid, hostname, since}, plus an import's progress
         info = result.info
-        perso = worker_pool.lost(task_id, info)
-        if perso:
+        lost = worker_pool.lost(task_id, info)
+        if lost:
             # its worker died with it (OOMKilled, pod gone): it will never end
-            response.status, response.message, response.error = "FAILURE", None, perso
+            response.status, response.message, response.error = "FAILURE", None, lost
         elif isinstance(info, dict) and isinstance(info.get("phase"), str):
             response.progress = {k: info[k] for k in ("phase", "rows", "file", "files", "call", "calls", "pages")
                                  if info.get(k) is not None}
@@ -436,7 +435,7 @@ def get_task_status(task_id: str):
 @router.delete("/{task_id}", response_model=TaskResponse)
 def revoke_task(task_id: str):
     """
-    Revoca/cancella un task in esecuzione.
+    Revokes a running task.
     """
     celery_app.control.revoke(task_id, terminate=True)
     
@@ -450,7 +449,7 @@ def revoke_task(task_id: str):
 @router.get("", response_model=list[dict])
 def list_active_tasks():
     """
-    Lista task attivi al momento.
+    Lists the tasks active now.
     """
     inspect = celery_app.control.inspect()
     active = inspect.active() or {}

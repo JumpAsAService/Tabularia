@@ -1,31 +1,30 @@
-"""Toglie i segreti dai testi che arrivano all'utente.
+"""Removes the secrets from the texts that reach the user.
 
-Serve perché l'engine mette le credenziali dello storage DENTRO il SQL: senza
-una `named collection`, ogni sorgente diventa
+Needed because the engine puts the storage's credentials INSIDE the SQL: without a
+`named collection`, every source becomes
 
     s3('<url>', '<access key>', '<secret key>', 'Parquet')
 
-ClickHouse maschera i segreti analizzando la query, ma se la query non si
-ANALIZZA non c'è niente da mascherare e il messaggio d'errore riporta il
-frammento in chiaro (audit 2026-09-19, A2: riprodotto con chiavi finte). Da lì
-il testo risale al toast dell'editor, a `Run.error_detail` salvato nel database
-e, attraverso l'assistente, al fornitore del modello.
+ClickHouse masks the secrets by parsing the query, but when the query does not PARSE
+there is nothing to mask and the error message carries the fragment in clear (audit
+2026-09-19, A2: reproduced with fake keys). From there the text goes up to the editor's
+toast, to `Run.error_detail` stored in the database and, through the assistant, to the
+model's provider.
 
-Si redige alla SORGENTE — nel processo che conosce i segreti — così ogni
-consumatore a valle riceve testo già pulito senza doversene ricordare.
+It is redacted at the SOURCE — in the process that knows the secrets — so every consumer
+downstream gets clean text without having to remember.
 
-Non sostituisce la `named collection`, che resta la soluzione giusta: lì le
-chiavi non entrano proprio nella query. Questa è la rete di sicurezza per le
-installazioni che non la usano, e per qualunque segreto che un domani finisse
-in un messaggio d'eccezione.
+It does not replace the `named collection`, which stays the right solution: there the
+keys do not enter the query at all. This is the safety net for the installations that do
+not use it, and for any secret that one day ended up in an exception's message.
 """
 from __future__ import annotations
 
 import re
 
 MASK = "***"
-# sotto questa lunghezza non si redige: una "chiave" di pochi caratteri
-# comparirebbe ovunque per caso e mangerebbe il messaggio
+# below this length nothing is redacted: a "key" of a few characters would appear
+# everywhere by chance and eat the message
 _MIN_LEN = 8
 
 
@@ -33,135 +32,133 @@ def _secrets() -> list[str]:
     from app.core.config import get_settings
 
     cfg = get_settings()
-    grezzi: list[str] = []
+    raw_values: list[str] = []
 
-    def aggiungi(v) -> None:
+    def add(v) -> None:
         if v is None:
             return
-        testo = v.get_secret_value() if hasattr(v, "get_secret_value") else str(v)
-        if testo and len(testo) >= _MIN_LEN:
-            grezzi.append(testo)
+        text = v.get_secret_value() if hasattr(v, "get_secret_value") else str(v)
+        if text and len(text) >= _MIN_LEN:
+            raw_values.append(text)
 
-    aggiungi(cfg.storage.access_key)
-    aggiungi(cfg.storage.secret_key)
+    add(cfg.storage.access_key)
+    add(cfg.storage.secret_key)
     ch = getattr(cfg, "clickhouse_external", None)
     if ch is not None:
-        aggiungi(getattr(ch, "password", None))
-        aggiungi(getattr(ch, "ai_password", None))
+        add(getattr(ch, "password", None))
+        add(getattr(ch, "ai_password", None))
     bq = getattr(cfg, "bigquery", None)
     if bq is not None:
-        aggiungi(getattr(bq, "credentials_b64", None))
-    # i più lunghi per primi: se un segreto ne contiene un altro, si redige
-    # prima quello esterno e non restano frammenti
-    return sorted(set(grezzi), key=len, reverse=True)
+        add(getattr(bq, "credentials_b64", None))
+    # the longest first: when a secret holds another, the outer one is redacted first
+    # and no fragments remain
+    return sorted(set(raw_values), key=len, reverse=True)
 
 
 def redact_secrets(text: str | None) -> str | None:
-    """Sostituisce con `***` ogni segreto noto trovato nel testo.
+    """Replaces every known secret found in the text with `***`.
 
-    Non solleva mai: un errore qui trasformerebbe un messaggio d'errore in un
-    altro errore, e il chiamante sta già gestendo un guasto."""
+    It never raises: an error here would turn an error message into another error, and
+    the caller is handling a fault already."""
     if not text:
         return text
     try:
-        pulito = text
-        for segreto in _secrets():
-            if segreto in pulito:
-                pulito = pulito.replace(segreto, MASK)
-        return pulito
-    except Exception:  # pragma: no cover — la redazione non deve mai propagare
+        clean = text
+        for secret in _secrets():
+            if secret in clean:
+                clean = clean.replace(secret, MASK)
+        return clean
+    except Exception:  # pragma: no cover — the redaction must never propagate
         return text
 
 
-# funzioni che toccano lo storage o la rete: dentro ci sono URL, bucket,
-# percorsi e — su ClickHouse senza named collection — le chiavi
-_NOMI_STORAGE = (
+# functions that touch the storage or the network: they hold URLs, buckets, paths
+# and — on ClickHouse without a named collection — the keys
+_STORAGE_NAMES = (
     "s3", "s3Cluster", "url", "urlCluster", "remote", "remoteSecure",
     "azureBlobStorage", "gcs", "hdfs",
 )
-_APERTURA = re.compile(r"\b(" + "|".join(_NOMI_STORAGE) + r")\s*\(", re.IGNORECASE)
+_OPENING = re.compile(r"\b(" + "|".join(_STORAGE_NAMES) + r")\s*\(", re.IGNORECASE)
 
 
-def _fine_argomenti(testo: str, inizio: int) -> int | None:
-    """Indice della parentesi che chiude quella aperta in `inizio`, o None se il
-    testo FINISCE prima. Conta le parentesi solo fuori dagli apici, perché un URL
-    o un percorso può contenerne."""
-    profondita = 0
-    apice = None
-    i = inizio
-    while i < len(testo):
-        c = testo[i]
-        if apice:
+def _end_of_arguments(text: str, start: int) -> int | None:
+    """The index of the parenthesis closing the one opened at `start`, or None when the text
+    ENDS before. Counts the parentheses only outside quotes, because a URL or a path may
+    hold some."""
+    depth = 0
+    quote = None
+    i = start
+    while i < len(text):
+        c = text[i]
+        if quote:
             if c == "\\":
                 i += 2
                 continue
-            if c == apice:
-                apice = None
+            if c == quote:
+                quote = None
         elif c in "'\"`":
-            apice = c
+            quote = c
         elif c == "(":
-            profondita += 1
+            depth += 1
         elif c == ")":
-            profondita -= 1
-            if profondita == 0:
+            depth -= 1
+            if depth == 0:
                 return i
         i += 1
     return None
 
 
 def redact_storage_args(text: str | None) -> str | None:
-    """Svuota gli argomenti di `s3(...)`, `url(...)` e simili.
+    """Empties the arguments of `s3(...)`, `url(...)` and the like.
 
-    Il `query_log` di ClickHouse maschera la chiave SEGRETA da sé, ma non la
-    chiave di ACCESSO, e insieme a quella restano in chiaro l'endpoint, il bucket
-    e il percorso dell'oggetto — verificato su un ClickHouse 24.8 il 2026-09-28.
-    In un elenco di query lente quegli argomenti non dicono niente di utile: a
-    chi guarda serve sapere QUALE query pesa, non su quale chiave.
+    ClickHouse's `query_log` masks the SECRET key by itself, but not the ACCESS key, and
+    with it the endpoint, the bucket and the object's path stay in clear — checked on a
+    ClickHouse 24.8 on 2026-09-28. In a list of slow queries those arguments say nothing
+    useful: whoever looks needs to know WHICH query weighs, not on which key.
 
-    Due trappole, entrambe trovate dal vivo:
+    Two traps, both found live:
 
-    - il testo può essere TRONCATO (il `query_log` si legge a fette): la
-      parentesi non si chiude mai, e proprio lì dentro sta la chiave d'accesso.
-      Senza chiusura si redige fino alla fine — meglio perdere la coda di una
-      query che pubblicare una credenziale;
-    - `s3(` può comparire DENTRO una stringa (`WHERE nome LIKE '%s3(%'`): lì non
-      è una chiamata e non si tocca, altrimenti si rovina una query legittima.
+    - the text may be TRUNCATED (the `query_log` is read in slices): the parenthesis never
+      closes, and the access key is right inside. Without a closing it is redacted to the
+      end — better to lose a query's tail than publish a credential;
+    - `s3(` may appear INSIDE a string (`WHERE name LIKE '%s3(%'`): there it is not a
+      call and is left alone, otherwise a legitimate query is spoiled.
     """
     if not text:
         return text
     try:
-        fuori = []
+        outside = []
         i = 0
-        apice = None
+        quote = None
         while i < len(text):
             c = text[i]
-            if apice:                      # dentro una stringa: si copia e basta
-                fuori.append(c)
+            if quote:                      # inside a string: just copied
+                outside.append(c)
                 if c == "\\" and i + 1 < len(text):
-                    fuori.append(text[i + 1])
+                    outside.append(text[i + 1])
                     i += 2
                     continue
-                if c == apice:
-                    apice = None
+                if c == quote:
+                    quote = None
                 i += 1
                 continue
             if c in "'\"`":
-                apice = c
-                fuori.append(c)
+                quote = c
+                outside.append(c)
                 i += 1
                 continue
-            m = _APERTURA.match(text, i)
+            m = _OPENING.match(text, i)
             if m:
-                apre = m.end() - 1
-                chiude = _fine_argomenti(text, apre)
-                fuori.append(text[i:m.end()])
-                fuori.append("\u2026)")
-                if chiude is None:         # troncata: si taglia qui
-                    return "".join(fuori)
-                i = chiude + 1
+                opens = m.end() - 1
+                closes = _end_of_arguments(text, opens)
+                outside.append(text[i:m.end()])
+                outside.append("\u2026)")
+                if closes is None:         # truncated: cut here
+                    return "".join(outside)
+                i = closes + 1
                 continue
-            fuori.append(c)
+            outside.append(c)
             i += 1
-        return "".join(fuori)
+        return "".join(outside)
     except Exception:  # pragma: no cover
         return text

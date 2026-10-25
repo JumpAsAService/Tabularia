@@ -1,6 +1,6 @@
-"""Data contracts lato engine: valutare un contratto su uno snapshot e profilare
-i dati per proporne uno. Sincrone per chi chiama (invio + attesa), eseguite su un
-worker: Polars non gira nel processo dell'API."""
+"""Data contracts on the engine's side: evaluating a contract on a snapshot and profiling
+the data to propose one. Synchronous for the caller (send + wait), run on a worker:
+Polars does not run in the API's process."""
 import logging
 import time
 from typing import Any, Optional
@@ -15,7 +15,7 @@ from app.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/contracts", tags=["contracts"])
 
-# quanto si aspetta una verifica chiesta a mano prima di rinunciare
+# how long a check asked for by hand is awaited before giving up
 WAIT_SECONDS = 120.0
 
 
@@ -23,7 +23,7 @@ class EvaluateRequest(BaseModel):
     bucket: Optional[str] = None
     key: str
     document: dict[str, Any]
-    snapshot_at: Optional[str] = Field(default=None, description="Quando lo snapshot è stato prodotto (ISO)")
+    snapshot_at: Optional[str] = Field(default=None, description="When the snapshot was produced (ISO)")
 
 
 class ProfileRequest(BaseModel):
@@ -46,14 +46,14 @@ def _run(task: str, **kwargs) -> dict:
                 )
         except HTTPException:
             raise
-        except Exception as e:  # il task è fallito: lo storage non risponde, il parquet non c'è
-            logger.warning("%s non riuscito: %s", task, e)
+        except Exception as e:  # the task failed: the storage does not answer, the parquet is not there
+            logger.warning("%s failed: %s", task, e)
             raise HTTPException(status_code=422, detail=str(e).splitlines()[0][:300] or type(e).__name__)
 
 
 @router.post("/evaluate")
 def evaluate_contract(request: EvaluateRequest) -> dict:
-    """Il referto del contratto sullo snapshot indicato."""
+    """The contract's report on the given snapshot."""
     return _run(
         "app.tasks.contract_jobs.evaluate_contract_task",
         bucket=request.bucket or get_settings().storage.bucket,
@@ -63,7 +63,7 @@ def evaluate_contract(request: EvaluateRequest) -> dict:
 
 @router.post("/profile")
 def profile_dataset(request: ProfileRequest) -> dict:
-    """Il profilo dei dati e il contratto che se ne può proporre."""
+    """The data's profile and the contract one can propose from it."""
     return _run(
         "app.tasks.contract_jobs.profile_dataset_task",
         bucket=request.bucket or get_settings().storage.bucket, key=request.key,

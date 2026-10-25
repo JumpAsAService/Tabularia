@@ -1,15 +1,14 @@
 """
-Implementazione dell'Engine basata su Polars, con cache incrementale degli step.
+The Engine implemented on Polars, with an incremental step cache.
 
-Strategia I/O: le sorgenti vengono scaricate dallo storage (rclone S3) su file
-temporanei e aperte con `scan_parquet` (lazy). Il flow è una catena lazy;
-solo `preview`/`run` la materializzano — in streaming, per reggere dataset più
-grandi della RAM.
+I/O strategy: the sources are downloaded from the storage to temporary files and opened
+with `scan_parquet` (lazy). The flow is a lazy chain; only `preview`/`run` materialize
+it — streaming, to handle datasets larger than the RAM.
 
-Cache (vedi `cache.py`): invece di ripartire sempre dalla sorgente, la catena
-riparte dall'antenato già materializzato più vicino. La `preview` materializza
-il *parent* del nodo richiesto, così iterando sui parametri di un nodo ogni
-anteprima costa "cache del parent + 1 operazione" invece dell'intera catena.
+Cache (see `cache.py`): instead of always starting from the source, the chain starts
+from the nearest materialized ancestor. The `preview` materializes the *parent* of the
+node asked for, so while one iterates on a node's parameters every preview costs "the
+parent's cache + 1 operation" instead of the whole chain.
 """
 from __future__ import annotations
 
@@ -21,12 +20,12 @@ from typing import Any, Iterator
 import polars as pl
 from polars.exceptions import PanicException
 
-# Un errore interno di Polars (panic in Rust, es. un tipo Arrow che il lettore
-# streaming non conosce) arriva in Python come PanicException, che deriva da
-# BaseException e NON da Exception: senza nominarla, nessun `except Exception` la
-# ferma e il processo del worker esce a metà lavoro (WorkerLostError, run fallito
-# senza spiegazione). Trovato dall'oracolo dell'export dbt il 2026-10-10.
-_ERRORI_POLARS = (Exception, PanicException)
+# An internal Polars error (a panic in Rust, such as an Arrow type the streaming
+# reader does not know) reaches Python as PanicException, which derives from
+# BaseException and NOT from Exception: unless it is named, no `except Exception`
+# stops it and the worker process quits half way (WorkerLostError, a failed run with
+# no explanation). Found by the dbt export oracle, 2026-10-10.
+_POLARS_ERRORS = (Exception, PanicException)
 
 from app.engine.base import (
     ColumnInfo,
@@ -56,13 +55,13 @@ from app.engine.stepcache_defer import DeferredStepCache
 
 
 class PolarsEngine(DeferredStepCache, Engine):
-    # tag che namespacea la cache a step: engine diversi (Polars/DuckDB) possono
-    # produrre parquet leggermente diversi per la stessa catena → non devono
-    # condividere i blob della step-cache (chiavati sull'hash del piano)
+    # the tag that namespaces the step cache: different engines (Polars/DuckDB) may
+    # produce slightly different parquet for the same chain → they must not share the
+    # step cache's blobs (keyed on the plan's hash)
     engine_name = "polars"
 
     def __init__(self, storage=None, cache: StepCache | None = None):
-        # import ritardato per non forzare la dipendenza in import-time
+        # a late import, not to force the dependency at import time
         if storage is None:
             from app.utils import get_storage_service
 
@@ -83,18 +82,17 @@ class PolarsEngine(DeferredStepCache, Engine):
         return f"{self.engine_name}:{source.bucket}/{source.key}"
 
     def _sink(self, lf: pl.LazyFrame, path: str) -> None:
-        """Scrive un LazyFrame in parquet: streaming, con fallback in-memory.
+        """Writes a LazyFrame as parquet: streaming, with an in-memory fallback.
 
-        Nel fallback il RISULTATO sta comunque tutto in RAM (è il prezzo di un
-        piano che il sink non regge), ma `engine="streaming"` esegue in
-        streaming tutti i nodi che possono esserlo: il picco resta più basso
-        del collect classico."""
+        In the fallback the RESULT is all in RAM anyway (the price of a plan the sink
+        cannot handle), but `engine="streaming"` streams every node that can be: the
+        peak stays lower than the classic collect's."""
         try:
             lf.sink_parquet(path)
-        except _ERRORI_POLARS as e:  # nodo non supportato dall'engine streaming
+        except _POLARS_ERRORS as e:  # a node the streaming engine does not support
             from app.engine.query_tag import was_interrupted
 
-            if was_interrupted(e):  # preview superata: NON rifare tutto in memoria
+            if was_interrupted(e):  # a superseded preview: do NOT redo it all in memory
                 raise
             logger.warning("sink_parquet streaming fallito (%s), fallback in-memory", e)
             lf.collect(engine="streaming").write_parquet(path)
@@ -109,24 +107,24 @@ class PolarsEngine(DeferredStepCache, Engine):
         use_cache: bool = True,
     ) -> pl.LazyFrame:
         """
-        Costruisce la catena lazy partendo dall'antenato in cache più vicino e
-        applicando solo le operazioni rimanenti.
+        Builds the lazy chain from the nearest cached ancestor, applying only the
+        remaining operations.
 
-        `record=True` conta hit/miss per le metriche (solo dal percorso top-level
-        di preview/run, non dalla materializzazione interna del parent).
-        `use_cache=False` ignora la cache (parte sempre dalla sorgente): usato dal
-        Viewer per non sporcare la cache con query esplorative usa-e-getta.
+        `record=True` counts hits/misses for the metrics (only from the top-level path
+        of preview/run, not from the parent's internal materialization).
+        `use_cache=False` ignores the cache (always starts from the source): the Viewer
+        uses it so as not to soil the cache with throwaway exploratory queries.
         """
-        start = self.cache.nearest(hashes) if use_cache else 0  # step già in cache
+        start = self.cache.nearest(hashes) if use_cache else 0  # step cached already
         if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
         if start == 0:
             lf = ctx.scan(source)
         else:
-            self.cache.touch(hashes[start - 1])  # segna l'uso → posticipa il TTL
+            self.cache.touch(hashes[start - 1])  # marks the use → postpones the TTL
             cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
             lf = ctx.scan(cached)
-            logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
+            logger.info("cache hit: starting again from step %d/%d", start, len(operations))
 
         for i in range(start, len(operations)):
             op = operations[i]
@@ -135,7 +133,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                 lf = fn(lf, op.params, ctx)
             except EngineError:
                 raise
-            except _ERRORI_POLARS as e:  # errore Polars su questa operazione
+            except _POLARS_ERRORS as e:  # a Polars error on this operation
                 raise OperationError(op.type, i, str(e)) from e
         return lf
 
@@ -146,9 +144,9 @@ class PolarsEngine(DeferredStepCache, Engine):
         operations: list[Operation],
     ) -> None:
         """
-        Materializza in cache l'output di `operations` (se non già presente),
-        così le prossime esecuzioni possono ripartire da lì. No-op se la catena
-        è vuota o è già in cache.
+        Materializes the output of `operations` in the cache (unless there already),
+        so the next runs can start from there. A no-op when the chain is empty or
+        cached already.
         """
         if not operations:
             return
@@ -165,7 +163,7 @@ class PolarsEngine(DeferredStepCache, Engine):
             self._sink(lf, path)
         except EngineError:
             raise
-        except _ERRORI_POLARS as e:
+        except _POLARS_ERRORS as e:
             raise EngineError(f"Error while running the flow: {e}") from e
 
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
@@ -176,7 +174,7 @@ class PolarsEngine(DeferredStepCache, Engine):
         return self._session()
 
     def _bounded_rows(self, ctx, lf: pl.LazyFrame, n: int) -> int:
-        """Quante righe ha `lf`, contate al massimo fino a n+1 (head: si ferma presto)."""
+        """How many rows `lf` has, counted up to n+1 at most (head: it stops early)."""
         return int(lf.head(n + 1).select(pl.len()).collect(engine="streaming").item())
 
     # ── Preview (sincrona) ────────────────────────────────────────────────
@@ -190,9 +188,9 @@ class PolarsEngine(DeferredStepCache, Engine):
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         with self._session() as ctx:
-            # Il PARENT va in cache, ma DOPO la risposta (task differito): iterando
-            # sui parametri di questo nodo le anteprime successive ripartiranno
-            # da li'. Il Viewer passa use_cache=False → niente materializzazione.
+            # The PARENT is cached, but AFTER the answer (a deferred task): while one
+            # iterates on this node's parameters the next previews start from there.
+            # The Viewer passes use_cache=False → no materialization.
             if use_cache:
                 self._defer_materialization(source, ops[:-1])
             cstate, ccap = self._cache_state(source, ops[:-1], use_cache)
@@ -200,12 +198,12 @@ class PolarsEngine(DeferredStepCache, Engine):
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             lf = self._lazy_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
 
-            # +1 per capire se il risultato reale è più lungo del limite
+            # +1 to tell whether the real result is longer than the limit
             try:
                 df = lf.limit(limit + 1).collect(engine="streaming")
             except EngineError:
                 raise
-            except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
+            except _POLARS_ERRORS as e:  # Polars errors at run time (lazy)
                 raise EngineError(f"Error while running the flow: {e}") from e
 
             truncated = df.height > limit
@@ -219,10 +217,10 @@ class PolarsEngine(DeferredStepCache, Engine):
                 cache_state=cstate, cache_cap_rows=ccap,
             )
 
-    # ── Export (download diretto, anche da nodi intermedi) ────────────────
-    # Limite fisico del formato xlsx (righe per foglio). Fa anche da guardia
-    # di memoria: il collect dell'export Excel non supera mai ~1M righe.
-    XLSX_MAX_ROWS = 1_048_576 - 1  # -1: una riga è l'header
+    # ── Export (direct download, intermediate nodes too) ──────────────────
+    # The xlsx format's physical limit (rows per sheet). A memory guard too: the
+    # collect of the Excel export never goes beyond ~1M rows.
+    XLSX_MAX_ROWS = 1_048_576 - 1  # -1: one row is the header
 
     def count(self, source: DataSource) -> int:
         """The rows of a source, counted in streaming (memory: nothing)."""
@@ -230,7 +228,7 @@ class PolarsEngine(DeferredStepCache, Engine):
             lf = self._lazy_from_cache(ctx, source, [], plan_hashes(self._source_id(source), []), record=False)
             try:
                 return int(lf.select(pl.len()).collect(engine="streaming").item())
-            except _ERRORI_POLARS as e:
+            except _POLARS_ERRORS as e:
                 raise EngineError(f"Error while reading the data: {e}") from e
 
     def export(
@@ -243,17 +241,16 @@ class PolarsEngine(DeferredStepCache, Engine):
         max_rows: int | None = None,
     ) -> None:
         """
-        Esegue la catena e scrive il risultato in `out_path` (csv o xlsx).
+        Runs the chain and writes the result to `out_path` (csv or xlsx).
 
-        - csv: streaming (`sink_csv`) → memoria costante. Con `max_rows` scrive al
-          più max_rows+1 righe e le conta nel file: una riga in più vuol dire oltre
-          il tetto, ed è un errore (il flusso si esegue una volta sola, e il disco
-          resta limitato).
-        - xlsx: il formato è uno ZIP non streamabile e ha un tetto di ~1M righe;
-          contiamo prima le righe (in streaming, costo memoria zero) e rifiutiamo
-          oltre il tetto con un errore chiaro. Sotto il tetto, collect + write_excel.
+        - csv: streaming (`sink_csv`) → constant memory. With `max_rows` it writes at most
+          max_rows+1 rows and counts them in the file: one row more means over the cap,
+          and is an error (the flow runs once, and the disk stays bounded).
+        - xlsx: the format is a ZIP that cannot stream and has a cap of ~1M rows; the rows
+          are counted first (streaming, no memory) and refused over the cap with a clear
+          error. Under the cap, collect + write_excel.
 
-        Il file in `out_path` è responsabilità del chiamante (cleanup incluso).
+        The file at `out_path` is the caller's (cleanup included).
         """
         ops = _coerce_ops(operations)
         with self._session() as ctx:
@@ -264,22 +261,22 @@ class PolarsEngine(DeferredStepCache, Engine):
 
             try:
                 if fmt == "csv":
-                    # un `limit` già sotto il tetto basta a sé
-                    tetto = max_rows if max_rows and not (limit and limit <= max_rows) else None
-                    lf_csv = lf.limit(tetto + 1) if tetto else lf
+                    # a `limit` under the cap already is enough by itself
+                    cap = max_rows if max_rows and not (limit and limit <= max_rows) else None
+                    lf_csv = lf.limit(cap + 1) if cap else lf
                     try:
                         lf_csv.sink_csv(out_path)
                     except EngineError:
                         raise
-                    except _ERRORI_POLARS as e:  # nodo non supportato dallo streaming
+                    except _POLARS_ERRORS as e:  # a node streaming does not support
                         logger.warning("sink_csv streaming fallito (%s), fallback in-memory", e)
                         lf_csv.collect(engine="streaming").write_csv(out_path)
-                    if tetto and os.path.getsize(out_path) > 0:
-                        # riletto dal file: conta le righe vere anche con a-capo nei valori
+                    if cap and os.path.getsize(out_path) > 0:
+                        # read back from the file: counts the true rows even with line breaks in the values
                         n = pl.scan_csv(out_path, infer_schema=False).select(pl.len()).collect().item()
-                        if n > tetto:
+                        if n > cap:
                             raise EngineError(
-                                f"the result has more than {tetto:,} rows: over the cap of the CSV export. "
+                                f"the result has more than {cap:,} rows: over the cap of the CSV export. "
                                 f"Write it with an Output node (datasource, table or bucket), or reduce it with filter/limit."
                             )
                 elif fmt == "xlsx":
@@ -294,10 +291,10 @@ class PolarsEngine(DeferredStepCache, Engine):
                     raise EngineError(f"unsupported export format: '{fmt}' (use csv or xlsx)")
             except EngineError:
                 raise
-            except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
+            except _POLARS_ERRORS as e:  # Polars errors at run time (lazy)
                 raise EngineError(f"Error while running the flow: {e}") from e
 
-    # ── Run (materializza l'output completo) ──────────────────────────────
+    # ── Run (materializes the whole output) ──────────────────────────────
     def run(
         self,
         source: DataSource,
@@ -315,18 +312,18 @@ class PolarsEngine(DeferredStepCache, Engine):
                 self._sink(lf, out_path)
             except EngineError:
                 raise
-            except _ERRORI_POLARS as e:  # errori Polars a tempo di esecuzione (lazy)
+            except _POLARS_ERRORS as e:  # Polars errors at run time (lazy)
                 raise EngineError(f"Error while running the flow: {e}") from e
 
             self.storage.upload_file(out_path, destination.bucket, destination.key)
 
-            # metadati dal parquet scritto (letti dai metadata, economici)
+            # metadata of the written parquet (read from the metadata, cheap)
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
 
-            # L'output finale è anche il risultato dell'ultimo step: mettilo in
-            # cache così ri-run e anteprime del nodo foglia sono immediati —
-            # se sta nel tetto (un output enorme non vale una seconda copia).
+            # The final output is the last step's result too: cache it, so that runs
+            # again and previews of the leaf node are immediate — when it fits under the
+            # cap (a huge output is not worth a second copy).
             if use_cache and ops and self._cache_output_allowed(int(rows_written)) and not self.cache.has(hashes[-1]):
                 self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
                 self.cache.mark(hashes[-1])

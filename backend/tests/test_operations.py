@@ -314,7 +314,7 @@ def test_foreach_placeholder_tollera_spazi_e_nomi_con_spazi():
 
 
 def test_foreach_placeholder_nelle_chiavi_dei_dict():
-    # regressione: rename/cast/fill hanno la colonna come CHIAVE del mapping
+    # regressione: rename/cast/fill hanno la colonna come KEY del mapping
     out = apply(
         "foreach",
         {
@@ -561,14 +561,14 @@ def test_compute_lista_vuota_rifiutata():
 
 # ── Union (il ramo destro passa dallo storage, come il join) ────────────────
 def test_union_relaxed_allinea_colonne_per_nome(storage):
-    destra = upload_df(
+    right = upload_df(
         storage,
         pl.DataFrame({"paese": ["ES"], "vendite": [75], "canale": ["web"]}),
         "datasets/vendite_es.parquet",
     )
     ctx = OperationContext(storage)
     try:
-        out = apply("union", {"right": {"bucket": destra.bucket, "key": destra.key}}, ctx=ctx)
+        out = apply("union", {"right": {"bucket": right.bucket, "key": right.key}}, ctx=ctx)
         assert out.height == 5  # 4 righe base + 1 accodata
         assert "canale" in out.columns and "data" in out.columns
         es = out.filter(pl.col("paese") == "ES")
@@ -579,7 +579,7 @@ def test_union_relaxed_allinea_colonne_per_nome(storage):
 
 
 def test_union_strict_rifiuta_schemi_diversi(storage):
-    destra = upload_df(
+    right = upload_df(
         storage,
         pl.DataFrame({"paese": ["ES"], "solo_qui": [1]}),
         "datasets/schema_diverso.parquet",
@@ -587,7 +587,7 @@ def test_union_strict_rifiuta_schemi_diversi(storage):
     ctx = OperationContext(storage)
     try:
         with pytest.raises(Exception):  # errore Polars a runtime: schemi non identici
-            apply("union", {"right": {"bucket": destra.bucket, "key": destra.key}, "strategy": "strict"}, ctx=ctx)
+            apply("union", {"right": {"bucket": right.bucket, "key": right.key}, "strategy": "strict"}, ctx=ctx)
     finally:
         ctx.cleanup()
 

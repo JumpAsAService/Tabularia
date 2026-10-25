@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from app.core import regolazioni
-from app.core.config import settings_dall_ambiente
+from app.core import panel_settings
+from app.core.config import settings_from_env
 from app.tasks import worker_pool
 from app.tasks.worker_pool import PoolFromPanel, kind_of, live_workers, report, resize, state, target_size
 
@@ -76,9 +76,9 @@ def test_a_worker_on_the_preview_queue_only_is_a_preview_worker():
 
 def test_without_a_value_from_the_panel_a_worker_keeps_its_starting_size():
     assert target_size("run", 3) == 3 and target_size("preview", 2) == 2
-    regolazioni.scrivi({"workers.run_concurrency": 6})
+    panel_settings.write({"workers.run_concurrency": 6})
     assert target_size("run", 3) == 6 and target_size("preview", 2) == 2
-    regolazioni.scrivi({"workers.preview_concurrency": 4})
+    panel_settings.write({"workers.preview_concurrency": 4})
     assert target_size("run", 3) == 3 and target_size("preview", 2) == 4
 
 
@@ -128,14 +128,14 @@ def test_a_reported_worker_is_live_until_its_state_expires(regolazioni_isolate):
 
 
 def test_the_step_resizes_and_reports_at_start_and_then_on_a_timer(regolazioni_isolate):
-    regolazioni.scrivi({"workers.run_concurrency": 4})
+    panel_settings.write({"workers.run_concurrency": 4})
     c = Consumer(processes=2)
     step = PoolFromPanel(None)
     step.start(c)
     assert c.pool.num_processes == 4 and step.started_with == 2
     assert c.timer.calls[0][0] == worker_pool.TICK
     assert json.loads(regolazioni_isolate.get(worker_pool.KEY_PREFIX + "celery@w1"))["processes"] == 4
-    regolazioni.scrivi({})  # the value removed: back to the size it started with
+    panel_settings.write({})  # the value removed: back to the size it started with
     step.tick(c)
     assert c.pool.num_processes == 2
     step.shutdown(c)
@@ -170,7 +170,7 @@ def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(regolazioni
 
 
 def test_a_failing_check_never_stops_the_worker(regolazioni_isolate):
-    regolazioni.scrivi({"workers.run_concurrency": 4})
+    panel_settings.write({"workers.run_concurrency": 4})
     c = Consumer(processes=2)
 
     def boom(n):
@@ -184,7 +184,7 @@ def test_a_failing_check_never_stops_the_worker(regolazioni_isolate):
 
 
 def test_with_autoscale_celery_keeps_sizing_the_pool():
-    regolazioni.scrivi({"workers.run_concurrency": 4})
+    panel_settings.write({"workers.run_concurrency": 4})
     c = Consumer(processes=2)
     c.controller.autoscaler = object()
     step = PoolFromPanel(None)
@@ -205,8 +205,8 @@ def test_the_engine_api_lists_the_workers_and_the_queues(monkeypatch):
 
 @pytest.mark.parametrize("value", [0, 33])
 def test_the_panel_value_stays_between_one_and_thirty_two(value):
-    _, errori = regolazioni.valida({"workers.run_concurrency": value}, settings_dall_ambiente())
-    assert errori and errori[0]["code"] in ("min", "max")
+    _, errors = panel_settings.validate({"workers.run_concurrency": value}, settings_from_env())
+    assert errors and errors[0]["code"] in ("min", "max")
 
 
 def test_a_pool_that_cannot_resize_is_left_alone():
@@ -259,16 +259,16 @@ def test_without_the_facts_no_verdict(regolazioni_isolate, meta, monkeypatch):
 def test_without_valkey_no_verdict(monkeypatch):
     def broken():
         raise ConnectionError("valkey down")
-    monkeypatch.setattr(regolazioni, "_client", broken)
+    monkeypatch.setattr(panel_settings, "_client", broken)
     assert worker_pool.lost("t", {"pid": 7, "hostname": "celery@w1", "since": 1.0}) == ""
 
 
 def test_every_task_notes_its_worker_and_its_start():
-    from app.tasks.celery_app import _TaskCheNonUccideIlWorker, celery_app
+    from app.tasks.celery_app import _TaskThatSparesTheWorker, celery_app
 
     seen = []
 
-    class Probe(_TaskCheNonUccideIlWorker):
+    class Probe(_TaskThatSparesTheWorker):
         name = "tests.worker_pool.probe"
 
         def run(self):

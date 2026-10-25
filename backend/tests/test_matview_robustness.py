@@ -115,7 +115,7 @@ class _PreviewCtx:
     def __init__(self):
         self.settings: dict = {}
         self.allow_matview = True
-        self.fonte_radice = "?"
+        self.root_source = "?"
         self.queries: list[str] = []
 
     def cleanup(self) -> None:
@@ -147,9 +147,9 @@ def _preview_engine(monkeypatch, ctx, root_from_copy=True):
 
     def sql(c, source, ops, hashes, record=False, use_cache=True):
         if c.allow_matview and root_from_copy:
-            c.fonte_radice = "matview"
+            c.root_source = "matview"
             return "SELECT * FROM mv_copy"
-        c.fonte_radice = "s3"
+        c.root_source = "s3"
         return "SELECT * FROM s3_parquet" if root_from_copy else "SELECT * FROM mv_copy"
 
     monkeypatch.setattr(eng, "_sql_from_cache", sql)
@@ -162,7 +162,7 @@ def test_a_copy_that_vanished_under_the_preview_falls_back_to_the_parquet(monkey
     res = eng.preview(SRC, [], limit=10, use_cache=False, sort_keys=["id"])
     assert res.row_count == 3
     assert discarded == [(SRC.key, ["id"])]
-    assert "s3_parquet" in ctx.queries[-1] and ctx.fonte_radice == "s3"
+    assert "s3_parquet" in ctx.queries[-1] and ctx.root_source == "s3"
 
 
 def test_a_missing_table_that_is_not_the_copy_is_still_an_error(monkeypatch):

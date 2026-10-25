@@ -1,10 +1,10 @@
 """
-Contesto di esecuzione condiviso tra le operazioni di un flow.
+The execution context shared by a flow's operations.
 
-Fornisce:
-- accesso lazy alle sorgenti (`scan`) — usato anche dalle operazioni che
-  hanno bisogno di leggere un secondo parquet (es. join);
-- gestione dei file temporanei, ripuliti a fine run.
+It provides:
+- lazy access to the sources (`scan`) — used by the operations that need to read a
+  second parquet too (join);
+- the temporary files, cleaned up at the end of the run.
 """
 from __future__ import annotations
 
@@ -14,28 +14,28 @@ import tempfile
 import polars as pl
 from botocore.exceptions import ClientError
 
-from app.core.regolazioni import valore_all_avvio
+from app.core.panel_settings import value_at_start
 from app.engine.base import DataSource
 from app.engine.exceptions import SourceNotFoundError
 from app.engine.temporal import naive_utc_lazy
 
-# codici S3/MinIO per "oggetto (o bucket) inesistente"
+# S3/MinIO codes for "object (or bucket) does not exist"
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
-# tetto di righe di un CROSS JOIN in un run: oltre, l'operazione viene rifiutata
-# con un errore chiaro invece di far esplodere la RAM (il prodotto cartesiano
-# L×R è la causa n.1 di OOM). Configurabile via env; 0/negativo = nessun tetto.
-MAX_CROSS_JOIN_ROWS = int(valore_all_avvio("ENGINE_MAX_CROSS_JOIN_ROWS"))  # env, or the panel's at start
+# the cap on a CROSS JOIN's rows in a run: beyond it the operation is refused with a
+# clear error instead of blowing up the RAM (the L×R Cartesian product is the no. 1
+# cause of OOM). Set from the environment; 0/negative = no cap.
+MAX_CROSS_JOIN_ROWS = int(value_at_start("ENGINE_MAX_CROSS_JOIN_ROWS"))  # env, or the panel's at start
 
 
 class OperationContext:
     def __init__(self, storage):
         self.storage = storage
         self._temp_paths: list[str] = []
-        # budget cumulativo di iterazioni foreach su TUTTA la catena di un run:
-        # limita l'esplosione moltiplicativa dei foreach annidati (vedi op_foreach)
+        # the cumulative budget of foreach iterations over a run's WHOLE chain: bounds the
+        # multiplying explosion of nested foreach loops (see op_foreach)
         self.foreach_iterations = 0
-        # tetto righe del cross join (anti-OOM): oltre, l'operazione è rifiutata
+        # the cross join's row cap (against OOM): beyond it the operation is refused
         self.max_cross_join_rows = MAX_CROSS_JOIN_ROWS
 
     def tempfile(self, suffix: str = ".parquet") -> str:
@@ -46,10 +46,10 @@ class OperationContext:
 
     def scan(self, source: DataSource) -> pl.LazyFrame:
         """
-        Scarica il parquet dallo storage e lo apre in modalità lazy.
+        Downloads the parquet from the storage and opens it lazily.
 
-        Il file temporaneo resta su disco finché non viene chiamato
-        `cleanup()`, così lo scan lazy (e lo streaming) può leggerlo.
+        The temporary file stays on disk until `cleanup()` is called, so the lazy scan
+        (and the streaming) can read it.
         """
         local_path = self.tempfile(".parquet")
         try:
@@ -59,8 +59,8 @@ class OperationContext:
             if code in _NOT_FOUND_CODES:
                 raise SourceNotFoundError(source.bucket, source.key) from e
             raise
-        # parquet scritti con fuso (es. run di ClickHouse esterno in modalità s3)
-        # → datetime naive UTC, lo standard di tutti gli engine
+        # parquet written with a time zone (runs of the external ClickHouse with s3)
+        # → naive UTC datetimes, every engine's standard
         return naive_utc_lazy(pl.scan_parquet(local_path))
 
     def cleanup(self) -> None:

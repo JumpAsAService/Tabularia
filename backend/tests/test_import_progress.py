@@ -21,19 +21,19 @@ def test_l_import_da_database_dice_attesa_righe_e_salvataggio(monkeypatch):
     rows = [(i, f"n{i}") for i in range(25)]
     monkeypatch.setitem(db_source._DRIVERS, "postgresql",
                         lambda conn, query: _dbapi_batches(_cursore(rows), batch_rows=10))
-    visti = []
+    seen = []
     ingest_db_to_parquet(DbConnectionSpec(db_type="postgresql", host="h", database="d"), DbSourceSpec(mode="table", ref="t"),
-                         bucket="b", key="k.parquet", storage=FakeStorage(), progress=lambda f, **c: visti.append((f, c)))
-    assert visti == [("waiting", {}), ("reading", {"rows": 10}), ("reading", {"rows": 20}), ("reading", {"rows": 25}),
+                         bucket="b", key="k.parquet", storage=FakeStorage(), progress=lambda f, **c: seen.append((f, c)))
+    assert seen == [("waiting", {}), ("reading", {"rows": 10}), ("reading", {"rows": 20}), ("reading", {"rows": 25}),
                      ("saving", {"rows": 25})]
 
 
 def test_l_import_da_sharepoint_conta_i_file(monkeypatch):
-    visti = []
+    seen = []
     sp.ingest_sharepoint_to_parquet(_conn(), sp.SharePointSourceSpec(path="Budget/2026/*.xlsx", sheet="Dati"), "b", "k.parquet",
-                                    FakeStorage(), client=_client(FakeGraph(TREE)), progress=lambda f, **c: visti.append((f, c)))
+                                    FakeStorage(), client=_client(FakeGraph(TREE)), progress=lambda f, **c: seen.append((f, c)))
     # feb.xlsx (1 riga) poi gen.xlsx (2 righe): le righe sono quelle lette PRIMA del file
-    assert visti == [("files", {"file": 1, "files": 2, "rows": 0}), ("files", {"file": 2, "files": 2, "rows": 1}),
+    assert seen == [("files", {"file": 1, "files": 2, "rows": 0}), ("files", {"file": 2, "files": 2, "rows": 1}),
                      ("saving", {"rows": 3})]
 
 
@@ -53,9 +53,9 @@ def test_il_task_scrive_al_piu_ogni_due_secondi_ma_sempre_al_cambio_di_fase(monk
     monkeypatch.setattr(celery, "current_task", task)
     orologio = iter([0.0, 0.5, 1.0, 2.5, 2.6, 2.7])
     monkeypatch.setattr(jobs._time_mod, "monotonic", lambda: next(orologio))
-    avanza = jobs._Avanzamento()
-    for fase, righe in (("reading", 1), ("reading", 2), ("reading", 3), ("reading", 4), ("reading", 5), ("saving", 5)):
-        avanza(fase, rows=righe)
+    advances = jobs._Progress()
+    for phase, rows in (("reading", 1), ("reading", 2), ("reading", 3), ("reading", 4), ("reading", 5), ("saving", 5)):
+        advances(phase, rows=rows)
     avanzamenti = [(stato, {k: v for k, v in meta.items() if k not in ("pid", "hostname", "since")})
                    for stato, meta in task.stati]
     assert avanzamenti == [("STARTED", {"phase": "reading", "rows": 1}), ("STARTED", {"phase": "reading", "rows": 4}),
@@ -68,14 +68,14 @@ def test_fuori_da_un_worker_non_fa_niente_e_un_guasto_non_ferma_l_import(monkeyp
     import celery
 
     monkeypatch.setattr(celery, "current_task", None)
-    jobs._Avanzamento()("reading", rows=1)  # nessun task: niente da scrivere, niente errori
+    jobs._Progress()("reading", rows=1)  # nessun task: niente da scrivere, niente errori
 
     class _Rotto(_TaskFinto):
         def update_state(self, state, meta):
             raise ConnectionError("valkey giù")
 
     monkeypatch.setattr(celery, "current_task", _Rotto())
-    jobs._Avanzamento()("reading", rows=1)
+    jobs._Progress()("reading", rows=1)
 
 
 @pytest.mark.parametrize("info, atteso", [

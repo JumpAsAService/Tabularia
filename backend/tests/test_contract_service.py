@@ -11,14 +11,14 @@ def parquet(tmp_path, monkeypatch):
     """Uno «storage» che è una cartella: `download_file` copia il parquet richiesto."""
     import shutil
 
-    origine = tmp_path / "dati.parquet"
-    pl.DataFrame({"id": [1, 2, 3], "stato": ["a", None, "c"]}).write_parquet(origine)
+    origin = tmp_path / "data.parquet"
+    pl.DataFrame({"id": [1, 2, 3], "stato": ["a", None, "c"]}).write_parquet(origin)
 
     class Storage:
         def download_file(self, bucket, key, path):
             if key != "datasets/ok.parquet":
                 raise FileNotFoundError(f"{bucket}/{key}")
-            shutil.copy(origine, path)
+            shutil.copy(origin, path)
 
     monkeypatch.setattr(service, "get_storage_service", lambda: Storage())
     return "datasets/ok.parquet"
@@ -56,8 +56,8 @@ def test_il_task_di_ingest_porta_il_referto_solo_se_c_e_un_contratto(parquet, mo
 
     monkeypatch.setattr(db_source, "ingest_db_to_parquet", lambda **kw: {"rows_written": 3, "columns": [{"name": "id", "dtype": "Int64"}]})
     conn = {"db_type": "postgresql", "host": "h", "port": 5432, "username": "u", "password_encrypted": "", "database": "d"}
-    senza = ingest_database_task.run(connection=conn, source={"mode": "table", "ref": "t"}, bucket="b", output_key=parquet)
-    assert "contract" not in senza and senza["rows_written"] == 3
+    without = ingest_database_task.run(connection=conn, source={"mode": "table", "ref": "t"}, bucket="b", output_key=parquet)
+    assert "contract" not in without and without["rows_written"] == 3
     con = ingest_database_task.run(connection=conn, source={"mode": "table", "ref": "t"}, bucket="b", output_key=parquet, contract=BLOCCANTE)
     assert con["contract"]["outcome"] == "failed" and con["rows_written"] == 3
 
@@ -78,9 +78,9 @@ def test_con_una_regola_bloccante_violata_la_copia_e_l_email_non_partono(parquet
     import app.ingest.s3_destination as s3d
 
     monkeypatch.setattr(s3d, "write_output_to_s3", lambda *a, **k: consegne.append("s3") or {"rows": 3})
-    copia = {"connection": {"endpoint": "http://x", "access_key": "a", "secret_key_encrypted": "", "region": "r"}, "target": {"bucket": "fuori", "key": "k.parquet"}}
+    copy = {"connection": {"endpoint": "http://x", "access_key": "a", "secret_key_encrypted": "", "region": "r"}, "target": {"bucket": "fuori", "key": "k.parquet"}}
 
-    out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, mirror=copia, contract=BLOCCANTE)
+    out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, mirror=copy, contract=BLOCCANTE)
     assert out["contract"]["outcome"] == "failed" and "mirror" not in out and consegne == []
 
     out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, contract=SOLO_AVVISI)

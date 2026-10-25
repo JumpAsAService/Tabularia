@@ -1,8 +1,7 @@
-"""Prestazioni (endpoint INTERNI, raggiunti solo dal gateway e solo per gli admin).
+"""Performance (INTERNAL endpoints, reached by the gateway only and for admins only).
 
-Nessuna tabella nostra dietro queste rotte: le preview più lente stanno in un
-sorted set a dimensione fissa su Valkey, le query pesanti le conserva già
-ClickHouse nel suo `system.query_log`.
+No table of ours behind these routes: the slowest previews are in a fixed-size sorted set
+on Valkey, ClickHouse keeps the heavy queries in its `system.query_log` already.
 """
 import logging
 
@@ -42,9 +41,9 @@ def previews(limit: int = Query(25, ge=1, le=50)):
 
 @router.get("/warehouse")
 def warehouse(minutes: int = Query(60, ge=5, le=1440), limit: int = Query(20, ge=1, le=50)):
-    """Le query più pesanti sul ClickHouse esterno nell'ultima finestra. Le tiene
-    già lui: noi chiediamo e basta. Le query delle preview portano l'etichetta
-    del task (`tab-prev:…`), quindi si distinguono da quelle dei run."""
+    """The heaviest queries on the external ClickHouse in the last window. It keeps them
+    already: we just ask. The previews' queries carry the task's label (`tab-prev:…`), so
+    they can be told from the runs'."""
     cfg = get_settings().clickhouse_external
     if not cfg.enabled:
         return {"enabled": False, "queries": []}
@@ -69,10 +68,10 @@ def warehouse(minutes: int = Query(60, ge=5, le=1440), limit: int = Query(20, ge
             {"at": r[0].isoformat() + "+00:00" if r[0].tzinfo is None else r[0].isoformat(), "kind": r[1], "ok": r[2] == "QueryFinish",
              "exception_code": r[3], "duration_ms": r[4], "read_rows": r[5], "read_bytes": r[6], "memory_bytes": r[7],
              "origin": "preview" if str(r[8]).startswith("tab-prev:") else "run",
-             # il testo serve a riconoscere QUALE query pesa, non su quale chiave:
-             # gli argomenti di s3()/url() se ne vanno (vedi core/redaction.py)
-             # si TAGLIA DOPO aver redatto: ClickHouse tagliava a 160 caratteri
-             # e spezzava `s3(` a metà, lasciando la chiave d'accesso in chiaro
+             # the text tells WHICH query weighs, not on which key: the arguments of
+             # s3()/url() go (see core/redaction.py)
+             # CUT AFTER redacting: ClickHouse cut at 160 characters and split `s3(`
+             # half way, leaving the access key in clear
              "query": (redact_secrets(redact_storage_args(r[9])) or "")[:200]}
             for r in rows
         ],

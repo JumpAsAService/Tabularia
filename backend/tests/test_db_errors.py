@@ -341,7 +341,7 @@ class _MssqlLike(Exception):
 _MssqlLike.__module__ = "mssql_python.exceptions"
 
 
-@pytest.mark.parametrize("driver_error, ddbc_error, porta, expected", [
+@pytest.mark.parametrize("driver_error, ddbc_error, port, expected", [
     ("Invalid authorization specification", "[Microsoft][SQL Server]Login failed for user 'lettore'.", 1433,
      "SQL Server: Login failed for user 'lettore'. Check the connection's username, password and database: "
      "SQL Server reports a database that does not exist, or that the user cannot open, as a failed login."),
@@ -358,8 +358,8 @@ _MssqlLike.__module__ = "mssql_python.exceptions"
     ("Client unable to establish connection", "[Microsoft]TCP Provider: Error code 0x2749", 1599,
      "SQL Server: Connection refused by mssqltest:1599: no service is listening on that port."),
 ])
-def test_sqlserver(driver_error, ddbc_error, porta, expected):
-    assert describe_db_error(_MssqlLike(driver_error, ddbc_error), "sqlserver", "mssqltest", porta) == expected
+def test_sqlserver(driver_error, ddbc_error, port, expected):
+    assert describe_db_error(_MssqlLike(driver_error, ddbc_error), "sqlserver", "mssqltest", port) == expected
 
 
 def test_sqlserver_tipo_che_arrow_non_porta():

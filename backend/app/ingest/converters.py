@@ -1,9 +1,9 @@
 """
-Conversione dei formati di input in parquet.
+Converting the input formats to parquet.
 
-Dove possibile la conversione è in *streaming* (`scan_* -> sink_parquet`), così
-un CSV grande non viene mai caricato interamente in RAM — stessa filosofia
-dell'engine. JSON (array) ed Excel non sono streamabili: lettura completa.
+Where possible the conversion *streams* (`scan_* -> sink_parquet`), so a large CSV is
+never loaded whole in RAM — the engine's own philosophy. JSON (arrays) and Excel cannot
+stream: a full read.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class IngestError(Exception):
-    """Errore durante la conversione di un file in parquet."""
+    """An error while converting a file to parquet."""
 
 
 def _overrides(options: IngestOptions) -> dict[str, object] | None:
@@ -35,7 +35,7 @@ def _cast(lf: pl.LazyFrame, overrides: dict[str, object] | None) -> pl.LazyFrame
 
 
 def _sink(lf: pl.LazyFrame, dst: str) -> None:
-    """Scrive in streaming; fallback in-memory se un nodo non è supportato."""
+    """Writes streaming; an in-memory fallback when a node is not supported."""
     try:
         lf.sink_parquet(dst)
     except Exception as e:  # noqa: BLE001
@@ -141,7 +141,7 @@ def _convert_csv(src: str, dst: str, fmt: FileFormat, options: IngestOptions, ov
 
 
 def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptions) -> None:
-    """Converte il file locale `src` in un parquet locale `dst`."""
+    """Converts the local file `src` into a local parquet `dst`."""
     overrides = _overrides(options)
 
     if fmt in (FileFormat.csv, FileFormat.tsv):
@@ -179,7 +179,7 @@ def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptio
         df.write_parquet(dst)
 
     elif fmt is FileFormat.parquet:
-        # passthrough (con eventuale cast dei tipi)
+        # passthrough (with a cast of the types, if any)
         lf = _cast(pl.scan_parquet(src), overrides)
         _sink(lf, dst)
 

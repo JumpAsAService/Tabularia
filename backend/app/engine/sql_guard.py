@@ -1,23 +1,22 @@
-"""Il nodo `sql` legge SOLO il proprio input: lista BIANCA delle tabelle.
+"""The `sql` node reads ONLY its own input: an ALLOWLIST of the tables.
 
-Sui motori che eseguono la query su un server vero (ClickHouse esterno, chDB,
-BigQuery) una lista nera di funzioni pericolose non basta, ed è stato dimostrato
-dal vivo (2026-09-19): `merge('system', '^query_log$')` non era nell'elenco e ha
-letto un'altra tabella del server passando dal nodo; `information_schema` elencava
-le tabelle. Ogni versione del server aggiunge table function, quindi l'elenco dei
-divieti è sempre in ritardo. Qui si rovescia la domanda: non «cosa è vietato» ma
-«cosa è ammesso», cioè `self` e `input` — e nient'altro.
+On the engines that run the query on a real server (external ClickHouse, chDB, BigQuery)
+a denylist of dangerous functions is not enough, as was shown live (2026-09-19):
+`merge('system', '^query_log$')` was not in the list and read another table of the
+server through the node; `information_schema` listed the tables. Every server version
+adds table functions, so the list of bans always lags. Here the question is turned
+around: not «what is forbidden» but «what is allowed», that is `self` and `input` — and
+nothing else.
 
-Perché conta per l'RBAC: l'engine gira con credenziali che leggono tutto. Il
-gateway decide QUALE datasource un utente può aprire, ma la query libera gira poi
-sul server con quelle credenziali: se potesse nominare un'altra tabella, il
-permesso sulla datasource sarebbe decorativo. Vale per l'editor dei flussi e, dal
-2026-09-19, per l'assistente AI, che mette una query libera in mano a chiunque
-abbia VIEW.
+Why it matters for the RBAC: the engine runs with credentials that read everything. The
+gateway decides WHICH datasource a user may open, but the free query then runs on the
+server with those credentials: if it could name another table, the permission on the
+datasource would be decorative. It holds for the flow editor and, since 2026-09-19, for
+the AI assistant, which puts a free query in the hands of anyone with VIEW.
 
-DuckDB e Polars non passano da qui: DuckDB esegue il nodo in una connessione in
-memoria con l'accesso esterno spento e bloccato, Polars conosce solo il frame
-registrato. Lì non c'è un server da cui leggere altro.
+DuckDB and Polars do not come through here: DuckDB runs the node in an in-memory
+connection with external access off and locked, Polars knows only the registered frame.
+There is no server there to read anything else from.
 """
 from __future__ import annotations
 
@@ -30,14 +29,14 @@ from app.engine.exceptions import EngineError
 
 INPUT_NAMES = frozenset({"self", "input"})
 
-# table function che generano righe dal nulla: non leggono niente, restano ammesse
+# table functions that make rows out of nothing: they read nothing, they stay allowed
 HARMLESS_TABLE_FUNCTIONS = frozenset({
     "numbers", "numbers_mt", "zeros", "zeros_mt", "generateseries", "generate_series",
     "values", "unnest", "generate_array", "generate_date_array", "generate_timestamp_array",
 })
 
-# funzioni SCALARI che leggono altro dal server (dizionari, tabelle Join,
-# impostazioni e macro): non compaiono come tabelle, vanno nominate
+# SCALAR functions that read other things from the server (dictionaries, Join tables,
+# settings and macros): they do not appear as tables, they must be named
 _FORBIDDEN_SCALARS = (
     "dictget", "dicthas", "dictisin", "joinget", "getsetting", "getserversetting",
     "getmacro", "hascolumnintable", "getclienthttpheader",
@@ -55,10 +54,10 @@ def _function_name(node: exp.Expression) -> str:
 
 
 def ensure_reads_only_input(query: str, dialect: str) -> None:
-    """Solleva EngineError se la query nomina una tabella che non è il suo input.
+    """Raises EngineError when the query names a table that is not its input.
 
-    Una query che sqlglot non sa analizzare viene RIFIUTATA: far passare ciò che
-    non si è capito riaprirebbe il buco che questo modulo chiude."""
+    A query sqlglot cannot parse is REFUSED: letting through what was not understood
+    would reopen the hole this module closes."""
     try:
         tree = sqlglot.parse_one(query, read=dialect)
     except SqlglotError as e:
@@ -69,10 +68,9 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
     if tree is None:
         raise EngineError("sql: the query is empty")
 
-    # 1) le sorgenti VERE di ogni scope: una CTE o una sottoquery sono uno Scope,
-    #    una tabella del server è una exp.Table. Guardare lo scope (e non solo i
-    #    nomi delle CTE) impedisce di definire una CTE `x` in una sottoquery e poi
-    #    leggere la tabella vera `x` fuori da lì.
+    # 1) the TRUE sources of every scope: a CTE or a subquery is a Scope, a server
+    #    table is an exp.Table. Looking at the scope (and not only the CTE names) stops
+    #    defining a CTE `x` in a subquery and then reading the real table `x` outside it.
     real: set[int] = set()
     try:
         for scope in traverse_scope(tree):
@@ -83,12 +81,12 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
     except SqlglotError as e:
         raise EngineError(f"sql: the query could not be parsed, so it was not run. Detail: {str(e)[:200]}") from e
 
-    # nomi delle CTE: sono sorgenti legittime ovunque nella query
+    # the CTE names: legitimate sources anywhere in the query
     cte_names = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
 
-    # 2) rete di sicurezza: ogni exp.Table che l'analisi degli scope non avesse
-    #    visitato (costrutti del dialetto che non conosce) passa lo stesso
-    #    controllo, con l'unica tolleranza dei nomi di CTE
+    # 2) a safety net: every exp.Table the scope analysis did not visit (constructs of
+    #    the dialect it does not know) goes through the same check, the CTE names the
+    #    only tolerance
     for table in tree.find_all(exp.Table):
         if id(table) in real:
             continue
@@ -97,55 +95,53 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
             continue
         _check_table(table)
 
-    # 3) Tutto ciò che sta in posizione FROM/JOIN deve essere una sorgente che
-    #    l'analisi ha riconosciuto. NON ci si può fidare del TIPO di nodo: nel
-    #    dialetto ClickHouse sqlglot analizza `db.tabella` dentro la sottoquery
-    #    di un ARRAY JOIN come exp.Column, non exp.Table — quindi né
-    #    `traverse_scope` né `find_all(exp.Table)` la vedono, e la lista bianca
-    #    guardava nel posto sbagliato. Trovato dall'audit 2026-09-19 (A9), dopo
-    #    che la stessa classe di problema era gia' costata l'incidente merge().
-    #    Qui si guarda la POSIZIONE, che il dialetto non può falsare.
-    for ramo in tree.find_all(exp.From, exp.Join):
-        _check_source(ramo.this, cte_names)
+    # 3) Everything in FROM/JOIN position must be a source the analysis recognized. The
+    #    node's TYPE cannot be trusted: in the ClickHouse dialect sqlglot parses
+    #    `db.table` inside an ARRAY JOIN's subquery as exp.Column, not exp.Table — so
+    #    neither `traverse_scope` nor `find_all(exp.Table)` sees it, and the allowlist
+    #    looked in the wrong place. Found by the 2026-09-19 audit (A9), after the same
+    #    class of problem had already cost the merge() incident. Here the POSITION is
+    #    looked at, which the dialect cannot fake.
+    for branch in tree.find_all(exp.From, exp.Join):
+        _check_source(branch.this, cte_names)
 
-    # 4) ClickHouse: `x IN nome_tabella` legge una tabella senza un FROM
+    # 4) ClickHouse: `x IN table_name` reads a table without a FROM
     for node in tree.find_all(exp.In):
         if node.args.get("field") is not None:
             raise EngineError(_REFUSAL.format(what=f"`IN {node.args['field'].sql()}`"))
 
-    # 5) funzioni scalari che leggono dal server
+    # 5) scalar functions that read from the server
     for func in tree.find_all(exp.Func):
         name = _function_name(func)
         if name.startswith(_FORBIDDEN_SCALARS):
             raise EngineError(_REFUSAL.format(what=f"The function `{name}`"))
 
 
-def _check_source(nodo: exp.Expression | None, cte_names: set[str]) -> None:
-    """Valida ciò che compare come sorgente di un FROM o di un JOIN.
+def _check_source(node: exp.Expression | None, cte_names: set[str]) -> None:
+    """Validates what appears as the source of a FROM or a JOIN.
 
-    Si guarda la POSIZIONE e non il tipo di nodo, perché il tipo non è
-    affidabile: dentro la sottoquery di un ARRAY JOIN sqlglot classifica come
-    `exp.Column` sia `self` sia `information_schema.tables`. Il discrimine vero
-    è il QUALIFICATORE — un nome puntato in posizione di sorgente è sempre la
-    tabella di qualcun altro."""
-    if nodo is None:
+    The POSITION is looked at and not the node's type, because the type is not reliable:
+    inside an ARRAY JOIN's subquery sqlglot classifies both `self` and
+    `information_schema.tables` as `exp.Column`. The true discriminant is the QUALIFIER — a
+    dotted name in a source position is always someone else's table."""
+    if node is None:
         return
-    if isinstance(nodo, exp.Table):
-        if isinstance(nodo.this, exp.Identifier) and not nodo.db and not nodo.catalog \
-                and nodo.name.lower() in cte_names:
-            return  # una CTE è una sorgente legittima
-        _check_table(nodo)
+    if isinstance(node, exp.Table):
+        if isinstance(node.this, exp.Identifier) and not node.db and not node.catalog \
+                and node.name.lower() in cte_names:
+            return  # a CTE is a legitimate source
+        _check_table(node)
         return
-    if isinstance(nodo, (exp.Subquery, exp.Unnest, exp.Values, exp.Lateral)):
-        return  # il loro contenuto è già passato dagli scope
-    if isinstance(nodo, exp.Column):
-        # `self`/`input` e le CTE sono nomi NUDI; tutto ciò che è qualificato
-        # (`db.tabella`) in posizione di sorgente è una tabella estranea
-        if not nodo.table and nodo.name.lower() in (INPUT_NAMES | cte_names):
+    if isinstance(node, (exp.Subquery, exp.Unnest, exp.Values, exp.Lateral)):
+        return  # their content went through the scopes already
+    if isinstance(node, exp.Column):
+        # `self`/`input` and the CTEs are BARE names; anything qualified (`db.table`) in
+        # a source position is a foreign table
+        if not node.table and node.name.lower() in (INPUT_NAMES | cte_names):
             return
-        raise EngineError(_REFUSAL.format(what=f"The table `{nodo.sql()[:80]}`"))
-    if isinstance(nodo, exp.Dot):
-        raise EngineError(_REFUSAL.format(what=f"The reference `{nodo.sql()[:80]}`"))
+        raise EngineError(_REFUSAL.format(what=f"The table `{node.sql()[:80]}`"))
+    if isinstance(node, exp.Dot):
+        raise EngineError(_REFUSAL.format(what=f"The reference `{node.sql()[:80]}`"))
 
 
 def _check_table(table: exp.Table) -> None:

@@ -1,15 +1,14 @@
 """
-Registry delle operazioni del flow.
+The registry of the flow's operations.
 
-Ogni operazione è una funzione pura `(lf, params, ctx) -> lf` che mappa un nodo
-della IR (un dict `params`) in una trasformazione su `LazyFrame`. Aggiungere una
-nuova operazione = registrare una funzione con `@register("nome")`.
+Every operation is a pure function `(lf, params, ctx) -> lf` that maps a node of the IR
+(a `params` dict) to a transformation on a `LazyFrame`. Adding an operation = registering
+a function with `@register("name")`.
 
-Design volutamente dichiarativo: nessuna `eval` di codice arbitrario
-(sicurezza + serializzabilità JSON per Celery). Le trasformazioni sono un set
-chiuso e verificato. Unica eccezione controllata: `compute` parsa espressioni
-SQL con `pl.sql_expr` — un parser di SOLE espressioni (niente statement, niente
-I/O, niente Python), quindi il perimetro resta chiuso.
+A deliberately declarative design: no `eval` of arbitrary code (security + JSON
+serializability for Celery). The transformations are a closed, verified set. The one
+controlled exception: `compute` parses SQL expressions with `pl.sql_expr` — a parser of
+expressions ONLY (no statements, no I/O, no Python), so the perimeter stays closed.
 """
 from __future__ import annotations
 
@@ -23,7 +22,7 @@ from app.engine.context import OperationContext
 from app.engine.dtypes import resolve_dtype as _dtype
 from app.engine.exceptions import EngineError, UnknownOperationError
 
-# tipo di una funzione-operazione
+# the type of an operation function
 OperationFn = Callable[[pl.LazyFrame, dict[str, Any], OperationContext], pl.LazyFrame]
 
 _REGISTRY: dict[str, OperationFn] = {}
@@ -55,7 +54,7 @@ def _require(params: dict[str, Any], key: str) -> Any:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Selezione / rimozione / rinomina colonne
+# Selecting / dropping / renaming columns
 # ─────────────────────────────────────────────────────────────────────────────
 @register("select")
 def op_select(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
@@ -64,8 +63,8 @@ def op_select(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 
 @register("reorder")
 def op_reorder(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    # riordina: le colonne elencate prima (in quest'ordine), poi TUTTE le altre
-    # (così non si perdono colonne aggiunte a monte dopo la configurazione).
+    # reorder: the listed columns first (in this order), then ALL the others (so the
+    # columns added upstream after the configuration are not lost).
     order = _require(params, "columns")
     return lf.select([*order, pl.exclude(order)])
 
@@ -82,14 +81,14 @@ def op_rename(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 
 @register("cast")
 def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    # params: {"columns": {"col": "int", "altra": "float"}}
+    # params: {"columns": {"col": "int", "other": "float"}}
     #
-    # STANDARD CROSS-ENGINE del cast (uguale in DuckDB/chDB/ClickHouse):
-    # - conversione impossibile → NULL, mai errore ("x" → NULL, "2024-02-30" → NULL);
-    # - testo → numero/data: spazi attorno tagliati (" 4 " → 4);
-    # - testo → intero: SOLO interi letterali ("2.7" → NULL, non 3 né 2);
-    # - numero (float/decimal) → intero: TRONCAMENTO verso zero (100.9 → 100,
-    #   -2.7 → -2); fuori range → NULL.
+    # The CROSS-ENGINE STANDARD of the cast (the same in DuckDB/chDB/ClickHouse):
+    # - an impossible conversion → NULL, never an error ("x" → NULL, "2024-02-30" → NULL);
+    # - text → number/date: surrounding spaces trimmed (" 4 " → 4);
+    # - text → integer: integer literals ONLY ("2.7" → NULL, neither 3 nor 2);
+    # - number (float/decimal) → integer: TRUNCATION toward zero (100.9 → 100,
+    #   -2.7 → -2); out of range → NULL.
     columns: dict[str, str] = _require(params, "columns")
     schema = lf.collect_schema()
     exprs: list[pl.Expr] = []
@@ -102,7 +101,7 @@ def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
             if target.is_integer():
                 e = pl.when(e.str.contains(r"^[+-]?\d+$")).then(e).otherwise(None)
             elif isinstance(target, pl.Datetime) or target == pl.Datetime:
-                # "2024-01-05 10:30:00" (spazio) vale quanto "2024-01-05T10:30:00"
+                # "2024-01-05 10:30:00" (a space) is as good as "2024-01-05T10:30:00"
                 e = e.str.replace(r"^(\d{4}-\d{2}-\d{2})\s+", "${1}T")
             if target == pl.Boolean:
                 # Polars does not cast text to bool: the words DuckDB takes, else NULL
@@ -112,7 +111,7 @@ def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
                 continue
             e = e.cast(target, strict=False)
         elif target.is_integer() and src is not None and (src.is_float() or src.is_decimal()):
-            e = e.cast(pl.Float64).cast(target, strict=False)  # troncamento verso zero
+            e = e.cast(pl.Float64).cast(target, strict=False)  # truncation toward zero
         else:
             e = e.cast(target, strict=False)
         exprs.append(e.alias(c))
@@ -120,7 +119,7 @@ def op_cast(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Filtro righe
+# Filtering rows
 # ─────────────────────────────────────────────────────────────────────────────
 # the text a cast to bool reads, on every engine (DuckDB's own rule, case aside)
 TEXT_TRUE = ["true", "t", "1", "yes", "y"]
@@ -128,11 +127,11 @@ TEXT_FALSE = ["false", "f", "0", "no", "n"]
 
 
 def _coerce_value(value: Any, dtype: pl.DataType | None) -> Any:
-    """Adatta il valore del filtro al tipo della colonna.
+    """Fits the filter's value to the column's type.
 
-    Il form manda sempre stringhe ISO ("2024-01-15", "2024-01-15T10:30:00"):
-    se la colonna è temporale le convertiamo in date/datetime NATIVE, perché
-    Polars rifiuta il confronto diretto data↔stringa.
+    The form always sends ISO strings ("2024-01-15", "2024-01-15T10:30:00"): when the
+    column is temporal they are converted to NATIVE dates/datetimes, because Polars
+    refuses to compare a date with a string directly.
     """
     if not isinstance(value, str) or dtype is None or not dtype.is_temporal():
         return value
@@ -204,8 +203,8 @@ def _predicate(column: str, operator: str, value: Any, dtype: pl.DataType | None
         case "not_in":
             return ~col.is_in([_coerce_value(v, dtype) for v in value])
         case "between":
-            # pl.lit espliciti: is_between interpreta le stringhe nude come
-            # NOMI di colonna, non come valori
+            # explicit pl.lit: is_between reads bare strings as column NAMES, not
+            # as values
             lo, hi = (_coerce_value(v, dtype) for v in (value[0], value[1]))
             return col.is_between(pl.lit(lo), pl.lit(hi))
         case "contains":
@@ -246,7 +245,7 @@ def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
     operator = _require(params, "operator")
     value = params.get("value")
     check_filter_value(operator, value)
-    # il dtype serve a convertire le stringhe ISO in date/datetime (solo schema, zero dati)
+    # the dtype converts the ISO strings into dates/datetimes (schema only, no data)
     dtype = lf.collect_schema().get(column)
     return lf.filter(_predicate(column, operator, value, dtype))
 
@@ -280,9 +279,9 @@ def op_sort(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
     keys = sort_keys(params, lf.collect_schema().names() if params.get("ignore_missing") else None)
     if not keys:
         return lf
-    # STANDARD CROSS-ENGINE: i NULL vanno SEMPRE in coda (asc e desc), così un
-    # "top N" (sort desc + limit) non è mai fatto di NULL. DuckDB/ClickHouse
-    # usano NULLS LAST esplicito. Una direzione per colonna.
+    # CROSS-ENGINE STANDARD: NULLs ALWAYS go last (asc and desc), so a "top N" (sort
+    # desc + limit) is never made of NULLs. DuckDB/ClickHouse use an explicit NULLS
+    # LAST. One direction per column.
     return lf.sort([c for c, _ in keys], descending=[d for _, d in keys], nulls_last=True)
 
 
@@ -295,7 +294,7 @@ SAMPLE_BUCKETS = 10_000
 
 
 def sample_threshold(params: dict[str, Any]) -> tuple[int, int]:
-    """(soglia su SAMPLE_BUCKETS, seme) da `fraction` (0..1] e `seed`."""
+    """(threshold over SAMPLE_BUCKETS, seed) from `fraction` (0..1] and `seed`."""
     try:
         fraction = float(_require(params, "fraction"))
     except (TypeError, ValueError):
@@ -308,11 +307,11 @@ def sample_threshold(params: dict[str, Any]) -> tuple[int, int]:
 
 @register("sample")
 def op_sample(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    """Campione CASUALE ma DETERMINISTICO di una frazione delle righe: la scelta
-    dipende dall'hash del contenuto della riga (+ seme), non da un generatore →
-    stesse righe a ogni preview, streaming-friendly (niente row index né shuffle).
-    Usato dal campionamento di SVILUPPO dei nodi sorgente; in produzione non viene
-    mai iniettato (vedi gateway flow_resolver)."""
+    """A RANDOM but DETERMINISTIC sample of a fraction of the rows: the choice depends on
+    the hash of the row's content (+ seed), not on a generator → the same rows at every
+    preview, streaming-friendly (no row index, no shuffle). Used by the DEVELOPMENT
+    sampling of the source nodes; never injected in production (see the gateway's
+    flow_resolver)."""
     threshold, seed = sample_threshold(params)
     return lf.filter(pl.struct(pl.all()).hash(seed) % SAMPLE_BUCKETS < threshold)
 
@@ -326,7 +325,7 @@ def op_unique(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 
 @register("fill_null")
 def op_fill_null(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    # o {"value": 0} su tutte, o {"columns": {"col": 0, "altra": "n/d"}}
+    # either {"value": 0} on all, or {"columns": {"col": 0, "other": "n/a"}}
     if "columns" in params:
         cols: dict[str, Any] = params["columns"]
         return lf.with_columns([pl.col(c).fill_null(v) for c, v in cols.items()])
@@ -339,12 +338,12 @@ def op_drop_nulls(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContex
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Aggregazione
+# Aggregation
 # ─────────────────────────────────────────────────────────────────────────────
-# STANDARD CROSS-ENGINE degli aggregati = semantica SQL (è ciò che gira in
-# produzione su DuckDB/ClickHouse): i NULL sono ignorati; sum di un gruppo con
-# SOLI NULL → NULL (Polars darebbe 0); n_unique NON conta il NULL (Polars sì);
-# std/var campionarie (n-1). Vale anche per il pivot, che usa questa tabella.
+# The CROSS-ENGINE STANDARD of the aggregates = SQL semantics (what runs in
+# production on DuckDB/ClickHouse): NULLs are ignored; sum of a group of ONLY NULLs →
+# NULL (Polars would give 0); n_unique does NOT count NULL (Polars does); sample
+# std/var (n-1). The pivot too, which uses this table.
 _AGG: dict[str, Callable[[str], pl.Expr]] = {
     "sum": lambda c: pl.when(pl.col(c).count() > 0).then(pl.col(c).sum()).otherwise(None),
     "mean": lambda c: pl.col(c).mean(),
@@ -378,26 +377,26 @@ def op_group_by(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Reshape: pivot (righe → colonne) e unpivot (colonne → righe)
+# Reshape: pivot (rows → columns) and unpivot (columns → rows)
 # ─────────────────────────────────────────────────────────────────────────────
-# ogni valore distinto di `on` diventa una colonna nuova: oltre questa soglia è
-# quasi certamente la colonna sbagliata, non un reshape voluto
+# every distinct value of `on` becomes a new column: beyond this it is almost surely
+# the wrong column, not a reshape anyone wants
 MAX_PIVOT_COLUMNS = 500
 
 
-# ── Standard CROSS-ENGINE del pivot (Polars, DuckDB, chDB, ClickHouse) ────────
-# Con engine di sviluppo ≠ engine di produzione lo stesso flusso deve produrre le
-# STESSE colonne ovunque (i nodi a valle le referenziano per nome). Regole:
-# - nome colonna = valore come testo (`pivot_label`: null→"null", bool→true/false,
-#   date ISO); più colonne `on` → etichette unite da "_" e SOLO le combinazioni
-#   presenti nei dati (niente prodotto cartesiano);
-# - semantica SQL: gruppo (indice × on) assente → NULL; presente ma con valori
-#   tutti NULL → NULL (anche per sum); `count`/`n_unique` → 0 e tipo Int64.
+# ── The CROSS-ENGINE standard of the pivot (Polars, DuckDB, chDB, ClickHouse) ─
+# With a development engine ≠ the production engine the same flow must make THE SAME
+# columns everywhere (the nodes downstream refer to them by name). Rules:
+# - column name = the value as text (`pivot_label`: null→"null", bool→true/false,
+#   ISO dates); several `on` columns → labels joined by "_" and ONLY the combinations
+#   present in the data (no Cartesian product);
+# - SQL semantics: a missing group (index × on) → NULL; present but with all values
+#   NULL → NULL (sum too); `count`/`n_unique` → 0 and type Int64.
 PIVOT_LABEL_SEP = "_"
 
 
 def pivot_label(v: Any) -> str:
-    """Etichetta di colonna di un valore pivot, identica in tutti gli engine."""
+    """The column label of a pivot value, the same in every engine."""
     import datetime as _dt
 
     if v is None:
@@ -422,7 +421,7 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     func = params.get("func") or "sum"
     if isinstance(index, str):
         index = [index]
-    on = on if isinstance(on, list) else [on]  # più colonne = combinazioni dei valori
+    on = on if isinstance(on, list) else [on]  # several columns = combinations of the values
     if not index:
         raise EngineError("pivot: choose at least one index column (the row keys)")
     if not on:
@@ -430,9 +429,9 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     if func not in _AGG:
         raise EngineError(f"pivot: unsupported aggregation function '{func}'")
 
-    # 1) il grosso del lavoro resta lazy/STREAMING: l'aggregazione riduce il
-    #    dataset a (gruppi indice × combinazioni di `on`) righe — piccolo
-    #    per costruzione, qualunque sia la dimensione dell'input
+    # 1) the bulk of the work stays lazy/STREAMING: the aggregation shrinks the dataset
+    #    to (index groups × combinations of `on`) rows — small by construction,
+    #    whatever the size of the input
     agg_expr = _AGG[func](values)
     if func == "sum":
         # semantica SQL (come DuckDB/ClickHouse): sum di soli NULL → NULL, non 0
@@ -443,32 +442,32 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
         lf.group_by(index + on).agg(agg_expr.alias(values)).collect(engine="streaming")
     )
 
-    n_cols = aggregated.select(on).unique().height  # combinazioni distinte = colonne nuove
+    n_cols = aggregated.select(on).unique().height  # distinct combinations = new columns
     if n_cols > MAX_PIVOT_COLUMNS:
         raise EngineError(
             f"pivot: the chosen columns have {n_cols} distinct combinations, that is {n_cols} "
             f"new columns (maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
 
-    # 2) il reshape vero è eager (pivot non esiste in lazy) ma lavora sul
-    #    risultato già aggregato; "first" è un no-op: le coppie (indice, on)
-    #    sono uniche dopo la group_by. Le colonne nuove prendono l'etichetta
-    #    standard cross-engine (vedi `pivot_label`) calcolata come colonna chiave.
+    # 2) the reshape proper is eager (pivot does not exist lazily) but works on the
+    #    aggregated result; "first" is a no-op: the (index, on) pairs are unique after
+    #    the group_by. The new columns take the cross-engine label (see
+    #    `pivot_label`) computed as the key column.
     key = "__pivot_on__"
     label = pl.concat_str(
         [pl.col(c).cast(pl.Utf8).fill_null("null") for c in on], separator=PIVOT_LABEL_SEP
     ).alias(key)
     aggregated = aggregated.with_columns(label).drop(on)
     out = aggregated.pivot(key, index=index, values=values, aggregate_function="first", sort_columns=True)
-    if func in ("count", "n_unique"):  # gruppo assente = 0 righe, non "sconosciuto"
+    if func in ("count", "n_unique"):  # a missing group = 0 rows, not "unknown"
         out = out.with_columns(pl.exclude(index).fill_null(0))
     return out.lazy()
 
 
 @register("unpivot")
 def op_unpivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    # params: {"index": ["id"], "on": ["gen", "feb"] (vuoto = tutte le altre),
-    #          "variable_name": "mese", "value_name": "valore"}
+    # params: {"index": ["id"], "on": ["jan", "feb"] (empty = all the others),
+    #          "variable_name": "month", "value_name": "value"}
     index = params.get("index") or None
     on = params.get("on") or None
     return lf.unpivot(
@@ -480,17 +479,17 @@ def op_unpivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Join (legge una seconda sorgente tramite il context)
+# Join (reads a second source through the context)
 # ─────────────────────────────────────────────────────────────────────────────
 def _build_right(right_ref: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     """
-    Costruisce il LazyFrame del lato destro del join.
+    Builds the LazyFrame of the join's right side.
 
-    Due formati:
+    Two formats:
     - sub-flow: {"source": {bucket, key}, "operations": [{type, params}, ...]}
-      → scan della sorgente + applicazione della catena (ramo trasformato).
+      → a scan of the source + the chain applied (a transformed branch).
     - legacy:   {"bucket": ..., "key": ...}
-      → semplice scan di un parquet.
+      → a plain scan of a parquet.
     """
     if "source" in right_ref:
         rlf = ctx.scan(DataSource(**right_ref["source"]))
@@ -502,14 +501,14 @@ def _build_right(right_ref: dict[str, Any], ctx: OperationContext) -> pl.LazyFra
 
 
 def _cross_join(lf: pl.LazyFrame, right_lf: pl.LazyFrame, ctx: OperationContext) -> pl.LazyFrame:
-    """Cross join (prodotto cartesiano L×R) con guardia anti-OOM.
+    """Cross join (the L×R Cartesian product) with a guard against OOM.
 
-    Conta prima le righe dei due lati e, se il prodotto supera il tetto, RIFIUTA
-    con un messaggio chiaro invece di far esplodere la RAM (il cross join è la
-    causa n.1 di freeze). Niente campionamento: l'anteprima mostra il risultato
-    VERO (o l'errore), mai un campione fuorviante. Il conteggio è in streaming:
-    sui parquet è quasi gratis (metadati); sul lato sinistro esegue la catena a
-    monte una volta (prezzo dell'assicurazione)."""
+    Counts the two sides' rows first and, when the product goes over the cap, REFUSES
+    with a clear message instead of blowing up the RAM (the cross join is the no. 1
+    cause of freezes). No sampling: the preview shows the TRUE result (or the error),
+    never a misleading sample. The count streams: on parquet it is almost free
+    (metadata); on the left side it runs the upstream chain once (the insurance's
+    price)."""
     cap = ctx.max_cross_join_rows
     if cap and cap > 0:
         left_n = lf.select(pl.len()).collect(engine="streaming").item()
@@ -526,22 +525,22 @@ def _cross_join(lf: pl.LazyFrame, right_lf: pl.LazyFrame, ctx: OperationContext)
 
 @register("join")
 def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
-    # params: {"right": <sorgente o sub-flow>,
-    #          "on": ["id"]  (oppure "left_on"/"right_on"),
+    # params: {"right": <source or sub-flow>,
+    #          "on": ["id"]  (or "left_on"/"right_on"),
     #          "how": "inner"}
     right_ref = _require(params, "right")
     right_lf = _build_right(right_ref, ctx)
     how = params.get("how", "inner")
 
-    # il cross join non usa colonne chiave — e può esplodere: protetto a parte
+    # the cross join uses no key columns — and can explode: guarded separately
     if how == "cross":
         return _cross_join(lf, right_lf, ctx)
 
-    # STANDARD CROSS-ENGINE delle colonne del join (come SQL USING / ON):
-    # - `on` (stessi nomi): la chiave è UNA sola colonna, valorizzata anche
-    #   nelle righe solo-destra dei full/right join (coalescente);
-    # - `left_on`/`right_on` (nomi diversi): restano ENTRAMBE le colonne chiave;
-    # - colonna omonima non-chiave a destra → suffisso `_right`.
+    # The CROSS-ENGINE STANDARD of the join's columns (as SQL USING / ON):
+    # - `on` (same names): the key is ONE column, filled in the right-only rows of
+    #   full/right joins too (coalesced);
+    # - `left_on`/`right_on` (different names): BOTH key columns stay;
+    # - a non-key column with the same name on the right → suffix `_right`.
     if how in ("semi", "anti"):
         if "on" in params:
             return lf.join(right_lf, on=params["on"], how=how)
@@ -553,25 +552,25 @@ def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
         left_on = _require(params, "left_on")
         right_on = _require(params, "right_on")
         out = lf.join(right_lf, left_on=left_on, right_on=right_on, how=how, coalesce=False)
-    # ordine colonne = sinistra (nel suo ordine) + nuove di destra, su ogni tipo
-    # di join (il right join di Polars sposterebbe la chiave dopo le colonne di sinistra)
+    # column order = the left's (in its order) + the right's new ones, on every kind of
+    # join (Polars' right join would move the key after the left's columns)
     out_cols = out.collect_schema().names()
     left_set = set(left_cols)
     return out.select([c for c in left_cols if c in out_cols] + [c for c in out_cols if c not in left_set])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Union: accoda le righe di un altro ramo
+# Union: appends the rows of another branch
 # ─────────────────────────────────────────────────────────────────────────────
 @register("union")
 def op_union(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     """
-    params: {"right": <sorgente o sub-flow, come il join>, "strategy": "relaxed"}
+    params: {"right": <source or sub-flow, as for the join>, "strategy": "relaxed"}
 
-    Accoda le righe del ramo destro sotto quelle della catena. "relaxed"
-    (default) allinea le colonne per nome: le mancanti da un lato diventano
-    null, i tipi si riconciliano al supertipo. "strict" richiede schemi
-    identici. Union di N sorgenti = nodi union in catena. Tutto lazy.
+    Appends the right branch's rows under the chain's. "relaxed" (the default) aligns
+    the columns by name: the ones missing on a side become null, the types are
+    reconciled to the supertype. "strict" requires identical schemas. A union of N
+    sources = union nodes in a chain. All lazy.
     """
     right_ref = _require(params, "right")
     right_lf = _build_right(right_ref, ctx)
@@ -607,19 +606,18 @@ def check_strict_union(left: list[tuple[str, str]], right: list[tuple[str, str]]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Colonne calcolate: espressioni SQL (dialetto Polars) → espressioni lazy
+# Computed columns: SQL expressions (Polars dialect) → lazy expressions
 # ─────────────────────────────────────────────────────────────────────────────
 @register("compute")
 def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     """
-    params: {"columns": [{"name": "margine", "expr": "prezzo - costo"}, ...]}
+    params: {"columns": [{"name": "margin", "expr": "price - cost"}, ...]}
 
-    Le espressioni sono SQL nel dialetto di Polars: aritmetica, CASE WHEN,
-    funzioni stringa/data e window functions con OVER (PARTITION BY /
-    ORDER BY → semantica running per righe). `pl.sql_expr` parsa SOLO
-    espressioni: niente statement né accesso a tabelle. Le colonne vengono
-    applicate IN SEQUENZA: un'espressione può usare quelle definite prima;
-    un nome già esistente sovrascrive la colonna. Tutto resta lazy.
+    The expressions are SQL in Polars' dialect: arithmetic, CASE WHEN, string and date
+    functions, window functions with OVER (PARTITION BY / ORDER BY → running semantics
+    by rows). `pl.sql_expr` parses ONLY expressions: no statements, no access to
+    tables. The columns apply IN SEQUENCE: an expression may use those defined before;
+    an existing name overwrites the column. Everything stays lazy.
     """
     columns = _require(params, "columns")
     if not isinstance(columns, list) or not columns:
@@ -642,12 +640,12 @@ def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Execute SQL: una query SQL (dialetto Polars) sul frame in ingresso
+# Execute SQL: a SQL query (Polars dialect) on the incoming frame
 # ─────────────────────────────────────────────────────────────────────────────
-# Table function che leggono FILE dal disco del worker: Polars SQL le supporta,
-# ma qui sono VIETATE — una query potrebbe leggere secret o i parquet di altri
-# (es. `SELECT * FROM read_csv('/app/.../secrets.toml')`). L'unica tabella
-# disponibile è l'input del nodo.
+# Table functions that read FILES from the worker's disk: Polars SQL supports them,
+# but here they are FORBIDDEN — a query could read secrets or other people's parquet
+# (`SELECT * FROM read_csv('/app/.../secrets.toml')`). The only table available is
+# the node's input.
 _SQL_FILE_FUNCS = re.compile(r"\b(?:read|scan)_(?:csv|parquet|ipc|ndjson|json)\s*\(", re.IGNORECASE)
 
 
@@ -656,11 +654,11 @@ def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> p
     """
     params: {"query": "SELECT ... FROM self ..."}
 
-    Esegue una query SQL nel dialetto di Polars sul frame in ingresso, esposto
-    come tabella `self` (alias `input`). Polars SQL è un motore CHIUSO sui frame
-    in memoria — niente Python, nessun I/O — e resta LAZY (`SQLContext.execute`
-    torna un LazyFrame → streamabile e cacheable), coerente con l'engine
-    dichiarativo. Le table function che leggono file sono bloccate a monte.
+    Runs a SQL query in Polars' dialect on the incoming frame, exposed as the table
+    `self` (alias `input`). Polars SQL is an engine CLOSED over the frames in memory —
+    no Python, no I/O — and stays LAZY (`SQLContext.execute` returns a LazyFrame →
+    streamable and cacheable), in line with the declarative engine. The table functions
+    that read files are blocked upstream.
     """
     query = str(_require(params, "query") or "").strip()
     if not query:
@@ -672,7 +670,7 @@ def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> p
         )
     try:
         result = pl.SQLContext(frames={"self": lf, "input": lf}).execute(query)
-        result.collect_schema()  # valida sintassi/colonne SUBITO (metadati, senza dati)
+        result.collect_schema()  # validates syntax and columns AT ONCE (metadata, no data)
         return result
     except EngineError:
         raise
@@ -681,27 +679,27 @@ def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> p
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Foreach: ciclo con placeholder (stile container SSIS)
+# Foreach: a loop with placeholders (SSIS container style)
 # ─────────────────────────────────────────────────────────────────────────────
-# guardia per-livello: un driver/items enorme genererebbe migliaia di catene
+# per-level guard: a huge driver or item list would make thousands of chains
 MAX_FOREACH_ITERATIONS = 1000
-# guardia cumulativa su TUTTA la catena di un run: i foreach annidati moltiplicano
-# (1000^profondità), quindi il solo limite per-livello non basta. Conta le
-# iterazioni totali costruite (outer × inner) e taglia l'esplosione.
+# cumulative guard over a run's WHOLE chain: nested foreach loops multiply
+# (1000^depth), so the per-level limit alone is not enough. It counts all the
+# iterations built (outer × inner) and stops the explosion.
 MAX_FOREACH_TOTAL = 100_000
 
-# tollerante: spazi attorno alla chiave ("{{ ProductKey }}") e chiavi con
-# spazi/punteggiatura nel nome ("{{Customer ID}}" — capita nei nomi colonna)
+# tolerant: spaces around the key ("{{ ProductKey }}") and keys with spaces or
+# punctuation in the name ("{{Customer ID}}" — it happens in column names)
 _PLACEHOLDER = re.compile(r"\{\{\s*(.+?)\s*\}\}")
 
 
 def _reject_dynamic_source_keys(obj: Any) -> None:
-    """Vieta i placeholder `{{...}}` nei campi che INDIRIZZANO lo storage
-    (`key`/`bucket`). Una sorgente il cui percorso viene risolto dai DATI di
-    riga sfuggirebbe all'autorizzazione statica del gateway (che scandisce solo
-    il payload): potresti leggere il parquet di un altro progetto mettendone la
-    chiave in una cella del driver. I percorsi delle sorgenti devono venire dal
-    grafo del flusso (concreti e autorizzati), mai dai dati.
+    """Forbids the `{{...}}` placeholders in the fields that ADDRESS the storage
+    (`key`/`bucket`). A source whose path is resolved from the rows' DATA would escape
+    the gateway's static authorization (which scans the payload only): one could read
+    another project's parquet by putting its key in a cell of the driver. The sources'
+    paths must come from the flow's graph (concrete and authorized), never from the
+    data.
     """
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -717,12 +715,12 @@ def _reject_dynamic_source_keys(obj: Any) -> None:
 
 
 def _substitute(obj: Any, item: dict[str, Any]) -> Any:
-    """Sostituisce ricorsivamente i placeholder {{chiave}} nei params del corpo.
+    """Replaces the {{key}} placeholders in the body's params, recursively.
 
-    - stringa che è SOLO un placeholder ("{{soglia}}") → valore originale,
-      tipo preservato (numero resta numero: utile per filter/limit);
-    - placeholder immerso in testo ("vendite_{{paese}}") → sostituzione testuale;
-    - dict/list → discesa ricorsiva.
+    - a string that is ONLY a placeholder ("{{threshold}}") → the original value, its
+      type kept (a number stays a number: useful for filter/limit);
+    - a placeholder within text ("sales_{{country}}") → a text replacement;
+    - dict/list → recursive descent.
     """
     if isinstance(obj, str):
         m = _PLACEHOLDER.fullmatch(obj.strip())
@@ -744,8 +742,8 @@ def _substitute(obj: Any, item: dict[str, Any]) -> Any:
     if isinstance(obj, list):
         return [_substitute(x, item) for x in obj]
     if isinstance(obj, dict):
-        # anche le CHIAVI possono essere placeholder (es. rename/cast/fill_null:
-        # {"{{colonna}}": ...}); una chiave deve restare stringa
+        # the KEYS may be placeholders too (rename/cast/fill_null:
+        # {"{{column}}": ...}); a key must stay a string
         out = {}
         for k, v in obj.items():
             nk = _substitute(k, item) if isinstance(k, str) else k
@@ -757,20 +755,20 @@ def _substitute(obj: Any, item: dict[str, Any]) -> Any:
 @register("foreach")
 def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     """
-    Esegue il corpo per ogni iterazione e APPENDE i risultati (concat).
+    Runs the body for every iteration and APPENDS the results (concat).
 
     params:
-    - "body": [{type, params}, ...] — le operazioni del corpo; nei valori si
-      usano i placeholder {{chiave}};
-    - le iterazioni arrivano da UNO dei due:
-      "driver": sub-flow ({"source": {...}, "operations": [...]}) — ogni RIGA
-        è un'iterazione, le COLONNE sono i placeholder disponibili;
-      "items": lista statica di dict [{chiave: valore, ...}, ...];
-    - "add_keys_as_columns": true → aggiunge le chiavi dell'iterazione come
-      colonne letterali all'output (per distinguere i blocchi appesi).
+    - "body": [{type, params}, ...] — the body's operations; the values use the
+      {{key}} placeholders;
+    - the iterations come from ONE of the two:
+      "driver": a sub-flow ({"source": {...}, "operations": [...]}) — every ROW is an
+        iteration, the COLUMNS are the placeholders available;
+      "items": a static list of dicts [{key: value, ...}, ...];
+    - "add_keys_as_columns": true → adds the iteration's keys as literal columns to the
+      output (to tell the appended blocks apart).
 
-    Il risultato resta LAZY: N catene + concat, lo streaming è preservato.
-    `diagonal_relaxed` tollera piccole differenze di schema tra iterazioni.
+    The result stays LAZY: N chains + concat, streaming is kept. `diagonal_relaxed`
+    tolerates small schema differences between iterations.
     """
     body = _require(params, "body")
     items = params.get("items")
@@ -787,19 +785,19 @@ def op_foreach(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
             "foreach has no iterations: connect a driver (the top input) "
             "or define 'items' in the parameters"
         )
-    # cap per-livello anche sugli items STATICI (il ramo driver è già limitato sopra)
+    # the per-level cap on STATIC items too (the driver branch is capped above already)
     if len(items) > MAX_FOREACH_ITERATIONS:
         raise EngineError(
             f"foreach: {len(items)} iterations, over the limit of {MAX_FOREACH_ITERATIONS}"
         )
     if not body:
         raise EngineError("foreach has an empty body: drag some operations into the container")
-    # una sorgente nel corpo non può avere il percorso deciso dai dati (bypass RBAC)
+    # a source in the body cannot have its path decided by the data (an RBAC bypass)
     _reject_dynamic_source_keys(body)
 
-    # budget cumulativo: i foreach annidati vengono ricostruiti a ogni iterazione
-    # esterna, quindi outer×inner passa da qui e viene tagliato prima dell'OOM.
-    # (in esecuzione reale ctx c'è sempre; è None solo nei test delle op pure)
+    # cumulative budget: nested foreach loops are rebuilt at every outer iteration, so
+    # outer×inner goes through here and is cut before the OOM.
+    # (in a real run ctx is always there; None only in the tests of the pure ops)
     if ctx is not None:
         ctx.foreach_iterations += len(items)
         if ctx.foreach_iterations > MAX_FOREACH_TOTAL:

@@ -74,7 +74,7 @@ def test_stringa_di_connessione(monkeypatch):
     (pa.date32(), pa.date32()),
 ])
 def test_tipi_allineati_agli_altri_driver(arrow, atteso):
-    assert ds._sqlserver_tipo(arrow) == atteso
+    assert ds._sqlserver_type(arrow) == atteso
 
 
 def test_porta_ed_elenco_tabelle():

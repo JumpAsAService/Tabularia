@@ -1,17 +1,16 @@
 """
-Engine basato su DuckDB — alternativa OUT-OF-CORE a Polars (stessa IR).
+An engine on DuckDB — an OUT-OF-CORE alternative to Polars (the same IR).
 
-DuckDB spilla su disco: aggregazioni/join molto grandi non fanno esplodere la
-RAM. La catena è LAZY come in Polars — una relazione DuckDB è un piano, non dati.
-Solo `preview` (LIMIT n) e `run` (`write_parquet`, streaming su disco)
-materializzano. Sources and cached steps are read straight from the object
+DuckDB spills to disk: very large aggregations and joins do not blow up the RAM. The
+chain is LAZY as in Polars — a DuckDB relation is a plan, not data. Only `preview`
+(LIMIT n) and `run` (`write_parquet`, streaming to disk) materialize. Sources and cached steps are read straight from the object
 storage, only the parts a query needs (see storage_direct); without that, the
-file is downloaded first. L'output è scritto in streaming e caricato sullo storage.
+file is downloaded first. The output is written streaming and uploaded to the storage.
 
-Operazioni in `duckdb_ops`: strutturali single-input + join/union (leggono il
-lato destro via il context) + pivot/unpivot + compute + `sql` (in a sandbox
-without network) + `foreach`. Step-cache incrementale come Polars: si riparte dal
-passo in cache più vicino, e la copia del passo a monte si fa dopo la risposta.
+The operations in `duckdb_ops`: single-input structural ones + join/union (they read the
+right side through the context) + pivot/unpivot + compute + `sql` (in a sandbox without
+network) + `foreach`. An incremental step cache as Polars': the chain starts from the
+nearest cached step, and the copy of the upstream step is made after the answer.
 """
 from __future__ import annotations
 
@@ -38,10 +37,10 @@ _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
 
 class DuckContext:
-    """Stato di esecuzione di una catena DuckDB: connessione, storage, file
-    temporanei e generatore di nomi UNIVOCI (alias delle operazioni, viste
-    registrate). Le operazioni multi-input (join/union) lo usano per costruire
-    il lato destro dalla sorgente annidata."""
+    """The state of a running DuckDB chain: connection, storage, temporary files and a
+    generator of UNIQUE names (the operations' aliases, the registered views). The
+    multi-input operations (join/union) use it to build the right side from the nested
+    source."""
 
     def __init__(self, con, storage, tmp: list[str], preview_limit: int | None = None, direct: bool = False):
         self.con = con
@@ -50,12 +49,12 @@ class DuckContext:
         # sources read in place on the object storage (see storage_direct)
         self.direct = direct
         self._n = 0
-        # in preview il nodo `sql` limita il risultato del sandbox a queste righe
-        # (altrimenti calcolerebbe l'intero risultato solo per mostrarne N), but
+        # in a preview the `sql` node limits the sandbox's result to these rows
+        # (otherwise it would compute the whole result to show N of them), but
         # only when it is the chain's last operation: see `apply`
         self.preview_limit = preview_limit
         self.limit_output: int | None = None
-        # budget cumulativo delle iterazioni foreach (anti-esplosione annidata)
+        # the cumulative budget of the foreach iterations (against nested explosions)
         self.foreach_iterations = 0
 
     def uid(self, prefix: str) -> str:
@@ -87,8 +86,8 @@ class DuckContext:
                     raise SourceNotFoundError(source.bucket, source.key) from e
                 raise
             rel = self.con.read_parquet(path)
-        # parquet scritti con fuso (es. run di ClickHouse esterno in modalità s3)
-        # → TIMESTAMP naive UTC, lo standard di tutti gli engine (sessione in UTC)
+        # parquet written with a time zone (runs of the external ClickHouse with s3)
+        # → naive UTC TIMESTAMP, every engine's standard (session in UTC)
         tz_cols = {c for c, t in zip(rel.columns, rel.types) if "WITH TIME ZONE" in str(t).upper()}
         if tz_cols:
             proj = ", ".join(f"CAST({_qi(c)} AS TIMESTAMP) AS {_qi(c)}" if c in tz_cols else _qi(c) for c in rel.columns)
@@ -96,9 +95,9 @@ class DuckContext:
         return rel
 
     def apply(self, rel, ops, index_offset: int = 0, top: bool = False):
-        """Applica una catena di operazioni (Operation o dict) a una relazione.
-        `index_offset` allinea l'indice riportato negli errori a quello assoluto
-        nella catena (le op iniziali possono venire dalla cache). `top`: the
+        """Applies a chain of operations (Operation or dict) to a relation. `index_offset`
+        aligns the index reported in errors with the absolute one in the chain (the
+        first ops may come from the cache). `top`: the
         preview's own chain, not the right side of a join or a foreach body."""
         for i, op in enumerate(ops):
             op_type = op.type if isinstance(op, Operation) else op["type"]
@@ -112,20 +111,20 @@ class DuckContext:
                 rel = fn(rel, params, self.uid("q"), self)
             except EngineError:
                 raise
-            except Exception as e:  # errore SQL/binder su questa operazione
+            except Exception as e:  # a SQL or binder error on this operation
                 raise OperationError(op_type, i + index_offset, str(e)) from e
         return rel
 
     def build_right(self, ref: dict):
-        """Lato destro di un join/union: sotto-flow {source, operations} o
-        sorgente semplice {bucket, key}."""
+        """The right side of a join or union: a sub-flow {source, operations} or a plain source
+        {bucket, key}."""
         if "source" in ref:
             rel = self.scan(DataSource(**ref["source"]))
             return self.apply(rel, ref.get("operations") or [])
         return self.scan(DataSource(**ref))
 
     def register(self, rel) -> str:
-        """Registra una relazione come vista con nome univoco (per il join/union)."""
+        """Registers a relation as a view with a unique name (for the join/union)."""
         name = self.uid("reg")
         self.con.register(name, rel)
         return name
@@ -137,7 +136,7 @@ from app.engine.stepcache_defer import DeferredStepCache
 
 
 class DuckDBEngine(DeferredStepCache, Engine):
-    # tag che namespacea la step-cache: engine diversi non condividono i blob
+    # the tag that namespaces the step cache: different engines do not share the blobs
     engine_name = "duckdb"
 
     def __init__(self, storage=None, cache=None):
@@ -153,11 +152,11 @@ class DuckDBEngine(DeferredStepCache, Engine):
         self.direct = isinstance(storage, StorageService) and storage_direct.duckdb_available()
 
     def _connection(self, tmp: list[str]) -> duckdb.DuckDBPyConnection:
-        con = duckdb.connect(":memory:")  # spill su disco automatico (out-of-core)
-        # Riversamenti su disco nella directory temporanea di SISTEMA (TMPDIR, di
-        # default /tmp). Il default di DuckDB per i DB in memoria è `.tmp` nella
-        # directory di lavoro: con l'immagine di produzione a filesystem in sola
-        # lettura fallirebbe, e in sviluppo scriverebbe dentro i sorgenti montati.
+        con = duckdb.connect(":memory:")  # automatic spill to disk (out of core)
+        # Spills to disk in the SYSTEM's temporary directory (TMPDIR, /tmp by default).
+        # DuckDB's default for in-memory databases is `.tmp` in the working directory:
+        # with the production image's read-only filesystem it would fail, and in
+        # development it would write inside the mounted sources.
         # One directory per connection: DuckDB names its spill files the same way in
         # every instance, so two connections spilling into a shared directory read
         # each other's blocks (wrong sums, IO errors). It goes with the request's
@@ -169,8 +168,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
         if self.direct:
             storage_direct.duckdb_enable(con)
         try:
-            con.execute("SET TimeZone = 'UTC'")  # i TIMESTAMPTZ letti diventano naive UTC
-        except Exception:  # senza estensione ICU DuckDB è comunque in UTC
+            con.execute("SET TimeZone = 'UTC'")  # the TIMESTAMPTZ read become naive UTC
+        except Exception:  # without the ICU extension DuckDB is in UTC anyway
             pass
         return con
 
@@ -179,24 +178,24 @@ class DuckDBEngine(DeferredStepCache, Engine):
 
     # ── Cache incrementale (mirror di PolarsEngine) ───────────────────────
     def _rel_from_cache(self, ctx: "DuckContext", source, operations, hashes, record=False, use_cache=True):
-        """Costruisce la relazione partendo dall'antenato in cache più vicino e
-        applicando solo le operazioni rimanenti. `use_cache=False` ignora la cache
-        (parte dalla sorgente): il Viewer non sporca la cache con query ad-hoc."""
-        start = self.cache.nearest(hashes) if use_cache else 0  # step già in cache
+        """Builds the relation from the nearest cached ancestor, applying only the remaining
+        operations. `use_cache=False` ignores the cache (starts from the source): the
+        Viewer does not soil the cache with ad hoc queries."""
+        start = self.cache.nearest(hashes) if use_cache else 0  # step cached already
         if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
         if start == 0:
             rel = ctx.scan(source)
         else:
-            self.cache.touch(hashes[start - 1])  # segna l'uso → posticipa il TTL
+            self.cache.touch(hashes[start - 1])  # marks the use → postpones the TTL
             cached = DataSource(bucket=self.cache.bucket, key=self.cache.object_key(hashes[start - 1]))
             rel = ctx.scan(cached)
-            logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
+            logger.info("cache hit: starting again from step %d/%d", start, len(operations))
         return ctx.apply(rel, operations[start:], index_offset=start, top=True)
 
     def _materialize(self, ctx: "DuckContext", source, operations) -> None:
-        """Materializza in cache l'output di `operations` (se non già presente),
-        così le prossime esecuzioni possono ripartire da lì."""
+        """Materializes the output of `operations` in the cache (unless there already), so the
+        next runs can start from there."""
         if not operations:
             return
         hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in operations])
@@ -255,15 +254,15 @@ class DuckDBEngine(DeferredStepCache, Engine):
         con = self._connection(tmp)
         try:
             ctx = DuckContext(con, self.storage, tmp, preview_limit=limit + 1, direct=self.direct)
-            # materializza il PARENT: iterando sui parametri dell'ultimo nodo, le
-            # anteprime successive ripartono dalla sua cache (Viewer: use_cache=False)
+            # materializes the PARENT: while one iterates on the last node's parameters,
+            # the next previews start from its cache (Viewer: use_cache=False)
             if use_cache:
                 self._defer_materialization(source, ops[:-1])
-            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # DOPO la risposta, in un task a parte
+            cstate, ccap = self._cache_state(source, ops[:-1], use_cache)  # AFTER the answer, in a task of its own
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             rel = self._rel_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
             try:
-                df = rel.limit(limit + 1).pl()  # solo LIMIT+1 righe materializzate
+                df = rel.limit(limit + 1).pl()  # only LIMIT+1 rows materialized
             except EngineError:
                 raise
             except Exception as e:
@@ -308,8 +307,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
             self.storage.upload_file(out_path, destination.bucket, destination.key)
             written = pl.scan_parquet(out_path)
             rows_written = written.select(pl.len()).collect(engine="streaming").item()
-            # l'output finale è anche il risultato dell'ultimo step: mettilo in
-            # cache così ri-run e anteprime del nodo foglia sono immediati (nel tetto)
+            # the final output is the last step's result too: cache it, so that runs again
+            # and previews of the leaf node are immediate (within the cap)
             if use_cache and ops and self._cache_output_allowed(int(rows_written)) and not self.cache.has(hashes[-1]):
                 self.storage.upload_file(out_path, self.cache.bucket, self.cache.object_key(hashes[-1]))
                 self.cache.mark(hashes[-1])

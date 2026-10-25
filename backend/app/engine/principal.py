@@ -1,14 +1,14 @@
-"""Per conto di CHI gira una query: oggi solo l'assistente AI ha un'identità sua.
+"""On WHOSE behalf a query runs: today only the AI assistant has an identity of its own.
 
-L'engine parla con ClickHouse con un'utenza che legge tutto. Finché le query le
-scrive un nodo del flusso va bene; l'assistente invece mette una SELECT libera
-in mano a chiunque abbia VIEW, e il 2026-09-19 una query è uscita dall'input
-(`merge()`, vedi sql_guard). La lista bianca ha chiuso quel buco; l'utenza `ai`
-è la SECONDA barriera: se un giorno un'altra query passasse, sul server
-troverebbe un utente che non può leggere `system` né scrivere nulla.
+The engine talks to ClickHouse with a user that reads everything. While a flow's node
+writes the queries that is fine; the assistant instead puts a free SELECT in the hands of
+anyone with VIEW, and on 2026-09-19 a query got out of its input (`merge()`, see
+sql_guard). The allowlist closed that hole; the `ai` user is the SECOND barrier: if
+another query ever got through, on the server it would find a user that can neither read
+`system` nor write anything.
 
-ContextVar come `query_tag`, per la stessa ragione: la firma di `preview()` è
-comune a tutti gli engine e solo ClickHouse sa che farsene.
+A ContextVar as `query_tag`, for the same reason: the signature of `preview()` is common
+to every engine and only ClickHouse has a use for it.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar

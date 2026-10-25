@@ -11,7 +11,7 @@ import pytest
 from polars.exceptions import PanicException
 
 from app.engine.exceptions import EngineError
-from app.ingest.db_source import _batch_senza_estensioni, _schema_senza_estensioni
+from app.ingest.db_source import _batch_without_extensions, _schema_without_extensions
 
 
 def _batch_opaco():
@@ -23,26 +23,26 @@ def _batch_opaco():
 def test_l_import_scrive_i_numeric_come_numeri_e_lo_schema_combacia():
     """Scelta dell'utente (2026-10-10): un numeric di Postgres è un numero, non un testo."""
     b = _batch_opaco()
-    nb = _batch_senza_estensioni(b)
+    nb = _batch_without_extensions(b)
     assert nb.schema.field("importo").type == pa.float64() and nb.column(1).to_pylist() == [1.5, None, 100.0]
-    assert _schema_senza_estensioni(b.schema) == nb.schema
+    assert _schema_without_extensions(b.schema) == nb.schema
 
 
 def test_i_valori_speciali_di_numeric_e_gli_altri_tipi_opachi():
     t = pa.opaque(pa.string(), "numeric", "PostgreSQL")
     speciali = pa.ExtensionArray.from_storage(t, pa.array(["NaN", "Infinity", "-Infinity", "12345678901234567890.123", "-0.01"]))
     altro = pa.ExtensionArray.from_storage(pa.opaque(pa.string(), "interval", "PostgreSQL"), pa.array(["1 day"] * 5))
-    nb = _batch_senza_estensioni(pa.RecordBatch.from_arrays([speciali, altro], names=["n", "i"]))
+    nb = _batch_without_extensions(pa.RecordBatch.from_arrays([speciali, altro], names=["n", "i"]))
     v = nb.column(0).to_pylist()
     assert v[0] != v[0] and v[1:3] == [float("inf"), float("-inf")] and v[3] == 1.2345678901234567e19 and v[4] == -0.01
     assert nb.schema.field("i").type == pa.string() and nb.column(1).to_pylist() == ["1 day"] * 5
-    pulito = pa.RecordBatch.from_arrays([pa.array([1])], names=["id"])
-    assert _batch_senza_estensioni(pulito) is pulito and _schema_senza_estensioni(pulito.schema) is pulito.schema
+    clean = pa.RecordBatch.from_arrays([pa.array([1])], names=["id"])
+    assert _batch_without_extensions(clean) is clean and _schema_without_extensions(clean.schema) is clean.schema
 
 
 def test_il_parquet_dell_import_si_filtra_in_streaming():
     f = tempfile.mktemp(suffix=".parquet")
-    pq.write_table(pa.Table.from_batches([_batch_senza_estensioni(_batch_opaco())]), f)
+    pq.write_table(pa.Table.from_batches([_batch_without_extensions(_batch_opaco())]), f)
     lf = pl.scan_parquet(f)
     assert lf.filter(pl.col("importo").is_not_null()).collect(engine="streaming").height == 2
     assert lf.drop_nulls().collect(engine="streaming").height == 2
@@ -50,9 +50,9 @@ def test_il_parquet_dell_import_si_filtra_in_streaming():
 
 
 def test_un_panic_di_polars_diventa_un_errore_del_task_e_non_uccide_il_worker():
-    from app.tasks.celery_app import _TaskCheNonUccideIlWorker, celery_app
+    from app.tasks.celery_app import _TaskThatSparesTheWorker, celery_app
 
-    class Rotto(_TaskCheNonUccideIlWorker):
+    class Rotto(_TaskThatSparesTheWorker):
         name = "test.rotto"
 
         def run(self):
@@ -67,5 +67,5 @@ def test_un_panic_di_polars_diventa_un_errore_del_task_e_non_uccide_il_worker():
 def test_il_motore_polars_ferma_anche_il_panic():
     from app.engine import polars_engine
 
-    assert PanicException in polars_engine._ERRORI_POLARS and Exception in polars_engine._ERRORI_POLARS
+    assert PanicException in polars_engine._POLARS_ERRORS and Exception in polars_engine._POLARS_ERRORS
     assert "except Exception as e" not in open(polars_engine.__file__).read()

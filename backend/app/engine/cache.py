@@ -1,32 +1,30 @@
 """
-Cache incrementale degli step del flow.
+The incremental cache of the flow's steps.
 
-Idea: l'output di un nodo è una funzione deterministica della sorgente + delle
-operazioni fino a lì. Ne calcoliamo un hash progressivo (rolling): cambiando
-un'operazione cambia il suo hash e quelli a valle, ma quelli a monte restano
-stabili. Così possiamo materializzare l'output di uno step in
-`cache/<hash>.parquet` e, la volta dopo, ripartire dall'antenato già in cache
-invece che dalla sorgente.
+Idea: a node's output is a deterministic function of the source + the operations up to
+it. A progressive (rolling) hash is computed: changing an operation changes its hash and
+those downstream, but those upstream stay stable. So a step's output can be
+materialized in `cache/<hash>.parquet` and, next time, the chain starts from the
+cached ancestor instead of the source.
 
-Strutture su Valkey (tenute SEMPRE sincronizzate tra loro e con lo storage):
-- SET  `dataprep:stepcache`        → hash materializzati (indice di presenza).
-- ZSET `dataprep:stepcache:atime`  → hash → timestamp di ultimo accesso (per il TTL).
+Structures on Valkey (ALWAYS kept in sync with each other and with the storage):
+- SET  `dataprep:stepcache`        → materialized hashes (an index of presence).
+- ZSET `dataprep:stepcache:atime`  → hash → timestamp of the last access (for the TTL).
 
-I blob parquet stanno nello stesso storage S3, sotto `cache/`.
+The parquet blobs are on the same S3 storage, under `cache/`.
 
-La cache è "best-effort": se Valkey non risponde, si comporta come cache vuota e
-il flow viene ricalcolato normalmente (nessun errore all'utente).
+The cache is "best effort": when Valkey does not answer it behaves as an empty cache
+and the flow is computed again normally (no error for the user).
 
-Content-addressed ⇒ nessuna invalidazione: se cambi un parametro cambia l'hash.
-Le voci non più accedute vengono rimosse dall'eviction TTL (`evict_expired`),
-che cancella insieme blob + SET + ZSET, così indice e storage restano allineati.
+Content-addressed ⇒ no invalidation: changing a parameter changes the hash. The entries
+no longer accessed are removed by the TTL eviction (`evict_expired`), which deletes
+blob + SET + ZSET together, so index and storage stay aligned.
 
-L'indice è una PROMESSA, non una prova: un blob può sparire sotto i suoi piedi
-(cancellazione manuale sul bucket, regola di lifecycle, cambio di storage).
-Un hit su un blob mancante non deve mai rompere una preview: `nearest` verifica
-l'esistenza (HEAD) prima di riusare uno step, dimentica la voce orfana e risale
-all'antenato precedente, fino alla sorgente; lo sweep periodico scarta le voci
-senza blob.
+The index is a PROMISE, not a proof: a blob may vanish underneath (deleted by hand on
+the bucket, a lifecycle rule, a change of storage). A hit on a missing blob must never
+break a preview: `nearest` checks it exists (HEAD) before reusing a step, forgets the
+orphaned entry and goes back to the previous ancestor, up to the source; the periodic
+sweep discards the entries without a blob.
 """
 from __future__ import annotations
 
@@ -41,24 +39,24 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-CACHE_PREFIX = "cache"  # prefisso delle chiavi parquet nello storage
+CACHE_PREFIX = "cache"  # prefix of the parquet keys in the storage
 INDEX_SET = "dataprep:stepcache"  # SET Valkey con gli hash materializzati
-ATIME_ZSET = "dataprep:stepcache:atime"  # ZSET hash -> ultimo accesso (unix ts)
-HITS_KEY = "dataprep:metrics:cache_hits"  # contatore riusi (per le metriche)
-MISSES_KEY = "dataprep:metrics:cache_misses"  # contatore miss (per le metriche)
+ATIME_ZSET = "dataprep:stepcache:atime"  # ZSET hash -> last access (unix ts)
+HITS_KEY = "dataprep:metrics:cache_hits"  # reuse counter (for the metrics)
+MISSES_KEY = "dataprep:metrics:cache_misses"  # miss counter (for the metrics)
 
 
 def _canonical(op: dict) -> str:
-    """Serializzazione stabile di un'operazione (chiavi ordinate) per l'hash."""
+    """A stable serialization of an operation (sorted keys) for the hash."""
     return json.dumps(op, sort_keys=True, separators=(",", ":"))
 
 
 def plan_hashes(source_id: str, operations: list[dict]) -> list[str]:
     """
-    Hash progressivo della catena.
+    The chain's progressive hash.
 
-    `hashes[i]` identifica l'output DOPO aver applicato `operations[0..i]`.
-    La lista ha la stessa lunghezza di `operations`.
+    `hashes[i]` identifies the output AFTER applying `operations[0..i]`. The list is as
+    long as `operations`.
     """
     hashes: list[str] = []
     running = source_id
@@ -74,9 +72,9 @@ class StepCache:
         self.storage = storage
         self.bucket = settings.storage.bucket
         self.redis = redis_client or redis.Redis.from_url(settings.redis.url, decode_responses=True)
-        # `namespace`: un indice SEPARATO per le cache che non stanno nello
-        # storage (BigQuery: tabelle native). Lo sweep dell'indice comune non
-        # deve vederle, o le scarterebbe come orfane (nessun parquet).
+        # `namespace`: a SEPARATE index for the caches that are not in the storage
+        # (BigQuery: native tables). The common index's sweep must not see them, or it
+        # would discard them as orphans (no parquet).
         suffix = f":{namespace}" if namespace else ""
         self.index_set = INDEX_SET + suffix
         self.atime_zset = ATIME_ZSET + suffix if not namespace else f"{INDEX_SET}{suffix}:atime"
@@ -86,9 +84,9 @@ class StepCache:
         return f"{CACHE_PREFIX}/{h}.parquet"
 
     def blob_exists(self, h: str) -> bool:
-        """Il parquet dello step esiste davvero nello storage? (HEAD, mai download).
-        Se lo storage non sa rispondere (errore transitorio) si assume True: il
-        download successivo fallirà comunque in modo esplicito."""
+        """Does the step's parquet really exist on the storage? (HEAD, never a download).
+        When the storage cannot answer (a transient error) True is assumed: the next
+        download fails explicitly anyway."""
         check = getattr(self.storage, "object_exists", None) or getattr(self.storage, "exists", None)
         if check is None:
             return True
@@ -102,8 +100,8 @@ class StepCache:
             return True
 
     def forget(self, h: str) -> None:
-        """Toglie una voce dall'indice (SET + ZSET) senza toccare lo storage:
-        per le voci ORFANE, il cui blob non esiste più."""
+        """Removes an entry from the index (SET + ZSET) without touching the storage: for the
+        ORPHANED entries, whose blob no longer exists."""
         try:
             self.redis.srem(self.index_set, h)
             self.redis.zrem(self.atime_zset, h)
@@ -111,14 +109,14 @@ class StepCache:
             pass
 
     def has(self, h: str) -> bool:
-        """Solo presenza nell'indice (nessun effetto collaterale)."""
+        """Presence in the index only (no side effects)."""
         try:
             return bool(self.redis.sismember(self.index_set, h))
         except redis.RedisError:
-            return False  # cache non raggiungibile → trattala come vuota
+            return False  # cache unreachable → treat it as empty
 
     def mark(self, h: str) -> None:
-        """Registra un hash appena materializzato e ne segna l'accesso."""
+        """Records a hash just materialized and marks its access."""
         try:
             self.redis.sadd(self.index_set, h)
             self.redis.zadd(self.atime_zset, {h: time.time()})
@@ -126,13 +124,13 @@ class StepCache:
             pass
 
     def touch(self, h: str) -> None:
-        """Aggiorna il timestamp di ultimo accesso (chiamato quando si USA la cache)."""
+        """Updates the last-access timestamp (called when the cache is USED)."""
         try:
             self.redis.zadd(self.atime_zset, {h: time.time()})
         except redis.RedisError:
             pass
 
-    # ── lucchetto e passi scartati (materializzazione differita) ────────
+    # ── lock and discarded steps (deferred materialization) ────────
     def _lock_key(self, h: str) -> str:
         return f"{self.index_set}:lock:{h}"
 
@@ -140,8 +138,8 @@ class StepCache:
         return f"{self.index_set}:skip:{h}"
 
     def try_lock(self, h: str, ttl_seconds: int = 900) -> bool:
-        """Prende il lucchetto della materializzazione di `h` (SET NX con
-        scadenza). Valkey giu' → True: meglio una copia doppia che nessuna."""
+        """Takes the lock of the materialization of `h` (SET NX with an expiry). Valkey down
+        → True: better a copy twice than none."""
         try:
             return bool(self.redis.set(self._lock_key(h), "1", nx=True, ex=ttl_seconds))
         except redis.RedisError:
@@ -154,8 +152,8 @@ class StepCache:
             pass
 
     def mark_skipped(self, h: str, ttl_seconds: int | None = None) -> None:
-        """Ricorda che il passo `h` e' troppo grande per la cache (per il TTL
-        della cache): i click successivi non lo ricontano."""
+        """Remembers that step `h` is too large for the cache (for the cache's TTL): the next
+        clicks do not count it again."""
         ttl = ttl_seconds or int(get_settings().cache.ttl_seconds)
         try:
             self.redis.set(self._skip_key(h), "1", ex=ttl)
@@ -169,14 +167,14 @@ class StepCache:
             return False
 
     def record_hit(self) -> None:
-        """Segna un riuso della cache (per le metriche)."""
+        """Marks a reuse of the cache (for the metrics)."""
         try:
             self.redis.incr(HITS_KEY)
         except redis.RedisError:
             pass
 
     def record_miss(self) -> None:
-        """Segna un miss (ricalcolo dalla sorgente) per le metriche."""
+        """Marks a miss (computed again from the source) for the metrics."""
         try:
             self.redis.incr(MISSES_KEY)
         except redis.RedisError:
@@ -184,15 +182,14 @@ class StepCache:
 
     def nearest(self, hashes: list[str]) -> int:
         """
-        Quanti step iniziali sono già coperti dalla cache.
+        How many leading steps the cache covers already.
 
-        Ritorna l'indice `k` (0..len) tale che `hashes[k-1]` è l'antenato
-        materializzato più vicino. 0 = nessun antenato in cache (si parte dalla
-        sorgente).
+        Returns the index `k` (0..len) such that `hashes[k-1]` is the nearest
+        materialized ancestor. 0 = no ancestor cached (start from the source).
 
-        Auto-riparante: un hash presente nell'indice ma senza blob nello storage
-        viene dimenticato e si prosegue con l'antenato precedente. Una HEAD per
-        hit: trascurabile rispetto al download del parquet che segue.
+        Self-repairing: a hash in the index without a blob on the storage is forgotten
+        and the previous ancestor is tried. One HEAD per hit: negligible next to the
+        download of the parquet that follows.
         """
         for k in range(len(hashes), 0, -1):
             h = hashes[k - 1]
@@ -200,18 +197,18 @@ class StepCache:
                 continue
             if self.blob_exists(h):
                 return k
-            logger.warning("cache: voce orfana %s (blob mancante nello storage), rimossa dall'indice", h[:12])
+            logger.warning("cache: orphaned entry %s (blob missing on the storage), removed from the index", h[:12])
             self.forget(h)
         return 0
 
     def _reconcile(self) -> None:
         """
-        Ripristina l'invariante SET == ZSET.
+        Restores the invariant SET == ZSET.
 
-        Serve solo a coprire drift/migrazioni: una voce nel SET senza `atime`
-        (es. scritta da una versione precedente) sarebbe invisibile al TTL →
-        le diamo `atime=now` (adottata nel ciclo TTL). Voci nello ZSET senza SET
-        vengono rimosse.
+        Only to cover drift and migrations: an entry in the SET without an `atime`
+        (written by an earlier version) would be invisible to the TTL → it gets
+        `atime=now` (adopted into the TTL cycle). Entries in the ZSET without the SET are
+        removed.
         """
         now = time.time()
         in_set = set(self.redis.smembers(self.index_set))
@@ -223,12 +220,12 @@ class StepCache:
 
     def evict_expired(self, ttl_seconds: int) -> int:
         """
-        Rimuove le voci non accedute da più di `ttl_seconds`.
+        Removes the entries not accessed for more than `ttl_seconds`.
 
-        Per ogni voce scaduta cancella IN BLOCCO: blob parquet + SET + ZSET, così
-        indice e storage restano sincronizzati. Le voci NON scadute il cui blob
-        è sparito dallo storage (cancellazione manuale, lifecycle) vengono
-        dimenticate. Ritorna il numero di voci rimosse (scadute + orfane).
+        For every expired entry it deletes TOGETHER: parquet blob + SET + ZSET, so index
+        and storage stay in sync. The entries NOT expired whose blob vanished from the
+        storage (deleted by hand, lifecycle) are forgotten. Returns how many entries were
+        removed (expired + orphaned).
         """
         try:
             self._reconcile()
@@ -239,7 +236,7 @@ class StepCache:
             return 0
 
         for h in expired:
-            # delete_object è idempotente (S3): nessun errore se il blob non c'è
+            # delete_object is idempotent (S3): no error when the blob is not there
             self.storage.delete_object(self.bucket, self.object_key(h))
             self.redis.srem(self.index_set, h)
             self.redis.zrem(self.atime_zset, h)
@@ -250,13 +247,13 @@ class StepCache:
 
         if expired or orphans:
             logger.info(
-                "Cache eviction: rimosse %d voci scadute (ttl=%ds) e %d orfane (blob mancante)",
+                "Cache eviction: removed %d expired entries (ttl=%ds) and %d orphaned (blob missing)",
                 len(expired), ttl_seconds, len(orphans),
             )
         return len(expired) + len(orphans)
 
     def clear(self) -> int:
-        """Svuota tutta la cache (blob + indici). Ritorna quante voci rimosse."""
+        """Empties the whole cache (blobs + indexes). Returns how many entries were removed."""
         try:
             hashes = self.redis.smembers(self.index_set)
         except redis.RedisError:

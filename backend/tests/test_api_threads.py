@@ -17,10 +17,10 @@ def test_il_default_e_piu_largo_di_quello_della_libreria():
 
 def test_all_avvio_il_limite_dei_thread_e_quello_configurato():
     async def prova() -> tuple[int, int]:
-        prima = int(anyio.to_thread.current_default_thread_limiter().total_tokens)
+        before = int(anyio.to_thread.current_default_thread_limiter().total_tokens)
         async with main.lifespan(main.app):
-            return prima, int(anyio.to_thread.current_default_thread_limiter().total_tokens)
+            return before, int(anyio.to_thread.current_default_thread_limiter().total_tokens)
 
-    prima, dopo = anyio.run(prova)
-    assert prima == 40  # il default della libreria, ciò che si aveva
-    assert dopo == get_settings().app.engine_api_threads
+    before, after = anyio.run(prova)
+    assert before == 40  # il default della libreria, ciò che si aveva
+    assert after == get_settings().app.engine_api_threads

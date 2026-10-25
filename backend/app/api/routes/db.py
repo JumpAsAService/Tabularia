@@ -1,12 +1,12 @@
-"""Sorgenti database (endpoint INTERNI, raggiunti solo dal gateway).
+"""Database sources (INTERNAL endpoints, reached by the gateway only).
 
-- POST /db/inspect: sincrono, veloce — test di connessione o lista tabelle,
-  per dare feedback immediato nella UI mentre l'utente configura la sorgente.
-- POST /db/ingest: accoda il task Celery che esegue la query e scrive il
-  parquet in streaming; si polla su GET /tasks/{task_id} come ogni run.
+- POST /db/inspect: synchronous, fast — a connection test or the table list, for
+  immediate feedback in the UI while the user sets the source up.
+- POST /db/ingest: queues the Celery task that runs the query and writes the parquet
+  streaming; polled on GET /tasks/{task_id} as every run.
 
-Le credenziali arrivano cifrate (password_encrypted, Fernet condiviso col
-gateway) e vengono decifrate solo al momento di aprire la connessione.
+The credentials arrive encrypted (password_encrypted, the Fernet key shared with the
+gateway) and are decrypted only when the connection opens.
 """
 import logging
 from typing import Literal, Optional
@@ -34,15 +34,15 @@ router = APIRouter(prefix="/db", tags=["db"])
 
 
 def _friendly(e: Exception, connection: Optional[dict] = None) -> str:
-    """Messaggio del server del database (vedi app.ingest.db_errors), non
-    l'eccezione Python di trasporto."""
+    """The database server's message (see app.ingest.db_errors), not the transport's
+    Python exception."""
     c = connection or {}
     return describe_db_error(e, c.get("db_type"), c.get("host"), c.get("port"))
 
 
 class DbInspectRequest(BaseModel):
-    # dict e non DbConnectionSpec: le connessioni S3 hanno campi diversi
-    # (endpoint/access_key/…) e vengono smistate su `db_type`
+    # a dict and not DbConnectionSpec: the S3 connections have other fields
+    # (endpoint/access_key/…) and are dispatched on `db_type`
     connection: dict
     action: Literal["test", "tables"] = "test"
 
@@ -63,7 +63,7 @@ def inspect(request: DbInspectRequest):
 
             if request.action == "tables":
                 raise DbSourceError("SMTP connections have no tables to list")
-            # apre, cifra e autentica senza spedire nulla
+            # opens, encrypts and authenticates without sending anything
             smtp_test(SmtpConnectionSpec(**request.connection))
             return {"ok": True}
 
@@ -84,15 +84,15 @@ def inspect(request: DbInspectRequest):
     except DriverNotInstalledError as e:
         # a code, so that the gateway says it in the user's language
         raise HTTPException(status_code=422, detail={"code": e.code, "db_type": e.db_type, "message": str(e)})
-    except IngestError as e:  # DbSourceError, S3DestinationError: già parlanti
+    except IngestError as e:  # DbSourceError, S3DestinationError: clear already
         raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:  # errori driver: connessione rifiutata, auth, DNS…
+    except Exception as e:  # driver errors: connection refused, auth, DNS…
         raise HTTPException(status_code=400, detail=_friendly(e, request.connection))
 
 
 class NotifyRequest(BaseModel):
-    """Un avviso in solo testo. La connessione arriva con la password ANCORA
-    cifrata, come ogni altro payload dal gateway: qui la si decifra."""
+    """A plain-text notice. The connection arrives with the password STILL encrypted, as
+    every other payload from the gateway: it is decrypted here."""
 
     connection: dict
     to: list[str]
@@ -102,8 +102,8 @@ class NotifyRequest(BaseModel):
 
 @router.post("/notify")
 def notify(request: NotifyRequest):
-    """Spedisce un avviso via SMTP. Separata da `/ingest`: un avviso non ha dati
-    da leggere, e deve poter partire proprio quando il dato manca."""
+    """Sends a notice through SMTP. Apart from `/ingest`: a notice has no data to read, and
+    must be able to go out precisely when the data is missing."""
     from app.ingest.email_destination import EmailDestinationError, SmtpConnectionSpec, send_notice
 
     if request.connection.get("db_type") != "smtp":
@@ -145,7 +145,7 @@ class DbIngestRequest(BaseModel):
     source: DbSourceSpec
     output_key: str
     bucket: Optional[str] = None  # default: bucket configurato dell'engine
-    contract: Optional[dict] = None  # data contract della datasource che si aggiorna
+    contract: Optional[dict] = None  # the data contract of the datasource being refreshed
 
 
 @router.post("/ingest", response_model=TaskResponse)
@@ -158,8 +158,8 @@ def ingest(request: DbIngestRequest):
         source=request.source.model_dump(),
         bucket=bucket,
         output_key=request.output_key,
-        # solo se c'è: un worker non ancora aggiornato non conosce il parametro
-        # (vedi /tasks/transform-data)
+        # only when there is one: a worker not upgraded yet does not know the parameter
+        # (see /tasks/transform-data)
         **({"contract": request.contract} if request.contract else {}),
     )
     logger.info("📩 Submitting ingest_database_task: %s → %s", request.connection.db_type, request.output_key)

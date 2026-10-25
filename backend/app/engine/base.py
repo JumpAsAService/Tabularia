@@ -1,10 +1,9 @@
 """
-Interfaccia dell'engine di trasformazione e modelli di dominio.
+The transformation engine's interface and the domain models.
 
-L'idea è tenere separata la *rappresentazione logica del flow* (una lista di
-Operation, la IR dichiarativa) dall'*engine di esecuzione* (Polars oggi,
-eventualmente DuckDB/ClickHouse domani per i job pesanti). Route e task Celery
-parlano solo con questa interfaccia, mai con Polars direttamente.
+The idea is to keep the *logical representation of the flow* (a list of Operations, the
+declarative IR) apart from the *execution engine* (Polars, DuckDB, ClickHouse, BigQuery).
+Routes and Celery tasks talk only to this interface, never to an engine directly.
 """
 from __future__ import annotations
 
@@ -16,19 +15,19 @@ from pydantic import BaseModel, Field, field_validator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Modelli di dominio (IR + risultati)
+# Domain models (IR + results)
 # ─────────────────────────────────────────────────────────────────────────────
 class DataSource(BaseModel):
-    """Riferimento a un parquet nello storage S3 (rclone)."""
+    """A reference to a parquet on the S3 storage."""
 
     bucket: str
     key: str
 
 
 class Operation(BaseModel):
-    """Un singolo step del flow: un tipo + i suoi parametri."""
+    """One step of the flow: a type + its parameters."""
 
-    type: str = Field(..., description="Tipo di operazione (filter, select, group_by, join, ...)")
+    type: str = Field(..., description="The operation's type (filter, select, group_by, join, ...)")
     params: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -38,18 +37,18 @@ class ColumnInfo(BaseModel):
 
 
 class PreviewResult(BaseModel):
-    """Risultato di una preview: campione di righe + schema."""
+    """A preview's result: a sample of rows + the schema."""
 
     columns: list[ColumnInfo]
     rows: list[dict[str, Any]]
-    row_count: int = Field(..., description="Numero di righe nel campione restituito")
-    truncated: bool = Field(..., description="True se il risultato reale ha più righe del limite")
-    # Stato della step-cache del passo A MONTE di questo nodo (quello da cui le
-    # prossime anteprime ripartirebbero): "hit" in cache, "pending" in scrittura
-    # differita, "skipped" oltre il tetto (ricalcolato a ogni anteprima), "off"
-    # cache non usata (Viewer). None = non c'e' un passo a monte da mettere in cache.
+    row_count: int = Field(..., description="How many rows the sample returned holds")
+    truncated: bool = Field(..., description="True when the real result has more rows than the limit")
+    # The step-cache state of the step UPSTREAM of this node (the one the next previews
+    # would start from): "hit" cached, "pending" being written later, "skipped" over the
+    # cap (computed again at every preview), "off" cache not used (Viewer). None = no
+    # upstream step to cache.
     cache_state: str | None = Field(default=None)
-    cache_cap_rows: int | None = Field(default=None, description="Tetto di righe della cache, quando conta")
+    cache_cap_rows: int | None = Field(default=None, description="The cache's row cap, when it matters")
 
     @field_validator("rows")
     @classmethod
@@ -65,7 +64,7 @@ class PreviewResult(BaseModel):
 
 
 class RunResult(BaseModel):
-    """Risultato di un run completo: dove ha scritto e cosa."""
+    """A whole run's result: where it wrote and what."""
 
     destination: DataSource
     rows_written: int
@@ -73,18 +72,18 @@ class RunResult(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Interfaccia engine
+# The engine interface
 # ─────────────────────────────────────────────────────────────────────────────
 class Engine(ABC):
     """
-    Contratto che ogni backend di esecuzione deve implementare.
+    The contract every execution backend implements.
 
-    - `preview`: esegue il flow su un campione, in modo *sincrono e veloce*
-      (serve per il feedback interattivo mentre l'utente costruisce il flow).
-    - `run`: esegue il flow intero e materializza il parquet di output
-      (tipicamente lanciato in modo asincrono da un worker Celery).
-    - `export`: esegue il flow (anche parziale) e scrive il risultato in un
-      file locale csv/xlsx, per il download diretto dall'editor.
+    - `preview`: runs the flow on a sample, *synchronously and fast* (the interactive
+      feedback while the user builds the flow).
+    - `run`: runs the whole flow and materializes the output parquet (usually started
+      asynchronously by a Celery worker).
+    - `export`: runs the flow (partially too) and writes the result to a local csv/xlsx
+      file, for the editor's direct download.
     """
 
     @abstractmethod
@@ -115,5 +114,5 @@ class Engine(ABC):
         limit: int | None = None,
         max_rows: int | None = None,
     ) -> None:
-        # non abstract: un engine può non supportare l'export diretto
+        # not abstract: an engine may not support the direct export
         raise NotImplementedError(f"{type(self).__name__} does not support export")

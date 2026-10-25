@@ -1,28 +1,27 @@
 """
-Engine basato su Google BigQuery (serverless, a consumo).
+An engine on Google BigQuery (serverless, pay per use).
 
-I parquet restano dove sono: ogni sorgente diventa una TABELLA ESTERNA
-TEMPORANEA del job (`gs://bucket/chiave`, formato PARQUET), quindi serve che lo
-storage di Tabularia sia Google Cloud Storage. La catena di operazioni e' una
-sola query (`bigquery_ops`, SELECT annidate) che BigQuery esegue in una volta;
-le colonne di ogni passo si conoscono con un DRY RUN, che e' gratuito. Il
-risultato torna al worker con la Storage Read API (Arrow, streaming) e viene
-scritto in parquet come per gli altri motori.
+The parquet files stay where they are: every source becomes a TEMPORARY EXTERNAL
+TABLE of the job (`gs://bucket/key`, PARQUET format), so Tabularia's storage must be
+Google Cloud Storage. The chain of operations is one query (`bigquery_ops`, nested
+SELECTs) that BigQuery runs at once; every step's columns are known through a DRY RUN,
+which is free. The result comes back to the worker through the Storage Read API (Arrow,
+streaming) and is written as parquet, as for the other engines.
 
-Costi: BigQuery fattura i byte LETTI dalle colonne toccate, anche con LIMIT.
-Il campione automatico di sviluppo e il tetto `maximum_bytes_billed` (rifiuto
-PRIMA di eseguire) sono le due difese. Ogni query e' etichettata con il tag
-della preview, cosi' una preview superata viene annullata sul servizio.
+Costs: BigQuery bills the bytes READ from the columns touched, even with a LIMIT. The
+automatic development sample and the `maximum_bytes_billed` cap (a refusal BEFORE
+running) are the two defenses. Every query is labelled with the preview's tag, so a
+superseded preview is cancelled on the service.
 
-Step-cache NATIVA (mirror di quella parquet degli altri motori): l'output dei
-passi intermedi dell'editor viene scritto con CREATE TABLE … AS SELECT in un
-dataset del progetto (`cache_dataset`), con scadenza, e le preview successive
-ripartono da quella tabella nativa: piccola, colonnare, quasi gratis da
-leggere. La scrittura e' DIFFERITA: la preview risponde subito dall'antenato
-in cache piu' vicino e lascia in `take_pending` i passi da materializzare, che
-il task della preview affida a un task separato (`materialize`). L'indice degli hash sta su Valkey in uno spazio separato
-(`BigQueryStepCache`), i nomi originali delle colonne nella descrizione della
-tabella. Il Viewer (`use_cache=False`) non la tocca.
+A NATIVE step cache (the mirror of the other engines' parquet one): the output of the
+editor's intermediate steps is written with CREATE TABLE … AS SELECT in a dataset of
+the project (`cache_dataset`), expiring, and the next previews start from that native
+table: small, columnar, almost free to read. The writing is DEFERRED: the preview
+answers at once from the nearest cached ancestor and leaves the steps to materialize in
+`take_pending`, which the preview's task hands to a separate task (`materialize`). The
+hashes' index is on Valkey in a separate space (`BigQueryStepCache`), the columns'
+original names in the table's description. The Viewer (`use_cache=False`) does not
+touch it.
 """
 from __future__ import annotations
 
@@ -50,11 +49,11 @@ from app.engine.temporal import naive_utc, rewrite_parquet_naive_utc
 
 logger = logging.getLogger(__name__)
 
-USD_PER_TIB = 6.25  # listino on-demand, per il log dei costi
+USD_PER_TIB = 6.25  # on-demand price list, for the cost log
 
 
 def _label(tag: str) -> str:
-    """Le etichette dei job ammettono solo [a-z0-9_-], max 63: 'tab-prev:<id>' → 'tab-prev-<id>'."""
+    """Job labels allow only [a-z0-9_-], at most 63: 'tab-prev:<id>' → 'tab-prev-<id>'."""
     return re.sub(r"[^a-z0-9_-]", "-", tag.lower())[:63]
 
 
@@ -62,7 +61,7 @@ _SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,299}$")
 
 
 def _sanitize(name: str) -> str:
-    """Nome ammesso da BigQuery: solo [A-Za-z0-9_], non inizia per cifra, non vuoto."""
+    """A name BigQuery allows: only [A-Za-z0-9_], not starting with a digit, not empty."""
     s = re.sub(r"[^A-Za-z0-9_]", "_", str(name))[:120]
     if not s:
         s = "_col"
@@ -72,9 +71,8 @@ def _sanitize(name: str) -> str:
 
 
 class _RangeFile:
-    """File in sola lettura su un oggetto S3/GCS con GET a intervalli: pyarrow
-    legge cosi' SOLO il footer del parquet (due richieste piccole), niente
-    download del file."""
+    """A read-only file over an S3/GCS object with ranged GETs: pyarrow then reads ONLY
+    the parquet's footer (two small requests), no download of the file."""
 
     def __init__(self, client, bucket: str, key: str, size: int):
         self._c, self._b, self._k, self._size, self._pos = client, bucket, key, size, 0
@@ -114,8 +112,8 @@ class _RangeFile:
 
 
 def parquet_column_names(storage, bucket: str, key: str) -> list[str] | None:
-    """Nomi colonna VERI del parquet (dal footer, letto a intervalli). None se lo
-    storage non espone un client S3 (finti dei test)."""
+    """The parquet's TRUE column names (from the footer, read by ranges). None when the
+    storage exposes no S3 client (the tests' fakes)."""
     client = getattr(storage, "client", None)
     if client is None:
         return None
@@ -132,7 +130,7 @@ def _bq_string(text: str) -> str:
 
 
 def _cached_names(table) -> list[str] | None:
-    """I nomi ORIGINALI delle colonne di una tabella di cache (descrizione JSON)."""
+    """The ORIGINAL column names of a cache table (JSON description)."""
     if table is None:
         return None
     try:
@@ -143,9 +141,9 @@ def _cached_names(table) -> list[str] | None:
 
 
 class BigQueryStepCache(StepCache):
-    """Indice (Valkey, spazio `bigquery`) delle tabelle di cache: il «blob» e'
-    una tabella nativa `<progetto>.<dataset>.s_<hash>` che scade da sola sul
-    servizio; qui si verifica che esista ancora e si allinea l'indice."""
+    """Index (Valkey, space `bigquery`) of the cache tables: the «blob» is a native table
+    `<project>.<dataset>.s_<hash>` that expires by itself on the service; here one checks
+    that it still exists and aligns the index."""
 
     def __init__(self, storage, engine: "BigQueryEngine", redis_client=None):
         super().__init__(storage, redis_client, namespace="bigquery")
@@ -156,8 +154,8 @@ class BigQueryStepCache(StepCache):
         return f"{cfg.project}.{cfg.cache_dataset}.s_{h}"
 
     def get_table(self, h: str):
-        """La tabella di cache, o None se non c'e' (piu'). Errori diversi dal
-        «non trovato» risalgono: non vanno confusi con una cache vuota."""
+        """The cache table, or None when it is not there (any more). Errors other than «not
+        found» go up: they must not be taken for an empty cache."""
         from google.api_core.exceptions import NotFound
 
         try:
@@ -173,7 +171,7 @@ class BigQueryStepCache(StepCache):
 
             if was_interrupted(e):
                 raise
-            return True  # non si sa: la query successiva lo dira' in modo esplicito
+            return True  # unknown: the next query will say it explicitly
 
     def evict_expired(self, ttl_seconds: int) -> int:
         try:
@@ -181,7 +179,7 @@ class BigQueryStepCache(StepCache):
             cutoff = time.time() - ttl_seconds
             expired = self.redis.zrangebyscore(self.atime_zset, "-inf", cutoff)
             alive = list(self.redis.zrangebyscore(self.atime_zset, cutoff, "+inf"))
-        except Exception:  # noqa: BLE001 — Valkey giu': niente da fare
+        except Exception:  # noqa: BLE001 — Valkey down: nothing to do
             return 0
         client = self.engine._client_or_raise()
         for h in expired:
@@ -191,7 +189,7 @@ class BigQueryStepCache(StepCache):
         for h in orphans:
             self.forget(h)
         if expired or orphans:
-            logger.info("cache BigQuery: rimosse %d tabelle scadute e %d voci orfane", len(expired), len(orphans))
+            logger.info("BigQuery cache: removed %d expired tables and %d orphaned entries", len(expired), len(orphans))
         return len(expired) + len(orphans)
 
     def clear(self) -> int:
@@ -207,7 +205,7 @@ class BigQueryStepCache(StepCache):
 
 
 def _clean_error(e: Exception) -> str:
-    """Il messaggio di BigQuery senza il rumore dell'API (job id, URL, elenco errori doppio)."""
+    """BigQuery's message without the API's noise (job id, URL, the error list twice)."""
     errors = getattr(e, "errors", None)
     if errors and isinstance(errors, list) and isinstance(errors[0], dict) and errors[0].get("message"):
         msg = str(errors[0]["message"])
@@ -218,8 +216,8 @@ def _clean_error(e: Exception) -> str:
 
 
 class BigQueryContext:
-    """Stato di esecuzione di una catena: client, tabelle esterne registrate,
-    schema dei frammenti gia' chiesti (dry run), job lanciati, contatori."""
+    """The state of a running chain: client, external tables registered, schemas of the
+    fragments asked already (dry run), jobs started, counters."""
 
     def __init__(self, client, storage, cfg: BigQuerySettings, location: str | None, tmp: list[str],
                  preview_limit: int | None = None):
@@ -232,7 +230,7 @@ class BigQueryContext:
         self._n = 0
         self.tables: dict[str, Any] = {}  # alias → ExternalConfig
         self._schemas: dict[str, list[tuple[str, str]]] = {}
-        # nomi colonna: originale → sicuro (quello che BigQuery vede) e ritorno
+        # column names: original → safe (what BigQuery sees) and back
         self._safe: dict[str, str] = {}
         self._orig: dict[str, str] = {}
         self.jobs: list[Any] = []
@@ -246,13 +244,13 @@ class BigQueryContext:
         self._n += 1
         return f"_{prefix}{self._n}"
 
-    # ── nomi colonna ─────────────────────────────────────────────────────
+    # ── column names ─────────────────────────────────────────────────────
     def register(self, original: str, safe: str) -> None:
         self._safe[original] = safe
         self._orig[safe] = original
 
     def safe(self, name: str) -> str:
-        """Nome sicuro di una colonna (registrato al primo uso, univoco)."""
+        """A column's safe name (registered at its first use, unique)."""
         name = str(name)
         s = self._safe.get(name)
         if s is None:
@@ -271,8 +269,8 @@ class BigQueryContext:
         return self._orig.get(safe, safe)
 
     def map_quoted(self, expr: str) -> str:
-        """Nelle espressioni libere (compute/sql) gli identificatori quotati con
-        i backtick che sono colonne note vengono tradotti nel nome sicuro."""
+        """In the free expressions (compute/sql) the backtick-quoted identifiers that are known
+        columns are turned into the safe name."""
         return re.sub(r"`([^`]+)`", lambda m: self.qi(m.group(1)) if m.group(1) in self._safe else m.group(0), expr)
 
     def tempfile(self) -> str:
@@ -296,9 +294,9 @@ class BigQueryContext:
         return jc
 
     def query(self, sql: str, dry_run: bool = False):
-        """Lancia una query e (se non e' un dry run) ne aspetta la fine. Errori
-        di BigQuery → EngineError con il suo messaggio; un'interruzione (preview
-        superata) annulla il job e viene rilanciata."""
+        """Starts a query and (unless a dry run) waits for its end. BigQuery's errors →
+        EngineError with its message; an interruption (a superseded preview) cancels
+        the job and is raised again."""
         t0 = time.perf_counter()
         try:
             job = self.client.query(sql, job_config=self._job_config(dry_run), location=self.location)
@@ -320,7 +318,7 @@ class BigQueryContext:
         return job
 
     def cancel_all(self) -> None:
-        """Annulla i job ancora in corso (best-effort: chi pulisce non deve fallire)."""
+        """Cancels the jobs still running (best effort: whoever cleans up must not fail)."""
         for job in self.jobs:
             try:
                 if job.state != "DONE":
@@ -350,12 +348,12 @@ class BigQueryContext:
         rows = self.query(f"SELECT DISTINCT {sel} FROM {base_sql} ORDER BY {sel}").result()
         return [list(r.values()) for r in rows]
 
-    # ── sorgenti e catena ────────────────────────────────────────────────
+    # ── sources and chain ────────────────────────────────────────────────
     def scan(self, source: DataSource) -> str:
         from google.cloud import bigquery
 
-        # BigQuery direbbe "Not found: Files gs://…" solo a query lanciata: un
-        # HEAD sul bucket (gratuito) da' subito l'errore giusto
+        # BigQuery would say "Not found: Files gs://…" only once the query is running: a
+        # HEAD on the bucket (free) gives the right error at once
         if not self.storage.object_exists(source.bucket, source.key):
             raise SourceNotFoundError(source.bucket, source.key)
         alias = self.uid("src")
@@ -363,9 +361,9 @@ class BigQueryContext:
         ext.source_uris = [f"gs://{source.bucket}/{source.key}"]
         self.tables[alias] = ext
         sql = f"SELECT * FROM {_qi(alias)}"
-        # BigQuery normalizza da solo i nomi del parquet non ammessi ("Ragione
-        # Sociale" → Ragione_Sociale): si abbinano per POSIZIONE i nomi veri
-        # (footer del file) con quelli che BigQuery espone (dry run, gratuito)
+        # BigQuery normalizes the parquet names it does not allow by itself ("Company
+        # Name" → Company_Name): the true names (the file's footer) are paired by
+        # POSITION with those BigQuery exposes (dry run, free)
         names = parquet_column_names(self.storage, source.bucket, source.key)
         if names is not None:
             if all(_SAFE_NAME.match(n) for n in names):
@@ -381,8 +379,8 @@ class BigQueryContext:
         return sql
 
     def scan_cached(self, table_ref: str, safe_names: list[str], originals: list[str]) -> str:
-        """Radice della catena = una tabella di cache nativa. Le sue colonne
-        portano i nomi SICURI: si ripristina la mappa verso gli originali."""
+        """The chain's root = a native cache table. Its columns carry the SAFE names: the
+        map back to the originals is restored."""
         for safe, orig in zip(safe_names, originals):
             self.register(orig, safe)
         return f"SELECT * FROM {_qi(table_ref)}"
@@ -417,17 +415,17 @@ class BigQueryContext:
 class BigQueryEngine(Engine):
     engine_name = "bigquery"
 
-    # il tetto dei byte fatturati si regola dal pannello (core/regolazioni.py):
-    # il motore vive quanto il processo, la sua sezione passa di lì a ogni uso
+    # the cap on billed bytes is set from the panel (core/regolazioni.py): the engine
+    # lives as long as the process, its section is read from there at every use
     @property
     def cfg(self) -> BigQuerySettings:
-        from app.core import regolazioni
+        from app.core import panel_settings
 
-        return regolazioni.sovrapposte(self._cfg, "bigquery")
+        return panel_settings.overlapping(self._cfg, "bigquery")
 
     @cfg.setter
-    def cfg(self, valore: BigQuerySettings) -> None:
-        self._cfg = valore
+    def cfg(self, value: BigQuerySettings) -> None:
+        self._cfg = value
 
     def __init__(self, storage=None, cache=None, cfg: BigQuerySettings | None = None):
         if storage is None:
@@ -437,10 +435,10 @@ class BigQueryEngine(Engine):
         self.storage = storage
         self.cfg = cfg or get_settings().bigquery
         self.cache = cache or BigQueryStepCache(storage, self)
-        self._cache_ok: bool | None = None  # None = dataset non ancora verificato
-        # passi da materializzare DOPO la risposta (il CTAS costa 2-3 s: il primo
-        # click su un nodo non deve pagarlo; chi esegue la preview li drena con
-        # `take_pending` e li affida a un task separato → `materialize`)
+        self._cache_ok: bool | None = None  # None = dataset not checked yet
+        # steps to materialize AFTER the answer (the CTAS costs 2-3 s: the first click
+        # on a node must not pay for it; whoever runs the preview drains them with
+        # `take_pending` and hands them to a separate task → `materialize`)
         self._pending: list[tuple[DataSource, list[dict]]] = []
         self._client = None
         self._credentials = None
@@ -472,7 +470,7 @@ class BigQueryEngine(Engine):
         return self._client
 
     def _bucket_location(self, bucket: str) -> str | None:
-        """Regione del bucket (la query DEVE girare li'). Letta una volta."""
+        """The bucket's region (the query MUST run there). Read once."""
         if self.cfg.location.strip():
             return self.cfg.location.strip()
         if self._location is None:
@@ -481,13 +479,13 @@ class BigQueryEngine(Engine):
             if callable(fn):
                 loc = str(fn(bucket) or "")
             if not loc:
-                logger.warning("regione del bucket %s non leggibile: lascio decidere BigQuery (default US)", bucket)
+                logger.warning("region of bucket %s unreadable: BigQuery decides (default US)", bucket)
             self._location = loc.lower()
         return self._location or None
 
     def _bqstorage_client(self):
-        """Storage Read API per scaricare i risultati grandi; senza il pacchetto
-        si ripiega sull'API REST (lenta, ma funziona)."""
+        """The Storage Read API downloads large results; without the package it falls back on
+        the REST API (slow, but it works)."""
         if not self._bqstorage_tried:
             self._bqstorage_tried = True
             try:
@@ -495,13 +493,13 @@ class BigQueryEngine(Engine):
 
                 self._bqstorage = bigquery_storage.BigQueryReadClient(credentials=self._creds())
             except Exception as e:  # noqa: BLE001
-                logger.info("Storage Read API non disponibile (%s): risultati via REST", e)
+                logger.info("Storage Read API not available (%s): results through REST", e)
         return self._bqstorage
 
     # ── step-cache nativa ────────────────────────────────────────────────
     def _cache_enabled(self, location: str | None) -> bool:
-        """La cache e' usabile se il dataset esiste o si lascia creare. Deciso
-        una volta per processo; senza permessi si va avanti SENZA cache."""
+        """The cache is usable when the dataset exists or can be created. Decided once per
+        process; without permissions it goes on WITHOUT a cache."""
         if not self.cfg.cache_dataset.strip():
             return False
         if self._cache_ok is None:
@@ -511,13 +509,13 @@ class BigQueryEngine(Engine):
                 ds = bigquery.Dataset(f"{self.cfg.project}.{self.cfg.cache_dataset}")
                 ds.location = location
                 ds.default_table_expiration_ms = int(get_settings().cache.ttl_seconds) * 1000
-                ds.description = "Tabularia: step-cache dell'editor (tabelle a scadenza automatica)"
+                ds.description = "Tabularia: the editor's step cache (self-expiring tables)"
                 self._client_or_raise().create_dataset(ds, exists_ok=True)
                 self._cache_ok = True
             except Exception as e:  # noqa: BLE001
                 logger.warning(
-                    "step-cache BigQuery disattivata: il dataset %s.%s non esiste e non si puo' creare (%s). "
-                    "Concedi «BigQuery Data Editor» al service account, o crea il dataset nella regione %s.",
+                    "BigQuery step cache off: the dataset %s.%s does not exist and cannot be created (%s). "
+                    "Grant «BigQuery Data Editor» to the service account, or create the dataset in the region %s.",
                     self.cfg.project, self.cfg.cache_dataset, _clean_error(e), location,
                 )
                 self._cache_ok = False
@@ -527,8 +525,8 @@ class BigQueryEngine(Engine):
         return f"{self.engine_name}:{source.bucket}/{source.key}"
 
     def _sql_from_cache(self, ctx: BigQueryContext, source, operations, hashes, record=False, use_cache=True) -> str:
-        """Costruisce la catena partendo dall'antenato in cache piu' vicino e
-        applicando solo le operazioni rimanenti (mirror degli altri motori)."""
+        """Builds the chain from the nearest cached ancestor, applying only the remaining
+        operations (as the other engines)."""
         start = self.cache.nearest(hashes) if use_cache else 0
         table = None
         if start > 0:
@@ -536,7 +534,7 @@ class BigQueryEngine(Engine):
             table = self.cache.get_table(h)
             names = _cached_names(table)
             if table is None or names is None:
-                self.cache.forget(h)  # tabella scaduta o senza mappa dei nomi: come una miss
+                self.cache.forget(h)  # a table expired or without a name map: as a miss
                 start, table = 0, None
         if record and operations and use_cache:
             (self.cache.record_hit if start > 0 else self.cache.record_miss)()
@@ -545,12 +543,12 @@ class BigQueryEngine(Engine):
         else:
             self.cache.touch(hashes[start - 1])
             sql = ctx.scan_cached(self.cache.table_ref(hashes[start - 1]), [f.name for f in table.schema], names)
-            logger.info("cache hit: riparto dallo step %d/%d", start, len(operations))
+            logger.info("cache hit: starting again from step %d/%d", start, len(operations))
         return ctx.apply(sql, operations[start:], index_offset=start)
 
     def _materialize(self, ctx: BigQueryContext, source, operations) -> None:
-        """Scrive in cache l'output di `operations` (se non c'e' gia'): CREATE
-        TABLE AS SELECT con scadenza, nomi originali nella descrizione."""
+        """Writes the output of `operations` to the cache (unless there already): CREATE TABLE
+        AS SELECT with an expiry, the original names in the description."""
         if not operations:
             return
         hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in operations])
@@ -560,7 +558,7 @@ class BigQueryEngine(Engine):
         sql = self._sql_from_cache(ctx, source, operations, hashes)
         originals = ctx.columns_of(sql)
         description = json.dumps({"names": originals}, ensure_ascii=False)
-        if len(description) > 15_000:  # limite della descrizione: questo passo resta senza cache
+        if len(description) > 15_000:  # the description's limit: this step stays uncached
             return
         ttl = int(get_settings().cache.ttl_seconds)
         t0 = time.perf_counter()
@@ -574,8 +572,8 @@ class BigQueryEngine(Engine):
         logger.info("materializzato step %d in cache BigQuery (%s)", len(operations), final[:12])
 
     def _defer_materialization(self, source: DataSource, ops: list[Operation]) -> None:
-        """Mette in coda (in memoria) la materializzazione di `ops`, se non e'
-        gia' in cache: il chiamante la esegue fuori dalla richiesta."""
+        """Queues (in memory) the materialization of `ops`, unless it is cached already: the
+        caller runs it outside the request."""
         if not ops:
             return
         final = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])[-1]
@@ -584,18 +582,18 @@ class BigQueryEngine(Engine):
         self._pending.append((source, [op.model_dump() for op in ops]))
 
     def take_pending(self) -> list[tuple[DataSource, list[dict]]]:
-        """Le materializzazioni rimaste da fare (e le dimentica)."""
+        """The materializations left to do (and forgets them)."""
         out, self._pending = self._pending, []
         return out
 
     def materialize(self, source: DataSource, operations: list[dict]) -> bool:
-        """Materializza in cache l'output di `operations` (chiamata dal task
-        differito). True se ha scritto qualcosa."""
+        """Materializes the output of `operations` in the cache (called by the deferred task).
+        True when it wrote something."""
         ops = _coerce_ops(operations)
         if not ops:
             return False
         final = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])[-1]
-        if not self.cache.try_lock(final):  # due click sullo stesso passo: un solo CTAS
+        if not self.cache.try_lock(final):  # two clicks on the same step: one CTAS
             return False
         tmp: list[str] = []
         ctx = self._context(source, tmp)
@@ -633,7 +631,7 @@ class BigQueryEngine(Engine):
             from app.observability import preview_stats
 
             preview_stats.set_phases(dict(ctx.phases), "bigquery")
-        except Exception:  # noqa: BLE001 — la telemetria non deve mai rompere la preview
+        except Exception:  # noqa: BLE001 — telemetry must never break the preview
             pass
 
     # ── Preview ──────────────────────────────────────────────────────────
@@ -687,15 +685,15 @@ class BigQueryEngine(Engine):
 
     # ── Run ──────────────────────────────────────────────────────────────
     def _write_parquet(self, ctx: BigQueryContext, job, path: str) -> int:
-        """Scarica il risultato del job in un parquet locale, in streaming, con
-        row group grandi (INGEST__PARQUET_ROW_GROUP_ROWS) come gli altri motori."""
+        """Downloads the job's result into a local parquet, streaming, with large row groups
+        (INGEST__PARQUET_ROW_GROUP_ROWS) as the other engines."""
         rows = job.result()
         total = int(rows.total_rows or 0)
         group_rows = max(1, int(get_settings().ingest.parquet_row_group_rows))
         bqs = self._bqstorage_client()
         try:
             batches = rows.to_arrow_iterable(bqstorage_client=bqs) if bqs else rows.to_arrow_iterable()
-        except TypeError:  # versioni vecchie senza il kwarg
+        except TypeError:  # old versions without the kwarg
             batches = rows.to_arrow_iterable()
         writer: pq.ParquetWriter | None = None
         pending: list[pa.RecordBatch] = []
@@ -724,7 +722,7 @@ class BigQueryEngine(Engine):
                 if pending_rows >= group_rows:
                     flush()
             flush()
-            if writer is None:  # nessuna riga: parquet vuoto con lo schema del job
+            if writer is None:  # no rows: an empty parquet with the job's schema
                 schema = schema or self._arrow_schema(rows.schema)
                 schema = pa.schema([f.with_name(ctx.original(f.name)) for f in schema], metadata=schema.metadata)
                 writer = pq.ParquetWriter(path, schema, compression="zstd")
@@ -736,7 +734,7 @@ class BigQueryEngine(Engine):
 
     @staticmethod
     def _arrow_schema(fields) -> pa.Schema:
-        from google.cloud.bigquery import _pandas_helpers  # schema vuoto: solo per il file senza righe
+        from google.cloud.bigquery import _pandas_helpers  # an empty schema: only for the file without rows
 
         return _pandas_helpers.bq_to_arrow_schema(fields) or pa.schema([])
 
@@ -771,9 +769,9 @@ class BigQueryEngine(Engine):
         finally:
             self._cleanup(tmp)
 
-    # ── annullamento delle query di una preview superata ─────────────────
+    # ── cancelling the queries of a superseded preview ─────────────────
     def kill_tagged(self, tag: str) -> None:
-        """Annulla i job ancora in corso etichettati con `tag` (best-effort)."""
+        """Cancels the jobs still running labelled with `tag` (best effort)."""
         if not is_safe_tag(tag):
             return
         want = _label(tag)
@@ -784,4 +782,4 @@ class BigQueryEngine(Engine):
                 if (getattr(job, "labels", None) or {}).get("tabularia_tag") == want:
                     client.cancel_job(job.job_id, location=job.location)
         except Exception as e:  # noqa: BLE001
-            logger.warning("annullamento dei job BigQuery %s non riuscito: %s", tag, e)
+            logger.warning("cancelling the BigQuery jobs %s failed: %s", tag, e)

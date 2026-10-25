@@ -39,11 +39,11 @@ def _worker_di_ieri(bucket, input_key, operations, output_key, destination=None)
     minuto accanto all'API nuova durante un rolling update."""
 
 
-def _invia(monkeypatch, **campi) -> dict:
+def _invia(monkeypatch, **fields) -> dict:
     spia = _Spia()
     monkeypatch.setattr(route, "transform_data_task", spia)
     req = TransformDataRequest(
-        bucket="b", input_key="in.parquet", output_key="out.parquet", operations=[], **campi
+        bucket="b", input_key="in.parquet", output_key="out.parquet", operations=[], **fields
     )
     route.submit_transform_data_task(req)
     assert spia.kwargs is not None
@@ -62,7 +62,7 @@ def test_optional_kwargs_are_omitted_when_empty(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "campo, valore",
+    "field, value",
     [
         ("email", {"connection": {}, "target": {}}),
         ("mirror", {"connection": {}, "target": {}}),
@@ -70,7 +70,7 @@ def test_optional_kwargs_are_omitted_when_empty(monkeypatch):
         ("destination", {"type": "s3"}),
     ],
 )
-def test_a_valued_option_is_sent(monkeypatch, campo, valore):
+def test_a_valued_option_is_sent(monkeypatch, field, value):
     """Omettere i vuoti non deve significare perdere quelli che servono."""
-    inviati = _invia(monkeypatch, **{campo: valore})
-    assert inviati[campo] == valore
+    inviati = _invia(monkeypatch, **{field: value})
+    assert inviati[field] == value

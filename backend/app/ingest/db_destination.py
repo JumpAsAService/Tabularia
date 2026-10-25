@@ -1,12 +1,12 @@
-"""Destinazioni database: scrive un parquet dello storage in una tabella,
-in streaming (batch Arrow → INSERT), senza mai materializzare tutto in memoria.
+"""Database destinations: writes a parquet of the storage into a table, streaming
+(Arrow batches → INSERT), never holding all of it in memory.
 
-Semantica UNIFORME su tutti i dialetti (è il contratto del nodo Output):
-1. CREATE TABLE IF NOT EXISTS con tipi mappati dallo schema Arrow;
-2. mode="replace" → TRUNCATE (la definizione della tabella resta, i dati no);
-   mode="append"  → si accoda a ciò che c'è;
-3. insert in streaming a batch;
-4. eventuali statement post-insert (separati da `;`), sulla stessa connessione.
+UNIFORM semantics on every dialect (the Output node's contract):
+1. CREATE TABLE IF NOT EXISTS with types mapped from the Arrow schema;
+2. mode="replace" → TRUNCATE (the table's definition stays, the data does not);
+   mode="append"  → appended to what is there;
+3. streaming inserts in batches;
+4. any post-insert statements (separated by `;`), on the same connection.
 
 Columns are matched by NAME on every database: a column the existing table lacks
 stops the write, columns the flow lacks take their DEFAULT. On ClickHouse "replace"
@@ -14,12 +14,12 @@ loads a staging copy of the target's own definition and swaps it in atomically, 
 engine, ORDER BY, partitions, TTL and defaults stay the customer's (materialized
 views on the target see inserts, not swaps: they do not see replaced data).
 
-Driver per dialetto (gli stessi delle sorgenti):
-- postgresql        → ADBC (adbc_ingest: bulk COPY, Arrow nativo)
+A driver per dialect (the sources' own):
+- postgresql        → ADBC (adbc_ingest: bulk COPY, native Arrow)
 - clickhouse        → clickhouse-connect (insert_arrow)
-- mysql / mariadb   → PyMySQL executemany su chunk
-- trino             → INSERT parametrico multi-riga (lento per natura: Trino
-                      non è pensato per OLTP, ma funziona)
+- mysql / mariadb   → PyMySQL executemany in chunks
+- trino             → a parametric multi-row INSERT (slow by nature: Trino is not meant
+                      for OLTP, but it works)
 """
 from __future__ import annotations
 
@@ -39,23 +39,23 @@ from app.ingest.db_source import _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec
 
 logger = logging.getLogger(__name__)
 
-# righe per singolo INSERT nei percorsi senza bulk nativo
+# rows per INSERT on the paths without a native bulk load
 MYSQL_CHUNK_ROWS = 5_000  # multi-row VALUES: sotto il max_allowed_packet
-TRINO_CHUNK_ROWS = 500  # ogni INSERT è una query Trino: chunk piccoli
+TRINO_CHUNK_ROWS = 500  # every INSERT is a Trino query: small chunks
 
 
 class DbDestinationError(IngestError):
-    """Errore parlante da mostrare all'utente (tabella, tipi, permessi DB)."""
+    """A clear error to show the user (table, types, database permissions)."""
 
 
 class DbDestinationSpec(BaseModel):
-    table: str  # nome tabella (anche schema.tabella)
+    table: str  # the table's name (schema.table too)
     mode: Literal["append", "replace"] = "append"
     post_sql: str = ""  # statement post-insert separati da `;` (facoltativi)
 
 
 def _qualified_table(conn: DbConnectionSpec, table_ref: str) -> tuple[str, list[str]]:
-    """Nome tabella quotato per dialetto + parti non quotate (schema, tabella)."""
+    """The table name quoted per dialect + the unquoted parts (schema, table)."""
     q = _IDENT_QUOTE[conn.db_type]
     parts = [p.strip() for p in table_ref.split(".") if p.strip()]
     if not parts:
@@ -72,7 +72,7 @@ def _post_statements(post_sql: str) -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Mappa tipi Arrow → SQL per dialetto
+# Arrow types → SQL, per dialect
 # ─────────────────────────────────────────────────────────────────────────────
 def _sql_type(db_type: str, t: pa.DataType) -> str:
     ch = db_type == "clickhouse"
@@ -97,7 +97,7 @@ def _sql_type(db_type: str, t: pa.DataType) -> str:
         }[db_type]
     elif pa.types.is_date(t):
         base = "Date32" if ch else "DATE"
-    else:  # stringhe e tutto il resto (tempo, binario…): testo
+    else:  # strings and everything else (time, binary…): text
         base = {"postgresql": "TEXT", "mysql": "TEXT", "mariadb": "TEXT",
                 "clickhouse": "String", "trino": "VARCHAR"}[db_type]
     return f"Nullable({base})" if ch else base
@@ -120,7 +120,7 @@ def _quoted_columns(conn: DbConnectionSpec, schema: pa.Schema) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Writer per dialetto: stessa firma, stessa semantica
+# A writer per dialect: the same signature, the same semantics
 # ─────────────────────────────────────────────────────────────────────────────
 def _write_postgresql(
     conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
@@ -165,13 +165,13 @@ def _write_clickhouse(
         password=conn.resolve_password(),
         database=conn.database or "default",
         connect_timeout=10,
-        # INSERT … SELECT dalla staging e post-SQL (un OPTIMIZE) possono tacere a lungo
+        # INSERT … SELECT from the staging and the post-SQL (an OPTIMIZE) may stay silent for long
         send_receive_timeout=get_settings().ingest.db_read_timeout_seconds,
     )
-    # ClickHouse non ha transazioni sull'INSERT in streaming: scrivere direttamente
-    # nella tabella (TRUNCATE + insert a batch) la lascerebbe in stato PARZIALE se
-    # qualcosa fallisce a metà — con replace, addirittura vuota (dati persi). Quindi
-    # si scrive tutto in una tabella di STAGING; poi lo scambio è ATOMICO.
+    # ClickHouse has no transactions on a streaming INSERT: writing straight into the
+    # table (TRUNCATE + batched inserts) would leave it PARTIAL if something fails half
+    # way — with replace, even empty (data lost). So everything is written to a STAGING
+    # table; then the swap is ATOMIC.
     import uuid
 
     q = _IDENT_QUOTE["clickhouse"]
@@ -206,7 +206,7 @@ def _write_clickhouse(
             client.insert_arrow(stg_name, pa.Table.from_batches([batch], schema=schema))
             rows += batch.num_rows
         if dest.mode == "replace":
-            # swap ATOMICO: la destinazione passa dai vecchi ai nuovi dati in un colpo
+            # ATOMIC swap: the destination goes from the old data to the new in one stroke
             client.command(f"EXCHANGE TABLES {qualified} AND {stg_qualified}")
         else:
             # append: one server-side INSERT, by column name
@@ -221,7 +221,7 @@ def _write_clickhouse(
                     e, conn.db_type, conn.host, conn.port_or_default))) from e
     finally:
         try:
-            client.command(f"DROP TABLE IF EXISTS {stg_qualified}")  # staging (dati vecchi o già copiati)
+            client.command(f"DROP TABLE IF EXISTS {stg_qualified}")  # staging (old data, or copied already)
         except Exception:
             pass
         client.close()
@@ -274,11 +274,11 @@ def _write_mysql(
         with c.cursor() as cur:
             cur.execute(_create_table_sql(conn, qualified, schema))
             if dest.mode == "replace":
-                # DELETE (DML, transazionale) e NON TRUNCATE: in MySQL/MariaDB
-                # TRUNCATE è DDL e fa un COMMIT implicito, quindi svuoterebbe la
-                # tabella FUORI dalla transazione degli INSERT — un errore a metà
-                # stream lascerebbe la tabella permanentemente vuota. Con DELETE
-                # lo svuotamento e gli insert committano (o rollbackano) insieme.
+                # DELETE (DML, transactional) and NOT TRUNCATE: in MySQL/MariaDB TRUNCATE
+                # is DDL and makes an implicit COMMIT, so it would empty the table OUTSIDE
+                # the INSERTs' transaction — an error half way through the stream would
+                # leave the table empty for good. With DELETE the emptying and the inserts
+                # commit (or roll back) together.
                 cur.execute(f"DELETE FROM {qualified}")
             for batch in batches:
                 for chunk in _row_chunks(batch, schema, MYSQL_CHUNK_ROWS):
@@ -309,16 +309,16 @@ def _write_trino(
     if password:
         kwargs["http_scheme"] = "https"
         kwargs["auth"] = trino.auth.BasicAuthentication(conn.username, password)
-    # transazione esplicita: DELETE + INSERT devono essere atomici, altrimenti un
-    # errore a metà lascia la tabella svuotata/parziale. NB: la transazionalità in
-    # Trino dipende dal CONNETTORE (Iceberg/Delta la supportano, Hive puro no); dove
-    # non è supportata il commit/rollback degenera nel comportamento precedente.
+    # an explicit transaction: DELETE + INSERT must be atomic, otherwise an error half
+    # way leaves the table emptied or partial. NB: transactions in Trino depend on the
+    # CONNECTOR (Iceberg/Delta support them, plain Hive does not); where they are not
+    # supported commit/rollback degrade to the previous behavior.
     kwargs["isolation_level"] = trino.transaction.IsolationLevel.READ_UNCOMMITTED
     c = trino.dbapi.connect(**kwargs)
 
     def _run(cur, sql: str, params=None) -> None:
         cur.execute(sql, params) if params else cur.execute(sql)
-        cur.fetchall()  # il client Trino completa la query solo consumandola
+        cur.fetchall()  # the Trino client completes the query only by consuming it
 
     one_row = "(" + ", ".join(["?"] * len(schema)) + ")"
     prefix = f"INSERT INTO {qualified} ({_quoted_columns(conn, schema)}) VALUES "
@@ -326,9 +326,9 @@ def _write_trino(
     try:
         cur = c.cursor()
         _run(cur, _create_table_sql(conn, qualified, schema))
-        c.commit()  # la DDL fuori dalla transazione dei dati
+        c.commit()  # the DDL outside the data's transaction
         if dest.mode == "replace":
-            _run(cur, f"DELETE FROM {qualified}")  # Trino non ha TRUNCATE ovunque
+            _run(cur, f"DELETE FROM {qualified}")  # Trino does not have TRUNCATE everywhere
         for batch in batches:
             for chunk in _row_chunks(batch, schema, TRINO_CHUNK_ROWS):
                 sql = prefix + ", ".join([one_row] * len(chunk))
@@ -336,7 +336,7 @@ def _write_trino(
                 rows += len(chunk)
         for stmt in _post_statements(dest.post_sql):
             _run(cur, stmt)
-        c.commit()  # DELETE + INSERT insieme: o tutto o niente
+        c.commit()  # DELETE + INSERT together: all or nothing
     except Exception:
         try:
             c.rollback()
@@ -364,7 +364,7 @@ def _counted(batches: Iterator[pa.RecordBatch], counter: list[int]) -> Iterator[
 
 
 def _row_chunks(batch: pa.RecordBatch, schema: pa.Schema, size: int) -> Iterator[list[tuple]]:
-    """RecordBatch → liste di tuple Python (ordine colonne = schema)."""
+    """RecordBatch → lists of Python tuples (column order = schema)."""
     names = [f.name for f in schema]
     for start in range(0, batch.num_rows, size):
         piece = batch.slice(start, size)
@@ -373,7 +373,7 @@ def _row_chunks(batch: pa.RecordBatch, schema: pa.Schema, size: int) -> Iterator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Entry point: parquet su storage → tabella
+# Entry point: parquet on the storage → table
 # ─────────────────────────────────────────────────────────────────────────────
 def write_parquet_to_db(
     conn: DbConnectionSpec,
@@ -382,9 +382,9 @@ def write_parquet_to_db(
     key: str,
     storage=None,
 ) -> dict:
-    """Scrive `bucket/key` (parquet) nella tabella di destinazione. Ritorna righe
-    scritte e nome qualificato. Il parquet passa dal disco locale (buffer), i
-    batch dallo streaming del ParquetFile: memoria O(dimensione batch)."""
+    """Writes `bucket/key` (parquet) into the destination table. Returns the rows written and
+    the qualified name. The parquet goes through the local disk (buffer), the batches
+    through the ParquetFile's streaming: memory O(batch size)."""
     if storage is None:
         from app.utils import get_storage_service
 
@@ -400,14 +400,14 @@ def write_parquet_to_db(
         pf = pq.ParquetFile(tmp)
         schema = pf.schema_arrow
         logger.info(
-            "db-dest %s@%s ← %s → %s (%s, %d colonne)",
+            "db-dest %s@%s ← %s → %s (%s, %d columns)",
             conn.db_type, conn.host, key, qualified, dest.mode, len(schema),
         )
         try:
             rows = writer(conn, dest, qualified, parts, schema, pf.iter_batches(batch_size=BATCH_ROWS))
         except IngestError:
             raise
-        except Exception as e:  # errore del driver → messaggio del server del database
+        except Exception as e:  # the driver's error → the database server's message
             raise DbDestinationError(
                 describe_db_error(e, conn.db_type, conn.host, conn.port_or_default)
             ) from e
@@ -417,5 +417,5 @@ def write_parquet_to_db(
         except OSError:
             pass
 
-    logger.info("db-dest completato: %s (%d righe, %s)", qualified, rows, dest.mode)
+    logger.info("db-dest done: %s (%d rows, %s)", qualified, rows, dest.mode)
     return {"rows_written": rows, "table": qualified, "mode": dest.mode}

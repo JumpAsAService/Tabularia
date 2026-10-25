@@ -1,18 +1,17 @@
-"""Invio dell'output di un run come email con allegato (csv o xlsx).
+"""Sending a run's output as an email with an attachment (csv or xlsx).
 
-Percorso dati: parquet interno → `PolarsEngine.export` su file temporaneo (csv in
-streaming, xlsx col tetto del formato) → allegato di un messaggio MIME → SMTP.
-Il file temporaneo viene sempre rimosso, anche in errore.
+Data path: the internal parquet → `PolarsEngine.export` on a temporary file (csv
+streamed, xlsx with the format's cap) → the attachment of a MIME message → SMTP. The
+temporary file is always removed, on errors too.
 
-Le credenziali arrivano cifrate (`password_encrypted`, Fernet condiviso col
-gateway) e si decifrano solo al momento di aprire la connessione, come per le
-sorgenti database e le destinazioni S3.
+The credentials arrive encrypted (`password_encrypted`, the Fernet key shared with the
+gateway) and are decrypted only when the connection opens, as for the database sources
+and the S3 destinations.
 
-CONFINE DI SICUREZZA: qui NON si validano i destinatari. L'elenco dei domini
-ammessi vive sulla connessione e lo applica il GATEWAY, che è l'unico a poterlo
-fare in modo vincolante: il worker riceve destinatari già risolti, e un controllo
-in questo punto sarebbe scavalcabile da chiunque riesca a parlare con l'engine.
-Questo modulo spedisce ciò che gli viene detto di spedire.
+SECURITY BOUNDARY: the recipients are NOT validated here. The list of allowed domains
+lives on the connection and the GATEWAY enforces it, the only one that can do so
+bindingly: the worker receives recipients resolved already, and a check here could be
+bypassed by anyone able to talk to the engine. This module sends what it is told to send.
 """
 from __future__ import annotations
 
@@ -32,28 +31,28 @@ from app.ingest.converters import IngestError
 
 logger = logging.getLogger(__name__)
 
-# Tetto dell'allegato. Quasi ogni server di posta rifiuta oltre i 25 MB, e la
-# codifica base64 gonfia di circa un terzo: fermarsi qui dà un errore chiaro
-# invece di un rifiuto SMTP oscuro dopo aver occupato il worker per minuti.
+# The attachment's cap. Nearly every mail server refuses beyond 25 MB, and base64
+# inflates by about a third: stopping here gives a clear error instead of an obscure
+# SMTP refusal after holding the worker for minutes.
 MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024
 
 
 class EmailDestinationError(IngestError):
-    """Errore parlante da mostrare all'utente (allegato, server, credenziali)."""
+    """A clear error to show the user (attachment, server, credentials)."""
 
 
 class SmtpConnectionSpec(BaseModel):
     host: str = ""
     port: int = 587
     username: str = ""
-    # una delle due: cifrata (come arriva dal gateway) o in chiaro (prove dirette
-    # sull'engine in sviluppo), stessa convenzione di S3ConnectionSpec
+    # one of the two: encrypted (as it comes from the gateway) or in clear (direct trials
+    # on the engine in development), the same convention as S3ConnectionSpec
     password: str = ""
     password_encrypted: str = ""
-    # mittente: indirizzo e, facoltativo, nome visualizzato
+    # sender: address and, optionally, display name
     from_address: str = ""
     from_name: str = ""
-    # starttls (587, il default moderno) | ssl (465, implicito) | none (solo reti fidate)
+    # starttls (587, the modern default) | ssl (465, implicit) | none (trusted networks only)
     tls: Literal["starttls", "ssl", "none"] = "starttls"
     timeout_seconds: float = 30.0
 
@@ -73,8 +72,8 @@ class EmailSpec(BaseModel):
     cc: list[str] = []
     subject: str = ""
     body: str = ""
-    # il corpo è HTML: si spedisce multipart/alternative con un'alternativa
-    # testuale, così non arriva illeggibile a chi legge in solo testo
+    # the body is HTML: sent as multipart/alternative with a text alternative, so it
+    # does not arrive unreadable to whoever reads plain text only
     body_is_html: bool = False
     attachment_name: str = "report"
     attachment_format: Literal["csv", "xlsx"] = "xlsx"
@@ -117,30 +116,29 @@ _MIME = {
 
 
 def _html_to_text(html: str) -> str:
-    """Alternativa testuale grossolana ma onesta: togliere i tag è meglio che
-    spedire sorgente HTML a chi non lo rende."""
+    """A rough but honest text alternative: stripping the tags is better than sending HTML
+    source to whoever does not render it."""
     import re
 
-    testo = re.sub(r"<br\s*/?>|</p>|</div>|</tr>", "\n", html, flags=re.I)
-    testo = re.sub(r"<[^>]+>", "", testo)
-    return re.sub(r"\n{3,}", "\n\n", testo).strip()
+    text = re.sub(r"<br\s*/?>|</p>|</div>|</tr>", "\n", html, flags=re.I)
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _filename(spec: EmailSpec) -> str:
     base = (spec.attachment_name or "report").strip() or "report"
-    # niente separatori di percorso nel nome di un allegato
+    # no path separators in an attachment's name
     base = base.replace("/", "_").replace("\\", "_").strip(". ")
     suffix = f".{spec.attachment_format}"
     return base if base.lower().endswith(suffix) else base + suffix
 
 
 def build_attachment(bucket: str, key: str, spec: EmailSpec) -> tuple[bytes, str]:
-    """Scarica il parquet dell'output e lo rende nel formato richiesto.
+    """Downloads the output's parquet and renders it in the format asked for.
 
-    Nessuna operazione: la catena è già stata eseguita e il risultato è in
-    `key`. È lo stesso schema dell'export con un engine non-Polars (calcola lo
-    snapshot, poi Polars scrive il file), quindi il formato è identico a quello
-    che l'utente otterrebbe scaricandolo a mano.
+    No operations: the chain has run already and the result is in `key`. The same scheme
+    as the export with a non-Polars engine (it computes the snapshot, then Polars writes
+    the file), so the format is the same the user would get downloading it by hand.
     """
     from app.engine import DataSource, get_engine
 
@@ -169,7 +167,7 @@ def build_attachment(bucket: str, key: str, spec: EmailSpec) -> tuple[bytes, str
             pass
 
 
-def _contesto_tls() -> ssl.SSLContext:
+def _tls_context() -> ssl.SSLContext:
     """The TLS context of an SMTP connection: certificate and name verified, unless
     the deployment opted out (SMTP__VERIFY_TLS=false). smtplib's own default
     verifies nothing, so the password went to whoever answered."""
@@ -183,79 +181,78 @@ def _contesto_tls() -> ssl.SSLContext:
     return ctx
 
 
-def _apri(conn: SmtpConnectionSpec) -> smtplib.SMTP:
+def _open(conn: SmtpConnectionSpec) -> smtplib.SMTP:
     """Connects and encrypts as the connection says (`tls`)."""
     if conn.tls == "ssl":
-        return smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds, context=_contesto_tls())
+        return smtplib.SMTP_SSL(conn.host, conn.port, timeout=conn.timeout_seconds, context=_tls_context())
     return smtplib.SMTP(conn.host, conn.port, timeout=conn.timeout_seconds)
 
 
-def _certificato_rifiutato(conn: SmtpConnectionSpec, e: ssl.SSLCertVerificationError) -> EmailDestinationError:
-    motivo = getattr(e, "verify_message", "") or str(e)
+def _certificate_refused(conn: SmtpConnectionSpec, e: ssl.SSLCertVerificationError) -> EmailDestinationError:
+    reason = getattr(e, "verify_message", "") or str(e)
     return EmailDestinationError(
-        f"The certificate of {conn.host} could not be verified ({motivo}). Give the server a certificate "
+        f"The certificate of {conn.host} could not be verified ({reason}). Give the server a certificate "
         f"that matches its name, or, for a relay with a self-signed one, set SMTP__VERIFY_TLS=false on the engine."
     )
 
 
-def _spedisci(conn: SmtpConnectionSpec, msg: EmailMessage, destinatari: list[str]) -> None:
-    """Apre, cifra, autentica e spedisce. Estratta perché ci sono due cose da
-    mandare: l'output di un flusso, con il suo allegato, e un avviso, che non ne
-    ha nessuno."""
+def _send(conn: SmtpConnectionSpec, msg: EmailMessage, recipients: list[str]) -> None:
+    """Opens, encrypts, authenticates and sends. Split out because there are two things to
+    send: a flow's output, with its attachment, and a notice, which has none."""
     try:
-        with _apri(conn) as server:
+        with _open(conn) as server:
             if conn.tls == "starttls":
-                server.starttls(context=_contesto_tls())
+                server.starttls(context=_tls_context())
             if conn.username:
                 server.login(conn.username, conn.resolve_secret())
-            server.send_message(msg, to_addrs=destinatari)
+            server.send_message(msg, to_addrs=recipients)
     except ssl.SSLCertVerificationError as e:
-        raise _certificato_rifiutato(conn, e) from e
+        raise _certificate_refused(conn, e) from e
     except smtplib.SMTPAuthenticationError as e:
         raise EmailDestinationError(f"SMTP authentication rejected by {conn.host}: {e}") from e
     except smtplib.SMTPException as e:
         raise EmailDestinationError(f"Sending was rejected by {conn.host}: {type(e).__name__}: {e}") from e
-    except OSError as e:  # DNS, rete, porta chiusa, TLS
+    except OSError as e:  # DNS, network, closed port, TLS
         raise EmailDestinationError(f"Cannot reach {conn.host}:{conn.port}: {e}") from e
 
 
 def send_notice(conn: SmtpConnectionSpec, to: list[str], subject: str, body: str) -> dict:
-    """Un avviso in solo testo, senza allegati: serve a dire che un flusso è
-    fallito, e deve arrivare anche quando è proprio il dato a mancare."""
-    destinatari = [a.strip() for a in to if a and a.strip()]
-    if not destinatari:
+    """A plain-text notice without attachments: it says a flow failed, and must arrive
+    even when it is the data itself that is missing."""
+    recipients = [a.strip() for a in to if a and a.strip()]
+    if not recipients:
         raise EmailDestinationError("No recipients: enter at least one address.")
     if not conn.from_address.strip():
         raise EmailDestinationError("The SMTP connection has no sender address.")
 
     msg = EmailMessage()
     msg["From"] = conn.sender()
-    msg["To"] = ", ".join(destinatari)
+    msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject
     msg["Message-ID"] = make_msgid()
-    # `Auto-Submitted` dice ai server che è posta generata da un programma: evita
-    # che una risposta automatica dall'altra parte inneschi un rimbalzo infinito
+    # `Auto-Submitted` tells the servers it is mail generated by a program: keeps an
+    # automatic reply on the other side from starting an endless bounce
     msg["Auto-Submitted"] = "auto-generated"
     msg.set_content(body)
 
-    _spedisci(conn, msg, destinatari)
-    logger.info("📧 avviso inviato a %d destinatari", len(destinatari))
-    return {"ok": True, "recipients": len(destinatari)}
+    _send(conn, msg, recipients)
+    logger.info("📧 notice sent to %d recipients", len(recipients))
+    return {"ok": True, "recipients": len(recipients)}
 
 
 def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, key: str,
                       now: datetime | None = None) -> dict:
-    """Genera l'allegato e lo spedisce. Solleva `EmailDestinationError` con un
-    messaggio leggibile; il chiamante decide se il run debba fallire. The subject
+    """Makes the attachment and sends it. Raises `EmailDestinationError` with a readable
+    message; the caller decides whether the run must fail. The subject
     and the attachment name are resolved first (a bad placeholder sends nothing)."""
     spec = resolve_names(spec, now)
-    destinatari = [a for a in (*spec.to, *spec.cc) if a.strip()]
-    if not destinatari:
+    recipients = [a for a in (*spec.to, *spec.cc) if a.strip()]
+    if not recipients:
         raise EmailDestinationError("No recipients: enter at least one address.")
     if not conn.from_address.strip():
         raise EmailDestinationError("The SMTP connection has no sender address.")
 
-    dati, nome_file = build_attachment(bucket, key, spec)
+    data, nome_file = build_attachment(bucket, key, spec)
 
     msg = EmailMessage()
     msg["From"] = conn.sender()
@@ -272,32 +269,32 @@ def send_output_email(conn: SmtpConnectionSpec, spec: EmailSpec, bucket: str, ke
         msg.set_content(spec.body or "")
 
     maintype, subtype = _MIME[spec.attachment_format]
-    msg.add_attachment(dati, maintype=maintype, subtype=subtype, filename=nome_file)
+    msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=nome_file)
 
-    _spedisci(conn, msg, destinatari)
+    _send(conn, msg, recipients)
 
-    logger.info("📧 email inviata a %d destinatari, allegato %s (%d byte)", len(destinatari), nome_file, len(dati))
+    logger.info("📧 email sent to %d recipients, attachment %s (%d bytes)", len(recipients), nome_file, len(data))
     return {
         "ok": True,
-        "recipients": len(destinatari),
+        "recipients": len(recipients),
         "attachment": nome_file,
         "subject": str(msg["Subject"]),
-        "bytes": len(dati),
+        "bytes": len(data),
     }
 
 
 def test_connection(conn: SmtpConnectionSpec) -> None:
-    """Prova la connessione senza spedire nulla: apre, cifra e autentica."""
+    """Tests the connection without sending anything: opens, encrypts and authenticates."""
     if not conn.host.strip():
         raise EmailDestinationError("No SMTP server specified.")
     try:
-        with _apri(conn) as server:
+        with _open(conn) as server:
             if conn.tls == "starttls":
-                server.starttls(context=_contesto_tls())
+                server.starttls(context=_tls_context())
             if conn.username:
                 server.login(conn.username, conn.resolve_secret())
     except ssl.SSLCertVerificationError as e:
-        raise _certificato_rifiutato(conn, e) from e
+        raise _certificate_refused(conn, e) from e
     except smtplib.SMTPAuthenticationError as e:
         raise EmailDestinationError(f"Authentication rejected by {conn.host}: {e}") from e
     except smtplib.SMTPException as e:

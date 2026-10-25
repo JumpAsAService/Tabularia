@@ -1,22 +1,21 @@
-"""Valutatore dei data contracts: un parquet e un contratto in ingresso, un
-referto regola per regola in uscita.
+"""The data contracts' evaluator: a parquet and a contract in, a report rule by rule
+out.
 
-UNO solo, su Polars, qualunque motore abbia prodotto i dati: l'output di ogni
-motore è un parquet nello storage, e valutarlo lì tiene i cinque motori fuori da
-questa storia (e il risultato non dipende da quale si è usato).
+ONE, on Polars, whatever engine produced the data: every engine's output is a parquet
+on the storage, and evaluating it there keeps the five engines out of this (and the
+result does not depend on which one was used).
 
-Come lavora:
-  1. ogni regola diventa un'espressione che CONTA le righe che la violano;
-  2. ogni espressione viene prima provata sullo schema, senza leggere dati: una
-     regola che non si può valutare (colonna che non c'è, tipo che non c'entra,
-     SQL che non compila) NON regge, e dice perché — un contratto non passa mai
-     perché non lo si è potuto controllare;
-  3. tutti i conteggi si calcolano in UNA passata sul parquet;
-  4. solo per le regole violate si torna a leggere, per portare qualche valore
-     di esempio.
+How it works:
+  1. every rule becomes an expression that COUNTS the rows violating it;
+  2. every expression is tried on the schema first, reading no data: a rule that
+     cannot be evaluated (a column that is not there, a type that does not fit, SQL that
+     does not compile) does NOT hold, and says why — a contract never passes because it
+     could not be checked;
+  3. all the counts are computed in ONE pass over the parquet;
+  4. only for the violated rules is the data read again, to bring a few sample values.
 
-Il referto è fatto di DATI (quante violazioni, che cosa si è osservato), non di
-frasi: la frase la costruisce l'interfaccia, nella lingua di chi guarda.
+The report is made of DATA (how many violations, what was observed), not sentences:
+the interface builds the sentence, in the reader's language.
 """
 from __future__ import annotations
 
@@ -28,16 +27,16 @@ from typing import Any, Callable
 import polars as pl
 
 SEVERITIES = ("warning", "error")
-MAX_SAMPLES = 5          # valori di esempio per regola violata
-MAX_SAMPLE_CHARS = 80    # ognuno tagliato qui
-MAX_SAMPLED_RULES = 25   # ogni esempio è un'altra lettura: oltre, si riportano solo i conteggi
-ENUM_MAX_DISTINCT = 12   # la proposta suggerisce «valori ammessi» fino a tanti valori distinti
+MAX_SAMPLES = 5          # sample values per violated rule
+MAX_SAMPLE_CHARS = 80    # each cut here
+MAX_SAMPLED_RULES = 25   # every sample is another read: beyond this, only the counts are reported
+ENUM_MAX_DISTINCT = 12   # the proposal suggests «accepted values» up to this many distinct values
 
 
 # ── tipi ─────────────────────────────────────────────────────────────────────
 def family(dtype: pl.DataType) -> str:
-    """La famiglia di un tipo, cioè ciò che un contratto promette: non «Int32»
-    (un dettaglio del motore, che cambia da un motore all'altro) ma «intero»."""
+    """A type's family, which is what a contract promises: not «Int32» (an engine's detail,
+    which changes from one engine to another) but «integer»."""
     if dtype.is_integer():
         return "integer"
     if dtype.is_numeric():
@@ -54,26 +53,26 @@ def family(dtype: pl.DataType) -> str:
 
 
 def _fits(actual: str, wanted: str) -> bool:
-    # un intero è anche un numero: chi promette «numero» accetta entrambi
+    # an integer is a number too: whoever promises «number» accepts both
     return actual == wanted or (wanted == "number" and actual == "integer")
 
 
-# ── una regola pronta da valutare ────────────────────────────────────────────
+# ── a rule ready to evaluate ────────────────────────────────────────────
 @dataclass
 class Check:
-    """Come si valuta una regola. O è già decisa (`fixed`), o è un conteggio da
-    fare sui dati (`violations`), con la maschera delle righe che violano e la
-    colonna da cui prendere gli esempi."""
-    fixed: dict | None = None            # {passed, ...} deciso senza contare
-    violations: pl.Expr | None = None    # quante righe violano
-    offending: pl.Expr | None = None     # quali (per gli esempi)
-    sample_of: pl.Expr | None = None     # che cosa mostrare di quelle righe
-    observe: pl.Expr | None = None       # un valore osservato da riportare (es. il più recente)
-    decide: Callable[[Any], dict] | None = None  # da `observe` all'esito
+    """How a rule is evaluated. Either decided already (`fixed`), or a count to make on the
+    data (`violations`), with the mask of the violating rows and the column to take the
+    samples from."""
+    fixed: dict | None = None            # {passed, ...} decided without counting
+    violations: pl.Expr | None = None    # how many rows violate
+    offending: pl.Expr | None = None     # which ones (for the samples)
+    sample_of: pl.Expr | None = None     # what to show of those rows
+    observe: pl.Expr | None = None       # an observed value to report (the most recent, say)
+    decide: Callable[[Any], dict] | None = None  # from `observe` to the outcome
 
 
 class RuleError(ValueError):
-    """La regola non si può valutare su questi dati (o è scritta male)."""
+    """The rule cannot be evaluated on this data (or it is badly written)."""
 
 
 _BUILDERS: dict[str, Callable[[dict, "Ctx"], Check]] = {}
@@ -102,7 +101,7 @@ class Ctx:
 
 
 def _literal(value: Any, dtype: pl.DataType) -> Any:
-    """Un estremo di intervallo scritto nel contratto (JSON) nel tipo della colonna."""
+    """A range bound written in the contract (JSON) in the column's type."""
     fam = family(dtype)
     try:
         if fam == "date":
@@ -119,7 +118,7 @@ def _literal(value: Any, dtype: pl.DataType) -> Any:
 
 @rule("column")
 def _column(r: dict, ctx: Ctx) -> Check:
-    """La colonna esiste e, se è detto, è della famiglia promessa."""
+    """The column exists and, when said, is of the promised family."""
     name = r.get("column")
     if not name or name not in ctx.schema:
         return Check(fixed={"passed": False, "observed": None, "expected": r.get("dtype") or "present"})
@@ -154,19 +153,19 @@ def _accepted_values(r: dict, ctx: Ctx) -> Check:
         raise RuleError("the list of accepted values is empty")
     c = pl.col(name)
     fam = family(ctx.schema[name])
-    # Il contratto è JSON e chi lo scrive non conosce il tipo fisico: «3» deve
-    # combaciare con 3, e 3 con 3.0. Quindi i valori si portano nel tipo della
-    # colonna dove un tipo c'è; altrimenti si confronta sulla forma scritta.
+    # The contract is JSON and whoever writes it does not know the physical type: «3»
+    # must match 3, and 3 match 3.0. So the values are brought to the column's type
+    # where there is one; otherwise they are compared as written.
     inside = None
     if fam in ("integer", "number"):
         try:
             inside = c.cast(pl.Float64).is_in([float(v) for v in values if not isinstance(v, bool)])
         except (TypeError, ValueError):
-            pass  # un valore che non è un numero: confronto sul testo
+            pass  # a value that is not a number: compared as text
     elif fam == "boolean":
-        veri = {True: True, False: False, "true": True, "false": False, "1": True, "0": False, 1: True, 0: False}
+        true_ones = {True: True, False: False, "true": True, "false": False, "1": True, "0": False, 1: True, 0: False}
         try:
-            inside = c.is_in([veri[v.strip().lower() if isinstance(v, str) else v] for v in values])
+            inside = c.is_in([true_ones[v.strip().lower() if isinstance(v, str) else v] for v in values])
         except KeyError as e:
             raise RuleError(f"'{e.args[0]}' is not a boolean") from e
     if inside is None:
@@ -205,7 +204,7 @@ def _pattern(r: dict, ctx: Ctx) -> Check:
     except re.error as e:
         raise RuleError(f"invalid pattern: {e}") from e
     c = pl.col(name)
-    # per INTERO: «^[A-Z]+» senza ancora finale accetterebbe «ABC-qualunque-cosa»
+    # WHOLE: «^[A-Z]+» without a final anchor would accept «ABC-anything-at-all»
     bad = c.is_not_null() & ~c.cast(pl.String).str.contains(f"^(?:{regex})$")
     return Check(violations=bad.sum(), offending=bad, sample_of=c)
 
@@ -230,13 +229,13 @@ def _freshness(r: dict, ctx: Ctx) -> Check:
         raise RuleError("the maximum age must be a positive number of hours")
     limit = ctx.now - timedelta(hours=hours)
 
-    def esito(newest: datetime | None) -> dict:
+    def outcome(newest: datetime | None) -> dict:
         age = None if newest is None else round((ctx.now - newest).total_seconds() / 3600, 2)
         return {"passed": newest is not None and newest >= limit, "observed": age, "expected": hours}
 
     if not r.get("column"):
-        # età dello snapshot: quando i dati sono stati prodotti
-        return Check(fixed=esito(ctx.snapshot_at or ctx.now))
+        # the snapshot's age: when the data was produced
+        return Check(fixed=outcome(ctx.snapshot_at or ctx.now))
     name = ctx.col(r)
     fam = family(ctx.schema[name])
     if fam not in ("date", "datetime"):
@@ -245,7 +244,7 @@ def _freshness(r: dict, ctx: Ctx) -> Check:
     def decide(newest: Any) -> dict:
         if isinstance(newest, date) and not isinstance(newest, datetime):
             newest = datetime(newest.year, newest.month, newest.day, 23, 59, 59)
-        return esito(newest)
+        return outcome(newest)
 
     return Check(observe=pl.col(name).max(), decide=decide)
 
@@ -256,15 +255,15 @@ def _expression(r: dict, ctx: Ctx) -> Check:
     if not sql or not isinstance(sql, str):
         raise RuleError("the expression is empty")
     try:
-        expr = pl.sql_expr(sql)  # solo espressioni: niente statement, niente tabelle
+        expr = pl.sql_expr(sql)  # expressions only: no statements, no tables
     except Exception as e:
         raise RuleError(f"invalid expression: {e}") from e
-    # un esito «non lo so» (null) non è un sì: la riga viola
+    # an «I don't know» outcome (null) is not a yes: the row violates
     bad = ~expr.cast(pl.Boolean).fill_null(False)
     return Check(violations=bad.sum(), offending=bad)
 
 
-# ── valutazione ──────────────────────────────────────────────────────────────
+# ── evaluation ──────────────────────────────────────────────────────────────
 def _cut(v: Any) -> Any:
     if v is None or isinstance(v, (bool, int, float)):
         return v
@@ -273,7 +272,7 @@ def _cut(v: Any) -> Any:
 
 
 def _plain(v: Any) -> Any:
-    """Un valore osservato in forma JSON."""
+    """An observed value in JSON form."""
     if isinstance(v, (datetime, date)):
         return v.isoformat()
     if isinstance(v, dict):
@@ -291,10 +290,10 @@ def evaluate(
     lf: pl.LazyFrame, document: dict, *, now: datetime | None = None, snapshot_at: datetime | None = None,
     samples: bool = True,
 ) -> dict:
-    """Il referto del contratto `document` sui dati `lf`.
+    """The report of the contract `document` on the data `lf`.
 
-    `snapshot_at`: quando i dati sono stati prodotti (per la freschezza dello
-    snapshot); assente = adesso, cioè dati appena scritti."""
+    `snapshot_at`: when the data was produced (for the snapshot's freshness); absent =
+    now, data just written."""
     ctx = Ctx(schema=dict(lf.collect_schema()), now=_naive_utc(now) or datetime.now(timezone.utc).replace(tzinfo=None),
               snapshot_at=_naive_utc(snapshot_at))
     rules = [r for r in (document.get("rules") or []) if isinstance(r, dict)]
@@ -303,7 +302,7 @@ def evaluate(
 
     for i, r in enumerate(rules):
         base = {"id": r.get("id"), "kind": r.get("kind"), "severity": r.get("severity")}
-        # su che cosa era la regola: chi legge il referto non deve avere il contratto sotto mano
+        # what the rule was on: whoever reads the report must not need the contract at hand
         base.update({k: r[k] for k in ("column", "columns", "name") if r.get(k)})
         builder = _BUILDERS.get(r.get("kind"))
         try:
@@ -312,14 +311,14 @@ def evaluate(
             if builder is None:
                 raise RuleError(f"unknown rule kind '{r.get('kind')}'")
             check = builder(r, ctx)
-            # la prova sullo schema: niente dati letti, ma tipi e nomi sì
+            # the check on the schema: no data read, but types and names are
             exprs = [e for e in (check.violations, check.observe) if e is not None]
             if exprs:
                 lf.select(exprs).collect_schema()
         except RuleError as e:
             results[i] = {**base, "passed": False, "error": str(e)}
             continue
-        except Exception as e:  # Polars: tipo che non c'entra, colonna usata dall'espressione che non c'è…
+        except Exception as e:  # Polars: a type that does not fit, a column the expression uses that is not there…
             results[i] = {**base, "passed": False, "error": str(e).splitlines()[0][:300]}
             continue
         if check.fixed is not None:
@@ -328,7 +327,7 @@ def evaluate(
             checks[i] = check
             results[i] = base
 
-    # UNA passata per tutti i conteggi
+    # ONE pass for all the counts
     rows = None
     aggregates = [pl.len().alias("__rows")]
     for i, c in checks.items():
@@ -344,29 +343,29 @@ def evaluate(
             results[i].update(c.decide(value))
             results[i]["observed"] = _plain(results[i].get("observed"))
 
-    # qualche esempio, solo dove serve
+    # a few samples, only where needed
     if samples:
         failed = [i for i, c in checks.items() if c.offending is not None and not results[i]["passed"]]
         for i in failed[:MAX_SAMPLED_RULES]:
             c = checks[i]
             what = c.sample_of if c.sample_of is not None else (pl.col(rules[i]["column"]) if rules[i].get("column") else None)
             if what is None or rules[i].get("kind") == "not_null":
-                continue  # di un null non c'è niente da mostrare
+                continue  # there is nothing to show of a null
             try:
                 got = lf.filter(c.offending).select(what.alias("v")).unique().head(MAX_SAMPLES).collect()
                 results[i]["sample"] = [_cut(_plain(v)) for v in got["v"].to_list()]
             except Exception:
-                pass  # l'esempio è un di più: il conteggio c'è già
+                pass  # the sample is an extra: the count is there already
 
     ordered = [results[i] for i in range(len(rules))]
     broken = [x for x in ordered if not x["passed"]]
     outcome = "failed" if any(x["severity"] == "error" for x in broken) else "warning" if broken else "passed"
-    # una regola scritta male (severità assente) conta come errore: non deve passare in silenzio
+    # a badly written rule (no severity) counts as an error: it must not pass silently
     if any(x["severity"] not in SEVERITIES for x in broken):
         outcome = "failed"
     return {
         "outcome": outcome,
-        "version": document.get("version"),  # di quale versione del contratto è questo referto
+        "version": document.get("version"),  # which version of the contract this report is of
         "rows": rows,
         "errors": sum(1 for x in broken if x["severity"] != "warning"),
         "warnings": sum(1 for x in broken if x["severity"] == "warning"),
@@ -374,9 +373,9 @@ def evaluate(
     }
 
 
-# ── profilo e proposta ───────────────────────────────────────────────────────
+# ── profile and proposal ───────────────────────────────────────────────────────
 def profile(lf: pl.LazyFrame) -> dict:
-    """Che cosa c'è nei dati, colonna per colonna: la base per PROPORRE un contratto."""
+    """What is in the data, column by column: the base to PROPOSE a contract."""
     schema = dict(lf.collect_schema())
     names = list(schema)
     aggs = [pl.len().alias("__rows")]
@@ -393,8 +392,8 @@ def profile(lf: pl.LazyFrame) -> dict:
         col = {"name": n, "dtype": str(schema[n]), "family": fam, "nulls": int(row[f"n{i}"]), "distinct": int(row[f"d{i}"])}
         if f"lo{i}" in row:
             col["min"], col["max"] = _plain(row[f"lo{i}"]), _plain(row[f"hi{i}"])
-        # i pochi valori distinti di un testo sono candidati a «valori ammessi»; di
-        # un booleano no: che siano vero e falso lo dice già il tipo
+        # a text's few distinct values are candidates for «accepted values»; a boolean's
+        # are not: the type already says they are true and false
         if fam == "string" and 0 < col["distinct"] <= ENUM_MAX_DISTINCT and rows > col["distinct"] * 2:
             vals = lf.select(pl.col(n)).unique().drop_nulls().head(ENUM_MAX_DISTINCT).collect()[n].to_list()
             col["values"] = sorted(_plain(v) for v in vals)
@@ -403,12 +402,12 @@ def profile(lf: pl.LazyFrame) -> dict:
 
 
 def propose(prof: dict) -> dict:
-    """Un contratto di partenza dal profilo dei dati di OGGI, da correggere a mano.
+    """A starting contract from the profile of TODAY's data, to correct by hand.
 
-    Prudente apposta: promette ciò che è strutturale (le colonne e i loro tipi,
-    che ci sia almeno una riga) come ERRORE, e ciò che è solo vero oggi (nessun
-    null, nessun doppione, pochi valori distinti) come AVVISO — una proposta
-    troppo severa fermerebbe il prossimo aggiornamento per un caso mai visto."""
+    Careful on purpose: it promises what is structural (the columns and their types, at
+    least one row) as an ERROR, and what is only true today (no nulls, no duplicates, few
+    distinct values) as a WARNING — a proposal too strict would stop the next refresh for
+    a case never seen."""
     rules: list[dict] = []
     rows = prof.get("rows") or 0
 

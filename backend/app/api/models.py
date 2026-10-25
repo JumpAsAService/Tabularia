@@ -7,38 +7,38 @@ from typing import Any, Literal, Optional
 # Request/Response Models
 # ─────────────────────────────────────────────────────────────────────────────
 class TransformOperation(BaseModel):
-    type: str = Field(..., description="Tipo di operazione (es. filter, aggregate, join)")
-    params: dict[str, Any] = Field(default_factory=dict, description="Parametri dell'operazione")
+    type: str = Field(..., description="The operation's type (filter, aggregate, join…)")
+    params: dict[str, Any] = Field(default_factory=dict, description="The operation's parameters")
 
 
 class TransformDataRequest(BaseModel):
     bucket: str = Field(..., description="Nome del bucket S3")
-    input_key: str = Field(..., description="Chiave del file di input")
-    output_key: str = Field(..., description="Chiave del file di output")
-    operations: list[TransformOperation] = Field(..., description="Lista di operazioni da applicare")
-    # destinazione opzionale (nodo Output): {"type": "database"|"s3",
-    # "connection": …, "target": …}; la secret nella connection è
-    # Fernet-cifrata, come per l'ingest
+    input_key: str = Field(..., description="Key of the input file")
+    output_key: str = Field(..., description="Key of the output file")
+    operations: list[TransformOperation] = Field(..., description="The operations to apply")
+    # an optional destination (Output node): {"type": "database"|"s3",
+    # "connection": …, "target": …}; the secret in the connection is Fernet-encrypted,
+    # as for the ingest
     destination: Optional[dict[str, Any]] = Field(
-        default=None, description="Destinazione opzionale (database o S3)"
+        default=None, description="An optional destination (database or S3)"
     )
-    # copia BEST-EFFORT su S3 esterno, in aggiunta all'output: stessa forma di
-    # `destination` ({"connection": …, "target": …}) ma un suo errore NON fa
-    # fallire il task — output e datasource restano il risultato primario
+    # a BEST-EFFORT copy to an external S3, in addition to the output: the same shape as
+    # `destination` ({"connection": …, "target": …}) but its error does NOT fail the
+    # task — output and datasource stay the primary result
     mirror: Optional[dict[str, Any]] = Field(
-        default=None, description="Copia best-effort su S3 esterno (in aggiunta all'output)"
+        default=None, description="A best-effort copy to an external S3 (in addition to the output)"
     )
-    # invio dell'output come allegato email: stessa forma di `destination`
-    # ({"connection": …, "target": …}) più `stop_on_failure`. La secret nella
-    # connection è Fernet-cifrata, e i destinatari sono già stati validati dal
-    # gateway contro i domini ammessi della connessione.
+    # emailing the output as an attachment: the same shape as `destination`
+    # ({"connection": …, "target": …}) plus `stop_on_failure`. The secret in the
+    # connection is Fernet-encrypted, and the gateway has validated the recipients
+    # against the connection's allowed domains already.
     email: Optional[dict[str, Any]] = Field(
-        default=None, description="Invio dell'output come email con allegato"
+        default=None, description="Sending the output as an email attachment"
     )
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
-    # data contract della datasource su cui l'output verrà pubblicato: valutato
-    # sul parquet appena scritto, il referto torna col risultato del task
-    contract: Optional[dict[str, Any]] = Field(default=None, description="Data contract da valutare sull'output")
+    # the data contract of the datasource the output will be published to: evaluated on
+    # the parquet just written, the report comes back with the task's result
+    contract: Optional[dict[str, Any]] = Field(default=None, description="The data contract to evaluate on the output")
 
 
 class TaskResponse(BaseModel):
@@ -52,9 +52,9 @@ class TaskStatusResponse(BaseModel):
     status: str
     result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
-    error_detail: Optional[str] = None  # traceback completo su FAILURE (per il debug)
+    error_detail: Optional[str] = None  # the whole traceback on FAILURE (for debugging)
     message: Optional[str] = None
-    # STARTED: a che punto è un import (fase, righe, file) — vedi jobs._Avanzamento
+    # STARTED: how far an import is (phase, rows, file) — see jobs._Avanzamento
     progress: Optional[dict[str, Any]] = None
 
 
@@ -64,23 +64,23 @@ class PreviewRequest(BaseModel):
     operations: list[TransformOperation] = Field(
         default_factory=list, description="Flow da applicare (IR dichiarativa)"
     )
-    limit: int = Field(default=100, ge=1, le=1000, description="Righe massime nel campione")
+    limit: int = Field(default=100, ge=1, le=1000, description="The most rows in the sample")
     engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
-    no_cache: bool = Field(default=False, description="Non scrivere/leggere la step-cache (query esplorative del Viewer)")
-    # Slot della preview: in ogni slot conta solo l'ULTIMA richiesta — una nuova
-    # butta giu' la precedente (vedi api/preview_slots.py). Assente = come prima.
-    # Per conto di chi gira: "ai" = query dell'assistente → utenza ClickHouse
-    # dedicata, se configurata (engine/principal.py). È solo un DECLASSAMENTO:
-    # dichiararlo non dà nulla in più, quindi non serve proteggerlo.
-    principal: Optional[str] = Field(default=None, pattern=r"^ai$", description="Identità della query: 'ai' = assistente")
+    no_cache: bool = Field(default=False, description="Neither write nor read the step cache (the Viewer's exploratory queries)")
+    # The preview's slot: in every slot only the LAST request counts — a new one knocks
+    # down the previous (see api/preview_slots.py). Absent = as before.
+    # On whose behalf it runs: "ai" = the assistant's query → the dedicated ClickHouse
+    # user, when configured (engine/principal.py). Only a DOWNGRADE: declaring it gives
+    # nothing more, so it needs no protection.
+    principal: Optional[str] = Field(default=None, pattern=r"^ai$", description="The query's identity: 'ai' = the assistant")
     slot: Optional[str] = Field(default=None, max_length=96, pattern=r"^[A-Za-z0-9:_-]+$",
-                                description="Slot: una nuova preview sullo stesso slot annulla la precedente")
-    # Le chiavi entrano nell'IDENTITA' della copia materializzata: variarle genera
-    # copie distinte dello stesso dato. Senza un tetto, una richiesta ripetuta con
-    # chiavi sempre diverse riempirebbe il disco del server condiviso.
+                                description="Slot: a new preview on the same slot cancels the previous one")
+    # The keys are part of the materialized copy's IDENTITY: varying them makes distinct
+    # copies of the same data. Without a cap, a request repeated with ever different
+    # keys would fill the shared server's disk.
     sort_keys: list[str] = Field(
         default_factory=list, max_length=8,
-        description="Colonne di ORDER BY che la copia materializzata (ClickHouse) deve ereditare",
+        description="ORDER BY columns the materialized copy (ClickHouse) must inherit",
     )
 
     @field_validator("sort_keys")
@@ -97,17 +97,17 @@ class PreviewRequest(BaseModel):
 
 
 class ExportRequest(BaseModel):
-    """Download diretto del risultato di una catena (anche parziale, fino a un
-    nodo intermedio): csv in streaming, xlsx col tetto righe del formato."""
+    """Downloading a chain's result directly (partial too, up to an intermediate node):
+    csv streamed, xlsx with the format's row cap."""
     bucket: str = Field(..., description="Nome del bucket S3")
     input_key: str = Field(..., description="Chiave del parquet di input")
     operations: list[TransformOperation] = Field(
-        default_factory=list, description="Catena fino al nodo da esportare"
+        default_factory=list, description="The chain up to the node to export"
     )
-    format: Literal["csv", "xlsx"] = Field(default="csv", description="Formato del file")
-    limit: Optional[int] = Field(default=None, ge=1, description="Righe massime (opzionale)")
-    filename: Optional[str] = Field(default=None, description="Nome file suggerito al browser")
-    engine: Optional[str] = Field(default=None, description="Motore che calcola lo snapshot (dialetto compute); il file è poi scritto da Polars")
+    format: Literal["csv", "xlsx"] = Field(default="csv", description="The file's format")
+    limit: Optional[int] = Field(default=None, ge=1, description="The most rows (optional)")
+    filename: Optional[str] = Field(default=None, description="The file name suggested to the browser")
+    engine: Optional[str] = Field(default=None, description="The engine that computes the snapshot (compute dialect); Polars then writes the file")
 
 
 class ExportStart(ExportRequest):

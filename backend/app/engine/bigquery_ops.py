@@ -1,28 +1,26 @@
 """
-Registry delle operazioni per l'engine BigQuery, parallelo a `chdb_ops.py`:
-puro SQL (dialetto GoogleSQL), ogni operazione riceve la SELECT dello step
-precedente e la avvolge in una subquery. La catena e' un'unica query che
-BigQuery pianifica ed esegue in una volta.
+The registry of the BigQuery engine's operations, parallel to `chdb_ops.py`: pure
+SQL (GoogleSQL dialect), every operation receives the previous step's SELECT and wraps
+it in a subquery. The chain is one query BigQuery plans and runs at once.
 
-Firma: `(sql, params, ctx)`. `ctx` serve per l'introspezione delle colonne
-(`ctx.columns_of` / `ctx.schema_of`, che su BigQuery e' un DRY RUN: gratuito)
-e per le operazioni MULTI-INPUT (join/union) che leggono il lato destro
-(`ctx.build_right`).
+Signature: `(sql, params, ctx)`. `ctx` serves the column introspection
+(`ctx.columns_of` / `ctx.schema_of`, which on BigQuery is a DRY RUN: free) and the
+MULTI-INPUT operations (join/union) that read the right side (`ctx.build_right`).
 
-Standard cross-engine (vedi operations.py e test_data_correctness.py): NULL,
-cast «try» (fallito → NULL), join con suffisso _right, pivot con etichette
-ordinate, datetime naive UTC (BigQuery: DATETIME). Dove BigQuery non ha un
-equivalente esatto lo si dice qui accanto all'operazione.
+The cross-engine standard (see operations.py and test_data_correctness.py): NULLs,
+«try» casts (failed → NULL), joins with the _right suffix, pivots with sorted labels,
+naive UTC datetimes (BigQuery: DATETIME). Where BigQuery has no exact equivalent it
+is said next to the operation.
 
-Nomi colonna: BigQuery ammette solo [A-Za-z0-9_] (e normalizza da solo quelli
-del parquet: "Ragione Sociale" → Ragione_Sociale). Le operazioni ragionano nei
-nomi ORIGINALI e ogni identificatore passa da `ctx.qi(nome)`, che lo traduce
-nel nome sicuro registrato nel contesto; il motore ritraduce i risultati.
-`ctx.columns_of`/`schema_of` rispondono gia' nei nomi originali.
+Column names: BigQuery allows only [A-Za-z0-9_] (and normalizes the parquet's by
+itself: "Company Name" → Company_Name). The operations reason in the ORIGINAL names and
+every identifier goes through `ctx.qi(name)`, which turns it into the safe name
+registered in the context; the engine translates the results back.
+`ctx.columns_of`/`schema_of` answer in the original names already.
 
-Sicurezza: le operazioni strutturali usano solo nomi colonna / operatori /
-valori. `compute` e `sql` accettano espressioni ma vietano subquery, DDL/DML,
-EXTERNAL_QUERY, ML/AI e gli statement di script.
+Security: the structural operations use only column names / operators / values.
+`compute` and `sql` take expressions but forbid subqueries, DDL/DML, EXTERNAL_QUERY,
+ML/AI and script statements.
 """
 from __future__ import annotations
 
@@ -30,7 +28,7 @@ import re
 from typing import Any, Callable
 
 from app.engine.context import MAX_CROSS_JOIN_ROWS
-from app.engine.espressioni import espressione_vietata
+from app.engine.expressions import forbidden_expression
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
@@ -63,13 +61,13 @@ def get_bigquery_operation(name: str) -> BqOpFn:
 
 # ── helper SQL (dialetto GoogleSQL) ───────────────────────────────────────────
 def _qi(name: str) -> str:
-    """Quota un identificatore con i backtick (GoogleSQL)."""
+    """Quotes an identifier with backticks (GoogleSQL)."""
     return "`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`"
 
 
 def _lit(v: Any) -> str:
-    """Letterale SQL da un valore Python (gia' parsato dal frontend). BigQuery
-    NON converte implicitamente: un BOOL si confronta solo con TRUE/FALSE."""
+    """A SQL literal from a Python value (parsed by the frontend already). BigQuery does NOT
+    convert implicitly: a BOOL compares only with TRUE/FALSE."""
     if v is None:
         return "NULL"
     if isinstance(v, bool):
@@ -93,7 +91,7 @@ def _sub(sql: str) -> str:
     return f"({sql})"
 
 
-# tipi BigQuery (come li riporta lo schema di un job) → famiglia
+# BigQuery types (as a job's schema reports them) → family
 _BQ_INTS = {"INTEGER", "INT64"}
 _BQ_FLOATS = {"FLOAT", "FLOAT64"}
 _BQ_DECIMALS = {"NUMERIC", "BIGNUMERIC", "DECIMAL", "BIGDECIMAL"}
@@ -101,7 +99,7 @@ _BQ_TEXT = {"STRING"}
 _CAST_TYPES = {"int", "float", "str", "bool", "date", "datetime"}
 
 
-# ── colonne ───────────────────────────────────────────────────────────────────
+# ── columns ───────────────────────────────────────────────────────────────────
 @_register("select")
 def op_select(sql, params, ctx):
     cols = ", ".join(ctx.qi(c) for c in _require(params, "columns"))
@@ -130,10 +128,10 @@ def op_rename(sql, params, ctx):
 
 
 def _cast_expr(c: str, base: str, dt: str) -> str:
-    """Stesso STANDARD del cast di Polars/DuckDB/ClickHouse: fallito → NULL
-    (SAFE_CAST); testo con spazi tagliati; testo → intero solo se intero
-    letterale; numero → intero per troncamento (CAST arrotonderebbe); float →
-    testo con ".0" sui valori interi (BigQuery stamperebbe 200.0 come "200")."""
+    """The same STANDARD as Polars'/DuckDB's/ClickHouse's cast: failed → NULL (SAFE_CAST);
+    text with its spaces trimmed; text → integer only for an integer literal; number →
+    integer by truncation (CAST would round); float → text with ".0" on whole values
+    (BigQuery would print 200.0 as "200")."""
     is_text = base in _BQ_TEXT
     is_float = base in _BQ_FLOATS or base in _BQ_DECIMALS
     if dt == "int":
@@ -153,15 +151,15 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
         return f"SAFE_CAST({c} AS STRING)"
     if dt == "date":
         if is_text:
-            # SAFE_CAST accetta solo YYYY-MM-DD e rifiuta le date impossibili
-            # ("2024-02-30" → NULL), come Polars/DuckDB
+            # SAFE_CAST accepts only YYYY-MM-DD and refuses impossible dates
+            # ("2024-02-30" → NULL), as Polars/DuckDB
             return f"SAFE_CAST(TRIM({c}) AS DATE)"
         if base == "TIMESTAMP":
             return f"DATE({c}, 'UTC')"
         return f"SAFE_CAST({c} AS DATE)"
     if dt == "datetime":
         if is_text:
-            # ISO con 'T' o spazio; il resto → NULL (Polars/DuckDB: solo l'ISO)
+            # ISO with 'T' or a space; the rest → NULL (Polars/DuckDB: ISO only)
             return f"SAFE_CAST(TRIM({c}) AS DATETIME)"
         if base == "TIMESTAMP":
             return f"DATETIME({c}, 'UTC')"
@@ -191,7 +189,7 @@ def op_cast(sql, params, ctx):
     return f"SELECT * REPLACE ({', '.join(repls)}) FROM {_sub(sql)}"
 
 
-# ── filtri ────────────────────────────────────────────────────────────────────
+# ── filters ────────────────────────────────────────────────────────────────────
 def _predicate(ctx, column: str, operator: str, value: Any) -> str:
     c = ctx.qi(column)
     if operator == "is_null":
@@ -228,7 +226,7 @@ def op_filter(sql, params, ctx):
     return f"SELECT * FROM {_sub(sql)} WHERE {pred}"
 
 
-# ── riordino / righe ──────────────────────────────────────────────────────────
+# ── ordering / rows ──────────────────────────────────────────────────────────
 @_register("sort")
 def op_sort(sql, params, ctx):
     # the keys and a direction each (operations.sort_keys: `ignore_missing` too)
@@ -246,8 +244,8 @@ def op_limit(sql, params, ctx):
 
 @_register("sample")
 def op_sample(sql, params, ctx):
-    # campione casuale DETERMINISTICO: hash del contenuto della riga (+ seme).
-    # Righe diverse dagli altri engine (hash diverso), ma le stesse a ogni run.
+    # a DETERMINISTIC random sample: hash of the row's content (+ seed). Other rows than
+    # the other engines' (another hash), but the same at every run.
     threshold, seed = sample_threshold(params)
     return (
         f"SELECT * FROM {_sub(sql)} AS _r WHERE "
@@ -260,7 +258,7 @@ def op_unique(sql, params, ctx):
     subset = params.get("subset")
     if subset:
         part = ", ".join(ctx.qi(c) for c in subset)
-        # una riga per combinazione (quale, come su ClickHouse, non e' garantito)
+        # one row per combination (which one, as on ClickHouse, is not guaranteed)
         return f"SELECT * FROM {_sub(sql)} QUALIFY ROW_NUMBER() OVER (PARTITION BY {part}) = 1"
     return f"SELECT DISTINCT * FROM {_sub(sql)}"
 
@@ -279,9 +277,9 @@ def op_drop_nulls(sql, params, ctx):
     return f"SELECT * FROM {_sub(sql)} WHERE {cond}"
 
 
-# ── aggregazione ──────────────────────────────────────────────────────────────
-# `median` non ha un aggregato ESATTO in BigQuery: e' calcolata a parte con
-# PERCENTILE_CONT (analitica) e agganciata per chiave (vedi op_group_by).
+# ── aggregation ───────────────────────────────────────────────────────────────
+# `median` has no EXACT aggregate in BigQuery: it is computed separately with
+# PERCENTILE_CONT (analytic) and joined by key (see op_group_by).
 _AGG = {
     "sum": "SUM", "mean": "AVG", "min": "MIN", "max": "MAX", "count": "COUNT",
     "std": "STDDEV_SAMP", "var": "VAR_SAMP",
@@ -303,7 +301,7 @@ def op_group_by(sql, params, ctx):
     base = _sub(sql)
     out: list[str] = [f"a.{ctx.qi(c)}" for c in by]
     parts = [by_sql]
-    medians: list[tuple[str, str]] = []  # (colonna, alias)
+    medians: list[tuple[str, str]] = []  # (column, alias)
     for agg in aggs:
         col, func = agg["column"], agg.get("func", "sum")
         if func not in _AGG:
@@ -318,15 +316,15 @@ def op_group_by(sql, params, ctx):
     agg_sql = f"SELECT {', '.join(parts)} FROM {base} GROUP BY {by_sql}"
     if not medians:
         return agg_sql
-    # mediana ESATTA: PERCENTILE_CONT e' solo analitica → una riga per chiave
-    # (DISTINCT) e join sulle chiavi con semantica NULL-safe
+    # the EXACT median: PERCENTILE_CONT is analytic only → one row per key (DISTINCT)
+    # and a join on the keys with NULL-safe semantics
     med_cols = ", ".join(f"PERCENTILE_CONT({ctx.qi(c)}, 0.5) OVER (PARTITION BY {by_sql}) AS {ctx.qi(a)}" for c, a in medians)
     med_sql = f"SELECT DISTINCT {by_sql}, {med_cols} FROM {base}"
     on = " AND ".join(f"a.{ctx.qi(c)} IS NOT DISTINCT FROM m.{ctx.qi(c)}" for c in by)
     return f"SELECT {', '.join(out)} FROM ({agg_sql}) AS a LEFT JOIN ({med_sql}) AS m ON {on}"
 
 
-# ── compute (espressioni scalari, SENZA subquery né accesso esterno) ──────────
+# ── compute (scalar expressions, WITHOUT subqueries or external access) ──────────
 # The expression is written in the other engines' dialect (DuckDB/Polars SQL, then
 # translated below): it is parsed in that dialect, so EXTRACT(YEAR FROM d) passes
 # and a subquery or a table function does not (see app/engine/espressioni.py).
@@ -336,9 +334,9 @@ _BIGQUERY_ONLY = re.compile(r"\b(?:external_query|ml\.|ai\.|session_user)", re.I
 
 
 def to_bigquery_expr(expr: str) -> str:
-    """Traduce un'espressione scalare dal dialetto degli altri motori (DuckDB/
-    Polars SQL: `%`, strftime, date_part…) in GoogleSQL con sqlglot. Best-effort:
-    se non si lascia analizzare resta com'e' (magari e' gia' GoogleSQL)."""
+    """Translates a scalar expression from the other engines' dialect (DuckDB/Polars SQL:
+    `%`, strftime, date_part…) into GoogleSQL with sqlglot. Best effort: when it cannot
+    be parsed it stays as it is (perhaps it is GoogleSQL already)."""
     try:
         import sqlglot
 
@@ -359,7 +357,7 @@ def op_compute(sql, params, ctx):
         expr = str(c.get("expr") or "").strip()
         if not name or not expr:
             raise EngineError("compute: name and expression are required")
-        if espressione_vietata(expr, "duckdb") or _BIGQUERY_ONLY.search(expr):
+        if forbidden_expression(expr, "duckdb") or _BIGQUERY_ONLY.search(expr):
             raise EngineError(
                 f"compute: the expression of '{name}' is not allowed (no subqueries, "
                 "FROM or external functions — scalar expressions only)."
@@ -373,7 +371,7 @@ def op_compute(sql, params, ctx):
     return sql
 
 
-# ── Execute SQL (query libera sull'input, dialetto GoogleSQL) ─────────────────
+# ── Execute SQL (a free query on the input, GoogleSQL dialect) ─────────────────
 _SQL_FORBIDDEN = re.compile(
     r"\b(?:insert|update|delete|merge|create|alter|drop|truncate|grant|revoke|"
     r"export|load|call|execute|declare|begin|set|external_query|ml\.|ai\.|"
@@ -384,8 +382,8 @@ _SQL_FORBIDDEN = re.compile(
 
 @_register("sql")
 def op_sql(sql, params, ctx):
-    """Query libera sull'input del nodo, esposto come CTE `self` (alias `input`),
-    stessa convenzione degli altri motori. Composabile come ogni altra op."""
+    """A free query on the node's input, exposed as the CTE `self` (alias `input`), the
+    other engines' convention. Composable as any other op."""
     query = str(_require(params, "query")).strip().rstrip(";").strip()
     if not query:
         raise EngineError("sql: the query is empty")
@@ -400,15 +398,15 @@ def op_sql(sql, params, ctx):
             "sql: the query may only read the node's input. DDL/DML, scripts, "
             "EXTERNAL_QUERY, ML/AI and references to the project's tables are not allowed."
         )
-    # lista BIANCA: `dataset.tabella` si scrive anche SENZA backtick, e la
-    # step-cache degli altri utenti vive in un dataset dello stesso progetto
+    # an ALLOWLIST: `dataset.table` can be written WITHOUT backticks too, and the other
+    # users' step cache lives in a dataset of the same project
     ensure_reads_only_input(query, "bigquery")
     return f"WITH input AS ({sql}), self AS (SELECT * FROM input) {ctx.map_quoted(query)}"
 
 
 # ── join / union ──────────────────────────────────────────────────────────────
 def _join_condition(ctx, params: dict) -> tuple[str, str, list[tuple[str, str]]]:
-    """Torna (clausola SQL, kind, coppie chiave) con kind='using' o 'on'."""
+    """Returns (SQL clause, kind, key pairs) with kind='using' or 'on'."""
     if "on" in params and params["on"]:
         keys = _as_list(params["on"])
         return f"USING ({', '.join(ctx.qi(c) for c in keys)})", "using", [(k, k) for k in keys]
@@ -457,7 +455,7 @@ def op_join(sql, params, ctx):
 
     clause, kind, pairs = _join_condition(ctx, params)
     if how in ("semi", "anti"):
-        # BigQuery non ha SEMI/ANTI JOIN: EXISTS con le stesse chiavi
+        # BigQuery has no SEMI/ANTI JOIN: EXISTS with the same keys
         cond = " AND ".join(f"l.{ctx.qi(l)} = r.{ctx.qi(r)}" for l, r in pairs)
         kw = "EXISTS" if how == "semi" else "NOT EXISTS"
         return f"SELECT l.* FROM {L} AS l WHERE {kw} (SELECT 1 FROM {R} AS r WHERE {cond})"
@@ -514,8 +512,8 @@ def op_pivot(sql, params, ctx):
             f"{ctx.qi(c)} IS NULL" if val is None else f"{ctx.qi(c)} = {_lit(val)}" for c, val in zip(on, combo)
         )
         colname = PIVOT_LABEL_SEP.join(pivot_label(val) for val in combo)
-        # aggregazione condizionale: nessuna riga (o soli NULL) → NULL, tranne
-        # count/n_unique → 0, come negli altri engine
+        # conditional aggregation: no rows (or only NULLs) → NULL, except
+        # count/n_unique → 0, as in the other engines
         expr = _agg_expr(func, f"IF({cond}, {v}, NULL)")
         cols.append(f"{expr} AS {ctx.qi(colname)}")
     group = f" GROUP BY {idx_sql}" if idx_sql else ""
@@ -523,8 +521,8 @@ def op_pivot(sql, params, ctx):
 
 
 def unpivot_value_type(types: list[str]) -> str:
-    """Supertipo del valore sciolto (stessa regola degli altri engine): tutti
-    interi → INT64; tutti numerici → FLOAT64; tutti uguali → quello; altrimenti STRING."""
+    """The unpivoted value's supertype (the other engines' rule): all integers → INT64; all
+    numeric → FLOAT64; all alike → that one; otherwise STRING."""
     bases = [str(t).upper() for t in types]
     if all(b in _BQ_INTS for b in bases):
         return "INT64"
@@ -559,7 +557,7 @@ def op_unpivot(sql, params, ctx):
                     f"CONCAT(CAST(CAST({q} AS INT64) AS STRING), '.0'), CAST({q} AS STRING)) AS {q}")
         return f"CAST({q} AS {vtype}) AS {q}"
 
-    # l'UNPIVOT nativo vuole colonne dello stesso tipo: prima le si porta al supertipo
+    # the native UNPIVOT wants columns of one type: they are brought to the supertype first
     inner_cols = [ctx.qi(c) for c in keep] + [_val(c) for c in melt]
     inner = f"SELECT {', '.join(inner_cols)} FROM {_sub(sql)}"
     keep_sql = "".join(f"{ctx.qi(c)}, " for c in keep)

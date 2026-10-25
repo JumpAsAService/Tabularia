@@ -1,15 +1,14 @@
-"""Destinazioni S3 / object storage: riversa l'output di un run su un bucket
-ESTERNO (AWS, MinIO, R2, Wasabi…) — file singolo oppure dataset partizionato
-hive-style (`colonna=valore/…`), pronto per il partition pruning di Trino,
-Athena, DuckDB e Spark.
+"""S3 / object storage destinations: pours a run's output into an EXTERNAL bucket (AWS,
+MinIO, R2, Wasabi…) — one file or a hive-style partitioned dataset (`column=value/…`),
+ready for the partition pruning of Trino, Athena, DuckDB and Spark.
 
-Percorso dati: parquet interno → disco locale (buffer) → sink Polars in
-STREAMING (conversione formato e/o partizionamento con `pl.PartitionBy`) →
-upload boto3 file per file. Memoria O(batch), il disco fa da buffer, come per
-ingest e destinazioni database.
+Data path: the internal parquet → the local disk (buffer) → a Polars sink, STREAMING
+(format conversion and/or partitioning with `pl.PartitionBy`) → boto3 uploads file by
+file. Memory O(batch), the disk is the buffer, as for the ingest and the database
+destinations.
 
-Le credenziali arrivano cifrate (secret_key_encrypted, Fernet condiviso col
-gateway) e vengono decifrate solo al momento di creare il client.
+The credentials arrive encrypted (secret_key_encrypted, the Fernet key shared with the
+gateway) and are decrypted only when the client is created.
 """
 from __future__ import annotations
 
@@ -28,20 +27,20 @@ from app.ingest.converters import IngestError
 
 logger = logging.getLogger(__name__)
 
-# oltre questo numero di partizioni si genera il classico problema dei "mille
-# file piccoli" (e upload lentissimi): quasi sempre è una colonna sbagliata
+# beyond this many partitions comes the classic "thousand small files" problem (and
+# very slow uploads): almost always the wrong column
 MAX_PARTITIONS = 1000
 
 
 class S3DestinationError(IngestError):
-    """Errore parlante da mostrare all'utente (bucket, chiave, credenziali)."""
+    """A clear error to show the user (bucket, key, credentials)."""
 
 
 class S3ConnectionSpec(BaseModel):
-    endpoint_url: str = ""  # vuoto = AWS vero; valorizzato = MinIO/R2/Wasabi…
+    endpoint_url: str = ""  # empty = real AWS; set = MinIO/R2/Wasabi…
     access_key: str = ""
-    # una delle due: `secret_key_encrypted` (Fernet, come arriva dal gateway) o
-    # `secret_key` in chiaro (solo per prove dirette sull'engine in sviluppo)
+    # one of the two: `secret_key_encrypted` (Fernet, as it comes from the gateway) or
+    # `secret_key` in clear (only for direct trials on the engine in development)
     secret_key: str = ""
     secret_key_encrypted: str = ""
     region: str = ""
@@ -61,10 +60,10 @@ class S3ConnectionSpec(BaseModel):
         kwargs: dict = {}
         if self.endpoint_url.strip():
             kwargs["endpoint_url"] = self.endpoint_url.strip()
-            # path-style: obbligatorio per MinIO/Rclone e innocuo per gli altri
+            # path style: required by MinIO/Rclone and harmless for the others
             kwargs["config"] = Config(
                 signature_version="s3v4", s3={"addressing_style": "path"},
-                # come in app.utils: i checksum a blocchi di boto3 rompono le PUT su GCS
+                # as in app.utils: boto3's chunked checksums break the PUTs on GCS
                 request_checksum_calculation="when_required", response_checksum_validation="when_required",
             )
         if self.region.strip():
@@ -78,8 +77,8 @@ class S3ConnectionSpec(BaseModel):
 
 
 class S3DestinationSpec(BaseModel):
-    bucket: str = ""  # vuoto = bucket di default della connessione
-    # chiave del file (senza partizioni) o prefisso (con partizioni); a template with
+    bucket: str = ""  # empty = the connection's default bucket
+    # the file's key (no partitions) or the prefix (with partitions); a template with
     # the Outputs' placeholders (app.core.placeholders): exports/{today:yyyy/MM}/v_{date}.csv
     key: str
     format: Literal["parquet", "csv"] = "parquet"
@@ -123,7 +122,7 @@ def _clean_key(key: str) -> str:
 
 
 def _local_files(root: str) -> list[tuple[str, str]]:
-    """[(path locale, path relativo con separatore '/')] di tutti i file sotto root."""
+    """[(local path, relative path with '/' separators)] of every file under root."""
     out: list[tuple[str, str]] = []
     for dirpath, _dirs, files in os.walk(root):
         for f in files:
@@ -133,13 +132,14 @@ def _local_files(root: str) -> list[tuple[str, str]]:
 
 
 def _delete_stale_objects(client, bucket: str, prefix: str, keep: set[str]) -> None:
-    """Rimuove gli oggetti sotto `prefix/` NON riscritti in questo run (`keep`).
+    """Removes the objects under `prefix/` NOT written again in this run (`keep`).
 
-    Serve a rendere IDEMPOTENTE l'output partizionato: Polars nomina i file in modo
-    deterministico, ma il NUMERO di file per partizione può cambiare tra run (volume
-    dati/parallelismo) e alcune partizioni possono sparire → senza pulizia restano
-    file di run precedenti e si contano righe stantie/doppie. Prima si caricano i
-    nuovi (sovrascrivono), poi si tolgono i vecchi rimasti (mai finestra vuota)."""
+    It makes the partitioned output IDEMPOTENT: Polars names the files
+    deterministically, but the NUMBER of files per partition may change between runs
+    (data volume, parallelism) and some partitions may vanish → without a cleanup the
+    earlier runs' files stay and stale or double rows get counted. The new ones are
+    uploaded first (overwriting), then the old ones left are removed (never an empty
+    window)."""
     p = prefix.rstrip("/") + "/"
     stale: list[dict] = []
     try:
@@ -148,7 +148,7 @@ def _delete_stale_objects(client, bucket: str, prefix: str, keep: set[str]) -> N
             for obj in page.get("Contents", []):
                 if obj["Key"] not in keep:
                     stale.append({"Key": obj["Key"]})
-        # batch dove c'e', DELETE singole dove manca (GCS): vedi app.utils.delete_keys
+        # batches where there are, single DELETEs where not (GCS): see app.utils.delete_keys
         from app.utils import delete_keys
 
         _, errors = delete_keys(client, bucket, [o["Key"] for o in stale])
@@ -170,12 +170,12 @@ def write_output_to_s3(
     storage=None,
     now: datetime | None = None,
 ) -> dict:
-    """Riversa `bucket/key` (parquet interno) sulla destinazione S3 esterna.
+    """Pours `bucket/key` (the internal parquet) into the external S3 destination.
 
-    Senza partizioni: un solo oggetto a `dest.key` (parquet copiato com'è,
-    csv convertito in streaming). Con `partition_by`: albero hive sotto il
-    prefisso `dest.key/` — le run successive sovrascrivono gli stessi path,
-    ma le partizioni sparite dai dati NON vengono eliminate dal bucket.
+    Without partitions: one object at `dest.key` (parquet copied as it is, csv converted
+    streaming). With `partition_by`: a hive tree under the prefix `dest.key/` — the next
+    runs overwrite the same paths, but the partitions gone from the data are NOT removed
+    from the bucket.
     """
     if storage is None:
         from app.utils import get_storage_service
@@ -220,10 +220,10 @@ def write_output_to_s3(
             else:
                 lf.sink_csv(sink_to, mkdir=True)
             uploads = [(local, f"{target_key}/{rel}") for local, rel in _local_files(workdir)]
-            if not uploads:  # risultato vuoto: nessuna partizione, nessun file
+            if not uploads:  # an empty result: no partition, no file
                 raise S3DestinationError("The output is empty: no partitions to write")
         elif dest.format == "parquet":
-            uploads = [(tmp, target_key)]  # già parquet: nessuna conversione
+            uploads = [(tmp, target_key)]  # parquet already: no conversion
         else:
             single = os.path.join(workdir, "out.csv")
             lf.sink_csv(single)
@@ -234,12 +234,12 @@ def write_output_to_s3(
             for local, k in uploads:
                 # parts sized for storages that take at most 1,000 of them (see app.utils)
                 client.upload_file(local, target_bucket, k, Config=transfer_config(os.path.getsize(local)))
-        except Exception as e:  # credenziali, bucket inesistente, rete…
+        except Exception as e:  # credentials, a missing bucket, the network…
             raise S3DestinationError(
                 f"Upload to s3://{target_bucket}/{target_key} failed: {type(e).__name__}: {e}"
             ) from e
-        # dataset partizionato: rendi il prefisso IDEMPOTENTE togliendo i file dei
-        # run precedenti (l'output a file singolo sovrascrive già la stessa chiave)
+        # a partitioned dataset: makes the prefix IDEMPOTENT by removing the earlier runs'
+        # files (the single-file output overwrites the same key already)
         if dest.partition_by:
             _delete_stale_objects(client, target_bucket, target_key, {k for _, k in uploads})
     finally:
@@ -250,7 +250,7 @@ def write_output_to_s3(
         shutil.rmtree(workdir, ignore_errors=True)
 
     logger.info(
-        "s3-dest completato: s3://%s/%s (%d righe, %d file, %s)",
+        "s3-dest done: s3://%s/%s (%d rows, %d files, %s)",
         target_bucket, target_key, rows, len(uploads), dest.format,
     )
     return {
@@ -264,8 +264,8 @@ def write_output_to_s3(
 
 
 def test_connection(conn: S3ConnectionSpec) -> None:
-    """Prova le credenziali sullo stesso percorso dell'upload: se non solleva,
-    la connessione è utilizzabile. Col bucket di default ne verifica l'accesso."""
+    """Tests the credentials on the upload's own path: if it does not raise, the connection
+    is usable. With a default bucket it checks the access to it."""
     client = conn.client()
     try:
         if (conn.bucket or "").strip():
