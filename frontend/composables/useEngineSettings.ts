@@ -7,7 +7,7 @@ export type SettingCategory = 'import' | 'export' | 'execution' | 'cache' | 'cli
   | 'embedded' | 'engine_api' | 'sftp' | 's3' | 'api' | 'placeholders'
 
 export interface EngineSetting {
-  key: string // "<sezione>.<campo>", es. "ingest.parquet_row_group_rows"
+  key: string // "<section>.<field>", e.g. "ingest.parquet_row_group_rows"
   category: SettingCategory | 'workers' // workers: shown in Admin → Workers
   unit: SettingUnit
   kind?: 'int' | 'float' | 'bool'

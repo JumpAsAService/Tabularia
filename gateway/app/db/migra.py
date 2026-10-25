@@ -98,7 +98,7 @@ def migra(eng=None, verify: bool = True) -> dict:
             # means restoring a backup
             logger.warning("the database is at revision %s, newer than this gateway's (%s): nothing to migrate, "
                            "this release runs on it (a rollback of one release)", before, head())
-            return {"prima": before, "dopo": before, "adottato": False}
+            return {"before": before, "after": before, "adopted": False}
         adopted = False
         if before is None and inspect(conn).has_table("users"):
             # a database from before Alembic: bring it to the base's state and stamp it
@@ -118,7 +118,7 @@ def migra(eng=None, verify: bool = True) -> dict:
                 )
     if before != after or adopted:
         logger.info("database schema: %s → %s%s", before or "no revision", after, " (adopted from before Alembic)" if adopted else "")
-    return {"prima": before, "dopo": after, "adottato": adopted}
+    return {"before": before, "after": after, "adopted": adopted}
 
 
 class DatabaseBehind(RuntimeError):
@@ -183,8 +183,8 @@ def _main(arguments: list[str]) -> int:
     if action == "migra":
         with startup_lock():
             outcome = migra()
-        print(f"database at revision {outcome['dopo']}" + (f" (was {outcome['prima'] or 'without a revision'})" if outcome["prima"] != outcome["dopo"] else "")
-              + (", adopted from before Alembic" if outcome["adottato"] else ""))
+        print(f"database at revision {outcome['after']}" + (f" (was {outcome['before'] or 'without a revision'})" if outcome["before"] != outcome["after"] else "")
+              + (", adopted from before Alembic" if outcome["adopted"] else ""))
         return 0
     if action == "stato":
         with engine.connect() as conn:

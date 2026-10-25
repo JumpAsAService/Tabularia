@@ -28,15 +28,15 @@ def ping_only_if_idle(eng, idle_for_s: float = PING_IF_IDLE_FOR_S) -> None:
 
     @event.listens_for(eng, "connect")
     def _new(dbapi_conn, record):
-        record.info["resa"] = time.monotonic()
+        record.info["returned_at"] = time.monotonic()
 
     @event.listens_for(eng, "checkin")
     def _returned(dbapi_conn, record):
-        record.info["resa"] = time.monotonic()
+        record.info["returned_at"] = time.monotonic()
 
     @event.listens_for(eng, "checkout")
     def _taken(dbapi_conn, record, proxy):
-        if time.monotonic() - record.info.get("resa", 0.0) < idle_for_s:
+        if time.monotonic() - record.info.get("returned_at", 0.0) < idle_for_s:
             return
         try:
             eng.dialect.do_ping(dbapi_conn)

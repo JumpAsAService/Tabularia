@@ -2440,7 +2440,7 @@ def check_proposal(sql: str, dialect: str, allowed: set[str] | None, columns: li
 
 
 def use_proposal(sql: str, dialect: str, ident_to_macro: dict[str, str], columns: list[str], model: str,
-                 check: "ControlloSintassiClickHouse | None" = None) -> str:
+                 check: "ClickHouseSyntaxCheck | None" = None) -> str:
     """A translation proposed for a compiled model: checked, then with the sources'
     placeholders (__s_0, __m_1…) in place of the dbt macros. The placeholders are
     renamed on the tree, not in the text: the AI may write them with or without alias."""

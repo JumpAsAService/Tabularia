@@ -36,13 +36,13 @@ const esc = (v: unknown) =>
 const seriesList = computed(() => {
   const { x, y, series } = props.spec
   if (!series) return [{ name: y, rows: props.rows }]
-  const per = new Map<string, Record<string, any>[]>()
+  const bySeries = new Map<string, Record<string, any>[]>()
   for (const r of props.rows) {
     const k = String(r[series] ?? '—')
-    if (!per.has(k)) per.set(k, [])
-    per.get(k)!.push(r)
+    if (!bySeries.has(k)) bySeries.set(k, [])
+    bySeries.get(k)!.push(r)
   }
-  return [...per.entries()].map(([name, rows]) => ({ name, rows }))
+  return [...bySeries.entries()].map(([name, rows]) => ({ name, rows }))
     .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, PALETTE.length)
 })

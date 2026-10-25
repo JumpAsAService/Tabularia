@@ -57,12 +57,12 @@ def temporary_database():
 
 def test_a_new_migrated_database_is_equal_to_the_models(temporary_database):
     outcome = m.migra(temporary_database)
-    assert outcome == {"prima": None, "dopo": m.head(), "adottato": False}
+    assert outcome == {"before": None, "after": m.head(), "adopted": False}
     with temporary_database.connect() as c:
         assert m.differences(c) == []
         assert m.revision(c) == m.head()
     # again: nothing to do
-    assert m.migra(temporary_database) == {"prima": m.head(), "dopo": m.head(), "adottato": False}
+    assert m.migra(temporary_database) == {"before": m.head(), "after": m.head(), "adopted": False}
 
 
 def test_a_pre_alembic_database_is_adopted_and_becomes_equal_to_the_models(temporary_database):
@@ -71,7 +71,7 @@ def test_a_pre_alembic_database_is_adopted_and_becomes_equal_to_the_models(tempo
     with temporary_database.connect() as c:
         assert m.revision(c) is None and m.differences(c)          # the old mechanism's drift is there
     outcome = m.migra(temporary_database)
-    assert outcome["adottato"] and outcome["prima"] is None and outcome["dopo"] == m.head()
+    assert outcome["adopted"] and outcome["before"] is None and outcome["after"] == m.head()
     with temporary_database.connect() as c:
         assert m.differences(c) == []
         insp = inspect(c)
@@ -79,7 +79,7 @@ def test_a_pre_alembic_database_is_adopted_and_becomes_equal_to_the_models(tempo
         fk = {f["name"] for f in insp.get_foreign_keys("flows")}
         assert "flows_notify_connection_id_fkey" in fk              # the foreign key the ALTER did not add
         assert "uq_users_oidc_identity" in {i["name"] for i in insp.get_indexes("users")}
-    assert m.migra(temporary_database)["adottato"] is False        # adopted once only
+    assert m.migra(temporary_database)["adopted"] is False        # adopted once only
 
 
 def test_a_difference_from_the_models_stops_the_step_without_half_changes(temporary_database):
@@ -135,5 +135,5 @@ def test_a_database_newer_than_the_code_does_not_stop_the_step(temporary_databas
     m.migra(temporary_database)
     with temporary_database.begin() as c:
         c.execute(text("UPDATE alembic_version SET version_num = '9999'"))
-    assert m.migra(temporary_database) == {"prima": "9999", "dopo": "9999", "adottato": False}
+    assert m.migra(temporary_database) == {"before": "9999", "after": "9999", "adopted": False}
     assert m.check_revision(temporary_database) == "9999"

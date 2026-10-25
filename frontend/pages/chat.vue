@@ -37,7 +37,7 @@ const { user } = useAuth()
 // Observer and not administrator: for them the conversation is saved nowhere (a shared
 // account on an open installation). The same condition as the gateway: `is_observer`
 // from /auth/me is true for admins too.
-const senzaStorico = computed(() => !!user.value?.is_observer && !user.value?.is_superuser)
+const noHistory = computed(() => !!user.value?.is_observer && !user.value?.is_superuser)
 const ai = useAi()
 const dsApi = useDatasources()
 const projectsApi = useProjects()
@@ -253,7 +253,7 @@ function toggleChats() {
 
 // ── saved conversations ───────────────────────────────────────────────────
 async function refreshChats() {
-  if (senzaStorico.value) return   // there is no history to ask for
+  if (noHistory.value) return   // there is no history to ask for
   try { chats.value = await ai.chats() } catch { /* the list is not essential */ }
 }
 
@@ -435,7 +435,7 @@ watch(draft, async () => {
           <span v-if="chatTotal && chatTotal.turns" class="total" :title="$t('chat.costHint')">
             {{ $t('chat.chatTotal', { c: money(chatTotal.cost_usd) }) }}
           </span>
-          <button v-if="!senzaStorico" class="mini" type="button" :aria-expanded="chatsOpen" @click="toggleChats">
+          <button v-if="!noHistory" class="mini" type="button" :aria-expanded="chatsOpen" @click="toggleChats">
             <History :size="13" /> {{ $t('chat.history', { n: chats.length }) }}
           </button>
           <span v-else class="nohistory" :title="$t('chat.historyUnavailableWhy')">

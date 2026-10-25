@@ -390,7 +390,7 @@ class _Project:
             raise DbtExportError(f"too many upstream flows in a chain (more than {MAX_UPSTREAM_DEPTH}): the source «{ds.name}» cannot be included",
                                  "upstream_too_deep", max=MAX_UPSTREAM_DEPTH, source=ds.name)
         ctx = self._context(flow)
-        published = ctx["pubblicate"]
+        published = ctx["published"]
         node = published.get((ds.name, ds.project_id))
         if node is None:
             # renamed or moved after the flow published it (the Output still writes the old name), or the
@@ -399,7 +399,7 @@ class _Project:
             raise DbtExportError(f"the flow «{flow.name}» has no output that publishes «{ds.name}» (it publishes {listing}): the datasource "
                                  "was renamed or moved after the flow published it, or the flow's Output changed",
                                  "upstream_no_output", flow=flow.name, source=ds.name, published=listing)
-        if (ds.name, ds.project_id) in ctx["doppie"]:
+        if (ds.name, ds.project_id) in ctx["duplicates"]:
             # which one wrote it last depends on the order they ran in: the project would carry one of the
             # two branches, maybe not the one whose data the downstream flow read
             raise DbtExportError(f"in the flow «{flow.name}» more than one Output publishes «{ds.name}»", "upstream_output_ambiguous",
@@ -463,9 +463,9 @@ class _Project:
                         published.setdefault(slot_key, n["id"])
             except (KeyError, TypeError, ValueError, AttributeError) as e:
                 raise _invalid_definition(flow, e) from e
-            self._contexts[flow.id] = {"definition": definition, "by_id": by_id, "pubblicate": published, "doppie": duplicates,
-                                       "suffisso": _slug(flow.name), "origine": self._origin(flow),
-                                       "dialetto": _DIALECT.get(flow.production_engine or flow.engine)}
+            self._contexts[flow.id] = {"definition": definition, "by_id": by_id, "published": published, "duplicates": duplicates,
+                                       "suffix": _slug(flow.name), "origin": self._origin(flow),
+                                       "dialect": _DIALECT.get(flow.production_engine or flow.engine)}
         return self._contexts[flow.id]
 
     def _include(self, flow: Flow, depth: int, only_nodes: list[str] | None) -> None:
@@ -573,7 +573,7 @@ class _Project:
         if not outputs:
             return
         ctx = self._context(flow)
-        by_id, suffix, origin, dialect = ctx["by_id"], ctx["suffisso"], ctx["origine"], ctx["dialetto"]
+        by_id, suffix, origin, dialect = ctx["by_id"], ctx["suffix"], ctx["origin"], ctx["dialect"]
         for u in outputs:
             self._waiting.pop((flow.id, (u["node"] or {}).get("id")), None)
         cuts = self._cuts(outputs)   # shared prefixes → intermediate models
@@ -595,7 +595,7 @@ class _Project:
             model = self._output_model(flow, u, intermediates, suffix)
             model["dialect"] = dialect
             self._materialization(flow, u, model)
-            self.models.append(self._trace(model, origin, output=model.pop("_uscita", None),
+            self.models.append(self._trace(model, origin, output=model.pop("_output", None),
                                              node=(u["node"] or {}).get("id")))
             self._done[(flow.id, (u["node"] or {}).get("id"))] = model["name"]
 
@@ -604,7 +604,7 @@ class _Project:
         `incremental` only for an output in append (the others replace the data)."""
         slot_key = output_key(flow.id, (u["node"] or {}).get("id"))
         allowed_ones = ["incremental", "table", "view"] if model["materialized"] == "incremental" else ["table", "view"]
-        self.outputs.append({"key": slot_key, "model": model["name"], "flow": flow.name, "label": model.get("_uscita"),
+        self.outputs.append({"key": slot_key, "model": model["name"], "flow": flow.name, "label": model.get("_output"),
                             "materialized": model["materialized"], "materializations": allowed_ones})
         choice = self.options.materializations.get(slot_key)
         if choice is None:
@@ -678,7 +678,7 @@ class _Project:
             model["materialized"] = "table"
             model["publishes"] = (ds_name, project_id)
             model["description"] = f"Output «{ds_name}» of the flow «{flow.name}»." + (f" {flow.description}" if flow.description else "")
-            model["_uscita"] = f"output «{ds_name}» (datasource)"
+            model["_output"] = f"output «{ds_name}» (datasource)"
             ds = self.session.exec(select(Datasource).where(Datasource.name == ds_name, Datasource.project_id == project_id)).first()
             if ds is not None:
                 self._schema_and_contract(model, ds)
@@ -693,7 +693,7 @@ class _Project:
                 self.destinations[model["name"]] = {"connection_id": dest.get("connection_id"), "table": table,
                                                       "mode": dest.get("mode") or "append"}
             model["description"] = f"Output table `{table}` of the flow «{flow.name}» ({dest.get('mode') or 'append'})."
-            model["_uscita"] = f"output table `{table}` ({dest.get('mode') or 'append'})"
+            model["_output"] = f"output table `{table}` ({dest.get('mode') or 'append'})"
             if dest.get("post_sql"):
                 self.note.append(f"The output `{table}` runs a post-SQL after each write in Tabularia; dbt does not: add it as a `post-hook` on the model `{model['name']}` if you need it.")
         elif dest.get("type") == "sftp":
@@ -702,7 +702,7 @@ class _Project:
             model["materialized"] = "table"
             model["description"] = (f"Output file `{dest.get('file_name')}` written to an SFTP server by the flow «{flow.name}»: "
                                       "in dbt it is a table (export it from the warehouse).")
-            model["_uscita"] = f"output file `{dest.get('file_name')}` (SFTP)"
+            model["_output"] = f"output file `{dest.get('file_name')}` (SFTP)"
         else:   # s3
             # a key with placeholders: the model is named after its fixed text
             file_stem = (dest.get("key") or "model").rsplit("/", 1)[-1].split(".")[0]
@@ -711,7 +711,7 @@ class _Project:
             model["name"] = self.names.new(file_stem, suffix)
             model["materialized"] = "table"
             model["description"] = f"Output file `{dest.get('key')}` of the flow «{flow.name}»: in dbt it is a table (export it from the warehouse)."
-            model["_uscita"] = f"output file `{dest.get('key')}`"
+            model["_output"] = f"output file `{dest.get('key')}`"
         return model
 
     def _schema_and_contract(self, model: dict, ds: Datasource) -> None:

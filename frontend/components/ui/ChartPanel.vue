@@ -162,11 +162,11 @@ async function refresh() {
       ops = [
         {
           type: 'group_by',
-          params: { by: [xCol.value, ...by], aggregations: [{ column: aggCol, func: func.value, alias: '__valore' }] },
+          params: { by: [xCol.value, ...by], aggregations: [{ column: aggCol, func: func.value, alias: '__value' }] },
         },
         chartType.value === 'line' || chartType.value === 'area'
           ? { type: 'sort', params: { by: xCol.value, descending: false } }
-          : { type: 'sort', params: { by: '__valore', descending: true } },
+          : { type: 'sort', params: { by: '__value', descending: true } },
         { type: 'limit', params: { n: by.length ? 1000 : Math.max(topN.value, 1) } },
       ]
     }
@@ -216,7 +216,7 @@ function pivotBydata() {
   const totals = new Map<string, number>()
   for (const r of rows.value) {
     const k = String(r[by])
-    totals.set(k, (totals.get(k) ?? 0) + Math.abs(Number(r.__valore) || 0))
+    totals.set(k, (totals.get(k) ?? 0) + Math.abs(Number(r.__value) || 0))
   }
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
   const kept = ranked.slice(0, MAX_SERIES)
@@ -228,7 +228,7 @@ function pivotBydata() {
   for (const r of rows.value) {
     const c = String(r[xCol.value])
     if (!catTotals.has(c)) catOrder.push(c)
-    catTotals.set(c, (catTotals.get(c) ?? 0) + (Number(r.__valore) || 0))
+    catTotals.set(c, (catTotals.get(c) ?? 0) + (Number(r.__value) || 0))
   }
   const cats =
     chartType.value === 'bar'
@@ -241,7 +241,7 @@ function pivotBydata() {
   for (const r of rows.value) {
     const si = sIdx.get(String(r[by]))
     const ci = catIdx.get(String(r[xCol.value]))
-    if (si !== undefined && ci !== undefined) series[si].data[ci] = r.__valore
+    if (si !== undefined && ci !== undefined) series[si].data[ci] = r.__value
   }
   return { cats, series }
 }
@@ -275,13 +275,13 @@ const option = computed(() => {
     const rest = rows.value.slice(MAX_SERIES)
     const data = top.map((r, i) => ({
       name: String(r[xCol.value]),
-      value: r.__valore,
+      value: r.__value,
       itemStyle: kind === 'pie' ? { color: PALETTE[i] } : undefined,
     }))
     if (rest.length && ADDITIVE.has(func.value)) {
       data.push({
         name: t('chartPanel.otherGroup', { n: rest.length }),
-        value: rest.reduce((s, r) => s + (Number(r.__valore) || 0), 0),
+        value: rest.reduce((s, r) => s + (Number(r.__value) || 0), 0),
         itemStyle: kind === 'pie' ? { color: OTHER_COLOR } : undefined,
       })
     }
@@ -315,7 +315,7 @@ const option = computed(() => {
         label: { color: c.text, fontSize: 11, formatter: '{b}' },
         data: rows.value.slice(0, Math.max(topN.value, 1)).map((r) => ({
           name: String(r[xCol.value]),
-          value: r.__valore,
+          value: r.__value,
         })),
       }],
     }
@@ -390,7 +390,7 @@ const option = computed(() => {
     )
   } else {
     cats = rows.value.map((r) => String(r[xCol.value]))
-    const vals = rows.value.map((r) => r.__valore)
+    const vals = rows.value.map((r) => r.__value)
     seriesList = [
       isBar
         ? { name: seriesName.value, type: 'bar', data: vals, barMaxWidth: 28, itemStyle: { borderRadius: [4, 4, 0, 0] } }

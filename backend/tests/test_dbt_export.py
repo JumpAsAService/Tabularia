@@ -2964,17 +2964,17 @@ def test_a_clickhouse_that_never_answers_does_not_hold_the_export_and_the_readme
 
     def run_check():
         start = time.monotonic()
-        outcome["primo"] = check.error("SELECT 1")
-        outcome["secondi"] = time.monotonic() - start
-        outcome["poi"] = check.error("SELECT FROM WHERE (")
-        outcome["dopo"] = time.monotonic() - start
+        outcome["first"] = check.error("SELECT 1")
+        outcome["seconds"] = time.monotonic() - start
+        outcome["then"] = check.error("SELECT FROM WHERE (")
+        outcome["after"] = time.monotonic() - start
     worker_thread = threading.Thread(target=run_check, daemon=True)
     worker_thread.start()
     worker_thread.join(20)
     try:
         assert not worker_thread.is_alive(), "the check is still waiting for ClickHouse"
-        assert outcome["primo"] is None and outcome["poi"] is None and outcome["secondi"] < 10
-        assert outcome["dopo"] - outcome["secondi"] < 1        # off for the rest of the export: no second wait
+        assert outcome["first"] is None and outcome["then"] is None and outcome["seconds"] < 10
+        assert outcome["after"] - outcome["seconds"] < 1        # off for the rest of the export: no second wait
         assert check.skipped
         check.close()
         # the README says that the SQL was not read by a ClickHouse parser
