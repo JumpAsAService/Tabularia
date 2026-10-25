@@ -1,12 +1,12 @@
-"""Il gateway pubblicato sotto un prefisso (`APP__ROOT_PATH`).
+"""The gateway published under a prefix (`APP__ROOT_PATH`).
 
-Quando un solo host serve interfaccia e API, il reverse proxy manda
-`/api/*` al gateway togliendo il prefisso, perché gateway e frontend hanno
-percorsi omonimi (`/flows`, `/runs`…) e non si possono distinguere altrimenti.
-Il gateway deve SAPERE quel prefisso per una cosa che il proxy non vede: il
-cookie della transazione SSO è ristretto a un percorso, e se il percorso non è
-quello che vede il browser il cookie non torna indietro e l'accesso fallisce
-con `tx_missing` — dopo che l'utente si è già autenticato sull'IdP.
+When one host serves interface and API, the reverse proxy sends `/api/*` to the
+gateway removing the prefix, because gateway and frontend have paths with the same
+names (`/flows`, `/runs`…) that could not be told apart otherwise. The gateway must
+KNOW that prefix for one thing the proxy does not see: the SSO transaction's cookie is
+restricted to a path, and if the path is not the one the browser sees the cookie does
+not come back and the sign-in fails with `tx_missing` — after the user has
+authenticated on the IdP already.
 """
 import pytest
 from pydantic import ValidationError
@@ -28,18 +28,18 @@ def _login(monkeypatch, **app):
     return sso_routes.sso_login(FakeRequest())
 
 
-def test_senza_prefisso_il_cookie_resta_dov_era(monkeypatch):
+def test_without_prefix_the_cookie_stays_where_it_was(monkeypatch):
     res = _login(monkeypatch)
     assert "Path=/auth/sso;" in res.headers["set-cookie"] + ";"
 
 
-def test_il_cookie_di_transazione_segue_il_prefisso_pubblico(monkeypatch):
+def test_the_transaction_cookie_follows_the_public_prefix(monkeypatch):
     res = _login(monkeypatch, root_path="/api")
     assert "Path=/api/auth/sso;" in res.headers["set-cookie"] + ";"
 
 
-def test_anche_la_cancellazione_del_cookie_usa_il_prefisso(session, monkeypatch):
-    # un cookie si cancella solo ripetendo il percorso con cui è stato scritto
+def test_deleting_the_cookie_uses_the_prefix_too(session, monkeypatch):
+    # a cookie is deleted only by repeating the path it was written with
     cfg = Settings(app={"root_path": "/api"}, oidc=OIDC)
     monkeypatch.setattr(sso_routes, "get_settings", lambda: cfg)
     res = sso_routes.sso_callback(FakeRequest(), code="abc", state="s", session=session)
@@ -47,39 +47,39 @@ def test_anche_la_cancellazione_del_cookie_usa_il_prefisso(session, monkeypatch)
     assert "Path=/api/auth/sso" in res.headers["set-cookie"]
 
 
-@pytest.mark.parametrize("scritto, letto", [("", ""), ("/", ""), ("/api", "/api"), ("/api/", "/api"), ("api", "/api")])
-def test_il_prefisso_viene_normalizzato(scritto, letto):
-    assert AppSettings(root_path=scritto).root_path == letto
+@pytest.mark.parametrize("written, read_value", [("", ""), ("/", ""), ("/api", "/api"), ("/api/", "/api"), ("api", "/api")])
+def test_the_prefix_is_normalized(written, read_value):
+    assert AppSettings(root_path=written).root_path == read_value
 
 
-def test_un_prefisso_che_non_e_un_percorso_viene_rifiutato():
-    for sbagliato in ("https://app.example.com/api", "/api?x=1", "/a b"):
+def test_a_prefix_that_is_not_a_path_is_refused():
+    for wrong in ("https://app.example.com/api", "/api?x=1", "/a b"):
         with pytest.raises(ValidationError):
-            AppSettings(root_path=sbagliato)
+            AppSettings(root_path=wrong)
 
 
-def test_sotto_un_prefisso_la_barra_finale_non_reindirizza_fuori():
-    """Con una barra di troppo FastAPI risponde 307 verso l'indirizzo senza barra,
-    e quell'indirizzo lo costruisce SENZA il prefisso: dietro il proxy porterebbe
-    `/api/users/` su `/users`, che è una pagina del frontend. Sotto un prefisso
-    il reindirizzamento si spegne: un 404 dice la verità, un 307 sbagliato no."""
+def test_under_a_prefix_the_trailing_slash_does_not_redirect_out():
+    """With one slash too many FastAPI answers 307 towards the address without the slash, and
+    builds that address WITHOUT the prefix: behind the proxy it would take `/api/users/`
+    to `/users`, which is a frontend page. Under a prefix the redirect is turned off: a
+    404 tells the truth, a wrong 307 does not."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    def app_con(impostazioni: AppSettings) -> TestClient:
-        app = FastAPI(root_path=impostazioni.root_path, redirect_slashes=impostazioni.redirect_slashes)
+    def app_with(settings_: AppSettings) -> TestClient:
+        app = FastAPI(root_path=settings_.root_path, redirect_slashes=settings_.redirect_slashes)
         app.get("/users")(lambda: [])
         return TestClient(app, follow_redirects=False, base_url="https://app.example.com")
 
-    alla_radice = app_con(AppSettings()).get("/users/")
-    assert alla_radice.status_code == 307  # in sviluppo resta com'era
+    at_root = app_with(AppSettings()).get("/users/")
+    assert at_root.status_code == 307  # in development it stays as it was
 
-    sotto_api = app_con(AppSettings(root_path="/api")).get("/users/")
-    assert sotto_api.status_code == 404 and "location" not in sotto_api.headers
-    assert app_con(AppSettings(root_path="/api")).get("/users").status_code == 200
+    under_api = app_with(AppSettings(root_path="/api")).get("/users/")
+    assert under_api.status_code == 404 and "location" not in under_api.headers
+    assert app_with(AppSettings(root_path="/api")).get("/users").status_code == 200
 
 
-def test_l_applicazione_e_costruita_con_quelle_impostazioni():
+def test_the_application_is_built_with_those_settings():
     from app import main
     from app.core.config import get_settings
 
@@ -88,12 +88,11 @@ def test_l_applicazione_e_costruita_con_quelle_impostazioni():
     assert main.app.router.redirect_slashes == cfg.redirect_slashes
 
 
-# ── La domanda che il proxy fa al gateway prima di aprire Grafana ────────────
-def test_la_rotta_per_il_proxy_e_chiusa_dalla_guardia_degli_osservatori():
-    """Quando Grafana sta dietro un reverse proxy, è il proxy a chiedere
-    al gateway se chi bussa può vedere il monitoraggio (`forward_auth`). La
-    rotta non deve rispondere niente e non deve costare niente: viene chiamata a
-    ogni richiesta di ogni pannello. Conta solo CHI la può chiamare."""
+# ── The question the proxy asks the gateway before opening Grafana ───────────
+def test_the_proxys_route_is_closed_by_the_observers_guard():
+    """When Grafana sits behind a reverse proxy, the proxy asks the gateway whether whoever
+    knocks may see the monitoring (`forward_auth`). The route must answer nothing and cost
+    nothing: it is called at every request of every panel. Only WHO may call it counts."""
     from app.deps.auth import require_observer
     from app.routes import auth as auth_routes
 
@@ -104,9 +103,9 @@ def test_la_rotta_per_il_proxy_e_chiusa_dalla_guardia_degli_osservatori():
 
 
 
-def test_la_rotta_risponde_solo_a_chi_puo_osservare(session):
-    """La stessa domanda, fatta davvero: senza token, con un token qualunque,
-    da utente normale, da osservatore, da amministratore."""
+def test_the_route_answers_only_whoever_can_observe(session):
+    """The same question, really asked: without a token, with any token, as a normal user, as
+    an observer, as an administrator."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -119,18 +118,18 @@ def test_la_rotta_risponde_solo_a_chi_puo_osservare(session):
     app.dependency_overrides[get_session] = lambda: session
     client = TestClient(app)
 
-    normale = make_user(session, email="normale@x.local")
-    osservatore = make_user(session, email="osservatore@x.local", is_observer=True)
+    normal = make_user(session, email="normale@x.local")
+    observer = make_user(session, email="osservatore@x.local", is_observer=True)
     admin = make_user(session, email="admin@x.local", is_superuser=True)
-    from tests.conftest import token_di
+    from tests.conftest import token_of
 
-    portatore = lambda u: {"Authorization": f"Bearer {token_di(session, u)}"}
+    bearer = lambda u: {"Authorization": f"Bearer {token_of(session, u)}"}
 
     assert client.get("/auth/observer").status_code == 401
-    # ciò che il proxy manda quando il cookie non c'è: «Bearer » e basta
+    # what the proxy sends when there is no cookie: «Bearer » and that is all
     assert client.get("/auth/observer", headers={"Authorization": "Bearer "}).status_code == 401
     assert client.get("/auth/observer", headers={"Authorization": "Bearer non-un-token"}).status_code == 401
-    assert client.get("/auth/observer", headers=portatore(normale)).status_code == 403
-    for chi in (osservatore, admin):
-        answer = client.get("/auth/observer", headers=portatore(chi))
+    assert client.get("/auth/observer", headers=bearer(normal)).status_code == 403
+    for who in (observer, admin):
+        answer = client.get("/auth/observer", headers=bearer(who))
         assert answer.status_code == 204 and answer.content == b""

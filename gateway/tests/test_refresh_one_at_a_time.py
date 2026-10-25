@@ -29,7 +29,7 @@ from app.routes import runs as run_routes
 from app.services import orchestrator as orch
 from app.services import scheduler
 from tests.conftest import make_datasource, make_project, make_user
-from tests.test_migrazioni import database_temporaneo  # noqa: F401 — the fixture
+from tests.test_migrations import temporary_database  # noqa: F401 — the fixture
 
 
 class SlowEngine:
@@ -84,14 +84,14 @@ def _refresh(eng, user_id, ds_id, results, name):
 
 
 # ── two refreshes at once, on a real Postgres (throwaway database) ─────────────
-def test_two_manual_refreshes_at_once_launch_one(database_temporaneo, monkeypatch):  # noqa: F811
-    m.migra(database_temporaneo)
-    with Session(database_temporaneo) as s:
+def test_two_manual_refreshes_at_once_launch_one(temporary_database, monkeypatch):  # noqa: F811
+    m.migra(temporary_database)
+    with Session(temporary_database) as s:
         user_id, ds_id = _world(s)
     engine = _engine(monkeypatch, delay=0.6)
     results: dict = {}
-    first = threading.Thread(target=_refresh, args=(database_temporaneo, user_id, ds_id, results, "first"))
-    second = threading.Thread(target=_refresh, args=(database_temporaneo, user_id, ds_id, results, "second"))
+    first = threading.Thread(target=_refresh, args=(temporary_database, user_id, ds_id, results, "first"))
+    second = threading.Thread(target=_refresh, args=(temporary_database, user_id, ds_id, results, "second"))
     first.start()
     time.sleep(0.2)  # the first is inside the engine call: nothing recorded yet
     second.start()
@@ -100,15 +100,15 @@ def test_two_manual_refreshes_at_once_launch_one(database_temporaneo, monkeypatc
     assert results["first"][0] == "launched"
     assert results["second"] == (409, "A refresh is already running for this datasource")
     assert engine.ingests == 1
-    with Session(database_temporaneo) as s:
+    with Session(temporary_database) as s:
         assert len(s.exec(select(Run).where(Run.datasource_id == ds_id, Run.kind == "ingest")).all()) == 1
 
 
-def test_the_newer_snapshot_wins_two_overlapping_closes(database_temporaneo):  # noqa: F811
+def test_the_newer_snapshot_wins_two_overlapping_closes(temporary_database):  # noqa: F811
     """The swap of run 10 must not overwrite the one of run 11 that committed while
     run 10 was looking (it read the datasource before 11's commit)."""
-    m.migra(database_temporaneo)
-    with Session(database_temporaneo) as s:
+    m.migra(temporary_database)
+    with Session(temporary_database) as s:
         _, ds_id = _world(s)
         for i in (10, 11):
             s.add(Run(id=i, kind="ingest", datasource_id=ds_id, task_id=f"t{i}", status="STARTED",
@@ -119,7 +119,7 @@ def test_the_newer_snapshot_wins_two_overlapping_closes(database_temporaneo):  #
         s.commit()
 
     def close(run_id, hold):
-        with Session(database_temporaneo) as s:
+        with Session(temporary_database) as s:
             run = s.get(Run, run_id)
             run_routes._finalize_ingest(s, run, {"rows_written": 1, "columns": []})
             time.sleep(hold)
@@ -132,7 +132,7 @@ def test_the_newer_snapshot_wins_two_overlapping_closes(database_temporaneo):  #
     older.start()
     newer.join(10)
     older.join(10)
-    with Session(database_temporaneo) as s:
+    with Session(temporary_database) as s:
         ds = s.get(Datasource, ds_id)
         assert (ds.key, ds.snapshot_run_id) == (f"datasets/{ds_id}/k11.parquet", 11)
         pending = sorted(p.key for p in s.exec(select(PendingBlobDeletion)).all())

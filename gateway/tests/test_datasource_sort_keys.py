@@ -1,5 +1,5 @@
-"""sort_keys sulla datasource: si salvano e tornano al client (per riproporli nel
-form e per farli ereditare alla copia materializzata del viewer)."""
+"""sort_keys on the datasource: they are saved and come back to the client (to offer them
+again in the form and to have the viewer's materialized copy inherit them)."""
 import json
 
 from app.models import Datasource

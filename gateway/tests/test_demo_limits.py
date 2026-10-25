@@ -1,7 +1,7 @@
-"""I limiti che servono prima di aprire l'installazione a sconosciuti.
+"""The limits needed before opening the installation to strangers.
 
-Scritti per una demo pubblica con UN account condiviso, ma non sono
-caratteristiche della demo: sono buchi che valgono sempre.
+Written for a public demo with ONE shared account, but they are not features of the
+demo: they are holes that always count.
 """
 import pytest
 from fastapi import HTTPException
@@ -13,16 +13,16 @@ from app.models.permission import Capability, Permission
 from tests.conftest import make_project, make_user
 
 
-# ── upload: serve saper creare qualcosa, non solo guardare ───────────────────
+# ── upload: one must be able to create something, not only look ──────────────
 
 def test_a_read_only_account_cannot_upload(session):
-    """Era il buco: `POST /files` chiedeva solo di essere autenticati, quindi un
-    account di sola lettura poteva scrivere nel bucket dell'installazione."""
+    """It was the hole: `POST /files` asked only to be authenticated, so a read-only account
+    could write into the installation's bucket."""
     p = make_project(session, name="P")
-    ospite = make_user(session, email="ospite@x.it")
-    session.add(Permission(project_id=p.id, user_id=ospite.id, capability=Capability.VIEW))
+    guest = make_user(session, email="ospite@x.it")
+    session.add(Permission(project_id=p.id, user_id=guest.id, capability=Capability.VIEW))
     session.commit()
-    assert permissions.can_upload(session, ospite) is False
+    assert permissions.can_upload(session, guest) is False
 
 
 def test_who_can_edit_somewhere_can_upload(session):
@@ -37,7 +37,7 @@ def test_an_administrator_can_always_upload(session):
     assert permissions.can_upload(session, make_user(session, email="capo@x.it", is_superuser=True)) is True
 
 
-# ── tetto di spesa giornaliero dell'assistente ───────────────────────────────
+# ── the assistant's daily spending cap ───────────────────────────────────────
 
 def test_the_daily_spend_sums_only_today(session):
     from datetime import datetime, timedelta, timezone
@@ -45,13 +45,13 @@ def test_the_daily_spend_sums_only_today(session):
     from app.services import ai_chats
 
     anna = make_user(session, email="anna@x.it")
-    oggi = datetime.now(timezone.utc).replace(tzinfo=None)
-    session.add(AiSpend(user_id=anna.id, cost_usd="0.010", ts=oggi))
-    session.add(AiSpend(user_id=anna.id, cost_usd="0.005", ts=oggi))
-    # ieri non conta
-    session.add(AiSpend(user_id=anna.id, cost_usd="9.99", ts=oggi - timedelta(days=1)))
-    # costo sconosciuto conta zero: non è «gratis», è «non lo sappiamo»
-    session.add(AiSpend(user_id=anna.id, cost_usd=None, ts=oggi))
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
+    session.add(AiSpend(user_id=anna.id, cost_usd="0.010", ts=today))
+    session.add(AiSpend(user_id=anna.id, cost_usd="0.005", ts=today))
+    # yesterday does not count
+    session.add(AiSpend(user_id=anna.id, cost_usd="9.99", ts=today - timedelta(days=1)))
+    # an unknown cost counts zero: it is not «free», it is «we do not know»
+    session.add(AiSpend(user_id=anna.id, cost_usd=None, ts=today))
     session.commit()
     assert str(ai_chats.spent_today(session, anna)) == "0.015"
 
@@ -69,8 +69,8 @@ def test_the_spend_is_per_user(session):
 
 
 def test_the_whole_installation_has_its_own_ceiling(session):
-    """Dove l'account è condiviso il tetto per utente non protegge niente: il
-    conto è uno solo, e va guardato tutto insieme."""
+    """Where the account is shared the per-user cap protects nothing: the bill is one, and it
+    must be looked at all together."""
     from datetime import datetime, timezone
     from app.models import AiSpend
     from app.services import ai_chats
@@ -85,31 +85,31 @@ def test_the_whole_installation_has_its_own_ceiling(session):
 
 
 def test_deleting_the_conversation_does_not_reset_the_ceiling(session):
-    """È il motivo per cui il registro della spesa esiste: le chat di un
-    osservatore si cancellano quando se ne va, e se il tetto leggesse da lì
-    basterebbe aprirne una nuova per ricominciare a spendere."""
+    """It is the reason the spending log exists: an observer's chats are deleted when they
+    leave, and if the cap read from there opening a new one would be enough to start
+    spending again."""
     from decimal import Decimal
     from app.models import AiChat, AiChatTurn
     from app.services import ai_chats
 
-    ospite = make_user(session, email="ospite-spesa@x.it")
-    chat = ai_chats.create(session, ospite, "quanto vendiamo?", "m", None)
+    guest = make_user(session, email="ospite-spesa@x.it")
+    chat = ai_chats.create(session, guest, "quanto vendiamo?", "m", None)
     ai_chats.save_turn(session, chat.id, question="quanto vendiamo?", messages=[],
                          model_id="m", input_tokens=10, output_tokens=5, requests=1,
                          cost=Decimal("0.40"))
-    assert str(ai_chats.spent_today(session, ospite)) == "0.40"
+    assert str(ai_chats.spent_today(session, guest)) == "0.40"
 
-    # via la conversazione, contenuto compreso
+    # away with the conversation, content included
     session.exec(delete(AiChatTurn).where(AiChatTurn.chat_id == chat.id))
     session.exec(delete(AiChat).where(AiChat.id == chat.id))
     session.commit()
 
-    assert session.exec(select(AiChat).where(AiChat.user_id == ospite.id)).all() == []
-    assert str(ai_chats.spent_today(session, ospite)) == "0.40"      # il conto resta
+    assert session.exec(select(AiChat).where(AiChat.user_id == guest.id)).all() == []
+    assert str(ai_chats.spent_today(session, guest)) == "0.40"      # the bill stays
     assert str(ai_chats.spent_today_all(session)) == "0.40"
 
 
-# ── freno sul login ──────────────────────────────────────────────────────────
+# ── brake on the login ───────────────────────────────────────────────────────
 
 def test_the_first_attempts_pass_then_it_holds(session):
     for _ in range(login_throttle.THRESHOLD):
@@ -126,8 +126,8 @@ def test_a_success_clears_the_count(session):
 
 
 def test_one_blocked_account_does_not_block_another(session):
-    """Si conta per (IP, email): un ufficio dietro un NAT non si blocca a vicenda
-    e cambiare account non azzera il conto dell'altro."""
+    """It counts by (IP, email): an office behind a NAT does not block itself and changing
+    account does not reset the other's count."""
     for _ in range(login_throttle.THRESHOLD + 2):
         login_throttle.record_failure(session, "1.2.3.4", "vittima@x.it")
     assert login_throttle.request_wait(session, "1.2.3.4", "vittima@x.it") > 0
@@ -162,8 +162,8 @@ def test_the_route_answers_429_with_retry_after(session):
 
 
 def test_two_replicas_count_the_same_failures(db_engine):
-    """Il motivo per cui il conto sta in una tabella: cinque errori in tutto, non
-    cinque per replica. Due sessioni = due processi."""
+    """The reason the count sits in a table: five errors in all, not five per replica. Two
+    sessions = two processes."""
     from sqlmodel import Session
 
     with Session(db_engine) as replica_a, Session(db_engine) as replica_b:

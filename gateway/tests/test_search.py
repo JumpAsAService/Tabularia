@@ -1,15 +1,14 @@
-"""Ricerca unificata per nome su tutte le risorse del catalogo.
+"""Unified search by name over all the catalog's resources.
 
-I contratti che contano, e che sono il motivo per cui questa rotta non è una
-UNION SQL:
+The contracts that count, and that are the reason this route is not an SQL UNION:
 
-1. ogni tipo ha il SUO insieme di permessi. Le cartelle usano l'insieme
-   NAVIGABILE (include gli antenati, per mostrare il percorso), i contenuti
-   quello LEGGIBILE, le connessioni la capability ORTOGONALE `CONNECT`. Chi ha
-   solo VIEW su una cartella non ne vede le connessioni;
-2. i `counts` descrivono tutto ciò che combacia, non la pagina e nemmeno il
-   filtro per tipo: sono i numeri del selettore;
-3. si cerca solo nel NOME, e i metacaratteri di LIKE restano letterali.
+1. every kind has ITS OWN set of permissions. Folders use the NAVIGABLE set (it
+   includes the ancestors, to show the path), contents the READABLE one, connections
+   the ORTHOGONAL `CONNECT` capability. Whoever has only VIEW on a folder does not
+   see its connections;
+2. the `counts` describe everything that matches, not the page and not even the kind
+   filter: they are the selector's numbers;
+3. only the NAME is searched, and LIKE's metacharacters stay literal.
 """
 from app.models import Connection, FlowGroup, SavedView
 from app.models.permission import Capability
@@ -23,11 +22,11 @@ from tests.conftest import (
 )
 
 
-def _cerca(session, user, q, kind=None, limit=30, offset=0):
+def _search(session, user, q, kind=None, limit=30, offset=0):
     return search_everything(q=q, kind=kind, limit=limit, offset=offset, user=user, session=session)
 
 
-def _connessione(session, name: str, project_id: int, db_type: str = "postgresql"):
+def _connection(session, name: str, project_id: int, db_type: str = "postgresql"):
     c = Connection(name=name, project_id=project_id, db_type=db_type, host="dbhost")
     session.add(c)
     session.commit()
@@ -35,7 +34,7 @@ def _connessione(session, name: str, project_id: int, db_type: str = "postgresql
     return c
 
 
-def _vista(session, name: str, project_id: int, datasource_id: int):
+def _view(session, name: str, project_id: int, datasource_id: int):
     v = SavedView(name=name, project_id=project_id, datasource_id=datasource_id)
     session.add(v)
     session.commit()
@@ -43,29 +42,29 @@ def _vista(session, name: str, project_id: int, datasource_id: int):
     return v
 
 
-# ── la domanda vuota non è una ricerca ──────────────────────────────────────
+# ── the empty question is not a search ──────────────────────────────────────
 def test_an_empty_query_returns_nothing(session):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="vendite")
     make_flow(session, name="vendite mensili", project_id=p.id)
 
     for q in ("", "   "):
-        res = _cerca(session, admin, q)
+        res = _search(session, admin, q)
         assert res.total == 0 and res.items == [] and res.counts == {}
 
 
-# ── trova tutti e sei i tipi ────────────────────────────────────────────────
+# ── finds all six kinds ─────────────────────────────────────────────────────
 def test_it_finds_every_kind_of_resource(session):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="margine")
     ds = make_datasource(session, name="margine righe", project_id=p.id)
     make_flow(session, name="margine per area", project_id=p.id)
-    _vista(session, "margine 2025", p.id, ds.id)
-    _connessione(session, "margine db", p.id)
+    _view(session, "margine 2025", p.id, ds.id)
+    _connection(session, "margine db", p.id)
     session.add(FlowGroup(name="margine notturno", project_id=p.id))
     session.commit()
 
-    res = _cerca(session, admin, "margine")
+    res = _search(session, admin, "margine")
     assert res.total == 6
     assert res.counts == {"folder": 1, "flow": 1, "group": 1, "datasource": 1, "view": 1, "connection": 1}
 
@@ -75,40 +74,40 @@ def test_each_hit_says_where_it_lives(session):
     p = make_project(session, name="vendite")
     make_flow(session, name="report", project_id=p.id)
 
-    hit = next(h for h in _cerca(session, admin, "report").items if h.kind == "flow")
+    hit = next(h for h in _search(session, admin, "report").items if h.kind == "flow")
     assert hit.project_id == p.id and hit.project_name == "vendite"
 
 
-# ── 1. ogni tipo ha il suo insieme di permessi ──────────────────────────────
+# ── 1. every kind has its own set of permissions ────────────────────────────
 def test_folders_use_the_navigable_set_but_content_uses_the_readable_one(session):
-    """Un ANTENATO si vede per nome (serve a mostrare il percorso) ma il suo
-    CONTENUTO non è leggibile. È la distinzione fra `visible_project_ids` e
-    `readable_project_ids`, e qui dev'essere rispettata."""
-    lettore = make_user(session, email="l@x.local")
+    """An ANCESTOR is seen by name (it serves to show the path) but its CONTENT is not
+    readable. It is the difference between `visible_project_ids` and
+    `readable_project_ids`, and here it must be respected."""
+    reader = make_user(session, email="l@x.local")
     root = make_project(session, name="report radice")
-    figlia = make_project(session, name="report figlia", parent_id=root.id)
-    make_permission(session, user_id=lettore.id, project_id=figlia.id, capability=Capability.VIEW.value)
+    child_folder = make_project(session, name="report figlia", parent_id=root.id)
+    make_permission(session, user_id=reader.id, project_id=child_folder.id, capability=Capability.VIEW.value)
 
-    make_flow(session, name="report della radice", project_id=root.id)   # NON leggibile
-    make_flow(session, name="report della figlia", project_id=figlia.id)   # leggibile
+    make_flow(session, name="report della radice", project_id=root.id)   # NOT readable
+    make_flow(session, name="report della figlia", project_id=child_folder.id)   # readable
 
-    res = _cerca(session, lettore, "report")
-    cartelle = {h.name for h in res.items if h.kind == "folder"}
+    res = _search(session, reader, "report")
+    folders = {h.name for h in res.items if h.kind == "folder"}
     flows = {h.name for h in res.items if h.kind == "flow"}
 
-    assert cartelle == {"report radice", "report figlia"}  # l'antenato è navigabile
-    assert flows == {"report della figlia"}               # ma il suo contenuto no
+    assert folders == {"report radice", "report figlia"}  # the ancestor is navigable
+    assert flows == {"report della figlia"}               # but its content is not
 
 
 def test_view_alone_does_not_reveal_connections(session):
-    """CONNECT è ortogonale: chi legge la cartella non ne vede le credenziali."""
-    lettore = make_user(session, email="l@x.local")
+    """CONNECT is orthogonal: whoever reads the folder does not see its credentials."""
+    reader = make_user(session, email="l@x.local")
     p = make_project(session, name="p")
-    make_permission(session, user_id=lettore.id, project_id=p.id, capability=Capability.VIEW.value)
-    _connessione(session, "warehouse", p.id)
+    make_permission(session, user_id=reader.id, project_id=p.id, capability=Capability.VIEW.value)
+    _connection(session, "warehouse", p.id)
     make_flow(session, name="warehouse sync", project_id=p.id)
 
-    res = _cerca(session, lettore, "warehouse")
+    res = _search(session, reader, "warehouse")
     assert {h.kind for h in res.items} == {"flow"}
     assert "connection" not in res.counts
 
@@ -117,21 +116,21 @@ def test_connect_reveals_them(session):
     operator = make_user(session, email="o@x.local")
     p = make_project(session, name="p")
     make_permission(session, user_id=operator.id, project_id=p.id, capability=Capability.CONNECT.value)
-    _connessione(session, "warehouse", p.id)
+    _connection(session, "warehouse", p.id)
 
-    res = _cerca(session, operator, "warehouse")
+    res = _search(session, operator, "warehouse")
     assert [h.kind for h in res.items] == ["connection"]
 
 
 def test_a_stranger_finds_nothing(session):
-    estraneo = make_user(session, email="e@x.local")
+    stranger = make_user(session, email="e@x.local")
     p = make_project(session, name="segreta")
     make_flow(session, name="segreta pipeline", project_id=p.id)
 
-    assert _cerca(session, estraneo, "segreta").total == 0
+    assert _search(session, stranger, "segreta").total == 0
 
 
-# ── 2. i conteggi descrivono tutto, il filtro restringe solo gli elementi ────
+# ── 2. the counts describe everything, the filter narrows only the items ────
 def test_counts_cover_everything_even_when_filtering_by_kind(session):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="p")
@@ -139,10 +138,10 @@ def test_counts_cover_everything_even_when_filtering_by_kind(session):
         make_flow(session, name=f"nota {i}", project_id=p.id)
     make_datasource(session, name="nota base", project_id=p.id)
 
-    res = _cerca(session, admin, "nota", kind="flow")
-    assert [h.kind for h in res.items] == ["flow"] * 3   # filtrati
+    res = _search(session, admin, "nota", kind="flow")
+    assert [h.kind for h in res.items] == ["flow"] * 3   # filtered
     assert res.total == 3
-    assert res.counts == {"flow": 3, "datasource": 1}     # ma i numeri restano interi
+    assert res.counts == {"flow": 3, "datasource": 1}     # but the numbers stay whole
 
 
 def test_the_window_is_limited_while_the_total_is_not(session):
@@ -151,32 +150,32 @@ def test_the_window_is_limited_while_the_total_is_not(session):
     for i in range(10):
         make_flow(session, name=f"riga {i:02d}", project_id=p.id)
 
-    res = _cerca(session, admin, "riga", limit=3, offset=0)
+    res = _search(session, admin, "riga", limit=3, offset=0)
     assert res.total == 10 and len(res.items) == 3
-    queue_ = _cerca(session, admin, "riga", limit=3, offset=9)
+    queue_ = _search(session, admin, "riga", limit=3, offset=9)
     assert len(queue_.items) == 1 and queue_.items[0].name == "riga 09"
 
 
-# ── 3. rilevanza e metacaratteri ────────────────────────────────────────────
+# ── 3. relevance and metacharacters ─────────────────────────────────────────
 def test_names_that_start_with_the_term_come_first(session):
-    """Senza questo, cercare «ordini» metterebbe «riordini» davanti a «ordini»."""
+    """Without this, searching «ordini» would put «riordini» before «ordini»."""
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="p")
     make_flow(session, name="riordini 2024", project_id=p.id)
     make_flow(session, name="ordini 2024", project_id=p.id)
 
-    assert [h.name for h in _cerca(session, admin, "ordini").items] == ["ordini 2024", "riordini 2024"]
+    assert [h.name for h in _search(session, admin, "ordini").items] == ["ordini 2024", "riordini 2024"]
 
 
 def test_like_metacharacters_stay_literal(session):
-    """`_` è un jolly in LIKE. Chi cerca `a_b` intende `a_b`. Questo test è anche
-    la prova che l'escape è DICHIARATO: senza, su SQLite passerebbe il jolly."""
+    """`_` is a wildcard in LIKE. Whoever searches `a_b` means `a_b`. This test is also the
+    proof that the escape is DECLARED: without it, on SQLite the wildcard would pass."""
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="p")
     make_flow(session, name="a_b esatto", project_id=p.id)
     make_flow(session, name="axb diverso", project_id=p.id)
 
-    assert [h.name for h in _cerca(session, admin, "a_b").items] == ["a_b esatto"]
+    assert [h.name for h in _search(session, admin, "a_b").items] == ["a_b esatto"]
 
 
 def test_percent_stays_literal_too(session):
@@ -185,7 +184,7 @@ def test_percent_stays_literal_too(session):
     make_flow(session, name="sconto 50% netto", project_id=p.id)
     make_flow(session, name="sconto pieno", project_id=p.id)
 
-    assert [h.name for h in _cerca(session, admin, "50%").items] == ["sconto 50% netto"]
+    assert [h.name for h in _search(session, admin, "50%").items] == ["sconto 50% netto"]
 
 
 def test_the_search_is_case_insensitive(session):
@@ -193,4 +192,4 @@ def test_the_search_is_case_insensitive(session):
     p = make_project(session, name="p")
     make_flow(session, name="Margine Lordo", project_id=p.id)
 
-    assert _cerca(session, admin, "margine lordo").total == 1
+    assert _search(session, admin, "margine lordo").total == 1

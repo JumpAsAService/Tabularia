@@ -1,7 +1,8 @@
-"""Descrizioni dei CAMPI di una datasource (`Datasource.column_descriptions`).
+"""Descriptions of a datasource's FIELDS (`Datasource.column_descriptions`).
 
-Mappa {colonna: testo} curata a mano, separata dallo schema `columns` (che ogni
-refresh rigenera): sopravvive ai refresh e viaggia anche dentro `columns[*].description`.
+A {column: text} map curated by hand, kept apart from the `columns` schema (which every
+refresh regenerates): it survives the refreshes and travels inside
+`columns[*].description` too.
 """
 import json
 
@@ -35,7 +36,7 @@ def test_out_merges_descriptions_into_columns(session):
     assert out.column_descriptions == {"prezzo": "netto EUR", "sparita": "colonna non più nello schema"}
     by = {c["name"]: c for c in out.columns}
     assert by["prezzo"]["description"] == "netto EUR"
-    assert "description" not in by["id"]  # non descritta: chiave assente, non stringa vuota
+    assert "description" not in by["id"]  # not described: key missing, not an empty string
 
 
 def test_update_replaces_map_and_survives_schema_change(session):
@@ -44,22 +45,22 @@ def test_update_replaces_map_and_survives_schema_change(session):
     ds = make_datasource(session, project_id=p.id, columns=json.dumps([{"name": "a", "dtype": "Int64"}]))
     out = update_datasource(ds.id, DatasourceUpdate(column_descriptions={"a": "campo A", "b": ""}), user=admin, session=session)
     assert out.column_descriptions == {"a": "campo A"}
-    # aggiornare nome/descrizione NON tocca le descrizioni dei campi (omesso = invariato)
+    # updating name/description does NOT touch the fields' descriptions (omitted = unchanged)
     out = update_datasource(ds.id, DatasourceUpdate(description="nuova"), user=admin, session=session)
     assert out.column_descriptions == {"a": "campo A"}
-    # un refresh riscrive lo schema: la descrizione resta agganciata al nome
+    # a refresh rewrites the schema: the description stays tied to the name
     ds.columns = json.dumps([{"name": "a", "dtype": "String"}, {"name": "c", "dtype": "Int64"}])
     session.add(ds); session.commit(); session.refresh(ds)
     out = _to_out(ds)
     assert {c["name"]: c.get("description") for c in out.columns} == {"a": "campo A", "c": None}
-    # mappa vuota = cancella tutto
+    # empty map = delete everything
     out = update_datasource(ds.id, DatasourceUpdate(column_descriptions={}), user=admin, session=session)
     assert out.column_descriptions == {}
 
 
 def test_datasource_description_is_trimmed_and_capped(session):
-    """La descrizione della DATASOURCE si cura come quelle dei campi: spazi
-    tolti, lunghezza limitata, e resta quando si salvano solo i campi."""
+    """The DATASOURCE's description is curated as the fields' are: spaces stripped, length
+    limited, and it stays when only the fields are saved."""
     from app.routes.datasources import MAX_DATASOURCE_DESCRIPTION
 
     admin = make_user(session, email="a@x.local", is_superuser=True)
@@ -68,7 +69,7 @@ def test_datasource_description_is_trimmed_and_capped(session):
     out = update_datasource(ds.id, DatasourceUpdate(description="  Ordini 2024, una riga per ordine.  "), user=admin, session=session)
     assert out.description == "Ordini 2024, una riga per ordine."
     out = update_datasource(ds.id, DatasourceUpdate(column_descriptions={"x": "id"}), user=admin, session=session)
-    assert out.description == "Ordini 2024, una riga per ordine."  # non toccata
+    assert out.description == "Ordini 2024, una riga per ordine."  # not touched
     with pytest.raises(HTTPException) as e:
         update_datasource(ds.id, DatasourceUpdate(description="x" * (MAX_DATASOURCE_DESCRIPTION + 1)), user=admin, session=session)
     assert e.value.status_code == 422

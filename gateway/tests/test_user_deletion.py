@@ -1,16 +1,15 @@
-"""Cancellazione di un utente: cosa sparisce con lui e cosa DEVE sopravvivere.
+"""Deleting a user: what disappears with them and what MUST survive.
 
-Il caso che ha originato questo file: eliminare un utente rispondeva **500** su
-Postgres. `audit_logs.actor_id` è una foreign key verso `users`, il percorso di
-cancellazione non la azzerava, e siccome `auth.login` è auditato bastava aver
-fatto accesso una volta per non essere più eliminabili — cioè qualunque utente
-vero. Nei test non si vedeva perché SQLite ha le foreign key spente.
+The case that started this file: deleting a user answered **500** on Postgres.
+`audit_logs.actor_id` is a foreign key towards `users`, the deletion path did not reset
+it, and since `auth.login` is audited having signed in once was enough to be no longer
+deletable — that is any real user. The tests did not show it because SQLite has
+foreign keys off.
 
-Qui non si può riprodurre la violazione (stesso SQLite, stesse FK spente), e
-inseguirla sarebbe il test sbagliato: quello giusto verifica il COMPORTAMENTO
-che rende la cancellazione possibile, cioè che l'audit sopravviva alla persona
-perdendo solo il riferimento. Se qualcuno domani togliesse quella riga, questo
-test cadrebbe su qualsiasi database.
+Here the violation cannot be reproduced (same SQLite, same FKs off), and chasing it
+would be the wrong test: the right one checks the BEHAVIOUR that makes the deletion
+possible, that is the audit surviving the person losing only the reference. If someone
+removed that line tomorrow, this test would fail on any database.
 """
 import pytest
 from fastapi import HTTPException
@@ -28,52 +27,52 @@ def _admin(session):
 
 
 def test_the_audit_survives_the_person(session):
-    """Cancellare un account non deve cancellare le prove di ciò che ha fatto."""
+    """Deleting an account must not delete the evidence of what it did."""
     admin = _admin(session)
-    tizio = make_user(session, email="tizio@x.local")
-    audit.record_audit(session, actor=tizio, action=audit.LOGIN)
-    audit.record_audit(session, actor=tizio, action=audit.EXPORT_DOWNLOAD, target_label="clienti.csv")
+    someone = make_user(session, email="tizio@x.local")
+    audit.record_audit(session, actor=someone, action=audit.LOGIN)
+    audit.record_audit(session, actor=someone, action=audit.EXPORT_DOWNLOAD, target_label="clienti.csv")
 
-    delete_user(tizio.id, session=session, current=admin)
+    delete_user(someone.id, session=session, current=admin)
 
     # the deletion itself is now an entry of its own, by the administrator
-    (cancellazione,) = session.exec(select(AuditLog).where(AuditLog.action == audit.USER_DELETE)).all()
-    assert cancellazione.actor_id == admin.id and cancellazione.target_label == "tizio@x.local"
+    (deletion,) = session.exec(select(AuditLog).where(AuditLog.action == audit.USER_DELETE)).all()
+    assert deletion.actor_id == admin.id and deletion.target_label == "tizio@x.local"
     rows = session.exec(select(AuditLog).where(AuditLog.action != audit.USER_DELETE)).all()
     assert len(rows) == 2, "le righe di audit non devono sparire con l'utente"
     for r in rows:
-        assert r.actor_id is None                  # il riferimento si azzera…
-        assert r.actor_label == "tizio@x.local"    # …ma si sa ancora chi era
+        assert r.actor_id is None                  # the reference is reset…
+        assert r.actor_label == "tizio@x.local"    # …but who it was is still known
     assert {r.action for r in rows} == {audit.LOGIN, audit.EXPORT_DOWNLOAD}
 
 
 def test_the_audit_of_other_people_is_untouched(session):
     admin = _admin(session)
-    tizio = make_user(session, email="tizio@x.local")
+    someone = make_user(session, email="tizio@x.local")
     caio = make_user(session, email="caio@x.local")
-    audit.record_audit(session, actor=tizio, action=audit.LOGIN)
+    audit.record_audit(session, actor=someone, action=audit.LOGIN)
     audit.record_audit(session, actor=caio, action=audit.LOGIN)
 
-    delete_user(tizio.id, session=session, current=admin)
+    delete_user(someone.id, session=session, current=admin)
 
-    per_attore = {r.actor_label: r.actor_id for r in session.exec(select(AuditLog)).all()}
-    assert per_attore["tizio@x.local"] is None
-    assert per_attore["caio@x.local"] == caio.id  # l'altro non è stato toccato
+    by_actor = {r.actor_label: r.actor_id for r in session.exec(select(AuditLog)).all()}
+    assert by_actor["tizio@x.local"] is None
+    assert by_actor["caio@x.local"] == caio.id  # the other was not touched
 
 
 def test_permissions_and_memberships_go_with_the_user(session):
-    """Il contorno che già funzionava, inchiodato: sono ACCESSI, non storia, e
-    devono sparire davvero."""
+    """The surroundings that worked already, nailed down: they are ACCESS, not history, and
+    must really disappear."""
     admin = _admin(session)
-    tizio = make_user(session, email="tizio@x.local")
+    someone = make_user(session, email="tizio@x.local")
     p = make_project(session, name="cartella")
-    make_permission(session, user_id=tizio.id, project_id=p.id, capability=Capability.VIEW.value)
+    make_permission(session, user_id=someone.id, project_id=p.id, capability=Capability.VIEW.value)
 
-    delete_user(tizio.id, session=session, current=admin)
+    delete_user(someone.id, session=session, current=admin)
 
-    assert session.exec(select(Permission).where(Permission.user_id == tizio.id)).all() == []
-    assert session.exec(select(UserGroupLink).where(UserGroupLink.user_id == tizio.id)).all() == []
-    assert session.get(User, tizio.id) is None
+    assert session.exec(select(Permission).where(Permission.user_id == someone.id)).all() == []
+    assert session.exec(select(UserGroupLink).where(UserGroupLink.user_id == someone.id)).all() == []
+    assert session.get(User, someone.id) is None
 
 
 def test_you_cannot_delete_yourself(session):

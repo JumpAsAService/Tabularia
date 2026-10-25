@@ -16,7 +16,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.models import AiSpend, AuditLog, DbtAiText, Flow, FlowVersion, User
 from app.services import dbt_ai
 from app.services import dbt_export as d
-from tests.test_dbt_export import _flusso_a_due_uscite, _richiesta, scena  # noqa: F401 (scena is a fixture)
+from tests.test_dbt_export import _flow_with_two_outputs, _request, scene  # noqa: F401 (scena is a fixture)
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def ai(monkeypatch):
                             describe=lambda item, n: f"About {item.get('column') or item.get('name')} call {n}",
                             delay=0.0, hang=False, broken=False, error=None, usage=None, on_call=None)
 
-    async def rispondi(messages, info):
+    async def answer(messages, info):
         state.calls += 1
         n = state.calls
         text = next(p.content for m in messages for p in getattr(m, "parts", []) if type(p).__name__ == "UserPromptPart")
@@ -48,21 +48,21 @@ def ai(monkeypatch):
         if state.error:
             raise RuntimeError(state.error)
         uso = RequestUsage(input_tokens=state.usage[0], output_tokens=state.usage[1]) if state.usage else RequestUsage()
-        strumento = info.output_tools[0].name
+        tool = info.output_tools[0].name
         if state.broken:
-            return ModelResponse(parts=[ToolCallPart(tool_name=strumento, args={"wrong": 1})], usage=uso)
+            return ModelResponse(parts=[ToolCallPart(tool_name=tool, args={"wrong": 1})], usage=uso)
         if text.startswith("{"):
             items = json.loads(text)["items"]
             if state.on_call:
                 state.on_call([v["key"] for v in items])
             answer = [{"key": v["key"], "description": t} for v in items if (t := state.describe(v, n)) is not None]
-            return ModelResponse(parts=[ToolCallPart(tool_name=strumento, args={"items": answer})], usage=uso)
-        return ModelResponse(parts=[ToolCallPart(tool_name=strumento, args={"sql": state.sql})], usage=uso)
+            return ModelResponse(parts=[ToolCallPart(tool_name=tool, args={"items": answer})], usage=uso)
+        return ModelResponse(parts=[ToolCallPart(tool_name=tool, args={"sql": state.sql})], usage=uso)
 
     async def samples(bucket, key):
         return {}
 
-    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(rispondi))
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(answer))
     monkeypatch.setattr(dbt_ai, "ai_model", lambda session: state.model)
     monkeypatch.setattr(dbt_ai, "_samples", samples)
     return state
@@ -82,17 +82,17 @@ def _version(session, flow, n=1):
     session.commit()
 
 
-async def _descrivi(session, user, flow, **kw):
+async def _describe(session, user, flow, **kw):
     payload, project = d._build(session, flow, "data-prep", "duckdb", None, d.DbtOptions(ai_descriptions=True))
     await asyncio.wait_for(dbt_ai.describe(session, user, flow, sorted(project.flows_seen), payload, **kw), 20)
     return payload
 
 
-def _colonne(payload):
+def _columns(payload):
     return {c["name"]: c.get("description") or "" for c in payload["sources"][0]["tables"][0]["columns"]}
 
 
-def _rifiuto_traduzione(sql, detail="boh", code="translation_failed"):
+def _translation_refusal(sql, detail="boh", code="translation_failed"):
     return (422, {"detail": {"code": code, "message": "x", "params": {
         "dialect": "clickhouse", "detail": detail, "model": "margin", "sql": sql,
         "source_dialect": "duckdb", "target_dialect": "clickhouse", "columns": ["id", "canale"]}}})
@@ -100,7 +100,7 @@ def _rifiuto_traduzione(sql, detail="boh", code="translation_failed"):
 
 # ── #54: a key longer than the column that stores it ──────────────────────────
 @pytest.mark.anyio
-async def test_a_column_name_over_500_characters_is_remembered_and_found_again(session, scena, ai):
+async def test_a_column_name_over_500_characters_is_remembered_and_found_again(session, scene, ai):
     """Survey exports name a column after the whole question, and a nested Struct's
     type runs to hundreds of characters: the key is longer than its column. It was
     stored cut, never found again (a paid call on every export), and the second insert
@@ -108,30 +108,30 @@ async def test_a_column_name_over_500_characters_is_remembered_and_found_again(s
     the end collided on the very first export."""
     question = "How satisfied are you with " + "the service you received today " * 18
     assert len(question) > 500
-    columns = json.loads(scena.ordini.columns) + [{"name": question + "[Price]", "dtype": "Int64"},
+    columns = json.loads(scene.orders.columns) + [{"name": question + "[Price]", "dtype": "Int64"},
                                                     {"name": question + "[Quality]", "dtype": "Int64"}]
-    scena.ordini.columns = json.dumps(columns)
-    session.add(scena.ordini)
+    scene.orders.columns = json.dumps(columns)
+    session.add(scene.orders)
     session.commit()
     ai.describe = lambda v, n: f"Answer about {(v.get('column') or v.get('name'))[-9:]}"   # the end tells the two apart
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
 
-    p1 = await _descrivi(session, scena.capo, flow)
-    c = _colonne(p1)
+    p1 = await _describe(session, scene.boss, flow)
+    c = _columns(p1)
     assert c[question + "[Price]"] == "(AI) Answer about y [Price]"
     assert c[question + "[Quality]"] == "(AI) Answer about [Quality]"
     assert ai.calls == 1
     assert all(len(r.key) <= 500 for r in session.exec(select(DbtAiText)).all())
 
-    p2 = await _descrivi(session, scena.capo, flow)
+    p2 = await _describe(session, scene.boss, flow)
     assert ai.calls == 1                                 # found again: no new call
     assert p2["sources"] == p1["sources"] and p2["ai"] == p1["ai"]
 
 
 # ── #55: an answer that leaves items out ──────────────────────────────────────
 @pytest.mark.anyio
-async def test_items_the_ai_leaves_out_are_asked_once_more_then_kept_as_without_description(session, scena, ai):
+async def test_items_the_ai_leaves_out_are_asked_once_more_then_kept_as_without_description(session, scene, ai):
     """Models drop items from long lists, or answer some with nothing. Those items were
     asked again at every export of the version: a paid call each time, a different zip,
     and a refusal once the provider was down. Now they are asked once more in the same
@@ -144,52 +144,52 @@ async def test_items_the_ai_leaves_out_are_asked_once_more_then_kept_as_without_
         return None if n == 1 else f"About {item['column']}"   # left out the first time
 
     ai.describe = describe
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
 
-    p1 = await _descrivi(session, scena.capo, flow)
+    p1 = await _describe(session, scene.boss, flow)
     assert ai.calls == 2
-    secondo = [v["key"] for v in json.loads(ai.prompts[1])["items"]]
-    assert secondo == [f"col:ds:{scena.ordini.id}:id:", f"col:ds:{scena.ordini.id}:importo:"]   # only the missing ones
-    assert _colonne(p1) == {"id": "(AI) About id", "canale": "Sales channel", "importo": ""}
+    second = [v["key"] for v in json.loads(ai.prompts[1])["items"]]
+    assert second == [f"col:ds:{scene.orders.id}:id:", f"col:ds:{scene.orders.id}:importo:"]   # only the missing ones
+    assert _columns(p1) == {"id": "(AI) About id", "canale": "Sales channel", "importo": ""}
 
-    p2 = await _descrivi(session, scena.capo, flow)
+    p2 = await _describe(session, scene.boss, flow)
     assert ai.calls == 2 and p2 == p1                       # the same version: no call, the same payload
     ai.error = "503 upstream"
-    p3 = await _descrivi(session, scena.capo, flow)          # the provider is down: nothing to ask
+    p3 = await _describe(session, scene.boss, flow)          # the provider is down: nothing to ask
     assert ai.calls == 2 and p3 == p1
 
 
 @pytest.mark.anyio
-async def test_when_the_second_ask_fails_the_first_answer_is_kept(session, scena, ai):
+async def test_when_the_second_ask_fails_the_first_answer_is_kept(session, scene, ai):
     """The first answer was paid for: a failure on the second ask stops the export, but
     the next export asks only what is still missing."""
     ai.describe = lambda v, n: None if v.get("column") == "id" else "Described"
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
     ai.on_call = lambda keys: setattr(ai, "error", "503 upstream") if ai.calls == 1 else None
     with pytest.raises(d.DbtExportError) as e:
-        await _descrivi(session, scena.capo, flow)
+        await _describe(session, scene.boss, flow)
     assert e.value.code == "ai_failed" and ai.calls == 2
     ai.error, ai.on_call = None, None
     ai.describe = lambda v, n: "Described"
-    p = await _descrivi(session, scena.capo, flow)
-    assert ai.calls == 3 and [v["key"] for v in json.loads(ai.prompts[-1])["items"]] == [f"col:ds:{scena.ordini.id}:id:"]
-    assert _colonne(p)["id"] == "(AI) Described"
+    p = await _describe(session, scene.boss, flow)
+    assert ai.calls == 3 and [v["key"] for v in json.loads(ai.prompts[-1])["items"]] == [f"col:ds:{scene.orders.id}:id:"]
+    assert _columns(p)["id"] == "(AI) Described"
 
 
 # ── #57: a provider that does not answer ──────────────────────────────────────
 @pytest.mark.anyio
-async def test_a_provider_that_does_not_answer_stops_the_export_within_its_budget(session, scena, ai, monkeypatch):
+async def test_a_provider_that_does_not_answer_stops_the_export_within_its_budget(session, scene, ai, monkeypatch):
     """A provider that accepts the connection and never answers held the download for
     up to 3 × 600 s, past the ingress' 300 s: the user got a generic 504 instead of
     «the AI did not answer»."""
     _ai_settings(monkeypatch, dbt_export_timeout_seconds=0.5)
     ai.hang = True
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     start = time.monotonic()
     with pytest.raises(d.DbtExportError) as e:
-        await _descrivi(session, scena.capo, flow)
+        await _describe(session, scene.boss, flow)
     assert time.monotonic() - start < 5
     assert e.value.code == "ai_failed" and "0.5 s" in e.value.params["detail"]
 
@@ -202,7 +202,7 @@ def test_the_default_ai_budget_ends_before_the_ingress_cuts_the_request():
 
 
 @pytest.mark.anyio
-async def test_the_budget_is_for_the_whole_export_not_for_each_call(session, scena, ai, fake_engine, monkeypatch):
+async def test_the_budget_is_for_the_whole_export_not_for_each_call(session, scene, ai, fake_engine, monkeypatch):
     """Descriptions and translations are several calls in one request: each one under
     the budget can still add up past it."""
     from fastapi import HTTPException
@@ -211,49 +211,49 @@ async def test_the_budget_is_for_the_whole_export_not_for_each_call(session, sce
 
     _ai_settings(monkeypatch, dbt_export_timeout_seconds=1.0)
     ai.delay = 0.6
-    flow = _flusso_a_due_uscite(session, scena)
-    fake_engine.dbt_export_script = [_rifiuto_traduzione("SELECT id, canale FROM __s_0 QUALIFY strano"), None]
+    flow = _flow_with_two_outputs(session, scene)
+    fake_engine.dbt_export_script = [_translation_refusal("SELECT id, canale FROM __s_0 QUALIFY strano"), None]
     opz = d.DbtOptions(target="clickhouse", ai_descriptions=True, ai_translations=True)
     with pytest.raises(HTTPException) as e:
-        await asyncio.wait_for(flows_routes.export_flow_dbt_with_options(flow.id, opz, _richiesta(), scena.capo, session), 20)
+        await asyncio.wait_for(flows_routes.export_flow_dbt_with_options(flow.id, opz, _request(), scene.boss, session), 20)
     assert e.value.status_code == 422 and "did not answer" in e.value.detail and ai.calls == 2
 
 
 # ── #56: what a failed call cost ──────────────────────────────────────────────
 @pytest.mark.anyio
-async def test_a_failed_ai_call_still_reaches_the_spending_ledger(session, scena, ai):
+async def test_a_failed_ai_call_still_reaches_the_spending_ledger(session, scene, ai):
     """An answer that fails validation is retried by pydantic-ai: two billed requests,
     and nothing in ai_spend, so the daily caps never saw them."""
     ai.broken, ai.usage = True, (50_000, 4_000)
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     with pytest.raises(d.DbtExportError) as e:
-        await _descrivi(session, scena.capo, flow)
+        await _describe(session, scene.boss, flow)
     assert e.value.code == "ai_failed" and ai.calls == 2
     rows = session.exec(select(AiSpend)).all()
     assert sum(r.input_tokens for r in rows) == 100_000 and sum(r.output_tokens for r in rows) == 8_000
 
     before = len(rows)
     with pytest.raises(d.DbtExportError):
-        await dbt_ai.translate(session, scena.capo, flow, _rifiuto_traduzione("SELECT 1")[1]["detail"]["params"])
+        await dbt_ai.translate(session, scene.boss, flow, _translation_refusal("SELECT 1")[1]["detail"]["params"])
     assert ai.calls == 4 and sum(r.input_tokens for r in session.exec(select(AiSpend)).all()[before:]) == 100_000
 
 
 @pytest.mark.anyio
-async def test_the_export_s_ai_calls_have_the_assistant_s_per_turn_limits(session, scena, ai, monkeypatch):
+async def test_the_export_s_ai_calls_have_the_assistant_s_per_turn_limits(session, scene, ai, monkeypatch):
     """The assistant stops a turn over its token or cost limit (audit A8); the export
     sent up to 400 columns in one call with only a limit on the number of requests."""
     _ai_settings(monkeypatch, max_input_tokens_per_turn=1000)
     ai.usage = (5_000, 10)
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     with pytest.raises(d.DbtExportError) as e:
-        await _descrivi(session, scena.capo, flow)
+        await _describe(session, scene.boss, flow)
     assert e.value.code == "ai_failed" and "input_tokens_limit" in e.value.params["detail"]
     assert sum(r.input_tokens for r in session.exec(select(AiSpend)).all()) == 5_000
 
 
 # ── #58 #64: a query too long for the AI ──────────────────────────────────────
 @pytest.mark.anyio
-async def test_a_query_too_long_for_the_ai_is_refused_not_sent_cut(session, scena, ai, fake_engine):
+async def test_a_query_too_long_for_the_ai_is_refused_not_sent_cut(session, scene, ai, fake_engine):
     """The AI got the first 20,000 characters and nothing said the rest was missing: a
     proposal without the hidden steps passed the engine's checks, which compare columns,
     not steps. A proposal kept from such a cut prompt is not reused either."""
@@ -261,33 +261,33 @@ async def test_a_query_too_long_for_the_ai_is_refused_not_sent_cut(session, scen
 
     from app.routes import flows as flows_routes
 
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
     columns = ",\n".join(f'    "attribute_{i:04d}"' for i in range(1000))
-    lunga = f"SELECT\n{columns}\nFROM __s_0\nWHERE secret_filter = 1"
-    assert len(lunga) > 20_000
-    session.add(DbtAiText(flow_id=flow.id, flow_version=1, kind="translate", key=dbt_ai.translation_key(lunga, "duckdb", "clickhouse"),
+    long_one = f"SELECT\n{columns}\nFROM __s_0\nWHERE secret_filter = 1"
+    assert len(long_one) > 20_000
+    session.add(DbtAiText(flow_id=flow.id, flow_version=1, kind="translate", key=dbt_ai.translation_key(long_one, "duckdb", "clickhouse"),
                           text="SELECT id, canale FROM __s_0", model_id="finto-1"))
     session.commit()
-    fake_engine.dbt_export_script = [_rifiuto_traduzione(lunga), None]
+    fake_engine.dbt_export_script = [_translation_refusal(long_one), None]
     opz = d.DbtOptions(target="clickhouse", ai_translations=True)
     with pytest.raises(HTTPException) as e:
-        await flows_routes.export_flow_dbt_with_options(flow.id, opz, _richiesta(), scena.capo, session)
+        await flows_routes.export_flow_dbt_with_options(flow.id, opz, _request(), scene.boss, session)
     assert ai.calls == 0 and len(fake_engine.dbt_exports) == 1
     assert e.value.status_code == 422
-    assert "«margin»" in e.value.detail and f"{len(lunga):,}" in e.value.detail and "20,000" in e.value.detail
+    assert "«margin»" in e.value.detail and f"{len(long_one):,}" in e.value.detail and "20,000" in e.value.detail
 
     # under the limit the AI gets the whole query, its last step included
-    corta = "SELECT\n" + ",\n".join(f'    "attribute_{i:04d}"' for i in range(880)) + "\nFROM __s_0\nWHERE secret_filter = 1"
-    assert 19_000 < len(corta) <= 20_000
-    fake_engine.dbt_export_script = [_rifiuto_traduzione(corta), None]
-    answer = await flows_routes.export_flow_dbt_with_options(flow.id, opz, _richiesta(), scena.capo, session)
-    assert answer.status_code == 200 and ai.calls == 1 and ai.prompts[0] == corta
+    short_one = "SELECT\n" + ",\n".join(f'    "attribute_{i:04d}"' for i in range(880)) + "\nFROM __s_0\nWHERE secret_filter = 1"
+    assert 19_000 < len(short_one) <= 20_000
+    fake_engine.dbt_export_script = [_translation_refusal(short_one), None]
+    answer = await flows_routes.export_flow_dbt_with_options(flow.id, opz, _request(), scene.boss, session)
+    assert answer.status_code == 200 and ai.calls == 1 and ai.prompts[0] == short_one
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("code", ["translation_failed", "query_not_translatable"])
-async def test_a_model_over_clickhouse_max_query_size_is_not_sent_to_the_ai(session, scena, ai, fake_engine, code):
+async def test_a_model_over_clickhouse_max_query_size_is_not_sent_to_the_ai(session, scene, ai, fake_engine, code):
     """A model over ClickHouse's max_query_size came back as a translation failure, so
     with the AI option on the gateway paid for calls that could never pass the same
     size check. The refusal keeps the engine's reason."""
@@ -295,16 +295,16 @@ async def test_a_model_over_clickhouse_max_query_size_is_not_sent_to_the_ai(sess
 
     from app.routes import flows as flows_routes
 
-    flow = _flusso_a_due_uscite(session, scena)
-    enorme = "SELECT " + ", ".join(f"c{i}" for i in range(60_000)) + " FROM __s_0"
-    assert len(enorme) > 262_144
+    flow = _flow_with_two_outputs(session, scene)
+    huge = "SELECT " + ", ".join(f"c{i}" for i in range(60_000)) + " FROM __s_0"
+    assert len(huge) > 262_144
     reason = "Max query size exceeded (can be increased with the `max_query_size` setting): Syntax error: failed at position 262145"
-    refusal = _rifiuto_traduzione(enorme, detail=reason, code=code)
+    refusal = _translation_refusal(huge, detail=reason, code=code)
     refusal[1]["detail"]["params"]["datasource"] = "orders query"
     fake_engine.dbt_export_script = [refusal, None]
     with pytest.raises(HTTPException) as e:
         await flows_routes.export_flow_dbt_with_options(flow.id, d.DbtOptions(target="clickhouse", ai_translations=True),
-                                                       _richiesta(), scena.capo, session)
+                                                       _request(), scene.boss, session)
     assert ai.calls == 0 and e.value.status_code == 422 and "Max query size exceeded" in e.value.detail
 
 
@@ -323,96 +323,96 @@ class TestOverlappingExports:
         engine.dispose()
 
     @pytest.mark.anyio
-    async def test_overlapping_exports_ask_the_ai_once_and_give_the_same_texts(self, db_engine, session, scena, ai):
-        flow = _flusso_a_due_uscite(session, scena)
+    async def test_overlapping_exports_ask_the_ai_once_and_give_the_same_texts(self, db_engine, session, scene, ai):
+        flow = _flow_with_two_outputs(session, scene)
         _version(session, flow)
         ai.delay = 0.3
         with Session(db_engine) as other_one:
             p1, p2 = await asyncio.gather(
-                _descrivi(session, scena.capo, flow),
-                _descrivi(other_one, other_one.get(User, scena.capo.id), other_one.get(Flow, flow.id)))
+                _describe(session, scene.boss, flow),
+                _describe(other_one, other_one.get(User, scene.boss.id), other_one.get(Flow, flow.id)))
         assert ai.calls == 1
-        assert p1 == p2 and _colonne(p1)["id"] == "(AI) About id call 1"
-        assert await _descrivi(session, scena.capo, flow) == p1 and ai.calls == 1
+        assert p1 == p2 and _columns(p1)["id"] == "(AI) About id call 1"
+        assert await _describe(session, scene.boss, flow) == p1 and ai.calls == 1
         assert session.exec(select(DbtAiText).where(DbtAiText.kind == "claim")).all() == []   # nothing left held
 
     @pytest.mark.anyio
-    async def test_texts_another_gateway_stored_first_win(self, db_engine, session, scena, ai):
+    async def test_texts_another_gateway_stored_first_win(self, db_engine, session, scene, ai):
         """Another replica (an older one during a rolling update) stores its texts while
         this export waits for the AI: the insert must not fail and the zip must carry
         what is stored, the texts every later re-export gives."""
-        flow = _flusso_a_due_uscite(session, scena)
+        flow = _flow_with_two_outputs(session, scene)
         _version(session, flow)
 
-        def l_altro_gateway(keys):
+        def the_other_gateway(keys):
             with Session(db_engine) as other:
                 for k in keys:
                     other.add(DbtAiText(flow_id=flow.id, flow_version=1, kind="describe", key=k, text="From the other gateway", model_id="m-2"))
                 other.commit()
 
-        ai.on_call = l_altro_gateway
-        p1 = await _descrivi(session, scena.capo, flow)
-        assert _colonne(p1)["id"] == "(AI) From the other gateway" and p1["ai"]["model"] == "m-2"
+        ai.on_call = the_other_gateway
+        p1 = await _describe(session, scene.boss, flow)
+        assert _columns(p1)["id"] == "(AI) From the other gateway" and p1["ai"]["model"] == "m-2"
         ai.on_call = None
-        assert await _descrivi(session, scena.capo, flow) == p1 and ai.calls == 1
+        assert await _describe(session, scene.boss, flow) == p1 and ai.calls == 1
 
 
 @pytest.mark.anyio
-async def test_a_claim_left_by_an_export_that_died_expires(session, scena, ai):
+async def test_a_claim_left_by_an_export_that_died_expires(session, scene, ai):
     """A gateway that dies while asking the AI leaves its claim: the version is not
     blocked past that export's own deadline."""
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
     session.add(DbtAiText(flow_id=flow.id, flow_version=1, kind="claim", key="describe", text=f"{time.time() - 1:.3f}"))
     session.commit()
-    p = await _descrivi(session, scena.capo, flow)
-    assert ai.calls == 1 and _colonne(p)["id"] == "(AI) About id call 1"
+    p = await _describe(session, scene.boss, flow)
+    assert ai.calls == 1 and _columns(p)["id"] == "(AI) About id call 1"
 
 
 # ── #59: the model the README names ───────────────────────────────────────────
 @pytest.mark.anyio
-async def test_after_a_model_switch_the_readme_names_the_model_that_wrote_the_texts(session, scena, ai):
+async def test_after_a_model_switch_the_readme_names_the_model_that_wrote_the_texts(session, scene, ai):
     """The texts are kept per version; the README named the model configured now, so the
     zip changed and named a model that wrote nothing. With every text stored, a re-export
     needs no AI at all."""
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
-    p1 = await _descrivi(session, scena.capo, flow)
+    p1 = await _describe(session, scene.boss, flow)
     assert p1["ai"]["model"] == "finto-1"
     ai.model = "other-model-2"
-    assert await _descrivi(session, scena.capo, flow) == p1 and ai.calls == 1
+    assert await _describe(session, scene.boss, flow) == p1 and ai.calls == 1
     ai.model = None                                       # the AI switched off since
-    assert await _descrivi(session, scena.capo, flow) == p1
+    assert await _describe(session, scene.boss, flow) == p1
 
 
 @pytest.mark.anyio
-async def test_texts_of_two_models_name_both(session, scena, ai):
+async def test_texts_of_two_models_name_both(session, scene, ai):
     ai.describe = lambda v, n: None if v.get("column") == "id" else "Described"
     ai.on_call = lambda keys: setattr(ai, "error", "503 upstream") if ai.calls == 1 else None
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
     with pytest.raises(d.DbtExportError):
-        await _descrivi(session, scena.capo, flow)
+        await _describe(session, scene.boss, flow)
     ai.error, ai.on_call, ai.model = None, None, "other-model-2"
     ai.describe = lambda v, n: "Described"
-    p = await _descrivi(session, scena.capo, flow)
+    p = await _describe(session, scene.boss, flow)
     assert p["ai"]["model"] == "finto-1, other-model-2"
 
 
 @pytest.mark.anyio
-async def test_the_audit_names_the_model_that_wrote_the_translation(session, scena, ai, fake_engine):
+async def test_the_audit_names_the_model_that_wrote_the_translation(session, scene, ai, fake_engine):
     from app.routes import flows as flows_routes
 
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
     opz = d.DbtOptions(target="clickhouse", ai_translations=True)
     for model in ("finto-1", "other-model-2"):
         ai.model = model
-        fake_engine.dbt_export_script = [_rifiuto_traduzione("SELECT id, canale FROM __s_0 QUALIFY strano"), None]
-        await flows_routes.export_flow_dbt_with_options(flow.id, opz, _richiesta(), scena.capo, session)
+        fake_engine.dbt_export_script = [_translation_refusal("SELECT id, canale FROM __s_0 QUALIFY strano"), None]
+        await flows_routes.export_flow_dbt_with_options(flow.id, opz, _request(), scene.boss, session)
     assert ai.calls == 1
-    dettagli = [json.loads(r.detail)["ai"] for r in session.exec(select(AuditLog).where(AuditLog.action == "export.download")).all()]
-    assert dettagli == [{"model": "finto-1", "translated": ["margin"]}] * 2
+    details = [json.loads(r.detail)["ai"] for r in session.exec(select(AuditLog).where(AuditLog.action == "export.download")).all()]
+    assert details == [{"model": "finto-1", "translated": ["margin"]}] * 2
 
 
 # ── #61: text YAML can carry ──────────────────────────────────────────────────
@@ -420,16 +420,16 @@ _NOT_YAML = re.compile("[^\t\n\r\x20-\x7e\x85\xa0-\ud7ff\ue000-\ufffd\U00010000-
 
 
 @pytest.mark.anyio
-async def test_ai_text_is_stored_without_characters_yaml_cannot_carry(session, scena, ai):
+async def test_ai_text_is_stored_without_characters_yaml_cannot_carry(session, scene, ai):
     """Sample values decoded with the wrong code page carry C1 controls, and the AI
     echoes them: one of them in schema.yml and `dbt parse` refuses the whole project."""
     import yaml
 
     ai.describe = lambda v, n: "Name,\x00 e.g. Smith\x96Jones\x7f;\x01 ok\ufffe\x85next\u2028line\x0bend"
-    flow = _flusso_a_due_uscite(session, scena)
+    flow = _flow_with_two_outputs(session, scene)
     _version(session, flow)
-    p = await _descrivi(session, scena.capo, flow)
-    assert _colonne(p)["id"] == "(AI) Name, e.g. SmithJones; ok next line end"
+    p = await _describe(session, scene.boss, flow)
+    assert _columns(p)["id"] == "(AI) Name, e.g. SmithJones; ok next line end"
     for r in session.exec(select(DbtAiText)).all():
         assert not _NOT_YAML.search(r.text), repr(r.text)
         # as the engine writes it (a JSON string is a YAML double-quoted scalar)
@@ -437,40 +437,40 @@ async def test_ai_text_is_stored_without_characters_yaml_cannot_carry(session, s
 
 
 # ── handed over by the engine lane (E1 #53 #2): the AI's refusals, the source() macro ──
-@pytest.mark.parametrize("reason, params, inglese, italiano", [
+@pytest.mark.parametrize("reason, params, english, italian", [
     ("function_not_allowed", {"function": "dictGet"}, "it calls dictGet, which reads data or settings outside the model",
      "chiama dictGet, che legge dati o impostazioni fuori dal modello"),
     ("settings", {}, "it changes the server's settings (SETTINGS)", "cambia le impostazioni del server (SETTINGS)"),
 ])
-def test_the_engine_s_new_reasons_to_refuse_an_ai_translation_are_sentences(reason, params, inglese, italiano):
+def test_the_engine_s_new_reasons_to_refuse_an_ai_translation_are_sentences(reason, params, english, italian):
     """The engine refuses a proposal that reads outside the model or changes the server's
     settings: without a sentence the user read the bare reason code."""
     from app.services.dbt_messages import engine_message
 
     detail = {"code": "ai_translation_invalid", "message": "x", "params": {"model": "margin", "reason": reason, **params}}
-    assert engine_message(detail, "en") == (f"The AI's translation of «margin» did not pass the checks: {inglese}. "
+    assert engine_message(detail, "en") == (f"The AI's translation of «margin» did not pass the checks: {english}. "
                                                   "Export with another target, or without the AI translation.")
-    assert italiano in engine_message(detail, "it")
+    assert italian in engine_message(detail, "it")
     for language in ("de", "es", "fr"):
         assert reason not in engine_message(detail, language)
 
 
-def _come_legge_dbt(argomento: str) -> tuple[str, str | None]:
+def _as_dbt_reads(argument: str) -> tuple[str, str | None]:
     """A source() argument as dbt reads it: (what Jinja renders, what dbt's static parser
     takes, None when it cannot read it and leaves it to Jinja). The static parser takes a
     string literal as written, escapes included (seen with dbt 1.12.5); Jinja reads a
     string literal as Python does."""
     import ast
 
-    pieces = argomento.split(" ~ ")
+    pieces = argument.split(" ~ ")
     jinja = "".join(ast.literal_eval(x) for x in pieces)
-    statico = argomento[1:-1] if len(pieces) == 1 and argomento[0] == argomento[-1] and argomento[0] in "'\"" else None
-    return jinja, statico
+    static = argument[1:-1] if len(pieces) == 1 and argument[0] == argument[-1] and argument[0] in "'\"" else None
+    return jinja, static
 
 
 @pytest.mark.parametrize("table", ["ordini", "o'brien", 'say "hi"', "o'brien\\x", "both ' and \"", "\\", "'"])
 @pytest.mark.parametrize("target", ["duckdb", "native", "clickhouse"])
-def test_a_table_name_with_a_quote_or_a_backslash_is_read_by_dbt_as_written(session, scena, target, table):
+def test_a_table_name_with_a_quote_or_a_backslash_is_read_by_dbt_as_written(session, scene, target, table):
     """`{{ source('…', '<table>') }}` was written with the raw table name: a quote in it
     ended the Jinja string, and dbt could not parse the model. An escaped literal is no
     answer either: dbt's static parser would read the escapes as part of the name.
@@ -480,20 +480,20 @@ def test_a_table_name_with_a_quote_or_a_backslash_is_read_by_dbt_as_written(sess
     is refused on every target, as the engine does: nobody names a table that way."""
     for name in ("src", "db_1_vendite"):
         m = re.fullmatch(r"\{\{ source\('(\w+)', (.+)\) \}\}", d._macro_source(name, table))
-        assert m and m.group(1) == name and _come_legge_dbt(m.group(2))[0] == table
-    scena.ordini.source_ref = f"vendite.{table}"
-    session.add(scena.ordini)
+        assert m and m.group(1) == name and _as_dbt_reads(m.group(2))[0] == table
+    scene.orders.source_ref = f"vendite.{table}"
+    session.add(scene.orders)
     session.commit()
     if "'" in table or ('"' in table and target != "clickhouse") or ("\\" in table and target == "clickhouse"):
         with pytest.raises(d.DbtExportError) as e:
-            d.build_export_payload(session, _flusso_a_due_uscite(session, scena), "data-prep", target)
+            d.build_export_payload(session, _flow_with_two_outputs(session, scene), "data-prep", target)
         assert e.value.code == "name_not_quotable" and e.value.params["name"] == table
         return
-    p = d.build_export_payload(session, _flusso_a_due_uscite(session, scena), "data-prep", target)
-    item = p["source_map"][scena.ordini.key]
+    p = d.build_export_payload(session, _flow_with_two_outputs(session, scene), "data-prep", target)
+    item = p["source_map"][scene.orders.key]
     macro = item.get("ref") or item["macro"]
     m = re.fullmatch(r"\{\{ source\('(\w+)', (.+)\) \}\}", macro)
     assert m, macro
-    jinja, statico = _come_legge_dbt(m.group(2))
-    assert jinja == table and statico in (table, None), macro
+    jinja, static = _as_dbt_reads(m.group(2))
+    assert jinja == table and static in (table, None), macro
     assert item["label"] == table

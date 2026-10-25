@@ -1,8 +1,8 @@
-"""Fail-closed della cifratura Fernet.
+"""Fail-closed Fernet encryption.
 
-Regressione per il fix: senza `SECURITY__FERNET_KEY` il servizio NON deve
-ripiegare in silenzio su una chiave nota nel repo — deve sollevare. Con la
-chiave impostata, il round-trip cifra/decifra deve funzionare.
+Regression for the fix: without `SECURITY__FERNET_KEY` the service must NOT fall back
+silently on a key known in the repo — it must raise. With the key set, the
+encrypt/decrypt round trip must work.
 """
 import pytest
 from cryptography.fernet import Fernet

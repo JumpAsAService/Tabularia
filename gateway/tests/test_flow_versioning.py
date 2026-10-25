@@ -1,4 +1,4 @@
-"""Versioning dei flussi (auto-versione + promozione) e statistiche d'esecuzione."""
+"""The flows' versioning (auto-version + promotion) and run statistics."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -39,7 +39,7 @@ async def test_update_definition_creates_version_and_dedupes(session):
     user, p = _admin_and_project(session)
     flow = create_flow(p.id, FlowCreate(name="f", definition='{"nodes":[]}'), None, user, session)
     update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), None, user, session)  # cambia → v2
-    update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), None, user, session)  # uguale → niente
+    update_flow(flow.id, FlowUpdate(definition='{"nodes":[1]}'), None, user, session)  # the same → nothing
     assert [v.version for v in _versions(session, flow.id)] == [1, 2]
 
 
@@ -53,8 +53,8 @@ async def test_update_name_only_makes_no_version(session):
 async def test_promote_old_version_becomes_current(session):
     user, p = _admin_and_project(session)
     flow = create_flow(p.id, FlowCreate(name="f", definition='{"v":1}'), None, user, session)
-    update_flow(flow.id, FlowUpdate(definition='{"v":2}'), None, user, session)  # v2 = corrente
-    promoted = promote_flow_version(flow.id, 1, None, user, session)  # torna alla v1
+    update_flow(flow.id, FlowUpdate(definition='{"v":2}'), None, user, session)  # v2 = current
+    promoted = promote_flow_version(flow.id, 1, None, user, session)  # back to v1
     assert promoted.definition == '{"v":1}'
     vers = _versions(session, flow.id)
     assert [v.version for v in vers] == [1, 2, 3]

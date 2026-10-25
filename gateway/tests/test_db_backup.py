@@ -228,7 +228,7 @@ def app(session, store, monkeypatch):
     return app
 
 
-def _entra(app, session, email, **kw) -> TestClient:
+def _sign_in(app, session, email, **kw) -> TestClient:
     from app.core.security import hash_password
 
     make_user(session, email=email, hashed_password=hash_password(PASSWORD), **kw)
@@ -238,26 +238,26 @@ def _entra(app, session, email, **kw) -> TestClient:
 
 
 def test_the_administrator_changes_the_settings_and_puts_them_back(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    st = capo.get("/admin/backups").json()
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    st = boss.get("/admin/backups").json()
     assert st["enabled"] and st["schedule"] == "0 3 * * *" and st["keep"] == 14 and st["editable"]
     assert st["bucket"] == "tabularia" and st["prefix"] == "backups/postgres/" and st["same_as_data"] is True
-    assert capo.put("/admin/backups", json={"schedule": "every night"}, headers=CSRF).status_code == 422
-    st = capo.put("/admin/backups", json={"schedule": "30 1 * * 0", "keep": 4}, headers=CSRF).json()
+    assert boss.put("/admin/backups", json={"schedule": "every night"}, headers=CSRF).status_code == 422
+    st = boss.put("/admin/backups", json={"schedule": "30 1 * * 0", "keep": 4}, headers=CSRF).json()
     assert st["schedule"] == "30 1 * * 0" and st["keep"] == 4 and st["changed"] == {"enabled": False, "schedule": True, "keep": True}
     assert datetime.fromisoformat(st["next_at"]).weekday() == 6  # the next one follows the new schedule at once
-    assert capo.put("/admin/backups", json={"enabled": False}, headers=CSRF).json()["next_at"] is None
-    capo.put("/admin/backups", json={"reset": ["enabled"]}, headers=CSRF)
-    st = capo.put("/admin/backups", json={"reset": ["schedule"]}, headers=CSRF).json()
+    assert boss.put("/admin/backups", json={"enabled": False}, headers=CSRF).json()["next_at"] is None
+    boss.put("/admin/backups", json={"reset": ["enabled"]}, headers=CSRF)
+    st = boss.put("/admin/backups", json={"reset": ["schedule"]}, headers=CSRF).json()
     assert st["schedule"] == "0 3 * * *" and st["changed"]["schedule"] is False and st["keep"] == 4
     assert session.exec(select(AuditLog).where(AuditLog.action == "backup.update")).all()
 
 
 def test_back_up_now_once_at_a_time(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.post("/admin/backups/run", headers=CSRF)
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.post("/admin/backups/run", headers=CSRF)
     assert r.status_code == 200 and r.json()["requested_at"]
-    assert capo.post("/admin/backups/run", headers=CSRF).status_code == 409
+    assert boss.post("/admin/backups/run", headers=CSRF).status_code == 409
 
 
 def test_the_observer_reads_without_errors_and_downloads_nothing(app, session, store):
@@ -266,23 +266,23 @@ def test_the_observer_reads_without_errors_and_downloads_nothing(app, session, s
     r.last_error = "pg_dump failed: password authentication failed for user tab on db.internal"
     session.add(r)
     session.commit()
-    occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    st = occhio.get("/admin/backups").json()
+    eye = _sign_in(app, session, "occhio@x.local", is_observer=True)
+    st = eye.get("/admin/backups").json()
     assert st["last_error"] is None and not st["editable"] and [i["name"] for i in st["items"]] == [OLD[0]]
-    assert occhio.get(f"/admin/backups/{OLD[0]}/download").status_code == 403
-    assert occhio.put("/admin/backups", json={"keep": 1}, headers=CSRF).status_code == 403
-    assert occhio.post("/admin/backups/run", headers=CSRF).status_code == 403
-    assert _entra(app, session, "anna@x.local").get("/admin/backups").status_code == 403
+    assert eye.get(f"/admin/backups/{OLD[0]}/download").status_code == 403
+    assert eye.put("/admin/backups", json={"keep": 1}, headers=CSRF).status_code == 403
+    assert eye.post("/admin/backups/run", headers=CSRF).status_code == 403
+    assert _sign_in(app, session, "anna@x.local").get("/admin/backups").status_code == 403
 
 
 def test_a_download_streams_the_file_and_is_in_the_audit_log(app, session, store):
     store.objects[OLD[0]] = b"PGDMP" + b"y" * 5000
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.get(f"/admin/backups/{OLD[0]}/download")
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.get(f"/admin/backups/{OLD[0]}/download")
     assert r.status_code == 200 and r.content == store.objects[OLD[0]]
     assert OLD[0] in r.headers["content-disposition"]
-    assert capo.get("/admin/backups/notes.txt/download").status_code == 404
-    assert capo.get(f"/admin/backups/{OLD[1]}/download").status_code == 404
+    assert boss.get("/admin/backups/notes.txt/download").status_code == 404
+    assert boss.get(f"/admin/backups/{OLD[1]}/download").status_code == 404
     item = session.exec(select(AuditLog).where(AuditLog.action == "backup.download")).one()
     assert item.target_label == OLD[0]
 

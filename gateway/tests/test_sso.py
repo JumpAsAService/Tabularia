@@ -1,13 +1,13 @@
-"""SSO OIDC opzionale: configurazione, provisioning JIT e sincronizzazione gruppi.
+"""Optional OIDC SSO: configuration, JIT provisioning and group synchronization.
 
-Copre le due cuciture del design (docs/design/sso-group-mapping.md):
-- **accettazione**: transazione di login firmata (state/nonce/PKCE), rifiuto di
-  state non corrispondente, token scaduto o di tipo errato;
-- **sincronizzazione**: la claim dell'IdP riconciliata su `user_groups`, che è
-  l'unica cosa letta dall'RBAC.
+Covers the two seams of the design (docs/design/sso-group-mapping.md):
+- **acceptance**: signed login transaction (state/nonce/PKCE), refusal of a state that
+  does not match, an expired token or one of the wrong type;
+- **synchronization**: the IdP's claim reconciled onto `user_groups`, the only thing
+  RBAC reads.
 
-Niente rete: discovery e id_token sono sostituiti da fixture. Il flusso completo
-contro un IdP vero sta in docs/examples/keycloak/.
+No network: discovery and id_token are replaced by fixtures. The whole flow against a
+real IdP is in docs/examples/keycloak/.
 """
 import ssl
 import time
@@ -23,9 +23,9 @@ from tests.conftest import make_user
 
 
 @pytest.fixture(autouse=True)
-def _sso_isolato_dall_ambiente(monkeypatch):
-    """I test partono SEMPRE con l'SSO spento, qualunque sia l'ambiente del
-    container: un `.env` di prova con OIDC__* non deve cambiarne l'esito."""
+def _sso_isolated_from_environment(monkeypatch):
+    """The tests ALWAYS start with SSO off, whatever the container's environment: a test
+    `.env` with OIDC__* must not change their outcome."""
     import os
 
     from app.core.config import get_settings
@@ -57,21 +57,21 @@ def group_names(session, user: User) -> set[str]:
     return set(session.exec(select(Group.name).where(Group.id.in_(gids))).all()) if gids else set()
 
 
-# ── Configurazione: opzionale e fail-fast se incompleta ──────────────────────
-def test_sso_spento_di_default():
+# ── Configuration: optional, and fail-fast when incomplete ───────────────────
+def test_sso_off_by_default():
     s = Settings()
     assert s.oidc.enabled is False
-    s.check_sso_config()  # nessun vincolo quando è spento
-    assert sso.public_config()["enabled"] in (True, False)  # non solleva mai
+    s.check_sso_config()  # no constraint while off
+    assert sso.public_config()["enabled"] in (True, False)  # never raises
 
 
-def test_enabled_richiede_issuer_e_client_id():
+def test_enabled_requires_issuer_and_client_id():
     assert OidcSettings(issuer="https://idp", client_id="").enabled is False
     assert OidcSettings(issuer="", client_id="abc").enabled is False
     assert cfg().enabled is True
 
 
-def test_configurazione_incompleta_blocca_lo_startup():
+def test_incomplete_configuration_blocks_the_startup():
     s = Settings(oidc={"issuer": "https://idp/realms/t", "client_id": "c"})
     with pytest.raises(RuntimeError) as e:
         s.check_sso_config()
@@ -79,7 +79,7 @@ def test_configurazione_incompleta_blocca_lo_startup():
     assert "OIDC__CLIENT_SECRET" in msg and "OIDC__REDIRECT_URI" in msg
 
 
-def test_configurazione_completa_passa_e_scopes_richiede_openid():
+def test_complete_configuration_passes_and_scopes_requires_openid():
     full = {"issuer": "https://idp/realms/t", "client_id": "c", "client_secret": "s",
             "redirect_uri": "https://gw/auth/sso/callback"}
     Settings(oidc=full).check_sso_config()
@@ -87,15 +87,15 @@ def test_configurazione_completa_passa_e_scopes_richiede_openid():
         Settings(oidc={**full, "scopes": "profile email"}).check_sso_config()
 
 
-def test_allowlist_e_scopes_si_leggono_da_stringa():
+def test_allowlist_and_scopes_are_read_from_a_string():
     c = cfg(group_allowlist=" analytics , finance ,, ", scopes="openid profile")
     assert c.allowlist == {"analytics", "finance"}
     assert c.scope_list == ["openid", "profile"]
     assert c.discovery_url == "https://idp.example/realms/t/.well-known/openid-configuration"
 
 
-# ── Transazione di login: state, nonce, PKCE ─────────────────────────────────
-def test_pkce_challenge_deriva_dal_verifier():
+# ── Login transaction: state, nonce, PKCE ────────────────────────────────────
+def test_pkce_challenge_derives_from_the_verifier():
     import base64, hashlib
 
     verifier, challenge = sso.new_pkce_pair()
@@ -103,7 +103,7 @@ def test_pkce_challenge_deriva_dal_verifier():
     assert challenge == expected and "=" not in challenge
 
 
-def test_tx_token_roundtrip_e_state_sbagliato():
+def test_tx_token_roundtrip_and_wrong_state():
     token = sso.issue_tx_token("st4te", "n0nce", "verifier")
     tx = sso.read_tx_token(token, "st4te")
     assert tx["nonce"] == "n0nce" and tx["cv"] == "verifier"
@@ -112,18 +112,18 @@ def test_tx_token_roundtrip_e_state_sbagliato():
     assert e.value.code == "state_mismatch"
 
 
-def test_tx_token_scaduto_o_di_tipo_errato():
+def test_tx_token_expired_or_of_the_wrong_type():
     import jwt as pyjwt
 
     from app.core.config import get_settings
 
     secret = get_settings().jwt.secret.get_secret_value()
     # expired beyond the clocks' tolerance (a minute)
-    scaduto = pyjwt.encode({"typ": sso.TX_TOKEN_TYPE, "state": "s", "exp": int(time.time()) - 120}, secret, algorithm="HS256")
+    expired = pyjwt.encode({"typ": sso.TX_TOKEN_TYPE, "state": "s", "exp": int(time.time()) - 120}, secret, algorithm="HS256")
     with pytest.raises(sso.SsoError) as e:
-        sso.read_tx_token(scaduto, "s")
+        sso.read_tx_token(expired, "s")
     assert e.value.code == "tx_expired"
-    # un token di sessione normale non vale come transazione di login
+    # a normal session token does not hold as a login transaction
     from app.core.security import create_access_token
 
     with pytest.raises(sso.SsoError) as e:
@@ -131,78 +131,79 @@ def test_tx_token_scaduto_o_di_tipo_errato():
     assert e.value.code == "tx_invalid"
 
 
-# ── Claim → identità ─────────────────────────────────────────────────────────
-def test_email_dalle_claim_con_fallback_entra():
+# ── Claim → identity ─────────────────────────────────────────────────────────
+def test_email_from_the_claims_with_fallback_upn():
     assert sso.email_from_claims({"email": "A@X.local"}) == "a@x.local"
     assert sso.email_from_claims({"preferred_username": "b@x.local"}) == "b@x.local"
     assert sso.email_from_claims({"upn": "c@x.local"}) == "c@x.local"
-    # preferred_username non-email (Keycloak manda lo username) → si ignora
+    # a non-email preferred_username (Keycloak sends the username) → ignored
     assert sso.email_from_claims({"preferred_username": "alice", "email": "d@x.local"}) == "d@x.local"
     with pytest.raises(sso.SsoError) as e:
         sso.email_from_claims({"preferred_username": "alice"})
     assert e.value.code == "no_email"
 
 
-def test_normalize_groups_keycloak_ed_entra():
+def test_normalize_groups_keycloak_and_entra():
     c = cfg()
     assert sso.normalize_groups({"groups": ["/analytics", "finance "]}, c) == {"analytics", "finance"}
     assert sso.normalize_groups({"groups": "solo-uno"}, c) == {"solo-uno"}
     assert sso.normalize_groups({}, c) == set()
     assert sso.normalize_groups({"groups": None}, c) == set()
     assert sso.normalize_groups({"groups": {"non": "una lista"}}, c) == set()
-    # Entra: app role su claim `roles`
-    entra = cfg(groups_claim="roles")
-    assert sso.normalize_groups({"roles": ["Analytics.Read"], "groups": ["ignorato"]}, entra) == {"Analytics.Read"}
+    # Entra: app roles on the `roles` claim
+    enters = cfg(groups_claim="roles")
+    assert sso.normalize_groups({"roles": ["Analytics.Read"], "groups": ["ignorato"]}, enters) == {"Analytics.Read"}
 
 
-# ── Identità: chi sta entrando ───────────────────────────────────────────────
+# ── Identity: who is signing in ──────────────────────────────────────────────
 ISS = "https://idp.example/realms/t"
 
 
 def claims(email: str, sub: str | None = None, **kw) -> dict:
-    """Claim di un id_token realistico. `iss` e `sub` ci sono SEMPRE: li esige
-    `validate_id_token`, e sono l'identità su cui l'SSO riconosce l'utente."""
+    """The claims of a realistic id_token. `iss` and `sub` are ALWAYS there:
+    `validate_id_token` requires them, and they are the identity SSO recognizes the user
+    by."""
     base = {"iss": ISS, "sub": sub or f"sub-of-{email}", "email": email}
     base.update(kw)
     return base
 
 
-def test_identita_richiede_iss_e_sub(session):
-    """Un token senza identità stabile non identifica nessuno: si rifiuta invece
-    di ripiegare sull'email, che è il ripiego che apriva il takeover."""
-    for parziale in ({"email": "x@x.local"}, {"iss": ISS, "email": "x@x.local"},
+def test_identity_requires_iss_and_sub(session):
+    """A token without a stable identity identifies nobody: it is refused instead of falling
+    back on the email, which is the fallback that opened the takeover."""
+    for partial in ({"email": "x@x.local"}, {"iss": ISS, "email": "x@x.local"},
                      {"sub": "s", "email": "x@x.local"}):
         with pytest.raises(sso.SsoError) as e:
-            sso.provision_and_sync(session, parziale, cfg())
+            sso.provision_and_sync(session, partial, cfg())
         assert e.value.code == "no_identity"
 
 
-def test_claim_booleana_vera_solo_se_lo_dice(session):
-    """La vecchia guardia controllava `is False`: claim assente, "false" o 0 la
-    superavano. Ora conferma solo un'affermazione esplicita."""
-    for vero in (True, "true", "TRUE", "1", "yes"):
-        assert sso.claim_is_true(vero) is True
-    for falso in (False, "false", "0", "", None, 0, "boh"):
-        assert sso.claim_is_true(falso) is False
+def test_boolean_claim_true_only_when_it_says_so(session):
+    """The old guard checked `is False`: a missing claim, "false" or 0 got past it. Now only
+    an explicit statement confirms."""
+    for real in (True, "true", "TRUE", "1", "yes"):
+        assert sso.claim_is_true(real) is True
+    for false_ in (False, "false", "0", "", None, 0, "boh"):
+        assert sso.claim_is_true(false_) is False
 
 
-def test_riconosce_l_utente_dal_subject_anche_se_cambia_email(session):
-    """L'email presso l'IdP può cambiare: l'identità no. Stesso account,
-    indirizzo aggiornato, nessun duplicato."""
+def test_recognizes_the_user_by_subject_even_when_the_email_changes(session):
+    """The email at the IdP may change: the identity does not. The same account, the address
+    updated, no duplicate."""
     user, detail = sso.provision_and_sync(session, claims("prima@x.local", sub="s-1"), cfg())
     assert detail["created"] is True
 
-    stesso, detail2 = sso.provision_and_sync(session, claims("dopo@x.local", sub="s-1"), cfg())
-    assert stesso.id == user.id and detail2["created"] is False
-    assert stesso.email == "dopo@x.local"
+    same, detail2 = sso.provision_and_sync(session, claims("dopo@x.local", sub="s-1"), cfg())
+    assert same.id == user.id and detail2["created"] is False
+    assert same.email == "dopo@x.local"
     assert len(session.exec(select(User)).all()) == 1
 
 
-# ── IL TAKEOVER CHE QUESTA MODIFICA CHIUDE ───────────────────────────────────
-def test_non_si_entra_in_un_account_esistente_portandone_l_email(session):
-    """Il rilievo ALTA dell'audit: un token con l'email dell'admin — ma un
-    subject qualsiasi — restituiva l'account dell'admin. Ora serve che l'IdP
-    dichiari l'email verificata, e comunque il collegamento avviene una volta sola."""
+# ── THE TAKEOVER THIS CHANGE CLOSES ──────────────────────────────────────────
+def test_an_existing_account_cannot_be_entered_by_carrying_its_email(session):
+    """The audit's HIGH finding: a token with the admin's email — but any subject — returned
+    the admin's account. Now the IdP must declare the email verified, and the link happens
+    once only anyway."""
     admin = make_user(session, email="admin@tabularia.local", is_superuser=True)
 
     with pytest.raises(sso.SsoError) as e:
@@ -210,13 +211,13 @@ def test_non_si_entra_in_un_account_esistente_portandone_l_email(session):
     assert e.value.code == "email_unverified"
 
     session.refresh(admin)
-    assert admin.oidc_subject is None  # l'account non è stato rivendicato
+    assert admin.oidc_subject is None  # the account was not claimed
     assert admin.is_superuser is True
 
 
-def test_upn_non_verificato_non_rivendica_un_account(session):
-    """Stessa difesa sul percorso Entra, dove l'identità arriva da `upn` e la
-    claim di verifica tipicamente non c'è affatto."""
+def test_unverified_upn_does_not_claim_an_account(session):
+    """The same defence on the Entra path, where the identity comes from `upn` and the
+    verification claim is typically not there at all."""
     make_user(session, email="vittima@x.local")
     with pytest.raises(sso.SsoError) as e:
         sso.provision_and_sync(
@@ -225,19 +226,19 @@ def test_upn_non_verificato_non_rivendica_un_account(session):
     assert e.value.code == "email_unverified"
 
 
-def test_collegamento_una_volta_sola_poi_l_identita_e_pinnata(session):
-    """Migrazione legittima: un account preesistente si collega al suo utente
-    dell'IdP, ma da quel momento nessun'altra identità può reclamarlo."""
-    esistente = make_user(session, email="mario@x.local")
+def test_linked_once_only_then_the_identity_is_pinned(session):
+    """A legitimate migration: a pre-existing account links to its IdP user, but from then on
+    no other identity can claim it."""
+    existing = make_user(session, email="mario@x.local")
 
     user, detail = sso.provision_and_sync(
         session, claims("mario@x.local", sub="s-mario", email_verified=True), cfg()
     )
-    assert user.id == esistente.id
+    assert user.id == existing.id
     assert detail["linked"] is True and detail["created"] is False
     assert user.oidc_subject == "s-mario" and user.oidc_issuer == ISS
 
-    # un secondo soggetto con la stessa email ora viene respinto
+    # a second subject with the same email is now refused
     with pytest.raises(sso.SsoError) as e:
         sso.provision_and_sync(
             session, claims("mario@x.local", sub="s-impostore", email_verified=True), cfg()
@@ -245,13 +246,13 @@ def test_collegamento_una_volta_sola_poi_l_identita_e_pinnata(session):
     assert e.value.code == "identity_conflict"
 
 
-def test_il_login_locale_dell_admin_resta_intatto(session):
-    """Requisito esplicito: l'SSO non deve togliere all'admin la sua porta."""
+def test_the_admins_local_login_stays_intact(session):
+    """An explicit requirement: SSO must not take the admin's door away."""
     from app.core.security import hash_password, verify_password
 
     admin = make_user(session, email="admin@tabularia.local",
                       hashed_password=hash_password("segretissima"), is_superuser=True)
-    # un tentativo di takeover fallito non tocca la password
+    # a failed takeover attempt does not touch the password
     with pytest.raises(sso.SsoError):
         sso.provision_and_sync(session, claims("admin@tabularia.local", sub="x"), cfg())
     session.refresh(admin)
@@ -259,17 +260,17 @@ def test_il_login_locale_dell_admin_resta_intatto(session):
     assert admin.is_active and admin.is_superuser
 
 
-# ── Chi può ENTRARE ──────────────────────────────────────────────────────────
-def test_senza_cancelli_entra_chiunque_lidp_autentichi(session):
-    """Comportamento storico, invariato: i due cancelli sono spenti di default."""
+# ── Who may SIGN IN ──────────────────────────────────────────────────────────
+def test_without_gates_anyone_the_idp_authenticates_signs_in(session):
+    """The historical behaviour, unchanged: the two gates are off by default."""
     user, detail = sso.provision_and_sync(session, claims("tizio@ovunque.example"), cfg())
     assert detail["created"] is True and user.is_active
 
 
-def test_dominio_email_non_ammesso_non_entra(session):
+def test_email_domain_not_allowed_does_not_sign_in(session):
     c = cfg(allowed_email_domains="azienda.it, altra.it")
     user, _ = sso.provision_and_sync(session, claims("mario@azienda.it"), c)
-    assert user.id  # dominio ammesso: entra
+    assert user.id  # allowed domain: signs in
 
     with pytest.raises(sso.SsoError) as e:
         sso.provision_and_sync(session, claims("estraneo@altrove.example"), c)
@@ -277,7 +278,7 @@ def test_dominio_email_non_ammesso_non_entra(session):
     assert session.exec(select(User).where(User.email == "estraneo@altrove.example")).first() is None
 
 
-def test_gruppo_obbligatorio_per_accedere(session):
+def test_group_required_to_sign_in(session):
     c = cfg(group_allowlist="analytics", require_allowlisted_group=True)
     make_group(session, "analytics")
 
@@ -289,36 +290,36 @@ def test_gruppo_obbligatorio_per_accedere(session):
     assert e.value.code == "not_allowed"
 
 
-def test_il_gruppo_admin_basta_per_entrare(session):
-    """Chi è nel gruppo che concede l'admin non deve essere elencato due volte."""
+def test_the_admin_group_is_enough_to_sign_in(session):
+    """Whoever is in the group that grants admin must not be listed twice."""
     c = cfg(group_allowlist="analytics", require_allowlisted_group=True,
             superuser_group="tabularia-admins")
     user, _ = sso.provision_and_sync(session, claims("capo@x.local", groups=["tabularia-admins"]), c)
     assert user.is_superuser is True
 
 
-def test_configurazione_contraddittoria_lo_dice(session):
-    """Richiedere un gruppo ammesso senza elencarne nessuno bloccherebbe tutti
-    in silenzio: meglio un errore esplicito."""
+def test_contradictory_configuration_says_so(session):
+    """Requiring an allowed group without listing any would block everyone silently: better
+    an explicit error."""
     with pytest.raises(sso.SsoError) as e:
         sso.provision_and_sync(session, claims("x@x.local"), cfg(require_allowlisted_group=True))
     assert e.value.code == "config_error"
 
 
-# ── Provisioning JIT + sincronizzazione ──────────────────────────────────────
-def test_crea_utente_al_primo_login_e_mappa_i_gruppi(session):
+# ── JIT provisioning + synchronization ───────────────────────────────────────
+def test_creates_the_user_at_first_login_and_maps_the_groups(session):
     make_group(session, "analytics")
     c = claims("alice@x.local", name="Alice", groups=["/analytics", "sconosciuto"])
     user, detail = sso.provision_and_sync(session, c, cfg())
     assert user.id and user.email == "alice@x.local" and user.full_name == "Alice"
-    assert user.hashed_password is None  # utente solo-SSO
-    assert user.oidc_subject == "sub-of-alice@x.local"  # identità pinnata subito
+    assert user.hashed_password is None  # an SSO-only user
+    assert user.oidc_subject == "sub-of-alice@x.local"  # identity pinned at once
     assert detail["created"] is True and detail["groups_added"] == ["analytics"]
-    # 'sconosciuto' non esiste in Tabularia e auto_create è spento: ignorato
+    # 'sconosciuto' does not exist in Tabularia and auto_create is off: ignored
     assert group_names(session, user) == {"analytics"}
 
 
-def test_secondo_login_non_duplica_e_completa_il_nome(session):
+def test_second_login_does_not_duplicate_and_completes_the_name(session):
     make_group(session, "analytics")
     c = claims("alice@x.local", groups=["analytics"])
     user, _ = sso.provision_and_sync(session, c, cfg())
@@ -328,7 +329,7 @@ def test_secondo_login_non_duplica_e_completa_il_nome(session):
     assert len(session.exec(select(UserGroupLink)).all()) == 1
 
 
-def test_authoritative_rimuove_i_gruppi_non_piu_nella_claim(session):
+def test_authoritative_removes_the_groups_no_longer_in_the_claim(session):
     analytics, finance = make_group(session, "analytics"), make_group(session, "finance")
     user = make_user(session, email="bob@x.local")
     for g in (analytics, finance):
@@ -342,7 +343,7 @@ def test_authoritative_rimuove_i_gruppi_non_piu_nella_claim(session):
     assert detail["groups_removed"] == ["finance"]
 
 
-def test_additivo_non_toglie_nulla(session):
+def test_additive_removes_nothing(session):
     analytics, finance = make_group(session, "analytics"), make_group(session, "finance")
     user = make_user(session, email="bob@x.local")
     session.add(UserGroupLink(user_id=user.id, group_id=finance.id))
@@ -355,7 +356,7 @@ def test_additivo_non_toglie_nulla(session):
     assert detail["groups_removed"] == []
 
 
-def test_allowlist_filtra_i_gruppi_dell_idp(session):
+def test_allowlist_filters_the_idps_groups(session):
     make_group(session, "analytics")
     make_group(session, "segreti")
     user, _ = sso.provision_and_sync(
@@ -364,7 +365,7 @@ def test_allowlist_filtra_i_gruppi_dell_idp(session):
     assert group_names(session, user) == {"analytics"}
 
 
-def test_auto_create_crea_i_gruppi_mancanti(session):
+def test_auto_create_creates_the_missing_groups(session):
     user, _ = sso.provision_and_sync(
         session, claims("d@x.local", groups=["nuovo-team"]), cfg(auto_create_groups=True),
     )
@@ -372,13 +373,13 @@ def test_auto_create_crea_i_gruppi_mancanti(session):
     assert session.exec(select(Group).where(Group.name == "nuovo-team")).first() is not None
 
 
-def test_superuser_group_concede_e_revoca(session):
+def test_superuser_group_grants_and_revokes(session):
     c = cfg(superuser_group="tabularia-admins")
     user, detail = sso.provision_and_sync(
         session, claims("e@x.local", groups=["tabularia-admins"]), c
     )
     assert user.is_superuser is True and detail["superuser_changed"] is True
-    # il gruppo admin NON diventa un gruppo di progetto
+    # the admin group does NOT become a project group
     assert group_names(session, user) == set()
     user, detail = sso.provision_and_sync(session, claims("e@x.local", groups=[]), c)
     assert user.is_superuser is False and detail["superuser_changed"] is True
@@ -400,24 +401,24 @@ def test_a_token_without_the_groups_claim_is_no_groups_and_the_audit_says_so(ses
     assert detail["groups_claim_missing"] == "grups"
 
 
-def test_utente_disattivato_non_entra_via_sso(session):
+def test_disabled_user_does_not_sign_in_through_sso(session):
     make_user(session, email="f@x.local", is_active=False)
     with pytest.raises(sso.SsoError) as e:
         sso.provision_and_sync(session, claims("f@x.local", groups=[], email_verified=True), cfg())
     assert e.value.code == "user_disabled"
 
 
-def test_senza_superuser_group_lo_stato_admin_non_viene_toccato(session):
+def test_without_superuser_group_the_admin_state_is_not_touched(session):
     make_user(session, email="g@x.local", is_superuser=True)
     user, _ = sso.provision_and_sync(
         session, claims("g@x.local", groups=[], email_verified=True), cfg()
     )
-    assert user.is_superuser is True  # gestito a mano dall'admin, l'SSO non decide
+    assert user.is_superuser is True  # managed by hand by the admin, SSO does not decide
 
 
-# ── Rotte: comportamento quando l'SSO è spento o il flusso è manomesso ───────
+# ── Routes: behaviour when SSO is off or the flow is tampered with ───────────
 class FakeRequest:
-    """Minimo indispensabile per le rotte: cookie, header e client (per l'audit)."""
+    """The bare minimum for the routes: cookie, header and client (for the audit)."""
 
     def __init__(self, cookies=None, headers=None, scheme="http"):
         self.cookies = cookies or {}
@@ -426,7 +427,7 @@ class FakeRequest:
         self.client = type("C", (), {"host": "127.0.0.1"})()
 
 
-def test_config_pubblica_non_espone_nulla_di_sensibile(monkeypatch):
+def test_public_config_exposes_nothing_sensitive(monkeypatch):
     from app.core import config as config_mod
 
     monkeypatch.setattr(config_mod, "get_settings", lambda: Settings(oidc={
@@ -439,7 +440,7 @@ def test_config_pubblica_non_espone_nulla_di_sensibile(monkeypatch):
     assert "segretissimo" not in str(pub) and "issuer" not in pub
 
 
-def test_login_e_callback_con_sso_spento_non_esplodono(session):
+def test_login_and_callback_with_sso_off_do_not_blow_up(session):
     from app.routes import sso as sso_routes
 
     res = sso_routes.sso_login(FakeRequest())
@@ -448,7 +449,7 @@ def test_login_e_callback_con_sso_spento_non_esplodono(session):
     assert res.status_code == 303 and "error=sso_disabled" in res.headers["location"]
 
 
-def test_callback_senza_cookie_di_transazione_viene_respinto(session, monkeypatch):
+def test_callback_without_transaction_cookie_is_refused(session, monkeypatch):
     from app.core import config as config_mod
     from app.routes import sso as sso_routes
 
@@ -458,16 +459,16 @@ def test_callback_senza_cookie_di_transazione_viene_respinto(session, monkeypatc
     monkeypatch.setattr(config_mod, "get_settings", lambda: enabled)
     res = sso_routes.sso_callback(FakeRequest(), code="abc", state="s", session=session)
     assert res.status_code == 303 and "error=tx_missing" in res.headers["location"]
-    # l'IdP che rifiuta il login non deve mai propagare il suo messaggio all'utente
+    # the IdP refusing the login must never pass its message on to the user
     res = sso_routes.sso_callback(FakeRequest(), error="access_denied",
                                   error_description="consent required", session=session)
     assert "error=idp_denied" in res.headers["location"]
     assert "consent" not in res.headers["location"]
 
 
-def test_il_login_locale_rifiuta_un_utente_solo_sso(session):
-    """Utente creato dall'SSO (senza password locale): niente back-door con
-    password vuota. Il login locale resta per gli utenti che ne hanno una."""
+def test_the_local_login_refuses_an_sso_only_user(session):
+    """A user created by SSO (without a local password): no back door with an empty
+    password. The local login stays for the users that have one."""
     from app.routes.auth import login
     from app.schemas.models import LoginRequest
     from fastapi import HTTPException, Response
@@ -480,10 +481,9 @@ def test_il_login_locale_rifiuta_un_utente_solo_sso(session):
         assert e.value.status_code == 401
 
 
-def test_callback_ok_apre_la_sessione_interna_e_scrive_l_audit(session, monkeypatch):
-    """Percorso felice della rotta: sessione INTERNA nel cookie HttpOnly e niente
-    token nell'URL, cookie di transazione cancellato, evento di audit col delta
-    dei gruppi."""
+def test_callback_ok_opens_the_internal_session_and_writes_the_audit(session, monkeypatch):
+    """The route's happy path: an INTERNAL session in the HttpOnly cookie and no token in the
+    URL, the transaction cookie deleted, an audit event with the groups' delta."""
     from app.core import config as config_mod
     from app.core.security import decode_access_token
     from app.models import AuditLog, UserSession
@@ -503,19 +503,19 @@ def test_callback_ok_apre_la_sessione_interna_e_scrive_l_audit(session, monkeypa
     res = sso_routes.sso_callback(FakeRequest({sso.TX_COOKIE: tx_cookie}), code="ok", state="s1", session=session)
 
     assert res.status_code == 303
-    # il token non passa dall'URL: né nel frammento né altrove
+    # the token does not go through the URL: neither in the fragment nor elsewhere
     assert res.headers["location"] == "https://app.example/auth/callback"
     cookies = res.headers.getlist("set-cookie")
     user_session = next(c for c in cookies if c.startswith("tab_token="))
     assert "HttpOnly" in user_session and "Path=/" in user_session and "SameSite=lax" in user_session
-    # è il TOKEN INTERNO di Tabularia, con una sessione aperta come quella del login locale
+    # it is Tabularia's INTERNAL TOKEN, with a session open like the local login's
     payload = decode_access_token(user_session.split(";")[0].split("=", 1)[1])
     assert int(payload["sub"]) == user.id
     row = session.get(UserSession, payload["sid"])
     assert row is not None and row.user_id == user.id and row.method == "sso"
-    # il cookie di transazione è a uso singolo
-    transazione = next(c for c in cookies if c.startswith("tab_sso_tx="))
-    assert 'tab_sso_tx=""' in transazione or "Max-Age=0" in transazione
+    # the transaction cookie is single-use
+    transaction = next(c for c in cookies if c.startswith("tab_sso_tx="))
+    assert 'tab_sso_tx=""' in transaction or "Max-Age=0" in transaction
 
     entry = session.exec(select(AuditLog).where(AuditLog.action == "auth.sso_login")).first()
     assert entry is not None and entry.actor_id == user.id and "analytics" in (entry.detail or "")

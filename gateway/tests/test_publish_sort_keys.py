@@ -1,9 +1,9 @@
-"""Chiavi di ordinamento nel PUBLISH di un flusso.
+"""Sort keys in a flow's PUBLISH.
 
-Il flusso ordina il risultato prima di scriverlo (parquet ordinato → pruning a
-valle) e la datasource pubblicata eredita le chiavi. Senza chiavi, tutto come
-prima. Le tre parti: il body del resolver (scheduler), l'iniezione dell'op sort
-al lancio, l'ereditarietà sulla datasource creata.
+The flow sorts the result before writing it (a sorted parquet → pruning downstream) and
+the published datasource inherits the keys. Without keys, everything as before. The
+three parts: the resolver's body (scheduler), injecting the sort op at launch, the
+inheritance on the created datasource.
 """
 import json
 
@@ -19,7 +19,7 @@ from tests.conftest import make_flow, make_project, make_user
 pytestmark = pytest.mark.anyio
 
 
-# ── 1. resolver (percorso scheduler): il nodo porta le chiavi nel body ──────────
+# ── 1. resolver (scheduler path): the node carries the keys in the body ─────────
 def test_output_body_carries_sort_keys_from_the_node():
     node = {"type": "output", "data": {"destType": "datasource", "name": "x", "projectId": 1, "sortKeys": ["id", "data"]}}
     body = _output_body(node, ("bucket", "key"), [], "bucket")
@@ -31,7 +31,7 @@ def test_output_body_without_keys_is_empty():
     assert _output_body(node, ("bucket", "key"), [], "bucket")["publish"]["sort_keys"] == []
 
 
-# ── 2. lancio: op sort in coda + chiavi salvate sul run ─────────────────────────
+# ── 2. launch: sort op at the end + keys saved on the run ───────────────────────
 def _body(project_id, *, sort_keys):
     return RunCreate(
         bucket="data-prep", input_key="datasets/x.parquet", operations=[{"type": "select", "params": {"columns": ["id"]}}],
@@ -56,9 +56,9 @@ async def test_publish_with_keys_appends_a_sort_op(session, fake_engine):
 
 
 async def test_the_injected_sort_tolerates_a_vanished_key(session, fake_engine):
-    """`ignore_missing` è la differenza fra «la chiave non c'è più, ordino per le
-    altre» e «ogni run di questo flusso fallisce». La checklist mostra solo le
-    colonne esistenti, quindi una chiave stantia non sarebbe nemmeno togliibile."""
+    """`ignore_missing` is the difference between «the key is no longer there, I sort by the
+    others» and «every run of this flow fails». The checklist shows only the existing
+    columns, so a stale key could not even be removed."""
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="p")
     flow = make_flow(session, name="f", project_id=p.id)
@@ -89,7 +89,7 @@ async def test_blank_keys_are_dropped_at_launch(session, fake_engine):
     assert fake_engine.transforms[0]["operations"][-1]["params"]["by"] == ["id"]
 
 
-# ── 3. la datasource pubblicata eredita le chiavi ───────────────────────────────
+# ── 3. the published datasource inherits the keys ───────────────────────────────
 def test_the_published_datasource_inherits_the_keys(session):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="p")

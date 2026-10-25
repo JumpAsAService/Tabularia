@@ -1,7 +1,7 @@
-"""Il ruolo osservatore: legge i pannelli di amministrazione, non scrive nulla.
+"""The observer role: reads the administration panels, writes nothing.
 
-Due cose da dimostrare, e la seconda conta quanto la prima: che i pannelli si
-aprano, e che i dati personali dentro NON si aprano con loro.
+Two things to prove, and the second counts as much as the first: that the panels
+open, and that the personal data inside does NOT open with them.
 """
 import pytest
 from fastapi import HTTPException
@@ -21,16 +21,16 @@ from app.services.masking import mask_email
 from tests.conftest import make_user
 
 
-def _filtri_vuoti() -> dict:
-    """I filtri della rotta dell'audit, espliciti: chiamandola come funzione i
-    default `Query(None)` non sono `None` e finirebbero dentro il WHERE."""
+def _empty_filters() -> dict:
+    """The audit route's filters, explicit: calling it as a function, the `Query(None)`
+    defaults are not `None` and would end up in the WHERE."""
     return {
         "q": None, "action": None, "target_type": None, "outcome": None,
         "actor_id": None, "since": None, "until": None, "limit": 50, "offset": 0,
     }
 
 
-def _osservatore(session, email="ospite@x.it"):
+def _observer(session, email="ospite@x.it"):
     u = make_user(session, email=email)
     u.is_observer = True
     session.add(u)
@@ -38,20 +38,20 @@ def _osservatore(session, email="ospite@x.it"):
     return u
 
 
-# ── chi è osservatore ────────────────────────────────────────────────────────
+# ── who is an observer ───────────────────────────────────────────────────────
 
 def test_a_plain_user_is_not_an_observer(session):
     assert permissions.is_observer(session, make_user(session, email="tizio@x.it")) is False
 
 
 def test_the_flag_makes_an_observer(session):
-    assert permissions.is_observer(session, _osservatore(session)) is True
+    assert permissions.is_observer(session, _observer(session)) is True
 
 
 def test_an_administrator_is_already_an_observer(session):
-    """Chi comanda vede: non serve dargli due ruoli."""
-    capo = make_user(session, email="capo@x.it", is_superuser=True)
-    assert permissions.is_observer(session, capo) is True
+    """Whoever is in charge sees: no need to give them two roles."""
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
+    assert permissions.is_observer(session, boss) is True
 
 
 def test_a_group_can_grant_it(session):
@@ -80,40 +80,40 @@ def test_leaving_the_group_takes_it_away(session):
     assert permissions.is_observer(session, anna) is False
 
 
-# ── legge, ma non scrive ─────────────────────────────────────────────────────
+# ── reads, but does not write ────────────────────────────────────────────────
 
 def test_an_observer_passes_the_read_guard_and_fails_the_write_one(session):
-    ospite = _osservatore(session)
-    assert require_observer(ospite, session) is ospite
+    guest = _observer(session)
+    assert require_observer(guest, session) is guest
     with pytest.raises(HTTPException) as e:
-        require_superuser(ospite, session)
+        require_superuser(guest, session)
     assert e.value.status_code == 403
 
 
 def test_an_observer_can_read_the_engine_policy(session):
-    ospite = _osservatore(session)
-    assert isinstance(policy_routes.list_engine_policy(user=ospite, session=session), list)
+    guest = _observer(session)
+    assert isinstance(policy_routes.list_engine_policy(user=guest, session=session), list)
 
 
-# ── i dati personali NON si aprono col pannello ──────────────────────────────
+# ── the personal data does NOT open with the panel ───────────────────────────
 
 def test_the_users_list_is_masked_for_an_observer(session):
-    ospite = _osservatore(session)
+    guest = _observer(session)
     make_user(session, email="alice.rossi@esempio.it", full_name="Alice Rossi")
 
-    capo = make_user(session, email="c@x.it", is_superuser=True)
-    come_admin = user_routes.list_users(session=session, asker=capo)
-    assert any(u.email == "alice.rossi@esempio.it" and u.full_name == "Alice Rossi" for u in come_admin)
+    boss = make_user(session, email="c@x.it", is_superuser=True)
+    as_admin = user_routes.list_users(session=session, asker=boss)
+    assert any(u.email == "alice.rossi@esempio.it" and u.full_name == "Alice Rossi" for u in as_admin)
 
-    come_ospite = user_routes.list_users(session=session, asker=ospite)
-    emails = [u.email for u in come_ospite]
+    as_guest = user_routes.list_users(session=session, asker=guest)
+    emails = [u.email for u in as_guest]
     assert "alice.rossi@esempio.it" not in emails
-    assert "a***@esempio.it" in emails  # il dominio resta: dice dentro o fuori
-    assert all(u.full_name == "" for u in come_ospite)
+    assert "a***@esempio.it" in emails  # the domain stays: it says inside or outside
+    assert all(u.full_name == "" for u in as_guest)
 
 
 def test_the_audit_keeps_what_happened_and_drops_who(session):
-    ospite = _osservatore(session)
+    guest = _observer(session)
     from datetime import datetime as _dt, timezone as _tz
     session.add(AuditLog(
         action="flow.run", actor_label="alice@esempio.it", outcome="success", ip="10.0.0.7",
@@ -121,14 +121,14 @@ def test_the_audit_keeps_what_happened_and_drops_who(session):
     ))
     session.commit()
 
-    item = audit_routes.list_audit(**_filtri_vuoti(), session=session, asker=ospite).items[0]
-    assert item.action == "flow.run"  # il senso del registro resta
+    item = audit_routes.list_audit(**_empty_filters(), session=session, asker=guest).items[0]
+    assert item.action == "flow.run"  # the log's point stays
     assert item.actor_label == "a***@esempio.it"
     assert item.ip is None
 
-    capo = make_user(session, email="capo2@x.it", is_superuser=True)
-    voce_admin = audit_routes.list_audit(**_filtri_vuoti(), session=session, asker=capo).items[0]
-    assert voce_admin.actor_label == "alice@esempio.it" and voce_admin.ip == "10.0.0.7"
+    boss = make_user(session, email="capo2@x.it", is_superuser=True)
+    admin_item = audit_routes.list_audit(**_empty_filters(), session=session, asker=boss).items[0]
+    assert admin_item.actor_label == "alice@esempio.it" and admin_item.ip == "10.0.0.7"
 
 
 def test_the_active_sessions_hide_the_addresses(session):
@@ -136,87 +136,88 @@ def test_the_active_sessions_hide_the_addresses(session):
 
     from app.services import sessions
 
-    ospite = _osservatore(session)
+    guest = _observer(session)
     u = make_user(session, email="bruno@esempio.it")
-    sessions.open_session(session, u, _Finta(), "password")
+    sessions.open_session(session, u, _Fake(), "password")
 
-    rows = audit_routes.active_sessions(request=SimpleNamespace(), limit=100, session=session, asker=ospite).items
+    rows = audit_routes.active_sessions(request=SimpleNamespace(), limit=100, session=session, asker=guest).items
     mia = next(r for r in rows if r.user_id == u.id)
     assert mia.email == "b***@esempio.it" and mia.ip is None and mia.user_agent is None
-    assert mia.online is True  # lo STATO resta visibile
+    assert mia.online is True  # the STATE stays visible
 
 
-# ── il mascheramento in sé ───────────────────────────────────────────────────
+# ── the masking itself ───────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("dentro,outside", [
+@pytest.mark.parametrize("inside,outside", [
     ("alice.rossi@esempio.it", "a***@esempio.it"),
     ("x@y.z", "x***@y.z"),
     ("@senzalocale.it", "***@senzalocale.it"),
-    ("scheduler", "***"),  # un'etichetta che non è un'email
+    ("scheduler", "***"),  # a label that is not an email
     ("", ""),
 ])
-def test_how_an_address_is_masked(dentro, outside):
-    assert mask_email(dentro) == outside
+def test_how_an_address_is_masked(inside, outside):
+    assert mask_email(inside) == outside
 
 
 def test_the_same_address_always_gives_the_same_mask():
-    """Serve a riconoscere che due azioni sono della stessa persona senza sapere chi."""
+    """It serves to recognize that two actions are the same person's without knowing whose."""
     assert mask_email("alice@x.it") == mask_email("alice@x.it")
     assert mask_email("alice@x.it") != mask_email("bruno@x.it")
 
 
-# ── si concede dal pannello, non con una riga di SQL ──────────────────────────
+# ── granted from the panel, not with a line of SQL ────────────────────────────
 
 def test_an_administrator_can_grant_and_revoke_it(session):
-    """Il ruolo è inutile se per accenderlo serve psql: questo è il percorso che
-    usa il bottone del pannello."""
-    capo = make_user(session, email="capo3@x.it", is_superuser=True)
-    ospite = make_user(session, email="ospite2@x.it")
+    """The role is useless if turning it on needs psql: this is the path the panel's button
+    uses."""
+    boss = make_user(session, email="capo3@x.it", is_superuser=True)
+    guest = make_user(session, email="ospite2@x.it")
 
     outside = user_routes.update_user(
-        ospite.id, UserUpdate(is_observer=True), request=None, session=session, current=capo,
+        guest.id, UserUpdate(is_observer=True), request=None, session=session, current=boss,
     )
     assert outside.is_observer is True
-    assert permissions.is_observer(session, session.get(User, ospite.id)) is True
+    assert permissions.is_observer(session, session.get(User, guest.id)) is True
 
     outside = user_routes.update_user(
-        ospite.id, UserUpdate(is_observer=False), request=None, session=session, current=capo,
+        guest.id, UserUpdate(is_observer=False), request=None, session=session, current=boss,
     )
     assert outside.is_observer is False
-    assert permissions.is_observer(session, session.get(User, ospite.id)) is False
+    assert permissions.is_observer(session, session.get(User, guest.id)) is False
 
 
 def test_granting_it_leaves_a_trace(session):
-    """Apre audit, sessioni ed elenco utenti: vale la traccia quanto una promozione."""
-    capo = make_user(session, email="capo4@x.it", is_superuser=True)
-    ospite = make_user(session, email="ospite3@x.it")
+    """It opens audit, sessions and the users' list: it is worth the trace as much as a
+    promotion."""
+    boss = make_user(session, email="capo4@x.it", is_superuser=True)
+    guest = make_user(session, email="ospite3@x.it")
     user_routes.update_user(
-        ospite.id, UserUpdate(is_observer=True), request=None, session=session, current=capo,
+        guest.id, UserUpdate(is_observer=True), request=None, session=session, current=boss,
     )
-    azioni = [a.action for a in session.exec(select(AuditLog)).all()]
-    assert audit_svc.OBSERVER_GRANT in azioni
-    assert audit_svc.USER_PROMOTE not in azioni  # non è una promozione ad admin
+    actions = [a.action for a in session.exec(select(AuditLog)).all()]
+    assert audit_svc.OBSERVER_GRANT in actions
+    assert audit_svc.USER_PROMOTE not in actions  # it is not a promotion to admin
 
     user_routes.update_user(
-        ospite.id, UserUpdate(is_observer=False), request=None, session=session, current=capo,
+        guest.id, UserUpdate(is_observer=False), request=None, session=session, current=boss,
     )
     assert audit_svc.OBSERVER_REVOKE in [a.action for a in session.exec(select(AuditLog)).all()]
 
 
 def test_it_can_be_granted_at_creation(session):
-    """L'account dimostrativo si crea in un colpo, con la spunta nel form."""
-    capo = make_user(session, email="capo5@x.it", is_superuser=True)
+    """The demo account is created in one go, with the tick in the form."""
+    boss = make_user(session, email="capo5@x.it", is_superuser=True)
     outside = user_routes.create_user(
         UserCreate(email="demo@x.it", password="segretissima", is_observer=True),
-        request=None, session=session, current=capo,
+        request=None, session=session, current=boss,
     )
     assert outside.is_observer is True
     assert audit_svc.OBSERVER_GRANT in [a.action for a in session.exec(select(AuditLog)).all()]
 
 
 def test_a_group_can_be_switched_to_observer(session):
-    """La via da usare con l'SSO: il flag personale lo riscrive l'IdP a ogni login."""
-    capo = make_user(session, email="capo6@x.it", is_superuser=True)
+    """The way to use with SSO: the IdP rewrites the personal flag at every login."""
+    boss = make_user(session, email="capo6@x.it", is_superuser=True)
     g = Group(name="Ospiti")
     session.add(g)
     session.commit()
@@ -227,7 +228,7 @@ def test_a_group_can_be_switched_to_observer(session):
     assert permissions.is_observer(session, anna) is False
 
     outside = group_routes.update_group(
-        g.id, GroupUpdate(is_observer=True), request=None, session=session, current=capo,
+        g.id, GroupUpdate(is_observer=True), request=None, session=session, current=boss,
     )
     assert outside.is_observer is True
     assert permissions.is_observer(session, session.get(User, anna.id)) is True
@@ -235,8 +236,8 @@ def test_a_group_can_be_switched_to_observer(session):
 
 
 def test_the_list_says_which_group_grants_it(session):
-    """Come per gli admin: nell'elenco si deve vedere che il permesso è del
-    gruppo, altrimenti si cerca un flag personale che non c'è."""
+    """As for the admins: the list must show the permission is the group's, otherwise one
+    looks for a personal flag that is not there."""
     g = Group(name="Ospiti", is_observer=True)
     session.add(g)
     session.commit()
@@ -244,17 +245,17 @@ def test_the_list_says_which_group_grants_it(session):
     anna = make_user(session, email="anna3@x.it")
     session.add(UserGroupLink(user_id=anna.id, group_id=g.id))
     session.commit()
-    capo = make_user(session, email="capo7@x.it", is_superuser=True)
+    boss = make_user(session, email="capo7@x.it", is_superuser=True)
 
-    row = next(u for u in user_routes.list_users(session=session, asker=capo) if u.id == anna.id)
-    assert row.is_observer is False  # nessun flag personale
+    row = next(u for u in user_routes.list_users(session=session, asker=boss) if u.id == anna.id)
+    assert row.is_observer is False  # no personal flag
     assert row.observer_groups == ["Ospiti"]
 
 
-# ── l'indirizzo IP di un osservatore non si raccoglie proprio ────────────────
+# ── an observer's IP address is not collected at all ─────────────────────────
 
-class _Finta:
-    """Una richiesta quel tanto che basta a `record_audit` e a `_touch_last_seen`."""
+class _Fake:
+    """A request just enough for `record_audit` and `_touch_last_seen`."""
 
     def __init__(self, ip="203.0.113.77"):
         self.headers = {"user-agent": "prova", "x-forwarded-for": ip}
@@ -262,46 +263,46 @@ class _Finta:
 
 
 def test_an_observers_address_is_not_written_to_the_audit(session):
-    """Mascherare la vista non basta: il dato non deve proprio entrare."""
+    """Masking the view is not enough: the data must not get in at all."""
     from app.services import audit as audit_svc
 
-    ospite = _osservatore(session, email="ospite-ip@x.it")
-    audit_svc.record_audit(session, actor=ospite, action="flow.run", request=_Finta())
+    guest = _observer(session, email="ospite-ip@x.it")
+    audit_svc.record_audit(session, actor=guest, action="flow.run", request=_Fake())
 
-    item = session.exec(select(AuditLog).where(AuditLog.actor_id == ospite.id)).one()
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == guest.id)).one()
     assert item.ip is None
-    assert item.user_agent is None            # né browser né sistema operativo
-    assert item.action == "flow.run"          # che cosa è stato fatto resta
-    assert item.actor_label == ospite.email   # e chi, per un amministratore
+    assert item.user_agent is None            # neither browser nor operating system
+    assert item.action == "flow.run"          # what was done stays
+    assert item.actor_label == guest.email   # and who, for an administrator
 
 
 def test_an_administrators_address_is_still_written(session):
-    """Chi può cambiare le cose lascia la traccia: è il senso del registro."""
+    """Whoever can change things leaves the trace: it is the log's point."""
     from app.services import audit as audit_svc
 
-    capo = make_user(session, email="capo-ip@x.it", is_superuser=True)
-    audit_svc.record_audit(session, actor=capo, action="flow.run", request=_Finta())
+    boss = make_user(session, email="capo-ip@x.it", is_superuser=True)
+    audit_svc.record_audit(session, actor=boss, action="flow.run", request=_Fake())
 
-    item = session.exec(select(AuditLog).where(AuditLog.actor_id == capo.id)).one()
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == boss.id)).one()
     assert item.ip == "203.0.113.77"
     assert item.user_agent == "prova"
 
 
 def test_an_ordinary_user_is_still_traced(session):
-    """La rinuncia vale per gli OSSERVATORI, non per tutti: chi carica, modifica
-    ed esegue resta tracciato."""
+    """The renunciation holds for the OBSERVERS, not for everyone: whoever uploads, changes
+    and runs stays tracked."""
     from app.services import audit as audit_svc
 
-    tizio = make_user(session, email="tizio-ip@x.it")
-    audit_svc.record_audit(session, actor=tizio, action="datasource.create", request=_Finta())
+    someone = make_user(session, email="tizio-ip@x.it")
+    audit_svc.record_audit(session, actor=someone, action="datasource.create", request=_Fake())
 
-    item = session.exec(select(AuditLog).where(AuditLog.actor_id == tizio.id)).one()
+    item = session.exec(select(AuditLog).where(AuditLog.actor_id == someone.id)).one()
     assert item.ip == "203.0.113.77"
 
 
 def test_an_admin_by_group_keeps_being_traced(session):
-    """`is_observer` è vero anche per gli admin: se la regola guardasse quello,
-    smetteremmo di tracciare proprio chi comanda."""
+    """`is_observer` is true for the admins too: if the rule looked at that, we would stop
+    tracking exactly whoever is in charge."""
     from app.services import audit as audit_svc
 
     g = Group(name="Capi", is_admin=True)
@@ -312,57 +313,57 @@ def test_an_admin_by_group_keeps_being_traced(session):
     session.add(UserGroupLink(user_id=anna.id, group_id=g.id))
     session.commit()
 
-    audit_svc.record_audit(session, actor=anna, action="flow.run", request=_Finta())
+    audit_svc.record_audit(session, actor=anna, action="flow.run", request=_Fake())
     item = session.exec(select(AuditLog).where(AuditLog.actor_id == anna.id)).one()
     assert item.ip == "203.0.113.77"
 
 
 def test_last_seen_keeps_the_moment_and_drops_the_address(session):
-    """Le «sessioni attive» devono dire CHE c'è qualcuno collegato, non da dove."""
+    """The «active sessions» must say THAT someone is connected, not from where."""
     from app.deps.auth import _touch_last_seen
 
     from app.services import sessions
 
-    ospite = _osservatore(session, email="ospite-seen@x.it")
-    open_ = sessions.open_session(session, ospite, _Finta(), "password")[0]
-    _touch_last_seen(session, ospite, open_, _Finta())
-    session.refresh(ospite)
+    guest = _observer(session, email="ospite-seen@x.it")
+    open_ = sessions.open_session(session, guest, _Fake(), "password")[0]
+    _touch_last_seen(session, guest, open_, _Fake())
+    session.refresh(guest)
     session.refresh(open_)
-    assert ospite.last_seen_at is not None
-    assert ospite.last_seen_ip is None and open_.ip is None and open_.user_agent is None
+    assert guest.last_seen_at is not None
+    assert guest.last_seen_ip is None and open_.ip is None and open_.user_agent is None
 
 
 def test_an_address_collected_before_the_role_is_erased(session):
-    """Il ruolo può arrivare dopo: al primo passaggio l'indirizzo vecchio va via,
-    altrimenti resterebbe lì per sempre."""
+    """The role may come later: at the first pass the old address goes, otherwise it would
+    stay there forever."""
     from app.deps.auth import _touch_last_seen
 
     from app.services import sessions
 
     u = make_user(session, email="prima-poi@x.it")
-    open_ = sessions.open_session(session, u, _Finta(), "password")[0]
-    _touch_last_seen(session, u, open_, _Finta())
+    open_ = sessions.open_session(session, u, _Fake(), "password")[0]
+    _touch_last_seen(session, u, open_, _Fake())
     session.refresh(u)
     session.refresh(open_)
-    # l'indirizzo sta nella sessione, non più sull'utente
+    # the address sits in the session, no longer on the user
     assert open_.ip == "203.0.113.77" and u.last_seen_ip is None
 
     u.is_observer = True
-    u.last_seen_at = None          # scavalca il freno del throttle
+    u.last_seen_at = None          # skips the throttle's brake
     session.add(u)
     session.commit()
-    _touch_last_seen(session, u, open_, _Finta())
+    _touch_last_seen(session, u, open_, _Fake())
     session.refresh(u)
     session.refresh(open_)
     assert u.last_seen_ip is None and open_.ip is None and open_.user_agent is None
 
 
 def test_a_failed_login_still_records_the_address(session):
-    """Senza attore la regola non può applicarsi, ed è giusto così: lì l'indirizzo
-    è l'unica traccia di un tentativo di forzatura. Documentato, non dimenticato."""
+    """Without an actor the rule cannot apply, and rightly so: there the address is the only
+    trace of a brute-force attempt. Documented, not forgotten."""
     from app.services import audit as audit_svc
 
     audit_svc.record_audit(session, actor=None, actor_label="ospite-ip@x.it",
-                           action=audit_svc.LOGIN_FAILED, outcome="failure", request=_Finta())
+                           action=audit_svc.LOGIN_FAILED, outcome="failure", request=_Fake())
     item = session.exec(select(AuditLog).where(AuditLog.action == audit_svc.LOGIN_FAILED)).one()
     assert item.ip == "203.0.113.77"

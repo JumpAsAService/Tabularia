@@ -1,11 +1,11 @@
-"""Webhook: l'evento nasce con la chiusura del run, parte firmato, si ritenta, e
-non va dove non deve.
+"""Webhooks: the event is born with the run's closing, goes out signed, is retried, and
+does not go where it must not.
 
-Le regole che questi test tengono ferme: la consegna entra nella STESSA
-transazione che chiude il run (i due percorsi: la riconciliazione di un task e la
-chiusura di un'orchestrazione); un guasto nel preparare l'evento non impedisce di
-chiudere il run; la firma si verifica col segreto; un 5xx si ritenta, un
-indirizzo vietato no; solo l'amministratore crea e vede segreti e indirizzi.
+The rules these tests pin: the delivery goes into the SAME transaction that closes the
+run (the two paths: a task's reconciliation and an orchestration's closing); a fault
+preparing the event does not prevent closing the run; the signature verifies with the
+secret; a 5xx is retried, a forbidden address is not; only the administrator creates
+and sees secrets and addresses.
 """
 import hashlib
 import hmac
@@ -26,44 +26,44 @@ from app.services import webhooks as svc
 from tests.conftest import make_datasource, make_flow, make_project, make_run, make_user
 
 CSRF = {"X-Tabularia-Csrf": "1"}
-TUTTI = list(svc.EVENTS)
+EVERYONE = list(svc.EVENTS)
 
 
 @pytest.fixture(autouse=True)
-def una_scrittura_alla_volta(monkeypatch):
-    """I test usano SQLite in memoria con UNA connessione condivisa (StaticPool),
-    e la spedizione legge e scrive da più thread insieme: due esiti registrati
-    nello stesso istante si pestavano (circa un giro su tre). In produzione ogni
-    thread ha la sua connessione dal pool di Postgres; qui vanno in fila."""
+def one_write_at_a_time(monkeypatch):
+    """The tests use in-memory SQLite with ONE shared connection (StaticPool), and the
+    sending reads and writes from several threads together: two outcomes recorded at the
+    same instant trod on each other (about one round in three). In production every
+    thread has its own connection from Postgres's pool; here they go in line."""
     import threading
 
-    fila = threading.Lock()
+    line = threading.Lock()
     for name in ("_take_due", "_record"):
         vera = getattr(svc, name)
 
-        def in_fila(*a, _vera=vera, **k):
-            with fila:
+        def in_line(*a, _vera=vera, **k):
+            with line:
                 return _vera(*a, **k)
-        monkeypatch.setattr(svc, name, in_fila)
+        monkeypatch.setattr(svc, name, in_line)
 
 
-def _webhook(session, *, events=None, folder=None, attivo=True, url="http://ricevente.example/hook") -> tuple[Webhook, str]:
+def _webhook(session, *, events=None, folder=None, active=True, url="http://ricevente.example/hook") -> tuple[Webhook, str]:
     secret = svc.new_secret()
-    w = Webhook(name="w", url=url, secret_enc=svc.encrypt(secret), events=json.dumps(events or TUTTI),
-                project_id=folder, active=attivo, created_at=svc.now())
+    w = Webhook(name="w", url=url, secret_enc=svc.encrypt(secret), events=json.dumps(events or EVERYONE),
+                project_id=folder, active=active, created_at=svc.now())
     session.add(w)
     session.commit()
     session.refresh(w)
     return w, secret
 
 
-def _consegne(session) -> list[WebhookDelivery]:
+def _deliveries(session) -> list[WebhookDelivery]:
     session.expire_all()
     return list(session.exec(select(WebhookDelivery).order_by(WebhookDelivery.id)).all())
 
 
-def _chiudi(session, run: Run, state: str) -> int:
-    """Quello che fanno i due percorsi di chiusura: stato nuovo, consegne, un commit."""
+def _close(session, run: Run, state: str) -> int:
+    """What the two closing paths do: new state, deliveries, one commit."""
     run.status, run.finished_at = state, svc.now()
     session.add(run)
     session.flush()
@@ -72,76 +72,76 @@ def _chiudi(session, run: Run, state: str) -> int:
     return n
 
 
-# ── quali eventi, per chi ──────────────────────────────────────────────────
+# ── which events, for whom ─────────────────────────────────────────────────
 
-def test_un_flusso_finito_diventa_un_evento_con_flusso_cartella_e_run(session):
-    utente = make_user(session, email="a@x.local")
-    folder = make_project(session, name="Vendite", owner_id=utente.id)
-    flusso = make_flow(session, name="Margini", project_id=folder.id, owner_id=utente.id)
+def test_a_finished_flow_becomes_an_event_with_flow_folder_and_run(session):
+    user_ = make_user(session, email="a@x.local")
+    folder = make_project(session, name="Vendite", owner_id=user_.id)
+    flow = make_flow(session, name="Margini", project_id=folder.id, owner_id=user_.id)
     _webhook(session)
-    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id, rows_written=12)
-    assert _chiudi(session, run, "SUCCESS") == 1
-    d = _consegne(session)[0]
+    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id, rows_written=12)
+    assert _close(session, run, "SUCCESS") == 1
+    d = _deliveries(session)[0]
     body = json.loads(d.payload)
     assert d.event == body["event"] == "flow.run.succeeded"
-    assert body["data"]["flow"] == {"id": flusso.id, "name": "Margini"}
+    assert body["data"]["flow"] == {"id": flow.id, "name": "Margini"}
     assert body["data"]["folder"] == {"id": folder.id, "name": "Vendite"}
     assert body["data"]["run"]["id"] == run.id and body["data"]["run"]["status"] == "SUCCESS"
 
 
-def test_i_tipi_di_run(session):
-    utente = make_user(session, email="a@x.local")
-    folder = make_project(session, name="C", owner_id=utente.id)
-    flusso = make_flow(session, name="F", project_id=folder.id, owner_id=utente.id)
+def test_the_kinds_of_run(session):
+    user_ = make_user(session, email="a@x.local")
+    folder = make_project(session, name="C", owner_id=user_.id)
+    flow = make_flow(session, name="F", project_id=folder.id, owner_id=user_.id)
     ds = make_datasource(session, name="clienti", project_id=folder.id)
-    padre = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
-    casi = {
-        "flow.run.failed": make_run(session, kind="flow", status="STARTED", task_id="t1", flow_id=flusso.id),
+    padre = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
+    cases = {
+        "flow.run.failed": make_run(session, kind="flow", status="STARTED", task_id="t1", flow_id=flow.id),
         "datasource.refresh.succeeded": make_run(session, kind="ingest", status="STARTED", task_id="t2", datasource_id=ds.id),
-        None: make_run(session, kind="flow", status="STARTED", task_id="t3", flow_id=flusso.id, parent_run_id=padre.id),
+        None: make_run(session, kind="flow", status="STARTED", task_id="t3", flow_id=flow.id, parent_run_id=padre.id),
     }
-    casi["flow.run.failed"].status = "FAILURE"
-    casi["datasource.refresh.succeeded"].status = "SUCCESS"
-    casi[None].status = "SUCCESS"
-    for atteso, run in casi.items():
-        assert svc.run_event(run) == atteso
-    run = casi["datasource.refresh.succeeded"]
+    cases["flow.run.failed"].status = "FAILURE"
+    cases["datasource.refresh.succeeded"].status = "SUCCESS"
+    cases[None].status = "SUCCESS"
+    for expected, run in cases.items():
+        assert svc.run_event(run) == expected
+    run = cases["datasource.refresh.succeeded"]
     _webhook(session)
-    _chiudi(session, run, "SUCCESS")
-    assert json.loads(_consegne(session)[0].payload)["data"]["datasource"]["name"] == "clienti"
+    _close(session, run, "SUCCESS")
+    assert json.loads(_deliveries(session)[0].payload)["data"]["datasource"]["name"] == "clienti"
 
 
-def test_eventi_non_scelti_webhook_spenti_e_altre_cartelle_non_ricevono(session):
-    utente = make_user(session, email="a@x.local")
-    padre = make_project(session, name="Vendite", owner_id=utente.id)
-    figlia = make_project(session, name="Nord", owner_id=utente.id, parent_id=padre.id)
-    other_one = make_project(session, name="Acquisti", owner_id=utente.id)
-    flusso = make_flow(session, name="F", project_id=figlia.id, owner_id=utente.id)
-    solo_fallimenti, _ = _webhook(session, events=["flow.run.failed"])
-    spento, _ = _webhook(session, attivo=False)
-    della_madre, _ = _webhook(session, folder=padre.id)
-    di_un_altra, _ = _webhook(session, folder=other_one.id)
-    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
-    _chiudi(session, run, "SUCCESS")
-    # solo quello della cartella madre: una sottocartella è dentro
-    assert [d.webhook_id for d in _consegne(session)] == [della_madre.id]
+def test_events_not_chosen_webhooks_off_and_other_folders_receive_nothing(session):
+    user_ = make_user(session, email="a@x.local")
+    padre = make_project(session, name="Vendite", owner_id=user_.id)
+    child_folder = make_project(session, name="Nord", owner_id=user_.id, parent_id=padre.id)
+    other_one = make_project(session, name="Acquisti", owner_id=user_.id)
+    flow = make_flow(session, name="F", project_id=child_folder.id, owner_id=user_.id)
+    failures_only, _ = _webhook(session, events=["flow.run.failed"])
+    off, _ = _webhook(session, active=False)
+    of_the_parent, _ = _webhook(session, folder=padre.id)
+    of_another, _ = _webhook(session, folder=other_one.id)
+    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
+    _close(session, run, "SUCCESS")
+    # only the parent folder's: a subfolder is inside
+    assert [d.webhook_id for d in _deliveries(session)] == [of_the_parent.id]
 
 
-def test_un_guasto_nel_preparare_l_evento_non_impedisce_di_chiudere_il_run(session, monkeypatch):
-    utente = make_user(session, email="a@x.local")
-    flusso = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=utente.id).id, owner_id=utente.id)
+def test_a_fault_preparing_the_event_does_not_prevent_closing_the_run(session, monkeypatch):
+    user_ = make_user(session, email="a@x.local")
+    flow = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=user_.id).id, owner_id=user_.id)
     _webhook(session)
     monkeypatch.setattr(svc, "_run_data", lambda *a: (_ for _ in ()).throw(RuntimeError("guasto")))
-    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
-    assert _chiudi(session, run, "FAILURE") == 0
+    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
+    assert _close(session, run, "FAILURE") == 0
     session.refresh(run)
-    assert run.status == "FAILURE" and _consegne(session) == []
+    assert run.status == "FAILURE" and _deliveries(session) == []
 
 
 
 
 @pytest.mark.anyio
-async def test_la_riconciliazione_di_un_task_accoda_nella_stessa_transazione(session, fake_engine):
+async def test_a_tasks_reconciliation_enqueues_in_the_same_transaction(session, fake_engine):
     from app.routes.runs import _reconcile
 
     ds = make_datasource(session, name="live", kind="database", key="datasets/s1.parquet")
@@ -149,136 +149,136 @@ async def test_la_riconciliazione_di_un_task_accoda_nella_stessa_transazione(ses
     run = make_run(session, kind="ingest", status="STARTED", task_id="task-ing", datasource_id=ds.id, output_key="datasets/s2.parquet")
     fake_engine.set_task("task-ing", "SUCCESS", result={"bucket": "data-prep", "rows_written": 3, "columns": []})
     await _reconcile(session, run)
-    d = _consegne(session)
+    d = _deliveries(session)
     assert len(d) == 1 and d[0].event == "datasource.refresh.succeeded"
-    # una seconda riconciliazione del run già chiuso non ripete l'evento
+    # a second reconciliation of the run closed already does not repeat the event
     await _reconcile(session, run)
-    assert len(_consegne(session)) == 1
+    assert len(_deliveries(session)) == 1
 
 
 @pytest.mark.anyio
-async def test_la_chiusura_di_un_orchestrazione_accoda(db_engine, session, monkeypatch):
+async def test_an_orchestrations_closing_enqueues(db_engine, session, monkeypatch):
     from app.services import orchestrator as orch
 
     monkeypatch.setattr(orch, "engine", db_engine)
-    utente = make_user(session, email="a@x.local")
-    flusso = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=utente.id).id, owner_id=utente.id)
+    user_ = make_user(session, email="a@x.local")
+    flow = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=user_.id).id, owner_id=user_.id)
     _webhook(session)
-    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
+    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
     await orch._finalize_orch_run(run.id, "FAILURE", "boom")
-    d = _consegne(session)
+    d = _deliveries(session)
     assert len(d) == 1 and d[0].event == "flow.run.failed" and json.loads(d[0].payload)["data"]["run"]["error"] == "boom"
-    await orch._finalize_orch_run(run.id, "SUCCESS", None)  # già chiuso: niente
-    assert len(_consegne(session)) == 1
+    await orch._finalize_orch_run(run.id, "SUCCESS", None)  # closed already: nothing
+    assert len(_deliveries(session)) == 1
 
 
-# ── la spedizione ───────────────────────────────────────────────────────────
+# ── sending ─────────────────────────────────────────────────────────────────
 
-def _client(answers: list[int], ricevute: list[httpx.Request]) -> httpx.AsyncClient:
-    def gestisci(req: httpx.Request) -> httpx.Response:
-        ricevute.append(req)
+def _client(answers: list[int], received: list[httpx.Request]) -> httpx.AsyncClient:
+    def handle(req: httpx.Request) -> httpx.Response:
+        received.append(req)
         return httpx.Response(answers.pop(0) if answers else 200)
-    return httpx.AsyncClient(transport=httpx.MockTransport(gestisci))
+    return httpx.AsyncClient(transport=httpx.MockTransport(handle))
 
 
 @pytest.fixture
-def indirizzi_pubblici(monkeypatch):
-    """Ogni nome risolve a un indirizzo pubblico (i test non fanno DNS)."""
-    async def risolvi(url):
+def public_addresses(monkeypatch):
+    """Every name resolves to a public address (the tests do no DNS)."""
+    async def resolve(url):
         u = httpx.URL(url)
         return u, u.raw_host.decode(), "93.184.216.34"
-    monkeypatch.setattr(svc, "_resolve", risolvi)
+    monkeypatch.setattr(svc, "_resolve", resolve)
 
 
 @pytest.mark.anyio
-async def test_parte_firmata_e_la_firma_si_verifica(db_engine, session, indirizzi_pubblici):
+async def test_goes_out_signed_and_the_signature_verifies(db_engine, session, public_addresses):
     w, secret = _webhook(session)
     svc.enqueue_ping(session, w)
-    ricevute: list[httpx.Request] = []
-    assert await svc.deliver_due(db_engine, _client([200], ricevute)) == 1
-    req = ricevute[0]
+    received: list[httpx.Request] = []
+    assert await svc.deliver_due(db_engine, _client([200], received)) == 1
+    req = received[0]
     body = req.content.decode()
     t, v1 = (dict(p.split("=", 1) for p in req.headers["X-Tabularia-Signature"].split(","))[k] for k in ("t", "v1"))
     assert hmac.compare_digest(v1, hmac.new(secret.encode(), f"{t}.{body}".encode(), hashlib.sha256).hexdigest())
     assert req.headers["X-Tabularia-Event"] == "ping" and req.headers["X-Tabularia-Delivery"] == json.loads(body)["id"]
-    d = _consegne(session)[0]
+    d = _deliveries(session)[0]
     assert d.status == "delivered" and d.last_status_code == 200 and d.attempts == 1
 
 
 @pytest.mark.anyio
-async def test_un_5xx_si_ritenta_e_dopo_l_ultimo_tentativo_si_arrende(db_engine, session, indirizzi_pubblici):
+async def test_a_5xx_is_retried_and_gives_up_after_the_last_attempt(db_engine, session, public_addresses):
     w, _ = _webhook(session)
     svc.enqueue_ping(session, w)
     await svc.deliver_due(db_engine, _client([503], []))
-    d = _consegne(session)[0]
+    d = _deliveries(session)[0]
     assert d.status == "pending" and d.attempts == 1 and d.last_status_code == 503
     assert timedelta(seconds=25) < d.next_attempt_at - svc.now() <= timedelta(seconds=30)
-    # tutti i tentativi a vuoto
+    # all the attempts in vain
     for _ in range(svc.MAX_ATTEMPTS - 1):
-        d = _consegne(session)[0]
+        d = _deliveries(session)[0]
         d.next_attempt_at = svc.now()
         session.add(d)
         session.commit()
         await svc.deliver_due(db_engine, _client([500], []))
-    d = _consegne(session)[0]
+    d = _deliveries(session)[0]
     assert d.status == "failed" and d.attempts == svc.MAX_ATTEMPTS
 
 
 @pytest.mark.anyio
-async def test_una_consegna_presa_da_un_processo_morto_torna_in_coda(db_engine, session, indirizzi_pubblici):
+async def test_a_delivery_taken_by_a_dead_process_goes_back_in_the_queue(db_engine, session, public_addresses):
     w, _ = _webhook(session)
     d = svc.enqueue_ping(session, w)
     d.status, d.claimed_at = "sending", svc.now() - svc.RECLAIM_AFTER - timedelta(seconds=1)
     session.add(d)
     session.commit()
     await svc.deliver_due(db_engine, _client([200], []))
-    assert _consegne(session)[0].status == "delivered"
+    assert _deliveries(session)[0].status == "delivered"
 
 
 @pytest.mark.anyio
-async def test_un_webhook_spento_non_spedisce_quel_che_aveva_in_coda(db_engine, session, indirizzi_pubblici):
+async def test_a_webhook_off_does_not_send_what_it_had_queued(db_engine, session, public_addresses):
     w, _ = _webhook(session)
     svc.enqueue_ping(session, w)
     w.active = False
     session.add(w)
     session.commit()
-    ricevute: list[httpx.Request] = []
-    await svc.deliver_due(db_engine, _client([200], ricevute))
-    assert ricevute == [] and _consegne(session)[0].status == "failed"
+    received: list[httpx.Request] = []
+    await svc.deliver_due(db_engine, _client([200], received))
+    assert received == [] and _deliveries(session)[0].status == "failed"
 
 
 @pytest.mark.anyio
-async def test_un_indirizzo_vietato_non_si_chiama_e_non_si_ritenta(db_engine, session):
+async def test_a_forbidden_address_is_not_called_nor_retried(db_engine, session):
     w, _ = _webhook(session, url="http://127.0.0.1:9/x")
     svc.enqueue_ping(session, w)
-    ricevute: list[httpx.Request] = []
-    await svc.deliver_due(db_engine, _client([200], ricevute))
-    d = _consegne(session)[0]
-    assert ricevute == [] and d.status == "failed" and "not allowed" in d.last_error
+    received: list[httpx.Request] = []
+    await svc.deliver_due(db_engine, _client([200], received))
+    d = _deliveries(session)[0]
+    assert received == [] and d.status == "failed" and "not allowed" in d.last_error
 
 
-@pytest.mark.parametrize("ip,vietato", [
+@pytest.mark.parametrize("ip,forbidden", [
     ("127.0.0.1", True), ("::1", True), ("169.254.169.254", True), ("0.0.0.0", True),
     ("::ffff:127.0.0.1", True), ("224.0.0.1", True), ("fe80::1", True),
-    ("100.100.100.200", True), ("fd00:ec2::254", True), ("168.63.129.16", True),  # metadati dei cloud
-    ("2002:7f00:1::", True), ("2002:a9fe:a9fe::", True), ("2002:5db8:d822::", False),  # 6to4: l'IPv4 dentro
+    ("100.100.100.200", True), ("fd00:ec2::254", True), ("168.63.129.16", True),  # the clouds' metadata
+    ("2002:7f00:1::", True), ("2002:a9fe:a9fe::", True), ("2002:5db8:d822::", False),  # 6to4: the IPv4 inside
     ("10.0.0.5", False), ("172.22.0.19", False), ("192.168.1.10", False), ("8.8.8.8", False),
 ])
-def test_quali_indirizzi_sono_vietati(ip, vietato):
-    assert svc._forbidden_ip(ipaddress.ip_address(ip)) is vietato
+def test_which_addresses_are_forbidden(ip, forbidden):
+    assert svc._forbidden_ip(ipaddress.ip_address(ip)) is forbidden
 
 
 @pytest.mark.parametrize("url", [
     "ftp://host/x", "http://", "file:///etc/passwd", "javascript:alert(1)",
-    # quel che httpx o il resolver non sanno leggere (trovati provando dal vivo)
+    # what httpx or the resolver cannot read (found by trying it live)
     "http://0177.0.0.1/", "http://a..b/x", "http://" + "a" * 70 + ".com/", "http://ricevente.example:99999/",
 ])
-def test_solo_indirizzi_http(url):
+def test_http_addresses_only(url):
     with pytest.raises(ValueError):
         svc.validate_url(url)
 
 
-# ── le rotte ────────────────────────────────────────────────────────────────
+# ── the routes ──────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def app(session):
@@ -291,7 +291,7 @@ def app(session):
     return app
 
 
-def _entra(app, session, email, **kw) -> TestClient:
+def _sign_in(app, session, email, **kw) -> TestClient:
     from app.core.security import hash_password
 
     make_user(session, email=email, hashed_password=hash_password("una-password-lunga"), **kw)
@@ -300,13 +300,13 @@ def _entra(app, session, email, **kw) -> TestClient:
     return c
 
 
-def test_l_amministratore_crea_e_il_segreto_si_vede_due_volte_sole(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.post("/webhooks", json={"name": "Airflow", "url": "https://airflow.interno/hook", "events": ["flow.run.failed"]}, headers=CSRF)
+def test_the_administrator_creates_and_the_secret_is_seen_twice_only(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.post("/webhooks", json={"name": "Airflow", "url": "https://airflow.interno/hook", "events": ["flow.run.failed"]}, headers=CSRF)
     assert r.status_code == 201 and r.json()["secret"].startswith("whsec_")
     wid = r.json()["id"]
-    assert "secret" not in capo.get("/webhooks").json()[0]
-    new = capo.post(f"/webhooks/{wid}/rotate-secret", headers=CSRF).json()["secret"]
+    assert "secret" not in boss.get("/webhooks").json()[0]
+    new = boss.post(f"/webhooks/{wid}/rotate-secret", headers=CSRF).json()["secret"]
     assert new != r.json()["secret"]
     from app.core.crypto import decrypt_secret
 
@@ -314,158 +314,158 @@ def test_l_amministratore_crea_e_il_segreto_si_vede_due_volte_sole(app, session)
     assert decrypt_secret(session.get(Webhook, wid).secret_enc) == new
 
 
-def test_eventi_sconosciuti_e_indirizzi_sbagliati_sono_rifiutati(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
+def test_unknown_events_and_wrong_addresses_are_refused(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
     for body in ({"name": "x", "url": "https://a/b", "events": ["flow.run.esploso"]},
                   {"name": "x", "url": "https://a/b", "events": []},
                   {"name": "x", "url": "ftp://a/b", "events": ["flow.run.failed"]}):
-        assert capo.post("/webhooks", json=body, headers=CSRF).status_code == 422
+        assert boss.post("/webhooks", json=body, headers=CSRF).status_code == 422
 
 
-def test_l_osservatore_vede_che_esistono_non_dove_ne_cosa_mandano(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    wid = capo.post("/webhooks", json={"name": "Airflow", "url": "https://airflow.interno/hook?key=segreta", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
-    capo.post(f"/webhooks/{wid}/test", headers=CSRF)
-    occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    seen = occhio.get("/webhooks").json()[0]
+def test_the_observer_sees_that_they_exist_not_where_nor_what_they_send(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    wid = boss.post("/webhooks", json={"name": "Airflow", "url": "https://airflow.interno/hook?key=segreta", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
+    boss.post(f"/webhooks/{wid}/test", headers=CSRF)
+    eye = _sign_in(app, session, "occhio@x.local", is_observer=True)
+    seen = eye.get("/webhooks").json()[0]
     assert seen["url"] == "https://airflow.interno/…" and "secret" not in seen
-    assert occhio.get(f"/webhooks/{wid}/deliveries").json()[0]["payload"] is None
-    assert occhio.post("/webhooks", json={"name": "x", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).status_code == 403
-    assert occhio.post(f"/webhooks/{wid}/test", headers=CSRF).status_code == 403
+    assert eye.get(f"/webhooks/{wid}/deliveries").json()[0]["payload"] is None
+    assert eye.post("/webhooks", json={"name": "x", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).status_code == 403
+    assert eye.post(f"/webhooks/{wid}/test", headers=CSRF).status_code == 403
 
 
-def test_rispedire_crea_una_consegna_nuova_con_un_id_nuovo(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    wid = capo.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
-    before = capo.post(f"/webhooks/{wid}/test", headers=CSRF).json()
-    after = capo.post(f"/webhooks/deliveries/{before['id']}/redeliver", headers=CSRF).json()
+def test_resending_creates_a_new_delivery_with_a_new_id(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    wid = boss.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
+    before = boss.post(f"/webhooks/{wid}/test", headers=CSRF).json()
+    after = boss.post(f"/webhooks/deliveries/{before['id']}/redeliver", headers=CSRF).json()
     assert after["id"] != before["id"]
     a, b = (json.loads(session.get(WebhookDelivery, i).payload) for i in (before["id"], after["id"]))
     assert a["id"] != b["id"] and a["data"] == b["data"]
 
 
-def test_togliere_il_webhook_toglie_le_sue_consegne(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    wid = capo.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
-    capo.post(f"/webhooks/{wid}/test", headers=CSRF)
-    assert capo.delete(f"/webhooks/{wid}", headers=CSRF).status_code == 204
-    assert _consegne(session) == [] and session.get(Webhook, wid) is None
+def test_removing_the_webhook_removes_its_deliveries(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    wid = boss.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
+    boss.post(f"/webhooks/{wid}/test", headers=CSRF)
+    assert boss.delete(f"/webhooks/{wid}", headers=CSRF).status_code == 204
+    assert _deliveries(session) == [] and session.get(Webhook, wid) is None
 
 
-def test_la_pulizia_toglie_il_registro_vecchio(session):
+def test_the_cleanup_removes_the_old_log(session):
     w, _ = _webhook(session)
-    vecchia, recente, in_coda = (svc.enqueue_ping(session, w) for _ in range(3))
-    vecchia.status, vecchia.created_at = "delivered", svc.now() - timedelta(days=31)
-    recente.status = "delivered"
-    in_coda.created_at = svc.now() - timedelta(days=31)  # ancora da spedire: resta
-    session.add_all([vecchia, recente, in_coda])
+    old_one, recent, queued = (svc.enqueue_ping(session, w) for _ in range(3))
+    old_one.status, old_one.created_at = "delivered", svc.now() - timedelta(days=31)
+    recent.status = "delivered"
+    queued.created_at = svc.now() - timedelta(days=31)  # still to send: it stays
+    session.add_all([old_one, recent, queued])
     session.commit()
     assert svc.clean(session) == 1
-    assert {d.id for d in _consegne(session)} == {recente.id, in_coda.id}
+    assert {d.id for d in _deliveries(session)} == {recent.id, queued.id}
 
 
-# ── dalla revisione di sicurezza ─────────────────────────────────────────────
+# ── from the security review ─────────────────────────────────────────────────
 
 @pytest.mark.anyio
-async def test_si_chiama_l_indirizzo_verificato_col_nome_nell_host(db_engine, session, indirizzi_pubblici):
-    """Il nome si risolve una volta: la connessione va all'indirizzo controllato,
-    non a quello che il DNS darebbe la seconda volta."""
+async def test_the_checked_address_is_called_with_the_name_in_host(db_engine, session, public_addresses):
+    """The name is resolved once: the connection goes to the checked address, not to the one
+    DNS would give the second time."""
     w, _ = _webhook(session, url="https://ricevente.example:8443/hook")
     svc.enqueue_ping(session, w)
-    ricevute: list[httpx.Request] = []
-    await svc.deliver_due(db_engine, _client([200], ricevute))
-    req = ricevute[0]
+    received: list[httpx.Request] = []
+    await svc.deliver_due(db_engine, _client([200], received))
+    req = received[0]
     assert req.url.host == "93.184.216.34" and req.url.port == 8443
     assert req.headers["Host"] == "ricevente.example:8443"
     assert req.extensions.get("sni_hostname") == "ricevente.example"
 
 
 @pytest.mark.anyio
-async def test_i_nomi_internazionali_si_controllano_come_li_codifica_httpx(monkeypatch):
-    chiesti = []
+async def test_international_names_are_checked_as_httpx_encodes_them(monkeypatch):
+    asked = []
 
     async def getaddrinfo(host, port, **kw):
-        chiesti.append(host)
+        asked.append(host)
         return [(2, 1, 6, "", ("93.184.216.34", port))]
 
     import asyncio
     monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", getaddrinfo)
     await svc._resolve("https://straße.de/x")
-    assert chiesti == ["xn--strae-oqa.de"]
+    assert asked == ["xn--strae-oqa.de"]
 
 
 @pytest.mark.anyio
-async def test_un_nome_che_non_si_risolve_si_ritenta(db_engine, session, monkeypatch):
-    async def guasto(url):
+async def test_a_name_that_does_not_resolve_is_retried(db_engine, session, monkeypatch):
+    async def failing(url):
         raise svc._Unresolved("name not resolved: Temporary failure in name resolution")
-    monkeypatch.setattr(svc, "_resolve", guasto)
+    monkeypatch.setattr(svc, "_resolve", failing)
     w, _ = _webhook(session)
     svc.enqueue_ping(session, w)
     await svc.deliver_due(db_engine, _client([200], []))
-    d = _consegne(session)[0]
+    d = _deliveries(session)[0]
     assert d.status == "pending" and d.attempts == 1 and "not resolved" in d.last_error
 
 
 @pytest.mark.anyio
-async def test_un_ricevente_che_non_finisce_di_rispondere_non_tiene_la_consegna(db_engine, session, indirizzi_pubblici, monkeypatch):
+async def test_a_receiver_that_never_finishes_answering_does_not_hold_the_delivery(db_engine, session, public_addresses, monkeypatch):
     import asyncio
 
     monkeypatch.setenv("WEBHOOKS__TIMEOUT_SECONDS", "0.1")
     from app.core.config import get_settings
     get_settings.cache_clear()
 
-    async def lento(req):
+    async def slow(req):
         await asyncio.sleep(5)
         return httpx.Response(200)
 
     w, _ = _webhook(session)
     svc.enqueue_ping(session, w)
-    await svc.deliver_due(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(lento)))
-    d = _consegne(session)[0]
+    await svc.deliver_due(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(slow)))
+    d = _deliveries(session)[0]
     assert d.status == "pending" and "in time" in d.last_error
 
 
 @pytest.mark.anyio
-async def test_della_risposta_si_legge_solo_l_inizio(db_engine, session, indirizzi_pubblici):
-    def enorme(req):
+async def test_only_the_start_of_the_answer_is_read(db_engine, session, public_addresses):
+    def huge(req):
         return httpx.Response(500, content=b"x" * 10_000_000)
     w, _ = _webhook(session)
     svc.enqueue_ping(session, w)
-    await svc.deliver_due(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(enorme)))
-    d = _consegne(session)[0]
+    await svc.deliver_due(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(huge)))
+    d = _deliveries(session)[0]
     assert d.last_status_code == 500 and len(d.last_error) < 400
 
 
 @pytest.mark.anyio
-async def test_una_consegna_rimandata_non_si_prende_prima_del_tempo(db_engine, session, indirizzi_pubblici):
+async def test_a_put_off_delivery_is_not_taken_before_its_time(db_engine, session, public_addresses):
     w, _ = _webhook(session)
     d = svc.enqueue_ping(session, w)
     d.next_attempt_at = svc.now() + timedelta(minutes=5)
     session.add(d)
     session.commit()
-    ricevute: list[httpx.Request] = []
-    await svc.deliver_due(db_engine, _client([200], ricevute))
-    assert ricevute == [] and _consegne(session)[0].status == "pending"
+    received: list[httpx.Request] = []
+    await svc.deliver_due(db_engine, _client([200], received))
+    assert received == [] and _deliveries(session)[0].status == "pending"
 
 
-def test_l_esito_si_scrive_solo_da_chi_ha_ancora_la_consegna(session):
-    """Un processo in ritardo non sovrascrive chi l'ha ripresa dopo."""
+def test_the_outcome_is_written_only_by_whoever_still_has_the_delivery(session):
+    """A late process does not overwrite whoever took it again later."""
     w, _ = _webhook(session)
     d = svc.enqueue_ping(session, w)
     d.status, d.claimed_at = "sending", svc.now()
     session.add(d)
     session.commit()
     svc._close_delivery(session, d.id, svc.now() - timedelta(minutes=10), status="delivered")
-    assert _consegne(session)[0].status == "sending"
+    assert _deliveries(session)[0].status == "sending"
 
 
-def test_un_webhook_tolto_mentre_un_run_si_chiude_non_rompe_la_chiusura(session):
-    """Le consegne non hanno chiave esterna verso i webhook: un webhook tolto fra la
-    lettura e il commit non fa fallire la chiusura del run."""
-    utente = make_user(session, email="a@x.local")
-    flusso = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=utente.id).id, owner_id=utente.id)
+def test_a_webhook_removed_while_a_run_closes_does_not_break_the_closing(session):
+    """The deliveries have no foreign key towards the webhooks: a webhook removed between the
+    read and the commit does not fail the run's closing."""
+    user_ = make_user(session, email="a@x.local")
+    flow = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=user_.id).id, owner_id=user_.id)
     w, _ = _webhook(session)
-    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
+    run = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
     run.status, run.finished_at = "FAILURE", svc.now()
     session.add(run)
     session.flush()
@@ -476,55 +476,55 @@ def test_un_webhook_tolto_mentre_un_run_si_chiude_non_rompe_la_chiusura(session)
 
 
 @pytest.mark.anyio
-async def test_le_altre_chiusure_dei_flussi_mandano_l_evento(db_engine, session, monkeypatch):
-    """Orfane (processo morto), chiuse allo spegnimento, rimaste in coda troppo:
-    sono proprio i fallimenti che un sistema esterno deve sapere."""
+async def test_the_flows_other_closings_send_the_event(db_engine, session, monkeypatch):
+    """Orphaned (process dead), closed at shutdown, left queued too long: exactly the failures
+    an external system must know about."""
     from app.routes.runs import close_if_queued_too_long
     from app.services import orchestrator as orch
 
     monkeypatch.setattr(orch, "engine", db_engine)
-    utente = make_user(session, email="a@x.local")
-    flusso = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=utente.id).id, owner_id=utente.id)
+    user_ = make_user(session, email="a@x.local")
+    flow = make_flow(session, name="F", project_id=make_project(session, name="C", owner_id=user_.id).id, owner_id=user_.id)
     _webhook(session, events=["flow.run.failed"])
-    orphan = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
+    orphan = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
     await orch.close_orphans()
-    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id, claimed_by=orch.INSTANCE)
+    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id, claimed_by=orch.INSTANCE)
     orch.close_mine(only_earlier=False)
-    in_coda = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=flusso.id,
+    queued = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=flow.id,
                        started_at=svc.now() - timedelta(days=1))
-    await close_if_queued_too_long(session, in_coda)
-    events = [json.loads(d.payload)["data"]["run"]["id"] for d in _consegne(session)]
-    assert sorted(events) == sorted([orphan.id, mia.id, in_coda.id])
+    await close_if_queued_too_long(session, queued)
+    events = [json.loads(d.payload)["data"]["run"]["id"] for d in _deliveries(session)]
+    assert sorted(events) == sorted([orphan.id, mia.id, queued.id])
 
 
-def test_all_osservatore_il_registro_non_dice_l_errore_del_ricevente(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    wid = capo.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
-    did = capo.post(f"/webhooks/{wid}/test", headers=CSRF).json()["id"]
+def test_to_the_observer_the_log_does_not_say_the_receivers_error(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    wid = boss.post("/webhooks", json={"name": "A", "url": "https://a/b", "events": ["flow.run.failed"]}, headers=CSRF).json()["id"]
+    did = boss.post(f"/webhooks/{wid}/test", headers=CSRF).json()["id"]
     d = session.get(WebhookDelivery, did)
     d.last_error = "response 500: segreti del ricevente 10.1.2.3"
     session.add(d)
     session.commit()
-    occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    assert occhio.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"] is None
-    assert capo.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"].startswith("response 500")
+    eye = _sign_in(app, session, "occhio@x.local", is_observer=True)
+    assert eye.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"] is None
+    assert boss.get(f"/webhooks/{wid}/deliveries").json()[0]["last_error"].startswith("response 500")
 
 
-def test_una_cartella_di_un_webhook_non_si_toglie_in_silenzio(app, session):
+def test_a_webhooks_folder_is_not_removed_silently(app, session):
     from app.routes import projects as projects_routes
 
     app.include_router(projects_routes.router)
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    folder = capo.post("/projects", json={"name": "Osservata"}, headers=CSRF).json()["id"]
-    capo.post("/webhooks", json={"name": "Airflow", "url": "https://a/b", "events": ["flow.run.failed"], "project_id": folder}, headers=CSRF)
-    r = capo.delete(f"/projects/{folder}", headers=CSRF)
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    folder = boss.post("/projects", json={"name": "Osservata"}, headers=CSRF).json()["id"]
+    boss.post("/webhooks", json={"name": "Airflow", "url": "https://a/b", "events": ["flow.run.failed"], "project_id": folder}, headers=CSRF)
+    r = boss.delete(f"/projects/{folder}", headers=CSRF)
     assert r.status_code == 409 and "Airflow" in r.json()["detail"]
 
 
-# ── trovati provando dal vivo (2026-10-12) ───────────────────────────────────
+# ── found by trying it live (2026-10-12) ─────────────────────────────────────
 
 def _certificati(tmp_path, name):
-    """Una CA di prova e un certificato per `name` firmato da lei."""
+    """A test CA and a certificate for `name` signed by it."""
     import datetime as dt
 
     from cryptography import x509
@@ -532,15 +532,15 @@ def _certificati(tmp_path, name):
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import NameOID
 
-    def emetti(soggetto, key, emittente, chiave_emittente, ca, san=None):
-        b = (x509.CertificateBuilder().subject_name(soggetto).issuer_name(emittente).public_key(key.public_key())
+    def emetti(subject, key, emittente, issuer_key, ca, san=None):
+        b = (x509.CertificateBuilder().subject_name(subject).issuer_name(emittente).public_key(key.public_key())
              .serial_number(x509.random_serial_number())
              .not_valid_before(dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1))
              .not_valid_after(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1))
              .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
         if san:
             b = b.add_extension(x509.SubjectAlternativeName([x509.DNSName(san)]), critical=False)
-        return b.sign(chiave_emittente, hashes.SHA256())
+        return b.sign(issuer_key, hashes.SHA256())
 
     k_ca, k = ec.generate_private_key(ec.SECP256R1()), ec.generate_private_key(ec.SECP256R1())
     n_ca = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "CA di prova")])
@@ -555,25 +555,25 @@ def _certificati(tmp_path, name):
 
 
 @pytest.mark.anyio
-async def test_un_nome_senza_certificato_non_passa_sulla_connessione_di_un_altro(db_engine, session, tmp_path, monkeypatch):
-    """Due nomi, un indirizzo: il server ha il certificato solo di a. Con un pool
-    condiviso fra le consegne, la chiamata per c viaggiava sulla connessione TLS
-    verificata per a e arrivava (provato dal vivo). Ogni consegna ha un client suo:
-    c fallisce sul certificato, e ogni richiesta arriva col SUO nome nel TLS."""
+async def test_a_name_without_certificate_does_not_ride_another_names_connection(db_engine, session, tmp_path, monkeypatch):
+    """Two names, one address: the server has the certificate of a only. With a pool shared
+    among the deliveries, the call for c travelled on the TLS connection checked for a and
+    got through (tried live). Every delivery has a client of its own: c fails on the
+    certificate, and every request arrives with ITS name in TLS."""
     import asyncio
     import ssl
 
     ca, cert, key = _certificati(tmp_path, "a.test")
     monkeypatch.setenv("SSL_CERT_FILE", str(ca))
     svc._tls_context.cache_clear()
-    monkeypatch.setattr(svc, "PARALLEL", 1)  # in fila: la seconda troverebbe libera la connessione della prima
+    monkeypatch.setattr(svc, "PARALLEL", 1)  # in line: the second would find the first's connection free
 
     views = []
-    lato_server = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    lato_server.load_cert_chain(cert, key)
-    lato_server.sni_callback = lambda sock, name, _c: setattr(sock, "sni", name)
+    server_side = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    server_side.load_cert_chain(cert, key)
+    server_side.sni_callback = lambda sock, name, _c: setattr(sock, "sni", name)
 
-    async def servi(reader, writer):
+    async def serve(reader, writer):
         try:
             while True:
                 head = await reader.readuntil(b"\r\n\r\n")
@@ -588,111 +588,111 @@ async def test_un_nome_senza_certificato_non_passa_sulla_connessione_di_un_altro
         finally:
             writer.close()
 
-    server = await asyncio.start_server(servi, "127.0.0.1", 0, ssl=lato_server)
-    porta = server.sockets[0].getsockname()[1]
+    server = await asyncio.start_server(serve, "127.0.0.1", 0, ssl=server_side)
+    port = server.sockets[0].getsockname()[1]
 
-    async def risolvi(url):  # entrambi i nomi allo stesso indirizzo (quello del server di prova)
+    async def resolve(url):  # both names to the same address (the test server's)
         u = httpx.URL(url)
         return u, u.raw_host.decode(), "127.0.0.1"
-    monkeypatch.setattr(svc, "_resolve", risolvi)
+    monkeypatch.setattr(svc, "_resolve", resolve)
 
     try:
-        a, _ = _webhook(session, url=f"https://a.test:{porta}/a")
-        c, _ = _webhook(session, url=f"https://c.test:{porta}/c")
+        a, _ = _webhook(session, url=f"https://a.test:{port}/a")
+        c, _ = _webhook(session, url=f"https://c.test:{port}/c")
         for w in (a, a, c, a):
             svc.enqueue_ping(session, w)
         await svc.deliver_due(db_engine)
     finally:
         server.close()
-    esiti = {d.id: d for d in _consegne(session)}
-    per_c = [d for d in esiti.values() if d.webhook_id == c.id]
-    assert per_c[0].status == "pending" and "CERTIFICATE_VERIFY_FAILED" in per_c[0].last_error
-    assert all(d.status == "delivered" for d in esiti.values() if d.webhook_id == a.id)
+    outcomes = {d.id: d for d in _deliveries(session)}
+    for_c = [d for d in outcomes.values() if d.webhook_id == c.id]
+    assert for_c[0].status == "pending" and "CERTIFICATE_VERIFY_FAILED" in for_c[0].last_error
+    assert all(d.status == "delivered" for d in outcomes.values() if d.webhook_id == a.id)
     assert ("c.test" not in [h.split(":")[0] for _, h, _ in views]), views
     assert all(sni == "a.test" and host.startswith("a.test:") for sni, host, _ in views), views
 
 
 @pytest.mark.anyio
-async def test_un_ricevente_che_non_risponde_non_trattiene_gli_altri(db_engine, session, indirizzi_pubblici):
-    """Quaranta consegne in coda verso un ricevente fermo e una per un altro: dal
-    vivo la sana arrivava dopo 66 s (ogni giro prendeva le 20 più vecchie e le
-    aspettava tutte). Ora un webhook occupa al più PER_WEBHOOK posti."""
+async def test_a_receiver_not_answering_does_not_hold_the_others_back(db_engine, session, public_addresses):
+    """Forty deliveries queued towards a stuck receiver and one for another: live, the
+    healthy one arrived after 66 s (every round took the 20 oldest and waited for them
+    all). Now a webhook takes at most PER_WEBHOOK slots."""
     import asyncio
 
     dead, _ = _webhook(session, url="http://morto.example/x")
-    sano, _ = _webhook(session, url="http://sano.example/x")
+    healthy, _ = _webhook(session, url="http://sano.example/x")
     for _ in range(40):
         svc.enqueue_ping(session, dead)
-    svc.enqueue_ping(session, sano)
+    svc.enqueue_ping(session, healthy)
     still = asyncio.Event()
-    arrivate = []
+    arrived = []
 
-    async def rispondi(req):
+    async def answer(req):
         if req.headers["Host"].startswith("morto"):
             await still.wait()
-        arrivate.append(req.headers["Host"])
+        arrived.append(req.headers["Host"])
         return httpx.Response(200)
 
-    flight = svc._InFlight(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(rispondi)))
+    flight = svc._InFlight(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(answer)))
     await flight.round_()
     for _ in range(100):
-        if "sano.example" in arrivate:
+        if "sano.example" in arrived:
             break
         await asyncio.sleep(0.02)
-    assert arrivate == ["sano.example"]
+    assert arrived == ["sano.example"]
     assert sorted(flight.tasks.values()) == [dead.id] * svc.PER_WEBHOOK
     still.set()
     await flight.finish()
 
 
 @pytest.mark.anyio
-async def test_un_giro_non_aspetta_le_consegne_ancora_in_volo(db_engine, session, indirizzi_pubblici):
+async def test_a_round_does_not_wait_for_the_deliveries_still_in_flight(db_engine, session, public_addresses):
     import asyncio
 
-    lento, _ = _webhook(session, url="http://lento.example/x")
-    svc.enqueue_ping(session, lento)
+    slow, _ = _webhook(session, url="http://lento.example/x")
+    svc.enqueue_ping(session, slow)
     still = asyncio.Event()
 
-    async def rispondi(req):
+    async def answer(req):
         if req.headers["Host"].startswith("lento"):
             await still.wait()
         return httpx.Response(200)
 
-    flight = svc._InFlight(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(rispondi)))
+    flight = svc._InFlight(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(answer)))
     assert await flight.round_() == 1
     other, _ = _webhook(session, url="http://altro.example/x")
     svc.enqueue_ping(session, other)
-    assert await flight.round_() == 1  # la lenta è ancora in volo, e il giro dopo parte lo stesso
+    assert await flight.round_() == 1  # the slow one is still in flight, and the next round starts all the same
     await asyncio.sleep(0.1)
-    stati = {d.webhook_id: d.status for d in _consegne(session)}
-    assert stati == {lento.id: "sending", other.id: "delivered"}
+    states = {d.webhook_id: d.status for d in _deliveries(session)}
+    assert states == {slow.id: "sending", other.id: "delivered"}
     still.set()
     await flight.finish()
-    assert {d.status for d in _consegne(session)} == {"delivered"}
+    assert {d.status for d in _deliveries(session)} == {"delivered"}
 
 
 @pytest.mark.anyio
-async def test_un_indirizzo_che_httpx_non_legge_chiude_la_consegna_e_non_ferma_le_altre(db_engine, session):
-    """Salvato prima del controllo (o letto diversamente da una versione nuova di
-    httpx): prima l'eccezione usciva dal giro, la consegna restava presa per
-    sempre e le altre del lotto perdevano il client a metà."""
-    cattivo, _ = _webhook(session, url="http://0177.0.0.1/x")
-    buono, _ = _webhook(session, url="http://93.184.216.34/x")
-    svc.enqueue_ping(session, cattivo)
-    svc.enqueue_ping(session, buono)
+async def test_an_address_httpx_cannot_read_closes_the_delivery_and_does_not_stop_the_others(db_engine, session):
+    """Saved before the check (or read differently by a new httpx version): before, the
+    exception left the round, the delivery stayed taken forever and the others of the
+    batch lost their client halfway."""
+    bad, _ = _webhook(session, url="http://0177.0.0.1/x")
+    good, _ = _webhook(session, url="http://93.184.216.34/x")
+    svc.enqueue_ping(session, bad)
+    svc.enqueue_ping(session, good)
     await svc.deliver_due(db_engine, _client([200], []))
-    stati = {d.webhook_id: (d.status, d.last_error) for d in _consegne(session)}
-    assert stati[cattivo.id][0] == "failed" and "invalid" in stati[cattivo.id][1]
-    assert stati[buono.id] == ("delivered", None)
+    states = {d.webhook_id: (d.status, d.last_error) for d in _deliveries(session)}
+    assert states[bad.id][0] == "failed" and "invalid" in states[bad.id][1]
+    assert states[good.id] == ("delivered", None)
 
 
 @pytest.mark.anyio
-async def test_un_errore_imprevisto_e_l_esito_di_quella_consegna(db_engine, session, indirizzi_pubblici, monkeypatch):
-    """Un guasto fuori dalla chiamata HTTP (lì gli errori sono già un esito)."""
-    rotto, _ = _webhook(session, url="http://rotto.example/x")
-    buono, _ = _webhook(session, url="http://buono.example/x")
-    svc.enqueue_ping(session, rotto)
-    svc.enqueue_ping(session, buono)
+async def test_an_unexpected_error_is_that_deliverys_outcome(db_engine, session, public_addresses, monkeypatch):
+    """A fault outside the HTTP call (there the errors are an outcome already)."""
+    broken, _ = _webhook(session, url="http://rotto.example/x")
+    good, _ = _webhook(session, url="http://buono.example/x")
+    svc.enqueue_ping(session, broken)
+    svc.enqueue_ping(session, good)
     vera = svc._ship
 
     async def send(job, client):
@@ -702,15 +702,15 @@ async def test_un_errore_imprevisto_e_l_esito_di_quella_consegna(db_engine, sess
     monkeypatch.setattr(svc, "_ship", send)
 
     await svc.deliver_due(db_engine, _client([200], []))
-    stati = {d.webhook_id: d for d in _consegne(session)}
-    assert stati[rotto.id].status == "pending" and stati[rotto.id].attempts == 1  # si ritenta, con le attese
-    assert "RuntimeError" in stati[rotto.id].last_error and "guasto" not in stati[rotto.id].last_error
-    assert stati[buono.id].status == "delivered"
+    states = {d.webhook_id: d for d in _deliveries(session)}
+    assert states[broken.id].status == "pending" and states[broken.id].attempts == 1  # retried, with the waits
+    assert "RuntimeError" in states[broken.id].last_error and "guasto" not in states[broken.id].last_error
+    assert states[good.id].status == "delivered"
 
 
 @pytest.mark.anyio
-async def test_allo_spegnimento_le_consegne_in_volo_restano_prese(db_engine, session, indirizzi_pubblici):
-    """Fermate a metà, tornano in coda dopo RECLAIM_AFTER: almeno una consegna."""
+async def test_at_shutdown_the_deliveries_in_flight_stay_taken(db_engine, session, public_addresses):
+    """Stopped halfway, they go back in the queue after RECLAIM_AFTER: at least once."""
     import asyncio
 
     w, _ = _webhook(session)
@@ -722,20 +722,20 @@ async def test_allo_spegnimento_le_consegne_in_volo_restano_prese(db_engine, ses
     flight = svc._InFlight(db_engine, httpx.AsyncClient(transport=httpx.MockTransport(mai)))
     await flight.round_()
     await flight.finish(0.1)
-    assert _consegne(session)[0].status == "sending" and not flight.tasks
+    assert _deliveries(session)[0].status == "sending" and not flight.tasks
 
 
-def test_l_indirizzo_non_valido_si_rifiuta_al_salvataggio(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
+def test_the_invalid_address_is_refused_at_saving(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
     for url in ("http://0177.0.0.1/", "http://a..b/", "http://x.example:70000/"):
-        r = capo.post("/webhooks", json={"name": "A", "url": url, "events": ["flow.run.failed"]}, headers=CSRF)
+        r = boss.post("/webhooks", json={"name": "A", "url": url, "events": ["flow.run.failed"]}, headers=CSRF)
         assert r.status_code == 422, (url, r.text)
 
 
 @pytest.mark.anyio
-async def test_una_coda_lunga_verso_un_ricevente_veloce_si_svuota_subito(db_engine, session, indirizzi_pubblici, monkeypatch):
-    """Il ciclo vero: riparte appena un posto si libera. Sul prodtest 300 consegne
-    a un ricevente pronto andavano a una al secondo (due in volo, poi CYCLE fermo)."""
+async def test_a_long_queue_towards_a_fast_receiver_empties_at_once(db_engine, session, public_addresses, monkeypatch):
+    """The real loop: it starts again as soon as a slot frees up. On the prodtest 300
+    deliveries to a ready receiver went one per second (two in flight, then CYCLE still)."""
     import asyncio
     import time
 
@@ -747,12 +747,12 @@ async def test_una_coda_lunga_verso_un_ricevente_veloce_si_svuota_subito(db_engi
     for _ in range(40):
         svc.enqueue_ping(session, w)
     stop = asyncio.Event()
-    ciclo = asyncio.create_task(svc.delivery_loop(stop))
+    loop = asyncio.create_task(svc.delivery_loop(stop))
     t0 = time.monotonic()
-    while time.monotonic() - t0 < 10 and any(d.status != "delivered" for d in _consegne(session)):
+    while time.monotonic() - t0 < 10 and any(d.status != "delivered" for d in _deliveries(session)):
         await asyncio.sleep(0.05)
     duration = time.monotonic() - t0
     stop.set()
-    await asyncio.wait_for(ciclo, 10)
-    assert all(d.status == "delivered" for d in _consegne(session))
-    assert duration < svc.CYCLE * 2, duration  # prima: 40 / PER_WEBHOOK giri da CYCLE = 40 s
+    await asyncio.wait_for(loop, 10)
+    assert all(d.status == "delivered" for d in _deliveries(session))
+    assert duration < svc.CYCLE * 2, duration  # before: 40 / PER_WEBHOOK rounds of CYCLE = 40 s

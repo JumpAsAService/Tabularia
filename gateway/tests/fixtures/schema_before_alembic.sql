@@ -1,6 +1,6 @@
--- Lo schema del database di sviluppo il 2026-10-10, PRIMA di Alembic (pg_dump -s): create_all
--- più gli ALTER idempotenti, con la deriva che quel meccanismo lasciava. Serve a provare
--- l'adozione (test_migrazioni.py). Solo schema: nessun dato.
+-- The development database's schema on 2026-10-10, BEFORE Alembic (pg_dump -s): create_all
+-- plus the idempotent ALTERs, with the drift that mechanism left. It serves to test the
+-- adoption (test_migrations.py). Schema only: no data.
 CREATE TABLE public.ai_chat_turns (
     id integer NOT NULL,
     chat_id integer NOT NULL,

@@ -1,9 +1,9 @@
-"""Datasource da Excel su SharePoint: la parte del gateway.
+"""A datasource from Excel on SharePoint: the gateway's part.
 
-La connessione riusa le colonne esistenti (nessuna migrazione) e la datasource è
-una `kind="database"` come le altre: eredita refresh, scheduler, storico e
-spinner. Qui si fissa cosa parte verso l'engine — secret CIFRATO, percorso e
-foglio giusti — e chi può fare cosa.
+The connection reuses the existing columns (no migration) and the datasource is a
+`kind="database"` one like the others: it inherits refresh, scheduler, history and
+spinner. Here it is pinned what goes out towards the engine — ENCRYPTED secret, the
+right path and sheet — and who may do what.
 """
 import json
 
@@ -46,7 +46,7 @@ def test_the_payload_maps_the_columns_and_keeps_the_secret_encrypted(session):
     assert pay == {"tenant_id": "tenant-id", "client_id": "client-id", "site_url": "https://contoso.sharepoint.com/sites/Finance",
                    "library": "Contabilita", "client_secret_encrypted": pay["client_secret_encrypted"]}
     assert pay["client_secret_encrypted"] != "segreto" and decrypt_secret(pay["client_secret_encrypted"]) == "segreto"
-    # gli endpoint Microsoft non sono scelti da chi crea la connessione
+    # the Microsoft endpoints are not chosen by whoever creates the connection
     assert "graph_base" not in pay and "login_base" not in pay
 
 
@@ -65,8 +65,8 @@ async def test_creating_it_queues_a_sharepoint_ingest_with_path_and_sheet(sessio
 
 
 async def test_refresh_goes_down_the_same_road(session, fake_engine):
-    """Il refresh — e quindi lo scheduler — non sa nulla di SharePoint: passa da
-    launch_ingest_run, che smista sul tipo di connessione."""
+    """The refresh — and so the scheduler — knows nothing of SharePoint: it goes through
+    launch_ingest_run, which dispatches on the connection's kind."""
     admin = make_user(session, email="a@x.it", is_superuser=True)
     p = make_project(session, name="p")
     conn = _conn(session, p.id)
@@ -100,8 +100,8 @@ async def test_without_connect_on_the_connection_nothing_is_created(session, fak
 
     admin = make_user(session, email="a@x.it", is_superuser=True)
     editor = make_user(session, email="e@x.it")
-    p = make_project(session, name="p"); altrove = make_project(session, name="altrove")
-    conn = _conn(session, altrove.id)
+    p = make_project(session, name="p"); elsewhere = make_project(session, name="altrove")
+    conn = _conn(session, elsewhere.id)
     session.add(Permission(project_id=p.id, user_id=editor.id, capability=Capability.EDIT)); session.commit()
     with pytest.raises(HTTPException) as e:
         await create_sharepoint_datasource(p.id, _body(conn.id), _Req(), editor, session)
@@ -165,8 +165,8 @@ def test_the_path_is_mandatory_the_sheet_is_not():
 
 
 async def test_a_sharepoint_connection_cannot_be_a_database_destination(session, fake_engine):
-    """Non è un database: senza il controllo l'errore arriverebbe dal driver, a
-    run già partito, parlando d'altro."""
+    """It is not a database: without the check the error would come from the driver, with the
+    run started already, talking about something else."""
     from app.routes.runs import _launch_flow_run
     from app.schemas.models import RunCreate, RunDestinationSpec
     from tests.conftest import make_flow

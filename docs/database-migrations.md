@@ -45,7 +45,7 @@ update, and revisions are written so that it keeps working (below).
    and types the way it understands them. Fix it by hand.
 4. `python -m app.db.migra`, then `python -m app.db.migra controlla` → *equal to the models*.
 5. Commit the model change and the revision together. The gateway test
-   `test_migrazioni.py` fails if the models and the revisions do not agree.
+   `test_migrations.py` fails if the models and the revisions do not agree.
 
 Revisions are numbered `0002`, `0003`… in one chain. They go **forward only**: a mistake is
 fixed by a new revision, and a rollback of the database is a restore from backup.

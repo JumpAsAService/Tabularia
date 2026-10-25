@@ -1,8 +1,8 @@
-"""Pinning delle letture del data plane (`ensure_reads_pinned`).
+"""Pinning the data plane's reads (`ensure_reads_pinned`).
 
-Regressione per il fix: `_launch_flow_run` deve ancorare ogni sorgente al bucket
-dell'engine e ai prefissi gestiti, come già fa il proxy. Qui testiamo la
-funzione pura che entrambi i path condividono.
+Regression for the fix: `_launch_flow_run` must anchor every source to the engine's
+bucket and the managed prefixes, as the proxy does already. Here we test the pure
+function both paths share.
 """
 
 import pytest
@@ -25,7 +25,7 @@ def _super(session):
 
 
 def test_valid_managed_source_passes(session, _normal):
-    # bucket dell'engine + chiave sotto un prefisso gestito → nessun errore
+    # the engine's bucket + a key under a managed prefix → no error
     ensure_reads_pinned(
         session, _normal, {"bucket": ENGINE_BUCKET, "input_key": "datasets/abc.parquet"}, ENGINE_BUCKET
     )
@@ -48,8 +48,8 @@ def test_unmanaged_key_rejected(session, _normal):
 
 
 def test_nested_join_right_source_bucket_rejected(session, _normal):
-    # una sorgente annidata (ramo destro di un join) con bucket estraneo non
-    # deve sfuggire al pinning
+    # a nested source (a join's right branch) with a foreign bucket must not escape the
+    # pinning
     payload = {
         "bucket": ENGINE_BUCKET,
         "input_key": "datasets/a.parquet",
@@ -66,7 +66,7 @@ def test_nested_join_right_source_bucket_rejected(session, _normal):
 
 
 def test_superuser_bypasses_pinning(session, _super):
-    # il superuser non è vincolato (nessuna eccezione anche con bucket estraneo)
+    # the superuser is not bound (no exception even with a foreign bucket)
     ensure_reads_pinned(
         session, _super, {"bucket": "qualsiasi", "input_key": "ovunque/x.parquet"}, ENGINE_BUCKET
     )

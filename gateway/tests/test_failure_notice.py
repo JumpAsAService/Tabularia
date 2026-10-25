@@ -1,8 +1,8 @@
-"""Avviso via SMTP quando un'esecuzione PROGRAMMATA fallisce.
+"""A notice over SMTP when a SCHEDULED run fails.
 
-«Metti in schedule e dimentica» funziona solo se qualcosa ti sveglia. Qui si
-verifica soprattutto quando l'avviso NON deve partire: un avviso che arriva
-troppo spesso viene filtrato, e allora non serve più a niente.
+«Schedule it and forget it» works only if something wakes you up. Here above all it is
+checked when the notice must NOT go out: a notice arriving too often is filtered, and
+then it serves nothing.
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -48,8 +48,8 @@ def scenario(session, monkeypatch):
 
 
 def _run(session, flow, *, status="FAILURE", trigger="schedule", when=None, error="boom", kind="orchestration"):
-    """L'esecuzione programmata di un flusso è il run di ORCHESTRAZIONE: è quello
-    che l'orchestratore passa al notificatore."""
+    """A flow's scheduled run is the ORCHESTRATION run: it is what the orchestrator passes to
+    the notifier."""
     t = when or datetime.now(timezone.utc).replace(tzinfo=None)
     return make_run(
         session, kind=kind, flow_id=flow.id, status=status, trigger_type=trigger,
@@ -57,50 +57,50 @@ def _run(session, flow, *, status="FAILURE", trigger="schedule", when=None, erro
     )
 
 
-def _avvisa(session, run):
+def _notify(session, run):
     asyncio.run(notifier.notify_failure(session, run))
 
 
 def test_a_scheduled_failure_sends_the_notice(session, scenario):
     flow, _, sent = scenario
-    _avvisa(session, _run(session, flow))
+    _notify(session, _run(session, flow))
     assert len(sent) == 1
     msg = sent[0]
     assert msg["to"] == ["alice@x.it", "bruno@x.it"]
     assert flow.name in msg["subject"]
-    assert "boom" in msg["body"]  # l'errore vero, non un «qualcosa è andato storto»
+    assert "boom" in msg["body"]  # the real error, not a «something went wrong»
 
 
 def test_a_manual_failure_says_nothing(session, scenario):
-    """Chi lancia a mano sta guardando lo schermo: avvisarlo è rumore."""
+    """Whoever launches by hand is looking at the screen: notifying them is noise."""
     flow, _, sent = scenario
-    _avvisa(session, _run(session, flow, trigger="manual"))
+    _notify(session, _run(session, flow, trigger="manual"))
     assert sent == []
 
 
 def test_a_success_says_nothing(session, scenario):
     flow, _, sent = scenario
-    _avvisa(session, _run(session, flow, status="SUCCESS", error=None))
+    _notify(session, _run(session, flow, status="SUCCESS", error=None))
     assert sent == []
 
 
 def test_it_does_not_repeat_while_it_keeps_failing(session, scenario):
-    """Un flusso rotto che scatta ogni cinque minuti manderebbe 300 email al
-    giorno, e alla terza nessuno le leggerebbe più."""
+    """A broken flow firing every five minutes would send 300 emails a day, and by the third
+    nobody would read them any more."""
     flow, _, sent = scenario
-    ieri = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
-    _run(session, flow, when=ieri)  # era già fallita
-    _avvisa(session, _run(session, flow))
+    yesterday = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    _run(session, flow, when=yesterday)  # it had failed already
+    _notify(session, _run(session, flow))
     assert sent == []
 
 
 def test_it_speaks_again_after_a_recovery(session, scenario):
-    """Fallito, risolto, fallito di nuovo: il secondo guasto è una notizia."""
+    """Failed, fixed, failed again: the second fault is news."""
     flow, _, sent = scenario
     base = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
     _run(session, flow, when=base)
     _run(session, flow, status="SUCCESS", error=None, when=base + timedelta(hours=1))
-    _avvisa(session, _run(session, flow, when=base + timedelta(hours=2)))
+    _notify(session, _run(session, flow, when=base + timedelta(hours=2)))
     assert len(sent) == 1
 
 
@@ -109,12 +109,12 @@ def test_without_recipients_or_connection_nothing_is_sent(session, scenario):
     flow.notify_emails = None
     session.add(flow)
     session.commit()
-    _avvisa(session, _run(session, flow))
+    _notify(session, _run(session, flow))
     assert sent == []
 
 
 def test_a_broken_notice_never_changes_the_outcome(session, scenario, monkeypatch):
-    """Il run è già fallito: un avviso rotto non deve renderlo più confuso."""
+    """The run has failed already: a broken notice must not make it more confusing."""
     flow, _, _ = scenario
 
     class _Boom:
@@ -123,14 +123,14 @@ def test_a_broken_notice_never_changes_the_outcome(session, scenario, monkeypatc
 
     monkeypatch.setattr(notifier, "get_engine_client", lambda: _Boom())
     run = _run(session, flow)
-    _avvisa(session, run)  # non solleva
+    _notify(session, run)  # does not raise
     assert run.status == "FAILURE"
 
 
-# ── configurazione ───────────────────────────────────────────────────────────
+# ── configuration ────────────────────────────────────────────────────────────
 
 def test_the_allowed_domains_of_the_connection_still_apply(session, scenario):
-    """L'avviso non è una scorciatoia per aggirare la barriera del nodo email."""
+    """The notice is not a shortcut around the email node's barrier."""
     from app.routes import flows as flow_routes
     from app.schemas.models import FlowScheduleUpdate
 
@@ -138,11 +138,11 @@ def test_the_allowed_domains_of_the_connection_still_apply(session, scenario):
     conn.extra = '{"from_address": "tabularia@x.it", "allowed_domains": "x.it"}'
     session.add(conn)
     session.commit()
-    capo = make_user(session, email="capo@x.it", is_superuser=True)
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
 
     with pytest.raises(HTTPException) as e:
         flow_routes._set_failure_notice(
-            session, capo, flow,
+            session, boss, flow,
             FlowScheduleUpdate(notify_emails="fuori@altrove.com", notify_connection_id=conn.id),
         )
     assert e.value.status_code == 422 and "altrove.com" in e.value.detail
@@ -153,31 +153,31 @@ def test_a_malformed_address_is_refused(session, scenario):
     from app.schemas.models import FlowScheduleUpdate
 
     flow, conn, _ = scenario
-    capo = make_user(session, email="capo@x.it", is_superuser=True)
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
     with pytest.raises(HTTPException) as e:
-        flow_routes._set_failure_notice(session, capo, flow, FlowScheduleUpdate(notify_emails="non-un-indirizzo"))
+        flow_routes._set_failure_notice(session, boss, flow, FlowScheduleUpdate(notify_emails="non-un-indirizzo"))
     assert e.value.status_code == 422
 
 
 def test_the_notice_is_about_the_orchestration_not_its_output_runs(session, scenario):
-    """Per mesi qui c'era scritto kind == "flow": l'orchestratore passa il run di
-    orchestrazione, e l'avviso non partiva mai. I run "flow" sono i figli (uno per
-    nodo Output) e da soli non avvisano."""
+    """For months kind == "flow" was written here: the orchestrator passes the orchestration
+    run, and the notice never went out. The "flow" runs are the children (one per Output
+    node) and do not notify alone."""
     flow, _, sent = scenario
-    _avvisa(session, _run(session, flow, kind="flow"))
+    _notify(session, _run(session, flow, kind="flow"))
     assert sent == []
-    _avvisa(session, _run(session, flow))
+    _notify(session, _run(session, flow))
     assert len(sent) == 1
 
 
 def test_a_rejected_launch_does_not_count_as_a_previous_failure(session, scenario):
-    """Un lancio manuale respinto perché il flusso girava già non è un'esecuzione
-    fallita: non deve zittire l'avviso della prossima che fallisce davvero."""
+    """A manual launch refused because the flow was running already is not a failed run: it
+    must not silence the notice of the next one that really fails."""
     from datetime import timedelta
 
     flow, _, sent = scenario
     at = datetime.now(timezone.utc).replace(tzinfo=None)
     _run(session, flow, status="SUCCESS", when=at - timedelta(hours=2), error=None)
     _run(session, flow, trigger="manual", when=at - timedelta(hours=1), error="flow already running")
-    _avvisa(session, _run(session, flow, when=at))
+    _notify(session, _run(session, flow, when=at))
     assert len(sent) == 1

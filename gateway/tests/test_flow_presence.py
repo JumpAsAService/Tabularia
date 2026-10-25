@@ -1,9 +1,8 @@
-"""Avviso "questo flusso è aperto anche da …".
+"""The "this flow is also open by …" warning.
 
-Due persone possono aprire lo stesso flusso e l'ultimo che salva sovrascrive
-l'altro in silenzio. Per scelta non si blocca: si avvisa. Questi test fissano il
-registro (chi c'è, chi scade, chi se ne va) e il fatto che a vederlo sia solo chi
-può vedere il flusso.
+Two people may open the same flow and whoever saves last overwrites the other silently.
+By choice nothing is blocked: it warns. These tests pin the register (who is there, who
+expires, who leaves) and the fact that only whoever can see the flow sees it.
 """
 import pytest
 from fastapi import HTTPException
@@ -14,7 +13,7 @@ from app.services import flow_presence as fp
 from tests.conftest import make_flow, make_project, make_user
 
 
-# ── il registro ────────────────────────────────────────────────────────────────
+# ── the register ───────────────────────────────────────────────────────────────
 def test_alone_there_is_nobody_else(session):
     assert fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=100) == []
 
@@ -26,7 +25,7 @@ def test_the_second_one_sees_the_first_and_vice_versa(session):
 
 
 def test_a_second_tab_of_the_same_user_counts_too(session):
-    """Una seconda scheda sovrascrive quanto una seconda persona."""
+    """A second tab overwrites as much as a second person."""
     fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=100)
     assert [o["email"] for o in fp.beat(session, 1, "tab-a2a2", 10, "a@x.it", "A", now=101)] == ["a@x.it"]
 
@@ -37,7 +36,7 @@ def test_other_flows_are_not_mixed_in(session):
 
 
 def test_whoever_stops_beating_expires(session):
-    """Scheda chiusa di colpo, rete caduta: nessun DELETE arriva mai."""
+    """Tab closed abruptly, network down: no DELETE ever arrives."""
     fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=100)
     assert fp.beat(session, 1, "tab-bbbb", 20, "b@x.it", "B", now=100 + fp.TTL_SECONDS + 1) == []
 
@@ -66,8 +65,8 @@ def test_the_registry_cannot_be_flooded(session):
 
 
 def test_two_replicas_see_the_same_people(db_engine):
-    """Il motivo per cui sta in una tabella: chi batte passando da una replica
-    deve essere visto da chi passa da un'altra. Due sessioni = due processi."""
+    """The reason it sits in a table: whoever beats through one replica must be seen by
+    whoever goes through another. Two sessions = two processes."""
     from sqlmodel import Session
 
     with Session(db_engine) as replica_a, Session(db_engine) as replica_b:
@@ -89,12 +88,12 @@ def test_expired_rows_are_swept(session):
 
 def test_coming_back_after_expiring_starts_over(session):
     fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=100)
-    tardi = 100 + fp.TTL_SECONDS + 50
-    fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=tardi)
-    assert [o["since"] for o in fp.beat(session, 1, "tab-bbbb", 20, "b@x.it", "B", now=tardi + 1)] == [tardi]
+    later = 100 + fp.TTL_SECONDS + 50
+    fp.beat(session, 1, "tab-aaaa", 10, "a@x.it", "A", now=later)
+    assert [o["since"] for o in fp.beat(session, 1, "tab-bbbb", 20, "b@x.it", "B", now=later + 1)] == [later]
 
 
-# ── la rotta: chi può vedere il flusso ─────────────────────────────────────────
+# ── the route: who may see the flow ────────────────────────────────────────────
 def test_the_route_answers_who_else_is_there(session):
     admin = make_user(session, email="admin@x.it", is_superuser=True)
     other = make_user(session, email="altro@x.it", is_superuser=True)
@@ -103,23 +102,23 @@ def test_the_route_answers_who_else_is_there(session):
     assert flow_presence_beat(flow.id, PresenceBeat(instance="tab-aaaa"), admin, session).others == []
     out = flow_presence_beat(flow.id, PresenceBeat(instance="tab-bbbb"), other, session)
     assert [o.email for o in out.others] == ["admin@x.it"]
-    assert out.others[0].since.tzinfo is not None  # esce con l'offset, come ogni datetime
+    assert out.others[0].since.tzinfo is not None  # goes out with the offset, as every datetime
     flow_presence_leave(flow.id, "tab-aaaa", admin, session)
     assert flow_presence_beat(flow.id, PresenceBeat(instance="tab-bbbb"), other, session).others == []
 
 
 def test_someone_who_cannot_see_the_flow_learns_nothing(session):
     admin = make_user(session, email="admin@x.it", is_superuser=True)
-    estraneo = make_user(session, email="fuori@x.it")
+    stranger = make_user(session, email="fuori@x.it")
     p = make_project(session, name="p")
     flow = make_flow(session, name="f", project_id=p.id)
     flow_presence_beat(flow.id, PresenceBeat(instance="tab-aaaa"), admin, session)
     with pytest.raises(HTTPException) as e:
-        flow_presence_beat(flow.id, PresenceBeat(instance="tab-xxxx"), estraneo, session)
+        flow_presence_beat(flow.id, PresenceBeat(instance="tab-xxxx"), stranger, session)
     assert e.value.status_code in (403, 404)
     from app.models import FlowPresence
 
-    assert session.get(FlowPresence, (flow.id, "tab-xxxx")) is None  # e non lascia traccia
+    assert session.get(FlowPresence, (flow.id, "tab-xxxx")) is None  # and leaves no trace
 
 
 @pytest.mark.parametrize("bad", ["a", "x" * 65, "con spazi", "a/b", ""])

@@ -1,5 +1,5 @@
-"""Prestazioni dei run: aggregati calcolati AL VOLO dalla tabella `runs`, senza
-tabelle nuove. Solo admin."""
+"""Runs' performance: aggregates computed ON THE FLY from the `runs` table, without new
+tables. Admin only."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -23,9 +23,9 @@ def _run(session, *, flow_id=None, ds_id=None, status="SUCCESS", dur=10.0, wait=
 
 def test_flows_are_ranked_by_the_time_they_cost(session):
     p = make_project(session, name="p")
-    lento, veloce = make_flow(session, name="lento", project_id=p.id), make_flow(session, name="veloce", project_id=p.id)
-    for d in (100, 120, 300): _run(session, flow_id=lento.id, dur=d, wait=0)
-    for d in (2, 3): _run(session, flow_id=veloce.id, dur=d, wait=0)
+    slow, fast = make_flow(session, name="lento", project_id=p.id), make_flow(session, name="veloce", project_id=p.id)
+    for d in (100, 120, 300): _run(session, flow_id=slow.id, dur=d, wait=0)
+    for d in (2, 3): _run(session, flow_id=fast.id, dur=d, wait=0)
     out = runs_performance(days=7, session=session)
     assert [i["name"] for i in out["items"]] == ["lento", "veloce"]
     top = out["items"][0]
@@ -73,7 +73,7 @@ def test_it_is_for_admins_only(session):
 
 
 def test_deleting_a_group_that_holds_permissions_works(session):
-    """Esplodeva in un 500 sul vincolo di chiave esterna dei permessi."""
+    """It blew up in a 500 on the permissions' foreign key constraint."""
     from app.models import Group, Permission
     from app.models.permission import Capability
     from app.routes.groups import delete_group

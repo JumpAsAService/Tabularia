@@ -1,27 +1,26 @@
-"""Una connessione al database si prende e si rende nello stesso passo.
+"""A database connection is taken and handed back in the same step.
 
-FastAPI esegue ogni dipendenza sincrona e ogni rotta sincrona in un thread, uno
-per passo, presi da un insieme limitato (40). Se un passo esce tenendosi la
-connessione, la richiesta la tiene mentre aspetta un thread per il passo dopo —
-e sotto una raffica quei thread sono tutti occupati da altre richieste che
-aspettano una connessione (il pool ne ha 15). Nessuno dei due gruppi avanza
-finché non scatta il timeout del pool.
+FastAPI runs every synchronous dependency and every synchronous route in a thread, one
+per step, taken from a limited set (40). If a step leaves holding the connection, the
+request keeps it while waiting for a thread for the next step — and under a burst
+those threads are all busy with other requests waiting for a connection (the pool has
+15). Neither group moves on until the pool's timeout fires.
 
-Misurato su Postgres, rotte normali (`/flows`, `/projects`, `/datasources`,
-`/auth/me`), richieste tutte insieme:
+Measured on Postgres, normal routes (`/flows`, `/projects`, `/datasources`,
+`/auth/me`), all the requests together:
 
-    20  → tutte 200 in 0,2 s
-    60  → 32 errori 500, 30 s
-    100 → 68 errori 500, 60 s
-    200 → 160 errori 500, 120 s
+    20  → all 200 in 0.2 s
+    60  → 32 errors 500, 30 s
+    100 → 68 errors 500, 60 s
+    200 → 160 errors 500, 120 s
 
-Sessanta richieste insieme sono una decina di persone che aprono la stessa
-pagina. Due regole lo tolgono, e questi test le tengono ferme:
+Sixty requests together are a dozen people opening the same page. Two rules remove
+it, and these tests pin them:
 
-  - le dipendenze di autenticazione chiudono la loro transazione prima di
-    restituire l'utente;
-  - la sessione della richiesta si chiude sul ciclo degli eventi, non in un
-    thread: il rilascio finale non deve aspettare un thread libero.
+  - the authentication dependencies close their transaction before returning the
+    user;
+  - the request's session closes on the event loop, not in a thread: the final
+    release must not wait for a free thread.
 """
 import inspect
 from types import SimpleNamespace
@@ -31,54 +30,55 @@ from fastapi import HTTPException
 
 from app.db import session as db_session
 from app.deps import auth
-from tests.conftest import make_user, token_di
+from tests.conftest import make_user, token_of
 
 
-def _richiesta():
+def _request():
     return SimpleNamespace(headers={}, client=SimpleNamespace(host="203.0.113.9"))
 
 
-def _spia(engine):
-    """Conta le connessioni uscite dal pool e non rese, e i comandi mandati al database."""
+def _spy(engine):
+    """Counts the connections out of the pool and not handed back, and the commands sent to
+    the database."""
     from sqlalchemy import event
 
-    state = SimpleNamespace(in_mano=0, taken=0, comandi=[])
+    state = SimpleNamespace(in_hand=0, taken=0, commands=[])
 
     @event.listens_for(engine, "checkout")
     def _taken(*_):
-        state.in_mano += 1
+        state.in_hand += 1
         state.taken += 1
 
     @event.listens_for(engine, "checkin")
     def _returned(*_):
-        state.in_mano -= 1
+        state.in_hand -= 1
 
     @event.listens_for(engine, "before_cursor_execute")
-    def _comando(conn, cursor, statement, *_):
-        state.comandi.append(statement)
+    def _command(conn, cursor, statement, *_):
+        state.commands.append(statement)
 
     return state
 
 
-def test_l_autenticazione_non_esce_con_una_connessione_in_mano(db_engine, session):
+def test_the_authentication_does_not_leave_with_a_connection_in_hand(db_engine, session):
     from datetime import datetime, timezone
 
-    # visto un attimo fa: `last_seen` non va aggiornato, quindi nessun commit
-    # rilascia la connessione per caso — è il caso di quasi tutte le richieste
+    # seen a moment ago: `last_seen` need not be updated, so no commit releases the
+    # connection by chance — it is the case of almost every request
     u = make_user(session, email="a@x.local", last_seen_at=datetime.now(timezone.utc))
-    token = token_di(session, u)
-    spia = _spia(db_engine)
-    utente = auth.get_current_user(_richiesta(), token=token, session=session)
-    assert spia.taken == 1 and spia.in_mano == 0
-    # l'utente resta agganciato alla sessione: chi lo legge dopo lo ritrova
-    assert utente in session
-    assert utente.email == "a@x.local" and utente.id == u.id
+    token = token_of(session, u)
+    spy = _spy(db_engine)
+    user_ = auth.get_current_user(_request(), token=token, session=session)
+    assert spy.taken == 1 and spy.in_hand == 0
+    # the user stays attached to the session: whoever reads it afterwards finds it again
+    assert user_ in session
+    assert user_.email == "a@x.local" and user_.id == u.id
 
 
-def test_l_autenticazione_costa_una_lettura_e_la_rotta_non_rilegge_l_utente(db_engine):
-    """Misurato sullo stack vero prima di questa regola: 4 comandi per leggere
-    l'utente (ping, BEGIN, SELECT, ROLLBACK) e una seconda SELECT identica nella
-    rotta, perché il rollback di fine passo lo aveva fatto scadere."""
+def test_the_authentication_costs_one_read_and_the_route_does_not_read_the_user_again(db_engine):
+    """Measured on the real stack before this rule: 4 commands to read the user (ping, BEGIN,
+    SELECT, ROLLBACK) and a second identical SELECT in the route, because the end-of-step
+    rollback had expired it."""
     from datetime import datetime, timezone
 
     from sqlalchemy import inspect as sa_inspect
@@ -86,38 +86,38 @@ def test_l_autenticazione_costa_una_lettura_e_la_rotta_non_rilegge_l_utente(db_e
 
     with Session(db_engine) as s:
         u = make_user(s, email="c@x.local", last_seen_at=datetime.now(timezone.utc))
-        uid, token = u.id, token_di(s, u)
-    spia = _spia(db_engine)
-    with Session(db_engine) as richiesta:  # la sessione nuova che ogni richiesta riceve
-        utente = auth.get_current_user(_richiesta(), token=token, session=richiesta)
-        # una lettura sola anche con la sessione: è in JOIN con l'utente
-        assert len(spia.comandi) == 1 and "FROM users" in spia.comandi[0] and "user_sessions" in spia.comandi[0]
-        # quello che la rotta fa per prima cosa: leggerne i campi
-        assert not sa_inspect(utente).expired
-        assert (utente.id, utente.email, utente.is_active, utente.is_superuser) == (uid, "c@x.local", True, False)
-        assert len(spia.comandi) == 1 and spia.in_mano == 0
+        uid, token = u.id, token_of(s, u)
+    spy = _spy(db_engine)
+    with Session(db_engine) as request_:  # the new session every request receives
+        user_ = auth.get_current_user(_request(), token=token, session=request_)
+        # one read only with the session too: it is joined with the user
+        assert len(spy.commands) == 1 and "FROM users" in spy.commands[0] and "user_sessions" in spy.commands[0]
+        # what the route does first: reading its fields
+        assert not sa_inspect(user_).expired
+        assert (user_.id, user_.email, user_.is_active, user_.is_superuser) == (uid, "c@x.local", True, False)
+        assert len(spy.commands) == 1 and spy.in_hand == 0
 
 
-def test_un_utente_disattivato_o_sparito_e_respinto_come_prima(db_engine):
+def test_a_disabled_or_vanished_user_is_refused_as_before(db_engine):
     from sqlmodel import Session
 
     from app.core.security import create_access_token
 
     with Session(db_engine) as s:
-        spento = make_user(s, email="spento@x.local")
-        token_spento = token_di(s, spento)  # entrato quando era attivo…
-        spento.is_active = False               # …e disattivato dopo
-        s.add(spento)
+        off = make_user(s, email="spento@x.local")
+        token_off = token_of(s, off)  # signed in while active…
+        off.is_active = False               # …and disabled afterwards
+        s.add(off)
         s.commit()
-    for token in (token_spento, create_access_token(99999, "nessuna-sessione")):
-        with Session(db_engine) as richiesta, pytest.raises(HTTPException) as e:
-            auth.get_current_user(_richiesta(), token=token, session=richiesta)
+    for token in (token_off, create_access_token(99999, "nessuna-sessione")):
+        with Session(db_engine) as request_, pytest.raises(HTTPException) as e:
+            auth.get_current_user(_request(), token=token, session=request_)
         assert e.value.status_code == 401
 
 
-def test_l_utente_caricato_si_puo_modificare_e_salvare_dalla_rotta(db_engine):
-    """La rotta lo riceve agganciato alla SUA sessione: cambiarlo e fare commit
-    scrive, come quando lo leggeva la sessione stessa."""
+def test_the_loaded_user_can_be_changed_and_saved_from_the_route(db_engine):
+    """The route receives it attached to ITS session: changing it and committing writes, as
+    when the session itself read it."""
     from datetime import datetime, timezone
 
     from sqlmodel import Session
@@ -126,48 +126,48 @@ def test_l_utente_caricato_si_puo_modificare_e_salvare_dalla_rotta(db_engine):
 
     with Session(db_engine) as s:
         u = make_user(s, email="d@x.local", last_seen_at=datetime.now(timezone.utc))
-        uid, token = u.id, token_di(s, u)
-    with Session(db_engine) as richiesta:
-        utente = auth.get_current_user(_richiesta(), token=token, session=richiesta)
-        utente.full_name = "Nome Nuovo"
-        richiesta.add(utente)
-        richiesta.commit()
+        uid, token = u.id, token_of(s, u)
+    with Session(db_engine) as request_:
+        user_ = auth.get_current_user(_request(), token=token, session=request_)
+        user_.full_name = "Nome Nuovo"
+        request_.add(user_)
+        request_.commit()
     with Session(db_engine) as s:
         assert s.get(User, uid).full_name == "Nome Nuovo"
 
 
-def test_nemmeno_quando_ha_appena_aggiornato_last_seen(session):
-    u = make_user(session, email="b@x.local")  # last_seen_at nullo: l'aggiorna e fa commit
-    auth.get_current_user(_richiesta(), token=token_di(session, u), session=session)
+def test_not_even_when_it_has_just_updated_last_seen(session):
+    u = make_user(session, email="b@x.local")  # last_seen_at null: it updates it and commits
+    auth.get_current_user(_request(), token=token_of(session, u), session=session)
     assert not session.in_transaction()
     session.refresh(u)
     assert u.last_seen_at is not None
 
 
-@pytest.mark.parametrize("guardia", ["require_superuser", "require_observer"])
-def test_le_guardie_amministrative_non_escono_con_una_transazione_aperta(session, guardia):
+@pytest.mark.parametrize("guard", ["require_superuser", "require_observer"])
+def test_the_administrative_guards_do_not_leave_with_an_open_transaction(session, guard):
     admin = make_user(session, email="capo@x.local", is_superuser=True)
-    assert getattr(auth, guardia)(user=admin, session=session) is admin
+    assert getattr(auth, guard)(user=admin, session=session) is admin
     assert not session.in_transaction()
 
 
-@pytest.mark.parametrize("guardia", ["require_superuser", "require_observer"])
-def test_le_guardie_rifiutano_come_prima(session, guardia):
-    normale = make_user(session, email="n@x.local")
+@pytest.mark.parametrize("guard", ["require_superuser", "require_observer"])
+def test_the_guards_refuse_as_before(session, guard):
+    normal = make_user(session, email="n@x.local")
     with pytest.raises(HTTPException) as e:
-        getattr(auth, guardia)(user=normale, session=session)
+        getattr(auth, guard)(user=normal, session=session)
     assert e.value.status_code == 403
 
 
-def test_un_token_non_valido_e_respinto_come_prima(session):
+def test_an_invalid_token_is_refused_as_before(session):
     with pytest.raises(HTTPException) as e:
-        auth.get_current_user(_richiesta(), token="non-un-token", session=session)
+        auth.get_current_user(_request(), token="non-un-token", session=session)
     assert e.value.status_code == 401
 
 
 @pytest.mark.anyio
-async def test_la_sessione_della_richiesta_si_chiude_sul_ciclo_degli_eventi(db_engine, monkeypatch):
-    """Generatore ASINCRONO: l'ingresso e l'uscita non passano da un thread."""
+async def test_the_requests_session_closes_on_the_event_loop(db_engine, monkeypatch):
+    """An ASYNCHRONOUS generator: the entry and the exit do not go through a thread."""
     assert inspect.isasyncgenfunction(db_session.get_session)
     monkeypatch.setattr(db_session, "engine", db_engine)
     gen = db_session.get_session()
@@ -183,12 +183,12 @@ async def test_la_sessione_della_richiesta_si_chiude_sul_ciclo_degli_eventi(db_e
     assert not user_session.in_transaction()
 
 
-# ── La rotta sincrona rilascia prima di uscire dal suo thread ────────────────
-# Dopo la rotta FastAPI valida la risposta in UN ALTRO thread: se la rotta esce
-# con la transazione aperta, la richiesta tiene la connessione mentre aspetta
-# quel thread. Misurato dopo aver corretto l'autenticazione: 60 insieme a posto,
-# 100 insieme → 37 errori e 30 secondi di blocco.
-def test_a_fine_rotta_la_connessione_e_resa_e_il_risultato_resta_leggibile(session):
+# ── The synchronous route releases before leaving its thread ─────────────────
+# After the route FastAPI validates the answer in ANOTHER thread: if the route leaves
+# with the transaction open, the request keeps the connection while waiting for that
+# thread. Measured after fixing the authentication: 60 together fine, 100 together → 37
+# errors and 30 seconds of block.
+def test_at_end_of_route_the_connection_is_handed_back_and_the_result_stays_readable(session):
     from app.db.session import at_end_of_route
     from app.models import Project
 
@@ -196,17 +196,17 @@ def test_a_fine_rotta_la_connessione_e_resa_e_il_risultato_resta_leggibile(sessi
     def route(session):
         p = Project(name="cartella")
         session.add(p)
-        session.commit()  # l'oggetto è «scaduto»: leggerlo dopo richiede il database
+        session.commit()  # the object is «expired»: reading it afterwards needs the database
         return p
 
     p = route(session=session)
     assert not session.in_transaction()
-    # FastAPI lo leggerà nel thread successivo: deve bastare ciò che è in memoria
+    # FastAPI will read it in the next thread: what is in memory must be enough
     assert p.name == "cartella" and p.id is not None
     assert not session.in_transaction()
 
 
-def test_vale_anche_per_liste_e_dizionari_di_oggetti(session):
+def test_it_holds_for_lists_and_dicts_of_objects_too(session):
     from app.db.session import at_end_of_route
     from app.models import Project
 
@@ -221,7 +221,7 @@ def test_vale_anche_per_liste_e_dizionari_di_oggetti(session):
     assert [x.name for x in r["items"]] == ["a", "b"] and not session.in_transaction()
 
 
-def test_un_errore_nella_rotta_rilascia_lo_stesso(session):
+def test_an_error_in_the_route_releases_all_the_same(session):
     from sqlmodel import select
 
     from app.db.session import at_end_of_route
@@ -237,10 +237,10 @@ def test_un_errore_nella_rotta_rilascia_lo_stesso(session):
     assert not session.in_transaction()
 
 
-def test_ogni_router_del_gateway_rilascia_a_fine_rotta():
-    """Un router nuovo non deve potersene dimenticare: ogni `APIRouter` dichiara
-    la classe di rotta che avvolge le rotte sincrone. Le asincrone restano fuori
-    (non passano da un thread per rotta)."""
+def test_every_gateway_router_releases_at_end_of_route():
+    """A new router must not be able to forget it: every `APIRouter` declares the route class
+    that wraps the synchronous routes. The asynchronous ones stay out (they do not go
+    through a thread per route)."""
     import asyncio
     import importlib
     import pkgutil
@@ -248,12 +248,12 @@ def test_ogni_router_del_gateway_rilascia_a_fine_rotta():
     from fastapi import APIRouter
     from fastapi.routing import APIRoute
 
-    import app.main  # noqa: F401 — carica tutti i router
-    import app.routes as pacchetto
+    import app.main  # noqa: F401 — loads every router
+    import app.routes as package
     from app.core.routing import ReleasingRoute
 
     sincrone = asincrone = 0
-    for info in pkgutil.iter_modules(pacchetto.__path__):
+    for info in pkgutil.iter_modules(package.__path__):
         modulo = importlib.import_module(f"app.routes.{info.name}")
         router = getattr(modulo, "router", None)
         if not isinstance(router, APIRouter):
@@ -272,72 +272,72 @@ def test_ogni_router_del_gateway_rilascia_a_fine_rotta():
     assert sincrone > 50 and asincrone > 10
 
 
-# ── Meno giri verso Postgres per richiesta ───────────────────────────────────
-# Il profilo sotto carico (250 utenti): quasi metà del tempo in cui il gateway
-# lavorava era attesa su Postgres per cose evitabili — il ping prima di ogni uso
-# di una connessione, connessioni aperte e chiuse a ogni richiesta perché il pool
-# era di 5, la stessa tabella riletta tre volte.
-def test_il_pool_e_a_misura_dei_thread():
+# ── Fewer round trips to Postgres per request ────────────────────────────────
+# The profile under load (250 users): almost half of the time the gateway worked was
+# waiting on Postgres for avoidable things — the ping before every use of a connection,
+# connections opened and closed at every request because the pool was 5, the same
+# table read three times.
+def test_the_pool_is_sized_on_the_threads():
     from app.core.config import get_settings
 
     s = get_settings()
-    assert s.db.pool_size is None  # vuoto = uno per thread
+    assert s.db.pool_size is None  # empty = one per thread
     assert db_session.engine.pool.size() == s.app.gateway_threads
 
 
-def test_le_letture_dell_utente_hanno_connessioni_loro_sempre_in_autocommit(db_engine):
-    letture = db_session.read_engine(db_session.engine)
-    assert letture is not db_session.engine and letture.pool is not db_session.engine.pool
-    assert letture.url == db_session.engine.url
-    assert letture.dialect._on_connect_isolation_level == "AUTOCOMMIT"
-    # poche, e mai una in più: chi non ne trova aspetta la SELECT di un altro
-    assert 2 <= letture.pool.size() <= db_session.engine.pool.size() // 2
-    assert letture.pool._max_overflow == 0
-    # un engine qualunque (quello dei test): stesso pool, autocommit per l'occasione
+def test_the_users_reads_have_their_own_connections_always_in_autocommit(db_engine):
+    reads = db_session.read_engine(db_session.engine)
+    assert reads is not db_session.engine and reads.pool is not db_session.engine.pool
+    assert reads.url == db_session.engine.url
+    assert reads.dialect._on_connect_isolation_level == "AUTOCOMMIT"
+    # few, and never one more: whoever finds none waits for someone else's SELECT
+    assert 2 <= reads.pool.size() <= db_session.engine.pool.size() // 2
+    assert reads.pool._max_overflow == 0
+    # any engine (the tests'): the same pool, autocommit for the occasion
     assert db_session.read_engine(db_engine).pool is db_engine.pool
 
 
-def _engine_su_file(tmp_path, idle_for_s):
+def _engine_on_file(tmp_path, idle_for_s):
     from sqlalchemy import QueuePool
     from sqlmodel import create_engine
 
     eng = create_engine(f"sqlite:///{tmp_path}/ping.db", poolclass=QueuePool)
     db_session.ping_only_if_idle(eng, idle_for_s=idle_for_s)
     ping = []
-    vero = eng.dialect.do_ping
-    eng.dialect.do_ping = lambda c: (ping.append(c), vero(c))[1]
+    real = eng.dialect.do_ping
+    eng.dialect.do_ping = lambda c: (ping.append(c), real(c))[1]
     return eng, ping
 
 
-def test_una_connessione_appena_usata_non_viene_provata(tmp_path):
-    eng, ping = _engine_su_file(tmp_path, idle_for_s=60)
+def test_a_connection_just_used_is_not_tested(tmp_path):
+    eng, ping = _engine_on_file(tmp_path, idle_for_s=60)
     for _ in range(5):
         with eng.connect() as c:
             c.exec_driver_sql("select 1")
     assert ping == []
 
 
-def test_una_connessione_rimasta_ferma_viene_provata(tmp_path):
-    eng, ping = _engine_su_file(tmp_path, idle_for_s=0)
+def test_a_connection_left_idle_is_tested(tmp_path):
+    eng, ping = _engine_on_file(tmp_path, idle_for_s=0)
     for _ in range(3):
         with eng.connect() as c:
             c.exec_driver_sql("select 1")
     assert len(ping) == 3
 
 
-def test_se_la_connessione_ferma_e_morta_chi_la_chiede_ne_riceve_una_nuova(tmp_path):
+def test_when_the_idle_connection_is_dead_whoever_asks_gets_a_new_one(tmp_path):
     from sqlalchemy import event
 
-    eng, _ = _engine_su_file(tmp_path, idle_for_s=0)
+    eng, _ = _engine_on_file(tmp_path, idle_for_s=0)
     open_ones = []
     event.listen(eng, "connect", lambda dbapi, record: open_ones.append(dbapi))
     with eng.connect() as c:
         c.exec_driver_sql("select 1")
     assert len(open_ones) == 1
-    morte = {id(open_ones[0])}
+    dead_ones = {id(open_ones[0])}
 
-    def do_ping(dbapi_conn):  # la prima connessione non risponde più
-        if id(dbapi_conn) in morte:
+    def do_ping(dbapi_conn):  # the first connection no longer answers
+        if id(dbapi_conn) in dead_ones:
             raise OSError("server closed the connection unexpectedly")
         return True
 
@@ -347,7 +347,7 @@ def test_se_la_connessione_ferma_e_morta_chi_la_chiede_ne_riceve_una_nuova(tmp_p
     assert len(open_ones) == 2
 
 
-def test_l_elenco_delle_cartelle_legge_l_albero_una_volta_sola(db_engine, session):
+def test_the_folders_listing_reads_the_tree_once_only(db_engine, session):
     from app.models import Permission, Project
     from app.services import permissions
 
@@ -355,17 +355,17 @@ def test_l_elenco_delle_cartelle_legge_l_albero_una_volta_sola(db_engine, sessio
     root = Project(name="radice", owner_id=u.id)
     other_one = Project(name="altra", owner_id=u.id)
     session.add(root); session.add(other_one); session.commit()
-    figlia = Project(name="figlia", parent_id=root.id, owner_id=u.id)
-    session.add(figlia); session.commit()
-    session.add(Permission(project_id=figlia.id, user_id=u.id, capability="view")); session.commit()
+    child_folder = Project(name="figlia", parent_id=root.id, owner_id=u.id)
+    session.add(child_folder); session.commit()
+    session.add(Permission(project_id=child_folder.id, user_id=u.id, capability="view")); session.commit()
 
     waits = permissions.visible_project_ids(session, u)
-    assert waits == {root.id, figlia.id}  # la figlia, e la radice per arrivarci
+    assert waits == {root.id, child_folder.id}  # the child, and the root to get to it
     session.commit()
     session.info[permissions.REQUEST_SESSION] = True  # as get_session marks every request's session
-    spia = _spia(db_engine)
+    spy = _spy(db_engine)
     views = permissions.visible_projects(session, u)
     assert {p.id for p in views} == waits
     # the tree once as (id, parent) pairs, then whole rows of the visible folders only
-    letture = [c for c in spia.comandi if "FROM projects" in c]
-    assert len(letture) == 2 and "projects.name" not in letture[0] and "WHERE projects.id IN" in letture[1]
+    reads = [c for c in spy.commands if "FROM projects" in c]
+    assert len(reads) == 2 and "projects.name" not in reads[0] and "WHERE projects.id IN" in reads[1]

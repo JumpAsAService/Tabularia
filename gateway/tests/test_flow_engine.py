@@ -1,7 +1,7 @@
-"""Selezione del motore di esecuzione per flusso (Flow.engine).
+"""Choosing the run engine per flow (Flow.engine).
 
-L'engine si sceglie alla CREAZIONE ed è persistito; solo gli engine del catalogo
-sono accettati."""
+The engine is chosen at CREATION and persisted; only the catalog's engines are
+accepted."""
 import pytest
 from fastapi import HTTPException
 
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.anyio
 def test_validate_engine_default_and_known():
     assert _validate_engine(None) == "polars"
     assert _validate_engine("polars") == "polars"
-    assert _validate_engine("  POLARS ") == "polars"  # normalizzato
+    assert _validate_engine("  POLARS ") == "polars"  # normalized
 
 
 def test_validate_engine_rejects_unavailable():

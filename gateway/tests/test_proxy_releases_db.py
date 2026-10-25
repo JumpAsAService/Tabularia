@@ -1,18 +1,17 @@
-"""Mentre il gateway aspetta l'engine, non deve tenersi una connessione al database.
+"""While the gateway waits for the engine, it must not hold a database connection.
 
-Ogni rotta inoltrata all'engine passa dall'autenticazione e dai controlli sui
-permessi, che leggono dal database e aprono una transazione. Se la transazione
-resta aperta durante l'attesa — fino a due minuti per un'anteprima, tutta la
-durata per un upload o un export — quella richiesta occupa una connessione del
-pool senza usarla. Il pool ne ha quindici: quindici anteprime lente insieme
-lasciavano senza database tutte le altre richieste, accesso compreso.
+Every route forwarded to the engine goes through authentication and the permission
+checks, which read from the database and open a transaction. If the transaction stays
+open during the wait — up to two minutes for a preview, the whole length for an
+upload or an export — that request holds a pool connection without using it. The pool
+has fifteen: fifteen slow previews together left every other request without a
+database, sign-in included.
 
-Misurato su Postgres con venti anteprime da 6 secondi: 15 connessioni occupate,
-una richiesta qualunque ferma 4,8 secondi, le anteprime finite in 12 secondi
-invece di 6.
+Measured on Postgres with twenty 6-second previews: 15 connections held, any request
+stuck for 4.8 seconds, the previews finished in 12 seconds instead of 6.
 
-Qui si guarda la causa, non il sintomo: nel momento in cui parte la chiamata
-all'engine, la sessione non deve avere una transazione aperta.
+Here the cause is looked at, not the symptom: at the moment the call to the engine
+starts, the session must have no open transaction.
 """
 import json
 
@@ -27,7 +26,7 @@ from tests.conftest import make_user
 pytestmark = pytest.mark.anyio
 
 
-def _richiesta(body: dict | None = None, method: str = "POST", path: str = "/x") -> Request:
+def _request(body: dict | None = None, method: str = "POST", path: str = "/x") -> Request:
     raw = json.dumps(body).encode() if body is not None else b""
     scope = {
         "type": "http", "method": method, "path": path, "query_string": b"",
@@ -42,9 +41,9 @@ def _richiesta(body: dict | None = None, method: str = "POST", path: str = "/x")
 
 
 @pytest.fixture
-def engine_che_guarda(session, monkeypatch):
-    """Un engine finto che, quando viene chiamato, annota se la sessione del
-    gateway ha una transazione aperta in quel momento."""
+def watching_engine(session, monkeypatch):
+    """A fake engine that, when called, notes whether the gateway's session has an open
+    transaction at that moment."""
     seen: list[tuple[str, bool]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -73,112 +72,111 @@ def _body(**extra) -> dict:
     return {"bucket": _bucket(), "input_key": "datasets/prova.parquet", "operations": [], "limit": 10, **extra}
 
 
-def _come_dopo_l_autenticazione(session, user) -> None:
-    """Ciò che lascia `get_current_user`: l'utente letto, la transazione aperta."""
+def _as_after_authentication(session, user) -> None:
+    """What `get_current_user` leaves: the user read, the transaction open."""
     session.get(User, user.id)
     assert session.in_transaction()
 
 
-async def test_l_anteprima_non_tiene_la_connessione_mentre_aspetta(session, admin, engine_che_guarda):
-    await proxy.preview(_richiesta(_body()), user=admin, session=session)
-    assert engine_che_guarda == [("/tasks/preview", False)]
+async def test_the_preview_does_not_hold_the_connection_while_waiting(session, admin, watching_engine):
+    await proxy.preview(_request(_body()), user=admin, session=session)
+    assert watching_engine == [("/tasks/preview", False)]
 
 
-async def test_l_export_non_tiene_la_connessione_mentre_aspetta(session, admin, engine_che_guarda):
-    await proxy.export(_richiesta(_body(format="csv", filename="x")), user=admin, session=session)
-    assert engine_che_guarda == [("/tasks/export", False)]
+async def test_the_export_does_not_hold_the_connection_while_waiting(session, admin, watching_engine):
+    await proxy.export(_request(_body(format="csv", filename="x")), user=admin, session=session)
+    assert watching_engine == [("/tasks/export", False)]
 
 
-async def test_il_run_senza_flusso_non_tiene_la_connessione_mentre_aspetta(session, admin, engine_che_guarda):
-    await proxy.transform(_richiesta(_body()), user=admin, session=session)
-    assert engine_che_guarda == [("/tasks/transform-data", False)]
+async def test_the_run_without_flow_does_not_hold_the_connection_while_waiting(session, admin, watching_engine):
+    await proxy.transform(_request(_body()), user=admin, session=session)
+    assert watching_engine == [("/tasks/transform-data", False)]
 
 
-async def test_l_upload_non_tiene_la_connessione_e_registra_comunque_il_proprietario(session, admin, engine_che_guarda):
+async def test_the_upload_does_not_hold_the_connection_and_records_the_owner_anyway(session, admin, watching_engine):
     from sqlmodel import select
 
     from app.models import Upload
 
-    await proxy.upload(_richiesta({}, path="/files"), user=admin, session=session)
-    assert engine_che_guarda == [("/files", False)]
-    # dopo la risposta dell'engine la sessione serve ancora: deve funzionare
-    caricati = session.exec(select(Upload)).all()
-    assert [(u.dataset_id, u.owner_id) for u in caricati] == [("d1", admin.id)]
+    await proxy.upload(_request({}, path="/files"), user=admin, session=session)
+    assert watching_engine == [("/files", False)]
+    # after the engine's answer the session is still needed: it must work
+    uploaded_ones = session.exec(select(Upload)).all()
+    assert [(u.dataset_id, u.owner_id) for u in uploaded_ones] == [("d1", admin.id)]
 
 
 @pytest.mark.parametrize("route, path", [("operations", "/tasks/operations"), ("engines", "/engines")])
-async def test_le_rotte_brevi_rilasciano_anche_loro(session, admin, engine_che_guarda, route, path):
-    _come_dopo_l_autenticazione(session, admin)
-    await getattr(proxy, route)(_richiesta(method="GET"), session=session)
-    assert engine_che_guarda == [(path, False)]
+async def test_the_short_routes_release_too(session, admin, watching_engine, route, path):
+    _as_after_authentication(session, admin)
+    await getattr(proxy, route)(_request(method="GET"), session=session)
+    assert watching_engine == [(path, False)]
 
 
-async def test_lo_stato_di_un_task_non_tiene_la_connessione(session, admin, engine_che_guarda):
-    _come_dopo_l_autenticazione(session, admin)
-    await proxy.task_status(_richiesta(method="GET"), task_id="t1", session=session)
-    assert engine_che_guarda == [("/tasks/t1", False)]
+async def test_a_tasks_state_does_not_hold_the_connection(session, admin, watching_engine):
+    _as_after_authentication(session, admin)
+    await proxy.task_status(_request(method="GET"), task_id="t1", session=session)
+    assert watching_engine == [("/tasks/t1", False)]
 
 
-async def test_l_utente_resta_utilizzabile_dopo_il_rilascio(session, admin, engine_che_guarda):
-    """Rilasciare non deve lasciare oggetti inservibili a chi viene dopo: le
-    rotte usano ancora l'utente (proprietario dell'upload, audit)."""
-    await proxy.preview(_richiesta(_body()), user=admin, session=session)
+async def test_the_user_stays_usable_after_the_release(session, admin, watching_engine):
+    """Releasing must not leave unusable objects to whoever comes after: the routes still use
+    the user (owner of the upload, audit)."""
+    await proxy.preview(_request(_body()), user=admin, session=session)
     assert admin.email == "capo@x.local" and admin.id is not None
 
 
-async def test_anche_se_un_commit_precedente_aveva_fatto_scadere_l_utente(session, admin, engine_che_guarda):
-    """È il caso di chi arriva per primo dopo un minuto: l'autenticazione
-    aggiorna `last_seen` e fa commit, e gli attributi dell'utente scadono. Dopo
-    il rilascio l'utente è staccato dalla sessione: se non fosse stato ricaricato
-    prima, leggerne l'id solleverebbe un errore."""
-    session.commit()  # ciò che fa `_touch_last_seen`
-    await proxy.upload(_richiesta({}, path="/files"), user=admin, session=session)
-    assert engine_che_guarda == [("/files", False)]
+async def test_even_when_an_earlier_commit_had_expired_the_user(session, admin, watching_engine):
+    """It is the case of whoever comes first after a minute: authentication updates
+    `last_seen` and commits, and the user's attributes expire. After the release the user
+    is detached from the session: had it not been reloaded before, reading its id would
+    raise an error."""
+    session.commit()  # what `_touch_last_seen` does
+    await proxy.upload(_request({}, path="/files"), user=admin, session=session)
+    assert watching_engine == [("/files", False)]
     assert admin.id is not None and admin.email == "capo@x.local"
 
 
 @pytest.mark.parametrize("route", ["preview", "export", "transform"])
-async def test_i_controlli_sul_database_non_girano_sul_ciclo_degli_eventi(session, admin, engine_che_guarda, monkeypatch, route):
-    """Le query sono sincrone: sul ciclo degli eventi lo bloccherebbero, e con il
-    pool esaurito lo fermerebbero ad aspettare una connessione che può liberarsi
-    solo se LUI va avanti. Osservato dal vivo: gateway immobile per 30 secondi.
-    I controlli devono quindi girare in un thread."""
+async def test_the_database_checks_do_not_run_on_the_event_loop(session, admin, watching_engine, monkeypatch, route):
+    """The queries are synchronous: on the event loop they would block it, and with the pool
+    exhausted they would stop it waiting for a connection that can free up only if IT goes
+    on. Seen live: gateway frozen for 30 seconds. So the checks must run in a thread."""
     import threading
 
-    ciclo = threading.get_ident()
+    loop = threading.get_ident()
     where: list[int] = []
-    vero = proxy.ensure_reads_pinned
+    real = proxy.ensure_reads_pinned
 
-    def spia(*a, **k):
+    def spy(*a, **k):
         where.append(threading.get_ident())
-        return vero(*a, **k)
+        return real(*a, **k)
 
-    monkeypatch.setattr(proxy, "ensure_reads_pinned", spia)
+    monkeypatch.setattr(proxy, "ensure_reads_pinned", spy)
     body = _body(format="csv", filename="x") if route == "export" else _body()
-    await getattr(proxy, route)(_richiesta(body), user=admin, session=session)
-    assert where and all(t != ciclo for t in where)
+    await getattr(proxy, route)(_request(body), user=admin, session=session)
+    assert where and all(t != loop for t in where)
 
 
-def test_l_autenticazione_del_proxy_non_lascia_la_connessione_in_mano(session, admin):
-    """L'autenticazione gira in un thread e i controlli in un altro: una
-    richiesta che fra i due si tenesse la connessione aspetterebbe un thread
-    tenendo ferma una risorsa che altri thread stanno aspettando. Con 60
-    anteprime insieme: gateway fermo 28 secondi. Deve prendere e rendere nello
-    stesso passo, e restituire un utente leggibile senza database."""
-    from tests.conftest import token_di
+def test_the_proxys_authentication_does_not_leave_the_connection_in_hand(session, admin):
+    """Authentication runs in a thread and the checks in another: a request holding the
+    connection between the two would wait for a thread while holding a resource other
+    threads are waiting for. With 60 previews together: gateway stuck for 28 seconds. It
+    must take and hand back in the same step, and return a user readable without a
+    database."""
+    from tests.conftest import token_of
 
-    token = token_di(session, admin)
-    utente = proxy._user(_richiesta(method="GET"), token=token, session=session)
+    token = token_of(session, admin)
+    user_ = proxy._user(_request(method="GET"), token=token, session=session)
     assert not session.in_transaction()
-    assert (utente.id, utente.email, utente.is_superuser) == (admin.id, "capo@x.local", True)
+    assert (user_.id, user_.email, user_.is_superuser) == (admin.id, "capo@x.local", True)
 
 
-def test_ogni_rotta_del_proxy_passa_da_quella_autenticazione():
-    """Una rotta aggiunta domani con `get_current_user` riaprirebbe lo stallo
-    senza che niente lo dica: l'autenticazione è del router, tutta intera."""
+def test_every_proxy_route_goes_through_that_authentication():
+    """A route added tomorrow with `get_current_user` would reopen the stall without anything
+    saying so: the authentication belongs to the router, whole."""
     from app.deps.auth import get_current_user
 
     for route in proxy.router.routes:
-        chiamate = {d.call for d in route.dependant.dependencies}
-        assert proxy._user in chiamate, route.path
-        assert get_current_user not in chiamate, route.path
+        calls = {d.call for d in route.dependant.dependencies}
+        assert proxy._user in calls, route.path
+        assert get_current_user not in calls, route.path

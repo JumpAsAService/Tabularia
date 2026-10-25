@@ -1,25 +1,25 @@
-"""In produzione il gateway rifiuta di partire con segreti deboli (audit 2026-10-08, B3).
+"""In production the gateway refuses to start with weak secrets (audit 2026-10-08, B3).
 
-Si rifiutava solo il default di sviluppo del segreto JWT: qualunque altro valore,
-anche di un carattere, passava. Il segreto firma ogni sessione con HS256: uno
-corto si indovina offline partendo da un solo token, e chi lo indovina si firma
-un token da amministratore."""
+Only the development default of the JWT secret was refused: any other value, even one
+character, got through. The secret signs every session with HS256: a short one is
+guessed offline starting from a single token, and whoever guesses it signs themselves
+an administrator token."""
 import pytest
 
 from app.core.config import JWT_SECRET_MIN, Settings
 
-BUONO = "a" * 64
+GOOD = "a" * 64
 
 
-def _produzione(**kw):
-    base = {"app": {"env_name": "production"}, "jwt": {"secret": BUONO},
+def _production(**kw):
+    base = {"app": {"env_name": "production"}, "jwt": {"secret": GOOD},
             "auth": {"admin_password": "una-password-vera"}, "db": {"password": "un-altra-vera"}}
     base.update(kw)
     return Settings(**base)
 
 
-def test_segreti_veri_passano():
-    _produzione().check_production_safety()
+def test_real_secrets_pass():
+    _production().check_production_safety()
 
 
 @pytest.mark.parametrize("secret, reason", [
@@ -27,15 +27,15 @@ def test_segreti_veri_passano():
     ("a", "too short (1 characters"),
     ("x" * (JWT_SECRET_MIN - 1), f"too short ({JWT_SECRET_MIN - 1} characters"),
 ])
-def test_un_segreto_jwt_debole_ferma_la_partenza(secret, reason):
+def test_a_weak_jwt_secret_stops_the_start(secret, reason):
     with pytest.raises(RuntimeError, match="JWT__SECRET") as e:
-        _produzione(jwt={"secret": secret}).check_production_safety()
+        _production(jwt={"secret": secret}).check_production_safety()
     assert reason in str(e.value)
 
 
-def test_al_minimo_passa():
-    _produzione(jwt={"secret": "x" * JWT_SECRET_MIN}).check_production_safety()
+def test_at_the_minimum_it_passes():
+    _production(jwt={"secret": "x" * JWT_SECRET_MIN}).check_production_safety()
 
 
-def test_in_sviluppo_non_si_controlla():
+def test_in_development_it_is_not_checked():
     Settings(app={"env_name": "development"}, jwt={"secret": "a"}).check_production_safety()

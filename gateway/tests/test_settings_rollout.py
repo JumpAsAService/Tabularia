@@ -26,7 +26,7 @@ from app.routes import engine_settings as engine_routes
 from app.routes import gateway_settings as routes
 from app.services import kube_jobs
 from app.services import settings_rollout as sr
-from tests.test_engine_settings import CSRF, MotoreFinto, _entra
+from tests.test_engine_settings import CSRF, FakeEngine, _sign_in
 
 pytestmark = pytest.mark.anyio
 
@@ -104,9 +104,9 @@ def _clean():
     ov.forget()
 
 
-class MotoreConRiavvio(MotoreFinto):
-    def _catalogo(self, maximum):
-        c = super()._catalogo(maximum)
+class EngineWithRestart(FakeEngine):
+    def _catalog(self, maximum):
+        c = super()._catalog(maximum)
         c["items"].append({"key": "celery.max_tasks_per_child", "category": "execution", "unit": "tasks", "min": 1,
                            "max": 100_000, "kind": "int", "rollout": ["worker", "preview-worker"],
                            "env_var": "CELERY__MAX_TASKS_PER_CHILD", "env_value": 50,
@@ -115,15 +115,15 @@ class MotoreConRiavvio(MotoreFinto):
 
 
 @pytest.fixture
-def motore(monkeypatch):
-    m = MotoreConRiavvio()
+def engine_(monkeypatch):
+    m = EngineWithRestart()
     monkeypatch.setattr("app.core.engine_client._client",
-                        httpx.AsyncClient(transport=httpx.MockTransport(m.gestisci), base_url="http://engine"))
+                        httpx.AsyncClient(transport=httpx.MockTransport(m.handle), base_url="http://engine"))
     return m
 
 
 @pytest.fixture
-def app(session, motore):
+def app(session, engine_):
     from app.routes import api_tokens as tokens_routes
     from app.routes import auth as auth_routes
 
@@ -140,61 +140,61 @@ def _component(state, name):
 
 # ── what a save marks ────────────────────────────────────────────────────────
 def test_saving_a_start_setting_marks_its_components_and_a_live_one_does_not(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    capo.put("/admin/gateway-settings", json={"values": {"ai.max_requests": 10}}, headers=CSRF)
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    boss.put("/admin/gateway-settings", json={"values": {"ai.max_requests": 10}}, headers=CSRF)
     assert session.exec(select(SettingsRollout)).all() == []
-    capo.put("/admin/gateway-settings", json={"values": {"db.max_overflow": 30}}, headers=CSRF)
-    capo.put("/admin/engine-settings", json={"values": {"celery.max_tasks_per_child": 20}}, headers=CSRF)
+    boss.put("/admin/gateway-settings", json={"values": {"db.max_overflow": 30}}, headers=CSRF)
+    boss.put("/admin/engine-settings", json={"values": {"celery.max_tasks_per_child": 20}}, headers=CSRF)
     session.expire_all()
     marked = {r.component for r in session.exec(select(SettingsRollout)).all() if r.changed_at}
     assert marked == {"gateway", "orchestrator", "worker", "preview-worker"}
     # going back to the environment's value is a change too
     before = session.get(SettingsRollout, "gateway").changed_at
-    capo.put("/admin/gateway-settings", json={"values": {"db.max_overflow": None}}, headers=CSRF)
+    boss.put("/admin/gateway-settings", json={"values": {"db.max_overflow": None}}, headers=CSRF)
     session.expire_all()
     assert session.get(SettingsRollout, "gateway").changed_at >= before
 
 
 # ── on Docker Compose ────────────────────────────────────────────────────────
 def test_on_compose_the_panel_names_the_services_and_the_administrator_says_done(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    capo.put("/admin/gateway-settings", json={"values": {"app.gateway_threads": 60}}, headers=CSRF)
-    state = capo.get("/admin/settings-rollout").json()
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    boss.put("/admin/gateway-settings", json={"values": {"app.gateway_threads": 60}}, headers=CSRF)
+    state = boss.get("/admin/settings-rollout").json()
     assert state["mode"] == "compose" and state["editable"]
     gw, eng = _component(state, "gateway"), _component(state, "engine")
     assert gw["pending"] and gw["compose_service"] == "gateway" and _component(state, "orchestrator")["compose_service"] == "gateway"
     assert not eng["pending"] and eng["compose_service"] == "backend"
-    state = capo.post("/admin/settings-rollout", json={"components": ["gateway", "orchestrator"]}, headers=CSRF).json()
+    state = boss.post("/admin/settings-rollout", json={"components": ["gateway", "orchestrator"]}, headers=CSRF).json()
     assert not _component(state, "gateway")["pending"]
     entry = session.exec(select(AuditLog).where(AuditLog.action == "settings.rollout")).one()
     assert json.loads(entry.detail) == {"components": ["gateway", "orchestrator"], "mode": "compose"}
 
 
 def test_only_an_administrator_and_never_a_token(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    assert occhio.get("/admin/settings-rollout").json()["editable"] is False
-    assert occhio.post("/admin/settings-rollout", json={"components": ["engine"]}, headers=CSRF).status_code == 403
-    token = capo.post("/auth/tokens", json={"name": "x", "scope": "write", "expires_in_days": 5}, headers=CSRF).json()["token"]
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    eye = _sign_in(app, session, "occhio@x.local", is_observer=True)
+    assert eye.get("/admin/settings-rollout").json()["editable"] is False
+    assert eye.post("/admin/settings-rollout", json={"components": ["engine"]}, headers=CSRF).status_code == 403
+    token = boss.post("/auth/tokens", json={"name": "x", "scope": "write", "expires_in_days": 5}, headers=CSRF).json()["token"]
     from fastapi.testclient import TestClient
 
     r = TestClient(app).post("/admin/settings-rollout", json={"components": ["engine"]}, headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
-    assert capo.post("/admin/settings-rollout", json={"components": ["frontend"]}, headers=CSRF).status_code == 422
+    assert boss.post("/admin/settings-rollout", json={"components": ["frontend"]}, headers=CSRF).status_code == 422
 
 
 # ── on Kubernetes ────────────────────────────────────────────────────────────
 def test_the_pods_started_before_the_change_are_old(app, session, kube):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
     kube.add("tab-worker-a", "worker", T0 - timedelta(days=1))
     session.add(SettingsRollout(component="worker", changed_at=T0))
     session.commit()
-    state = capo.get("/admin/settings-rollout").json()
+    state = boss.get("/admin/settings-rollout").json()
     w = _component(state, "worker")
     assert state["mode"] == "kubernetes" and (w["pods"], w["ready"], w["old"], w["pending"]) == (1, 1, 1, True)
     assert "app.kubernetes.io/instance=tab,app.kubernetes.io/component=worker" in kube.selectors
     kube.replace("tab-worker-a", "tab-worker-b", T0 + timedelta(seconds=5))
-    assert _component(capo.get("/admin/settings-rollout").json(), "worker")["pending"] is False
+    assert _component(boss.get("/admin/settings-rollout").json(), "worker")["pending"] is False
 
 
 async def test_one_pod_at_a_time_the_oldest_first(session, db_engine, kube):
@@ -269,13 +269,13 @@ async def test_a_new_pod_that_never_gets_ready_stops_the_rollout_there(session, 
 
 
 async def test_a_cancelled_rollout_stops(app, session, db_engine, kube):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
     kube.add("tab-beat-a", "beat", T0 - timedelta(days=1))
     session.add(SettingsRollout(component="beat", changed_at=T0))
     session.commit()
-    state = capo.post("/admin/settings-rollout", json={"components": ["beat"]}, headers=CSRF).json()
+    state = boss.post("/admin/settings-rollout", json={"components": ["beat"]}, headers=CSRF).json()
     assert _component(state, "beat")["requested_at"] is not None
-    capo.delete("/admin/settings-rollout/beat", headers=CSRF)
+    boss.delete("/admin/settings-rollout/beat", headers=CSRF)
     assert await sr.one_step(db_engine) is None and kube.evicted == []
     assert session.exec(select(AuditLog).where(AuditLog.action == "settings.rollout_cancel")).one()
 
@@ -283,8 +283,8 @@ async def test_a_cancelled_rollout_stops(app, session, db_engine, kube):
 def test_without_the_chart_right_the_panel_says_manual(app, session, kube, monkeypatch):
     monkeypatch.setenv("KUBERNETES__ROLLOUT", "false")
     get_settings.cache_clear()
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    assert capo.get("/admin/settings-rollout").json()["mode"] == "manual"
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    assert boss.get("/admin/settings-rollout").json()["mode"] == "manual"
 
 
 # ── from the bug hunt of 2026-10-23 ───────────────────────────────────────────
@@ -318,8 +318,8 @@ def test_on_kubernetes_without_the_token_it_is_not_compose(app, session, monkeyp
     the panel took the installation for Docker Compose."""
     monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
     get_settings.cache_clear()
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    assert capo.get("/admin/settings-rollout").json()["mode"] == "manual"
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    assert boss.get("/admin/settings-rollout").json()["mode"] == "manual"
     from app.services import db_backup
 
     assert db_backup.disabled_reason(session) != "kubernetes"
@@ -328,8 +328,8 @@ def test_on_kubernetes_without_the_token_it_is_not_compose(app, session, monkeyp
 def test_an_orchestrator_of_its_own_on_compose(app, session, monkeypatch):
     monkeypatch.setenv("APP__ROLE", "api")
     get_settings.cache_clear()
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    state = capo.get("/admin/settings-rollout").json()
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    state = boss.get("/admin/settings-rollout").json()
     assert _component(state, "orchestrator")["compose_service"] == "orchestrator"
 
 
@@ -338,8 +338,8 @@ def test_with_the_panel_off_nothing_waits_for_a_restart(app, session, monkeypatc
     session.commit()
     monkeypatch.setenv("ENGINE__SETTINGS_PANEL", "false")
     get_settings.cache_clear()
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    assert not _component(capo.get("/admin/settings-rollout").json(), "gateway")["pending"]
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    assert not _component(boss.get("/admin/settings-rollout").json(), "gateway")["pending"]
 
 
 def test_an_api_error_offers_no_restart(app, session, kube, monkeypatch):
@@ -347,8 +347,8 @@ def test_an_api_error_offers_no_restart(app, session, kube, monkeypatch):
     session.add(SettingsRollout(component="worker", changed_at=T0))
     session.commit()
     monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(lambda req: httpx.Response(403, json={"message": "forbidden"})))
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    w = _component(capo.get("/admin/settings-rollout").json(), "worker")
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    w = _component(boss.get("/admin/settings-rollout").json(), "worker")
     assert not w["pending"] and "403" in w["error"]
 
 

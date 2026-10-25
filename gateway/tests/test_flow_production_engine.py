@@ -1,8 +1,8 @@
-"""Engine di SVILUPPO vs PRODUZIONE per flusso.
+"""DEVELOPMENT vs PRODUCTION engine per flow.
 
-`Flow.engine` è il motore dell'editor (preview, run manuali); `Flow.production_engine`
-è quello dei run SCHEDULATI (e di run-now ?mode=production). None = come sviluppo.
-`resolve_run_engine` è la regola usata da `_launch_flow_run`.
+`Flow.engine` is the editor's engine (previews, manual runs); `Flow.production_engine`
+is the SCHEDULED runs' one (and run-now ?mode=production's). None = as development.
+`resolve_run_engine` is the rule `_launch_flow_run` uses.
 """
 from types import SimpleNamespace
 
@@ -36,7 +36,7 @@ def test_resolve_run_engine_rules():
     flow = SimpleNamespace(engine="polars", production_engine="clickhouse")
     assert resolve_run_engine(flow, "development") == "polars"
     assert resolve_run_engine(flow, "production") == "clickhouse"
-    # senza motore di produzione, anche in produzione si usa quello di sviluppo
+    # without a production engine, production uses the development one too
     same = SimpleNamespace(engine="duckdb", production_engine=None)
     assert resolve_run_engine(same, "production") == "duckdb"
     assert resolve_run_engine(same, "development") == "duckdb"
@@ -50,7 +50,7 @@ def test_create_flow_with_production_engine(session):
         request=None, user=admin, session=session,
     )
     assert flow.engine == "polars" and flow.production_engine == "clickhouse"
-    # "" alla creazione = nessun motore di produzione
+    # "" at creation = no production engine
     flow2 = create_flow(
         p.id, FlowCreate(name="g", engine="polars", production_engine=""),
         request=None, user=admin, session=session,
@@ -63,11 +63,11 @@ def test_update_flow_sets_and_clears_production_engine(session):
     p = make_project(session, name="p")
     flow = create_flow(p.id, FlowCreate(name="f"), request=None, user=admin, session=session)
     up = update_flow(flow.id, FlowUpdate(production_engine="chdb"), request=None, user=admin, session=session)
-    assert up.production_engine == "chdb" and up.engine == "polars"  # lo sviluppo non cambia
-    # omesso = invariato
+    assert up.production_engine == "chdb" and up.engine == "polars"  # development does not change
+    # omitted = unchanged
     up = update_flow(flow.id, FlowUpdate(name="f2"), request=None, user=admin, session=session)
     assert up.production_engine == "chdb"
-    # "" = torna come sviluppo
+    # "" = back to the same as development
     up = update_flow(flow.id, FlowUpdate(production_engine=""), request=None, user=admin, session=session)
     assert up.production_engine is None
     with pytest.raises(HTTPException):
@@ -86,6 +86,6 @@ def test_schedule_can_set_production_engine(session):
         request=None, user=admin, session=session,
     )
     assert up.run_schedule == "0 3 * * *" and up.production_engine == "clickhouse"
-    # disattivare lo schedule senza toccare il motore lo lascia com'è
+    # turning off the schedule without touching the engine leaves it as it is
     up = set_flow_schedule(flow.id, FlowScheduleUpdate(cron=""), request=None, user=admin, session=session)
     assert up.run_schedule is None and up.production_engine == "clickhouse"

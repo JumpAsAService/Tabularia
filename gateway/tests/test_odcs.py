@@ -1,8 +1,8 @@
-"""L'export del data contract nel formato aperto ODCS v3.0.2.
+"""The data contract's export in the open ODCS v3.0.2 format.
 
-Qui si prova che cosa diventa ogni regola e che lo YAML scritto a mano non si
-lascia cambiare significato da nessun testo. La validazione contro lo schema
-ufficiale di ODCS sta nel giro dal vivo (`contratti.py`), che ha le librerie.
+Here it is tested what each rule becomes and that the YAML written by hand lets no text
+change its meaning. The validation against ODCS's official schema is in the live round
+(`contratti.py`), which has the libraries.
 """
 from datetime import datetime
 from types import SimpleNamespace
@@ -15,12 +15,12 @@ from app.routes import contracts as routes
 from app.services import contracts, odcs
 from tests.conftest import make_datasource, make_permission, make_project, make_user
 
-COLONNE = [
+COLUMNS = [
     {"name": "id", "dtype": "Int64"}, {"name": "stato", "dtype": "String"}, {"name": "importo", "dtype": "Float64"},
     {"name": "creato", "dtype": "Datetime(time_unit='us', time_zone=None)"}, {"name": "giorno", "dtype": "Date"},
     {"name": "codice", "dtype": "String"}, {"name": "blob", "dtype": "Binary"},
 ]
-REGOLE = [
+RULES = [
     {"id": "r1", "kind": "column", "column": "id", "dtype": "integer", "severity": "error"},
     {"id": "r2", "kind": "not_null", "column": "id", "severity": "error"},
     {"id": "r3", "kind": "not_null", "column": "stato", "severity": "warning"},
@@ -38,15 +38,15 @@ REGOLE = [
 ]
 
 
-def _doc(rules=REGOLE, **other):
+def _doc(rules=RULES, **other):
     return odcs.to_odcs(**{
-        "datasource_id": 7, "name": "ordini", "description": "Ordini evasi", "columns": COLONNE,
+        "datasource_id": 7, "name": "ordini", "description": "Ordini evasi", "columns": COLUMNS,
         "column_descriptions": {"id": "chiave"}, "document": {"rules": rules}, "version": 3, "enabled": True,
         "created_at": datetime(2026, 10, 5, 8, 30), **other,
     })
 
 
-def test_l_intestazione_e_quella_che_lo_standard_richiede():
+def test_the_header_is_the_one_the_standard_requires():
     d = _doc()
     assert (d["apiVersion"], d["kind"], d["id"], d["version"], d["status"]) == ("v3.0.2", "DataContract", "urn:tabularia:datasource:7", "3.0.0", "active")
     assert d["description"] == {"purpose": "Ordini evasi"} and d["contractCreatedTs"] == "2026-10-05T08:30:00Z"
@@ -54,31 +54,31 @@ def test_l_intestazione_e_quella_che_lo_standard_richiede():
     assert "description" not in _doc(description="")
 
 
-def test_le_colonne_diventano_proprieta_con_tipo_logico_e_fisico():
+def test_the_columns_become_properties_with_logical_and_physical_type():
     (obj,) = _doc()["schema"]
     p = {x["name"]: x for x in obj["properties"]}
     assert (obj["name"], obj["logicalType"], obj["physicalType"]) == ("ordini", "object", "table")
-    assert list(p) == ["id", "stato", "importo", "creato", "giorno", "codice", "blob", "sparita"]   # l'ordine della tabella, poi le colonne solo promesse
+    assert list(p) == ["id", "stato", "importo", "creato", "giorno", "codice", "blob", "sparita"]   # the table's order, then the columns only promised
     assert (p["id"]["logicalType"], p["id"]["physicalType"], p["id"]["description"]) == ("integer", "Int64", "chiave")
-    assert p["creato"]["logicalType"] == "date" and p["creato"]["physicalType"].startswith("Datetime")   # la 3.0 non ha «timestamp»
+    assert p["creato"]["logicalType"] == "date" and p["creato"]["physicalType"].startswith("Datetime")   # 3.0 has no «timestamp»
     assert "logicalType" not in p["blob"] and "physicalType" not in p["sparita"]
 
 
-def test_solo_le_regole_bloccanti_diventano_vincoli_dello_schema():
+def test_only_blocking_rules_become_schema_constraints():
     p = {x["name"]: x for x in _doc()["schema"][0]["properties"]}
     assert p["id"]["required"] is True and p["id"]["unique"] is True
-    assert "required" not in p["stato"]          # not_null come avviso: resta un controllo, non un vincolo
+    assert "required" not in p["stato"]          # not_null as a warning: it stays a check, not a constraint
     assert p["importo"]["logicalTypeOptions"] == {"minimum": 0, "maximum": 99.5}
     assert p["giorno"]["logicalTypeOptions"] == {"minimum": "2020-01-01"}
     assert p["codice"]["logicalTypeOptions"] == {"pattern": r"^[A-Z]{3}-\d+$"}
 
 
-def test_ogni_regola_e_un_controllo_con_la_sua_severita_e_la_sua_origine():
+def test_every_rule_is_a_check_with_its_severity_and_origin():
     d = _doc()
     checks = [q for p in d["schema"][0]["properties"] for q in p.get("quality", [])] + d["schema"][0]["quality"]
     origin = {next(c["value"] for c in q["customProperties"] if c["property"] == "tabulariaRuleId"): q for q in checks}
-    assert sorted(origin, key=lambda i: int(i[1:])) == [r["id"] for r in REGOLE]
-    assert all(origin[r["id"]]["severity"] == r["severity"] for r in REGOLE)
+    assert sorted(origin, key=lambda i: int(i[1:])) == [r["id"] for r in RULES]
+    assert all(origin[r["id"]]["severity"] == r["severity"] for r in RULES)
     assert all(q["type"] in ("library", "sql", "text") and q["name"] for q in checks)
     assert (origin["r2"]["rule"], origin["r2"]["mustBe"]) == ("nullValues", 0)
     assert (origin["r4"]["rule"], origin["r4"]["mustBe"]) == ("duplicateCount", 0)
@@ -91,8 +91,8 @@ def test_ogni_regola_e_un_controllo_con_la_sua_severita_e_la_sua_origine():
     assert origin["r9"]["type"] == "text" and r"^[A-Z]{3}-\d+$" in origin["r9"]["description"]
 
 
-def test_l_ordine_delle_regole_non_cambia_lo_schema():
-    # il tipo promesso arriva DOPO l'intervallo: gli estremi numerici non devono finire su una colonna di testo
+def test_the_rules_order_does_not_change_the_schema():
+    # the promised type arrives AFTER the range: the numeric bounds must not end up on a text column
     rules = [
         {"id": "r1", "kind": "range", "column": "importo", "min": 0, "severity": "error"},
         {"id": "r2", "kind": "pattern", "column": "id", "regex": "x", "severity": "error"},
@@ -104,21 +104,21 @@ def test_l_ordine_delle_regole_non_cambia_lo_schema():
     assert p["id"]["logicalTypeOptions"] == {"pattern": "x"}
 
 
-def test_la_freschezza_e_anche_un_livello_di_servizio():
+def test_freshness_is_a_service_level_too():
     assert _doc()["slaProperties"] == [
         {"property": "latency", "value": 26, "unit": "h"},
         {"property": "latency", "value": 48, "unit": "h", "element": "ordini.creato"},
     ]
-    assert "slaProperties" not in _doc(REGOLE[:3])
+    assert "slaProperties" not in _doc(RULES[:3])
 
 
-def test_un_solo_estremo_del_numero_di_righe():
+def test_one_bound_only_of_the_row_count():
     rule = lambda **k: _doc([{"id": "r1", "kind": "row_count", "severity": "error", **k}])["schema"][0]["quality"][0]
     assert rule(min=5)["mustBeGreaterOrEqualTo"] == 5 and "mustBeBetween" not in rule(min=5)
     assert rule(max=9)["mustBeLessOrEqualTo"] == 9
 
 
-def test_lo_yaml_non_si_lascia_cambiare_significato_dal_testo():
+def test_the_yaml_does_not_let_text_change_its_meaning():
     text = odcs.dump_yaml({
         "name": "yes", "note": "a: b # c", "riga": "uno\ndue", "virgolette": 'dice "ciao"', "numero": "1.0",
         "vero": True, "nullo": None, "conta": 3, "soglia": 0.5, "vuota": [], "coppia": [1, 2.5],
@@ -149,31 +149,31 @@ def test_lo_yaml_non_si_lascia_cambiare_significato_dal_testo():
     )
 
 
-# ── la rotta ─────────────────────────────────────────────────────────────────
+# ── the route ────────────────────────────────────────────────────────────────
 @pytest.fixture
-def scena(session):
-    capo = make_user(session, email="capo@x.it", is_superuser=True)
-    folder = make_project(session, name="dati", owner_id=capo.id)
-    lettore, estraneo = make_user(session, email="lettore@x.it"), make_user(session, email="fuori@x.it")
-    make_permission(session, user_id=lettore.id, project_id=folder.id, capability=Capability.VIEW)
+def scene(session):
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
+    folder = make_project(session, name="dati", owner_id=boss.id)
+    reader, stranger = make_user(session, email="lettore@x.it"), make_user(session, email="fuori@x.it")
+    make_permission(session, user_id=reader.id, project_id=folder.id, capability=Capability.VIEW)
     ds = make_datasource(session, name="Ordini 2026 / nord", project_id=folder.id, key="datasets/1/v1.parquet", rows=3)
-    return SimpleNamespace(ds=ds, capo=capo, lettore=lettore, estraneo=estraneo)
+    return SimpleNamespace(ds=ds, boss=boss, reader=reader, stranger=stranger)
 
 
-def test_chi_legge_la_datasource_scarica_il_contratto_in_odcs(session, scena):
-    contracts.save(session, scena.ds, contracts.validate_document({"rules": [{"kind": "row_count", "min": 1, "severity": "error"}]}), True, scena.capo.id)
+def test_whoever_reads_the_datasource_downloads_the_contract_in_odcs(session, scene):
+    contracts.save(session, scene.ds, contracts.validate_document({"rules": [{"kind": "row_count", "min": 1, "severity": "error"}]}), True, scene.boss.id)
     session.commit()
-    answer = routes.export_odcs(scena.ds.id, scena.lettore, session)
+    answer = routes.export_odcs(scene.ds.id, scene.reader, session)
     assert answer.media_type == "application/yaml"
     assert answer.headers["content-disposition"] == 'attachment; filename="Ordini_2026_nord.odcs.yaml"'
     text = answer.body.decode()
     assert text.startswith('apiVersion: "v3.0.2"\nkind: "DataContract"\n') and 'rule: "rowCount"' in text
     with pytest.raises(HTTPException) as e:
-        routes.export_odcs(scena.ds.id, scena.estraneo, session)
+        routes.export_odcs(scene.ds.id, scene.stranger, session)
     assert e.value.status_code == 403
 
 
-def test_senza_contratto_non_c_e_niente_da_esportare(session, scena):
+def test_without_contract_there_is_nothing_to_export(session, scene):
     with pytest.raises(HTTPException) as e:
-        routes.export_odcs(scena.ds.id, scena.capo, session)
+        routes.export_odcs(scene.ds.id, scene.boss, session)
     assert e.value.status_code == 404

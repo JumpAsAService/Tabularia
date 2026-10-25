@@ -1,9 +1,8 @@
-"""Lo slot delle preview e' recintato per utente.
+"""The previews' slot is fenced per user.
 
-Una nuova preview su uno slot butta giu' la precedente: e' il meccanismo che
-impedisce all'editor di restare appeso quando si clicca un nodo dopo l'altro.
-Ma lo slot lo dichiara il browser — senza recinto, sarebbe un modo per annullare
-le anteprime di un ALTRO utente.
+A new preview on a slot knocks down the previous one: it is the mechanism that keeps
+the editor from hanging when one clicks a node after another. But the browser declares
+the slot — without a fence, it would be a way to cancel ANOTHER user's previews.
 """
 import json
 
@@ -37,8 +36,8 @@ def test_without_a_slot_the_body_is_untouched_byte_for_byte():
 
 @pytest.mark.parametrize("bad", ["u1:ed-preview", "a b", "x'y", "", "x" * 65, 42, None, ["a"]])
 def test_a_malformed_slot_is_dropped_not_forwarded(bad):
-    """Compreso il tentativo di spacciarsi per un altro utente ("u1:…"): i due
-    punti non sono ammessi nello slot del client."""
+    """The attempt to pass for another user ("u1:…") included: colons are not allowed in the
+    client's slot."""
     _, out = _scoped({**BODY, "slot": bad})
     assert "slot" not in json.loads(out)
 

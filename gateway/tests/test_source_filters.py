@@ -1,9 +1,9 @@
-"""Filtri A MONTE sui nodi sorgente (`data.filters`).
+"""UPSTREAM filters on the source nodes (`data.filters`).
 
-Condizioni in AND applicate subito dopo la lettura della sorgente, PRIMA del
-campione di sviluppo e di ogni altra operazione. A differenza del campione
-fanno parte del flusso: iniettate in sviluppo E in produzione, senza marcatore,
-quindi `strip_dev_sample_ops` non le rimuove. Condizioni incomplete = ignorate.
+Conditions in AND applied right after reading the source, BEFORE the development
+sample and any other operation. Unlike the sample they are part of the flow: injected
+in development AND in production, without a marker, so `strip_dev_sample_ops` does not
+remove them. Incomplete conditions = ignored.
 """
 from app.services.flow_resolver import (
     DEV_SAMPLE_MARK,
@@ -40,7 +40,7 @@ def test_source_filter_operations_shapes():
         {"column": "s", "operator": "is_null", "value": "ignorato"},
         {"column": "k", "operator": "in", "value": ["a", "b"]},
         {"column": "d", "operator": "between", "value": ["2024-01-01", "2024-12-31"]},
-        # incomplete → ignorate
+        # incomplete → ignored
         {"column": "", "operator": "eq", "value": 1},
         {"column": "x", "operator": "boh", "value": 1},
         {"column": "x", "operator": "eq"},
@@ -55,7 +55,7 @@ def test_source_filter_operations_shapes():
         {"type": "filter", "params": {"column": "k", "operator": "in", "value": ["a", "b"]}},
         {"type": "filter", "params": {"column": "d", "operator": "between", "value": ["2024-01-01", "2024-12-31"]}},
     ]
-    # l'id di riga dell'editor non finisce nell'IR
+    # the editor's row id does not end up in the IR
     assert all("id" not in op["params"] for op in ops)
 
 
@@ -70,11 +70,11 @@ def test_filters_injected_in_every_mode_before_everything():
         assert [o["type"] for o in ops[:2]] == ["filter", "filter"]
         assert ops[0]["params"] == {"column": "x", "operator": "gt", "value": 1}
         assert ops[1]["params"] == {"column": "s", "operator": "is_not_null"}
-        # anche la sorgente del ramo destro del join è filtrata a monte
+        # the source of the join's right branch is filtered upstream too
         right_ops = [o for o in ops if o["type"] == "join"][0]["params"]["right"]["operations"]
         assert right_ops[0] == {"type": "filter", "params": {"column": "k", "operator": "ne", "value": "z"}}
         if mode == "development":
-            # campione DOPO i filtri (campiona i dati già filtrati), poi la catena
+            # sample AFTER the filters (it samples the data filtered already), then the chain
             assert ops[2]["type"] == "limit" and ops[2]["params"][DEV_SAMPLE_MARK]
             assert [o["type"] for o in ops[3:]] == ["select", "join"]
         else:

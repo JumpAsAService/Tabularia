@@ -1,9 +1,9 @@
-"""Campione di SVILUPPO sui nodi sorgente — invariante di PRODUZIONE.
+"""DEVELOPMENT sample on the source nodes — a PRODUCTION invariant.
 
-`data.sample` su un nodo sorgente diventa un'operazione (limit/sample marcata
-`_dev_sample`) SOLO in engine_mode="development". In produzione (default del
-resolver, scheduler, run-now ?mode=production) non viene mai iniettata, e
-`strip_dev_sample_ops` la rimuove comunque ovunque, anche annidata.
+`data.sample` on a source node becomes an operation (limit/sample marked
+`_dev_sample`) ONLY in engine_mode="development". In production (the resolver's
+default, scheduler, run-now ?mode=production) it is never injected, and
+`strip_dev_sample_ops` removes it everywhere anyway, nested too.
 """
 from app.services.flow_resolver import (
     DEV_SAMPLE_MARK,
@@ -32,7 +32,7 @@ def _definition(sample=None, right_sample=None):
 
 
 def _all_ops(ops):
-    """Tutte le operazioni, anche annidate in right/driver/body."""
+    """All the operations, those nested in right/driver/body too."""
     for op in ops:
         yield op
         p = op.get("params") or {}
@@ -61,14 +61,14 @@ def test_dev_sample_operation_shapes():
 
 def test_production_never_samples():
     definition, out = _definition(sample={"mode": "first", "rows": 1000}, right_sample={"mode": "random", "percent": 5})
-    # default del resolver = produzione
+    # the resolver's default = production
     req = resolve_output_request(definition, out, lambda i: None, BUCKET)
     assert not _has_sample(req["operations"])
     assert req["operations"][0]["type"] == "filter"
-    # esplicito
+    # explicit
     req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="production")
     assert not _has_sample(req["operations"])
-    # qualsiasi valore diverso da "development" è produzione
+    # any value other than "development" is production
     req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="prod")
     assert not _has_sample(req["operations"])
     reqs = build_output_run_requests(definition, lambda i: None, BUCKET)
@@ -79,10 +79,10 @@ def test_development_injects_sample_on_every_source():
     definition, out = _definition(sample={"mode": "first", "rows": 1000}, right_sample={"mode": "random", "percent": 5})
     req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="development")
     ops = req["operations"]
-    # prima operazione della catena principale = campione della sorgente
+    # the main chain's first operation = the source's sample
     assert ops[0] == {"type": "limit", "params": {"n": 1000, DEV_SAMPLE_MARK: True}}
     assert ops[1]["type"] == "filter"
-    # anche il lato destro del join è campionato
+    # the join's right side is sampled too
     right_ops = ops[2]["params"]["right"]["operations"]
     assert right_ops[0]["type"] == "sample" and right_ops[0]["params"][DEV_SAMPLE_MARK]
 
@@ -97,7 +97,7 @@ def test_development_without_sample_is_untouched():
 def test_strip_removes_marked_ops_everywhere():
     ops = [
         {"type": "limit", "params": {"n": 10, DEV_SAMPLE_MARK: True}},
-        {"type": "limit", "params": {"n": 5}},  # limit VOLUTO dall'utente: resta
+        {"type": "limit", "params": {"n": 5}},  # a limit the user WANTED: it stays
         {"type": "join", "params": {"on": ["k"], "right": {"source": {"bucket": BUCKET, "key": "datasets/d.parquet"}, "operations": [
             {"type": "sample", "params": {"fraction": 0.1, DEV_SAMPLE_MARK: True}},
             {"type": "select", "params": {"columns": ["k"]}},
@@ -115,12 +115,12 @@ def test_strip_removes_marked_ops_everywhere():
     assert [o["type"] for o in clean[1]["params"]["right"]["operations"]] == ["select"]
     assert clean[2]["params"]["driver"]["operations"] == []
     assert [o["type"] for o in clean[2]["params"]["body"]] == ["filter"]
-    # idempotente e senza effetti su catene pulite
+    # idempotent and without effects on clean chains
     again, n = strip_dev_sample_ops(clean)
     assert n == 0 and again == clean
 
 
-# ── Campione AUTOMATICO (PREVIEW__DEFAULT_SAMPLE_ROWS) ──────────────────────
+# ── AUTOMATIC sample (PREVIEW__DEFAULT_SAMPLE_ROWS) ─────────────────────────
 def _with_default(monkeypatch, rows: int):
     import app.core.config as config_mod
 
@@ -132,26 +132,26 @@ def _with_default(monkeypatch, rows: int):
 def test_default_sample_shapes():
     from app.services.flow_resolver import MAX_SAMPLE_ROWS
 
-    # senza campione sul nodo: il default lo campiona
+    # without a sample on the node: the default samples it
     assert dev_sample_operation({}, default_rows=100_000) == {"type": "limit", "params": {"n": 100_000, DEV_SAMPLE_MARK: True}}
     assert dev_sample_operation({"sample": None}, default_rows=100_000)["params"]["n"] == 100_000
-    # tetto di sicurezza come per il campione manuale
+    # a safety cap as for the manual sample
     assert dev_sample_operation({}, default_rows=10**12)["params"]["n"] == MAX_SAMPLE_ROWS
-    # spento ESPLICITAMENTE dall'utente: tutte le righe, anche col default acceso
+    # turned off EXPLICITLY by the user: all the rows, even with the default on
     assert dev_sample_operation({"sample": {"mode": "off"}}, default_rows=100_000) is None
     assert dev_sample_operation({"sample": {"mode": "off"}}) is None
-    # un campione scelto dall'utente vince sul default
+    # a sample the user chose wins over the default
     assert dev_sample_operation({"sample": {"mode": "first", "rows": 10}}, default_rows=100_000)["params"]["n"] == 10
     assert dev_sample_operation({"sample": {"mode": "random", "percent": 5}}, default_rows=100_000)["type"] == "sample"
-    # un campione manuale malformato NON ricade sul default: era una scelta, non un'assenza
+    # a malformed manual sample does NOT fall back on the default: it was a choice, not an absence
     assert dev_sample_operation({"sample": {"mode": "first", "rows": 0}}, default_rows=100_000) is None
-    # default spento = comportamento di prima
+    # default off = the behaviour of before
     assert dev_sample_operation({}, default_rows=0) is None
 
 
 def test_default_sample_applies_to_every_unsampled_source_in_development(monkeypatch):
     _with_default(monkeypatch, 100_000)
-    definition, out = _definition()  # nessun campione sui nodi
+    definition, out = _definition()  # no sample on the nodes
     req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="development")
     ops = req["operations"]
     assert ops[0] == {"type": "limit", "params": {"n": 100_000, DEV_SAMPLE_MARK: True}}
@@ -165,7 +165,7 @@ def test_default_sample_respects_explicit_off_and_manual_sample(monkeypatch):
     definition, out = _definition(sample={"mode": "off"}, right_sample={"mode": "random", "percent": 5})
     req = resolve_output_request(definition, out, lambda i: None, BUCKET, engine_mode="development")
     ops = req["operations"]
-    assert [o["type"] for o in ops] == ["filter", "join"]  # sorgente principale: tutte le righe
+    assert [o["type"] for o in ops] == ["filter", "join"]  # main source: all the rows
     right_ops = ops[1]["params"]["right"]["operations"]
     assert right_ops[0]["type"] == "sample" and right_ops[0]["params"]["fraction"] == 0.05
 

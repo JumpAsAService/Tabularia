@@ -1,12 +1,12 @@
-"""Impostazioni del motore dal pannello: il gateway le conserva, le fa controllare
-e applicare al motore, e le rispedisce a intervalli.
+"""Engine settings from the panel: the gateway keeps them, has the engine check and apply
+them, and sends them again at intervals.
 
-Le regole che questi test tengono ferme: si salva solo quello che il motore ha
-accettato (tutto o niente; motore giù = niente cambiato); il limite duro dei task
-non supera la soglia oltre cui il gateway dichiara perso un run; scrive solo
-l'amministratore, mai con un token API, e l'audit dice da cosa a cosa; con
-ENGINE__SETTINGS_PANEL=false si vedono e non valgono; il giro periodico rispedisce,
-e una salvata che non vale più si scarta invece di lasciare quella vecchia.
+The rules these tests pin: only what the engine accepted is saved (all or nothing;
+engine down = nothing changed); the tasks' hard limit does not exceed the threshold
+past which the gateway declares a run lost; only the administrator writes, never with
+an API token, and the audit says from what to what; with ENGINE__SETTINGS_PANEL=false
+they are seen and do not hold; the periodic round sends them again, and a saved one
+that no longer holds is discarded instead of leaving the old one.
 """
 import json
 
@@ -27,15 +27,15 @@ CSRF = {"X-Tabularia-Csrf": "1"}
 PASSWORD = "una-password-lunga"
 
 
-class MotoreFinto:
-    """Il motore per quel che serve qui: due voci, i loro controlli, e quello che applica."""
+class FakeEngine:
+    """The engine as far as needed here: two items, their checks, and what it applies."""
 
     def __init__(self):
         self.values: dict = {}
-        self.ricevute: list[dict] = []
+        self.received: list[dict] = []
         self.giu = False
 
-    def _catalogo(self, maximum):
+    def _catalog(self, maximum):
         return {
             "items": [
                 {"key": "export.max_rows", "category": "export", "unit": "rows", "min": 0, "max": 100_000_000,
@@ -47,14 +47,14 @@ class MotoreFinto:
             "unavailable": ["bigquery"], "refresh_seconds": 10.0, "discarded": [],
         }
 
-    def gestisci(self, req: httpx.Request) -> httpx.Response:
+    def handle(self, req: httpx.Request) -> httpx.Response:
         if self.giu:
             raise httpx.ConnectError("il motore non risponde")
         assert req.url.path == "/settings"
         if req.method == "GET":
-            return httpx.Response(200, json=self._catalogo(int(req.url.params["max_task_time_limit"])))
+            return httpx.Response(200, json=self._catalog(int(req.url.params["max_task_time_limit"])))
         body = json.loads(req.content)
-        self.ricevute.append(body)
+        self.received.append(body)
         errors = []
         for k, v in body["values"].items():
             if k in ("export.max_rows", "celery.task_time_limit") and (isinstance(v, bool) or not isinstance(v, int)):
@@ -67,19 +67,19 @@ class MotoreFinto:
         if errors:
             return httpx.Response(422, json={"detail": {"errors": errors}})
         self.values = dict(body["values"])
-        return httpx.Response(200, json=self._catalogo(body["max_task_time_limit"]))
+        return httpx.Response(200, json=self._catalog(body["max_task_time_limit"]))
 
 
 @pytest.fixture
-def motore(monkeypatch):
-    m = MotoreFinto()
+def engine_(monkeypatch):
+    m = FakeEngine()
     monkeypatch.setattr("app.core.engine_client._client",
-                        httpx.AsyncClient(transport=httpx.MockTransport(m.gestisci), base_url="http://engine"))
+                        httpx.AsyncClient(transport=httpx.MockTransport(m.handle), base_url="http://engine"))
     return m
 
 
 @pytest.fixture
-def app(session, motore):
+def app(session, engine_):
     from app.routes import api_tokens as tokens_routes
     from app.routes import auth as auth_routes
 
@@ -90,7 +90,7 @@ def app(session, motore):
     return app
 
 
-def _entra(app, session, email, **kw) -> TestClient:
+def _sign_in(app, session, email, **kw) -> TestClient:
     from app.core.security import hash_password
 
     make_user(session, email=email, hashed_password=hash_password(PASSWORD), **kw)
@@ -99,84 +99,84 @@ def _entra(app, session, email, **kw) -> TestClient:
     return c
 
 
-def _voce(state, key):
+def _item(state, key):
     return next(v for v in state["items"] if v["key"] == key)
 
 
-def test_l_amministratore_cambia_e_torna_al_valore_dell_ambiente(app, session, motore):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    state = capo.get("/admin/engine-settings").json()
+def test_the_administrator_changes_and_goes_back_to_the_environments_value(app, session, engine_):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    state = boss.get("/admin/engine-settings").json()
     assert state["editable"] and state["panel_enabled"] and state["unavailable"] == ["bigquery"]
-    assert _voce(state, "export.max_rows") | {"value": None, "applied": None, "env_value": 5_000_000} == _voce(state, "export.max_rows")
+    assert _item(state, "export.max_rows") | {"value": None, "applied": None, "env_value": 5_000_000} == _item(state, "export.max_rows")
 
-    state = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 1_000_000}}, headers=CSRF).json()
-    v = _voce(state, "export.max_rows")
+    state = boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 1_000_000}}, headers=CSRF).json()
+    v = _item(state, "export.max_rows")
     assert (v["value"], v["applied"], v["updated_by"]) == (1_000_000, 1_000_000, "capo@x.local")
     assert session.get(EngineSetting, "export.max_rows").value == 1_000_000
-    assert motore.ricevute[-1]["values"] == {"export.max_rows": 1_000_000}
+    assert engine_.received[-1]["values"] == {"export.max_rows": 1_000_000}
 
-    state = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": None}}, headers=CSRF).json()
-    assert _voce(state, "export.max_rows")["value"] is None and motore.values == {}
+    state = boss.put("/admin/engine-settings", json={"values": {"export.max_rows": None}}, headers=CSRF).json()
+    assert _item(state, "export.max_rows")["value"] is None and engine_.values == {}
     session.expire_all()
     assert session.exec(select(EngineSetting)).all() == []
 
 
-def test_l_audit_dice_da_cosa_a_cosa(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
-    capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF)
+def test_the_audit_says_from_what_to_what(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
+    boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF)
     items = session.exec(select(AuditLog).where(AuditLog.action == "engine_settings.update").order_by(AuditLog.id)).all()
     assert [json.loads(v.detail)["changes"]["export.max_rows"] for v in items] == [
         {"from": None, "to": 10}, {"from": 10, "to": 20}]
-    # niente di cambiato, niente audit
-    capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF)
+    # nothing changed, no audit
+    boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF)
     assert len(session.exec(select(AuditLog).where(AuditLog.action == "engine_settings.update")).all()) == 2
 
 
-def test_si_salva_solo_quello_che_il_motore_accetta(app, session, motore):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
-    r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": -1}}, headers=CSRF)
+def test_only_what_the_engine_accepts_is_saved(app, session, engine_):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
+    r = boss.put("/admin/engine-settings", json={"values": {"export.max_rows": -1}}, headers=CSRF)
     assert r.status_code == 422 and r.json()["detail"]["errors"][0] == {"key": "export.max_rows", "code": "min", "limit": 0}
     session.expire_all()
-    assert session.get(EngineSetting, "export.max_rows").value == 10 and motore.values == {"export.max_rows": 10}
+    assert session.get(EngineSetting, "export.max_rows").value == 10 and engine_.values == {"export.max_rows": 10}
 
 
-def test_motore_giu_niente_cambiato(app, session, motore):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    motore.giu = True
-    assert capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF).status_code == 503
-    assert capo.get("/admin/engine-settings").status_code == 503
+def test_engine_down_nothing_changed(app, session, engine_):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    engine_.giu = True
+    assert boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF).status_code == 503
+    assert boss.get("/admin/engine-settings").status_code == 503
     assert session.exec(select(EngineSetting)).all() == []
 
 
-def test_il_limite_duro_resta_sotto_la_soglia_del_gateway(app, session, motore, monkeypatch):
-    """Il gateway dichiara perso un run dopo ENGINE__RUN_STALE_TIMEOUT_SECONDS: col
-    limite duro sopra, chiuderebbe come fallito un run ancora vivo."""
+def test_the_hard_limit_stays_under_the_gateways_threshold(app, session, engine_, monkeypatch):
+    """The gateway declares a run lost after ENGINE__RUN_STALE_TIMEOUT_SECONDS: with the hard
+    limit above it, it would close as failed a run still alive."""
     monkeypatch.setenv("ENGINE__RUN_STALE_TIMEOUT_SECONDS", "3900")
     get_settings.cache_clear()
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    assert _voce(capo.get("/admin/engine-settings").json(), "celery.task_time_limit")["max"] == 3600
-    r = capo.put("/admin/engine-settings", json={"values": {"celery.task_time_limit": 3700}}, headers=CSRF)
-    assert r.status_code == 422 and motore.ricevute[-1]["max_task_time_limit"] == 3600
-    assert capo.put("/admin/engine-settings", json={"values": {"celery.task_time_limit": 1800}}, headers=CSRF).status_code == 200
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    assert _item(boss.get("/admin/engine-settings").json(), "celery.task_time_limit")["max"] == 3600
+    r = boss.put("/admin/engine-settings", json={"values": {"celery.task_time_limit": 3700}}, headers=CSRF)
+    assert r.status_code == 422 and engine_.received[-1]["max_task_time_limit"] == 3600
+    assert boss.put("/admin/engine-settings", json={"values": {"celery.task_time_limit": 1800}}, headers=CSRF).status_code == 200
 
 
-def test_l_osservatore_vede_e_non_cambia(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
-    occhio = _entra(app, session, "occhio@x.local", is_observer=True)
-    state = occhio.get("/admin/engine-settings").json()
-    v = _voce(state, "export.max_rows")
+def test_the_observer_sees_and_does_not_change(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
+    eye = _sign_in(app, session, "occhio@x.local", is_observer=True)
+    state = eye.get("/admin/engine-settings").json()
+    v = _item(state, "export.max_rows")
     assert not state["editable"] and v["value"] == 10 and v["updated_by"] != "capo@x.local"
-    assert occhio.put("/admin/engine-settings", json={"values": {"export.max_rows": 1}}, headers=CSRF).status_code == 403
-    chiunque = _entra(app, session, "anna@x.local")
-    assert chiunque.get("/admin/engine-settings").status_code == 403
+    assert eye.put("/admin/engine-settings", json={"values": {"export.max_rows": 1}}, headers=CSRF).status_code == 403
+    anyone = _sign_in(app, session, "anna@x.local")
+    assert anyone.get("/admin/engine-settings").status_code == 403
 
 
-def test_un_token_non_cambia_le_impostazioni(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    token = capo.post("/auth/tokens", json={"name": "x", "scope": "write", "expires_in_days": 5}, headers=CSRF).json()["token"]
+def test_a_token_does_not_change_the_settings(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    token = boss.post("/auth/tokens", json={"name": "x", "scope": "write", "expires_in_days": 5}, headers=CSRF).json()["token"]
     script = TestClient(app)
     h = {"Authorization": f"Bearer {token}"}
     assert script.get("/admin/engine-settings", headers=h).json()["editable"] is False
@@ -184,21 +184,21 @@ def test_un_token_non_cambia_le_impostazioni(app, session):
     assert r.status_code == 403 and "non cambia le impostazioni" in r.json()["detail"]
 
 
-def test_col_pannello_spento_dall_ambiente_si_vedono_e_non_valgono(app, session, motore, monkeypatch):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
+def test_with_the_panel_off_from_the_environment_they_are_seen_and_do_not_hold(app, session, engine_, monkeypatch):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     monkeypatch.setenv("ENGINE__SETTINGS_PANEL", "false")
     get_settings.cache_clear()
-    state = capo.get("/admin/engine-settings").json()
-    assert not state["editable"] and not state["panel_enabled"] and _voce(state, "export.max_rows")["value"] is None
-    assert capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF).status_code == 403
-    assert rm.in_force(session) == {}  # il giro periodico spedisce «nessuna»
+    state = boss.get("/admin/engine-settings").json()
+    assert not state["editable"] and not state["panel_enabled"] and _item(state, "export.max_rows")["value"] is None
+    assert boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 20}}, headers=CSRF).status_code == 403
+    assert rm.in_force(session) == {}  # the periodic round sends «none»
 
 
 @pytest.mark.anyio
-async def test_il_giro_rispedisce_e_scarta_quella_che_non_vale_piu(session, motore, monkeypatch):
-    """Salvata quando valeva (limite duro 3700 con una soglia più alta), poi la
-    soglia è scesa: si spediscono le altre, non si lascia in vigore la vecchia."""
+async def test_the_round_sends_again_and_discards_the_one_no_longer_valid(session, engine_, monkeypatch):
+    """Saved when it held (hard limit 3700 with a higher threshold), then the threshold went
+    down: the others are sent, the old one is not left in force."""
     from datetime import datetime
 
     for k, v in (("export.max_rows", 10), ("celery.task_time_limit", 3700)):
@@ -207,106 +207,107 @@ async def test_il_giro_rispedisce_e_scarta_quella_che_non_vale_piu(session, moto
     monkeypatch.setenv("ENGINE__RUN_STALE_TIMEOUT_SECONDS", "3900")
     get_settings.cache_clear()
     await rm.push_discarding(rm.in_force(session))
-    assert motore.values == {"export.max_rows": 10}
+    assert engine_.values == {"export.max_rows": 10}
 
 
 @pytest.mark.anyio
-async def test_il_giro_periodico_rispedisce_le_salvate(db_engine, session, motore):
-    """Valkey svuotato o motore ripartito: il giro rimette quelle del database."""
+async def test_the_periodic_round_sends_the_saved_ones_again(db_engine, session, engine_):
+    """Valkey emptied or engine restarted: the round puts back the database's."""
     from datetime import datetime
 
     session.add(EngineSetting(key="export.max_rows", value=77, updated_at=datetime(2026, 10, 12)))
     session.commit()
-    motore.values = {}
+    engine_.values = {}
     assert await rm.one_round(db_engine) is True
-    assert motore.values == {"export.max_rows": 77}
+    assert engine_.values == {"export.max_rows": 77}
 
 
-def test_un_motore_di_prima_lo_dice_invece_di_non_risponde(app, session, motore, monkeypatch):
-    """Aggiornamento a metà: il motore non conosce /settings (404)."""
-    monkeypatch.setattr(motore, "gestisci", lambda req: httpx.Response(404, json={"detail": "Not Found"}))
+def test_an_engine_of_before_says_so_instead_of_not_answering(app, session, engine_, monkeypatch):
+    """A half-done update: the engine does not know /settings (404)."""
+    monkeypatch.setattr(engine_, "handle", lambda req: httpx.Response(404, json={"detail": "Not Found"}))
     monkeypatch.setattr("app.core.engine_client._client",
-                        httpx.AsyncClient(transport=httpx.MockTransport(lambda req: motore.gestisci(req)), base_url="http://engine"))
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.get("/admin/engine-settings")
+                        httpx.AsyncClient(transport=httpx.MockTransport(lambda req: engine_.handle(req)), base_url="http://engine"))
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.get("/admin/engine-settings")
     assert r.status_code == 503 and "older version" in r.json()["detail"]
-    r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
+    r = boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     assert r.status_code == 503 and "nothing was changed" in r.json()["detail"]
     assert session.exec(select(EngineSetting)).all() == []
 
 
-# ── dalla prova a scatola chiusa (2026-10-12) ───────────────────────────────
+# ── from the black-box trial (2026-10-12) ───────────────────────────────────
 
 @pytest.fixture
-def motore_che_rifiuta(motore, monkeypatch):
-    """Il motore rifiuta le voci in `rifiuta` (salvate quando valevano: l'ambiente è cambiato)."""
-    motore.rifiuta = set()
-    vero = motore.gestisci
+def refusing_engine(engine_, monkeypatch):
+    """The engine refuses the items in `refuse` (saved when they held: the environment
+    changed)."""
+    engine_.refuse = set()
+    real = engine_.handle
 
-    def gestisci(req):
+    def handle(req):
         if req.method == "PUT":
             body = json.loads(req.content)
-            bad_ones = [k for k in body["values"] if k in motore.rifiuta]
+            bad_ones = [k for k in body["values"] if k in engine_.refuse]
             if bad_ones:
-                motore.ricevute.append(body)
+                engine_.received.append(body)
                 return httpx.Response(422, json={"detail": {"errors": [{"key": k, "code": "below"} for k in bad_ones]}})
-        return vero(req)
+        return real(req)
     monkeypatch.setattr("app.core.engine_client._client",
-                        httpx.AsyncClient(transport=httpx.MockTransport(gestisci), base_url="http://engine"))
-    return motore
+                        httpx.AsyncClient(transport=httpx.MockTransport(handle), base_url="http://engine"))
+    return engine_
 
 
 @pytest.mark.parametrize("value", [True, False, "100000", 1.5, 100000.0, [1], {"a": 1}])
-def test_solo_numeri_interi(app, session, motore, value):
-    """`true` diventava 1 (e `false` 0, «nessun tetto» per BigQuery) prima che il motore lo vedesse."""
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": value}}, headers=CSRF)
-    assert r.status_code == 422 and motore.values == {}
+def test_whole_numbers_only(app, session, engine_, value):
+    """`true` became 1 (and `false` 0, «no cap» for BigQuery) before the engine saw it."""
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.put("/admin/engine-settings", json={"values": {"export.max_rows": value}}, headers=CSRF)
+    assert r.status_code == 422 and engine_.values == {}
 
 
-def test_niente_chiavi_sconosciute_ne_corpi_enormi(app, session, motore):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.put("/admin/engine-settings", json={"values": {"zz.sconosciuta": None}}, headers=CSRF)
+def test_no_unknown_keys_nor_huge_bodies(app, session, engine_):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.put("/admin/engine-settings", json={"values": {"zz.sconosciuta": None}}, headers=CSRF)
     assert r.status_code == 422 and r.json()["detail"]["errors"] == [{"key": "zz.sconosciuta", "code": "unknown"}]
-    r = capo.put("/admin/engine-settings", json={"values": {f"k{i}": None for i in range(200)}}, headers=CSRF)
+    r = boss.put("/admin/engine-settings", json={"values": {f"k{i}": None for i in range(200)}}, headers=CSRF)
     assert r.status_code == 422
 
 
-def test_un_token_riceve_403_anche_col_corpo_sbagliato(app, session):
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    token = capo.post("/auth/tokens", json={"name": "x", "scope": "write", "expires_in_days": 5}, headers=CSRF).json()["token"]
+def test_a_token_gets_403_even_with_the_wrong_body(app, session):
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    token = boss.post("/auth/tokens", json={"name": "x", "scope": "write", "expires_in_days": 5}, headers=CSRF).json()["token"]
     r = TestClient(app).put("/admin/engine-settings", json={"values": {"export.max_rows": "molti"}},
                             headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
 
 
 @pytest.mark.anyio
-async def test_il_giro_scarta_finche_il_motore_accetta(db_engine, session, motore_che_rifiuta):
-    """Prima scartava una volta sola e, al secondo rifiuto, non spediva più niente."""
+async def test_the_round_discards_until_the_engine_accepts(db_engine, session, refusing_engine):
+    """Before, it discarded once only and, at the second refusal, sent nothing any more."""
     from datetime import datetime
 
     for k, v in (("export.max_rows", 4777), ("celery.task_time_limit", 1800)):
         session.add(EngineSetting(key=k, value=v, updated_at=datetime(2026, 10, 12)))
     session.commit()
-    motore_che_rifiuta.rifiuta = {"celery.task_time_limit"}
+    refusing_engine.refuse = {"celery.task_time_limit"}
     assert await rm.one_round(db_engine)
-    assert motore_che_rifiuta.values == {"export.max_rows": 4777}
+    assert refusing_engine.values == {"export.max_rows": 4777}
 
 
-def test_una_salvata_che_non_vale_piu_non_blocca_le_altre(app, session, motore_che_rifiuta):
-    """L'ambiente è cambiato sotto un valore salvato: si cambiano le altre, e quello
-    resta salvato (non applicato) finché non lo si cambia o lo si azzera."""
+def test_a_saved_one_no_longer_valid_does_not_block_the_others(app, session, refusing_engine):
+    """The environment changed under a saved value: the others are changed, and that one
+    stays saved (not applied) until it is changed or reset."""
     from datetime import datetime
 
     session.add(EngineSetting(key="celery.task_time_limit", value=3250, updated_at=datetime(2026, 10, 12)))
     session.commit()
-    motore_che_rifiuta.rifiuta = {"celery.task_time_limit"}
-    capo = _entra(app, session, "capo@x.local", is_superuser=True)
-    r = capo.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
+    refusing_engine.refuse = {"celery.task_time_limit"}
+    boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    r = boss.put("/admin/engine-settings", json={"values": {"export.max_rows": 10}}, headers=CSRF)
     assert r.status_code == 200, r.text
-    assert motore_che_rifiuta.values == {"export.max_rows": 10}
-    assert motore_che_rifiuta.ricevute[-1]["changed"] == ["export.max_rows"]
-    v = _voce(r.json(), "celery.task_time_limit")
-    assert v["value"] == 3250 and v["applied"] is None  # salvata, non applicata: il pannello lo dice
-    r = capo.put("/admin/engine-settings", json={"values": {"celery.task_time_limit": None}}, headers=CSRF)
+    assert refusing_engine.values == {"export.max_rows": 10}
+    assert refusing_engine.received[-1]["changed"] == ["export.max_rows"]
+    v = _item(r.json(), "celery.task_time_limit")
+    assert v["value"] == 3250 and v["applied"] is None  # saved, not applied: the panel says so
+    r = boss.put("/admin/engine-settings", json={"values": {"celery.task_time_limit": None}}, headers=CSRF)
     assert r.status_code == 200 and session.get(EngineSetting, "celery.task_time_limit") is None

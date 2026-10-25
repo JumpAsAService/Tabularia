@@ -1,9 +1,9 @@
-"""Il risolutore dei flussi è sul percorso di OGNI run. `chain` ora passa da
-`chain_with_ids` (che serve all'export dbt): questi test fissano che la catena
-prodotta è IDENTICA a quella di prima, su una batteria di grafi — lineare, join e
-union con rami destri, filtri a monte, campione di sviluppo, contenitore foreach
-con driver e corpo, uscita dentro un contenitore, sorgente mancante, ciclo — e che
-gli id dei nodi restano allineati alle operazioni."""
+"""The flows' resolver is on the path of EVERY run. `chain` now goes through
+`chain_with_ids` (which the dbt export needs): these tests pin that the chain produced
+is IDENTICAL to the one of before, on a battery of graphs — linear, join and union with
+right branches, upstream filters, development sample, foreach container with driver
+and body, an output inside a container, a missing source, a cycle — and that the node
+ids stay aligned with the operations."""
 from typing import Optional
 
 import pytest
@@ -14,13 +14,13 @@ from app.services.flow_resolver import FlowResolveError, _Resolver, build_output
 BUCKET = "data-prep"
 
 
-def _vecchia_chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
-    """`_Resolver.chain` com'era prima del 2026-10-08, copiata parola per parola:
-    è l'oracolo dell'equivalenza."""
+def _old_chain(self, target_id: str) -> tuple[Optional[tuple[str, str]], list[dict]]:
+    """`_Resolver.chain` as it was before 2026-10-08, copied word for word: it is the
+    equivalence's oracle."""
     target = self.by_id.get(target_id)
     if target and target.get("parentNode"):
         upstream_id = self.inc.get(target["parentNode"], {}).get("left")
-        up_src, up_ops = _vecchia_chain(self, upstream_id) if upstream_id else (None, [])
+        up_src, up_ops = _old_chain(self, upstream_id) if upstream_id else (None, [])
         op = self._operation_for(target["parentNode"], until=target_id)
         return up_src, [*up_ops, op]
 
@@ -74,8 +74,8 @@ def _resolve_ds(ds_id):
     return {7: (BUCKET, "datasets/7/v1.parquet")}.get(ds_id)
 
 
-# ── i grafi ──────────────────────────────────────────────────────────────────
-LINEARE = {"nodes": [_src("s", "datasets/a.parquet"), _op("f", "filter", {"column": "x", "operator": "gt", "value": 1}),
+# ── the graphs ───────────────────────────────────────────────────────────────
+LINEAR = {"nodes": [_src("s", "datasets/a.parquet"), _op("f", "filter", {"column": "x", "operator": "gt", "value": 1}),
                      _op("g", "group_by", {"by": ["k"], "aggregations": [{"column": "x", "func": "sum"}]}), _out("o")],
            "edges": [_e("s", "f"), _e("f", "g"), _e("g", "o")]}
 
@@ -85,7 +85,7 @@ JOIN_UNION = {"nodes": [_src("s", "datasets/a.parquet", filters=[{"column": "x",
                         _op("j", "join", {"on": ["k"], "how": "left"}), _op("un", "union", {}), _out("o")],
               "edges": [_e("s", "j"), _e("r", "rs"), _e("rs", "j", "right"), _e("j", "un"), _e("u", "un", "right"), _e("un", "o")]}
 
-CATALOGO = {"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 7, "sample": {"mode": "first", "rows": 50}}},
+CATALOG = {"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": 7, "sample": {"mode": "first", "rows": 50}}},
                       _op("l", "limit", {"n": 5}), _out("o")],
             "edges": [_e("s", "l"), _e("l", "o")]}
 
@@ -101,30 +101,30 @@ FOREACH = {"nodes": [_src("s", "datasets/a.parquet"), _src("d", "datasets/driver
 CYCLE = {"nodes": [_src("s", "datasets/a.parquet"), _op("a", "limit", {"n": 1}), _op("b", "limit", {"n": 2}), _out("o")],
          "edges": [_e("a", "b"), _e("b", "a"), _e("b", "o")]}
 
-SENZA_SORGENTE = {"nodes": [_op("a", "limit", {"n": 1}), _out("o")], "edges": [_e("a", "o")]}
+WITHOUT_SOURCE = {"nodes": [_op("a", "limit", {"n": 1}), _out("o")], "edges": [_e("a", "o")]}
 
-GRAFI = {"lineare": LINEARE, "join_union": JOIN_UNION, "catalogo": CATALOGO, "foreach": FOREACH, "ciclo": CYCLE, "senza_sorgente": SENZA_SORGENTE}
+GRAPHS = {"lineare": LINEAR, "join_union": JOIN_UNION, "catalogo": CATALOG, "foreach": FOREACH, "ciclo": CYCLE, "senza_sorgente": WITHOUT_SOURCE}
 
 
-@pytest.mark.parametrize("modo", ["production", "development"])
-@pytest.mark.parametrize("name", list(GRAFI))
-def test_la_catena_e_identica_a_quella_di_prima(name, modo, monkeypatch):
+@pytest.mark.parametrize("mode", ["production", "development"])
+@pytest.mark.parametrize("name", list(GRAPHS))
+def test_the_chain_is_identical_to_the_one_of_before(name, mode, monkeypatch):
     monkeypatch.setattr(fr, "default_sample_rows", lambda: 1000)
-    g = GRAFI[name]
+    g = GRAPHS[name]
     for target in [n["id"] for n in g["nodes"]]:
-        new_one = _Resolver(g["nodes"], g["edges"], _resolve_ds, modo).chain(target)
-        vecchia = _vecchia_chain(_Resolver(g["nodes"], g["edges"], _resolve_ds, modo), target)
-        assert new_one == vecchia, (name, modo, target)
+        new_one = _Resolver(g["nodes"], g["edges"], _resolve_ds, mode).chain(target)
+        old_one = _old_chain(_Resolver(g["nodes"], g["edges"], _resolve_ds, mode), target)
+        assert new_one == old_one, (name, mode, target)
 
 
-@pytest.mark.parametrize("modo", ["production", "development"])
-@pytest.mark.parametrize("name", list(GRAFI))
-def test_gli_id_sono_allineati_alle_operazioni(name, modo, monkeypatch):
+@pytest.mark.parametrize("mode", ["production", "development"])
+@pytest.mark.parametrize("name", list(GRAPHS))
+def test_the_ids_are_aligned_with_the_operations(name, mode, monkeypatch):
     monkeypatch.setattr(fr, "default_sample_rows", lambda: 1000)
-    g = GRAFI[name]
+    g = GRAPHS[name]
     by_id = {n["id"]: n for n in g["nodes"]}
     for target in [n["id"] for n in g["nodes"]]:
-        src, ops, ids = _Resolver(g["nodes"], g["edges"], _resolve_ds, modo).chain_with_ids(target)
+        src, ops, ids = _Resolver(g["nodes"], g["edges"], _resolve_ds, mode).chain_with_ids(target)
         assert len(ops) == len(ids), (name, target)
         for op, nid in zip(ops, ids):
             if nid.endswith("#head"):
@@ -133,9 +133,9 @@ def test_gli_id_sono_allineati_alle_operazioni(name, modo, monkeypatch):
                 assert op["type"] == by_id[nid]["data"]["opType"]
 
 
-def test_il_campione_di_sviluppo_e_i_filtri_a_monte_portano_l_id_della_sorgente(monkeypatch):
+def test_the_development_sample_and_upstream_filters_carry_the_sources_id(monkeypatch):
     monkeypatch.setattr(fr, "default_sample_rows", lambda: 1000)
-    src, ops, ids = _Resolver(CATALOGO["nodes"], CATALOGO["edges"], _resolve_ds, "development").chain_with_ids("o")
+    src, ops, ids = _Resolver(CATALOG["nodes"], CATALOG["edges"], _resolve_ds, "development").chain_with_ids("o")
     assert src == (BUCKET, "datasets/7/v1.parquet")
     assert ids == ["s#head", "l"] and ops[0]["type"] == "limit"
     src, ops, ids = _Resolver(JOIN_UNION["nodes"], JOIN_UNION["edges"], _resolve_ds, "production").chain_with_ids("o")
@@ -144,8 +144,8 @@ def test_il_campione_di_sviluppo_e_i_filtri_a_monte_portano_l_id_della_sorgente(
     assert right["source"]["key"] == "datasets/b.parquet" and [o["type"] for o in right["operations"]] == ["filter", "select"]
 
 
-def test_un_nodo_dentro_un_contenitore_porta_l_id_del_contenitore():
-    # la preview di un nodo del corpo: il contenitore fino a quel nodo
+def test_a_node_inside_a_container_carries_the_containers_id():
+    # the preview of a node of the body: the container up to that node
     src, ops, ids = _Resolver(FOREACH["nodes"], FOREACH["edges"], _resolve_ds, "production").chain_with_ids("b2")
     assert ids == ["pre", "fe"] and [o["type"] for o in ops] == ["select", "foreach"]
     body = ops[1]["params"]["body"]
@@ -156,19 +156,19 @@ def test_un_nodo_dentro_un_contenitore_porta_l_id_del_contenitore():
     assert ids == ["pre", "fe", "post"]
 
 
-def test_resolve_output_chains_da_gli_stessi_corpi_dei_run_di_produzione():
+def test_resolve_output_chains_gives_the_same_bodies_as_production_runs():
     for name in ("lineare", "join_union", "catalogo", "foreach"):
-        g = GRAFI[name]
+        g = GRAPHS[name]
         chains = resolve_output_chains(g, _resolve_ds, BUCKET)
-        corpi = build_output_run_requests(g, _resolve_ds, BUCKET, "production")
-        assert [c["body"] for c in chains] == corpi, name
+        bodies = build_output_run_requests(g, _resolve_ds, BUCKET, "production")
+        assert [c["body"] for c in chains] == bodies, name
         assert all(len(c["op_ids"]) == len(c["body"]["operations"]) for c in chains)
 
 
-def test_resolve_output_chains_rifiuta_come_prima():
+def test_resolve_output_chains_refuses_as_before():
     with pytest.raises(FlowResolveError, match="no source with data upstream"):
-        resolve_output_chains(SENZA_SORGENTE, _resolve_ds, BUCKET)
+        resolve_output_chains(WITHOUT_SOURCE, _resolve_ds, BUCKET)
     with pytest.raises(FlowResolveError, match="no source with data upstream"):
-        build_output_run_requests(SENZA_SORGENTE, _resolve_ds, BUCKET)
+        build_output_run_requests(WITHOUT_SOURCE, _resolve_ds, BUCKET)
     with pytest.raises(FlowResolveError, match="has no Output nodes"):
         resolve_output_chains({"nodes": [_src("s", "k")], "edges": []}, _resolve_ds, BUCKET)

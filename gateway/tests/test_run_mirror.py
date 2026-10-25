@@ -1,16 +1,16 @@
-"""Copia dell'output su S3 esterno, IN AGGIUNTA alla datasource pubblicata.
+"""A copy of the output to an external S3, AS WELL AS the published datasource.
 
-La copia è BEST-EFFORT per scelta esplicita: la datasource è il risultato
-primario, la copia è una consegna a valle (data engineering che legge il
-prefisso concordato). Un suo fallimento — credenziali scadute, bucket pieno,
-rete — non deve annullare un run riuscito né impedire la pubblicazione.
+The copy is BEST EFFORT by explicit choice: the datasource is the primary result, the
+copy is a delivery downstream (data engineering reading the agreed prefix). Its
+failure — expired credentials, full bucket, network — must not undo a successful run
+nor prevent the publishing.
 
-Qui si verifica la parte che vive nel gateway:
-  1. il nodo Output di tipo "datasource" emette `mirror` ACCANTO a `publish`
-     (non al posto suo: `destination` resta libero, così il percorso S3 in cui
-     la scrittura È il risultato continua a fallire duramente);
-  2. l'esito riportato dal worker viene registrato sul run — altrimenti un
-     fallimento resterebbe solo nei log, invisibile in cronologia.
+Here the part that lives in the gateway is checked:
+  1. the Output node of kind "datasource" emits `mirror` NEXT TO `publish` (not in
+     its place: `destination` stays free, so the S3 path where the writing IS the
+     result keeps failing hard);
+  2. the outcome the worker reports is recorded on the run — otherwise a failure
+     would stay only in the logs, invisible in the history.
 """
 import json
 
@@ -29,33 +29,33 @@ def _node(**data) -> dict:
     return base
 
 
-# ── risoluzione del nodo Output ──────────────────────────────────────────────
-def test_mirror_convive_con_publish():
-    """La copia si AGGIUNGE alla datasource: entrambi i campi nel corpo-run."""
+# ── resolving the Output node ────────────────────────────────────────────────
+def test_mirror_lives_alongside_publish():
+    """The copy is ADDED to the datasource: both fields in the run body."""
     body = _output_body(
         _node(mirrorEnabled=True, mirrorConnectionId=7, mirrorBucket="lake",
               mirrorKey="published/vendite/latest.parquet"),
         ("data-prep", "datasets/in.parquet"), [], "data-prep",
     )
-    assert body["publish"]["name"] == "vendite"  # il risultato primario resta
-    # nessun `format`: la copia è sempre parquet, la scelta non esiste
+    assert body["publish"]["name"] == "vendite"  # the primary result stays
+    # no `format`: the copy is always parquet, the choice does not exist
     assert body["mirror"] == {
         "connection_id": 7,
         "bucket": "lake",
         "key": "published/vendite/latest.parquet",
     }
-    # `destination` NON è usato: là un errore sarebbe fatale, qui non deve esserlo
+    # `destination` is NOT used: there an error would be fatal, here it must not be
     assert "destination" not in body
 
 
-def test_mirror_assente_se_non_richiesto():
+def test_mirror_missing_when_not_asked():
     body = _output_body(_node(), ("data-prep", "datasets/in.parquet"), [], "data-prep")
     assert "mirror" not in body and body["publish"]["name"] == "vendite"
 
 
-def test_mirror_ignorato_senza_connessione():
-    """Spunta attiva ma connessione non scelta: si ignora invece di lanciare un
-    run che fallirebbe la validazione a valle."""
+def test_mirror_ignored_without_connection():
+    """Tick on but connection not chosen: ignored instead of launching a run that would fail
+    the validation downstream."""
     body = _output_body(
         _node(mirrorEnabled=True, mirrorKey="published/x.parquet"),
         ("data-prep", "datasets/in.parquet"), [], "data-prep",
@@ -63,9 +63,9 @@ def test_mirror_ignorato_senza_connessione():
     assert "mirror" not in body
 
 
-def test_mirror_non_tocca_gli_altri_tipi_di_output():
-    """Su un Output di tipo s3 la scrittura È il risultato: nessun mirror, e la
-    destinazione resta quella di sempre (fallimento vincolante)."""
+def test_mirror_does_not_touch_the_other_output_kinds():
+    """On an Output of kind s3 the writing IS the result: no mirror, and the destination
+    stays the usual one (a binding failure)."""
     body = _output_body(
         {"type": "output", "data": {"destType": "s3", "connectionId": 3, "s3Key": "out/x.parquet",
                                     "mirrorEnabled": True, "mirrorConnectionId": 9}},
@@ -75,10 +75,10 @@ def test_mirror_non_tocca_gli_altri_tipi_di_output():
     assert "mirror" not in body and "publish" not in body
 
 
-# ── registrazione dell'esito sul run ─────────────────────────────────────────
-async def test_copia_fallita_non_fa_fallire_il_run(session, fake_engine):
-    """Il cuore del requisito: prima il run, poi la copia. Se la copia fallisce
-    il run resta SUCCESS e l'errore è leggibile in cronologia."""
+# ── recording the outcome on the run ─────────────────────────────────────────
+async def test_failed_copy_does_not_fail_the_run(session, fake_engine):
+    """The heart of the requirement: the run first, then the copy. When the copy fails the
+    run stays SUCCESS and the error is readable in the history."""
     run = make_run(session, kind="flow", status="STARTED", task_id="t-mirror-ko", flow_id=1)
     fake_engine.set_task(
         "t-mirror-ko", "SUCCESS",
@@ -92,14 +92,14 @@ async def test_copia_fallita_non_fa_fallire_il_run(session, fake_engine):
     await _reconcile(session, run)
     session.refresh(run)
 
-    assert run.status == "SUCCESS"  # il risultato primario NON è compromesso
+    assert run.status == "SUCCESS"  # the primary result is NOT compromised
     assert run.rows_written == 42
     outcome = json.loads(run.mirror)
     assert outcome["ok"] is False
     assert "EndpointConnectionError" in outcome["error"]
 
 
-async def test_copia_riuscita_registrata(session, fake_engine):
+async def test_successful_copy_recorded(session, fake_engine):
     run = make_run(session, kind="flow", status="STARTED", task_id="t-mirror-ok", flow_id=1)
     fake_engine.set_task(
         "t-mirror-ok", "SUCCESS",
@@ -114,8 +114,8 @@ async def test_copia_riuscita_registrata(session, fake_engine):
     assert json.loads(run.mirror)["ok"] is True
 
 
-async def test_run_senza_copia_lascia_il_campo_vuoto(session, fake_engine):
-    """Nessuna copia richiesta: la colonna resta NULL, non un JSON finto."""
+async def test_run_without_copy_leaves_the_field_empty(session, fake_engine):
+    """No copy asked: the column stays NULL, not a fake JSON."""
     run = make_run(session, kind="flow", status="STARTED", task_id="t-no-mirror", flow_id=1)
     fake_engine.set_task("t-no-mirror", "SUCCESS", result={"rows_written": 3})
 

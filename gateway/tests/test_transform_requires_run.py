@@ -1,8 +1,8 @@
-"""`/tasks/transform-data` è un run: chiede RUN, non solo VIEW.
+"""`/tasks/transform-data` is a run: it asks for RUN, not only VIEW.
 
-Trovato con le credenziali dell'ospite della demo (audit 2026-09-30): un
-osservatore di sola lettura eseguiva un run completo e scriveva un parquet,
-senza riga Run e senza audit, per una strada che il percorso ufficiale nega.
+Found with the demo guest's credentials (audit 2026-09-30): a read-only observer ran a
+whole run and wrote a parquet, without a Run row and without audit, along a way the
+official path denies.
 """
 import pytest
 from fastapi import HTTPException
@@ -21,56 +21,56 @@ def _datasource(session, project, key="datasets/1/abc.parquet"):
 
 
 def test_view_only_can_read_but_not_run(session):
-    """Il cuore del rilievo: leggere sì, eseguire no."""
+    """The heart of the finding: reading yes, running no."""
     p = make_project(session, name="Marketing")
-    ospite = make_user(session, email="ospite@x.it")
-    ospite.is_observer = True
-    session.add(Permission(project_id=p.id, user_id=ospite.id, capability=Capability.VIEW))
+    guest = make_user(session, email="ospite@x.it")
+    guest.is_observer = True
+    session.add(Permission(project_id=p.id, user_id=guest.id, capability=Capability.VIEW))
     session.commit()
     ds = _datasource(session, p)
 
-    ensure_can_read_keys(session, ospite, {ds.key})            # l'anteprima resta sua
+    ensure_can_read_keys(session, guest, {ds.key})            # the preview stays theirs
     with pytest.raises(HTTPException) as e:
-        ensure_can_run_keys(session, ospite, {ds.key})
+        ensure_can_run_keys(session, guest, {ds.key})
     assert e.value.status_code == 403
     assert "run" in e.value.detail.lower()
 
 
 def test_run_on_the_project_is_enough(session):
     p = make_project(session, name="Marketing")
-    tizio = make_user(session, email="tizio@x.it")
-    session.add(Permission(project_id=p.id, user_id=tizio.id, capability=Capability.RUN))
+    someone = make_user(session, email="tizio@x.it")
+    session.add(Permission(project_id=p.id, user_id=someone.id, capability=Capability.RUN))
     session.commit()
     ds = _datasource(session, p)
-    ensure_can_run_keys(session, tizio, {ds.key})  # non solleva
+    ensure_can_run_keys(session, someone, {ds.key})  # does not raise
 
 
 def test_run_elsewhere_does_not_carry_over(session):
-    """RUN su un progetto non dà RUN sui dati di un altro."""
-    mio, other = make_project(session, name="Mio"), make_project(session, name="Altro")
-    tizio = make_user(session, email="tizio2@x.it")
-    session.add(Permission(project_id=mio.id, user_id=tizio.id, capability=Capability.RUN))
-    session.add(Permission(project_id=other.id, user_id=tizio.id, capability=Capability.VIEW))
+    """RUN on one project does not give RUN on another's data."""
+    mine, other = make_project(session, name="Mio"), make_project(session, name="Altro")
+    someone = make_user(session, email="tizio2@x.it")
+    session.add(Permission(project_id=mine.id, user_id=someone.id, capability=Capability.RUN))
+    session.add(Permission(project_id=other.id, user_id=someone.id, capability=Capability.VIEW))
     session.commit()
     ds = _datasource(session, other, "datasets/2/def.parquet")
     with pytest.raises(HTTPException):
-        ensure_can_run_keys(session, tizio, {ds.key})
+        ensure_can_run_keys(session, someone, {ds.key})
 
 
 def test_own_upload_can_be_run(session):
-    """Chi ha caricato un file lo può trasformare: è la strada dell'editor su un
-    upload non ancora in un flusso."""
-    tizio = make_user(session, email="tizio3@x.it")
-    session.add(Upload(owner_id=tizio.id, dataset_id="mio", bucket="b", parquet_key="raw/mio.parquet"))
+    """Whoever uploaded a file may transform it: it is the editor's way on an upload not in a
+    flow yet."""
+    someone = make_user(session, email="tizio3@x.it")
+    session.add(Upload(owner_id=someone.id, dataset_id="mio", bucket="b", parquet_key="raw/mio.parquet"))
     session.commit()
-    ensure_can_run_keys(session, tizio, {"raw/mio.parquet"})
+    ensure_can_run_keys(session, someone, {"raw/mio.parquet"})
 
 
 def test_an_administrator_runs_anywhere(session):
-    capo = make_user(session, email="capo@x.it", is_superuser=True)
-    ensure_can_run_keys(session, capo, {"datasets/9/qualunque.parquet"})
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
+    ensure_can_run_keys(session, boss, {"datasets/9/qualunque.parquet"})
 
 
 def test_no_keys_means_nothing_to_check(session):
-    tizio = make_user(session, email="tizio4@x.it")
-    ensure_can_run_keys(session, tizio, set())
+    someone = make_user(session, email="tizio4@x.it")
+    ensure_can_run_keys(session, someone, set())

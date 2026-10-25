@@ -1,18 +1,16 @@
-"""Integrità dei run: verità dello stato, ordine degli snapshot, orchestrazioni orfane.
+"""Runs' integrity: the truth of the state, the order of the snapshots, orphaned
+orchestrations.
 
-Regressione per i tre rilievi ALTA dell'audit 2026-09-13 (docs/audit/):
+Regression for the three HIGH findings of the 2026-09-13 audit (docs/audit/):
 
-- **C1** un run dichiarato scaduto veniva marcato FAILURE senza fermare il task,
-  che continuava a girare e a SCRIVERE: su un Output in append il rilancio
-  dell'utente accodava le stesse righe due volte. In più il cronometro partiva
-  dalla nascita della riga, quindi contava l'attesa in CODA e poteva dichiarare
-  scaduto un run appena partito.
-- **C2** lo scambio dello snapshot era «vince chi finisce»: un refresh lento
-  partito PRIMA ma finito DOPO rimpiazzava dati più freschi e ne programmava la
-  cancellazione.
-- **C3** le orchestrazioni restavano STARTED per sempre dopo un riavvio del
-  gateway (girano come task asyncio nel processo, non come task Celery, e
-  `_reconcile` le salta).
+- **C1** a run declared expired was marked FAILURE without stopping the task, which
+  kept running and WRITING: on an Output in append the user's relaunch appended the
+  same rows twice. Also the stopwatch started from the row's birth, so it counted the
+  wait in the QUEUE and could declare expired a run just started.
+- **C2** the snapshot's swap was «whoever finishes wins»: a slow refresh started
+  EARLIER but finished LATER replaced fresher data and scheduled its deletion.
+- **C3** the orchestrations stayed STARTED forever after a gateway restart (they run
+  as asyncio tasks in the process, not as Celery tasks, and `_reconcile` skips them).
 """
 from datetime import datetime, timedelta, timezone
 
@@ -44,10 +42,10 @@ def _ago(seconds: int) -> datetime:
     return datetime.now(timezone.utc) - timedelta(seconds=seconds)
 
 
-# ── C1: lo stato dice la verità ─────────────────────────────────────────────
+# ── C1: the state tells the truth ───────────────────────────────────────────
 async def test_stale_run_is_revoked_not_just_marked_failed(session, fake_engine, monkeypatch):
-    """Il cuore del rilievo: marcare FAILURE senza revocare lascia un task che
-    scrive di nascosto. Ora il task viene fermato davvero."""
+    """The heart of the finding: marking FAILURE without revoking leaves a task that writes
+    on the quiet. Now the task is really stopped."""
     import app.routes.runs as runs_mod
 
     monkeypatch.setattr(runs_mod, "stale_after_seconds", lambda: 60)
@@ -55,31 +53,31 @@ async def test_stale_run_is_revoked_not_just_marked_failed(session, fake_engine,
         session, kind="flow", status="STARTED", task_id="t-stale", flow_id=1,
         started_at=_ago(600), engine_started_at=_ago(600),
     )
-    fake_engine.set_task("t-stale", "STARTED")  # l'engine lo dà ancora in esecuzione
+    fake_engine.set_task("t-stale", "STARTED")  # the engine still says it is running
 
     await _reconcile(session, run)
     session.refresh(run)
     assert run.status == "FAILURE"
-    assert fake_engine.revoked == ["t-stale"]  # fermato sull'engine, non solo in cronologia
+    assert fake_engine.revoked == ["t-stale"]  # stopped on the engine, not only in the history
     assert "stopped" in (run.error or "")
 
 
 async def test_queue_wait_is_not_counted_as_execution_time(session, fake_engine, monkeypatch):
-    """Un run rimasto a lungo in CODA e appena partito NON è scaduto: il
-    cronometro parte dall'esecuzione reale, non dalla nascita della riga."""
+    """A run long left in the QUEUE and just started is NOT expired: the stopwatch starts
+    from the real run, not from the row's birth."""
     import app.routes.runs as runs_mod
 
     monkeypatch.setattr(runs_mod, "stale_after_seconds", lambda: 60)
     run = make_run(
         session, kind="flow", status="STARTED", task_id="t-queued", flow_id=1,
-        started_at=_ago(3600),      # in coda da un'ora…
-        engine_started_at=_ago(5),  # …ma in esecuzione da 5 secondi
+        started_at=_ago(3600),      # queued for an hour…
+        engine_started_at=_ago(5),  # …but running for 5 seconds
     )
     fake_engine.set_task("t-queued", "STARTED")
 
     await _reconcile(session, run)
     session.refresh(run)
-    assert run.status == "STARTED"  # niente falso fallimento
+    assert run.status == "STARTED"  # no false failure
     assert fake_engine.revoked == []
 
 
@@ -91,7 +89,7 @@ async def test_execution_start_recorded_on_first_started_observation(session, fa
     await _reconcile(session, run)
     session.refresh(run)
     assert run.status == "STARTED"
-    assert run.engine_started_at is not None  # baseline del cronometro
+    assert run.engine_started_at is not None  # the stopwatch's baseline
 
 
 async def test_completed_run_is_never_revoked(session, fake_engine):
@@ -104,28 +102,28 @@ async def test_completed_run_is_never_revoked(session, fake_engine):
     assert fake_engine.revoked == []
 
 
-# ── C2: vince chi ha letto per ultimo, non chi finisce per ultimo ───────────
+# ── C2: whoever read last wins, not whoever finishes last ───────────────────
 async def test_refresh_started_earlier_does_not_clobber_fresher_snapshot(session, fake_engine):
-    """Scenario esatto del rilievo, end-to-end: A parte prima, B parte dopo e
-    finisce prima. Quando A finisce NON deve riportare indietro la datasource."""
+    """The finding's exact scenario, end to end: A starts first, B starts later and finishes
+    first. When A finishes it must NOT take the datasource back."""
     ds = make_datasource(session, name="ordini", kind="database", key="datasets/1/v0.parquet")
     run_a = make_run(session, kind="ingest", status="STARTED", task_id="t-a",
                      datasource_id=ds.id, output_key="datasets/1/a.parquet")
     run_b = make_run(session, kind="ingest", status="STARTED", task_id="t-b",
                      datasource_id=ds.id, output_key="datasets/1/b.parquet")
-    assert run_a.id < run_b.id  # A ha letto la sorgente PRIMA
+    assert run_a.id < run_b.id  # A read the source EARLIER
     ok = {"bucket": "data-prep", "rows_written": 1, "columns": []}
     fake_engine.set_task("t-a", "SUCCESS", result=ok)
     fake_engine.set_task("t-b", "SUCCESS", result=ok)
 
-    await _reconcile(session, run_b)  # B finisce per primo
-    await _reconcile(session, run_a)  # A finisce dopo, ma è più vecchio
+    await _reconcile(session, run_b)  # B finishes first
+    await _reconcile(session, run_a)  # A finishes later, but it is older
 
     session.refresh(ds)
-    assert ds.key == "datasets/1/b.parquet"       # resta il dato più fresco
+    assert ds.key == "datasets/1/b.parquet"       # the freshest data stays
     assert ds.snapshot_run_id == run_b.id
-    assert "datasets/1/a.parquet" in _pending_keys(session)  # il parquet stantio è orfano
-    assert "datasets/1/b.parquet" not in _pending_keys(session)  # il fresco NON è cancellato
+    assert "datasets/1/a.parquet" in _pending_keys(session)  # the stale parquet is orphaned
+    assert "datasets/1/b.parquet" not in _pending_keys(session)  # the fresh one is NOT deleted
 
 
 async def test_finalize_ingest_accepts_newer_run_and_records_baseline(session, fake_engine):
@@ -145,8 +143,8 @@ async def test_finalize_ingest_accepts_newer_run_and_records_baseline(session, f
 
 
 async def test_finalize_ingest_without_baseline_is_accepted(session, fake_engine):
-    """Le datasource create prima di questo campo non hanno baseline: si accetta
-    (altrimenti il primo refresh dopo l'aggiornamento sarebbe rifiutato)."""
+    """The datasources created before this field have no baseline: accepted (otherwise the
+    first refresh after the update would be refused)."""
     ds = make_datasource(session, name="legacy", kind="database", key="datasets/old.parquet")
     assert ds.snapshot_run_id is None
     run = make_run(session, kind="ingest", datasource_id=ds.id, output_key="datasets/2/x.parquet")
@@ -164,14 +162,14 @@ async def test_publish_overwrite_rejects_older_run(session, fake_engine):
                      publish_overwrite=True, publish_name="vendite", publish_project_id=1,
                      output_key="datasets/3/stale.parquet")
     newer = make_run(session, kind="flow", status="SUCCESS", task_id="t-o2")
-    existing.snapshot_run_id = newer.id  # una pubblicazione più recente è già passata
+    existing.snapshot_run_id = newer.id  # a newer publish has gone through already
     session.add(existing)
     session.commit()
 
     _publish_datasource(session, older, {"rows_written": 9, "columns": []})
     session.commit()
     session.refresh(existing)
-    assert existing.key == "datasets/3/fresh.parquet"  # non sovrascritta dal più vecchio
+    assert existing.key == "datasets/3/fresh.parquet"  # not overwritten by the older one
     assert "datasets/3/stale.parquet" in _pending_keys(session)
 
 
@@ -184,34 +182,34 @@ async def test_publish_creation_records_baseline(session, fake_engine):
     assert ds is not None and ds.snapshot_run_id == run.id
 
 
-# ── Layout delle chiavi (operatività) ───────────────────────────────────────
+# ── Keys' layout (operations) ───────────────────────────────────────────────
 def test_snapshot_key_is_foldered_and_timestamped():
     key = snapshot_key(42)
     assert key.startswith("datasets/42/") and key.endswith(".parquet")
-    # il pinning del data plane accetta solo i prefissi gestiti: la sottocartella
-    # non deve farne uscire la chiave
+    # the data plane's pinning accepts only the managed prefixes: the subfolder must not take
+    # the key out of them
     assert key.startswith(MANAGED_PREFIXES)
 
 
 def test_snapshot_key_without_datasource_uses_neutral_folder():
-    """Alla PRIMA pubblicazione la datasource non esiste ancora: nessun id."""
+    """At the FIRST publish the datasource does not exist yet: no id."""
     assert snapshot_key(None).startswith("datasets/new/")
 
 
 def test_snapshot_keys_do_not_collide_within_the_same_second():
     keys = {snapshot_key(1) for _ in range(50)}
-    assert len(keys) == 50  # il suffisso casuale evita la collisione
+    assert len(keys) == 50  # the random suffix avoids the collision
 
 
-# ── C3: orchestrazioni orfane chiuse ────────────────────────────────────────
-# Nate come controllo all'avvio del gateway (un processo solo). Con più processi
-# l'avvio di uno non dice niente sugli altri: è orfana l'orchestrazione il cui
-# HEARTBEAT è fermo, e la chiude il primo orchestratore che se ne accorge. Il resto
-# sta in test_orchestration_queue.py.
+# ── C3: orphaned orchestrations closed ──────────────────────────────────────
+# Born as a check at the gateway's start (one process). With several processes one's
+# start says nothing about the others: an orchestration is orphaned when its HEARTBEAT
+# has stopped, and the first orchestrator that notices closes it. The rest is in
+# test_orchestration_queue.py.
 @pytest.fixture
 def orch_db(db_engine, monkeypatch):
-    """Le funzioni dell'orchestratore aprono una sessione propria (girano fuori da
-    una richiesta): la si punta al DB di test."""
+    """The orchestrator's functions open a session of their own (they run outside a
+    request): it is pointed at the test DB."""
     import app.services.orchestrator as orch_mod
 
     monkeypatch.setattr(orch_mod, "engine", db_engine)
@@ -219,8 +217,8 @@ def orch_db(db_engine, monkeypatch):
 
 
 async def test_orphaned_orchestrations_are_closed(session, orch_db):
-    # STARTED senza battito: è di una versione che non lo scriveva, cioè di un
-    # processo che non c'è più
+    # STARTED without a heartbeat: it is from a version that did not write it, that is from
+    # a process no longer there
     stuck = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=1)
     session.commit()
 
@@ -235,7 +233,7 @@ async def test_orphaned_orchestrations_are_closed(session, orch_db):
 
 async def test_orphan_sweep_leaves_finished_and_engine_backed_runs_alone(session, orch_db):
     done = make_run(session, kind="orchestration", status="SUCCESS", task_id="", flow_id=1)
-    # un run di flusso ha un task sull'engine: lo riconcilia `_reconcile`
+    # a flow run has a task on the engine: `_reconcile` reconciles it
     flow_run = make_run(session, kind="flow", status="STARTED", task_id="t-live", flow_id=1)
     session.commit()
 
@@ -251,24 +249,24 @@ async def test_orphan_sweep_is_idempotent(session, orch_db):
     session.commit()
 
     assert await close_orphans() == 1
-    assert await close_orphans() == 0  # un secondo giro, o un altro processo, non ha nulla da fare
+    assert await close_orphans() == 0  # a second round, or another process, has nothing to do
 
 
-# ── più processi che riconciliano insieme ───────────────────────────────────
+# ── several processes reconciling together ──────────────────────────────────
 async def test_a_stale_started_answer_does_not_reopen_a_closed_run(session, db_engine, fake_engine):
-    """Due processi riconciliano lo stesso run. Uno chiede lo stato all'engine e
-    riceve STARTED; prima che lo scriva, l'altro lo ha già chiuso. Scrivere
-    STARTED sull'oggetto lo riaprirebbe (e il giro dopo rifarebbe la chiusura,
-    con i suoi effetti): l'UPDATE è condizionato allo stato non terminale."""
+    """Two processes reconcile the same run. One asks the engine for the state and gets
+    STARTED; before it writes it, the other has closed it already. Writing STARTED on the
+    object would reopen it (and the next round would redo the closing, with its effects):
+    the UPDATE is conditional on the non-terminal state."""
     from sqlmodel import Session
 
     run = make_run(session, kind="flow", status="PENDING", task_id="t-gara", flow_id=1)
     fake_engine.task_states["t-gara"] = {"status": "STARTED", "result": {}, "error": None}
-    with Session(db_engine) as other:  # l'altro processo lo chiude nel frattempo
+    with Session(db_engine) as other:  # the other process closes it meanwhile
         r = other.get(Run, run.id)
         r.status = "SUCCESS"
         other.add(r); other.commit()
-    # questo processo ha ancora in mano l'oggetto letto prima (PENDING)
+    # this process still holds the object read before (PENDING)
     assert run.status == "PENDING"
     after = await _reconcile(session, run)
     assert after.status == "SUCCESS"
@@ -284,26 +282,26 @@ async def test_blob_sweep_tolerates_a_row_another_process_already_removed(sessio
     from app.models import PendingBlobDeletion
     from app.services.blobgc import sweep_blob_deletions
 
-    passato = datetime.now(timezone.utc) - timedelta(hours=1)
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
     for key in ("a", "b"):
-        session.add(PendingBlobDeletion(bucket="data-prep", key=f"datasets/{key}.parquet", reason="t", delete_after=passato))
+        session.add(PendingBlobDeletion(bucket="data-prep", key=f"datasets/{key}.parquet", reason="t", delete_after=past))
     session.commit()
 
-    vero = fake_engine._handler
+    real = fake_engine._handler
 
-    def un_altro_arriva_prima(request):
-        # mentre questo processo chiama l'engine per la prima riga, un altro
-        # finisce la sua passata e toglie tutte le righe
+    def another_arrives_first(request):
+        # while this process calls the engine for the first row, another finishes its pass and
+        # removes all the rows
         with Session(db_engine) as other:
             for row in other.exec(select(PendingBlobDeletion)).all():
                 other.delete(row)
             other.commit()
-        return vero(request)
+        return real(request)
 
     import httpx
 
     import app.core.engine_client as ec
 
-    ec._client = httpx.AsyncClient(transport=httpx.MockTransport(un_altro_arriva_prima), base_url="http://engine")
-    assert await sweep_blob_deletions(session) == 0  # nessun errore: le ha tolte l'altro
+    ec._client = httpx.AsyncClient(transport=httpx.MockTransport(another_arrives_first), base_url="http://engine")
+    assert await sweep_blob_deletions(session) == 0  # no error: the other removed them
     assert session.exec(select(PendingBlobDeletion)).all() == []

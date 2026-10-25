@@ -1,9 +1,9 @@
-"""Regressione: serializzare un oggetto ORM DOPO un commit (es. record_audit).
+"""Regression: serializing an ORM object AFTER a commit (e.g. record_audit).
 
-SQLAlchemy marca l'istanza "expired" al commit: `model_dump()` su un'istanza
-expired torna {} e la costruzione dello schema di uscita esplodeva con
-"N validation errors … Field required" (500 su POST /projects/{id}/connections).
-I `_to_out` devono leggere gli attributi, che ricaricano dal DB.
+SQLAlchemy marks the instance "expired" at the commit: `model_dump()` on an expired
+instance returns {} and building the output schema blew up with "N validation errors …
+Field required" (500 on POST /projects/{id}/connections). The `_to_out` functions must
+read the attributes, which reload from the DB.
 """
 from app.models import Connection
 from app.routes.connections import _to_out as conn_out
@@ -16,7 +16,7 @@ def test_connection_out_after_expire(session):
     conn = Connection(name="c", project_id=p.id, db_type="postgresql", host="h", port=5432,
                       username="u", password_encrypted="enc", database="d", db_schema="")
     session.add(conn); session.commit()
-    session.expire(conn)  # come dopo il commit di record_audit
+    session.expire(conn)  # as after record_audit's commit
     out = conn_out(conn)
     assert out.name == "c" and out.host == "h" and out.has_password is True
 

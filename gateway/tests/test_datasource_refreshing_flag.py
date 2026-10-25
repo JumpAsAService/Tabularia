@@ -1,8 +1,8 @@
-"""Lo spinner del refresh lo decide il SERVER.
+"""The SERVER decides the refresh spinner.
 
-Lo stato "sta importando" viveva solo nella memoria della pagina: con un refresh
-da cinque minuti bastava cambiare scheda e tornare — o che il refresh fosse
-partito dallo scheduler — per non vedere più nulla.
+The "importing" state lived only in the page's memory: with a five-minute refresh,
+changing tab and coming back — or the refresh having been started by the scheduler —
+was enough to see nothing any more.
 """
 from app.models import Datasource, Run
 from app.routes.datasources import _refreshing_ids
@@ -23,11 +23,11 @@ def _run(session, ds_id, status, kind="ingest"):
 def test_only_datasources_with_a_live_ingest_are_flagged(session):
     u = make_user(session, email="a@x.it", is_superuser=True)
     p = make_project(session, name="p")
-    still, running, finished, fallito = (_ds(session, n, p.id, u.id) for n in ("fermo", "in_corso", "finito", "fallito"))
+    still, running, finished, failed = (_ds(session, n, p.id, u.id) for n in ("fermo", "in_corso", "finito", "fallito"))
     _run(session, running.id, "STARTED")
     _run(session, finished.id, "SUCCESS")
-    _run(session, fallito.id, "FAILURE")
-    assert _refreshing_ids(session, [still, running, finished, fallito]) == {running.id}
+    _run(session, failed.id, "FAILURE")
+    assert _refreshing_ids(session, [still, running, finished, failed]) == {running.id}
 
 
 def test_a_pending_ingest_counts_and_an_old_success_does_not_hide_it(session):

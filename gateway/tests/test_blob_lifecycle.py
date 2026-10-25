@@ -1,11 +1,11 @@
-"""Ciclo di vita dei blob: cancellazione differita (grace) e verità dei run.
+"""Blobs' lifecycle: deferred deletion (grace) and the truth of the runs.
 
-Regressione per:
-- F12/F20: un refresh/overwrite/delete NON deve cancellare subito un blob che un
-  run o una preview in corso potrebbe ancora leggere → cancellazione differita,
-  eseguita dallo sweep quando la grace scade.
-- F17: se il publish fallisce (nome esaurito), il parquet orfano non va perso →
-  marcato per la cancellazione.
+Regression for:
+- F12/F20: a refresh/overwrite/delete must NOT delete at once a blob a run or a
+  preview in progress could still read → deferred deletion, run by the sweep when the
+  grace expires.
+- F17: when the publish fails (names used up), the orphaned parquet must not be lost →
+  marked for deletion.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -28,7 +28,7 @@ def _pending(session) -> list[PendingBlobDeletion]:
     return session.exec(select(PendingBlobDeletion)).all()
 
 
-# ── blobgc puro ───────────────────────────────────────────────────────────
+# ── blobgc alone ──────────────────────────────────────────────────────────
 async def test_schedule_adds_row_with_grace(session):
     schedule_blob_deletion(session, "data-prep", "datasets/x.parquet", reason="test")
     session.commit()
@@ -55,24 +55,24 @@ async def test_sweep_deletes_only_due_rows(session, fake_engine):
     removed = await sweep_blob_deletions(session)
     assert removed == 1
     assert ("data-prep", "datasets/due.parquet") in fake_engine.deleted
-    # la riga scaduta è sparita, quella futura resta
+    # the expired row is gone, the future one stays
     remaining = [r.key for r in _pending(session)]
     assert remaining == ["datasets/later.parquet"]
 
 
 async def test_sweep_retries_when_engine_fails(session, fake_engine):
-    fake_engine.delete_status = 500  # l'engine non riesce a cancellare
+    fake_engine.delete_status = 500  # the engine cannot delete
     past = datetime.now(timezone.utc) - timedelta(seconds=10)
     session.add(PendingBlobDeletion(bucket="data-prep", key="datasets/x.parquet", delete_after=past))
     session.commit()
 
     removed = await sweep_blob_deletions(session)
     assert removed == 0
-    assert _pending(session)  # la riga resta → si riproverà al prossimo tick
+    assert _pending(session)  # the row stays → retried at the next tick
 
 
 async def test_sweep_treats_404_as_done(session, fake_engine):
-    fake_engine.delete_status = 404  # già sparito
+    fake_engine.delete_status = 404  # gone already
     past = datetime.now(timezone.utc) - timedelta(seconds=10)
     session.add(PendingBlobDeletion(bucket="data-prep", key="datasets/gone.parquet", delete_after=past))
     session.commit()
@@ -82,7 +82,7 @@ async def test_sweep_treats_404_as_done(session, fake_engine):
     assert _pending(session) == []
 
 
-# ── _finalize_ingest: swap con cancellazione DIFFERITA del vecchio snapshot ──
+# ── _finalize_ingest: swap with DEFERRED deletion of the old snapshot ──
 async def test_finalize_ingest_schedules_old_snapshot_not_immediate(session, fake_engine):
     ds = make_datasource(session, name="ordini", kind="database", bucket="data-prep", key="datasets/old.parquet")
     run = make_run(session, kind="ingest", datasource_id=ds.id, output_key="datasets/new.parquet")
@@ -92,16 +92,16 @@ async def test_finalize_ingest_schedules_old_snapshot_not_immediate(session, fak
     session.commit()
 
     session.refresh(ds)
-    assert ds.key == "datasets/new.parquet"  # swappata al nuovo snapshot
+    assert ds.key == "datasets/new.parquet"  # swapped to the new snapshot
     assert ds.rows == 42
-    assert fake_engine.deleted == []  # il vecchio blob NON è stato cancellato subito
+    assert fake_engine.deleted == []  # the old blob was NOT deleted at once
     pend = _pending(session)
-    assert len(pend) == 1 and pend[0].key == "datasets/old.parquet"  # differito
+    assert len(pend) == 1 and pend[0].key == "datasets/old.parquet"  # deferred
 
 
 async def test_finalize_ingest_datasource_deleted_defers_new_orphan(session, fake_engine):
-    # datasource sparita durante il refresh: il nuovo blob è orfano SENZA lettori
-    # → comunque cancellazione differita (uniforme, resta pulito anche in retry)
+    # datasource gone during the refresh: the new blob is orphaned WITHOUT readers →
+    # deferred deletion anyway (uniform, it stays clean on a retry too)
     run = make_run(session, kind="ingest", datasource_id=999, output_key="datasets/new.parquet")
     _finalize_ingest(session, run, {"rows_written": 1})
     session.commit()
@@ -120,7 +120,7 @@ async def test_publish_creates_new_datasource(session, fake_engine):
     ds = session.exec(select(Datasource).where(Datasource.name == "vendite")).first()
     assert ds is not None and run.datasource_id == ds.id
     assert ds.key == "datasets/pub.parquet" and ds.rows == 5
-    assert _pending(session) == []  # niente da cancellare in creazione
+    assert _pending(session) == []  # nothing to delete at creation
 
 
 async def test_publish_overwrite_replaces_in_place_and_defers_old_blob(session, fake_engine):
@@ -134,16 +134,16 @@ async def test_publish_overwrite_replaces_in_place_and_defers_old_blob(session, 
     _publish_datasource(session, run, {"rows_written": 9, "columns": []})
     session.refresh(existing)
     session.refresh(run)
-    assert run.datasource_id == existing.id  # STESSO id (i flussi che la usano non si rompono)
+    assert run.datasource_id == existing.id  # the SAME id (the flows using it do not break)
     assert existing.key == "datasets/v2.parquet" and existing.rows == 9
-    assert fake_engine.deleted == []  # il blob v1 NON cancellato subito
+    assert fake_engine.deleted == []  # the v1 blob NOT deleted at once
     pend = _pending(session)
-    assert len(pend) == 1 and pend[0].key == "datasets/v1.parquet"  # differito
+    assert len(pend) == 1 and pend[0].key == "datasets/v1.parquet"  # deferred
 
 
 async def test_publish_overwrite_refused_for_database_kind_falls_to_create(session, fake_engine):
-    # una snapshot di database non è sovrascrivibile: si ricade nella creazione
-    # (nome già preso → suffisso)
+    # a database snapshot cannot be overwritten: it falls back to creation (name taken →
+    # suffix)
     make_datasource(session, name="ordini", project_id=1, kind="database", key="datasets/db.parquet")
     run = make_run(
         session, kind="flow", status="SUCCESS", task_id="abcd1234ef", publish_overwrite=True,
@@ -153,12 +153,12 @@ async def test_publish_overwrite_refused_for_database_kind_falls_to_create(sessi
     session.refresh(run)
     created = session.get(Datasource, run.datasource_id)
     assert created is not None and created.kind == "flow"
-    assert created.name != "ordini"  # ha preso il nome col suffisso, non la snapshot DB
+    assert created.name != "ordini"  # it took the name with the suffix, not the DB snapshot
 
 
 async def test_publish_exhausted_schedules_orphan_blob(session, fake_engine):
-    # F17: nome preso E anche il nome-col-suffisso preso → publish esaurito →
-    # il parquet dell'output è orfano e va marcato per la cancellazione
+    # F17: name taken AND the name-with-suffix taken too → publish used up → the output's
+    # parquet is orphaned and must be marked for deletion
     make_datasource(session, name="dup", project_id=1, kind="flow", key="datasets/a.parquet")
     make_datasource(session, name="dup (deadbeef)", project_id=1, kind="flow", key="datasets/b.parquet")
     run = make_run(
@@ -167,12 +167,12 @@ async def test_publish_exhausted_schedules_orphan_blob(session, fake_engine):
     )
     _publish_datasource(session, run, {"columns": []})
     session.refresh(run)
-    assert run.datasource_id is None  # nessuna datasource pubblicata
+    assert run.datasource_id is None  # no datasource published
     pend = _pending(session)
-    assert len(pend) == 1 and pend[0].key == "datasets/orphan.parquet"  # orfano marcato
+    assert len(pend) == 1 and pend[0].key == "datasets/orphan.parquet"  # orphan marked
 
 
-# ── _reconcile end-to-end (macchina a stati) ────────────────────────────────
+# ── _reconcile end to end (state machine) ───────────────────────────────────
 async def test_reconcile_publishes_on_success_and_is_idempotent(session, fake_engine):
     run = make_run(
         session, kind="flow", status="STARTED", task_id="task-pub",
@@ -186,7 +186,7 @@ async def test_reconcile_publishes_on_success_and_is_idempotent(session, fake_en
     ds_count = len(session.exec(select(Datasource).where(Datasource.name == "report")).all())
     assert ds_count == 1 and run.datasource_id is not None
 
-    # una seconda riconciliazione non deve ripubblicare (run già terminale)
+    # a second reconciliation must not publish again (run terminal already)
     await _reconcile(session, run)
     ds_count2 = len(session.exec(select(Datasource).where(Datasource.name == "report")).all())
     assert ds_count2 == 1
@@ -201,13 +201,13 @@ async def test_reconcile_ingest_success_swaps_and_defers(session, fake_engine):
     await _reconcile(session, run)
     session.refresh(ds)
     assert ds.key == "datasets/s2.parquet"
-    assert fake_engine.deleted == []  # vecchio snapshot differito, non cancellato subito
+    assert fake_engine.deleted == []  # old snapshot deferred, not deleted at once
     assert [r.key for r in _pending(session)] == ["datasets/s1.parquet"]
 
 
-# ── F13: effetto post-claim ATOMICO e RITENTABILE ───────────────────────────
+# ── F13: an ATOMIC and RETRYABLE post-claim effect ──────────────────────────
 def _flaky(real, fail_times: int):
-    """Wrapper che fa fallire le prime `fail_times` chiamate, poi delega al reale."""
+    """A wrapper that fails the first `fail_times` calls, then delegates to the real one."""
     state = {"n": 0}
 
     def wrapper(*a, **k):
@@ -227,7 +227,7 @@ async def test_reconcile_publish_recovers_in_call_on_transient_failure(session, 
         publish_name="rep1", publish_project_id=1, output_key="datasets/r.parquet",
     )
     fake_engine.set_task("t-r1", "SUCCESS", result={"rows_written": 3, "columns": []})
-    # fallisce UNA volta: il retry IMMEDIATO nello stesso _reconcile lo recupera
+    # fails ONCE: the IMMEDIATE retry in the same _reconcile recovers it
     monkeypatch.setattr(runs_mod, "_publish_datasource", _flaky(runs_mod._publish_datasource, 1))
 
     await _reconcile(session, run)
@@ -244,7 +244,7 @@ async def test_reconcile_publish_lazy_retry_when_attempts_exhausted(session, fak
         publish_name="rep2", publish_project_id=1, output_key="datasets/r.parquet",
     )
     fake_engine.set_task("t-r2", "SUCCESS", result={"rows_written": 3, "columns": []})
-    # fallisce TUTTI i tentativi immediati → il giro esaurisce e lascia non terminale
+    # fails ALL the immediate attempts → the round runs out and leaves it non-terminal
     monkeypatch.setattr(
         runs_mod, "_publish_datasource", _flaky(runs_mod._publish_datasource, runs_mod.SIDE_EFFECT_ATTEMPTS)
     )
@@ -254,7 +254,7 @@ async def test_reconcile_publish_lazy_retry_when_attempts_exhausted(session, fak
     assert run.status != "SUCCESS"
     assert session.exec(select(Datasource).where(Datasource.name == "rep2")).first() is None
 
-    # smette di fallire → la lettura successiva riconcilia (fallback lazy)
+    # stops failing → the next read reconciles (lazy fallback)
     await _reconcile(session, run)
     session.refresh(run)
     assert run.status == "SUCCESS"
@@ -270,7 +270,7 @@ async def test_reconcile_ingest_recovers_in_call_on_transient_failure(session, f
     fake_engine.set_task("t-r3", "SUCCESS", result={"rows_written": 1, "columns": []})
     monkeypatch.setattr(runs_mod, "_finalize_ingest", _flaky(runs_mod._finalize_ingest, 1))
 
-    await _reconcile(session, run)  # un solo giro: il retry immediato recupera lo swap
+    await _reconcile(session, run)  # one round only: the immediate retry recovers the swap
     session.refresh(ds)
     session.refresh(run)
     assert ds.key == "datasets/s2.parquet"

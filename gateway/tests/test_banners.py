@@ -1,8 +1,8 @@
-"""Banner di avvertimento dell'Explore: creazione, elenco, eliminazione.
+"""The Explore's warning banners: creation, list, deletion.
 
-Il contratto che conta: li LEGGONO tutti (servono a essere visti), li SCRIVE solo
-un superuser, e ogni modifica lascia traccia nell'audit — perché cambia ciò che
-vede l'intera installazione.
+The contract that counts: everyone READS them (they serve to be seen), only a superuser
+WRITES them, and every change leaves a trace in the audit — because it changes what the
+whole installation sees.
 """
 import pytest
 from fastapi import HTTPException
@@ -20,11 +20,11 @@ def _admin(session):
     return make_user(session, email="admin@x.local", is_superuser=True)
 
 
-def _azioni(session) -> list[str]:
+def _actions(session) -> list[str]:
     return [r.action for r in session.exec(select(AuditLog)).all()]
 
 
-# ── creazione ───────────────────────────────────────────────────────────────
+# ── creation ────────────────────────────────────────────────────────────────
 def test_create_shows_up_in_the_list(session):
     admin = _admin(session)
     create_banner(body=BannerCreate(message="Manutenzione alle 18:00"), user=admin, session=session)
@@ -32,14 +32,14 @@ def test_create_shows_up_in_the_list(session):
     banners = list_banners(session=session)
     assert len(banners) == 1
     assert banners[0].message == "Manutenzione alle 18:00"
-    assert banners[0].level == "warning"  # default: è un avvertimento
+    assert banners[0].level == "warning"  # default: it is a warning
     assert banners[0].created_by == admin.id
 
 
 def test_level_is_kept(session):
     admin = _admin(session)
-    for livello in ("info", "warning", "danger"):
-        create_banner(body=BannerCreate(message=f"m-{livello}", level=livello), user=admin, session=session)
+    for level in ("info", "warning", "danger"):
+        create_banner(body=BannerCreate(message=f"m-{level}", level=level), user=admin, session=session)
     assert {b.level for b in list_banners(session=session)} == {"info", "warning", "danger"}
 
 
@@ -60,7 +60,7 @@ def test_list_is_newest_first(session):
     assert [b.message for b in list_banners(session=session)] == ["terzo", "secondo", "primo"]
 
 
-# ── eliminazione ────────────────────────────────────────────────────────────
+# ── deletion ────────────────────────────────────────────────────────────────
 def test_delete_removes_it(session):
     admin = _admin(session)
     b = create_banner(body=BannerCreate(message="da togliere"), user=admin, session=session)
@@ -76,13 +76,13 @@ def test_delete_missing_is_404(session):
     assert e.value.status_code == 404
 
 
-# ── chi può scrivere ────────────────────────────────────────────────────────
+# ── who may write ───────────────────────────────────────────────────────────
 def test_only_superusers_may_write(session):
-    normale = make_user(session, email="tizio@x.local", is_superuser=False)
+    normal = make_user(session, email="tizio@x.local", is_superuser=False)
     with pytest.raises(HTTPException) as e:
-        require_superuser(user=normale, session=session)
+        require_superuser(user=normal, session=session)
     assert e.value.status_code == 403
-    # il superuser passa la stessa guardia
+    # the superuser passes the same guard
     assert require_superuser(user=_admin(session), session=session) is not None
 
 
@@ -90,7 +90,7 @@ def test_only_superusers_may_write(session):
 def test_create_and_delete_are_audited(session):
     admin = _admin(session)
     b = create_banner(body=BannerCreate(message="tracciami"), user=admin, session=session)
-    assert audit.BANNER_CREATE in _azioni(session)
+    assert audit.BANNER_CREATE in _actions(session)
 
     delete_banner(banner_id=b.id, user=admin, session=session)
-    assert audit.BANNER_DELETE in _azioni(session)
+    assert audit.BANNER_DELETE in _actions(session)

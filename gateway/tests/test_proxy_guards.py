@@ -1,22 +1,20 @@
-"""Guardie del proxy sul corpo inoltrato all'engine.
+"""The proxy's guards on the body forwarded to the engine.
 
-Destinazioni (tabella di database, oggetto S3) e copia su S3 esterno passano
-SOLO da `/flows/{id}/runs`, dove è il GATEWAY a costruire il payload della
-connessione: capability CONNECT verificata sul progetto, secret presa dal
-catalogo e cifrata, riga `Run` in cronologia. Accettarle qui salterebbe tutto
-in una volta — un utente qualsiasi potrebbe indicare endpoint e credenziali
-PROPRIE, in chiaro, e farsi consegnare il parquet dal worker senza lasciare
-traccia.
+Destinations (database table, S3 object) and the copy to an external S3 go ONLY
+through `/flows/{id}/runs`, where the GATEWAY builds the connection payload: the
+CONNECT capability checked on the project, the secret taken from the catalog and
+encrypted, a `Run` row in the history. Accepting them here would skip it all at once —
+any user could point to THEIR OWN endpoint and credentials, in clear, and get the
+parquet delivered by the worker without leaving a trace.
 
-Regressione vera: `mirror` era stato aggiunto come campo fratello di
-`destination` senza estendere questa guardia, che fino ad allora non era
-coperta da alcun test. Il parametrizzato copre tutti i nomi della famiglia
-proprio perché il prossimo campo non ripeta la storia — `email` è stato
-aggiunto qui nello stesso commit che lo ha introdotto.
+A real regression: `mirror` had been added as a sibling field of `destination` without
+extending this guard, which until then no test covered. The parametrized test covers
+every name of the family precisely so that the next field does not repeat the story —
+`email` was added here in the same commit that introduced it.
 
-Per `email` la posta in gioco è più alta: oltre a catalogo, CONNECT e cifratura,
-saltare questa guardia salterebbe la validazione dei domini ammessi, cioè
-l'unica barriera fra un flusso e l'invio di dati a un indirizzo arbitrario.
+For `email` the stakes are higher: besides catalog, CONNECT and encryption, skipping
+this guard would skip the allowed domains' validation, the only barrier between a
+flow and sending data to an arbitrary address.
 """
 import json
 from types import SimpleNamespace
@@ -29,18 +27,18 @@ from app.routes.proxy import transform
 
 pytestmark = pytest.mark.anyio
 
-_UTENTE = SimpleNamespace(id=1, is_superuser=False)
+_USER = SimpleNamespace(id=1, is_superuser=False)
 
-# payload che porta una connessione dell'attaccante: endpoint arbitrario
-# (anche interno, es. l'endpoint metadata del cloud) e secret IN CHIARO
-_CONNESSIONE_OSTILE = {
+# a payload carrying the attacker's connection: an arbitrary endpoint (internal too,
+# e.g. the cloud's metadata endpoint) and the secret IN CLEAR
+_HOSTILE_CONNECTION = {
     "connection": {"endpoint_url": "http://169.254.169.254", "access_key": "k", "secret_key": "in-chiaro"},
     "target": {"bucket": "bucket-attaccante", "key": "esfiltrato.parquet"},
 }
 
 
-def _richiesta(body: dict) -> Request:
-    """Request minima: `_read_json` legge gli header e poi il corpo a chunk."""
+def _request(body: dict) -> Request:
+    """A minimal Request: `_read_json` reads the headers and then the body in chunks."""
     raw = json.dumps(body).encode()
     scope = {
         "type": "http",
@@ -60,22 +58,22 @@ def _richiesta(body: dict) -> Request:
 
 
 @pytest.mark.parametrize("field", ["destination", "db_destination", "mirror", "email"])
-async def test_destinazioni_rifiutate_dal_proxy(field):
+async def test_destinations_refused_by_the_proxy(field):
     body = {
         "bucket": "data-prep",
         "input_key": "datasets/x.parquet",
         "operations": [],
-        field: _CONNESSIONE_OSTILE,
+        field: _HOSTILE_CONNECTION,
     }
     with pytest.raises(HTTPException) as e:
-        # session=None basta: la guardia solleva PRIMA di toccare il database
-        await transform(_richiesta(body), user=_UTENTE, session=None)
+        # session=None is enough: the guard raises BEFORE touching the database
+        await transform(_request(body), user=_USER, session=None)
     assert e.value.status_code == 422
     assert "Destinations are not allowed" in str(e.value.detail)
 
 
-async def test_corpo_non_oggetto_rifiutato():
-    """Una lista al posto di un oggetto non deve arrivare all'engine."""
+async def test_body_not_an_object_refused():
+    """A list in place of an object must not reach the engine."""
     with pytest.raises(HTTPException) as e:
-        await transform(_richiesta([1, 2, 3]), user=_UTENTE, session=None)  # type: ignore[arg-type]
+        await transform(_request([1, 2, 3]), user=_USER, session=None)  # type: ignore[arg-type]
     assert e.value.status_code == 422

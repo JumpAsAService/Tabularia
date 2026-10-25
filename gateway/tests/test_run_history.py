@@ -18,7 +18,7 @@ from app.routes.runs import runs_activity
 from app.services import run_history
 from app.services.permissions import REQUEST_SESSION
 from tests.conftest import make_datasource, make_flow, make_project, make_user
-from tests.test_migrazioni import database_temporaneo  # noqa: F401 — a fixture
+from tests.test_migrations import temporary_database  # noqa: F401 — a fixture
 from app.db import migra
 
 NOW = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
@@ -81,9 +81,9 @@ def test_on_sqlite(session):
     _check(session)
 
 
-def test_on_postgres(database_temporaneo):
-    migra.migra(database_temporaneo)
-    with Session(database_temporaneo) as session:
+def test_on_postgres(temporary_database):
+    migra.migra(temporary_database)
+    with Session(temporary_database) as session:
         session.info[REQUEST_SESSION] = True
         _check(session)
 
@@ -104,13 +104,13 @@ ANALYZE runs;
 
 
 @pytest.fixture
-def history(database_temporaneo):
+def history(temporary_database):
     """A year of runs (50,000), as the planner sees them after ANALYZE."""
-    migra.migra(database_temporaneo)
-    with database_temporaneo.begin() as c:
+    migra.migra(temporary_database)
+    with temporary_database.begin() as c:
         for statement in filter(str.strip, HISTORY.split(";")):
             c.execute(text(statement))
-    return database_temporaneo
+    return temporary_database
 
 
 def _plan(engine, query) -> str:

@@ -1,4 +1,4 @@
-"""L'informativa sulla privacy: una sola, la legge chiunque, la scrive l'admin."""
+"""The privacy notice: only one, anyone reads it, the admin writes it."""
 import pytest
 from fastapi import HTTPException
 from sqlmodel import select
@@ -11,28 +11,28 @@ from tests.conftest import make_user
 
 
 def test_it_is_readable_without_signing_in(session):
-    """Si legge PRIMA di entrare: chiedere di autenticarsi per sapere che cosa
-    si raccoglie significherebbe informare qualcuno dopo avergli preso i dati."""
+    """It is read BEFORE signing in: asking to authenticate to know what is collected would
+    mean informing someone after taking their data."""
     import inspect
 
-    parametri = inspect.signature(privacy_routes.get_privacy).parameters
-    assert "user" not in parametri and "current" not in parametri
+    parameters = inspect.signature(privacy_routes.get_privacy).parameters
+    assert "user" not in parameters and "current" not in parameters
     assert privacy_routes.get_privacy(session=session).enabled is True
 
 
 def test_the_first_read_creates_it_with_a_text_that_is_actually_true(session):
-    """Il testo di partenza non è un modulo da riempire: dice quello che il
-    prodotto raccoglie davvero, ed è verificabile leggendo il codice."""
+    """The starting text is not a form to fill: it says what the product really collects, and
+    it can be checked by reading the code."""
     outside = privacy_routes.get_privacy(session=session)
 
     assert outside.enabled is True and outside.summary
-    # le tre rinunce di cui il prodotto è responsabile
+    # the three renunciations the product is responsible for
     assert "We do not record your IP address" in outside.body
     assert "We do not record your browser" in outside.body
     assert "questions to the assistant are not saved" in outside.body
-    # e le due cose scomode, dette lo stesso
+    # and the two awkward things, said all the same
     assert "sent to the model provider" in outside.body
-    # la conservazione non è un numero copiato a mano: è letta dalla configurazione
+    # the retention is not a number copied by hand: it is read from the configuration
     assert "Automatic deletion of audit entries:" in outside.body
     assert "{audit_retention}" in outside.body_template
 
@@ -44,56 +44,56 @@ def test_it_is_one_row_not_a_list(session):
 
 
 def test_an_administrator_rewrites_it_and_it_leaves_a_trace(session):
-    """Cambiare l'informativa cambia ciò che l'installazione DICHIARA a tutti:
-    è una modifica che deve restare a registro come le altre."""
-    capo = make_user(session, email="capo@x.it", is_superuser=True)
+    """Changing the notice changes what the installation DECLARES to everyone: it is a change
+    that must stay on record like the others."""
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
     outside = privacy_routes.update_privacy(
         PrivacyUpdate(summary="La nostra informativa", url="https://esempio.it/privacy"),
-        current=capo, session=session,
+        current=boss, session=session,
     )
     assert outside.summary == "La nostra informativa"
     assert outside.url == "https://esempio.it/privacy"
-    assert outside.body  # non tocco ciò che non mi passano
+    assert outside.body  # I do not touch what I am not passed
 
-    azioni = [a.action for a in session.exec(select(AuditLog)).all()]
-    assert audit_svc.PRIVACY_UPDATE in azioni
+    actions = [a.action for a in session.exec(select(AuditLog)).all()]
+    assert audit_svc.PRIVACY_UPDATE in actions
 
 
 def test_it_can_be_switched_off(session):
-    capo = make_user(session, email="capo2@x.it", is_superuser=True)
-    privacy_routes.update_privacy(PrivacyUpdate(enabled=False), current=capo, session=session)
+    boss = make_user(session, email="capo2@x.it", is_superuser=True)
+    privacy_routes.update_privacy(PrivacyUpdate(enabled=False), current=boss, session=session)
     assert privacy_routes.get_privacy(session=session).enabled is False
 
 
 def test_an_observer_reads_it_but_cannot_rewrite_it(session):
-    """La deve VEDERE — parla di lui — ma non è lui a deciderne il testo."""
+    """They must SEE it — it speaks of them — but they do not decide its text."""
     from app.deps.auth import require_superuser
 
-    ospite = make_user(session, email="ospite@x.it")
-    ospite.is_observer = True
-    session.add(ospite)
+    guest = make_user(session, email="ospite@x.it")
+    guest.is_observer = True
+    session.add(guest)
     session.commit()
 
     assert privacy_routes.get_privacy(session=session).enabled is True
     with pytest.raises(HTTPException) as e:
-        require_superuser(ospite, session)
+        require_superuser(guest, session)
     assert e.value.status_code == 403
 
 
-# ── il valore di conservazione è un PARAMETRO, non un numero copiato ─────────
+# ── the retention value is a PARAMETER, not a copied number ──────────────────
 
 def test_the_retention_window_is_filled_in_from_the_configuration(session, monkeypatch):
-    """Serve a una cosa sola: che l'informativa non possa mentire. Se qualcuno
-    cambia la finestra e si dimentica del testo, il testo si aggiorna da solo."""
+    """It serves one thing only: that the notice cannot lie. If someone changes the window
+    and forgets the text, the text updates by itself."""
     from app.core.config import get_settings
 
     cfg = get_settings()
     monkeypatch.setattr(cfg.audit, "retention_minutes", 60, raising=False)
     outside = privacy_routes.get_privacy(session=session)
 
-    assert "{audit_retention}" not in outside.body        # sostituito nel testo mostrato
+    assert "{audit_retention}" not in outside.body        # replaced in the text shown
     assert "1 hour" in outside.body
-    assert "{audit_retention}" in outside.body_template   # intatto in quello da modificare
+    assert "{audit_retention}" in outside.body_template   # untouched in the one to edit
 
 
 def test_no_expiry_is_said_in_words_not_left_blank(session, monkeypatch):
@@ -104,24 +104,24 @@ def test_no_expiry_is_said_in_words_not_left_blank(session, monkeypatch):
     assert "none — entries are kept until an administrator removes them" in outside.body
 
 
-@pytest.mark.parametrize("minutes,atteso", [
+@pytest.mark.parametrize("minutes,expected", [
     (1, "1 minute"), (45, "45 minutes"), (60, "1 hour"), (120, "2 hours"),
     (1440, "1 day"), (43200, "30 days"), (90, "90 minutes"),
 ])
-def test_the_window_is_said_the_way_a_person_would(minutes, atteso):
+def test_the_window_is_said_the_way_a_person_would(minutes, expected):
     from app.routes.privacy import _duration
 
-    assert _duration(minutes) == atteso
+    assert _duration(minutes) == expected
 
 
 def test_an_unknown_placeholder_is_left_alone(session, monkeypatch):
-    """Chi scrive un'informativa non deve poterla rompere con una graffa."""
+    """Whoever writes a notice must not be able to break it with a brace."""
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings().audit, "retention_minutes", 60, raising=False)
-    capo = make_user(session, email="capo-par@x.it", is_superuser=True)
+    boss = make_user(session, email="capo-par@x.it", is_superuser=True)
     outside = privacy_routes.update_privacy(
         PrivacyUpdate(body="Conserviamo per {audit_retention}. Scrivi a {qualcosa}."),
-        current=capo, session=session,
+        current=boss, session=session,
     )
     assert outside.body == "Conserviamo per 1 hour. Scrivi a {qualcosa}."

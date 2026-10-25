@@ -1,19 +1,18 @@
-"""Le esecuzioni dei flussi passano da una coda sul database.
+"""The flows' runs go through a queue on the database.
 
-Finché il gateway era un processo solo, un'esecuzione era un task asyncio dentro
-quel processo: l'elenco dei flussi in corso stava in un `set` in memoria, e le
-orchestrazioni rimaste a metà si chiudevano all'avvio. Con più processi nessuna
-delle due cose regge — un altro processo non vede quel `set`, e l'avvio di uno
-chiuderebbe le esecuzioni vive degli altri.
+While the gateway was one process, a run was an asyncio task inside that process:
+the list of the running flows sat in an in-memory `set`, and the orchestrations left
+halfway were closed at start. With several processes neither holds — another process
+does not see that `set`, and one's start would close the others' live runs.
 
-Ora chi lancia (run-now, lo scheduler) scrive una riga PENDING; chi esegue la
-prende con un UPDATE condizionato, la firma e ne tiene vivo il battito. Questi
-test tengono ferme le garanzie che il `set` dava gratis:
+Now whoever launches (run-now, the scheduler) writes a PENDING row; whoever runs takes
+it with a conditional UPDATE, signs it and keeps its heartbeat alive. These tests pin
+the guarantees the `set` gave for free:
 
-  - una riga in coda la prende UN processo;
-  - di un flusso gira UNA esecuzione alla volta (lo dice il database);
-  - uno slot dello scheduler lancia UNA volta, anche se lo vedono in due;
-  - un'esecuzione il cui processo è morto viene chiusa, le altre no.
+  - a queued row is taken by ONE process;
+  - ONE run of a flow goes at a time (the database says so);
+  - a scheduler slot launches ONCE, even when two see it;
+  - a run whose process died is closed, the others are not.
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -36,18 +35,18 @@ pytestmark = pytest.mark.anyio
 
 @pytest.fixture
 def queue_(db_engine, session, monkeypatch):
-    """Orchestratore e scheduler puntati al DB di test, con un utente e una cartella."""
+    """Orchestrator and scheduler pointed at the test DB, with a user and a folder."""
     monkeypatch.setattr(orch, "engine", db_engine)
     monkeypatch.setattr(orch, "heartbeat_engine", db_engine)
     monkeypatch.setattr(orch, "_alive", set())
     monkeypatch.setattr(scheduler, "engine", db_engine)
-    utente = make_user(session, email="chi-lancia@x.local", is_superuser=True)
-    folder = make_project(session, name="cartella", owner_id=utente.id)
-    return utente, folder
+    user_ = make_user(session, email="chi-lancia@x.local", is_superuser=True)
+    folder = make_project(session, name="cartella", owner_id=user_.id)
+    return user_, folder
 
 
-def _flusso(session, utente, folder, name="f", **kw):
-    return make_flow(session, name=name, project_id=folder.id, owner_id=utente.id, definition="{}", **kw)
+def _flow(session, user_, folder, name="f", **kw):
+    return make_flow(session, name=name, project_id=folder.id, owner_id=user_.id, definition="{}", **kw)
 
 
 def _state(session, run_id):
@@ -55,235 +54,235 @@ def _state(session, run_id):
     return session.get(Run, run_id)
 
 
-def _come(monkeypatch, sign):
-    """Da qui in poi le funzioni dell'orchestratore agiscono come il processo `sign`."""
+def _as(monkeypatch, sign):
+    """From here on the orchestrator's functions act as the process `sign`."""
     monkeypatch.setattr(orch, "INSTANCE", sign)
 
 
-# ── mettere in coda ──────────────────────────────────────────────────────────
-def test_un_lancio_e_una_riga_in_coda(session, queue_):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    run = orch.create_orchestration_run(session, utente, flusso, "manual", "production")
+# ── queueing ─────────────────────────────────────────────────────────────────
+def test_a_launch_is_a_queued_row(session, queue_):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    run = orch.create_orchestration_run(session, user_, flow, "manual", "production")
     assert (run.kind, run.status, run.engine_mode, run.trigger_type) == ("orchestration", "PENDING", "production", "manual")
-    assert run.claimed_by is None and run.heartbeat_at is None and run.launched_by == utente.id
+    assert run.claimed_by is None and run.heartbeat_at is None and run.launched_by == user_.id
 
 
-async def test_esegui_ora_rifiuta_un_flusso_gia_in_coda_o_in_corso(session, queue_):
-    """Ogni «Esegui ora» di troppo costava una riga in `runs` e un giro della coda,
-    e ripetuto spingeva in fondo le esecuzioni degli altri flussi: ora è un 409,
-    nella lingua di chi chiede, e non scrive niente."""
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
+async def test_run_now_refuses_a_flow_queued_or_running_already(session, queue_):
+    """Every extra «Run now» cost a row in `runs` and a round of the queue, and repeated it
+    pushed the other flows' runs to the back: now it is a 409, in the asker's language,
+    and writes nothing."""
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
 
-    async def esegui_ora(request=None):
-        return run_flow_now(flusso.id, request=request, mode="development", user=utente, session=session)
+    async def run_now(request=None):
+        return run_flow_now(flow.id, request=request, mode="development", user=user_, session=session)
 
-    primo = await esegui_ora()
+    first = await run_now()
     with pytest.raises(HTTPException) as e:                       # in coda
-        await esegui_ora()
+        await run_now()
     assert e.value.status_code == 409 and "already queued or running" in e.value.detail
     orch.claim(5)
     session.expire_all()
-    italiano = SimpleNamespace(headers={"accept-language": "it-IT,it;q=0.9,en;q=0.8"})
-    with pytest.raises(HTTPException) as e:                       # in esecuzione
-        await esegui_ora(italiano)
+    italian = SimpleNamespace(headers={"accept-language": "it-IT,it;q=0.9,en;q=0.8"})
+    with pytest.raises(HTTPException) as e:                       # running
+        await run_now(italian)
     assert e.value.status_code == 409 and "già in coda o in esecuzione" in e.value.detail
-    assert len(session.exec(select(Run).where(Run.flow_id == flusso.id)).all()) == 1
-    await orch.run_it(primo["run_id"])                            # finito: si rilancia
+    assert len(session.exec(select(Run).where(Run.flow_id == flow.id)).all()) == 1
+    await orch.run_it(first["run_id"])                            # finished: it launches again
     session.expire_all()
-    secondo = await esegui_ora()
-    assert secondo["run_id"] != primo["run_id"] and _state(session, secondo["run_id"]).status == "PENDING"
+    second = await run_now()
+    assert second["run_id"] != first["run_id"] and _state(session, second["run_id"]).status == "PENDING"
 
 
-# ── prendere dalla coda ──────────────────────────────────────────────────────
-def test_chi_prende_firma_e_batte(session, queue_, monkeypatch):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
-    _come(monkeypatch, "processo-a")
+# ── taking from the queue ────────────────────────────────────────────────────
+def test_whoever_takes_signs_and_beats(session, queue_, monkeypatch):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
+    _as(monkeypatch, "processo-a")
     assert orch.claim(5) == ([run.id], [])
     taken_one = _state(session, run.id)
     assert (taken_one.status, taken_one.claimed_by) == ("STARTED", "processo-a")
     assert taken_one.heartbeat_at is not None
 
 
-def test_una_riga_la_prende_un_processo_solo(session, queue_, monkeypatch):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
-    _come(monkeypatch, "processo-a")
+def test_a_row_is_taken_by_one_process_only(session, queue_, monkeypatch):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
+    _as(monkeypatch, "processo-a")
     assert orch.claim(5) == ([run.id], [])
-    _come(monkeypatch, "processo-b")
+    _as(monkeypatch, "processo-b")
     assert orch.claim(5) == ([], [])
     assert _state(session, run.id).claimed_by == "processo-a"
 
 
-def test_due_processi_che_vedono_la_stessa_riga_la_prende_il_primo(session, queue_, db_engine, monkeypatch):
-    """Il caso vero: entrambi hanno letto la riga come PENDING prima che uno dei
-    due la prendesse. È l'UPDATE condizionato a decidere, non la lettura."""
+def test_two_processes_seeing_the_same_row_the_first_takes_it(session, queue_, db_engine, monkeypatch):
+    """The real case: both read the row as PENDING before one of the two took it. The
+    conditional UPDATE decides, not the read."""
     from sqlalchemy import update
 
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
 
-    def prendi(sign):
+    def take(sign):
         with Session(db_engine) as s:
             r = s.exec(update(Run).where(Run.id == run.id, Run.status == "PENDING").values(status="STARTED", claimed_by=sign))
             s.commit()
             return r.rowcount
 
-    assert [prendi("a"), prendi("b")] == [1, 0]
+    assert [take("a"), take("b")] == [1, 0]
 
 
-def test_si_prende_fino_al_limite_e_in_ordine(session, queue_, monkeypatch):
-    utente, folder = queue_
-    runs = [orch.create_orchestration_run(session, utente, _flusso(session, utente, folder, f"f{i}")).id for i in range(4)]
+def test_takes_up_to_the_limit_and_in_order(session, queue_, monkeypatch):
+    user_, folder = queue_
+    runs = [orch.create_orchestration_run(session, user_, _flow(session, user_, folder, f"f{i}")).id for i in range(4)]
     taken, _ = orch.claim(2)
     assert taken == runs[:2]
     taken, _ = orch.claim(10)
     assert taken == runs[2:]
 
 
-# ── una esecuzione per flusso ────────────────────────────────────────────────
-def test_il_database_rifiuta_due_esecuzioni_vive_dello_stesso_flusso(session, queue_):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
+# ── one run per flow ─────────────────────────────────────────────────────────
+def test_the_database_refuses_two_live_runs_of_the_same_flow(session, queue_):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
     with pytest.raises(IntegrityError):
-        make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id)
+        make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id)
     session.rollback()
-    # quello che NON deve rifiutare: un altro flusso, esecuzioni finite, run di altro tipo
-    other = _flusso(session, utente, folder, "altro")
+    # what must NOT refuse: another flow, finished runs, runs of another kind
+    other = _flow(session, user_, folder, "altro")
     make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=other.id)
-    make_run(session, kind="orchestration", status="SUCCESS", task_id="", flow_id=flusso.id)
-    make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=flusso.id)
-    make_run(session, kind="flow", status="STARTED", task_id="t-1", flow_id=flusso.id)
-    make_run(session, kind="flow", status="STARTED", task_id="t-2", flow_id=flusso.id)
+    make_run(session, kind="orchestration", status="SUCCESS", task_id="", flow_id=flow.id)
+    make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=flow.id)
+    make_run(session, kind="flow", status="STARTED", task_id="t-1", flow_id=flow.id)
+    make_run(session, kind="flow", status="STARTED", task_id="t-2", flow_id=flow.id)
 
 
-def test_un_lancio_manuale_di_un_flusso_che_gira_e_respinto(session, queue_, monkeypatch):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    primo = orch.create_orchestration_run(session, utente, flusso)
-    assert orch.claim(5) == ([primo.id], [])
-    secondo = orch.create_orchestration_run(session, utente, flusso)
-    _come(monkeypatch, "un-altro-processo")
-    assert orch.claim(5) == ([], [secondo.id])
-    assert _state(session, secondo.id).status == "PENDING"  # la chiude il chiamante, con l'avviso
+def test_a_manual_launch_of_a_running_flow_is_refused(session, queue_, monkeypatch):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    first = orch.create_orchestration_run(session, user_, flow)
+    assert orch.claim(5) == ([first.id], [])
+    second = orch.create_orchestration_run(session, user_, flow)
+    _as(monkeypatch, "un-altro-processo")
+    assert orch.claim(5) == ([], [second.id])
+    assert _state(session, second.id).status == "PENDING"  # the caller closes it, with the notice
 
 
-async def test_il_respinto_viene_chiuso_come_gia_in_esecuzione(session, queue_):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    primo = orch.create_orchestration_run(session, utente, flusso)
+async def test_the_refused_one_is_closed_as_already_running(session, queue_):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    first = orch.create_orchestration_run(session, user_, flow)
     orch.claim(5)
-    secondo = orch.create_orchestration_run(session, utente, flusso)
+    second = orch.create_orchestration_run(session, user_, flow)
     _, refused = orch.claim(5)
     for run_id in refused:
         await orch._finalize_orch_run(run_id, "FAILURE", orch.ALREADY_RUNNING)
-    closed_one = _state(session, secondo.id)
+    closed_one = _state(session, second.id)
     assert (closed_one.status, closed_one.error) == ("FAILURE", "flow already running")
-    assert _state(session, primo.id).status == "STARTED"  # quello vero non è toccato
+    assert _state(session, first.id).status == "STARTED"  # the real one is not touched
 
 
-def test_uno_slot_schedulato_su_un_flusso_che_gira_sparisce_senza_traccia(session, queue_):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    orch.create_orchestration_run(session, utente, flusso)
+def test_a_scheduled_slot_on_a_running_flow_vanishes_without_trace(session, queue_):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    orch.create_orchestration_run(session, user_, flow)
     orch.claim(5)
-    slot = orch.create_orchestration_run(session, utente, flusso, "schedule", "production")
+    slot = orch.create_orchestration_run(session, user_, flow, "schedule", "production")
     assert orch.claim(5) == ([], [])
     assert _state(session, slot.id) is None
 
 
-# ── battito e orfane ─────────────────────────────────────────────────────────
-def test_il_battito_tocca_solo_le_esecuzioni_di_questo_processo(session, queue_, monkeypatch):
-    utente, folder = queue_
+# ── heartbeat and orphans ────────────────────────────────────────────────────
+def test_the_heartbeat_touches_only_this_processs_runs(session, queue_, monkeypatch):
+    user_, folder = queue_
     old = datetime(2020, 1, 1)
-    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, "a").id, claimed_by="io", heartbeat_at=old)
-    altrui = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, "b").id, claimed_by="un-altro", heartbeat_at=old)
-    finita = make_run(session, kind="orchestration", status="SUCCESS", task_id="", flow_id=_flusso(session, utente, folder, "c").id, claimed_by="io", heartbeat_at=old)
-    _come(monkeypatch, "io")
-    monkeypatch.setattr(orch, "_alive", {mia.id, altrui.id, finita.id})
+    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, "a").id, claimed_by="io", heartbeat_at=old)
+    others_ = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, "b").id, claimed_by="un-altro", heartbeat_at=old)
+    finished = make_run(session, kind="orchestration", status="SUCCESS", task_id="", flow_id=_flow(session, user_, folder, "c").id, claimed_by="io", heartbeat_at=old)
+    _as(monkeypatch, "io")
+    monkeypatch.setattr(orch, "_alive", {mia.id, others_.id, finished.id})
     assert orch.beat() == 1
     assert _state(session, mia.id).heartbeat_at > old
-    assert _state(session, altrui.id).heartbeat_at == old
-    assert _state(session, finita.id).heartbeat_at == old
+    assert _state(session, others_.id).heartbeat_at == old
+    assert _state(session, finished.id).heartbeat_at == old
 
 
-async def test_chi_batte_non_e_orfano_chi_ha_smesso_si(session, queue_):
-    utente, folder = queue_
+async def test_whoever_beats_is_not_orphaned_whoever_stopped_is(session, queue_):
+    user_, folder = queue_
     now = orch._now()
-    viva = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, "a").id, claimed_by="vivo", heartbeat_at=now - timedelta(seconds=5))
-    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, "b").id, claimed_by="morto", heartbeat_at=now - timedelta(seconds=orch._orc().dead_after_seconds + 30))
-    in_coda = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, folder, "c").id)
+    viva = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, "a").id, claimed_by="vivo", heartbeat_at=now - timedelta(seconds=5))
+    dead = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, "b").id, claimed_by="morto", heartbeat_at=now - timedelta(seconds=orch._orc().dead_after_seconds + 30))
+    queued = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flow(session, user_, folder, "c").id)
 
     assert await orch.close_orphans() == 1
 
     assert _state(session, viva.id).status == "STARTED"
-    assert _state(session, in_coda.id).status == "PENDING"  # in coda non è «morta»: aspetta chi la prenda
-    closed = _state(session, morta.id)
+    assert _state(session, queued.id).status == "PENDING"  # queued is not «dead»: it waits for someone to take it
+    closed = _state(session, dead.id)
     assert (closed.status, closed.error) == ("FAILURE", ORCHESTRATION_INTERRUPTED)
     assert closed.finished_at is not None
 
 
-async def test_chiusa_l_orfana_il_flusso_puo_ripartire(session, queue_):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id, claimed_by="morto", heartbeat_at=datetime(2020, 1, 1))
-    new = orch.create_orchestration_run(session, utente, flusso)
-    assert orch.claim(5) == ([], [new.id])  # finché l'orfana è lì, il flusso risulta occupato
+async def test_with_the_orphan_closed_the_flow_can_start_again(session, queue_):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id, claimed_by="morto", heartbeat_at=datetime(2020, 1, 1))
+    new = orch.create_orchestration_run(session, user_, flow)
+    assert orch.claim(5) == ([], [new.id])  # while the orphan is there, the flow shows busy
     await orch.close_orphans()
     assert orch.claim(5) == ([new.id], [])
 
 
-# ── i passi di un'orchestrazione interrotta ───────────────────────────────────
-# Un orchestratore che si ferma (rolling update, riavvio dal pannello, sfratto, OOM)
-# chiudeva il flusso come interrotto ma lasciava scrivere l'Output già consegnato a un
-# worker: il flusso, chiuso, poteva ripartire sopra di lui (righe doppie in append).
-async def test_lo_spegnimento_ferma_anche_l_output_gia_partito(session, queue_, fake_engine, monkeypatch):
-    utente, folder = queue_
+# ── the steps of an interrupted orchestration ─────────────────────────────────
+# An orchestrator that stops (rolling update, restart from the panel, eviction, OOM)
+# closed the flow as interrupted but let the Output already handed to a worker write:
+# the flow, closed, could start again on top of it (duplicate rows in append).
+async def test_the_shutdown_stops_the_output_started_already_too(session, queue_, fake_engine, monkeypatch):
+    user_, folder = queue_
     monkeypatch.setattr(orch._orc(), "poll_interval_seconds", 0.05)
-    flusso = _flusso(session, utente, folder)
-    run = orch.create_orchestration_run(session, utente, flusso)
+    flow = _flow(session, user_, folder)
+    run = orch.create_orchestration_run(session, user_, flow)
     assert orch.claim(5)[0] == [run.id]
-    partito, figlio = asyncio.Event(), {}
+    started_, child = asyncio.Event(), {}
 
     async def orchestrate(s, u, f, **kw):
         out = make_run(s, kind="flow", status="STARTED", task_id="t-output", flow_id=f.id,
                        parent_run_id=kw["parent_run_id"])
-        figlio["id"] = out.id
+        child["id"] = out.id
         fake_engine.set_task("t-output", "STARTED")
-        partito.set()
+        started_.set()
         await orch._wait_run(s, out)
         return []
 
     monkeypatch.setattr(orch, "orchestrate", orchestrate)
     task = asyncio.create_task(orch.run_it(run.id))
-    await partito.wait()
-    task.cancel()  # lo spegnimento del lifespan al SIGTERM
+    await started_.wait()
+    task.cancel()  # the lifespan's shutdown at SIGTERM
     with pytest.raises(asyncio.CancelledError):
         await task
     assert (_state(session, run.id).status, _state(session, run.id).error) == ("FAILURE", ORCHESTRATION_INTERRUPTED)
-    out = _state(session, figlio["id"])
+    out = _state(session, child["id"])
     assert (out.status, out.error) == ("FAILURE", STEP_INTERRUPTED) and fake_engine.revoked == ["t-output"]
 
 
-async def test_chi_chiude_l_orfana_ferma_i_suoi_passi(session, queue_, fake_engine):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+async def test_whoever_closes_the_orphan_stops_its_steps(session, queue_, fake_engine):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    dead = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id,
                      claimed_by="morto", heartbeat_at=datetime(2020, 1, 1))
-    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=morta.id)
-    in_coda = make_run(session, kind="flow", status="PENDING", task_id="t-dopo", flow_id=flusso.id,
-                       parent_run_id=morta.id)
-    finished = make_run(session, kind="flow", status="SUCCESS", task_id="t-prima", flow_id=flusso.id,
-                      parent_run_id=morta.id)
+    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flow.id, parent_run_id=dead.id)
+    queued = make_run(session, kind="flow", status="PENDING", task_id="t-dopo", flow_id=flow.id,
+                       parent_run_id=dead.id)
+    finished = make_run(session, kind="flow", status="SUCCESS", task_id="t-prima", flow_id=flow.id,
+                      parent_run_id=dead.id)
     fake_engine.set_task("t-out", "STARTED")  # still running on the engine
     fake_engine.set_task("t-dopo", "PENDING")
     assert await orch.close_orphans() == 1
     assert sorted(fake_engine.revoked) == ["t-dopo", "t-out"]
-    assert _state(session, out.id).status == _state(session, in_coda.id).status == "FAILURE"
-    assert _state(session, finished.id).status == "SUCCESS"  # quel che è finito resta com'è
+    assert _state(session, out.id).status == _state(session, queued.id).status == "FAILURE"
+    assert _state(session, finished.id).status == "SUCCESS"  # what has finished stays as it is
 
 
 async def test_a_step_the_engine_finished_meanwhile_keeps_its_outcome(session, queue_, fake_engine):
@@ -292,13 +291,13 @@ async def test_a_step_the_engine_finished_meanwhile_keeps_its_outcome(session, q
     from app.models import Datasource
     from tests.conftest import make_datasource
 
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
     ds = make_datasource(session, name="ordini", kind="database", key="datasets/1/v0.parquet", project_id=folder.id)
-    morta = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+    dead = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id,
                      claimed_by="morto", heartbeat_at=datetime(2020, 1, 1))
     imp = make_run(session, kind="ingest", status="STARTED", task_id="t-imp", datasource_id=ds.id,
-                   output_key="datasets/1/new.parquet", parent_run_id=morta.id)
+                   output_key="datasets/1/new.parquet", parent_run_id=dead.id)
     fake_engine.set_task("t-imp", "SUCCESS", result={"bucket": "data-prep", "rows_written": 5, "columns": []})
     assert await orch.close_orphans() == 1
     assert _state(session, imp.id).status == "SUCCESS" and fake_engine.revoked == []
@@ -306,133 +305,133 @@ async def test_a_step_the_engine_finished_meanwhile_keeps_its_outcome(session, q
     assert session.get(Datasource, ds.id).key == "datasets/1/new.parquet"
 
 
-async def test_cio_che_questo_processo_esegue_non_e_orfano_anche_col_battito_vecchio(session, queue_, fake_engine,
+async def test_what_this_process_runs_is_not_orphaned_even_with_an_old_heartbeat(session, queue_, fake_engine,
                                                                                       monkeypatch):
-    # Postgres fermo oltre dead_after (un failover): al ritorno ogni battito è vecchio, anche
-    # quello di chi esegue ancora; il giro degli orfani non chiude (né ferma) le proprie
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
+    # Postgres down past dead_after (a failover): when it comes back every heartbeat is old,
+    # the one of whoever is still running too; the orphans' round does not close (nor stop)
+    # its own
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id,
                    claimed_by=orch.INSTANCE, heartbeat_at=datetime(2020, 1, 1))
-    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=mia.id)
+    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flow.id, parent_run_id=mia.id)
     monkeypatch.setattr(orch, "_alive", {mia.id})
     assert await orch.close_orphans() == 0
     assert _state(session, mia.id).status == _state(session, out.id).status == "STARTED" and fake_engine.revoked == []
 
 
-def test_il_giro_degli_orfani_aspetta_che_il_processo_batta_da_un_intervallo_intero(monkeypatch):
+def test_the_orphans_round_waits_for_the_process_to_beat_for_a_whole_interval(monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(orch.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(orch, "_heartbeat_ok_since", None)
-    assert not orch.heartbeat_healthy()  # il database non risponde (o non ancora)
+    assert not orch.heartbeat_healthy()  # the database does not answer (or not yet)
     monkeypatch.setattr(orch, "_heartbeat_ok_since", 1000.0)
     clock[0] += orch._orc().dead_after_seconds - 1
-    assert not orch.heartbeat_healthy()  # tornato da poco: gli altri non hanno ancora battuto
+    assert not orch.heartbeat_healthy()  # back a moment ago: the others have not beaten yet
     clock[0] += 1
     assert orch.heartbeat_healthy()
 
 
-async def test_al_riavvio_le_esecuzioni_precedenti_fermano_i_loro_passi(session, queue_, fake_engine, monkeypatch):
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    ospite = orch.INSTANCE.rsplit(":", 1)[0]
-    before = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id,
-                     claimed_by=f"{ospite}:vecchia-firma", heartbeat_at=orch._now())
-    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flusso.id, parent_run_id=before.id)
+async def test_at_restart_the_earlier_runs_stop_their_steps(session, queue_, fake_engine, monkeypatch):
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    guest = orch.INSTANCE.rsplit(":", 1)[0]
+    before = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id,
+                     claimed_by=f"{guest}:vecchia-firma", heartbeat_at=orch._now())
+    out = make_run(session, kind="flow", status="STARTED", task_id="t-out", flow_id=flow.id, parent_run_id=before.id)
     fake_engine.set_task("t-out", "STARTED")
     stop = asyncio.Event()
-    stop.set()  # il ciclo fa solo l'avvio e si ferma
+    stop.set()  # the loop only does the start and stops
     monkeypatch.setattr(orch, "start_heartbeat", lambda ev: None)
     await orch.queue_loop(stop)
     assert _state(session, before.id).error == ORCHESTRATION_INTERRUPTED
     assert _state(session, out.id).status == "FAILURE" and fake_engine.revoked == ["t-out"]
 
 
-# ── eseguire ─────────────────────────────────────────────────────────────────
-async def test_eseguire_porta_il_run_in_fondo(session, queue_):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
+# ── running ──────────────────────────────────────────────────────────────────
+async def test_running_brings_the_run_to_the_end(session, queue_):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
     orch.claim(5)
     await orch.run_it(run.id)
     done = _state(session, run.id)
     assert (done.status, done.error) == ("SUCCESS", None) and done.finished_at is not None
 
 
-async def test_eseguire_passa_la_modalita_e_l_origine_scritte_sulla_riga(session, queue_, monkeypatch):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder), "schedule", "production")
+async def test_running_passes_the_mode_and_origin_written_on_the_row(session, queue_, monkeypatch):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder), "schedule", "production")
     orch.claim(5)
     seen = {}
 
-    async def finta(session, user, flow, **kw):
-        seen.update(kw, utente=user.id, flusso=flow.id)
+    async def fake_one(session, user, flow, **kw):
+        seen.update(kw, user=user.id, flow=flow.id)
         return []
 
-    monkeypatch.setattr(orch, "orchestrate", finta)
+    monkeypatch.setattr(orch, "orchestrate", fake_one)
     await orch.run_it(run.id)
     assert seen["trigger_type"] == "schedule" and seen["engine_mode"] == "production"
-    assert seen["parent_run_id"] == run.id and seen["guarded"] is True and seen["utente"] == utente.id
+    assert seen["parent_run_id"] == run.id and seen["guarded"] is True and seen["user"] == user_.id
 
 
-async def test_un_utente_disattivato_non_fa_girare_niente(session, queue_):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
-    utente.is_active = False
-    session.add(utente); session.commit()
+async def test_a_disabled_user_runs_nothing(session, queue_):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
+    user_.is_active = False
+    session.add(user_); session.commit()
     orch.claim(5)
     await orch.run_it(run.id)
     closed_one = _state(session, run.id)
     assert (closed_one.status, closed_one.error) == ("FAILURE", "invalid flow or user")
 
 
-async def test_chi_e_stato_dato_per_morto_si_ferma_prima_del_passo_successivo(session, queue_, monkeypatch):
-    """Un processo che non riusciva a battere (database irraggiungibile per un
-    minuto) viene dato per perso e il suo run chiuso. Se poi torna, non deve
-    andare avanti come se niente fosse: l'esito è già stato scritto, e forse il
-    flusso è già stato rilanciato."""
+async def test_whoever_was_taken_for_dead_stops_before_the_next_step(session, queue_, monkeypatch):
+    """A process that could not beat (database unreachable for a minute) is taken for lost
+    and its run closed. If it then comes back, it must not go on as if nothing happened:
+    the outcome is written already, and the flow may have been launched again already."""
     import json
 
-    utente, folder = queue_
+    user_, folder = queue_
     definition = json.dumps({"nodes": [{"id": "r1", "type": "refresh", "data": {"datasourceId": 123}}], "edges": []})
-    flusso = make_flow(session, name="con-un-passo", project_id=folder.id, owner_id=utente.id, definition=definition)
-    run = orch.create_orchestration_run(session, utente, flusso)
+    flow = make_flow(session, name="con-un-passo", project_id=folder.id, owner_id=user_.id, definition=definition)
+    run = orch.create_orchestration_run(session, user_, flow)
     orch.claim(5)
-    # un altro orchestratore lo chiude
+    # another orchestrator closes it
     make = session.get(Run, run.id)
     make.status, make.error = "FAILURE", ORCHESTRATION_INTERRUPTED
     session.add(make); session.commit()
 
-    eseguiti = []
+    executed = []
 
     async def step(*a, **kw):
-        eseguiti.append(a)
+        executed.append(a)
 
     monkeypatch.setattr(orch, "_refresh_and_wait", step)
     await orch.run_it(run.id)
-    assert eseguiti == []
-    assert _state(session, run.id).error == ORCHESTRATION_INTERRUPTED  # non sovrascritto
+    assert executed == []
+    assert _state(session, run.id).error == ORCHESTRATION_INTERRUPTED  # not overwritten
 
 
-async def test_un_esito_gia_scritto_non_si_riscrive(session, queue_):
-    utente, folder = queue_
-    run = make_run(session, kind="orchestration", status="FAILURE", task_id="", flow_id=_flusso(session, utente, folder).id, error="chiuso prima")
+async def test_an_outcome_written_already_is_not_written_again(session, queue_):
+    user_, folder = queue_
+    run = make_run(session, kind="orchestration", status="FAILURE", task_id="", flow_id=_flow(session, user_, folder).id, error="chiuso prima")
     await orch._finalize_orch_run(run.id, "SUCCESS", None)
     assert (_state(session, run.id).status, _state(session, run.id).error) == ("FAILURE", "chiuso prima")
 
 
-async def test_fermare_il_processo_chiude_le_esecuzioni_in_corso(session, queue_, monkeypatch):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
+async def test_stopping_the_process_closes_the_running_runs(session, queue_, monkeypatch):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
     orch.claim(5)
-    partita = asyncio.Event()
+    started_one = asyncio.Event()
 
-    async def lunga(*a, **kw):
-        partita.set()
+    async def long_one(*a, **kw):
+        started_one.set()
         await asyncio.sleep(60)
 
-    monkeypatch.setattr(orch, "orchestrate", lunga)
+    monkeypatch.setattr(orch, "orchestrate", long_one)
     task = asyncio.create_task(orch.run_it(run.id))
-    await partita.wait()
+    await started_one.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
@@ -440,14 +439,14 @@ async def test_fermare_il_processo_chiude_le_esecuzioni_in_corso(session, queue_
     assert (closed_one.status, closed_one.error) == ("FAILURE", ORCHESTRATION_INTERRUPTED)
 
 
-# ── il lavoratore, dall'inizio alla fine ─────────────────────────────────────
-async def test_il_lavoratore_prende_esegue_e_si_ferma(session, queue_, monkeypatch):
-    utente, folder = queue_
+# ── the worker, from start to end ────────────────────────────────────────────
+async def test_the_worker_takes_runs_and_stops(session, queue_, monkeypatch):
+    user_, folder = queue_
     monkeypatch.setattr(orch._orc(), "queue_poll_seconds", 0.05)
     stop = asyncio.Event()
-    lavoratore = asyncio.create_task(orch.queue_loop(stop))
+    worker = asyncio.create_task(orch.queue_loop(stop))
     try:
-        run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
+        run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
         orch.wake()
         for _ in range(100):
             if _state(session, run.id).status == "SUCCESS":
@@ -457,156 +456,156 @@ async def test_il_lavoratore_prende_esegue_e_si_ferma(session, queue_, monkeypat
         assert _state(session, run.id).claimed_by == orch.INSTANCE
     finally:
         stop.set()
-        await asyncio.wait_for(lavoratore, timeout=5)
-    assert orch._wakeup is None  # fermo: `sveglia()` torna a non fare niente
+        await asyncio.wait_for(worker, timeout=5)
+    assert orch._wakeup is None  # stopped: `wake()` goes back to doing nothing
 
 
-def test_svegliare_dove_non_c_e_un_lavoratore_non_fa_niente():
+def test_waking_where_there_is_no_worker_does_nothing():
     assert orch._wakeup is None
-    orch.wake()  # un processo `api`: nessun errore, la riga la troverà un orchestratore
+    orch.wake()  # an `api` process: no error, an orchestrator will find the row
 
 
-# ── lo scheduler: uno slot, un lancio ────────────────────────────────────────
-def _schedulato(session, utente, folder, name="notturno"):
-    return _flusso(
-        session, utente, folder, name, run_schedule="0 3 * * *", run_scheduled_by=utente.id,
+# ── the scheduler: one slot, one launch ──────────────────────────────────────
+def _schedulato(session, user_, folder, name="notturno"):
+    return _flow(
+        session, user_, folder, name, run_schedule="0 3 * * *", run_scheduled_by=user_.id,
         next_run_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1),
     )
 
 
-def _in_coda(session, flusso_id):
+def _queued(session, flow_id_):
     session.expire_all()
-    return session.exec(select(Run).where(Run.kind == "orchestration", Run.flow_id == flusso_id)).all()
+    return session.exec(select(Run).where(Run.kind == "orchestration", Run.flow_id == flow_id_)).all()
 
 
-async def test_lo_slot_scaduto_mette_in_coda_e_avanza(session, queue_):
-    utente, folder = queue_
-    flusso = _schedulato(session, utente, folder)
-    era = flusso.next_run_at
-    await scheduler._fire_flow(session, flusso, datetime.now(timezone.utc))
-    (run,) = _in_coda(session, flusso.id)
-    assert (run.status, run.trigger_type, run.engine_mode, run.launched_by) == ("PENDING", "schedule", "production", utente.id)
-    assert session.get(Flow, flusso.id).next_run_at > era
+async def test_the_due_slot_enqueues_and_moves_on(session, queue_):
+    user_, folder = queue_
+    flow = _schedulato(session, user_, folder)
+    was = flow.next_run_at
+    await scheduler._fire_flow(session, flow, datetime.now(timezone.utc))
+    (run,) = _queued(session, flow.id)
+    assert (run.status, run.trigger_type, run.engine_mode, run.launched_by) == ("PENDING", "schedule", "production", user_.id)
+    assert session.get(Flow, flow.id).next_run_at > was
 
 
-async def test_due_processi_sullo_stesso_slot_lanciano_una_volta(session, queue_, db_engine):
-    """Entrambi hanno letto il flusso come scaduto. Il primo sposta in avanti la
-    prossima esecuzione; il secondo la trova spostata e lascia stare."""
-    utente, folder = queue_
-    flusso = _schedulato(session, utente, folder)
+async def test_two_processes_on_the_same_slot_launch_once(session, queue_, db_engine):
+    """Both read the flow as due. The first moves the next run forward; the second finds it
+    moved and leaves it."""
+    user_, folder = queue_
+    flow = _schedulato(session, user_, folder)
     now = datetime.now(timezone.utc)
     with Session(db_engine) as a, Session(db_engine) as b:
-        visto_da_a = a.get(Flow, flusso.id)
-        visto_da_b = b.get(Flow, flusso.id)
-        assert visto_da_a.next_run_at == visto_da_b.next_run_at  # lo stesso slot
-        await scheduler._fire_flow(a, visto_da_a, now)
-        await scheduler._fire_flow(b, visto_da_b, now)
-    assert len(_in_coda(session, flusso.id)) == 1
+        seen_by_a = a.get(Flow, flow.id)
+        seen_by_b = b.get(Flow, flow.id)
+        assert seen_by_a.next_run_at == seen_by_b.next_run_at  # the same slot
+        await scheduler._fire_flow(a, seen_by_a, now)
+        await scheduler._fire_flow(b, seen_by_b, now)
+    assert len(_queued(session, flow.id)) == 1
 
 
-async def test_se_il_giro_precedente_non_e_finito_lo_slot_si_salta(session, queue_):
-    utente, folder = queue_
-    flusso = _schedulato(session, utente, folder)
-    era = flusso.next_run_at
-    make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flusso.id, claimed_by="x", heartbeat_at=orch._now())
-    await scheduler._fire_flow(session, flusso, datetime.now(timezone.utc))
-    assert len(_in_coda(session, flusso.id)) == 1  # solo quella che c'era
-    assert session.get(Flow, flusso.id).next_run_at > era  # ma lo slot è consumato
+async def test_when_the_previous_round_is_not_over_the_slot_is_skipped(session, queue_):
+    user_, folder = queue_
+    flow = _schedulato(session, user_, folder)
+    was = flow.next_run_at
+    make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=flow.id, claimed_by="x", heartbeat_at=orch._now())
+    await scheduler._fire_flow(session, flow, datetime.now(timezone.utc))
+    assert len(_queued(session, flow.id)) == 1  # only the one that was there
+    assert session.get(Flow, flow.id).next_run_at > was  # but the slot is used up
 
 
-async def test_un_autore_disattivato_spegne_la_schedulazione(session, queue_):
-    utente, folder = queue_
-    flusso = _schedulato(session, utente, folder)
-    utente.is_active = False
-    session.add(utente); session.commit()
-    await scheduler._fire_flow(session, flusso, datetime.now(timezone.utc))
-    assert _in_coda(session, flusso.id) == []
-    spento = session.get(Flow, flusso.id)
-    assert spento.run_schedule is None and spento.next_run_at is None
+async def test_a_disabled_author_turns_off_the_schedule(session, queue_):
+    user_, folder = queue_
+    flow = _schedulato(session, user_, folder)
+    user_.is_active = False
+    session.add(user_); session.commit()
+    await scheduler._fire_flow(session, flow, datetime.now(timezone.utc))
+    assert _queued(session, flow.id) == []
+    off = session.get(Flow, flow.id)
+    assert off.run_schedule is None and off.next_run_at is None
 
 
-# ── cosa fa questo processo ──────────────────────────────────────────────────
-async def test_un_processo_che_risponde_soltanto_non_avvia_lavoro_di_fondo(monkeypatch):
+# ── what this process does ───────────────────────────────────────────────────
+async def test_an_answer_only_process_starts_no_background_work(monkeypatch):
     import app.main as main
     from app.core.config import get_settings
 
-    avviati = []
+    started = []
 
-    def finto(name):
-        async def ciclo(stop):
-            avviati.append(name)
-        return ciclo
+    def fake(name):
+        async def loop(stop):
+            started.append(name)
+        return loop
 
-    cicli = ["scheduler_loop", "queue_loop", "retention_loop", "housekeeping_loop", "backup_loop", "webhooks_loop", "engine_settings_loop", "siem_loop"]
-    for name in cicli:
-        monkeypatch.setattr(main, name, finto(name))
+    loops = ["scheduler_loop", "queue_loop", "retention_loop", "housekeeping_loop", "backup_loop", "webhooks_loop", "engine_settings_loop", "siem_loop"]
+    for name in loops:
+        monkeypatch.setattr(main, name, fake(name))
 
-    for ruolo, attesi in (("api", []), ("all", cicli), ("orchestrator", cicli)):
-        avviati.clear()
-        monkeypatch.setenv("APP__ROLE", ruolo)
+    for role, expected_items in (("api", []), ("all", loops), ("orchestrator", loops)):
+        started.clear()
+        monkeypatch.setenv("APP__ROLE", role)
         get_settings.cache_clear()
         tasks = main.start_background_work(asyncio.Event())
         await asyncio.gather(*tasks)
-        assert avviati == attesi, ruolo
+        assert started == expected_items, role
 
 
-# ── rilievi della revisione avversaria (2026-10-05) ──────────────────────────
-# Ognuno di questi test fissa un difetto che i test sopra non vedevano.
+# ── findings of the adversarial review (2026-10-05) ──────────────────────────
+# Each of these tests pins a defect the tests above did not see.
 
-async def test_una_riga_firmata_il_cui_task_e_morto_smette_di_battere(session, queue_, monkeypatch):
-    """Il battito è delle esecuzioni che hanno un task vivo, non del processo. Se
-    il task muore senza chiudere il run (il database cade mentre scrive l'esito)
-    e il processo resta in piedi, battere «per firma» terrebbe quella riga viva
-    per sempre: nessuno la chiuderebbe e l'indice unico bloccherebbe il flusso."""
-    utente, folder = queue_
-    flusso = _flusso(session, utente, folder)
-    run = orch.create_orchestration_run(session, utente, flusso)
-    orch.claim(5)  # firmata da questo processo…
-    assert orch._alive == set()  # …ma nessun task la sta eseguendo
+async def test_a_signed_row_whose_task_died_stops_beating(session, queue_, monkeypatch):
+    """The heartbeat belongs to the runs with a live task, not to the process. If the task
+    dies without closing the run (the database falls while writing the outcome) and the
+    process stays up, beating «by signature» would keep that row alive forever: nobody
+    would close it and the unique index would block the flow."""
+    user_, folder = queue_
+    flow = _flow(session, user_, folder)
+    run = orch.create_orchestration_run(session, user_, flow)
+    orch.claim(5)  # signed by this process…
+    assert orch._alive == set()  # …but no task is running it
     assert orch.beat() == 0
-    # passato il tempo, è un'orfana come le altre
+    # once the time has passed, it is an orphan like the others
     old = session.get(Run, run.id)
     old.heartbeat_at = orch._now() - timedelta(seconds=orch._orc().dead_after_seconds + 5)
     session.add(old); session.commit()
     assert await orch.close_orphans() == 1
-    new = orch.create_orchestration_run(session, utente, flusso)
-    assert orch.claim(5) == ([new.id], [])  # e il flusso riparte
+    new = orch.create_orchestration_run(session, user_, flow)
+    assert orch.claim(5) == ([new.id], [])  # and the flow starts again
 
 
-async def test_il_registro_dei_task_vivi_segue_i_task(session, queue_, monkeypatch):
-    utente, folder = queue_
-    run = orch.create_orchestration_run(session, utente, _flusso(session, utente, folder))
+async def test_the_live_tasks_register_follows_the_tasks(session, queue_, monkeypatch):
+    user_, folder = queue_
+    run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
     orch.claim(5)
-    dentro = asyncio.Event(); via = asyncio.Event()
+    inside = asyncio.Event(); via = asyncio.Event()
 
-    async def lunga(*a, **kw):
-        dentro.set()
+    async def long_one(*a, **kw):
+        inside.set()
         await via.wait()
         return []
 
-    monkeypatch.setattr(orch, "orchestrate", lunga)
+    monkeypatch.setattr(orch, "orchestrate", long_one)
     task = orch._start(run.id)
-    await dentro.wait()
+    await inside.wait()
     assert orch._alive == {run.id} and orch.beat() == 1
     via.set()
     await task
-    await asyncio.sleep(0)  # lascia girare la callback di fine task
+    await asyncio.sleep(0)  # lets the task's end callback run
     assert orch._alive == set() and orch.beat() == 0
     assert _state(session, run.id).status == "SUCCESS"
 
 
-def test_una_presa_interrotta_a_meta_torna_quelle_gia_prese(session, queue_, monkeypatch):
-    """Se sollevasse, chi chiama non saprebbe di averle: firmate, e nessuno le esegue."""
-    utente, folder = queue_
-    runs = [orch.create_orchestration_run(session, utente, _flusso(session, utente, folder, f"f{i}")).id for i in range(3)]
-    vero = orch._now
-    chiamate = []
+def test_a_take_broken_off_halfway_returns_those_taken_already(session, queue_, monkeypatch):
+    """If it raised, the caller would not know it had them: signed, and nobody runs them."""
+    user_, folder = queue_
+    runs = [orch.create_orchestration_run(session, user_, _flow(session, user_, folder, f"f{i}")).id for i in range(3)]
+    real = orch._now
+    calls = []
 
     def now():
-        chiamate.append(1)
-        if len(chiamate) == 2:
+        calls.append(1)
+        if len(calls) == 2:
             raise RuntimeError("database caduto")
-        return vero()
+        return real()
 
     monkeypatch.setattr(orch, "_now", now)
     taken, refused = orch.claim(5)
@@ -614,126 +613,126 @@ def test_una_presa_interrotta_a_meta_torna_quelle_gia_prese(session, queue_, mon
     assert _state(session, runs[1]).status == "PENDING"
 
 
-async def test_il_respinto_che_nel_frattempo_e_partito_non_viene_chiuso(session, queue_):
-    """Fra il rifiuto dell'indice e la chiusura come «già in esecuzione», l'altra
-    esecuzione può finire e un altro processo può prendere questa: sta girando,
-    e chiuderla la farebbe risultare mai partita."""
-    utente, folder = queue_
-    partita = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder).id, claimed_by="un-altro", heartbeat_at=orch._now())
-    await orch._finalize_orch_run(partita.id, "FAILURE", orch.ALREADY_RUNNING, only_if_queued=True)
-    assert _state(session, partita.id).status == "STARTED"
-    in_coda = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, folder, "b").id)
-    await orch._finalize_orch_run(in_coda.id, "FAILURE", orch.ALREADY_RUNNING, only_if_queued=True)
-    assert _state(session, in_coda.id).status == "FAILURE"
+async def test_the_refused_one_that_started_meanwhile_is_not_closed(session, queue_):
+    """Between the index's refusal and the closing as «already running», the other run may
+    end and another process may take this one: it is running, and closing it would make
+    it look never started."""
+    user_, folder = queue_
+    started_one = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder).id, claimed_by="un-altro", heartbeat_at=orch._now())
+    await orch._finalize_orch_run(started_one.id, "FAILURE", orch.ALREADY_RUNNING, only_if_queued=True)
+    assert _state(session, started_one.id).status == "STARTED"
+    queued = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flow(session, user_, folder, "b").id)
+    await orch._finalize_orch_run(queued.id, "FAILURE", orch.ALREADY_RUNNING, only_if_queued=True)
+    assert _state(session, queued.id).status == "FAILURE"
 
 
-def test_all_avvio_si_chiudono_le_esecuzioni_di_un_incarnazione_precedente(session, queue_, monkeypatch):
-    """Il container che riparte dopo un crash: stesso host, stesso pid, altra firma.
-    Quel processo non c'è più di sicuro, e non serve aspettare il battito."""
-    utente, folder = queue_
-    _come(monkeypatch, "host-a:1:nuova")
+def test_at_start_the_runs_of_an_earlier_incarnation_are_closed(session, queue_, monkeypatch):
+    """The container starting again after a crash: same host, same pid, another signature.
+    That process is surely gone, and there is no need to wait for the heartbeat."""
+    user_, folder = queue_
+    _as(monkeypatch, "host-a:1:nuova")
     now = orch._now()
     def row(name, sign):
-        return make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, name).id, claimed_by=sign, heartbeat_at=now).id
+        return make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, name).id, claimed_by=sign, heartbeat_at=now).id
     previous = row("a", "host-a:1:vecchia")
-    altro_host = row("b", "host-b:1:vecchia")       # un altro orchestratore: può essere vivo
-    altro_pid = row("c", "host-a:7:vecchia")        # un altro processo sulla stessa macchina
-    simile = row("d", "host-a:12:vecchia")          # «host-a:1» è un prefisso di «host-a:12»: non deve bastare
+    other_host = row("b", "host-b:1:vecchia")       # another orchestrator: it may be alive
+    other_pid = row("c", "host-a:7:vecchia")        # another process on the same machine
+    simile = row("d", "host-a:12:vecchia")          # «host-a:1» is a prefix of «host-a:12»: it must not be enough
     mia = row("e", "host-a:1:nuova")
     assert len(orch.close_mine(True)) == 1
     assert _state(session, previous).status == "FAILURE" and _state(session, previous).error == ORCHESTRATION_INTERRUPTED
-    assert [_state(session, r).status for r in (altro_host, altro_pid, simile, mia)] == ["STARTED"] * 4
+    assert [_state(session, r).status for r in (other_host, other_pid, simile, mia)] == ["STARTED"] * 4
 
 
-def test_allo_spegnimento_si_chiudono_tutte_le_proprie(session, queue_, monkeypatch):
-    utente, folder = queue_
-    _come(monkeypatch, "host-a:1:io")
+def test_at_shutdown_all_its_own_are_closed(session, queue_, monkeypatch):
+    user_, folder = queue_
+    _as(monkeypatch, "host-a:1:io")
     now = orch._now()
-    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, "a").id, claimed_by="host-a:1:io", heartbeat_at=now).id
-    altrui = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flusso(session, utente, folder, "b").id, claimed_by="host-b:1:x", heartbeat_at=now).id
+    mia = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, "a").id, claimed_by="host-a:1:io", heartbeat_at=now).id
+    others_ = make_run(session, kind="orchestration", status="STARTED", task_id="", flow_id=_flow(session, user_, folder, "b").id, claimed_by="host-b:1:x", heartbeat_at=now).id
     assert len(orch.close_mine(False)) == 1
-    assert (_state(session, mia).status, _state(session, altrui).status) == ("FAILURE", "STARTED")
+    assert (_state(session, mia).status, _state(session, others_).status) == ("FAILURE", "STARTED")
 
 
-# lo scheduler: dal SECONDO slot dello stesso giro in poi
-def _ds_schedulata(session, utente, folder, conn, name):
+# the scheduler: from the SECOND slot of the same round on
+def _ds_schedulata(session, user_, folder, conn, name):
     from app.models import Permission
     from tests.conftest import make_datasource
 
     return make_datasource(
         session, name=name, project_id=folder.id, kind="database", connection_id=conn.id,
-        refresh_schedule="0 3 * * *", refresh_scheduled_by=utente.id,
+        refresh_schedule="0 3 * * *", refresh_scheduled_by=user_.id,
         next_refresh_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1),
     )
 
 
-async def test_il_secondo_slot_del_giro_non_si_prende_su_un_valore_riletto(session, queue_, db_engine, monkeypatch):
-    """Il difetto: `seen` veniva letto dall'oggetto DOPO il commit del primo slot,
-    che fa scadere tutto — quindi era il valore già spostato dall'altro processo,
-    e il confronto riusciva sempre. Qui A lavora il primo slot mentre B prende il
-    secondo; quando A arriva al secondo NON deve lanciarlo."""
+async def test_the_rounds_second_slot_is_not_taken_on_a_reread_value(session, queue_, db_engine, monkeypatch):
+    """The defect: `seen` was read from the object AFTER the first slot's commit, which
+    expires everything — so it was the value already moved by the other process, and the
+    comparison always succeeded. Here A works the first slot while B takes the second;
+    when A gets to the second it must NOT launch it."""
     from app.models import Connection, Datasource
 
-    utente, folder = queue_
-    conn = Connection(name="c", db_type="postgresql", project_id=folder.id, owner_id=utente.id, host="h", port=5432, username="u", database="d")
+    user_, folder = queue_
+    conn = Connection(name="c", db_type="postgresql", project_id=folder.id, owner_id=user_.id, host="h", port=5432, username="u", database="d")
     session.add(conn); session.commit(); session.refresh(conn)
-    ds1 = _ds_schedulata(session, utente, folder, conn, "uno")
-    ds2 = _ds_schedulata(session, utente, folder, conn, "due")
-    lanciati = []
+    ds1 = _ds_schedulata(session, user_, folder, conn, "uno")
+    ds2 = _ds_schedulata(session, user_, folder, conn, "due")
+    launched = []
 
-    async def finto_lancio(session, user, ds, conn, trigger_type="manual"):
-        lanciati.append(ds.id)
+    async def fake_launch_(session, user, ds, conn, trigger_type="manual"):
+        launched.append(ds.id)
 
-    monkeypatch.setattr(scheduler, "launch_ingest_run", finto_lancio)
+    monkeypatch.setattr(scheduler, "launch_ingest_run", fake_launch_)
     now = datetime.now(timezone.utc)
     with Session(db_engine) as a, Session(db_engine) as b:
-        # A fa la query degli scaduti, come il tick
-        scaduti_a = [(d, d.next_refresh_at) for d in a.exec(select(Datasource).where(Datasource.id.in_([ds1.id, ds2.id])).order_by(Datasource.id)).all()]
-        await scheduler._fire_ds(a, scaduti_a[0][0], now, scaduti_a[0][1])   # A: primo slot (commit → oggetti scaduti)
-        await scheduler._fire_ds(b, b.get(Datasource, ds2.id), now)          # B: prende il secondo
-        await scheduler._fire_ds(a, scaduti_a[1][0], now, scaduti_a[1][1])   # A: arriva al secondo
-    assert lanciati == [ds1.id, ds2.id]  # ds2 una volta sola
+        # A runs the due query, as the tick does
+        expired_at = [(d, d.next_refresh_at) for d in a.exec(select(Datasource).where(Datasource.id.in_([ds1.id, ds2.id])).order_by(Datasource.id)).all()]
+        await scheduler._fire_ds(a, expired_at[0][0], now, expired_at[0][1])   # A: first slot (commit → objects expired)
+        await scheduler._fire_ds(b, b.get(Datasource, ds2.id), now)          # B: takes the second
+        await scheduler._fire_ds(a, expired_at[1][0], now, expired_at[1][1])   # A: gets to the second
+    assert launched == [ds1.id, ds2.id]  # ds2 once only
 
 
-async def test_anche_senza_il_valore_passato_uno_slot_gia_spostato_non_si_riprende(session, queue_, db_engine, monkeypatch):
-    """La seconda difesa: l'UPDATE chiede che lo slot sia ancora scaduto. Uno già
-    preso sta nel futuro, quindi non combacia nemmeno se lo si rilegge."""
-    utente, folder = queue_
-    flusso = _schedulato(session, utente, folder)
+async def test_even_without_the_passed_value_a_slot_moved_already_is_not_taken_again(session, queue_, db_engine, monkeypatch):
+    """The second defence: the UPDATE asks that the slot is still due. One taken already is
+    in the future, so it does not match even when read again."""
+    user_, folder = queue_
+    flow = _schedulato(session, user_, folder)
     now = datetime.now(timezone.utc)
     with Session(db_engine) as b:
-        await scheduler._fire_flow(b, b.get(Flow, flusso.id), now)
+        await scheduler._fire_flow(b, b.get(Flow, flow.id), now)
     session.expire_all()
-    riletto = session.get(Flow, flusso.id)       # legge il valore già spostato da B
-    # la prima esecuzione è già finita: `flow_running` non farebbe da rete
-    for r in _in_coda(session, flusso.id):
+    reread = session.get(Flow, flow.id)       # reads the value already moved by B
+    # the first run has finished already: `flow_running` would not act as a net
+    for r in _queued(session, flow.id):
         r.status = "SUCCESS"; session.add(r)
     session.commit()
-    await scheduler._fire_flow(session, session.get(Flow, flusso.id), now)
-    assert len(_in_coda(session, flusso.id)) == 1
+    await scheduler._fire_flow(session, session.get(Flow, flow.id), now)
+    assert len(_queued(session, flow.id)) == 1
 
 
-# la coda non aspetta per sempre
-async def test_un_esecuzione_in_coda_da_troppo_non_parte_piu(session, queue_):
+# the queue does not wait forever
+async def test_a_run_queued_too_long_no_longer_starts(session, queue_):
     from app.routes.runs import QUEUE_TIMED_OUT, _reconcile
 
-    utente, folder = queue_
-    vecchia = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, folder, "a").id,
+    user_, folder = queue_
+    old_one = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flow(session, user_, folder, "a").id,
                        started_at=datetime.now(timezone.utc) - timedelta(seconds=orch._orc().queue_timeout_seconds + 60))
-    fresca = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, folder, "b").id)
-    # chi la guarda (anche un processo che risponde soltanto) la trova chiusa
-    letta = await _reconcile(session, session.get(Run, vecchia.id))
-    assert (letta.status, letta.error) == ("FAILURE", QUEUE_TIMED_OUT)
-    assert (await _reconcile(session, session.get(Run, fresca.id))).status == "PENDING"
-    assert orch.claim(5) == ([fresca.id], [])
+    fresh = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flow(session, user_, folder, "b").id)
+    # whoever looks at it (a process that only answers too) finds it closed
+    read_one = await _reconcile(session, session.get(Run, old_one.id))
+    assert (read_one.status, read_one.error) == ("FAILURE", QUEUE_TIMED_OUT)
+    assert (await _reconcile(session, session.get(Run, fresh.id))).status == "PENDING"
+    assert orch.claim(5) == ([fresh.id], [])
 
 
-async def test_l_orchestratore_chiude_la_coda_scaduta_prima_di_prenderla(session, queue_):
-    utente, folder = queue_
-    vecchia = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flusso(session, utente, folder).id,
+async def test_the_orchestrator_closes_the_expired_queue_before_taking_it(session, queue_):
+    user_, folder = queue_
+    old_one = make_run(session, kind="orchestration", status="PENDING", task_id="", flow_id=_flow(session, user_, folder).id,
                        started_at=datetime.now(timezone.utc) - timedelta(seconds=orch._orc().queue_timeout_seconds + 60))
     await orch.close_orphans()
-    assert _state(session, vecchia.id).status == "FAILURE"
+    assert _state(session, old_one.id).status == "FAILURE"
     assert orch.claim(5) == ([], [])
 
 

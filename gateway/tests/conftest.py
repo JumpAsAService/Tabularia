@@ -1,12 +1,12 @@
-"""Harness di test del gateway.
+"""The gateway's test harness.
 
-DB SQLite in-memory (StaticPool: una sola connessione condivisa da tutte le
-sessioni del test) con lo schema creato da `create_all` — NON dalle migrazioni
-ALTER, che sono Postgres-only e servono solo a patchare tabelle già in prod.
+In-memory SQLite DB (StaticPool: one connection shared by all of a test's sessions)
+with the schema created by `create_all` — NOT by the ALTER migrations, which are
+Postgres-only and serve only to patch tables already in prod.
 
-L'engine (data plane) è sostituito da un client httpx con `MockTransport`: le
-funzioni che parlano con l'engine (`_reconcile` via GET /tasks/{id}, il cleanup
-via DELETE /files/object) girano offline e le loro chiamate sono ispezionabili.
+The engine (data plane) is replaced by an httpx client with `MockTransport`: the
+functions that talk to the engine (`_reconcile` through GET /tasks/{id}, the cleanup
+through DELETE /files/object) run offline and their calls can be inspected.
 """
 import base64
 import json
@@ -21,7 +21,7 @@ import pytest
 from sqlalchemy import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-import app.models  # noqa: F401 — registra i modelli su SQLModel.metadata
+import app.models  # noqa: F401 — registers the models on SQLModel.metadata
 from app.models import Datasource, Flow, Permission, Project, Run, User
 
 
@@ -32,12 +32,12 @@ def anyio_backend():
 
 @pytest.fixture(autouse=True)
 def _no_deployment_defaults(monkeypatch):
-    """I test non devono dipendere dal .env del deployment (i container li
-    eseguono con l'env_file): il campione automatico di sviluppo resta spento
-    salvo che il test lo imposti da se'."""
+    """The tests must not depend on the deployment's .env (the containers run them with the
+    env_file): the automatic development sample stays off unless the test sets it
+    itself."""
     monkeypatch.delenv("PREVIEW__DEFAULT_SAMPLE_ROWS", raising=False)
     for name in ("AI__BASE_URL", "AI__ACCESS_KEY", "AI__SECRET_KEY", "AI__DEFAULT_MODEL"):
-        monkeypatch.delenv(name, raising=False)  # l'assistente AI e' spento salvo che il test lo accenda
+        monkeypatch.delenv(name, raising=False)  # the AI assistant is off unless the test turns it on
     # the dev stack's own allowances (a fixed admin password, no address purge)
     for name in ("AUTH__ALLOW_KNOWN_ADMIN_PASSWORD", "AUDIT__IP_RETENTION_DAYS", "AUTH__FIRST_RUN_SETUP", "SECURITY__KEYS_DIR"):
         monkeypatch.delenv(name, raising=False)
@@ -90,14 +90,14 @@ def _json_body(request: httpx.Request) -> dict:
 
 
 class FakeEngine:
-    """Engine finto: registra le DELETE dei blob e serve stati di task su misura."""
+    """Fake engine: records the blobs' DELETEs and serves task states made to measure."""
 
     def __init__(self):
-        self.deleted: list[tuple[str, str]] = []  # (bucket, key) cancellati
-        self.revoked: list[str] = []  # task_id revocati (DELETE /tasks/{id})
-        self.transforms: list[dict] = []  # corpi ricevuti su POST /tasks/transform-data
-        self.ingests: list[tuple[str, dict]] = []  # (rotta, corpo) degli ingest accodati
-        self.inspects: list[dict] = []  # corpi ricevuti su POST /sharepoint/inspect
+        self.deleted: list[tuple[str, str]] = []  # (bucket, key) deleted
+        self.revoked: list[str] = []  # task_ids revoked (DELETE /tasks/{id})
+        self.transforms: list[dict] = []  # bodies received on POST /tasks/transform-data
+        self.ingests: list[tuple[str, dict]] = []  # (route, body) of the queued ingests
+        self.inspects: list[dict] = []  # bodies received on POST /sharepoint/inspect
         # SFTP: bodies received on POST /sftp/inspect, and the answers to serve per action
         self.sftp_inspects: list[dict] = []
         # the key the fake SFTP server offers; a «test» answers as the engine does:
@@ -130,26 +130,26 @@ class FakeEngine:
         self.db_inspects: list[dict] = []
         self.db_responses: dict[str, tuple[int, dict]] = {"test": (200, {"ok": True}), "tables": (200, {"tables": []})}
         self.drivers: dict | None = {"sqlserver": {"installed": True}}
-        self.dbt_exports: list[dict] = []  # corpi ricevuti su POST /dbt/export
-        self.dbt_export_response: tuple[int, dict] | None = None  # una risposta d'errore da servire (es. un 422 con codice)
-        self.dbt_export_script: list[tuple[int, dict] | None] = []  # risposte in fila, una per chiamata (None = lo zip)
+        self.dbt_exports: list[dict] = []  # bodies received on POST /dbt/export
+        self.dbt_export_response: tuple[int, dict] | None = None  # an error answer to serve (e.g. a 422 with a code)
+        self.dbt_export_script: list[tuple[int, dict] | None] = []  # answers in line, one per call (None = the zip)
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
         self.pushmails: list[dict] = []  # bodies received on POST /db/pushmail
         self.pushmail_status = 200  # a different answer to test an engine that refuses the email
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
-        self.delete_status = 200  # forza un esito diverso per testare il retry dello sweep
+        self.delete_status = 200  # forces another outcome to test the sweep's retry
         self.copies: list[tuple[str, str, str]] = []  # (bucket, source, target) copied on the storage
         self.copy_status = 204  # a different answer to test a copy that fails
-        # preview (assistente AI): corpi ricevuti e risposta da servire
-        # data contracts: richieste ricevute su /contracts/* e risposte da servire
+        # preview (AI assistant): bodies received and the answer to serve
+        # data contracts: requests received on /contracts/* and answers to serve
         self.contract_calls: list[tuple[str, dict]] = []
         self.contract_response: tuple[int, dict] = (200, {"outcome": "passed", "rows": 3, "errors": 0, "warnings": 0, "rules": []})
         self.profile_response: tuple[int, dict] = (200, {"profile": {"rows": 3, "columns": []}, "proposal": {"description": "", "rules": []}})
         self.previews: list[dict] = []
         self.preview_response: tuple[int, dict] = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
-        # catalogo servito da GET /engines. L'engine dice cosa è tecnicamente
-        # disponibile; è il GATEWAY a sovrapporci la politica dell'installazione
-        # (motori disabilitati dall'admin), quindi qui arrivano tutti "available".
+        # catalog served by GET /engines. The engine says what is technically available; it is
+        # the GATEWAY that lays the installation's policy over it (engines disabled by the
+        # admin), so here they all arrive "available".
         self.engines: list[dict] = [
             {"id": "polars", "label": "Polars", "available": True, "description": ""},
             {"id": "duckdb", "label": "DuckDB", "available": True, "description": ""},
@@ -167,11 +167,11 @@ class FakeEngine:
         path = request.url.path
         if path == "/engines":
             return httpx.Response(200, json=self.engines)
-        # DEVE stare prima del ramo "/tasks/", che altrimenti lo intercetta come
-        # se "transform-data" fosse un task_id e risponde con uno stato invece
-        # che con un id. Il payload viene registrato: è l'unico modo di
-        # verificare COSA il gateway manda all'engine — che le secret partano
-        # cifrate, e che i destinatari siano quelli già validati.
+        # MUST sit before the "/tasks/" branch, which would otherwise catch it as if
+        # "transform-data" were a task_id and answer with a state instead of an id. The
+        # payload is recorded: it is the only way to check WHAT the gateway sends the engine —
+        # that the secrets go out encrypted, and that the recipients are those validated
+        # already.
         if path == "/sftp/inspect" and request.method == "POST":
             body = _json_body(request)
             body.setdefault("expected_fingerprint", "")
@@ -248,16 +248,16 @@ class FakeEngine:
             return httpx.Response(200, json={"task_id": f"t-pushmail-{len(self.pushmails)}", "status": "submitted", "message": ""})
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]
-            if request.method == "DELETE":  # revoca + terminate del task
+            if request.method == "DELETE":  # revoke + terminate of the task
                 self.revoked.append(tid)
                 return httpx.Response(200, json={"task_id": tid, "status": "revoked"})
             return httpx.Response(200, json=self.task_states.get(tid, self.default_state))
         if path == "/dbt/export" and request.method == "POST":
             self.dbt_exports.append(json.loads(request.content or b"{}"))
             if self.dbt_export_script:
-                prossima = self.dbt_export_script.pop(0)
-                if prossima is not None:
-                    return httpx.Response(prossima[0], json=prossima[1])
+                next_one = self.dbt_export_script.pop(0)
+                if next_one is not None:
+                    return httpx.Response(next_one[0], json=next_one[1])
             elif self.dbt_export_response is not None:
                 return httpx.Response(self.dbt_export_response[0], json=self.dbt_export_response[1])
             return httpx.Response(200, content=b"PK\x05\x06" + b"\x00" * 18, headers={"content-type": "application/zip"})
@@ -267,7 +267,7 @@ class FakeEngine:
                 self.copies.append((p.get("bucket"), p.get("source_key"), p.get("target_key")))
             return httpx.Response(self.copy_status)
         if path == "/files/object" and request.method == "DELETE":
-            if self.delete_status < 400:  # cancellazione effettiva riuscita
+            if self.delete_status < 400:  # actual deletion succeeded
                 self.deleted.append(
                     (request.url.params.get("bucket"), request.url.params.get("key"))
                 )
@@ -283,7 +283,7 @@ def fake_engine(monkeypatch):
     yield fake
 
 
-# ── factory minimali (FK non forzate da SQLite → si crea solo ciò che serve) ──
+# ── minimal factories (FKs not enforced by SQLite → only what is needed is created) ──
 def make_user(session, **kw):
     kw.setdefault("email", "u@x.local")
     kw.setdefault("hashed_password", "x")
@@ -295,8 +295,8 @@ def make_user(session, **kw):
     return u
 
 
-def token_di(session, user, request=None, method="password"):
-    """Un token valido per `user`: apre una sessione vera, come fa il login."""
+def token_of(session, user, request=None, method="password"):
+    """A valid token for `user`: opens a real session, as the login does."""
     from app.services import sessions
 
     return sessions.open_session(session, user, request, method)[1]
@@ -356,10 +356,10 @@ def make_run(session, **kw):
 
 
 @pytest.fixture(autouse=True)
-def _openlineage_spento(monkeypatch):
-    """Nessun test manda lineage a un collector vero: il contenitore di sviluppo
-    può avere OPENLINEAGE__URL nell'ambiente, e i run che i test chiudono
-    finirebbero in Marquez. Chi vuole provare l'emissione lo accende da sé."""
+def _openlineage_off(monkeypatch):
+    """No test sends lineage to a real collector: the development container may have
+    OPENLINEAGE__URL in the environment, and the runs the tests close would end up in
+    Marquez. Whoever wants to test the emission turns it on themselves."""
     from app.core.config import get_settings
 
     s = get_settings().openlineage

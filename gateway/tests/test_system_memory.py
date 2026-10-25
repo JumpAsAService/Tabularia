@@ -1,6 +1,6 @@
-"""Il badge della RAM senza un node-exporter: spento, non guasto. Su Kubernetes il
-chart non ne installa uno; prima il gateway ricadeva sull'indirizzo del compose e
-rispondeva 503 a ogni poll di ogni browser, con un avviso nel log ogni volta."""
+"""The RAM badge without a node-exporter: off, not broken. On Kubernetes the chart
+installs none; before, the gateway fell back on the compose's address and answered 503
+to every poll of every browser, with a warning in the log each time."""
 from types import SimpleNamespace
 
 import pytest
@@ -11,7 +11,7 @@ import app.routes.system as system
 pytestmark = pytest.mark.anyio
 
 
-async def test_senza_node_exporter_il_badge_e_spento_e_non_si_chiama_niente(monkeypatch):
+async def test_without_node_exporter_the_badge_is_off_and_nothing_is_called(monkeypatch):
     monkeypatch.setattr(system, "get_settings", lambda: SimpleNamespace(monitoring=SimpleNamespace(node_exporter_url=" ")))
 
     async def mai():
@@ -23,7 +23,7 @@ async def test_senza_node_exporter_il_badge_e_spento_e_non_si_chiama_niente(monk
     assert e.value.status_code == 404
 
 
-async def test_con_node_exporter_irraggiungibile_resta_503(monkeypatch):
+async def test_with_node_exporter_unreachable_it_stays_503(monkeypatch):
     monkeypatch.setattr(system, "get_settings", lambda: SimpleNamespace(monitoring=SimpleNamespace(node_exporter_url="http://node-exporter:9100/metrics")))
 
     async def giu():

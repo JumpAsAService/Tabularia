@@ -106,8 +106,8 @@ def indexes(monkeypatch):
     get_settings.cache_clear()
 
 
-def run(coro):
-    return asyncio.run(coro)
+def run(coro_):
+    return asyncio.run(coro_)
 
 
 def test_python_search_ranks_the_exact_name_then_the_prefixes(indexes):

@@ -1,6 +1,6 @@
-"""SECURITY__FERNET_KEY è obbligatoria SEMPRE (anche in sviluppo): il gateway
-non parte senza una chiave valida, invece di fallire al primo uso delle
-connessioni. Copre `Settings.check_required_secrets` (chiamata nel lifespan)."""
+"""SECURITY__FERNET_KEY is required ALWAYS (in development too): the gateway does not
+start without a valid key, instead of failing at the first use of the connections.
+Covers `Settings.check_required_secrets` (called in the lifespan)."""
 import pytest
 from cryptography.fernet import Fernet
 
@@ -28,8 +28,8 @@ def test_valid_key_passes_in_every_env():
 
 
 def test_production_check_no_longer_owns_the_fernet_rule():
-    # in produzione la chiave è già pretesa da check_required_secrets: il check di
-    # produzione si occupa solo dei default di sviluppo (jwt/admin/db)
+    # in production check_required_secrets requires the key already: the production check
+    # only deals with the development defaults (jwt/admin/db)
     s = Settings(security={"fernet_key": ""}, app={"env_name": "production"})
     with pytest.raises(RuntimeError) as e:
         s.check_production_safety()

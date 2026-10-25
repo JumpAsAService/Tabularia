@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings, get_settings
 from app.db.session import get_session
 from app.routes import proxy as proxy_routes
-from tests.conftest import make_user, token_di
+from tests.conftest import make_user, token_of
 
 
 class Engine:
@@ -44,7 +44,7 @@ def client(session):
     app.include_router(proxy_routes.router)
     app.dependency_overrides[get_session] = lambda: session
     admin = make_user(session, email="admin@x.it", is_superuser=True)
-    return TestClient(app, headers={"Authorization": f"Bearer {token_di(session, admin)}"})
+    return TestClient(app, headers={"Authorization": f"Bearer {token_of(session, admin)}"})
 
 
 def _limit(monkeypatch, n: int):
