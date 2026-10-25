@@ -175,7 +175,7 @@ BIGQUERY__MAXIMUM_BYTES_BILLED: {{ include "tabularia.env" (.Values.externalServ
 {{- /* extraEnv adds what this file does not set; it never overrides it */ -}}
 {{- $fixed := include "tabularia.configData" . | fromYaml -}}
 {{- /* and the ones set container by container, which would cover a ConfigMap value */ -}}
-{{- $perContainer := list "APP__ROLE" "APP__GATEWAY_THREADS" "CELERY__WORKER_CONCURRENCY" "MALLOC_ARENA_MAX"
+{{- $perContainer := list "APP__ROLE" "APP__GATEWAY_THREADS" "CELERY__WORKER_CONCURRENCY" "MALLOC_ARENA_MAX" "TMP_SIZE_LIMIT"
       "KUBERNETES__SCALING" "KUBERNETES__CLUSTER_VIEW" "KUBERNETES__NAMESPACE" "KUBERNETES__RELEASE" "KUBERNETES__APP_NAME" "KUBERNETES__ROLLOUT"
       "KUBERNETES__RUN_WORKER_DEPLOYMENT" "KUBERNETES__RUN_WORKER_AUTOSCALER" "KUBERNETES__RUN_WORKER_MAX_REPLICAS"
       "KUBERNETES__PREVIEW_WORKER_DEPLOYMENT" "KUBERNETES__PREVIEW_WORKER_AUTOSCALER" "KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS"

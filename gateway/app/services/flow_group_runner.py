@@ -20,7 +20,7 @@ orchestration (services/orchestrator.py), which hands it here from `esegui`.
 - A **pushmail** cell sends one email with one .xlsx per datasource through an SMTP
   connection, as an engine task under a run of its own (kind="pushmail"); every part
   of it — the connection, the recipients' domains, the datasources — is checked again
-  with the rights of whoever runs the group (routes/flow_groups.py `pushmail_errors`).
+  with the rights of whoever runs the group (services/pushmail.py `pushmail_errors`).
 - A **script** cell runs a saved script's current version (services/saved_script_runs.py)
   under a child orchestration row that holds the script's live slot, as a flow cell
   does; a run of the script already in progress is waited for, and its outcome counts
@@ -376,7 +376,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
     from app.core.engine_client import get_engine_client
     from app.models import Connection
     from app.routes.connections import engine_connection_payload
-    from app.routes.flow_groups import pushmail_errors
+    from app.services.pushmail import pushmail_errors
     from app.routes.runs import PLACEHOLDER_TASK
     from app.services import audit
 

@@ -117,7 +117,7 @@ VOCI: tuple[Voce, ...] = (
     Voce("api.min_interval_seconds", "api", "seconds", 0, 3600, tipo="float"),
     Voce("placeholders.max_values", "placeholders", "values", 1, 100_000),
     # set from the gateway's panel together with the gateway's own (the second barrier)
-    Voce("upload.max_bytes", "upload", "bytes", 0, 1024**4),
+    Voce("upload.max_bytes", "upload", "bytes", 1024**2, 1024**4),  # never 0 from the panel: /tmp has a limit
     # ── read when a process starts ──
     Voce("app.engine_api_threads", "engine_api", "threads", 40, 2000, rollout=("engine",)),
     # at most under the chart's ingress timeout (proxy-read-timeout 300 s): past it people

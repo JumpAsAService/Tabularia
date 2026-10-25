@@ -221,3 +221,51 @@ async def test_an_engine_that_refuses_the_email_fails_the_cell_at_once(world, db
     await orch.esegui(run_id)
     status, _, cells, (child,) = _state(db_engine, run_id)
     assert status == "FAILURE" and "did not take the email" in cells[0][0]["error"] and child.status == "FAILURE"
+
+
+# ── a scheduled group: checked whole before its first step ───────────────────
+def test_a_scheduled_group_checks_the_pushmail_cell_not_a_datasource_with_its_number(world):
+    """The cell's id is its number in the group: it must never be read as a datasource's."""
+    from app.services.schedule_authority import gaps_of_group
+
+    s = world["session"]
+    author = make_user(s, email="author@x.local")
+    for project, cap in ((world["p"], Capability.RUN), (world["p"], Capability.EDIT), (world["p"], Capability.VIEW),
+                         (world["mail"], Capability.CONNECT)):
+        make_permission(s, user_id=author.id, project_id=project.id, capability=cap)
+    hidden = make_project(s, name="HR")
+    # a datasource whose id is the cell's number, in a folder the author cannot run
+    clash = s.get(type(world["sales"]), 1)
+    clash.project_id = hidden.id
+    s.add(clash)
+    s.commit()
+    cell = _cell(world, attachments=[{"datasourceId": world["regions"].id, "fileName": "r"}])
+    group = FlowGroup(name="Mattino", project_id=world["p"].id, definition=json.dumps({"steps": [[cell]]}))
+    s.add(group)
+    s.commit()
+    assert gaps_of_group(s, author, group) == []
+    # the author loses CONNECT on the SMTP connection: the schedule is stopped before it starts
+    from app.models import Permission
+
+    s.delete(s.exec(select(Permission).where(Permission.user_id == author.id, Permission.project_id == world["mail"].id)).one())
+    s.commit()
+    gaps = gaps_of_group(s, author, group)
+    assert len(gaps) == 1 and "needs CONNECT" in gaps[0]
+
+
+async def test_a_scheduled_group_whose_author_cannot_send_does_not_start(world, db_engine):
+    s = world["session"]
+    author = make_user(s, email="author@x.local")
+    make_permission(s, user_id=author.id, project_id=world["p"].id, capability=Capability.RUN)
+    make_permission(s, user_id=author.id, project_id=world["p"].id, capability=Capability.VIEW)
+    group = FlowGroup(name="Mattino", project_id=world["p"].id, definition=json.dumps({"steps": [[_cell(world)]]}))
+    s.add(group)
+    s.commit()
+    run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=author.id,
+              trigger_type="schedule", claimed_by=orch.ISTANZA, heartbeat_at=orch._adesso(),
+              input_key="", output_bucket="", output_key="")
+    s.add(run)
+    s.commit()
+    await orch.esegui(run.id)
+    status, error, _, children = _state(db_engine, run.id)
+    assert status == "FAILURE" and "CONNECT" in (error or "") and children == [] and world["engine"].pushmails == []

@@ -109,7 +109,9 @@ exposes at `/system/info` and in the app's settings menu.
 - **Fixed: a CSV saved by Excel in Italian (or French, German, Spanish) uploaded from the
   editor**: `;`-separated, it answered 500; with decimal commas, the prices stayed text and a
   conversion emptied them; in Windows-1252, «Città» came as «Citt�». The separator, the
-  decimal comma (thousands grouped by dots too) and the encoding are now read from the file.
+  decimal comma (thousands grouped by dots too: «1.500» is fifteen hundred, not 1.5) and the
+  encoding are now read from the file; codes such as postcodes, and columns given a type
+  by hand, are left as they are.
   A column whose type changes after the first 10,000 rows no longer answers 500: the types
   are guessed again on the whole file. Any CSV the reader cannot read is refused saying
   why; spaces around the headers go, as for the SFTP and S3 datasources.
@@ -146,6 +148,8 @@ exposes at `/system/info` and in the app's settings menu.
   evicted pod or a lost node write nothing either. The engine now tells such a task from
   a running one by the worker's own record and fails it within seconds (the same pod's
   container started again) or about a minute (the pod gone), saying the worker stopped.
+  A worker stopping gracefully (an upgrade, a drain, a scale-in) keeps its record until
+  its runs end: they finish, and are not called lost.
 - **Fixed: one failed answer of the Kubernetes API failed a Script or Container node,**
   ignored its retries and deleted a Job running fine (a 503 during a control plane
   upgrade, a 429). It is asked again at the next look; a log the cluster cannot give (the
@@ -341,6 +345,11 @@ exposes at `/system/info` and in the app's settings menu.
   does not carry is read from the access token, where Keycloak puts the roles by default
   (signature, issuer, expiry and person checked), then from userinfo. Tried on minikube
   with Keycloak 26.
+- **Fixed: a groups claim set wrong took the administrators' rights and every group away
+  at the next SSO sign-in** (with `OIDC__AUTHORITATIVE`, the default). A token that carries
+  none of the configured group sources — a typo in Administration → Settings, a provider
+  that stopped sending them — now leaves administrator rights and memberships as they
+  are, and the audit of the sign-in names the missing claim.
 - **Automatic backups of the database.** Every night at 03:00 an orchestrator runs
   `pg_dump` of Tabularia's database and streams it to the engine, which stores it in the
   object storage — by default Tabularia's bucket under `backups/postgres/`; a bucket of

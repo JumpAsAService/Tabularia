@@ -219,7 +219,7 @@ async def _database_down(request: Request, exc: DBAPIError):
     if not (exc.connection_invalidated or isinstance(exc, (OperationalError, InterfaceError))):
         raise exc
     logger.warning("database not answering on %s %s: %s", request.method, request.url.path, str(exc).splitlines()[0][:200])
-    return JSONResponse(status_code=503, content={"detail": "The database is not answering: try again in a moment"})
+    return JSONResponse(status_code=503, content={"detail": "The database is not answering, or too busy to: try again in a moment"})
 
 
 @app.exception_handler(httpx.TransportError)

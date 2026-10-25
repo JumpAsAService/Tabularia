@@ -119,7 +119,8 @@ VOCI: tuple[Voce, ...] = (
     # ── dbt export, previews, uploads, backups, monitoring, lineage ──
     Voce("engine.dbt_export_timeout_seconds", "dbt", "float", "seconds", 10, 3600),
     Voce("preview.default_sample_rows", "previews", "int", "rows", 0, 10_000_000),
-    Voce("upload.max_bytes", "previews", "int", "bytes", 0, 1024 ** 4),
+    # never 0 from here (no limit at all): the engine converts on its /tmp, which has one
+    Voce("upload.max_bytes", "previews", "int", "bytes", 1024 ** 2, 1024 ** 4),
     Voce("backup.timeout_seconds", "backups", "int", "seconds", 60, DAY),
     Voce("monitoring.timeout_seconds", "monitoring", "float", "seconds", 0.5, 30),
     Voce("monitoring.cache_seconds", "monitoring", "float", "seconds", 0, 300),

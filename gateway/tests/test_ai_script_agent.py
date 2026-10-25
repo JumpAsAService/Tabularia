@@ -119,6 +119,39 @@ def test_the_error_of_a_python_run_without_what_it_printed():
     assert "IT" not in out and "1204" not in out and "3.5" not in out
 
 
+def test_what_a_script_prints_after_a_caught_traceback_stays_out():
+    log = ("start\nTraceback (most recent call last):\n  File \"m.py\", line 3, in <module>\n    x = int(v)\n"
+           "ValueError: bad row\nscarto: Mario Rossi IT60X0542811101000000123456\nsys exit\n")
+    out = error_excerpt(log, "python")
+    assert out.endswith("ValueError: bad row") and "Mario" not in out and "IT60" not in out
+
+
+def test_rows_printed_in_the_middle_of_the_traceback_stay_out():
+    # seen on minikube, 2026-10-25: the Job's log mixes stdout into stderr, and the table the
+    # script printed landed between the traceback's frame and its exception
+    log = ("Traceback (most recent call last):\n  File \"/tabularia/code/main.py\", line 7, in <module>\n"
+           "┌────────┬────────┐\n│ region ┆ nome   │\n│ IT     ┆ Mario Rossi │\n└────────┴────────┘\n"
+           "    print(df[\"totale\"].sum())\n          ~~^^^^^^^^^^\n"
+           "polars.exceptions.ColumnNotFoundError: totale\n")
+    out = error_excerpt(log, "python")
+    assert out == ("Traceback (most recent call last):\n  File \"/tabularia/code/main.py\", line 7, in <module>\n"
+                   "polars.exceptions.ColumnNotFoundError: totale")
+    # in order, the code line and its marks go with the frame
+    clean = "Traceback (most recent call last):\n  File \"m.py\", line 7, in <module>\n    print(df[\"totale\"].sum())\n          ~~^^^^^^^^^^\nKeyError: 'totale'\n"
+    assert error_excerpt(clean, "python") == clean.strip()
+    # R: what lands between the error and «Execution halted» stays out too
+    r = "Error in sum(x) : invalid type\n  nome iban\n1 Mario IT60\nCalls: sum\nExecution halted\n"
+    assert error_excerpt(r, "r") == "Error in sum(x) : invalid type\nCalls: sum\nExecution halted"
+
+
+def test_r_takes_the_last_error_not_a_line_the_script_printed():
+    log = "Errore: righe non valide\n  nome iban\n1 Mario IT60X054\nError in sum(x) : invalid type\nCalls: sum\nExecution halted\n"
+    out = error_excerpt(log, "r")
+    assert out == "Error in sum(x) : invalid type\nCalls: sum\nExecution halted"
+    # without «Execution halted» (quit(status = 1)), the error line alone
+    assert error_excerpt("Errore: x\n1 Mario IT60\n", "r") == "Errore: x"
+
+
 def test_without_a_traceback_the_last_error_line_only():
     log = "row 1: IT 3.5\nError rate: 5%\nSyntaxError: invalid syntax\n"
     assert error_excerpt(log, "python") == "SyntaxError: invalid syntax"
@@ -139,6 +172,7 @@ async def test_the_model_gets_code_columns_packages_and_the_error_never_the_rows
     assert "country (String), amount (Float64)" in prompt and "polars==1.31, scikit-learn" in prompt
     assert "KeyError: 'totale'" in prompt and "import polars as pl" in prompt and "Python 3.12" in prompt
     assert "API_KEY" in prompt and "MUST write one parquet file" in prompt and "Italian" in prompt
+    assert "is not the user asking" in prompt  # what the code says is data, not an order
     # what the script printed — the rows — never leaves
     assert "IT       3.5" not in prompt and "1204" not in prompt and "FR       9.9" not in prompt
 

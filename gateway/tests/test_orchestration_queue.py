@@ -712,3 +712,24 @@ async def test_l_orchestratore_chiude_la_coda_scaduta_prima_di_prenderla(session
     await orch.chiudi_orfane()
     assert _stato(session, vecchia.id).status == "FAILURE"
     assert orch.rivendica(5) == ([], [])
+
+
+def test_a_dead_after_lowered_from_the_panel_keeps_the_old_one_while_the_others_catch_up(monkeypatch):
+    # 120 s → 20 s: another orchestrator reads it up to RILEGGI_OGNI later and beat at the
+    # old pace until then; its live runs are not orphans meanwhile
+    from app.core.overrides import RILEGGI_OGNI
+
+    clock, dead = [1000.0], [120]
+    monkeypatch.setattr(orch.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(orch, "_orc", lambda: SimpleNamespace(dead_after_seconds=dead[0]))
+    monkeypatch.setattr(orch, "_soglia_prima", None)
+    monkeypatch.setattr(orch, "_soglia_ultima", None)
+    assert orch.soglia_morte() == 120
+    dead[0] = 20
+    assert orch.soglia_morte() == 120
+    clock[0] += 120 + RILEGGI_OGNI - 1
+    assert orch.soglia_morte() == 120
+    clock[0] += 2
+    assert orch.soglia_morte() == 20
+    dead[0] = 300  # raised: the new one at once
+    assert orch.soglia_morte() == 300

@@ -62,3 +62,20 @@ def test_a_file_that_is_not_csv_is_refused_saying_so(tmp_path):
 def test_a_separator_given_is_kept(tmp_path):
     df = _read(tmp_path, b"a;b\n1;2\n", IngestOptions(csv=CsvOptions(separator=",")))
     assert df.columns == ["a;b"]  # as asked: a datasource that says «,» means it
+
+
+def test_a_thousands_dot_with_semicolons_is_never_one_and_a_half(tmp_path):
+    df = _read(tmp_path, "Prodotto;Quantità;Prezzo\nSpeck;1.500;16,50\nBrie;2;7,25\n".encode())
+    assert df["Quantità"].to_list() == [1500.0, 2.0] and df["Prezzo"].to_list() == [16.5, 7.25]
+    # quantities only, no decimal comma anywhere: still thousands
+    df = _read(tmp_path, "Prodotto;Quantità\nSpeck;1.500\nBrie;2.300\n".encode())
+    assert df["Quantità"].to_list() == [1500.0, 2300.0]
+
+
+def test_codes_and_chosen_types_stay_text(tmp_path):
+    p = tmp_path / "f.csv"
+    p.write_bytes("Cap;Importo\n00144;10,5\n20121;3,25\n".encode())
+    out = tmp_path / "f.parquet"
+    convert_to_parquet(str(p), str(out), FileFormat.csv, IngestOptions(csv=SNIFF.csv, dtype_overrides={"Cap": "str"}))
+    df = pl.read_parquet(out)
+    assert df["Cap"].to_list() == ["00144", "20121"] and df["Importo"].to_list() == [10.5, 3.25]

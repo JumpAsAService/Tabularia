@@ -309,13 +309,15 @@ def test_decimals_take_integers_too_and_refuse_the_rest():
 
 def test_the_new_live_ones_reach_their_readers():
     regolazioni.scrivi({"sftp.max_files": 3, "api.max_pages": 7, "placeholders.max_values": 9,
-                        "s3_source.max_listed": 1000, "upload.max_bytes": 0})
+                        "s3_source.max_listed": 1000, "upload.max_bytes": 2 * 1024 ** 2})
     s = get_settings()
     assert (s.sftp.max_files, s.api.max_pages, s.placeholders.max_values, s.s3_source.max_listed,
-            s.upload.max_bytes) == (3, 7, 9, 1000, 0)
+            s.upload.max_bytes) == (3, 7, 9, 1000, 2 * 1024 ** 2)
     from app.api.upload_limit import _from_settings
 
-    assert _from_settings() == 0
+    assert _from_settings() == 2 * 1024 ** 2
+    # no limit at all (0) only from the environment: /tmp has one
+    assert _errori({"upload.max_bytes": 0})[0]["code"] == "min"
 
 
 def test_a_rollout_one_waits_for_the_process_to_start_again():

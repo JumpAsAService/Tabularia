@@ -128,7 +128,7 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
     engine = get_engine("polars")
     files: list[tuple[str, bytes]] = []
     cut: list[tuple[str, int, int]] = []
-    rows_sent = 0
+    rows_sent = size = 0
     with tempfile.TemporaryDirectory(prefix="pushmail_") as tmp:
         for i, (a, name) in enumerate(zip(spec.attachments, names)):
             source = DataSource(bucket=a.bucket, key=a.key)
@@ -136,19 +136,20 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
             sent = min(total, a.max_rows)
             path = os.path.join(tmp, f"{i}.xlsx")
             engine.export(source=source, operations=[], fmt="xlsx", out_path=path, limit=sent if total > sent else None)
+            # checked file by file: past the limit the rest is not written, nor held in memory
+            size += os.path.getsize(path)
+            if size > MAX_ATTACHMENT_BYTES:
+                raise EmailDestinationError(
+                    f"The files reach {size / 1024 / 1024:.1f} MB at file {i + 1} of {len(names)}, over the "
+                    f"{MAX_ATTACHMENT_BYTES // 1024 // 1024} MB an email may carry here: lower the rows of each "
+                    "datasource, or send fewer of them. How large a message the SMTP relay accepts, the "
+                    "administrators know."
+                )
             with open(path, "rb") as f:
                 files.append((name, f.read()))
             rows_sent += sent
             if total > sent:
                 cut.append((a.label or name, sent, total))
-    size = sum(len(data) for _, data in files)
-    if size > MAX_ATTACHMENT_BYTES:
-        raise EmailDestinationError(
-            f"The {len(files)} files total {size / 1024 / 1024:.1f} MB, over the "
-            f"{MAX_ATTACHMENT_BYTES // 1024 // 1024} MB an email may carry here: lower the rows of each "
-            "datasource, or send fewer of them. How large a message the SMTP relay accepts, the "
-            "administrators know."
-        )
 
     msg = EmailMessage()
     msg["From"] = conn.sender()

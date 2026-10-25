@@ -56,21 +56,23 @@ def _strip_names(lf: pl.LazyFrame) -> pl.LazyFrame:
 _ITALIAN_NUMBER = r"^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?$"
 
 
-def _italian_numbers(dst: str) -> None:
+def _italian_numbers(dst: str, keep: set[str] | frozenset[str] = frozenset()) -> None:
     """The text columns holding nothing but numbers written with a decimal comma become
-    numbers: the reader's decimal comma leaves «1.234,50» as text. A column with one value
-    that is not such a number stays text, as it was."""
+    numbers: the reader's decimal comma leaves «1.234,50» and «1.500» as text. A column with
+    one value that is not such a number stays text, as it was; so does one whose numbers
+    have neither a comma nor a thousands dot (codes such as «00144»), and one whose type
+    was chosen (`keep`). Read in streaming: a big file is never held in memory whole."""
     import os
 
     lf = pl.scan_parquet(dst)
-    texts = [c for c, t in lf.collect_schema().items() if t == pl.String]
+    texts = [c for c, t in lf.collect_schema().items() if t == pl.String and c not in keep]
     if not texts:
         return
     checks = lf.select([
         ((pl.col(c).is_null() | pl.col(c).str.strip_chars().str.contains(_ITALIAN_NUMBER)).all()
-         & pl.col(c).is_not_null().any()).alias(c)
+         & pl.col(c).str.contains(r"[,.]").any()).alias(c)
         for c in texts
-    ]).collect().row(0, named=True)
+    ]).collect(engine="streaming").row(0, named=True)
     numbers = [c for c, ok in checks.items() if ok]
     if not numbers:
         return
@@ -120,10 +122,14 @@ def _convert_csv(src: str, dst: str, fmt: FileFormat, options: IngestOptions, ov
             logger.info("csv types guessed again on the whole file (%s)", str(e).splitlines()[0][:200])
             _sink(scan(None), dst)
         if decimal_comma:
-            _italian_numbers(dst)
+            _italian_numbers(dst, set(overrides or {}))
     except IngestError:
         raise
     except Exception as e:  # noqa: BLE001 — what the reader said, as a refusal, not a 500
+        from app.engine.query_tag import was_interrupted
+
+        if was_interrupted(e):  # the task's time ran out: not a file that cannot be read
+            raise
         first = (str(e).strip().splitlines() or [type(e).__name__])[0][:300]
         raise IngestError(f"The file could not be read as CSV: {first}") from e
     finally:

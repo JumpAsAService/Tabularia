@@ -691,6 +691,27 @@ def avvia_battito(ferma: threading.Event) -> threading.Thread:
     return t
 
 
+# the dead-after threshold this process used before the last change, and since when
+_soglia_prima: tuple[float, float] | None = None
+_soglia_ultima: float | None = None
+
+
+def soglia_morte() -> float:
+    """`dead_after_seconds`, but for a while after it is lowered from the panel the old
+    one: the other orchestrators read the change up to `RILEGGI_OGNI` seconds later, and
+    meanwhile beat at the old pace. Their live runs are not orphans in that window."""
+    global _soglia_prima, _soglia_ultima
+    from app.core.overrides import RILEGGI_OGNI
+
+    ora, adesso = _orc().dead_after_seconds, time.monotonic()
+    if _soglia_ultima is not None and ora != _soglia_ultima:
+        _soglia_prima = (_soglia_ultima, adesso)
+    _soglia_ultima = ora
+    if _soglia_prima is not None and adesso - _soglia_prima[1] < _soglia_prima[0] + RILEGGI_OGNI:
+        return max(ora, _soglia_prima[0])
+    return ora
+
+
 async def chiudi_orfane() -> int:
     """Chiude le orchestrazioni STARTED il cui battito è fermo: il processo che le
     eseguiva è morto (crash, riavvio, macchina persa) e nessuno le finirà.
@@ -698,7 +719,7 @@ async def chiudi_orfane() -> int:
     resterebbero STARTED per sempre, e il flusso non potrebbe più ripartire.
 
     Vale anche per le righe senza battito, che sono di una versione precedente."""
-    taglio = _adesso() - timedelta(seconds=_orc().dead_after_seconds)
+    taglio = _adesso() - timedelta(seconds=soglia_morte())
     with _vive_lock:
         mie_vive = list(_vive)
     orfana = (

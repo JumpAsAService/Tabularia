@@ -200,7 +200,12 @@ def gaps_of_group(session: Session, user: User, group: FlowGroup) -> list[str]:
                                                  registry_access.repository_allowed(session, user, registry,
                                                                                     str(d.get("repository") or ""))):
                     gaps.append(f"use of the image {d.get('repository')} of container registry '{registry.name}'")
-            else:
+            elif cell.kind == "pushmail":
+                # its own settings, not an object: its number in the group is no datasource
+                from app.services.pushmail import pushmail_errors
+
+                gaps.extend(pushmail_errors(session, user, cell))
+            elif cell.kind == "refresh":
                 ds = session.get(Datasource, cell.id)
                 if ds is not None:
                     gaps.extend(_refresh_gaps(session, user, ds))

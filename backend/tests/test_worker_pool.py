@@ -41,6 +41,7 @@ class Queues:
 class App:
     def __init__(self, queues):
         self.amqp = type("Amqp", (), {"queues": Queues(queues)})()
+        self.conf = type("Conf", (), {"task_time_limit": 3600})()
 
 
 class Controller:
@@ -139,6 +140,27 @@ def test_the_step_resizes_and_reports_at_start_and_then_on_a_timer(regolazioni_i
     assert c.pool.num_processes == 2
     step.shutdown(c)
     assert live_workers() == []
+
+
+def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(regolazioni_isolate, monkeypatch):
+    # warm shutdown: the consumer stops first, then the pool waits for the running
+    # tasks (a rolling update, a drain, a scale-in): they are not lost meanwhile
+    at_exit = []
+    monkeypatch.setattr(worker_pool.atexit, "register", lambda f, *a: at_exit.append((f, a)))
+    monkeypatch.setattr(worker_pool, "CONFIRM_SECONDS", 0)
+    expiry, real_set = {}, regolazioni_isolate.set
+    monkeypatch.setattr(regolazioni_isolate, "set", lambda k, v, nx=False, ex=None: expiry.update({k: ex}) or real_set(k, v, nx, ex))
+    c = Consumer()
+    step = PoolFromPanel(None)
+    step.start(c)
+    meta = {"pid": 7, "hostname": "celery@w1", "since": step.started_at + 1}
+    step.shutdown(c)
+    assert live_workers() == []  # out of the panel at once
+    assert worker_pool.lost("t", meta) == "" and worker_pool.lost("t", meta) == ""
+    assert expiry[worker_pool.KEY_PREFIX + "celery@w1"] == 3600 + worker_pool.TTL  # the hard time limit, and a margin
+    for f, a in at_exit:  # the process exits once the pool is done
+        f(*a)
+    assert worker_pool.lost("t", meta) == worker_pool.LOST  # still running then: it went with the process
 
 
 def test_a_failing_check_never_stops_the_worker(regolazioni_isolate):

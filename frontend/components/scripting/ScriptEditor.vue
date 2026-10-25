@@ -288,6 +288,10 @@ function makeEntry(path: string) {
 const aiApi = useAi()
 const aiStatus = ref<AiStatus | null>(null)
 const side = ref<'env' | 'assistant'>('env')
+// mounted the first time it is opened (its AI notice asks then, not when the editor opens),
+// and kept while the variables are shown: the conversation stays
+const assistantOpened = ref(false)
+watch(side, (s) => { if (s === 'assistant') assistantOpened.value = true })
 const aiAvailable = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !props.readOnly)
 onMounted(async () => {
   try { aiStatus.value = await aiApi.status() } catch { /* no assistant: the panel stays as it was */ }
@@ -307,7 +311,10 @@ function applyProposal(p: ScriptProposal) {
     const mine = local.value.find((x) => x.path === f.path)
     const model = models.get(f.path)
     if (mine && model && m) {
+      // a stop before and after: Ctrl+Z takes back the proposal, and only the proposal
+      model.pushStackElement()
       model.pushEditOperations([], [{ range: model.getFullModelRange(), text: f.content }], () => null)
+      model.pushStackElement()
     } else if (mine) {
       mine.content = f.content
     } else {
@@ -458,7 +465,7 @@ onBeforeUnmount(() => {
     <!-- nokey: the flow editor's keys (Space pans, Backspace deletes the selected node) stay
          out of the code. Monaco types through EditContext on Chrome and Edge: an element
          Vue Flow does not recognise as a text field -->
-    <div class="layout nokey">
+    <div class="layout nokey" :class="{ wide: aiAvailable && side === 'assistant' }">
       <!-- the node's files -->
       <aside class="files" :aria-label="$t('scripting.editor.files')">
         <div class="side-title">{{ $t('scripting.editor.files') }}</div>
@@ -530,7 +537,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- the assistant, in place of the environment's panel -->
-      <aside v-if="aiAvailable && side === 'assistant' && aiStatus" class="env assist">
+      <aside v-if="aiAvailable && aiStatus && assistantOpened" v-show="side === 'assistant'" class="env assist">
         <ScriptAssistant
           :status="aiStatus"
           :environment-id="environment.id"
@@ -546,7 +553,7 @@ onBeforeUnmount(() => {
         />
       </aside>
       <!-- what the script finds -->
-      <aside v-else class="env" :aria-label="$t('scripting.editor.environment')">
+      <aside v-show="!aiAvailable || side !== 'assistant'" class="env" :aria-label="$t('scripting.editor.environment')">
         <div class="side-title"><Variable :size="13" /> {{ $t('scripting.editor.variables') }}</div>
         <p class="nota">{{ $t('scripting.editor.variablesHint') }}</p>
         <ul class="vars">
@@ -580,7 +587,7 @@ onBeforeUnmount(() => {
 .assist-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; font-size: 12px; margin-right: 6px; }
 .assist-toggle.on { border-color: var(--accent); color: var(--accent-hi); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; gap: 12px; height: min(72vh, 900px); min-height: 420px; }
-.layout:has(.assist) { grid-template-columns: 210px minmax(0, 1fr) 360px; }
+.layout.wide { grid-template-columns: 210px minmax(0, 1fr) 360px; }
 .env.assist { overflow: hidden; }
 .files, .env { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
 .side-title { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 4px; }

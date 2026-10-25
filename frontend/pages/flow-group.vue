@@ -11,7 +11,7 @@
 // looked at (the latest by default), polled while a run is queued or running.
 //
 // /flow-group?id=N opens a group; /flow-group?project=P starts a new one in folder P.
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
@@ -400,7 +400,14 @@ async function save() {
 function onKey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault()
-    save()
+    // a field of a cell's panel that records its value on «change» gives it first (as in
+    // the flow editor): saved at once, the group kept the value from before
+    const field = document.activeElement as HTMLElement | null
+    if (field && ['INPUT', 'TEXTAREA', 'SELECT'].includes(field.tagName.toUpperCase())) {
+      field.blur()
+      field.focus()
+    }
+    nextTick(() => save())
   }
 }
 

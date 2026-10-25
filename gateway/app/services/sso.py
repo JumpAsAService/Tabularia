@@ -390,6 +390,13 @@ def normalize_groups(claims: dict, cfg: OidcSettings, more: tuple[dict, ...] = (
     return {n for n in names if n}
 
 
+def groups_claim_found(claims: dict, cfg: OidcSettings, more: tuple[dict, ...] = ()) -> bool:
+    """Whether any configured group source is in the claims at all (an empty list counts:
+    the person is in no group). None found is a groups claim set wrong — a typo in the
+    panel, a provider that stopped sending it — not a person who left every group."""
+    return any(claim_at(c, source) is not None for source in group_sources(cfg) for c in (claims, *more))
+
+
 def _access_token_claims(cfg: OidcSettings, doc: dict, access_token: str, subject: str) -> Optional[dict]:
     """The claims of the access token, when it is a JWT signed by the provider's keys,
     issued by it and for the same person: Keycloak puts the realm's and the clients' roles
@@ -460,7 +467,7 @@ def _group_ids(session: Session, names: set[str], auto_create: bool) -> set[int]
 
 
 def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSettings] = None,
-                       groups: Optional[set[str]] = None) -> tuple[User, dict]:
+                       groups: Optional[set[str]] = None, groups_known: Optional[bool] = None) -> tuple[User, dict]:
     """Crea/aggiorna l'utente dalle claim e riconcilia i suoi gruppi.
 
     Ritorna `(utente, dettaglio)`; il dettaglio finisce nell'audit e dice cosa è
@@ -472,6 +479,8 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     # the groups the provider asserts: given by login_user (which also reads the access
     # token and userinfo), or from the claims alone
     asserted = set(groups) if groups is not None else normalize_groups(claims, cfg)
+    if groups_known is None:
+        groups_known = groups_claim_found(claims, cfg)
     # 0) ha il permesso di entrare? Prima di creare o collegare qualsiasi cosa.
     ensure_admitted(cfg, email, set(asserted))
 
@@ -544,7 +553,12 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     # il gruppo che concede i privilegi admin non è un gruppo di progetto: si
     # valuta PRIMA dell'allowlist, così non serve elencarlo anche lì
     superuser_before = user.is_superuser
-    if cfg.superuser_group:
+    if not groups_known:
+        # no group source in the token: the claim is set wrong, the person has not left
+        # every group. Administration and memberships stay as they are; the audit says why.
+        logger.warning("SSO: none of the group claims (%s) is in the token of %s: groups left as they are",
+                       cfg.groups_claim, email)
+    elif cfg.superuser_group:
         user.is_superuser = cfg.superuser_group in idp_groups
         idp_groups.discard(cfg.superuser_group)
         if user.is_superuser != superuser_before:
@@ -569,7 +583,7 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     for gid in wanted - current:
         session.add(UserGroupLink(user_id=user.id, group_id=gid))
     removed_ids: set[int] = set()
-    if cfg.authoritative:
+    if cfg.authoritative and groups_known:
         removed_ids = current - wanted
         for gid in removed_ids:
             link = session.exec(
@@ -597,6 +611,8 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     }
     if user.is_superuser != superuser_before:
         detail["superuser_changed"] = True
+    if not groups_known:
+        detail["groups_claim_missing"] = cfg.groups_claim
     return user, detail
 
 
@@ -609,8 +625,9 @@ def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings
         # se l'IdP dichiara l'email NON verificata non ci si fida: sarebbe una
         # via di takeover. Se la claim manca (tipico di Entra) si procede.
         raise SsoError("email not verified by the IdP", "email_unverified")
-    groups = normalize_groups(claims, cfg, more_group_claims(cfg, claims, tokens))
-    return provision_and_sync(session, claims, cfg, groups=groups)
+    more = more_group_claims(cfg, claims, tokens)
+    return provision_and_sync(session, claims, cfg, groups=normalize_groups(claims, cfg, more),
+                              groups_known=groups_claim_found(claims, cfg, more))
 
 
 def public_config() -> dict[str, Any]:

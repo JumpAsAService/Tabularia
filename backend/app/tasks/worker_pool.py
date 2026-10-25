@@ -16,6 +16,7 @@ stops writing disappears by itself.
 """
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
@@ -129,6 +130,16 @@ def forget(name: str) -> None:
     r.srem(REGISTRY, name)
 
 
+def draining(name: str, started_at: float, seconds: int) -> None:
+    """A worker in its warm shutdown: out of the panel's list, but its state stays for
+    as long as its tasks may still run (`seconds`), so `lost` does not call them lost
+    while Celery lets them finish. The process forgets it when it exits; killed before,
+    the state expires by itself."""
+    r = regolazioni._client()
+    r.set(KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at, "draining": True}), ex=seconds)
+    r.srem(REGISTRY, name)
+
+
 # a task the result backend says STARTED, whose worker is no longer there to finish it
 LOST = ("The worker running it stopped before the end: killed at its memory limit (OOMKilled), or "
         "its pod restarted or removed (an upgrade, a drained node). Run it again; if it happens again, "
@@ -157,6 +168,7 @@ def lost(task_id: str, meta: Any) -> str:
         r = regolazioni._client()
         raw = r.get(KEY_PREFIX + meta["hostname"])
         if raw is not None:
+            r.delete(SUSPECT_PREFIX + task_id)  # back after a blip: the next absence starts afresh
             started_at = json.loads(raw).get("started_at")
             restarted = isinstance(since, (int, float)) and isinstance(started_at, (int, float)) and started_at > since
             return LOST if restarted else ""
@@ -168,6 +180,13 @@ def lost(task_id: str, meta: Any) -> str:
         return LOST if now - first >= CONFIRM_SECONDS else ""
     except Exception:  # noqa: BLE001 — Valkey down or a state unreadable: no verdict
         return ""
+
+
+def _forget_quietly(name: str) -> None:
+    try:
+        forget(name)
+    except Exception:  # noqa: BLE001 — it expires by itself
+        pass
 
 
 def task_started_meta(request: Any) -> dict:
@@ -218,9 +237,12 @@ class PoolFromPanel(bootsteps.StartStopStep):
             self.tref = None
 
     def shutdown(self, c):
+        # the consumer stops before the pool, which then waits for the running tasks:
+        # they may last up to the hard time limit
         self.stop(c)
         try:
-            forget(c.hostname)
+            draining(c.hostname, self.started_at, int(c.app.conf.task_time_limit or 7200) + TTL)
+            atexit.register(_forget_quietly, c.hostname)
         except Exception:  # noqa: BLE001 — it expires by itself
             pass
 

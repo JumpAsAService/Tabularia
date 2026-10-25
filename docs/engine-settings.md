@@ -126,7 +126,7 @@ Container node) or greyed out (an engine that is not configured).
 | Setting | Variable | Panel range | Applies |
 |---|---|---|---|
 | Automatic sample of the editor | `PREVIEW__DEFAULT_SAMPLE_ROWS` | 0 – 10,000,000 | live |
-| Largest file uploaded | `UPLOAD__MAX_BYTES` | 0 – 1 TiB | live |
+| Largest file uploaded | `UPLOAD__MAX_BYTES` | 1 MiB – 1 TiB (0, no limit, only from the environment) | live |
 
 **Database backups**
 
@@ -382,8 +382,10 @@ can stop it.
   start. The restart waits for each component's last new pod to be ready before it moves
   to the next component.
 - A worker pod finishes the run it has in hand before it stops (up to its grace period,
-  `worker.terminationGracePeriodSeconds`, an hour by default): the restart of the workers
-  lasts as long as the longest run in progress.
+  `worker.terminationGracePeriodSeconds`, an hour by default). Worker pods go one at a
+  time, and the pods not yet restarted keep taking new runs: with many workers and long
+  runs the restart of the workers can take hours, and the components after them in the
+  order wait. Restart the workers on their own, at a quiet hour, when runs are long.
 - The scheduler (beat) is a single pod: for a second or two, while the evicted one stops
   and the new one starts, both are up. A periodic task due in that instant may be queued
   twice (the housekeeping tasks are harmless twice); a node drain does the same.

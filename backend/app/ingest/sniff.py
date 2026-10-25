@@ -8,7 +8,8 @@ became one column, «Citt�» and prices as text.
 - separator: among `;` `,` tab `|`, the one found the same number of times (and at least
   once) on the first lines, outside quotes; `,` when none is;
 - decimal comma: with a separator other than `,`, numbers written `16,125` and none
-  written `16.125`.
+  written `16.5`; with `;` (Excel's separator in those languages) a number written
+  `1.500` is a thousands dot too, never one and a half.
 """
 from __future__ import annotations
 
@@ -24,6 +25,9 @@ CHUNK = 1 << 20
 
 _COMMA_NUMBER = re.compile(r"^-?\d+(?:\.\d{3})*,\d+$")
 _DOT_NUMBER = re.compile(r"^-?\d+\.\d+$")
+# `1.500`, `12.345.678`: a thousands dot where the comma is the decimal mark, a decimal
+# dot with three decimals elsewhere; which one, the separator says
+_THOUSANDS = re.compile(r"^-?\d{1,3}(?:\.\d{3})+$")
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,7 @@ def sniff(path: str) -> CsvShape:
     if separator != ",":
         tokens = [t.strip() for r in _fields(lines[1:], separator) for t in r]
         comma = sum(bool(_COMMA_NUMBER.match(t)) for t in tokens)
-        dot = sum(bool(_DOT_NUMBER.match(t)) for t in tokens)
-        decimal_comma = comma > 0 and dot == 0
+        thousands = sum(bool(_THOUSANDS.match(t)) for t in tokens) if separator == ";" else 0
+        dot = sum(bool(_DOT_NUMBER.match(t)) and not (separator == ";" and _THOUSANDS.match(t)) for t in tokens)
+        decimal_comma = (comma > 0 or thousands > 0) and dot == 0
     return CsvShape(separator=separator, decimal_comma=decimal_comma, encoding=encoding)

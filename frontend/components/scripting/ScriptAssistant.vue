@@ -6,7 +6,7 @@
 // What goes to the model: the code, the environment, the names of the variables and of
 // the inputs' columns, and the error of the last run when it failed — never a row of
 // data (the user's choice of 2026-10-24); the gateway cuts the log down to the error.
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, CircleAlert, FileDiff, LoaderCircle, Plus, Send, Sparkles, Square, Wrench } from 'lucide-vue-next'
 import { useAi, type AiDone, type AiStatus, type AiUsage, type ScriptProposal } from '~/composables/useAi'
@@ -71,6 +71,8 @@ onMounted(() => {
   try { saved = localStorage.getItem(MODEL_KEY) ?? '' } catch { /* no storage: the default model */ }
   model.value = props.status.models.includes(saved) ? saved : (props.status.default_model ?? props.status.models[0] ?? '')
 })
+// the editor closed while the model writes: the answer is stopped, not paid for to no one
+onBeforeUnmount(() => controller?.abort())
 watch(model, (m) => { try { if (m) localStorage.setItem(MODEL_KEY, m) } catch { /* a convenience */ } })
 
 function scrollDown() {

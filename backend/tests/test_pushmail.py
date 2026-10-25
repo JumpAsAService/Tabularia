@@ -105,6 +105,13 @@ def test_over_the_size_cap_nothing_is_sent_and_the_admins_are_named(sent, sales,
     assert sent == []
 
 
+def test_past_the_cap_the_next_files_are_not_written(sent, sales, regions, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_ATTACHMENT_BYTES", 1)
+    with pytest.raises(EmailDestinationError, match="at file 1 of 2"):
+        pm.send_pushmail(_conn(), _spec(_att(sales, "v"), _att(regions, "r")), now=NOW)
+    assert sent == []
+
+
 def test_no_recipients_or_a_bad_placeholder_send_nothing(sent, regions):
     with pytest.raises(EmailDestinationError, match="No recipients"):
         pm.send_pushmail(_conn(), _spec(_att(regions, "r"), to=[" "], cc=[]), now=NOW)

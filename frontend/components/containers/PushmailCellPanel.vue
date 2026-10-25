@@ -5,7 +5,7 @@
 // take the Outputs' date placeholders, previewed as they are typed. More than one
 // datasource, or a big one, brings a warning: how large a message the SMTP relay
 // takes is known by the administrators.
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, X, Trash2, TriangleAlert, Mail } from 'lucide-vue-next'
 import type { ConnectionInfo } from '~/composables/useConnections'
@@ -41,6 +41,12 @@ const connOptions = computed(() => props.connections.map((c) => ({ value: c.id, 
 function splitAddresses(raw: string): string[] {
   return raw.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
 }
+// the recipients go to the cell as they are typed (a save with the cursor still in the
+// field keeps them), from text of their own: the comma just typed stays where it is
+const toText = ref(props.config.to.join(', '))
+const ccText = ref(props.config.cc.join(', '))
+watch(toText, (v) => emit('update', { to: splitAddresses(v) }))
+watch(ccText, (v) => emit('update', { cc: splitAddresses(v) }))
 
 function setAttachment(i: number, patch: Partial<PushmailAttachment>) {
   const next = props.config.attachments.map((a, n) => (n === i ? { ...a, ...patch } : a))
@@ -95,11 +101,9 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
       <p v-if="!connections.length" class="muted hint">{{ t('pushmail.noConnections') }}</p>
 
       <label for="pm-to">{{ t('pushmail.toLabel') }} <span class="muted">{{ t('pushmail.listHint') }}</span></label>
-      <input id="pm-to" :value="config.to.join(', ')" type="text" spellcheck="false" placeholder="anna@acme.example, bruno@acme.example"
-             @change="emit('update', { to: splitAddresses(($event.target as HTMLInputElement).value) })" />
+      <input id="pm-to" v-model="toText" type="text" spellcheck="false" placeholder="anna@acme.example, bruno@acme.example" />
       <label for="pm-cc">{{ t('pushmail.ccLabel') }}</label>
-      <input id="pm-cc" :value="config.cc.join(', ')" type="text" spellcheck="false"
-             @change="emit('update', { cc: splitAddresses(($event.target as HTMLInputElement).value) })" />
+      <input id="pm-cc" v-model="ccText" type="text" spellcheck="false" />
 
       <label for="pm-subject">{{ t('pushmail.subjectLabel') }}</label>
       <input id="pm-subject" :value="config.subject" type="text" maxlength="500" aria-describedby="tp-pm-subject"
