@@ -40,7 +40,7 @@ from app.ingest.db_source import _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec
 logger = logging.getLogger(__name__)
 
 # rows per INSERT on the paths without a native bulk load
-MYSQL_CHUNK_ROWS = 5_000  # multi-row VALUES: sotto il max_allowed_packet
+MYSQL_CHUNK_ROWS = 5_000  # multi-row VALUES: under max_allowed_packet
 TRINO_CHUNK_ROWS = 500  # every INSERT is a Trino query: small chunks
 
 
@@ -51,7 +51,7 @@ class DbDestinationError(IngestError):
 class DbDestinationSpec(BaseModel):
     table: str  # the table's name (schema.table too)
     mode: Literal["append", "replace"] = "append"
-    post_sql: str = ""  # statement post-insert separati da `;` (facoltativi)
+    post_sql: str = ""  # post-insert statements separated by `;` (optional)
 
 
 def _qualified_table(conn: DbConnectionSpec, table_ref: str) -> tuple[str, list[str]]:

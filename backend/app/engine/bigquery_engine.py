@@ -326,7 +326,7 @@ class BigQueryContext:
             except Exception as e:  # noqa: BLE001
                 logger.warning("annullamento job BigQuery %s non riuscito: %s", getattr(job, "job_id", "?"), e)
 
-    # ── introspezione (dry run: gratuita) ────────────────────────────────
+    # ── introspection (dry run: free) ────────────────────────────────────
     def schema_of(self, sql: str) -> list[tuple[str, str]]:
         cached = self._schemas.get(sql)
         if cached is not None:
@@ -415,7 +415,7 @@ class BigQueryContext:
 class BigQueryEngine(Engine):
     engine_name = "bigquery"
 
-    # the cap on billed bytes is set from the panel (core/regolazioni.py): the engine
+    # the cap on billed bytes is set from the panel (core/panel_settings.py): the engine
     # lives as long as the process, its section is read from there at every use
     @property
     def cfg(self) -> BigQuerySettings:
@@ -496,7 +496,7 @@ class BigQueryEngine(Engine):
                 logger.info("Storage Read API not available (%s): results through REST", e)
         return self._bqstorage
 
-    # ── step-cache nativa ────────────────────────────────────────────────
+    # ── native step cache ───────────────────────────────────────────────
     def _cache_enabled(self, location: str | None) -> bool:
         """The cache is usable when the dataset exists or can be created. Decided once per
         process; without permissions it goes on WITHOUT a cache."""

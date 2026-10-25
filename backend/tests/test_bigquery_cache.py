@@ -1,8 +1,8 @@
-"""Step-cache NATIVA di BigQuery, senza BigQuery: un client finto registra le
-query e simula il servizio (tabelle create dal CTAS, descrizione, scadenza,
-NotFound). Si verifica il contratto: materializzazione dei passi intermedi con
-scadenza e nomi originali, riuso dall'antenato piu' vicino, auto-riparazione
-quando la tabella e' sparita, niente cache nel Viewer, degrado senza permessi.
+"""BigQuery's NATIVE step cache, without BigQuery: a fake client records the queries and
+simulates the service (tables made by CTAS, description, expiry, NotFound). The contract
+is checked: the intermediate steps materialized with an expiry and the original names,
+reuse from the nearest ancestor, self-repair when the table is gone, no cache in the
+Viewer, a graceful fallback without permissions.
 """
 import io
 import json
@@ -92,8 +92,8 @@ class FakeClient:
 
 
 class _RangeClient:
-    """Il client S3 minimo che il motore usa per leggere il footer del parquet
-    (HEAD + GET a intervalli), sopra i blob del FakeStorage."""
+    """The minimal S3 client the engine uses to read the parquet's footer (HEAD + ranged
+    GETs), over the FakeStorage's blobs."""
 
     def __init__(self, blobs):
         self.blobs = blobs
@@ -127,7 +127,7 @@ LIMIT = {"type": "limit", "params": {"n": 5}}
 
 def _engine(forbid_dataset=False):
     fs = _Storage()
-    # un parquet VERO con un nome colonna che BigQuery normalizza
+    # a REAL parquet with a column name BigQuery normalizes
     buf = io.BytesIO()
     pl.DataFrame({"id": [1, 2], "Ragione Sociale": ["a", "b"]}).write_parquet(buf)
     fs.blobs[("data-prep", "datasets/x.parquet")] = buf.getvalue()
@@ -147,7 +147,7 @@ def _real(client):
 
 
 def _drain(eng):
-    """Quello che fa il task differito: materializza i passi lasciati in sospeso."""
+    """What the deferred task does: materializes the steps left pending."""
     for src, ops in eng.take_pending():
         eng.materialize(src, ops)
 
@@ -156,24 +156,24 @@ def test_materializes_previous_steps_and_restarts_from_cache():
     eng = _engine()
     c = eng._client
     res = eng.preview(SRC, [FILTER, SORT], limit=10, use_cache=True)
-    # 0) la preview NON aspetta il CTAS: lo lascia in sospeso e riparte dalla sorgente
+    # 0) the preview does NOT wait for the CTAS: it leaves it pending and starts from the source
     assert _ctas(c) == [] and "FROM `_src1`" in _real(c)[-1]
     pending = eng.take_pending()
     assert len(pending) == 1 and pending[0][1] == [FILTER]
-    assert eng.take_pending() == []  # drenata una volta sola
+    assert eng.take_pending() == []  # drained once
     for src, ops in pending:
         eng.materialize(src, ops)
-    # 1) il passo intermedio ([filter]) e' scritto in cache con scadenza e nomi originali
+    # 1) the intermediate step ([filter]) is written to the cache with an expiry and the original names
     ctas = _ctas(c)
     assert len(ctas) == 1
     assert "`p.tabularia_cache.s_" in ctas[0] and "expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL" in ctas[0]
     desc = re.search(r"description = '((?:[^'\\]|\\.)*)'", ctas[0]).group(1)
     assert json.loads(desc.replace("\\'", "'")) == {"names": ["id", "Ragione Sociale"]}
-    assert "FROM `_src1`" in ctas[0]  # la prima materializzazione parte dalla sorgente
-    assert [col.name for col in res.columns] == ["id", "Ragione Sociale"]  # nomi ORIGINALI
+    assert "FROM `_src1`" in ctas[0]  # the first materialization starts from the source
+    assert [col.name for col in res.columns] == ["id", "Ragione Sociale"]  # ORIGINAL names
     assert c.datasets == ["tabularia_cache"]
 
-    # 2) seconda preview identica: riparte dalla tabella di cache, niente in sospeso
+    # 2) a second identical preview: starts from the cache table, nothing pending
     n = len(_real(c))
     res = eng.preview(SRC, [FILTER, SORT], limit=10, use_cache=True)
     final = _real(c)[-1]
@@ -181,13 +181,13 @@ def test_materializes_previous_steps_and_restarts_from_cache():
     assert len(_real(c)) == n + 1 and eng.take_pending() == []
     assert [col.name for col in res.columns] == ["id", "Ragione Sociale"]
 
-    # 3) un passo in piu': la cache di [filter, sort] parte da quella di [filter]
+    # 3) one more step: the cache of [filter, sort] starts from that of [filter]
     eng.preview(SRC, [FILTER, SORT, LIMIT], limit=10, use_cache=True)
     _drain(eng)
     ctas = _ctas(c)
     assert len(ctas) == 2 and "tabularia_cache.s_" in ctas[1] and "_src" not in ctas[1]
     _drain(eng)
-    assert len(_ctas(c)) == 2  # gia' in cache: nessun CTAS ripetuto
+    assert len(_ctas(c)) == 2  # cached already: no CTAS repeated
 
 
 def test_expired_table_is_forgotten_and_rebuilt():
@@ -195,9 +195,9 @@ def test_expired_table_is_forgotten_and_rebuilt():
     c = eng._client
     eng.preview(SRC, [FILTER, SORT], limit=10, use_cache=True)
     _drain(eng)
-    c.tables.clear()  # scaduta sul servizio, l'indice non lo sa
+    c.tables.clear()  # expired on the service, the index does not know
     eng.preview(SRC, [FILTER, SORT], limit=10, use_cache=True)
-    assert "FROM `_src" in _real(c)[-1]  # la preview e' ripartita dalla sorgente
+    assert "FROM `_src" in _real(c)[-1]  # the preview started again from the source
     _drain(eng)
     assert len(_ctas(c)) == 2 and "FROM `_src" in _ctas(c)[1]
 
@@ -230,10 +230,10 @@ def test_evict_expired_drops_tables_and_index():
     _drain(eng)
     (h,) = list(eng.cache.redis.smembers(eng.cache.index_set))
     assert eng.cache.table_ref(h) in c.tables
-    eng.cache.redis.zadd(eng.cache.atime_zset, {h: 1.0})  # accesso antichissimo
+    eng.cache.redis.zadd(eng.cache.atime_zset, {h: 1.0})  # a very old access
     assert eng.cache.evict_expired(ttl_seconds=60) == 1
     assert c.tables == {} and not eng.cache.has(h)
-    # indice in uno spazio SEPARATO da quello dei motori a parquet
+    # an index in a space SEPARATE from the parquet engines'
     assert eng.cache.index_set.endswith(":bigquery")
 
 
@@ -249,8 +249,8 @@ def test_run_starts_from_cache_but_does_not_write_it():
 
 
 def test_preview_task_hands_pending_steps_to_the_deferred_task(monkeypatch):
-    """Il task della preview drena le materializzazioni in sospeso e le accoda
-    al task separato, sulla coda delle preview: la risposta non le aspetta."""
+    """The preview's task drains the pending materializations and queues them to the
+    separate task, on the previews' queue: the answer does not wait for them."""
     from app.tasks import jobs
 
     eng = _engine()
@@ -261,6 +261,6 @@ def test_preview_task_hands_pending_steps_to_the_deferred_task(monkeypatch):
     out = jobs.preview_task.run(bucket="data-prep", input_key="datasets/x.parquet", operations=[FILTER, SORT], limit=10, engine="bigquery")
     assert out["ok"] and sent == [{"args": ["bigquery", "data-prep", "datasets/x.parquet", [FILTER]], "queue": "preview",
                                    "priority": jobs.CACHE_COPY_PRIORITY}]
-    # e il task differito esegue davvero la materializzazione
+    # and the deferred task really runs the materialization
     res = jobs.materialize_step_task.run("bigquery", "data-prep", "datasets/x.parquet", [FILTER])
     assert res == {"ok": True, "written": True} and len(_ctas(eng._client)) == 1

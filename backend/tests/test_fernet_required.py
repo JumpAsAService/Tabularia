@@ -1,6 +1,6 @@
-"""SECURITY__FERNET_KEY è obbligatoria SEMPRE: API e worker Celery non partono
-senza una chiave valida (`Settings.check_required_secrets`, chiamata all'import
-di app.api.main e di app.tasks.celery_app)."""
+"""SECURITY__FERNET_KEY is ALWAYS required: the API and the Celery workers do not start
+without a valid key (`Settings.check_required_secrets`, called at the import of
+app.api.main and app.tasks.celery_app)."""
 import pytest
 from cryptography.fernet import Fernet
 

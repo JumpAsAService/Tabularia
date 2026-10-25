@@ -1,9 +1,9 @@
-"""Cancellazione di piu' chiavi su storage con e senza batch (GCS non ce l'ha).
+"""Deleting several keys on storages with and without batches (GCS has none).
 
-Semantica attesa ovunque: il batch e' usato quando c'e'; quando l'endpoint lo
-rifiuta si passa alle DELETE singole (e non si riprova il batch); cancellare una
-chiave assente non e' un errore (GCS risponde 404, S3 no); un errore vero sulla
-prima chiave interrompe subito invece di insistere su centinaia di chiavi.
+The semantics expected everywhere: the batch is used when there is one; when the
+endpoint refuses it, single DELETEs follow (and the batch is not tried again); deleting a
+missing key is not an error (GCS answers 404, S3 does not); a real error on the first key
+stops at once instead of insisting on hundreds of keys.
 """
 import pytest
 from botocore.exceptions import ClientError
@@ -68,7 +68,7 @@ def test_falls_back_to_single_deletes_and_remembers():
     assert (deleted, errors) == (3, [])
     assert c.single_calls == ["a", "b", "c"]
     assert "https://storage.googleapis.com" in utils._batch_delete_unsupported
-    # seconda volta: niente tentativo batch (che fallirebbe di nuovo)
+    # the second time: no batch attempt (which would fail again)
     c2 = _Client(endpoint="https://storage.googleapis.com", batch=True)
     delete_keys(c2, "b", ["x"])
     assert c2.batch_calls == [] and c2.single_calls == ["x"]
@@ -115,8 +115,8 @@ def test_storage_service_single_delete_is_idempotent(monkeypatch):
 
 
 def test_storage_client_does_not_send_chunked_checksums(monkeypatch):
-    """GCS rifiuta le PUT con i checksum a blocchi che boto3 >= 1.36 aggiunge di
-    default (SignatureDoesNotMatch): il client deve calcolarli solo dove richiesti."""
+    """GCS refuses the PUTs with the chunked checksums boto3 >= 1.36 adds by default
+    (SignatureDoesNotMatch): the client must compute them only where required."""
     monkeypatch.setenv("STORAGE__ENDPOINT", "https://storage.googleapis.com")
     from app.core.config import get_settings
 

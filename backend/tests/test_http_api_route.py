@@ -7,7 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import http_api as route
-from app.api.routes import tasks as rotta_tasks
+from app.api.routes import tasks as tasks_route
 from app.core.crypto import encrypt_secret
 from tests.fake_api import FakeApi
 
@@ -95,5 +95,5 @@ def test_the_engine_returns_the_progress_of_calls(monkeypatch):
         def __init__(self, task_id, app=None):
             self.status, self.info = "STARTED", {"phase": "calls", "call": 2, "calls": 5, "pages": 7, "rows": 700, "pid": 1}
 
-    monkeypatch.setattr(rotta_tasks, "AsyncResult", _Result)
-    assert rotta_tasks.get_task_status("t").progress == {"phase": "calls", "call": 2, "calls": 5, "pages": 7, "rows": 700}
+    monkeypatch.setattr(tasks_route, "AsyncResult", _Result)
+    assert tasks_route.get_task_status("t").progress == {"phase": "calls", "call": 2, "calls": 5, "pages": 7, "rows": 700}

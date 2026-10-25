@@ -692,7 +692,7 @@ def settings_from_env() -> Settings:
 
 def get_settings() -> Settings:
     """The settings in force: the environment's, with the values an administrator
-    changed from the panel on top (see core/regolazioni.py). While there are none,
+    changed from the panel on top (see core/panel_settings.py). While there are none,
     the same object as `settings_from_env()`.
 
     Usage:

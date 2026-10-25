@@ -44,7 +44,7 @@ class S3ConnectionSpec(BaseModel):
     secret_key: str = ""
     secret_key_encrypted: str = ""
     region: str = ""
-    bucket: str = ""  # bucket di default della connessione
+    bucket: str = ""  # the connection's default bucket
 
     def resolve_secret(self) -> str:
         if self.secret_key_encrypted:

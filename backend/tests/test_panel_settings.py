@@ -1,13 +1,12 @@
-"""Regolazioni dal pannello: l'amministratore cambia alcuni parametri del motore da
-Amministrazione → Impostazioni, senza ambiente e senza riavvii.
+"""Settings from the panel: the administrator changes some of the engine's parameters
+from Administration → Settings, without the environment and without restarts.
 
-Le regole che questi test tengono ferme: solo le voci dell'elenco, intere e dentro
-il loro intervallo; i vincoli fra voci (limite morbido < limite duro, timeout di
-lettura < limite morbido, limite duro < soglia del gateway); un valore non valido
-si scarta anche quando si legge; Valkey giù = restano gli ultimi valori; ogni
-processo le vede entro REREAD_EVERY; arrivano davvero dove servono (row group
-dell'import, tetto dell'export, limiti dei task, motori ClickHouse e BigQuery
-creati una volta).
+The rules these tests hold: only the listed items, whole and within their range; the
+constraints between items (soft limit < hard limit, read timeout < soft limit, hard limit
+< the gateway's threshold); an invalid value is discarded when read too; Valkey down =
+the last values stay; every process sees them within REREAD_EVERY; they really reach
+where they are needed (the import's row group, the export's cap, the tasks' limits, the
+ClickHouse and BigQuery engines made once).
 """
 import io
 import json
@@ -22,69 +21,69 @@ from app.core.config import BigQuerySettings, ClickHouseExternalSettings, get_se
 from tests.fakes import FakeStorage
 
 
-def _errori(values, **kw):
+def _errors(values, **kw):
     return panel_settings.validate(values, settings_from_env(), **kw)[1]
 
 
-# ── che cosa si accetta ──────────────────────────────────────────────────────
+# ── what is accepted ──────────────────────────────────────────────────────
 
-def test_solo_le_voci_dell_elenco_intere_e_nel_loro_intervallo():
-    assert _errori({"storage.endpoint": "http://altrove"}) == [{"key": "storage.endpoint", "code": "unknown"}]
-    assert _errori({"export.max_rows": "100"})[0]["code"] == "integer"
-    assert _errori({"export.max_rows": True})[0]["code"] == "integer"  # un bool è un int per Python
-    assert _errori({"ingest.parquet_row_group_rows": 10})[0] == {
+def test_only_the_listed_items_whole_and_in_their_range():
+    assert _errors({"storage.endpoint": "http://altrove"}) == [{"key": "storage.endpoint", "code": "unknown"}]
+    assert _errors({"export.max_rows": "100"})[0]["code"] == "integer"
+    assert _errors({"export.max_rows": True})[0]["code"] == "integer"  # a bool is an int to Python
+    assert _errors({"ingest.parquet_row_group_rows": 10})[0] == {
         "key": "ingest.parquet_row_group_rows", "code": "min", "limit": 10_000}
-    assert _errori({"ingest.parquet_row_group_rows": 50_000_000})[0]["code"] == "max"
-    assert _errori({"ingest.parquet_row_group_rows": 250_000, "export.max_rows": 0}) == []
+    assert _errors({"ingest.parquet_row_group_rows": 50_000_000})[0]["code"] == "max"
+    assert _errors({"ingest.parquet_row_group_rows": 250_000, "export.max_rows": 0}) == []
 
 
-def test_le_credenziali_e_gli_indirizzi_non_sono_nell_elenco():
+def test_credentials_and_addresses_are_not_in_the_list():
     key_names = {v.key for v in panel_settings.ITEMS}
-    for vietata in ("storage.secret_key", "storage.endpoint", "redis.host", "security.fernet_key",
+    for forbidden in ("storage.secret_key", "storage.endpoint", "redis.host", "security.fernet_key",
                     "clickhouse_external.password", "clickhouse_external.host", "bigquery.credentials_b64",
                     "celery.worker_concurrency", "celery.timezone", "storage.direct_read",
                     "clickhouse_external.transport", "redis.url"):
-        assert vietata not in key_names
+        assert forbidden not in key_names
 
 
-def test_il_limite_morbido_resta_sotto_il_duro():
-    e = _errori({"celery.task_soft_time_limit": 3600})  # il duro dell'ambiente è 3600
+def test_the_soft_limit_stays_under_the_hard_one():
+    e = _errors({"celery.task_soft_time_limit": 3600})  # the environment's hard limit is 3600
     assert e == [{"key": "celery.task_soft_time_limit", "code": "below", "other": "celery.task_time_limit", "limit": 3600}]
-    # abbassare il duro sotto il morbido dell'ambiente: la colpa è del duro
-    e = _errori({"celery.task_time_limit": 1800})
+    # lowering the hard limit under the environment's soft one: the hard limit is at fault
+    e = _errors({"celery.task_time_limit": 1800})
     assert e[0]["key"] == "celery.task_time_limit" and e[0]["code"] == "above"
-    assert _errori({"celery.task_time_limit": 1800, "celery.task_soft_time_limit": 1700,
+    assert _errors({"celery.task_time_limit": 1800, "celery.task_soft_time_limit": 1700,
                     "ingest.db_read_timeout_seconds": 1500}) == []
 
 
-def test_chi_aspetta_un_import_legge_il_timeout_di_lettura_non_il_task_ucciso():
-    e = _errori({"ingest.db_read_timeout_seconds": 3300})  # il morbido dell'ambiente è 3300
+def test_whoever_waits_on_an_import_reads_the_read_timeout_not_the_killed_task():
+    e = _errors({"ingest.db_read_timeout_seconds": 3300})  # the environment's soft limit is 3300
     assert e[0]["key"] == "ingest.db_read_timeout_seconds" and e[0]["code"] == "below"
 
 
-def test_il_limite_duro_resta_sotto_la_soglia_del_gateway():
-    """Il gateway dichiara perso un run dopo la sua soglia: se il limite duro la
-    superasse, chiuderebbe come fallito un run ancora vivo."""
-    e = _errori({"celery.task_time_limit": 3600}, hard_limit_max=3000)
+def test_the_hard_limit_stays_under_the_gateways_threshold():
+    """The gateway calls a run lost after its threshold: if the hard limit went beyond it,
+    it would close as failed a run still alive."""
+    e = _errors({"celery.task_time_limit": 3600}, hard_limit_max=3000)
     assert e[0] == {"key": "celery.task_time_limit", "code": "max", "limit": 3000}
 
 
-# ── come arrivano ai processi ────────────────────────────────────────────────
+# ── how they reach the processes ────────────────────────────────────────────────
 
-def test_senza_regolazioni_e_l_ambiente_lo_stesso_oggetto():
+def test_without_panel_values_it_is_the_environment_the_same_object():
     assert get_settings() is settings_from_env()
 
 
-def test_scritte_valgono_e_tolte_torna_l_ambiente():
+def test_written_they_hold_and_removed_the_environment_returns():
     panel_settings.write({"export.max_rows": 1234, "cache.max_step_rows": 0})
     s = get_settings()
     assert (s.export.max_rows, s.cache.max_step_rows) == (1234, 0)
-    assert s.storage is settings_from_env().storage  # le sezioni non toccate restano quelle
+    assert s.storage is settings_from_env().storage  # the sections not touched stay the same
     panel_settings.write({})
     assert get_settings().export.max_rows == settings_from_env().export.max_rows
 
 
-def test_un_valore_non_valido_in_valkey_si_scarta_e_gli_altri_restano(regolazioni_isolate):
+def test_an_invalid_value_in_valkey_is_discarded_and_the_others_stay(regolazioni_isolate):
     regolazioni_isolate.set(panel_settings.KEY, json.dumps(
         {"export.max_rows": 99, "ingest.parquet_row_group_rows": 3, "storage.endpoint": "http://x"}))
     panel_settings.forget()
@@ -94,20 +93,20 @@ def test_un_valore_non_valido_in_valkey_si_scarta_e_gli_altri_restano(regolazion
     assert s.storage.endpoint == settings_from_env().storage.endpoint
 
 
-def test_gli_altri_processi_le_vedono_entro_il_tempo_di_rilettura(regolazioni_isolate, monkeypatch):
+def test_the_other_processes_see_them_within_the_reread_time(regolazioni_isolate, monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(panel_settings.time, "monotonic", lambda: now[0])
     panel_settings.forget()
     assert get_settings().export.max_rows == settings_from_env().export.max_rows
-    # un altro processo (il gateway, tramite l'API) scrive
+    # another process (the gateway, through the API) writes
     regolazioni_isolate.set(panel_settings.KEY, json.dumps({"export.max_rows": 42}))
     now[0] += panel_settings.REREAD_EVERY / 2
-    assert get_settings().export.max_rows != 42  # non si rilegge a ogni chiamata
+    assert get_settings().export.max_rows != 42  # not read again at every call
     now[0] += panel_settings.REREAD_EVERY
     assert get_settings().export.max_rows == 42
 
 
-def test_valkey_giu_restano_gli_ultimi_valori(regolazioni_isolate, monkeypatch):
+def test_valkey_down_the_last_values_stay(regolazioni_isolate, monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(panel_settings.time, "monotonic", lambda: now[0])
     panel_settings.write({"export.max_rows": 77})
@@ -118,12 +117,12 @@ def test_valkey_giu_restano_gli_ultimi_valori(regolazioni_isolate, monkeypatch):
             raise ConnectionError("Valkey non risponde")
     monkeypatch.setattr(panel_settings, "_client", lambda: Giu())
     now[0] += panel_settings.REREAD_EVERY * 3
-    assert get_settings().export.max_rows == 77  # non si torna all'ambiente per un guasto passeggero
+    assert get_settings().export.max_rows == 77  # no going back to the environment for a passing fault
 
 
-# ── dove servono ─────────────────────────────────────────────────────────────
+# ── where they are needed ─────────────────────────────────────────────────────────────
 
-def test_il_row_group_dell_import_segue_il_pannello(monkeypatch):
+def test_the_imports_row_group_follows_the_panel(monkeypatch):
     from app.ingest import db_source
     from app.ingest.db_source import DbConnectionSpec, DbSourceSpec, _dbapi_batches, ingest_db_to_parquet
 
@@ -143,44 +142,44 @@ def test_il_row_group_dell_import_segue_il_pannello(monkeypatch):
     assert (md.num_rows, md.num_row_groups) == (25_000, 3)
 
 
-def test_il_tetto_dell_export_segue_il_pannello(monkeypatch):
+def test_the_exports_cap_follows_the_panel(monkeypatch):
     from app.tasks import jobs
 
-    visto = {}
+    seen = {}
 
-    class Finto:
+    class Fake:
         def export(self, **kw):
-            visto.update(kw)
+            seen.update(kw)
             with open(kw["out_path"], "w") as f:
                 f.write("a\n")
-    monkeypatch.setattr(jobs, "get_engine", lambda nome: Finto())
+    monkeypatch.setattr(jobs, "get_engine", lambda name: Fake())
     monkeypatch.setattr(jobs, "get_storage_service", lambda: FakeStorage())
     panel_settings.write({"export.max_rows": 1234})
     jobs.export_task.apply(kwargs={"bucket": "b", "input_key": "k", "operations": []}).get()
-    assert visto["max_rows"] == 1234
+    assert seen["max_rows"] == 1234
 
 
-def test_i_limiti_di_tempo_viaggiano_nel_messaggio_del_task():
-    """Celery usa quelli del messaggio: cambiati dal pannello, valgono dal task
-    spedito dopo, senza riavviare i worker."""
+def test_the_time_limits_travel_in_the_tasks_message():
+    """Celery uses the message's: changed from the panel, they hold from the next task sent,
+    without restarting the workers."""
     from app.tasks.celery_app import _time_limits_in_force
 
-    intestazioni = {"timelimit": [None, None]}
-    _time_limits_in_force(headers=intestazioni)
+    headers = {"timelimit": [None, None]}
+    _time_limits_in_force(headers=headers)
     env = settings_from_env().celery
-    assert tuple(intestazioni["timelimit"]) == (env.task_time_limit, env.task_soft_time_limit)
+    assert tuple(headers["timelimit"]) == (env.task_time_limit, env.task_soft_time_limit)
     panel_settings.write({"celery.task_time_limit": 1800, "celery.task_soft_time_limit": 1700,
                         "ingest.db_read_timeout_seconds": 1500})
-    intestazioni = {"timelimit": [None, None]}
-    _time_limits_in_force(headers=intestazioni)
-    assert tuple(intestazioni["timelimit"]) == (1800, 1700)
-    # un task che ne dichiara di suoi li tiene
-    proprie = {"timelimit": [60, 50]}
-    _time_limits_in_force(headers=proprie)
-    assert proprie["timelimit"] == [60, 50]
+    headers = {"timelimit": [None, None]}
+    _time_limits_in_force(headers=headers)
+    assert tuple(headers["timelimit"]) == (1800, 1700)
+    # a task declaring its own keeps them
+    own_ones = {"timelimit": [60, 50]}
+    _time_limits_in_force(headers=own_ones)
+    assert own_ones["timelimit"] == [60, 50]
 
 
-def test_il_motore_clickhouse_creato_una_volta_segue_il_pannello():
+def test_the_clickhouse_engine_made_once_follows_the_panel():
     from app.engine.clickhouse_engine import ClickHouseEngine
     from app.engine.matview import MatViewStore
 
@@ -193,12 +192,12 @@ def test_il_motore_clickhouse_creato_una_volta_segue_il_pannello():
                         "clickhouse_external.max_execution_time": 120})
     assert eng.cfg.parquet_scan_max_threads == 24 and eng.cfg.max_execution_time == 120
     assert store.cfg.materialize_enabled and store.cfg.materialize_min_rows == 5_000_000
-    # il resto è quello con cui è stato creato, credenziali comprese
+    # the rest is what it was made with, credentials included
     assert eng.cfg.host == "ch.inner" and eng.cfg.password.get_secret_value() == "segreta"
-    assert eng.cfg is eng.cfg  # una copia per versione, non una a ogni accesso
+    assert eng.cfg is eng.cfg  # one copy per version, not one at every access
 
 
-def test_il_motore_bigquery_creato_una_volta_segue_il_pannello():
+def test_the_bigquery_engine_made_once_follows_the_panel():
     from app.engine.bigquery_engine import BigQueryEngine
 
     eng = BigQueryEngine.__new__(BigQueryEngine)
@@ -207,19 +206,19 @@ def test_il_motore_bigquery_creato_una_volta_segue_il_pannello():
     assert eng.cfg.maximum_bytes_billed == 5 * 1024**3 and eng.cfg.project == "p"
 
 
-# ── l'API che chiama il gateway ──────────────────────────────────────────────
-# (le altre rotte dell'engine si provano chiamando le funzioni: qui niente TestClient)
+# ── the API the gateway calls ────────────────────────────────────────────────
+# (the engine's other routes are tested by calling the functions: no TestClient here)
 
 def _put(values, **kw):
     from app.api.routes.panel_settings import Write, write
 
     r = write(Write(values=values, **kw))
-    if hasattr(r, "status_code"):  # una JSONResponse: il rifiuto
+    if hasattr(r, "status_code"):  # a JSONResponse: the refusal
         return r.status_code, json.loads(r.body)
     return 200, r
 
 
-def test_il_catalogo_dice_ambiente_valore_e_intervallo():
+def test_the_catalog_says_environment_value_and_range():
     from app.api.routes.panel_settings import read
 
     panel_settings.write({"export.max_rows": 1234})
@@ -238,55 +237,55 @@ def test_il_catalogo_dice_ambiente_valore_e_intervallo():
     assert items["chdb.max_memory_usage"]["env_var"] == "CHDB_MAX_MEMORY_USAGE"
 
 
-def test_la_scrittura_e_tutto_o_niente():
+def test_the_writing_is_all_or_nothing():
     panel_settings.write({"export.max_rows": 1234})
     code, body = _put({"export.max_rows": 99, "celery.task_soft_time_limit": 9999})
     assert code == 422 and body["detail"]["errors"][0]["key"] == "celery.task_soft_time_limit"
-    assert get_settings().export.max_rows == 1234  # niente di scritto
+    assert get_settings().export.max_rows == 1234  # nothing written
     code, _ = _put({"export.max_rows": 99})
     assert code == 200 and get_settings().export.max_rows == 99
-    # sostituisce TUTTO: chi non c'è torna all'ambiente
+    # replaces EVERYTHING: the missing ones go back to the environment
     _put({})
     assert get_settings() is settings_from_env()
 
 
-def test_la_scrittura_rispetta_la_soglia_del_gateway():
+def test_the_writing_respects_the_gateways_threshold():
     code, body = _put({"celery.task_time_limit": 3500}, max_task_time_limit=3000)
     assert code == 422 and body["detail"]["errors"][0]["code"] == "max"
 
 
-# ── dalla prova a scatola chiusa (2026-10-12) ───────────────────────────────
+# ── from the black-box test (2026-10-12) ───────────────────────────────
 
 @pytest.mark.parametrize("grezzo", ["[1, 2]", "42", '"abc"', "null"])
-def test_un_json_che_non_e_un_oggetto_non_fa_cadere_get_settings(regolazioni_isolate, grezzo, monkeypatch):
-    """Prima `validate` chiamava `.items()` su una lista: un'eccezione a ogni rilettura,
-    dentro qualunque richiesta o invio di task."""
+def test_json_that_is_not_an_object_does_not_bring_down_get_settings(regolazioni_isolate, grezzo, monkeypatch):
+    """`validate` used to call `.items()` on a list: an exception at every read, inside any
+    request or task sent."""
     now = [1000.0]
     monkeypatch.setattr(panel_settings.time, "monotonic", lambda: now[0])
     panel_settings.write({"export.max_rows": 77})
-    assert get_settings().export.max_rows == 77  # lette una volta: sono le ultime valide
+    assert get_settings().export.max_rows == 77  # read once: they are the last valid ones
     regolazioni_isolate.set(panel_settings.KEY, grezzo)
     now[0] += panel_settings.REREAD_EVERY * 2
-    assert get_settings().export.max_rows == 77  # restano quelle, nessuna eccezione
+    assert get_settings().export.max_rows == 77  # they stay, no exception
 
 
-@pytest.mark.parametrize("scritto", [
+@pytest.mark.parametrize("written", [
     {"celery.task_time_limit": 3200, "celery.task_soft_time_limit": 3250},
-    {"celery.task_time_limit": 3200, "celery.task_soft_time_limit": 2900},  # il morbido sotto la lettura dell'ambiente
-    {"celery.task_time_limit": 3200},  # sotto il morbido dell'ambiente
+    {"celery.task_time_limit": 3200, "celery.task_soft_time_limit": 2900},  # the soft limit under the environment's read timeout
+    {"celery.task_time_limit": 3200},  # under the environment's soft limit
 ])
-def test_da_valkey_non_si_applica_mai_una_coppia_incoerente(regolazioni_isolate, scritto):
-    """Togliere una voce può rompere un vincolo già controllato: si ricontrolla
-    finché tutto torna (prima si applicava un duro 3200 col morbido 3300)."""
-    regolazioni_isolate.set(panel_settings.KEY, json.dumps(scritto))
+def test_from_valkey_an_inconsistent_pair_never_applies(regolazioni_isolate, written):
+    """Removing an item may break a constraint checked already: it is checked again until
+    everything holds (a hard 3200 used to apply with a soft 3300)."""
+    regolazioni_isolate.set(panel_settings.KEY, json.dumps(written))
     panel_settings.forget()
     c, i = get_settings().celery, get_settings().ingest
     assert c.task_soft_time_limit < c.task_time_limit
     assert i.db_read_timeout_seconds < c.task_soft_time_limit
 
 
-def test_l_errore_nomina_la_voce_appena_cambiata():
-    """Morbido già impostato a 1700, si cambia il duro a 1600: la colpa è del duro."""
+def test_the_error_names_the_item_just_changed():
+    """The soft limit set to 1700 already, the hard one changed to 1600: the hard one is at fault."""
     good, errors = panel_settings.validate(
         {"celery.task_soft_time_limit": 1700, "celery.task_time_limit": 1600, "ingest.db_read_timeout_seconds": 1500},
         settings_from_env(), changed={"celery.task_time_limit"})
@@ -301,9 +300,9 @@ def test_decimals_take_integers_too_and_refuse_the_rest():
                                        settings_from_env())
     assert errors == [] and good == {"api.min_interval_seconds": 1.0, "sftp.timeout_seconds": 2.5}
     assert isinstance(good["api.min_interval_seconds"], float)
-    for cattivo in ("1", True, float("nan"), float("inf")):
-        assert _errori({"api.min_interval_seconds": cattivo})[0]["code"] == "number"
-    assert _errori({"celery.max_memory_headroom_frac": 0.99})[0] == {
+    for bad_value in ("1", True, float("nan"), float("inf")):
+        assert _errors({"api.min_interval_seconds": bad_value})[0]["code"] == "number"
+    assert _errors({"celery.max_memory_headroom_frac": 0.99})[0] == {
         "key": "celery.max_memory_headroom_frac", "code": "max", "limit": 0.95}
 
 
@@ -317,7 +316,7 @@ def test_the_new_live_ones_reach_their_readers():
 
     assert _from_settings() == 2 * 1024 ** 2
     # no limit at all (0) only from the environment: /tmp has one
-    assert _errori({"upload.max_bytes": 0})[0]["code"] == "min"
+    assert _errors({"upload.max_bytes": 0})[0]["code"] == "min"
 
 
 def test_a_rollout_one_waits_for_the_process_to_start_again():
@@ -366,7 +365,7 @@ def test_valkey_down_at_start_the_environment_applies(regolazioni_isolate, monke
 
 def test_an_integer_too_large_for_a_decimal_is_refused_not_raised():
     """10**400 made float() raise inside `validate`: a 500, and in Valkey a get_settings that failed everywhere."""
-    assert _errori({"api.min_interval_seconds": 10 ** 400})[0]["code"] == "max"
+    assert _errors({"api.min_interval_seconds": 10 ** 400})[0]["code"] == "max"
 
 
 def test_a_malformed_variable_read_at_import_stops_the_process(regolazioni_isolate, monkeypatch):

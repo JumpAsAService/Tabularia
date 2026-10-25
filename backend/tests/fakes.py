@@ -1,8 +1,8 @@
-"""Doppioni in-memory di storage e Redis: i test girano senza Docker, in ms.
+"""In-memory doubles of the storage and Redis: the tests run without Docker, in ms.
 
-L'idea dei "fake": un oggetto finto che imita SOLO i metodi che il codice vero
-usa. Se il codice chiama `storage.download_file(...)`, al fake basta avere
-quel metodo — non serve un vero MinIO.
+The idea of the fakes: an object that imitates ONLY the methods the real code uses. If
+the code calls `storage.download_file(...)`, the fake only needs that method — no real
+MinIO needed.
 """
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from pathlib import Path
 
 
 class FakeStorage:
-    """Storage S3 finto: un dizionario {(bucket, key): bytes}."""
+    """A fake S3 storage: a dict {(bucket, key): bytes}."""
 
     def __init__(self):
         self.blobs: dict[tuple[str, str], bytes] = {}
 
     def create_bucket(self, bucket: str) -> None:
-        pass  # idempotente come il servizio vero: qui non serve fare nulla
+        pass  # idempotent as the real service: nothing to do here
 
     def upload_file(self, local_path: str, bucket: str, key: str) -> None:
         self.blobs[(bucket, key)] = Path(local_path).read_bytes()
@@ -29,20 +29,20 @@ class FakeStorage:
         Path(local_path).write_bytes(data)
 
     def delete_object(self, bucket: str, key: str) -> None:
-        # idempotente come S3: cancellare ciò che non c'è non è un errore
+        # idempotent as S3: deleting what is not there is not an error
         self.blobs.pop((bucket, key), None)
 
-    # comodità per gli assert nei test
+    # a convenience for the tests' asserts
     def exists(self, bucket: str, key: str) -> bool:
         return (bucket, key) in self.blobs
 
 
 class FakeRedis:
-    """Redis/Valkey finto: implementa solo ciò che usa StepCache."""
+    """A fake Redis/Valkey: implements only what StepCache uses."""
 
     def __init__(self):
         self.sets: dict[str, set] = defaultdict(set)
-        self.zsets: dict[str, dict[str, float]] = defaultdict(dict)  # membro -> score
+        self.zsets: dict[str, dict[str, float]] = defaultdict(dict)  # member -> score
         self.counters: dict[str, int] = defaultdict(int)
 
     # ── SET ──────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ class FakeRedis:
             del self.zsets[key][m]
         return len(doomed)
 
-    # ── stringhe (lucchetto SET NX, passi «troppo grandi») ───────────────
+    # ── strings (SET NX lock, «too large» steps) ───────────────
     def set(self, key, value, nx=False, ex=None):
         if not hasattr(self, "strings"):
             self.strings: dict[str, str] = {}
@@ -104,7 +104,7 @@ class FakeRedis:
     def expire(self, key, seconds):
         return 1 if key in getattr(self, "strings", {}) else 0  # the time itself is not kept
 
-    # ── contatori / chiavi ───────────────────────────────────────────────
+    # ── counters / keys ───────────────────────────────────────────────
     def incr(self, key):
         self.counters[key] += 1
         return self.counters[key]
@@ -119,8 +119,8 @@ class FakeRedis:
 
 
 class BrokenRedis:
-    """Redis che fallisce sempre: verifica il comportamento best-effort
-    (Valkey giù → la cache si comporta come vuota, mai un errore all'utente)."""
+    """A Redis that always fails: checks the best-effort behavior (Valkey down → the cache
+    behaves as empty, never an error for the user)."""
 
     def __getattr__(self, name):
         import redis

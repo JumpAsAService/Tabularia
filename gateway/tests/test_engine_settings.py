@@ -58,7 +58,7 @@ class MotoreFinto:
         errori = []
         for k, v in corpo["values"].items():
             if k in ("export.max_rows", "celery.task_time_limit") and (isinstance(v, bool) or not isinstance(v, int)):
-                errori.append({"key": k, "code": "integer"})  # the engine checks the type (core/regolazioni.py)
+                errori.append({"key": k, "code": "integer"})  # the engine checks the type (core/panel_settings.py)
                 continue
             if k == "export.max_rows" and v < 0:
                 errori.append({"key": k, "code": "min", "limit": 0})

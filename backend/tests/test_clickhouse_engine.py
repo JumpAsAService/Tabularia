@@ -1,20 +1,20 @@
-"""Engine ClickHouse ESTERNO: stessa IR e stessi builder SQL di chDB, ma eseguiti
-su un server remoto. Qui in modalità `push` (staging table + download streaming)
-con storage e Redis finti: l'unica cosa vera è il server ClickHouse.
+"""The EXTERNAL ClickHouse engine: the same IR and SQL builders as chDB, but run on a
+remote server. Here in `push` mode (staging table + streaming download) with a fake
+storage and Redis: the only real thing is the ClickHouse server.
 
-Serve un ClickHouse raggiungibile — i test si SALTANO se `CLICKHOUSE_TEST_HOST`
-non è impostata. Es. (porta HTTP 18123, utente tab/tab, db tab):
+It needs a reachable ClickHouse — the tests are SKIPPED when `CLICKHOUSE_TEST_HOST` is not
+set. E.g. (HTTP port 18123, user tab/tab, db tab):
     docker run -d --rm --name chtest -p 18123:8123 -e CLICKHOUSE_USER=tab \\
       -e CLICKHOUSE_PASSWORD=tab -e CLICKHOUSE_DB=tab clickhouse/clickhouse-server:24.8
     CLICKHOUSE_TEST_HOST=localhost CLICKHOUSE_TEST_PORT=18123 CLICKHOUSE_TEST_USER=tab \\
       CLICKHOUSE_TEST_PASSWORD=tab CLICKHOUSE_TEST_DB=tab pytest tests/test_clickhouse_engine.py
 
-Modalità `s3` (il server legge/scrive sullo storage): stessa suite con
-`CLICKHOUSE_TEST_TRANSPORT=s3` + `CLICKHOUSE_TEST_S3_ENDPOINT` (endpoint dello
-storage COME LO VEDE il server, es. http://minio:9000 se il container è sulla
-rete `dataprep-network`) e le `STORAGE__*` dell'engine puntate allo stesso
-storage dall'host (es. STORAGE__ENDPOINT=http://localhost:9002). Qui lo storage
-è VERO (MinIO dello stack), non il doppione in memoria.
+`s3` mode (the server reads and writes on the storage): the same suite with
+`CLICKHOUSE_TEST_TRANSPORT=s3` + `CLICKHOUSE_TEST_S3_ENDPOINT` (the storage endpoint AS
+THE SERVER SEES IT, http://minio:9000 when the container is on the `dataprep-network`
+network) and the engine's `STORAGE__*` pointed at the same storage from the host
+(STORAGE__ENDPOINT=http://localhost:9002). Here the storage is REAL (the stack's MinIO),
+not the in-memory double.
 """
 import datetime as dt
 import os
@@ -50,8 +50,8 @@ def _cfg() -> ClickHouseExternalSettings:
 
 
 class _RealStorage:
-    """Storage VERO (per la modalità s3) con le comodità del FakeStorage usate
-    negli assert (`exists`, `read`)."""
+    """A REAL storage (for the s3 mode) with the FakeStorage conveniences the asserts use
+    (`exists`, `read`)."""
 
     def __init__(self):
         from app.utils import get_storage_service
@@ -123,9 +123,9 @@ def test_preview_passthrough_types(storage, src):
     assert types["vendite"] == "Int64"
     assert types["giorno"] == "Date"
     assert types["quando"].startswith("Datetime")
-    by_paese = {r["paese"]: r for r in res.rows}
-    assert by_paese["DE"]["citta"] is None and by_paese["DE"]["quando"] is None
-    assert by_paese["FR"]["giorno"] == dt.date(2024, 2, 1)
+    by_country = {r["paese"]: r for r in res.rows}
+    assert by_country["DE"]["citta"] is None and by_country["DE"]["quando"] is None
+    assert by_country["FR"]["giorno"] == dt.date(2024, 2, 1)
 
 
 def test_filter_and_sort(storage, src):
@@ -140,14 +140,14 @@ def test_filter_and_sort(storage, src):
 def test_filter_on_dates_takes_the_editors_calendar(storage, src):
     """The editor's calendar sends 2024-02-01T10:30, without seconds: ClickHouse refused it
     («Cannot parse time component of DateTime»), every date-time filter failed."""
-    def paesi(params):
+    def countries(params):
         return sorted(r["paese"] for r in _engine(storage).preview(src, [{"type": "filter", "params": params}], limit=10).rows)
 
-    assert paesi({"column": "quando", "operator": "gt", "value": "2024-02-01T10:30"}) == ["FR", "IT"]
-    assert paesi({"column": "quando", "operator": "between", "value": ["2024-01-01T00:00", "2024-02-01T11:00"]}) == ["FR", "IT"]
-    assert paesi({"column": "giorno", "operator": "ge", "value": "2024-03-01"}) == ["DE", "IT"]
+    assert countries({"column": "quando", "operator": "gt", "value": "2024-02-01T10:30"}) == ["FR", "IT"]
+    assert countries({"column": "quando", "operator": "between", "value": ["2024-01-01T00:00", "2024-02-01T11:00"]}) == ["FR", "IT"]
+    assert countries({"column": "giorno", "operator": "ge", "value": "2024-03-01"}) == ["DE", "IT"]
     with pytest.raises(EngineError, match="is not valid for a date or time column"):
-        paesi({"column": "quando", "operator": "gt", "value": "01/02/2024"})
+        countries({"column": "quando", "operator": "gt", "value": "01/02/2024"})
 
 
 def test_group_by(storage, src):
@@ -177,20 +177,20 @@ def test_compute_and_rename(storage, src):
     assert {r["paese"]: r["x2"] for r in res.rows}["DE"] == 500
 
 
-def test_compute_con_extract_e_colonna_url(storage, src):
-    # EXTRACT(… FROM …) e un nome come `url` erano rifiutati dal controllo a parole (2026-10-10)
+def test_compute_with_extract_and_a_url_column(storage, src):
+    # EXTRACT(… FROM …) and a name such as `url` were refused by the check by words (2026-10-10)
     ops = [{"type": "compute", "params": {"columns": [{"name": "url", "expr": "vendite * 3"}, {"name": "x", "expr": "EXTRACT(YEAR FROM toDate('2024-05-06')) + url * 0"}]}}]
     res = _engine(storage).preview(src, ops, limit=10)
     assert {r["paese"]: r["x"] for r in res.rows}["DE"] == 2024
 
 
-def test_compute_rifiuta_table_function_e_dizionari(storage, src):
-    for cattiva in ("(SELECT 1 FROM s3('http://minio:9000/x.parquet'))", "dictGet('d', 'v', toUInt64(1))"):
+def test_compute_refuses_table_functions_and_dictionaries(storage, src):
+    for bad in ("(SELECT 1 FROM s3('http://minio:9000/x.parquet'))", "dictGet('d', 'v', toUInt64(1))"):
         with pytest.raises(EngineError, match="not allowed"):
-            _engine(storage).preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": cattiva}]}}], limit=5)
+            _engine(storage).preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": bad}]}}], limit=5)
 
 
-def test_nodo_sql_con_un_suo_with(storage, src):
+def test_sql_node_with_its_own_with(storage, src):
     q = "WITH grandi AS (SELECT * FROM input WHERE vendite > 100), conta AS (SELECT count() AS n FROM self) SELECT paese, vendite, (SELECT n FROM conta) AS tutte FROM grandi"
     res = _engine(storage).preview(src, [{"type": "sql", "params": {"query": q}}], limit=10)
     assert res.row_count >= 1 and {c.name for c in res.columns} == {"paese", "vendite", "tutte"}
@@ -210,11 +210,11 @@ def test_run_writes_parquet_and_cache(storage, src):
     assert res.rows_written == 2
     assert {c.name for c in res.columns} >= {"paese", "vendite", "giorno", "quando"}
     assert storage.exists(BUCKET, dest.key)
-    # il risultato finale finisce anche nella step-cache (namespace dell'engine)
+    # the final result ends in the step cache too (the engine's namespace)
     hashes = plan_hashes(eng._source_id(src), ops)
     assert cache.has(hashes[-1])
     assert storage.exists(cache.bucket, cache.object_key(hashes[-1]))
-    # rilettura del parquet scritto: tipi temporali preservati
+    # reading the written parquet back: temporal types kept
     import io
     df = pl.read_parquet(io.BytesIO(_read_blob(storage, BUCKET, dest.key)))
     assert df["giorno"].dtype == pl.Date and df["quando"].dtype.is_temporal()
@@ -230,14 +230,14 @@ def test_preview_uses_cache_prefix(storage, src):
     ]
     res = eng.preview(src, ops, limit=10)
     assert res.row_count == 3
-    # il prefisso (tutti gli step tranne l'ultimo) va in cache DOPO la risposta
+    # the prefix (every step but the last) is cached AFTER the answer
     hashes = plan_hashes(eng._source_id(src), ops)
     assert not cache.has(hashes[0])
     from tests.conftest import drain_cache
 
     assert drain_cache(eng) == 1
     assert cache.has(hashes[0]) and not cache.has(hashes[1])
-    # seconda preview: riparte dalla cache e dà lo stesso risultato
+    # a second preview: starts from the cache and gives the same result
     res2 = eng.preview(src, ops, limit=10)
     assert sorted(r["paese"] for r in res2.rows) == sorted(r["paese"] for r in res.rows)
 

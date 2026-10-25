@@ -1,12 +1,11 @@
-"""Protezioni della materializzazione: i tre modi in cui ha già fatto danno.
+"""The materialization's protections: the three ways it did harm already.
 
-Ognuno di questi test corrisponde a un guasto osservato o verificato, non a un
-caso di scuola:
-1. la copia partiva anche dalle preview dell'EDITOR (copia doppia dello stesso
-   dataset e richiesta che "rimane appesa" sulla copia sincrona);
-2. lo sweep delle orfane, con Valkey muto, considerava orfana OGNI tabella viva;
-3. il probe dei core legge "auto(8)", non un intero: il guard che impedisce di
-   strozzare un server grande moriva in silenzio.
+Each of these tests matches a fault observed or verified, not a textbook case:
+1. the copy started from the EDITOR's previews too (a double copy of the same dataset
+   and a request "hanging" on the synchronous copy);
+2. the sweep of the orphans, with Valkey silent, took EVERY live table for an orphan;
+3. the cores probe reads "auto(8)", not an integer: the guard that keeps a large server
+   from being throttled died silently.
 """
 import pytest
 
@@ -17,15 +16,15 @@ from tests.fakes import BrokenRedis, FakeRedis
 from tests.test_matview import SRC, FakeCtx, _cfg
 
 
-# ── 1. lo sweep delle orfane fallisce CHIUSO ────────────────────────────────────
+# ── 1. the sweep of the orphans fails CLOSED ────────────────────────────────────
 def test_orphan_sweep_is_skipped_when_the_registry_is_unreadable():
-    """Valkey muto => `_all_known` vedrebbe zero voci e OGNI tabella viva
-    sembrerebbe orfana: si droppava l'intera cache (anche sotto query in corso,
-    perché metadata_modification_time non avanza con l'uso)."""
+    """Valkey silent => `_all_known` would see zero entries and EVERY live table would look
+    orphaned: the whole cache was dropped (even under running queries, since
+    metadata_modification_time does not move with use)."""
     store = MatViewStore(BrokenRedis(), _cfg(materialize_ttl_seconds=100))
     ctx = FakeCtx(rows=0)
     import time as _t
-    ctx.tables["_mv_viva"] = _t.time() - 5000  # vecchia di DDL, ma in uso
+    ctx.tables["_mv_viva"] = _t.time() - 5000  # an old DDL, but in use
 
     assert store.evict(ctx, 100) == 0
     assert ctx.dropped == [], "con il registro illeggibile non si droppa NIENTE"
@@ -46,12 +45,12 @@ def test_a_registered_table_is_never_treated_as_an_orphan():
     store._mark(sid)
     ctx = FakeCtx(rows=0)
     import time as _t
-    ctx.tables[store.table_name(sid)] = _t.time() - 5000  # DDL vecchia, ma registrata
+    ctx.tables[store.table_name(sid)] = _t.time() - 5000  # an old DDL, but registered
     store.evict(ctx, 100)
     assert ctx.dropped == [], "registrata e non scaduta: resta"
 
 
-# ── 2. il probe dei core accetta "auto(N)" ──────────────────────────────────────
+# ── 2. the cores probe accepts "auto(N)" ──────────────────────────────────────
 class _Ctx:
     def __init__(self, value):
         self.value = value
@@ -63,7 +62,7 @@ class _Ctx:
 
 def _engine(server_value, **cfg_kw):
     from app.engine.clickhouse_engine import ClickHouseEngine
-    eng = ClickHouseEngine.__new__(ClickHouseEngine)      # senza toccare host/Valkey
+    eng = ClickHouseEngine.__new__(ClickHouseEngine)      # without touching host/Valkey
     eng.cfg = ClickHouseExternalSettings(host="h", transport="s3", **cfg_kw)
     eng._server_threads = None
     return eng
@@ -77,7 +76,7 @@ def test_the_core_probe_parses_both_plain_and_auto(raw, cores):
 
 
 def test_a_big_server_is_left_alone_even_when_it_answers_auto():
-    # il caso che il guard esiste per impedire: 8 < 32 => non toccare
+    # the case the guard exists to stop: 8 < 32 => leave it alone
     eng = _engine("auto(32)", parquet_scan_max_threads=8)
     assert eng._scan_max_threads(_Ctx("auto(32)")) == 0
 
@@ -92,29 +91,29 @@ def test_an_unreadable_probe_does_not_crash_the_preview():
         def _rows(self, sql):
             raise RuntimeError("system.settings non leggibile")
     eng = _engine("x", parquet_scan_max_threads=8)
-    assert eng._scan_max_threads(Boom()) == 8  # ripiega sul target, senza sollevare
+    assert eng._scan_max_threads(Boom()) == 8  # falls back on the target, without raising
 
 
-# ── 3. il tuning vale solo per transport s3 ─────────────────────────────────────
+# ── 3. the tuning applies to transport s3 only ────────────────────────────────
 def test_push_transport_is_never_tuned():
-    """In push il server non tocca S3: non c'è latenza di rete da nascondere e
-    l'oversubscription su una scansione CPU-bound peggiora."""
+    """With push the server does not touch S3: there is no network latency to hide and
+    oversubscribing a CPU-bound scan makes it worse."""
     eng = _engine("2", parquet_scan_max_threads=8)
     eng.cfg = ClickHouseExternalSettings(host="h", transport="push", parquet_scan_max_threads=8)
     assert eng._scan_max_threads(_Ctx("2")) == 0
 
 
 def test_materialization_is_off_by_default():
-    """La copia sincrona su una tabella grande non finiva mai nel tetto di
-    tempo e costava un minuto a ogni Apply: di default resta spenta, e chi la
-    vuole la accende con una soglia esplicita."""
+    """The synchronous copy of a large table never finished within the time cap and cost a
+    minute at every Apply: it stays off by default, and whoever wants it turns it on with
+    an explicit threshold."""
     from app.core.config import ClickHouseExternalSettings
     cfg = ClickHouseExternalSettings(host="ch.example", transport="s3")
     assert cfg.materialize_min_rows == 0
     assert cfg.materialize_enabled is False
 
 
-# ── lo sweep NON dipende dall'interruttore della materializzazione ─────────────
+# ── the sweep does NOT depend on the materialization's switch ─────────────
 def test_the_sweep_switch_depends_only_on_clickhouse_being_configured():
     assert _cfg(materialize_min_rows=0).materialize_enabled is False
     assert _cfg(materialize_min_rows=0).matview_sweep_enabled is True
@@ -123,9 +122,9 @@ def test_the_sweep_switch_depends_only_on_clickhouse_being_configured():
 
 
 def test_orphans_are_swept_even_with_materialization_off(monkeypatch):
-    """Spegnere la materializzazione (min_rows=0) spegneva anche lo spazzino: la
-    tabella temporanea da 5,77 GiB di una build uccisa a metà restava sul server
-    per sempre. Lo sweep deve girare finché ClickHouse è configurato."""
+    """Turning the materialization off (min_rows=0) turned the sweeper off too: the 5.77 GiB
+    temporary table of a build killed half way stayed on the server for ever. The sweep
+    must run as long as ClickHouse is configured."""
     import time
     from app.engine import clickhouse_engine as ce
 
@@ -133,7 +132,7 @@ def test_orphans_are_swept_even_with_materialization_off(monkeypatch):
     eng.storage = None
     eng.matviews = MatViewStore(FakeRedis(), eng.cfg)
     ctx = FakeCtx(rows=0)
-    ctx.tables["_mv_deadbeef_tmp_1234abcd"] = time.time() - 10_000  # orfana, ben oltre il TTL
+    ctx.tables["_mv_deadbeef_tmp_1234abcd"] = time.time() - 10_000  # orphaned, well beyond the TTL
     ctx.cleanup = lambda: None
     monkeypatch.setattr(eng, "_client", lambda: object())
     monkeypatch.setattr(ce, "ClickHouseContext", lambda *a, **k: ctx)

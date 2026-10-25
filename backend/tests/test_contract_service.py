@@ -1,5 +1,5 @@
-"""I data contracts dentro i task che scrivono i dati: il referto viaggia col
-risultato, e con una regola bloccante violata niente esce dallo storage."""
+"""The data contracts inside the tasks that write the data: the report travels with the
+result, and with a blocking rule violated nothing leaves the storage."""
 import polars as pl
 import pytest
 
@@ -8,7 +8,7 @@ from app.contracts import service
 
 @pytest.fixture
 def parquet(tmp_path, monkeypatch):
-    """Uno «storage» che è una cartella: `download_file` copia il parquet richiesto."""
+    """A «storage» that is a folder: `download_file` copies the parquet asked for."""
     import shutil
 
     origin = tmp_path / "data.parquet"
@@ -24,33 +24,33 @@ def parquet(tmp_path, monkeypatch):
     return "datasets/ok.parquet"
 
 
-SOLO_AVVISI = {"rules": [{"id": "a", "kind": "not_null", "column": "stato", "severity": "warning"}]}
-BLOCCANTE = {"rules": [{"id": "a", "kind": "not_null", "column": "stato", "severity": "error"}]}
+WARNINGS_ONLY = {"rules": [{"id": "a", "kind": "not_null", "column": "stato", "severity": "warning"}]}
+BLOCKING = {"rules": [{"id": "a", "kind": "not_null", "column": "stato", "severity": "error"}]}
 
 
-def test_il_referto_sullo_snapshot_nello_storage(parquet):
-    r = service.evaluate_key("b", parquet, BLOCCANTE)
+def test_the_report_on_the_snapshot_in_the_storage(parquet):
+    r = service.evaluate_key("b", parquet, BLOCKING)
     assert (r["outcome"], r["rows"], r["rules"][0]["violations"]) == ("failed", 3, 1)
-    assert service.evaluate_key("b", parquet, SOLO_AVVISI)["outcome"] == "warning"
+    assert service.evaluate_key("b", parquet, WARNINGS_ONLY)["outcome"] == "warning"
 
 
-def test_profilo_e_proposta_dallo_snapshot(parquet):
+def test_profile_and_proposal_from_the_snapshot(parquet):
     r = service.profile_key("b", parquet)
     assert r["profile"]["rows"] == 3 and {c["name"] for c in r["profile"]["columns"]} == {"id", "stato"}
     assert any(x["kind"] == "column" and x["column"] == "id" for x in r["proposal"]["rules"])
 
 
-def test_se_non_si_riesce_a_valutare_un_contratto_bloccante_non_passa(parquet):
-    r = service.check_before_publish("b", "datasets/sparito.parquet", BLOCCANTE)
+def test_a_blocking_contract_that_cannot_be_evaluated_does_not_pass(parquet):
+    r = service.check_before_publish("b", "datasets/sparito.parquet", BLOCKING)
     assert r["outcome"] == "failed" and r["errors"] == 1 and "sparito" in r["error"]
 
 
-def test_se_non_si_riesce_a_valutare_un_contratto_di_soli_avvisi_non_blocca(parquet):
-    r = service.check_before_publish("b", "datasets/sparito.parquet", SOLO_AVVISI)
+def test_a_warnings_only_contract_that_cannot_be_evaluated_does_not_block(parquet):
+    r = service.check_before_publish("b", "datasets/sparito.parquet", WARNINGS_ONLY)
     assert r["outcome"] == "warning" and r["errors"] == 0 and r["error"]
 
 
-def test_il_task_di_ingest_porta_il_referto_solo_se_c_e_un_contratto(parquet, monkeypatch):
+def test_the_ingest_task_carries_the_report_only_with_a_contract(parquet, monkeypatch):
     import app.ingest.db_source as db_source
     from app.tasks.jobs import ingest_database_task
 
@@ -58,31 +58,31 @@ def test_il_task_di_ingest_porta_il_referto_solo_se_c_e_un_contratto(parquet, mo
     conn = {"db_type": "postgresql", "host": "h", "port": 5432, "username": "u", "password_encrypted": "", "database": "d"}
     without = ingest_database_task.run(connection=conn, source={"mode": "table", "ref": "t"}, bucket="b", output_key=parquet)
     assert "contract" not in without and without["rows_written"] == 3
-    con = ingest_database_task.run(connection=conn, source={"mode": "table", "ref": "t"}, bucket="b", output_key=parquet, contract=BLOCCANTE)
-    assert con["contract"]["outcome"] == "failed" and con["rows_written"] == 3
+    with_contract = ingest_database_task.run(connection=conn, source={"mode": "table", "ref": "t"}, bucket="b", output_key=parquet, contract=BLOCKING)
+    assert with_contract["contract"]["outcome"] == "failed" and with_contract["rows_written"] == 3
 
 
-def test_con_una_regola_bloccante_violata_la_copia_e_l_email_non_partono(parquet, monkeypatch):
-    """Il task di trasformazione consegna l'output anche altrove (copia su S3,
-    email): se il contratto lo rifiuta, quei dati non devono uscire."""
+def test_with_a_blocking_rule_violated_the_copy_and_the_email_do_not_go(parquet, monkeypatch):
+    """The transformation task delivers the output elsewhere too (S3 copy, email): when the
+    contract refuses it, that data must not leave."""
     from types import SimpleNamespace
 
     import app.tasks.jobs as jobs
 
-    class Motore:
+    class StubEngine:
         def run(self, source, operations, destination):
             return SimpleNamespace(rows_written=3, columns=[])
 
-    monkeypatch.setattr(jobs, "get_engine", lambda nome=None: Motore())
-    consegne = []
+    monkeypatch.setattr(jobs, "get_engine", lambda name=None: StubEngine())
+    deliveries = []
     import app.ingest.s3_destination as s3d
 
-    monkeypatch.setattr(s3d, "write_output_to_s3", lambda *a, **k: consegne.append("s3") or {"rows": 3})
+    monkeypatch.setattr(s3d, "write_output_to_s3", lambda *a, **k: deliveries.append("s3") or {"rows": 3})
     copy = {"connection": {"endpoint": "http://x", "access_key": "a", "secret_key_encrypted": "", "region": "r"}, "target": {"bucket": "fuori", "key": "k.parquet"}}
 
-    out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, mirror=copy, contract=BLOCCANTE)
-    assert out["contract"]["outcome"] == "failed" and "mirror" not in out and consegne == []
+    out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, mirror=copy, contract=BLOCKING)
+    assert out["contract"]["outcome"] == "failed" and "mirror" not in out and deliveries == []
 
-    out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, contract=SOLO_AVVISI)
+    out = jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet, contract=WARNINGS_ONLY)
     assert out["contract"]["outcome"] == "warning"
     assert "contract" not in jobs.transform_data_task.run(bucket="b", input_key="in", operations=[], output_key=parquet)

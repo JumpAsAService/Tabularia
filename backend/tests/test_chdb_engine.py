@@ -1,7 +1,7 @@
-"""Engine chDB (ClickHouse embedded, out-of-core): stessa IR di Polars/DuckDB.
+"""The chDB engine (embedded ClickHouse, out of core): the same IR as Polars/DuckDB.
 
-Verifica preview/run e le 16 operazioni strutturali; sql/foreach devono sollevare
-un errore chiaro (usa Polars/DuckDB). Cache con Redis finto (nessun Valkey).
+Checks preview/run and the 16 structural operations; sql/foreach must raise a clear
+error. The cache with a fake Redis (no Valkey).
 """
 import polars as pl
 import pytest
@@ -91,7 +91,7 @@ def test_select_drop_rename(storage, src):
     assert {c.name for c in drop.columns} == {"paese", "vendite"}
     ren = e.preview(src, [{"type": "rename", "params": {"mapping": {"paese": "country"}}}], limit=5)
     assert "country" in {c.name for c in ren.columns}
-    assert [c.name for c in ren.columns][0] == "country"  # ordine preservato
+    assert [c.name for c in ren.columns][0] == "country"  # order kept
 
 
 def test_cast(storage, src):
@@ -134,7 +134,7 @@ def test_compute(storage, src):
     assert got["DE"] == 500
 
 
-def test_compute_blocca_table_function(storage, src):
+def test_compute_blocks_table_functions(storage, src):
     ops = [{"type": "compute", "params": {"columns": [{"name": "x", "expr": "(SELECT 1 FROM file('/etc/passwd'))"}]}}]
     with pytest.raises(EngineError):
         _engine(storage).preview(src, ops, limit=5)
@@ -147,7 +147,7 @@ def test_join(storage, src, anagrafica):
     }}]
     res = _engine(storage).preview(src, ops, limit=10)
     assert "nome" in {c.name for c in res.columns}
-    assert res.row_count == 3  # IT,IT,DE (FR non ha match)
+    assert res.row_count == 3  # IT,IT,DE (FR has no match)
 
 
 def test_union(storage, src, anagrafica):
@@ -170,15 +170,15 @@ def test_pivot_and_unpivot(storage):
     res = _engine(storage).preview(s, piv, limit=10)
     cols = {c.name for c in res.columns}
     assert "IT" in cols and "DE" in cols
-    by_anno = {r["anno"]: r for r in res.rows}
-    assert by_anno[2024]["IT"] == 3
+    by_year = {r["anno"]: r for r in res.rows}
+    assert by_year[2024]["IT"] == 3
 
     unp = [{"type": "unpivot", "params": {"index": ["anno", "paese"], "on": ["val"]}}]
     res2 = _engine(storage).preview(s, unp, limit=10)
     assert {"variable", "value"} <= {c.name for c in res2.columns}
 
 
-def test_run_scrive_output(storage, src):
+def test_run_writes_output(storage, src):
     dest = DataSource(bucket=BUCKET, key="out/chdb_run.parquet")
     ops = [{"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": 100}}]
     res = _engine(storage).run(src, ops, dest)
@@ -186,7 +186,7 @@ def test_run_scrive_output(storage, src):
     assert storage.exists(BUCKET, "out/chdb_run.parquet")
 
 
-def test_sql_e_foreach_non_supportati(storage, src):
+def test_sql_and_foreach_not_supported(storage, src):
     e = _engine(storage)
     with pytest.raises(EngineError):
         e.preview(src, [{"type": "sql", "params": {"query": "SELECT 1"}}], limit=5)
@@ -194,7 +194,7 @@ def test_sql_e_foreach_non_supportati(storage, src):
         e.preview(src, [{"type": "foreach", "params": {"body": [], "items": [{}]}}], limit=5)
 
 
-def test_step_cache_materializza_il_parent(storage, src):
+def test_step_cache_materializes_the_parent(storage, src):
     cache = StepCache(storage, redis_client=FakeRedis())
     e = _engine(storage, cache)
     ops = [
@@ -203,11 +203,11 @@ def test_step_cache_materializza_il_parent(storage, src):
     ]
     e.preview(src, ops, limit=10)
     hashes = plan_hashes(e._source_id(src), [{"type": ops[0]["type"], "params": ops[0]["params"]}])
-    assert not cache.has(hashes[-1])  # la preview non aspetta la copia
+    assert not cache.has(hashes[-1])  # the preview does not wait for the copy
     from tests.conftest import drain_cache
 
     assert drain_cache(e) == 1
-    assert cache.has(hashes[-1])  # il parent (ops[:-1]) e' in cache
+    assert cache.has(hashes[-1])  # the parent (ops[:-1]) is cached
 
 
 def test_namespacing_engine(storage, src):

@@ -645,7 +645,7 @@ def storage_stats_task() -> dict:
     """
     settings = get_settings()
     storage = get_storage_service()
-    r = get_engine().cache.redis  # riusa il client Valkey (decode_responses=True)
+    r = get_engine().cache.redis  # reuses the Valkey client (decode_responses=True)
 
     result: dict[str, dict[str, int]] = {}
     for prefix in STORAGE_PREFIXES:

@@ -141,8 +141,8 @@ def _start(body) -> str:
     return tasks.start_export(ExportStart(**body)).task_id
 
 
-def test_the_requester_follows_the_export_and_takes_the_file_once(worker, storage, vendite):
-    task_id = _start(_body(vendite, filename="sales.csv", owner="u1"))
+def test_the_requester_follows_the_export_and_takes_the_file_once(worker, storage, sales):
+    task_id = _start(_body(sales, filename="sales.csv", owner="u1"))
 
     [key] = storage.keys("exports/")
     size = len(next(data for (_, k), data in storage.blobs.items() if k == key))
@@ -162,26 +162,26 @@ def test_the_requester_follows_the_export_and_takes_the_file_once(worker, storag
     assert _status_code(tasks.export_file, task_id, owner="u1") == 404
 
 
-def test_an_excel_file_comes_through_whole(worker, vendite):
-    task_id = _start(_body(vendite, operations=[], format="xlsx", owner="u1"))
+def test_an_excel_file_comes_through_whole(worker, sales):
+    task_id = _start(_body(sales, operations=[], format="xlsx", owner="u1"))
     headers, body = _play(tasks.export_file(task_id, owner="u1"))
     assert headers["content-type"].startswith("application/vnd.openxmlformats")
     assert headers["content-disposition"] == 'attachment; filename="export.xlsx"'
     assert pl.read_excel(io.BytesIO(body)).height == 6
 
 
-def test_a_name_outside_ascii_is_encoded_for_the_browser(worker, vendite):
-    task_id = _start(_body(vendite, filename="vendite più.csv", owner="u1"))
+def test_a_name_outside_ascii_is_encoded_for_the_browser(worker, sales):
+    task_id = _start(_body(sales, filename="vendite più.csv", owner="u1"))
     headers, _ = _play(tasks.export_file(task_id, owner="u1"))
     assert headers["content-disposition"] == "attachment; filename*=utf-8''vendite%20pi%C3%B9.csv"
 
 
-def test_a_failed_export_says_why_and_leaves_no_file(worker, storage, vendite):
-    missing = _start(_body(vendite, input_key="datasets/gone.parquet", owner="u1"))
+def test_a_failed_export_says_why_and_leaves_no_file(worker, storage, sales):
+    missing = _start(_body(sales, input_key="datasets/gone.parquet", owner="u1"))
     assert tasks.export_status(missing, owner="u1")["code"] == 404
 
     panel_settings.write({"export.max_rows": 1})
-    over = _start(_body(vendite, owner="u1"))
+    over = _start(_body(sales, owner="u1"))
     status = tasks.export_status(over, owner="u1")
     assert status["status"] == "failed" and status["code"] == 400 and "CSV" in status["detail"]
     assert _status_code(tasks.export_file, over, owner="u1") == 409
@@ -203,16 +203,16 @@ def test_a_worker_that_died_is_a_failure_with_its_reason(worker, monkeypatch):
         "status": "failed", "code": 500, "detail": "Worker exited prematurely: signal 9 (SIGKILL)"}
 
 
-def test_api_callers_still_get_the_file_in_the_response(worker, storage, vendite):
-    headers, body = _play(tasks.export_flow(ExportRequest(**_body(vendite, filename="it.csv"))))
+def test_api_callers_still_get_the_file_in_the_response(worker, storage, sales):
+    headers, body = _play(tasks.export_flow(ExportRequest(**_body(sales, filename="it.csv"))))
     assert headers["content-disposition"] == 'attachment; filename="it.csv"'
     assert pl.read_csv(io.BytesIO(body)).height == 2
     assert storage.keys("exports/") == [] and all(res.forgotten for res in worker.values())
 
 
-def test_the_synchronous_route_gives_the_reason_of_a_refusal(worker, vendite):
+def test_the_synchronous_route_gives_the_reason_of_a_refusal(worker, sales):
     with pytest.raises(HTTPException) as e:
-        tasks.export_flow(ExportRequest(**_body(vendite, input_key="datasets/gone.parquet")))
+        tasks.export_flow(ExportRequest(**_body(sales, input_key="datasets/gone.parquet")))
     assert e.value.status_code == 404 and "gone" in e.value.detail
     assert all(res.forgotten for res in worker.values())
 
@@ -224,8 +224,8 @@ def test_a_synchronous_export_no_worker_finishes_is_revoked(monkeypatch):
     assert pending.revoked and pending.forgotten
 
 
-def test_with_another_engine_the_snapshot_goes_once_the_file_is_written(worker, storage, vendite):
-    _, body = _play(tasks.export_flow(ExportRequest(**_body(vendite, engine="duckdb"))))
+def test_with_another_engine_the_snapshot_goes_once_the_file_is_written(worker, storage, sales):
+    _, body = _play(tasks.export_flow(ExportRequest(**_body(sales, engine="duckdb"))))
     assert pl.read_csv(io.BytesIO(body)).height == 2
     assert storage.keys("tmp/") == [] and storage.keys("exports/") == []
 

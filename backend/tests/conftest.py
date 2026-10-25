@@ -1,8 +1,8 @@
-"""Fixture condivise: le "preparazioni" che pytest inietta nei test.
+"""Shared fixtures: the "preparations" pytest injects into the tests.
 
-Una fixture è una funzione il cui RISULTATO viene passato come argomento ai
-test che ne dichiarano il nome. Esempio: un test con parametro `engine`
-riceve un PolarsEngine già collegato a storage e cache finti.
+A fixture is a function whose RESULT is passed as an argument to the tests that declare
+its name. For example, a test with a parameter `engine` receives a PolarsEngine wired to
+a fake storage and cache already.
 """
 from __future__ import annotations
 
@@ -21,22 +21,22 @@ from app.engine.cache import StepCache
 from app.engine.polars_engine import PolarsEngine
 from tests.fakes import FakeRedis, FakeStorage
 
-# Il bucket dei test e' finto (FakeStorage) tranne nelle suite LIVE, dove i
-# parquet vanno sullo storage vero: allora e' quello configurato.
+# The tests' bucket is fake (FakeStorage) except in the LIVE suites, where the parquet
+# files go to the real storage: then it is the configured one.
 BUCKET = os.getenv("TEST_BUCKET") or "data-prep"
 
 
 @pytest.fixture(autouse=True)
 def regolazioni_isolate(monkeypatch):
-    """Ogni test parte senza regolazioni dal pannello, su un Valkey finto tutto suo:
-    quelle messe sul Valkey di sviluppo cambierebbero i risultati (un row group o
-    un tetto diversi). Chi le prova le scrive qui (`panel_settings.write`)."""
+    """Every test starts without panel values, on a fake Valkey of its own: those set on the
+    development Valkey would change the results (another row group or cap). Whoever tests
+    them writes them here (`panel_settings.write`)."""
     from app.core import panel_settings
 
-    finto = FakeRedis()
-    monkeypatch.setattr(panel_settings, "_client", lambda: finto)
+    fake = FakeRedis()
+    monkeypatch.setattr(panel_settings, "_client", lambda: fake)
     panel_settings.forget()
-    yield finto
+    yield fake
     panel_settings.forget()
 
 
@@ -61,9 +61,8 @@ def engine(storage, cache) -> PolarsEngine:
 
 
 def drain_cache(engine) -> int:
-    """Esegue le materializzazioni lasciate in sospeso da una preview: e' cio'
-    che fa `materialize_step_task` fuori dalla richiesta. Ritorna quante ne ha
-    scritte davvero."""
+    """Runs the materializations a preview left pending: what `materialize_step_task` does
+    outside the request. Returns how many it really wrote."""
     written = 0
     for src, ops in engine.take_pending():
         written += bool(engine.materialize(src, ops))
@@ -71,7 +70,7 @@ def drain_cache(engine) -> int:
 
 
 def upload_df(storage: FakeStorage, df: pl.DataFrame, key: str) -> DataSource:
-    """Carica un DataFrame come parquet nel FakeStorage e ritorna la sorgente."""
+    """Loads a DataFrame as parquet into the FakeStorage and returns the source."""
     import tempfile, os
 
     fd, path = tempfile.mkstemp(suffix=".parquet")
@@ -83,8 +82,8 @@ def upload_df(storage: FakeStorage, df: pl.DataFrame, key: str) -> DataSource:
 
 
 @pytest.fixture
-def vendite(storage) -> DataSource:
-    """Sorgente di esempio: vendite per paese, con date e qualche null."""
+def sales(storage) -> DataSource:
+    """A sample source: sales by country, with dates and some nulls."""
     df = pl.DataFrame(
         {
             "paese": ["IT", "IT", "FR", "FR", "DE", "DE"],
@@ -97,6 +96,6 @@ def vendite(storage) -> DataSource:
 
 @pytest.fixture
 def anagrafica(storage) -> DataSource:
-    """Seconda sorgente per i test di join: paese → nome esteso."""
+    """A second source for the join tests: country → full name."""
     df = pl.DataFrame({"paese": ["IT", "FR"], "nome": ["Italia", "Francia"]})
     return upload_df(storage, df, "datasets/anagrafica.parquet")

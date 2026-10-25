@@ -1,12 +1,12 @@
-"""Parità CROSS-ENGINE di pivot/unpivot (Polars, DuckDB, chDB, ClickHouse esterno).
+"""CROSS-ENGINE parity of pivot/unpivot (Polars, DuckDB, chDB, external ClickHouse).
 
-Con engine di sviluppo ≠ engine di produzione lo stesso flusso deve produrre
-le STESSE colonne e gli stessi valori ovunque: i nodi a valle referenziano le
-colonne del pivot per nome. Polars è il riferimento; ogni altro engine
-disponibile deve coincidere (nomi colonna, righe, famiglia di tipo).
+With a development engine ≠ the production engine the same flow must make THE SAME
+columns and values everywhere: the nodes downstream refer to the pivot's columns by name.
+Polars is the reference; every other engine available must match (column names, rows,
+type family).
 
-DuckDB/chDB girano se i pacchetti sono installati (nel container sì);
-l'engine ClickHouse esterno se `CLICKHOUSE_TEST_HOST` è impostata (vedi
+DuckDB/chDB run when the packages are installed (they are in the container); the
+external ClickHouse engine when `CLICKHOUSE_TEST_HOST` is set (see
 test_clickhouse_engine.py).
 """
 from __future__ import annotations
@@ -65,8 +65,8 @@ def src(storage):
         "paese": ["IT", "IT", "FR", "FR", "DE"],
         "anno": [2023, 2024, 2023, 2024, 2024],
         "canale": ["web", "shop", "web", "web", "shop"],
-        "vendite": [10.5, 20.0, 5.0, None, 7.0],  # FR/2024 esiste ma è NULL
-        "qta": [1, 2, 3, 4, 10],  # 10: l'ordine delle etichette è testuale ("10" < "2")
+        "vendite": [10.5, 20.0, 5.0, None, 7.0],  # FR/2024 exists but is NULL
+        "qta": [1, 2, 3, 4, 10],  # 10: the labels' order is textual ("10" < "2")
         "giorno": [dt.date(2024, 1, i + 1) for i in range(5)],
         "attivo": [True, False, True, None, False],
     })
@@ -140,13 +140,13 @@ def test_reshape_matches_polars(storage, src, case, other):
 
 
 def test_pivot_standard_on_polars(storage, src):
-    """Lo standard stesso, sul riferimento: etichette, NULL, count → 0/Int64."""
+    """The standard itself, on the reference: labels, NULLs, count → 0/Int64."""
     eng = _engine("polars", storage)
     res = eng.preview(src, CASES["pivot_sum_null_group"], limit=100)
     assert [c.name for c in res.columns] == ["paese", "2023", "2024"]
     by = {r["paese"]: r for r in res.rows}
-    assert by["DE"]["2023"] is None  # gruppo assente
-    assert by["FR"]["2024"] is None  # gruppo presente ma tutto NULL: NULL, non 0
+    assert by["DE"]["2023"] is None  # a missing group
+    assert by["FR"]["2024"] is None  # a group present but all NULL: NULL, not 0
     res = eng.preview(src, CASES["pivot_count"], limit=100)
     by = {r["paese"]: r for r in res.rows}
     assert by["DE"]["2023"] == 0 and by["FR"]["2024"] == 0

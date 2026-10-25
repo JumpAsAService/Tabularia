@@ -12,84 +12,84 @@ from app.engine.cache import HITS_KEY, plan_hashes
 from app.engine.exceptions import EngineError, OperationError
 from tests.conftest import BUCKET
 
-FILTRO_IT = [{"type": "filter", "params": {"column": "paese", "operator": "eq", "value": "IT"}}]
+FILTER_IT = [{"type": "filter", "params": {"column": "paese", "operator": "eq", "value": "IT"}}]
 
 
 # ── Preview ──────────────────────────────────────────────────────────────────
-def test_preview_ritorna_righe_colonne_e_conteggio(engine, vendite):
-    res = engine.preview(vendite, FILTRO_IT, limit=100)
+def test_preview_returns_rows_columns_and_count(engine, sales):
+    res = engine.preview(sales, FILTER_IT, limit=100)
     assert res.row_count == 2
     assert not res.truncated
     assert [c.name for c in res.columns] == ["paese", "vendite", "data"]
     assert all(r["paese"] == "IT" for r in res.rows)
 
 
-def test_preview_tronca_al_limite_e_lo_segnala(engine, vendite):
-    res = engine.preview(vendite, [], limit=2)
+def test_preview_cuts_at_the_limit_and_says_so(engine, sales):
+    res = engine.preview(sales, [], limit=2)
     assert res.row_count == 2
     assert res.truncated
 
 
-def test_preview_espone_i_dtype_come_stringhe(engine, vendite):
-    res = engine.preview(vendite, [], limit=1)
+def test_preview_exposes_dtypes_as_strings(engine, sales):
+    res = engine.preview(sales, [], limit=1)
     dtypes = {c.name: c.dtype for c in res.columns}
-    assert dtypes["data"] == "Date"  # il frontend ci fa pattern-matching (calendari)
+    assert dtypes["data"] == "Date"  # the frontend pattern-matches on it (calendars)
     assert dtypes["vendite"].startswith("Int")
 
 
-def test_preview_con_operazione_rotta_indica_nodo_e_posizione(engine, vendite):
-    ops = FILTRO_IT + [{"type": "filter", "params": {"column": "non_esiste", "operator": "eq", "value": 1}}]
+def test_preview_with_a_broken_operation_says_node_and_position(engine, sales):
+    ops = FILTER_IT + [{"type": "filter", "params": {"column": "non_esiste", "operator": "eq", "value": 1}}]
     with pytest.raises((OperationError, EngineError)):
-        engine.preview(vendite, ops, limit=10)
+        engine.preview(sales, ops, limit=10)
 
 
-# ── Cache incrementale ───────────────────────────────────────────────────────
-def test_la_preview_lascia_il_parent_da_materializzare(engine, vendite, cache):
+# ── Incremental cache ───────────────────────────────────────────────────────
+def test_the_preview_leaves_the_parent_to_materialize(engine, sales, cache):
     from tests.conftest import drain_cache
 
-    ops = FILTRO_IT + [{"type": "limit", "params": {"n": 1}}]
-    engine.preview(vendite, ops, limit=10)
-    parent_hash = plan_hashes(engine._source_id(vendite), FILTRO_IT)[-1]
-    assert not cache.has(parent_hash)  # la preview NON aspetta la copia
-    assert drain_cache(engine) == 1  # il task differito la scrive
-    assert cache.has(parent_hash)  # iterare sui params dell'ultimo nodo ora costa 1 op
+    ops = FILTER_IT + [{"type": "limit", "params": {"n": 1}}]
+    engine.preview(sales, ops, limit=10)
+    parent_hash = plan_hashes(engine._source_id(sales), FILTER_IT)[-1]
+    assert not cache.has(parent_hash)  # the preview does NOT wait for the copy
+    assert drain_cache(engine) == 1  # the deferred task writes it
+    assert cache.has(parent_hash)  # iterating on the last node's params now costs 1 op
     assert engine.take_pending() == []
 
 
-def test_la_seconda_preview_riusa_la_cache(engine, vendite, fredis):
+def test_the_second_preview_reuses_the_cache(engine, sales, fredis):
     from tests.conftest import drain_cache
 
-    ops = FILTRO_IT + [{"type": "limit", "params": {"n": 1}}]
-    engine.preview(vendite, ops, limit=10)
+    ops = FILTER_IT + [{"type": "limit", "params": {"n": 1}}]
+    engine.preview(sales, ops, limit=10)
     drain_cache(engine)
-    hits_prima = fredis.counters[HITS_KEY]
-    engine.preview(vendite, ops, limit=10)
-    assert fredis.counters[HITS_KEY] > hits_prima
+    hits_before = fredis.counters[HITS_KEY]
+    engine.preview(sales, ops, limit=10)
+    assert fredis.counters[HITS_KEY] > hits_before
 
 
-def test_il_risultato_con_cache_e_identico_a_quello_senza(engine, vendite):
+def test_the_result_with_cache_is_identical_to_the_one_without(engine, sales):
     from tests.conftest import drain_cache
 
-    ops = FILTRO_IT + [{"type": "sort", "params": {"by": "vendite"}}]
-    fresco = engine.preview(vendite, ops, limit=10).rows
-    drain_cache(engine)  # popola la cache
-    dal_cache = engine.preview(vendite, ops, limit=10).rows  # riparte dalla cache
-    assert fresco == dal_cache
+    ops = FILTER_IT + [{"type": "sort", "params": {"by": "vendite"}}]
+    fresco = engine.preview(sales, ops, limit=10).rows
+    drain_cache(engine)  # fills the cache
+    from_cache = engine.preview(sales, ops, limit=10).rows  # starts from the cache
+    assert fresco == from_cache
 
 
 # ── Run ──────────────────────────────────────────────────────────────────────
-def test_run_scrive_l_output_e_riporta_le_righe(engine, vendite, storage):
+def test_run_writes_the_output_and_reports_the_rows(engine, sales, storage):
     dest = DataSource(bucket=BUCKET, key="out/risultato.parquet")
-    res = engine.run(vendite, FILTRO_IT, dest)
+    res = engine.run(sales, FILTER_IT, dest)
     assert res.rows_written == 2
     assert storage.exists(BUCKET, "out/risultato.parquet")
 
 
-def test_run_mette_in_cache_anche_lo_step_finale(engine, vendite, cache):
+def test_run_caches_the_final_step_too(engine, sales, cache):
     dest = DataSource(bucket=BUCKET, key="out/risultato.parquet")
-    engine.run(vendite, FILTRO_IT, dest)
-    final_hash = plan_hashes(engine._source_id(vendite), FILTRO_IT)[-1]
-    assert cache.has(final_hash)  # ri-run e preview del nodo foglia sono immediati
+    engine.run(sales, FILTER_IT, dest)
+    final_hash = plan_hashes(engine._source_id(sales), FILTER_IT)[-1]
+    assert cache.has(final_hash)  # runs again and the leaf node's preview are immediate
 
 
 # ── Export ───────────────────────────────────────────────────────────────────
@@ -99,10 +99,10 @@ def _tmp(suffix: str) -> str:
     return path
 
 
-def test_export_csv_scrive_il_risultato_filtrato(engine, vendite):
+def test_export_csv_writes_the_filtered_result(engine, sales):
     path = _tmp(".csv")
     try:
-        engine.export(vendite, FILTRO_IT, fmt="csv", out_path=path)
+        engine.export(sales, FILTER_IT, fmt="csv", out_path=path)
         df = pl.read_csv(path)
         assert df.height == 2
         assert set(df["paese"]) == {"IT"}
@@ -110,49 +110,49 @@ def test_export_csv_scrive_il_risultato_filtrato(engine, vendite):
         os.unlink(path)
 
 
-def test_export_xlsx_produce_un_excel_valido(engine, vendite):
+def test_export_xlsx_makes_a_valid_excel(engine, sales):
     path = _tmp(".xlsx")
     try:
-        engine.export(vendite, [], fmt="xlsx", out_path=path)
+        engine.export(sales, [], fmt="xlsx", out_path=path)
         df = pl.read_excel(path)
         assert df.height == 6
     finally:
         os.unlink(path)
 
 
-def test_export_xlsx_oltre_il_tetto_righe_suggerisce_il_csv(engine, vendite, monkeypatch):
-    monkeypatch.setattr(type(engine), "XLSX_MAX_ROWS", 3)  # abbassa il tetto per il test
+def test_export_xlsx_over_the_row_cap_suggests_csv(engine, sales, monkeypatch):
+    monkeypatch.setattr(type(engine), "XLSX_MAX_ROWS", 3)  # lowers the cap for the test
     path = _tmp(".xlsx")
     try:
         with pytest.raises(EngineError, match="CSV"):
-            engine.export(vendite, [], fmt="xlsx", out_path=path)
+            engine.export(sales, [], fmt="xlsx", out_path=path)
     finally:
         os.unlink(path)
 
 
-def test_export_csv_oltre_il_tetto_righe_si_ferma_e_suggerisce_un_output(engine, vendite):
-    # 6 righe: con un tetto di 5 si rifiuta (il browser raccoglierebbe tutto in memoria)
+def test_export_csv_over_the_row_cap_stops_and_suggests_an_output(engine, sales):
+    # 6 rows: with a cap of 5 it is refused (the browser would gather it all in memory)
     path = _tmp(".csv")
     try:
         with pytest.raises(EngineError, match="Output node"):
-            engine.export(vendite, [], fmt="csv", out_path=path, max_rows=5)
+            engine.export(sales, [], fmt="csv", out_path=path, max_rows=5)
     finally:
         os.unlink(path)
 
 
 @pytest.mark.parametrize("max_rows, limit, rows", [(6, None, 6), (None, None, 6), (5, 3, 3), (5, 5, 5)])
-def test_export_csv_al_tetto_o_sotto_passa(engine, vendite, max_rows, limit, rows):
-    # al tetto esatto passa; senza tetto passa tutto; un limit sotto il tetto basta a sé
+def test_export_csv_at_or_under_the_cap_passes(engine, sales, max_rows, limit, rows):
+    # at the exact cap it passes; without a cap everything passes; a limit under the cap is enough by itself
     path = _tmp(".csv")
     try:
-        engine.export(vendite, [], fmt="csv", out_path=path, limit=limit, max_rows=max_rows)
+        engine.export(sales, [], fmt="csv", out_path=path, limit=limit, max_rows=max_rows)
         assert pl.read_csv(path).height == rows
     finally:
         os.unlink(path)
 
 
-def test_export_csv_conta_le_righe_vere_anche_con_a_capo_nei_valori(engine, storage):
-    # 3 righe, una con un a-capo dentro il valore: sono 3, non 4 — il tetto di 3 regge
+def test_export_csv_counts_the_true_rows_even_with_line_breaks_in_values(engine, storage):
+    # 3 rows, one with a line break inside the value: 3, not 4 — the cap of 3 holds
     from tests.conftest import upload_df
 
     src = upload_df(storage, pl.DataFrame({"note": ["una", "due\nrighe", "tre"]}), "datasets/note.parquet")
@@ -166,19 +166,19 @@ def test_export_csv_conta_le_righe_vere_anche_con_a_capo_nei_valori(engine, stor
         os.unlink(path)
 
 
-def test_export_formato_sconosciuto_da_errore_chiaro(engine, vendite):
+def test_export_unknown_format_gives_a_clear_error(engine, sales):
     path = _tmp(".bin")
     try:
         with pytest.raises(EngineError, match="unsupported export format"):
-            engine.export(vendite, [], fmt="pdf", out_path=path)
+            engine.export(sales, [], fmt="pdf", out_path=path)
     finally:
         os.unlink(path)
 
 
-def test_export_rispetta_il_limit(engine, vendite):
+def test_export_respects_the_limit(engine, sales):
     path = _tmp(".csv")
     try:
-        engine.export(vendite, [], fmt="csv", out_path=path, limit=3)
+        engine.export(sales, [], fmt="csv", out_path=path, limit=3)
         assert pl.read_csv(path).height == 3
     finally:
         os.unlink(path)

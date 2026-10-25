@@ -59,7 +59,7 @@ def get_bigquery_operation(name: str) -> BqOpFn:
     return fn
 
 
-# ── helper SQL (dialetto GoogleSQL) ───────────────────────────────────────────
+# ── SQL helpers (GoogleSQL dialect) ───────────────────────────────────────────
 def _qi(name: str) -> str:
     """Quotes an identifier with backticks (GoogleSQL)."""
     return "`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`"
@@ -327,7 +327,7 @@ def op_group_by(sql, params, ctx):
 # ── compute (scalar expressions, WITHOUT subqueries or external access) ──────────
 # The expression is written in the other engines' dialect (DuckDB/Polars SQL, then
 # translated below): it is parsed in that dialect, so EXTRACT(YEAR FROM d) passes
-# and a subquery or a table function does not (see app/engine/espressioni.py).
+# and a subquery or a table function does not (see app/engine/expressions.py).
 # These names reach outside the row only on BigQuery: models, Vertex AI, the
 # service account's identity.
 _BIGQUERY_ONLY = re.compile(r"\b(?:external_query|ml\.|ai\.|session_user)", re.IGNORECASE)

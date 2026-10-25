@@ -1,9 +1,9 @@
-"""I segreti non escono nei messaggi d'errore (audit 2026-09-19, A2).
+"""The secrets do not get out in the error messages (audit 2026-09-19, A2).
 
-Senza `named collection` l'engine mette le chiavi dello storage dentro il SQL.
-ClickHouse le maschera analizzando la query, ma su un errore di SINTASSI non
-c'è nulla da analizzare e il frammento esce in chiaro: da lì arriva al toast
-dell'editor, a `Run.error_detail` nel database e al fornitore del modello.
+Without a `named collection` the engine puts the storage's keys inside the SQL.
+ClickHouse masks them by parsing the query, but on a SYNTAX error there is nothing to
+parse and the fragment comes out in clear: from there it reaches the editor's toast,
+`Run.error_detail` in the database and the model's provider.
 """
 import pytest
 
@@ -13,7 +13,7 @@ from app.core.redaction import MASK, redact_secrets
 
 @pytest.fixture
 def key_names(monkeypatch):
-    """Chiavi finte al posto di quelle vere, per tutta la durata del test."""
+    """Fake keys instead of the real ones, for the whole test."""
     cfg = get_settings()
     ak, sk = "AK_FINTA_ACCESS_KEY", "SK_FINTA_SEGRETISSIMA_9z"
     monkeypatch.setattr(cfg.storage, "access_key", ak, raising=False)
@@ -30,7 +30,7 @@ def test_the_storage_keys_are_masked(key_names):
     clean = redact_secrets(error)
     assert sk not in clean and ak not in clean
     assert MASK in clean
-    # il messaggio resta leggibile: si toglie il segreto, non il senso
+    # the message stays readable: the secret goes, not the meaning
     assert "Syntax error" in clean and "x.parquet" in clean
 
 
@@ -39,14 +39,14 @@ def test_a_message_without_secrets_is_untouched(key_names):
     assert redact_secrets(msg) == msg
 
 
-@pytest.mark.parametrize("vuoto", [None, ""])
-def test_empty_input_survives(vuoto):
-    assert redact_secrets(vuoto) == vuoto
+@pytest.mark.parametrize("empty", [None, ""])
+def test_empty_input_survives(empty):
+    assert redact_secrets(empty) == empty
 
 
 def test_redaction_never_raises(monkeypatch):
-    # se la configurazione è irraggiungibile il messaggio passa com'è:
-    # una redazione rotta non deve trasformare un errore in un altro errore
+    # when the configuration cannot be reached the message passes as it is: a broken
+    # redaction must not turn an error into another error
     import app.core.redaction as r
 
     monkeypatch.setattr(r, "_secrets", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -54,7 +54,7 @@ def test_redaction_never_raises(monkeypatch):
 
 
 def test_the_database_error_path_redacts(key_names, monkeypatch):
-    """`describe_db_error` è il punto unico da cui escono i messaggi: deve redigere."""
+    """`describe_db_error` is the one point the messages go out from: it must redact."""
     from app.ingest.db_errors import describe_db_error
 
     _, sk = key_names
@@ -63,12 +63,12 @@ def test_the_database_error_path_redacts(key_names, monkeypatch):
     assert sk not in outside
 
 
-# ── testo delle query nel pannello Prestazioni ───────────────────────────────
+# ── the queries' text in the Performance panel ───────────────────────────────
 
 def test_the_arguments_of_a_storage_function_are_emptied():
-    """Il query_log di ClickHouse maschera la chiave segreta ma NON quella di
-    accesso, e lascia in chiaro endpoint, bucket e percorso — verificato su un
-    ClickHouse 24.8. In un elenco di query lente non servono a nulla."""
+    """ClickHouse's query_log masks the secret key but NOT the access key, and leaves the
+    endpoint, bucket and path in clear — checked on a ClickHouse 24.8. In a list of slow
+    queries they serve nothing."""
     from app.core.redaction import redact_storage_args
 
     q = ("SELECT count() FROM s3('https://s3.it-mil.scw.cloud/bucket/datasets/1/x.parquet', "
@@ -76,7 +76,7 @@ def test_the_arguments_of_a_storage_function_are_emptied():
     outside = redact_storage_args(q)
     assert "AK_VISIBILE" not in outside and "bucket/datasets" not in outside
     assert "s3(…)" in outside
-    # il senso della query resta leggibile: è il motivo per cui la si mostra
+    # the query's meaning stays readable: the reason it is shown
     assert "SELECT count()" in outside and "paese = 'IT'" in outside
 
 
@@ -96,17 +96,17 @@ def test_a_query_without_storage_functions_is_untouched():
     assert redact_storage_args(q) == q
 
 
-# ── il testo TRONCATO: è lì che stava il buco ────────────────────────────────
+# ── the TRUNCATED text: that is where the hole was ────────────────────────────────
 
 def test_a_truncated_storage_call_is_redacted_to_the_end():
-    """Il `query_log` si legge a fette: se il taglio cade dentro `s3(`, la
-    parentesi non si chiude mai e la chiave d'accesso resta in chiaro. Trovato
-    dal vivo il 2026-09-28 nel pannello Prestazioni."""
+    """The `query_log` is read in slices: when the cut falls inside `s3(`, the parenthesis
+    never closes and the access key stays in clear. Found live on 2026-09-28 in the
+    Performance panel."""
     from app.core.redaction import redact_storage_args
 
-    tronca = ("INSERT INTO FUNCTION s3('https://s3.it-mil.scw.cloud/bucket/x.parquet', "
+    cut = ("INSERT INTO FUNCTION s3('https://s3.it-mil.scw.cloud/bucket/x.parquet', "
               "'SCWAWW2XAESEMPIO")
-    outside = redact_storage_args(tronca)
+    outside = redact_storage_args(cut)
     assert "SCWAWW2XAESEMPIO" not in outside
     assert "s3.it-mil.scw.cloud" not in outside and "bucket" not in outside
     assert outside.startswith("INSERT INTO FUNCTION s3(")
@@ -119,12 +119,12 @@ def test_a_storage_call_nested_two_levels_deep_is_redacted():
          "WHERE toYYYYMM(d) = 202601) t")
     outside = redact_storage_args(q)
     assert "y.parquet" not in outside and "'K'" not in outside
-    assert "toYYYYMM(d) = 202601" in outside  # il resto della query resta leggibile
+    assert "toYYYYMM(d) = 202601" in outside  # the rest of the query stays readable
 
 
 def test_the_name_inside_a_string_is_not_a_call():
-    """`WHERE nome LIKE '%s3(%'` non è una chiamata: redigerla rovinerebbe una
-    query legittima senza proteggere niente."""
+    """`WHERE nome LIKE '%s3(%'` is not a call: redacting it would spoil a legitimate query
+    protecting nothing."""
     from app.core.redaction import redact_storage_args
 
     q = "SELECT * FROM t WHERE nome LIKE '%s3(%' AND a = 1"

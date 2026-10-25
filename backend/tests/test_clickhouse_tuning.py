@@ -1,8 +1,7 @@
-"""Regola del tuning dei thread per le letture Parquet dell'engine ClickHouse.
+"""The rule tuning the threads of the ClickHouse engine's Parquet reads.
 
-Il quando (quali query) e il quanto (quanti thread) sono due funzioni pure,
-provate qui senza un server. Il guadagno vero è stato misurato end-to-end su
-Scaleway: vedi la nota di memoria clickhouse-parquet-read-tuning.
+The when (which queries) and the how much (how many threads) are two pure functions,
+tested here without a server. The real gain was measured end to end on Scaleway.
 """
 from app.engine.base import Operation
 from app.engine.clickhouse_engine import _effective_scan_threads, _needs_scan_tuning
@@ -12,9 +11,9 @@ def _ops(*types):
     return [Operation(type=t, params={}) for t in types]
 
 
-# ── quando: solo le catene che fanno una scansione piena ────────────────────────
+# ── when: only the chains that make a full scan ────────────────────────
 def test_a_plain_projection_with_limit_is_not_tuned():
-    # la vista tabella del viewer: con troppi thread RALLENTA, va lasciata stare
+    # the viewer's table view: with too many threads it SLOWS DOWN, it is left alone
     assert _needs_scan_tuning(_ops("filter", "select", "compute")) is False
 
 
@@ -36,14 +35,14 @@ def test_an_empty_chain_is_not_tuned():
     assert _needs_scan_tuning([]) is False
 
 
-# ── quanto: alza, non abbassa mai; spegnibile ───────────────────────────────────
+# ── how much: raises, never lowers; can be switched off ───────────────────────────────────
 def test_it_raises_threads_on_a_small_server():
-    # 2 core: 8 thread nascondono l'attesa di rete su S3
+    # 2 cores: 8 threads hide the network wait on S3
     assert _effective_scan_threads(8, server_threads=2) == 8
 
 
 def test_it_leaves_a_big_server_alone():
-    # 16 core: imporre 8 sarebbe una REGRESSIONE → non toccare
+    # 16 cores: imposing 8 would be a REGRESSION → leave it alone
     assert _effective_scan_threads(8, server_threads=16) == 0
 
 
@@ -56,5 +55,5 @@ def test_zero_disables_it():
 
 
 def test_unknown_server_threads_still_applies_the_target():
-    # core del server non leggibili (0): applica comunque il target richiesto
+    # the server's cores unreadable (0): the requested target applies anyway
     assert _effective_scan_threads(8, server_threads=0) == 8

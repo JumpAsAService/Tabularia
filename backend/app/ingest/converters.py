@@ -156,7 +156,7 @@ def convert_to_parquet(src: str, dst: str, fmt: FileFormat, options: IngestOptio
         _sink(lf, dst)
 
     elif fmt is FileFormat.json:
-        # JSON array: non streamabile
+        # JSON array: cannot be streamed
         df = pl.read_json(src)
         df = _cast(df.lazy(), overrides).collect(engine='streaming')
         df.write_parquet(dst)

@@ -1,7 +1,6 @@
-"""Engine DuckDB (out-of-core): stessa IR di Polars, operazioni single-input v1.
+"""The DuckDB engine (out of core): the same IR as Polars.
 
-Verifica preview/run e le 11 operazioni supportate; le altre devono sollevare
-un errore chiaro (usa Polars).
+Checks preview/run and the supported operations; the others must raise a clear error.
 """
 import polars as pl
 import pytest
@@ -15,7 +14,7 @@ from tests.fakes import FakeRedis
 
 
 def _engine(storage, cache=None):
-    # cache con Redis finto (i test girano senza Valkey), come i test Polars
+    # the cache with a fake Redis (the tests run without Valkey), as the Polars tests
     return DuckDBEngine(storage=storage, cache=cache or StepCache(storage, redis_client=FakeRedis()))
 
 
@@ -90,7 +89,7 @@ def test_select_drop_rename(storage, src):
 
 
 def test_cast(storage, src):
-    # lo schema torna dai tipi Polars (preview via .pl()) → Float
+    # the schema comes back in Polars types (preview through .pl()) → Float
     res = _engine(storage).preview(src, [{"type": "cast", "params": {"columns": {"vendite": "float"}}}], limit=5)
     dt = {c.name: c.dtype for c in res.columns}
     assert "Float" in dt["vendite"]
@@ -115,7 +114,7 @@ def test_sort_limit_unique(storage, src):
 
 
 def test_multi_op_chain(storage, src):
-    # catena di più operazioni: verifica che gli alias per-step non ricorsino
+    # a chain of several operations: the per-step aliases do not recurse
     ops = [
         {"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": 80}},
         {"type": "group_by", "params": {
@@ -124,7 +123,7 @@ def test_multi_op_chain(storage, src):
         }},
         {"type": "sort", "params": {"by": "tot", "descending": True}},
     ]
-    # filtro ≥80 esclude l'unica riga FR (50) → gruppi IT(400), DE(250)
+    # the filter ≥80 leaves out the one FR row (50) → groups IT(400), DE(250)
     res = _engine(storage).preview(src, ops, limit=10)
     assert [r["paese"] for r in res.rows] == ["IT", "DE"]
     assert res.rows[0]["tot"] == 400
@@ -156,7 +155,7 @@ def test_sql_input_alias(storage, src):
 
 
 def test_sql_sandbox_blocks_file_read(storage, src):
-    # la query utente NON può leggere il filesystem del worker
+    # the user's query can NOT read the worker's filesystem
     with pytest.raises(EngineError):
         _engine(storage).preview(
             src, [{"type": "sql", "params": {"query": "SELECT * FROM read_csv('/app/app/core/config.py')"}}], limit=5
@@ -177,7 +176,7 @@ def test_foreach_items(storage, src):
         "body": [{"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": "{{soglia}}"}}],
     }}]
     res = _engine(storage).preview(src, ops, limit=50)
-    # soglia 100 → 3 righe (100,250,300); soglia 250 → 2 (250,300); totale 5
+    # threshold 100 → 3 rows (100,250,300); threshold 250 → 2 (250,300); total 5
     assert res.row_count == 5
     assert "soglia" in {c.name for c in res.columns}
 
@@ -189,10 +188,10 @@ def test_foreach_driver(storage, src):
         "body": [{"type": "filter", "params": {"column": "vendite", "operator": "ge", "value": "{{soglia}}"}}],
     }}]
     res = _engine(storage).preview(src, ops, limit=50)
-    assert res.row_count == 4  # soglia100 → 3, soglia300 → 1
+    assert res.row_count == 4  # threshold 100 → 3, threshold 300 → 1
 
 
-# ── step-cache incrementale ──────────────────────────────────────────────────
+# ── incremental step cache ─────────────────────────────────────────────────
 def test_step_cache_materializes_parent(storage, src):
     cache = StepCache(storage, redis_client=FakeRedis())
     eng = _engine(storage, cache)
@@ -200,11 +199,11 @@ def test_step_cache_materializes_parent(storage, src):
     ops = parent + [{"type": "sort", "params": {"by": "vendite"}}]
     eng.preview(src, ops, limit=10)
     parent_hash = plan_hashes(eng._source_id(src), parent)[-1]
-    assert not cache.has(parent_hash)  # la preview non aspetta la copia
+    assert not cache.has(parent_hash)  # the preview does not wait for the copy
     from tests.conftest import drain_cache
 
     assert drain_cache(eng) == 1
-    assert cache.has(parent_hash)  # il parent (filter) è in cache → l'ultimo nodo riparte da lì
+    assert cache.has(parent_hash)  # the parent (filter) is cached → the last node starts from there
 
 
 def test_step_cache_result_identical(storage, src):
@@ -218,12 +217,12 @@ def test_step_cache_result_identical(storage, src):
     from tests.conftest import drain_cache
 
     drain_cache(eng)
-    second = eng.preview(src, ops, limit=10).rows  # riparte dalla cache del parent
+    second = eng.preview(src, ops, limit=10).rows  # starts from the parent's cache
     assert first == second
 
 
 def test_step_cache_namespaced_by_engine(storage, src):
-    # DuckDB e Polars non devono condividere i blob: il source_id porta il tag
+    # DuckDB and Polars must not share the blobs: the source_id carries the tag
     assert _engine(storage)._source_id(src).startswith("duckdb:")
 
 
@@ -238,7 +237,7 @@ def test_join_inner(storage, src, anag):
     ops = [{"type": "join", "params": {"right": {"bucket": anag.bucket, "key": anag.key}, "on": ["paese"], "how": "inner"}}]
     res = _engine(storage).preview(src, ops, limit=10)
     assert "nome" in {c.name for c in res.columns}
-    assert {r["nome"] for r in res.rows} == {"Italia", "Francia"}  # DE senza match escluso
+    assert {r["nome"] for r in res.rows} == {"Italia", "Francia"}  # DE without a match left out
 
 
 def test_join_left_keeps_unmatched(storage, src, anag):
@@ -252,7 +251,7 @@ def test_join_overlap_suffix(storage, src):
     r = upload_df(storage, pl.DataFrame({"paese": ["IT"], "vendite": [999]}), "datasets/ov_duck.parquet")
     ops = [{"type": "join", "params": {"right": {"bucket": r.bucket, "key": r.key}, "on": ["paese"], "how": "inner"}}]
     cols = {c.name for c in _engine(storage).preview(src, ops, limit=10).columns}
-    assert "vendite" in cols and "vendite_right" in cols  # omonima non-chiave → suffisso
+    assert "vendite" in cols and "vendite_right" in cols  # same name, not a key → suffix
 
 
 def test_union_relaxed(storage, src):

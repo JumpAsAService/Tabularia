@@ -1,12 +1,11 @@
-"""I batch del driver NON devono diventare un row group ciascuno.
+"""The driver's batches must NOT each become a row group.
 
-`write_batch` scrive un row group per chiamata, e i driver consegnano batch da
-poche migliaia di righe: un parquet da 25M righe x 50 colonne finiva con 3.063
-row group, 153.000 pezzi di colonna e un footer di 16,6 MB. Con blocchi cosi'
-piccoli leggere due colonne su cinquanta richiederebbe migliaia di richieste da
-poche decine di KB, quindi il motore scarica l'intero file: il pruning per
-colonna che il formato promette non conviene mai. Misurato su ClickHouse, la
-stessa aggregazione costava 19,2 s con o senza proiezione delle colonne.
+`write_batch` writes one row group per call, and the drivers hand over batches of a few
+thousand rows: a parquet of 25M rows x 50 columns ended with 3,063 row groups, 153,000
+column chunks and a 16.6 MB footer. With blocks that small, reading two columns of fifty
+would take thousands of requests of a few tens of KB, so the engine downloads the whole
+file: the column pruning the format promises never pays. Measured on ClickHouse, the
+same aggregation cost 19.2 s with or without projecting the columns.
 """
 import io
 import sqlite3
@@ -19,7 +18,7 @@ from app.ingest.db_source import DbConnectionSpec, DbSourceSpec, _dbapi_batches,
 from tests.fakes import FakeStorage
 
 
-def _cursore(rows):
+def _cursor(rows):
     db = sqlite3.connect(":memory:")
     cur = db.cursor()
     cur.execute("CREATE TABLE t (id INTEGER, nome TEXT)")
@@ -29,14 +28,14 @@ def _cursore(rows):
 
 
 def _driver(rows, batch_rows):
-    """Driver finto che consegna batch PICCOLI, come quelli veri."""
+    """A fake driver handing over SMALL batches, as the real ones."""
     def d(conn, query):
-        yield from _dbapi_batches(_cursore(rows), batch_rows=batch_rows)
+        yield from _dbapi_batches(_cursor(rows), batch_rows=batch_rows)
     return d
 
 
-def _scrivi(monkeypatch, n_righe, batch_rows, threshold):
-    rows = [(i, f"n{i}") for i in range(n_righe)]
+def _write(monkeypatch, n_rows, batch_rows, threshold):
+    rows = [(i, f"n{i}") for i in range(n_rows)]
     monkeypatch.setitem(db_source._DRIVERS, "postgresql", _driver(rows, batch_rows))
     monkeypatch.setenv("INGEST__PARQUET_ROW_GROUP_ROWS", str(threshold))
     db_source.get_settings.cache_clear()
@@ -46,27 +45,27 @@ def _scrivi(monkeypatch, n_righe, batch_rows, threshold):
         DbSourceSpec(mode="table", ref="t"),
         bucket="b", key="datasets/x.parquet", storage=storage,
     )
-    # FakeStorage tiene i blob in memoria: il parquet si rilegge da li'
+    # FakeStorage keeps the blobs in memory: the parquet is read back from there
     return pq.ParquetFile(io.BytesIO(storage.blobs[("b", "datasets/x.parquet")])).metadata
 
 
 def test_many_small_driver_batches_become_few_row_groups(monkeypatch):
-    """500 righe consegnate 10 alla volta = 50 batch, ma UN SOLO row group."""
-    md = _scrivi(monkeypatch, n_righe=500, batch_rows=10, threshold=1000)
+    """500 rows handed over 10 at a time = 50 batches, but ONE row group."""
+    md = _write(monkeypatch, n_rows=500, batch_rows=10, threshold=1000)
     assert md.num_rows == 500
     assert md.num_row_groups == 1, f"un row group per batch e' tornato: {md.num_row_groups}"
 
 
 def test_the_threshold_decides_how_many_row_groups(monkeypatch):
-    """Superata la soglia si chiude il blocco: 500 righe con soglia 100 -> 5."""
-    md = _scrivi(monkeypatch, n_righe=500, batch_rows=10, threshold=100)
+    """Past the threshold the block closes: 500 rows with a threshold of 100 -> 5."""
+    md = _write(monkeypatch, n_rows=500, batch_rows=10, threshold=100)
     assert md.num_rows == 500
     assert md.num_row_groups == 5, md.num_row_groups
 
 
 def test_the_last_partial_block_is_not_lost(monkeypatch):
-    """Il resto sotto soglia deve comunque finire nel file."""
-    md = _scrivi(monkeypatch, n_righe=250, batch_rows=10, threshold=100)
+    """The rest under the threshold must end in the file anyway."""
+    md = _write(monkeypatch, n_rows=250, batch_rows=10, threshold=100)
     assert md.num_rows == 250, "righe perse: manca lo scarico finale"
     assert md.num_row_groups == 3
 
@@ -78,16 +77,16 @@ def test_the_default_is_a_million_rows():
 
 
 def test_a_batch_bigger_than_the_threshold_is_split(monkeypatch):
-    """Postgres consegna anche decine di migliaia di righe in un batch: con la soglia
-    sotto (dal pannello, 10.000) usciva UN row group solo (trovato sul prodtest:
-    25.000 righe, 1 blocco)."""
-    md = _scrivi(monkeypatch, n_righe=250, batch_rows=250, threshold=100)
+    """Postgres hands over even tens of thousands of rows in one batch: with the threshold
+    below (from the panel, 10,000) ONE row group came out (found on prodtest: 25,000 rows,
+    1 block)."""
+    md = _write(monkeypatch, n_rows=250, batch_rows=250, threshold=100)
     assert md.num_rows == 250
     assert [md.row_group(i).num_rows for i in range(md.num_row_groups)] == [100, 100, 50]
 
 
 def test_no_tiny_row_group_after_each_block(monkeypatch):
-    """Batch da 30 e soglia 100: il blocco si chiude a 120 righe. Si scrivono 100 e
-    le 20 passano al blocco dopo, invece di un row group da 20 ogni volta."""
-    md = _scrivi(monkeypatch, n_righe=450, batch_rows=30, threshold=100)
+    """Batches of 30 and a threshold of 100: the block closes at 120 rows. 100 are written
+    and the 20 go to the next block, instead of a row group of 20 every time."""
+    md = _write(monkeypatch, n_rows=450, batch_rows=30, threshold=100)
     assert [md.row_group(i).num_rows for i in range(md.num_row_groups)] == [100, 100, 100, 100, 50]

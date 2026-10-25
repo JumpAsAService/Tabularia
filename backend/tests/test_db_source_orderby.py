@@ -1,7 +1,7 @@
-"""ORDER BY opzionale nell'import da DB (build_query).
+"""The optional ORDER BY of the import from a database (build_query).
 
-Il parquet esce ordinato per le chiavi scelte → row-group ordinati → pruning a
-valle. Nessuna chiave = query identica a prima.
+The parquet comes out sorted by the chosen keys → sorted row groups → pruning
+downstream. No keys = the query as before.
 """
 import pytest
 
@@ -38,6 +38,6 @@ def test_blank_keys_are_dropped():
 
 
 def test_a_key_containing_the_quote_char_is_refused():
-    # niente iniezione via nome colonna: stessa difesa del nome tabella
+    # no injection through a column name: the table name's defense
     with pytest.raises(DbSourceError):
         build_query(_conn(), DbSourceSpec(mode="table", ref="ordini", sort_keys=['id" ; DROP']))

@@ -1,9 +1,9 @@
-"""Sorgenti database: costruzione query, conversione righe→Arrow, ingest→parquet.
+"""Database sources: building the query, rows→Arrow, ingest→parquet.
 
-Il percorso DBAPI generico (MySQL/MariaDB/Trino) viene esercitato con sqlite:
-è un DBAPI come gli altri, quindi i test girano senza nessun database esterno.
-I driver Arrow-nativi (Postgres/ClickHouse) condividono tutto il resto del
-percorso (schema → ParquetWriter → storage), coperto da questi test.
+The generic DBAPI path (MySQL/MariaDB/Trino) is exercised with sqlite: a DBAPI as the
+others, so the tests run without any external database. The Arrow-native drivers
+(Postgres/ClickHouse) share all the rest of the path (schema → ParquetWriter → storage),
+covered by these tests.
 """
 import sqlite3
 
@@ -31,42 +31,42 @@ def _pg(**kw) -> DbConnectionSpec:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# build_query: tabella vs SQL, quoting per dialetto
+# build_query: table vs SQL, quoting per dialect
 # ─────────────────────────────────────────────────────────────────────────────
-def test_tabella_semplice_viene_quotata_col_dialetto_giusto():
+def test_plain_table_is_quoted_with_the_right_dialect():
     assert build_query(_pg(), DbSourceSpec(mode="table", ref="orders")) == 'SELECT * FROM "orders"'
     my = DbConnectionSpec(db_type="mysql", host="x", database="shop")
     assert build_query(my, DbSourceSpec(mode="table", ref="orders")) == "SELECT * FROM `orders`"
 
 
-def test_lo_schema_della_connessione_viene_anteposto_alla_tabella():
+def test_the_connections_schema_goes_before_the_table():
     conn = _pg(db_schema="sales")
     assert build_query(conn, DbSourceSpec(mode="table", ref="orders")) == 'SELECT * FROM "sales"."orders"'
 
 
-def test_schema_tabella_esplicito_vince_su_quello_della_connessione():
+def test_explicit_table_schema_wins_over_the_connections():
     conn = _pg(db_schema="sales")
     q = build_query(conn, DbSourceSpec(mode="table", ref="analytics.orders"))
     assert q == 'SELECT * FROM "analytics"."orders"'
 
 
-def test_il_sql_viene_avvolto_in_una_subselect_e_perde_il_punto_e_virgola():
+def test_the_sql_is_wrapped_in_a_subselect_and_loses_the_semicolon():
     q = build_query(_pg(), DbSourceSpec(mode="sql", ref="SELECT 1 AS a ;"))
     assert q == "SELECT * FROM (SELECT 1 AS a) AS _q"
 
 
-def test_tabella_con_carattere_di_quoting_viene_rifiutata():
+def test_table_with_a_quoting_character_is_refused():
     with pytest.raises(DbSourceError):
         build_query(_pg(), DbSourceSpec(mode="table", ref='ord"ers'))
 
 
-def test_sql_vuoto_viene_rifiutato():
+def test_empty_sql_is_refused():
     with pytest.raises(DbSourceError):
         build_query(_pg(), DbSourceSpec(mode="sql", ref="   ;  "))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Percorso DBAPI generico (fetchmany → batch Arrow), esercitato con sqlite
+# The generic DBAPI path (fetchmany → Arrow batches), exercised with sqlite
 # ─────────────────────────────────────────────────────────────────────────────
 def _cursor(rows, create="CREATE TABLE t (id INTEGER, name TEXT, val REAL)", table="t"):
     db = sqlite3.connect(":memory:")
@@ -79,7 +79,7 @@ def _cursor(rows, create="CREATE TABLE t (id INTEGER, name TEXT, val REAL)", tab
     return cur
 
 
-def test_il_primo_elemento_prodotto_e_lo_schema_poi_i_batch():
+def test_the_first_item_yielded_is_the_schema_then_the_batches():
     gen = _dbapi_batches(_cursor([(1, "a", 1.5), (2, "b", 2.5)]), batch_rows=10)
     schema = next(gen)
     assert isinstance(schema, pa.Schema)
@@ -88,7 +88,7 @@ def test_il_primo_elemento_prodotto_e_lo_schema_poi_i_batch():
     assert sum(b.num_rows for b in batches) == 2
 
 
-def test_i_batch_rispettano_la_dimensione_e_arrivano_tutti():
+def test_the_batches_keep_their_size_and_all_arrive():
     rows = [(i, f"r{i}", float(i)) for i in range(25)]
     gen = _dbapi_batches(_cursor(rows), batch_rows=10)
     next(gen)  # schema
@@ -96,21 +96,21 @@ def test_i_batch_rispettano_la_dimensione_e_arrivano_tutti():
     assert sum(b.num_rows for b in batches) == 25
 
 
-def test_una_colonna_tutta_null_nel_primo_batch_diventa_string():
+def test_a_column_all_null_in_the_first_batch_becomes_string():
     rows = [(1, None, 1.0), (2, None, 2.0)]
     gen = _dbapi_batches(_cursor(rows), batch_rows=10)
     schema = next(gen)
     assert schema.field("name").type == pa.string()
 
 
-def test_risultato_vuoto_produce_uno_schema_di_stringhe_e_zero_batch():
+def test_empty_result_makes_a_string_schema_and_zero_batches():
     gen = _dbapi_batches(_cursor([]), batch_rows=10)
     schema = next(gen)
     assert all(f.type == pa.string() for f in schema)
     assert list(gen) == []
 
 
-def test_colonne_con_lo_stesso_nome_danno_un_errore_parlante():
+def test_columns_with_the_same_name_give_a_clear_error():
     db = sqlite3.connect(":memory:")
     cur = db.cursor()
     cur.execute("SELECT 1 AS id, 2 AS id")
@@ -119,7 +119,7 @@ def test_colonne_con_lo_stesso_nome_danno_un_errore_parlante():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Ingest completo: batch → ParquetWriter → storage (driver finto via sqlite)
+# The whole ingest: batches → ParquetWriter → storage (a fake driver over sqlite)
 # ─────────────────────────────────────────────────────────────────────────────
 def _sqlite_driver(rows):
     def driver(conn, query):
@@ -128,7 +128,7 @@ def _sqlite_driver(rows):
     return driver
 
 
-def test_l_ingest_scrive_il_parquet_su_storage_e_riporta_righe_e_colonne(monkeypatch):
+def test_the_ingest_writes_the_parquet_to_storage_and_reports_rows_and_columns(monkeypatch):
     rows = [(i, f"n{i}", i * 1.5) for i in range(10)]
     monkeypatch.setitem(db_source._DRIVERS, "postgresql", _sqlite_driver(rows))
     storage = FakeStorage()
@@ -146,7 +146,7 @@ def test_l_ingest_scrive_il_parquet_su_storage_e_riporta_righe_e_colonne(monkeyp
     assert storage.exists("data-prep", "datasets/test.parquet")
 
 
-def test_il_parquet_scritto_si_rilegge_con_polars_con_i_tipi_giusti(monkeypatch, tmp_path):
+def test_the_written_parquet_reads_back_with_polars_with_the_right_types(monkeypatch, tmp_path):
     rows = [(1, "a", 1.5), (2, "b", 2.5)]
     monkeypatch.setitem(db_source._DRIVERS, "postgresql", _sqlite_driver(rows))
     storage = FakeStorage()
@@ -166,18 +166,18 @@ def test_il_parquet_scritto_si_rilegge_con_polars_con_i_tipi_giusti(monkeypatch,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Credenziali: cifratura Fernet condivisa gateway↔engine
+# Credentials: Fernet encryption shared gateway↔engine
 # ─────────────────────────────────────────────────────────────────────────────
-def test_la_password_cifrata_fa_il_giro_completo():
+def test_the_encrypted_password_makes_the_whole_round_trip():
     assert decrypt_secret(encrypt_secret("s3gret0!")) == "s3gret0!"
 
 
-def test_resolve_password_preferisce_quella_cifrata():
+def test_resolve_password_prefers_the_encrypted_one():
     conn = _pg(password="ignorata", password_encrypted=encrypt_secret("vera"))
     assert conn.resolve_password() == "vera"
 
 
-def test_resolve_password_usa_il_chiaro_solo_se_non_ce_cifrata():
+def test_resolve_password_uses_clear_only_without_encrypted():
     assert _pg(password="chiara").resolve_password() == "chiara"
 
 

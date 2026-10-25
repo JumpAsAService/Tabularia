@@ -307,7 +307,7 @@ def _recast_hugeint(ctx, rel):
 
 # ── compute (scalar SQL expressions, WITHOUT subqueries or file reads) ───────
 # the expression is parsed, not searched for words: EXTRACT(YEAR FROM d) is scalar
-# (see app/engine/espressioni.py, whose blacklist covers read_*, parquet_scan, scan_*)
+# (see app/engine/expressions.py, whose blacklist covers read_*, parquet_scan, scan_*)
 @_register("compute")
 def op_compute(rel, params, a, ctx):
     columns = _require(params, "columns")  # [{name, expr}]
@@ -479,7 +479,7 @@ def op_unpivot(rel, params, a, ctx):
     )
 
 
-# ── Execute SQL (query intera in SANDBOX) ─────────────────────────────────────
+# ── Execute SQL (whole query in a SANDBOX) ────────────────────────────────────
 @_register("sql")
 def op_sql(rel, params, a, ctx):
     """Runs a DuckDB SQL query on the incoming frame (table `self`, alias `input`) in an
@@ -515,7 +515,7 @@ def op_sql(rel, params, a, ctx):
                 result = result.limit(ctx.limit_output)
             reader = result.to_arrow_reader(1_000_000)  # streaming Arrow
             out_tmp = ctx.tempfile()
-            writer = _pq.ParquetWriter(out_tmp, reader.schema)  # scrive PYTHON, non DuckDB
+            writer = _pq.ParquetWriter(out_tmp, reader.schema)  # writes PYTHON, not DuckDB
             try:
                 for batch in reader:
                     writer.write_batch(batch)
@@ -531,7 +531,7 @@ def op_sql(rel, params, a, ctx):
     return ctx.con.read_parquet(out_tmp)
 
 
-# ── foreach (ciclo con placeholder, stile container SSIS) ─────────────────────
+# ── foreach (a loop with placeholders, SSIS container style) ────────────────────
 @_register("foreach")
 def op_foreach(rel, params, a, ctx):
     """Runs the body for every iteration and APPENDS the results (UNION ALL BY NAME). The
@@ -578,5 +578,5 @@ def op_foreach(rel, params, a, ctx):
 
     if len(parts) == 1:
         return parts[0]
-    names = [ctx.register(p) for p in parts]  # UNION ALL BY NAME (come diagonal_relaxed)
+    names = [ctx.register(p) for p in parts]  # UNION ALL BY NAME (like diagonal_relaxed)
     return ctx.con.sql(" UNION ALL BY NAME ".join(f"SELECT * FROM {n}" for n in names))

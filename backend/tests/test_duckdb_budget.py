@@ -84,9 +84,9 @@ def test_duckdb_spills_within_the_pods_tmp(monkeypatch):
     monkeypatch.setattr(duckdb_budget.sys, "argv", ["celery", "worker", "-Q", "celery"])
     monkeypatch.setenv("TMP_SIZE_LIMIT", "8Gi")
     assert duckdb_budget.spill_mib() == 2048  # half of 8 GiB, for two processes
-    con = duckdb.connect(":memory:")
-    duckdb_budget.apply(con)
-    assert con.execute("SELECT current_setting('max_temp_directory_size')").fetchone()[0] in ("2.0 GiB", "2.1 GB")
+    with_contract = duckdb.connect(":memory:")
+    duckdb_budget.apply(with_contract)
+    assert with_contract.execute("SELECT current_setting('max_temp_directory_size')").fetchone()[0] in ("2.0 GiB", "2.1 GB")
     monkeypatch.delenv("TMP_SIZE_LIMIT")
     assert duckdb_budget.spill_mib() is None
 
@@ -127,14 +127,14 @@ def test_the_engine_connection_uses_it_and_its_own_spill_directory(storage, monk
 def _spill_and_sum(_):
     duckdb_budget.budget = lambda: (64, 1)  # in a forked child: small enough to spill
     tmp: list[str] = []
-    con = DuckDBEngine(storage=object())._connection(tmp)
+    with_contract = DuckDBEngine(storage=object())._connection(tmp)
     try:
-        n, total = con.execute(
+        n, total = with_contract.execute(
             "SELECT count(*), sum(s) FROM (SELECT i % 400000 AS g, sum(i) AS s FROM range(4000000) t(i) GROUP BY g)"
         ).fetchone()
         return int(n), int(total)
     finally:
-        con.close()
+        with_contract.close()
         DuckDBEngine._cleanup(tmp)
 
 

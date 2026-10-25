@@ -1,9 +1,8 @@
-"""Messaggi d'errore dal SERVER del database, non eccezioni Python di trasporto.
+"""Error messages from the database SERVER, not the transport's Python exceptions.
 
-I testi dei driver sono quelli VERI catturati il 2026-09-12 (playground
-ClickHouse, Postgres di esempio, librerie PyMySQL e Trino): se un driver cambia
-formato, questi test lo segnalano. I testi per l'utente sono in INGLESE, e un
-test di guardia lo verifica.
+The drivers' texts are the REAL ones captured on 2026-09-12 (the ClickHouse playground,
+a sample Postgres, the PyMySQL and Trino libraries): if a driver changes format, these
+tests say so. The texts for the user are in ENGLISH, and a guard test checks it.
 """
 import re
 from http.client import IncompleteRead
@@ -19,7 +18,7 @@ AUTH_HINT = "Check the connection's username and password."
 
 
 # ── ClickHouse ────────────────────────────────────────────────────────────────
-# stream già partito e interrotto dal server: il messaggio sta nei byte parziali
+# a stream started already and broken by the server: the message is in the partial bytes
 CH_PARTIAL = (
     b"exception__\nkevxuijesbdpghhn\nCode: 396. DB::Exception: Limit for result exceeded, "
     b"max rows: 1.00 million, current rows: 1.02 million. (TOO_MANY_ROWS_OR_BYTES)\n"
@@ -27,7 +26,7 @@ CH_PARTIAL = (
 )
 
 
-def test_clickhouse_stream_interrotto_mostra_il_limite_del_server():
+def test_clickhouse_broken_stream_shows_the_servers_limit():
     exc = ProtocolError("Connection broken: IncompleteRead(198 bytes read)", IncompleteRead(CH_PARTIAL))
     msg = describe_db_error(exc, "clickhouse", "play.clickhouse.com", 443)
     assert msg == (
@@ -37,7 +36,7 @@ def test_clickhouse_stream_interrotto_mostra_il_limite_del_server():
     assert "IncompleteRead" not in msg and "__exception__" not in msg
 
 
-def test_clickhouse_stream_interrotto_senza_messaggio():
+def test_clickhouse_broken_stream_without_a_message():
     exc = ProtocolError("Connection broken: IncompleteRead(0 bytes read)", IncompleteRead(b""))
     msg = describe_db_error(exc, "clickhouse", "ch.example", 8443)
     assert msg.startswith("ClickHouse: The server closed the connection mid-response")
@@ -59,8 +58,8 @@ def test_clickhouse_stream_interrotto_senza_messaggio():
         "cell_towers LIMIT 1 (UNKNOWN_IDENTIFIER, code 47).",
     ),
     (
-        # sintassi: il messaggio vero continua su più righe con «Expected one of…»;
-        # «(SELEC)» è un frammento della query, non il nome dell'errore
+        # syntax: the real message goes on over several lines with «Expected one of…»;
+        # «(SELEC)» is a fragment of the query, not the error's name
         "Received ClickHouse exception, code: 62, server response: Code: 62. DB::Exception: Syntax "
         "error: failed at position 1 (SELEC) (line 1, col 1): SELEC 1\n FORMAT Native. Expected one "
         "of: Query, SELECT query, WITH. (SYNTAX_ERROR) (for url https://play.clickhouse.com:443)",
@@ -75,13 +74,13 @@ def test_clickhouse_stream_interrotto_senza_messaggio():
         "such name (AUTHENTICATION_FAILED, code 516). " + AUTH_HINT,
     ),
 ])
-def test_clickhouse_errori_del_server(text, expected):
+def test_clickhouse_server_errors(text, expected):
     from clickhouse_connect.driver.exceptions import DatabaseError
 
     assert describe_db_error(DatabaseError(text), "clickhouse", "play.clickhouse.com", 443) == expected
 
 
-def test_clickhouse_errori_di_rete():
+def test_clickhouse_network_errors():
     from clickhouse_connect.driver.exceptions import OperationalError
 
     dns = OperationalError(
@@ -107,8 +106,8 @@ def test_clickhouse_errori_di_rete():
 
 # ── PostgreSQL (ADBC) ─────────────────────────────────────────────────────────
 class _AdbcLike(Exception):
-    """Stessa forma delle eccezioni ADBC: testo del driver più l'attributo
-    `sqlstate`. La classe vera è coperta dalla verifica sul Postgres di esempio."""
+    """The same shape as ADBC's exceptions: the driver's text plus the `sqlstate` attribute.
+    The real class is covered by the check on the sample Postgres."""
 
     def __init__(self, text, sqlstate=None):
         super().__init__(text)
@@ -147,13 +146,13 @@ def test_postgresql(text, sqlstate, expected):
     assert describe_db_error(_AdbcLike(text, sqlstate), "postgresql", host, 5432) == expected
 
 
-def test_postgres_out_of_memory_e_del_server_non_del_worker():
+def test_postgres_out_of_memory_is_the_servers_not_the_workers():
     msg = describe_db_error(
         _AdbcLike("INTERNAL: Failed to execute: ERROR:  out of memory\nDETAIL: Failed on request of size 8.", "53200"),
         "postgresql", "db", 5432,
     )
     assert msg.startswith("PostgreSQL: out of memory (SQLSTATE 53200).")
-    assert msg.startswith(MESSAGE_PREFIXES)  # il gateway lo riconosce come errore del database
+    assert msg.startswith(MESSAGE_PREFIXES)  # the gateway recognizes it as a database error
 
 
 # ── MySQL (PyMySQL) ───────────────────────────────────────────────────────────
@@ -166,7 +165,7 @@ def test_mysql():
         pymysql.err.OperationalError(1045, "Access denied for user 'u'@'172.22.0.5' (using password: YES)"),
         "mariadb", "db", 3306,
     ) == "MariaDB: Access denied for user 'u'@'172.22.0.5' (using password: YES) (code 1045). " + AUTH_HINT
-    # errore di connessione VERO, porta chiusa
+    # a REAL connection error, a closed port
     try:
         pymysql.connect(host="127.0.0.1", port=1, user="u", password="p", connect_timeout=3)
     except pymysql.err.OperationalError as e:
@@ -196,13 +195,13 @@ def test_trino():
     )
 
 
-# ── Regole generali ───────────────────────────────────────────────────────────
-def test_errori_gia_parlanti_passano_invariati():
+# ── General rules ───────────────────────────────────────────────────────────
+def test_clear_errors_pass_unchanged():
     assert describe_db_error(DbSourceError("The table name is empty"), "clickhouse") == \
         "The table name is empty"
 
 
-def test_messaggio_mai_piu_lungo_del_limite_e_mai_un_crash():
+def test_message_never_longer_than_the_limit_and_never_a_crash():
     from clickhouse_connect.driver.exceptions import DatabaseError
 
     long_text = "server response: Code: 62. DB::Exception: " + "x" * 5000 + " (SYNTAX_ERROR)"
@@ -210,7 +209,7 @@ def test_messaggio_mai_piu_lungo_del_limite_e_mai_un_crash():
     assert describe_db_error(ValueError(""), None).startswith("Database: ")
 
 
-def test_messaggi_di_rete_senza_host():
+def test_network_messages_without_host():
     from clickhouse_connect.driver.exceptions import OperationalError
 
     timeout = OperationalError("Error HTTPConnectionPool: Connection to ch timed out. (connect timeout=5)")
@@ -227,7 +226,7 @@ def test_messaggi_di_rete_senza_host():
     )
 
 
-def test_engine_clickhouse_nomina_il_server_una_volta_sola():
+def test_clickhouse_engine_names_the_server_once():
     from clickhouse_connect.driver.exceptions import OperationalError
 
     from app.engine.clickhouse_engine import _clean_error
@@ -239,15 +238,15 @@ def test_engine_clickhouse_nomina_il_server_una_volta_sola():
     assert msg.count("ClickHouse") == 1
 
 
-# guardia: i testi SCRITTI DA NOI per l'utente sono in inglese (i messaggi del
-# server restano come li manda il database)
+# guard: the texts WE WRITE for the user are in English (the server's messages stay as
+# the database sends them)
 _ITALIAN = re.compile(
     r"\b(il|lo|la|gli|le|della|delle|dei|del|controlla|riduci|non|è|utente|connessione|"
     r"codice|nessuna|impossibile|rifiutata|errore|limite)\b", re.I,
 )
 
 
-def test_testi_per_l_utente_solo_in_inglese():
+def test_texts_for_the_user_in_english_only():
     from clickhouse_connect.driver.exceptions import OperationalError
 
     from app.ingest import db_errors
@@ -262,16 +261,16 @@ def test_testi_per_l_utente_solo_in_inglese():
         assert not _ITALIAN.search(text), f"testo per l'utente non in inglese: {text!r}"
 
 
-def test_ingest_traduce_l_errore_del_driver_e_conserva_la_causa(monkeypatch, storage):
-    """Percorso vero di ingest_db_to_parquet: il driver fallisce, il run riceve il
-    messaggio del server e il traceback conserva l'eccezione originale."""
+def test_ingest_translates_the_drivers_error_and_keeps_the_cause(monkeypatch, storage):
+    """The real path of ingest_db_to_parquet: the driver fails, the run receives the
+    server's message and the traceback keeps the original exception."""
     from app.ingest import db_source
 
     original = ProtocolError("Connection broken: IncompleteRead(198 bytes read)", IncompleteRead(CH_PARTIAL))
 
-    def failing_driver(conn, query, **_):  # l'import passa a ClickHouse anche read_timeout
+    def failing_driver(conn, query, **_):  # the import passes read_timeout to ClickHouse too
         raise original
-        yield  # generatore, come i driver veri
+        yield  # a generator, as the real drivers
 
     monkeypatch.setitem(db_source._DRIVERS, "clickhouse", failing_driver)
     conn = DbConnectionSpec(db_type="clickhouse", host="play.clickhouse.com", port=443, username="explorer")
@@ -283,10 +282,10 @@ def test_ingest_traduce_l_errore_del_driver_e_conserva_la_causa(monkeypatch, sto
 
 
 # ── Oracle (python-oracledb, Thin) ────────────────────────────────────────────
-# Messaggi catturati dal driver vero contro Oracle Free 23ai il 2026-10-11.
+# Messages captured from the real driver against Oracle Free 23ai on 2026-10-11.
 class _OracleLike(Exception):
-    """La forma delle eccezioni di python-oracledb: il primo argomento è un
-    oggetto `_Error` con `.message` (codice, testo e a volte altre righe)."""
+    """The shape of python-oracledb's exceptions: the first argument is an `_Error` object
+    with `.message` (code, text and sometimes more lines)."""
 
     def __init__(self, message):
         super().__init__(type("_Error", (), {"message": message})())
@@ -308,7 +307,7 @@ _OracleLike.__module__ = "oracledb.exceptions"
         'Oracle: table or view "TABULARIA"."NON_ESISTE" does not exist (ORA-00942).',
     ),
     (
-        # un «cannot connect» non dice niente: conta la causa più interna
+        # a «cannot connect» says nothing: the innermost cause counts
         "DPY-6005: cannot connect to database (CONNECTION_ID=IUJC5+wYMMcQXZy6IusEpA==).\n"
         'DPY-6001: Service "NONESISTE" is not registered with the listener at host "172.22.0.17" port 1521. (Similar to ORA-12514)',
         'Oracle: Service "NONESISTE" is not registered with the listener at host "172.22.0.17" port 1521. '
@@ -328,10 +327,10 @@ def test_oracle_cannot_connect_for_a_network_reason_says_the_network_reason():
 
 
 # ── SQL Server (mssql-python) ─────────────────────────────────────────────────
-# Forme catturate dal driver vero contro SQL Server 2022 il 2026-10-11.
+# Shapes captured from the real driver against SQL Server 2022 on 2026-10-11.
 class _MssqlLike(Exception):
-    """La forma delle eccezioni di mssql-python: `driver_error` (la classe ODBC) e
-    `ddbc_error` (il testo del server, dietro i prefissi [Microsoft][…])."""
+    """The shape of mssql-python's exceptions: `driver_error` (the ODBC class) and
+    `ddbc_error` (the server's text, behind the [Microsoft][…] prefixes)."""
 
     def __init__(self, driver_error, ddbc_error):
         super().__init__(f"Driver Error: {driver_error}; DDBC Error: {ddbc_error}")
@@ -362,7 +361,7 @@ def test_sqlserver(driver_error, ddbc_error, port, expected):
     assert describe_db_error(_MssqlLike(driver_error, ddbc_error), "sqlserver", "mssqltest", port) == expected
 
 
-def test_sqlserver_tipo_che_arrow_non_porta():
+def test_sqlserver_type_arrow_cannot_carry():
     e = RuntimeError("Unsupported data type for Arrow batch fetch for column - v, Type - -150, column ID - 2")
     assert describe_db_error(e, "sqlserver", "mssqltest", 1433) == (
         "SQL Server: column v has a type that cannot be imported (sql_variant). "

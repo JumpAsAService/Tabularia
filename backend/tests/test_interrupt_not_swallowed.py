@@ -1,9 +1,8 @@
-"""Il segnale che ferma una preview superata arriva UNA volta. Ogni `except
-Exception` sul suo percorso che lo inghiotte fa continuare la preview fino in
-fondo — proprio ciò che la funzione doveva evitare. Qui i punti che la revisione
-ha trovato: sink Polars (avrebbe rifatto tutto in memoria), sonda dei thread e
-validazione del client ClickHouse (avrebbero spento il tuning per tutta la vita
-del processo), HEAD della step-cache."""
+"""The signal that stops a superseded preview arrives ONCE. Every `except Exception` on
+its path that swallows it makes the preview go on to the end — exactly what the feature
+had to avoid. Here the points the review found: the Polars sink (it would have redone it
+all in memory), the threads probe and the ClickHouse client's validation (they would have
+turned the tuning off for the process's whole life), the step cache's HEAD."""
 import pytest
 
 from app.engine import clickhouse_engine as ce
@@ -11,7 +10,7 @@ from app.engine.cache import StepCache
 
 
 class SoftTimeLimitExceeded(Exception):
-    """Stesso NOME di quella di billiard."""
+    """The same NAME as billiard's."""
 
 
 def test_polars_sink_does_not_fall_back_when_interrupted():
@@ -32,7 +31,7 @@ def test_thread_probe_re_raises_and_does_not_cache_zero():
         def _rows(self, sql): raise SoftTimeLimitExceeded()
     with pytest.raises(SoftTimeLimitExceeded):
         eng._scan_max_threads(Ctx())
-    assert eng._server_threads is None  # la prossima preview riprova la sonda
+    assert eng._server_threads is None  # the next preview tries the probe again
 
 
 def test_client_validation_re_raises_and_drops_the_client():

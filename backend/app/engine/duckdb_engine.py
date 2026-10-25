@@ -176,7 +176,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"
 
-    # ── Cache incrementale (mirror di PolarsEngine) ───────────────────────
+    # ── Incremental cache (mirror of PolarsEngine) ────────────────────────
     def _rel_from_cache(self, ctx: "DuckContext", source, operations, hashes, record=False, use_cache=True):
         """Builds the relation from the nearest cached ancestor, applying only the remaining
         operations. `use_cache=False` ignores the cache (starts from the source): the
@@ -240,7 +240,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
     def _bounded_rows(self, ctx, rel, n: int) -> int:
         return int(rel.limit(n + 1).aggregate("count(*)").fetchone()[0])
 
-    # ── Preview (sincrona, solo N righe in RAM) ───────────────────────────
+    # ── Preview (synchronous, only N rows in RAM) ──────────────────────────
     def preview(
         self,
         source: DataSource,

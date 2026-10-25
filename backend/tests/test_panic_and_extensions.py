@@ -1,7 +1,7 @@
-"""Due difetti trovati dall'oracolo dell'export dbt (2026-10-10), entrambi a monte
-dell'export: l'import da Postgres scriveva i numeric come estensione Arrow opaca,
-e il lettore in streaming di Polars andava in PANIC su un filtro di quella
-colonna; il panic (BaseException, non Exception) faceva uscire il worker."""
+"""Two defects found by the dbt export oracle (2026-10-10), both upstream of the export:
+the import from Postgres wrote the numerics as an opaque Arrow extension, and Polars'
+streaming reader PANICked on a filter of that column; the panic (BaseException, not
+Exception) made the worker quit."""
 import tempfile
 
 import polars as pl
@@ -14,25 +14,25 @@ from app.engine.exceptions import EngineError
 from app.ingest.db_source import _batch_without_extensions, _schema_without_extensions
 
 
-def _batch_opaco():
+def _opaque_batch():
     t = pa.opaque(pa.string_view(), "numeric", "PostgreSQL")
-    importo = pa.ExtensionArray.from_storage(t, pa.array(["1.50", None, "100.00"], type=pa.string_view()))
-    return pa.RecordBatch.from_arrays([pa.array([1, 2, 3], pa.int32()), importo], names=["id", "importo"])
+    amount = pa.ExtensionArray.from_storage(t, pa.array(["1.50", None, "100.00"], type=pa.string_view()))
+    return pa.RecordBatch.from_arrays([pa.array([1, 2, 3], pa.int32()), amount], names=["id", "importo"])
 
 
-def test_l_import_scrive_i_numeric_come_numeri_e_lo_schema_combacia():
-    """Scelta dell'utente (2026-10-10): un numeric di Postgres è un numero, non un testo."""
-    b = _batch_opaco()
+def test_the_import_writes_numerics_as_numbers_and_the_schema_matches():
+    """The user's choice (2026-10-10): a Postgres numeric is a number, not a text."""
+    b = _opaque_batch()
     nb = _batch_without_extensions(b)
     assert nb.schema.field("importo").type == pa.float64() and nb.column(1).to_pylist() == [1.5, None, 100.0]
     assert _schema_without_extensions(b.schema) == nb.schema
 
 
-def test_i_valori_speciali_di_numeric_e_gli_altri_tipi_opachi():
+def test_numerics_special_values_and_the_other_opaque_types():
     t = pa.opaque(pa.string(), "numeric", "PostgreSQL")
-    speciali = pa.ExtensionArray.from_storage(t, pa.array(["NaN", "Infinity", "-Infinity", "12345678901234567890.123", "-0.01"]))
-    altro = pa.ExtensionArray.from_storage(pa.opaque(pa.string(), "interval", "PostgreSQL"), pa.array(["1 day"] * 5))
-    nb = _batch_without_extensions(pa.RecordBatch.from_arrays([speciali, altro], names=["n", "i"]))
+    special = pa.ExtensionArray.from_storage(t, pa.array(["NaN", "Infinity", "-Infinity", "12345678901234567890.123", "-0.01"]))
+    other = pa.ExtensionArray.from_storage(pa.opaque(pa.string(), "interval", "PostgreSQL"), pa.array(["1 day"] * 5))
+    nb = _batch_without_extensions(pa.RecordBatch.from_arrays([special, other], names=["n", "i"]))
     v = nb.column(0).to_pylist()
     assert v[0] != v[0] and v[1:3] == [float("inf"), float("-inf")] and v[3] == 1.2345678901234567e19 and v[4] == -0.01
     assert nb.schema.field("i").type == pa.string() and nb.column(1).to_pylist() == ["1 day"] * 5
@@ -40,31 +40,31 @@ def test_i_valori_speciali_di_numeric_e_gli_altri_tipi_opachi():
     assert _batch_without_extensions(clean) is clean and _schema_without_extensions(clean.schema) is clean.schema
 
 
-def test_il_parquet_dell_import_si_filtra_in_streaming():
+def test_the_imports_parquet_filters_streaming():
     f = tempfile.mktemp(suffix=".parquet")
-    pq.write_table(pa.Table.from_batches([_batch_without_extensions(_batch_opaco())]), f)
+    pq.write_table(pa.Table.from_batches([_batch_without_extensions(_opaque_batch())]), f)
     lf = pl.scan_parquet(f)
     assert lf.filter(pl.col("importo").is_not_null()).collect(engine="streaming").height == 2
     assert lf.drop_nulls().collect(engine="streaming").height == 2
-    assert lf.select(pl.col("importo").sum()).collect(engine="streaming").item() == 101.5   # si somma
+    assert lf.select(pl.col("importo").sum()).collect(engine="streaming").item() == 101.5   # it adds up
 
 
-def test_un_panic_di_polars_diventa_un_errore_del_task_e_non_uccide_il_worker():
+def test_a_polars_panic_becomes_a_task_error_and_does_not_kill_the_worker():
     from app.tasks.celery_app import _TaskThatSparesTheWorker, celery_app
 
-    class Rotto(_TaskThatSparesTheWorker):
-        name = "test.rotto"
+    class Broken(_TaskThatSparesTheWorker):
+        name = "test.broken"
 
         def run(self):
             raise PanicException("not yet implemented: arrow.opaque")
 
-    t = Rotto()
+    t = Broken()
     t.bind(celery_app)
     with pytest.raises(EngineError, match="Internal error in the compute engine"):
         t()
 
 
-def test_il_motore_polars_ferma_anche_il_panic():
+def test_the_polars_engine_stops_the_panic_too():
     from app.engine import polars_engine
 
     assert PanicException in polars_engine._POLARS_ERRORS and Exception in polars_engine._POLARS_ERRORS

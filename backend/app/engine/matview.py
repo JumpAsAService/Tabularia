@@ -73,7 +73,7 @@ class MatViewStore:
         self.redis = redis_client
         self.cfg = cfg
 
-    # the copies' threshold and lifetime are set from the panel (core/regolazioni.py)
+    # the copies' threshold and lifetime are set from the panel (core/panel_settings.py)
     @property
     def cfg(self):
         from app.core import panel_settings

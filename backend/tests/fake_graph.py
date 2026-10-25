@@ -57,16 +57,16 @@ class FakeGraph:
         self.page_size = page_size; self.secret = secret; self.granted = granted; self.modified = modified
         self.calls: list[tuple[str, str]] = []; self.tokens = 0; self.throttle_next = 0
 
-    # -- il "filesystem" --
+    # -- the "filesystem" --
     def _children(self, folder: str) -> list[dict]:
-        # l'indirizzamento per percorso di SharePoint NON distingue maiuscole e minuscole
+        # SharePoint's addressing by path does NOT tell upper from lower case
         folder = folder.strip("/"); pre = folder + "/" if folder else ""
         out: dict[str, dict] = {}
         for path, data in self.files.items():
             if not path.casefold().startswith(pre.casefold()): continue
             rest = path[len(pre):]
             name = rest.split("/")[0]
-            # come Graph: il percorso del genitore e' percent-encoded
+            # as Graph does: the parent's path is percent-encoded
             ref = {"parentReference": {"path": "/drives/DRV/root:/" + quote(path[:len(pre)].strip("/"))}}
             if "/" in rest: out.setdefault(name, {"id": "d:" + pre + name, "name": name, "folder": {}, **ref})
             else: out[name] = {"id": "f:" + path, "name": name, "file": {}, "size": len(data),

@@ -1,19 +1,19 @@
-"""Il nodo `sql` legge solo il proprio input (lista bianca, vedi engine/sql_guard).
+"""The `sql` node reads only its own input (an allowlist, see engine/sql_guard).
 
-Le query «ostili» qui sotto non sono ipotesi: `merge()` e `information_schema`
-hanno davvero letto altre tabelle del ClickHouse esterno il 2026-09-19, passando
-la vecchia lista nera. Le query «lecite» sono la garanzia opposta: l'SQL analitico
-che un utente scrive davvero deve continuare a passare.
+The «hostile» queries below are not hypotheses: `merge()` and `information_schema` really
+read other tables of the external ClickHouse on 2026-09-19, getting past the old
+denylist. The «lawful» queries are the opposite guarantee: the analytical SQL a user
+really writes must keep passing.
 """
 import pytest
 
 from app.engine.exceptions import EngineError
 from app.engine.sql_guard import ensure_reads_only_input
 
-LECITE_CLICKHOUSE = [
+LAWFUL_CLICKHOUSE = [
     "SELECT paese, count() AS n FROM self GROUP BY paese ORDER BY n DESC",
     "SELECT * FROM input WHERE importo > 10",
-    # FROM dentro una funzione non è una tabella
+    # FROM inside a function is not a table
     "SELECT EXTRACT(YEAR FROM d) AS y, trim(BOTH ' ' FROM x) AS t FROM self",
     "SELECT * FROM (WITH t AS (SELECT a FROM self) SELECT * FROM t) AS q JOIN input USING (a)",
     "SELECT a, b FROM self ARRAY JOIN arr AS b",
@@ -22,15 +22,15 @@ LECITE_CLICKHOUSE = [
     "SELECT * FROM self WHERE a IN (SELECT a FROM self GROUP BY a HAVING count() > 1)",
     "SELECT s.a, n.number FROM self AS s CROSS JOIN numbers(3) AS n",
     "SELECT a FROM self UNION ALL SELECT a FROM input",
-    # una colonna può chiamarsi come le parole che fanno paura
+    # a column may be named as the scary words
     'SELECT "system", "merge", file FROM self',
-    # l'ARRAY JOIN vero e proprio — quello sugli array dell'input — resta lecito
+    # the ARRAY JOIN proper — over the input's arrays — stays lawful
     "SELECT a, b FROM self ARRAY JOIN arr AS b",
     "SELECT a, b FROM self LEFT ARRAY JOIN arr AS b",
     "SELECT a, x FROM self ARRAY JOIN (SELECT groupArray(a) FROM self) AS x",
 ]
 
-OSTILI_CLICKHOUSE = [
+HOSTILE_CLICKHOUSE = [
     "SELECT count() FROM self WHERE 1=0 UNION ALL SELECT count() FROM merge('system', '^query_log$')",
     "SELECT t.table_name FROM self CROSS JOIN information_schema.tables AS t",
     "SELECT t.table_name FROM self CROSS JOIN INFORMATION_SCHEMA.TABLES AS t",
@@ -45,11 +45,11 @@ OSTILI_CLICKHOUSE = [
     "SELECT joinGet('db.t', 'v', a) FROM self",
     "SELECT dictGetString('d', 'attr', toUInt64(a)) FROM self",
     "SELECT getSetting('s3_max_connections') FROM self",
-    # una CTE definita DENTRO una sottoquery non autorizza la tabella omonima fuori
+    # a CTE defined INSIDE a subquery does not authorize the table of the same name outside
     "SELECT * FROM (WITH mv_abc AS (SELECT 1 AS a) SELECT * FROM mv_abc) AS s, self, mv_abc",
-    # ARRAY JOIN: sqlglot analizza il riferimento puntato come COLONNA e non come
-    # tabella, quindi la lista bianca lo mancava. Audit 2026-09-19, A9: eseguito
-    # davvero su un ClickHouse, leggeva information_schema e system.settings.
+    # ARRAY JOIN: sqlglot parses the dotted reference as a COLUMN and not as a table, so
+    # the allowlist missed it. Audit 2026-09-19, A9: really run on a ClickHouse, it read
+    # information_schema and system.settings.
     "SELECT * FROM self ARRAY JOIN (SELECT groupArray(table_name) FROM information_schema.tables) AS leak",
     "SELECT * FROM self ARRAY JOIN (SELECT groupArray(c) FROM altro_db.tabella_altrui) AS leak",
     "SELECT * FROM self LEFT ARRAY JOIN (SELECT groupArray(query) FROM system.query_log) AS leak",
@@ -57,12 +57,12 @@ OSTILI_CLICKHOUSE = [
 ]
 
 
-@pytest.mark.parametrize("sql", LECITE_CLICKHOUSE)
+@pytest.mark.parametrize("sql", LAWFUL_CLICKHOUSE)
 def test_analytical_sql_on_the_input_passes(sql):
     ensure_reads_only_input(sql, "clickhouse")
 
 
-@pytest.mark.parametrize("sql", OSTILI_CLICKHOUSE)
+@pytest.mark.parametrize("sql", HOSTILE_CLICKHOUSE)
 def test_anything_that_names_another_table_is_refused(sql):
     with pytest.raises(EngineError) as e:
         ensure_reads_only_input(sql, "clickhouse")
@@ -85,7 +85,7 @@ def test_bigquery_analytics_pass(sql):
 
 
 @pytest.mark.parametrize("sql", [
-    # senza backtick la vecchia regex non lo vedeva: è la step-cache degli altri
+    # without backticks the old regex did not see it: it is the others' step cache
     "SELECT * FROM self UNION ALL SELECT * FROM tabularia_cache.sc_0123",
     "SELECT * FROM self UNION ALL SELECT * FROM progetto.dataset.tabella",
     "SELECT * FROM self, altra",

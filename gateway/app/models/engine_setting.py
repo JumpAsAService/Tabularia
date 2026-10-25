@@ -4,7 +4,7 @@ Una riga per parametro CAMBIATO: a tabella vuota valgono i valori dell'ambiente,
 come prima. È la fonte vera: il gateway le spedisce al motore, che le tiene in
 Valkey per i suoi processi, e le rispedisce a intervalli (vedi
 services/regolazioni_motore.py). Quali parametri e con che limiti lo decide il
-motore (backend/app/core/regolazioni.py).
+motore (backend/app/core/panel_settings.py).
 """
 from datetime import datetime
 from typing import Optional

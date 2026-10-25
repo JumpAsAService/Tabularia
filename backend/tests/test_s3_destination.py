@@ -1,5 +1,5 @@
-"""Test delle destinazioni S3: percorso completo con storage finto e client
-boto3 registrato (niente rete), più le validazioni pure."""
+"""Tests of the S3 destinations: the whole path with a fake storage and a recording boto3
+client (no network), plus the pure validations."""
 from __future__ import annotations
 
 import polars as pl
@@ -17,13 +17,13 @@ from tests.conftest import BUCKET, upload_df
 
 
 class RecordingClient:
-    """Client S3 finto STATEFUL: registra gli upload e tiene lo stato degli oggetti
-    (per testare list/delete della pulizia idempotente delle partizioni)."""
+    """A STATEFUL fake S3 client: records the uploads and keeps the objects' state (to test
+    the list/delete of the partitions' idempotent cleanup)."""
 
     def __init__(self):
         self.uploads: list[tuple[str, str]] = []  # cronologia (bucket, key)
         self.configs: list = []  # the transfer settings of each upload
-        self.objects: dict[tuple[str, str], bool] = {}  # stato corrente
+        self.objects: dict[tuple[str, str], bool] = {}  # current state
 
     def upload_file(self, local, bucket, key, Config=None):
         self.uploads.append((bucket, key))
@@ -71,8 +71,8 @@ def _conn(**kw) -> S3ConnectionSpec:
     return S3ConnectionSpec(endpoint_url="http://minio:9000", access_key="k", secret_key="s", **kw)
 
 
-# ── percorso completo (client finto) ─────────────────────────────────────────
-def test_parquet_singolo_una_chiave_esatta(storage, source, recorder):
+# ── the whole path (fake client) ─────────────────────────────────────────
+def test_single_parquet_one_exact_key(storage, source, recorder):
     out = write_output_to_s3(
         _conn(), S3DestinationSpec(bucket="cliente", key="exports/vendite.parquet"),
         BUCKET, source.key, storage=storage,
@@ -83,7 +83,7 @@ def test_parquet_singolo_una_chiave_esatta(storage, source, recorder):
     assert recorder.configs[0] is not None and recorder.configs[0].multipart_chunksize >= 8 * 1024**2
 
 
-def test_csv_singolo_convertito(storage, source, recorder):
+def test_single_csv_converted(storage, source, recorder):
     out = write_output_to_s3(
         _conn(), S3DestinationSpec(bucket="cliente", key="exports/vendite.csv", format="csv"),
         BUCKET, source.key, storage=storage,
@@ -92,7 +92,7 @@ def test_csv_singolo_convertito(storage, source, recorder):
     assert out["format"] == "csv" and out["rows_written"] == 4
 
 
-def test_partizionato_hive_chiavi_colonna_uguale_valore(storage, source, recorder):
+def test_hive_partitioned_keys_column_equals_value(storage, source, recorder):
     out = write_output_to_s3(
         _conn(),
         S3DestinationSpec(bucket="cliente", key="exports/vendite", partition_by=["paese"]),
@@ -104,7 +104,7 @@ def test_partizionato_hive_chiavi_colonna_uguale_valore(storage, source, recorde
         assert any(k.startswith(prefix) and k.endswith(".parquet") for k in keys)
 
 
-def test_partizioni_multiple_colonne(storage, source, recorder):
+def test_partitions_several_columns(storage, source, recorder):
     out = write_output_to_s3(
         _conn(),
         S3DestinationSpec(bucket="c", key="p", partition_by=["paese", "anno"]),
@@ -114,10 +114,10 @@ def test_partizioni_multiple_colonne(storage, source, recorder):
     assert any("paese=IT/anno=2025/" in k for _, k in recorder.uploads)
 
 
-def test_partizionato_idempotente_rimuove_file_stantii(storage, source, recorder):
-    """Un file di un run PRECEDENTE sotto il prefisso (partizione sparita o conteggio
-    file diverso) dev'essere rimosso: niente righe duplicate al riscrivere."""
-    # simulo un residuo di un run precedente sotto lo stesso prefisso
+def test_partitioned_idempotent_removes_stale_files(storage, source, recorder):
+    """A file of an EARLIER run under the prefix (a partition gone, or another file count)
+    must be removed: no duplicate rows when writing again."""
+    # a leftover of an earlier run under the same prefix
     recorder.objects[("c", "p/paese=ZZ/anno=1999/00000000.parquet")] = True
     write_output_to_s3(
         _conn(),
@@ -125,11 +125,11 @@ def test_partizionato_idempotente_rimuove_file_stantii(storage, source, recorder
         BUCKET, source.key, storage=storage,
     )
     remaining = {k for (b, k) in recorder.objects if b == "c"}
-    assert "p/paese=ZZ/anno=1999/00000000.parquet" not in remaining  # stantio rimosso
-    assert any("paese=IT/anno=2025/" in k for k in remaining)  # nuovi presenti
+    assert "p/paese=ZZ/anno=1999/00000000.parquet" not in remaining  # the stale one removed
+    assert any("paese=IT/anno=2025/" in k for k in remaining)  # the new ones there
 
 
-def test_bucket_default_dalla_connessione(storage, source, recorder):
+def test_default_bucket_from_the_connection(storage, source, recorder):
     write_output_to_s3(
         _conn(bucket="default-bucket"), S3DestinationSpec(key="x.parquet"),
         BUCKET, source.key, storage=storage,
@@ -137,12 +137,12 @@ def test_bucket_default_dalla_connessione(storage, source, recorder):
     assert recorder.uploads[0][0] == "default-bucket"
 
 
-def test_nessun_bucket_errore_parlante(storage, source, recorder):
+def test_no_bucket_clear_error(storage, source, recorder):
     with pytest.raises(S3DestinationError, match="bucket"):
         write_output_to_s3(_conn(), S3DestinationSpec(key="x.parquet"), BUCKET, source.key, storage=storage)
 
 
-def test_colonna_partizione_inesistente(storage, source, recorder):
+def test_partition_column_that_does_not_exist(storage, source, recorder):
     with pytest.raises(S3DestinationError, match="not in the output"):
         write_output_to_s3(
             _conn(), S3DestinationSpec(bucket="c", key="p", partition_by=["boh"]),
@@ -150,7 +150,7 @@ def test_colonna_partizione_inesistente(storage, source, recorder):
         )
 
 
-def test_troppe_partizioni_rifiutate(storage, source, recorder, monkeypatch):
+def test_too_many_partitions_refused(storage, source, recorder, monkeypatch):
     monkeypatch.setattr(s3d, "MAX_PARTITIONS", 2)
     with pytest.raises(S3DestinationError, match="partitions"):
         write_output_to_s3(
@@ -164,7 +164,7 @@ def test_clean_key_normalizza_slash():
     assert _clean_key("/exports/vendite.parquet/") == "exports/vendite.parquet"
 
 
-def test_clean_key_vuota_o_traversal_rifiutata():
+def test_clean_key_empty_or_traversal_refused():
     with pytest.raises(S3DestinationError):
         _clean_key("  ")
     with pytest.raises(S3DestinationError):
@@ -173,7 +173,7 @@ def test_clean_key_vuota_o_traversal_rifiutata():
         _clean_key("a//b")
 
 
-def test_secret_in_chiaro_solo_sviluppo():
+def test_clear_secret_development_only():
     conn = S3ConnectionSpec(access_key="k", secret_key="chiaro")
     assert conn.resolve_secret() == "chiaro"
 

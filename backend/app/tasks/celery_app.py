@@ -19,7 +19,7 @@ settings = settings_from_env()
 if os.path.basename(sys.argv[0]).startswith("celery") and {"worker", "beat"} & set(sys.argv[1:]):
     panel_settings.wait_at_first_start()
 # what is read only when a process starts, with the panel's values of that moment
-# (memory and recycling of the children, the beat's intervals): core/regolazioni.py
+# (memory and recycling of the children, the beat's intervals): core/panel_settings.py
 start_values = panel_settings.at_start(settings)
 # the Fernet key is required everywhere: the worker that will decrypt the
 # credentials must not even start without it

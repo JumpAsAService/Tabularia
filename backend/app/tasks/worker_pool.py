@@ -3,7 +3,7 @@
 The administrator sets how many processes a worker container runs: one value for
 the workers of the run queue, one for those of the preview queue
 (`workers.run_concurrency`, `workers.preview_concurrency`, settings from the panel:
-core/regolazioni.py). Every worker checks the value each `TICK` seconds and resizes
+core/panel_settings.py). Every worker checks the value each `TICK` seconds and resizes
 its own prefork pool. It grows at once; it shrinks by idle processes only, so a
 busy one finishes its task and goes at a later check. No task is interrupted and
 nothing restarts. With no value set, a worker keeps the size it started with

@@ -1,9 +1,9 @@
-"""Operazione `sample` (campione casuale DETERMINISTICO di una frazione di righe)
-su tutti gli engine, e tolleranza del marcatore `_dev_sample` sugli op esistenti.
+"""The `sample` operation (a DETERMINISTIC random sample of a fraction of the rows) on
+every engine, and the tolerance of the `_dev_sample` marker on the existing ops.
 
-Gli engine usano hash diversi → non le stesse righe fra engine (è un campione
-di sviluppo), ma su ognuno: dimensione ≈ frazione, stesse righe a ogni
-esecuzione (seme fisso), frazione non valida → errore chiaro.
+The engines use different hashes → not the same rows across engines (it is a development
+sample), but on each: size ≈ fraction, the same rows at every run (a fixed seed), an
+invalid fraction → a clear error.
 """
 from __future__ import annotations
 
@@ -68,14 +68,14 @@ def test_sample_fraction_and_determinism(storage, big, name):
     a = eng.preview(big, ops, limit=N, use_cache=False)
     b = eng.preview(big, ops, limit=N, use_cache=False)
     assert N * 0.25 * 0.75 <= a.row_count <= N * 0.25 * 1.25, f"{name}: {a.row_count} righe su {N} al 25%"
-    assert sorted(r["id"] for r in a.rows) == sorted(r["id"] for r in b.rows)  # stesso seme → stesse righe
-    assert {c.name for c in a.columns} == {"id", "grp", "txt"}  # nessuna colonna di servizio
+    assert sorted(r["id"] for r in a.rows) == sorted(r["id"] for r in b.rows)  # the same seed → the same rows
+    assert {c.name for c in a.columns} == {"id", "grp", "txt"}  # no service column
 
 
 @pytest.mark.parametrize("name", ENGINES)
 def test_sample_then_ops_and_marked_limit(storage, big, name):
     eng = _engine(name, storage)
-    # il marcatore `_dev_sample` è ignorato dalle operazioni (limit compreso)
+    # the `_dev_sample` marker is ignored by the operations (limit included)
     ops = [
         {"type": "limit", "params": {"n": 100, "_dev_sample": True}},
         {"type": "group_by", "params": {"by": ["grp"], "aggregations": [{"column": "id", "func": "count", "alias": "n"}]}},

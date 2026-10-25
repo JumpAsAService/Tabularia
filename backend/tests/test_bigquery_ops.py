@@ -1,8 +1,8 @@
-"""SQL generato dalle operazioni BigQuery, SENZA BigQuery: un contesto finto
-risponde alle introspezioni (colonne/schema) e ai conteggi. Si verifica il
-dialetto (SAFE_CAST, QUALIFY, UNPIVOT, FARM_FINGERPRINT…), le protezioni di
-compute/sql e la struttura di join/pivot. La correttezza dei RISULTATI e' nella
-suite live (test_bigquery_live.py) contro un progetto vero.
+"""The SQL the BigQuery operations generate, WITHOUT BigQuery: a fake context answers the
+introspections (columns/schema) and the counts. Checks the dialect (SAFE_CAST, QUALIFY,
+UNPIVOT, FARM_FINGERPRINT…), the protections of compute/sql and the structure of
+join/pivot. The RESULTS' correctness is in the live suite (test_bigquery_live.py) against
+a real project.
 """
 import pytest
 
@@ -12,7 +12,7 @@ from app.engine.exceptions import EngineError
 
 class FakeCtx:
     def __init__(self, schema, right_schema=None, counts=None, distinct=None):
-        self.schema = schema  # [(nome, tipo)] della catena principale
+        self.schema = schema  # [(name, type)] of the main chain
         self.right_schema = right_schema or [("k", "INTEGER"), ("x", "STRING")]
         self.counts = counts or {}
         self.distinct = distinct or []
@@ -34,7 +34,7 @@ class FakeCtx:
     def build_right(self, ref):
         return "SELECT * FROM `_right`"
 
-    # stessa mappa dei nomi del contesto vero (nomi gia' sicuri = identita')
+    # the same name map as the real context (names safe already = identity)
     def qi(self, name):
         from app.engine.bigquery_engine import _sanitize
 
@@ -106,7 +106,7 @@ def test_group_by_plain_and_with_exact_median():
     sql = op("group_by", {"by": ["nome"], "aggregations": [{"column": "prezzo", "func": "median"}, {"column": "id", "func": "count"}]})
     assert "PERCENTILE_CONT(`prezzo`, 0.5) OVER (PARTITION BY `nome`) AS `prezzo_median`" in sql
     assert "LEFT JOIN" in sql and "IS NOT DISTINCT FROM" in sql
-    # ordine delle colonne = chiavi, poi le aggregazioni nell'ordine chiesto
+    # the columns' order = the keys, then the aggregations in the order asked
     assert sql.startswith("SELECT a.`nome`, m.`prezzo_median`, a.`id_count` FROM")
     with pytest.raises(EngineError):
         op("group_by", {"by": ["nome"], "aggregations": [{"column": "prezzo", "func": "mode"}]})
@@ -167,7 +167,7 @@ def test_unpivot_native_with_supertype():
     assert unpivot_value_type(["STRING", "FLOAT"]) == "STRING"
     sql = op("unpivot", {"index": ["id"], "on": ["prezzo", "nome"]})
     assert "UNPIVOT INCLUDE NULLS (`value` FOR `variable` IN (`prezzo`, `nome`))" in sql
-    assert "CONCAT(CAST(CAST(`prezzo` AS INT64) AS STRING), '.0')" in sql  # float → testo con .0
+    assert "CONCAT(CAST(CAST(`prezzo` AS INT64) AS STRING), '.0')" in sql  # float → text with .0
     assert sql.startswith("SELECT `id`, `variable`, `value` FROM (SELECT `id`, ")
     with pytest.raises(EngineError):
         op("unpivot", {"index": ["id"], "on": ["manca"]})
@@ -187,10 +187,10 @@ def test_unsafe_names_are_mapped_and_restored():
     ctx = BigQueryContext.__new__(BigQueryContext)
     ctx._safe, ctx._orig = {}, {}
     assert ctx.qi("Ragione Sociale") == "`Ragione_Sociale`"
-    # due originali che collidono → il secondo prende un suffisso
+    # two originals that collide → the second takes a suffix
     assert ctx.qi("a b") == "`a_b`" and ctx.qi("a-b") == "`a_b_2`"
     assert ctx.original("a_b_2") == "a-b" and ctx.original("altro") == "altro"
-    # espressioni libere: solo gli identificatori quotati NOTI vengono tradotti
+    # free expressions: only the KNOWN quoted identifiers are translated
     assert ctx.map_quoted("`a b` * 2 + `ignoto`") == "`a_b` * 2 + `ignoto`"
     sql = op("rename", {"mapping": {"nome": "Ragione Sociale"}}, FakeCtx(SCHEMA))
     assert "`nome` AS `Ragione_Sociale`" in sql
@@ -203,6 +203,6 @@ def test_compute_expressions_are_transpiled_to_googlesql():
     assert to_bigquery_expr("strftime(data, '%Y')") == "FORMAT_DATE('%Y', data)"
     assert to_bigquery_expr("CASE WHEN a > 1 THEN 'x' ELSE 'y' END") == "CASE WHEN a > 1 THEN 'x' ELSE 'y' END"
     assert to_bigquery_expr("SAFE_CAST(x AS INT64)") == "SAFE_CAST(x AS INT64)"  # gia' GoogleSQL: invariato
-    assert to_bigquery_expr("questo non e' sql ((") == "questo non e' sql (("  # ripiego sul testo
+    assert to_bigquery_expr("questo non e' sql ((") == "questo non e' sql (("  # falls back on the text
     sql = op("compute", {"columns": [{"name": "resto", "expr": "prezzo % 2"}]})
     assert "(MOD(prezzo, 2)) AS `resto`" in sql

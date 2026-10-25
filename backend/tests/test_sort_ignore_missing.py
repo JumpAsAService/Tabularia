@@ -1,12 +1,11 @@
-"""`ignore_missing` sul sort: solo per il sort INIETTATO dal publish.
+"""`ignore_missing` on the sort: only for the sort the publish INJECTS.
 
-Una chiave di ordinamento dichiarata sull'Output e poi sparita dalla catena
-(colonna rinominata o tolta a monte) faceva fallire OGNI run di quel flusso — e
-non era nemmeno rimuovibile dalla checklist, che mostra solo le colonne che
-esistono ancora. Il flag lo mette il gateway; un `sort` chiesto dall'utente resta
-severo, altrimenti un refuso passerebbe in silenzio.
+A sort key declared on the Output and then gone from the chain (a column renamed or
+removed upstream) failed EVERY run of that flow — and could not even be removed from the
+checklist, which shows only the columns that still exist. The gateway sets the flag; a
+`sort` the user asks for stays strict, otherwise a typo would pass silently.
 
-Vale su tutti e tre i dialetti toccati: Polars, DuckDB e chDB/ClickHouse.
+On all three dialects touched: Polars, DuckDB and chDB/ClickHouse.
 """
 from __future__ import annotations
 
@@ -47,14 +46,14 @@ def _preview(name, storage, ops):
     return _engine(name, storage).preview(src, ops, limit=10, use_cache=False)
 
 
-# ── senza il flag: una colonna assente DEVE farsi sentire ───────────────────────
+# ── without the flag: a missing column MUST be heard ───────────────────────
 @pytest.mark.parametrize("name", ENGINES)
 def test_a_plain_sort_on_a_missing_column_still_fails(name, storage):
     with pytest.raises(Exception):
         _preview(name, storage, [{"type": "sort", "params": {"by": ["sparita"]}}])
 
 
-# ── col flag: la chiave sparita si ignora, le altre ordinano ────────────────────
+# ── with the flag: the key gone is ignored, the others sort ────────────────────
 @pytest.mark.parametrize("name", ENGINES)
 def test_ignore_missing_drops_the_vanished_key(name, storage):
     res = _preview(name, storage, [

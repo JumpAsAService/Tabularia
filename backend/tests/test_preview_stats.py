@@ -1,5 +1,5 @@
-"""Prestazioni delle preview senza tabelle e senza RAM di processo: contatori a
-dimensione FISSA su Valkey + le più lente delle ultime 24 ore."""
+"""The previews' performance without tables and without process RAM: counters of FIXED
+size on Valkey + the slowest of the last 24 hours."""
 import json
 
 import pytest
@@ -8,8 +8,8 @@ from app.observability import preview_stats as ps
 
 
 class _MiniRedis:
-    """Solo i comandi che preview_stats usa: hash, sorted set e una pipeline che
-    esegue subito (l'atomicità qui non è ciò che si sta provando)."""
+    """Only the commands preview_stats uses: hashes, sorted sets and a pipeline that runs at
+    once (atomicity is not what is being tested here)."""
     def __init__(self): self.h: dict = {}; self.z: dict = {}
     def pipeline(self): self._out = []; return self
     def execute(self): out, self._out = self._out, []; return out
@@ -53,7 +53,7 @@ def test_durations_land_in_the_right_bucket():
 
 
 def test_a_thousand_previews_cost_the_same_keys_as_ten(_redis):
-    """Il punto di tutto il disegno: lo spazio NON cresce col traffico."""
+    """The point of the whole design: the space does NOT grow with the traffic."""
     for i in range(10): _rec(300 + i)
     few = len(ps.snapshot()["hist"])
     for i in range(1000): _rec(300 + (i % 40))
@@ -87,7 +87,7 @@ def test_the_ranking_is_bounded(_redis):
 def test_entries_older_than_a_day_drop_out_on_read(_redis):
     _rec(5000, now=1_000_000); _rec(4000, now=1_000_000 + ps.SLOWEST_WINDOW_SECONDS)
     assert [e["ms"] for e in ps.slowest(now=1_000_000 + ps.SLOWEST_WINDOW_SECONDS + 10)] == [4000]
-    assert _redis.zcard(ps.SLOWEST_KEY) == 1  # ripulito in lettura: nessun job
+    assert _redis.zcard(ps.SLOWEST_KEY) == 1  # cleaned on reading: no job
 
 
 def test_measuring_never_breaks_what_it_measures(monkeypatch):
@@ -102,7 +102,7 @@ def test_measuring_never_breaks_what_it_measures(monkeypatch):
 def test_phases_travel_from_engine_to_task_once():
     ps.set_phases({"query": 12.0}, "s3")
     assert ps.take_phases() == ({"query": 12.0}, "s3")
-    assert ps.take_phases() == ({}, "")  # non restano appese alla preview successiva
+    assert ps.take_phases() == ({}, "")  # they do not stay attached to the next preview
 
 
 def test_the_collector_emits_cumulative_buckets():
@@ -115,17 +115,17 @@ def test_the_collector_emits_cumulative_buckets():
     assert next(s.value for s in hist.samples if s.name.endswith("_sum")) == 1220.0
 
 
-# ── rilievi della revisione ────────────────────────────────────────────────────
+# ── findings of the review ────────────────────────────────────────────────────
 def test_an_arbitrary_engine_name_cannot_create_unbounded_keys():
-    """Il motore arriva dalla richiesta dell'utente: un nome libero creerebbe
-    chiavi e serie Prometheus senza limite."""
+    """The engine comes from the user's request: a free name would make keys and Prometheus
+    series without limit."""
     for e in ("oracle", "Polars", "x|y|z", "", None):
         _rec(300, engine=e)
     assert set(k.split("|")[0] for k in ps.snapshot()["hist"]) == {"unknown", "polars"}
 
 
 def test_stale_entries_are_pruned_when_writing_too(_redis):
-    """Un giorno di grandi lente vecchie non deve tenere fuori quelle di oggi."""
+    """A day of big old slow ones must not keep today's out."""
     for i in range(ps.SLOWEST_KEEP * 4): _rec(50_000 + i, now=1_000_000)
     _rec(2_000, now=1_000_000 + ps.SLOWEST_WINDOW_SECONDS + 10)
     assert _redis.zcard(ps.SLOWEST_KEY) == 1

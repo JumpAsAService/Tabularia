@@ -1,7 +1,7 @@
-"""Il valutatore dei data contracts: ogni regola, quando regge e quando no.
+"""The data contracts' evaluator: every rule, when it holds and when it does not.
 
-Un referto sbagliato qui è il difetto più caro di tutta la funzione: un «passa»
-di troppo pubblica dati rotti, un «non passa» di troppo ferma dati buoni.
+A wrong report here is the costliest defect of the whole feature: a «passes» too many
+publishes broken data, a «does not pass» too many stops good data.
 """
 from datetime import date, datetime, timedelta
 
@@ -10,7 +10,7 @@ import pytest
 
 from app.contracts.evaluator import evaluate, family, profile, propose
 
-ADESSO = datetime(2026, 10, 6, 12, 0, 0)
+NOW = datetime(2026, 10, 6, 12, 0, 0)
 
 
 def data() -> pl.LazyFrame:
@@ -28,17 +28,17 @@ def data() -> pl.LazyFrame:
     })
 
 
-def one(regola: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
-    referto = evaluate(lf if lf is not None else data(), {"rules": [{"id": "r", "severity": "error", **regola}]}, now=ADESSO, **kw)
-    return referto["rules"][0]
+def one(rule: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
+    report = evaluate(lf if lf is not None else data(), {"rules": [{"id": "r", "severity": "error", **rule}]}, now=NOW, **kw)
+    return report["rules"][0]
 
 
-# ── le regole, una per una ───────────────────────────────────────────────────
-@pytest.mark.parametrize("regola, passa", [
+# ── the rules, one by one ───────────────────────────────────────────────────
+@pytest.mark.parametrize("rule, passes", [
     ({"kind": "column", "column": "id"}, True),
     ({"kind": "column", "column": "non_esiste"}, False),
     ({"kind": "column", "column": "id", "dtype": "integer"}, True),
-    ({"kind": "column", "column": "id", "dtype": "number"}, True),      # un intero è anche un numero
+    ({"kind": "column", "column": "id", "dtype": "number"}, True),      # an integer is a number too
     ({"kind": "column", "column": "quantita", "dtype": "integer"}, False),
     ({"kind": "column", "column": "quantita", "dtype": "number"}, True),
     ({"kind": "column", "column": "stato", "dtype": "string"}, True),
@@ -50,19 +50,19 @@ def one(regola: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
     ({"kind": "not_null", "column": "id"}, True),
     ({"kind": "not_null", "column": "stato"}, False),
     ({"kind": "unique", "columns": ["id"]}, True),
-    ({"kind": "unique", "column": "id"}, True),                          # forma breve
+    ({"kind": "unique", "column": "id"}, True),                          # short form
     ({"kind": "unique", "columns": ["ordine"]}, False),
-    ({"kind": "unique", "columns": ["ordine", "riga"]}, True),           # chiave composta
+    ({"kind": "unique", "columns": ["ordine", "riga"]}, True),           # composite key
     ({"kind": "unique", "columns": ["ordine", "attivo"]}, False),
-    ({"kind": "accepted_values", "column": "stato", "values": ["aperto", "spedito", "perso"]}, True),   # il null non è un valore sbagliato
+    ({"kind": "accepted_values", "column": "stato", "values": ["aperto", "spedito", "perso"]}, True),   # null is not a wrong value
     ({"kind": "accepted_values", "column": "stato", "values": ["aperto", "spedito"]}, False),
     ({"kind": "accepted_values", "column": "riga", "values": [1, 2, 3]}, True),
-    ({"kind": "accepted_values", "column": "riga", "values": ["1", "2", "3"]}, True),   # scritto come testo, colonna numerica
+    ({"kind": "accepted_values", "column": "riga", "values": ["1", "2", "3"]}, True),   # written as text, a numeric column
     ({"kind": "accepted_values", "column": "riga", "values": [1]}, False),
-    ({"kind": "accepted_values", "column": "attivo", "values": [True, False]}, True),      # booleani: il difetto trovato dal vivo
+    ({"kind": "accepted_values", "column": "attivo", "values": [True, False]}, True),      # booleans: the defect found live
     ({"kind": "accepted_values", "column": "attivo", "values": ["true", "FALSE"]}, True),
     ({"kind": "accepted_values", "column": "attivo", "values": [True]}, False),
-    ({"kind": "accepted_values", "column": "quantita", "values": [1, 2.5, -3, "40"]}, True),   # 1 combacia con 1.0, «40» con 40.0
+    ({"kind": "accepted_values", "column": "quantita", "values": [1, 2.5, -3, "40"]}, True),   # 1 matches 1.0, «40» matches 40.0
     ({"kind": "accepted_values", "column": "quantita", "values": [1, 2.5]}, False),
     ({"kind": "accepted_values", "column": "giorno", "values": ["2026-10-01"]}, True),
     ({"kind": "range", "column": "quantita", "min": -3}, True),
@@ -74,46 +74,46 @@ def one(regola: dict, lf: pl.LazyFrame | None = None, **kw) -> dict:
     ({"kind": "range", "column": "giorno", "max": "2026-10-01"}, True),
     ({"kind": "pattern", "column": "sku", "regex": "[A-Za-z]{3}-\\d+"}, True),
     ({"kind": "pattern", "column": "sku", "regex": "[A-Z]{3}-\\d+"}, False),
-    ({"kind": "pattern", "column": "sku", "regex": "[A-Z]{3}"}, False),   # per INTERO, non «comincia con»
+    ({"kind": "pattern", "column": "sku", "regex": "[A-Z]{3}"}, False),   # WHOLE, not «starts with»
     ({"kind": "row_count", "min": 1}, True),
     ({"kind": "row_count", "min": 6}, False),
     ({"kind": "row_count", "max": 5}, True),
     ({"kind": "row_count", "min": 1, "max": 4}, False),
     ({"kind": "expression", "sql": "id > 0"}, True),
-    ({"kind": "expression", "sql": "quantita >= 0"}, False),              # -3, e un null
+    ({"kind": "expression", "sql": "quantita >= 0"}, False),              # -3, and a null
     ({"kind": "expression", "sql": "spedito >= creato"}, False),
     ({"kind": "expression", "sql": "ordine * 2 >= riga"}, True),
 ])
-def test_ogni_regola_quando_regge_e_quando_no(regola, passa):
-    assert one(regola)["passed"] is passa, one(regola)
+def test_every_rule_when_it_holds_and_when_not(rule, passes):
+    assert one(rule)["passed"] is passes, one(rule)
 
 
-def test_un_conteggio_dice_quante_righe_violano_e_ne_mostra_qualcuna():
+def test_a_count_says_how_many_rows_violate_and_shows_some():
     r = one({"kind": "accepted_values", "column": "stato", "values": ["aperto", "spedito"]})
     assert (r["passed"], r["violations"], r["sample"]) == (False, 1, ["perso"])
     r = one({"kind": "unique", "columns": ["ordine"]})
     assert r["violations"] == 3 and r["sample"] == [10]
     r = one({"kind": "range", "column": "quantita", "min": 0})
-    assert r["violations"] == 1 and r["sample"] == [-3.0]   # il null non è fuori intervallo
+    assert r["violations"] == 1 and r["sample"] == [-3.0]   # null is not out of range
     r = one({"kind": "not_null", "column": "stato"})
-    assert r["violations"] == 1 and "sample" not in r        # di un null non c'è niente da mostrare
+    assert r["violations"] == 1 and "sample" not in r        # there is nothing to show of a null
 
 
-def test_in_un_espressione_il_non_lo_so_non_e_un_si():
-    """`spedito >= creato` con `spedito` null dà null: quella riga viola."""
+def test_in_an_expression_i_dont_know_is_not_a_yes():
+    """`spedito >= creato` with `spedito` null gives null: that row violates."""
     r = one({"kind": "expression", "sql": "spedito >= creato"})
-    assert r["violations"] == 2   # una data prima, e un null
+    assert r["violations"] == 2   # a date before, and a null
 
 
-def test_gli_esempi_sono_pochi_e_tagliati():
-    lungo = pl.LazyFrame({"t": [f"{'x' * 200}{i}" for i in range(50)]})
-    r = one({"kind": "pattern", "column": "t", "regex": "y+"}, lungo)
+def test_the_samples_are_few_and_cut():
+    long_one = pl.LazyFrame({"t": [f"{'x' * 200}{i}" for i in range(50)]})
+    r = one({"kind": "pattern", "column": "t", "regex": "y+"}, long_one)
     assert r["violations"] == 50 and len(r["sample"]) == 5 and all(len(s) <= 80 for s in r["sample"])
-    assert "sample" not in evaluate(lungo, {"rules": [{"id": "r", "severity": "error", "kind": "pattern", "column": "t", "regex": "y+"}]}, samples=False)["rules"][0]
+    assert "sample" not in evaluate(long_one, {"rules": [{"id": "r", "severity": "error", "kind": "pattern", "column": "t", "regex": "y+"}]}, samples=False)["rules"][0]
 
 
-# ── una regola che non si può valutare NON regge ─────────────────────────────
-@pytest.mark.parametrize("regola, why", [
+# ── a rule that cannot be evaluated does NOT hold ─────────────────────────────
+@pytest.mark.parametrize("rule, why", [
     ({"kind": "not_null", "column": "non_esiste"}, "does not exist"),
     ({"kind": "not_null"}, "names no column"),
     ({"kind": "unique", "columns": ["id", "boh"]}, "does not exist"),
@@ -130,38 +130,38 @@ def test_gli_esempi_sono_pochi_e_tagliati():
     ({"kind": "freshness", "max_age_hours": 24, "column": "stato"}, "needs a date"),
     ({"kind": "regola_inventata"}, "unknown rule kind"),
 ])
-def test_una_regola_che_non_si_puo_valutare_non_regge_e_dice_perche(regola, why):
-    r = one(regola)
+def test_a_rule_that_cannot_be_evaluated_does_not_hold_and_says_why(rule, why):
+    r = one(rule)
     assert r["passed"] is False and r.get("error"), r
     assert why in r["error"], r["error"]
 
 
-def test_una_regola_rotta_non_impedisce_di_valutare_le_altre():
-    referto = evaluate(data(), {"rules": [
+def test_a_broken_rule_does_not_stop_evaluating_the_others():
+    report = evaluate(data(), {"rules": [
         {"id": "a", "kind": "expression", "sql": "boh > 1", "severity": "warning"},
         {"id": "b", "kind": "not_null", "column": "id", "severity": "error"},
         {"id": "c", "kind": "not_null", "column": "stato", "severity": "warning"},
     ]})
-    assert [(x["id"], x["passed"]) for x in referto["rules"]] == [("a", False), ("b", True), ("c", False)]
-    assert referto["rows"] == 5
+    assert [(x["id"], x["passed"]) for x in report["rules"]] == [("a", False), ("b", True), ("c", False)]
+    assert report["rows"] == 5
 
 
-# ── l'esito viene dalle severità ─────────────────────────────────────────────
-def _esito(*regole) -> str:
-    return evaluate(data(), {"rules": [{"id": f"r{i}", **r} for i, r in enumerate(regole)]})["outcome"]
+# ── the outcome comes from the severities ─────────────────────────────────────────────
+def _outcome(*rules) -> str:
+    return evaluate(data(), {"rules": [{"id": f"r{i}", **r} for i, r in enumerate(rules)]})["outcome"]
 
 
-def test_due_severita_tre_esiti():
-    regge = {"kind": "not_null", "column": "id"}
-    cade = {"kind": "not_null", "column": "stato"}
-    assert _esito({**regge, "severity": "error"}, {**regge, "severity": "warning"}) == "passed"
-    assert _esito({**regge, "severity": "error"}, {**cade, "severity": "warning"}) == "warning"
-    assert _esito({**cade, "severity": "error"}, {**regge, "severity": "warning"}) == "failed"
-    assert _esito({**cade, "severity": "error"}, {**cade, "severity": "warning"}) == "failed"
-    assert _esito() == "passed"   # un contratto vuoto non promette niente
+def test_two_severities_three_outcomes():
+    holds = {"kind": "not_null", "column": "id"}
+    falls = {"kind": "not_null", "column": "stato"}
+    assert _outcome({**holds, "severity": "error"}, {**holds, "severity": "warning"}) == "passed"
+    assert _outcome({**holds, "severity": "error"}, {**falls, "severity": "warning"}) == "warning"
+    assert _outcome({**falls, "severity": "error"}, {**holds, "severity": "warning"}) == "failed"
+    assert _outcome({**falls, "severity": "error"}, {**falls, "severity": "warning"}) == "failed"
+    assert _outcome() == "passed"   # an empty contract promises nothing
 
 
-def test_il_referto_conta_errori_e_avvisi():
+def test_the_report_counts_errors_and_warnings():
     r = evaluate(data(), {"rules": [
         {"id": "a", "kind": "not_null", "column": "stato", "severity": "error"},
         {"id": "b", "kind": "not_null", "column": "sku", "severity": "warning"},
@@ -172,21 +172,21 @@ def test_il_referto_conta_errori_e_avvisi():
 
 
 @pytest.mark.parametrize("severita", [None, "info", "blocker", "", 3])
-def test_una_severita_che_non_e_avviso_ne_errore_non_passa_in_silenzio(severita):
+def test_a_severity_neither_warning_nor_error_does_not_pass_silently(severita):
     r = evaluate(data(), {"rules": [{"id": "a", "kind": "not_null", "column": "id", "severity": severita}]})
     assert r["rules"][0]["passed"] is False and "severity" in r["rules"][0]["error"] and r["outcome"] == "failed"
 
 
-# ── freschezza ───────────────────────────────────────────────────────────────
-def test_la_freschezza_dello_snapshot_guarda_quando_i_dati_sono_stati_prodotti():
-    assert one({"kind": "freshness", "max_age_hours": 24})["passed"] is True          # appena scritti
-    r = one({"kind": "freshness", "max_age_hours": 24}, snapshot_at=ADESSO - timedelta(hours=30))
+# ── freshness ───────────────────────────────────────────────────────────────
+def test_the_snapshots_freshness_looks_at_when_the_data_was_produced():
+    assert one({"kind": "freshness", "max_age_hours": 24})["passed"] is True          # just written
+    r = one({"kind": "freshness", "max_age_hours": 24}, snapshot_at=NOW - timedelta(hours=30))
     assert (r["passed"], r["observed"], r["expected"]) == (False, 30.0, 24)
-    assert one({"kind": "freshness", "max_age_hours": 48}, snapshot_at=ADESSO - timedelta(hours=30))["passed"] is True
+    assert one({"kind": "freshness", "max_age_hours": 48}, snapshot_at=NOW - timedelta(hours=30))["passed"] is True
 
 
-def test_la_freschezza_di_una_colonna_guarda_il_valore_piu_recente():
-    r = one({"kind": "freshness", "max_age_hours": 30, "column": "creato"})       # 5 ottobre 09:00 → 27 ore prima
+def test_a_columns_freshness_looks_at_the_most_recent_value():
+    r = one({"kind": "freshness", "max_age_hours": 30, "column": "creato"})       # 5 October 09:00 → 27 hours before
     assert (r["passed"], r["observed"]) == (True, 27.0)
     assert one({"kind": "freshness", "max_age_hours": 24, "column": "creato"})["passed"] is False
     assert one({"kind": "freshness", "max_age_hours": 24 * 6, "column": "giorno"})["passed"] is True
@@ -194,27 +194,27 @@ def test_la_freschezza_di_una_colonna_guarda_il_valore_piu_recente():
     assert one({"kind": "freshness", "max_age_hours": 24, "column": "creato"}, empty)["passed"] is False
 
 
-# ── casi limite ──────────────────────────────────────────────────────────────
-def test_una_tabella_vuota():
+# ── edge cases ──────────────────────────────────────────────────────────────
+def test_an_empty_table():
     empty = data().filter(pl.col("id") < 0)
     assert one({"kind": "not_null", "column": "stato"}, empty)["passed"] is True
     assert one({"kind": "unique", "columns": ["id"]}, empty)["passed"] is True
     assert one({"kind": "row_count", "min": 1}, empty) == {"id": "r", "kind": "row_count", "severity": "error", "passed": False, "observed": 0, "expected": {"min": 1, "max": None}}
     r = one({"kind": "not_null", "column": "stato"})
-    assert r["column"] == "stato"                       # il referto dice su che cosa era la regola
+    assert r["column"] == "stato"                       # the report says what the rule was on
     assert one({"kind": "unique", "columns": ["ordine", "riga"]})["columns"] == ["ordine", "riga"]
-    assert evaluate(data(), {"version": 7, "rules": []})["version"] == 7   # e di quale versione del contratto
+    assert evaluate(data(), {"version": 7, "rules": []})["version"] == 7   # and of which version of the contract
     assert one({"kind": "column", "column": "id", "dtype": "integer"}, empty)["passed"] is True
 
 
-def test_le_famiglie_dei_tipi():
-    casi = {pl.Int8: "integer", pl.UInt64: "integer", pl.Float32: "number", pl.Decimal(10, 2): "number", pl.String: "string",
+def test_the_type_families():
+    cases = {pl.Int8: "integer", pl.UInt64: "integer", pl.Float32: "number", pl.Decimal(10, 2): "number", pl.String: "string",
             pl.Boolean: "boolean", pl.Date: "date", pl.Datetime("ms"): "datetime", pl.Datetime("us", "UTC"): "datetime", pl.List(pl.Int8): "other"}
-    for kind, wait in casi.items():
+    for kind, wait in cases.items():
         assert family(kind) == wait, kind
 
 
-def test_due_milioni_di_righe_in_pochi_secondi(tmp_path):
+def test_two_million_rows_in_a_few_seconds(tmp_path):
     import time
 
     n = 2_000_000
@@ -231,34 +231,34 @@ def test_due_milioni_di_righe_in_pochi_secondi(tmp_path):
     assert (r["outcome"], r["rows"], r["rules"][2]["violations"], r["rules"][2]["sample"]) == ("warning", n, n // 4, ["d"])
 
 
-# ── profilo e proposta ───────────────────────────────────────────────────────
-def test_il_profilo_dice_che_cosa_c_e_nei_dati():
+# ── profile and proposal ───────────────────────────────────────────────────────
+def test_the_profile_says_what_is_in_the_data():
     p = profile(data())
-    per = {c["name"]: c for c in p["columns"]}
+    by_name = {c["name"]: c for c in p["columns"]}
     assert p["rows"] == 5
-    assert (per["id"]["family"], per["id"]["nulls"], per["id"]["distinct"], per["id"]["min"], per["id"]["max"]) == ("integer", 0, 5, 1, 5)
-    assert (per["stato"]["nulls"], per["stato"]["family"]) == (1, "string")
-    assert per["creato"]["min"] == "2026-10-01T00:00:00"
+    assert (by_name["id"]["family"], by_name["id"]["nulls"], by_name["id"]["distinct"], by_name["id"]["min"], by_name["id"]["max"]) == ("integer", 0, 5, 1, 5)
+    assert (by_name["stato"]["nulls"], by_name["stato"]["family"]) == (1, "string")
+    assert by_name["creato"]["min"] == "2026-10-01T00:00:00"
 
 
-def test_la_proposta_e_prudente_e_il_contratto_proposto_regge_sui_dati_da_cui_nasce():
+def test_the_proposal_is_careful_and_the_proposed_contract_holds_on_its_data():
     lf = pl.LazyFrame({"id": list(range(40)), "canale": ["web", "negozio"] * 20, "note": [None] * 40, "importo": [1.5] * 40})
-    contratto = propose(profile(lf))
-    # con i tipi che si incontrano davvero: date, booleani, decimali, testo con pochi valori e null
-    vero = pl.LazyFrame({"giorno": [date(2026, 1, 1 + i % 28) for i in range(60)], "festivo": [True, False, False] * 20,
+    contract = propose(profile(lf))
+    # with the types one really meets: dates, booleans, decimals, text with few values and nulls
+    real = pl.LazyFrame({"giorno": [date(2026, 1, 1 + i % 28) for i in range(60)], "festivo": [True, False, False] * 20,
                          "nome": [None, "Natale", "Pasqua"] * 20, "anno": pl.Series([2026] * 60, dtype=pl.Int32),
                          "prezzo": pl.Series(["1.50"] * 60).cast(pl.Decimal(5, 2))})
-    proposto = propose(profile(vero))
-    assert evaluate(vero, proposto)["outcome"] == "passed", [r for r in evaluate(vero, proposto)["rules"] if not r["passed"]]
-    assert not any(r["kind"] == "accepted_values" and r["column"] == "festivo" for r in proposto["rules"])
-    per_tipo = {}
-    for r in contratto["rules"]:
-        per_tipo.setdefault(r["kind"], []).append(r)
-    # strutturale = errore; vero oggi = avviso
-    assert all(r["severity"] == "error" for r in per_tipo["column"]) and len(per_tipo["column"]) == 4
-    assert {r["column"] for r in per_tipo["not_null"]} == {"id", "canale", "importo"} and all(r["severity"] == "warning" for r in per_tipo["not_null"])
-    assert [r["columns"] for r in per_tipo["unique"]] == [["id"]]
-    assert [(r["column"], r["values"]) for r in per_tipo["accepted_values"]] == [("canale", ["negozio", "web"])]
-    assert per_tipo["row_count"][0]["min"] == 1
-    assert len({r["id"] for r in contratto["rules"]}) == len(contratto["rules"])
-    assert evaluate(lf, contratto)["outcome"] == "passed"
+    proposed = propose(profile(real))
+    assert evaluate(real, proposed)["outcome"] == "passed", [r for r in evaluate(real, proposed)["rules"] if not r["passed"]]
+    assert not any(r["kind"] == "accepted_values" and r["column"] == "festivo" for r in proposed["rules"])
+    by_type = {}
+    for r in contract["rules"]:
+        by_type.setdefault(r["kind"], []).append(r)
+    # structural = error; true today = warning
+    assert all(r["severity"] == "error" for r in by_type["column"]) and len(by_type["column"]) == 4
+    assert {r["column"] for r in by_type["not_null"]} == {"id", "canale", "importo"} and all(r["severity"] == "warning" for r in by_type["not_null"])
+    assert [r["columns"] for r in by_type["unique"]] == [["id"]]
+    assert [(r["column"], r["values"]) for r in by_type["accepted_values"]] == [("canale", ["negozio", "web"])]
+    assert by_type["row_count"][0]["min"] == 1
+    assert len({r["id"] for r in contract["rules"]}) == len(contract["rules"])
+    assert evaluate(lf, contract)["outcome"] == "passed"

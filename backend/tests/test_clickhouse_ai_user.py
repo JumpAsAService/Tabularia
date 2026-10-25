@@ -1,9 +1,9 @@
-"""Utenza ClickHouse dedicata alle query dell'assistente AI.
+"""The ClickHouse user dedicated to the AI assistant's queries.
 
-Seconda barriera dietro la lista bianca del nodo sql (test_sql_guard): le query
-dell'assistente girano con un utente di sola lettura, se configurato. Qui si
-verifica CHI viene scelto e quando; i grant dell'utente sono documentati (e
-provati su un server vero) in docs/engines/clickhouse-ai-user.md.
+A second barrier behind the sql node's allowlist (test_sql_guard): the assistant's
+queries run with a read-only user, when configured. Here WHO is chosen, and when, is
+checked; the user's grants are documented (and tried on a real server) in
+docs/engines/clickhouse-ai-user.md.
 """
 import inspect
 
@@ -19,7 +19,7 @@ from app.tasks.jobs import preview_task
 
 def _engine(**cfg) -> ClickHouseEngine:
     base = dict(host="ch.example", username="scwadmin", password=SecretStr("pw-admin"), transport="s3")
-    eng = object.__new__(ClickHouseEngine)  # niente connessioni: interessa solo la scelta
+    eng = object.__new__(ClickHouseEngine)  # no connections: only the choice matters
     eng.cfg = ClickHouseExternalSettings(**{**base, **cfg})
     return eng
 
@@ -35,14 +35,14 @@ def test_the_assistant_runs_as_the_ai_user_when_configured():
     eng = _engine(**AI_SET)
     with query_principal("ai"):
         assert eng._credentials() == ("ai", "pw-ai") and eng._as_ai()
-    assert eng._credentials() == ("scwadmin", "pw-admin")  # fuori dal contesto torna com'era
+    assert eng._credentials() == ("scwadmin", "pw-admin")  # outside the context it is as it was
 
 
 @pytest.mark.parametrize("cfg", [
-    {},                                              # non configurata: tutto come prima
-    {"ai_username": "ai"},                           # manca la password: inattiva, non un login a vuoto
-    {"ai_password": SecretStr("pw-ai")},             # manca il nome
-    {**AI_SET, "transport": "push"},                 # push crea tabelle di appoggio: serve l'utenza principale
+    {},                                              # not configured: everything as before
+    {"ai_username": "ai"},                           # the password missing: inactive, not a login that fails
+    {"ai_password": SecretStr("pw-ai")},             # the name missing
+    {**AI_SET, "transport": "push"},                 # push creates staging tables: the main user is needed
 ])
 def test_half_configured_or_push_falls_back_to_the_main_user(cfg):
     with query_principal("ai"):
@@ -62,7 +62,7 @@ def test_the_request_accepts_only_the_ai_principal():
 
 
 def test_the_worker_signature_takes_the_principal_with_a_default():
-    # default None: le preview dell'editor non lo mandano, e un'API vecchia
-    # accanto a un worker nuovo continua a funzionare
+    # default None: the editor's previews do not send it, and an old API next to a new
+    # worker keeps working
     p = inspect.signature(preview_task.run if hasattr(preview_task, "run") else preview_task).parameters["principal"]
     assert p.default is None

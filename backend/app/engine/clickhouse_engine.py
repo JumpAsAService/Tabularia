@@ -779,7 +779,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
                 sql = self._sql_from_cache(ctx, source, ops, hashes, record=True, use_cache=use_cache)
                 raw = ctx.parquet_bytes(f"SELECT * FROM ({sql}) LIMIT {limit + 1}")
             _t = _phase("query", _t)
-            # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
+            # cross-engine standard: NAIVE datetime (a UTC instant), not "+00:00"
             df = naive_utc(pl.read_parquet(io.BytesIO(raw))) if raw else pl.DataFrame()
             truncated = df.height > limit
             if truncated:
@@ -851,7 +851,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             rows_written, columns = self._describe_object(ctx, destination, local)
             if cache_dest is not None and self._cache_output_allowed(rows_written):
                 if local is None:
-                    self._copy(ctx, destination, cache_dest)  # s3: copia server-side
+                    self._copy(ctx, destination, cache_dest)  # s3: a server-side copy
                 else:
                     self.storage.upload_file(local, cache_dest.bucket, cache_dest.key)
                 self.cache.mark(hashes[-1])

@@ -79,7 +79,7 @@ class ModelSpec(BaseModel):
     alias: str | None = None
     meta: dict = {}                   # where it comes from: flow, version, output, author, export
     tags: list = []
-    translate: dict | None = None     # target clickhouse: la query (raw) va tradotta {connection_id}
+    translate: dict | None = None     # target clickhouse: the (raw) query to translate {connection_id}
     # the dialect its compute expressions and sql nodes are written in: its flow's engine's
     # (None: duckdb, as before this field existed)
     dialect: Literal["polars", "duckdb", "clickhouse", "bigquery"] | None = None
@@ -110,7 +110,7 @@ class ExportRequest(BaseModel):
     attachments: list = []        # duckdb: [{alias, db_type, conn, pw_env}]
     native: dict | None = None    # native: {db_type, conn, pw_env, target_schema}
     clickhouse: dict | None = None  # clickhouse: {connections: [{id, name, db_type, host, port, database, username, pw_env}], target_schema}
-    layout: dict | None = None    # dialogo di download: {package: project|folder, folder, layers}
+    layout: dict | None = None    # the download dialog: {package: project|folder, folder, layers}
     schema_: str | None = Field(None, alias="schema", pattern=r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")   # duckdb: the models' schema
     exported_by: str | None = None  # who exports: in the README only
     ai: dict | None = None          # dialog: what the AI wrote {model, summaries, translated}

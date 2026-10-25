@@ -1,10 +1,10 @@
-"""Una preview superata viene buttata giu' davvero — sul worker E sul server.
+"""A superseded preview is really knocked down — on the worker AND on the server.
 
-Provato dal vivo prima di scrivere questi test: interrompere il worker non ferma
-ClickHouse (la query continuava per 65 s, rallentando l'unica preview voluta), e
-il client riusato restava avvelenato ("Session … is locked"). Il primo tentativo
-di KILL falliva in SILENZIO per un NameError inghiottito dall'except di cortesia:
-da qui il test che pretende di VEDERE la KILL partire.
+Tried live before writing these tests: interrupting the worker does not stop ClickHouse
+(the query went on for 65 s, slowing the one preview wanted), and the reused client
+stayed poisoned ("Session … is locked"). The first KILL attempt failed SILENTLY on a
+NameError swallowed by the courtesy except: hence the test that demands to SEE the KILL
+go out.
 """
 import sys
 import types
@@ -30,14 +30,14 @@ class _FakeClient:
 
 @pytest.fixture
 def fake_driver(monkeypatch):
-    """Un `clickhouse_connect` finto: registra i client creati e i comandi."""
+    """A fake `clickhouse_connect`: records the clients made and the commands."""
     log: list = []
     mod = types.SimpleNamespace(get_client=lambda **kw: (log.append(("connect", kw)), _FakeClient(log))[1])
     monkeypatch.setitem(sys.modules, "clickhouse_connect", mod)
     return log
 
 
-# ── l'etichetta ────────────────────────────────────────────────────────────────
+# ── the label ────────────────────────────────────────────────────────────────
 def test_the_tag_lives_only_inside_its_block():
     assert current_query_tag() is None
     with query_tag("tab-prev:abc-123"):
@@ -47,7 +47,7 @@ def test_the_tag_lives_only_inside_its_block():
 
 @pytest.mark.parametrize("bad", ["x' OR 1=1 --", "a b", "", "é", "x" * 97])
 def test_an_unsafe_tag_is_never_used(bad):
-    """L'etichetta finisce dentro una KILL QUERY: niente apici, spazi, lunghezze strane."""
+    """The label ends up inside a KILL QUERY: no quotes, spaces, odd lengths."""
     assert not is_safe_tag(bad)
     with query_tag(bad):
         assert current_query_tag() is None
@@ -60,13 +60,13 @@ def test_the_context_labels_every_query_with_the_tag():
     assert "log_comment" not in ce.ClickHouseContext(object(), None, ClickHouseExternalSettings(host="h", transport="s3"), []).settings
 
 
-# ── la KILL parte davvero ──────────────────────────────────────────────────────
+# ── the KILL really goes out ──────────────────────────────────────────────────────
 def test_kill_tagged_really_sends_the_kill(fake_driver):
     _engine().kill_tagged("tab-prev:t1")
     sql = [x for x in fake_driver if isinstance(x, str) and x.startswith("KILL")]
     assert sql == ["KILL QUERY WHERE Settings['log_comment'] = 'tab-prev:t1' ASYNC"], fake_driver
     assert fake_driver[-1] == "close"
-    # con un client SENZA sessione: una sessione e' un lucchetto
+    # with a client WITHOUT a session: a session is a lock
     assert fake_driver[0][1]["autogenerate_session_id"] is False
 
 
@@ -78,12 +78,12 @@ def test_kill_tagged_refuses_an_unsafe_tag(fake_driver):
 def test_kill_tagged_never_raises(monkeypatch):
     mod = types.SimpleNamespace(get_client=lambda **kw: (_ for _ in ()).throw(RuntimeError("server giu'")))
     monkeypatch.setitem(sys.modules, "clickhouse_connect", mod)
-    _engine().kill_tagged("tab-prev:t1")  # non deve propagare
+    _engine().kill_tagged("tab-prev:t1")  # must not propagate
 
 
-# ── riconoscere l'interruzione ─────────────────────────────────────────────────
+# ── telling the interruption ─────────────────────────────────────────────────
 class SoftTimeLimitExceeded(Exception):
-    """Stesso NOME di quella di billiard: l'engine la riconosce per nome."""
+    """The same NAME as billiard's: the engine tells it by name."""
 
 
 def test_an_interruption_is_recognised_even_when_wrapped():
@@ -104,7 +104,7 @@ def test_forget_client_drops_and_closes_the_cached_client():
     assert ce._CLIENTS_PER_THREAD.by_key == {} and log == ["close"]
 
 
-# ── la route: lo slot ──────────────────────────────────────────────────────────
+# ── the route: the slot ──────────────────────────────────────────────────────────
 from celery.exceptions import TaskRevokedError, TimeoutError as CeleryTimeoutError  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
@@ -115,7 +115,7 @@ OK = {"ok": True, "result": {"columns": [], "rows": [], "row_count": 0, "truncat
 
 
 class _Result:
-    """AsyncResult finto: `script` = cosa fa ogni get() (eccezione o payload)."""
+    """A fake AsyncResult: `script` = what every get() does (an exception or a payload)."""
     def __init__(self, script): self.script = list(script); self.forgotten = False; self.revoked = None
     def get(self, timeout=None):
         step = self.script.pop(0) if len(self.script) > 1 else self.script[0]
@@ -156,7 +156,7 @@ def test_without_a_slot_nothing_changes(monkeypatch):
     slots = _Slots(); celery = _wire(monkeypatch, _Result([OK]), slots)
     routes.preview_flow(_req())
     assert celery.revoked == [] and slots.store == {} and slots.released == []
-    # nessun kwarg nuovo verso il task: un worker VECCHIO deve continuare a capirlo
+    # no new kwarg to the task: an OLD worker must go on understanding it
     assert set(celery.sent[0]["kwargs"]) == {"bucket", "input_key", "operations", "limit", "engine", "no_cache"}
 
 
@@ -169,8 +169,8 @@ def test_a_new_preview_takes_down_the_one_holding_the_slot(monkeypatch):
 
 
 def test_a_queued_preview_notices_it_was_superseded(monkeypatch):
-    """In coda il task non e' ancora marcato revocato: e' lo SLOT a dire che non
-    siamo piu' gli ultimi. Senza, il thread dell'API aspetterebbe il worker."""
+    """Queued, the task is not marked revoked yet: the SLOT says we are no longer the last.
+    Without it, the API's thread would wait for the worker."""
     slots = _Slots(); result = _Result([CeleryTimeoutError()]); celery = _wire(monkeypatch, result, slots)
     orig = slots.claim
     def claim(slot, task_id, ttl):
@@ -203,7 +203,7 @@ def test_an_odd_slot_is_rejected_by_the_model(bad):
 
 
 def test_the_slot_registry_fails_open(monkeypatch):
-    """Valkey giu' non deve rompere l'anteprima: si procede senza slot."""
+    """Valkey down must not break the preview: it goes on without a slot."""
     from app.api import preview_slots as ps
 
     class Boom:
@@ -215,15 +215,15 @@ def test_the_slot_registry_fails_open(monkeypatch):
     ps.release("s", "t")
 
 
-# ── l'interruzione si riconosce in QUALUNQUE involucro ─────────────────────────
+# ── the interruption is told in ANY wrapper ─────────────────────────
 class HTTPClientError(Exception):
-    """Come quella di botocore: porta la causa SOLO nel messaggio."""
+    """As botocore's: it carries the cause ONLY in the message."""
 
 
 def test_an_interruption_wrapped_by_botocore_is_recognised():
-    """Visto dal vivo nel test multiutente: il segnale arriva durante la HEAD su
-    S3, botocore la avvolge, e il task finiva "raised unexpected" con traceback —
-    19 in un'ora, per preview che nessuno aspettava piu'."""
+    """Seen live in the multi-user test: the signal arrives during the HEAD on S3, botocore
+    wraps it, and the task ended "raised unexpected" with a traceback — 19 in an hour, for
+    previews nobody waited for."""
     from app.engine.query_tag import was_interrupted
 
     assert was_interrupted(HTTPClientError("An HTTP Client raised an unhandled exception: SoftTimeLimitExceeded()"))
@@ -243,8 +243,7 @@ def test_the_task_reports_superseded_instead_of_crashing(monkeypatch):
 
 
 def test_a_real_unexpected_error_still_propagates(monkeypatch):
-    """Il silenzio vale solo per l'interruzione: un errore vero deve continuare a
-    farsi sentire."""
+    """The silence holds for the interruption only: a real error must go on being heard."""
     from app.tasks import jobs
 
     class Boom:

@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NoSuchBucket"}
 
 # ── memory budget (environment, with careful defaults under the worker's per-child cap) ──
-# the environment's, or the panel's when the process started (core/regolazioni.py)
+# the environment's, or the panel's when the process started (core/panel_settings.py)
 _MAX_MEMORY = int(value_at_start("CHDB_MAX_MEMORY_USAGE"))       # ~1.4 GB by default
 _EXT_GROUP_BY = int(value_at_start("CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY"))
 _EXT_SORT = int(value_at_start("CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT"))
@@ -78,7 +78,7 @@ class ChdbContext:
         """Runs a query and returns the rows as Python lists (types kept)."""
         try:
             raw = self.session.query(sql, "JSONCompact").bytes()
-        except Exception as e:  # errore SQL/binder
+        except Exception as e:  # SQL/binder error
             raise EngineError(str(e)) from e
         if not raw:
             return []
@@ -191,7 +191,7 @@ class ChdbEngine(DeferredStepCache, Engine):
     def _source_id(self, source: DataSource) -> str:
         return f"{self.engine_name}:{source.bucket}/{source.key}"
 
-    # ── Cache incrementale (mirror di DuckDB/Polars) ──────────────────────
+    # ── Incremental cache (mirror of DuckDB/Polars) ───────────────────────
     def _sql_from_cache(self, ctx: ChdbContext, source, operations, hashes, record=False, use_cache=True) -> str:
         # use_cache=False: starts from the source, no cache (Viewer, ad hoc queries)
         start = self.cache.nearest(hashes) if use_cache else 0
@@ -246,7 +246,7 @@ class ChdbEngine(DeferredStepCache, Engine):
             raise
         except Exception as e:
             raise EngineError(f"Error while running the flow: {e}") from e
-        # standard cross-engine: datetime NAIVE (istante UTC), non "+00:00"
+        # cross-engine standard: NAIVE datetime (a UTC instant), not "+00:00"
         rewrite_parquet_naive_utc(path)
         return path
 
@@ -260,7 +260,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         if state_dir:
             shutil.rmtree(state_dir, ignore_errors=True)
 
-    # ── Preview (sincrona, solo N righe in RAM) ───────────────────────────
+    # ── Preview (synchronous, only N rows in RAM) ──────────────────────────
     def preview(
         self,
         source: DataSource,
@@ -288,7 +288,7 @@ class ChdbEngine(DeferredStepCache, Engine):
                 df = pl.from_arrow(tbl)
                 if isinstance(df, pl.Series):
                     df = df.to_frame()
-                df = naive_utc(df)  # standard cross-engine: datetime naive (istante UTC)
+                df = naive_utc(df)  # cross-engine standard: naive datetime (a UTC instant)
             else:
                 df = pl.DataFrame()
             truncated = df.height > limit

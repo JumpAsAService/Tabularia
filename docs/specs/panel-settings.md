@@ -111,7 +111,7 @@ to shorten the trail of what administrators do: the installer decides).
 ## Tests
 
 Unit tests per mechanism and per converted constant (gateway: test_panel_overrides,
-test_gateway_settings_api, test_settings_rollout; engine: test_regolazioni); on minikube
+test_gateway_settings_api, test_settings_rollout; engine: test_panel_settings); on minikube
 and kind: a family-1 change seen by every replica within seconds, a family-2 change applied
 after the rollout and not before, a pod started later; UI in Chrome and Firefox.
 

@@ -2,7 +2,7 @@
 
 Il gateway le conserva (tabella `engine_settings`, con l'audit di ogni modifica) e
 le spedisce al motore (`PUT /settings`), che le controlla e le tiene in Valkey per
-tutti i suoi processi (backend/app/core/regolazioni.py: quali parametri, con che
+tutti i suoi processi (backend/app/core/panel_settings.py: quali parametri, con che
 limiti, e perché solo quelli). `spingi_loop` le rispedisce ogni `SPINGI_OGNI`
 secondi: se Valkey si svuota o il motore riparte, tornano da sole.
 

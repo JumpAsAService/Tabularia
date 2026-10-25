@@ -29,7 +29,7 @@ class IngestOptions(BaseModel):
     # overrides of the inferred types: {"column": "int"|"float"|"str"|"date"|...}
     dtype_overrides: dict[str, str] = Field(default_factory=dict)
     csv: CsvOptions = Field(default_factory=CsvOptions)
-    # per Excel: nome del foglio (None = the first visible one, ingest/sheets.py)
+    # for Excel: the sheet's name (None = the first visible one, ingest/sheets.py)
     sheet: Optional[str] = None
 
 

@@ -1,8 +1,8 @@
-"""Connettore SharePoint + Excel, provato contro un Graph finto (tests/fake_graph).
+"""The SharePoint + Excel connector, tested against a fake Graph (tests/fake_graph).
 
-NON sostituisce la prova contro un tenant vero: fissa il contratto che usiamo e,
-soprattutto, le scelte nostre — il glob, l'impilamento dei file, e il rifiuto di
-ciò che non è machine readable.
+It does NOT replace a test against a real tenant: it pins the contract we use and, above
+all, our own choices — the glob, the stacking of the files, and the refusal of what is not
+machine readable.
 """
 import io
 
@@ -52,8 +52,8 @@ def test_a_single_file():
 
 
 def test_a_star_takes_the_excel_files_of_one_folder_only():
-    """Non il .docx, e NON il file di blocco `~$…` che Office crea mentre qualcuno
-    ha il file aperto: un `*.xlsx` lo prenderebbe, ed è spazzatura."""
+    """Not the .docx, and NOT the `~$…` lock file Office makes while someone has the file
+    open: a `*.xlsx` would take it, and it is rubbish."""
     assert _paths("Budget/2026/*.xlsx") == ["Budget/2026/feb.xlsx", "Budget/2026/gen.xlsx"]
 
 
@@ -106,7 +106,7 @@ def test_files_with_different_columns_are_united_by_name_and_the_drift_is_report
     tree = {"M/a.xlsx": GEN, "M/b.xlsx": xlsx([["id", "importo", "filiale"], [9, 1.0, "MI"]])}
     res, df = _ingest(FakeGraph(tree), "M/*.xlsx")
     assert res["schema_drift"] == ["filiale"]
-    assert df.columns == ["id", "importo", "filiale", "_file", "_file_modified_at"]  # provenienza in fondo
+    assert df.columns == ["id", "importo", "filiale", "_file", "_file_modified_at"]  # provenance last
     assert df.filter(pl.col("_file") == "M/a.xlsx")["filiale"].to_list() == [None, None]
 
 
@@ -115,10 +115,10 @@ def test_nothing_matching_is_an_error_not_an_empty_table():
         _ingest(FakeGraph(TREE), "Budget/2027/*.xlsx")
 
 
-# ── machine readable, o niente ─────────────────────────────────────────────────
+# ── machine readable, or nothing ───────────────────────────────────────────────
 def test_a_title_above_the_header_is_refused():
-    """La libreria, da sola, leggerebbe `REPORT BUDGET` come nome di colonna e
-    inventerebbe `__UNNAMED__1`: il dato sporco passerebbe in silenzio."""
+    """The library alone would read `REPORT BUDGET` as a column name and make up
+    `__UNNAMED__1`: the dirty data would pass silently."""
     tree = {"M/brutto.xlsx": xlsx([["REPORT BUDGET 2026"], [], ["id", "importo"], [1, 2]])}
     with pytest.raises(sp.SharePointError, match=r"M/brutto\.xlsx.*FIRST row"):
         _ingest(FakeGraph(tree), "M/*.xlsx")
@@ -130,7 +130,7 @@ def test_a_hole_in_the_header_is_refused_and_says_which_column():
 
 
 def test_repeated_column_names_are_refused():
-    """Altrimenti la seconda diventerebbe `id_1`, indistinguibile da una colonna vera."""
+    """Otherwise the second would become `id_1`, indistinguishable from a real column."""
     with pytest.raises(sp.SharePointError, match="(?i)repeated.*id"):
         _ingest(FakeGraph({"M/x.xlsx": xlsx([["id", "ID", "importo"], [1, 2, 3]])}), "M/x.xlsx")
 
@@ -151,7 +151,7 @@ def test_the_provenance_column_names_are_reserved():
         _ingest(FakeGraph({"M/x.xlsx": xlsx([["id", "_file"], [1, "a"]])}), "M/x.xlsx")
 
 
-# ── accesso ────────────────────────────────────────────────────────────────────
+# ── access ────────────────────────────────────────────────────────────────────
 def test_a_wrong_secret_says_so_without_the_trace_noise():
     with pytest.raises(sp.SharePointError, match="Invalid client secret") as e:
         _ingest(FakeGraph(TREE, secret="altro"), "Budget/2026/gen.xlsx")
@@ -183,11 +183,11 @@ def test_the_token_is_fetched_once_and_throttling_is_waited_out():
     assert g.tokens == 1 and waits == [1.0, 1.0]
 
 
-# ── rilievi della revisione ────────────────────────────────────────────────────
+# ── findings of the review ────────────────────────────────────────────────────
 def test_a_header_only_template_does_not_turn_numbers_into_text():
-    """Il lettore tipizza String un foglio con la sola intestazione; nell'unione
-    rilassata Int64+String diventa String: un template vuoto del mese rendeva
-    testo OGNI colonna numerica. Contato fra i file, non concatenato."""
+    """The reader types a sheet with only a header as String; in the relaxed union
+    Int64+String becomes String: an empty template of the month made EVERY numeric column
+    text. Counted among the files, not concatenated."""
     tree = {"M/gen.xlsx": GEN, "M/template.xlsx": xlsx([["id", "importo"]])}
     res, df = _ingest(FakeGraph(tree), "M/*.xlsx")
     assert df["id"].dtype == pl.Int64 and df["importo"].dtype == pl.Float64
@@ -200,8 +200,8 @@ def test_only_header_files_are_an_error_not_an_empty_table():
 
 
 def test_folders_with_spaces_and_accents_are_found_and_reported_decoded():
-    """Graph restituisce il percorso del genitore percent-encoded: senza
-    decodifica la cartella veniva codificata due volte e dava 404."""
+    """Graph returns the parent's path percent-encoded: without decoding, the folder was
+    encoded twice and gave 404."""
     tree = {"Budget 2026/età/gen.xlsx": GEN, "Budget 2026/età/feb.xlsx": FEB}
     res, df = _ingest(FakeGraph(tree), "*/età/*.xlsx")
     assert [f["path"] for f in res["files"]] == ["Budget 2026/età/feb.xlsx", "Budget 2026/età/gen.xlsx"]
@@ -209,7 +209,7 @@ def test_folders_with_spaces_and_accents_are_found_and_reported_decoded():
 
 
 def test_header_whitespace_is_stripped_on_the_real_columns_too():
-    """'Importo ' in un file e 'Importo' in un altro non devono fare due colonne."""
+    """'Importo ' in one file and 'Importo' in another must not make two columns."""
     tree = {"M/a.xlsx": xlsx([["id", "Importo "], [1, 2.0]]), "M/b.xlsx": xlsx([["id", "Importo"], [2, 3.0]])}
     _, df = _ingest(FakeGraph(tree), "M/*.xlsx")
     assert df.columns[:2] == ["id", "Importo"] and df["Importo"].null_count() == 0

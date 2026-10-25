@@ -51,7 +51,7 @@ def get_chdb_operation(name: str) -> ChdbOpFn:
     return fn
 
 
-# ── helper SQL (dialetto ClickHouse) ──────────────────────────────────────────
+# ── SQL helpers (ClickHouse dialect) ─────────────────────────────────────────
 def _qi(name: str) -> str:
     """Quotes a ClickHouse identifier with backticks."""
     return "`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`"
@@ -331,7 +331,7 @@ def op_group_by(sql, params, ctx):
 
 
 # ── compute (scalar expressions, WITHOUT subqueries or file/network reads) ────
-# the check is in app/engine/espressioni.py (it parses the expression, it does not match words)
+# the check is in app/engine/expressions.py (it parses the expression, it does not match words)
 
 
 @_register("compute")

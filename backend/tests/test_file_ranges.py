@@ -190,7 +190,7 @@ def test_without_placeholders_nothing_changes(srv, root):
 
 
 # ── SharePoint ────────────────────────────────────────────────────────────────
-DATI = xlsx([["id", "importo"], [1, 10.5]])
+DATA = xlsx([["id", "importo"], [1, 10.5]])
 
 
 def _sp_ingest(files, previous=None, storage=None, **source):
@@ -206,7 +206,7 @@ def _sp_ingest(files, previous=None, storage=None, **source):
 
 
 def test_sharepoint_a_range_of_monthly_files_with_one_missing():
-    files = {"Chiusure/2026-07.xlsx": DATI, "Chiusure/2026-09.xlsx": DATI}
+    files = {"Chiusure/2026-07.xlsx": DATA, "Chiusure/2026-09.xlsx": DATA}
     res, df = _sp_ingest(files, path="Chiusure/{month:yyyy-MM}.xlsx", sheet="Dati",
                          variables=[{"name": "month", "type": "range", "start": "start_of_month-3m",
                                      "end": "start_of_month", "step": "1m"}])
@@ -217,7 +217,7 @@ def test_sharepoint_a_range_of_monthly_files_with_one_missing():
 
 def test_sharepoint_no_file_across_the_range_fails():
     with pytest.raises(sp.SharePointError, match="any of the 3 values"):
-        _sp_ingest({"Altro/x.xlsx": DATI}, path="Chiusure/{day}.xlsx", sheet="Dati", variables=[DAYS])
+        _sp_ingest({"Altro/x.xlsx": DATA}, path="Chiusure/{day}.xlsx", sheet="Dati", variables=[DAYS])
 
 
 def test_sharepoint_append_by_key():

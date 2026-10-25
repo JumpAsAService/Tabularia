@@ -11,7 +11,7 @@ import sys
 import pytest
 from fastapi import HTTPException
 
-from app.api.routes import db as rotta
+from app.api.routes import db as route
 from app.ingest import db_source as ds
 from app.ingest.db_source import DbConnectionSpec, DbSourceError, DbSourceSpec, DriverNotInstalledError
 
@@ -64,7 +64,7 @@ def test_an_import_fails_with_the_same_message(without_driver):
 
 def test_the_inspect_route_answers_with_a_code_the_gateway_translates(without_driver):
     with pytest.raises(HTTPException) as e:
-        rotta.inspect(rotta.DbInspectRequest(connection=_conn().model_dump(), action="test"))
+        route.inspect(route.DbInspectRequest(connection=_conn().model_dump(), action="test"))
     assert e.value.status_code == 422
     detail = e.value.detail
     assert detail["code"] == "driver_not_installed" and detail["db_type"] == "sqlserver"
@@ -72,12 +72,12 @@ def test_the_inspect_route_answers_with_a_code_the_gateway_translates(without_dr
 
 
 def test_the_engine_reports_the_driver_missing(without_driver):
-    assert rotta.drivers() == {"sqlserver": {"installed": False}}
+    assert route.drivers() == {"sqlserver": {"installed": False}}
 
 
 def test_the_engine_reports_the_driver_present(monkeypatch):
     monkeypatch.setattr(ds, "_module_installed", lambda name: name == "mssql_python")
-    assert rotta.drivers() == {"sqlserver": {"installed": True}}
+    assert route.drivers() == {"sqlserver": {"installed": True}}
 
 
 def test_another_missing_module_is_not_mistaken_for_the_driver(monkeypatch):

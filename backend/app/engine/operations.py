@@ -251,7 +251,7 @@ def op_filter(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Ordinamento / limit / deduplica / null
+# Sorting / limit / dedup / null
 # ─────────────────────────────────────────────────────────────────────────────
 def sort_keys(params: dict[str, Any], have: Any = None) -> list[tuple[str, bool]]:
     """(column, descending) of a sort, shared by every engine and the dbt export.
@@ -434,7 +434,7 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
     #    whatever the size of the input
     agg_expr = _AGG[func](values)
     if func == "sum":
-        # semantica SQL (come DuckDB/ClickHouse): sum di soli NULL → NULL, non 0
+        # SQL semantics (as DuckDB/ClickHouse): the sum of NULLs only → NULL, not 0
         agg_expr = pl.when(pl.col(values).count() > 0).then(agg_expr).otherwise(None)
     elif func in ("count", "n_unique"):
         agg_expr = agg_expr.cast(pl.Int64)

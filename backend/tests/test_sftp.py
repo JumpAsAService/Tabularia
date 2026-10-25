@@ -524,9 +524,9 @@ def test_the_output_also_refuses_a_changed_host_key(srv, root, storage, output):
 def test_transform_data_task_hands_an_sftp_destination_to_the_writer(monkeypatch, storage, output):
     import app.tasks.jobs as jobs
     import app.utils as utils
-    from tests.test_mirror_best_effort import _EngineFinto
+    from tests.test_mirror_best_effort import _FakeEngine
 
-    monkeypatch.setattr(jobs, "get_engine", lambda name=None: _EngineFinto(output.key))
+    monkeypatch.setattr(jobs, "get_engine", lambda name=None: _FakeEngine(output.key))
     monkeypatch.setattr(utils, "get_storage_service", lambda: storage)
     seen = {}
 

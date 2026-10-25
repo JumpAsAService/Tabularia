@@ -31,36 +31,36 @@ def _status(engine, src, chains: dict[str, list[dict]]) -> dict:
     return tasks.cache_status(CacheStatusRequest(**body))
 
 
-def test_a_node_is_cached_once_a_preview_after_it_has_copied_it(engine, vendite):
+def test_a_node_is_cached_once_a_preview_after_it_has_copied_it(engine, sales):
     chains = {"filter": [FILTER], "sort": [FILTER, SORT], "limit": [FILTER, SORT, LIMIT]}
-    assert _status(engine, vendite, chains) == {"cached": [], "too_big": []}
+    assert _status(engine, sales, chains) == {"cached": [], "too_big": []}
 
-    engine.preview(vendite, [FILTER, SORT], limit=10)  # clicking "sort" asks for a copy of "filter"
+    engine.preview(sales, [FILTER, SORT], limit=10)  # clicking "sort" asks for a copy of "filter"
     drain_cache(engine)
-    assert _status(engine, vendite, chains) == {"cached": ["filter"], "too_big": []}
+    assert _status(engine, sales, chains) == {"cached": ["filter"], "too_big": []}
 
-    engine.preview(vendite, [FILTER, SORT, LIMIT], limit=10)  # clicking "limit": "sort" now starts from "filter"
+    engine.preview(sales, [FILTER, SORT, LIMIT], limit=10)  # clicking "limit": "sort" now starts from "filter"
     drain_cache(engine)
-    assert _status(engine, vendite, chains)["cached"] == ["filter", "sort"]
+    assert _status(engine, sales, chains)["cached"] == ["filter", "sort"]
 
 
-def test_a_step_too_big_for_the_cache_says_so(engine, vendite):
-    final = plan_hashes(engine._source_id(vendite), [FILTER])[-1]
+def test_a_step_too_big_for_the_cache_says_so(engine, sales):
+    final = plan_hashes(engine._source_id(sales), [FILTER])[-1]
     engine.cache.mark_skipped(final)
-    assert _status(engine, vendite, {"filter": [FILTER]}) == {"cached": [], "too_big": ["filter"]}
+    assert _status(engine, sales, {"filter": [FILTER]}) == {"cached": [], "too_big": ["filter"]}
 
 
-def test_another_engine_s_copy_is_not_this_engine_s(storage, fredis, vendite, monkeypatch):
+def test_another_engine_s_copy_is_not_this_engine_s(storage, fredis, sales, monkeypatch):
     polars = PolarsEngine(storage=storage, cache=StepCache(storage, redis_client=fredis))
-    polars.preview(vendite, [FILTER, SORT], limit=10)
+    polars.preview(sales, [FILTER, SORT], limit=10)
     drain_cache(polars)
     monkeypatch.setattr(tasks, "_step_cache", lambda name: polars.cache)
-    body = {"engine": "duckdb", "chains": [{"node_id": "filter", "bucket": vendite.bucket, "input_key": vendite.key, "operations": [FILTER]}]}
+    body = {"engine": "duckdb", "chains": [{"node_id": "filter", "bucket": sales.bucket, "input_key": sales.key, "operations": [FILTER]}]}
     assert tasks.cache_status(CacheStatusRequest(**body))["cached"] == []
 
 
-def test_a_source_alone_has_nothing_to_ask(engine, vendite):
-    assert _status(engine, vendite, {"source": []}) == {"cached": [], "too_big": []}
+def test_a_source_alone_has_nothing_to_ask(engine, sales):
+    assert _status(engine, sales, {"source": []}) == {"cached": [], "too_big": []}
 
 
 ENGINES = [("app.engine.polars_engine", "PolarsEngine"), ("app.engine.duckdb_engine", "DuckDBEngine"),

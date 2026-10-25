@@ -1,13 +1,12 @@
-"""La copia su S3 esterno è BEST-EFFORT: un suo errore non abbatte il run.
+"""The copy to an external S3 is BEST EFFORT: its error does not bring the run down.
 
-È il contratto deciso esplicitamente — «prima il run, poi la copia». Il parquet
-di output è già scritto quando la copia parte, e la datasource verrà pubblicata
-dal gateway leggendo questo stesso risultato: far fallire il task perché una
-consegna a valle non è riuscita annullerebbe un lavoro valido.
+The contract decided explicitly — «the run first, then the copy». The output parquet is
+written already when the copy starts, and the gateway publishes the datasource reading
+this same result: failing the task because a delivery downstream did not succeed would
+undo valid work.
 
-Questo è il primo test che esercita `transform_data_task` direttamente (finora
-nessuno lo faceva), perché il `try/except` da verificare vive lì e non nella
-funzione di scrittura.
+This is the first test that exercises `transform_data_task` directly, because the
+`try/except` to check lives there and not in the writing function.
 """
 from __future__ import annotations
 
@@ -18,14 +17,13 @@ from app.engine.base import ColumnInfo, DataSource, RunResult
 from app.ingest.s3_destination import S3ConnectionSpec
 from app.tasks.jobs import transform_data_task
 from tests.conftest import BUCKET, upload_df
-# il client S3 finto STATEFUL vive già accanto ai test della destinazione:
-# riusarlo evita di duplicarne il comportamento (upload/list/delete) e di
-# vederne divergere le due copie
+# the STATEFUL fake S3 client lives next to the destination's tests already: reusing it
+# avoids duplicating its behavior (upload/list/delete) and seeing two copies diverge
 from tests.test_s3_destination import RecordingClient
 
 
-class _EngineFinto:
-    """Engine minimo: non trasforma nulla, dichiara solo cosa ha scritto."""
+class _FakeEngine:
+    """A minimal engine: transforms nothing, only declares what it wrote."""
 
     def __init__(self, key: str):
         self._key = key
@@ -46,18 +44,18 @@ def source(storage):
 
 @pytest.fixture
 def task_pronto(monkeypatch, storage, source):
-    """Aggancia engine e storage finti al task, senza rete."""
+    """Hooks the fake engine and storage to the task, without network."""
     import app.tasks.jobs as jobs
     import app.utils as utils
 
-    monkeypatch.setattr(jobs, "get_engine", lambda name=None: _EngineFinto(source.key))
+    monkeypatch.setattr(jobs, "get_engine", lambda name=None: _FakeEngine(source.key))
     monkeypatch.setattr(utils, "get_storage_service", lambda: storage)
     return source
 
 
 @pytest.fixture
 def recorder(monkeypatch) -> RecordingClient:
-    """Niente rete: ogni S3ConnectionSpec restituisce lo stesso client finto."""
+    """No network: every S3ConnectionSpec returns the same fake client."""
     client = RecordingClient()
     monkeypatch.setattr(S3ConnectionSpec, "client", lambda self: client)
     return client
@@ -70,24 +68,24 @@ def _mirror(key: str) -> dict:
     }
 
 
-def test_copia_fallita_il_task_resta_riuscito(task_pronto, source):
-    """Chiave vuota → `write_output_to_s3` solleva. Il task NON deve propagare:
-    deve concludersi con successo e riportare l'errore nel risultato."""
+def test_failed_copy_the_task_stays_successful(task_pronto, source):
+    """An empty key → `write_output_to_s3` raises. The task must NOT propagate: it must end
+    successfully and report the error in the result."""
     out = transform_data_task(
         bucket=BUCKET,
         input_key=source.key,
         operations=[],
         output_key=source.key,
-        mirror=_mirror(""),  # percorso vuoto: errore parlante dentro la scrittura
+        mirror=_mirror(""),  # an empty path: a clear error inside the writing
     )
 
-    assert out["status"] == "success"  # il risultato primario regge
+    assert out["status"] == "success"  # the primary result holds
     assert out["rows_written"] == 4
     assert out["mirror"]["ok"] is False
-    assert out["mirror"]["error"]  # l'errore è riportato, non ingoiato
+    assert out["mirror"]["error"]  # the error is reported, not swallowed
 
 
-def test_copia_riuscita_riportata(task_pronto, source, recorder):
+def test_successful_copy_reported(task_pronto, source, recorder):
     out = transform_data_task(
         bucket=BUCKET,
         input_key=source.key,
@@ -101,7 +99,7 @@ def test_copia_riuscita_riportata(task_pronto, source, recorder):
     assert recorder.uploads == [("lake", "published/vendite/latest.parquet")]
 
 
-def test_senza_copia_nessuna_chiave_nel_risultato(task_pronto, source):
+def test_without_copy_no_key_in_the_result(task_pronto, source):
     out = transform_data_task(
         bucket=BUCKET, input_key=source.key, operations=[], output_key=source.key
     )

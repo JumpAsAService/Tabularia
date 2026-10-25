@@ -144,7 +144,7 @@ class DbIngestRequest(BaseModel):
     connection: DbConnectionSpec
     source: DbSourceSpec
     output_key: str
-    bucket: Optional[str] = None  # default: bucket configurato dell'engine
+    bucket: Optional[str] = None  # default: the engine's configured bucket
     contract: Optional[dict] = None  # the data contract of the datasource being refreshed
 
 

@@ -1,5 +1,5 @@
-"""Test delle parti pure delle destinazioni database (niente DB reale):
-qualificazione dei nomi, DDL generata, mappa dei tipi, chunking delle righe."""
+"""Tests of the pure parts of the database destinations (no real database): qualifying
+the names, the DDL generated, the type map, chunking the rows."""
 import pyarrow as pa
 import pytest
 
@@ -20,7 +20,7 @@ def _conn(db_type="postgresql", db_schema=""):
     return DbConnectionSpec(db_type=db_type, host="h", database="d", db_schema=db_schema)
 
 
-# ── nomi qualificati ─────────────────────────────────────────────────────────
+# ── qualified names ─────────────────────────────────────────────────────────
 def test_qualified_table_plain():
     q, parts = _qualified_table(_conn(), "vendite")
     assert q == '"vendite"' and parts == ["vendite"]
@@ -122,7 +122,7 @@ def test_row_chunks_order_and_size():
     assert chunks[2] == [(5, "e")]
 
 
-# ── replace su MySQL/MariaDB deve svuotare con DELETE (transazionale), non TRUNCATE ──
+# ── replace on MySQL/MariaDB must empty with DELETE (transactional), not TRUNCATE ──
 class _RecordingCursor:
     def __init__(self, log): self.log = log
     def __enter__(self): return self
@@ -142,7 +142,7 @@ def _mysql_conn(**kw):
     return DbConnectionSpec(db_type="mysql", host="h", username="u", password="p", database="d", **kw)
 
 
-def test_mysql_replace_usa_delete_non_truncate(monkeypatch):
+def test_mysql_replace_uses_delete_not_truncate(monkeypatch):
     import pymysql
     log: list = []
     monkeypatch.setattr(pymysql, "connect", lambda **kw: _RecordingConn(log))
@@ -160,7 +160,7 @@ def test_mysql_replace_usa_delete_non_truncate(monkeypatch):
     joined = " ".join(stmts)
     assert "DELETE FROM" in joined, f"atteso DELETE, ottenuto: {log}"
     assert "TRUNCATE" not in joined, "TRUNCATE (DDL, auto-commit) non deve più essere usato"
-    # lo svuotamento precede gli INSERT e tutto committa una sola volta in fondo
+    # the emptying comes before the INSERTs and everything commits once at the end
     assert log[-1] == "COMMIT"
 
 
@@ -183,7 +183,7 @@ def test_mysql_writes_in_utc(monkeypatch):
     assert seen["init_command"] == "SET time_zone = '+00:00'"
 
 
-def test_mysql_append_non_svuota(monkeypatch):
+def test_mysql_append_does_not_empty(monkeypatch):
     import pymysql
     log: list = []
     monkeypatch.setattr(pymysql, "connect", lambda **kw: _RecordingConn(log))

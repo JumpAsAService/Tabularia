@@ -326,7 +326,7 @@ def _clickhouse_temporal_targets(ch_types) -> dict:
         if cls in ("Date", "Date32"):
             targets[i] = (pa.date32(), None)
         elif cls == "DateTime":
-            targets[i] = (pa.timestamp("s"), None)  # NAIVE = istante UTC (come ADBC)
+            targets[i] = (pa.timestamp("s"), None)  # NAIVE = a UTC instant (as ADBC)
         elif cls == "DateTime64":
             scale = int(getattr(t, "scale", 3) or 0)
             unit = {0: "s", 3: "ms", 6: "us", 9: "ns"}.get(scale, "us")

@@ -37,7 +37,7 @@ SLOWEST_MIN_MS = 1000
 HIST_KEY = "dataprep:metrics:preview:hist"      # hash  "<engine>|<outcome>|<le>" → n
 SUM_KEY = "dataprep:metrics:preview:sum_ms"     # hash  "<engine>|<outcome>" → ms
 PHASE_KEY = "dataprep:metrics:preview:phase_ms"  # hash  "<engine>|<phase>" → ms
-SLOWEST_KEY = "dataprep:metrics:preview:slowest"  # zset  json → durata ms
+SLOWEST_KEY = "dataprep:metrics:preview:slowest"  # zset  json → duration ms
 
 _local = threading.local()
 _client: redis.Redis | None = None

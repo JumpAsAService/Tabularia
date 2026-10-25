@@ -16,7 +16,7 @@ credentials are a temporary secret of each connection. chDB is ClickHouse: its
 a query or in the error messages that quote one.
 
 Neither the Execute-SQL node nor a computed column can reach the storage: their
-checks refuse table functions (app/engine/sql_guard.py, app/engine/espressioni.py),
+checks refuse table functions (app/engine/sql_guard.py, app/engine/expressions.py),
 and DuckDB's SQL sandbox has no network at all.
 """
 from __future__ import annotations

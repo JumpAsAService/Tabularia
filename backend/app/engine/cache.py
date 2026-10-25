@@ -40,7 +40,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 CACHE_PREFIX = "cache"  # prefix of the parquet keys in the storage
-INDEX_SET = "dataprep:stepcache"  # SET Valkey con gli hash materializzati
+INDEX_SET = "dataprep:stepcache"  # Valkey SET with the materialized hashes
 ATIME_ZSET = "dataprep:stepcache:atime"  # ZSET hash -> last access (unix ts)
 HITS_KEY = "dataprep:metrics:cache_hits"  # reuse counter (for the metrics)
 MISSES_KEY = "dataprep:metrics:cache_misses"  # miss counter (for the metrics)

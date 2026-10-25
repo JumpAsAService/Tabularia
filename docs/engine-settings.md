@@ -446,7 +446,7 @@ minute it may send the engine a decimal setting rounded, until its pods are gone
 
 Each of these has a test (gateway `tests/test_panel_overrides.py`,
 `tests/test_gateway_settings_api.py`, `tests/test_settings_rollout.py`; engine
-`tests/test_regolazioni.py`):
+`tests/test_panel_settings.py`):
 
 - a value of the wrong type is refused, not converted: `true` for a number, `"5"` for a
   number, `1` for on/off, `NaN` or `Infinity` for a decimal;
