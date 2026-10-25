@@ -18,7 +18,8 @@ export interface SelectOption {
   hint?: string
 }
 
-// two roots (trigger + Teleport): the parents' class/style go explicitly on the trigger
+// one root (the trigger, with the panel teleported from inside it): class, style and the
+// other attributes go explicitly on the trigger
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps<{
@@ -216,56 +217,59 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
       <template v-else>{{ placeholder ?? '—' }}</template>
     </span>
     <ChevronDown :size="13" class="chev" :class="{ flip: open }" />
-  </button>
 
-  <Teleport to="body">
-    <div v-if="open" ref="panelEl" class="sel-panel" :style="panelStyle" @mousedown.stop>
-      <div v-if="searchable" class="sel-search">
-        <Search :size="13" class="sel-search-icon" />
-        <input
-          ref="searchEl"
-          v-model="query"
-          type="text"
-          class="sel-search-input"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded="true"
-          :aria-controls="listId"
-          :aria-activedescendant="hi >= 0 ? optId(hi) : undefined"
-          :aria-label="t('select.search')"
-          :placeholder="t('select.search')"
-          @input="onQueryInput"
-          @keydown="onKeydown"
-        />
-      </div>
-      <div :id="listId" class="sel-list" role="listbox">
-        <div v-for="(g, gi) in groups" :key="gi" :role="g.group ? 'group' : 'presentation'" :aria-label="g.group ?? undefined">
-          <div v-if="g.group" class="sel-group" aria-hidden="true">{{ g.group }}</div>
-          <div
-            v-for="o in g.items"
-            :id="optId(flatIndex(o))"
-            :key="String(o.value)"
-            class="sel-opt"
-            role="option"
-            :aria-selected="o.value === modelValue"
-            :class="{ active: o.value === modelValue, hi: flatIndex(o) === hi }"
-            @click="pick(o)"
-            @mousemove="hi = flatIndex(o)"
-          >
-            <Check v-if="o.value === modelValue" :size="13" class="check" />
-            <span v-else class="check-spacer" />
-            <span v-if="o.hint" class="sel-opt-text">
-              <span class="sel-opt-label">{{ labelOf(o) }}</span>
-              <span class="sel-opt-hint" :title="o.hint">{{ o.hint }}</span>
-            </span>
-            <span v-else class="sel-opt-label">{{ labelOf(o) }}</span>
-          </div>
+    <!-- inside the button, so the component has ONE root: Vue then gives the trigger the
+         parent's scope, and a width a page sets on its <Select class="…"> applies. The
+         panel still lives in <body>: its events never pass through the button -->
+    <Teleport to="body">
+      <div v-if="open" ref="panelEl" class="sel-panel" :style="panelStyle" @mousedown.stop>
+        <div v-if="searchable" class="sel-search">
+          <Search :size="13" class="sel-search-icon" />
+          <input
+            ref="searchEl"
+            v-model="query"
+            type="text"
+            class="sel-search-input"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            :aria-controls="listId"
+            :aria-activedescendant="hi >= 0 ? optId(hi) : undefined"
+            :aria-label="t('select.search')"
+            :placeholder="t('select.search')"
+            @input="onQueryInput"
+            @keydown="onKeydown"
+          />
         </div>
-        <p v-if="!norm.length" class="sel-empty">{{ $t('select.noOptions') }}</p>
-        <p v-else-if="!filtered.length" class="sel-empty">{{ $t('select.noResults') }}</p>
+        <div :id="listId" class="sel-list" role="listbox">
+          <div v-for="(g, gi) in groups" :key="gi" :role="g.group ? 'group' : 'presentation'" :aria-label="g.group ?? undefined">
+            <div v-if="g.group" class="sel-group" aria-hidden="true">{{ g.group }}</div>
+            <div
+              v-for="o in g.items"
+              :id="optId(flatIndex(o))"
+              :key="String(o.value)"
+              class="sel-opt"
+              role="option"
+              :aria-selected="o.value === modelValue"
+              :class="{ active: o.value === modelValue, hi: flatIndex(o) === hi }"
+              @click="pick(o)"
+              @mousemove="hi = flatIndex(o)"
+            >
+              <Check v-if="o.value === modelValue" :size="13" class="check" />
+              <span v-else class="check-spacer" />
+              <span v-if="o.hint" class="sel-opt-text">
+                <span class="sel-opt-label">{{ labelOf(o) }}</span>
+                <span class="sel-opt-hint" :title="o.hint">{{ o.hint }}</span>
+              </span>
+              <span v-else class="sel-opt-label">{{ labelOf(o) }}</span>
+            </div>
+          </div>
+          <p v-if="!norm.length" class="sel-empty">{{ $t('select.noOptions') }}</p>
+          <p v-else-if="!filtered.length" class="sel-empty">{{ $t('select.noResults') }}</p>
+        </div>
       </div>
-    </div>
-  </Teleport>
+    </Teleport>
+  </button>
 </template>
 
 <style scoped>
@@ -274,7 +278,6 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  width: 100%;
   background: var(--bg-soft);
   /* the same border as the native fields: it is a control, not a decorative box */
   border: 1px solid var(--control-border);
@@ -286,6 +289,9 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   text-align: left;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
+/* the default width with no specificity: a width the parent gives (`.vwsel { width: 200px }`)
+   always wins, whatever order the stylesheets load in */
+:where(.sel-trigger) { width: 100%; }
 .sel-trigger:hover { border-color: var(--accent); box-shadow: none; transform: none; }
 .sel-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .sel-trigger.disabled { opacity: 0.45; cursor: not-allowed; }
